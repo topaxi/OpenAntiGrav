@@ -26,6 +26,10 @@
 
 use std::sync::Arc;
 
+use crate::binaural::{Binaural, LATENCY, VoiceState};
+use crate::limiter::Limiter;
+use crate::spatial::SpatialMode;
+
 /// Output channel count. Everything is mixed to interleaved stereo.
 pub const CHANNELS: usize = 2;
 
@@ -292,7 +296,7 @@ pub struct VoiceId {
     generation: u32,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct Voice {
     sound: Option<Arc<Sound>>,
     bus: Option<Bus>,
@@ -305,6 +309,29 @@ struct Voice {
     /// The recovered stereo position, or [`None`] for a voice that has none.
     /// See [`Play::pan`].
     pan: Option<f32>,
+    /// See [`Play::front`].
+    front: f32,
+    /// One-pole low-pass state per ear for [`SpatialMode::RearCue`] and
+    /// [`Mixer::set_rear_occlusion`].
+    rear_state: [f32; CHANNELS],
+    /// The smoothed rear-occlusion cutoff in hertz, or `None` until the first
+    /// [`Mixer::set_front`] of a voice that has one.
+    occlusion_hz: Option<f32>,
+    /// The voice's place in the shared convolver, while it is a headphone
+    /// voice.
+    hrtf: Option<Box<VoiceState>>,
+    /// Set by the per-render ranking: this voice is among the loudest placed
+    /// voices and may run the HRTF. See [`Mixer::set_hrtf_voice_cap`].
+    hrtf_wanted: bool,
+    /// Share of the output taken from the HRTF path, the rest from the rear
+    /// cue. 1.0 for a voice that never sounded any other way.
+    hrtf_weight: f32,
+    /// Frames before a voice that was heard on the rear cue starts to fade
+    /// into the HRTF: the convolver's output is silent for [`LATENCY`] frames.
+    hrtf_warmup: u32,
+    /// The voice has sounded through the rear cue under `headphones`, so its
+    /// HRTF output must be faded in rather than started at full level.
+    heard_rear: bool,
     looping: bool,
     generation: u32,
     /// Output frames left of the fade a stopped voice goes out on, or `None`
@@ -313,6 +340,31 @@ struct Voice {
     /// Output frames of silence left before the voice starts. See
     /// [`Mixer::delay_start`].
     delay: u32,
+}
+
+impl Default for Voice {
+    fn default() -> Self {
+        Self {
+            sound: None,
+            bus: None,
+            position: 0.0,
+            pitch: 0.0,
+            gain: 0.0,
+            pan: None,
+            front: 1.0,
+            rear_state: [0.0; CHANNELS],
+            occlusion_hz: None,
+            hrtf: None,
+            hrtf_wanted: false,
+            hrtf_weight: 1.0,
+            hrtf_warmup: 0,
+            heard_rear: false,
+            looping: false,
+            generation: 0,
+            release: None,
+            delay: 0,
+        }
+    }
 }
 
 impl Voice {
@@ -356,6 +408,10 @@ pub struct Play {
     /// through the panner at zero would come out quieter than it is meant to
     /// be. A voice whose position was never recovered is left alone.
     pub pan: Option<f32>,
+    /// How far ahead of the listener the voice is: `+1.0` dead ahead, `-1.0`
+    /// dead behind. Read only for a voice with a [`Self::pan`], and under
+    /// `Original` only by [`Mixer::set_rear_occlusion`]'s law.
+    pub front: f32,
     /// Whether to restart at the end instead of stopping.
     pub looping: bool,
 }
@@ -370,6 +426,7 @@ impl Play {
             gain: 1.0,
             pitch: 1.0,
             pan: None,
+            front: 1.0,
             looping: false,
         }
     }
@@ -384,13 +441,38 @@ impl Play {
     }
 }
 
+/// Placed voices that run the HRTF at once by default; the rest sound as the
+/// rear cue. Chosen, not measured: a Deck voice costs ~41 us per 512 frames, so
+/// 32 voices are ~8.6% of a core.
+pub const HRTF_VOICES: usize = 32;
+/// Frames over which a voice hands over between the HRTF and the rear cue.
+const HRTF_CROSSFADE_FRAMES: u32 = 256;
+
 /// The voice pool and the bus gains, and the loop that renders them.
 #[derive(Debug, Clone)]
 pub struct Mixer {
     voices: Vec<Voice>,
     bus_gain: [f32; Bus::COUNT],
+    /// A second gain per bus that [`Self::set_bus_gain`] never writes; see [`Self::set_bus_trim`].
+    bus_trim: [f32; Bus::COUNT],
+    /// See [`Self::music_tap`].
+    music_tap: Vec<f32>,
     master_gain: f32,
+    /// A fixed gain a title asks for, ahead of the limiter; see [`Self::set_master_trim`].
+    master_trim: f32,
     sample_rate: u32,
+    spatial: SpatialMode,
+    /// `max_frequency` of the original's rear low-pass, or `None` where the
+    /// title has none. See [`Self::set_rear_occlusion`].
+    rear_occlusion: Option<f32>,
+    /// The shared HRTF convolver, once built. See [`Self::set_binaural`].
+    binaural: Option<Binaural>,
+    binaural_requested: bool,
+    /// Most placed voices that run the HRTF at once.
+    hrtf_cap: usize,
+    /// Scratch for the per-render ranking, kept so the audio thread never
+    /// allocates.
+    hrtf_rank: Vec<(f32, bool, u16)>,
     generation: u32,
     /// Voices refused because every slot was busy, for the perf overlay and
     /// for tests. Silent starvation is the failure mode worth being able to
@@ -399,6 +481,10 @@ pub struct Mixer {
     /// Output samples the sum drove past full scale, for the same reason
     /// [`Self::starved`] is counted. See [`Self::render`].
     clipped: u64,
+    /// The master limiter that runs after the sum.
+    limiter: Limiter,
+    /// Whether the limiter runs; see [`Self::set_limiting`].
+    limiting: bool,
     /// Sample-rate remainder carried between [`Self::render_tick`] calls.
     ///
     /// **Because `sample_rate / tick_hz` is not always a whole number.** 48,000
@@ -418,13 +504,31 @@ impl Mixer {
         Self {
             voices: vec![Voice::default(); MAX_VOICES],
             bus_gain: [1.0; Bus::COUNT],
+            bus_trim: [1.0; Bus::COUNT],
+            music_tap: Vec::new(),
             master_gain: 1.0,
+            master_trim: 1.0,
             sample_rate: sample_rate.max(1),
+            spatial: SpatialMode::Original,
+            rear_occlusion: None,
+            binaural: None,
+            binaural_requested: false,
+            hrtf_cap: HRTF_VOICES,
+            hrtf_rank: Vec::with_capacity(MAX_VOICES),
             generation: 0,
             starved: 0,
             clipped: 0,
+            limiter: Limiter::new(sample_rate.max(1)),
+            limiting: true,
             tick_frame_remainder: 0,
         }
+    }
+
+    /// Turns the master limiter on or off (on by default). Off, the sum goes
+    /// to the final clamp unchanged and nothing is delayed, which tests that
+    /// read exact sample positions rely on.
+    pub fn set_limiting(&mut self, on: bool) {
+        self.limiting = on;
     }
 
     /// Grows the voice pool to at least `voices`; a smaller number is ignored.
@@ -452,6 +556,29 @@ impl Mixer {
         self.bus_gain[bus.index()] = gain.max(0.0);
     }
 
+    /// The last [`Self::render`]'s music, mono, before any bus gain, trim or
+    /// the master: what the original's band analysis hears, which goes on
+    /// reading the music with the music slider at zero
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`, "What a band
+    /// measures").
+    #[must_use]
+    pub fn music_tap(&self) -> &[f32] {
+        &self.music_tap
+    }
+
+    /// Multiplies one bus by `trim` on top of [`Self::set_bus_gain`]. Kept apart from it so a
+    /// caller that rewrites the bus gains every tick (HD's authored mix, the effects fade) does
+    /// not undo it, and [`Self::bus_gain`] still reads the level the settings asked for.
+    pub fn set_bus_trim(&mut self, bus: Bus, trim: f32) {
+        self.bus_trim[bus.index()] = trim.max(0.0);
+    }
+
+    /// Reads one bus's trim, `1.0` unless [`Self::set_bus_trim`] moved it.
+    #[must_use]
+    pub fn bus_trim(&self, bus: Bus) -> f32 {
+        self.bus_trim[bus.index()]
+    }
+
     /// Reads one bus's gain.
     #[must_use]
     pub fn bus_gain(&self, bus: Bus) -> f32 {
@@ -461,6 +588,14 @@ impl Mixer {
     /// Scales everything, after the buses. Used to mute wholesale.
     pub fn set_master_gain(&mut self, gain: f32) {
         self.master_gain = gain.max(0.0);
+    }
+
+    /// Scales everything like [`Self::set_master_gain`], but is the title's, not the
+    /// player's: the master volume slider does not move it. Applied to every voice before the
+    /// sum reaches the limiter, so a mix authored hotter than the limiter's ceiling is brought
+    /// down once here instead of being ridden down by the limiter all race.
+    pub fn set_master_trim(&mut self, gain: f32) {
+        self.master_trim = gain.max(0.0);
     }
 
     /// How many voices are live - started, not stopped, not finished.
@@ -486,14 +621,37 @@ impl Mixer {
         self.starved
     }
 
-    /// How many output samples the voice sum has driven past full scale.
+    /// How many output samples reached the hard clamp after the limiter.
     ///
-    /// Zero is a mix with headroom left. Anything else is the mix saturating -
-    /// see [`Self::render`] for why that is what the console does rather than
-    /// something to be fixed by turning a bus down.
+    /// Zero is the limiter doing its job; see [`Self::render`].
     #[must_use]
     pub fn clipped(&self) -> u64 {
         self.clipped
+    }
+
+    /// The largest absolute sample the voice sum has produced, before the
+    /// limiter.
+    #[must_use]
+    pub fn peak(&self) -> f32 {
+        self.limiter.peak()
+    }
+
+    /// Frames the limiter pulled down.
+    #[must_use]
+    pub fn limited(&self) -> u64 {
+        self.limiter.limited()
+    }
+
+    /// Frames with limiter gain below 0.94, 0.7 and 0.5.
+    #[must_use]
+    pub fn limit_depth_frames(&self) -> [u64; 3] {
+        self.limiter.depth_frames()
+    }
+
+    /// The lowest limiter gain applied so far (1.0 means it never acted).
+    #[must_use]
+    pub fn deepest_limit(&self) -> f32 {
+        self.limiter.deepest()
     }
 
     /// Starts a voice, returning a handle to steer it with.
@@ -529,6 +687,14 @@ impl Mixer {
             pitch: play.pitch,
             gain: (play.gain * pan_volume_gain).max(0.0),
             pan: play.pan,
+            front: play.front,
+            rear_state: [0.0; CHANNELS],
+            occlusion_hz: None,
+            hrtf: None,
+            hrtf_wanted: false,
+            hrtf_weight: 1.0,
+            hrtf_warmup: 0,
+            heard_rear: false,
             looping: play.looping,
             generation,
             release: None,
@@ -616,10 +782,129 @@ impl Mixer {
         }
     }
 
+    /// Where a live voice is along the listener's forward axis. See
+    /// [`Play::front`].
+    pub fn set_front(&mut self, id: VoiceId, front: f32) {
+        let max = self.rear_occlusion;
+        if let Some(voice) = self.voice_mut(id) {
+            voice.front = front;
+            if let Some(max) = max {
+                let target = crate::spatial::rear_occlusion_cutoff(front, max);
+                voice.occlusion_hz = Some(voice.occlusion_hz.map_or(target, |previous| {
+                    crate::spatial::smooth_occlusion(previous, target)
+                }));
+            }
+        }
+    }
+
+    /// Turns on the original's rear low-pass under [`SpatialMode::Original`]:
+    /// a placed voice behind the listener is low-passed by
+    /// [`crate::spatial::rear_occlusion_cutoff`] with this `max_frequency`
+    /// (the title's own `GlobalAudioConfig.xml` value). `None` is off, which is
+    /// bit-identical to a mixer without it, and what a title or circuit whose
+    /// original has no such filter asks for. The cutoff steps once per
+    /// [`Self::set_front`], the call every voice makes each tick.
+    pub fn set_rear_occlusion(&mut self, max_frequency: Option<f32>) {
+        if self.rear_occlusion != max_frequency {
+            self.rear_occlusion = max_frequency;
+            for voice in &mut self.voices {
+                voice.occlusion_hz = None;
+            }
+        }
+    }
+
+    /// The rear low-pass's `max_frequency`, or `None` where it is off.
+    #[must_use]
+    pub fn rear_occlusion(&self) -> Option<f32> {
+        self.rear_occlusion
+    }
+
+    /// Chooses how placed voices are rendered. See [`SpatialMode`].
+    pub fn set_spatial_mode(&mut self, mode: SpatialMode) {
+        self.spatial = mode;
+    }
+
+    /// Installs the HRTF convolver [`SpatialMode::Headphones`] needs. Built by
+    /// [`Binaural::new`] off the audio thread; until it is here that mode
+    /// sounds as the rear cue.
+    pub fn set_binaural(&mut self, binaural: Option<Binaural>) {
+        self.binaural = binaural;
+        self.binaural_requested = false;
+    }
+
+    /// Whether the caller should now build the HRTF convolver: `true` once,
+    /// until [`Self::set_binaural`] lands or fails.
+    pub fn request_binaural(&mut self) -> bool {
+        let wanted = self.binaural.is_none() && !self.binaural_requested;
+        self.binaural_requested |= wanted;
+        wanted
+    }
+
+    /// Whether the HRTF convolver is installed.
+    #[must_use]
+    pub fn has_binaural(&self) -> bool {
+        self.binaural.is_some()
+    }
+
+    /// Sets how many placed voices run the HRTF at once under
+    /// [`SpatialMode::Headphones`]; the rest sound as the rear cue.
+    pub fn set_hrtf_voice_cap(&mut self, cap: usize) {
+        self.hrtf_cap = cap;
+    }
+
+    /// Voices currently sounding through the HRTF (fully or fading).
+    #[must_use]
+    pub fn hrtf_voices(&self) -> usize {
+        self.voices
+            .iter()
+            .filter(|v| v.hrtf.is_some() && v.hrtf_weight > 0.0)
+            .count()
+    }
+
+    /// Marks the `hrtf_cap` most audible placed voices as wanting the HRTF.
+    /// Audibility is the voice's own gain through its bus; ties keep a voice
+    /// that already holds a convolver, then take the lower slot, so the choice
+    /// is stable from render to render.
+    fn rank_hrtf_voices(&mut self) {
+        let mut rank = std::mem::take(&mut self.hrtf_rank);
+        rank.clear();
+        for (slot, voice) in self.voices.iter_mut().enumerate() {
+            voice.hrtf_wanted = false;
+            if voice.sound.is_none() || voice.pan.is_none() {
+                continue;
+            }
+            let Some(bus) = voice.bus else { continue };
+            let level = voice.gain * self.bus_gain[bus.index()] * self.bus_trim[bus.index()];
+            rank.push((level, voice.hrtf.is_some(), slot as u16));
+        }
+        if rank.len() > self.hrtf_cap {
+            rank.sort_unstable_by(|a, b| {
+                b.0.total_cmp(&a.0).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2))
+            });
+        }
+        for &(_, _, slot) in rank.iter().take(self.hrtf_cap) {
+            self.voices[usize::from(slot)].hrtf_wanted = true;
+        }
+        self.hrtf_rank = rank;
+    }
+
+    /// The current [`SpatialMode`].
+    #[must_use]
+    pub fn spatial_mode(&self) -> SpatialMode {
+        self.spatial
+    }
+
     /// Whether the handle still addresses a sounding voice.
     #[must_use]
     pub fn is_playing(&self, id: VoiceId) -> bool {
         self.voice(id).is_some()
+    }
+
+    /// The gain a voice is currently levelled at (before its bus), as [`Self::set_gain`] left it.
+    /// `None` once the handle is stale, like [`Self::position`].
+    #[must_use]
+    pub fn gain(&self, id: VoiceId) -> Option<f32> {
+        self.voice(id).map(|voice| voice.gain)
     }
 
     /// The rate multiplier a voice is currently playing at, as
@@ -711,31 +996,39 @@ impl Mixer {
     ///
     /// Eight craft on the grid hold eight `~ENGINE` voices inside the flare's
     /// 50-unit radius at once, so the sum leaves full scale long before
-    /// anything unusual has happened. **Nothing in the original's chain
-    /// reserves headroom for that**: `Audio_Init_q` (`0x089906e4`) sets all
-    /// fifteen group volumes *and* the master to `0x400`, and
-    /// `Audio_OutputThread_q` (`0x0898ca54`) hands `master << 5` = `0x8000` -
-    /// `PSP_AUDIO_VOLUME_MAX` - to `sceAudioOutputPannedBlocking`. Unity end to
-    /// end, into a 16-bit buffer that clamps. See
-    /// [`audio-levels.md`](../../../../docs/ghidra/functions/psp-pulse-usa/audio-levels.md).
+    /// anything unusual has happened. The original reserves no headroom for
+    /// that (`Audio_Init_q` `0x089906e4` and `Audio_OutputThread_q`
+    /// `0x0898ca54` run unity end to end into a clamping 16-bit buffer,
+    /// [`audio-levels.md`](../../../../docs/ghidra/functions/psp-pulse-usa/audio-levels.md)),
+    /// and a hard clamp of a mix that far over is audible as crackle.
     ///
-    /// So the clamp below is the port of a hardware behaviour, not a limiter
-    /// invented to make a loud mix comfortable - there is no evidenced
-    /// attenuation to apply, and picking one would be exactly the
-    /// plausible-looking stand-in `CLAUDE.md` forbids. What the clamp does buy
-    /// is that an `f32` device and an `i16` device now receive the same
-    /// samples, where before the mixer handed the host whatever the sum
-    /// reached and each backend saturated it in its own place.
-    ///
-    /// [`Self::clipped`] counts what it cost. **Nothing reads it yet** - it is
-    /// there for tests and for the perf overlay to pick up, the way
-    /// [`Self::starved`] is, so that a mix saturating for a whole race is a
-    /// number somebody can ask for rather than only a sound.
+    /// So the sum goes through [`Limiter`] before the final clamp: per-cue
+    /// levels stay as authored and only the peaks that would leave full scale
+    /// are pulled down, ahead of time. [`Self::clipped`] now counts what still
+    /// reached the clamp after the limiter, which should be nothing.
+    /// [`Self::peak`], [`Self::limited`] and [`Self::deepest_limit`] report
+    /// what the limiter saw.
     pub fn render(&mut self, out: &mut [f32]) {
         out.fill(0.0);
-        let master = self.master_gain;
+        self.music_tap.clear();
+        self.music_tap.resize(out.len() / CHANNELS, 0.0);
+        let master = self.master_gain * self.master_trim;
         let bus_gain = self.bus_gain;
+        let bus_trim = self.bus_trim;
         let rate = f64::from(self.sample_rate);
+        let spatial = self.spatial;
+        let rear_occlusion = self.rear_occlusion;
+        if spatial == SpatialMode::Headphones && self.binaural.is_some() {
+            self.rank_hrtf_voices();
+        } else {
+            // Leaving `Headphones` mid-race: no voice wants the convolver, so
+            // each fades out over `HRTF_CROSSFADE_FRAMES` instead of cutting.
+            for voice in &mut self.voices {
+                voice.hrtf_wanted = false;
+            }
+        }
+        let binaural = &mut self.binaural;
+        let music_tap = &mut self.music_tap;
 
         for voice in &mut self.voices {
             let Some(sound) = voice.sound.clone() else {
@@ -744,12 +1037,57 @@ impl Mixer {
             let Some(bus) = voice.bus else {
                 continue;
             };
-            let gain = voice.gain * bus_gain[bus.index()] * master;
+            let gain = voice.gain * bus_gain[bus.index()] * bus_trim[bus.index()] * master;
             // One pair for the whole buffer. The original moves a pan over a
             // ramp inside SCREAM rather than per sample, and a tick is short
             // enough that stepping it here would model an interpolator we have
             // not read.
             let channel_gain = voice.pan.map_or([1.0; CHANNELS], crate::spatial::pan_gains);
+            // A headphone voice goes through the convolver; asked for before the
+            // sphere has loaded, it takes the rear cue meanwhile.
+            // `Original` drops the convolver at once (it is bit-identical to a
+            // mixer that never had one); `RearCue` lets a live one fade out.
+            let hrtf_ready =
+                spatial != SpatialMode::Original && voice.pan.is_some() && binaural.is_some();
+            let want_hrtf = spatial == SpatialMode::Headphones && hrtf_ready && voice.hrtf_wanted;
+            if want_hrtf && voice.hrtf.is_none() {
+                voice.hrtf = Some(Box::new(VoiceState::new()));
+                if voice.heard_rear {
+                    voice.hrtf_weight = 0.0;
+                    voice.hrtf_warmup = LATENCY as u32;
+                } else {
+                    voice.hrtf_weight = 1.0;
+                    voice.hrtf_warmup = 0;
+                }
+            }
+            if !hrtf_ready {
+                voice.hrtf = None;
+                voice.hrtf_weight = 1.0;
+            }
+            let hrtf_step = 1.0 / HRTF_CROSSFADE_FRAMES as f32;
+            let mut hrtf_weight = voice.hrtf_weight;
+            let mut hrtf_warmup = voice.hrtf_warmup;
+            let mut heard_rear = voice.heard_rear;
+            // The rear cue runs whenever the voice may sound through it at all.
+            let rear_active = spatial != SpatialMode::Original
+                && voice.pan.is_some()
+                && (voice.hrtf.is_none() || hrtf_weight < 1.0 || !want_hrtf);
+            let (rear_coeff, rear_gain) = if rear_active {
+                rear_cue(voice.front, self.sample_rate)
+            } else if let (SpatialMode::Original, Some(max), true) =
+                (spatial, rear_occlusion, voice.pan.is_some())
+            {
+                let hz = voice
+                    .occlusion_hz
+                    .unwrap_or_else(|| crate::spatial::rear_occlusion_cutoff(voice.front, max));
+                (
+                    crate::spatial::low_pass_coefficient(hz, self.sample_rate),
+                    1.0,
+                )
+            } else {
+                (1.0, 1.0)
+            };
+            let (side, front) = (voice.pan.unwrap_or(0.0), voice.front);
             let step = f64::from(sound.sample_rate()) / rate * f64::from(voice.pitch);
             let frames = sound.frames();
 
@@ -765,75 +1103,146 @@ impl Mixer {
             // shorter than the fade is shortened rather than swallowed.
             let closing = (f64::from(RELEASE_FRAMES) * step.abs()).min(frames as f64 / 4.0);
             let mut delay = voice.delay;
-            for chunk in out.as_chunks_mut::<CHANNELS>().0 {
+            for (at, chunk) in out.as_chunks_mut::<CHANNELS>().0.iter_mut().enumerate() {
                 if delay > 0 {
                     delay -= 1;
                     continue;
                 }
-                if frames == 0 {
-                    finished = true;
-                    break;
-                }
-                let fade = match release {
-                    None => 1.0,
-                    Some(0) => {
-                        finished = true;
-                        break;
+                let mut ended = false;
+                'frame: {
+                    if frames == 0 {
+                        ended = true;
+                        break 'frame;
                     }
-                    Some(left) => {
-                        release = Some(left - 1);
-                        left as f32 / RELEASE_FRAMES as f32
+                    let fade = match release {
+                        None => 1.0,
+                        Some(0) => {
+                            ended = true;
+                            break 'frame;
+                        }
+                        Some(left) => {
+                            release = Some(left - 1);
+                            left as f32 / RELEASE_FRAMES as f32
+                        }
+                    };
+                    if voice.position >= frames as f64 {
+                        if voice.looping {
+                            // Modulo rather than reset: at a step above one frame
+                            // the overshoot is real time, and dropping it makes a
+                            // looped bed drift slow.
+                            voice.position %= frames as f64;
+                        } else {
+                            ended = true;
+                            break 'frame;
+                        }
                     }
-                };
-                if voice.position >= frames as f64 {
-                    if voice.looping {
-                        // Modulo rather than reset: at a step above one frame
-                        // the overshoot is real time, and dropping it makes a
-                        // looped bed drift slow.
-                        voice.position %= frames as f64;
-                    } else {
-                        finished = true;
-                        break;
-                    }
-                }
 
-                let index = voice.position as usize;
-                let frac = (voice.position - index as f64) as f32;
-                let a = sound.frame(index);
-                let b = if voice.looping && index + 1 >= frames {
-                    sound.frame(0)
-                } else {
-                    sound.frame(index + 1)
-                };
-                // **The closing fade, on the waveform rather than after it.** A
-                // one-shot that stops mid-signal is cut at whatever value it
-                // reached, and on Wipeout HD that is routinely most of full
-                // scale - so the last stretch of the source is ramped down
-                // instead. Ramping the *signal* rather than holding its last
-                // sample and decaying that matters: a held value ramped to zero
-                // is a unipolar pulse, which is itself a low-frequency thump,
-                // and the longer the ramp the deeper it sits. This costs the
-                // cue the level of its final few milliseconds and adds nothing.
-                let closing_fade = if voice.looping {
-                    1.0
-                } else {
-                    let left = frames as f64 - voice.position;
-                    if closing > 0.0 && left < closing {
-                        (left / closing).clamp(0.0, 1.0) as f32
+                    let index = voice.position as usize;
+                    let frac = (voice.position - index as f64) as f32;
+                    let a = sound.frame(index);
+                    let b = if voice.looping && index + 1 >= frames {
+                        sound.frame(0)
                     } else {
+                        sound.frame(index + 1)
+                    };
+                    // **The closing fade, on the waveform rather than after it.** A
+                    // one-shot that stops mid-signal is cut at whatever value it
+                    // reached, and on Wipeout HD that is routinely most of full
+                    // scale - so the last stretch of the source is ramped down
+                    // instead. Ramping the *signal* rather than holding its last
+                    // sample and decaying that matters: a held value ramped to zero
+                    // is a unipolar pulse, which is itself a low-frequency thump,
+                    // and the longer the ramp the deeper it sits. This costs the
+                    // cue the level of its final few milliseconds and adds nothing.
+                    let closing_fade = if voice.looping {
                         1.0
+                    } else {
+                        let left = frames as f64 - voice.position;
+                        if closing > 0.0 && left < closing {
+                            (left / closing).clamp(0.0, 1.0) as f32
+                        } else {
+                            1.0
+                        }
+                    };
+                    let mut raw = [0.0; CHANNELS];
+                    let mut heard = [0.0; CHANNELS];
+                    for c in 0..CHANNELS {
+                        let x = a[c] + (b[c] - a[c]) * frac;
+                        raw[c] = x;
+                        heard[c] = if rear_coeff < 1.0 {
+                            let state = &mut voice.rear_state[c];
+                            *state += rear_coeff * (x - *state);
+                            *state
+                        } else {
+                            voice.rear_state[c] = x;
+                            x
+                        };
                     }
-                };
-                for (c, sample) in chunk.iter_mut().enumerate() {
-                    *sample += (a[c] + (b[c] - a[c]) * frac)
-                        * gain
-                        * channel_gain[c]
-                        * fade
-                        * closing_fade;
+                    if bus == Bus::Music {
+                        music_tap[at] += 0.5 * (raw[0] + raw[1]) * voice.gain * fade * closing_fade;
+                    }
+                    if let (Some(state), Some(bin)) = (voice.hrtf.as_deref_mut(), binaural.as_mut())
+                    {
+                        // A convolver entered mid-signal starts from silence; the
+                        // source is faded in over the warm-up so that start is
+                        // not a step the crossfade then has to hide.
+                        let fade_in = 1.0 - hrtf_warmup as f32 / LATENCY as f32;
+                        if hrtf_warmup > 0 {
+                            hrtf_warmup -= 1;
+                        } else if want_hrtf {
+                            hrtf_weight = (hrtf_weight + hrtf_step).min(1.0);
+                        } else {
+                            hrtf_weight = (hrtf_weight - hrtf_step).max(0.0);
+                        }
+                        let mono = 0.5 * (raw[0] + raw[1]) * gain * fade * closing_fade * fade_in;
+                        let (l, r) = state.push(bin, mono, side, front);
+                        chunk[0] += l * hrtf_weight;
+                        chunk[1] += r * hrtf_weight;
+                        let rear_weight = 1.0 - hrtf_weight;
+                        if rear_weight > 0.0 {
+                            heard_rear = true;
+                            for (c, sample) in chunk.iter_mut().enumerate() {
+                                *sample += heard[c]
+                                    * rear_gain
+                                    * gain
+                                    * channel_gain[c]
+                                    * fade
+                                    * closing_fade
+                                    * rear_weight;
+                            }
+                        }
+                    } else {
+                        if spatial != SpatialMode::Original && voice.pan.is_some() {
+                            heard_rear = true;
+                        }
+                        for (c, sample) in chunk.iter_mut().enumerate() {
+                            *sample +=
+                                heard[c] * rear_gain * gain * channel_gain[c] * fade * closing_fade;
+                        }
+                    }
+                    voice.position += step;
                 }
-                voice.position += step;
+                if ended {
+                    let tail = match (voice.hrtf.as_deref_mut(), binaural.as_mut()) {
+                        (Some(state), Some(bin)) => state.flush(bin, side, front),
+                        _ => None,
+                    };
+                    let Some((l, r)) = tail else {
+                        finished = true;
+                        break;
+                    };
+                    chunk[0] += l * hrtf_weight;
+                    chunk[1] += r * hrtf_weight;
+                }
             }
 
+            if !finished && voice.hrtf.is_some() && hrtf_weight <= 0.0 && !want_hrtf {
+                voice.hrtf = None;
+                hrtf_weight = 1.0;
+            }
+            voice.hrtf_weight = hrtf_weight;
+            voice.hrtf_warmup = hrtf_warmup;
+            voice.heard_rear = heard_rear;
             if finished {
                 *voice = Voice::default();
             } else {
@@ -842,6 +1251,9 @@ impl Mixer {
             }
         }
 
+        if self.limiting {
+            self.limiter.process(out);
+        }
         for sample in out.iter_mut() {
             if *sample < -1.0 || *sample > 1.0 {
                 self.clipped += 1;
@@ -869,6 +1281,33 @@ impl Mixer {
         frames
     }
 }
+
+/// Low-pass coefficient and gain for a voice `front` of the listener under
+/// [`SpatialMode::RearCue`]: `(1.0, 1.0)` ahead (the filter is then a bit-exact
+/// pass), easing to the rear values dead behind.
+///
+/// **Chosen, not measured**: Pulse's original cannot tell front from back
+/// (`docs/ghidra/functions/psp-pulse-usa/positional-audio.md`, "The angle loses
+/// front from back"); HD's can, and plays its own law under
+/// [`SpatialMode::Original`] ([`Mixer::set_rear_occlusion`]). Dead behind: one pole at [`REAR_CUTOFF_HZ`] and
+/// [`REAR_GAIN`], both eased linearly in the rear half only.
+fn rear_cue(front: f32, sample_rate: u32) -> (f32, f32) {
+    let behind = (-front).clamp(0.0, 1.0);
+    if behind <= 0.0 {
+        return (1.0, 1.0);
+    }
+    let full = 1.0 - (-std::f32::consts::TAU * REAR_CUTOFF_HZ / sample_rate as f32).exp();
+    (
+        1.0 + behind * (full - 1.0),
+        1.0 + behind * (REAR_GAIN - 1.0),
+    )
+}
+
+/// Cutoff of the rear-cue low-pass for a voice dead behind the listener.
+pub const REAR_CUTOFF_HZ: f32 = 2_500.0;
+
+/// Gain of a voice dead behind the listener under the rear cue.
+pub const REAR_GAIN: f32 = 0.8;
 
 #[cfg(test)]
 mod tests;

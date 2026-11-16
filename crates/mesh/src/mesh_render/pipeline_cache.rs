@@ -127,20 +127,37 @@ impl Scope {
     /// Every pipeline built in this scope draws under `light`'s title rig, so
     /// the paths only another title's rig takes compile out of it.
     ///
-    /// Only Omega's nova prelit curve so far: a light that is not nova is a
-    /// title that never is, since nothing mid-race turns it on - a Zone grade
-    /// rebuilds the light from this one and carries its flag, never sets it.
+    /// Omega's nova prelit curve, and the whole authored rig: a light that is not nova is a
+    /// title that never is, and a stand-in light never becomes a rig, since nothing mid-race
+    /// turns either on - a Zone grade rebuilds the light from this one, carries its flag and
+    /// hands a stand-in back untouched (`ZoneGrade::light`).
     /// A drawable built outside the scope keeps `mesh.wesl`'s live default and
     /// shades the same, only without the saving. Call it before the first
     /// `build()`: a pipeline built earlier is cached without the constant.
     pub fn lit_by(&self, light: &super::Light) {
         if light.nova <= 0.5 {
-            CACHE.with(|cell| {
-                if let Some(cache) = cell.borrow_mut().as_mut() {
-                    cache.constants.push(("nova_prelit", 0.0));
-                }
-            });
+            self.constant("nova_prelit");
         }
+        if light.enabled == 0.0 {
+            self.constant("light_rig");
+        }
+    }
+
+    /// Every pipeline built in this scope draws a race that has no Zone grade (`zone` false), so
+    /// the Zone recolour compiles out of it. The same rules as [`Self::lit_by`].
+    pub fn zoned(&self, zone: bool) {
+        if !zone {
+            self.constant("zone_race");
+        }
+    }
+
+    /// Pins the override `name` to `0.0` on every pipeline this scope builds.
+    fn constant(&self, name: &'static str) {
+        CACHE.with(|cell| {
+            if let Some(cache) = cell.borrow_mut().as_mut() {
+                cache.constants.push((name, 0.0));
+            }
+        });
     }
 
     /// `(shader module: calls, reused)` over this scope's life so far.
@@ -172,6 +189,73 @@ impl Scope {
 impl Drop for Scope {
     fn drop(&mut self) {
         CACHE.with(|cell| *cell.borrow_mut() = None);
+    }
+}
+
+/// A shader module and the pipelines built with it, kept between separate builds on one device.
+///
+/// [`Scope`] covers one scene's build and is gone when it drops. A menu builds one preview at a
+/// time, each a frame of its own, so nothing is open across them: every selection change used to
+/// reparse `mesh.wesl` and recreate its pipelines, about 57 ms on the Steam Deck and 0.7 s on a
+/// cold driver cache (`docs/rendering/frame-thread-cpu.md`, 2026-10-31). [`Self::build`] opens a
+/// scope on what this holds for one call and takes the shader and pipelines back afterwards.
+///
+/// **Textures are not kept**: a texture view stays resident while the cache names it, and a menu
+/// that kept every preview's textures would keep every preview it ever showed. Every pipeline was
+/// built for one `device`; build with no other.
+#[derive(Default)]
+pub struct Kept {
+    shader: [Option<wgpu::ShaderModule>; 2],
+    pipelines: HashMap<Key, wgpu::RenderPipeline>,
+}
+
+impl std::fmt::Debug for Kept {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Kept")
+            .field("pipelines", &self.pipelines.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl Kept {
+    /// Runs `build` with this cache open on the current thread, keeping what it compiled.
+    ///
+    /// Where a [`Scope`] is already open on this thread `build` runs in that one and this cache
+    /// is left as it was, since scopes do not nest.
+    pub fn build<R>(&mut self, build: impl FnOnce() -> R) -> R {
+        let installed = CACHE.with(|cell| {
+            let mut slot = cell.borrow_mut();
+            if slot.is_some() {
+                return false;
+            }
+            *slot = Some(Cache {
+                shader: std::mem::take(&mut self.shader),
+                pipelines: std::mem::take(&mut self.pipelines),
+                ..Cache::default()
+            });
+            true
+        });
+        if !installed {
+            return build();
+        }
+        // Taken back on unwind too, so a panicking build leaves no scope open behind it.
+        struct Restore<'a>(&'a mut Kept);
+        impl Drop for Restore<'_> {
+            fn drop(&mut self) {
+                if let Some(cache) = CACHE.with(|cell| cell.borrow_mut().take()) {
+                    self.0.shader = cache.shader;
+                    self.0.pipelines = cache.pipelines;
+                }
+            }
+        }
+        let _restore = Restore(self);
+        build()
+    }
+
+    /// How many distinct pipelines this holds.
+    #[must_use]
+    pub fn pipelines(&self) -> usize {
+        self.pipelines.len()
     }
 }
 

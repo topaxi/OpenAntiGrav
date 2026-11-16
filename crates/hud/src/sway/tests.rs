@@ -105,3 +105,40 @@ fn the_titles_that_slide_are_hd_and_the_two_that_inherit_it() {
     assert_eq!(law(oag_pulse::hud::ART), None);
     assert_eq!(law(oag_pure::hud::ART), None);
 }
+
+/// The slide moves the frame's draws where they are: each list keeps its buffer, and a text
+/// draw keeps its string, so a swaying HUD allocates nothing a still one does not.
+#[test]
+fn sliding_moves_the_draws_in_place() {
+    let layout = Layout::from_xml(SAMPLE);
+    let strings = strings();
+    let art = swaying();
+    let mut cx = context(&layout, &strings);
+    cx.art = &art;
+    let readout = Readout {
+        pickup: Some(oag_tables::weapons::Weapon::Rocket),
+        ..Readout::blank()
+    };
+    let mut frame = draw_list(&cx, &readout);
+    let text = |frame: &Frame| {
+        lists(frame)
+            .into_iter()
+            .flatten()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, .. } => Some(text.as_ptr()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let buffers = |frame: &Frame| lists(frame).map(|list| (list.as_ptr(), list.capacity()));
+    let (before_buffers, before_text) = (buffers(&frame), text(&frame));
+    assert!(!before_text.is_empty(), "the fixture draws text");
+    let sprites = frame.sprites.clone();
+
+    slide(&mut frame, [-6.0, 0.0]);
+
+    assert_eq!(buffers(&frame), before_buffers);
+    assert_eq!(text(&frame), before_text);
+    let moved: Vec<Draw> = sprites.iter().map(|d| moved_x(d, -6.0)).collect();
+    assert_eq!(frame.sprites, moved);
+}

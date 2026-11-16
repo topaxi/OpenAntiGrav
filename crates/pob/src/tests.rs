@@ -527,18 +527,10 @@ fn twin(order: ByteOrder) -> Vec<u8> {
     put(NODE + 4, 0.85f32.to_bits());
     put(NODE + 8, 0.5f32.to_bits());
     put(NODE + 0x24, MODIFIER_DRAG);
-    // The atlas grid is two `u16` fields, not one `u32`: on the disc a
-    // big-endian record holds `00 08 00 04` for an 8x4 grid, so a four-byte
-    // reversal would read it back as 4x8. Written here field by field.
-    let mut put16 = |at: usize, value: u16| {
-        let bytes = match order {
-            ByteOrder::Big => value.to_be_bytes(),
-            ByteOrder::Little => value.to_le_bytes(),
-        };
-        image[at..at + 2].copy_from_slice(&bytes);
-    };
-    put16(0x9a0, 4);
-    put16(0x9a2, 2);
+    // The atlas grid is one `u32` with the columns in the high half: Pure's
+    // debris reads `04 00 02 00` on the PSP, two columns of four rows, and
+    // the same word is `00 02 00 04` on the PS3.
+    put(0x9a0, (2 << 16) | 4);
 
     let blob = pob_from_resource(&[None, Some(0x1a4)], &image);
     match order {
@@ -592,7 +584,7 @@ fn the_big_endian_blob_carries_the_authored_values() {
     assert_eq!(root.gravity_per_tick2, -0.015);
     assert_eq!(root.live_cap, 64);
     assert_eq!(root.draw_class(), Some(6));
-    assert_eq!(root.atlas_grid, (4, 2));
+    assert_eq!(root.atlas_grid, (2, 4));
     assert_eq!(root.atlas_frames, 8);
     assert_eq!(root.size.mode, ChannelMode::Keyframed);
     assert_eq!(root.size.scaled_at(1.0), 2.5);

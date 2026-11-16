@@ -100,6 +100,30 @@ impl Frame {
             .collect()
     }
 
+    /// This frame without the marks in the lower half of a screen `height` high: the footer
+    /// strips. A pause screen is not nested in the front end's frame and draws none.
+    #[must_use]
+    pub fn without_footer(&self, height: f32) -> Self {
+        let mut frame = self.clone();
+        frame.marks.retain(|mark| match mark {
+            Draw::Sprite { rect, .. } | Draw::Fill { rect, .. } => rect[1] < height * 0.5,
+            _ => true,
+        });
+        frame
+    }
+
+    /// This frame without any mark and without its clear: the block art and the inks stay.
+    /// A screen that draws its own chrome from the disc (the pause screen) sits on the race and
+    /// not on the front end's frame.
+    #[must_use]
+    pub fn without_marks(&self) -> Self {
+        Self {
+            clear: None,
+            marks: Vec::new(),
+            ..self.clone()
+        }
+    }
+
     /// Whether this title draws any frame at all.
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -339,12 +363,12 @@ pub fn read(
         // patches of one shared `pulse_assets.mip`. Without it every mark
         // would draw that sheet's own top-left corner instead of its own
         // patch, same failure `frontend::draw` had before it read these.
-        let uv = [
-            placed.x as f32 + image.u.unwrap_or(0.0),
-            placed.y as f32 + image.v.unwrap_or(0.0),
+        let uv = placed.sheet_rect([
+            image.u.unwrap_or(0.0),
+            image.v.unwrap_or(0.0),
             image.texture_width.unwrap_or(placed.width as f32),
             image.texture_height.unwrap_or(placed.height as f32),
-        ];
+        ]);
         marks.push(Draw::Sprite {
             rect: [x, image.y, width, height],
             uv,

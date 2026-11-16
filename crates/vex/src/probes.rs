@@ -108,11 +108,11 @@ fn be_f32(b: &[u8], at: usize) -> f32 {
     f32::from_bits(be_u32(b, at))
 }
 
-fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
+pub(crate) fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+pub(crate) fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 
@@ -124,7 +124,7 @@ fn mid(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     ]
 }
 
-fn lerp(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
+pub(crate) fn lerp(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
     [
         a[0] + (b[0] - a[0]) * t,
         a[1] + (b[1] - a[1]) * t,
@@ -134,7 +134,7 @@ fn lerp(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
 
 /// The fraction of `axis` that `from_origin` reaches, clamped to `0..=1`; a
 /// degenerate axis reads as the start.
-fn project01(from_origin: [f32; 3], axis: [f32; 3]) -> f32 {
+pub(crate) fn project01(from_origin: [f32; 3], axis: [f32; 3]) -> f32 {
     let len2 = dot(axis, axis);
     if len2 <= f32::EPSILON {
         return 0.0;
@@ -334,25 +334,51 @@ fn blend(set: &[u8], bytes: usize, size: (usize, usize), taps: &Taps) -> Vec<u8>
 /// keeps decoded probes calls it directly.
 #[must_use]
 pub fn mix(images: &[(&[u8], f32)]) -> Vec<u8> {
+    let (mut acc, mut out) = (Vec::new(), Vec::new());
+    mix_into(images, &mut acc, &mut out);
+    out
+}
+
+/// [`mix`] into `out`, with `acc` as its working memory: a caller that blends every frame
+/// keeps both and allocates nothing.
+pub fn mix_into(images: &[(&[u8], f32)], acc: &mut Vec<f32>, out: &mut Vec<u8>) {
+    out.clear();
     let Some(&(first, _)) = images.first() else {
-        return Vec::new();
+        return;
     };
-    let total: f32 = images.iter().map(|(_, w)| w).sum();
-    let norm = if total > 0.0 { 1.0 / total } else { 0.0 };
+    let norm = norm(images.iter().map(|&(_, weight)| weight));
     // One accumulator over the whole slice, an image at a time: the inner loop is a plain
     // widen-and-add the compiler vectorises, which a per-texel walk over the images is not.
-    let mut acc = vec![0.0f32; first.len()];
+    acc.clear();
+    acc.resize(first.len(), 0.0);
     for &(image, weight) in images {
         let scale = weight * norm;
         for (sum, &byte) in acc.iter_mut().zip(image) {
             *sum += f32::from(byte) * scale;
         }
     }
-    let mut out: Vec<u8> = acc.iter().map(|&v| (v + 0.5) as u8).collect();
+    out.extend(acc.iter().map(|&v| (v + 0.5) as u8));
     for alpha in out.iter_mut().skip(3).step_by(4) {
         *alpha = 255;
     }
-    out
+}
+
+/// One over the sum of `weights`, added in order; zero where they sum to nothing.
+fn norm(weights: impl Iterator<Item = f32>) -> f32 {
+    let total: f32 = weights.sum();
+    if total > 0.0 { 1.0 / total } else { 0.0 }
+}
+
+impl Taps {
+    /// What [`mix`] multiplies each tap's texels by: its weight over the sum of the weights
+    /// above zero, and zero for a tap [`mix`]'s callers leave out. For a blend done
+    /// elsewhere (`oag_render::probe_blend`) that has to land on [`mix`]'s bytes.
+    #[must_use]
+    pub fn scales(&self) -> [f32; 4] {
+        let norm = norm(self.weights.iter().copied().filter(|&weight| weight > 0.0));
+        self.weights
+            .map(|weight| if weight > 0.0 { weight * norm } else { 0.0 })
+    }
 }
 
 #[cfg(test)]

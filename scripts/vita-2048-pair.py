@@ -33,6 +33,9 @@ phase uncertainty). No pose is read: ours spawns the same grid slot the original
     memory (`/proc/<pid>/mem`) right after the launch, which needs Vita3K to be this script's own child. `--no-patch-hull-shake`
     keeps the stock game; a Vita3K that was already running is not patched, and the pair records that.
 
+    --game-mode fury, --node-template, --node-pick, --hop and --load-wait reach an authored node of the HD or Fury Campaign by tapping it
+    on the map, with no track name written in the guest's memory (`docs/tools/compare-page.md`, "Real events for the substituted 2048 pairs").
+
     --read-pose (with --walk) reads the original's grid pose out of the same memory before the Retry (the drawn hull matrix nearest ours' slot),
     records it against ours' (`original.pose_read`, `pose_delta`) and renders a second ours on the original's pose, `ours-original-pose.png`
     (`--pose-ours-height` for an HD-derived hull, whose node sits above ours' craft position). `docs/tools/compare-page.md`, "The hull shake and
@@ -62,11 +65,15 @@ TITLE = "PCSF00007"
 GAME_MODE_SINGLE_PLAYER = (295, 162)
 #: The HD Campaign tile beside it (the DLC's own campaign, `vita3k-capture.md`'s walk-in table).
 GAME_MODE_HD_CAMPAIGN = (477, 162)
-GAME_MODES = {"single": GAME_MODE_SINGLE_PLAYER, "hd": GAME_MODE_HD_CAMPAIGN}
+#: The Fury Campaign tile (DLC2) right of it.
+GAME_MODE_FURY_CAMPAIGN = (659, 162)
+GAME_MODES = {"single": GAME_MODE_SINGLE_PLAYER, "hd": GAME_MODE_HD_CAMPAIGN, "fury": GAME_MODE_FURY_CAMPAIGN}
 CONFIRM = (882, 480)
 #: The craft button left of the event card's Close and Play buttons (HD Campaign).
 HD_SELECT_TEAM = (622, 480)
 PAUSE_RETRY = (750, 480)
+#: The cross on an event card: back to the campaign map.
+CARD_CLOSE = (752, 480)
 RETRY_YES = (402, 312)
 #: The campaign map's first open node of a save that has finished "2048 - Event 1": Queens Mall.
 DEFAULT_NODE = (270, 68)
@@ -129,7 +136,7 @@ def scan_base(mem, pid, probe_site, probe_bytes):
     return found[0]
 
 
-def patch_hull_shake(pid, timeout=30.0):
+def patch_hull_shake(pid, timeout=120.0):
     """Overwrite the drawn hull's `bl HullShake_Apply` calls with `nop`s in the running Vita3K `pid` (a child of this process: Yama's
     `ptrace_scope` 1 refuses `/proc/<pid>/mem` to anything else), before the guest has run the code. Returns what was read back.
 
@@ -244,6 +251,13 @@ def read_trace_pose(trace_csv):
     return g("pos"), [-v for v in right] + up + fwd
 
 
+def load_mem_tool():
+    spec = importlib.util.spec_from_file_location("vita3k_mem", HERE / "vita3k-mem.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_drive():
     spec = importlib.util.spec_from_file_location("vita3k_drive", HERE / "vita3k-drive.py")
     module = importlib.util.module_from_spec(spec)
@@ -310,6 +324,70 @@ class Session:
         sys.exit("STALLED waiting for %s (%.0f s); last frame %s" % (what, timeout, self.frames / name))
 
 
+def pixel(path, x, y):
+    return tuple(int(v) for v in subprocess.run(["magick", str(path), "-crop", "1x1+%d+%d" % (x, y), "+repage", "-depth", "8", "txt:-"],
+                                                capture_output=True, text=True, check=True).stdout.splitlines()[-1].split("(")[1].split(")")[0].split(",")[:3])
+
+
+def on_game_mode(path):
+    """The Game Mode grid, no dialog over it: navy tiles at the top (Single Player, HD, Fury; the selected one orange) on a near white ground."""
+    r, g, b = pixel(path, 150, 300)
+    if min(r, g, b) < 200:
+        return False
+    tiles = [pixel(path, x, 110) for x in (270, 450, 630)]
+    navy = sum(1 for r, g, b in tiles if r < 60 and g < 70 and b < 120)
+    orange = sum(1 for r, g, b in tiles if r > 190 and g < 130 and b < 60)
+    return navy + orange == 3 and navy >= 2
+
+
+def tile_highlighted(path, tile):
+    """The Game Mode tile at `tile` is drawn orange (selected, the grid still up): its centre pixel is orange rather than the navy tile or a map."""
+    r, g, b = subprocess.run(["magick", str(path), "-crop", "1x1+%d+%d" % (tile[0] - 30, tile[1] - 40), "+repage", "-depth", "8", "txt:-"],
+                             capture_output=True, text=True, check=True).stdout.splitlines()[-1].split("(")[1].split(")")[0].split(",")[:3]
+    return int(r) > 190 and int(g) < 130 and int(b) < 60
+
+
+#: Where the map puts the selected node once its card is closed again (Fury Talons Junction, Modesto Heights; HD Anulpha Pass: 533, 330 to 335).
+RECENTRED_NODE = (533, 333)
+
+
+def find_node(s, args, near=None):
+    """The tap point of the event's node: `--node`, or, with `--node-template`, the `--node-pick`th match (0 = leftmost) of that icon in a frame taken now
+    (the Fury map, and the HD map past its first grid, re-centres on a node each time a card closes, so a remembered point lands on
+    its neighbour: a Speed Lap card where the Race card was; `docs/tools/compare-page.md`, "Real events for the substituted 2048 pairs")."""
+    if not args.node_template:
+        return tuple(args.node)
+    shot = s.shot("walk-map.png")
+    out = subprocess.run(["python3", str(HERE / "vita-2048-map-node.py"), str(shot), str(args.node_template), "--peaks", "4"],
+                         capture_output=True, text=True, check=True).stdout.split("\n")
+    found = [tuple(float(v) for v in line.split()) for line in out if line.strip()]
+    found = [f for f in found if f[2] >= 0.85]
+    if not found:
+        sys.exit("--node-template %s matches nothing in %s (best scores: %s)" % (args.node_template, shot, ", ".join(out)))
+    found.sort()
+    if near is not None:
+        x, y, _ = min(found, key=lambda f: (f[0] - near[0]) ** 2 + (f[1] - near[1]) ** 2)
+        print("node icon at (%d, %d) in %s (nearest the re-centred node)" % (x, y, shot), file=sys.stderr)
+        return (int(x), int(y))
+    if args.node_pick >= len(found):
+        sys.exit("--node-pick %d but only %d match(es) of %s in %s" % (args.node_pick, len(found), args.node_template, shot))
+    x, y, _ = found[args.node_pick]
+    print("node icon at (%d, %d) in %s" % (x, y, shot), file=sys.stderr)
+    return (int(x), int(y))
+
+
+def hop_to_grid(s, hops):
+    """Walk the campaign map to a later grid: tap each point of `hops` (a node of the next grid, drawn at the screen's edge), then
+    cancel its card. The map re-centres on the node last opened, so the next grid is on screen; every tap point is read off a frame
+    of the same cold boot (the layout after each close repeats from boot to boot)."""
+    for x, y in hops:
+        s.tap((x, y))
+        time.sleep(4.0)
+        s.tap(CARD_CLOSE)
+        time.sleep(6.0)
+    s.shot("walk-hopped.png")
+
+
 def boot_and_walk(s, args):
     d = s.drive
     d.bring_up_display(args.display, args.socket)
@@ -321,26 +399,50 @@ def boot_and_walk(s, args):
     elif args.patch_hull_shake:
         print("WARNING: Vita3K was already running, so it cannot be patched: the original's hull shake is ON", file=sys.stderr)
     s.window(args.boot_timeout)
-    # The title: Return starts the intro, then three presses reach the Game Mode grid with the PSN prompt gone.
+    # The title: Return starts the intro, then presses of cross reach the Game Mode grid with the PSN prompt gone. The count of presses
+    # depends on how fast the machine loads the front end, so the walk looks at the frame instead of counting (a hung guest, a frame that
+    # never leaves the intro, stops it: the caller retries the boot).
     time.sleep(8.0)
     s.key("Return")
-    for _ in range(3):
+    end = time.monotonic() + args.boot_timeout
+    while True:
         time.sleep(4.0)
+        if on_game_mode(s.shot("walk-title.png")):
+            break
+        if time.monotonic() > end:
+            sys.exit("STALLED on the way to the Game Mode grid (%.0f s); last frame %s" % (args.boot_timeout, s.frames / "walk-title.png"))
         s.key("x")
     time.sleep(2.0)
     tile = GAME_MODES[args.game_mode]
     s.tap(tile)  # one tap opens the mode (measured 2026-10-26, frontend-campaign-map.md); a second would land on the map
     time.sleep(3.0)
-    s.tap(args.node)
+    # ... unless the tap only highlighted the tile (orange, still the Game Mode grid; seen on a loaded machine, 2026-11-12): then once more
+    for _ in range(3):
+        if not tile_highlighted(s.shot("walk-tile.png"), tile):
+            break
+        s.tap(tile)
+        time.sleep(3.0)
+    if args.rename_track:
+        # The grid cell records of every campaign are in the guest's memory from the boot on (`FUN_810bbfce`, `Track` at +0xea): the
+        # open first node then races the circuit written there, in its own mode, laps and class, with no unlock.
+        old, new = args.rename_track
+        written = load_mem_tool().rename_cells(args.vita_pid, old, new)
+        args.track_rename = {"from": old, "to": new, "records": len(written)}
+        print("renamed %d cell record(s) %s -> %s" % (len(written), old, new), file=sys.stderr)
+        if not written:
+            sys.exit("no grid cell record races %r in the guest's memory: nothing renamed" % old)
     time.sleep(3.0)
-    if args.game_mode == "hd":
+    hop_to_grid(s, args.hop)
+    s.tap(find_node(s, args))
+    time.sleep(3.0)
+    if args.game_mode in ("hd", "fury"):
         # The HD Campaign's load stalls at 56 to 75 percent unless the craft was confirmed on Select Team first (four cold boots,
         # 2026-10-26): the wrench opens it on the default craft (Feisar HD), its check mark returns to the map, the node again.
         s.tap(HD_SELECT_TEAM)
         time.sleep(3.0)
         s.tap(CONFIRM)
         time.sleep(3.0)
-        s.tap(args.node)
+        s.tap(find_node(s, args, near=RECENTRED_NODE))
         time.sleep(3.0)
     s.tap(CONFIRM)  # Play
     time.sleep(3.0)
@@ -353,7 +455,7 @@ def boot_and_walk(s, args):
         s.wait("the load to finish (a dark frame after the light menus and loading screen)", lambda f: mean_luma(f) < 0.55,
                args.load_timeout, every=2.0, name="walk-load.png")
     else:
-        time.sleep(20.0)
+        time.sleep(args.load_wait)
     # The ship flyby holds a check mark at the bottom right until it is tapped; the first tap may land on the load's tail.
     for _ in range(6):
         s.tap(CONFIRM)
@@ -461,11 +563,20 @@ def restart_and_burst(s, count, tag, sample=None):
     s.tap(RETRY_YES)
     t0 = time.monotonic()
     out = []
+    hud_seen = False
+    last_tap = t0
     for i in range(count):
         path = s.frames / ("%s%03d.png" % (tag, i))
         got = sample(i) if sample else None
         s.drive.screenshot(s.display, s.wid, path)
         out.append((time.monotonic() - t0, path) + ((got,) if sample else ()))
+        # The HD Campaign's event shows its mode card again on a Retry and holds the countdown until the check mark is tapped
+        # (seen 2026-11-12, 7 s of card on every frame); tap it until the HUD is up, then stop touching the screen.
+        hud_seen = hud_seen or hud_up(path)
+        now = time.monotonic()
+        if not hud_seen and now - t0 > 1.5 and now - last_tap > 2.0:
+            s.tap(CONFIRM)
+            last_tap = time.monotonic()
     return out
 
 
@@ -530,7 +641,7 @@ def main():
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--event", default="2048 - Event 2", help="our --event, the campaign event the original was walked into")
     ap.add_argument("--game-mode", choices=sorted(GAME_MODES), default="single",
-                    help="the Game Mode tile to open: `single` (Single Player Campaign) or `hd` (the DLC's HD Campaign)")
+                    help="the Game Mode tile to open: `single` (Single Player Campaign) or `hd` / `fury` (the DLC campaigns)")
     ap.add_argument("--track", default=None,
                     help="ours races this circuit (`--track <vex entry> --mode`) instead of `--event`: a circuit no campaign event of ours names, "
                          "such as a DLC one (`Data\\art\\published\\DLC1\\environments\\Vineta_K\\track.vex`)")
@@ -539,6 +650,12 @@ def main():
                     help="ours' `--team` id; the DLC's HD Campaign flies the HD-derived roster (`Feisar`, under `hdships`), not 2048's own `feisar2048`")
     ap.add_argument("--node", type=int, nargs=2, default=DEFAULT_NODE, metavar=("X", "Y"),
                     help="the event's node on the campaign map, in the 960x544 window")
+    ap.add_argument("--node-template", type=Path, default=None,
+                    help="a crop of the node's icon (`vita-2048-map-node.py`): the node is found in a fresh frame before each tap instead of at --node")
+    ap.add_argument("--load-wait", type=float, default=20.0, help="with a DLC campaign: seconds to wait out the load before the HUD taps (a loaded machine needs more)")
+    ap.add_argument("--hop", type=int, nargs=2, action="append", default=[], metavar=("X", "Y"),
+                    help="before the node: open the card at this map point and close it, so the map re-centres on the next grid (repeatable)")
+    ap.add_argument("--node-pick", type=int, default=0, help="with --node-template: which match, counted from the left (the map shows several nodes of one icon)")
     ap.add_argument("--nose-original", type=float, nargs=2, metavar=("X", "Y"),
                     help="the hull's nose tip in the original's frame, read by eye off a 4x crop: for a craft with no yellow livery to find "
                          "(the HD Campaign's Feisar), where the centroid offset cannot be measured; needs --nose-ours")
@@ -552,6 +669,12 @@ def main():
     ap.add_argument("--pose-ours-height", action="store_true",
                     help="with --read-pose: keep ours' own height in the posed render. The drawn node of an HD-derived hull (the DLC's Feisar) "
                          "sits 1.85 units above ours' craft position (floor 33 px off if taken as is); 2048's own hulls agree to 0.05")
+    ap.add_argument("--rename-track", nargs=2, metavar=("OLD", "NEW"),
+                    help="with --walk: after the Game Mode tile, rewrite the track name of every grid cell record racing OLD in the guest's memory to NEW "
+                         "(`Vineta_K Metropia`), so the open first node of the HD Campaign loads NEW in its own mode: the unlock-free route to a circuit "
+                         "no open cell races. A pair made so is a substituted event, not an authored one (recorded as `original.track_rename`)")
+    ap.add_argument("--skip-craft-offset", action="store_true",
+                    help="do not measure the hull offset (a craft with no yellow livery and no --nose-original): recorded as not measured")
     ap.add_argument("--walk", action="store_true", help="boot and walk from the title to the HUD (else Vita3K is on a race already)")
     ap.add_argument("--display", type=int, default=int(os.environ.get("OAG_VITA3K_DISPLAY", 0)) or None)
     ap.add_argument("--socket", default=None, help="weston's socket name (with --walk, if the display is not up)")
@@ -591,6 +714,7 @@ def main():
 
     args.hull_shake = None
     args.vita_pid = None
+    args.track_rename = None
     which = ["--track", args.track, "--mode", args.mode] if args.track else ["--event", args.event]
     which += ["--team", args.team] if args.team else []
     env = {**os.environ, **ce.ours_env(profile_dir)}
@@ -645,6 +769,9 @@ def main():
     pair.rec["original"]["emulator"] = dict(plat["emulator"])
     pair.rec["original"]["hull_shake"] = (
         {"state": "patched out", "camera_tripod_shake": "on", **args.hull_shake} if args.hull_shake else "on")
+    if args.track_rename:
+        pair.rec["original"]["track_rename"] = {**args.track_rename, "method": "write to /proc/<pid>/mem of the 0x18-byte track name of each grid cell record "
+                                                "(Locked byte at -1, NUL padded, `FUN_810bbfce` +0xea) before the first node was tapped"}
     pair.rec["original"]["grab"] = {"hud_first_frame_s": t_hud, "grid_frame_s": t_pick, "burst_frames": len(burst),
                                     "burst_interval_s": (burst[-1][0] - burst[0][0]) / (len(burst) - 1),
                                     "grid_offset_s": t_pick - t_hud}
@@ -706,6 +833,8 @@ def main():
         print("MEASURED nose tip offset (%+.1f, %+.1f) px" % (dx, dy), file=sys.stderr)
         if abs(dx) > 6 or abs(dy) > 6:
             pair.caveat("the grid pose or camera is not matched: nose tip offset (%+.1f, %+.1f) px" % (dx, dy))
+    elif args.skip_craft_offset:
+        pair.rec["craft_offset_px"] = {"not_measured": "no yellow livery to find and no nose tip read"}
     else:
         off = craft_offset(out / "theirs.png", out / "ours.png")
         pair.rec["craft_offset_px"] = off

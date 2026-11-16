@@ -484,7 +484,7 @@ def menu(args):
         return
 
     # The attract demo *is* a race by state name, and it is not this one. Left
-    # sitting at the menus for ~120 s the game starts driving itself and announces
+    # sitting on the main menu for more than 60 s the game starts driving itself and announces
     # `Demo InGame`, which the check above used to read as "already in a race" -
     # so the walk returned success having done nothing, and whatever ran next
     # measured the demo's craft. Any button leaves it; one press lands back at the

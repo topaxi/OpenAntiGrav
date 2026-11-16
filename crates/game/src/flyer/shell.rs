@@ -63,7 +63,7 @@ impl Shell {
             .read_name(ENTRY)
             .with_context(|| format!("reading {ENTRY}"))?;
         let nodes = oag_vex::vex::nodes(&blob).context("reading the shell's scene tree")?;
-        let (mut model, _) = crate::preview::psp2_scene::model_named(archives, ENTRY)?;
+        let (mut model, _) = crate::preview::psp2_scene::model_named(archives, ENTRY, false)?;
         super::clip::bake(&mut model, 0.0);
         let named = |name: &str| {
             let draws = model

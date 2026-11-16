@@ -16,7 +16,7 @@ use oag_ui::menu;
 use oag_ui_screens::picker::Rating;
 
 use crate::records::Store;
-use crate::unlock::{gates_variants, loyalty_unlocked};
+use crate::unlock::{ModelGate, gates_variants, loyalty_unlocked};
 
 /// A team's livery row.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -97,24 +97,52 @@ pub fn variant_choices(title: &'static oag_title::Title, team: &str) -> Vec<menu
         .collect()
 }
 
-/// [`variant_choices`] with a hull variant cut to the ones `team`'s own `<Unlock>` rows let
-/// through (`Definition_IsUnlocked`, via [`loyalty_unlocked`]): a locked hull is absent from the
-/// row. A team `details` does not hold, a title that does not gate ([`gates_variants`]) and an
-/// axis that is a [`oag_title::TeamVariants`] one are returned whole.
+/// [`variant_choices`] cut to what `team`'s own `<Unlock>` rows let through: a locked hull or
+/// model is absent from the row.
+///
+/// Two shapes. On a title that gates its `PI_TeamModel`s ([`ModelGate::gates`], Wipeout
+/// HD/Fury and Omega) the row is every model raced out of the variant table's directories, in
+/// file order, each by its variant id ([`Team::model_variants`]: `""`, `"_c1"`, `"@livery2"`
+/// for `SKIN1`), the ones whose rows hold ([`ModelGate::offers`]); the plain suffixes keep the
+/// table's labels and a re-liveried model is called by its declared name. File order is the
+/// `HexSelection` column's, so `Down` steps the cursor down a row. On Pulse, a hull variant is
+/// cut by its loyalty rows (`Definition_IsUnlocked`, via [`loyalty_unlocked`]). A team `details`
+/// does not hold, or a title that gates neither, is returned whole.
 #[must_use]
 pub fn gated_variant_choices(
     title: &'static oag_title::Title,
     team: &str,
     details: &[Team],
     records: &Store,
+    gate: &ModelGate,
 ) -> Vec<menu::Choice> {
     let mut choices = variant_choices(title, team);
-    if !gates_variants(title) || title.race.team_variants_for(team).is_some() {
-        return choices;
-    }
     let Some(declared) = details.iter().find(|candidate| candidate.id == team) else {
         return choices;
     };
+    if gate.gates() && !declared.models.is_empty() {
+        let join = title.race.join_for(team);
+        let suffixes: Vec<String> = if choices.is_empty() {
+            vec![String::new()]
+        } else {
+            choices.iter().map(|choice| choice.value.clone()).collect()
+        };
+        return declared
+            .model_variants(join, suffixes.iter().map(String::as_str))
+            .into_iter()
+            .filter(|(_, model)| gate.offers(model, team, records, title))
+            .map(|(id, model)| {
+                let label = choices
+                    .iter()
+                    .find(|choice| choice.value == id)
+                    .map_or(model.name.as_str(), |choice| choice.label.as_str());
+                menu::Choice::labelled(id.as_str(), label)
+            })
+            .collect();
+    }
+    if !gates_variants(title) || title.race.team_variants_for(team).is_some() {
+        return choices;
+    }
     choices.retain(|choice| {
         declared
             .hull_unlocks
@@ -127,7 +155,7 @@ pub fn gated_variant_choices(
 
 /// The livery row of `team` (`details` is its catalogue entry, when the source has one) in `mode`.
 ///
-/// `records` is read only on a title that gates ([`gates_variants`]).
+/// `records` is read only on a title that gates ([`gates_variants`], [`ModelGate::gates`]).
 #[must_use]
 pub fn ship_livery(
     title: &'static oag_title::Title,
@@ -135,6 +163,7 @@ pub fn ship_livery(
     details: Option<&Team>,
     strings: &oag_ui::language::StringTable,
     records: &Store,
+    gate: &ModelGate,
     mode: oag_race::Mode,
 ) -> Livery {
     let gates = gates_variants(title);
@@ -185,7 +214,7 @@ pub fn ship_livery(
     }
     let details_slice: &[Team] = details.map_or(&[], std::slice::from_ref);
     let mut variants: Vec<(String, String)> =
-        gated_variant_choices(title, team, details_slice, records)
+        gated_variant_choices(title, team, details_slice, records, gate)
             .into_iter()
             .map(|choice| (choice.value, choice.label))
             .collect();
@@ -203,3 +232,6 @@ pub fn ship_livery(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod model_tests;

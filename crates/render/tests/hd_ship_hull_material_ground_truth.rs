@@ -65,6 +65,7 @@ fn build(image: &Path, archive: &str, path: &str) -> Option<(mesh::Model, mesh::
         &data,
         &geometry,
         &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
         |c| c.mesh,
     )
     .ok()

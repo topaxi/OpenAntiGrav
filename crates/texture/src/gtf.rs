@@ -82,9 +82,11 @@
 //! # 23 cubemaps, decoded face by face
 //!
 //! `cubemap` is set on 23 files (skies and probes). Six faces follow one another,
-//! face-major ([`Texture::face_to_rgba`], drawn by `oag_mesh::mesh::sky_cube`).
-//! The length invariant holds on all 23 with **an unexplained 360 bytes** on the
-//! 20 carrying a mip chain (see [`Texture::chain_len`]).
+//! face-major ([`Texture::face_to_rgba`], drawn by `oag_mesh::mesh::sky_cube`),
+//! **each starting on a [`CUBEMAP_FACE_ALIGN`]-byte boundary** (see
+//! [`Texture::face_stride`]). The length invariant holds exactly on all 23: the 8
+//! carrying a mip chain end each of their first five faces 72 bytes short of a
+//! boundary, which is the 360 bytes once read as an unexplained tail.
 //!
 //! See `docs/formats/gtf.md` for the evidence, and `docs/formats/hd-hud.md` for
 //! what needed this.
@@ -455,22 +457,38 @@ impl Texture {
 
     /// Bytes the whole texture occupies, every level of every face.
     ///
-    /// Includes the 360 unexplained bytes a multi-level cubemap carries, since
-    /// the declared length includes them on all 20; see the module docs.
+    /// Every face but the last is padded to [`Self::face_stride`]; the declared
+    /// length stops at the end of the last face's chain, unpadded.
     #[must_use]
     pub fn chain_len(&self) -> usize {
-        let one_face: usize = (0..self.mip_levels)
+        self.face_stride() * (self.faces() - 1) + self.face_chain_len()
+    }
+
+    /// Bytes of one face's whole mip chain, unpadded.
+    fn face_chain_len(&self) -> usize {
+        (0..self.mip_levels)
             .map(|level| self.level_len(level))
-            .sum();
-        let slack = usize::from(self.cubemap && self.mip_levels > 1) * CUBEMAP_SLACK;
-        one_face * self.faces() + slack
+            .sum()
+    }
+
+    /// Bytes from the start of one face to the start of the next: one face's
+    /// chain rounded up to [`CUBEMAP_FACE_ALIGN`]. Equal to the chain on a flat
+    /// texture, which has one face.
+    #[must_use]
+    pub fn face_stride(&self) -> usize {
+        let chain = self.face_chain_len();
+        if self.cubemap {
+            chain.next_multiple_of(CUBEMAP_FACE_ALIGN)
+        } else {
+            chain
+        }
     }
 
     /// Byte range of one mip level, inside the blob.
     ///
-    /// **Non-cubemaps only.** For a cubemap this is the level of the first face,
-    /// assuming it starts at offset zero (not checked); see the 360 unexplained
-    /// bytes in the module docs. [`Self::to_rgba`] refuses a cubemap.
+    /// **Non-cubemaps only.** For a cubemap this is the level of the first face;
+    /// [`Self::face_range`] addresses the others. [`Self::to_rgba`] refuses a
+    /// cubemap.
     #[must_use]
     pub fn level_range(&self, level: u8) -> Range<usize> {
         let start = self.data.start + (0..level).map(|l| self.level_len(l)).sum::<usize>();
@@ -479,18 +497,20 @@ impl Texture {
 
     /// Byte range of one mip level of one **face**.
     ///
-    /// **All of a face's levels are consecutive, then the next face's**
-    /// (`one_face * faces() + slack`, holding on all 23 cubemaps). A level-major
-    /// walk would read face 1's base level as face 0's second.
+    /// **All of a face's levels are consecutive, then the next face's, at the
+    /// next [`CUBEMAP_FACE_ALIGN`] boundary** ([`Self::face_stride`], holding on
+    /// all 23 cubemaps). A level-major walk would read face 1's base level as
+    /// face 0's second; an unaligned one slides face `n` sideways by `36 * n`
+    /// texels on Sol 2's 2048x2048 sky (`docs/formats/gtf.md`, "Each face starts
+    /// on a 128-byte boundary").
     ///
     /// `face` past [`Self::faces`] answers the last face rather than panicking;
     /// [`Self::face_to_rgba`] range-checks.
     #[must_use]
     pub fn face_range(&self, face: usize, level: u8) -> Range<usize> {
-        let one_face: usize = (0..self.mip_levels).map(|l| self.level_len(l)).sum();
         let face = face.min(self.faces().saturating_sub(1));
         let start = self.data.start
-            + face * one_face
+            + face * self.face_stride()
             + (0..level).map(|l| self.level_len(l)).sum::<usize>();
         start..start + self.level_len(level)
     }
@@ -606,10 +626,14 @@ pub fn decode_level(
     decode::level(format, texels, width, height, pitch, linear)
 }
 
-/// The unexplained tail on a cubemap that carries a mip chain.
+/// The boundary each cubemap face starts on.
 ///
-/// The same 360 bytes on all 20, whatever the face size or format.
-const CUBEMAP_SLACK: usize = 360;
+/// Every one of the disc's 23 cubemaps closes on it exactly
+/// (`docs/formats/gtf.md`, "Each face starts on a 128-byte boundary"). **The
+/// disc does not separate 128 from 256**: its multi-level faces all end at 184
+/// mod 256, so both pad 72 bytes. 128 is chosen as the RSX's texture address
+/// alignment, which a face is bound at.
+pub const CUBEMAP_FACE_ALIGN: usize = 128;
 
 /// A parsed `.gtf`.
 #[derive(Debug, Clone, PartialEq, Eq)]

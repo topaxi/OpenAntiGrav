@@ -58,7 +58,16 @@ pub(super) fn fill_fraction(art: &oag_title::HudArt, readout: &Readout, name: &s
 /// window is the **right** `fraction` of the art, so the art's pointed end is
 /// the tip at every value.
 pub(super) fn crop(sprite: &Sprite, fraction: f32) -> Sprite {
-    let mut out = sprite.clone();
+    Sprite {
+        name: sprite.name.clone(),
+        src: sprite.src.clone(),
+        ..crop_geometry(sprite, fraction)
+    }
+}
+
+/// [`crop`] without the sprite's `name` and `src`, drawn with `draw::sprite_draw_from`.
+pub(super) fn crop_geometry(sprite: &Sprite, fraction: f32) -> Sprite {
+    let mut out = super::draw::bare(sprite);
     out.rect[2] = tip_width(fraction, sprite.rect[2]);
     out.uv[0] = sprite.uv[0] + sprite.uv[2] * (1.0 - fraction);
     out.uv[2] = sprite.uv[2] * fraction;

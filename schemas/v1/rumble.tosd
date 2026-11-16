@@ -1,0 +1,91 @@
+# A rumble pattern: two byte tracks stepped once per pad update, plus a few flags.
+# The same data the disc's Data/XML/Rumble/<name>.xml holds, read into one Pattern
+# (crates/mod/src/rumble.rs). Absent class and priority play as Game and Low; a
+# `positional` table is the Positional behaviour; `loop` is meaningful on Looping
+# only and the loader refuses it on a OneShot, which this schema does not say.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/rumble[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+[types.number]
+oneof = ["integer", "float"]
+
+[types.positional]
+type = "table"
+
+[types.positional.fall_off_inner]
+oneof = ["integer", "float"]
+optional = true
+
+[types.positional.fall_off_outer]
+oneof = ["integer", "float"]
+optional = true
+
+# No `type = "table"` here: the table has a child named `type`, and an implicit
+# table (one with fixed children) is how this language lets a key be called that.
+[types.pattern.type]
+type = "string"
+allowedvalues = ["OneShot", "Looping"]
+
+[types.pattern.class]
+type = "string"
+allowedvalues = ["Game", "UI"]
+optional = true
+
+[types.pattern.priority]
+type = "string"
+allowedvalues = ["Low", "Medium", "High"]
+optional = true
+
+[types.pattern.loop]
+type = "array"
+itemtype = "integer"
+minlength = 2
+maxlength = 2
+optional = true
+
+[types.pattern.positional]
+type = "types.positional"
+optional = true
+
+[types.byte]
+type = "integer"
+min = 0
+max = 255
+
+[types.tracks]
+type = "table"
+
+[types.tracks.large]
+type = "array"
+itemtype = "types.byte"
+optional = true
+
+[types.tracks.small]
+type = "array"
+itemtype = "types.byte"
+optional = true
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+optional = true
+
+[elements.pattern]
+type = "types.pattern"
+
+[elements.tracks]
+type = "types.tracks"
+optional = true

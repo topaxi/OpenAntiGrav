@@ -168,7 +168,16 @@ fn image() -> Option<PathBuf> {
 /// [`cannon-quake-leachbeam.md`](../../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md);
 /// re-measuring the pathology regime needs `oag_ai::Driver::social`'s
 /// `alongside`/`CONTACT_FLOOR` fix reverted for one run.
-const MAX_OVERLAPPED_PAIR_TICKS: u32 = 2_000;
+///
+/// **Re-baselined to `2_500` when the Missile's probe floor arm became the Rocket's steer**
+/// (`docs/ghidra/functions/psp-pulse-usa/missile.md`, "The probe's floor arm"). The tree before
+/// it measured **1,906** pair-ticks (sustained 1,121) and the tree with it **2,066** (1,198); an
+/// arm-by-arm run showed that arm alone moves it, and that the Shuriken's and Rocket's arms leave it
+/// exactly where it was. The opponents fire Missiles on this scenario, a steered Missile lands
+/// 0.05 to 0.5 unit a tick off a turned-parallel one, and a different hit re-rolls a chaotic race.
+/// The headroom over the measured figure is the file's own proportional rule; it is no stronger a
+/// guard than it was.
+const MAX_OVERLAPPED_PAIR_TICKS: u32 = 2_500;
 
 /// Ticks per race: the same length the sticking measurement above was taken
 /// over, so a change here would also move the number this bound is set

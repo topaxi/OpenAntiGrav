@@ -184,19 +184,19 @@ archive!(
     base_data00,
     "omega-eu",
     "data00.psarc",
-    "Survey { files: 620, materials: 4918, uniforms: 6833, samplers: 7236, other_kinds: 0, unbound: 3290, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 2720, named_samplers: 3597, glow_layers: 16, plain_scrolls: 2 }"
+    "Survey { files: 620, materials: 4918, uniforms: 6833, samplers: 7236, other_kinds: 0, unbound: 3290, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 2722, named_samplers: 3597, glow_layers: 16, plain_scrolls: 2 }"
 );
 archive!(
     base_data01,
     "omega-eu",
     "data01.psarc",
-    "Survey { files: 304, materials: 5871, uniforms: 5959, samplers: 11004, other_kinds: 0, unbound: 2879, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 2097, named_samplers: 9222, glow_layers: 128, plain_scrolls: 0 }"
+    "Survey { files: 304, materials: 5871, uniforms: 5959, samplers: 11004, other_kinds: 0, unbound: 2879, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 2512, named_samplers: 9266, glow_layers: 128, plain_scrolls: 0 }"
 );
 archive!(
     base_data02,
     "omega-eu",
     "data02.psarc",
-    "Survey { files: 32, materials: 8565, uniforms: 14668, samplers: 18515, other_kinds: 0, unbound: 4061, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 4782, named_samplers: 14728, glow_layers: 153, plain_scrolls: 0 }"
+    "Survey { files: 32, materials: 8565, uniforms: 14668, samplers: 18515, other_kinds: 0, unbound: 4061, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 5062, named_samplers: 14966, glow_layers: 153, plain_scrolls: 0 }"
 );
 archive!(
     base_data03,
@@ -208,7 +208,7 @@ archive!(
     base_data04,
     "omega-eu",
     "data04.psarc",
-    "Survey { files: 40, materials: 13722, uniforms: 16415, samplers: 20548, other_kinds: 0, unbound: 7169, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 3781, named_samplers: 10024, glow_layers: 20, plain_scrolls: 17 }"
+    "Survey { files: 40, materials: 13722, uniforms: 16415, samplers: 20548, other_kinds: 0, unbound: 7169, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 3824, named_samplers: 10024, glow_layers: 20, plain_scrolls: 17 }"
 );
 archive!(
     patch_data05,

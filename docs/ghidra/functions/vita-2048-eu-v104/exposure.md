@@ -39,8 +39,9 @@ composite (wo_composite_nocc_fp), per pixel:
 
 `Scale`, `Max`, `Speed`, `BloomFactor` and `Gate` are the circuit's
 `Lighting.ExposureScale`, `ExposureMax`, `ExposureSpeed`, `BloomFactor` and
-`BloomGate`. `v` is a per-channel vignette factor `1 - t^2`, `t` the vertex
-program's third output (`wo_composite_vp`, `vignetteTint`), not resolved here.
+`BloomGate`. `v` is a per-channel vignette factor `1 - t^2`, `t = vignetteTint.rgb * w` the vertex
+program's third output (`wo_composite_vp`) and `w` the composite mesh's `pos.w`
+("The vignette" below).
 `main` is the scene, which 2048's lit programs write in a gamma-2 linear space:
 a lightmapped track program decodes its diffuse texel by squaring it and
 multiplies the raw lightmap scale-bias in (Vita3K's translation of the program,
@@ -69,6 +70,11 @@ the blur kernel: **75**. Parts below.
 | `0x8151c5d4` (data) | `g_BloomFactor` | 85 | |
 | `0x8151c5d8` (data) | `g_BloomGate` | 85 | |
 | `0x8151c5bc` (data) | `g_ExposureAdaptEnabled` | 60 | Read 1 on every race below; its four writers (`0x81022988`, `0x81035c08`, `0x81021c5e`, `0x81021cb8`) were not read past their stores. |
+| `0x816aef08` (data) | `g_VignetteTint` | 80 | `vignetteTint`, four floats `1.0, 1.0, 0.97, 1.0` seeded by `PostFx_RegisterPrograms`. |
+| `0x8151c6b0` (data) | `g_VignetteStrength` | 75 | The mesh's `w` on the outer ring, 1.0 (0 while a photo capture runs). |
+| `0x8151c6b4` (data) | `g_VignetteCentreY` | 80 | The mesh's centre height in clip space, -0.885. |
+| `0x8151c6b8` (data) | `g_VignetteInnerRadius` | 80 | Inside it `w` is 0, 1.5. |
+| `0x8151c6bc` (data) | `g_VignetteOuterRadius` | 80 | At it `w` is the strength, 2.15. |
 
 The schema offsets are `Environment_RegisterLightingSchema`'s
 ([lighting-schema.md](lighting-schema.md)): `+0x41c` is registered against
@@ -95,6 +101,108 @@ The same formula, from an independent decoder, is in Omega's executable:
 `c = alpha.rgb + (1 - alpha.a) * main; c *= exposure; L = dot(c, luminanceFactor); out = c * L / (1 + L) + ...`,
 registered there and referenced by no code. That page calls the `wo_*` set
 "Wipeout HD's composites carried forward"; this is the title that runs them.
+
+## The vignette: `v = 1 - (vignetteTint * w)^2`, a mesh dark at the top of the frame (2026-11-11, `w2048-vignette`)
+
+Static reading of `PostFx_RenderChain` and of the two programs' USSE listings
+(`scripts/vita-usse.py disasm`), checked against the three Vita3K pairs. Confidence
+**85** for the law and the mesh, **80** for the constants (a static seed with one writer,
+not watched at run time: Vita3K was not run, see "Not measured"), **70** that the mesh's
+`+y` is the picture's top (the corner measurement below, not the Vita's NDC convention).
+
+- **`wo_composite_vp`** (`eboot.elf` program #9, container `0x81526230`, 477 bytes): attributes
+  `pos` (4 floats) and `uv`, uniforms `mainScaleBias`, `bloomScaleBias`, `vignetteTint`. The
+  position output is `pos.xyz, 1` scaled by the constant ROM's `c1.y`; the vignette output is
+  `vignetteTint.xyz * pos.w` in half precision times `c15.y` (1.0), written as `o8`/`o10`
+  with `w = 1`. The mesh is drawn in clip space with no transform, so the composite is **the
+  mesh**, not a full-screen triangle; the program has no other input of `w`.
+- **`wo_composite_nocc_fp`** (program #37, `0x81529598`): its last three instructions are
+  `pa0.xyz = -t * t`, `pa0 = pa0 * S + screenTint`, `pa0.xyz += S`: `out = S * (1 - t^2) +
+  screenTint`, `S` the `sqrt` term above. So `v = 1 - t^2` per channel, `t = tint * w`.
+- **`vignetteTint`** is the half4 `PostFx_RenderChain` packs (`local_348`/`local_344`) from four
+  floats at `0x816aef08..0x816aef14`. `PostFx_RegisterPrograms` stores `1.0`, `1.0`, `0.97`
+  (`0x3f7851ec`), `1.0` there (`0x8103d762..0x8103d770`); the address has no other writer
+  (`get_xrefs_to`), so the tint is `(1, 1, 0.97)`: blue is darkened a little less.
+- **The mesh** (the race branch, `0x8103ae80` on): 32 sectors (angle step `0x3e490fd9`,
+  `2 pi / 32`) of nine vertices, `A B C | B C D | C D E`, each `(uv, pos)` with
+  `uv = (x / 2 + 0.5, 1 - (y / 2 + 0.5))`. With `a`, `b` the sector's two angles: `A` the centre
+  `(0, cy)`, `B`/`C` the inner circle `(R1 sin, cy + R1 cos)` at `a`/`b`, `D`/`E` the outer circle
+  at `a`/`b`; `pos.w` is 0 on `A`, `B`, `C` and `s` on `D`, `E`. The values are the floats
+  `g_VignetteStrength` `0x8151c6b0` = 1.0 (`s`, read at `0x8103aea6`), `g_VignetteCentreY`
+  `0x8151c6b4` = `0xbf628f5c` = -0.885, `g_VignetteInnerRadius` `0x8151c6b8` = 1.5,
+  `g_VignetteOuterRadius` `0x8151c6bc` = `0x4009999a` = 2.15. Each has one reader and no writer.
+  So `w` is 0 inside radius 1.5 of `(0, -0.885)` in clip space and ramps linearly over the
+  ring's triangles to 1.0 at 2.15; the frame's top corners are at 2.134, its bottom corners at
+  1.007 (no vignette), its top edge's middle at 1.885 (`w` 0.59, `v` 0.65). The outer polygon's
+  chord minimum is 2.1396, so the mesh just covers the frame.
+- **The switch**: `s` is 0 when `FUN_81021ef6` (`0x81021ef6`) returns nonzero (`0x8103ae80`).
+  It reads two 64-bit words at `0x81519638`/`0x81519640` and the byte `0x815d29e0` that
+  `FUN_81021992` (the photo capture's job start, `photo-mode.md`: `FUN_81021992(job, 0)`)
+  sets to 1 (four more functions write it, unread): it is true only while that
+  flag is set and the 64-bit word at `0x81519638` is past `0x81519640`, which
+  `FUN_81021992` sets to its start plus the job's length, so it reads as "a photo
+  capture job is running past its window" and a race has the vignette on throughout
+  (confidence 60; no name given). **Departure: ours' photo mode does not read it.** Its
+  accumulated shot (`oag_raceplay`'s `photo::shot`, frames of a motion blur or a depth of field)
+  draws each frame through this chain with the vignette on, where the original drops it for the
+  capture; wiring that on a score-60 reading is left open.
+- **Precision**: the vertex program's product and the fragment's square are half
+  precision (about 3 digits); ours runs `f32`.
+
+### The original shows it
+
+The original's top corners are black on all three pairs and its bottom corners are lit.
+The outermost 8x8 pixels, luma, original / ours before / ours after:
+
+| Pair | TL | TR | BL | BR |
+| --- | --- | --- | --- | --- |
+| Queens Mall | 1.8 / 8.6 / 0.6 | 1.8 / 64.6 / 4.5 | 90.4 / 116.0 / 116.0 | 47.7 / 47.0 / 47.0 |
+| Empire Climb | 1.6 / 7.1 / 0.4 | 1.2 / 8.6 / 0.6 | 80.7 / 149.5 / 149.5 | 140.0 / 216.1 / 216.1 |
+| Vineta K (DLC) | 0.9 / 11.3 / 0.7 | 1.3 / 66.6 / 4.8 | 23.2 / 19.0 / 19.0 | 17.6 / 8.1 / 8.1 |
+
+The 120x120 corner boxes (HUD pixels masked: near-white in any of the three frames, grown 3 px;
+the unmasked means follow), luma, original / before / after:
+
+| Pair | TL | TR | BL | BR |
+| --- | --- | --- | --- | --- |
+| Queens Mall | 25.4 / 45.6 / 26.4 | 21.5 / 19.6 / 11.1 | 79.8 / 84.6 / 84.6 | 58.9 / 60.8 / 60.8 |
+| Empire Climb | 12.2 / 16.9 / 9.4 | 19.4 / 8.6 / 4.2 | 80.0 / 97.1 / 97.1 | 152.4 / 155.5 / 155.5 |
+| Vineta K (DLC) | 14.0 / 25.5 / 15.3 | 29.1 / 54.6 / 32.8 | 26.6 / 25.4 / 25.4 | 60.0 / 52.2 / 52.2 |
+
+Unmasked: Queens Mall TL 61.3 / 74.4 / 60.0, TR 48.3 / 42.0 / 33.9; Empire Climb TL 51.1 / 51.3 /
+45.6, TR 42.6 / 31.5 / 27.6; Vineta K TL 53.7 / 61.1 / 52.2, TR 47.5 / 70.8 / 50.6. The bottom
+boxes do not move (the mesh's `w` is 0 there), the top-left boxes of Queens Mall and Vineta K and
+the top-right of Vineta K land on the original's, and the top rows of Vineta K fit
+(rows 0-7 masked 11.8 / 33.5 / 13.5, top edge middle 100.4 / 161.3 / 107.6). **Where it does not
+close**: the top edge's middle on Queens Mall and Empire Climb goes under the original's (59.1 /
+62.1 / 41.3 and 108.8 / 108.0 / 72.0), and Empire Climb's top-right box under it. Those are
+the regions the original lights with the sun's lens-flare streak and haze that ours does not draw
+([lens-flare.md](../../../rendering/lens-flare.md)), and ours' sky and walls are darker there
+before the vignette (Empire Climb rows 8-39: 42.5 / 41.6 / 29.5), so the box mean is not a
+measure of `v` alone; the 8x8 corners, where the original is black on all three, are. Frame
+mean luma, original / before / after (before is this tree with the vignette off, which carries
+the lighting work landed since the table under "Ours" was taken): Queens Mall 60.2 / 53.8 /
+51.3, Empire Climb 83.1 / 69.3 / 68.0, Vineta K 48.1 / 41.8 / 39.4. The whole frame goes a little
+darker, further from the original, because the vignette removes light from a frame that is
+already dark elsewhere (`tone-2048-grid`, below); that is the cost of a term the original has,
+not a reason to leave it out.
+
+### Not measured
+
+- Vita3K was **not run** for a poke probe (`--ram-poke 0x8151c6b0=0:f32` would render the
+  original with and without the vignette on one scene): this machine has no Vita3K profile
+  (no `ux0`, no `apps.dat`). The tint and strength are the static seeds; a `--ram-read` of
+  `0x816aef08..0x816aef14` and `0x8151c6b0` is the check that would watch them.
+- Which way the Vita's clip-space `+y` points is not read; the mesh's orientation is taken from the
+  pairs (the dark side is the top) and from `uv`'s `1 - (y / 2 + 0.5)`.
+- The screen tint (`screenTintColour`, `FUN_813b1d28`) and `alphaTex` stay open.
+
+### Omega: checked, differs
+
+Omega registers `wo_composite_nocc_fp` and runs its own tone map, whose vignette is two disc keys
+(`Vignette.Inner radius`, `Vignette.Outer radius intensity`, `ps4-omega-eu/tonemap.md`) over a
+radial law of its own; 2048's constants are code, not disc keys, and Omega's file has no mesh. Ours
+runs 2048's chain only on 2048 (`Looks::wo_composite`), so no Omega frame moves.
 
 ## Live evidence (Vita3K v0.2.1 4095, 960x544)
 
@@ -229,9 +337,11 @@ table above). The race report says which copy and which values.
 - **Chosen, not the disc's**: the first frame starts settled on its own
   readback instead of walking from 1.15; the step runs once per rendered frame
   with no readback latency (60 a second here, about 30 on Vita3K); the scene
-  target is `Rgba16Float` rather than `U2F10F10F10`; the vignette and the
-  screen tint are left out (`v = 1`, tint 0) and `alphaTex` reads as empty, all
-  three unread; a split screen runs one chain per view with its own exposure.
+  target is `Rgba16Float` rather than `U2F10F10F10`; the screen tint is left out
+  (tint 0) and `alphaTex` reads as empty, both unread; a split screen runs one
+  chain per view with its own exposure and its own vignette over its rectangle.
+  **The vignette is the disc's** since 2026-11-11 ("The vignette" above): the
+  composite is drawn as the original's mesh.
 - **Which of 2048's other programs square their texel is unread.** The
   lightmapped track program does (above); ours squares every texel a pipeline
   built for the scene's store decodes (meshes, clouds, exhaust, beams, ghosts),
@@ -269,10 +379,94 @@ Omega, so an Omega race builds only its `Tonemap` chain, and the Omega pairs on
 Vineta K and Anulpha Pass draw 0 differing pixels against the binary before the
 change (as do HD's two, Pulse PSP and PS2 and Pure).
 
+## Where ours is darker than the original: not a frame term (2026-11-09, `tone-2048-grid`)
+
+Claim tested: one frame-wide term of ours (fog, bloom, exposure, sky or lighting scale) accounts for most of the dark bias
+on the three 2048 grid pairs, and correcting it closes half of Empire Climb's bottom-third bias. **Result: false.**
+Confidence 75 that no single frame-wide term does it (ours is deterministic and was repeated; each original is one capture,
+`twin: no second capture of this pair`); 40 for what the rest is (below). Read-only measure, ours rendered headless on SwiftShader (the only Vulkan driver on that machine; the stored RADV
+render and the SwiftShader one of the same binary differ by 0.44 / 255 mean on Empire Climb, and the three baselines
+agree to 0.3 luma and 0.1 M impact). Every toggle is a scratch environment multiplier on the loaded values (`Lighting.*`
+read in `envsettings_exposure`, `envsettings_light`, `envsettings_fog`), built off the lane's tree and not landed.
+A repeat render of one toggle (ambient x3, Empire Climb) is byte-identical.
+
+**Falsifier written before the renders.** A frame-wide term darkens hull and road together, so a toggle that closes the
+bottom third only by pushing the road past the original, or that leaves the pair's impact flat, is not the term.
+
+**Method.** Luma bias is ours minus original (`0.2126 R + 0.7152 G + 0.0722 B`, unblurred, 8-bit), per third of the
+960x544 frame. The bottom third splits into the hull box `(290,240)-(680,544)` (the craft and the road under it, minus the
+HUD), the HUD boxes, and the scenery that is left (37 %, 28 % and 35 % of the band's pixels). Impact is the scout's
+measure (Gaussian sigma 7, 32 blocks across, hot at mean error 6, 8-connected, px x err), re-implemented, so the
+baselines differ a little from the scout's 9.67 / 7.33 / 5.22 M: 9.78 / 7.38 / 6.33 M on the same pair files (Vineta K
+is 0.9 M off the scout's and was not reconciled; every change below is against this method's own baseline).
+
+| Toggle (Empire Climb) | top | mid | bottom | bottom hull box | bottom scenery | impact (change) |
+| --- | --- | --- | --- | --- | --- | --- |
+| baseline | -11.2 | -12.2 | -16.5 | -43.1 | -2.0 | 9.78 M |
+| E 1.4 (`--hold-exposure`) | -5.0 | -0.4 | -0.9 | -28.1 | +16.7 | 9.28 M (-5 %) |
+| BloomFactor x0 / x3 | -15.7 / -4.7 | -23.2 / +4.2 | -35.0 / +9.4 | -62.5 / -17.5 | -21.8 / +27.8 | 13.81 M (+41 %) / 10.77 M (+10 %) |
+| BloomGate 0 | -8.2 | -6.3 | -8.5 | -34.9 | +7.4 | 8.85 M (-10 %) |
+| fog off / density x2 | -11.3 / -10.7 | -12.2 / -12.3 | -16.5 / -16.5 | -43.1 | -2.0 | 9.84 M / 9.73 M (+-1 %) |
+| sun diffuse x2 | -8.8 | +26.8 | +36.7 | +8.9 | +64.4 | 17.08 M (+75 %) |
+| lightmap scale x1.5 | -5.3 | -0.4 | -4.4 | -36.3 | +14.9 | 9.88 M (+1 %) |
+| ambient x2 / x3 / x4 / x6 | -10.8 / -10.3 / -9.8 / -8.8 | -11.0 / -10.0 / -9.2 / -8.0 | -10.6 / -6.3 / -3.3 / +0.8 | -27.3 / -15.7 / -7.5 / +3.4 | -2.0 | 8.94 / 8.81 / 8.94 / 9.37 M (-9 / -10 / -9 / -4 %) |
+
+Queens Mall (baseline -4.5 / -5.7 / -8.3, hull box -24.8, impact 7.38 M): E 1.4 +23 % impact; bloom x3 0 %, gate 0 +9 %,
+lightmap x1.5 +27 %, fog off 0 %; **ambient x2 / x3 / x4 / x6: bottom -5.3 / -2.6 / -0.2 / +3.7, hull box -16.9 / -9.5 /
+-3.0 / +7.3, impact 6.77 / 6.32 / 6.07 / 6.16 M (-8 / -14 / -18 / -17 %)**, scenery unchanged.
+Vineta K (baseline -1.3 / -10.1 / -6.9, hull box -13.4, impact 6.33 M): E 1.4 +11 %, bloom x3 +14 %, gate 0 +3 %,
+lightmap x1.5 +6 %, fog off 0 %; ambient x2 / x3 / x4 / x6: bottom -5.3 / -3.7 / -1.9 / +1.5, hull box -9.8 / -6.3 / -2.5 /
++5.0, impact 5.89 / 5.73 / 6.15 / 7.74 M (-7 / -9 / -3 / +22 %), but the top third goes -1.3 to +3.6 / +8.4 / +12.2 / +19.1.
+
+What it says:
+
+- **The bottom third's bias is the craft's box, not the frame.** On Empire Climb the hull box is 37 % of the band at -43.1,
+  which is -15.9 of the band's -16.5; Queens Mall's is -9.2 of -8.3; Vineta K's -5.0 of -6.9. The scenery of the band is
+  -2.0 / +2.4 / -2.0. The box holds the craft and the road round it, and the original's frame has more of the road: a white ring under the hull
+  (not the HUD's Pilot Assist bracket, which both sides draw bottom right; the ring is unidentified and ours draws none) and a glow on the
+  road. The hull itself is the same size as ours (the recorded 1.31 x 1.35 was the yellow mask's box; landmark boxes agree within 2 % on all
+  three pairs, ours on `OPT_CLOSE`: [compare-page.md](../../../tools/compare-page.md), "The chase camera and the craft's size"). Yellow paint inside `(290,240)-(680,470)` (R > G > B, R - B > 60, R > 90), baseline ours against the original:
+  Queens Mall 8,320 px at median luma 130.1 against 8,803 px at 156.1 (**ours' paint 17 % darker, same area**: a light
+  term); Empire Climb 10,514 px at 152.6 against 30,354 px at 143.1 (the original's mask also catches its peach road, so
+  the paint is **not** darker there; the box gap is the road's glow, the ring and the pose); Vineta K's craft is not
+  yellow and the mask finds none. Ambient x4 lifts Queens Mall's paint to 158.7 (matches), and lifts Empire Climb's to 192.9
+  and its near-white pixels from 246 to 5,807 against the original's 1,088 (overshoots). So a craft light term is real on
+  Queens Mall and not the story on Empire Climb.
+- **The top and middle thirds' scenery is 10 to 15 luma dark on Empire Climb and Vineta K, and no one term owns it.** The
+  original's top third carries the sun's lens-flare streak and a bright haze round it that ours has neither of
+  ([lens-flare.md](../../../rendering/lens-flare.md): 2048 "checked, differs, not wired"). Lightmap scale x1.5 closes the middle
+  scenery (-11.7 to -0.5) but pushes the bottom scenery to +14.9; exposure x1.2 does the same sort of thing.
+- **Fog is nothing here.** Empire Climb's density is 0.001, so `exp(-(0.001 d)^2)` is above 0.9 to 300 units: off or x2
+  moves no band by more than 0.6 luma and impact by 1 %. The inherited curve is not the cause of any dark bias.
+- **Bloom is already large in ours and is not what is missing.** Zeroing it darkens by 15 to 35 luma on Empire Climb; x3
+  overshoots the road by 28. Its gate at 0 helps Empire Climb (-10 %) and hurts Queens Mall (+9 %).
+- **Exposure is not a correction.** E = 1.15 is what the original draws at (read live, above). The flag sweep is a proxy for an
+  upstream light gain, and it closes the band means by overshooting the road (+16.7 at E 1.4) with impact -5 %, +23 %, +11 %.
+- **A display gain recovers nothing worth having.** Scaling ours' output by a constant g (1.0 to 1.4): Empire Climb's best is
+  g 1.1 at 9.03 M (-8 %); Queens Mall and Vineta K rise at every g. A per-band per-channel affine fit leaves 9.06 / 8.53 /
+  6.59 M. So the pairs' impact is spatial (texture, light pattern, the craft, the flare), and the tone rows of the ranking
+  cannot be closed by a tone term.
+- **The one toggle that lowers impact on all three is the ambient light, as a crude brightener of the craft.** Ambient x3
+  closes 62 / 69 / 46 % of the bottom third on Empire Climb / Queens Mall / Vineta K and lowers impact 10 / 14 / 9 %, with
+  the bottom scenery unchanged (Empire Climb, Queens Mall); the hull box reaches zero bias at about x4.5 to x5.5. That is a
+  fit of the box's mean, not a law: it overshoots Empire Climb's paint and white panels (above), and on Vineta K the same
+  multiplier also lifts the top third (+9.7), so ambient is read by more than the craft. A factor of 3 to 5 on three
+  circuits with different authored ambients (Empire Climb `0.31 0.47 0.70`) does not read as "ambient authored too low".
+  Ours lights a no-lightmap material (the craft's included, its program unread) as the `constantAmbientColour` family,
+  `(ambient + sunDiffuse * max(0, N.L)) * D^2` ([2048-material-params.md](../../../formats/2048-material-params.md), "The
+  ambient family"). **Chosen probe, not a law; no score.** Texel decode of x instead of x^2 on every draw overshoots
+  everything (+31.6 hull box, +87.8 scenery) and does not isolate the craft.
+
+**Lineage (Omega).** The fog, bloom, exposure and vignette terms are **checked, differs** (Omega runs `Tonemap.*` and its own
+`Bloom.*` chain, see above). The craft's light is **not checkable here**: neither title's craft pixel program was read in this
+lane (2048's is unread; Omega's `constantAmbientColour` appears on 4,337 pixel shaders and in the shield program
+([lightmap-prelit.md](../ps4-omega-eu/lightmap-prelit.md)), which is not the craft's), and shadPS4 race frames are untrusted, so
+there is no Omega pair to fit a factor against. Recipe: `cargo run -p oag-rcs --example gcn_dump` on an Omega craft material.
+
 ## Open
 
-- The vignette: `wo_composite_vp`'s third output and the `vignetteTint`
-  values `PostFx_RenderChain` packs (`local_348`/`local_344`).
+- ~~The vignette~~: closed 2026-11-11, "The vignette" above. Left over: a Vita3K
+  `--ram-read` of its constants, and the clip-space `+y` direction.
 - The screen tint's source (`FUN_813b1d28` of the vector at the composite's
   bind) and `accumFactor`'s; what `alphaTex` holds in a race.
 - When `FUN_81071300` resets E to 1.15 (race load, Retry, or both).
@@ -285,3 +479,7 @@ change (as do HD's two, Pulse PSP and PS2 and Pure).
   ours lights it with the base's.
 - Every number above on a real Vita: the readback is the one step Vita3K does
   not perform.
+- **The original's craft box is brighter than ours by more than the authored ambient explains** (2026-11-09, section above):
+  identify the white ring under the original's craft and match the pose first; on Queens Mall the craft's paint is also 17 % dark,
+  so read the 2048 craft's pixel program (`constantAmbientColour`, texel decode, any reflection or rim term) before any lighting
+  multiplier is wired.

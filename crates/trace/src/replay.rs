@@ -475,6 +475,7 @@ pub fn replay<R: Raycaster + ?Sized>(
     world.ships[0] = Ship {
         physics: initial_state(first, handling, options.basis, options.angular),
         handling: *handling,
+        weapon_counts: oag_weapons::counts::WeaponCounts::default(),
         segment: 0,
         // Slot 0 is flown by the script, not by a driver, and a replay has no
         // racing line for one to follow anyway.
@@ -495,7 +496,12 @@ pub fn replay<R: Raycaster + ?Sized>(
         quake_lift: 0.0,
         // Nor a Disruptor bolt to land one, for the same reason again.
         disruption: oag_weapons::disruption::Disruption::default(),
+        // A replay has no hull, so a Plasma would leave from the hold point.
+        muzzle: None,
+        track_up: None,
         active: true,
+        // No mod moves a replayed craft.
+        transit: None,
     };
     world.ship_count = 1;
 
@@ -528,7 +534,7 @@ pub fn replay<R: Raycaster + ?Sized>(
         // of a window is that it starts where tick 0 starts.
         if let Some(every) = options.reseed
             && index > 0
-            && index % every.get() == 0
+            && index % every == 0
         {
             world.ships[0].physics =
                 initial_state(recorded, handling, options.basis, options.angular);
@@ -714,6 +720,7 @@ where
     world.ships[0] = Ship {
         physics: initial,
         handling: *handling,
+        weapon_counts: oag_weapons::counts::WeaponCounts::default(),
         segment: 0,
         // Slot 0 is flown by the script, not by a driver, and a replay has no
         // racing line for one to follow anyway.
@@ -734,7 +741,12 @@ where
         quake_lift: 0.0,
         // Nor a Disruptor bolt to land one, for the same reason again.
         disruption: oag_weapons::disruption::Disruption::default(),
+        // A replay has no hull, so a Plasma would leave from the hold point.
+        muzzle: None,
+        track_up: None,
         active: true,
+        // No mod moves a replayed craft.
+        transit: None,
     };
     world.ship_count = 1;
 

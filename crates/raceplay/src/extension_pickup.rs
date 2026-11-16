@@ -9,7 +9,8 @@ use oag_ext_abi::{Colour as AbiColour, Command, Icon as AbiIcon, Pickup};
 use oag_tables::pickup_look::{Colour, Icon, PickupLook};
 
 /// The ABI's weapon vocabulary and the tables' weapons, both ways. The tables' own
-/// `Extension` is the mod's pickup, which the ABI names [`Pickup::Ours`].
+/// `Extension` is a mod's pickup, which the ABI names [`Pickup::Other`] by kind (a module's
+/// own is rewritten to [`Pickup::Ours`] in its observation).
 pub(crate) fn pickup(weapon: oag_tables::weapons::Weapon) -> Pickup {
     use oag_ext_abi::Weapon as Abi;
     use oag_tables::weapons::Weapon;
@@ -28,7 +29,7 @@ pub(crate) fn pickup(weapon: oag_tables::weapons::Weapon) -> Pickup {
         Weapon::Repulser => Abi::Repulser,
         Weapon::Shuriken => Abi::Shuriken,
         Weapon::Disruptor => Abi::Disruptor,
-        Weapon::Extension => return Pickup::Ours,
+        Weapon::Extension(kind) => return Pickup::Other(kind.index() as u8),
     })
 }
 
@@ -71,24 +72,25 @@ pub(crate) fn from_command(command: &Command, mod_id: &str) -> Option<PickupLook
     })
 }
 
-/// The look of `slot`'s mod pickup this tick: the last `pickup-look` among `hud` named for
-/// it, else the `[pickup]` of the module that owns the mod pickup (`owner`, its index plus
-/// one). `None` in a race without one.
+/// The look of `slot`'s mod pickup this tick: the last `pickup-look` among `hud` that
+/// `module`, the module of the pickup's kind, named for it, else that module's `[pickup]`.
 pub(crate) fn resolve<'a>(
     hud: &[(usize, Command)],
     slot: usize,
-    owner: u8,
+    module: usize,
     pickups: &[Option<PickupLook>],
     mod_id: impl Fn(usize) -> &'a str,
 ) -> Option<PickupLook> {
     let sent = hud
         .iter()
         .rev()
-        .filter(|(_, command)| command.slot().map(|s| s.index()) == Some(slot))
-        .find_map(|(module, command)| from_command(command, mod_id(*module)));
+        .filter(|(by, command)| *by == module && command.slot().map(|s| s.index()) == Some(slot))
+        .find_map(|(_, command)| from_command(command, mod_id(module)));
     sent.or_else(|| {
-        let owner = usize::from(owner).checked_sub(1)?;
-        Some(from_manifest(pickups.get(owner)?.as_ref()?, mod_id(owner)))
+        Some(from_manifest(
+            pickups.get(module)?.as_ref()?,
+            mod_id(module),
+        ))
     })
 }
 

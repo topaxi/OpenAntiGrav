@@ -13,7 +13,7 @@
 //! See `docs/ghidra/functions/psp-pulse-usa/collision-cage.md`.
 
 use oag_core::math::Vec3;
-use oag_physics::cage::{Located, Section};
+use oag_physics::cage::{Containment, Located, Section};
 use oag_vex::track::{AiTrack, CAGE_VERSION, SHORT_POINT_VERSION, SplinePoint};
 
 /// One path's control points as the cage reads them.
@@ -81,6 +81,12 @@ impl CageTrack {
             section: at.sections[index],
             sibling,
         })
+    }
+}
+
+impl Containment for CageTrack {
+    fn outside(&self, point: Vec3) -> Option<(Vec3, Vec3)> {
+        self.locate(point)?.outside(point)
     }
 }
 

@@ -102,6 +102,26 @@ pub type Row = [f32; GROUPS + 1];
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Maps {
     rows: [Option<Row>; State::ALL.len()],
+    rear: Rear,
+}
+
+/// `<RearOcclusion>`'s `max_frequency` per output layout, as authored.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Rear {
+    stereo: Option<f32>,
+    surround: Option<f32>,
+}
+
+impl Rear {
+    /// The value of the layout child `name` (`Stereo` or `Surround`).
+    #[must_use]
+    pub fn get(&self, name: &str) -> Option<f32> {
+        match name {
+            "Stereo" => self.stereo,
+            "Surround" => self.surround,
+            _ => None,
+        }
+    }
 }
 
 impl Maps {
@@ -115,6 +135,10 @@ impl Maps {
         for state in State::ALL {
             maps.rows[state.index()] = stereo_row(xml, state.tag());
         }
+        maps.rear = Rear {
+            stereo: oag_tables::audio_config::rear_occlusion_max_frequency(xml, "Stereo"),
+            surround: oag_tables::audio_config::rear_occlusion_max_frequency(xml, "Surround"),
+        };
         maps
     }
 
@@ -128,6 +152,12 @@ impl Maps {
             .ok()?;
         let maps = Self::parse(&String::from_utf8_lossy(&blob));
         maps.rows.iter().any(Option::is_some).then_some(maps)
+    }
+
+    /// The file's `RearOcclusion` values.
+    #[must_use]
+    pub fn rear(&self) -> Rear {
+        self.rear
     }
 
     /// The row a state plays, when the file authored one.
@@ -189,6 +219,11 @@ pub struct Hd {
     pub(super) state: State,
     /// The music, effects and speech settings as gains, kept for the tick.
     pub(super) sliders: std::cell::Cell<[f32; 3]>,
+    /// `<RearOcclusion>` as the file authored it.
+    pub(super) rear: Rear,
+    /// The layout child the title reads, or `None` where it has no rear low-pass.
+    pub(super) rear_layout: Option<&'static str>,
+    pub(super) circuit_low_pass_off: bool,
 }
 
 impl Default for Hd {
@@ -197,6 +232,9 @@ impl Default for Hd {
             live: None,
             state: State::FrontEnd,
             sliders: std::cell::Cell::new([1.0; 3]),
+            rear: Rear::default(),
+            rear_layout: None,
+            circuit_low_pass_off: false,
         }
     }
 }
@@ -285,10 +323,46 @@ impl Audio {
 
     /// Installs HD's mix, read off the frame thread by [`read_maps`]. The
     /// first one read wins, as the per-source read always did.
-    pub(crate) fn set_hd_mix(&mut self, maps: Maps) {
+    pub fn set_hd_mix(&mut self, maps: Maps) {
         if self.hd.live.is_none() {
+            self.hd.rear = maps.rear();
             self.hd.live = Some(Live::new(maps));
+            self.apply_rear_occlusion();
         }
+    }
+
+    /// The title's original low-passes a voice behind the listener
+    /// (`oag_title::Title::rear_occlusion`): `layout` names the child of the
+    /// file's `<RearOcclusion>` it reads. `None` is a title with no such filter.
+    /// A title that names a layout the file does not carry plays nothing.
+    pub fn set_rear_occlusion_layout(&mut self, layout: Option<&'static str>) {
+        self.hd.rear_layout = layout;
+        self.apply_rear_occlusion();
+    }
+
+    /// The circuit's own `AudioConfig.xml` switches its distance low-pass off
+    /// (`low_pass="0"`, Moa Therma): the rear low-pass is not played there
+    /// until that block is traced (`docs/ghidra/functions/ps4-omega-eu/audio-3d.md`).
+    pub fn set_circuit_low_pass_off(&mut self, off: bool) {
+        self.hd.circuit_low_pass_off = off;
+        self.apply_rear_occlusion();
+    }
+
+    /// The rear low-pass's `max_frequency` now on the mixer, or `None` where it is off.
+    #[must_use]
+    pub fn rear_low_pass(&self) -> Option<f32> {
+        self.output.with_mixer(|mixer| mixer.rear_occlusion())
+    }
+
+    /// The mixer's rear low-pass: the title's layout, read from the file, unless
+    /// the circuit turns it off.
+    fn apply_rear_occlusion(&mut self) {
+        let max = match self.hd.rear_layout {
+            Some(layout) if !self.hd.circuit_low_pass_off => self.hd.rear.get(layout),
+            _ => None,
+        };
+        self.output
+            .with_mixer(|mixer| mixer.set_rear_occlusion(max));
     }
 
     /// Moves the live groups one tick toward `state`'s row and puts the buses

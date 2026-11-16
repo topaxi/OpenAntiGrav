@@ -120,6 +120,7 @@ fn hd_zone_and_speed_lap_draw_the_phrase_from_hds_own_table() {
             default_line_height: 34.0,
             skin_line_height: 34.0,
             default_border: layout.default_border(),
+            tag_label: None,
         };
         let mut board = oag_hud::messages::MessageBoard::default();
         board.push("ER_GMA", true);
@@ -193,6 +194,7 @@ fn a_real_speed_lap_crossing_raises_the_banner_and_leaves_a_standing_line() {
         oag_game::medal_watch::tick(
             &cell,
             oag_tables::race_campaign::Difficulty::Medium,
+            oag_pulse::TITLE.campaign.counting_modes,
             &mut earned,
             &mut race,
         );
@@ -291,6 +293,7 @@ fn hd_speed_lap_raises_the_medal_and_its_voice_on_every_new_best_lap() {
             if let Some(tier) = oag_game::medal_watch::tick(
                 &cell,
                 oag_tables::race_campaign::Difficulty::Medium,
+                oag_hd::TITLE.campaign.counting_modes,
                 &mut earned,
                 &mut race,
             ) {

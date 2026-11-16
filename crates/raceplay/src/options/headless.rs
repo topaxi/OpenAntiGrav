@@ -48,6 +48,8 @@ impl Setup {
             #[cfg(feature = "view")]
             trail_sparks: false,
             #[cfg(feature = "view")]
+            request: None,
+            #[cfg(feature = "view")]
             campaign_event: false,
             seed,
             // An empty track, spelled out because `AiTrack` deliberately has
@@ -74,16 +76,26 @@ impl Setup {
             // than picking one title's real palette for a race that draws
             // nothing.
             #[cfg(feature = "view")]
+            shield_targets: Vec::new(),
+            #[cfg(feature = "view")]
             shield_palette: oag_render::shield::Palette {
                 activation: [0.0; 4],
                 target: [0.0; 4],
                 hit: [0.0; 4],
                 tints_shell: true,
+                colour_rate: oag_render::shield::COLOUR_RATE,
+                target_alpha_from_cockpit: false,
             },
             // Nothing draws on this constructor, Pulse's mechanism included -
             // see `shield_palette` above for the same reasoning.
             #[cfg(feature = "view")]
             hd_plasma_blast: false,
+            #[cfg(feature = "view")]
+            plasma_blast_law: None,
+            #[cfg(feature = "view")]
+            disruptor_halo_law: None,
+            #[cfg(feature = "view")]
+            disruptor_craft_law: None,
             #[cfg(feature = "view")]
             hd_bomb_blast: false,
             #[cfg(feature = "view")]
@@ -113,22 +125,32 @@ impl Setup {
             #[cfg(feature = "view")]
             wreck_anchors: Vec::new(),
             #[cfg(feature = "view")]
+            wreck_shockwave: false,
+            #[cfg(feature = "view")]
             magstrip_wake: None,
             #[cfg(feature = "view")]
             magstrip_pob: false,
             #[cfg(feature = "view")]
             leach_strip: None,
             #[cfg(feature = "view")]
+            missile_trail: None,
+            #[cfg(feature = "view")]
+            wingtip: None,
+            #[cfg(feature = "view")]
             destroy_stations: Vec::new(),
             finished_thrust: None,
             original_tables: None,
             #[cfg(feature = "view")]
             intro_camera: None,
+            #[cfg(feature = "view")]
+            intro_voice: None,
             slot_teams: Vec::new(),
             sight: Sighting::default(),
             collision: CollisionWorld::new(),
             handling: Handling::ZERO,
             opponent_handling: Vec::new(),
+            weapon_counts: oag_weapons::counts::WeaponCounts::default(),
+            opponent_weapon_counts: Vec::new(),
             // Zero travel at zero speed: the flaps neither open nor move.
             #[cfg(feature = "view")]
             airbrake_graphics: oag_gameplay::AirbrakeGraphics {
@@ -157,6 +179,7 @@ impl Setup {
             },
             #[cfg(feature = "view")]
             nozzles: Vec::new(),
+            muzzles: Vec::new(),
             #[cfg(feature = "view")]
             engine_lights: Vec::new(),
             #[cfg(feature = "view")]
@@ -181,6 +204,8 @@ impl Setup {
             announcer: oag_sound::sfx::Announcer::default(),
             #[cfg(feature = "view")]
             class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
+            #[cfg(feature = "view")]
+            rumble: oag_tables::rumble::Library::default(),
             zone_stages: None,
             countdown_voice: false,
             countdown_beat: false,
@@ -196,11 +221,22 @@ impl Setup {
             zoom_borrowed: false,
             weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
             leach_drain: oag_title::weapons::LeachDrain::PerTick,
+            blast_push: oag_title::weapons::BlastPush::Posted,
+            leach_beams: 8,
             quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
                 origin: oag_title::Origin::Chosen,
             },
             autopilot_absorb_cancels: true,
             autopilot_pad_grants: false,
+            launch_normal_is_track_up: true,
+            floor_arms_steer_to_ride_point: true,
+            plasma_release_at_display_scale: true,
+            own_craft_box_hides_track: oag_title::weapons::OwnCraftBox::Falls,
+            reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
+            contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
+            opponent_fire: oag_title::weapons::OpponentFire::PULSE,
+            score_law: None,
+            flip_law: None,
             speedup_pads: Vec::new(),
             weapon_pads: Vec::new(),
             weapons: None,

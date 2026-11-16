@@ -1,9 +1,9 @@
 ---
 status: ready-to-wire
 titles: [hd, omega, 2048, pulse, pure]
-updated: 2026-10-29
+updated: 2026-11-12
 categories: [frontend, rendering]
-summary: "Menu pairs HD 5, Omega 4, 2048 7, Pulse 5, Pure 8 on the compare page; ranked differences, Omega campaign selector, XML main/racebox/options gaps"
+summary: "Menu pairs on the compare page, ranked differences; Omega chooser drawn (2048 card art done; pose, grid open), XML main/racebox/options gaps"
 difficulty: medium (30)
 ---
 
@@ -26,13 +26,13 @@ Ranked by visible area on the 1920x1080 frame (read off the pair images, each pa
    (`docs/ui/campaign-screens.md`, "Shell, art and track name"). Pair numbers: cell 13.4 to 12.7, grid 40.9 to 42.9 (the card is now
    right but sits in the wrong place: it is 83 per cent of the grid's grey error). **Open**: (a) ~~the grid card's pose and size on Omega~~ (done 2026-10-27, `omega-grid-card-pose`: grid 42.9 to 16.4; the pose is
    measured off the frame and chosen, `Title.campaign.grid_card_pose`; Omega's own `<Flyer>` widget numbers still uncompared with HD's); (b) the backdrop (ghost tower against blurred streaks); (c) cell: `CHOOSE RACE` and the unlock line dark
-   where the original is grey, the selected hex's white outline, the missing `RECORDS` prompt; (d) the Omega `Campaign Selection`
-   chooser (three-way: 2048, HD, Fury; `campaign-select` still refuses); (e) **a PS4-wide lead found on the way**: the PS4 build
+   where the original is grey, the selected hex's white outline, the missing `RECORDS` prompt; (d) ~~the Omega `Campaign Selection`
+   chooser (three-way: 2048, HD, Fury; `campaign-select` still refuses)~~ (done 2026-11-05, `omega-chooser`: drawn off the screen's own XML by the reader HD uses, pair `omega/menu-campaign-select` 52.7 whole frame, 78.4 over the bracket; the `2048_campaign` card's art done 2026-11-12 (`omega-campaign-card-art`: the card's UV keys from the `.vex` were unplayed, `CardSpec::keyed`; card box mean grey 69.3 to 32.3, whole frame 56.3 to 46.2; the HD and Fury cards' ring logos draw too; the grid cards stay unkeyed until a frame of one is captured, `docs/ui/campaign-screens.md`, "Omega: `Campaign Selection`"); **left open**: the unselected cards stand 45 and ~190 px left of the original's and turn by `RotY` as radians where the frame fits ~0.75 rad, and choosing 2048 opens no grid: `grid_16`..`grid_18` are cell-less stubs the grid reader skips and its events are `Campaign2048_Definition.xml`'s `FE3DCanvas` map, so it shows `OAG_CAMPAIGN_NOT_PLAYABLE`; only the 2048-selected state has an original frame, HD and Fury selected are not captured); (e) **a PS4-wide lead found on the way**: the PS4 build
    leaves every vertex's coverage channel at 0 (red), so any blended or alpha-tested PS4 draw whose coverage is a texture's alpha
    reads red instead (`mesh::rcs::psp2` `slots`; fixed for the flyer cards only in `psp2_scene::alpha_from_the_picture`): census
    Omega's circuits and hulls (and 2048's Vita models, which share the builder: checked, applies, not wired) for draws it changes before
-   flipping the builder's default; the dark grey hull silhouette on Omega's base-campaign grid card (`grid-select-hd`) is unchecked against an original; (f) `Track Select` on Omega still lists
-   `NN_Track` ids (`CircuitNames::choose` needs one copy naming all 38; the table names only some). Pair each of Omega's other two
+   flipping the builder's default; the dark grey hull silhouette on Omega's base-campaign grid card (`grid-select-hd`) is unchecked against an original; (f) ~~`Track Select` on Omega still lists
+   `NN_Track` ids (`CircuitNames::choose` needs one copy naming all 38; the table names only some)~~ (done 2026-11-05: the ten 2048 circuits author `StringTableId`, `choose` takes `(id, key)` pairs, all 38 are named, `omega_track_model_ground_truth::every_circuit_a_menu_reaches_has_a_name_not_an_id`). Pair each of Omega's other two
    campaigns against its own original frame when one is captured.
 2. **Omega Ship Select: hull and logo** (34 grey). Ours draws the hull about twice the original's size in another livery
    (dark teal and yellow against pale blue and yellow) and a ringed Feisar logo against the flat one; the cursor starts on
@@ -48,7 +48,7 @@ Ranked by visible area on the 1920x1080 frame (read off the pair images, each pa
    rules per title); the save's `Safe Area Setting` is 96, so a fresh-profile run would still settle whether the offset
    follows it.
 5. **Track Select, both titles**: no circuit photo (`no slideshow chain to read`), no length or distance values, the model
-   turned and scaled differently (the turntable phase is not matched), Omega's name reads `01_Track`.
+   turned and scaled differently (the turntable phase is not matched), ~~Omega's name reads `01_Track`~~ (done 2026-11-05, item 1(f)).
 6. **HD grid flyer card**: pose (two large arrows tilted in the original), previous and next grid arrows missing, `EVENT 01/08`
    bold capitals in the original against small mixed case.
 7. **HD Ship Select**: hull pose and size, red markers on the statistic bars that the original lacks.
@@ -102,12 +102,12 @@ Pure shows no difficulty control). No renderer or UI code changed. Ranked by the
 4. **Grid Selection, Cell Selection** (2.1 %, 1.8 %): the cursor hex halo (the front end's bloom, not a `SelectorGlow` image; undrawn, see `docs/ui/campaign-screens.md`, "The halo is the front end's bloom"; the cursor's position was 1.2-1.3 px low and is fixed, 59.3 to 52.4 grid and 69.2 to 65.1 cell controlled) and the scrolling footer ticker (empty at tick 0). 2026-10-29: `Selector` now pulses (`SelectorPulse`) and the pair script records `original.seconds_since_entry` and passes it as `--menu-picker-seconds` for these two; cursor-box mean grey 66.3 to 59.3 (grid), 77.2 to 69.2 (cell) on the same original frame, the rest is the glow and a ~0.2 s phase miss (`docs/ui/campaign-screens.md`, "The `Selector` pulse"). **Still open, same clock**: Ship Select hull turntable (`preview.rs` `orbit_for`: 12 s/rev and start yaw chosen), Track Select turntable and photo slideshow timing, footer ticker at tick 0; `CLOCKED` in `scripts/psp-menu-pair.py` takes their ids once each law is measured.
 
 **Pure**
-1. **Team Selection** (8.6 %, 7.5 % re-made 2026-10-29): eight teams on both sides now; open: the original's large type, the hull outline's angle, crowded stat labels.
-2. **Track Selection** (5.5 %): the `SINGLE RACE - VENOM - ALPHA` context line (chosen), record format `0.00.00` against `0'00"00`, `m` unit case.
+1. **Team Selection** (8.6 %, 7.5 % re-made 2026-10-29, 3.2 % on 2026-11-01 against a fresh capture, 7.57 % the same fresh capture before): the large type, the hull's angle (the slideshow's clock: `team` is now in `PURE_CLOCKED`) and the stat labels (the `Stats` face) are closed. Open: the description line the original types along the bottom (`YOU KNOW WHERE`, ours draws none on the picker), the dashed cyan rule at y 217 and the solid footer rule at y 251, the pink cursor arrow beside the selected row (ours draws the picker's two scroll arrows).
+2. **Track Selection** (5.5 %, 4.2 % on 2026-11-01, 5.63 % the same fresh capture before): the `SINGLE RACE - VENOM - ALPHA` context line is gone from the still (the original draws none on any chain screen; it stays on the live screen), the `m` unit and the labels come from the `Stats` face. Open: the record's separators. At 8x the original's `0.00.00` reads `0 . 00 . 00` with small mid-height dots and wide gaps, not `0'00"00` (the 2x reading); ours prints `.` at the baseline, and a sweep of every Latin-1 character as the separator found none that matches, so the format string is not recovered.
 3. **Every chain screen** (2.4 to 3.4 %): the context line (ours' chosen stand-in; Class, League, Tournament Selection), the description
    line is drawn settled since 2026-10-29 (the original types it in and its frame holds a prefix, so the share rose 0.8-1.6 points; its type-in rate is
-   not measured, its scale `0.7` chosen, its face the menu face where the original's is `Scroll`), the footer `Back` has its triangle; open: the
-   original's dashed cyan rule at y 217 and solid footer rule at y 251.
+   not measured, its scale `0.7` chosen; its face and the footer's `Confirm`/`Back` are the disc's `Scroll` face since 2026-11-01, the `Stats` glyph slot), the footer `Back` has its triangle; open: the
+   original's dashed cyan rule at y 217 and solid footer rule at y 251. The context line is no longer in the compare still.
 4. **Title** (0.3 %): no visible difference.
 
 Gaps (original kept, no pair): Pulse `Main Menu`, `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+), the pause menu;
@@ -115,7 +115,7 @@ Pure `Main Menu` and the pause menu. Each is drawn from `menu.toml` or has no st
 
 ## Next Steps
 
-1. Omega's campaign selector (2048, HD, Fury cards) and the flyer on Omega's source: one lane, the biggest area.
+1. ~~Omega's campaign selector (2048, HD, Fury cards)~~ (drawn 2026-11-05). What is left of it (the `2048_campaign` card's art landed 2026-11-12): the turned cards' pose (needs the executable's `Campaign Selection` update, `ghidra-mcp` was down that session, and an original frame per selection), and 2048's grids (`grid_16`..`grid_18` stubs, `Campaign2048_Definition.xml`'s map): `docs/ui/campaign-screens.md`, "Omega: `Campaign Selection`".
 2. A `--menu-page` still for the HD pause menu and Racebox setup read from `racebox_definition.xml` / `ingame_definition.xml`
    if the maintainer wants those XML-driven; then pair them with `scripts/rpcs3-hd-menu-pair.py` (add a `WALK` step, change
    `drawn_from` to `xml`).
@@ -125,6 +125,6 @@ Pure `Main Menu` and the pause menu. Each is drawn from `menu.toml` or has no st
 5. 2048: a still route for Options, Profile, Extras and the Select Team grid (a `--screen` that draws the shell around the screen, or an
    `--until` that takes a button script), then pair them with `scripts/vita3k-2048-menu-pair.py` (move the `WALK` entries from
    `route: None` to a route).
-6. Pulse and Pure: (Track Select, Ship Select and Pure's team list closed 2026-10-29) check Pure's chain context line against the original's text, make `--menu-page cell-select` read the persisted campaign difficulty on Pulse (only the HD branch does, so a non-default rung cannot be paired); measure the description's type-in rate on PPSSPP, draw the `Scroll` face (`LTe50325.fnt`) for the legend and description, and the two frame rules; then re-run
+6. Pulse and Pure: (Track Select, Ship Select and Pure's team list closed 2026-10-29) make `--menu-page cell-select` read the persisted campaign difficulty on Pulse (only the HD branch does, so a non-default rung cannot be paired); measure the description's type-in rate on PPSSPP, draw the two frame rules, the team description line and the record separators (the `Scroll` face is drawn since 2026-11-01); then re-run
    `scripts/psp-menu-pair.py pairs`.
 7. Pulse and Pure pause menus: a `--menu-page pause` still would turn those two gaps into pairs.

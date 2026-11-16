@@ -22,6 +22,10 @@ pub struct RaceFrame<'a> {
     pub class_announcer: &'a ClassAnnouncer,
     /// The cues the race raised this tick, drained.
     pub cues: Vec<CueEvent>,
+    /// The mods' own sounds the race asked for this tick, drained.
+    pub mod_sounds: Vec<oag_gameplay::cue::ModSoundEvent>,
+    /// The loops of the mods' own sounds the race wants now, whatever events were heard.
+    pub mod_loops: Vec<oag_gameplay::cue::ModSoundLoop>,
     /// The Zone milestones raised this tick, drained.
     pub announcements: Vec<u16>,
     /// The Zone speed-class stages raised this tick, drained.
@@ -31,8 +35,15 @@ pub struct RaceFrame<'a> {
     /// Every live craft's position and speed by grid slot; [`None`] for a slot
     /// the race did not field.
     pub craft: [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS],
+    /// [`Self::craft`] with the craft out of the world in a `transit` kept where it left:
+    /// a mod's sound from one still comes from there.
+    pub mod_craft: [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS],
     /// Each grid slot's team name, for HD's crossfaded engine table.
     pub slot_teams: [Option<&'a str>; oag_gameplay::MAX_SHIPS],
+    /// The grid slot this machine's speakers are for (`Race::player_slot`): its
+    /// own craft's cues play dry, its engine is the player's, and the other
+    /// slots are heard positionally.
+    pub player_slot: usize,
     /// The local player's throttle, `0..=100`.
     pub throttle: f32,
     /// Every projectile slot, read after the tick has run.
@@ -51,6 +62,6 @@ pub struct RaceFrame<'a> {
     pub sight: oag_race::sight::State,
     /// The quake wave's road midpoint, while one travels.
     pub quake_point: Option<Vec3>,
-    /// The world's one Leach beam, while one exists.
-    pub leach_beam: Option<Beam>,
+    /// The world's LeachBeam pool (`oag_gameplay::World::leach_beams`).
+    pub leach_beams: [Option<Beam>; oag_weapons::projectile::leach_beam::POOL_SIZE],
 }

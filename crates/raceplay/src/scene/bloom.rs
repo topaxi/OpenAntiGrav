@@ -80,7 +80,7 @@ impl Scene {
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
         rect: (f32, f32, f32, f32),
-        stamps: &oag_post::bloom::Stamps<'_>,
+        stamps: &[oag_post::bloom::Stamp],
     ) {
         if let Some(bloom) = &self.bloom {
             bloom.stamp_glow(
@@ -190,7 +190,7 @@ impl Scene {
     pub(super) fn prepare_split_bloom(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         rects: &[(f32, f32, f32, f32)],

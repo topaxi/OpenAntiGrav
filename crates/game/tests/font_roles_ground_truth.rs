@@ -306,3 +306,44 @@ fn the_two_titles_fill_the_same_slots_but_for_menu_against_scroll() {
          why its MenuSkin::menu_font is None"
     );
 }
+
+/// **Pure's `Stats` slot is a face of its own, and it is the `Scroll` face too.** The race box's team
+/// and circuit panels (`font="Stats"`) and the footer's `Confirm` prompt and description
+/// (`font="scroll"`) print in one small letter-spaced face, not the menu face
+/// (`oag_title::MenuSkin::stats_font`, the renderer's third glyph slot). Dropping the slot, or
+/// resolving `Stats` to the `Default` file, puts them back in the big menu face.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pures_stats_slot_is_its_own_face_and_the_scroll_face() {
+    for (label, image, family) in images() {
+        if family != Family::Pure {
+            continue;
+        }
+        let (mut archives, languages) = languages_of(&image);
+        let face = |role: &str| {
+            languages
+                .iter()
+                .find_map(|language| language.font(role))
+                .unwrap_or_else(|| panic!("{label}: no plugin fills in the {role:?} slot"))
+                .to_string()
+        };
+        let stats = face(roles::STATS);
+        assert_ne!(
+            stats,
+            face(roles::DEFAULT),
+            "{label}: Stats is the body face"
+        );
+        assert_eq!(
+            stats,
+            face("Scroll"),
+            "{label}: Scroll and Stats are two files"
+        );
+        let font = archives
+            .read_font(&stats)
+            .unwrap_or_else(|e| panic!("{label}: {stats} named but unreadable: {e}"));
+        assert!(
+            !font.glyphs.is_empty(),
+            "{label}: {stats} decoded to no glyphs"
+        );
+    }
+}

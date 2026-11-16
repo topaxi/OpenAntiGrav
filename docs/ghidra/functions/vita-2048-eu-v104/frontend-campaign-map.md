@@ -400,6 +400,14 @@ more like a small hand-authored pixel nudge on top of whatever `+0x15c`/
 `m_y` values (not `<CanvasLabel>`) is the concrete next empirical check, in
 `docs/formats/2048-frontend.md`'s own campaign-map section.
 
+## 2026-11-10: the base tier's position is answered
+
+The "still open" item above is closed on [campaign-map-projection.md](campaign-map-projection.md):
+the base tier keeps no cached position. Every use recomputes the event's lattice cell from
+`m_x`/`m_y` and `m_canvasTweak_x/_y` through the quad `(4, 2, 55, 25)` at `0x81880448` and projects it
+through the canvas camera; the tile is six painted cells of the canvas. `m_canvasTweak` is a nudge
+in cells, as guessed; `m_buttonShape` was not needed for the position.
+
 ## A tap on a mode tile leaves on one tap (measured 2026-10-26, confidence 90)
 
 Vita3K v0.2.1 4095, EU `PCSF00007` v1.04 with both packs mounted, a

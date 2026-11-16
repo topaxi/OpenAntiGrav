@@ -1319,8 +1319,9 @@ recipe and its three traps.
       behind one live `[graphics] motion_blur` strength row
       ([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md),
       [ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)).
-      The velocity attachment is always written in a race, deliberately, so
-      FSR 3.1 can rely on it.
+      The velocity attachment is written on every frame that reads it (the
+      blur, a temporal upscaler: `scene::velocity_gate`) and masked off the
+      track and hulls otherwise; FSR 3.1 is a reader.
       **Dynamic resolution works, and is off by default**: the scene target is
       allocated once at the `render_scale` ceiling and the frame is drawn into a
       sub-rectangle of it, so moving the resolution costs a uniform write
@@ -1467,7 +1468,7 @@ there, each with a ground-truth test against the disc:
 1. **[`oag_formats::psarc`](../formats/psarc.md)** - the container, ported from
    `scripts/psarc.py`. 11,664 of 11,664 entries carry the MD5 of their own
    uppercased path.
-2. **[`oag_formats::ByteOrder`](../formats/hd-status.md)**, and both files that
+2. **[`oag_bytes::ByteOrder`](../formats/hd-status.md)**, and both files that
    need it read big-endian. Neither `vex::nodes` nor `track::parse` gained an
    argument: **each file declares its own order in its own magic** - `VEXX`
    against `XXEV`, `dtOW` against `WOtd` - so the order is read from the data,
@@ -1676,9 +1677,8 @@ see [hd-status.md](../formats/hd-status.md#the-roster-is-declared-and-under-hds-
 
 What this does **not** touch is the per-team paint: each `PI_Team` declares six
 `PI_TeamModel` variants (`normal`, `SKIN1`, `SKIN2`, `chrome`, `zone`,
-`detonator`) naming a `texturelocation`, and nothing collects or draws them -
-the same gap the Pulse roadmap item above records. Nor is `Unlock` read on any
-title, so everything declared is offered.
+`detonator`) naming a `texturelocation`. (Since 2026-11-14 the skins are raced,
+each gated by its own `<Unlock>`: [race-setup.md](../formats/race-setup.md#hd-era-model-unlocks).)
 
 #### Textures land, the same day
 
@@ -1718,13 +1718,15 @@ Wipeout 2048's own Altima circuit races with Wipeout Pure's craft, HUD and
 grid roster - the feature's own request, verified end to end: the load
 report names both titles (`racing on Wipeout 2048`, `craft from Wipeout
 Pure`), the grid wears Pure's roster and the HUD entry is Pure's own
-`TimeTrial_HUD.xml`. `race::Options.craft_source` and `crate::remix::Remix`
-(`crates/game/src/remix.rs`) are the backend: `None`/omitted is
-byte-identical to an ordinary race, proven by `race_remix_ground_truth.rs`
+`TimeTrial_HUD.xml`. `race::Options.craft_source` and `oag_source::pair::SourcePair`
+(`crates/source/src/pair.rs`) are the backend: `None`/omitted is
+byte-identical to an ordinary race, proven by `race_two_title_ground_truth.rs`
 loading every combination twice, once plain and once naming its own source
 as `craft_source`, and diffing the result.
 
-A `RACE REMIX` entry on the front-end menu's main page wires the same path
+A `RACE REMIX` entry under RACEBOX, carried by the official mod `oag.remix`
+([mods](../tools/mods.md#official-mods-assetsmodsofficial), ADR-0083; with the mod off
+there is none), wires the same path
 to two title-then-scoped-list pickers (TRACK TITLE → TRACK, CRAFT TITLE →
 TEAM) - present unconditionally rather than gated on "more than one title
 available", since gating it would need new menu-engine machinery the

@@ -105,7 +105,7 @@ fn sweep(name: &str) -> Option<Survey> {
             );
             let Some(node) = mesh.node else { continue };
             survey.node_bound_meshes += 1;
-            let stem = mesh.name.strip_suffix("Shape").unwrap_or(&mesh.name);
+            let stem = mesh.name.trim_suffix("Shape");
             survey.node_hashes_matched +=
                 usize::from(name_hash(stem) == scene.nodes[node].name_hash);
         }

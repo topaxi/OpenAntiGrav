@@ -24,27 +24,40 @@ pub fn build(
     vex: &[u8],
     geometry: &[u8],
 ) -> Result<Option<(Model, String)>> {
-    Ok(build_named(archives, entry, vex, geometry)?.map(|(model, report, _)| (model, report)))
+    Ok(build_named(archives, entry, vex, geometry, false, None)?
+        .map(|(model, report, _)| (model, report)))
 }
 
 /// [`build`], and the path of each texture the build asked for, in the order it
 /// asked: what a card hides its unread effects by (`crate::flyer`).
+///
+/// `keyed` plays the UV keys the `.vex` authors per mesh (`mesh::rcs::psp2::build_billboard`).
 fn build_named(
     archives: &mut oag_assets::Archives,
     entry: &str,
     vex: &[u8],
     geometry: &[u8],
+    keyed: bool,
+    livery: Option<oag_livery::LiveryFolder<'_>>,
 ) -> Result<Option<(Model, String, Vec<String>)>> {
     if !mesh::rcs::psp2::is_psp2(geometry) {
         return Ok(None);
     }
     let mut textures = Vec::new();
-    let (model, built) = mesh::rcs::psp2::build_with_vex(entry, geometry, vex, &mut |path| {
+    let mut reads = oag_livery::zone_livery::Reads::new(livery);
+    let build = if keyed {
+        mesh::rcs::psp2::build_billboard
+    } else {
+        mesh::rcs::psp2::build_with_vex
+    };
+    let (model, built) = build(entry, geometry, vex, &mut |path| {
         // Materials are asked for too; a draw's texture slot counts the pictures only.
-        if path.ends_with(".gnf") {
+        if oag_texture::decode::Container::of_name(path)
+            == Some(oag_texture::decode::Container::Gnf)
+        {
             textures.push(path.to_string());
         }
-        archives.read_name(path).ok()
+        reads.read(archives, path)
     })?;
     Ok(Some((model, built.describe(), textures)))
 }
@@ -53,19 +66,25 @@ fn build_named(
 /// beside `entry` is one, else the PS3 path. Scoped to the flyer cards, like
 /// [`model`] to the selection screens: [`super::model_named`] stays as it was.
 ///
+/// `keyed` plays the UV keys the card's `.vex` authors per mesh. Left off, a card whose art
+/// scrolls samples its textures at rest (the 2048 card's banner lands on the transparent half of
+/// its alpha texture). It is on for the `Campaign Selection` cards alone, the ones an original
+/// frame has measured (`docs/ui/campaign-screens.md`, "Omega: `Campaign Selection`").
+///
 /// # Errors
 ///
 /// The entry is missing or will not decode.
 pub fn model_named(
     archives: &mut oag_assets::Archives,
     entry: &str,
+    keyed: bool,
 ) -> Result<(Model, Vec<String>)> {
     if let Some(sibling) = mesh::rcs::sibling_name(entry)
         && let Ok(geometry) = archives.read_name(&sibling)
     {
         let vex = archives.read_name(entry)?;
         if let Some((mut model, report, textures)) =
-            build_named(archives, entry, &vex, &geometry)
+            build_named(archives, entry, &vex, &geometry, keyed, None)
                 .with_context(|| format!("decoding the card model {entry}"))?
         {
             log::debug!("card model {entry}: {report}");
@@ -199,17 +218,32 @@ fn coverage_from_the_atlas(
 ///
 /// The entry is missing or will not decode.
 pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> {
+    model_in(archives, entry, None)
+}
+
+/// [`model`] painted from another livery folder of the hull's directory (`SKIN1` on Ship
+/// Select), the swap a race makes ([`oag_livery::LiveryFolder`]).
+///
+/// # Errors
+///
+/// As [`model`].
+pub fn model_in(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    livery: Option<oag_livery::LiveryFolder<'_>>,
+) -> Result<Model> {
     if let Some(sibling) = mesh::rcs::sibling_name(entry)
         && let Ok(geometry) = archives.read_name(&sibling)
     {
         let vex = archives.read_name(entry)?;
-        if let Some((mut model, report)) = build(archives, entry, &vex, &geometry)
-            .with_context(|| format!("decoding the selection model {entry}"))?
+        if let Some((mut model, report, _)) =
+            build_named(archives, entry, &vex, &geometry, false, livery)
+                .with_context(|| format!("decoding the selection model {entry}"))?
         {
             log::debug!("selection model {entry}: {report}");
             model.keep_nearest();
             return Ok(model);
         }
     }
-    super::model(archives, entry)
+    super::model_in(archives, entry, livery)
 }

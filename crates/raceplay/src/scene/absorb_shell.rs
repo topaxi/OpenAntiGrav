@@ -70,3 +70,23 @@ impl Scene {
         }
     }
 }
+
+#[cfg(test)]
+impl Scene {
+    /// Gives slot 0 a shell that is a copy of its hull on a block of its own, for tests.
+    pub(crate) fn give_a_shell_for_tests(&mut self, device: &wgpu::Device) {
+        let mut shell = self.ships[0].instances(device, 1).remove(0);
+        shell.clear_scene_kind_for_tests();
+        self.absorb_shell = vec![Some(shell)];
+    }
+
+    /// Runs the scene's block sharing again, for tests.
+    pub(crate) fn share_scene_blocks_for_tests(&mut self, device: &wgpu::Device) {
+        self.share_scene_blocks(device);
+    }
+
+    /// The kind of scene block slot 0's shell reads, for tests.
+    pub(crate) fn shell_scene_kind_for_tests(&self) -> Option<crate::drawable::SceneKind> {
+        self.absorb_shell.first()?.as_ref()?.scene_kind_for_tests()
+    }
+}

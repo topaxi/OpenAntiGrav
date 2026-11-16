@@ -1,16 +1,13 @@
-//! The `Hexmedal_HD` atlas crop and the difficulty-rung text it sits beside -
-//! split out of `hd.rs` under the 1,000-line rule
-//! (`scripts/check-file-size.py`). `pub(super)`: every item here is an
-//! internal helper `super::hd_cell_draw_list` calls, not part of this
-//! crate's own public API.
+//! The `Hexmedal_HD` atlas crop and the difficulty-rung text it sits beside,
+//! split out of `hd.rs` for file size. [`hd_medal_frame`] is public so a
+//! disc-backed test can read the crop a draw samples; every other item is an
+//! internal helper `super::hd_cell_draw_list` calls.
 
 use oag_tables::race_campaign::{Cell, Difficulty, Medal, Mode};
 
 use oag_ui::frontend::{Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::screen::Image;
-
-use super::super::draw::sprite_draw;
 
 /// Where one medal tier's own static icon sits in `Hexmedal_HD.mip`/`.gtf` -
 /// **measured off the disc's own authored crop, not eyeballed**:
@@ -61,7 +58,7 @@ use super::super::draw::sprite_draw;
 /// function already uses, but nothing pins whether the real screen holds
 /// still on it or animates a spin through the rest of the row (the atlas
 /// is far wider than one 60px frame). No earned-medal capture exists to
-/// check either way - the same gap `medal_argb`'s own doc already records.
+/// check either way - the same gap `MedalTiers::standard`'s own doc records.
 /// `u=0` is used because it is what the disc's own comparable widget uses,
 /// not a guess.
 ///
@@ -109,20 +106,48 @@ use super::super::draw::sprite_draw;
 /// one mode (`Race`) - not independently reproduced across a second boot or
 /// a second mode family (e.g. an `Elimination`/`NitroBattle` cell's own
 /// `Novice`/`Skilled`/`Elite`-named target triple).
-pub(super) fn hd_medal_frame(medal: Medal, difficulty: Difficulty) -> [f32; 4] {
-    const FRAME: f32 = 60.0;
-    const BLOCK_PITCH: f32 = 183.0;
-    let tier_v = match medal {
-        Medal::Gold => 0.0,
-        Medal::Silver => 61.0,
-        Medal::Bronze => 122.0,
-    };
+///
+/// **`tier_rows` is the stored row of a block that holds each tier** (`[gold, silver, bronze]`,
+/// 0 the block's top). HD's is `[0, 1, 2]`, the authored `v = 0/61/122`; Omega's `.gnf` keeps
+/// HD's blocks and frame grid but stores bronze, silver, gold from the top, `[2, 1, 0]`
+/// (`oag_title::Campaign::medal_tier_rows`, `docs/formats/omega-status.md`, "The medal atlas").
+/// The block order and `difficulty` mapping are the same on both.
+pub fn hd_medal_frame(medal: Medal, difficulty: Difficulty, tier_rows: [u8; 3]) -> [f32; 4] {
+    let tier_row = tier_rows[medal.index().min(2)];
+    atlas_frame(
+        difficulty,
+        3,
+        usize::from(tier_row),
+        [HD_FRAME, HD_FRAME],
+        HD_ROW_PITCH,
+    )
+}
+
+/// The title atlases' frame size and row pitch (a 1 px gap under each 60 px frame).
+pub(in crate::campaign) const HD_FRAME: f32 = 60.0;
+pub(in crate::campaign) const HD_ROW_PITCH: f32 = 61.0;
+
+/// One frame of a medal atlas laid out as a column of blocks, one block per difficulty (easy,
+/// medium, hard from the top), `rows` frames to a block, `row_pitch` px apart:
+/// `[u, v, width, height]`. A single-block atlas passes [`Difficulty::Easy`].
+pub(in crate::campaign) fn atlas_frame(
+    difficulty: Difficulty,
+    rows: usize,
+    row: usize,
+    frame: [f32; 2],
+    row_pitch: f32,
+) -> [f32; 4] {
     let block = match difficulty {
         Difficulty::Easy => 0.0,
         Difficulty::Medium => 1.0,
         Difficulty::Hard => 2.0,
     };
-    [0.0, block * BLOCK_PITCH + tier_v, FRAME, FRAME]
+    [
+        0.0,
+        (block * rows as f32 + row as f32) * row_pitch,
+        frame[0],
+        frame[1],
+    ]
 }
 
 /// `Medal_{x}_{y}`'s own draw: [`hd_medal_frame`]'s crop, drawn at its own
@@ -143,7 +168,7 @@ pub(super) fn hd_medal_frame(medal: Medal, difficulty: Difficulty) -> [f32; 4] {
 /// visibly-offset badge on every column, and was reverted in favour of
 /// this, the simpler and disc-measured choice. **No tint**: unlike Pulse's
 /// `hex_filled.mip` (a plain white hex [`super::super::draw::tinted_medal_draw`]
-/// still colours with [`super::super::draw::medal_argb`] - that path is
+/// still colours with `MedalTiers::argb` - that path is
 /// untouched, and still correct for Pulse), HD's own atlas frame already
 /// carries the tier's colour baked into its texels, so multiplying a flat
 /// swatch over it a second time was the other half of the bug this
@@ -153,8 +178,9 @@ pub(super) fn hd_tinted_medal_draw(
     placed: Placed,
     medal: Medal,
     difficulty: Difficulty,
+    tier_rows: [u8; 3],
 ) -> Draw {
-    let [u, v, frame_width, frame_height] = hd_medal_frame(medal, difficulty);
+    let [u, v, frame_width, frame_height] = hd_medal_frame(medal, difficulty, tier_rows);
     let cropped = Image {
         width: Some(frame_width),
         height: Some(frame_height),
@@ -164,7 +190,7 @@ pub(super) fn hd_tinted_medal_draw(
         texture_height: Some(frame_height),
         ..image.clone()
     };
-    sprite_draw(&cropped, placed, image.x, image.y, 0xffff_ffff)
+    cropped.sprite_draw(placed, image.x, image.y, 0xffff_ffff)
 }
 
 /// `Target Title`'s own text - `DATA06`'s single shared header replacing

@@ -125,9 +125,8 @@ pub fn results_draw_list(
 /// `EndRaceResults_OnEnter` - which is false for Tournament's own mode `4`
 /// (only `16`, an unimplemented sibling this project has no evidence is
 /// reachable through any launch path it drives, sets it true). A
-/// non-finisher's own points read `0` (`oag_race::tournament::points_for_finish`)
-/// exactly as the original's own unsorted leg row would, with no DNF text
-/// standing in for it.
+/// craft's points are its place's (`oag_race::tournament::points_for_place`),
+/// a still-racing opponent's included, with no DNF text standing in for it.
 #[must_use]
 #[allow(
     clippy::too_many_arguments,
@@ -267,15 +266,7 @@ fn rewards_layers(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let screen = &layout.screen;
     let mut out = Vec::new();
     let panel = |owner: Option<u8>| models.get(usize::from(owner.unwrap_or(0)));
@@ -350,7 +341,7 @@ fn rewards_layers(
             .map_or("", |name| super::table::split_suffix(name).0);
         let content =
             match name {
-                "RewardLine1" => Some(medal_award_text(model.medal, strings)),
+                "RewardLine1" => Some(medal_award_text(model.medal, model.tier.as_ref(), strings)),
                 "RewardLine2" => model.loyalty.as_ref().map(|loyalty| {
                     format!("{} {}", loyalty.team_name, strings.get_or_id("ER_LOY"))
                 }),
@@ -391,26 +382,9 @@ pub fn endrace_menu_draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let screen = &layout.screen;
-    let mut out = Vec::new();
-    for fill in &screen.fills {
-        out.push(fill_draw(fill));
-    }
-    for image in &screen.images {
-        let Some(placed) = sprites(&image.src) else {
-            continue;
-        };
-        out.push(image_draw(image, placed));
-    }
+    let mut out = screen.plain_draws(sprites);
     if let Some(menu) = &screen.menu {
         let pitch = font_line_height(&menu.font) * face_scale(layout, &menu.font);
         let color = argb_to_rgba(menu.color);
@@ -487,17 +461,29 @@ pub(super) fn ordinal_idstring(place: u8) -> Option<&'static str> {
     })
 }
 
-/// `RewardLine1`'s own resolved text: `ER_GMA`/`ER_SMA`/`ER_BMA`/`ER_NMA`.
+/// `RewardLine1`'s own resolved text: `ER_GMA`/`ER_SMA`/`ER_BMA`/`ER_NMA`. A campaign's own
+/// tier (`tier`, set only for a tier the title has no phrase for) reads `OAG_MEDAL_AWARD` with
+/// the tier's name in it.
 pub(super) fn medal_award_text(
     medal: Option<oag_tables::race_campaign::Medal>,
+    tier: Option<&oag_tables::race_campaign::MedalTier>,
     strings: &StringTable,
 ) -> String {
     use oag_tables::race_campaign::Medal;
+    if let Some(tier) = tier {
+        let name = tier.string_id.as_deref().map_or_else(
+            || tier.name.to_ascii_uppercase(),
+            |id| strings.get_or_id(id).to_string(),
+        );
+        return strings
+            .get_or_id("OAG_MEDAL_AWARD")
+            .replacen("%s", &name, 1);
+    }
     let id = match medal {
         Some(Medal::Gold) => "ER_GMA",
         Some(Medal::Silver) => "ER_SMA",
         Some(Medal::Bronze) => "ER_BMA",
-        None => "ER_NMA",
+        _ => "ER_NMA",
     };
     strings.get_or_id(id).to_string()
 }
@@ -621,7 +607,7 @@ pub(super) fn fill_draw(fill: &Fill) -> Draw {
 }
 
 pub(super) fn image_draw(image: &Image, placed: Placed) -> Draw {
-    sprite_draw(image, placed, image.x, image.y, image.color)
+    image.sprite_draw(placed, image.x, image.y, image.color)
 }
 
 /// The loyalty total `loyaltybar` is full at (`Loyalty_AccumulateTotal`'s ceiling): the
@@ -637,43 +623,7 @@ fn loyalty_bar_draw(image: &Image, placed: Placed, width: f32) -> Draw {
     let mut cropped = image.clone();
     cropped.width = Some(width.max(0.0));
     cropped.texture_width = Some(width.max(0.0));
-    sprite_draw(&cropped, placed, image.x, image.y, image.color)
-}
-
-fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw {
-    let width = image.width.unwrap_or(placed.width as f32);
-    let height = image.height.unwrap_or(placed.height as f32);
-    let sampled = [
-        image.texture_width.unwrap_or(placed.width as f32),
-        image.texture_height.unwrap_or(placed.height as f32),
-    ];
-    let color = argb_to_rgba(argb);
-    if sampled[0] > placed.width as f32 + 0.5 || sampled[1] > placed.height as f32 + 0.5 {
-        return Draw::TiledSprite {
-            rect: [x, y, width, height],
-            uv: [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
-            repeat: [
-                sampled[0] / placed.width.max(1) as f32,
-                sampled[1] / placed.height.max(1) as f32,
-            ],
-            color,
-        };
-    }
-    Draw::Sprite {
-        rect: [x, y, width, height],
-        uv: [
-            placed.x as f32 + image.u.unwrap_or(0.0),
-            placed.y as f32 + image.v.unwrap_or(0.0),
-            sampled[0],
-            sampled[1],
-        ],
-        color,
-    }
+    cropped.sprite_draw(placed, image.x, image.y, image.color)
 }
 
 pub(super) fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {

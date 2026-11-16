@@ -41,10 +41,9 @@ Left unnamed, deliberately (below 70, or not decompiled):
   by copy), stores `desc+0x2c` as a countdown and `1/max(0.01, desc+0x3c)`,
   `1/max(0.01, desc+0x40)` as rates. Reads as a timed light or post-effect
   registry; what consumes it was not found.
-- `0x0174a4f0`, a 20-slot event ring on `DAT_020fd940` that the walker pushes
-  id `0x33` into with the impact position on every wall hit and on a ship hit
-  when the victim is a remote craft. Probably the impact rumble/camera event;
-  not chased.
+- `0x0174a4f0`, `Rumble_PlayOnLocalPads` ([rumble.md](rumble.md)): the walker
+  fires pattern `0x33`, `plasma_hits_wall`, with the impact position on every wall
+  hit and on a ship hit when the victim is a remote craft.
 - `0x01257f00`, the collision query `(world, from, to, &hit)`; only its
   return codes were read, from how the walker branches on them.
 
@@ -162,15 +161,19 @@ p->flags     |= 8;  p->age = 0;  p->ramp_a = 0;           // + 0x74, + 0x8c, + 0
 p->charging   = 1;  p->charge = 1.0f;                     // + 0x84, + 0x88 = 0x3f800000
 p->emitter    = Sound_CreateEmitter("Plasma", ...);       // + 0x98, parented to the weapon node
 Sound_Play(1.0f, p->emitter, ..., "NGP_Plasma", 0, 0xb);
-p->surface    = -craft->up;                               // + 0x150 <- -(craft + 0x8040)
+p->surface    = -craft->track_down;                       // + 0x150 <- -(craft + 0x8040), the located track's up
 p->position   = weapon_node->matrix.row3;                 // + 0xe0
 p->ramp       = -1.2f;                                    // + 0x164 = 0xbf99999a
 Psys_Spawn("WO_PLASMA_HEAD"    -> 'PLHE', attached to p + 0xf0);   p->head_id  = + 0x90
 Psys_Spawn("WO_PLASMA_CHARGING" -> 'PLCG', attached to p + 0xf0);   p->charge_id = + 0x94
 p->ball_matrix = weapon_node->matrix, orthonormalised;    // + 0x1a0.. + 0x1d0
-Rumble(0.07f, 1.0f, ...) if the craft is local;           // 0x0137eba0
+CameraShake(0.07f, 1.0f, ...) if the craft is local;      // 0x0137eba0
 Light_Register(p + 0x1f0, &DAT_01a148f0); Light_Register(p + 0x1f0, &DAT_01a14950);
 ```
+
+`craft + 0x8040` is the down of the track sample the craft is located on, not the craft's
+own up ([ps3-hdfury-eu/projectile-launch-normal.md](../ps3-hdfury-eu/projectile-launch-normal.md),
+"Omega and 2048", confidence 80).
 
 `Plasma_Launch(plasma, node_matrix, craft_velocity)`:
 
@@ -179,10 +182,10 @@ p->launch_kmh = length(craft_velocity) * 3.6f + stats->launchspeed;   // + 0x80,
 p->position   = node_matrix.row3;
 p->charging   = 0;
 p->velocity   = node_matrix.forward * (Plasma_GetSpeed(p) * 0.2777778f);   // age is 0, so launch_kmh
-p->surface    = -craft->up;
+p->surface    = -craft->track_down;
 p->flags     |= 8;
 Sound_Play(1.0f, p->emitter, ..., "_NGP_Plasmatvl", p + 0xa0, -1);   // the loop the teardown stops
-Rumble(0.06f, 0.3f, ...) if local;
+CameraShake(0.06f, 0.3f, ...) if local;
 Psys_Spawn("WO_PLASMA_LAUNCH" -> 'PLLH', at the weapon node);
 Light_PushFrame(p->position, 1/24, 24.0f, colour (2.2, 1.6, 2.2));      // the 32-slot list at 0x01fc6e20
 ```

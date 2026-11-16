@@ -16,11 +16,14 @@ mod encoded_blend;
 mod exhaust_pipeline;
 mod hd_trail_encoded_tap;
 mod lens_flare_draw;
+mod mod_shader_draw;
 mod psys_2048_ground_truth;
 mod psys_emitter_roll_ground_truth;
 mod psys_ground_truth;
+mod psys_layer_order;
 mod psys_omega_ground_truth;
 mod psys_template_ground_truth;
+mod trail_length;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

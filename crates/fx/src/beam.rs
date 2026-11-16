@@ -371,21 +371,15 @@ pub use pipeline::{Drawer, Drawn, Pipeline};
 pub mod hd_ball {
     use super::Vec3;
 
-    /// Where the ball sits along the beam at `fraction` of its trip: `target`
-    /// at `0.0` (the trip's start), `owner` at `1.0` (the arrival) - a
-    /// straight lerp, not the strip's own displaced chain. The trip's period
-    /// and accumulator are the simulation's,
-    /// `oag_weapons::projectile::leach_beam::trip`.
+    /// Where the ball sits at `fraction` of its trip on a title that draws no
+    /// strip: `target` at `0.0`, `owner` at `1.0`, on the straight line.
     ///
-    /// **Both halves of this are chosen, not measured.** The original's own
-    /// fraction-to-point lookup (`_opd_FUN_00116308`) walks the strip's
-    /// authored chain rather than a straight line, and flips which end is
-    /// fraction `0` on a condition this pass did not resolve
-    /// (`param_2[2] == *param_2`); the target-to-owner direction taken here
-    /// is inferred only from where the wrap's own `WO_LEACHBEAM_ABSORB`
-    /// lands (read as the shooter's own matrix, by analogy with Pulse's
-    /// `WO_LEACHBEAM_ENERGY`, which arrives at the shooter the same way -
-    /// see [`super::Ribbon::energy_point`]) and is not itself confirmed.
+    /// The direction is the original's (`BeamPath_PointAt`, `0x00116308`:
+    /// fraction 0 is the target's end whichever craft was walked). The path is
+    /// not: the original places the ball on the strip's own chain
+    /// (`crate::leach_strip::point_at`), and this straight line stands in only
+    /// where no strip is drawn. The trip's period and accumulator are the
+    /// simulation's, `oag_weapons::projectile::leach_beam::trip`.
     #[must_use]
     pub fn position(fraction: f32, owner: Vec3, target: Vec3) -> Vec3 {
         target + (owner - target) * fraction.clamp(0.0, 1.0)

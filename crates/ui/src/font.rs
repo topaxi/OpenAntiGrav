@@ -65,6 +65,7 @@
 use std::collections::BTreeMap;
 
 use oag_texture::fnt;
+use oag_title::prompts::Prompts;
 
 /// Glyph width in pixels.
 pub const GLYPH_WIDTH: u32 = 5;
@@ -542,6 +543,12 @@ const GLYPHS: &[(char, [&str; 7])] = &[
     ),
 ];
 
+/// The largest texel scale (texels per grid unit) a texture pack's face is used at. **Chosen**:
+/// the front end lays out in 480x272, and eight texels per unit covers a 3840-wide screen, so
+/// a larger picture adds memory (a 16x face is 4096 square, and its button glyphs make it
+/// several times that) and no pixels anyone sees.
+pub const PACK_MAX_FACTOR: u32 = 8;
+
 /// Where a glyph sits in the atlas, and how much room it takes.
 ///
 /// The size and advance travel with the cell because a real font's glyphs are
@@ -729,6 +736,162 @@ impl Atlas {
         }
     }
 
+    /// [`Self::from_font`] drawn from the picture a texture pack replaces the face's atlas with
+    /// (`oag_texture::replacer::font`): its alpha is the coverage and its red channel the
+    /// body/outline mask, as the disc's palette is.
+    ///
+    /// The picture is the atlas at a whole multiple `f` of its size, the same on both axes
+    /// (`docs/formats/ppsspp-texture-pack.md`, "Wired"). Every cell's box moves to the picture's
+    /// pixels and [`Self::texel_scale`] reads each texel as `1/f` grid units, so a glyph keeps
+    /// its size and its pen advance and only gains texels; the cells' halo (`with_border_extend`)
+    /// is the caller's to give in the picture's pixels, `f` times the authored one.
+    ///
+    /// # Errors
+    ///
+    /// The picture is not a whole multiple of the atlas, its two axes differ (a face has one
+    /// texel scale), or it is more than a texture holds (`MAX_ATLAS_SIDE`).
+    pub fn from_replaced_font(
+        font: &fnt::Font,
+        picture: &oag_texture::replacer::Image,
+    ) -> Result<Self, String> {
+        let (width, source_height) = (u32::from(font.width), u32::from(font.height));
+        let whole = |picture: u32, atlas: u32| {
+            (atlas > 0 && picture.is_multiple_of(atlas)).then(|| picture / atlas)
+        };
+        let (Some(fx), Some(fy)) = (
+            whole(picture.width, width),
+            whole(picture.height, source_height),
+        ) else {
+            return Err(format!(
+                "its {}x{} picture is not a whole multiple of the {width}x{source_height} atlas",
+                picture.width, picture.height
+            ));
+        };
+        if picture.width.max(picture.height + 2) > oag_texture::replacer::MAX_ATLAS_SIDE {
+            return Err(format!(
+                "its {}x{} picture is more than a texture of {} a side holds",
+                picture.width,
+                picture.height,
+                oag_texture::replacer::MAX_ATLAS_SIDE
+            ));
+        }
+        if fx != fy {
+            return Err(format!(
+                "its picture is {fx}x wide and {fy}x tall, and a face has one texel scale"
+            ));
+        }
+        let mut atlas = Self::from_font(font);
+        let pixels = (picture.width * picture.height) as usize;
+        let rows = (picture.width * (picture.height + 2)) as usize;
+        let mut coverage = vec![0u8; rows];
+        let mut luma = vec![0u8; rows];
+        let mut first_ink: Option<u8> = None;
+        let mut outlined = false;
+        for (at, texel) in picture
+            .rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .take(pixels)
+            .enumerate()
+        {
+            coverage[at] = texel[3];
+            // A transparent texel carries no colour, as the disc's transparent palette entry
+            // carries none: a pack's PNG is white there, and an outlined face's body pass would
+            // fill the whole glyph box with it.
+            luma[at] = if texel[3] == 0 { 0 } else { texel[0] };
+            // Greys are compared under fully opaque ink only: an upscaled picture's edge texels
+            // round both channels (`pulse_text.fnt` in the Pulse pack has red 254 under alpha
+            // 254), which is not a second grey.
+            if texel[3] == u8::MAX {
+                match first_ink {
+                    None => first_ink = Some(texel[0]),
+                    Some(first) => outlined |= first != texel[0],
+                }
+            }
+        }
+        atlas.width = picture.width;
+        atlas.height = picture.height + 2;
+        atlas.solid = solid_patch(&mut coverage, picture.width, 0, picture.height);
+        solid_patch(&mut luma, picture.width, 0, picture.height);
+        atlas.coverage = coverage;
+        atlas.luma = luma;
+        atlas.outlined = outlined;
+        let factor = fx as f32;
+        for cell in atlas.glyphs.values_mut() {
+            cell.x *= fx;
+            cell.y *= fx;
+            cell.width *= fx;
+            cell.height *= fx;
+            cell.advance *= factor;
+        }
+        atlas.texel_scale /= factor;
+        Ok(atlas)
+    }
+
+    /// The face `name`'s atlas drawn from the active texture pack's picture of it, with the halo
+    /// `border` the pack's factor gives (`border` times the factor), or `None` to keep the
+    /// disc's own.
+    ///
+    /// The picture is used at the largest whole fraction of its factor that is at most
+    /// [`PACK_MAX_FACTOR`] and leaves the atlas, with the substitute button glyphs `prompts`
+    /// will add ([`Self::with_prompts`], which the caller still calls), within
+    /// [`oag_texture::replacer::MAX_ATLAS_SIDE`] a side. The 16x Pulse pack's menu faces are
+    /// 4096 square, and 64 button glyphs at that scale made them 18744 tall: more than a Steam
+    /// Deck's textures hold.
+    ///
+    /// A face whose atlas the pack does not replace, whose picture is not a whole multiple of
+    /// it, which no fraction fits, or whose `.fnt` keeps its atlas elsewhere (PS2) is the
+    /// disc's; a refusal is a line in `report`, `what` labelling it ("HUD font", "menu font").
+    /// The race HUD and the front end both build their faces through this.
+    pub fn from_pack(
+        archives: &mut oag_assets::Archives,
+        name: &str,
+        font: &fnt::Font,
+        border: u32,
+        what: &str,
+        prompts: Option<&Prompts>,
+        report: &mut Vec<String>,
+    ) -> Option<(Self, u32)> {
+        let picture = oag_texture::replacer::font(&archives.read_name(name).ok()?)?;
+        let full = match Self::from_replaced_font(font, &picture) {
+            Ok(atlas) => atlas,
+            Err(why) => {
+                report.push(format!(
+                    "{what} {name}: texture pack picture not used: {why}"
+                ));
+                return None;
+            }
+        };
+        let factor = picture.width / u32::from(font.width);
+        let side = oag_texture::replacer::MAX_ATLAS_SIDE;
+        for used in (1..=factor.min(PACK_MAX_FACTOR)).rev() {
+            if !factor.is_multiple_of(used) {
+                continue;
+            }
+            let atlas = full.reduced(factor / used);
+            let grown = prompts.map_or_else(|| atlas.clone(), |p| atlas.clone().with_prompts(p));
+            if grown.width.max(grown.height) > side {
+                continue;
+            }
+            let kept = if used == factor {
+                format!("{factor}x")
+            } else {
+                format!("{used}x of the pack's {factor}x")
+            };
+            report.push(format!(
+                "{what} {name}: {}x{} from the texture pack ({kept})",
+                atlas.width, atlas.height
+            ));
+            return Some((atlas, border * used));
+        }
+        report.push(format!(
+            "{what} {name}: texture pack picture not used: no fraction of its {factor}x fits a \
+             {side}-pixel texture with the button glyphs"
+        ));
+        None
+    }
+
     /// This atlas with its texels read as `scale` grid units each.
     ///
     /// Omega's faces are the same as HD's at twice the pixel size (every glyph
@@ -867,6 +1030,7 @@ fn solid_patch(coverage: &mut [u8], width: u32, x: u32, y: u32) -> Cell {
 }
 
 mod border;
+mod reduce;
 
 #[cfg(test)]
 mod tests {
@@ -948,6 +1112,127 @@ mod tests {
         assert_eq!(measure(&atlas, "AB"), 12.0);
     }
 
+    fn face() -> oag_texture::fnt::Font {
+        oag_texture::fnt::Font {
+            line_height: 12,
+            unknown: 0,
+            width: 16,
+            height: 8,
+            palette: vec![[0, 0, 0, 0], [200, 200, 200, 255], [40, 40, 40, 255]],
+            indices: vec![0; 16 * 8],
+            glyphs: vec![oag_texture::fnt::Glyph {
+                codepoint: u16::from(b'A'),
+                width: 4,
+                height: 4,
+                u0: 2,
+                u1: 6,
+                v0: 1,
+                v1: 5,
+                advance: 5,
+            }],
+        }
+    }
+
+    fn picture(
+        width: u32,
+        height: u32,
+        grey: impl Fn(u32, u32) -> u8,
+    ) -> oag_texture::replacer::Image {
+        oag_texture::replacer::Image {
+            width,
+            height,
+            rgba: (0..width * height)
+                .flat_map(|at| {
+                    let (x, y) = (at % width, at / width);
+                    [
+                        grey(x, y),
+                        grey(x, y),
+                        grey(x, y),
+                        if x == 9 && y == 5 { 255 } else { 0 },
+                    ]
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_pack_picture_keeps_every_glyph_its_size_and_gains_texels() {
+        let atlas = Atlas::from_replaced_font(&face(), &picture(64, 32, |_, _| 255)).unwrap();
+        assert_eq!(
+            (atlas.width, atlas.height),
+            (64, 32 + 2),
+            "the picture and the solid rows"
+        );
+        assert_eq!(atlas.texel_scale, 0.25);
+        assert_eq!(atlas.line_height, 12.0, "grid units, unchanged");
+        let cell = atlas.cell('A').unwrap();
+        assert_eq!((cell.x, cell.y, cell.width, cell.height), (8, 4, 16, 16));
+        assert_eq!(cell.advance, 20.0);
+        assert_eq!(
+            measure(&atlas, "A"),
+            5.0,
+            "the pen moves as far as the disc's face does"
+        );
+        assert_eq!(
+            atlas.coverage[5 * 64 + 9],
+            255,
+            "coverage is the picture's alpha"
+        );
+        assert_eq!(atlas.coverage[5 * 64 + 10], 0);
+        assert!(
+            !atlas.is_outlined(),
+            "a picture of one grey has no outline to mix in"
+        );
+    }
+
+    #[test]
+    fn a_picture_with_two_greys_under_ink_is_outlined() {
+        let two = |x: u32, _| if x < 9 { 40 } else { 255 };
+        let mut picture = picture(32, 16, two);
+        picture.rgba[(5 * 32 + 8) * 4 + 3] = 255;
+        let atlas = Atlas::from_replaced_font(&face(), &picture).unwrap();
+        assert!(atlas.is_outlined());
+        assert_eq!(atlas.luma[5 * 32 + 8], 40);
+    }
+
+    #[test]
+    fn a_rounded_edge_grey_is_not_an_outline_and_transparent_texels_carry_no_body() {
+        let mut picture = picture(32, 16, |_, _| 255);
+        let edge = (5 * 32 + 8) * 4;
+        picture.rgba[edge] = 254;
+        picture.rgba[edge + 3] = 254;
+        let atlas = Atlas::from_replaced_font(&face(), &picture).unwrap();
+        assert!(
+            !atlas.is_outlined(),
+            "red 254 under alpha 254 is the upscaler's rounding, not a second grey"
+        );
+        assert_eq!(atlas.luma[5 * 32 + 8], 254);
+        assert_eq!(atlas.luma[5 * 32 + 9], 255, "opaque ink keeps its grey");
+        assert_eq!(
+            atlas.luma[0], 0,
+            "a white texel under zero alpha is no body"
+        );
+    }
+
+    #[test]
+    fn a_picture_that_is_not_a_whole_multiple_is_refused() {
+        let face = face();
+        for (width, height) in [(33, 16), (32, 17), (32, 8 * 3)] {
+            assert!(
+                Atlas::from_replaced_font(&face, &picture(width, height, |_, _| 255)).is_err(),
+                "{width}x{height} is not one factor on both axes"
+            );
+        }
+        // The size is read before any pixel is, so a picture too big for a texture is refused
+        // without allocating it.
+        let huge = oag_texture::replacer::Image {
+            width: 16 * 1024,
+            height: 8 * 1024,
+            rgba: Vec::new(),
+        };
+        assert!(Atlas::from_replaced_font(&face, &huge).is_err());
+    }
+
     #[test]
     fn a_space_is_a_real_glyph_so_it_takes_width() {
         let atlas = Atlas::build();
@@ -958,3 +1243,5 @@ mod tests {
 
 #[cfg(test)]
 mod fold_tests;
+#[cfg(test)]
+mod reduce_tests;

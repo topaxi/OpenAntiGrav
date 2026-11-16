@@ -400,9 +400,10 @@ fn blocks(
     let across = (width as usize).div_ceil(4) as u32;
     let down = (height as usize).div_ceil(4) as u32;
 
+    let order = Twiddle::new(across, down);
     for by in 0..down {
         for bx in 0..across {
-            let index = twiddle(bx, by, across, down) as usize;
+            let index = order.index(bx as usize, by as usize);
             let at = index * unit;
             let block = texels.get(at..at + unit)?;
             let texels16 = decode(block);
@@ -440,9 +441,10 @@ fn blocks(
 fn argb8888(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
     let pixels = (width as usize).checked_mul(height as usize)?;
     let mut out = vec![[0u8; 4]; pixels];
+    let order = Twiddle::new(width, height);
     for y in 0..height {
         for x in 0..width {
-            let index = twiddle(x, y, width, height) as usize;
+            let index = order.index(x as usize, y as usize);
             let at = index.checked_mul(4)?;
             let texel = texels.get(at..at + 4)?;
             let (a, r, g, b) = (texel[0], texel[1], texel[2], texel[3]);
@@ -472,9 +474,10 @@ fn argb8888(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
 fn rgb888(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
     let pixels = (width as usize).checked_mul(height as usize)?;
     let mut out = vec![[0u8; 4]; pixels];
+    let order = Twiddle::new(width, height);
     for y in 0..height {
         for x in 0..width {
-            let index = twiddle(x, y, width, height) as usize;
+            let index = order.index(x as usize, y as usize);
             let at = index.checked_mul(3)?;
             let texel = texels.get(at..at + 3)?;
             out[y as usize * width as usize + x as usize] = [texel[0], texel[1], texel[2], 255];
@@ -491,27 +494,53 @@ fn rgb888(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
 /// bits are appended linearly. That makes it correct for a non-square grid like
 /// `hud_2048.gxt`'s 256x128 blocks. Same algorithm as `ClassiCube`'s Vita port's
 /// `TwiddleCalcFactors`, as a direct bit-scatter.
+#[cfg(test)]
 pub(crate) fn twiddle(bx: u32, by: u32, across: u32, down: u32) -> u32 {
-    let (mut w, mut h) = (across, down);
-    let mut mask_x = 0u32;
-    let mut mask_y = 0u32;
-    let mut shift = 0u32;
-    while w > 1 || h > 1 {
-        if w > 1 && h > 1 {
-            mask_y |= 1 << shift;
-            mask_x |= 1 << (shift + 1);
-            shift += 2;
-        } else if w > 1 {
-            mask_x |= 1 << shift;
-            shift += 1;
-        } else {
-            mask_y |= 1 << shift;
-            shift += 1;
+    Twiddle::new(across, down).index(bx as usize, by as usize) as u32
+}
+
+/// [`twiddle`] over a whole grid at once: the two bit-scatters of every column
+/// and every row, built once, so a cell's index is `x_bits[x] | y_bits[y]`.
+///
+/// `twiddle` derived its masks from the grid size and walked the mask bits on
+/// every call; a surface asks it once per block, word or texel.
+pub(crate) struct Twiddle {
+    x_bits: Vec<u32>,
+    y_bits: Vec<u32>,
+}
+
+impl Twiddle {
+    pub(crate) fn new(across: u32, down: u32) -> Self {
+        let (mut w, mut h) = (across, down);
+        let mut mask_x = 0u32;
+        let mut mask_y = 0u32;
+        let mut shift = 0u32;
+        while w > 1 || h > 1 {
+            if w > 1 && h > 1 {
+                mask_y |= 1 << shift;
+                mask_x |= 1 << (shift + 1);
+                shift += 2;
+            } else if w > 1 {
+                mask_x |= 1 << shift;
+                shift += 1;
+            } else {
+                mask_y |= 1 << shift;
+                shift += 1;
+            }
+            w >>= 1;
+            h >>= 1;
         }
-        w >>= 1;
-        h >>= 1;
+        Self {
+            x_bits: (0..across).map(|x| scatter(x, mask_x)).collect(),
+            y_bits: (0..down).map(|y| scatter(y, mask_y)).collect(),
+        }
     }
-    scatter(bx, mask_x) | scatter(by, mask_y)
+
+    /// The twiddled index of cell `(x, y)`, which must lie inside the grid.
+    #[inline]
+    pub(crate) fn index(&self, x: usize, y: usize) -> usize {
+        (self.x_bits[x] | self.y_bits[y]) as usize
+    }
 }
 
 /// Deposits the low bits of `value`, one at a time, into the set bit

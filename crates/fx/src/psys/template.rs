@@ -15,9 +15,17 @@
 //! have to start with that child's own instances, and no consumer here carries
 //! that. [`Effect::skipped_templates`] counts them.
 //!
-//! **Pulse on the PSP only**, the layout being read off that executable alone:
-//! every other source calls [`Effect::without_pulse_psp_draw`], which mutes the
-//! templates it added.
+//! **Pulse on the PSP, and the effects a title lists**
+//! (`oag_title::Effects::templates`): every other source calls
+//! [`Effect::without_pulse_psp_draw`], which mutes the templates it added, and
+//! [`Effect::without_pulse_psp_draw_but`] keeps them for a listed effect with the
+//! roll and stretch they author. Pure's absorb burst is listed; its draw, sampler
+//! and instance initialiser are Pulse's
+//! (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw").
+//!
+//! Where the file embeds none (Wipeout HD), a listed effect's template takes the sprite its
+//! record names at `+0x87c` (`oag_pob::texture::TEMPLATE_TEXTURE_PATH_FIELD`) from the
+//! caller, as an emitter takes its own.
 //!
 //! The sprite is the template record's own, at `+0x890`
 //! (`FUN_08928b10` binds it for a template particle): on the collision sparks it is
@@ -46,6 +54,7 @@ impl Effect {
         data: &[u8],
         records: &[pob::Emitter],
         scale: ColourScale,
+        template_paths: bool,
         external: &mut dyn FnMut(&str) -> Option<super::Sprite>,
     ) {
         let parents: Vec<usize> = self.roots.clone();
@@ -57,7 +66,11 @@ impl Effect {
                 // The template's own sprite, not its parent's: none is a stand-in.
                 let Some(sprite) =
                     super::Sprite::from_template(system, data, template).or_else(|| {
-                        let path = system.texture_path(data, template)?;
+                        let path = system.texture_path(data, template).or_else(|| {
+                            template_paths
+                                .then(|| system.template_texture_path(data, template))
+                                .flatten()
+                        })?;
                         external(path)
                     })
                 else {
@@ -105,6 +118,32 @@ impl Effect {
 }
 
 impl System {
+    /// Makes every particle of this instance, not only a template, draw at the
+    /// instance's current severity: `ParticleSystem_UpdateParticleFields` multiplies the
+    /// size channel by `instance + 0x34` every update
+    /// (`docs/ghidra/functions/psp-pulse-usa/particle-system.md`, "Channel animation").
+    /// Off unless a caller turns it on: only the Plasma's head, whose severity is
+    /// re-written every charging tick, has been measured against it
+    /// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the arcs' size follows the charge").
+    pub fn set_draws_live_severity(&mut self, live: bool) {
+        self.live_severity = live;
+    }
+
+    /// The severity a particle's drawn size is multiplied by: a sprite
+    /// template reads the instance's current one every frame (the Plasma's
+    /// charging head grows with the charge it is rescaled to, and its
+    /// templates are born once, at the press, when the charge is zero), every
+    /// other particle keeps the one it spawned with, unless the caller turned on
+    /// [`Self::set_draws_live_severity`]. `docs/ghidra/functions/psp-pulse-usa/plasma.md`,
+    /// "the head's template playback".
+    pub(super) fn drawn_scale(&self, spec: &EmitterSpec, particle: &Particle) -> f32 {
+        if spec.template || self.live_severity {
+            self.scale
+        } else {
+            particle.scale
+        }
+    }
+
     /// Frees every template particle, at once - `ParticleSystem_StopAndClear`'s
     /// `FUN_088f48c0`, which empties the instance's template list.
     pub(super) fn clear_templates(&mut self, effect: &Effect) {

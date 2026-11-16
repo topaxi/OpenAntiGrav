@@ -65,13 +65,13 @@ const CLEAN_LAP: &str = "data/traces/talons-junction-clean-lap.csv";
 /// (`0.02`-`0.04` rad/s on the lap captures).
 const SIGNIFICANT: f32 = 0.05;
 
-fn workspace(relative: &str) -> std::path::PathBuf {
+pub(crate) fn workspace(relative: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join(relative)
 }
 
-fn load() -> (CollisionWorld, Handling) {
+pub(crate) fn load() -> (CollisionWorld, Handling) {
     let image = workspace(IMAGE);
     let mut archives = pulse::open(image.to_str().expect("utf-8")).expect("opening the disc image");
     let track_blob = archives.read_name(TRACK).expect("reading the track");
@@ -85,12 +85,13 @@ fn load() -> (CollisionWorld, Handling) {
         CLASS,
         handling::SpeedupPads::default(),
         handling::Special::default(),
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
     )
     .expect("class");
     (collision_world(&nodes), handling)
 }
 
-fn controls_of(frame: &oag_trace::Frame) -> ShipControls {
+pub(crate) fn controls_of(frame: &oag_trace::Frame) -> ShipControls {
     ShipControls {
         steer_x: frame.steer / CONTROL_RANGE,
         thrust: frame.throttle / CONTROL_RANGE,
@@ -256,7 +257,12 @@ fn gates_at_the_clean_lap_redirect() {
     let _ =
         oag_physics::forces::evaluate(&mut state, &controls, &handling, &environment, &world, dt);
     let before = state.body.position;
-    oag_physics::integrate(&mut state.body, state.inertia_frame, dt);
+    oag_physics::integrate(
+        &mut state.body,
+        state.inertia_frame,
+        environment.laws.body_damping,
+        dt,
+    );
     if let Some((correction, _)) = oag_physics::hover::sweep(&state, &environment, &world, before) {
         println!("hover sweep correction {}", fmt(correction));
     }

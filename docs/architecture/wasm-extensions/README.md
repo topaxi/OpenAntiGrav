@@ -11,7 +11,7 @@ and the maintainer's examples walked end to end. The engine half is beside it:
 [hooks.md](hooks.md) (where each event is raised and each command lands, at its
 `file:line`, and where the one guest call per tick sits) and
 [determinism-and-state.md](determinism-and-state.md) (floats, fuel, the state
-blob, the hash, replays, network play, web and iOS, the spike's measurements).
+blob, the hash, replays, network play, web and iOS, the measurements).
 Where this page and those two disagree, they own the engine facts and this page
 is to be corrected.
 
@@ -26,14 +26,14 @@ compiled and a race offered a module names it as left out in its load report.
 
 | Piece | Where | What it is |
 | --- | --- | --- |
-| The host | `crates/modhost` | Section 4.1's configuration minus Pulley and the load-time rewrite (desktop Cranelift only); one process-wide `Engine`, built at the first compile and counted (`engines_created`); a fresh pooled instance per tick; fuel per tick `FUEL_PER_TICK` = 200,000, **chosen**; a trap or a refused reply is a `Fault` |
-| The ABI | `crates/ext-abi` (`oag_ext_abi`) | Core wasm: exports `memory`, `oag_abi` (the major and the layout revision, below), `oag_io` (a 4,096-byte buffer), `tick`, optionally `oag_state_len` and `oag_track` (the [track region](#and-track-properties-2026-10-30)); **no imports at all** (the `oag` namespace is empty in ABI 1, so `rng-next` and `log` are not offered yet). The buffer's fixed little-endian layout is on that crate's page, the one definition the host and the guest SDK both compile against (it moved out of `oag-modhost` with the SDK, below); it carries the README's records only as far as the examples need: the tick, the active-slot mask, the events, the blob, the reply, the craft records |
+| The host | `crates/modhost` | Section 4.1's configuration minus the load-time rewrite (desktop; Cranelift, or Pulley behind the `pulley` feature, section 5); one process-wide `Engine`, built at the first compile and counted (`engines_created`); a fresh pooled instance per tick; fuel per tick `FUEL_PER_TICK` = 200,000, **chosen**; a trap or a refused reply is a `Fault` |
+| The ABI | `crates/ext-abi` (`oag_ext_abi`) | Core wasm: exports `memory`, `oag_abi` (the major and the layout revision, below), `oag_io` (a 4,096-byte buffer), `tick`, optionally `oag_state_len`, `oag_wants_race` ([a race check](hooks.md#choosing-its-races-oag_wants_race-abi-1-revision-6)) and `oag_track` (the [track region](#and-track-properties-2026-10-30)); **no imports at all** (the `oag` namespace is empty in ABI 1, so `rng-next` and `log` are not offered yet). The buffer's fixed little-endian layout is on that crate's page, the one definition the host and the guest SDK both compile against (it moved out of `oag-modhost` with the SDK, below); it carries the README's records only as far as the examples need: the tick, the active-slot mask, the events, the blob, the reply, the craft records |
 | Event | `wall-contact{slot}` | Raised in `Race::count_wall_contact` for a person's craft and an AI craft alike, **on every tick the craft touches a wall** (`contacts > floor_contacts`, the test `wall_contact_ticks` counts), at most once per craft per tick; delivered the next tick (the one-tick latency) |
-| Command | `scale-thrust{slot, factor}` | No `ticks` field and no host timer: the guest re-sends it each tick it wants it. `factor` finite and in `[0, 1]` for Wall Penalty (`[0, 2]` since Energy Turbo, below); anything else, a slot with no craft, or two for one slot is a fault, never a clamp. Below 1.0 **multiplied** into `Ship::pending_thrust_scale`, so a Leach Beam drain armed the tick before is kept |
-| Kind | `[extension.rules]` in `oag-mod.toml` | A rules module, because section 2.1 lets a rules module touch any slot and a craft module only slots flying its hull: a curse on every craft would otherwise be one craft row per team. Section 1.1 names a rules module from a mode file; `modes/*.toml` does not exist yet, so until it does a mod's rules module runs in every race the mod is on for, on its titles, **except the original campaigns** (section 1.2) **and network races** (the host's race runs vanilla until phase 3; the lobby's fingerprint leaves the repository's examples out) |
-| State | `RaceSim::extensions` | Each module's blob (the manifest's `state_bytes`, at most 1,024), its fault tick, and the pending wall-contact bits, cloned with a snapshot and hashed last in `RaceSim::state_hash`; a race with no module hashes nothing there |
-| No replay | `Race::start_recording` | A modded race records none (section 4.4, phase 2's rule) |
-| Overlay | `oag_present::perf::mods` | The `Dev` overlay's `mods` block: per module fuel last tick, peak, share of the budget, call wall time, and the fault tick; a per-tick output timed in `oag-raceplay`, never hashed |
+| Command | `scale-thrust{slot, factor}` | No `ticks` field and no host timer: the guest re-sends it each tick it wants it. `factor` finite and in `[0, 2]` (`MAX_THRUST_FACTOR`); anything else, a slot with no craft, or two for one slot is a fault, never a clamp. Below 1.0 **multiplied** into `Ship::pending_thrust_scale`, so a Leach Beam drain armed the tick before is kept |
+| Kind | `[extension.rules]` in `oag-mod.toml` | A rules module, because section 2.1 lets a rules module touch any slot and a craft module only slots flying its hull: a curse on every craft would otherwise be one craft row per team. Section 1.1 names a rules module from a mode file; `modes/*.toml` does not exist yet, so until it does a mod's rules module runs in every race the mod is on for, on its titles, **unless its guest declines the race** ([`oag_wants_race`](hooks.md#choosing-its-races-oag_wants_race-abi-1-revision-6), asked once at race load: Slipstream runs only in a Single Race or a Tournament leg with weapons on), **except the original campaigns** (section 1.2) **and network races** (the host's race runs vanilla until phase 3; the lobby's fingerprint leaves the repository's examples out) |
+| State | `RaceSim::extensions` | Each module's blob (the length its `oag_state_len` exports, or the manifest's `state_bytes`, at most 1,024), its fault tick, and the pending wall-contact bits, cloned with a snapshot and hashed last in `RaceSim::state_hash`; a race with no module hashes nothing there |
+| Replay | `Race::start_recording`, `oag_replay::header::ModUse` | A modded race **records its inputs** and its header's `mods` list names each module: mod id, version, module path, SHA-256 of the module's bytes, ABI major and layout revision, state bytes and the `sim` picks. A rebuild (`Options::recorded_mods`, set by `apply_replay`) runs exactly those modules with the recorded picks, and `apply_recorded` refuses a module that is missing, another build, another layout or picks, or an extra one, by name (`extensions/identity.rs`). A modded race sets no ghost and offers none to save. Not built: the tune bytes (nothing reads a `setup.tune` yet), the lobby fingerprint's SHA-256, the cross-engine conformance test (section 4.4, 4.2) |
+| Overlay | `oag_present::perf::mods` | The `Dev` overlay's `mods` block: per module fuel last tick, peak, share of the budget, linear memory (`Cost::memory_bytes`: `Memory::data_size` read after the tick, before the pooled instance is dropped, so growth and a trapped call count; shown as the last call's size and the peak since load, against the `memory_pages` cap, with the manifest `state_bytes`; reporting only, no reservation and no new limit), call wall time, and the fault tick; a per-tick output timed in `oag-raceplay`, never hashed |
 
 Proof: `oag_raceplay`'s `tests::extensions` (a vanilla race's 600 tick hashes fold
 to one constant in both builds and build no engine; a modded race hashes the same
@@ -66,19 +66,21 @@ added to the engine and the ABI, each its own commit with the vanilla fold uncha
 | Craft records | observation | One 16-byte record per slot (`oag_ext_abi::Craft`): the held pickup (its place in `Weapon::ALL` plus one, 255 for the mod's own), flags (person-flown, fire button held, racing past GO), shield, its maximum, speed. Copies; the held input is the `InputSnapshot` the tick already has |
 | `scale-thrust` up to 2.0 | command | Above 1.0 through a new `Environment::extension_thrust` (`oag-physics`, applied to the engine's thrust after the Leach Beam's scale; `1.0` skips the multiply, so no vanilla bit moves). Below 1.0 still the Leach Beam's path |
 | `shield-delta{slot, amount}` | command | A loss through `oag_physics::damage::apply_weapon` at its full amount, so the destroyed edge, the Shield pickup's immunity and the critical crossing are a hit's (a drained pool wrecks: proven); a gain through `damage::add`'s clamp. `|amount|` at most the slot's maximum; refused where the mode takes no damage |
-| The mod's own pickup | engine | `oag_tables::weapons::Weapon::Extension` (7.5): a fieldless arm outside `Weapon::ALL`, so `Option<Weapon>` stays one byte and the World snapshot does not grow; hashed as 255, which no vanilla race writes. The engine never fires or absorbs it: a person's press (`Race::spend_pickup`) and the AI's fire (`Race::spend_opponent_pickup`, through the Turbo's gate; the AI never absorbs it) raise **`pickup-fire{slot}`** / **`pickup-absorbed{slot}`**; an absorb clears it and pays no pool. The HUD draws the look the mod declares for it: its manifest's `[pickup]`, or this tick's `pickup-look` (below). A mod that hands one out with no `[pickup]` is faulted for the race on its first `give-pickup` or `pickup-roll`, naming the missing table |
+| The mod's own pickup | engine | `oag_tables::weapons::Weapon::Extension` (7.5): an arm outside `Weapon::ALL` carrying a `ModKind` (one per mod that declares a `[pickup]`, in module id order, at most 32; a 33rd such mod is left out of the race by name in the load report); hashed as 255 for kind 0, 254 for kind 1 and so on, which no vanilla race writes. The engine never fires or absorbs it: a person's press (`Race::spend_pickup`) and the AI's fire (`Race::spend_opponent_pickup`, through the Turbo's gate; the AI never absorbs it) raise **`pickup-fire{slot}`** / **`pickup-absorbed{slot}`**; an absorb clears it and pays no pool. The HUD draws the look the mod declares for it: its manifest's `[pickup]`, or this tick's `pickup-look` (below). A mod that gives, rolls or clears one with no `[pickup]` is faulted for the race on its first such command, naming the missing table. A module sees its own kind in a craft record as `Pickup::Ours` (code 255) and another mod's as `Pickup::Other(kind)` (codes 15 to 46); `pickup-fire` and `pickup-absorbed` are raised to the module of the kind the craft held, no other |
 | `give-pickup{slot}` / `clear-pickup{slot}` | command | Puts the mod's pickup in an empty slot / takes it out of a slot holding it (a fault otherwise). A race without weapons gives nothing. The slot's last-granted weapon is left alone, so the title's repeat rule is unchanged |
-| `pickup-roll{weapon, every}` | command | Race-wide (sent on slot 0): every `every`-th time a weapon pad (`Race::test_weapon_pads`) draws that weapon, it hands out the mod's pickup instead, with the drawn weapon still the slot's last grant. The count is hashed; re-sending the same rule keeps it. The first module to send any of the three pickup commands owns the kind for the race; another one faults |
+| `pickup-roll{weapon, every}` | command | Race-wide (sent on slot 0): every `every`-th time a weapon pad (`Race::test_weapon_pads`) draws that weapon, it hands out the mod's pickup instead, with the drawn weapon still the slot's last grant. The count is hashed; re-sending the same rule keeps it. Each module's rule is its own (per kind): the first grant of the weapon that turns, in module id order, takes it. Each module gives, rolls and clears only its own kind |
 | `scale-pad{slot, 0}` and **`speed-pad{slot, pad}`** | command, event | The turbo holds its slot's speed pads at 0 while carried, so a pad gives no push, plume or pad sound, and pays the pool on the `speed-pad` the entry raises ([track properties](#and-track-properties-2026-10-30)) |
 | `play-cue{slot, cue}` | output | One of six of the engine's cues (`oag_ext_abi::Cue`, matched to the engine's in `oag_raceplay::extensions`), pushed beside the tick's own |
-| `fire-effect{slot, effect}` | output | The title's own `CollisionSpark` or `HitSpark` `.pob`, at the hull's back end, drawn by the view half; a title without it draws nothing |
-| `fire-effect{slot, own index}` | output | The sending mod's own particle effect (`[effects]` of its manifest, `docs/formats/mod-effect.md`), arg bit 15 set, at the hull's back end; one that did not load draws nothing |
+| `play-mod-sound{slot, sound, mode}` | output | The sending mod's own sound, named by its key in the reply's string pool (`[sounds]` of its manifest, a key it lacks faults the module, naming it; `docs/formats/mod-sound.md`) once, as a loop that follows the craft, or a loop's stop; placed like a title cue on the craft through the mixer, limiter and spatial path. One that did not load plays nothing and the load report says so |
+| `fire-effect{slot, effect}` | output | The title's own `CollisionSpark` or `HitSpark` `.pob`, at the hull's back end, drawn by the view half; a title without it draws nothing. A module may send at most `MAX_FIRE_EFFECTS_PER_TICK` = **16** (`MAX_CRAFTS`: two for each of the grid's eight craft) `fire-effect`s of either kind a tick (**chosen, not measured**); the 17th faults the module, because a full stage evicts the title's own one-shot sparks. SDK: `Refused::Effects` |
+| `fire-effect{slot, own effect}` | output | The sending mod's own particle effect named by its key in the reply's string pool (`[effects]` of its manifest, `docs/formats/mod-effect.md`; a key it lacks faults the module, naming it), arg bit 15 set, at the hull's back end; one that did not load draws nothing |
 | `hud-tint{slot, element, rgba}` | output | Recolours a HUD element of that slot. `Pickup` is **not** tintable any more: a `hud-tint` of it is a malformed record (`pickup-look` colours the pickup). Elements are title-agnostic (`Speed`, `Thrust`, `Energy`, `Pickup`, `Position`, `Lap`, `Time`) and `oag_hud::ext_draws::element_of` maps each to the title's widgets; an element the title has no widget for draws nothing |
-| `pickup-look{slot, icon, colour}` | output | Command 22. The look of that slot's held mod pickup: `icon` is `{title: weapon}` (the title's own icon sprite for the weapon; a title with none draws none) or `{mod: name}` (a PNG of the mod's `[icons]`), `colour` is `{title: weapon}` (the title's own backdrop row for the weapon: Pulse's recovered table, HD's and Omega's own) or `{rgba}` (a colour of the mod's own). Re-sent each tick it should hold; with none sent the manifest's `[pickup]` is the look, and the last look is kept while the pickup fades out after use. The title's fade-in, overshoot, size pulse, hold and fade-out (Pulse, HD, Omega) play on any look. **Per title:** Pulse, HD and Omega draw both colour kinds; **Pure has no backdrop widget, so both colour kinds draw nothing there** (its icon is the title's model for the weapon, or nothing for a mod icon); 2048 has no backdrop colour table, so its backdrop stays as authored and a `rgba` or title colour draws nothing there (its icon goes through the UV table, a mod icon is fitted inside `PickupBgFrame`). A mod icon is fitted, aspect kept, in the slot the title's weapon icons share (**chosen, not measured**). An output: drawn, never hashed |
+| `pickup-look{slot, icon, colour}` | output | Command 22. The look of that slot's held mod pickup: `icon` is `{title: weapon}` (the title's own icon sprite for the weapon; a title with none draws none) or `{mod: name}` (a PNG or SVG of the mod's `[icons]`; an SVG is rasterised at load, off the render thread, at the pixel size its slot is drawn at, and again when that changes: `oag_hud::svg`, `oag_game::hud_overlay`; `<text>` draws nothing and `<image>` is never read, `resvg` being built without its text and raster-image features), `colour` is `{title: weapon}` (the title's own backdrop row for the weapon: Pulse's recovered table, HD's and Omega's own) or `{rgba}` (a colour of the mod's own). Re-sent each tick it should hold; with none sent the manifest's `[pickup]` is the look, and the last look is kept while the pickup fades out after use. The title's fade-in, overshoot, size pulse, hold and fade-out (Pulse, HD, Omega) play on any look. **Per title:** Pulse, HD and Omega draw both colour kinds; **Pure has no backdrop widget, so both colour kinds draw nothing there** (its icon is the title's model for the weapon; a mod icon is a PNG drawn at its own size, centred on the backdrop grid's quad, so ship the glyph alone); 2048 has no backdrop colour table, so its backdrop stays as authored and a `rgba` or title colour draws nothing there (its icon goes through the UV table, a mod icon is fitted inside `PickupBgFrame`). A mod icon is scaled, aspect kept, to the box the title's own Turbo glyph fills and centred on it: the loader measures the PNG's drawn pixels (alpha above 16, so a margin never counts) and the HUD reads the title's glyph off the HUD sheet (alpha above 32 in the Turbo icon's own region; for 2048 the Turbo row of its UV table, centred in `PickupBgFrame`), then both are shrunk to the backdrop frame if they would not fit it (**chosen, not measured**; where the title's glyph cannot be read the art is drawn at its own size on the frame). A title with a different look per title names it in `[pickup.titles.<title>]` (below). An output: drawn, never hashed |
 | `hud-shake{slot, element, amplitude}` | output | Jitters the element's widgets by up to `amplitude` HUD pixels (at most 16) this tick. The offset is an integer hash of tick, slot and element, never zero while `amplitude` is above 0 (chosen, not measured) |
 | `hud-bar-extra{slot, element, extra, rgba}` | output | A bar shows `extra` times its value on top: it is rescaled so value x (1 + extra) fills it, the base share keeps the bar's colour and the added share (`extra / (1 + extra)` of the fill, 47 % at 0.9) blends from the bar's colour into `rgba`. Each element means the same on every title: `Thrust` is the thrust bar and draws nothing on a title without one (Pulse); `Speed` is the speed bar |
 | `hud-text{slot, anchor, x, y, text, rgba, size}` | output | Text in the title's HUD font at one of nine anchors of the HUD layout grid, offset `x`, `y` HUD pixels (12-bit signed), `size` in quarters of the title's own text height. The string is at most 48 bytes, carried in the reply's string pool |
 | `hud-icon{slot, anchor, x, y, sprite, rgba, size}` | output | The title's HUD sprite of that name (`TimeDiffIcon`, `TurboIcon`) at an anchor, `rgba` its modulating colour; a name the layout lacks draws nothing |
+| `raise-warning{slot, icon \| (side, own icon)}` | output | Command 37. Raises the viewer's incoming-weapon warning (`oag_hud::incoming`, `docs/ghidra/functions/psp-pulse-usa/hud-incoming-warnings.md`) exactly as an opponent's fire does: the icon's group lights its background and that weapon's icon for 2.0 s, blinking at 4 Hz. `icon` is one of ten (`oag_ext_abi::WarningIcon`, the title's own warning icons by weapon) and **fixes the group**: Rocket, Missile, Quake, Cannon, Plasma, LeachBeam, Repulser and Shuriken warn on the rear slot (a threat behind), Mine and Bomb on the forward slot (a threat laid ahead). **Edge-triggered, not re-sent:** a raise restarts the group's timer, and a timer restarted every tick is never lit, so send it once, on the tick of the cause. A mod may instead name an icon of its own `[icons]` (a PNG or SVG, `own` flag in the argument, the name in the reply's string pool like `hud-icon`'s) **and the group it lights** (`WarningSide`, rear or forward, in the word): the host draws the group's own backdrop and fits the art, aspect kept, to the box of the title's `RearWarningRocketIcon` / `ForwardWarningMineIcon` (**chosen, not measured**: the eight rear icons' boxes are near-identical, Rocket's is taken; the forward box is the Mine's wide, short strip, so tall art is drawn small there), a vector icon rasterised again at that box's pixels. A name the mod's `[icons]` does not declare faults the module, naming it (sent from the view call it is dropped with the call's other drawn outputs); an icon the host could not read draws nothing, and the load report says so (as a pickup's). ABI 1 revision 4. **Drawn only where the original draws its warnings**: Pulse (PSP and PS2), one view and one person, in Arcade, Tournament, Eliminator and Head-to-Head, and only for the viewer's own slot; for any other slot, title, mode or seat it is dropped without a fault. An output: never hashed |
 
 The HUD outputs are re-sent each tick they should hold, are per slot (in split screen
 each lands in the view of the slot it names, since each view draws its own slot's
@@ -290,9 +292,9 @@ rewritten on them with **no `unsafe`, no offsets and no ABI codes**:
 | --- | --- | --- |
 | The layout | `crates/ext-abi` (`oag-ext-abi`) | `no_std`, zero dependencies, `#![forbid(unsafe_code)]`. Offsets, sizes, caps, flag bits, and the records `Craft`, `Event`, `Command` with their encode and decode; the shared vocabulary `Slot`, `Weapon` (the 14 codes in `Weapon::ALL`'s order), `Pickup` (`None`, `Weapon`, `Ours`), `Cue`, `Effect`, `Rgba`. `oag-modhost` depends on it and keeps only the checks that need the observation (the slot holds a craft, the shield maximum, the pickup held, one of a kind per slot); `oag-raceplay` maps the vocabulary to the engine's with exhaustive `match`es, so either side growing is a compile error |
 | The revision | `oag_ext_abi::REVISION` | Bumped by hand on any edit to the layout; a unit test folds every offset, size, code and one encoding of each record into a committed `(REVISION, fold)` pair, so a layout edit without a bump fails the gate. `oag_abi()` returns `(ABI << 8) \| REVISION`; the host refuses another revision **by name** ("built for ABI 1 rev 2, this host is ABI 1 rev 1"), and a value below 256 as a module "without a layout revision". Revision 1 is the layout the pre-SDK examples were built against, so the old `.wasm` files are refused |
-| The state length | `oag_state_len` | An optional export; when present it must equal the manifest's `state_bytes` (refused by name otherwise). `state_bytes` stays required in the manifest and its schema |
+| The state length | `oag_state_len` | An optional export; when present it is the state's length: a manifest that declares no `state_bytes` takes it, one that declares a number must agree (refused by name otherwise). A module without the export has no state unless the manifest declares one |
 | The guest SDK | `crates/ext` (`oag-ext`) | `no_std`, no `alloc`, depends on `oag-ext-abi` only; no engine crate may depend on it (`just check-deps`, rule 2). `Observation` (`tick()`, `crafts()` over occupied slots, `craft(slot)`, `events()` skipping unknown kinds); `Craft`, a view whose accessors (`is_person`, `fire_held`, `is_racing`, `shield`, `shield_max`, `speed_kmh`, `pickup`) read their field when asked; `Reply` with one method per command, taking a `&Craft` where the slot must hold one and returning `Err(Refused)` where the host would fault; the count written by the glue; `blob!` for the state (a plain-data struct, field order, little-endian, no padding, a `const` assert against `MAX_STATE_BYTES`); the `Extension` trait carrying the fresh-instance and one-tick-late rules; `export!` emitting `oag_abi`, `oag_io`, `oag_track`, `oag_state_len`, `tick` and the panic handler on wasm32 only; `Observation::track()` and `prop!` read the track region. Its `test` feature's `test::Race` runs an extension natively through the host's own writer and decoder |
-| The examples | `mod-examples`, branch `ext-sdk` | Wall Penalty 87 lines (its blob `[u16; 8]`), Energy Turbo 307 (its record kept at 12 bytes with a spare `u16`), each with native tests under `cargo test`. The dependency is a `path` into the engine checkout the submodule sits in; a stand-alone clone needs a git dependency pinned to the revision, which waits until the branch is public |
+| The examples | `mod-examples`, branch `ext-sdk` | Wall Penalty 87 lines (its blob `[u16; 8]`), Energy Turbo 307 (its record kept at 12 bytes with a spare `u16`), each with native tests under `cargo test`. The dependency is a git dependency on this repository's `main` (a stand-alone clone builds; a release pins a `rev`); inside the engine `assets/mods/.cargo/config.toml` patches it to `crates/ext`. Not published to crates.io |
 
 Measured on the rebuilt modules (`opt-level = "s"`, LTO, stripped). Fuel is from
 `oag_raceplay`'s `tests::extension_examples`: a full grid of eight racing crafts
@@ -318,7 +320,26 @@ name. `wall_penalty_ground_truth` and `energy_turbo_ground_truth` pass unchanged
 against the rebuilt modules, and the vanilla fold did not move.
 
 Not built yet: an `oag-ext check` tool, a generated C header and a C++ example
-built from it, a template mod, and the git dependency.
+built from it, and a template mod.
+
+### A committed module is its guest's build (2026-11-13)
+A guest (`assets/mods/*/*/guest/`) is a workspace of its own, so the engine's build compiles
+neither it nor its tests, and the `.wasm` a player loads is a file a person committed. The
+module is a function of the guest source, the SDK it patches in (`assets/mods/.cargo/config.toml`)
+and the toolchain `rust-toolchain.toml` pins. `just check-guests --strict`
+(`scripts/check-mod-guests.py`) runs every guest's `cargo test`, builds it for
+`wasm32-unknown-unknown` and requires `ext/<name>.wasm` to be byte-identical; a stale module, a
+guest that does not build and a missing wasm target (`rustup target add wasm32-unknown-unknown`)
+all fail. It is in `just`, `just gate-affected` and CI's `test` job. Bare `just check-guests`
+only reports a stale module. A stale module still loads while its ABI revision matches, which is
+how seven of them shipped an older SDK unnoticed until 2026-11-10 (the pinned toolchain had not
+moved since 2026-10-02; the SDK had grown, for example `raise_warning`).
+
+To regenerate after an SDK, ABI or toolchain change (one command): `just rebuild-guests`
+(runs each `guest/build.sh`), then commit `ext/` in the `assets/mods/examples` and
+`assets/mods/official` submodules, then the pointers. Proof it fails: a byte appended to
+`tether.wasm` gives `1 stale module(s) ... Failing: --strict`, rc 1; a `rustup` that lists no
+target gives rc 1 naming the install command.
 
 ### Breakable armour from the Shield (2026-10-30)
 
@@ -375,7 +396,7 @@ census of those titles' Shield tables was taken for this change.
 ### And Checkpoint Circuit (2026-10-30)
 
 The fourth example, `oag.checkpoint-circuit` (`assets/mods/examples/checkpoint-circuit/`, a
-track module of 9,046 bytes on `oag-ext`, and its own track file built by
+track module of 9,303 bytes on `oag-ext`, and its own track file built by
 `checkpoint_circuit.py` in Blender): the example of triggers, track properties, HUD text from a
 mod's own strings, and the AI route hook. Each craft has **20 s** to its next checkpoint gate
 (`oag/triggers/checkpoint <n>`, `mod_checkpoint = n`, 1 to 4 in lap order); reaching it resets
@@ -397,7 +418,7 @@ player's physics. What it added, each with the vanilla fold unchanged:
 | --- | --- | --- |
 | Path properties | track file | `mod_*` on a Blender spline object, written as the glb spline node's `oag_props` extra (one object); `oag_trackfile::Track::path_props`, one list per path or none. A file without any writes nothing new |
 | Paths and routes in the region | observation | Entity kinds 5 (`Path`) and 6 (`Route`) after the triggers; their counts at `PATHS_AT` (6) and `ROUTES_AT` (8), so the entities start at 12. A path's box bounds its points, a route's its samples (world space, the identity placement). A route carries the properties of the paths it drives, the first path's value kept where two set one name, so a guest finds the pit lane's route by `route(r).prop(prop!("pit"))`. SDK: `Track::paths()`, `routes()`, `path(i)`, `route(i)` |
-| `prefer-route{slot, route}` | command (21) | Re-sent each tick it should hold; `route` below the region's route count (the course's numbering, `Course::routes`), one per slot per tick, else a fault. Held in `Extensions` for the tick and **hashed** after the no-module early return. SDK: `Reply::prefer_route(&craft, route)`. Code 22 is `pickup-look`, 23 stays free |
+| `prefer-route{slot, route}` | command (21) | Re-sent each tick it should hold; `route` below the region's route count (the course's numbering, `Course::routes`), one per slot per tick, else a fault. Held in `Extensions` for the tick and **hashed** after the no-module early return. SDK: `Reply::prefer_route(&craft, route)`. Code 22 is `pickup-look`, 23 is `emit` ([below](#and-events-between-mods-2026-10-30)) |
 
 **Where it lands.** `Race::steer_branching` (`crates/raceplay/src/routes.rs`), `Ai_ChooseBranch`'s
 states 0 to 2: the coin is thrown exactly as before on entering the pre-fork path
@@ -526,10 +547,11 @@ page builds on them rather than re-deriving them.
 - **Two phases, then a third.** Phase 1 runs modules only where nothing reaches a
   race's state (HUD widgets, and the frontend world's mod screens, section 2.3). Phase 2 opens the simulation hook; a mod that touches
   the simulation declares `simulation = true` and marks the session **MODDED**: no
-  multiplayer, no ghosts or replays recorded or played back, records in a separate
-  modded table, MODDED on the HUD and the MODS page. Phase 3 lifts that once module
-  hashes travel in the replay header and the lobby and the cross-engine conformance
-  test holds.
+  multiplayer, no ghosts, records in a separate modded table, MODDED on the HUD and the
+  MODS page. Replays: [ADR-0091](../adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md)
+  records a modded race's input stream (a screenshot of it must be made again), the
+  header's `mods` list carrying the module hashes (section 4.4). Phase 3 lifts the rest once the lobby carries the hashes
+  and the cross-engine conformance test holds.
 - **Engine choice**: wasmtime with Cranelift on Linux, Windows, macOS and Android;
   wasmtime's Pulley interpreter on iOS (no JIT); the browser's own `WebAssembly` on
   the web build. Three engines must give bit-identical results: a deterministic
@@ -678,8 +700,8 @@ extension = "ext/a_to_b.wasm"      # what data cannot say; optional
   and never another's commands ([hooks.md](hooks.md#the-shape-one-call-per-tick-events-in-commands-out)).
 - **A module is compiled at race load, never per tick**, on the load thread the race
   already builds on (`docs/architecture/race-load-transition.md`); the browser
-  compiles asynchronously (section 5). The spike compiled a 1.6 KB guest in about
-  2 ms ([determinism-and-state.md](determinism-and-state.md#the-spike)).
+  compiles asynchronously (section 5). Measured: a 1.6 KB guest compiles in about
+  2 ms ([determinism-and-state.md](determinism-and-state.md#measurements)).
 - **One craft module per hull per race.** Two enabled mods binding the same team
   identity on the same title: the first by id wins, the second is left out **and
   named in the load report** (`mod B: craft extension for "feisar" already provided
@@ -1210,9 +1232,10 @@ the whole session shares (a host-chosen setting) is folded into
 ([network play](determinism-and-state.md#network-play)); a **per-seat** tune (each
 player's own craft) cannot be, since folding it would refuse every join where two
 players differ. Per-seat tunes are the server receiving each seat's bytes with the
-seat at race start, which touches the wire and is open question 13. Until phase 3,
-a session whose sim module reads a tune is MODDED anyway: no replay, no ghost, no
-multiplayer.
+seat at race start, which touches the wire and is open question 13. A tune
+is not built (the ABI has no `setup.tune` yet), so no header carries one; until it is, a
+mod's sim module reads nothing a replay cannot reproduce from the `mods` entry and the
+inputs. A session whose sim module reads a tune stays MODDED: no ghost, no multiplayer.
 
 **Where it runs.** The screen model is `oag-ui-screens`'s, in the existing shape
 (`Input` and `Pointer` in, `Outcome` and `Draw` out), over a small injected trait
@@ -1261,7 +1284,7 @@ load (an import outside `oag`) or faults at the command check.
 | Not exposed | Why |
 | --- | --- |
 | **No WASI, no files, no network, no environment, no clock, no threads.** The linker holds one import namespace, `oag`, with the functions of `sim-host` or `hud-host` and nothing else | Determinism: a clock or a file is an input the replay does not carry (`docs/architecture/determinism.md`). Safety: a mod is read in place from an untrusted archive; it gets no reach past its own files. The browser cannot grant them anyway ([determinism-and-state.md](determinism-and-state.md#no-threads-no-clock-no-wasi)) |
-| **No state in the guest's own memory across a tick.** One pooled instance per module per tick; the blob is the only thing that crosses a tick boundary | Network rollback restores the race state, not a guest's linear memory; the spike measured a guest with a counter in its own memory **diverging after a rollback** with a persistent instance ([determinism-and-state.md](determinism-and-state.md#mod-state-is-a-fixed-size-blob-in-the-race-state)). Enforced by construction rather than by asking authors to behave |
+| **No state in the guest's own memory across a tick.** One pooled instance per module per tick; the blob is the only thing that crosses a tick boundary | Network rollback restores the race state, not a guest's linear memory; measured: a guest with a counter in its own memory **diverging after a rollback** with a persistent instance ([determinism-and-state.md](determinism-and-state.md#mod-state-is-a-fixed-size-blob-in-the-race-state)). Enforced by construction rather than by asking authors to behave |
 | **No raw `World`, `Ship` or `Body` pointer, no shared memory with the host, no reading what the observation did not copy** (another module's blob, the game's `Rng` state, a projectile's internals) | `World` is plain data whose layout changes with nearly every simulation commit ([ADR-0003](../adr/0003-no-ecs.md), [ADR-0055](../adr/0055-replays-are-inputs-and-a-ghost-is-poses.md)). A guest reading it by offset breaks on the next field; a guest writing it bypasses every check. Copies in, commands out |
 | **No force, torque or position write; a velocity write only through the capped `impulse`**; no replacing the integrator | The force law is the measured original; a guest scales its inputs (`scale-thrust`), it does not step the body |
 | **No same-tick reaction to an event raised after the call** | The one-tick latency is the price of one call per tick (section 2); a law that needs same-tick reaction is a measured original's and belongs in the engine |
@@ -1270,7 +1293,7 @@ load (an import outside `oag`) or faults at the command check.
 | **No input devices; only the `InputSnapshot` the tick already received, for person-flown slots** | The snapshot is the one thing a replay and a network peer carry (ADR-0055, [ADR-0070](../adr/0070-the-network-transport-is-webtransport.md) decision 4). Reading a pad directly would be an un-replayed input |
 | **No reading or writing another module's blob, commands or published keys** | One instance and one blob per module; composition between mods is open question 8 and must not happen by accident |
 | **No persistence from the sim or HUD world, and none of a guest's own files.** The one exception is the frontend world's saved blob, at most 4 KiB per mod and title, a host-written table beside the records (section 2.3) | Modern saves: no slots, no files a player manages; a mod must not leave state on disk the MODS page does not know about. The blob is the host's, listed and clearable on the MODS page. The sim guest sees it only as `setup.tune` at `race-start` and never writes it |
-| **No change to an original title's faithful modes unless the player opts into the mod** | The MODS page's ENABLED switch is the opt-in (ADR-0078). With a sim module on, the session is MODDED (phase 2): records go to the modded table, ghosts and replays are off, the HUD says so. The original campaigns never load an extension (settled) |
+| **No change to an original title's faithful modes unless the player opts into the mod** | The MODS page's ENABLED switch is the opt-in (ADR-0078). With a sim module on, the session is MODDED (phase 2): records go to the modded table, ghosts are off, the HUD says so; the input stream is still recorded and names the module. The original campaigns never load an extension (settled) |
 | **No projectile of the mod's own in v1** | `World::projectiles` is a fixed-size pool of plain `Copy` data (`crates/gameplay/src/world.rs:378`); the Quake, Leach Beam and Repulser each have their own single-slot pool. A guest-defined projectile would change the snapshot's size and every golden hash. A custom weapon is a timed self-effect first (section 7.5); a projectile pool for mods, with a visual from the mod's files, is open question 4 |
 | **No menu rows beyond ADR-0066's closed vocabulary, no settings, no new disc pages, no behaviour in a disc's own menus.** The one allowance is a mod's own screen in the frontend world: one extra action, `open-mod-screen`, and a page the mod owns (section 2.3, [ADR-0080](../adr/0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md), which supersedes ADR-0066 decision 4 for wasm screens only) | A mod still cannot invent front-end behaviour on the disc's pages; its screen is a page of its own that cannot start a race, change a setting or reach a file. The sim, craft, track, rules and weapon kinds still attach to a race, not to the menus |
 | **No AI advantage.** A craft module runs for every slot flying its hull, the AI's included; `controller` is readable so a rules mod can handicap, but nothing in `oag-extras` ever favours the AI | The AI obeys the player's physics (maintainer's rule). A third-party mod that does otherwise is the player's choice and is MODDED |
@@ -1283,7 +1306,7 @@ load (an import outside `oag`) or faults at the command check.
 
 ### 4.1 Engine configuration and the load-time rewrite
 
-wasmtime 50 (the version the spike pinned; `just test-wasm` runs the simulation
+wasmtime 50 (the version measured; `just test-wasm` runs the simulation
 suites under wasmtime already, `docs/tools/web.md`), configured so everything a
 guest can observe is pinned. The browser has neither fuel nor NaN canonicalisation,
 so both also run as **a rewrite of the module at load**, applied on every engine,
@@ -1292,11 +1315,12 @@ with wasmtime's own switches left on as a second line
 
 | Setting | Value | Why |
 | --- | --- | --- |
-| Fuel | on; a budget per call, set before `tick` (`Store::set_fuel`); plus the rewrite's own counter at function entries and loop headers, trapping at zero, identical on every engine; wasmtime's fuel a higher backstop | the only portable work bound; a wall-clock epoch traps at different instructions on different machines. The budget bounds loops and calls, not straight-line length (measured). The number is set with the first real hook; the spike's toy used about 168 units a tick |
+| Fuel | on; a budget per call, set before `tick` (`Store::set_fuel`); plus the rewrite's own counter at function entries and loop headers, trapping at zero, identical on every engine; wasmtime's fuel a higher backstop | the only portable work bound; a wall-clock epoch traps at different instructions on different machines. The budget bounds loops and calls, not straight-line length (measured). The number is set with the first real hook; the toy measured used about 168 units a tick |
 | NaN canonicalisation | `cranelift_nan_canonicalization(true)`, plus the rewrite inserting the same canonicalisation after every float op | measured: on, every arithmetic NaN read `7fc00000` on both engines; off, `ffc00000` with a payload |
 | Relaxed SIMD, threads, shared memory, memory64, SIMD | off / refused at load | the deterministic subset; `simd128` only after the conformance test passes with it |
 | Memory | the manifest's `memory_pages`, the same `StoreLimits` on every engine, ceiling 256 pages (16 MiB, proposed) | `memory.grow` fails at the same size everywhere |
-| Call depth | the rewrite's counter, trapping at a fixed depth well below any engine's native stack | a native stack overflow traps at different depths on Cranelift and Pulley; open risk until the pass exists |
+| Engine | wasmtime's Cranelift, native code, by default; with `oag-modhost`'s `pulley` feature, `Config::target("pulley64")`: the same Cranelift front end emitting Pulley bytecode, run by the interpreter (section 5). Every other row of this table is set the same on both | the interpreter is a local measuring build; players get no switch |
+| Call depth | the rewrite's counter, trapping at a fixed depth well below any engine's native stack | a native stack overflow traps at different depths on Cranelift and Pulley; open risk until the pass exists. Not exercised by the `pulley` comparison below |
 | Instance | one pooled instance per module per tick (copy-on-write reset) | rollback safety; 11.4 us (Cranelift) / 27.3 us (Pulley) a tick for 20 calls against a 60 us race tick; one call per tick here |
 | State blob | `state_bytes` from the manifest, capped by the host (a few hundred bytes per slot plus a global part covers every example here; the cap is set with the first sim hook) | a fixed-size field in the race state, no allocation |
 | Module size | at most 4 MiB on disk (proposed) | a mod is small; a bigger module is a mistake |
@@ -1308,20 +1332,53 @@ with wasmtime's own switches left on as a second line
 - **One answer for every failure** ([hooks.md](hooks.md#the-shape-one-call-per-tick-events-in-commands-out)):
   a trap (out of fuel, `unreachable`, out-of-bounds memory, stack overflow) or a
   refused command **turns the module off for the rest of the race**. That call's
-  commands are discarded, the blob keeps its value from before the call, every
-  later call is skipped. The race goes on: a player two laps in keeps the race; the
+  commands are discarded (a rule only the apply step can check, an emit past its cap, on
+  a channel the mod does not publish, or a pickup command that breaks the
+  `[pickup]` rule, discards the whole reply, whichever command is first), the blob keeps
+  its value from before the call, every later call is skipped.
+- **What a fault gives back.** Held race-wide state goes back to the title's at the
+  fault: the module's `scale-pad`s return to 1.0, and if it owned the mod pickup, the
+  `pickup-roll` ends, and every craft still holding that module's pickup kind (the other
+  mods' kinds stay) is handed the title's: a pickup that came from a roll becomes
+  the weapon the pad drew (the craft's `last`; the AI and the person use it as if no
+  module had run), and one that came from `give-pickup` replaced nothing and is taken
+  away. Per-tick outputs (`scale-thrust`, HUD, sky) end because the module is no longer
+  called. Mail it already queued is delivered once. All of it is hashed state. The race goes on: a player two laps in keeps the race; the
   author gets the tick.
 - **The fault edge is simulation state**: the fault flag and the tick are hashed;
   the fuel total is not (its per-operator costs are wasmtime's own and the browser
-  has none). Same inputs, same fault tick on every machine: the spike's runaway loop
+  has none). Same inputs, same fault tick on every machine: the measured runaway loop
   trapped at the same iteration on Cranelift and Pulley.
 - **Shown, not only logged**: the HUD's MODDED tag and the results screen name the
   mod and the tick.
 - **A HUD module that faults** is hidden for the rest of the race; the title's own
   HUD is untouched.
 - **A module that will not validate at load** (an import outside `oag`, a missing
-  export, a refused feature, another `api` major) leaves its mod out of the race,
-  named in the load report; the race runs vanilla.
+  export, an export with the wrong signature (`tick`, `oag_io`, `oag_track`,
+  `oag_state_len` and `oag_abi` are each `() -> i32`), a refused feature, another `api`
+  major) leaves its mod out of the race, named in the load report; the race runs
+  vanilla. An `[extension]` whose `api`, `memory_pages` or `state_bytes` is out of range,
+  or that names neither `rules` nor `track`, is refused earlier still, when the manifest
+  parses, so the MODS page shows it.
+- **Machine-local failures become hashed faults.** Three failures depend on the machine
+  the race runs on, not on the module, and each still ends as a `Fault::Trap` whose
+  tick is hashed: the host failing to make an instance (the pool of 64 instances for
+  the whole process, or an mmap or commit failure), and a native stack overflow (the
+  open risk in [determinism-and-state.md](determinism-and-state.md)). Two machines
+  running the same modded race can therefore fault the same module at different ticks,
+  or one of them not at all. Network races force vanilla
+  (`mod_extensions::attach` is told `vanilla` for them, which leaves `find_extensions`
+  `None`: `game/src/main/session/load.rs:505-508`, `game/src/main_body.rs:534-536`), so
+  no two machines compare a modded race's hash live. **A modded replay is the case that
+  now does, and the failure has not been moved out of the hash**: a recording whose
+  module hit a host-local fault (a pool or mmap failure, a deep guest) disagrees on a
+  machine that did not, and `Verifier` reports it at the next stored hash (`Desync`),
+  never silently. A replay across engines (Cranelift, Pulley, the browser) is unproven
+  until the conformance test exists. Before a modded network race exists the failure
+  still has to leave the hash: a host-local failure must not fault the module (retry, or
+  end the race for that machine alone), and the stack-depth counter in
+  determinism-and-state.md must exist so a deep guest traps at a fixed depth on every
+  engine.
 
 ### 4.3 Versioning
 
@@ -1336,8 +1393,11 @@ with wasmtime's own switches left on as a second line
   it knows and ignores an event it does not); a change to an existing field's
   meaning or position is major 2, a second layout the host writes beside the first
   for a release.
-- The replay header's `mods` entry carries the mod's blob layout version, so a
-  replay refuses a mod build whose blob layout changed.
+- The replay header's `mods` entry carries the module's SHA-256 and the layout it ran
+  under (ABI major, layout revision, state bytes), so a replay refuses a mod build whose
+  blob layout changed, and any other build of the module. The SHA-256 subsumes a separate
+  "blob layout version": the layout is in the module's code, and no manifest field names
+  one. Built (`oag_replay::header::ModUse`).
 
 ### 4.4 Trust
 
@@ -1357,12 +1417,18 @@ with wasmtime's own switches left on as a second line
   ([determinism-and-state.md](determinism-and-state.md#network-play)). Mod code
   arriving through a lobby is never auto-run (decision 6): the joiner must have the
   mod installed.
-- **Replays**: `oag_replay::Header` (`crates/replay/src/header.rs`) has no mod field
-  today and `build` is informational, never compared. Proposed: a dedicated `mods`
-  list (id, version, module SHA-256, blob layout version), not the opaque `options`
-  map, editing format v1 in place. Playback refuses a replay whose modules are not
-  present with those hashes, by name; the stored state hashes still decide validity
-  (ADR-0055). In phase 2 a modded session records no replay at all
+- **Replays** (built, [ADR-0091](../adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md)): `oag_replay::Header::mods`
+  (`crates/replay/src/header.rs`), a dedicated list, not the opaque `options` map, editing
+  format v1 in place: per module the id, version, module path, SHA-256, ABI major and
+  layout revision, state bytes and `sim` picks. `Race::start_recording` fills it from the
+  modules the load compiled (hashed in `extensions::prepare`, where the bytes are read).
+  A rebuild runs the listed modules with the listed picks and no others, and
+  `oag_raceplay::replay::apply_recorded` refuses a missing module, another build (hash
+  or version), another layout, other picks or an extra module, naming each; the stored
+  state hashes still decide validity (ADR-0055). **Not covered by the hash of the module
+  alone**: manifest tables the race reads (pickup odds, memory pages), which the `version`
+  stands for. **Deferred**: the tune bytes (no `setup.tune` is built), the lobby
+  fingerprint's SHA-256, the REPLAYS list's playback needs the mods the file names
   ([determinism-and-state.md](determinism-and-state.md#replays)).
 - **Records**: a modded session's results go to the separate modded table (phase 2),
   keyed with the fingerprint; the networking page already says a modified-sim run
@@ -1378,7 +1444,10 @@ with wasmtime's own switches left on as a second line
 registered? **No.**
 
 - **Without the `extensions` feature**, wasmtime is not linked at all, and the web
-  build never links it (section 5): nothing to run.
+  build never links it (section 5): nothing to run. Since 2026-10-30 the feature is
+  `oag-game`'s default on Linux, Windows, macOS and Android; the web build and iOS
+  build with `--no-default-features`, and `oag-modhost` refuses to compile for either
+  (Cranelift only until the browser path and a Pulley build for iOS exist; desktop can opt into Pulley, section 5).
 - **With the feature on and no module loaded**, no wasmtime `Engine`, `Store` or
   instance exists. The host is built **lazily**, at the first load of a module by a
   race (a sim or HUD module of a mod that is on for it) or by a screen (the first
@@ -1402,10 +1471,34 @@ registered? **No.**
 
 | Target | Engine | How the module gets in | Status |
 | --- | --- | --- | --- |
-| Linux, Windows, macOS | wasmtime 50, Cranelift | compiled at race load on the load thread | spike: Cranelift and Pulley bit-identical over a 36,000-tick race, fuel trap points included; the native Rust oracle of the same law gives the same hash ([determinism-and-state.md](determinism-and-state.md#the-spike)) |
-| Android | wasmtime, Cranelift (aarch64) | same | same host code; the mobile glue is `oag-mobile` ([ADR-0065](../adr/0065-one-mobile-crate-for-every-phone-os.md)). **Owed**: the spike on an AArch64 machine, where the default NaN differs; the x86 run says nothing about it |
+| Linux, Windows, macOS | wasmtime 50, Cranelift | compiled at race load on the load thread | measured: Cranelift and Pulley bit-identical over a 36,000-tick race, fuel trap points included; the native Rust oracle of the same law gives the same hash ([determinism-and-state.md](determinism-and-state.md#measurements)) |
+| Android | wasmtime, Cranelift (aarch64) | same | same host code; the mobile glue is `oag-mobile` ([ADR-0065](../adr/0065-one-mobile-crate-for-every-phone-os.md)). **Owed**: the measurements on an AArch64 machine, where the default NaN differs; the x86 run says nothing about it |
 | iOS | wasmtime, Cranelift compiling to **Pulley** bytecode on the device (no native code), +11.4 MB; the runtime-and-Pulley-only build (+0.8 MB) needs precompiled `.cwasm` per wasmtime build, brittle | same | **not checked on iOS**: `cargo check --target aarch64-apple-ios` of wasmtime 50 stops in a build script needing Apple's `xcrun`, the macOS-only toolchain `just ios-app` needs; whether `signals_based_traps` must be off there is owed to a macOS machine ([determinism-and-state.md](determinism-and-state.md#web-and-ios)) |
 | Web | the browser's own `WebAssembly`, through `js-sys`; **the web build never links wasmtime** | compiled asynchronously at race load, never per tick (browsers limit synchronous compiles on the main thread); the race load already runs on a Web Worker (`docs/tools/web.md`, "Threads"); per-tick calls copy the observation into the module's memory as on native | needs the load-time rewrite (fuel, NaN canonicalisation, call depth) before it can match; not run yet |
+
+**Pulley on desktop is a build feature** (2026-11-12, maintainer's request: measure the
+interpreter against Cranelift locally). `oag-modhost`'s `pulley` feature turns on
+wasmtime's `pulley` and builds the engine with `target("pulley64")`; it is forwarded as
+`wasm-interpreter` on `oag-raceplay` and `oag-game` and implies `extensions`. Off by
+default and in every shipped build, so `oag-server` is unchanged (`just check-deps`,
+rule 6). `just play --interpreter ...` builds with it (and adds to `OAG_PLAY_FEATURES`);
+a mod's load logs `runs on the Pulley engine` (or `Cranelift`) at `debug`
+(`RUST_LOG=warn,oag=debug`). Measured on x86-64, one host:
+
+- `oag-modhost`'s `engines` tests build a native and a Pulley engine in one process and
+  run the same guests for 200 ticks: state blob, commands and fuel are equal, and
+  every arithmetic NaN (`0/0`, `sqrt(-1)`, `inf - inf`, a payload NaN plus one) reads
+  `7fc00000` on both.
+- A 900-tick Time Trial with Wall Penalty on Pulse PSP EU (Venom, Track 16) has the same
+  `state_hash` at every hundredth tick on both builds
+  (`wall_penalty_ground_truth::a_modded_race_hashes_the_same_on_either_engine`, run once
+  per build with `OAG_ENGINE_HASHES`).
+- Per full-grid tick of the committed examples (debug profile, which optimises
+  dependencies): wall-penalty 18.7 us Cranelift / 22.4 us Pulley, energy-turbo
+  22.8 / 78.4, hillside 19.5 / 24.4, checkpoint-circuit 26.5 / 118.0, with fuel equal on
+  both. About 18 us of each is the fresh pooled instance, which is why the small mods
+  barely move. `extension_examples::per_tick_wall_time_of_the_examples_on_this_engine`
+  prints it for the build it runs in.
 
 **Same bits everywhere means the guest's results, not the host's speed.** The
 engines agree because the module is the same bytes after the rewrite, the imports
@@ -1426,11 +1519,11 @@ dependency fits inside that:
 
 | Crate | Licence | Role | Note |
 | --- | --- | --- | --- |
-| `wasmtime` 50 (with `cranelift`, `pulley`, `runtime`, `pooling-allocator`; without `wasi`, `cache`, `parallel-compilation`, `async`, `profiling`, `coredump`, `addr2line`, `debug-builtins`, `component-model`, `threads`) | Apache-2.0 WITH LLVM-exception (read off the crate's own `Cargo.toml` in the spike) | the engine | the LLVM exception only loosens Apache's attribution clause for binaries; compatible with both halves of ours |
+| `wasmtime` 50 (with `cranelift`, `pulley`, `runtime`, `pooling-allocator`; without `wasi`, `cache`, `parallel-compilation`, `async`, `profiling`, `coredump`, `addr2line`, `debug-builtins`, `component-model`, `threads`) | Apache-2.0 WITH LLVM-exception (read off the crate's own `Cargo.toml` in the measurements) | the engine | the LLVM exception only loosens Apache's attribution clause for binaries; compatible with both halves of ours |
 | `cranelift-codegen` 0.137 and family, `pulley-interpreter` 50 | Apache-2.0 WITH LLVM-exception | wasmtime's backends | transitive |
 | `wasmparser`, `wasm-encoder` | Apache-2.0 WITH LLVM-exception | the load-time rewrite (fuel counter, NaN canonicalisation, call depth) and the feature check before compiling | the same bytes go to wasmtime and to the browser |
 | `wasmtime-wasi` | Apache-2.0 WITH LLVM-exception | **not used** | listed to say so: no WASI |
-| `wit-bindgen`, `wasm-tools` | Apache-2.0 WITH LLVM-exception | **not a runtime dependency**: the WIT on this page is documentation; guests are plain `wasm32-unknown-unknown` Rust over the I/O buffer, as the spike's is | an example mod may generate its bindings with them at its own build time |
+| `wit-bindgen`, `wasm-tools` | Apache-2.0 WITH LLVM-exception | **not a runtime dependency**: the WIT on this page is documentation; guests are plain `wasm32-unknown-unknown` Rust over the I/O buffer, as the measured guest is | an example mod may generate its bindings with them at its own build time |
 | `js-sys`, `web-sys`, `wasm-bindgen` | MIT OR Apache-2.0 | the web host | already in the tree for the web build (`crates/game/Cargo.toml`) |
 | `sha2` | MIT OR Apache-2.0 | module hashes in the fingerprint and the replay header | or `ring`'s digest, already linked by `oag-net` |
 
@@ -1481,8 +1574,8 @@ above 1.0 are the engine change.
    straights from the next tick; the speed bar, which reads `speed_kmh` from the
    body's velocity (`crates/raceplay/src/telemetry.rs:137`), shows it with no HUD
    change. `publish{"feisar.pads", n}` lets a HUD module (7.6) show the counter.
-7. **Replay and records**: phase 2, none recorded; MODDED on the results. Phase 3: the
-   module's hash in the header and the lobby.
+7. **Replay and records**: the input stream is recorded and the header names the module
+   and its hash; no ghost; MODDED on the results. Phase 3: the module's hash in the lobby.
 
 ### 7.2 A spring jump on a custom track
 
@@ -1660,7 +1753,7 @@ channel; the HUD layout files are planned separately.
     maintainer.
 11. **Hot reload** of a module during a race for mod authors (a `--reload-extensions`
     debug flag): useful, and incompatible with the hash; debug builds only, if at all.
-12. **iOS and AArch64**: the spike on an AArch64 machine and the wasmtime build on
+12. **iOS and AArch64**: the measurements on an AArch64 machine and the wasmtime build on
     iOS (`xcrun`), both owed to hardware this machine does not have.
 13. **A per-seat tune on the wire** (section 2.3): the server receives each seat's
     tune bytes with the seat at race start, so players may differ; what that adds to
@@ -1694,7 +1787,7 @@ not move ([hooks.md](hooks.md#what-has-to-be-built-in-order)):
    I/O buffer ABI, fuel, the fault path, the pooled per-tick instance, the load-time
    checks), no call site wired, behind the `extensions` feature, built lazily at the
    first module load (section 4.5), with the no-`Engine` test and the
-   vanilla-hashes-unchanged test. The ADR accepted; the spike's result on this page.
+   vanilla-hashes-unchanged test. The ADR accepted; the result is on this page.
 2. **Phase 1, no simulation code**: the `hud` world, `[[extension.hud]]` and the
    `hud/*.toml` widget box, one example widget (the lap-delta graph) in
    `mod-examples`. Proves the host on low-stakes code.
@@ -1718,10 +1811,156 @@ not move ([hooks.md](hooks.md#what-has-to-be-built-in-order)):
    velocity write for `impulse` (7.2); a gravity direction (7.3); a custom `Weapon`
    arm and `give-pickup` (7.5); authored spawn points; the `Controller` trait for a
    pilot controller (the pilot-controller thread).
-7. **Phase 3**: module hashes in the replay header's `mods` list and the lobby
-   fingerprint, playback and join refusing a mismatch by name, the conformance test
-   across Cranelift, Pulley and the browser, `oag-server` running sim modules;
-   MODDED stops meaning "no replay, no multiplayer" and starts meaning "with these
+7. **Phase 3**: module hashes in the lobby fingerprint, join refusing a mismatch by
+   name, the conformance test across Cranelift, Pulley and the browser, `oag-server`
+   running sim modules (the replay header's `mods` list and playback's refusal by name
+   are built); MODDED stops meaning "no multiplayer" and starts meaning "with these
    modules". The tune bytes join the replay header's `mods` entry, and a
    session-shared tune joins the lobby fingerprint (section 2.3; a per-seat tune is
    open question 13).
+
+### And events between mods (2026-10-30)
+
+Mods, and tracks authored in Blender, send each other events over declared channels. ABI 1 was
+edited in place (no revision bump; the layout fold re-recorded in its own commit, every example
+module rebuilt), so **events are 16 bytes now** and every module built before it still loads (the revision
+stays 3) and **misreads every event**: rebuild against the engine you run.
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| `emit{slot, channel, value}` | command (23) | `channel!("<mod id>/<name>")`, the compile-time FNV-1a 32 hash a property's name has. The mod must publish the channel and a module may send **4** a tick, else a fault by name. SDK: `Reply::emit`, `Refused::Emits` |
+| `mod{slot, from, channel, value}` | event (10) | Every module hears it on the **next** tick, sorted, ahead of the engine's events; the queue is **hashed**. `from` is the sender mod id's key, or `TRACK_SENDER` |
+| a trigger's `oag_emit` | track file | A craft entering it sends the channel, no module needed; any module hears it from `TRACK_SENDER` |
+| an animation's `oag_on` | track file | The art animation holds its first key until the channel fires, then plays from there. Render only |
+| an animation's `oag_on_value` | track file | With `oag_on`: start only on an event carrying exactly this value (`Race::channel_started` looks up the last tick of the (channel, value) pair; the log keeps up to 256 pairs). Absent: any value. Render only, nothing hashed. A per-viewer filter is not possible: the scene is shared across split-screen views (per-view animation state would be needed) |
+| `[channels] publishes, listens` | `oag-mod.toml` | Namespaced names, refused by name when malformed or foreign; the MODS page shows SENDS, HEARS and **NO ONE SENDS** |
+| `[channels] publishes` | `.track.toml` | What its triggers may send |
+
+The caps (**4** a module a tick, **16** `mod` events a tick) are **chosen, not measured**.
+[hooks.md](hooks.md#events-between-mods-emit-and-mod) has where it lands.
+
+**Proof.** `tests/extension_channels.rs` (hand-written guests): an emit on tick 3 reaches the
+listener with slot, value, sender and channel intact on tick 4 and once only; the result is the same
+with the emitter before or after the listener (swapped mod ids); two emitters' events arrive in
+channel-key order whichever sent first; a race that differs from another only in a queued value
+hashes differently at the end of the emitting tick (dropping `hash_mail` fails it); a race with no
+module hashes as the same race without the feature, tick for tick; a fifth emit and an undeclared
+channel each fault the module naming the rule, with the four delivered or none queued; a trigger
+reaches a listening module from `TRACK_SENDER` and, with no module, still raises its channel
+(`Race::channel_started`) and leaves every hash as it was. `oag-ext`'s own pair of guests
+(`Race::hear`) proves the SDK end. The render side's clock
+(`foreign::art::tests`, `an_animation_that_starts_on_a_channel_holds_until_it_fires_then_plays_from_there`)
+holds the first key before the channel fires and plays from it after, a node no channel starts keeps
+reading the world clock, and `write_node_anims_started` writes a channel-driven model every frame
+(a table that depends on more than the clock). Checkpoint Circuit announces each gate on
+`oag.checkpoint-circuit/checkpoint` (`checkpoint_circuit_ground_truth`: never faulted, the channel
+fired); each gate's lamp carries `oag_on_value` = its gate number, so it swells only when a craft
+clears that gate (`a_value_filtered_animation_starts_only_on_its_own_value`: another value does not
+start it, its own does, no filter starts on any). **Screenshots** (headless, `--race --track-file channels.track.toml --autopilot --camera-pose` at a
+fixed camera; the track is `roundtrip.py channels`'s: the motion loop with its airship starting on a
+gate's channel, the gate a 120 by 120 by 80 box over spline point 8, clear of the grid). The first
+craft crosses it at tick 623 and the field by 732. The airship's own keys run a 3.2 s loop, so a
+frame is only evidence of the hold if it would differ were the animation free: at tick 200 with
+`--anim-seconds 0` **and** `--anim-seconds 1.6` the airship sits at its first key, far left, in
+both (identical frames), while the same track with `oag_on` renamed to a key the reader ignores
+(same bytes) has it already gone from that spot at 1.6. At tick 600, before anyone crossed on
+the natural clock, it is at its first key; at tick 700, 77 ticks after the first craft crossed, it
+has flown on towards the right and turned (its dark gondola side to the camera). A forced
+`--anim-seconds` below the fire time freezes a channel-started animation again: its clock is the
+time since the channel fired, clamped at zero.
+
+**Later: event urgency levels (a note, not built).** Today every event is delivered on the next
+tick, which is what keeps the result independent of module order. A later revision might name
+levels per channel: *next tick* (the default, as built), *immediate in the mod* (a module's own
+event seen at once in the same call; it needs no host), *async* (only a fixed delay in ticks, never
+a wall-clock one), *lazy* (only the latest value per channel and slot is kept, for a gauge that
+need not queue) and a *priority* that decides what is dropped past the cap, in place of today's
+sort order. Each stays deterministic by the same rule: delivery order and drops are a function of
+the queued events alone, never of which module ran first.
+
+### And the pieces of a portal weapon (2026-11-03)
+
+What a guest needs to build a portal-teleport pickup (the official mod `oag.slipstream`
+is its first user; the engine names no mod). ABI 1 is edited in place; the layout fold
+in `crates/ext-abi/src/tests.rs` is recorded again. The engine side is in
+[hooks.md](hooks.md#built-for-a-portal-weapon-transit-scale-speed-probe-clearance-2026-11-03).
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| `transit{slot, ticks, distance, exit_factor}` | command 27 | Out of the world for `ticks` (1 to `MAX_TRANSIT_TICKS` = 600): frozen where it was, not stepped, not drawn, not collided with, not hit or locked, controls and pickup presses ignored, reset triggers held. Then moved forward to `distance`, on the road's middle at the height a craft flies at (the reset's placement without its 5 unit drop, `breadcrumbs::emerge`), and stepped from there the same tick, at `exit_factor` (0 to 2, steps of 1/10,000) times its entry speed. Laps count through the jump (not across a shut half-way gate, as for a driven crossing); a finish in it is timed at the exit tick. Refused (a fault) for a craft not racing or already out, or a distance that does not resolve; a craft another module took out on the same call is dropped with no fault |
+| `Distance` | vocabulary | `Units(u)` on, `Seconds(s)` at the speed it has when the command lands, `Lap(share)`, `Progress(p)` (a place on the lap, units from the start line), `Trigger(n)` (the course point nearest track trigger `n`'s centre: a portal's other end). Always forward, under a lap |
+| `transit-end{slot}` | event 11 | On the exit tick's own call |
+| `scale-speed{slot, factor}` | command 28 | Velocity times `factor` (0 to 2), once, at the call |
+| `probe-clearance{slot, distance, radius}` | command 29 | Does a half disc of `radius` (up to 64) standing across the track at `distance` fit: width at least `2r` and no geometry on nine rays from its centre to its rim. Answered next call |
+| `clearance{slot, fits, ahead}` | event 12 | The answer, sent to the module that probed alone, with how far on it probed; a distance that does not resolve answers "does not fit" with `ahead` 0 |
+| `in-transit` | craft flag 16 | The craft is out of the world |
+| `[pickup.titles.<title>]` | manifest | `icon` and/or `colour` (the `[pickup]` shapes) for one title (its lowercased hyphenated name), each over `[pickup]` for what it leaves out: one mod icon per title (`oag_mod::Manifest::pickup_for`, resolved when the race prepares its modules). Pulse's PSP and PS2 pressings are one title here and share a row |
+| `[[pickup.odds]]` | manifest | Rows `{ title?, class?, ai, human, front, back }` inside `[pickup]`: the weapon pads draw the mod's pickup beside the title's weapons at the most specific row's weights (title and class, then title, then class, then neither), so a title with per-class tables (2048's five) gives each its own row. The declaring module owns the mod pickup for the race; a second mod's rows are left out with a load report line; a fault ends the odds |
+
+**A portal on a track, not a weapon.** A track module answers `trigger-enter{slot, n}` with
+`transit{slot, ticks, Trigger(m), 1.0}`. The exit must lie on the course ring (the authored
+spline the lap counter and AI follow), not on collision geometry: two portals on disconnected
+geometry work if the spline runs through both, its connecting stretch never driven. An exit
+`Trigger(m)` whose centre is nearer a fork route's sample than the ring's lands on that route:
+the craft is put on the route's point for that ring point (`Course::route_point`) and its driver
+seated on the route's line (`Race::seat_on_route`); every other distance is a share of the ring.
+An exit with no spline near it is not built. Proof: `Course::locate_exit` names the route
+(`branch_progress_ground_truth`, every Pulse and 2048 route), `transit_ground_truth` seats the
+craft and its driver on a Pulse `05_Track` route, `track_props_ground_truth` runs a trigger pair
+on Hillside (a ring exit; a disc circuit carries no triggers, so no test names a route through
+a trigger file).
+
+**A reset is a different move.** It goes back, to a breadcrumb, and earns nothing; it shares
+only the cursor reset (`Race::reseat`), not the lap rule.
+
+Proof: `oag_race`'s `standing::jump_tests` (a move over the line is a lap on its tick, most of a
+lap is one lap, a finish by a move is timed there), `oag_raceplay`'s `tests::transit` (frozen,
+undrawn, untargetable, triggers held, out at the asked place and speed; a guest's transit
+raises `transit-end` and its probe `clearance`; two runs hash alike; `scale-speed`),
+`tests::extension_odds`, `oag_weapons`' `a_mod_pickup_row_is_drawn_at_its_weight_and_absent_changes_nothing`,
+`oag_tables`' `odds_tests`, `oag_mod`'s manifest test, and the byte pins in `oag_ext_abi`.
+
+**An AI craft that holds the mod's pickup.** By default the engine raises `pickup-fire` for it
+wherever the driver would fire a Turbo (the Turbo's own gate, on the Turbo's boost time). A
+mod whose module decides for itself sets `[extension] drives_ai_pickup = true` (default
+`false`): the engine then raises nothing for an AI craft, and the module decides from the
+observation and clears the pickup itself with `clear-pickup` (and does what it fires, such as
+a `transit`). The observation carries what such a decision reads:
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| tracking record | observation | A second per-craft record at `TRACKING_AT` (8 bytes a slot, `oag_ext_abi::Tracking`): `progress` (`f32`, units along the circuit from the start line, in `[0, length)`: a craft on the grid behind the line reads just under a lap), `place` (`u8`, 1-based, 0 for an empty slot; the one ordering the HUD shows, `RaceSim::places`), a flags byte whose bit 0 says `progress` is a fix (no number stands for "no fix yet") |
+| course length | observation | `f32` units at header offset 4 (`COURSE_LENGTH_AT`), 0 without a closed course: `progress / length` is the lap share |
+| title key | observation | `u32` at `TITLE_AT` (after the tracking records): `channel_key` of the title's lowercased hyphenated name (`wipeout-hd`, the slug a manifest's `titles` uses), 0 when the host says none. SDK `Observation::title()` and the compile-time `title!("wipeout-hd")`; `test::Race::with_title`. A guest that looks different per title (a portal's colour) reads it; PSP and PS2 Pulse are one title. Appended after the last region, so no offset moves |
+| aiming | observation | `AIM_SLOTS` (8) x `AIM_SLOTS` pairs of three `i8` at `AIM_AT` (after the title key): where target `t` sits ahead of, to the right of and above observer `o`, along `o`'s own forward, right and up axes, in `AIM_STEP` (2) world units, saturating at 127 steps; a craft with itself or an empty slot reads zero (the active mask says which). The whole matrix, not one chosen slot, so a guest can gate every holder's fire in the same call. Observation only, never hashed; computed with `f32` dot products and a hand-rounded quantiser. SDK `Craft::aim_at(slot) -> Aim` with `Aim::{ahead, across, above, in_cone(range, spread)}`; `test::Race::with_aim`. Appended after the title key, so no offset moves. Proof: `tests::extension_aiming` and `aiming_ground_truth` (Pulse `16_Track` grid) |
+| `drives_ai_pickup` | manifest | `[extension]`, boolean, default `false` |
+
+The observation is built before the tick's step, so `progress` and `place` are last tick's.
+The mod pickup's fire path for a person is unchanged. Proof: `oag_raceplay`'s
+`tests::extension_ai_pickup` (the default raises `pickup-fire` for an AI craft, the flag
+raises nothing, a module reads the course length and the HUD's place), `oag_ext_abi`'s
+tracking round trip (title key included) and the recorded fold.
+
+**A second camera for a portal:** `portal-view` (command 36), the scene through a portal pair in the
+texture a mod shader reads: [`mod-shaders.md`](mod-shaders.md), "The engine texture".
+
+**View outputs for a portal (outputs, never hashed).** Three commands draw into a view; each
+is re-sent every tick it should hold, and a slot with no craft is a fault.
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| `screen-fill{slot, rgba}` | command 30 | Washes the slot's own view. It joins `Race::screen_wash`, the one wash the screen flash draws through: the colour times its alpha is added over the picture (an additive wash, as the title's flash is), and beside a running flash the two are summed into the same one pass. A split-screen seat wears only its own slot's fill; the flash stays the player's |
+| `fov-offset{slot, degrees}` | command 31 | Added to the slot's vertical field of view, `[-30, 30]` degrees (`MAX_FOV_OFFSET_DEG`), inside `camera::finish_vertical_fov` after the player's setting and before the boost kick and the aspect fit. Zero skips the arithmetic, so a race with none is bit-identical. Two modules add. The player's view draws it at the draw alpha between two ticks' values, as the speed widen is, so a ramp does not step at 60 Hz |
+| `fire-mod-effect-ahead{slot, effect, distance}` | command 32 | The sending mod's own effect `effect` (a key of its `[effects]`, named in the reply's string pool), played at the middle of the road `distance` ahead of the craft (the same `Distance` and `Race::point_ahead` as `transit`, lifted off the surface as `probe-clearance` lifts its disc). It stands in the world for the effect's own lifetime (up to 600 ticks): a mod PNG as a camera-facing sprite, the half disc of a portal, centred on the point (a half disc's art belongs in the PNG's upper half, its flat edge on the middle row). It is a sprite, not a mesh: a disc that stands across the road is a later piece; the sprite can run a shader of the mod's ([`mod-shaders.md`](mod-shaders.md)). Counts toward `MAX_FIRE_EFFECTS_PER_TICK`; a distance that does not resolve, or a road with no spline there, draws nothing |
+| `stop-mod-effect{slot, effect}` | command 38 | Ends at once, particles and all, the surfaces of the sending mod's own effect `effect` (a key of its `[effects]`, named in the reply's string pool) that it placed for `slot` with `fire-mod-effect-ahead` before this tick (`Stage::kill_surface`; the view remembers the last 64 it placed). None standing is not a fault; a key the manifest lacks faults the module. An output: never hashed. `oag.slipstream` can adopt it for a portal that closes early; its sprite otherwise stands for the effect's `lifetime` |
+
+Proof: `oag_ext_abi`'s byte pins and range tests, `oag_modhost`'s refusal test,
+`oag_raceplay`'s `tests::extension_view` (the fill is its slot's view's alone, beside a flash it
+adds, a zero offset is bit-identical, the effect lands on the road ahead) and the
+`outputter` test (a module's fill and offset leave the state hash alone).
+
+### And a mod's own shaders (2026-11-04)
+
+A mod ships WGSL fragment shaders (`[shaders]`), drawn on an effect's particles, a screen fill and a
+beam between two crafts (`draw-beam`). Contract, refusals and what a hung GPU is still open to:
+[`mod-shaders.md`](mod-shaders.md). Example: `oag.tether` in the mod examples.

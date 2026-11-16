@@ -212,3 +212,52 @@ fn a_local_space_particle_rides_a_moving_frame_only_when_asked() {
         }
     }
 }
+
+/// A riding frame whose matrix rows are `s` long draws a local-space particle at `s`
+/// of its offset from the anchor, and a particle born under it is placed there.
+#[test]
+fn a_riding_frame_scale_shrinks_local_space_offsets_from_the_anchor() {
+    let mut built = (*effect("local", false, 1.0)).clone();
+    let spec = &mut built.emitters[0];
+    spec.world_space = true;
+    spec.lifetime_ticks = (100.0, 0.0);
+    spec.speed_per_tick = (0.0, 0.0);
+    spec.direction = Direction::Cone { half_angle: 0.0 };
+    spec.spawn = Spawn::Ring {
+        extent: 8.0,
+        spread: 0.0,
+        mode: 0,
+        arc: std::f32::consts::TAU,
+    };
+    spec.playback.even_ring = true;
+    let effect = std::sync::Arc::new(built);
+    let reach = |system: &System| {
+        live(system)
+            .iter()
+            .map(|p| p.position.length())
+            .fold(0.0_f32, f32::max)
+    };
+    let mut rng = Rng::new(6);
+    let mut system = System::new();
+    system.ignite(&effect, Vec3::ZERO, 1.0);
+    system.set_rides_frame(true);
+    system.advance(&effect, DT, Vec3::ZERO, Vec3::Y, &mut rng);
+    let before = reach(&system);
+    assert!(before > 1.0, "the ring is out at {before}");
+    system.set_ride_scale(0.75);
+    system.advance(&effect, DT, Vec3::ZERO, Vec3::Y, &mut rng);
+    let after = reach(&system);
+    assert!(
+        (after - before * 0.75).abs() < 1e-3 * before,
+        "an old particle reads {after}, want {} (0.75 of {before})",
+        before * 0.75
+    );
+    for _ in 0..3 {
+        system.advance(&effect, DT, Vec3::ZERO, Vec3::Y, &mut rng);
+    }
+    assert!(
+        reach(&system) < before * 0.75 + 1e-3 * before,
+        "a newborn spawned outside the scaled frame: {}",
+        reach(&system)
+    );
+}

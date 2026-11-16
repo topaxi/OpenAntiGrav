@@ -23,9 +23,15 @@ pub fn with_pads(archive: &str, name: &str, data: &[u8], model: mesh::Model) -> 
     };
     let mut parts = vec![model];
     for build in [mesh::rcs::build_pads, mesh::rcs::build_weapon_pads] {
-        if let Ok((pads, report)) = build(name, data, &geometry, &mut |path| {
-            mesh::read_blob(archive, path).ok()
-        }) {
+        // The viewer draws into a gamma target, whose shaders decode with the plain power.
+        let drawn = build(
+            name,
+            data,
+            &geometry,
+            &mut |path| mesh::read_blob(archive, path).ok(),
+            Default::default(),
+        );
+        if let Ok((pads, report)) = drawn {
             println!("{}", report.describe());
             parts.push(pads);
         }

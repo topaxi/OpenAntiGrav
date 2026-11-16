@@ -39,6 +39,7 @@ pub mod probes;
 pub mod pvs;
 pub mod quake;
 pub mod shadow_occluder;
+pub mod shprobes;
 pub mod sound_emitters;
 pub mod track;
 pub mod track_coverage;

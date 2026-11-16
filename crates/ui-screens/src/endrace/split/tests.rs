@@ -74,6 +74,7 @@ fn placed() -> Option<Placed> {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     })
 }
 
@@ -238,6 +239,7 @@ fn each_person_gets_their_own_rewards_panel() {
     }
     assert!(!names.contains(&"RewardLine2"), "the single panel is gone");
     let panel = |team: &str, award, total| Rewards {
+        tier: None,
         medal: None,
         campaign: false,
         loyalty: Some(Loyalty {

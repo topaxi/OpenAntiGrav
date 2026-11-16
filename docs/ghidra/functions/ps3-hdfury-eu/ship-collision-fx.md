@@ -234,6 +234,93 @@ construction, itself reached through machinery this pass did not trace) than
 the single-TOC-slot pattern the rest of this chain used. That is why
 `FUN_0010f730`'s own caller/index is open rather than read.
 
+## 2026-11-15: who owns the looping spark, and kind 0 is not a no-op
+
+Lane `hd-impact`. This section corrects two readings above: "`kind == 0`: no-op, returns
+immediately" and "`Ship_DispatchCollisionFx` has no other direct caller" (true, and beside the
+point: the contact path calls the trigger itself). The sound half of the same ring walk is on
+[collision-cues.md](collision-cues.md).
+
+| Address | Kind | Name | Confidence |
+| --- | --- | --- | --- |
+| `0x000e6fd8` | function | `Ship_SpawnContactFx` | 80 |
+
+### The chain
+
+```text
+Ship_UpdateEntity ring walk, per contact record              0x000ec378..0x000ec4a4
+  not under a Shield (slot bit 0x10), and for some local view i:
+  the view shows this craft (ship+0x7a3c[i], and FUN_002d4c20's mask bit),
+  0 < |view eye - record point|^2 < 10000
+    -> Ship_SpawnContactFx(ship, record, min(|p| * 0.0125, 1))      call 0x000ec9fc
+         nearest of the ten locators (ship+0x79d0) to the record's point   0x000e6fd8..0x000e71c8
+         Track_UpdateCursor(*(ship+0x7d84), .., search 100)               0x000e726c
+         kind = record.friction > 0 ? 0 : 2                               0x000e7348, 0x000e7414, 0x000e7730
+         if the craft is not racing (state != 1): kind = 3                0x000e7428..0x000e7434
+         -> ShipCollisionFx_Trigger(locator, kind, basis...,
+                                    instance = ship+0x7d30, matrix = ship+0x7d40)   0x000e74dc
+         ship+0x7d80 = 1                                                  0x000e74f0
+         the player, racing: pad rumble 0x000a3528(0.3 * intensity, 0.6, .., motor 3 or 1 by
+         which side of the craft the point is on)                         0x000e76c0..0x000e7754
+```
+
+`ship + 0x7d30` is the particle instance `Ship_Construct` makes from
+`WO_SHIP_COLL_SPARK_DAMAGE` (or its `_ZONE` twin), attached, and stops at once
+(`0x000df6a0`..`0x000df708`: `FUN_002c9108(.., fourcc 'DSPS', .., 1, 0)`, the lookup
+`0x0027c288`, then `0x00281db8(instance, 1)`). `ship + 0x7d84` is the `"AI track data"` handle
+([pilot-assist.md](pilot-assist.md)), not an effect.
+
+### `ShipCollisionFx_Trigger` kind 0 and kind 3: the ship's own instance
+
+The dispatch at `0x002d97ec`..`0x002d9804` sends kind 1 to `0x002d9878`, kind 2 to
+`0x002d9d18`, kind 3 to `0x002d9bd8` and **anything under 1 to `0x002d9bd0`, which returns
+unless the kind is 0 and then falls into `0x002d9bd8`**. So kinds 0 and 3 run one body, on the
+instance the caller passed on the stack (`sp + 852` after the prologue; null returns):
+
+```text
+0x00281cb8(instance, 1)                                   start it                  0x002d9c18
+0x00283b40(instance, craft velocity * (1 / 60))           the instance's velocity   0x002d9c20..0x002d9c40
+*matrix = the caller's three basis vectors, translation = the locator's world position
+                                                                                    0x002d9c48..0x002d9c70
+0x00280ca8(instance, &block)                              read the scale block      0x002d9c74
+x = min(|craft velocity| * 0.0125, 1.0) + intensity       0x002d9c7c..0x002d9cec
+block[5] = x < 0.1 ? 0 : x                                0x002d9cf0..0x002d9d00
+0x002846d0(instance, &block)                              write it back             0x002d9d0c
+```
+
+The constants are at TOC `+0x6a6c`..`+0x6a7c` (`0x008b3f44`: `1/60`, `1.0`, `0.5`, `0.0125`,
+`0.1`). `intensity` is the caller's `f1`, `min(|p| * 0.0125, 1)`. The earlier reading of kind 3
+as a release took `0x00281cb8(x, 1)` for a teardown; the constructor's stop is the sibling
+`0x00281db8`. What tells kind 0 from kind 3 afterwards is only the word the trigger stores at
+`locator + 0xe0` (`0x002d97dc`), whose reader was not looked for.
+
+### Who lets go
+
+Every frame `Ship_UpdateEntity` (`0x000ebf8c`..`0x000ebfb8`) tests `ship + 0x7d80`: when no
+contact effect was asked for this frame and the instance is running (`instance + 0x170 & 1`),
+it stops it (`0x000ed0cc`), then clears the byte. The same block decays the contact measure,
+`ship + 0x5f78 *= 0.85` (`0x000ebf80`..`0x000ebf94`).
+
+### What this settles and what it changes for this engine
+
+- **The owner of the looping `WO_SHIP_COLL_SPARK_DAMAGE` is the contact ring**: any record
+  with friction, a wall's or another craft's, restarts the ship's one instance at the locator
+  nearest the record's point, and the first frame with no such record stops it. Confidence 85
+  (static, both functions read at instruction level; not run). `contact_fx.rs`'s attached mode
+  is that rule for the track; its "confidence 55 on the owner" is this.
+- **A craft-to-craft contact throws the same sparks**, on both craft, each from its own nearest
+  locator. This engine starts them for a wall only on HD. Open, ready to wire.
+- **Every craft a view can see within 100 units throws them**, not the seat's craft alone.
+  This engine draws the seat's own. Open.
+- **A frictionless record throws kind 2** (`WO_SHIP_COLL_SPARK_NODAMAGE`, or the `_ZONE`
+  file under the mode mask), a one-shot. Which records carry no friction on HD (the cage, the
+  floor) is not read.
+- **The spark's strength is `min(speed / 80, 1) + min(|p| / 80, 1)`, cut to zero under 0.1**,
+  in the instance's scale block slot 5, and the instance carries the craft's velocity over 60.
+  This engine plays it at `oag_fx::sparks::severity(impact_speed)`, Pulse's law. Open.
+- **RPCS3**: see [particle-triggers.md](particle-triggers.md), "2026-11-15: the damage smoke
+  re-read, and a film of a hit", for the frames where two hulls touch.
+
 ## Open
 
 - **What names the plain `WO_SHIP_COLL_SPARK_DAMAGE` and

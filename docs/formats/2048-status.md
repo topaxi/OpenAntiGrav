@@ -125,8 +125,10 @@ the start line and runs the simulation. What it does **not** do, and why:
   `--screenshot` with no `--race` goes through) now refuses by a narrower,
   more accurate name - "draws no MenuSkin-shaped menu ... race on it with
   `--race` instead" - where it used to refuse for "no front end at all."
-  `loading` stays `None` on the narrower gap this page already named: a
-  real percentage-bar loading screen with no located plugin XML.
+  `loading` stayed `None` on the narrower gap this page already named: a
+  real percentage-bar loading screen with no located plugin XML. **Re-read 2026-11-06**
+  ([2048-loading.md](2048-loading.md)): the percentage-bar screen is the executable's kind 4, the one a race
+  load starts; it is read and not built, and HD's feature screen (kind 7) beside it has no caller.
   **`music` is `Some` since 2026-09-25**: `frontend.bnk` turned out to
   carry no 16-byte name table (its names are FNV-1 hashes, [2048-xfx.md](2048-xfx.md#sblk-version-5-banks-names-are-hashes-95)),
   so what fills `Music::front_end` instead is
@@ -332,12 +334,19 @@ byte and the `.rcsmodel` in the PS4's pointer width, and names the same three
 literals with `.gnf`; `oag_omega::TITLE` carries the same axes. See
 [omega-status.md](omega-status.md#engine-trail-and-flare-2026-10-16-omega-exhaust).
 
-**The SPU engine light is off on 2048 - chosen, not measured.** Loading
+**The engine light is wired on 2048 (lane `engine-light-wire`), after being off - chosen, not
+measured.** What follows is why HD's law could not simply be turned on. Loading
 `EngineLightData.xml` on HD's law (`flare::Authored::engine_light`) washed the
 whole circuit blue-white: all 20 native craft author `Distance 3` /
 `Radius 30` against HD's 0.7-2.0, on a hull of the same length (13.8 units
-against 13.8, so not a units mismatch). The SPU is the PS3's and its Vita
-consumer is unread, so the light is not drawn and the load report says so.
+against 13.8, so not a units mismatch). **Its Vita consumer is read (2026-11-16, confidence 82) and wired**: 2048 runs the same producer as Omega, and a native craft's light is
+`(3.0, 0.5, 0.1)`, not HD's `(4, 10, 40)`, which is what washed the circuit;
+the receiver is a per-vertex Lambert light with a linear falloff, declared by
+every circuit's materials and the ship materials
+([engine-light.md](../ghidra/functions/vita-2048-eu-v104/engine-light.md)).
+The hull's own fragment program adds it to the ambient before the texture and
+vertex colour, as Omega's does, and Omega's hull is seen lit and flickering live
+(same page, "The hull's own programs").
 Switch-off bisect at tick 0: with only the light off the frame is pixel-identical
 to the pre-change one; the flare model, sprite, trail and quad are not visible
 for the player at rest.

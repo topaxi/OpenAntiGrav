@@ -15,8 +15,8 @@ use super::*;
 /// broken one.
 ///
 /// **The glow always draws.** There is no bloom setting: the original offers
-/// none in any title, so the only faithful strength is the title's own
-/// (maintainer, 2026-10-02). `Glow::Suppressed` stays in `oag_render` for its
+/// none in any title, so the only faithful strength is the title's own.
+/// `Glow::Suppressed` stays in `oag_render` for its
 /// own tests; nothing here asks for it.
 ///
 /// Returns the chain itself (or `None`), the caller's own surface format -
@@ -118,16 +118,18 @@ pub(super) fn build_wo(
     (wo, format)
 }
 
-/// What the scene target stores, given the chains built: HD's says, 2048's
+/// What the scene target stores, given the chains built: HD's and Omega's say, 2048's
 /// stores its gamma-2 space, and anything else the value as computed.
 pub(super) fn store(
     hd: Option<&oag_post::hd_bloom::Chain>,
+    omega: Option<&oag_post::omega_tonemap::Chain>,
     wo: bool,
 ) -> oag_gpu::formats::SceneStore {
-    match hd {
-        Some(hd) => hd.store(),
-        None if wo => oag_gpu::formats::SceneStore::Squared,
-        None => oag_gpu::formats::SceneStore::Computed,
+    match (hd, omega) {
+        (Some(hd), _) => hd.store(),
+        (None, Some(omega)) => omega.store(),
+        (None, None) if wo => oag_gpu::formats::SceneStore::Squared,
+        (None, None) => oag_gpu::formats::SceneStore::Computed,
     }
 }
 
@@ -145,7 +147,7 @@ impl Scene {
 
     /// What the scene target stores - see `oag_gpu::formats::SceneStore`.
     pub(crate) fn store(&self) -> oag_gpu::formats::SceneStore {
-        store(self.hd.as_ref(), self.wo.is_some())
+        store(self.hd.as_ref(), self.omega.as_ref(), self.wo.is_some())
     }
 
     /// Whether the scene's pipelines were built against the linear float
@@ -178,7 +180,7 @@ impl Scene {
     /// once a tick; `None` draws none).
     pub(super) fn run_hd(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
@@ -205,12 +207,16 @@ impl Scene {
     pub(super) fn run_boost_zoom(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
         race: &Race,
     ) {
+        // HD's own chain draws its ring (`Self::run_hd`); a second one over it would double it.
+        if self.hd.is_some() {
+            return;
+        }
         let Some(tuning) = race.borrowed_zoom_tuning() else {
             return;
         };

@@ -9,11 +9,26 @@
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
 
-# pkg/<content hash>/ never changes under the same name (build-web.sh). The page
-# itself (index.html, main.js, style.css) keeps Cloudflare's default, which
-# revalidates on every load, so a deploy is picked up at once.
+# pkg/<content hash>/ never changes under the same name (build-web.sh). The page's
+# own files revalidate on every load instead: main.js names the pkg/ directory, so
+# a cached main.js runs the previous deploy's module. Cloudflare gives a cached
+# file the zone's browser TTL (4 hours) where nothing here says otherwise.
 /pkg/*
   Cache-Control: public, max-age=31536000, immutable
+/main.js
+  Cache-Control: no-cache
+/worker.js
+  Cache-Control: no-cache
+/fault.js
+  Cache-Control: no-cache
+/audio.js
+  Cache-Control: no-cache
+/audio-worklet.js
+  Cache-Control: no-cache
+/movie.js
+  Cache-Control: no-cache
+/style.css
+  Cache-Control: no-cache
 
 # The project's TOML Schemas (scripts/stage-schemas.sh). Editors and validators
 # fetch them from other origins, and a schema may change within its major, so the

@@ -7,10 +7,8 @@ use oag_race::sight::Sight;
 /// Where the lock-on reticle lives and which law it runs.
 ///
 /// Both halves are title facts (the HUD's authored space, the title's sight
-/// dialect), read once at load. Before 2026-10-14 they were two setters on `Race`
-/// that the windowed game and the capture path called and nothing else did, so a
-/// race started without them ran Pulse's LeachBeam under the Missile's law (a lock
-/// at 48 ticks instead of 20).
+/// dialect), read once at load. Without them a race would run Pulse's LeachBeam under the
+/// Missile's law (a lock at 48 ticks instead of 20).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sighting {
     /// The grid the **simulation's** locks are in: the title's whole HUD space,
@@ -31,6 +29,9 @@ pub struct Sighting {
     /// Whether a held LeachBeam runs its own law (Pulse) rather than the
     /// Missile's. `oag_title::hud::Sights::runs_leach_law`.
     pub leach_law: bool,
+    /// What the Missile's chase rate is multiplied by while a target is on
+    /// screen. `oag_title::hud::Sights::chase_gain`.
+    pub chase_gain: f32,
     /// The square the law runs in when it is not the grid (the PS2's 512x512
     /// buffer), or `None`. See [`oag_race::sight::Sight::in_span`].
     pub span: Option<[f32; 2]>,
@@ -45,6 +46,7 @@ impl Default for Sighting {
             view_screen: oag_race::sight::SCREEN,
             columns_screen: None,
             leach_law: false,
+            chase_gain: oag_race::sight::CHASE_GAIN_NONE,
             span: None,
         }
     }
@@ -64,23 +66,35 @@ impl Sighting {
                 .as_ref()
                 .map(|columns| [columns.view.0, columns.view.1]),
             leach_law: hud.art.sights.runs_leach_law(),
+            chase_gain: hud.art.sights.chase_gain(),
             span: span_of(hud.space.size),
         }
     }
 
     /// A title's reticle with no HUD loaded: the lock grid is the whole HUD
-    /// space of `platform` (what [`Self::of`] reads off `hud.space`, which
-    /// `load_hud` sets from the same platform) and the law is the title's
-    /// art, as [`Self::of`] reads it; with no view, the view grid is the lock
-    /// grid. What a build without the `view` feature loads.
+    /// space `load_hud` would set for a race on `track` (`platform`'s, or the
+    /// circuit family's own, [`oag_title::race::CircuitLineage::grid`]) and the
+    /// law is the art's it would load, as [`Self::of`] reads them; with no view,
+    /// the view grid is the lock grid. What a build without the `view` feature
+    /// loads.
     #[must_use]
-    pub fn without_view(platform: oag_disc::Platform, art: &oag_title::hud::HudArt) -> Self {
-        let size = oag_display::space::Space::of(platform).size;
+    pub fn without_view(
+        platform: oag_disc::Platform,
+        title: &oag_title::Title,
+        track: &str,
+    ) -> Self {
+        let lineage = title.race.circuit_lineage(track);
+        let art = lineage.map_or(title.hud_art, |lineage| lineage.art);
+        let size = oag_display::space::Space::of(
+            lineage.and_then(|lineage| lineage.grid).unwrap_or(platform),
+        )
+        .size;
         Self {
             lock_screen: [size.0, size.1],
             view_screen: [size.0, size.1],
             columns_screen: None,
             leach_law: art.sights.runs_leach_law(),
+            chase_gain: art.sights.chase_gain(),
             span: span_of(size),
         }
     }
@@ -90,6 +104,7 @@ impl Sighting {
     pub fn view_sight(&self) -> Sight {
         let mut sight = Sight::new(self.view_screen);
         sight.set_leach_law(self.leach_law);
+        sight.set_chase_gain(self.chase_gain);
         self.spanned(sight)
     }
 
@@ -98,6 +113,7 @@ impl Sighting {
     pub fn lock_sight(&self) -> Sight {
         let mut sight = Sight::new(self.lock_screen);
         sight.set_leach_law(self.leach_law);
+        sight.set_chase_gain(self.chase_gain);
         self.spanned(sight)
     }
 

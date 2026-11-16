@@ -46,24 +46,75 @@ mod livery;
 mod seat;
 pub(crate) use seat::SeatChoice;
 
+/// Track Select as it would open: what [`Session::track_screen`] works out.
+pub(super) struct TrackScreen {
+    listed: Vec<(catalogue::Track, String)>,
+    pub(super) model: Picker,
+    pub(super) sources: Vec<PreviewSource>,
+    pub(super) layout: picker::Layout,
+}
+
+/// Ship Select as it would open: what [`Session::ship_screen`] works out.
+pub(super) struct ShipScreen {
+    pub(super) model: Picker,
+    pub(super) sources: Vec<PreviewSource>,
+    pub(super) layout: picker::Layout,
+    pub(super) axis: LiveryAxis,
+}
+
 impl Session {
     /// Opens Track Select over the menus, on the circuit `race.track` names.
     ///
     /// `false` when this title has no such screen, which is the caller's cue
     /// to launch straight away.
     pub(crate) fn open_track_picker(&mut self) -> bool {
-        let Some(shell) = self.shell.as_ref() else {
+        if self.shell.as_ref().is_none_or(|shell| shell.track_select.is_none()) {
+            return false;
+        }
+        // Before the rest: it may wait for the menus' source.
+        let gate = self.unlock_gate();
+        let Some(screen) = self.track_screen(&gate) else {
             return false;
         };
-        let Some(layout) = shell.track_select.clone() else {
-            return false;
-        };
+        let TrackScreen { listed, model, sources, layout } = screen;
+        // The setting follows the screen from the moment it opens: a stored
+        // circuit this mode's list does not hold - a race circuit after MODE
+        // moved to Zone - lands the screen on its first entry, and that is
+        // what a confirm without moving launches. The RACE page's own TRACK
+        // row used to settle this; it is not on the page any more on a title
+        // with these screens (`menu::Definition::drop_rows_picked_on_screen`).
+        if let Some(entry) = model.selected()
+            && entry.id != self.settings.race.track
+        {
+            self.settings.race.track = entry.id.clone();
+        }
+        // The lap lengths, measured off each circuit's own file on a worker
+        // - the selected circuit first, then the rest of the list in order
+        // - and copied onto the panel as they land. A 4 MB read and a
+        // spline parse per circuit is too slow for the frame thread and
+        // too cheap to cache on disk.
+        let mut order: Vec<(String, String)> = listed
+            .iter()
+            .map(|(track, _)| (track.id.clone(), track.entry_name()))
+            .collect();
+        let selected = model.index().min(order.len().saturating_sub(1));
+        if selected < order.len() {
+            order.rotate_left(selected);
+        }
+        let distances = self.spawn_distance_worker(order);
+        self.open_picker(model, layout, LiveryAxis::Variant, sources, distances, None)
+    }
+
+    /// Track Select as it would open now, touching nothing: `None` on a title with no such
+    /// screen.
+    pub(super) fn track_screen(&self, gate: &oag_game::unlock::Gate) -> Option<TrackScreen> {
+        let shell = self.shell.as_ref()?;
+        let layout = shell.track_select.clone()?;
         let mode = self.race_mode();
         let title = shell.title;
         let hd = layout.hd_track.is_some();
         let zone = mode == oag_race::Mode::Zone;
         let offered: Vec<_> = shell.tracks_for(mode).to_vec();
-        let gate = self.unlock_gate();
         let campaign_title = records::campaign_title(title, shell.platform);
         let offered: Vec<_> = offered
             .into_iter()
@@ -104,37 +155,15 @@ impl Session {
         );
         // HD's circuits step left/right - see `Picker::with_entries_across`.
         let model = if hd { model.with_rows(columns) } else { model };
-        // The setting follows the screen from the moment it opens: a stored
-        // circuit this mode's list does not hold - a race circuit after MODE
-        // moved to Zone - lands the screen on its first entry, and that is
-        // what a confirm without moving launches. The RACE page's own TRACK
-        // row used to settle this; it is not on the page any more on a title
-        // with these screens (`menu::Definition::drop_rows_picked_on_screen`).
-        if let Some(entry) = model.selected()
-            && entry.id != self.settings.race.track
-        {
-            self.settings.race.track = entry.id.clone();
-        }
-        // The lap lengths, measured off each circuit's own file on a worker
-        // - the selected circuit first, then the rest of the list in order
-        // - and copied onto the panel as they land. A 4 MB read and a
-        // spline parse per circuit is too slow for the frame thread and
-        // too cheap to cache on disk.
-        let mut order: Vec<(String, String)> = listed
-            .iter()
-            .map(|(track, _)| (track.id.clone(), track.entry_name()))
-            .collect();
-        let selected = model.index().min(order.len().saturating_sub(1));
-        if selected < order.len() {
-            order.rotate_left(selected);
-        }
-        let distances = self.spawn_distance_worker(order);
-        self.open_picker(model, layout, LiveryAxis::Variant, sources, distances, None)
+        Some(TrackScreen { listed, model, sources, layout })
     }
 
     /// The circuit gate, read off the source's own archives. Open (nothing
     /// locked) when no source is at hand to read grids from.
-    fn unlock_gate(&self) -> oag_game::unlock::Gate {
+    fn unlock_gate(&mut self) -> oag_game::unlock::Gate {
+        if let Some((_, gate)) = self.menu_source() {
+            return gate;
+        }
         let title = self.shell.as_ref().map(|shell| shell.title);
         let opened = self.race_options.as_ref().and_then(|options| {
             let (packs, pure_packs, _) = oag_source::dlc::packs_from_defaults(
@@ -227,31 +256,79 @@ impl Session {
     /// seat opens the same screen on their own pick (see [`seat`]) and writes
     /// nothing to the settings.
     pub(crate) fn open_ship_picker_for(&mut self, seat: usize) -> bool {
-        // Read before `shell` is borrowed: it opens the disc.
+        // Before the rest: it opens the disc.
         let locked_teams = self.pure_locked_teams();
-        let pair = self.pair_layouts();
-        let Some(shell) = self.shell.as_ref() else {
-            return false;
-        };
-        // One page for both people on a source that authors it, else one
-        // screen per seat on the single-player layout.
-        let Some(layout) = pair
-            .as_ref()
-            .map(|halves| halves[seat.min(1)].clone())
-            .or_else(|| shell.ship_select.clone())
-        else {
-            return false;
-        };
-        let title = shell.title;
-        let gates = unlock::gates_variants(title);
-        // HD's own ship screen prints the running loyalty total, which no
-        // other title that gates nothing shows.
-        let shows_loyalty = gates || layout.hd.is_some();
-        let records = if shows_loyalty {
+        let shared = self.pair_layouts().is_some();
+        let records = if self.shows_loyalty(seat) {
             records::load()
         } else {
             records::Store::default()
         };
+        let Some(screen) = self.ship_screen(seat, &locked_teams, &records) else {
+            return false;
+        };
+        let ShipScreen { model, sources, layout, axis } = screen;
+        // As `open_track_picker` does for the circuit: the screen's own
+        // selection is the setting, from the first frame.
+        // A later seat's pick is its own and the settings are the first
+        // player's, so it leaves them alone.
+        if seat == 0 {
+            if let Some(entry) = model.selected()
+                && entry.id != self.settings.race.team
+            {
+                self.settings.race.team = entry.id.clone();
+                self.resupply_race_variant();
+            }
+            // What the screen opened on is what a bare Confirm races.
+            livery::opened(
+                &mut self.settings.race,
+                axis,
+                model.variant().map(|(id, _)| id.as_str()),
+                model.fixed_livery(),
+            );
+        }
+        let seat_info = self.seat_of_picker(seat);
+        if !self.open_picker(model, layout, axis, sources, None, seat_info) {
+            return false;
+        }
+        // The second half of a shared page opens with the first.
+        if shared && seat == 0 {
+            self.open_ship_picker_for(1)
+        } else {
+            true
+        }
+    }
+
+    /// The layout `seat`'s Ship Select opens on: one page for both people on a source that
+    /// authors it, else one screen per seat on the single-player layout.
+    fn ship_layout(&self, seat: usize) -> Option<picker::Layout> {
+        self.pair_layouts()
+            .map(|halves| halves[seat.min(1)].clone())
+            .or_else(|| self.shell.as_ref()?.ship_select.clone())
+    }
+
+    /// Whether `seat`'s Ship Select shows the records: a title that gates its variants on them,
+    /// or HD's own ship screen, which prints the running loyalty total no other title that
+    /// gates nothing shows.
+    fn shows_loyalty(&self, seat: usize) -> bool {
+        self.shell.as_ref().is_some_and(|shell| {
+            unlock::gates_variants(shell.title) || shell.model_gate.gates()
+        })
+            || self.ship_layout(seat).is_some_and(|layout| layout.hd.is_some())
+    }
+
+    /// `seat`'s Ship Select as it would open now, touching nothing: `None` on a title with no
+    /// such screen.
+    pub(super) fn ship_screen(
+        &self,
+        seat: usize,
+        locked_teams: &[String],
+        records: &records::Store,
+    ) -> Option<ShipScreen> {
+        let shell = self.shell.as_ref()?;
+        let layout = self.ship_layout(seat)?;
+        let title = shell.title;
+        let shows_loyalty = self.shows_loyalty(seat);
         let mode = self.race_mode();
         let (entries, sources): (Vec<Entry>, Vec<PreviewSource>) = shell
             .teams
@@ -272,9 +349,11 @@ impl Session {
                     &choice.value,
                     details,
                     &shell.strings,
-                    &records,
+                    records,
+                    &shell.model_gate,
                     mode,
                 );
+                let preview = ship_source(title, details, &choice.value, mode, skins, &variants);
                 let join = title.race.join_for(&choice.value);
                 let stats = details
                     .map(|team| team.variant_stats(join, variants.iter().map(|(id, _)| id.as_str())))
@@ -305,17 +384,7 @@ impl Session {
                                 .then(|| records.loyalty_total(title, &choice.value)),
                         },
                     },
-                    PreviewSource::Ship {
-                        location: details.map_or_else(
-                            || format!(r"Data\Ships\{}", choice.value),
-                            |team| team.location.clone(),
-                        ),
-                        skins,
-                        join: title.race.team_variants_for(&choice.value).map(|v| v.join),
-                        hull_file: oag_game::preview::zone_hull_file(title, mode),
-                        zone_entry,
-                        race_hull: oag_game::preview::race_hull_entry(title, &choice.value, mode),
-                    },
+                    preview,
                 )
             })
             .unzip();
@@ -363,36 +432,7 @@ impl Session {
         } else {
             model
         };
-        // As `open_track_picker` does for the circuit: the screen's own
-        // selection is the setting, from the first frame.
-        // A later seat's pick is its own and the settings are the first
-        // player's, so it leaves them alone.
-        if seat == 0 {
-            if let Some(entry) = model.selected()
-                && entry.id != self.settings.race.team
-            {
-                self.settings.race.team = entry.id.clone();
-                self.resupply_race_variant();
-            }
-            // What the screen opened on is what a bare Confirm races.
-            livery::opened(
-                &mut self.settings.race,
-                axis,
-                model.variant().map(|(id, _)| id.as_str()),
-                model.fixed_livery(),
-            );
-        }
-        let seat_info = self.seat_of_picker(seat);
-        let shared = pair.is_some();
-        if !self.open_picker(model, layout, axis, sources, None, seat_info) {
-            return false;
-        }
-        // The second half of a shared page opens with the first.
-        if shared && seat == 0 {
-            self.open_ship_picker_for(1)
-        } else {
-            true
-        }
+        Some(ShipScreen { model, sources, layout, axis })
     }
 
     /// The three info rows for a circuit: distance, lap record, race
@@ -450,63 +490,47 @@ impl Session {
         let partner =
             seat.is_some_and(|(index, _)| index == 1) && self.pair_layouts().is_some();
         let layout = self.seat_layout(layout, seat);
-        let Some(options) = self.race_options.as_ref() else {
-            return false;
-        };
-        let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
-            &options.dlc,
-            &oag_source::cache::default_dlc_cache_dir(),
-        );
-        for problem in problems {
-            warn!("{problem}");
-        }
-        let archives = match oag_source::title::open_source(&options.source, packs, pure_packs) {
-            Ok(opened) => opened.archives,
-            Err(error) => {
-                warn!(
-                    "cannot open {} for the selection screen's previews: {error:#}",
-                    options.source
+        let archives = match self.menu_source() {
+            Some((archives, _)) => archives,
+            None => {
+                let Some(options) = self.race_options.as_ref() else {
+                    return false;
+                };
+                let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
+                    &options.dlc,
+                    &oag_source::cache::default_dlc_cache_dir(),
                 );
-                return false;
+                for problem in problems {
+                    warn!("{problem}");
+                }
+                match oag_source::title::open_source(&options.source, packs, pure_packs) {
+                    Ok(opened) => Arc::new(Mutex::new(opened.archives)),
+                    Err(error) => {
+                        warn!(
+                            "cannot open {} for the selection screen's previews: {error:#}",
+                            options.source
+                        );
+                        return false;
+                    }
+                }
             }
         };
-        let laps = {
-            let pending = self.pending_race();
-            catalogue::race_laps(pending.mode, pending.class.trim())
-        };
+        let pending = self.pending_race();
         let base = self
             .shell
             .as_ref()
             .map(|shell| shell.sprites.clone())
             .unwrap_or_default();
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Some(previews) = self.picker_previews() else {
             return false;
         };
-        let previews = crate::picker_stage::Previews {
-            meshes: self
-                .shell
-                .as_ref()
-                .and_then(|shell| shell.title.front_end)
-                .is_some_and(|front_end| front_end.preview_meshes),
-            ship_hull: self
-                .shell
-                .as_ref()
-                .and_then(|shell| shell.title.front_end)
-                .and_then(|front_end| front_end.ship_preview_hull),
-            front_end: self
-                .shell
-                .as_ref()
-                .and_then(|shell| shell.title.front_end),
-            globals: self
-                .shell
-                .as_ref()
-                .map_or_else(Vec::new, |shell| shell.globals.clone()),
-            strings: self
-                .shell
-                .as_ref()
-                .map_or_else(oag_ui::language::StringTable::default, |shell| {
-                    shell.strings.clone()
-                }),
+        // A later seat opens on another pick; the first's read is for the first.
+        let opening = seat
+            .is_none_or(|(index, _)| index == 0)
+            .then(|| self.opening_reads.take(model.kind()))
+            .flatten();
+        let Stage::Menu(stage) = &mut self.stage else {
+            return false;
         };
         let mut picker = PickerStage::new(
             model,
@@ -518,8 +542,19 @@ impl Session {
             self.anisotropy,
             base,
             previews,
+            opening,
         );
-        picker.laps = laps;
+        if let Some(shell) = &self.shell {
+            picker.laps = picker
+                .model
+                .entries()
+                .iter()
+                .map(|entry| {
+                    let class = pending.class.trim();
+                    catalogue::race_laps_on(shell.title, &entry.id, pending.mode, class)
+                })
+                .collect();
+        }
         picker.seat = seat;
         picker.refresh_preview(&self.gpu);
         picker.refresh_info();
@@ -541,6 +576,7 @@ impl Session {
             return;
         };
         picker.refresh_info();
+        picker.poll_preview(&self.gpu);
         // A split-screen seat's screen reads its own device and no other.
         let mut events = match picker.seat {
             Some((seat, _)) => picker
@@ -557,6 +593,7 @@ impl Session {
         let mut partner_events = Vec::new();
         if let Some(partner) = stage.partner.as_deref_mut() {
             partner.refresh_info();
+            partner.poll_preview(&self.gpu);
             let seat = partner.seat.map_or(1, |(seat, _)| seat);
             partner_events = partner.model.update(&mut seat::input(
                 self.split_lobby.as_ref(),
@@ -721,5 +758,43 @@ impl Session {
                 }
             }
         }
+    }
+}
+
+/// Where a team's Ship Select preview comes from: its front-end hull, `skins` its paints. The
+/// screen and the menus' prefetch (`session::menu_source`) name it by this one rule.
+pub(super) fn ship_source(
+    title: &'static oag_title::Title,
+    details: Option<&catalogue::Team>,
+    team: &str,
+    mode: oag_race::Mode,
+    skins: Vec<(String, String)>,
+    variants: &[(String, String)],
+) -> PreviewSource {
+    let join = title.race.team_variants_for(team).map(|v| v.join);
+    let liveries = details
+        .map(|details| {
+            variants
+                .iter()
+                .filter_map(|(id, _)| {
+                    oag_game::preview::variant::livery_folders(details, join, id)
+                        .map(|folders| (id.clone(), folders))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    PreviewSource::Ship {
+        liveries,
+        location: details.map_or_else(
+            || format!(r"Data\Ships\{team}"),
+            |details| details.location.clone(),
+        ),
+        skins,
+        join,
+        hull_file: oag_game::preview::zone_hull_file(title, mode),
+        zone_entry: oag_game::preview::zone_race_hull_entry(title, team, mode),
+        zone_livery: details
+            .and_then(|details| oag_game::preview::variant::zone_folders(title, details, mode)),
+        race_hull: oag_game::preview::race_hull_entry(title, team, mode),
     }
 }

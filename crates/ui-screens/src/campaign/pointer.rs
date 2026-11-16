@@ -138,7 +138,7 @@ pub fn cell_targets(
 /// The hexagon at slot `(x, y)` as the player sees it: [`hex_image`]'s rect
 /// cropped to `extent`'s box of opaque pixels, scaled the way the draw scales
 /// the texture.
-fn hex_hit_rect(
+pub(super) fn hex_hit_rect(
     screen: &oag_ui::screen::Screen,
     x: usize,
     y: usize,

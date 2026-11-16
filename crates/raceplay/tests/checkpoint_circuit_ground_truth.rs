@@ -43,18 +43,29 @@ fn checkpoint_circuit() -> Option<(race::extensions::Source, std::path::PathBuf)
     let file = module.local_path(&track.track).expect("a folder mod");
     let source = race::extensions::Source {
         mod_id: module.manifest.id.clone(),
+        version: module.manifest.version.to_string(),
         module: track.module,
         titles: module.manifest.titles.clone(),
         api: extension.api,
         memory_pages: extension.memory_pages,
         state_bytes: extension.state_bytes,
+        drives_ai_pickup: false,
         scope: race::extensions::Scope::Track(Some(file.clone())),
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
         effects: Vec::new(),
+        shaders: Vec::new(),
+        sounds: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: module.manifest.pickup.clone(),
+        pickup_titles: Vec::new(),
+        pickup_odds: module.manifest.pickup_odds.clone(),
+        options: Default::default(),
+        channels: race::extensions::Declared {
+            publishes: module.manifest.channels.publishes.clone(),
+            listens: module.manifest.channels.listens.clone(),
+        },
     };
     Some((source, file))
 }
@@ -216,6 +227,17 @@ fn a_craft_that_reaches_its_checkpoint_in_time_has_its_clock_reset_and_loses_not
         "the gates in lap order, wrapping: {numbers:?}"
     );
     assert!(lowest > 0, "the clock never ran out");
+    // Each gate cleared is announced on the channel the manifest publishes (an undeclared
+    // one would have faulted the module), for a listener or a track animation to hear.
+    assert_eq!(modded.extension_reports()[0].faulted, None);
+    let announced = modded.channel_started(oag_mesh::mesh::Start {
+        channel: oag_ext_abi::channel_key("oag.checkpoint-circuit/checkpoint"),
+        value: None,
+    });
+    assert!(
+        announced.is_some_and(|s| s > 0.0),
+        "no checkpoint was announced: {announced:?}"
+    );
 }
 
 /// A full field, weapons off, the person's craft flown by this project's driver; each
@@ -408,18 +430,26 @@ fn preferring(slot: Option<u8>) -> race::extensions::Source {
     .unwrap();
     race::extensions::Source {
         mod_id: "test.prefer".into(),
+        version: "1.0.0".to_string(),
         module: "test.wasm".into(),
         titles: Vec::new(),
         api: oag_ext_abi::ABI,
         memory_pages: 1,
         state_bytes: 4,
+        drives_ai_pickup: false,
         scope: race::extensions::Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
         effects: Vec::new(),
+        shaders: Vec::new(),
+        sounds: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: None,
+        pickup_titles: Vec::new(),
+        pickup_odds: Vec::new(),
+        options: Default::default(),
+        channels: race::extensions::Declared::default(),
     }
 }
 

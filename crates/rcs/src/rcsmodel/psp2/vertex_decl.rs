@@ -74,10 +74,35 @@ pub const NORMAL_HASH: u32 = 0xde7a_971b;
 pub const TANGENT_HASH: u32 = 0xdbe5_f417;
 /// `~crc32("Uv1")` - the diffuse texture coordinate.
 pub const UV1_HASH: u32 = 0x4272_14fc;
+/// `~crc32("uv1")`, lower case: the vertex input the `fc*` object-library programs name
+/// (`fc06_lambert_simple`: `uv1` passes to the pixel program's `DiffuseMapSampler` lookup).
+/// Omega spells it as an `f32` pair ([`PS4_FLOAT2`]) where 2048 has a half or float pair.
+pub const LOWERCASE_UV1_HASH: u32 = 0x7a3f_521c;
+/// `~crc32("Uvset1")`: the only texture coordinate Omega's Anulpha Pass centre-lane programs
+/// (`cf_centre_plasma_pulse`) take, an `f32` pair (`docs/rendering/hd-track-tone.md`, "2048 and
+/// Omega").
+pub const UVSET1_HASH: u32 = 0x49f7_6806;
+/// `~crc32("Uv1_Uv2")`: four halves, two coordinate pairs, the vertex input of
+/// `2048_shipshield_old`'s programs (`param1` is the first pair, `param2` the second). The
+/// declaration also lists `Uv1` and `Uv2` entries, both at the offset of the second pair;
+/// nothing explains them.
+pub const UV1_UV2_HASH: u32 = 0x1aef_e524;
 /// `~crc32("VertexColour1")`: four normalised bytes per vertex (type nibble 11 on PS4).
 pub const VERTEX_COLOUR1_HASH: u32 = 0x7493_d450;
+/// `~crc32("uv1_uvDirt")`: four halves, the tiling pair in `.xy` and the dirt pair in `.zw`. The
+/// vertex input of Omega's `tarmac_*` road programs, which name no `Uv1`.
+pub const UV1_UVDIRT_HASH: u32 = 0x273a_b13e;
+/// `~crc32("uvMarkings")`: two halves, the road's decal atlas pair, a unique unwrap over the
+/// whole road. The second vertex input of Omega's `tarmac_*` road programs.
+pub const UV_MARKINGS_HASH: u32 = 0x5f2a_9ab4;
 /// `~crc32("lightmapUV")`.
 pub const LIGHTMAP_HASH: u32 = 0x26a7_b665;
+/// `~crc32("NOVAColor")`: the baked per-vertex light of a Vita circuit's vertex-lit surfaces, four
+/// unsigned normalised bytes (type `0x44`). The name is the vertex programs' own attribute
+/// (`scripts/vita-gxp.py grep ... NOVAColor`), and its hash is this value (confidence 95).
+pub const NOVA_COLOUR_HASH: u32 = 0x1aaf_7631;
+/// The type nibble of [`NOVA_COLOUR_HASH`] on the Vita: four unsigned normalised bytes.
+pub const VITA_UBYTE4_NORM: u8 = 4;
 
 /// `~crc32("barsUV_blendUV")`: one four-lane half attribute, the bars' pair in `.xy` and the
 /// wipe's in `.zw`. The same hash HD's `nr_twinblend` names its `v[8]` by.
@@ -92,6 +117,10 @@ pub const PS4_HALF2: u8 = 1;
 /// The type nibble of a Vita (SceGxm) two-component half-float attribute: `Uv1`, `lightmapUV`
 /// and (four of them) `barsUV_blendUV`.
 pub const VITA_HALF2: u8 = 8;
+
+/// The type nibble of a two-component `f32` attribute on the PS4: a diffuse coordinate that is a
+/// float pair (23 submeshes of Omega's `data02` name their `Uv1` this way).
+pub const PS4_FLOAT2: u8 = 0;
 
 /// The type nibble of an `f32` attribute on the Vita (the position's `3x9`; a diffuse
 /// coordinate declared `2x9` is a float pair, 2,291 base submeshes).
@@ -147,6 +176,12 @@ impl VertexDecl {
         self.attribute(UV1_HASH)
     }
 
+    /// The packed pair attribute, four halves (see [`UV1_UV2_HASH`]).
+    #[must_use]
+    pub fn packed_uv_pair(&self) -> Option<&Attribute> {
+        self.attribute(UV1_UV2_HASH).filter(|a| a.components == 4)
+    }
+
     /// The lightmap texture coordinate, on the same terms.
     #[must_use]
     pub fn lightmap_texcoord(&self) -> Option<&Attribute> {
@@ -161,6 +196,14 @@ impl VertexDecl {
             .filter(|a| a.components == 4 && a.gxm_type == PS4_UBYTE4_NORM)
     }
 
+    /// `NOVAColor`, four unsigned normalised bytes on the Vita. Only sound on a declaration
+    /// reached through the record's own pointer.
+    #[must_use]
+    pub fn nova_colour(&self) -> Option<&Attribute> {
+        self.attribute(NOVA_COLOUR_HASH)
+            .filter(|a| a.components == 4 && a.gxm_type == VITA_UBYTE4_NORM)
+    }
+
     /// The `nr_twinblend` pair attribute, four halves. Only sound on a declaration reached
     /// through the record's own pointer.
     #[must_use]
@@ -169,35 +212,65 @@ impl VertexDecl {
             .filter(|a| a.components == 4)
     }
 
+    /// The tiling pair of a road declaration that carries [`UV1_UVDIRT_HASH`] (four halves of
+    /// the container's half type): its `.xy`, which is what the first two components at the
+    /// attribute's own offset are. Not the declaration's lower-case `uv1` entry, which sits at
+    /// the dirt pair's offset. The dirt pair is the same attribute's `.zw`, four bytes on.
+    #[must_use]
+    pub fn uv_dirt_tiling(&self, half: u8) -> Option<&Attribute> {
+        self.attribute(UV1_UVDIRT_HASH)
+            .filter(|a| a.components == 4 && a.gxm_type == half)
+    }
+
+    /// `uvMarkings`, a half pair. Only sound on a declaration reached through the record's own
+    /// pointer.
+    #[must_use]
+    pub fn markings_texcoord(&self, half: u8) -> Option<&Attribute> {
+        self.attribute(UV_MARKINGS_HASH)
+            .filter(|a| a.components == 2 && a.gxm_type == half)
+    }
+
     /// The diffuse coordinate of a declaration known to be **this submesh's
-    /// own** - `Uv1` where it is named, otherwise the first two-component
+    /// own** - `Uv1` where it is named, then the tiling pair of `uv1_uvDirt`
+    /// ([`Self::uv_dirt_tiling`]), otherwise the first two-component
     /// attribute that is not the lightmap's and is a pair of `half`s (the
     /// container's half type: [`PS4_HALF2`] or [`VITA_HALF2`]) or of `f32`s
-    /// ([`FLOAT2`]).
+    /// (the container's float type: [`PS4_FLOAT2`] or [`FLOAT2`]).
     ///
     /// **Only sound on a declaration reached through the record's own pointer**
-    /// (`PS4_DECLARATION_POINTER`), on both containers. Where no `Uv1` is
+    /// (`PS4_DECLARATION_POINTER`), on both containers. Where neither is
     /// named, the diffuse set is the file's own `uv1` (`0x7a3f521c`), `Uv2`
     /// (`0xdb7b4546`) or an unnamed hash, with the lightmap's `lightmapUV`
     /// after it - HD's own rule, "a two-component coordinate that is not
     /// `lightmapUV`" (`crate::rcsmodel::vertex_decl::VertexDecl::diffuse_texcoord`);
     /// **confidence 70**, so [`Self::diffuse_texcoord_is_fallback`] says when
-    /// it is the one answering.
+    /// it is the one answering. `uv1_uvDirt` is by name, not that rule: the road's
+    /// `uvMarkings` is first in file order and is a unique unwrap, not a tiling set
+    /// (`docs/formats/omega-status.md`, "The `tarmac_*` road families draw the wrong
+    /// coordinate set", confidence 85).
     #[must_use]
-    pub fn own_diffuse_texcoord(&self, half: u8) -> Option<&Attribute> {
-        self.diffuse_texcoord().or_else(|| {
-            self.attributes.iter().find(|a| {
-                a.name_hash != LIGHTMAP_HASH
-                    && a.components == 2
-                    && (a.gxm_type == half || a.gxm_type == FLOAT2)
+    pub fn own_diffuse_texcoord(&self, half: u8, float: u8) -> Option<&Attribute> {
+        self.diffuse_texcoord()
+            .or_else(|| self.uv_dirt_tiling(half))
+            .or_else(|| self.attribute(UVSET1_HASH).filter(|a| a.components == 2))
+            .or_else(|| {
+                self.attributes.iter().find(|a| {
+                    a.name_hash != LIGHTMAP_HASH
+                        && a.components == 2
+                        && (a.gxm_type == half
+                            || a.gxm_type == FLOAT2
+                            || (a.gxm_type == float && a.name_hash == LOWERCASE_UV1_HASH))
+                })
             })
-        })
     }
 
     /// True when [`Self::own_diffuse_texcoord`] answers by the confidence-70 rule, not by name.
     #[must_use]
-    pub fn diffuse_texcoord_is_fallback(&self, half: u8) -> bool {
-        self.diffuse_texcoord().is_none() && self.own_diffuse_texcoord(half).is_some()
+    pub fn diffuse_texcoord_is_fallback(&self, half: u8, float: u8) -> bool {
+        self.diffuse_texcoord().is_none()
+            && self.uv_dirt_tiling(half).is_none()
+            && self.attribute(UVSET1_HASH).is_none()
+            && self.own_diffuse_texcoord(half, float).is_some()
     }
 }
 
@@ -265,4 +338,111 @@ fn scan(cpu_bytes: &[u8]) -> impl Iterator<Item = (usize, VertexDecl)> + '_ {
 #[must_use]
 pub fn find_by_header(cpu_bytes: &[u8]) -> HashMap<usize, VertexDecl> {
     scan(cpu_bytes).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn attr(name_hash: u32, components: u8, gxm_type: u8, offset: u8) -> Attribute {
+        Attribute {
+            name_hash,
+            components,
+            gxm_type,
+            offset,
+        }
+    }
+
+    /// Rockway Stadium's road submesh: `uvMarkings` (20), `lightmapUV` (24), `uv1_uvDirt` as
+    /// four halves (28), and the lower-case `uv1` and `uvDirt` both at 32. No `Uv1`.
+    fn arena_road() -> VertexDecl {
+        VertexDecl {
+            stride: 36,
+            attributes: vec![
+                attr(POSITION_HASH, 3, PS4_FLOAT2, 0),
+                attr(NORMAL_HASH, 4, PS4_SBYTE4_NORM, 12),
+                attr(
+                    crate::rcsmaterial::name_hash("uvMarkings"),
+                    2,
+                    PS4_HALF2,
+                    20,
+                ),
+                attr(LIGHTMAP_HASH, 2, PS4_HALF2, 24),
+                attr(UV1_UVDIRT_HASH, 4, PS4_HALF2, 28),
+                attr(LOWERCASE_UV1_HASH, 2, PS4_HALF2, 32),
+                attr(crate::rcsmaterial::name_hash("uvDirt"), 2, PS4_HALF2, 32),
+            ],
+        }
+    }
+
+    #[test]
+    fn the_uv1_uvdirt_constant_is_the_hash_of_its_name() {
+        assert_eq!(UV1_UVDIRT_HASH, crate::rcsmaterial::name_hash("uv1_uvDirt"));
+    }
+
+    #[test]
+    fn the_uv_markings_constant_is_the_hash_of_its_name() {
+        assert_eq!(
+            UV_MARKINGS_HASH,
+            crate::rcsmaterial::name_hash("uvMarkings")
+        );
+    }
+
+    #[test]
+    fn a_road_declaration_names_its_markings_pair_at_20_and_its_dirt_pair_at_32() {
+        let decl = arena_road();
+        assert_eq!(decl.markings_texcoord(PS4_HALF2).unwrap().offset, 20);
+        let dirt = decl.uv_dirt_tiling(PS4_HALF2).unwrap();
+        assert_eq!(dirt.offset + 4, 32, "the dirt pair is the second half pair");
+        let mut other = arena_road();
+        other.attributes[2] = attr(UV_MARKINGS_HASH, 2, PS4_FLOAT2, 20);
+        assert!(other.markings_texcoord(PS4_HALF2).is_none());
+    }
+
+    #[test]
+    fn a_road_declaration_without_uv1_draws_the_tiling_pair_at_offset_28() {
+        let decl = arena_road();
+        let own = decl.own_diffuse_texcoord(PS4_HALF2, PS4_FLOAT2).unwrap();
+        assert_eq!(own.name_hash, UV1_UVDIRT_HASH);
+        assert_eq!(own.offset, 28);
+        assert!(!decl.diffuse_texcoord_is_fallback(PS4_HALF2, PS4_FLOAT2));
+    }
+
+    #[test]
+    fn the_centre_lanes_f32_uvset1_pair_is_its_diffuse_coordinate() {
+        assert_eq!(UVSET1_HASH, crate::rcsmaterial::name_hash("Uvset1"));
+        // Anulpha Pass's `cf_centre_plasma_pulse` declaration (Omega `data01`, stride 44).
+        let decl = VertexDecl {
+            stride: 44,
+            attributes: vec![
+                attr(POSITION_HASH, 3, PS4_FLOAT2, 0),
+                attr(NORMAL_HASH, 3, 14, 12),
+                attr(crate::rcsmaterial::name_hash("tangent"), 4, PS4_FLOAT2, 16),
+                attr(UVSET1_HASH, 2, PS4_FLOAT2, 32),
+                attr(LIGHTMAP_HASH, 2, PS4_HALF2, 40),
+            ],
+        };
+        let own = decl.own_diffuse_texcoord(PS4_HALF2, PS4_FLOAT2).unwrap();
+        assert_eq!((own.name_hash, own.offset), (UVSET1_HASH, 32));
+        assert!(!decl.diffuse_texcoord_is_fallback(PS4_HALF2, PS4_FLOAT2));
+    }
+
+    #[test]
+    fn a_named_uv1_still_wins_over_uv1_uvdirt() {
+        let mut decl = arena_road();
+        decl.attributes.push(attr(UV1_HASH, 2, PS4_HALF2, 16));
+        let own = decl.own_diffuse_texcoord(PS4_HALF2, PS4_FLOAT2).unwrap();
+        assert_eq!((own.name_hash, own.offset), (UV1_HASH, 16));
+    }
+
+    #[test]
+    fn a_uv1_uvdirt_that_is_not_four_halves_is_not_taken() {
+        let mut decl = arena_road();
+        decl.attributes[4] = attr(UV1_UVDIRT_HASH, 2, PS4_HALF2, 28);
+        let own = decl.own_diffuse_texcoord(PS4_HALF2, PS4_FLOAT2).unwrap();
+        assert_eq!(own.offset, 20);
+        decl.attributes[4] = attr(UV1_UVDIRT_HASH, 4, PS4_FLOAT2, 28);
+        let own = decl.own_diffuse_texcoord(PS4_HALF2, PS4_FLOAT2).unwrap();
+        assert_eq!(own.offset, 20);
+    }
 }

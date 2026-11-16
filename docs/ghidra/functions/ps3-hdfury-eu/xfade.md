@@ -135,8 +135,8 @@ re-derives them:
   channel-0 trigger is unnamed on disc, so this plays nothing.
 - It steps through `speed_field` thresholds `200..1000` calling `FUN_006772f8`
   with ids `0x14..0x16`, with a strength `trunc(speed_field * 0.127065)`. That
-  is not audio; the shape (a pad id, a strength) reads as controller rumble.
-  Not investigated.
+  is not audio, and it is not controller rumble either: `FUN_006772f8` is a stub
+  to a byte table write ([rumble.md](rumble.md#not-this-library)).
 
 ### Live check (2026-10-04) and why 82, not higher
 

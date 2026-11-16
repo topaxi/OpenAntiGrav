@@ -31,8 +31,12 @@ Four things cost time and are worth knowing before repeating this:
 1. **`just drive menu` does not stop at the main menu.** Its one mode walks all
    the way into a live Time Trial. Drive the presses directly and poll
    `state_name()` until it reads `Main Menu`.
-2. **The original enters an attract demo after about 120 seconds idle**, which
-   silently invalidates a capture left sitting.
+2. **The original enters an attract demo after 60 seconds idle on the main
+   menu** (front-end time, measured to within one frame twice; the demo then runs
+   120 s per circuit), which silently invalidates a capture left sitting.
+   An earlier reading of this item said "about 120 seconds"; that is the demo's
+   length, not the threshold
+   ([attract-demo.md](../ghidra/functions/psp-pulse-usa/attract-demo.md)).
 3. **Xvfb and PPSSPP must be `setsid`-detached**, or they die with the shell
    that launched them - taking the X server out from under the emulator
    mid-run.
@@ -133,7 +137,7 @@ photographing the X11 root window at every hit - frame-accurate rather than
 wall-clock sampled, so the screenshot cadence cannot alias against the
 animation's own period. A first attempt (breaking on presented frames while
 screenshotting between them, which costs real wall-clock time per frame) idled
-past the documented ~120 s attract-demo threshold partway through and
+past the 60 s attract-demo threshold partway through and
 captured race footage instead of the still menu without any obvious sign in
 the frame indices; it was discarded once a frame midway through showed a
 racing circuit rather than `Main Menu`. The kept run combined "walk to Main
@@ -590,7 +594,9 @@ Ranked by how much a player notices, ours first listed worst:
    now draws in the `Default` role (`TickerLayout::read`'s `font`, which was a
    chosen `"small"` and is now a chosen `"default"` corroborated by this
    capture; `before`/`after` in `sheets/footer-compare.png`: lowercase, inside
-   the strip, ink and size matching). The tag is still empty. On the campaign
+   the strip, ink and size matching). **The tag now draws the stored profile tag** at the authored
+   `(30, 235)` in the `Default` face (`NavigationLegend::set_tag`, `docs/ui/player-name.md`); the
+   colour is the file's `BackgroundColor`, and neither face nor colour is checked against the original's `AAA`. On the campaign
    pages a `--menu-page` still draws no tip at all (`static_footer_overlay`
    passes an empty rotation), so only the live stage and `--menu-page main`
    show the new face. *(Our `Confirm` label was
@@ -691,6 +697,68 @@ settings rows are the executable's `List` blocks (`draw_list_rows`) or Pure's
 own list; **checked, differs**, untouched - HD's `--menu-page options` and `race`
 stills are byte-identical before and after.
 
+## Game Options: the original's list against ours
+
+**Confidence 92 for the rows and entries** (read off the disc, 2026-11-06): `Data\Plugins\PI001\GUI\Additional_Definition.xml`,
+`Settings` screen (title `OPT_GAME_OPT`, "Game options"), `oag-wad cat <image>:PSP_GAME/USRDIR/Data.wad <name> --expand` on `pulse-psp-usa.chd` and
+`pulse-psp-eu.chd` (byte-identical after expansion) and `oag-wad cat <image>:54748/WADS2.WAD <name> --expand` on
+`pulse-ps2-eu.chd`. Display text from `Data\Plugins\PI012\entries.xml`. Every list is `save="true"`: the original
+persists each into the profile, as ours persist into `settings.toml`.
+
+| Row (`idstring`, text) | Entries, default first where the XML says so | PSP | PS2 | Ours |
+| --- | --- | --- | --- | --- |
+| `OPT_MUSIC_VOL`, Music volume | 0, 25, 50, 75, 100 % (default 100) | yes | yes | present: AUDIO page, `audio.music_volume` (0, 25, 50, 75, 90, 100) |
+| `OPT_SFX_VOL`, Sfx volume | 0, 25, 50, 75, 100 % (default 100) | yes | yes | present: AUDIO page, `audio.sfx_volume` (same steps) |
+| `OPT_MUSIC_PL`, Music playlist (list `Music Order`) | `OPT_SEQ` Sequential, `FE_RANDOM` Random (default sequential) | yes | yes | **added**: MUSIC ORDER on the AUDIO page, beside the volumes the disc's screen also holds (`audio.music_order`: sequential default, random). Random plays a shuffled deck, every song once before any repeats (`oag_sound::shuffle`, `docs/architecture/music-threads.md`, "Music order"). Shown on every title: the disc authors it on Pulse, the shuffle is wanted for every soundtrack. The label is ours (`OAG_AUDIO_MUSIC_ORDER`), not the disc's `OPT_MUSIC_PL` text: a menu row has no disc-string mechanism |
+| `OPT_CAM`, Camera | `OPT_INT` Internal, `OPT_CLOSE` Close, `OPT_FAR` Far (default close) | yes | yes | present: `graphics.camera_view` (internal, close, far) |
+| `OPT_HUD`, Dynamic HUD | `FE_DEFAULT`, `FE_CONCAVE`, `FE_FLAT`, `FE_OFF` (default `FE_DEFAULT`) | all four | three: no `FE_FLAT` | present, **two of four**: default and off. `FE_CONCAVE` and `FE_FLAT` set bit 1 of `+0xd0` on the HUD's two panel groups (1 and 0; `FE_DEFAULT` takes `race_manager+0x6f & 1`), a vertex warp read by `Text_Draw`, `Image_Draw` and the speed bar whose maths (`FUN_08919c2c`) is **unread** |
+| `OPT_MP_TAGS`, Multiplayer tags | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **added**: MULTIPLAYER TAGS, a player's name over each other person's craft in a multiplayer race (`oag_hud::player_tags`) |
+| `OPT_GHOST_VIS`, Ghost ships visible | `FE_ON`, `FE_OFF` (default on) | yes | yes | **added**: GHOST SHIPS VISIBLE, hides the ghost's draw (`Race::set_ghost_visible`) |
+| `OPT_AL_GHOST`, Auto load ghost | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **added**: AUTO LOAD GHOST, gates loading the stored lap when a Time Trial or Speed Lap starts |
+| `OPT_SCREEN_SIZE`, Screen size (HD's slider) | not authored on Pulse: no row in any front-end XML or in the executable | no | no | **added**: SCREEN SIZE, the shared slider shared with every title (`hud_safe_area`, 80 to 100, default 100), [hd-hud.md](../formats/hd-hud.md#screen-size-on-every-title) |
+| `OPT_LANG`, Language | the installed languages | yes | yes | present: `language` |
+
+Where the two pressings differ the PSP list wins (the project rule for anything invented for Pulse), so the PS2
+pressing offers both ghost rows and the same two Dynamic HUD entries.
+
+**Behaviour the rows have in the original** (`docs/ghidra/functions/psp-pulse-usa/ghost.md`, "Best lap, restarting at the
+line" and "Saving and loading"): `Ghost_Update` sets the ghost's visibility from the options byte `options+0x45c`
+(`FUN_08809bc8` reads it from the profile, anything but `FE_OFF` is on); the ghost is still raced, recorded and replaced
+by a quicker lap while hidden. `Ghost_Construct` starts the stored-ghost load only when `Auto Load Ghost` reads `FE_ON`.
+Ours: GHOST SHIPS VISIBLE gates `Race::ghost_pose`, the one place every draw path asks for the ghost, so no hull and no fade
+is built while it is off; AUTO LOAD GHOST gates `oag_game::ghosts::auto_load`, and a run with it off still records and still
+saves a lap that beats the stored one. A `--ghost <file>` on the command line is an explicit request and ignores AUTO LOAD
+GHOST. Both rows are `Title` data (`oag_title::race::GhostOptions`, Pulse only), seeded and shown only where the title
+lists them, and default to on, so no title's behaviour moved.
+
+**MULTIPLAYER TAGS is wired** (`docs/ghidra/functions/psp-pulse-usa/hud-game-options.md`, confidence 80): a white name 2 units
+above each other person's craft, fading in at 1.2 per second, fully opaque to 20 units and gone by 60, forced to 0 by the
+option. The row is `Title` data (`GameOptions::multiplayer_tags`, Pulse only; the type was `GhostOptions` and covers the three
+Pulse rows), default on, seeded and shown only where the title lists it, and not hidden under `--original-menu` (that flag
+only drops our extra tiles). The text comes off the disc's `MPTag_HUD.xml` (`PlrTag0`: `HUD` face, scale 0.5, centred, white,
+border alpha 0.25; the eight labels share it, a ground-truth test pins that) and is placed where the lock-on reticle is,
+projected through each view's own camera at the craft's drawn pose.
+**Chosen, not measured:** the raise runs along the craft's own up (the original's axis is unread); only other person-flown
+craft are tagged (no AI craft); a name is the lobby's where the race has one, else seat 1's stored player name (`Race::set_person_names`), and otherwise
+`Player N`, the maintainer's stop gap (the original falls back to one shared string, `ONL_CRJ_PLAYER`, for every
+unnamed slot); and there is no occlusion test, because the original's own gate (`FUN_0883e37c`) reads as a viewport test, so a tag
+shows through a wall. A craft behind a view's camera has no tag in that view.
+
+**Checked against the other titles** (the Pulse rule: an invented Pulse row is checked for the others, not widened to them):
+
+- **Pure** ships no `Additional_Definition.xml`: its `Data.wad` (841 entries) has no front-end XML at all, so its settings
+  list lives in the executable and is **not checkable** from the data. The rows stay off (`GhostOptions::NONE`).
+- **HD** (`docs/formats/hd-frontend.md`, `DATA06`'s `Additional_Definition.xml`): `Multiplayer Tags` and a ghost row
+  (`GhostOption`, "Ghost Ships Visible") exist, with no `Auto Load Ghost` and no `Dynamic HUD`. **Checked, applies, not wired**:
+  HD races a ghost (Pulse's recipe, chosen not measured) with no way to hide it. `Multiplayer Tags` is also listed: **checked,
+  applies, not wired** (`HudLayouts::player_tags` is `None` for HD, whose `mptag_hud.xml` and the 1920x1080 label face are unread
+  here; the engine path is title-blind once a title names the layout and lists the row).
+- **Omega**: Omega's front end is HD's (`PI001`), but nobody has read Omega's own `Settings` list: **not checkable** from this
+  lane. Its pause screen authors `FE_GHOST` (the ghost ship's visibility, seen live on shadPS4 in Time Trial and Speed Lap,
+  `docs/ui/pause-menu.md`, "Omega"), so this build offers GHOST SHIPS VISIBLE there on that evidence alone, **inherited from HD**
+  for the options row; `Auto Load Ghost` and `Multiplayer Tags` stay off.
+- **2048**: its `Settings` list is unread too: **not checkable** from this lane, named in the handover thread.
+
 ## Reproducing this
 
 ```sh
@@ -714,3 +782,9 @@ just play usa --screenshot /tmp/mid.png --menu-page options --size 480x272 \
 `--menu-anim-phase` exists because `--ticks` does nothing alongside
 `--menu-page`: that path draws one frame and runs no clock, so without it a
 still cannot show a transition at all.
+
+## Pure's `Stats` and `Scroll` face is one small letter-spaced file (2026-11-01, `pure-menu-pairs`)
+
+Pure's `Stats` and `Scroll` roles resolve to `LTe50325.fnt` (the table in `oag_ui::language::roles`; `font_roles_ground_truth::pures_stats_slot_is_its_own_face_and_the_scroll_face` pins it on both pressings). Every `font="Stats"` widget of a team's `screen.xml` (the stat labels and `n/5` values, scale 0.8) and of a circuit's (`RACE RECORD`, `LAP RECORD`, `LENGTH`, `HEIGHT` and their values), the footer's `Confirm`/`Back` (`font="scroll"`) and the typed description all print in it: in a PPSSPP frame at 8x they are 5-pixel capitals with a wide letter space and an upper-case `M` for the unit, where this build had drawn them in the menu face (`FX300ANG.fnt`). It rides the renderer's third glyph slot (`oag_title::MenuSkin::stats_font`, Pure only: its `Buttons` role does not exist, so the slot is free), and a `Draw::FacedText { role: "Stats" }` falls back to the menu face on a title that loads no such face. The `<Menu>` rows of `Team Selection` name no `font`; they draw in the menu face at `MenuScale` 1.15, 18 grid lines apart (measured 18.2 on the frame, the chain's own `FlowFiles::row_pitch`). Confidence 90 (a frame measurement, one capture each).
+
+**Open, same capture:** the record's separators read `0 . 00 . 00` with small mid-height dots and wide gaps at 8x, which is neither this build's `0.00.00` (baseline dots) nor the `0'00"00` the 2x reading suggested; no Latin-1 character drawn in `LTe50325.fnt` as the separator matches the frame (a sweep, 2026-11-01), so the original's format string is not recovered.

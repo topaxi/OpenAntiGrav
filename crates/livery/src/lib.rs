@@ -10,12 +10,12 @@
 //! declares: 845 to 1,497 triangles, 1,273 to 1,650 vertices, radius 6.45 to
 //! 7.09. That is worth stating because the *Zone* hull is the other way round -
 //! every team's `Zone.vex` decodes to the same 1213 vertices / 1149 triangles /
-//! 8 meshes, and only its paint varies (see `race::ship_entry_name`). So a
+//! 8 meshes, and only its paint varies (see `oag_title::race::ShipPaths::hull_entry_name`). So a
 //! livery here is a model load, and a Zone livery would be a texture swap.
 //!
 //! # What is recovered and what is ours
 //!
-//! **The hull paths are the disc's**: `ship_entry_name` builds
+//! **The hull paths are the disc's**: `oag_title::race::ShipPaths::hull_entry_name` builds
 //! `Data\Ships\<Team>\Ship.vex` from the team id the definition declares, and
 //! `PI_TeamModel`'s `location` is a *file stem* (the literal `"ship"`), not a
 //! team name - which is the naming trap `HANDOVER.md` records. Nothing here
@@ -50,19 +50,20 @@ use oag_mesh::mesh::{self, Model};
 use oag_race::Mode;
 use oag_vex::vex;
 
-use entry::{boost_entry_name, ps2_texture_set, ship_entry_name};
+use entry::{boost_entry_name, ps2_texture_set};
 
 mod absorb;
 mod arc_anchor;
-mod cannon_flash;
 pub mod engine_light;
 pub mod entry;
 mod flare;
+mod locator_pair;
+pub mod own_shield;
 pub use flare::{Scale, Spike};
 mod shield;
 pub mod ship_skin;
 mod wreck;
-mod zone_livery;
+pub mod zone_livery;
 
 pub use shield::cockpit_shield;
 use shield::shell;
@@ -82,6 +83,10 @@ pub struct Livery {
     /// Per team because the hulls differ: mounting eight ribbons on one team's
     /// nozzle put the flare inside the fuselage on some of them.
     pub nozzle: Option<Vec3>,
+    /// The `Ship Muzzle` locator in this hull's own model space: the weapon node a
+    /// charging Plasma's head is parented to. Per team; Assegai's is `(0, 0, 5.653)`
+    /// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix and node").
+    pub muzzle: Option<Vec3>,
     /// The additive plume a speed pad reveals, `shipboost.vex` beside the hull.
     ///
     /// **On Wipeout HD this is the `EF_Boost` group of the flare model**, not a
@@ -111,6 +116,10 @@ pub struct Livery {
     /// inside the fuselage in places and outside it in others. See
     /// [`crate::race::shield_entry_names`].
     pub shield: Option<Model>,
+    /// The `ShieldColour` the shell's own material authors: the colour the
+    /// raised shield settles to. `None` where the shell is not an `.rcsmodel`
+    /// (the PSP and PS2 shells carry no such parameter) or has no shell.
+    pub shield_colour: Option<[f32; 4]>,
     /// The `Ship Collision Fx` locators in this hull's own model space, the
     /// spark anchors the original picks the nearest of.
     ///
@@ -148,8 +157,11 @@ pub struct Livery {
     /// [`engine_light::load`].
     pub engine_light: Option<engine_light::EngineLight>,
     /// Wipeout HD's `cannon_flash` locators, model space, `[left, right]` -
-    /// both `None` on every source that authors none. See [`cannon_flash`].
+    /// both `None` on every source that authors none. See [`locator_pair`].
     pub cannon_flash: [Option<oag_core::math::Mat4>; 2],
+    /// Wipeout HD's `wingtip` locators (`wingtip_left`, `wingtip_right`), model space,
+    /// `[left, right]` - both `None` on every source that authors none. See [`locator_pair`].
+    pub wingtip: [Option<oag_core::math::Mat4>; 2],
     /// The `arc_anchor_point` locator the magstrip arc wake hangs on, model
     /// space. `None` where the hull authors none. See [`arc_anchor`].
     pub arc_anchor: Option<oag_core::math::Mat4>,
@@ -186,15 +198,19 @@ pub struct LoadContext<'a> {
     /// Where a team's hull, plume, shield and handling stats resolve - see
     /// [`oag_title::RaceDefaults::ships_for`].
     pub race: &'a oag_title::RaceDefaults,
-    /// Which mode's rules the race runs under - selects [`ship_entry_name`]'s
+    /// Which mode's rules the race runs under - selects `ShipPaths::hull_entry_name`'s
     /// Zone/non-Zone branch.
     pub mode: Mode,
     /// This title's own engine-flare mechanism - geometry, a sprite, or
     /// unread. See [`oag_title::flare::Flare`].
     pub flare: &'a oag_title::flare::Flare,
-    /// Whether to build the absorb hull overlay - Pulse's alone, and only
-    /// while `oag_fx::hull_overlay::DRAWN` says so. See [`absorb::overlay`].
+    /// Whether to build the absorb hull overlay - the titles whose `Looks::hull_overlay` rule
+    /// applies (Pulse, Pure), and only while `oag_fx::hull_overlay::DRAWN` says so. See
+    /// [`absorb::overlay`].
     pub hull_overlay: bool,
+    /// Whether to build the LeachBeam hull overlay too - on where the title has a LeachBeam and
+    /// [`Self::hull_overlay`] is: Pure draws the absorb overlay and ships no `leachbeam_surface.mip`.
+    pub leach_overlay: bool,
     /// Whether to build the hull's extra pass - Pulse's alone, and only while
     /// `oag_render::shine::DRAWN` says so. See `oag_render::shine`.
     pub hull_shine: bool,
@@ -204,6 +220,10 @@ pub struct LoadContext<'a> {
     pub hull_wreck: bool,
     /// Whether to load HD's absorb shell. See [`absorb::shell`].
     pub absorb_shell: bool,
+    /// Whether the shield shell is our own, built off the hull, instead of the one the disc
+    /// authors (`graphics.own_shield`, on a title whose `Looks::own_shield` offers it). See
+    /// [`own_shield::shell`].
+    pub own_shield: bool,
     /// Each craft's Zone livery name, `(team id, name)`, off the plugin
     /// definition's `PI_TeamModel name="zone"` - empty outside Zone and for a
     /// title that authors none. See `zone_livery`.
@@ -212,6 +232,49 @@ pub struct LoadContext<'a> {
     /// [`oag_title::RaceDefaults::eliminator_skin`], resolved per team. Empty outside an
     /// Eliminator race and for a title that forces none. See [`forced_paint`].
     pub forced_skins: &'a [(String, String)],
+    /// The hull stem the circuit forces on every craft, the player's pick included: the
+    /// `PI_Track` type's own ([`oag_title::RaceDefaults::hull_by_track_type`]). `None` flies each
+    /// slot's own.
+    pub circuit_hull: Option<&'static str>,
+    /// The livery folder the player's craft (slot 0) is painted from in place of its own. See
+    /// [`LiveryFolder`]. `None` keeps the hull's own.
+    pub player_livery: Option<LiveryFolder<'a>>,
+    /// What the race's scene target stores, which the hull's baked colours are encoded for.
+    pub store: oag_gpu::formats::SceneStore,
+}
+
+/// A craft painted from another livery folder of its own directory: Wipeout HD/Fury's and
+/// Omega's `PI_TeamModel` `texturelocation` (`SKIN1` is Feisar in `livery2`, `normal` in
+/// `livery1`). Every texture the hull names under [`Self::own`] is read from [`Self::worn`]
+/// instead, the same path substitution the Zone livery makes (`zone_livery`). The census that
+/// makes this a folder swap: every texture a Feisar hull names in `livery1` is shipped under
+/// `livery2`..`livery4` too, on HD's PS3 disc and on Omega (`docs/formats/race-setup.md`,
+/// "HD-era model unlocks"). A texture the worn folder does not hold draws nothing and is reported:
+/// the own folder's would be another livery's paint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LiveryFolder<'a> {
+    /// The folder the hull's materials name (the directory's own model's `texturelocation`).
+    pub own: &'a str,
+    /// The folder the picked model is painted from.
+    pub worn: &'a str,
+    /// Whether a texture the worn folder lacks is read from the own folder instead: the Zone
+    /// hull's livery does (the own folder holds its default skin), a model's livery does not
+    /// (the own folder's texture is another livery's paint).
+    pub fall_back: bool,
+}
+
+impl LiveryFolder<'_> {
+    /// The archive path a texture request becomes, or `None` when `path` is not under
+    /// [`Self::own`] and is read as asked. The rule a race's hull build applies, for a caller that
+    /// builds a hull of its own (a front-end preview).
+    #[must_use]
+    pub fn rewrite(&self, path: &str) -> Option<String> {
+        let lower = path.to_ascii_lowercase().replace('\\', "/");
+        let from = format!("/{}/", self.own.to_ascii_lowercase());
+        lower
+            .contains(&from)
+            .then(|| lower.replacen(&from, &format!("/{}/", self.worn.to_ascii_lowercase()), 1))
+    }
 }
 
 /// A hull file and a paint job picked for one craft.
@@ -220,7 +283,7 @@ pub struct LoadContext<'a> {
 /// caller: [`load`] takes one per seated slot after the first.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Paint<'a> {
-    /// The hull stem override, [`crate::race::ship_entry_name`]'s own.
+    /// The hull stem override, `ShipPaths::hull_entry_name`'s own.
     pub hull_variant: Option<&'a str>,
     /// A `PI_ModelSkin`'s archive entry, already resolved by [`ship_skin::resolve`].
     pub skin: Option<&'a str>,
@@ -252,7 +315,7 @@ fn forced_paint<'a>(forced_skins: &'a [(String, String)], team: &str) -> Paint<'
 /// player's, and a race with no hull for the player is not a race; every other
 /// failure falls back to slot 0's hull and says so in `report`.
 ///
-/// `hull_variant` is [`crate::race::ship_entry_name`]'s own override, applied
+/// `hull_variant` is `ShipPaths::hull_entry_name`'s own override, applied
 /// to **slot 0**, plus each slot `seats` names: it is the RACE page's own pick
 /// for a person's craft, and nothing offers an opponent a choice of their own -
 /// see `oag_title::race::HullVariant`'s doc comment for why there is no unlock
@@ -314,6 +377,7 @@ pub fn load(
                 team: team.clone(),
                 hull: source.hull.clone(),
                 nozzle: source.nozzle,
+                muzzle: source.muzzle,
                 collision_fx: source.collision_fx.clone(),
                 absorb: source.absorb.clone(),
                 absorb_overlay: source.absorb_overlay.clone(),
@@ -327,8 +391,10 @@ pub fn load(
                 flare_spikes: source.flare_spikes.clone(),
                 flare_origins: source.flare_origins,
                 shield: source.shield.clone(),
+                shield_colour: source.shield_colour,
                 engine_light: source.engine_light,
                 cannon_flash: source.cannon_flash,
+                wingtip: source.wingtip,
                 arc_anchor: source.arc_anchor,
             };
             report.push(format!(
@@ -345,7 +411,14 @@ pub fn load(
             ctx.race.ships_for(team),
             ctx,
             (paint.hull_variant, hull_variant),
-            paint.skin,
+            (
+                paint.skin,
+                if slot == 0 && !forced {
+                    ctx.player_livery
+                } else {
+                    None
+                },
+            ),
             report,
         ) {
             Ok(livery) => out.push(livery),
@@ -361,6 +434,7 @@ pub fn load(
                     team: player.team.clone(),
                     hull: player.hull.clone(),
                     nozzle: player.nozzle,
+                    muzzle: player.muzzle,
                     collision_fx: player.collision_fx.clone(),
                     absorb: player.absorb.clone(),
                     absorb_overlay: player.absorb_overlay.clone(),
@@ -374,8 +448,10 @@ pub fn load(
                     flare_spikes: player.flare_spikes.clone(),
                     flare_origins: player.flare_origins,
                     shield: player.shield.clone(),
+                    shield_colour: player.shield_colour,
                     engine_light: player.engine_light,
                     cannon_flash: player.cannon_flash,
+                    wingtip: player.wingtip,
                     arc_anchor: player.arc_anchor,
                 });
             }
@@ -404,10 +480,14 @@ fn one(
     ships: oag_title::race::ShipPaths,
     ctx: &LoadContext,
     (hull_variant, team_model): (Option<&str>, Option<&str>),
-    skin: Option<&str>,
+    (skin, livery): (Option<&str>, Option<LiveryFolder>),
     report: &mut Vec<String>,
 ) -> Result<Livery> {
-    let hull_name = ship_entry_name(ships, team, ctx.mode, hull_variant);
+    let hull_name = ships.hull_entry_name(
+        team,
+        ctx.mode == Mode::Zone,
+        ctx.circuit_hull.or(hull_variant),
+    );
     let blob = archives
         .read_name(&hull_name)
         .with_context(|| format!("reading {hull_name}"))?;
@@ -432,36 +512,32 @@ fn one(
             )),
             // 2048's container is a different file under the same extension
             // and needs no `.vex` at all - see `oag_mesh::mesh::rcs::psp2`.
-            Some(geometry) if mesh::rcs::psp2::is_psp2(&geometry) => {
-                let swap = zone_livery::swap(ships, ctx.mode, ctx.zone_liveries, team, report);
-                let (mut swapped, mut missing) = (0_usize, Vec::new());
-                let built = mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
-                    let Some(alt) = swap.as_ref().and_then(|swap| swap.rewrite(path)) else {
-                        return archives.read_name(path).ok();
-                    };
-                    if let Ok(blob) = archives.read_name(&alt) {
-                        swapped += 1;
-                        return Some(blob);
-                    }
-                    missing.push(alt);
-                    archives.read_name(path).ok()
-                })
-                .map(|(model, built)| (model, built.describe()))
+            Some(geometry) => {
+                let zone = zone_livery::swap(ships, ctx.mode, ctx.zone_liveries, team, report);
+                let worn = livery.filter(|_| ctx.mode != Mode::Zone);
+                let mut textures = zone_livery::Reads::new(zone.or(worn));
+                let built = if mesh::rcs::psp2::is_psp2(&geometry) {
+                    mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
+                        textures.read(archives, path)
+                    })
+                    .map(|(model, built)| (model, built.describe()))
+                } else {
+                    mesh::rcs::build(
+                        &hull_name,
+                        &blob,
+                        &geometry,
+                        &mut |path| textures.read(archives, path),
+                        ctx.store,
+                        |c| c.mesh,
+                    )
+                    .map(|(model, built)| (model, built.describe()))
+                }
                 .map_err(|error| format!("{hull_name}: {error:#}"));
-                if let Some(swap) = &swap {
-                    report.push(zone_livery::describe(team, swap, swapped, &missing));
+                if let Some(line) = textures.describe(team) {
+                    report.push(line);
                 }
                 built
             }
-            Some(geometry) => mesh::rcs::build(
-                &hull_name,
-                &blob,
-                &geometry,
-                &mut |path| archives.read_name(path).ok(),
-                |c| c.mesh,
-            )
-            .map(|(model, built)| (model, built.describe()))
-            .map_err(|error| format!("{hull_name}: {error:#}")),
         };
         let (hull, built) = match built {
             Ok(pair) => pair,
@@ -473,6 +549,7 @@ fn one(
                     team: team.to_string(),
                     hull: mesh::Model::none(&hull_name),
                     nozzle: None,
+                    muzzle: None,
                     collision_fx: Vec::new(),
                     absorb: Vec::new(),
                     absorb_overlay: None,
@@ -486,8 +563,10 @@ fn one(
                     flare_spikes: Vec::new(),
                     flare_origins: FlareOrigins::default(),
                     shield: None,
+                    shield_colour: None,
                     engine_light: None,
                     cannon_flash: [None, None],
+                    wingtip: [None, None],
                     arc_anchor: None,
                 });
             }
@@ -505,25 +584,81 @@ fn one(
         }
         let (nozzle, nozzle_axis, collision_fx) = locators(archives, &hull_name, &blob, report);
         let absorb = absorb::locators(archives, &hull_name, &blob, report);
-        let cannon_flash = cannon_flash::locators(archives, &hull_name, &blob, report);
+        let cannon_flash = locator_pair::locators(
+            locator_pair::CANNON_FLASH,
+            archives,
+            &hull_name,
+            &blob,
+            report,
+        );
+        let wingtip =
+            locator_pair::locators(locator_pair::WINGTIP, archives, &hull_name, &blob, report);
         let arc_anchor = arc_anchor::locator(archives, &hull_name, &blob, report);
-        let engine_light =
-            engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
+        let (light_dir, light_team) = entry::model_directory_with(
+            archives,
+            ships,
+            team,
+            ctx.mode,
+            oag_tables::enginelight::entry_name_in,
+            report,
+        );
+        let engine_light = engine_light::load(
+            archives,
+            light_team,
+            light_dir,
+            ships.dir,
+            ctx.flare,
+            nozzle_axis,
+            report,
+        );
         // **The plume comes from here too on this title.** HD ships no
         // `shipboost.vex`; `EF_Boost` inside the flare model is what a speed
         // pad reveals, so both halves come out of one load. See
         // `flare::per_team`.
-        let lit = authored_flare(archives, team, ships.dir, ctx.flare, nozzle, report);
+        let lit = authored_flare(archives, team, ships, ctx, nozzle, report);
+        let shield = {
+            // Authored about its hull like the flare: the Zone directory's
+            // own shell where it ships one.
+            let (shell_dir, shell_team) = entry::model_directory_with(
+                archives,
+                ships,
+                team,
+                ctx.mode,
+                |dir, team| entry::stem_entry_name(dir, team, entry::SHIELD_STEM),
+                report,
+            );
+            shell(
+                archives, shell_team, shell_dir, team_model, ctx.store, report,
+            )
+        };
         return Ok(Livery {
             team: team.to_string(),
             nozzle,
+            muzzle: vex::ship_muzzle(&blob).map(Vec3::from),
             collision_fx,
             absorb,
             absorb_overlay: None,
             leach_overlay: None,
             shine: None,
             wreck: None,
-            absorb_shell: absorb::shell(archives, team, ships.dir, ctx.absorb_shell, report),
+            absorb_shell: {
+                let (absorb_dir, absorb_team) = entry::model_directory_with(
+                    archives,
+                    ships,
+                    team,
+                    ctx.mode,
+                    |dir, team| entry::stem_entry_name(dir, team, absorb::SHELL_STEM),
+                    report,
+                );
+                absorb::shell(
+                    archives,
+                    absorb_team,
+                    absorb_dir,
+                    ctx.absorb_shell,
+                    ctx.store,
+                    report,
+                )
+            },
             hull,
             boost: lit.boost,
             flare: lit.always,
@@ -538,9 +673,11 @@ fn one(
             // beside it, under the same stem Pulse uses, for all eight teams and
             // Zone. `shell` takes the same external-geometry branch this hull
             // just took. See `crate::race::shield_entry_names`.
-            shield: shell(archives, team, ships.dir, team_model, report),
+            shield_colour: shield.as_ref().and_then(|(_, colour)| *colour),
+            shield: shield.map(|(model, _)| model),
             engine_light,
             cannon_flash,
+            wingtip,
             arc_anchor,
         });
     }
@@ -568,23 +705,42 @@ fn one(
     ));
 
     let (nozzle, nozzle_axis, collision_fx) = locators(archives, &hull_name, &blob, report);
-    let engine_light =
-        engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
+    let engine_light = engine_light::load(
+        archives,
+        team,
+        ships.dir,
+        ships.dir,
+        ctx.flare,
+        nozzle_axis,
+        report,
+    );
 
     let (boost, boost_uv) = plume(archives, team, ships, ctx.mode, report);
-    let shield = shell(archives, team, ships.dir, team_model, report);
+    // With our own shield on, a hull that cannot give one draws no shield (reported) rather than
+    // the disc's shell under our palette.
+    let (shield, shield_colour) = if ctx.own_shield {
+        (own_shield::shell(&hull, &blob, report), None)
+    } else {
+        match shell(archives, team, ships.dir, team_model, ctx.store, report) {
+            Some((model, colour)) => (Some(model), colour),
+            None => (None, None),
+        }
+    };
     // Nothing on a title whose flare is a sprite, which is every source that
     // reaches this branch today - the match is here rather than at the PS3
     // branch alone so a fourth source is answered by its own axis and not by
     // which decoder its hull happened to take.
-    let lit = authored_flare(archives, team, ships.dir, ctx.flare, nozzle, report);
+    let lit = authored_flare(archives, team, ships, ctx, nozzle, report);
     let wreck = if ctx.hull_wreck {
         wreck::load(archives, team, ships.dir, ctx.mode, report)
     } else {
         None
     };
-    let [absorb_overlay, leach_overlay] = [absorb::ABSORB, absorb::LEACH]
-        .map(|which| absorb::overlay(archives, &hull, &blob, which, ctx.hull_overlay, report));
+    let [absorb_overlay, leach_overlay] = [
+        (absorb::ABSORB, ctx.hull_overlay),
+        (absorb::LEACH, ctx.hull_overlay && ctx.leach_overlay),
+    ]
+    .map(|(which, wanted)| absorb::overlay(archives, &hull, &blob, which, wanted, report));
     let shine = if ctx.hull_shine {
         let shine = mesh::shine_pass::build(&hull);
         report.push(match &shine {
@@ -610,6 +766,7 @@ fn one(
         team: team.to_string(),
         hull,
         nozzle,
+        muzzle: vex::ship_muzzle(&blob).map(Vec3::from),
         collision_fx,
         absorb: Vec::new(),
         absorb_overlay,
@@ -626,8 +783,10 @@ fn one(
             boost: lit.boost_origin,
         },
         shield,
+        shield_colour,
         engine_light,
         cannon_flash: [None, None],
+        wingtip: [None, None],
         arc_anchor: None,
     })
 }
@@ -641,14 +800,19 @@ fn one(
 fn authored_flare(
     archives: &mut oag_assets::Archives,
     team: &str,
-    ship_dir: &str,
-    flare: &oag_title::flare::Flare,
+    ships: oag_title::race::ShipPaths,
+    ctx: &LoadContext,
     nozzle: Option<Vec3>,
     report: &mut Vec<String>,
 ) -> flare::Flare {
-    match flare {
+    match ctx.flare {
         oag_title::flare::Flare::PerTeam(authored) => {
-            flare::per_team(archives, team, ship_dir, authored, nozzle, report)
+            // The flare file is authored about its hull, so it comes from the
+            // directory the hull did: Zone's own on HD, not the player's team.
+            let (ship_dir, team) = entry::model_directory(ships, team, ctx.mode);
+            flare::per_team(
+                archives, team, ship_dir, authored, nozzle, ctx.store, report,
+            )
         }
         oag_title::flare::Flare::Sprite(_) | oag_title::flare::Flare::Unread => {
             flare::Flare::default()
@@ -772,7 +936,7 @@ fn collision_fx_locators(ship_blob: &[u8]) -> Vec<SparkAnchor> {
 
 /// The plume `ExhaustFlare_Init` reveals once `boost_timer` passes
 /// `exhaust::BOOST_GATE`: `shipboost.vex`, or `Zoneboost.vex` in Zone mode,
-/// matching whichever hull [`ship_entry_name`] picked.
+/// matching whichever hull `ShipPaths::hull_entry_name` picked.
 ///
 /// Absence is reported rather than failing the race: the PS2 set may not carry
 /// it under the same name the PSP one does, and a missing boost plume is a

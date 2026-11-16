@@ -1,5 +1,11 @@
 //! The LeachBeam's own reticle law (`FUN_0881e8c8`), asserted tick by tick.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use super::*;
 
 const DT: f32 = 1.0 / 60.0;

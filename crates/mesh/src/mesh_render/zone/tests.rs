@@ -166,3 +166,45 @@ fn write_vis_blanks_on_no_tint_or_no_bands() {
         );
     }
 }
+
+/// [`write_vis_changed`] writes the texels once and then only when they change: two frames of
+/// one spectrum make one texture write, a new level a second, and the blank lookup a race with
+/// no Zone gives every frame is written once. Drop the comparison and the log holds a write per
+/// call.
+#[test]
+fn write_vis_changed_writes_only_new_texels() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, _queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("vis memo test"),
+        size: wgpu::Extent3d {
+            width: VIS_WIDTH,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: texture::FORMAT,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let log = std::cell::RefCell::new(oag_gpu::writes::Log::default());
+    let mut last = None;
+    let tint = Some([255, 128, 64]);
+    let mut write = |bands: &[f32], tint| write_vis_changed(&log, &texture, bands, tint, &mut last);
+    assert!(write(&[0.5; 4], tint), "the first write is always made");
+    assert!(!write(&[0.5; 4], tint), "the same texels again: nothing");
+    assert!(write(&[0.9; 4], tint), "a new level: written");
+    assert!(write(&[], None), "blanked");
+    assert!(!write(&[], None), "blank again: nothing");
+    assert!(!write(&[0.5; 4], None), "no tint is the same blank");
+    assert_eq!(log.borrow().len(), 3);
+    assert_eq!(last, Some([[0; 4]; VIS_WIDTH as usize]));
+}

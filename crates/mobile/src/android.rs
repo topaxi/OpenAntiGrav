@@ -44,6 +44,40 @@ pub fn prepare(app: AndroidApp) {
     let _ = APP.set(app);
 }
 
+/// Unpacks the official mods the APK carries into `dest`, relative to the working directory
+/// [`prepare`] set (pass `oag_mod::OFFICIAL`, which `oag_mod::mods_search_path` already
+/// lists). Only the first launch of a build writes anything. See [`crate::packaged`].
+///
+/// Runs on the activity's thread before the event loop and the window exist, so no frame
+/// waits on it.
+///
+/// # Errors
+///
+/// [`prepare`] was never called, the APK has no mods, or the disk refused a write.
+pub fn install_official_mods(
+    dest: &std::path::Path,
+) -> std::io::Result<crate::packaged::Installed> {
+    use std::io::{Error, ErrorKind, Read};
+
+    let app = APP
+        .get()
+        .ok_or_else(|| Error::other("no AndroidApp: not started by android_main"))?;
+    let assets = app.asset_manager();
+    crate::packaged::install(
+        &mut |name| {
+            let name = std::ffi::CString::new(name)
+                .map_err(|_| Error::new(ErrorKind::InvalidInput, "asset name has a NUL"))?;
+            let mut asset = assets
+                .open(&name)
+                .ok_or_else(|| Error::new(ErrorKind::NotFound, name.to_string_lossy()))?;
+            let mut bytes = Vec::new();
+            asset.read_to_end(&mut bytes)?;
+            Ok(bytes)
+        },
+        dest,
+    )
+}
+
 /// The window system's event loop, handed the activity [`prepare`] kept.
 ///
 /// # Errors

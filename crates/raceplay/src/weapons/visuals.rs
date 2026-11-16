@@ -19,6 +19,13 @@ pub(crate) use flash::flash_for;
 
 use super::*;
 
+/// The LeachBeam pool's size: how many entries the render-side state has.
+const LEACH_POOL: usize = oag_weapons::projectile::leach_beam::POOL_SIZE;
+
+/// The row lengths of HD's bolt ball matrix, model `X`, `Y`, `Z`: `0.75^2`, `0.75^2` and
+/// `0.75^3`, read off the live object on two shots (`plasma.md`, "The bolt's two frames").
+pub(crate) const PLASMA_BALL_SCALE: [f32; 3] = [0.5625, 0.5625, 0.421_875];
+
 impl Race {
     /// Keeps [`Trigger::LeachbeamCharging`] on every craft that is holding a
     /// LeachBeam - the disc's own `Data\Psys\*.POB`, played through the same
@@ -77,17 +84,23 @@ impl Race {
     /// with `now == 0` at both (`LeachBeam_Advance`, and `FUN_08872e64`, the
     /// teardown `LeachBeam_UpdatePool` calls on retire), which sets the dead
     /// bit, and the manager frees the instance and its live particles on its
-    /// next tick (read 2026-09-30, see `particle-system.md`).
+    /// next tick (see `particle-system.md`).
     pub(crate) fn advance_leach_beam_ribbon(&mut self) {
-        let locked = self
-            .sim
-            .world
-            .leach_beam
+        for at in 0..LEACH_POOL {
+            self.advance_leach_beam_ribbon_at(at);
+        }
+    }
+
+    /// [`Self::advance_leach_beam_ribbon`] for the beam in pool entry `at`: the
+    /// ribbon, effect and ball clock of an entry follow its beam, and are torn
+    /// down when the entry holds none (or an unlocked one).
+    fn advance_leach_beam_ribbon_at(&mut self, at: usize) {
+        let locked = self.sim.world.leach_beams[at]
             .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked);
         let Some(beam) = locked else {
-            self.view.leach_beam_ribbon = None;
-            self.view.leach_ball_elapsed = 0.0;
-            if let Some(playing) = self.view.leach_beam_effect.take() {
+            self.view.leach_beam_ribbon[at] = None;
+            self.view.leach_ball_elapsed[at] = 0.0;
+            if let Some(playing) = self.view.leach_beam_effect[at].take() {
                 self.view.stage.kill(playing);
             }
             return;
@@ -105,13 +118,13 @@ impl Race {
         // once - the same idiom `Race::force_trail_sparks`'s own
         // `(player, rng)` pair uses.
         let (ribbon, rng) = (
-            &mut self.view.leach_beam_ribbon,
+            &mut self.view.leach_beam_ribbon[at],
             &mut self.view.leach_beam_rng,
         );
         let ribbon = ribbon.get_or_insert_with(|| oag_fx::beam::Ribbon::new(rng));
         let pulsed = ribbon.advance(dt, (target - owner).length(), beam.range, rng);
         let spline = &self.sim.spline;
-        let at = ribbon.energy_point(owner, target, beam.range, &|p| spline.tube_frame(p));
+        let point = ribbon.energy_point(owner, target, beam.range, &|p| spline.tube_frame(p));
 
         // `LEACHENERGY`: the same pulse block that re-spawns
         // `WO_LEACHBEAM_ENERGY` below, per `LeachBeam_Advance`'s own reading
@@ -121,26 +134,26 @@ impl Race {
         // firing of the original's pulse block, and `Ribbon::new`'s `cursor: 0`
         // already makes the very first `advance` call pulse, so the two agree
         // on tick one anyway.
-        if pulsed && let Some(at) = at {
+        if pulsed && let Some(point) = point {
             self.sim.cues.push(oag_gameplay::cue::CueEvent::at_point(
                 oag_gameplay::cue::Cue::LeachEnergy,
-                at,
+                point,
             ));
         }
 
         let effect = self.view.handles.get(Trigger::LeachbeamEnergy).cloned();
-        match (effect, self.view.leach_beam_effect, at) {
-            (Some(effect), playing, Some(at)) if pulsed || playing.is_none() => {
+        match (effect, self.view.leach_beam_effect[at], point) {
+            (Some(effect), playing, Some(point)) if pulsed || playing.is_none() => {
                 if let Some(playing) = playing {
                     self.view.stage.kill(playing);
                 }
-                self.view.leach_beam_effect = self.view.stage.attach(&effect, at, 1.0);
+                self.view.leach_beam_effect[at] = self.view.stage.attach(&effect, point, 1.0);
             }
-            (_, Some(playing), Some(at)) => self.view.stage.follow(playing, at),
+            (_, Some(playing), Some(point)) => self.view.stage.follow(playing, point),
             _ => {}
         }
 
-        self.advance_leach_ball_hd(beam.trip, owner, target, dt);
+        self.advance_leach_ball_hd(at, beam, dt);
     }
 
     /// Wipeout HD's own LeachBall drain trip - `LeachBall_Advance`'s
@@ -158,44 +171,52 @@ impl Race {
     /// On a title that drains per trip the simulation carries the
     /// accumulator (`Beam::trip`) and this reads it, so the burst lands on the
     /// tick the drain does; elsewhere the view keeps its own on the same law.
-    fn advance_leach_ball_hd(&mut self, trip: Option<f32>, owner: Vec3, target: Vec3, dt: f32) {
-        let length = (target - owner).length();
-        let wrapped = match trip {
+    fn advance_leach_ball_hd(
+        &mut self,
+        at: usize,
+        beam: oag_weapons::projectile::leach_beam::Beam,
+        dt: f32,
+    ) {
+        let gap = self.leach_trip_gap(beam);
+        let wrapped = match beam.trip {
             // The simulation's clock wrapped this tick (the drain landed):
             // it went down since the last frame read it.
             Some(elapsed) => {
-                let wrapped = elapsed < self.view.leach_ball_elapsed;
-                self.view.leach_ball_elapsed = elapsed;
+                let wrapped = elapsed < self.view.leach_ball_elapsed[at];
+                self.view.leach_ball_elapsed[at] = elapsed;
                 wrapped
             }
             None => oag_weapons::projectile::leach_beam::trip::advance(
-                &mut self.view.leach_ball_elapsed,
+                &mut self.view.leach_ball_elapsed[at],
                 dt,
-                length,
+                gap,
             ),
         };
         if !wrapped {
             return;
         }
-        let at = oag_fx::beam::hd_ball::position(
-            leach_ball_fraction(self.view.leach_ball_elapsed, length),
-            owner,
-            target,
-        );
+        // On the shooter: the wrap's `WO_LEACHBEAM_ABSORB` is placed on
+        // `*(path + 0x0) + 0x6944`'s matrix, the shooter's
+        // (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "The ball rides the
+        // strip"), where the ball has just arrived.
+        let point = self.sim.world.ships[beam.owner as usize]
+            .physics
+            .body
+            .position;
         if let Some(effect) = self.view.handles.get(Trigger::LeachbeamAbsorb) {
-            self.view.stage.play(effect, at, 1.0);
+            self.view.stage.play(effect, point, 1.0);
         }
     }
 
-    /// Where the LeachBeam ball model sits this frame, or `None` when
-    /// nothing is drawn - no [`oag_weapons::projectile::leach_beam::Kind::Locked`]
+    /// Where the ball model of the beam in pool entry `entry` sits this frame,
+    /// or `None` when nothing is drawn - no [`oag_weapons::projectile::leach_beam::Kind::Locked`]
     /// beam this tick, the same gate [`Self::advance_leach_beam_ribbon`]
     /// takes for the ribbon.
     ///
-    /// Reads the owner's and target's positions fresh rather than any this
-    /// tick's [`Self::advance_leach_ball_hd`] captured, so a caller at draw
-    /// time (after the tick that moved them) still places the ball against
-    /// where the beam's two ends are now, not where they were a tick ago.
+    /// Reads the beam's path fresh rather than anything this tick's
+    /// [`Self::advance_leach_ball_hd`] captured, so a caller at draw time
+    /// (after the tick that moved the craft) places the ball on the strip as it
+    /// is drawn now.
     ///
     /// **Translation only - identity rotation and scale, both chosen, not
     /// measured.** `LeachBall_Advance`'s own placement call
@@ -204,30 +225,45 @@ impl Race {
     /// "2026-09-25" section) but was not resolved past that, so nothing pins
     /// an orientation or a scale for this build to reproduce. An identity
     /// rotation is a determinant-`+1` matrix like every other HD weapon body's
-    /// placement since 2026-09-24, so `load::weapon_models::cull_as_authored`
+    /// placement, so `load::weapon_models::cull_as_authored`
     /// still applies correctly if the model's own materials ask for it.
     #[must_use]
-    pub fn leach_ball_model_matrix(&self) -> Option<Mat4> {
-        let beam = self
-            .sim
-            .world
-            .leach_beam
+    pub fn leach_ball_model_matrix(&self, entry: usize) -> Option<Mat4> {
+        let beam = self.sim.world.leach_beams[entry]
             .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked)?;
-        let owner = self.sim.world.ships[beam.owner as usize]
-            .physics
-            .body
-            .position;
-        let target = self.sim.world.ships[beam.target as usize]
-            .physics
-            .body
-            .position;
-        let length = (target - owner).length();
-        let at = oag_fx::beam::hd_ball::position(
-            leach_ball_fraction(self.view.leach_ball_elapsed, length),
-            owner,
-            target,
-        );
+        let at = self.leach_ball_point(beam, self.view.leach_ball_elapsed[entry]);
         Some(Mat4::from_translation(at))
+    }
+
+    /// The trip's length: the two craft's gap along the course
+    /// (`oag_weapons::projectile::leach_beam::trip::gap`), the length the
+    /// simulation's own trip reads.
+    fn leach_trip_gap(&self, beam: oag_weapons::projectile::leach_beam::Beam) -> f32 {
+        let ships = &self.sim.world.ships;
+        oag_weapons::projectile::leach_beam::trip::gap(
+            ships[beam.owner as usize].standing.progress,
+            ships[beam.target as usize].standing.progress,
+            self.leach_course_length(),
+        )
+    }
+
+    /// Where the ball is `elapsed` seconds into its trip: on the drawn strip
+    /// where the title has one ([`Self::leach_ball_on_strip`]), else on the
+    /// straight line between the two bodies, [`oag_fx::beam::hd_ball::position`].
+    fn leach_ball_point(
+        &self,
+        beam: oag_weapons::projectile::leach_beam::Beam,
+        elapsed: f32,
+    ) -> Vec3 {
+        let fraction = leach_ball_fraction(elapsed, self.leach_trip_gap(beam));
+        self.leach_ball_on_strip(beam, fraction).unwrap_or_else(|| {
+            let ships = &self.sim.world.ships;
+            oag_fx::beam::hd_ball::position(
+                fraction,
+                ships[beam.owner as usize].physics.body.position,
+                ships[beam.target as usize].physics.body.position,
+            )
+        })
     }
 
     /// The firing craft's LeachBeam hull-overlay pulse on `slot` this tick, or
@@ -239,11 +275,14 @@ impl Race {
     /// included. See [`oag_fx::beam::Ribbon::pulse_strength`].
     #[must_use]
     pub fn leach_overlay_pulse(&self, slot: usize) -> Option<f32> {
-        let beam = self.sim.world.leach_beam?;
-        if usize::from(beam.owner) != slot {
-            return None;
-        }
-        self.view.leach_beam_ribbon.as_ref()?.pulse_strength()
+        let (at, _) = self
+            .sim
+            .world
+            .leach_beams
+            .iter()
+            .enumerate()
+            .find(|(_, beam)| beam.is_some_and(|beam| usize::from(beam.owner) == slot))?;
+        self.view.leach_beam_ribbon[at].as_ref()?.pulse_strength()
     }
 
     /// The ribbon's geometry for this frame, or empty when there is no
@@ -260,10 +299,34 @@ impl Race {
         camera_right: oag_core::math::Vec3,
         camera_up: oag_core::math::Vec3,
     ) -> Vec<oag_mesh::mesh::GpuVertex> {
+        let mut out: Vec<oag_mesh::mesh::GpuVertex> = Vec::new();
+        for at in 0..LEACH_POOL {
+            let one = self.leach_beam_ribbon_vertices_at(at, camera_right, camera_up);
+            // One triangle strip for the whole pool: a degenerate pair (the last
+            // vertex so far, then the next ribbon's first) bridges two ribbons,
+            // as `oag_fx::beam::build` bridges its own two strips. Each ribbon is
+            // an even count, so the strip's winding parity survives.
+            if let (Some(&last), Some(&first)) = (out.last(), one.first()) {
+                out.extend([last, first]);
+            }
+            out.extend(one);
+        }
+        out
+    }
+
+    /// One pool entry's ribbon, empty when it holds no locked beam.
+    fn leach_beam_ribbon_vertices_at(
+        &self,
+        at: usize,
+        camera_right: oag_core::math::Vec3,
+        camera_up: oag_core::math::Vec3,
+    ) -> Vec<oag_mesh::mesh::GpuVertex> {
         use oag_weapons::projectile::leach_beam::{DISCONNECT_LINGER_SECONDS, Kind};
 
-        let (Some(beam), Some(ribbon)) = (self.sim.world.leach_beam, &self.view.leach_beam_ribbon)
-        else {
+        let (Some(beam), Some(ribbon)) = (
+            self.sim.world.leach_beams[at],
+            &self.view.leach_beam_ribbon[at],
+        ) else {
             return Vec::new();
         };
         if beam.kind != Kind::Locked {
@@ -312,12 +375,9 @@ impl Race {
     /// every effect here: an authored particle system is not something to
     /// approximate with billboards, and reusing *another* weapon's file is
     /// the same invention wearing a real asset - see [`Self::advance_projectile_flares`]'s
-    /// doc comment for the flare bug this was the blast-side twin of. Until
-    /// 2026-08-12 this method drew three expanding additive puffs and a
-    /// separate eight-billboard smoke trail, all invented; until 2026-08-26
-    /// it drew the *Rocket's* `Trigger::TrackBlast`/`Trigger::CraftBlast` for
-    /// every kind of impact, mine and missile included, because [`blast_for`]
-    /// took no `kind` at all; until 2026-09-23 a Bomb drew nothing at all.
+    /// doc comment for the flare bug this was the blast-side twin of. Drawing puffs,
+    /// smoke billboards, or the *Rocket's* `Trigger::TrackBlast`/`Trigger::CraftBlast`
+    /// for every kind would all be invention; [`blast_for`] takes the `kind`.
     ///
     /// [`RaceView::sparks`] is deliberately not reused for it: that system
     /// re-anchors to the hull every tick, so a burst ignited at an impact
@@ -332,6 +392,20 @@ impl Race {
         struck: Option<usize>,
         orientation: Quat,
     ) -> Option<psys::Playing> {
+        self.ignite_blast_aged(kind, point, struck, orientation, 0)
+    }
+
+    /// [`Self::ignite_blast`] for a detonation `age_ticks` ago, which a network client first
+    /// learns of late (`crate::catch_up`): the screen flash joins its ramp at that age. The
+    /// particle effect is returned fresh for the caller to pre-age.
+    pub(crate) fn ignite_blast_aged(
+        &mut self,
+        kind: oag_tables::weapons::Weapon,
+        point: Vec3,
+        struck: Option<usize>,
+        orientation: Quat,
+        age_ticks: u32,
+    ) -> Option<psys::Playing> {
         let (trigger, at) = self.blast_for(kind, point, struck)?;
         // The Plasma's own three-model detonation - `Trigger::PlasmaBlast`
         // below is `WO_PLASMA_FLASH`, a separate `.pob` particle system; the
@@ -342,6 +416,9 @@ impl Race {
         // independently of this effect stage.
         if kind == oag_tables::weapons::Weapon::Plasma {
             self.spawn_plasma_blast_model(at);
+        }
+        if kind == oag_tables::weapons::Weapon::Disruptor {
+            self.spawn_disruptor_halo(at);
         }
         // The Bomb's own two-model detonation - `Trigger::BombSmokering`
         // below is one third of it, the psys smoke ring; the hemisphere and
@@ -362,7 +439,8 @@ impl Race {
             flash_for(kind, struck.is_some()),
             &mut self.view.screen_flash,
         ) {
-            flash.start(kind, at);
+            #[expect(clippy::cast_precision_loss, reason = "at most a few seconds of ticks")]
+            flash.start_aged(kind, at, age_ticks as f32 * self.sim.dt);
         }
         let effect = self.view.handles.get(trigger).cloned()?;
         // Neutral severity: the field the collision sparks derive from an
@@ -401,10 +479,9 @@ impl Race {
     ///   (`0x0886b490`) runs one teardown pass over every bolt carrying the
     ///   destroy bit and calls `Plasma_SpawnDetonation` (`0x0886ac88`) with the
     ///   bolt's own position for each - a wall hit and a timed-out bolt reach
-    ///   it identically, so there is no split to mirror. Wired 2026-09-09; it
-    ///   returned `None` before, when the teardown was unread. **On HD,
+    ///   it identically, so there is no split to mirror. **On HD,
     ///   [`Trigger::PlasmaLightningExpand`] instead** - a different
-    ///   executable's own file, read 2026-09-17; see that constant's doc
+    ///   executable's own file; see that constant's doc
     ///   comment.
     /// - **`Bomb`**: [`Trigger::BombSmokering`] always, whatever it struck -
     ///   `Bomb_Detonate` (`0x088640c8`) calls `BombBlast_Construct`
@@ -414,10 +491,9 @@ impl Race {
     ///   `Bomb_Shockwave.vex`, their own `.vex` models this function cannot
     ///   carry - [`Self::ignite_blast`]'s own Bomb branch spawns those into
     ///   `bomb_blast`'s render-side pool alongside this effect. See
-    ///   `docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-23-the-blasts-own-per-tick-animator-read`.
+    ///   `docs/ghidra/functions/psp-pulse-usa/mine.md` ("the blast's own per-tick animator").
     /// - **Everything else**: `None`. Guessing here - playing the Mine's
-    ///   file, or the Rocket's, which is what this did for every kind before
-    ///   2026-08-26 - is exactly the invention `CLAUDE.md` forbids.
+    ///   file, or the Rocket's, is exactly the invention `CLAUDE.md` forbids.
     pub(crate) fn blast_for(
         &self,
         kind: oag_tables::weapons::Weapon,
@@ -441,6 +517,10 @@ impl Race {
             oag_tables::weapons::Weapon::Missile => Some((Trigger::MissileExplo, point)),
             oag_tables::weapons::Weapon::Mine => Some((Trigger::MineExplo, point)),
             oag_tables::weapons::Weapon::Bomb => Some((Trigger::BombSmokering, point)),
+            // `DisruptorExplo_Construct` (`0x0885a2c8`) at the hit matrix, at a hit and at the
+            // bolt's timeout alike (`psp-pure-usa/weapon-effects.md`). A title whose table
+            // answers no such trigger plays nothing.
+            oag_tables::weapons::Weapon::Disruptor => Some((Trigger::DisruptorExplo, point)),
             // `FUN_08870c78`, the blade's teardown: a fuse running out and a
             // craft hit both reach it.
             oag_tables::weapons::Weapon::Shuriken => Some((Trigger::ShurikenExpire, point)),
@@ -462,6 +542,32 @@ impl Race {
             )),
             _ => None,
         }
+    }
+
+    /// The second detonation a Pulse Plasma craft hit spawns, at the struck
+    /// craft's body position, or `None` when the hit has no second one.
+    ///
+    /// `Plasma_SweepCraftHit` (`0x0886afb8`) calls `Plasma_SpawnDetonation`
+    /// (`0x0886ac88`) at the craft, and `Plasmas_Update`'s teardown
+    /// (`0x0886b490`) calls it again at the bolt: two independent blasts in the
+    /// same tick (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, confidence
+    /// 88). The caller plays the bolt's own blast as for any ending and this
+    /// one on top. A wall hit and a timeout have no craft, so exactly one.
+    /// **Pulse only:** HD and Omega set a destroy flag on a craft hit and run
+    /// their one explosion from the shared destroy path, so
+    /// `hd_plasma_blast` gets none. Pure, unmeasured, inherits Pulse's.
+    pub(crate) fn plasma_craft_hit_blast_point(
+        &self,
+        kind: oag_tables::weapons::Weapon,
+        struck: Option<usize>,
+    ) -> Option<Vec3> {
+        let slot = struck?;
+        if kind != oag_tables::weapons::Weapon::Plasma || self.view.hd_plasma_blast {
+            return None;
+        }
+        // A craft gone inactive since the hit has no pose to read.
+        let ship = self.sim.world.ships.get(slot).filter(|ship| ship.active)?;
+        Some(ship.physics.body.position)
     }
 
     /// Plays [`Trigger::MissileBounce`] at every wall a missile glanced off
@@ -564,14 +670,14 @@ impl Race {
     ///
     /// **Gated on the weapon specifically, not on "any live projectile".**
     /// A Mine or a Bomb has no flare at all in the source. Matching on
-    /// `kind.is_none()` alone used to attach the Rocket's looping flare to a
+    /// `kind.is_none()` alone would attach the Rocket's looping flare to a
     /// mine or a bomb the instant it was laid - a fire riding a charge from
     /// the moment it landed rather than from its detonation, which
     /// [`Race::ignite_blast`] is the only thing that plays.
     ///
     /// A projectile that stops riding a flare **releases** it, not kills it
     /// (`Psys_ReleaseHandle` with `now != 0`, which `RocketPool_Update`,
-    /// `MissilePool_Update` and `Plasmas_Update` all call, read 2026-09-30):
+    /// `MissilePool_Update` and `Plasmas_Update` all call):
     /// emission stops and the template particles go at once - the missile's
     /// `glow` lives 3600 ticks and the plasma head's 65535 - while the
     /// particles the emitters already put out finish their own lives, so the
@@ -591,6 +697,11 @@ impl Race {
     /// **Called after `projectile::step`**, so a flare is anchored where its
     /// weapon ended the tick.
     pub(crate) fn advance_projectile_flares(&mut self) {
+        let head_rides_owner = self
+            .view
+            .handles
+            .get(Trigger::PlasmaFlare)
+            .is_some_and(|effect| effect.rides_owner_frame);
         for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
             let name = flare_effect_for(projectile.kind);
             let (primary, orbiting) = match projectile.kind {
@@ -605,12 +716,35 @@ impl Race {
                 Some(oag_tables::weapons::Weapon::Shuriken) => {
                     (projectile.position, Some(projectile.position))
                 }
+                // A charging head sits on the craft's weapon node, its hull's `Ship
+                // Muzzle` locator, through the drawn hull's matrix (display roll and
+                // lean included), on the source whose head rides its owner's frame
+                // (Pulse's PSP file): `plasma.md`, "the head's matrix and node". The
+                // bolt itself charges and is released on the same node in the
+                // simulation (`oag_weapons::projectile::plasma::muzzle`), so a released
+                // head draws where the bolt is, as the original's draws through the
+                // bolt's own matrix (`plasma.md`, "the head after the release").
+                Some(oag_tables::weapons::Weapon::Plasma)
+                    if head_rides_owner && projectile.charge > 0.0 =>
+                {
+                    (
+                        self.muzzle_of(usize::from(projectile.owner))
+                            .unwrap_or(projectile.position),
+                        None,
+                    )
+                }
                 _ => (projectile.position, None),
             };
-            let second = if projectile.kind == Some(oag_tables::weapons::Weapon::Shuriken) {
-                Some(Trigger::ShurikenTrail)
-            } else {
-                name
+            let (orbiting, second) = match projectile.kind {
+                Some(oag_tables::weapons::Weapon::Shuriken) => {
+                    (orbiting, Some(Trigger::ShurikenTrail))
+                }
+                // HD's wind-up effect is started beside the head, on the bolt's own
+                // matrix (`Plasma_Init`); a title without the trigger rides nothing.
+                Some(oag_tables::weapons::Weapon::Plasma) => {
+                    (Some(primary), Some(Trigger::PlasmaCharging))
+                }
+                _ => (orbiting, name),
             };
             // Only the primary anchor ever carries a non-neutral scale - see
             // `plasma_flare_scale`. The Missile's orbiting anchor rides at
@@ -630,17 +764,33 @@ impl Race {
             // because only the player's own camera can be internal at all.
             let cockpit = projectile.owner == 0 && !self.draws_own_ship();
             let scale = plasma_flare_scale(projectile.kind, projectile.charge, cockpit);
+            // A shot first drawn mid-flight (a network client learns of another person's
+            // fire late) is given its effect where it was fired from, and the effect is aged
+            // along the flight below: `docs/networking/README.md`, "A fire seen late".
+            let late = late_attach(projectile, self.sim.dt);
+            let back = late.map_or(Vec3::ZERO, |(_, back)| back);
+            let fresh = self.view.projectile_flare[slot].is_none();
+            let fresh_orbit = self.view.projectile_flare_orbit[slot].is_none();
             advance_one_flare(
                 &mut self.view.stage,
                 &self.view.handles,
                 name,
-                primary,
+                if fresh { primary - back } else { primary },
                 scale,
                 &mut self.view.projectile_flare[slot],
             );
+            // The head draws through the craft's weapon node while charging and the
+            // bolt's matrix after `Plasma_Launch`, both with 0.75 rows, so the arcs
+            // (flag `0x2`) draw at 0.75 of their local offsets (`plasma.md`, "the head's
+            // matrix and node").
+            if let Some(instance) = self.view.projectile_flare[slot] {
+                self.view
+                    .stage
+                    .set_ride_scale(instance, plasma_ride_scale(projectile.kind));
+            }
             // The Rocket's flare frame is its own basis turned `-pi/2` about
             // row 0, so the emitter's `+Y` is the velocity - measured live,
-            // `rocket-visuals.md`'s 2026-09-24 section. Every other rider
+            // `rocket-visuals.md`. Every other rider
             // keeps world up: none of their frames was read.
             if let (Some(oag_tables::weapons::Weapon::Rocket), Some(instance)) =
                 (projectile.kind, self.view.projectile_flare[slot])
@@ -668,7 +818,7 @@ impl Race {
                 &mut self.view.stage,
                 &self.view.handles,
                 orbiting.and(second),
-                orbiting.unwrap_or(primary),
+                orbiting.unwrap_or(primary) - if fresh_orbit { back } else { Vec3::ZERO },
                 1.0,
                 &mut self.view.projectile_flare_orbit[slot],
             );
@@ -677,6 +827,44 @@ impl Race {
             {
                 let up = projectile.velocity.try_normalize().unwrap_or(Vec3::Y);
                 self.view.stage.orient(instance, up);
+            }
+            // HD's head and wind-up effects emit about the bolt's effect frame, whose
+            // `+Y` is the firing craft's backward axis; Pulse's head keeps world up.
+            if projectile.kind == Some(oag_tables::weapons::Weapon::Plasma)
+                && self.view.handles.get(Trigger::PlasmaCharging).is_some()
+            {
+                let up = crate::plasma_launch::effect_up(projectile.velocity);
+                for instance in [
+                    self.view.projectile_flare[slot],
+                    self.view.projectile_flare_orbit[slot],
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    self.view.stage.orient(instance, up);
+                }
+            }
+            if let Some((ticks, _)) = late {
+                let dt = self.sim.dt;
+                let riders = [
+                    (fresh, self.view.projectile_flare[slot], primary),
+                    (
+                        fresh_orbit,
+                        self.view.projectile_flare_orbit[slot],
+                        orbiting.unwrap_or(primary),
+                    ),
+                ];
+                for (fresh, instance, to) in riders {
+                    if let (true, Some(instance)) = (fresh, instance) {
+                        self.view.stage.pre_age_riding(
+                            instance,
+                            ticks,
+                            dt,
+                            to,
+                            &mut self.view.stage_rng,
+                        );
+                    }
+                }
             }
         }
     }
@@ -697,13 +885,11 @@ impl Race {
     /// projectile would otherwise be invisible - see
     /// [`PROJECTILE_SPRITE_HALF_SIZE`].
     ///
-    /// **Was one flag for every kind at once, fixed 2026-09-05 alongside
-    /// [`Self::projectile_model_matrices`]'s own kind filter.** A single
-    /// `bool` gated *all* projectiles on whether the Rocket's model happened
+    /// **One flag per kind, not one for all.** A single
+    /// `bool` would gate *all* projectiles on whether the Rocket's model happened
     /// to load, so on a real disc (where it does) a live Missile, Plasma or
-    /// Shuriken (before its own model was drawn) drew nothing at all: no mesh, and no
-    /// billboard, because the flag said "modelled" for a kind it was never
-    /// about. `modelled` is now asked once per live projectile's own kind.
+    /// Shuriken (before its own model was drawn) would draw nothing at all: no mesh, and no
+    /// billboard. `modelled` is asked once per live projectile's own kind.
     #[must_use]
     pub fn projectile_sprites(
         &self,
@@ -742,8 +928,7 @@ impl Race {
     /// about its own row 0 (`Math_RotateByAxisAngle`, `0x08a6b6b4`) - and
     /// `+0xa0` is the frame `Rocket_Init` handed `WO_ROCKET_FLARE` by pointer,
     /// so the quarter-turn orients the flare, never the dart. Confidence 85;
-    /// see `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`'s
-    /// 2026-09-24 section.
+    /// see `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
     ///
     /// The original's second basis vector is the surface normal the rocket
     /// rides (`rocket+0x100`), which this engine carries as
@@ -802,6 +987,42 @@ impl Race {
         self.projectile_model_matrices(oag_tables::weapons::Weapon::Shuriken)
     }
 
+    /// Where each live Missile's two heads are, for the model draw: two per
+    /// missile, `Missile.cpp`'s constructor builds the model twice
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "2026-11-07").
+    ///
+    /// **Chosen, not measured.** Each sits on one of the two orbiting
+    /// anchors `WO_MISSILE_HEAD` already rides ([`missile_flare_anchors`]),
+    /// on the velocity-built basis every HD body takes; the original's own
+    /// per-tick placement of the two nodes (`0x0011e640`, an AltiVec body) is
+    /// unread.
+    #[must_use]
+    pub fn missile_head_model_matrices(&self) -> Vec<Mat4> {
+        let kind = oag_tables::weapons::Weapon::Missile;
+        self.sim
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .enumerate()
+            .filter(|(_, projectile)| projectile.kind == Some(kind))
+            .flat_map(|(slot, projectile)| {
+                let age = oag_weapons::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
+                let (a, b) = missile_flare_anchors(projectile.position, projectile.velocity, age);
+                let body = self.projectile_between(
+                    slot,
+                    projectile,
+                    self.projectile_matrix(kind, slot, projectile),
+                );
+                [a, b].map(|anchor| {
+                    let mut head = body;
+                    head.w_axis += (anchor - projectile.position).extend(0.0);
+                    head
+                })
+            })
+            .collect()
+    }
+
     /// Where each live Plasma bolt's own head is, for the model draw.
     ///
     /// **HD only** - `oag_gameplay`'s `Projectile` carries no charge/flight
@@ -830,19 +1051,13 @@ impl Race {
     /// [`Self::mine_model_matrices`], [`Self::bomb_model_matrices`] and
     /// [`Self::cannon_model_matrices`].
     ///
-    /// **Filters on `kind` specifically, which is the fix over what this did
-    /// before 2026-09-05.** Before, the filter was `kind.is_some()` - any live
-    /// projectile at all - so a live Missile, Plasma, Shuriken, Mine or Bomb
-    /// was drawn as a **Rocket** mesh whenever one was airborne alongside a
+    /// **Filters on `kind` specifically.** Filtering on `kind.is_some()` - any live
+    /// projectile at all - would draw a live Missile, Plasma, Shuriken, Mine or Bomb
+    /// as a **Rocket** mesh whenever one was airborne alongside a
     /// loaded [`ROCKET_MODEL_ENTRY`], because [`Race::rocket_model_matrices`]'s
     /// one caller zips its result against the Rocket's own drawables with no
-    /// kind check on either side. No test caught it because every test here
-    /// only ever spawns a single Rocket - see
-    /// `a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot` for the
-    /// one that does not. The same shape of bug, in the model path rather
-    /// than the effect path, as the mine that used to ride
-    /// [`Trigger::RocketFlare`] from the moment it landed - see
-    /// [`Race::advance_projectile_flares`]'s doc comment.
+    /// kind check on either side. See
+    /// `a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot`.
     ///
     /// **Neither branch applies a [`MODEL_YAW`]-style correction.** `MODEL_YAW`
     /// exists because `Ship.vex`'s own hull is authored with its nose along a
@@ -860,16 +1075,15 @@ impl Race {
     /// [`Body::orientation`]'s convention, a coarser question a single static
     /// mesh view cannot settle; `Pulse_Bomb.vex` was not separately viewed.
     ///
-    /// **Both branches are rotations (determinant `+1`) since 2026-09-24.**
-    /// The velocity branch used to build `side = forward x reference`, `up =
-    /// side x forward` - a reflection - so every Rocket, Cannon round and HD
-    /// Plasma head drew mirrored, and none could take its material's own
-    /// back-face cull (`load::weapon_models::cull_as_authored`). It now builds
+    /// **Both branches are rotations (determinant `+1`).**
+    /// A reflection (`side = forward x reference`) would draw every Rocket,
+    /// Cannon round and HD Plasma head mirrored and block its material's own
+    /// back-face cull (`load::weapon_models::cull_as_authored`). It builds
     /// `side = reference x forward`, `up = forward x side`, which is the
     /// original's own `Rocket_Update` basis, measured live, with
     /// `Projectile::surface` as its `n`. The `orientation` branch (the laid
-    /// Mine and Bomb) was always a rotation; on Pulse it is now the
-    /// executable's own measured pose instead - see `laid`.
+    /// Mine and Bomb) is a rotation too; on Pulse it is the
+    /// executable's own measured pose - see `laid`.
     #[must_use]
     fn projectile_model_matrices(&self, kind: oag_tables::weapons::Weapon) -> Vec<Mat4> {
         self.sim
@@ -916,6 +1130,23 @@ impl Race {
         // original's own `n` (`rocket+0x100`), seeded to world up at
         // spawn. It, then world up, then any perpendicular, so a
         // projectile flying along one of them still gets a basis.
+        if kind == oag_tables::weapons::Weapon::Plasma {
+            // HD's bolt ball, the one title that draws one: the live object's visual
+            // matrix (`plasma+0x150`) has model `X` down the carried up, `Y` across and
+            // `Z` along the firing direction, 0.5625, 0.5625 and 0.4219 long, charging
+            // and flying alike (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The
+            // bolt's two frames").
+            let up = projectile.surface.try_normalize().unwrap_or(Vec3::Y);
+            let flat = forward - up * forward.dot(up);
+            if let Some(front) = flat.try_normalize() {
+                return Mat4::from_cols(
+                    (-up * PLASMA_BALL_SCALE[0]).extend(0.0),
+                    (up.cross(front) * PLASMA_BALL_SCALE[1]).extend(0.0),
+                    (front * PLASMA_BALL_SCALE[2]).extend(0.0),
+                    projectile.position.extend(1.0),
+                );
+            }
+        }
         if kind == oag_tables::weapons::Weapon::Shuriken {
             // `Shuriken_Update` (`0x08877bdc`) keeps the carried
             // normal exact as row 1 and flattens the velocity
@@ -941,8 +1172,7 @@ impl Race {
         // (determinant `+1`), mapping the model's own `+X` onto
         // `up x forward` - `Rocket_Update`'s own row 0 (`n x f`,
         // `vcrsp.t` at `0x0885d988`). The other order is a
-        // reflection, and drew every one of these mirrored until
-        // 2026-09-24.
+        // reflection, and draws these mirrored.
         let side = reference.cross(forward).normalize_or_zero();
         let up = forward.cross(side);
         Mat4::from_cols(
@@ -955,7 +1185,7 @@ impl Race {
 }
 
 /// How far along its trip the HD LeachBall is, `0..=1`, `elapsed` seconds in
-/// on a beam `length` long.
-fn leach_ball_fraction(elapsed: f32, length: f32) -> f32 {
-    (elapsed / oag_weapons::projectile::leach_beam::trip::period(length)).clamp(0.0, 1.0)
+/// at a track gap of `gap`.
+fn leach_ball_fraction(elapsed: f32, gap: f32) -> f32 {
+    (elapsed / oag_weapons::projectile::leach_beam::trip::period(gap)).clamp(0.0, 1.0)
 }

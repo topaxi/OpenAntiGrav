@@ -16,18 +16,10 @@
 /// XML is not a sequence anyone has watched, and a screenshot of one must not be
 /// filed as evidence of what the original does.
 ///
-/// It is a function rather than an `if` inside `load_shell` for a reason that
-/// first arrived on 2026-09-05: Wipeout HD's chain was watched that day and
-/// briefly left no title `Declared`, so the disc-backed test that used to
-/// assert this line appears had nothing left to assert it against. Wipeout
-/// 2048 is `Declared` again since [ADR-0054] (one Vita3K boot corroborates
-/// its order rather than the three independent ones HD's own `Measured`
-/// needed - see `oag_2048::frontend::BOOT_PROFILE`), so the line is back to
-/// being exercised on a real title, but the function stays regardless of
-/// which titles currently hold which value: it is testable without a disc,
-/// an `if` inside a 200-line loader is not, and the guarantee would
-/// otherwise quietly stop being covered every time the roster happens to
-/// agree on `Measured`.
+/// A function rather than an `if` inside `load_shell` so it is testable without
+/// a disc and stays covered whichever titles currently hold `Measured`.
+/// Wipeout 2048 is `Declared` since [ADR-0054] (one Vita3K boot corroborates its
+/// order; see `oag_2048::frontend::BOOT_PROFILE`).
 ///
 /// [ADR-0054]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md
 pub(crate) fn caveat(title: &str, provenance: oag_title::Provenance) -> Option<String> {

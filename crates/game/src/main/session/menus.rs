@@ -5,7 +5,7 @@ use log::{error, info, warn};
 
 use oag_display::display;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::livery_row::{gated_variant_choices, variant_choices};
+use oag_game::livery_row::gated_variant_choices;
 use oag_game::{boot, movie, settings};
 use oag_raceplay::catalogue;
 use oag_raceplay::pilots;
@@ -18,7 +18,7 @@ use crate::menu_stage::{Backdrop, MenuStage, menu_playhead};
 use crate::stage::Stage;
 use crate::window::monitor_names;
 
-use super::{Session, picker, remix_menu};
+use super::{Session, picker, queries};
 
 /// Moved to `oag_game::scoreboard::speed_class_choices`, re-exported here
 /// under its own name so every call site in this module (and
@@ -28,10 +28,10 @@ use super::{Session, picker, remix_menu};
 /// RECORDS page's own per-class table, and this binary's `session` module is
 /// not reachable from the library crate that lives in. See that function's
 /// own doc for the full reasoning, including the `oag_title::SpeedClasses::
-/// is_offered_outside_remix` confinement.
+/// is_offered_on_race_page` confinement.
 pub(crate) use oag_game::scoreboard::speed_class_choices;
 
-/// [`speed_class_choices`]' shared tail, so the per-title row and RACE REMIX's
+/// [`speed_class_choices`]' shared tail, so the per-title row and a two-title race page's
 /// union spell a class exactly the same way.
 pub(super) fn to_choices(names: Vec<&'static str>) -> Vec<menu::Choice> {
     names
@@ -44,14 +44,13 @@ pub(super) fn to_choices(names: Vec<&'static str>) -> Vec<menu::Choice> {
 /// `race.class` and the title it booted - `None` meaning "leave the previous
 /// class in place", the same as an empty stored value always has.
 ///
-/// **This exists because `race.class` is one setting shared with RACE
-/// REMIX.** `Session::launch_remix` reads the exact same key, and its own row
-/// offers every rung [`oag_title::SpeedClasses::is_selectable`] allows -
-/// `VECTOR` included, when a Pure source is mounted. So a player who settles
-/// `race.class` to `"vector"` on RACE REMIX and then opens the ordinary RACE
-/// page has a stored value this page's own row no longer lists (see
+/// **This exists because a stored `race.class` can name a rung this page does
+/// not offer**: a settings file written while a `speed_classes_union` row (every
+/// rung [`oag_title::SpeedClasses::is_selectable`] allows, `VECTOR` included
+/// when a Pure source is mounted) saved under it, or edited by hand. Such a
+/// value is one this page's own row no longer lists (see
 /// [`speed_class_choices`]'s confinement to
-/// [`oag_title::SpeedClasses::is_offered_outside_remix`]). `Menu::supply`
+/// [`oag_title::SpeedClasses::is_offered_on_race_page`]). `Menu::supply`
 /// only ever changes the widget's own display index, never the stored
 /// setting, so without this check the row would *display* the fallback
 /// (`"venom"`) while [`Session::handle_menu`]'s `LaunchRace` arm launched
@@ -144,6 +143,9 @@ impl Session {
     /// a rectangle. A stage that is not the front end leaves the menus where
     /// they are, which is what makes this safe to call from the frame loop.
     pub(crate) fn open_menus(&mut self) -> Result<()> {
+        // Whatever opens the menus ends photo mode, so a race parked behind them is not held by it.
+        self.leave_photo();
+        self.stop_rumble();
         self.restore_campaign_home();
         let shell = self
             .shell
@@ -170,6 +172,12 @@ impl Session {
         // selection screens' rows - the renderer below draws them with it.
         skin.set_row_ink(oag_ui::pointer::RowInk::measure(&rows_face));
         let model = self.menu_model(&shell, &skin);
+        let pause_scrim = shell
+            .title
+            .pause_menu
+            .filter(|_| model.definition().pages[model.definition().root].id == menu::PAUSE_PAGE)
+            .map(|pause| pause.scrim_argb);
+        let pause_view = pause_scrim.and_then(|_| self.pause_view());
         // **The movie planes are asked for only when there is a movie to put in
         // them.** This used to be unconditionally `None`, on the grounds that
         // wanting them would tie the menus to a stage that had played one; that
@@ -291,6 +299,8 @@ impl Session {
         // through a binding instead of being dropped in place: a race that had
         // not finished is parked below rather than lost. See
         // `Session::suspended_race`.
+        // A race left for the menus (escape, quit, results) stops its motors with it.
+        self.controls.silence_motors();
         let outgoing = std::mem::replace(
             &mut self.stage,
             Stage::Menu(Box::new(MenuStage {
@@ -299,8 +309,14 @@ impl Session {
                 skin,
                 text_atlas,
                 default_atlas: shell.font.clone(),
-                frame: shell.frame.clone(),
-                nav_legend: shell.nav_legend.clone(),
+                frame: if pause_view.is_some() {
+                    shell.frame.without_marks()
+                } else if pause_scrim.is_some() {
+                    shell.frame.without_footer(skin.space().size.1)
+                } else {
+                    shell.frame.clone()
+                },
+                nav_legend: super::player_name::tagged(shell.nav_legend.clone(), &self.settings.player, shell.title),
                 ticker: shell.ticker.clone(),
                 // Free-running from zero on every open, the same choice
                 // `CampaignStage::ticker_elapsed` already makes and for the
@@ -308,6 +324,8 @@ impl Session {
                 // its phase on a menu open, so there is nothing to seed this
                 // from instead.
                 ticker_elapsed: 0.0,
+                pause_scrim: pause_scrim.map(oag_ui::screen::argb_to_rgba),
+                pause_view,
                 marquee: marquee::Timer::default(),
                 // Opening the menus is not a page change: the front end's own
                 // hand-off already had its moment, and starting a transition
@@ -346,6 +364,8 @@ impl Session {
         if let Stage::Race(stage) = outgoing
             && !stage.race.finished()
             && !was_lan
+            && !stage.watching
+            && stage.demo.is_none()
         {
             self.suspended_race = Some(stage);
         }
@@ -355,8 +375,15 @@ impl Session {
             .set_title(&hints::shell_title(&strings::project_table(
                 self.settings.language.as_deref(),
             )));
+        // A recording left, or one the rebuild refused, lands on the list it came from.
+        if std::mem::take(&mut self.return_to_replays)
+            && let Stage::Menu(stage) = &mut self.stage
+        {
+            stage.menu.push(oag_game::replays::page::PAGE);
+        }
         // An online race that ended lands back in its room.
         self.online_menus_opened();
+        self.ask_player();
         Ok(())
     }
 
@@ -372,13 +399,22 @@ impl Session {
         platform: oag_disc::Platform,
     ) {
         let rect = self.scene_rect(self.gpu.output.size());
+        for (key, value) in settings::mod_settings::seeds(&self.settings.mod_settings) {
+            model.seed(&key, &value);
+        }
         for (key, value) in settings::menu_seeds(&self.settings, self.anisotropy, title, platform) {
             // The row reads what the game is drawn at, which under gamescope is not the stored
             // value until the player picks one.
-            let value = if key == "graphics.render_scale" {
-                menu::Value::Text(self.render_scale_for(rect).to_string())
-            } else {
-                value
+            let value = match (key, &value) {
+                ("graphics.render_scale", _) => {
+                    menu::Value::Text(self.render_scale_for(rect).to_string())
+                }
+                // An unpicked style reads as the one the menus and the loading screen are in.
+                ("display.front_end_style", menu::Value::Text(text)) if text.is_empty() => self
+                    .loading_assets
+                    .style
+                    .map_or(value, |style| menu::Value::Text(style.to_string())),
+                _ => value,
             };
             // Rows this platform drops (`prepare.rs`) are not a gap.
             let dropped = if settings::platform::hidden_rows(oag_mobile::MOBILE).contains(&key) {
@@ -460,8 +496,9 @@ impl Session {
             &self.settings.race.team,
             &shell.team_details,
             &oag_game::records::load(),
+            &shell.model_gate,
         );
-        remix_menu::settle(&mut self.settings.race.variant, &choices);
+        queries::settle(&mut self.settings.race.variant, &choices);
         if let Stage::Menu(stage) = &mut self.stage {
             stage.menu.supply(menu::ValueSource::RaceVariant, &choices);
         }
@@ -497,7 +534,10 @@ impl Session {
             self.drop_split_lobby();
         }
         match event {
-            menu::MenuEvent::Changed { setting, value } => self.apply_setting(setting, value),
+            menu::MenuEvent::Changed { setting, value } => {
+                self.apply_setting(setting, value);
+                self.apply_pause_setting(setting);
+            }
             menu::MenuEvent::Fired(menu::Action::LaunchRace) => self.start_race_box(),
             // The MULTIPLAYER page's LOCAL MULTIPLAYER row (`session::multiplayer`).
             menu::MenuEvent::Fired(menu::Action::OpenMultiplayerLocal) => {
@@ -510,17 +550,28 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::OpenOnline) => self.open_online(),
             menu::MenuEvent::Fired(menu::Action::OnlineCreate) => self.open_online_create(),
             menu::MenuEvent::Fired(menu::Action::OnlineJoin) => self.open_online_join(),
-            // The RACE REMIX page's own launch - see `menu::Action::LaunchRemix`'s
-            // own doc comment for why it is not a second meaning for
-            // `LaunchRace` above. `Self::launch_remix` builds `race::Options`
-            // the same way that one does, plus the two source fields neither
-            // the CLI's `--race` route nor the ordinary RACE page ever has to
-            // resolve.
-            menu::MenuEvent::Fired(menu::Action::LaunchRemix) => self.launch_remix(),
+            // The OPTIONS page's PLAYER NAME and PLAYER TAG rows (`session::player_name`).
+            menu::MenuEvent::Fired(menu::Action::EditPlayerName) => self.edit_player_name(),
+            menu::MenuEvent::Fired(menu::Action::EditPlayerTag) => self.edit_player_tag(),
+            // A `launch_race` row that names its inputs by setting key (`session::launch_keys`).
+            menu::MenuEvent::Launch(keys) => self.launch_keyed(keys),
             // QUIT always quits, parked race or not - it is a row a player
             // chose deliberately, not a fall-through.
             menu::MenuEvent::Fired(menu::Action::Quit) => {
                 self.quit = true;
+            }
+            // The pause menu's PHOTO MODE row (`session::photo`).
+            menu::MenuEvent::Fired(menu::Action::PhotoMode) => self.open_photo_from_menu(),
+            // The pause menu's RESTART RACE and QUIT RACE rows (`session::pause_menu`).
+            menu::MenuEvent::Fired(menu::Action::RestartRace) => self.restart_parked_race(),
+            menu::MenuEvent::Fired(menu::Action::QuitRace) => self.quit_parked_race(),
+            // The REPLAYS page's three rows (`session::replays`).
+            menu::MenuEvent::Fired(menu::Action::WatchReplay) => self.watch_selected_replay(),
+            menu::MenuEvent::Fired(menu::Action::KeepReplay) => self.keep_selected_replay(),
+            menu::MenuEvent::Fired(menu::Action::DeleteReplay) => self.delete_selected_replay(),
+            // The MODS page's SETTINGS row (`session::mods_page`).
+            menu::MenuEvent::Fired(menu::Action::OpenModSettings) => {
+                self.open_selected_mod_settings();
             }
             // The AI PILOTS page's own two actions - see `super::pilot_editor`.
             menu::MenuEvent::Fired(menu::Action::SavePilot) => self.save_pilot(),
@@ -535,6 +586,8 @@ impl Session {
                 self.custom_campaign = None;
                 self.open_campaign();
             }
+            // The campaign picker's NEW CAMPAIGN row (`session::campaign_editor`).
+            menu::MenuEvent::Fired(menu::Action::OpenCampaignEditor) => self.open_campaign_editor(),
             // A row of the campaign picker: the row's id names the mod campaign.
             menu::MenuEvent::Fired(menu::Action::OpenCustomCampaign) => {
                 let key = match &self.stage {
@@ -619,9 +672,10 @@ impl Session {
         // The campaign writes both fields - see
         // `Session::launch_campaign_cell` - and a RACE-page launch must
         // never inherit one left over from a campaign cell that was backed
-        // out of before racing. The kill target is then set from the KILLS
-        // row below.
+        // out of before racing. The kill and score targets are then set from
+        // the KILLS and TARGET rows below.
         race_options.eliminator_kill_target = None;
+        race_options.eliminator_score_target = None;
         race_options.laps_override = None;
         // Resolved before the circuit below, and out of its usual
         // order beneath the class and difficulty rows: which list a
@@ -633,8 +687,18 @@ impl Session {
         // mode this one does not have still races - and still checks
         // the circuit against whichever list that leftover mode
         // implies.
+        // A mode this title does not offer (a stored `detonator` carried to Pulse) is
+        // refused the same way, with a line saying so.
         if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
-            race_options.mode = mode;
+            match self.shell.as_ref().map(|shell| shell.title) {
+                Some(title) if !oag_ui::menu::mode_offered(mode, title) => log::warn!(
+                    "race.mode {:?} is not a mode {} offers; racing {} instead",
+                    mode.name(),
+                    title.name,
+                    race_options.mode.name()
+                ),
+                _ => race_options.mode = mode,
+            }
         }
         // **A stored mode that takes fewer people than are seated does not launch.** Head to
         // Head is two craft ([`oag_race::Mode::max_people`], chosen, not measured), and the
@@ -649,6 +713,21 @@ impl Session {
         // The KILLS row's pick, for an Eliminator only.
         race_options.eliminator_kill_target =
             self.settings.race.eliminator_kill_target(race_options.mode);
+        // The TARGET row's pick, for an Eliminator only. A stored value this disc's slider does
+        // not step through (a hand edit, a pick from another source) races the minimum, as the
+        // row shows.
+        race_options.eliminator_score_target = self
+            .settings
+            .race
+            .eliminator_score_target(race_options.mode)
+            .filter(|target| {
+                self.shell.as_ref().is_some_and(|shell| {
+                    shell
+                        .score_targets
+                        .iter()
+                        .any(|choice| choice.value == target.to_string())
+                })
+            });
         let chosen = self.shell.as_ref().and_then(|shell| {
             shell
                 .track(race_options.mode, &self.settings.race.track)
@@ -686,8 +765,8 @@ impl Session {
         self.apply_race_team(&mut race_options);
         // Carried as a **name**, and checked against this page's own
         // row - see [`resolve_race_page_class`] for why: `race.class`
-        // is one setting shared with RACE REMIX, so a class settled
-        // there (`VECTOR`, offered only in remix) can sit in storage
+        // is one setting shared with a two-title race page, so a class settled
+        // there (`VECTOR`, offered only in a two-title race) can sit in storage
         // while this page's row was never on it. An empty setting
         // still leaves the previous class in place, as it always did.
         if let Some(class) = resolve_race_page_class(
@@ -806,7 +885,7 @@ mod tests {
     /// **The confinement, on the title that made it matter.** Wipeout Pure's
     /// own ladder carries `VECTOR`, and this build can race it - but the
     /// ordinary RACE page is not where that is offered. See
-    /// `oag_title::SpeedClasses::is_offered_outside_remix` and
+    /// `oag_title::SpeedClasses::is_offered_on_race_page` and
     /// `docs/architecture/menus.md` for why.
     #[test]
     fn a_pure_boots_race_page_offers_four_and_not_vector() {
@@ -817,7 +896,7 @@ mod tests {
             !names
                 .iter()
                 .any(|name| name.eq_ignore_ascii_case(oag_title::SpeedClasses::VECTOR)),
-            "VECTOR is a RACE REMIX offering, not this page's: {names:?}"
+            "VECTOR is a two-title race page offering, not this page's: {names:?}"
         );
     }
 
@@ -830,7 +909,7 @@ mod tests {
     }
 
     /// **The hazard `resolve_race_page_class` exists for.** `race.class` is
-    /// shared with RACE REMIX, whose own row can settle it to `"vector"` -
+    /// shared with a two-title race page, whose own row can settle it to `"vector"` -
     /// this page's row cannot, since the confinement above took it out. A
     /// stored `"vector"` reaching this page's own launch must not survive
     /// unclamped: it must fall back to the same first entry the row itself
@@ -924,7 +1003,14 @@ impl Session {
     /// every setting seeded, the window sized for `skin`. A MODS page switch builds the
     /// rebuilt tree's model with it too (`super::mods_page`), so the two cannot differ.
     pub(crate) fn menu_model(&mut self, shell: &super::Shell, skin: &menu::Skin) -> menu::Menu {
-        let mut model = menu::Menu::new(shell.definition.clone());
+        let mut definition = shell.definition.clone();
+        oag_game::music_pool::expand(&mut definition, self.music_discs.pool(), &shell.strings);
+        let paused = self.add_pause_screen(&mut definition);
+        let mut model = menu::Menu::new(definition);
+        model.set_pause_screen(paused);
+        // PHOTO MODE is a row of the pause menu: there while a race with one view is held
+        // behind the menus, and on no other page of the front end.
+        model.offer(menu::Action::PhotoMode, self.photo_available());
         // Just the first frame's own value - `MenuStage::render` refreshes
         // this every frame off whichever page is actually current, since a
         // player can navigate to a page with a different reservation need
@@ -958,7 +1044,7 @@ impl Session {
         model.supply(menu::ValueSource::Teams, &shell.teams);
         // Scoped to whichever team `race.team` already names, the same
         // reason the CIRCUIT row above is seeded from `race.mode`, and
-        // settled against that list for the reason RACE REMIX's own rows are
+        // settled against that list for the reason a two-title race page's own rows are
         // below - `race.variant` defaults to empty, which is a real value
         // only on the titles whose first variant is the unsuffixed one.
         let race_variants =
@@ -967,8 +1053,9 @@ impl Session {
                 &self.settings.race.team,
                 &shell.team_details,
                 &oag_game::records::load(),
+                &shell.model_gate,
             );
-        remix_menu::settle(&mut self.settings.race.variant, &race_variants);
+        queries::settle(&mut self.settings.race.variant, &race_variants);
         model.supply(menu::ValueSource::RaceVariant, &race_variants);
         // The booted title's own ladder, filtered to the rungs this build can
         // put a ship on. `None` means the title's per-team handling files have
@@ -978,37 +1065,27 @@ impl Session {
             menu::ValueSource::SpeedClasses,
             &speed_class_choices(shell.title),
         );
-        // RACE REMIX's own axis: the union across every title this machine can
-        // currently open a source for, so a class is offered exactly when the
-        // data behind it is actually here. See `Self::remix_speed_classes`.
-        //
-        // **Settled only when the union has something in it**, the same rule
-        // the RACE REMIX rows below follow and for the same reason: an empty
-        // union is not evidence that a saved pick is wrong, and settling
-        // against it would clear `race.class` to the empty string. That is a
-        // reachable configuration rather than a hypothetical - a machine whose
-        // only playable source is Wipeout 2048, whose ladder is unread, unions
-        // to nothing - and it would silently lose the player's saved class
-        // while the RACE page above still displayed its own fallback.
-        //
-        // `supply` is unconditional because it does not touch `self.settings`:
-        // it keeps the row on its current value when the list still offers it
-        // and falls to the first entry for *display* otherwise.
-        let remix_classes = self.remix_speed_classes();
-        if !remix_classes.is_empty() {
-            remix_menu::settle(&mut self.settings.race.class, &remix_classes);
-        }
-        model.supply(menu::ValueSource::RemixSpeedClasses, &remix_classes);
-        model.supply(menu::ValueSource::RemixAiDifficulty, &self.remix_ai_difficulty());
+        // Every available title's ladder, for a `speed_classes_union` row. A mod row's
+        // saved class is settled against it by `Session::resolve_menu_queries`, which leaves
+        // it alone while the union is empty (a machine whose only title is 2048, whose ladder
+        // is unread).
+        let union_classes = self.speed_classes_union();
+        model.supply(menu::ValueSource::SpeedClassesUnion, &union_classes);
+        model.supply(menu::ValueSource::AiDifficulties, &self.ai_difficulties());
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
+        model.supply(menu::ValueSource::ScoreTargets, &shell.score_targets);
         model.supply(menu::ValueSource::Weapons, &shell.weapons);
         model.supply(
             menu::ValueSource::HudStyles,
             &menu::hud_style_choices(shell.title, |skin| {
                 oag_game::unlock::hud_skin_unlocked(skin, &self.records, shell.title)
             }),
+        );
+        model.supply(
+            menu::ValueSource::SafeAreas,
+            &menu::safe_area_choices(shell.title),
         );
         // Enumerated every time the menus open rather than kept from startup,
         // because a screen can be plugged in while the game is running and the
@@ -1063,45 +1140,17 @@ impl Session {
             menu::ValueSource::ScreenFilters,
             &self.screen_filters.choices(),
         );
-        // Race Remix's own axis - every title this machine can currently open
-        // a source for, surveyed once at `Session` construction. See the
-        // field's own doc comment. TRACK TITLE's own row: 2048's circuits are
-        // not HD's, so no synthetic entry applies here; CRAFT TITLE's does,
-        // see `Self::craft_title_choices`.
-        //
-        // **Settled, not merely supplied**, and outward-in: each row's stored
-        // setting is brought into step with the list it is about to be given
-        // before the row below it is resolved from that setting. See
-        // `remix_menu::settle`, which is what keeps a fresh settings file's
-        // empty `remix.*` from leaving every row showing one thing and
-        // `self.settings` holding another.
-        let (titles, craft_titles) = self.settle_remix_titles();
+        // Every title this machine can open a source for (with CUSTOM when the scan found a
+        // track file) and the craft titles, the lists a `titles_available` and a `craft_titles`
+        // row offer, off the survey `Session::titles` already holds.
+        let mut titles: Vec<menu::Choice> = self
+            .titles
+            .iter()
+            .map(|candidate| menu::Choice::plain(candidate.title()))
+            .collect();
+        titles.extend(self.custom_title_choice());
         model.supply(menu::ValueSource::Titles, &titles);
-        model.supply(menu::ValueSource::CraftTitles, &craft_titles);
-        // Scoped to whichever titles `remix.track_title`/`remix.craft_title`
-        // now name, the same reason the CIRCUIT row above is seeded from
-        // `race.mode` rather than left empty until MODE is next touched: a
-        // menu reopened on a saved pick should show that pick's own list from
-        // the first frame. Both are `None` and supply nothing when the named
-        // title's source is no longer on this machine's search path, or will
-        // not open - see `Self::remix_catalogue_for`/
-        // `Self::remix_craft_catalogue`. Nothing is settled in that case
-        // either: an unreadable source is not evidence that a saved pick is
-        // wrong, and clearing it would lose it.
-        if let Some(tracks) = self.remix_track_options() {
-            remix_menu::settle(&mut self.settings.remix.track, &tracks);
-            model.supply(menu::ValueSource::RemixTracks, &tracks);
-        }
-        if let Some(catalogue) = self.remix_craft_catalogue() {
-            remix_menu::settle(&mut self.settings.remix.team, &catalogue.teams);
-            model.supply(menu::ValueSource::RemixTeams, &catalogue.teams);
-        }
-        // Last, because it is scoped to the team the line above just settled.
-        if let Some(title) = self.craft_title() {
-            let variants = variant_choices(title, &self.settings.remix.team);
-            remix_menu::settle(&mut self.settings.remix.variant, &variants);
-            model.supply(menu::ValueSource::RemixVariant, &variants);
-        }
+        model.supply(menu::ValueSource::CraftTitles, &self.craft_title_choices());
         // Ours, and settings-backed like everything above it - except PILOT
         // and AXIS, which nothing persists, so this both supplies and seeds
         // LOW/HIGH in one call. See `super::pilot_editor`.
@@ -1111,7 +1160,13 @@ impl Session {
             &oag_game::mods::choices(&shell.mods, &shell.strings),
         );
         oag_game::mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
+        // The files are read each time the menus open, so a race that ended a moment ago is on
+        // the REPLAYS page.
+        let replays = self.replay_choices(shell);
+        model.supply(menu::ValueSource::Replays, &replays);
         self.seed_menu(&mut model, shell.title, shell.platform);
+        self.label_rate_rows(&mut model);
+        self.resolve_menu_queries(&mut model);
         settings::supply_reset(
             &mut model,
             shell.title,

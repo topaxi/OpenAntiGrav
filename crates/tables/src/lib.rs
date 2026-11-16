@@ -27,7 +27,9 @@
 
 pub mod ai_control_stats;
 pub mod ai_race_stats;
+pub mod audio_config;
 pub mod billboard_pool;
+pub mod demo_config;
 pub mod effectsettings;
 pub mod enginelight;
 pub mod envsettings;
@@ -40,6 +42,9 @@ pub mod pure_ai_stats;
 pub mod pure_campaign;
 pub mod pure_flow;
 pub mod race_campaign;
+pub mod race_setup;
+pub mod rumble;
 pub mod track_stats;
 pub mod trackstartup;
 pub mod weapons;
+pub mod xp;

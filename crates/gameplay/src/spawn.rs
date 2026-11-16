@@ -70,6 +70,13 @@ impl Pose {
         }
     }
 
+    /// The pose on a sample's own racing line at `height`: the one way the engine puts a craft
+    /// on the spline (the grid fallback, a respawn, a rescue plan, the trace tools).
+    #[must_use]
+    pub fn on_racing_line(sample: &Sample, height: f32) -> Self {
+        Self::from_sample(sample, sample.racing_line, height)
+    }
+
     /// A pose at an arbitrary world position, taking its attitude from `sample`.
     ///
     /// **A capture and comparison aid, not a spawn.** Nothing in the original
@@ -535,6 +542,11 @@ pub fn box_inertia() -> Vec3 {
     oag_physics::forces::ship_inertia()
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -37,5 +37,43 @@ pub(super) fn resolve(
     }
 }
 
+/// The hull stem every craft flies on `track`, off the circuit's own `PI_Track` `type`:
+/// [`oag_title::RaceDefaults::hull_by_track_type`] of the craft's title, looked up for the kind the
+/// plugin definition declares `track` under. `None` when the title swaps no hull by type, when the
+/// definition will not read, or when `track` is declared under another type.
+///
+/// Every slot flies it, the player's own pick included: the original's hull path is built off the
+/// circuit's flag before the team's (`docs/ghidra/functions/psp-pure-usa/ship-models.md`).
+pub(super) fn circuit_hull(
+    archives: &mut oag_assets::Archives,
+    circuit_title: &oag_title::Title,
+    craft_title: &oag_title::Title,
+    track: &str,
+    report: &mut Vec<String>,
+) -> Option<&'static str> {
+    if craft_title.race.hull_by_track_type.is_empty() {
+        return None;
+    }
+    let documents = crate::catalogue::documents(archives, &[circuit_title.plugin_definition]);
+    let flat = |path: &str| path.replace('/', "\\").to_ascii_lowercase();
+    let track = flat(track);
+    let (kind, stem) = craft_title
+        .race
+        .hull_by_track_type
+        .iter()
+        .find(|(kind, _)| {
+            documents.iter().any(|xml| {
+                crate::catalogue::tracks_of_kind(xml, kind)
+                    .iter()
+                    .any(|entry| track.starts_with(&format!("{}\\", flat(&entry.location))))
+            })
+        })?;
+    report.push(format!(
+        "{}: a {kind} circuit - every craft flies its {stem}.vex hull",
+        craft_title.name
+    ));
+    Some(stem)
+}
+
 #[cfg(test)]
 mod tests;

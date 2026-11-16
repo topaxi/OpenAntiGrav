@@ -6,6 +6,7 @@
 //! may hold. See `scripts/check-file-size.py`, which is the rule as a gate.
 
 use super::*;
+use crate::spatial::SpatialMode;
 
 fn tone(frames: usize, channels: u16, rate: u32) -> Arc<Sound> {
     let samples = (0..frames * channels as usize)
@@ -24,7 +25,7 @@ fn a_sound_needs_whole_frames() {
 
 #[test]
 fn rendering_with_nothing_playing_writes_silence_not_a_short_buffer() {
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let mut out = vec![1.0f32; 64];
     mixer.render(&mut out);
     assert_eq!(out.len(), 64, "render must fill the whole buffer");
@@ -33,7 +34,7 @@ fn rendering_with_nothing_playing_writes_silence_not_a_short_buffer() {
 
 #[test]
 fn a_one_shot_frees_its_slot_when_it_ends() {
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let id = mixer
         .play(Play::once(tone(4, 2, 44_100), Bus::Sfx))
         .expect("a free slot");
@@ -53,7 +54,7 @@ fn a_one_shot_frees_its_slot_when_it_ends() {
 /// if the resampling step were left in.
 #[test]
 fn a_playhead_is_measured_in_the_sources_own_seconds() {
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let id = mixer
         .play(Play::looping(tone(22_050, 1, 22_050), Bus::Music))
         .expect("a free slot");
@@ -78,7 +79,7 @@ fn a_playhead_is_measured_in_the_sources_own_seconds() {
 #[test]
 fn a_seek_lands_where_the_playhead_then_reports() {
     for rate in [22_050, 44_100, 48_000] {
-        let mut mixer = Mixer::new(44_100);
+        let mut mixer = bare(44_100);
         let id = mixer
             .play(Play::looping(tone(rate as usize * 4, 2, rate), Bus::Music))
             .expect("a free slot");
@@ -98,7 +99,7 @@ fn a_seek_lands_where_the_playhead_then_reports() {
 /// for ever.
 #[test]
 fn a_seek_past_the_end_of_a_loop_wraps_into_it() {
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let id = mixer
         .play(Play::looping(tone(44_100, 2, 44_100), Bus::Music))
         .expect("a free slot");
@@ -120,7 +121,7 @@ fn a_seek_past_the_end_of_a_loop_wraps_into_it() {
 
 #[test]
 fn seeking_a_stale_handle_does_nothing() {
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let id = mixer
         .play(Play::once(tone(4, 2, 44_100), Bus::Sfx))
         .expect("a free slot");
@@ -131,7 +132,7 @@ fn seeking_a_stale_handle_does_nothing() {
 
 #[test]
 fn a_looping_voice_keeps_going_past_its_end() {
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let id = mixer
         .play(Play::looping(tone(4, 2, 44_100), Bus::Sfx))
         .expect("a free slot");
@@ -142,7 +143,7 @@ fn a_looping_voice_keeps_going_past_its_end() {
 
 #[test]
 fn a_stale_handle_cannot_steer_the_voice_that_took_its_slot() {
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let old = mixer
         .play(Play::once(tone(2, 2, 44_100), Bus::Sfx))
         .expect("a free slot");
@@ -163,7 +164,7 @@ fn a_stale_handle_cannot_steer_the_voice_that_took_its_slot() {
 
 #[test]
 fn the_pool_refuses_rather_than_steals_when_it_is_full() {
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     for _ in 0..MAX_VOICES {
         assert!(
             mixer
@@ -186,9 +187,33 @@ fn the_pool_refuses_rather_than_steals_when_it_is_full() {
 }
 
 #[test]
+fn the_music_tap_hears_the_music_before_its_fader_and_nothing_else() {
+    let mut mixer = Mixer::new(48_000);
+    mixer.play(Play::looping(tone(2048, 2, 48_000), Bus::Music));
+    mixer.play(Play::looping(tone(2048, 2, 48_000), Bus::Sfx));
+    mixer.set_bus_gain(Bus::Music, 0.0);
+    mixer.set_bus_trim(Bus::Music, 0.0);
+    mixer.set_master_gain(0.0);
+    let mut out = [0.0; 64];
+    mixer.render(&mut out);
+    assert_eq!(out, [0.0; 64]);
+    let full_scale = 32_768.0;
+    let tapped = mixer.music_tap();
+    assert_eq!(tapped.len(), 32);
+    for (frame, &sample) in tapped.iter().enumerate() {
+        let left = (frame * 2) as f32 / full_scale;
+        let right = (frame * 2 + 1) as f32 / full_scale;
+        assert!(
+            (sample - (left + right) * 0.5).abs() < 1e-6,
+            "frame {frame}"
+        );
+    }
+}
+
+#[test]
 fn a_bus_gain_only_moves_its_own_bus() {
     let sound = tone(1024, 2, 44_100);
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     mixer.play(Play::looping(sound.clone(), Bus::Music));
     mixer.set_bus_gain(Bus::Sfx, 0.0);
     let mut out = vec![0.0f32; 128 * CHANNELS];
@@ -221,12 +246,12 @@ fn a_bus_gain_only_moves_its_own_bus() {
 fn set_gain_folds_in_pan_volume_gain_the_same_way_play_does() {
     let scaled = Arc::new((*tone(256, 1, 44_100)).clone().with_pan_volume_gain(0.5));
 
-    let mut via_play = Mixer::new(44_100);
+    let mut via_play = bare(44_100);
     via_play.play(Play::once(scaled.clone(), Bus::Sfx));
     let mut out_play = vec![0.0f32; 64 * CHANNELS];
     via_play.render(&mut out_play);
 
-    let mut via_set_gain = Mixer::new(44_100);
+    let mut via_set_gain = bare(44_100);
     let id = via_set_gain
         .play(Play::once(scaled, Bus::Sfx))
         .expect("a free mixer has a slot");
@@ -248,7 +273,7 @@ fn a_stopped_voice_fades_out_instead_of_being_cut_dead() {
     // Full scale throughout, which is what a held cue looks like at the moment
     // something stops it: nothing about a stop lands near a zero crossing.
     let flat = Arc::new(Sound::new(vec![i16::MAX; 4096 * 2], 2, 44_100).expect("sound"));
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let id = mixer.play(Play::looping(flat, Bus::Sfx)).expect("slot");
 
     let mut out = vec![0.0f32; 256 * CHANNELS];
@@ -288,7 +313,7 @@ fn a_stopped_voice_fades_out_instead_of_being_cut_dead() {
 #[test]
 fn stopping_twice_does_not_reopen_the_fade() {
     let flat = Arc::new(Sound::new(vec![i16::MAX; 4096 * 2], 2, 44_100).expect("sound"));
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let id = mixer.play(Play::looping(flat, Bus::Sfx)).expect("slot");
     let mut out = vec![0.0f32; 32 * CHANNELS];
     mixer.render(&mut out);
@@ -310,7 +335,7 @@ fn stopping_twice_does_not_reopen_the_fade() {
 #[test]
 fn stopping_a_bus_leaves_the_other_one_sounding() {
     let sound = tone(1024, 2, 44_100);
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let music = mixer
         .play(Play::looping(sound.clone(), Bus::Music))
         .expect("slot");
@@ -322,7 +347,7 @@ fn stopping_a_bus_leaves_the_other_one_sounding() {
 
 #[test]
 fn a_tick_renders_the_same_frame_count_every_time() {
-    let mut mixer = Mixer::new(48_000);
+    let mut mixer = bare(48_000);
     let mut out = Vec::new();
     for _ in 0..60 {
         assert_eq!(mixer.render_tick(60, &mut out), 800);
@@ -337,7 +362,7 @@ fn a_tick_renders_the_same_frame_count_every_time() {
 #[test]
 fn the_same_control_sequence_renders_the_same_samples_twice() {
     let render = || {
-        let mut mixer = Mixer::new(44_100);
+        let mut mixer = bare(44_100);
         mixer.play(Play::looping(tone(777, 1, 48_000), Bus::Music));
         let mut out = Vec::new();
         for tick in 0..30 {
@@ -353,7 +378,7 @@ fn the_same_control_sequence_renders_the_same_samples_twice() {
 
 #[test]
 fn a_mono_source_arrives_on_both_channels() {
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     mixer.play(Play::looping(tone(512, 1, 44_100), Bus::Sfx));
     let mut out = vec![0.0f32; 64 * CHANNELS];
     mixer.render(&mut out);
@@ -366,7 +391,7 @@ fn a_mono_source_arrives_on_both_channels() {
 fn resampling_a_faster_source_consumes_it_faster() {
     // 88.2 kHz into a 44.1 kHz mixer is two source frames per output
     // frame, so a 200-frame sound lasts 100 output frames.
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let id = mixer
         .play(Play::once(tone(200, 2, 88_200), Bus::Sfx))
         .expect("slot");
@@ -381,7 +406,7 @@ fn resampling_a_faster_source_consumes_it_faster() {
 /// refusal is visible rather than silent.
 #[test]
 fn a_zero_pitch_voice_is_refused_rather_than_parked() {
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let before = mixer.starved();
 
     for pitch in [0.0, -1.0, f32::NAN] {
@@ -409,7 +434,7 @@ fn a_zero_pitch_voice_is_refused_rather_than_parked() {
 /// not lose frames, or the `--dump-audio` WAV drifts behind the simulation.
 #[test]
 fn a_non_divisible_sample_rate_averages_out_over_a_second() {
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     let mut out = Vec::new();
     let mut frames = 0;
     for _ in 0..64 {
@@ -427,7 +452,7 @@ fn a_voice_with_no_pan_reaches_both_channels_unchanged() {
     // The default, and the reason `Play::pan` is an `Option`: music and movie
     // audio must not be pulled down 3 dB by a law that was never applied to
     // them. A regression here is silent - everything just gets quieter.
-    let mut mixer = Mixer::new(8);
+    let mut mixer = bare(8);
     let sound = Arc::new(Sound::new(vec![i16::MAX; 4], 1, 8).unwrap());
     mixer.play(Play::once(sound, Bus::Sfx)).unwrap();
     let mut out = vec![0.0; 2 * CHANNELS];
@@ -438,7 +463,7 @@ fn a_voice_with_no_pan_reaches_both_channels_unchanged() {
 
 #[test]
 fn panning_hard_left_empties_the_right_channel() {
-    let mut mixer = Mixer::new(8);
+    let mut mixer = bare(8);
     let sound = Arc::new(Sound::new(vec![i16::MAX; 4], 1, 8).unwrap());
     mixer
         .play(Play {
@@ -456,7 +481,7 @@ fn panning_hard_left_empties_the_right_channel() {
 fn a_centred_pan_is_quieter_than_no_pan_at_all() {
     // Not a bug: the original's own table gives a centred source 0.7071 in each
     // channel. This test exists so that "fixing" it to 1.0 fails loudly.
-    let mut mixer = Mixer::new(8);
+    let mut mixer = bare(8);
     let sound = Arc::new(Sound::new(vec![i16::MAX; 4], 1, 8).unwrap());
     mixer
         .play(Play {
@@ -475,7 +500,7 @@ fn a_live_voice_can_be_moved_across_the_field_and_back_to_none() {
     // The per-tick half: the original recomputes an emitter's angle every frame
     // and pushes it at the sounding instance, so an overtaking craft crosses
     // rather than jumping at its next cue.
-    let mut mixer = Mixer::new(8);
+    let mut mixer = bare(8);
     let sound = Arc::new(Sound::new(vec![i16::MAX; 64], 1, 8).unwrap());
     let id = mixer
         .play(Play {
@@ -508,7 +533,7 @@ fn a_sum_past_full_scale_saturates_and_is_counted() {
     // so the console saturates here too. What must not happen is the mixer
     // handing the host a sample outside `-1.0..=1.0` and leaving each backend
     // to deal with it somewhere else.
-    let mut mixer = Mixer::new(8);
+    let mut mixer = bare(8);
     let sound = Arc::new(Sound::new(vec![i16::MAX; 64], 1, 8).unwrap());
     for _ in 0..3 {
         mixer
@@ -531,7 +556,7 @@ fn a_sum_past_full_scale_saturates_and_is_counted() {
 
 #[test]
 fn a_mix_with_headroom_left_counts_no_clipping() {
-    let mut mixer = Mixer::new(8);
+    let mut mixer = bare(8);
     let sound = Arc::new(Sound::new(vec![i16::MAX; 64], 1, 8).unwrap());
     mixer.play(Play::looping(sound, Bus::Sfx)).unwrap();
     let mut out = vec![0.0; CHANNELS * 4];
@@ -562,7 +587,7 @@ fn a_voice_follows_its_own_bus_and_the_master() {
     // The property the settings rows rely on: a gain applies at mix time, so a
     // live voice follows the row the player is standing on rather than needing
     // to be restarted.
-    let mut mixer = Mixer::new(8);
+    let mut mixer = bare(8);
     let sound = Arc::new(Sound::new(vec![i16::MAX; 64], 1, 8).unwrap());
     mixer.play(Play::looping(sound, Bus::Speech)).unwrap();
     let mut out = vec![0.0; CHANNELS];
@@ -596,6 +621,32 @@ fn a_voice_follows_its_own_bus_and_the_master() {
     );
 }
 
+/// A title's trim scales the sum ahead of the limiter and is not the player's master volume.
+#[test]
+fn the_title_trim_scales_the_sum_and_leaves_the_master_alone() {
+    let mut mixer = bare(8);
+    mixer.set_limiting(false);
+    let sound = Arc::new(Sound::new(vec![i16::MAX; 64], 1, 8).unwrap());
+    mixer.play(Play::looping(sound, Bus::Sfx)).unwrap();
+    let mut out = vec![0.0; CHANNELS];
+
+    mixer.set_master_trim(0.5);
+    mixer.render(&mut out);
+    assert!(
+        (out[0] - 0.5).abs() < 1e-3,
+        "the trim did not apply: {}",
+        out[0]
+    );
+
+    mixer.set_master_gain(0.5);
+    mixer.render(&mut out);
+    assert!(
+        (out[0] - 0.25).abs() < 1e-3,
+        "trim and master do not multiply: {}",
+        out[0]
+    );
+}
+
 /// The measured reason the closing fade exists: a cue that stops loud was cut
 /// loud, and a step from four fifths of full scale to zero is a thump heard
 /// just *after* the effect rather than during it.
@@ -607,7 +658,7 @@ fn a_voice_follows_its_own_bus_and_the_master() {
 fn a_cue_that_ends_loud_fades_out_instead_of_being_cut() {
     // Ends at full scale, the way HD's collision waveforms do.
     let abrupt = Arc::new(Sound::new(vec![i16::MAX; 400 * 2], 2, 44_100).expect("sound"));
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     mixer.play(Play::once(abrupt, Bus::Sfx)).expect("slot");
 
     let mut out = vec![0.0f32; 512 * CHANNELS];
@@ -648,7 +699,7 @@ fn a_cue_that_ends_loud_fades_out_instead_of_being_cut() {
 #[test]
 fn the_fade_does_not_outlast_the_source() {
     let abrupt = Arc::new(Sound::new(vec![i16::MAX; 100 * 2], 2, 44_100).expect("sound"));
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     mixer.play(Play::once(abrupt, Bus::Sfx)).expect("slot");
 
     let mut out = vec![0.0f32; 256 * CHANNELS];
@@ -666,7 +717,7 @@ fn the_fade_does_not_outlast_the_source() {
 #[test]
 fn a_cue_that_ends_quietly_is_unchanged_by_the_fade() {
     let clean = Arc::new(Sound::new(vec![0i16; 400 * 2], 2, 44_100).expect("sound"));
-    let mut mixer = Mixer::new(44_100);
+    let mut mixer = bare(44_100);
     mixer.play(Play::once(clean, Bus::Sfx)).expect("slot");
     let mut out = vec![0.0f32; 512 * CHANNELS];
     mixer.render(&mut out);
@@ -676,7 +727,7 @@ fn a_cue_that_ends_quietly_is_unchanged_by_the_fade() {
 
 #[test]
 fn a_delayed_voice_is_silent_until_its_delay_runs_out_then_plays_from_its_start() {
-    let mut mixer = Mixer::new(8);
+    let mut mixer = bare(8);
     let sound = Arc::new(Sound::new(vec![i16::MAX; 2], 1, 8).unwrap());
     let id = mixer.play(Play::once(sound, Bus::Sfx)).unwrap();
     mixer.delay_start(id, 0.5);
@@ -693,7 +744,7 @@ fn a_delayed_voice_is_silent_until_its_delay_runs_out_then_plays_from_its_start(
 
 #[test]
 fn a_delay_carries_across_render_calls() {
-    let mut mixer = Mixer::new(8);
+    let mut mixer = bare(8);
     let sound = Arc::new(Sound::new(vec![i16::MAX; 2], 1, 8).unwrap());
     let id = mixer.play(Play::once(sound, Bus::Sfx)).unwrap();
     mixer.delay_start(id, 0.5);
@@ -703,4 +754,225 @@ fn a_delay_carries_across_render_calls() {
     mixer.render(&mut out);
     assert_eq!(out[0], 0.0, "one frame of delay was left");
     assert!(out[CHANNELS] > 0.9);
+}
+
+/// A bright, loud mono source: an alternating sign at the Nyquist rate.
+fn buzz() -> Arc<Sound> {
+    let samples = (0..2048)
+        .map(|i| if i % 2 == 0 { 12_000 } else { -12_000 })
+        .collect();
+    Arc::new(Sound::new(samples, 1, 44_100).expect("sound"))
+}
+
+fn rendered(mode: SpatialMode, pan: Option<f32>, front: f32) -> Vec<f32> {
+    let mut mixer = bare(44_100);
+    mixer.set_spatial_mode(mode);
+    mixer
+        .play(Play {
+            pan,
+            front,
+            ..Play::looping(buzz(), Bus::Sfx)
+        })
+        .expect("voice");
+    let mut out = vec![0.0; 2 * 512];
+    mixer.render(&mut out);
+    out
+}
+
+fn energy(out: &[f32]) -> f32 {
+    out.iter().skip(64).map(|s| s * s).sum()
+}
+
+#[test]
+fn original_ignores_where_a_voice_is_along_the_forward_axis() {
+    let ahead = rendered(SpatialMode::Original, Some(0.3), 1.0);
+    let behind = rendered(SpatialMode::Original, Some(0.3), -1.0);
+    assert_eq!(
+        ahead.iter().map(|s| s.to_bits()).collect::<Vec<_>>(),
+        behind.iter().map(|s| s.to_bits()).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn rear_cue_leaves_the_front_half_bit_identical_to_original() {
+    for front in [1.0, 0.5, 0.0] {
+        let original = rendered(SpatialMode::Original, Some(-0.4), front);
+        let cued = rendered(SpatialMode::RearCue, Some(-0.4), front);
+        assert_eq!(
+            original.iter().map(|s| s.to_bits()).collect::<Vec<_>>(),
+            cued.iter().map(|s| s.to_bits()).collect::<Vec<_>>(),
+            "front = {front}"
+        );
+    }
+}
+
+#[test]
+fn rear_cue_filters_and_lowers_a_voice_behind_the_listener() {
+    let original = rendered(SpatialMode::Original, Some(0.0), -1.0);
+    let cued = rendered(SpatialMode::RearCue, Some(0.0), -1.0);
+    assert!(
+        energy(&cued) < energy(&original) * 0.05,
+        "a Nyquist buzz behind is mostly removed: {} vs {}",
+        energy(&cued),
+        energy(&original)
+    );
+    let half = rendered(SpatialMode::RearCue, Some(0.0), -0.5);
+    assert!(energy(&half) > energy(&cued), "the cue eases in");
+    assert!(energy(&half) < energy(&original), "and has begun at -0.5");
+}
+
+#[test]
+fn rear_cue_leaves_an_unplaced_voice_alone() {
+    let original = rendered(SpatialMode::Original, None, -1.0);
+    let cued = rendered(SpatialMode::RearCue, None, -1.0);
+    assert_eq!(
+        original.iter().map(|s| s.to_bits()).collect::<Vec<_>>(),
+        cued.iter().map(|s| s.to_bits()).collect::<Vec<_>>()
+    );
+}
+
+/// A mixer with the limiter off, for tests that read exact sample positions.
+fn bare(rate: u32) -> Mixer {
+    let mut mixer = Mixer::new(rate);
+    mixer.set_limiting(false);
+    mixer
+}
+
+#[test]
+fn the_limiter_keeps_a_saturated_sum_under_the_ceiling_without_clamping() {
+    let mut mixer = Mixer::new(48_000);
+    let sound = Arc::new(Sound::new(vec![i16::MAX; 64], 1, 48_000).unwrap());
+    for _ in 0..8 {
+        mixer
+            .play(Play::looping(Arc::clone(&sound), Bus::Sfx))
+            .unwrap();
+    }
+    let mut out = vec![0.0; CHANNELS * 4_800];
+    mixer.render(&mut out);
+    assert_eq!(mixer.clipped(), 0);
+    assert!(
+        out.iter()
+            .all(|s| s.abs() <= crate::limiter::CEILING + 1e-5)
+    );
+    assert!(mixer.peak() > 7.0);
+    assert!(mixer.limited() > 0);
+    assert!(mixer.deepest_limit() < 0.2);
+}
+
+fn rendered_occluded(max: Option<f32>, pan: Option<f32>, front: f32) -> Vec<f32> {
+    let mut mixer = bare(44_100);
+    mixer.set_spatial_mode(SpatialMode::Original);
+    mixer.set_rear_occlusion(max);
+    let id = mixer
+        .play(Play {
+            pan,
+            front: 1.0,
+            ..Play::looping(buzz(), Bus::Sfx)
+        })
+        .expect("voice");
+    mixer.set_front(id, front);
+    let mut out = vec![0.0; 2 * 512];
+    mixer.render(&mut out);
+    out
+}
+
+fn bits(out: &[f32]) -> Vec<u32> {
+    out.iter().map(|s| s.to_bits()).collect()
+}
+
+#[test]
+fn rear_occlusion_low_passes_a_voice_behind_the_listener_under_original() {
+    let ahead = rendered_occluded(Some(14_000.0), Some(0.0), 1.0);
+    let behind = rendered_occluded(Some(14_000.0), Some(0.0), -1.0);
+    assert!(
+        energy(&behind) < energy(&ahead) * 0.8,
+        "a Nyquist buzz behind is cut: {} vs {}",
+        energy(&behind),
+        energy(&ahead)
+    );
+}
+
+#[test]
+fn rear_occlusion_leaves_a_voice_ahead_bit_identical_to_no_law() {
+    for front in [1.0, 0.5, 0.0] {
+        let plain = rendered_occluded(None, Some(-0.4), front);
+        let law = rendered_occluded(Some(14_000.0), Some(-0.4), front);
+        assert_eq!(bits(&plain), bits(&law), "front = {front}");
+    }
+}
+
+#[test]
+fn without_the_law_original_stays_bit_identical_front_and_back() {
+    let ahead = rendered_occluded(None, Some(0.3), 1.0);
+    let behind = rendered_occluded(None, Some(0.3), -1.0);
+    assert_eq!(bits(&ahead), bits(&behind));
+    assert_eq!(
+        bits(&behind),
+        bits(&rendered(SpatialMode::Original, Some(0.3), -1.0))
+    );
+}
+
+#[test]
+fn rear_occlusion_leaves_an_unplaced_voice_alone() {
+    let plain = rendered_occluded(None, None, -1.0);
+    let law = rendered_occluded(Some(14_000.0), None, -1.0);
+    assert_eq!(bits(&plain), bits(&law));
+}
+
+#[test]
+fn the_cutoff_eases_in_over_ticks_not_at_once() {
+    let mut mixer = bare(44_100);
+    mixer.set_rear_occlusion(Some(2_000.0));
+    let id = mixer
+        .play(Play {
+            pan: Some(0.0),
+            ..Play::looping(buzz(), Bus::Sfx)
+        })
+        .expect("voice");
+    mixer.set_front(id, 1.0);
+    let mut last = 23_999.0;
+    for _ in 0..5 {
+        mixer.set_front(id, -1.0);
+        let hz = mixer.voices[0].occlusion_hz.expect("cutoff");
+        assert!(hz < last && hz > 2_000.0, "{hz}");
+        last = hz;
+    }
+}
+
+/// Scratch sweep: what the rear low-pass costs per voice, 32 placed voices all behind the listener
+/// (the worst case: every voice filters). Prints; asserts nothing. Run with `--release`.
+#[test]
+#[ignore = "scratch sweep: set OAG_SWEEP"]
+fn rear_occlusion_cost_per_voice() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    for (name, law) in [("no law", None), ("law, all behind", Some(14_000.0))] {
+        let mut mixer = Mixer::new(48_000);
+        mixer.set_rear_occlusion(law);
+        for i in 0..32 {
+            mixer
+                .play(Play {
+                    pan: Some((i as f32 * 0.37).sin()),
+                    front: -1.0,
+                    ..Play::looping(buzz(), Bus::Sfx)
+                })
+                .expect("voice");
+        }
+        let mut out = vec![0.0; 2 * 512];
+        for _ in 0..16 {
+            mixer.render(&mut out);
+        }
+        let blocks = 2000;
+        let start = std::time::Instant::now();
+        for _ in 0..blocks {
+            mixer.render(&mut out);
+        }
+        let per_block = start.elapsed() / blocks;
+        println!(
+            "original, {name}, 32 voices: {per_block:?} per 512 frames, {:.2} % of one core, {:?} per voice",
+            per_block.as_secs_f64() / (512.0 / 48_000.0) * 100.0,
+            per_block / 32
+        );
+    }
 }

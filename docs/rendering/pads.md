@@ -934,7 +934,7 @@ more away. The pairing is one to one on all four circuits. It is not one rule of
 either: Talon's Junction's nodes `Shape2`..`Shape19` own chunks `#810`..`#827` in node
 order, but `amphiseum`'s last node owns the first such chunk (`#1100`). Reproduce: `cargo run -p oag-render --example
 hd_speed_pad_owner -- <circuit> [archive] [weapon]`; pinned by
-`crates/render/tests/hd_speed_pad_owner_ground_truth.rs` (a disc-backed ground truth,
+`crates/mesh/tests/hd_speed_pad_owner_ground_truth.rs` (a disc-backed ground truth,
 four tests).
 
 **The engine's own rule stays unrecovered.** The hash is not a name hash
@@ -954,6 +954,18 @@ position-dependent rule the original does not state for a result that cannot dif
 it is left as it is. **2048/Omega: not checkable here.** The probe reads HD's `.vex`
 pad classes and their `.rcsmodel`; neither title's pad objects have been decompiled
 (`docs/formats/omega-status.md`), so whether their pad nodes resolve is unmeasured.
+
+## In a Zone race a pad keeps its plain program (2026-11-16, `zone-pad-re`)
+
+Every pad chunk carries render-block flag bit 9 (speed, 418 chunks) or bit 10
+(weapon, 208), and the original's draw loop gives a chunk with either bit (or
+bit 11) the non-Zone permutation word in a Zone race. A speed pad there runs
+`speedup_material`'s `HalfBrightAmbientSunSpot0SVC0` block (#5): its own
+albedo lit by the Zone stage's ambient alone, plus the `_ne.a * Colour` glow,
+no lightmap, no Zone texture (confidence 90, three RSX frames on Moa Therma).
+See [zone-plain-chunks.md](../ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md).
+Not wired. **2048/Omega: checked, differs** (their Zone model `trackZone`
+authors its own textured pad materials; no such flag), on that page.
 
 ## The load report said the speed pads were undrawn; they were not - 2026-10-06
 

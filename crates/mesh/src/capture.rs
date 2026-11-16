@@ -9,10 +9,12 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
+use oag_core::math::Mat4;
+
 use crate::mesh::Model;
 use crate::mesh_render::{
     Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowMaps, TRANSPARENT_BLEND,
-    TexAnims, UNIFORMS_SIZE, Velocity, build, write_uniforms,
+    TexAnims, UNIFORMS_SIZE, Velocity, build, write_uniforms, write_uniforms_raw,
 };
 use crate::orbit::Orbit;
 
@@ -108,6 +110,55 @@ pub fn capture_pixels_from(
     anisotropy: Anisotropy,
     seconds: f32,
 ) -> Result<Vec<u8>> {
+    capture_pixels(
+        model,
+        width,
+        height,
+        Camera::Orbit { yaw, pitch },
+        anisotropy,
+        seconds,
+    )
+}
+
+/// [`capture_pixels_from`] through a caller's own view-projection matrix (world space is the
+/// model's own recentred space, as in the orbit capture) instead of the orbit that frames the
+/// model: what a test needs to draw under a portal view's oblique projection.
+///
+/// # Errors
+///
+/// No GPU adapter, or a failed device request or readback.
+pub fn capture_pixels_through(
+    model: &Model,
+    width: u32,
+    height: u32,
+    view_projection: Mat4,
+    anisotropy: Anisotropy,
+    seconds: f32,
+) -> Result<Vec<u8>> {
+    capture_pixels(
+        model,
+        width,
+        height,
+        Camera::Matrix(view_projection),
+        anisotropy,
+        seconds,
+    )
+}
+
+/// Where a capture looks from.
+enum Camera {
+    Orbit { yaw: f32, pitch: f32 },
+    Matrix(Mat4),
+}
+
+fn capture_pixels(
+    model: &Model,
+    width: u32,
+    height: u32,
+    camera: Camera,
+    anisotropy: Anisotropy,
+    seconds: f32,
+) -> Result<Vec<u8>> {
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         compatible_surface: None,
@@ -170,7 +221,7 @@ pub fn capture_pixels_from(
         unblended_pipeline,
         authored_pipelines,
         bind_group,
-        vertex_buffer,
+        geometry,
         index_buffer,
         texture_binds,
         bindless: _,
@@ -183,8 +234,11 @@ pub fn capture_pixels_from(
         node_anim_buffer,
         emissive_buffer: _,
         stamp_pipeline: _,
+        foliage: _,
+        plain_draws: _,
         prepass: _,
         culled: _,
+        unwritten: _,
     } = build(
         &device,
         &queue,
@@ -212,19 +266,29 @@ pub fn capture_pixels_from(
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    write_uniforms(
-        &queue,
-        &uniform_buffer,
-        model,
-        width as f32 / height as f32,
-        // The capture path frames the whole model from its centre; panning is
-        // an interactive affordance and there is no cursor here.
-        Orbit {
-            yaw,
-            pitch,
-            ..Orbit::default()
-        },
-    );
+    match camera {
+        Camera::Orbit { yaw, pitch } => {
+            write_uniforms(
+                &queue,
+                &uniform_buffer,
+                model,
+                width as f32 / height as f32,
+                // The capture path frames the whole model from its centre; panning is
+                // an interactive affordance and there is no cursor here.
+                Orbit {
+                    yaw,
+                    pitch,
+                    ..Orbit::default()
+                },
+            );
+        }
+        Camera::Matrix(view_projection) => write_uniforms_raw(
+            &queue,
+            &uniform_buffer,
+            view_projection,
+            Mat4::from_translation(-oag_core::math::Vec3::from_array(model.centre)),
+        ),
+    }
 
     queue.write_buffer(
         &anim_buffer,
@@ -312,7 +376,7 @@ pub fn capture_pixels_from(
             // it at `Fog::off`.
             pass.set_bind_group(2, &fog_bind, &[0]);
             pass.set_bind_group(3, &anim_bind, &[]);
-            pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            let mut cursor = geometry.cursor(&mut pass);
             pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
             // One draw per material run. Slot 0 is the white fallback, so a texture
@@ -332,60 +396,29 @@ pub fn capture_pixels_from(
 
             for draw in &model.draws {
                 pass.set_bind_group(1, bind(draw), &[]);
-                pass.draw_indexed(draw.range.clone(), 0, 0..1);
+                cursor.draw(&mut pass, &draw.range);
             }
 
-            // Second pipeline group, same pass: `Model::alpha_tested_draws`
-            // wants a cutout, not a hardcoded alpha of 1.0 - see
-            // `fs_main_alpha_test`.
-            //
-            // **One `set_pipeline` per distinct reference, because the batch's
-            // own flag bits pick it** - a `.vex` batch authors `0x10` or
-            // `0x7f` and a circuit mixes them, exactly as the transparent
-            // classes below do. Switched only when it changes, so a model with
-            // one reference (or none, which is every PS3 model) pays for a
-            // single call as before. See `mesh_render::cutout`.
-            let cutouts = crate::mesh_render::CutoutPipelines {
-                default: &alpha_test_pipeline,
-                by_reference: &cutout_pipelines,
-            };
-            let mut current: Option<&wgpu::RenderPipeline> = None;
-            for draw in &model.alpha_tested_draws {
-                let pipeline = cutouts.select(draw);
-                if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                    pass.set_pipeline(pipeline);
-                    current = Some(pipeline);
-                }
-                pass.set_bind_group(1, bind(draw), &[]);
-                pass.draw_indexed(draw.range.clone(), 0, 0..1);
-            }
-
-            // Third pipeline group, same pass: `Model::transparent_draws`,
-            // blended rather than replaced and drawn last so opaque and cutout
-            // depth is already resolved. See `crate::exhaust::Pipeline` for the
-            // precedent of pairing an opaque and a blended pipeline this way.
-            //
-            // **One `set_pipeline` per draw call, because the batch's own
-            // `pass_mask` picks its blend equation** - the `0x0700` class
-            // splits three ways and a single model mixes them. Grouping the
-            // draws by class first would reorder them, and transparent draws
-            // are order-dependent by definition.
-            let pipelines = crate::mesh_render::TransparentPipelines {
-                alpha_over: &blend_pipeline,
-                additive: &additive_pipeline,
-                unblended: &unblended_pipeline,
-                authored: &authored_pipelines,
-            };
-            let mut current: Option<&wgpu::RenderPipeline> = None;
-            for draw in &model.transparent_draws {
-                let pipeline = pipelines.select(draw);
-                if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                    pass.set_pipeline(pipeline);
-                    current = Some(pipeline);
-                }
-                pass.set_bind_group(1, bind(draw), &[]);
-                pass.draw_indexed(draw.range.clone(), 0, 0..1);
-            }
+            // Cutout draws want `fs_main_alpha_test`, not a hardcoded alpha of
+            // 1.0; transparent draws are blended and last so opaque and cutout
+            // depth is already resolved (`crate::exhaust::Pipeline` pairs an
+            // opaque and a blended pipeline the same way).
+            crate::mesh_render::draw_cutout_then_transparent(
+                &mut pass,
+                &mut cursor,
+                model,
+                crate::mesh_render::CutoutPipelines {
+                    default: &alpha_test_pipeline,
+                    by_reference: &cutout_pipelines,
+                },
+                crate::mesh_render::TransparentPipelines {
+                    alpha_over: &blend_pipeline,
+                    additive: &additive_pipeline,
+                    unblended: &unblended_pipeline,
+                    authored: &authored_pipelines,
+                },
+                bind,
+            );
         }
     }
     encoder.copy_texture_to_buffer(

@@ -21,7 +21,13 @@ impl RaceStage {
         let difficulty = self
             .campaign_difficulty
             .unwrap_or(oag_tables::race_campaign::Difficulty::Medium);
-        oag_game::medal_watch::tick(cell, difficulty, &mut self.earned_medal, &mut self.race);
+        oag_game::medal_watch::tick(
+            cell,
+            difficulty,
+            self.title.campaign.counting_modes,
+            &mut self.earned_medal,
+            &mut self.race,
+        );
     }
 }
 
@@ -48,6 +54,22 @@ mod tests {
         assert!(
             capture.contains("crate::medal_watch::tick("),
             "the headless capture's tick must run the shared medal watch"
+        );
+    }
+
+    /// An Elimination cell's medal value is `medal_watch::elimination_value`'s, which reads
+    /// the place on HD and Omega: the race stage can not be built under a unit test (it owns a
+    /// GPU scene), so this fails when `campaign_tier` stops asking it.
+    #[test]
+    fn the_campaign_tier_asks_for_the_elimination_value() {
+        let stage = include_str!("../race_stage.rs");
+        assert!(
+            stage.contains("oag_game::medal_watch::elimination_value("),
+            "campaign_tier must take an Elimination cell's value from medal_watch"
+        );
+        assert!(
+            stage.contains("self.race.eliminator_place()"),
+            "the place is the end-of-race board's, Race::eliminator_place"
         );
     }
 }

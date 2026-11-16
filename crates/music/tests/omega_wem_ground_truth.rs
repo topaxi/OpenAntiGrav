@@ -673,18 +673,40 @@ fn the_decoder_agrees_with_ffmpeg_up_to_polarity() {
         return;
     };
     // The smallest stereo `.wem`, and the smallest four-channel one, so the
-    // check stays cheap and covers a second layout.
-    let mut files = loose(&mut archive, None);
-    files.sort_by_key(|(_, blob)| blob.len());
-    let mut picked: Vec<(u16, &str, &[u8])> = Vec::new();
-    for channels in [2u16, 4] {
-        if let Some((p, b)) = files.iter().find(|(_, b)| {
-            Wem::parse(b)
-                .is_ok_and(|w| w.format().tag == TAG_ATRAC9 && w.format().channels == channels)
-        }) {
-            picked.push((channels, p, b));
+    // check stays cheap and covers a second layout. Entries are visited
+    // smallest first by their directory size and only read until both are
+    // found, so the archive's other files are never read.
+    let mut paths: Vec<(u64, String)> = archive
+        .paths()
+        .iter()
+        .filter(|p| p.to_ascii_lowercase().ends_with(".wem"))
+        .filter_map(|p| {
+            let index = archive.index_of_path(p)?;
+            Some((archive.directory().entries[index].size, p.clone()))
+        })
+        .collect();
+    paths.sort_by_key(|(size, _)| *size);
+    let mut found: Vec<(u16, String, Vec<u8>)> = Vec::new();
+    for (_, path) in &paths {
+        if found.len() == 2 {
+            break;
+        }
+        let blob = archive.read_path(path).expect("the .wem reads");
+        let Ok(wem) = Wem::parse(&blob) else {
+            continue;
+        };
+        let f = wem.format();
+        if f.tag != TAG_ATRAC9 || ![2u16, 4].contains(&f.channels) {
+            continue;
+        }
+        if found.iter().all(|(c, _, _)| *c != f.channels) {
+            found.push((f.channels, path.clone(), blob));
         }
     }
+    let picked: Vec<(u16, &str, &[u8])> = found
+        .iter()
+        .map(|(c, p, b)| (*c, p.as_str(), b.as_slice()))
+        .collect();
     assert!(!picked.is_empty(), "a stereo file at least");
     // A missing tool is a skip, as in the movie ground truths; the game-data
     // switch is for missing game data.

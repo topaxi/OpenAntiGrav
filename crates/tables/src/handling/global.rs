@@ -286,7 +286,7 @@ fn c_number(node: &Node, element: &'static str, attribute: &'static str) -> Resu
         value: raw.to_string(),
     };
     let trimmed = raw.trim();
-    let digits = trimmed.strip_suffix(['f', 'F']).unwrap_or(trimmed);
+    let digits = trimmed.trim_suffix(['f', 'F']);
     let parsed: f32 = digits.parse().map_err(|_| bad())?;
     if parsed.is_finite() {
         Ok(parsed)

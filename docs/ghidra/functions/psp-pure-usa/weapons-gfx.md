@@ -18,7 +18,7 @@ under `Data\Weapons\` and `Data\Psys\` resolves in `Data.wad` by hash (50 of 50,
 | Mine | `0x0885bc28` (ctor `0x0885bab4`) | `Mine.vex` (`vr_Mine.vex` when a flag at `0x08a8..` is set), `WO_MINE_EXPLO` | model **now**; effect trigger open |
 | Bomb | `0x08857fc8` (ctor `0x08857e1c`) | `Bomb.vex`, `WO_BOMB_GLOW`, `WO_BOMB_SMOKERING` | model **now**; the effects open |
 | Bomb blast | `0x08858864`, `0x08858a44` (ctor `0x08858710`) | `explosion_hemisphere.vex`, `Bomb_Shockwave.vex` | **now** |
-| Plasma blast | `0x0885b4f4`, `0x0885b5b0`, `0x0885b66c` (ctor `0x0885b2a0`) | `plasma_halo`, `plasma_hemisphere_noglow`, `plasma_hemisphere` | **open**: three 255-to-0 key tables of its own, not Pulse's baked track |
+| Plasma blast | one constructor `0x0885b2a0` (the earlier `0x0885b4f4`, `0x0885b5b0`, `0x0885b66c` are its three model-load call sites) | `plasma_halo`, `plasma_hemisphere_noglow`, `plasma_hemisphere` | **read 2026-11-03**: three time-keyed tint tables, eased scale and a 2.0 s life, [plasma.md](plasma.md); wiring open |
 | Missile | - | `WO_MISSILE_HEAD`, `_EXPLO`, `_BOUNCE` | open (triggers unread) |
 | Disruptor | `0x08859c70`, `0x0885a3b0`, `0x0885a8fc` | `disruptor_effect.vex`, `disruptor_cockpit.vex`, `electric_halo2.vex`, `explosion_gaseous.vex`, `WO_DISRUPTOR_*` | open |
 | Quake | `0x08879d54` | `WO_QUAKE` (spawned), `WO_QUAKE_VR` (VR build), `WO_QUAKE_NEW_ROCKS` (loaded, no spawn found) | **wired 2026-10-12**: the extent law, world-up frame, `10` lift and the screen wash, [quake.md](quake.md) |

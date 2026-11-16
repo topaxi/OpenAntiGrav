@@ -94,6 +94,7 @@ fn load(image: &Path) -> boot::Boot {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     boot::load(&options).expect("loading the boot sequence")
 }
@@ -237,21 +238,22 @@ fn pures_picker_leads_to_its_second_boot_movie_then_the_title_screen() {
             "{label}: the movie is over by Title Screen, so its sound has to stop"
         );
 
-        // **`Title Screen` waits for START and for nothing else.** Its
-        // `TitleRedirect` carries no `forward` at all, so the button is not
+        // **`Title Screen` waits for START and for nothing else on the disc.**
+        // Its `TitleRedirect` carries no `forward` at all, so the button is not
         // authored there - it comes from the screen's own `idstring="PRESS
         // START"` widget and from watching the real firmware sit on this screen
-        // until START. Ten seconds of every other button the abstract layer
-        // carries, alternated with none, must leave it exactly where it is; a
-        // hidden timeout would show up here.
+        // until START. CROSS advances it too in this build, an intended
+        // divergence (`Frontend::update_title_screen`). Ten seconds of every
+        // other button the abstract layer carries, alternated with none, must
+        // leave it exactly where it is; a hidden timeout would show up here.
         for tick in 0..600 {
-            let held = !Button::Start.bit();
+            let held = !(Button::Start.bit() | Button::Cross.bit());
             input.begin_frame(if tick % 2 == 0 { held } else { 0 });
             loaded.frontend.update(1.0 / 60.0, &mut input, None);
         }
         assert!(
             loaded.frontend.machine().is(pure_states::TITLE_SCREEN),
-            "{label}: only START leaves Title Screen, and it does not time out; got {:?}",
+            "{label}: only START or CROSS leaves Title Screen, and it does not time out; got {:?}",
             loaded.frontend.machine().current()
         );
         assert!(
@@ -347,8 +349,9 @@ fn pures_second_movie_declares_sound() {
                     .eq_ignore_ascii_case(oag_pure::names::fmv_intro_movie(region))
             })
             .unwrap_or_else(|| panic!("{label}: no widget names the second boot movie"));
-        assert!(
+        assert_eq!(
             widget.sound,
+            Some(true),
             "{label}: the widget is sound=\"true\", so the movie is heard"
         );
     }
@@ -411,6 +414,7 @@ fn the_reel_flag_opens_the_screen_the_disc_itself_plays_it_on() {
             no_video: true,
             refresh_video: false,
             prefer_av1_cache: false,
+            find_texture_packs: None,
         };
         let loaded = boot::load(&options).expect("Pure's reel state is on its boot path");
         assert_eq!(

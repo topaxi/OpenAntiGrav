@@ -25,15 +25,13 @@
 //!
 //! # 2048 and Omega
 //!
-//! Both carry [`Effects::engine`] only, taken from Pulse by inheritance, and
-//! none of the four triggers a title answers for itself (the weapon-hit
-//! sparks, the weapon spark, the absorb burst, the wreck), checked against
-//! each other as CLAUDE.md asks. Omega's executable carries HD's weapon-spark
-//! and absorb strings, so its entries are "checked, applies, not wired": the
-//! wiring is unread, and a string in a binary is not a measured trigger.
-//! 2048's are unread outright. Neither draws anything there, which is the same
-//! silence the loader had before this table; no report line was written for it
-//! then and none is now.
+//! Both carry [`Effects::engine`] plus two entries taken from HD's measured law
+//! ([`Origin::InheritedFrom`] `"Wipeout HD"`): the absorb burst ([`Burst::HD`], over the six
+//! `absorb` locators every hull ships) and the Cannon's craft-hit spark. Neither throws Pulse's
+//! `Ship_Damage` hull spark or its wreck effects: HD's own mechanisms are the nearer lineage,
+//! and HD names no wreck effect, so a wrecked 2048 or Omega craft draws none (the loader says
+//! so). The trigger sites are unread on both; a string in Omega's executable is not a measured
+//! trigger.
 //!
 //! [ADR-0058]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0058-per-title-behaviour-is-title-data-with-provenance.md
 
@@ -89,6 +87,10 @@ pub enum Trigger {
     PlasmaLightningExpand,
     /// HD's Plasma detonation, 1.3 s later.
     PlasmaLightningCollapse,
+    /// HD's Plasma wind-up, started with the head and riding the bolt.
+    PlasmaCharging,
+    /// HD's Plasma release, riding the firing craft's `Ship Muzzle` node.
+    PlasmaLaunch,
     /// A Shuriken in flight.
     ShurikenFlare,
     /// A Shuriken's trail, riding beside its head.
@@ -109,6 +111,14 @@ pub enum Trigger {
     MineExplo,
     /// A Bomb's smoke ring.
     BombSmokering,
+    /// A laid Bomb's glow, riding it for as long as it lies (Pure).
+    BombGlow,
+    /// A Disruptor bolt in flight (Pure).
+    DisruptorHead,
+    /// A Disruptor bolt ending (Pure).
+    DisruptorExplo,
+    /// A Disruptor leaving the firing craft's `Ship Muzzle` node (Pure).
+    DisruptorLaunch,
     /// HD's Bomb detonation, 0.5 s in: the rays `0x001503d8` spawns once.
     BombRays,
     /// A Cannon bolt's impact.
@@ -144,6 +154,12 @@ pub enum Trigger {
     WreckSparks,
     /// The big blast after it.
     WreckExplosion,
+    /// Pure's big blast: one at each wreck node when the wreck's state times out.
+    WreckBigNode,
+    /// Pure's debris cloud at the wreck's matrix beside it.
+    WreckDebris,
+    /// Pure's smoke beside that.
+    WreckSmoke,
     /// HD's damage smoke while a struck craft's shield is above its first
     /// threshold.
     DamageMild,
@@ -160,7 +176,7 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 41] = [
+    pub const ALL: [Self; 50] = [
         Self::CollisionSpark,
         Self::CollisionSparkNoDamage,
         Self::HitSpark,
@@ -170,6 +186,8 @@ impl Trigger {
         Self::PlasmaBlast,
         Self::PlasmaLightningExpand,
         Self::PlasmaLightningCollapse,
+        Self::PlasmaCharging,
+        Self::PlasmaLaunch,
         Self::ShurikenFlare,
         Self::ShurikenTrail,
         Self::ShurikenBounce,
@@ -180,6 +198,10 @@ impl Trigger {
         Self::MissileBounce,
         Self::MineExplo,
         Self::BombSmokering,
+        Self::BombGlow,
+        Self::DisruptorHead,
+        Self::DisruptorExplo,
+        Self::DisruptorLaunch,
         Self::BombRays,
         Self::CannonSparks,
         Self::EngineFlare,
@@ -197,6 +219,9 @@ impl Trigger {
         Self::WreckNode,
         Self::WreckSparks,
         Self::WreckExplosion,
+        Self::WreckBigNode,
+        Self::WreckDebris,
+        Self::WreckSmoke,
         Self::DamageMild,
         Self::DamageModerate,
         Self::DamageCritical,
@@ -233,6 +258,11 @@ pub enum Burst {
 }
 
 impl Burst {
+    /// Wipeout HD's absorb burst (`FUN_000d9398`): the six `absorb` locators in three mirrored
+    /// pairs 0.2 s apart (`docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md`). 2048 and
+    /// Omega take it by inheritance.
+    pub const HD: Self = Self::MirroredPairs { stagger: 0.2 };
+
     /// `(locator index, delay in seconds)` for a hull that carries `nodes`
     /// locators of this title's class, in the order the original spawns them.
     ///
@@ -341,9 +371,38 @@ pub struct Effects {
     /// effect against a matched capture of the original, never by extension to
     /// the rest of the title's `.pob` files - see `oag_fx::psys::spawn`.
     pub extents: &'static [&'static str],
+    /// Effects whose emitters' own class-6 particles are drawn as HD's view-space bar
+    /// (`oag_fx::psys::streak::StreakDraw::FarBar`) on a source that is not Pulse on the PSP:
+    /// the draw HD's `PartRender` job and Omega's CPU twin build for render mode 5, read on
+    /// `WO_TRAIL_HITSHIP` alone (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The
+    /// class-6 draw law"). An effect not listed keeps the procedural profile for every
+    /// streak; wiring one is a decision made per effect, never by extension to the title.
+    pub far_bars: &'static [&'static str],
+    /// Effects whose emitters' own class-6 particles are drawn as the PSP engine's pool bar
+    /// (`oag_fx::psys::streak::StreakDraw::Bar`: both ends on the mean of their two view depths)
+    /// on a source that is not Pulse on the PSP: Pure's `FUN_088746c8` is
+    /// `ParticleSystem_DrawPoolBars`'s strip law
+    /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`). An effect not listed keeps the
+    /// procedural profile for every streak; wiring one is a decision made per effect against a
+    /// matched capture, never by extension to the title. An effect in both this list and
+    /// [`Self::far_bars`] draws the far bar.
+    pub pool_bars: &'static [&'static str],
+    /// Effects whose sprite templates (`oag_fx::psys::Effect::add_templates`) play on a source
+    /// that is not Pulse on the PSP. An effect not listed keeps its templates muted; wiring one is a
+    /// decision made per effect against a matched capture, never by extension to the title. No title
+    /// lists one yet: Pure's template draw, sampler and initialiser are Pulse's
+    /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw"), but its absorb burst
+    /// drew far too bright at 0.75 s with them on, and why is unread.
+    pub templates: &'static [&'static str],
     /// How the Quake wave is placed and washes the screen: its frame is read
     /// only for a title whose [`Self::extents`] list `WO_QUAKE`.
     pub quake_look: QuakeLook,
+    /// Whether the original fires [`Trigger::TrailHitship`] by itself. `false` on a title that
+    /// authors the burst but whose executable never spawns it (2048 and Omega: their CPU ports of
+    /// HD's `Trails` SPU job never set the hit bit,
+    /// `docs/ghidra/functions/ps4-omega-eu/trail-hits.md`), which then plays it only with the
+    /// player's `graphics.trail_hits` on, as Pulse and Pure do. See [`Self::trail_hits_on_setting`].
+    pub trail_hits_native: bool,
 }
 
 /// Where a title's Quake wave takes the `+Y` of the frame its `WO_QUAKE` is
@@ -399,7 +458,11 @@ impl Effects {
         scenery: &[],
         sprites: &[],
         extents: &[],
+        far_bars: &[],
+        pool_bars: &[],
+        templates: &[],
         quake_look: QuakeLook::track(Origin::InheritedFrom("Wipeout Pulse")),
+        trail_hits_native: false,
     };
 
     /// The entry for `trigger`.
@@ -413,6 +476,22 @@ impl Effects {
     pub const fn with(mut self, trigger: Trigger, spec: EffectSpec) -> Self {
         self.table[trigger.index()] = Some(spec);
         self
+    }
+
+    /// This table with its trail-hit burst played only when the player's `graphics.trail_hits` is
+    /// on ([`Self::trail_hits_native`] `false`). The trigger keeps its own effect, so the title
+    /// plays its own file and can still lend it to a title that authors none.
+    #[must_use]
+    pub const fn trail_hits_on_setting(mut self) -> Self {
+        self.trail_hits_native = false;
+        self
+    }
+
+    /// Whether the burst plays without the player's `graphics.trail_hits`: the table names it and
+    /// the original fires it ([`Self::trail_hits_native`]).
+    #[must_use]
+    pub const fn plays_trail_hits_natively(&self) -> bool {
+        self.trail_hits_native && self.on(Trigger::TrailHitship).is_some()
     }
 
     /// This table with `trigger` answering nothing.
@@ -470,6 +549,8 @@ impl Effects {
         use engine_effects as n;
         let mut e = Self::NONE;
         e.quake_look = QuakeLook::track(origin);
+        e.trail_hits_native = true;
+        e.far_bars = &[n::TRAIL_HITSHIP_EFFECT, n::TRAIL_HITSHIP_RED_EFFECT];
         e.scenery = &[
             n::BLUE_WELDER_EFFECT,
             n::MODESTO_STEAM_EFFECT,
@@ -657,6 +738,9 @@ pub enum ShieldPalette {
     Ps2Pulse,
     /// Wipeout HD's.
     Hd,
+    /// Omega's and 2048's: HD's, with the target alpha taken from the cockpit
+    /// sphere when it is larger.
+    Omega,
 }
 
 /// Which [`ShieldPalette`] a title's craft takes, by the platform of the
@@ -712,6 +796,14 @@ pub struct Looks {
     /// bloom's glow mask, the quake, weather and track stats.
     /// Keyed on the race's own archive.
     pub measured_draws: Rule,
+    /// The launch boost: the title's authored `<Handling><Global><StartBoost>` graded by when
+    /// thrust first lands (`docs/physics/launch-boost.md`). Where it applies, its origin names
+    /// whose law it is. A title with its own compiled-in boost (`CraftLaws::code_start_boost`)
+    /// leaves it unread. See [`Self::start_boost_origin`].
+    pub start_boost: Rule,
+    /// A second platform's [`Self::start_boost`], for a title whose platforms differ in
+    /// provenance (Pulse: PSP measured, PS2 carried over).
+    pub start_boost_carried: Rule,
     /// The PSP's glow mask and the bloom over it: every `.vex` model the race draws
     /// stamps the framebuffer's alpha through the stencil, per batch, and the four-pass
     /// bloom reads it (`docs/rendering/glow-mask.md`). Keyed on the race's own archive.
@@ -746,6 +838,11 @@ pub struct Looks {
     /// craft's hull, scaled per craft by the spline's light scale (so it
     /// darkens in a tunnel). Keyed on the race's own archive.
     pub hull_lights: Rule,
+    /// The hull's extra pass drawn in the circuit's accumulated light colour
+    /// rather than white: the sheen dims and tints where the craft's light
+    /// scale is low. Needs `hull_shine` and `hull_lights`. Keyed on the race's
+    /// own archive.
+    pub hull_shine_lit: Rule,
     /// The sun's lens flare: ten additive quads along the line through the screen
     /// centre, drawn where a circuit authors a `lensflare` node
     /// (`docs/rendering/lens-flare.md`). Pure's. The rule is the law, the node is the
@@ -765,6 +862,13 @@ pub struct Looks {
     pub track_shine_weighted: Rule,
     /// The shield tint.
     pub shield_palette: ShieldPalettes,
+    /// Our own HD/Fury-style shield, offered as the player's `graphics.own_shield` on a title
+    /// whose original draws a different one: Pulse and Pure. Unread on the titles whose original
+    /// draws the HD-style shield itself (HD, 2048, Omega), which drop the row.
+    pub own_shield: Rule,
+    /// Our own rocket effect (flame, smoke trail, launch flash, impact), offered as the player's
+    /// `graphics.own_rockets` on Pulse and Pure. Unread on HD, 2048 and Omega, which drop the row.
+    pub own_rockets: Rule,
     /// The front end never waits at its language picker on a fresh run: the
     /// original leaves `Language Selection` within milliseconds, so this build
     /// defaults to English instead of stopping there. Not a race look, but the
@@ -788,6 +892,15 @@ pub struct Looks {
     /// state with bit 2 writes depth. Wipeout HD's, read off
     /// `Material_ApplyRenderState` and a live race frame.
     pub material_render_state: Rule,
+    /// A `.vex` circuit's batch is drawn single-sided when its own `pass_mask`
+    /// bit `0x20` is clear (`GU_CULL_FACE` on), so the back-to-back front and
+    /// back copies of a trackside board never fight for one plane. Wipeout
+    /// Pulse PSP's, read off `Mesh_SetBatchDrawState` and a matched Moa Therma
+    /// frame (`docs/rendering/batch-cull.md`).
+    pub batch_back_face_cull: Rule,
+    /// [`Self::batch_back_face_cull`] on a disc that carries the same `.vex` batch
+    /// state but was not measured: the platform's law is the measured one.
+    pub batch_back_face_cull_carried: Rule,
     /// The race scene stores display-encoded values, so a blended draw adds or
     /// mixes encoded values rather than linear light. Wipeout HD's: every scene
     /// draw of three live race frames has `SET_SHADER_PACKER` 1 into an
@@ -795,6 +908,19 @@ pub struct Looks {
     /// of what is behind it (`docs/rendering/hd-track-tone.md`, "HD's blends
     /// combine encoded values").
     pub blends_encoded: Rule,
+    /// The race scene decodes a gamma-authored texel with the piecewise sRGB curve (the
+    /// texture unit's, for an sRGB-typed texture) while storing the value as computed.
+    /// Omega's: 3,115 of the 3,234 circuit pictures of `data01` and `data02` are
+    /// `ChannelType::Srgb` GNF (`docs/rendering/hd-track-tone.md`, "Omega's texels decode with
+    /// the sRGB curve").
+    pub texels_srgb: Rule,
+    /// The race's final composite reads the scaled scene half a source texel
+    /// off, `(0.5 / width, 0.5 / height)` of the scaled source (so it follows the
+    /// dynamic width), bilinearly: each output pixel is the mean of four source
+    /// texels in linear light. Wipeout HD's
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "A race's final
+    /// composite is the same quad").
+    pub final_composite_half_texel: Rule,
     /// The race frame ends in the `wo_*` post chain: the scene lit in the
     /// gamma-2 space its programs square a texel into, a quarter-resolution
     /// gate and two diagonal blurs, and `wo_composite_nocc_fp` at an exposure
@@ -810,6 +936,16 @@ pub struct Looks {
 pub const MATERIAL_LOD_BIAS: f32 = -1.5;
 
 impl Looks {
+    /// Where this title's authored launch boost comes from on a disc of `platform`, or `None`
+    /// where the title does not fly one.
+    #[must_use]
+    pub fn start_boost_origin(&self, platform: Platform) -> Option<Origin> {
+        [self.start_boost, self.start_boost_carried]
+            .into_iter()
+            .find(|rule| rule.applies(platform))
+            .map(|rule| rule.origin)
+    }
+
     /// The LOD bias this title's circuit materials are sampled with, in levels:
     /// [`MATERIAL_LOD_BIAS`] where [`Self::material_lod_bias`] applies, else `0.0`
     /// (the sampler's own selection).
@@ -837,6 +973,8 @@ impl Looks {
             laid_pose_scaled: Rule::UNREAD,
             laid_from_rear: Rule::UNREAD,
             measured_draws: Rule::UNREAD,
+            start_boost: Rule::UNREAD,
+            start_boost_carried: Rule::UNREAD,
             psp_glow_mask: Rule::UNREAD,
             bloom_under_hud: Rule::UNREAD,
             particle_laws: Rule::UNREAD,
@@ -845,15 +983,22 @@ impl Looks {
             circuit_effects: Rule::UNREAD,
             road_ripple: Rule::UNREAD,
             hull_lights: Rule::UNREAD,
+            hull_shine_lit: Rule::UNREAD,
             lens_flare: Rule::UNREAD,
             track_shine: Rule::UNREAD,
             track_shine_weighted: Rule::UNREAD,
             shield_palette,
+            own_shield: Rule::UNREAD,
+            own_rockets: Rule::UNREAD,
             skips_language_picker: Rule::UNREAD,
             lit_output_halved: Rule::UNREAD,
             material_lod_bias: Rule::UNREAD,
             material_render_state: Rule::UNREAD,
+            batch_back_face_cull: Rule::UNREAD,
+            batch_back_face_cull_carried: Rule::UNREAD,
             blends_encoded: Rule::UNREAD,
+            texels_srgb: Rule::UNREAD,
+            final_composite_half_texel: Rule::UNREAD,
             wo_composite: Rule::UNREAD,
         }
     }

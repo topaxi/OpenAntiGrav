@@ -2,7 +2,7 @@
 //!
 //! # What this file is the evidence for
 //!
-//! `crates/render/tests/zone_recolour.rs` proves the rule this engine draws
+//! `crates/mesh/tests/zone_recolour.rs` proves the rule this engine draws
 //! reaches a pixel. This proves the rule is the *right* one to draw - which is
 //! the question that actually needed settling, because a shader that matches a
 //! screenshot by over-applying is indistinguishable from a correct one in a

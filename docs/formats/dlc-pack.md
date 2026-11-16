@@ -227,7 +227,7 @@ own folder id has the same underscore-dropped shape as `Mirage`/`Mantis` - see
 [below](#pures-packs-decrypt-with-an-external-key-table).
 
 The ids are also the leaf of each `location`, for every team on both discs and
-in every pack - which is why `oag_livery::entry::ship_entry_name` can go on composing a path
+in every pack - which is why `oag_title::race::ShipPaths::hull_entry_name` can go on composing a path
 out of a team id alone.
 
 ## The circuits are new, and the four packs interlock
@@ -289,6 +289,24 @@ the region lock was for, it was not that the other region's build could not name
 the content.
 
 See [ADR-0021](../architecture/adr/0021-region-independent-dlc.md).
+
+## Running a pack in the original (PPSSPP)
+
+**Measured 2026-11-12, `gemini-dam-flicker`, a Pulse USA boot in PPSSPP, confidence 80** (the packs listed by Track Select
+and a race loaded from them; the EU disc was read statically only). The executable looks for packs under
+`msroot:\PSP\GAME\UCES00465\` on **both** discs (the string is in the USA and the EU `BOOT.BIN`), so a USA boot reads the
+European packs; the title-id folder is not the booted disc's. On a private PPSSPP memstick that is
+`PSP/GAME/UCES00465/PACKn.EDAT`, `PACKn_UI1.EDAT` and so on, linked from the unzipped packs.
+
+- **The extension must be upper case on a case-sensitive memstick.** The zips unpack to `.edat`; with those names Track Select
+  read `1 / 24` with the dev-unlock byte set, with `.EDAT` it read `1 / 32` (all four packs).
+- **Track Select with the unlock byte and all four packs**: the 24 disc entries, then `25` Edgewinter White, `26` Edgewinter
+  Black, `27` Vostok Reef White, `28` Vostok Reef Black, `29` Gemini Dam White, `30` **Gemini Dam Black**, `31` Orcus White,
+  `32` Orcus Black. Gemini Dam Black is the forward `12_Track` (start `(-21.0, 4.0, -368.5)` heading `-x`, 5 units from
+  the spline row whose tangent is `(-1, 0, 0)`).
+- `12_Track`'s `track.vex` is entry 23 of `PACK3.edat` (Harimau, hash `3e07086d`) and `track_reversed.vex` entry 29. The
+  Icaras pack lists `28_Track` at the same `12_Track` directory, so the circuit is not Harimau's alone; the hash is in
+  neither disc's `Data.wad`.
 
 ## Not read yet
 

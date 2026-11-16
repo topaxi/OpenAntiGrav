@@ -34,6 +34,7 @@ fn a_menu_source_switch_does_not_block_the_caller() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()), // does not exist
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -43,6 +44,7 @@ fn a_menu_source_switch_does_not_block_the_caller() {
     };
     let ps2_sound = silence(180.0, 2, 48_000);
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),
@@ -53,14 +55,18 @@ fn a_menu_source_switch_does_not_block_the_caller() {
         music_from: Some(Platform::Ps2),
         held: vec![(Platform::Ps2, Arc::clone(&ps2_sound))],
         movie: None,
+        pre_race_voice: Default::default(),
+        sfx_fade: Default::default(),
         race_voice: None,
         race_from: None,
         race_index: None,
+        race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -68,8 +74,10 @@ fn a_menu_source_switch_does_not_block_the_caller() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
     audio.music = audio
         .output
@@ -103,6 +111,7 @@ fn a_race_source_switch_does_not_block_the_caller() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()), // does not exist
         ps3: None,
@@ -143,6 +152,7 @@ fn a_press_back_to_the_current_release_drops_a_switch_still_in_flight() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()), // does not exist
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -152,6 +162,7 @@ fn a_press_back_to_the_current_release_drops_a_switch_still_in_flight() {
     };
     let ps2_sound = silence(180.0, 2, 48_000);
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),
@@ -162,14 +173,18 @@ fn a_press_back_to_the_current_release_drops_a_switch_still_in_flight() {
         music_from: Some(Platform::Ps2),
         held: vec![(Platform::Ps2, Arc::clone(&ps2_sound))],
         movie: None,
+        pre_race_voice: Default::default(),
+        sfx_fade: Default::default(),
         race_voice: None,
         race_from: None,
         race_index: None,
+        race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -177,8 +192,10 @@ fn a_press_back_to_the_current_release_drops_a_switch_still_in_flight() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
     audio.music = audio
         .output

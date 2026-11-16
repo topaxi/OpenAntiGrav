@@ -153,7 +153,7 @@ impl Race {
     pub(super) fn advance_exhausts(&mut self) {
         self.advance_zoom();
         for slot in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[slot].active {
+            if !self.sim.world.ships[slot].in_world() {
                 continue;
             }
             let ship = &self.sim.world.ships[slot].physics;
@@ -259,21 +259,21 @@ impl Race {
     /// `+0x11f0`; its `+0xe4` is the player's craft in the breakpoint run),
     /// while the variant byte is read off the craft at `+0x1204`, the ribbon's
     /// owner. So the burst plays on the intruder in the *owner's* colours, and
-    /// carries the intruder's velocity (see the `play_carried` call below).
+    /// carries the intruder's velocity (see the `play_carried_expendable` call below).
     ///
     /// A craft is never tested against its own trail: its nozzle *is* the head
     /// sample, so it would be permanently inside it.
     pub(super) fn advance_trail_hits(&mut self) {
-        if !self.view.hd_trail_active {
+        if !self.trail_hits_on() {
             return;
         }
         self.force_trail_sparks();
         for owner in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[owner].active || !self.view.hd_trail[owner].ready() {
+            if !self.sim.world.ships[owner].in_world() || !self.trail_ready(owner) {
                 continue;
             }
             for intruder in 0..self.sim.world.ship_count as usize {
-                if intruder == owner || !self.sim.world.ships[intruder].active {
+                if intruder == owner || !self.sim.world.ships[intruder].in_world() {
                     continue;
                 }
                 let at = self.sim.world.ships[intruder].physics.body.position;
@@ -283,6 +283,10 @@ impl Race {
                     self.view.trail_inside[owner] |= bit;
                 } else {
                     self.view.trail_inside[owner] &= !bit;
+                    self.view.trail_hit_rest[owner] &= !bit;
+                    continue;
+                }
+                if !self.trail_hit_due(owner, bit) {
                     continue;
                 }
                 // **The trail's owner picks the colour, measured.** At the call
@@ -308,9 +312,7 @@ impl Race {
                 // takes the point on the craft's own bounding sphere facing the
                 // contact - the place the nearest of ten hull nodes would be -
                 // and re-spawns it every tick, which is what makes it follow.
-                let contact = self.view.hd_trail[owner]
-                    .nearest(at)
-                    .map_or(at, |(on, _)| on);
+                let contact = self.trail_nearest(owner, at).map_or(at, |(on, _)| on);
                 let point = self.spark_anchor_of(intruder, owner).unwrap_or_else(|| {
                     hull_contact_point(at, contact, self.view.hull_reach[intruder])
                 });
@@ -320,12 +322,34 @@ impl Race {
                 // instance `+0x40`/`+0x4c`, whose HD consumer is unread, so it
                 // is not applied here. The craft's own velocity is: its
                 // particles inherit it times the record's `+0x4d0`
-                // ([`psys::Stage::play_carried`]), so the burst keeps up with the
-                // hull instead of piling up behind it.
+                // ([`psys::Stage::play_carried_expendable`]), so the burst keeps up with the
+                // hull instead of piling up behind it. Expendable: a craft in a
+                // trail holds about thirty instances at the every-tick rate, and
+                // a detonation or pickup burst must not lose its slot to them.
                 let velocity = self.sim.world.ships[intruder].physics.body.linear_velocity;
-                self.view.stage.play_carried(&effect, point, 1.0, velocity);
+                let tint = self.trail_hit_tint();
+                self.view
+                    .stage
+                    .play_carried_expendable(&effect, point, 1.0, velocity, tint);
             }
         }
+    }
+
+    /// Whether the burst for the craft `bit` names, inside `owner`'s trail, fires this tick.
+    ///
+    /// Every tick when the title plays its own burst (HD, 2048, Omega). A burst
+    /// lent to a title that authors none (`load::trail_hits`) is an enhancement of this
+    /// project's and fires every other tick, starting with the first tick inside: half HD's
+    /// rate still reads as a stream and keeps the stage's instances for the effects the
+    /// original does draw.
+    fn trail_hit_due(&mut self, owner: usize, bit: u8) -> bool {
+        if !self.view.handles.is_lent(Trigger::TrailHitship) {
+            return true;
+        }
+        let rest = &mut self.view.trail_hit_rest[owner];
+        let due = *rest & bit == 0;
+        *rest ^= bit;
+        due
     }
 
     /// `--trail-sparks`: the burst, every tick, on the player's own ribbon.
@@ -336,8 +360,10 @@ impl Race {
     /// "I saw nothing" cannot tell a burst that never played from one that
     /// played and drew nothing.
     ///
-    /// Everything but the *placement* is the real path - the same effect, the
-    /// same rate, the same [`hd_trail_red`](RaceView::hd_trail_red) colour select.
+    /// Everything but the *placement* and the *rate* is the real path - the same
+    /// effect and the same [`hd_trail_red`](RaceView::hd_trail_red) colour select.
+    /// The rate is HD's every tick, also on a title whose lent burst fires every
+    /// other tick for a real hit ([`Race::trail_hit_due`]).
     /// The placement is the one thing chosen rather than derived: two units
     /// above the player's nozzle, which is on screen and clear of the exhaust
     /// plume. Three alternatives were measured and each looks like nothing or
@@ -376,9 +402,30 @@ impl Race {
         let Some(effect) = self.view.handles.get(trigger).cloned() else {
             return;
         };
+        self.view.stage.play_carried_expendable(
+            &effect,
+            probe,
+            1.0,
+            body.linear_velocity,
+            self.trail_hit_tint(),
+        );
+    }
+
+    /// The hue of the burst a craft raises inside a rival's trail, when the burst is lent.
+    ///
+    /// **A derivation, not a measurement.** Wipeout HD picks its burst by the ribbon's owner:
+    /// the blue one in a blue ribbon, the red one in a red ribbon (`advance_trail_hits`). A
+    /// burst lent to Pulse or Pure is HD's blue, which is no colour of those titles' ribbons,
+    /// so it is redrawn in the hue the owner's ribbon shows and keeps its own brightness. Their
+    /// ribbon is one colour law for every craft ([`exhaust::TrailLaw::ribbon_colour`], which
+    /// differs between the PSP and the PS2), so the owner does not change the answer. A burst
+    /// the title authors is never tinted. See `docs/formats/pulse-absent-effects.md`,
+    /// "Trail-hit burst colour".
+    fn trail_hit_tint(&self) -> Option<psys::Tint> {
         self.view
-            .stage
-            .play_carried(&effect, probe, 1.0, body.linear_velocity);
+            .handles
+            .is_lent(Trigger::TrailHitship)
+            .then(|| psys::Tint::towards(self.trail_law().ribbon_colour()))
     }
 
     /// Whether any of the craft's own authored hull points is inside the
@@ -408,27 +455,87 @@ impl Race {
         self.view.hull_reach[slot]
     }
 
+    /// Whether this race tests for trail hits: HD's tube (HD, 2048 and Omega), or a burst lent to
+    /// a title that authors none (`graphics.trail_hits`, see `load::trail_hits`). With the setting
+    /// off a Pulse or Pure race has neither, so the whole path is inert. 2048 and Omega keep the
+    /// test but, with the setting off, have no handle to play (`load::trail_hits::gate`).
+    fn trail_hits_on(&self) -> bool {
+        self.view.hd_trail_active || self.view.handles.get(Trigger::TrailHitship).is_some()
+    }
+
+    /// Whether `owner`'s trail has a centre line to test against: HD's tube once seeded, or the
+    /// title's own ribbon once its ring is full.
+    fn trail_ready(&self, owner: usize) -> bool {
+        if self.view.hd_trail_active {
+            self.view.hd_trail[owner].ready()
+        } else {
+            self.view.exhaust[owner].trail_ready()
+        }
+    }
+
+    /// The closest point on `owner`'s trail centre line to `point`, and how far it is. **The
+    /// title's own trail**: HD's tube where the race draws it, the PSP-preset ribbon otherwise.
+    /// The ribbon's line ends where it is drawn below [`exhaust::TRAIL_HIT_MIN_BRIGHTNESS`] of
+    /// its head's brightness, so a lent burst never fires in the part nobody can see
+    /// (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst reach"); HD's tube is whole.
+    fn trail_nearest(&self, owner: usize, point: Vec3) -> Option<(Vec3, f32)> {
+        if self.view.hd_trail_active {
+            self.view.hd_trail[owner].nearest(point)
+        } else {
+            self.view.exhaust[owner].trail_nearest(point)
+        }
+    }
+
+    /// How far `owner`'s trail reaches either side of its centre line: HD's measured half-width,
+    /// or the PSP ribbon's drawn width at its head.
+    fn trail_half_width(&self, owner: usize) -> f32 {
+        if self.view.hd_trail_active {
+            exhaust::hd::FIN_HALF_WIDTH
+        } else {
+            self.view.exhaust[owner].trail_half_width()
+        }
+    }
+
     fn trail_touches(&self, slot: usize, owner: usize) -> bool {
-        let tube = &self.view.hd_trail[owner];
-        let Some((low, high)) = tube.bounds() else {
+        let bounds = if self.view.hd_trail_active {
+            self.view.hd_trail[owner].bounds()
+        } else {
+            self.view.exhaust[owner].trail_bounds()
+        };
+        let Some((low, high)) = bounds else {
             return false;
         };
+        let half_width = self.trail_half_width(owner);
         // A point farther than `reach` from the box holding the whole ribbon is farther than
         // `reach` from the ribbon, so `nearest` (53 segments) is asked only of a point that
         // could pass: the same answer, and most pairs on a spread-out field are far apart.
         // The unit of slack keeps float rounding in `nearest` on the same side.
         let near = |point: Vec3, reach: f32| {
             (point.clamp(low, high) - point).length() <= reach + 1.0
-                && tube.nearest(point).is_some_and(|(_, away)| away <= reach)
+                && self
+                    .trail_nearest(owner, point)
+                    .is_some_and(|(_, away)| away <= reach)
         };
         let at = self.sim.world.ships[slot].physics.body.position;
         let Some(anchors) = self.view.spark_anchors.get(slot).filter(|a| !a.is_empty()) else {
-            return near(at, self.view.hull_reach[slot] + exhaust::hd::FIN_HALF_WIDTH);
+            return near(at, self.view.hull_reach[slot] + half_width);
         };
+        if !self.view.hd_trail_active {
+            // A PSP-preset ribbon is a thin line (0.2..0.55 wide) down the middle of where the
+            // owner flew, and a hull's authored anchors are its edges: a craft flying along it
+            // has the line through its middle and no anchor within a ribbon's width of it. So
+            // the craft is in the trail when the line passes within the hull's own cross-section,
+            // the farthest an anchor sits from the hull's axis. **Chosen, not measured**: no
+            // test is read for this ribbon.
+            let radius = anchors
+                .iter()
+                .fold(0.0f32, |far, a| far.max(a.x.hypot(a.y)));
+            return near(at, radius + half_width);
+        }
         let matrix = model_matrix_of(&self.sim.world.ships[slot]);
         anchors
             .iter()
-            .any(|local| near(matrix.transform_point3(*local), exhaust::hd::FIN_HALF_WIDTH))
+            .any(|local| near(matrix.transform_point3(*local), half_width))
     }
 
     /// The craft's own authored hull spark anchor nearest `contact`, in world
@@ -472,7 +579,7 @@ impl Race {
         // sparking from its own exhaust.
         let body = self.sim.world.ships[slot].physics.body;
         let nose = body.position + body.forward() * self.view.hull_reach[slot];
-        let contact = self.view.hd_trail[owner].nearest(nose)?.0;
+        let contact = self.trail_nearest(owner, nose)?.0;
         anchors
             .iter()
             .map(|local| matrix.transform_point3(*local))
@@ -562,17 +669,12 @@ impl Race {
     /// [`Race::ship`], which is `ships[0]`, and a `CameraOverride` pose is
     /// still that player's view, so slot 0 is skipped under one too.
     #[must_use]
-    pub fn hd_sprite_quad(
-        &self,
-        slot: usize,
-        right: Vec3,
-        up: Vec3,
-    ) -> Vec<oag_mesh::mesh::GpuVertex> {
+    pub fn hd_sprite_quad(&self, slot: usize, right: Vec3, up: Vec3) -> SpriteQuad {
         if !self.view.hd_trail_active || slot == FOLLOWED_SLOT {
-            return Vec::new();
+            return SpriteQuad::default();
         }
         let Some(nozzle) = self.nozzle_of(slot) else {
-            return Vec::new();
+            return SpriteQuad::default();
         };
         // The camera's forward and position, both read out of the view
         // matrix: `right` and `up` are its rows 0 and 1, and for an
@@ -588,7 +690,7 @@ impl Race {
             (nozzle - eye).length(),
             exhaust::hd::sprite_view_dot(forward, nozzle_axis),
         ) else {
-            return Vec::new();
+            return SpriteQuad::default();
         };
         // The half-height is in the tuning file's model space, as `Flare
         // Radius` is - `nozzle` already carries the craft's 0.75 global scale
@@ -602,7 +704,7 @@ impl Race {
             sprite.half_height(fade) * exhaust::CRAFT_ROW_SCALE,
             fade,
         )
-        .to_vec()
+        .into()
     }
 
     /// Advances every craft's shield shell, and starts the fade on the tick its
@@ -735,9 +837,8 @@ impl Race {
         // Whole ticks, then a **short final tick** for the remainder, so the
         // ramp lands exactly on `target` instead of up to one tick past it.
         //
-        // This used to be `ceil`, and the overshoot was real: the first numeric
-        // comparison against a capture measured `intensity` `+0.0041` high, one
-        // whole tick of `INTENSITY_RISE * dt`, purely from rounding the warmup
+        // `ceil` overshoots: a capture comparison measured `intensity` `+0.0041` high,
+        // one whole tick of `INTENSITY_RISE * dt`, purely from rounding the warmup
         // up. Still a replay of `advance` rather than a poked field - the
         // principle this function is built on - because a shortened step is
         // something the original's own variable timestep does anyway.
@@ -787,7 +888,7 @@ impl Race {
         if let Some(nozzle) = self.nozzle() {
             let back = -self.ship().physics.body.forward();
             self.view.exhaust[0].clear_trail();
-            for k in (0..exhaust::TRAIL_SAMPLES).rev() {
+            for k in (0..self.view.exhaust[0].trail_samples_kept()).rev() {
                 let behind = back * (speed * self.sim.dt * k as f32);
                 self.view.exhaust[0].push_trail(nozzle + behind, back);
             }
@@ -821,6 +922,13 @@ impl Race {
     /// weapon step, no clock) for `ticks` steps, each craft on a straight path that ends exactly
     /// on the pose it holds now, at its captured velocity, so `trail_head_of` and the drawn hull
     /// agree and nothing but the exhaust has moved.
+    ///
+    /// **And the trail-hit burst with it.** A craft the capture caught inside a rival's ribbon
+    /// carries the original's burst on its nose, re-raised every frame it stays inside
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The trail-hit burst, measured").
+    /// On an HD race each replayed tick therefore also runs the effect stage and then
+    /// [`Self::advance_trail_hits`], in the order a real tick runs them, so a posed frame shows
+    /// the burst at the age a racing frame would. Off HD the stage is left alone.
     ///
     /// **Chosen, not measured:** the straight path and the fixed heading (the original's craft
     /// had curved), and full thrust for every craft: the player's throttle reads 100 in the
@@ -860,7 +968,13 @@ impl Race {
                 ship.body.linear_velocity = velocities[slot];
                 ship.thrust = Self::FULL_THRUST;
             }
+            if self.trail_hits_on() {
+                self.view
+                    .stage
+                    .advance(self.sim.dt, &mut self.view.stage_rng);
+            }
             self.advance_exhausts();
+            self.advance_trail_hits();
         }
         if aged == Some(0) {
             self.view.exhaust[0].boost(exhaust::BOOST_SECONDS);
@@ -943,6 +1057,17 @@ impl Race {
         self.ship().physics.craft_state == oag_physics::CraftState::Destroyed
     }
 
+    /// Whether `slot`'s craft is blowing up: the level the pad's explosion
+    /// pattern rises on.
+    #[must_use]
+    pub fn craft_destroyed(&self, slot: usize) -> bool {
+        self.sim
+            .world
+            .ships
+            .get(slot)
+            .is_some_and(|ship| ship.physics.craft_state == oag_physics::CraftState::Destroyed)
+    }
+
     /// Whether an Autopilot pickup is currently active under a person this
     /// machine's speakers are for ([`Self::heard_here`]).
     ///
@@ -999,12 +1124,30 @@ impl Race {
     /// own events and camera (its falloff is measured from the player's eye), so another local
     /// seat's view does not wear it: before, the player's explosion or respawn washed every
     /// view of a split. **Chosen, not measured**: a seat has no wash of its own yet.
+    ///
+    /// **Never the view through a portal pair**: that is the world at the exit, and the
+    /// wash is drawn once, over the view the portal's surface is in.
     #[must_use]
     pub fn screen_wash(&self) -> Option<[f32; 4]> {
-        if self.extra_viewpoint().is_some() {
+        if self.view.viewpoints.through_portal() {
             return None;
         }
-        self.view.screen_flash.as_ref()?.colour()
+        let flash = match self.extra_viewpoint() {
+            Some(_) => None,
+            None => self.view.screen_flash.as_ref().and_then(|f| f.colour()),
+        };
+        // A module's `screen-fill` is the view's own slot's, so a seat wears its own.
+        let fill = self.extension_fill(self.viewed_slot());
+        match (flash, fill) {
+            (flash, None) => flash,
+            (None, fill) => fill,
+            // Both are additive washes (colour times alpha added over the picture), so
+            // together they are the sum, at full alpha.
+            (Some(flash), Some(fill)) => {
+                let add = |c: usize| flash[c] * flash[3] + fill[c] * fill[3];
+                Some([add(0).min(1.0), add(1).min(1.0), add(2).min(1.0), 1.0])
+            }
+        }
     }
 
     /// Whether the player's shield pickup is currently up.
@@ -1071,6 +1214,16 @@ impl Race {
         Some(self.ship_model_matrix_of(slot).transform_point3(local))
     }
 
+    /// One craft's `Ship Muzzle` locator in **world** space, through the same model
+    /// matrix as [`Self::nozzle_of`]; `None` when its hull authors none. The
+    /// locator is the simulation's (`oag_gameplay::world::Ship::muzzle`, where the
+    /// bolt itself is released); the drawn matrix adds the display roll and lean.
+    #[must_use]
+    pub fn muzzle_of(&self, slot: usize) -> Option<Vec3> {
+        let local = self.sim.world.ships.get(slot)?.muzzle?;
+        Some(self.ship_model_matrix_of(slot).transform_point3(local))
+    }
+
     /// The `engine_flare` locator in **model space** - the pivot a transform
     /// composed with the craft's own matrix wants, where [`Self::nozzle_of`]
     /// is the world-space point the trail is laid from. Mixing the two up
@@ -1078,6 +1231,20 @@ impl Race {
     #[must_use]
     pub fn nozzle_local_of(&self, slot: usize) -> Option<Vec3> {
         self.view.nozzles.get(slot).copied().flatten()
+    }
+
+    /// Puts the player's craft on `position` and `orientation`, and carries its engine ribbon
+    /// with it (the same rigid move, from the pose the craft has now).
+    ///
+    /// A posed capture that runs the clock and then restores the pose it started from would
+    /// otherwise leave the ribbon hanging off the pose the craft had turned to.
+    pub fn place_player(&mut self, position: Vec3, orientation: Quat) {
+        let body = &mut self.sim.world.ships[FOLLOWED_SLOT].physics.body;
+        let turn = orientation * body.orientation.inverse();
+        let from = body.position;
+        body.position = position;
+        body.orientation = orientation;
+        self.view.exhaust[FOLLOWED_SLOT].move_rigidly(turn, from, position);
     }
 }
 
@@ -1094,4 +1261,22 @@ pub(super) const FOLLOWED_SLOT: usize = 0;
 /// LCG would need a stride instead.
 pub(super) fn exhaust_seed(slot: usize) -> u64 {
     EXHAUST_SEED + slot as u64
+}
+
+/// [`Race::hd_sprite_quad`]'s six vertices, or none, held in place and read as a slice.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SpriteQuad(Option<[oag_mesh::mesh::GpuVertex; 6]>);
+
+impl From<[oag_mesh::mesh::GpuVertex; 6]> for SpriteQuad {
+    fn from(quad: [oag_mesh::mesh::GpuVertex; 6]) -> Self {
+        Self(Some(quad))
+    }
+}
+
+impl std::ops::Deref for SpriteQuad {
+    type Target = [oag_mesh::mesh::GpuVertex];
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref().map_or(&[], |quad| &quad[..])
+    }
 }

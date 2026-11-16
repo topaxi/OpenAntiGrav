@@ -10,7 +10,7 @@
 //! Which events count, and the default of the one setting, are **chosen, not
 //! measured**: no original title was observed on a phone or a desktop window.
 
-use log::info;
+use log::debug;
 
 use crate::stage::Stage;
 
@@ -64,20 +64,45 @@ pub(crate) fn silences(away: Away) -> bool {
 }
 
 impl Session {
+    /// The run is ending, whichever way: the rumble stops, the playlist's place, the campaign
+    /// position and the replays are kept, and the background saves are finished.
+    pub(crate) fn wind_down(&mut self) {
+        self.stop_rumble();
+        self.controls.silence_motors();
+        self.save_race_music();
+        self.keep_campaign_position();
+        self.keep_replays();
+        oag_game::records::finish_background_saves();
+    }
+
+    /// A race that is neither finished nor held by the pause menu.
+    pub(crate) fn race_running(&self) -> bool {
+        matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
+            && !matches!(self.pause, oag_game::pause::State::Paused { .. })
+    }
+
     /// Applies [`decide`] to the live session.
     pub(crate) fn window_away(&mut self, away: Away) {
+        if matches!(away, Away::Suspended | Away::Minimized) {
+            self.idle.set_hidden(true);
+            self.idle.release();
+        }
         // A network race is never paused from here: the server's race goes on
         // whatever this window does, so a frozen client only falls behind it.
-        let running = matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
-            && !matches!(self.pause, oag_game::pause::State::Paused { .. })
-            && self.net.is_none();
+        // Photo mode already holds the race still, and the window going away leaves it.
+        let running = self.race_running()
+            && self.net.is_none()
+            && self.photo.is_none()
+            // A demo is never paused for losing focus: a wallpaper is never focused.
+            && !self.in_demo();
         let pause = decide(
             away,
             self.settings.display.pause_on_focus_loss,
             running,
             self.shell.is_some(),
         );
-        info!("window away ({away:?}): {pause:?}");
+        debug!("window away ({away:?}): {pause:?}");
+        self.controls.silence_motors();
         match pause {
             Pause::Nothing => {}
             Pause::Menu => self.back(),
@@ -99,6 +124,7 @@ impl Session {
     /// The window is back on screen: the device restarts. A race that was
     /// paused stays paused.
     pub(crate) fn window_back(&mut self) {
+        self.idle.set_hidden(false);
         self.audio.set_suspended(false);
         // The gap is not a frame anyone presented.
         self.stalled = true;

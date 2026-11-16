@@ -30,7 +30,7 @@
 // (`_alphaboost`, `scale.z`) and the advert's weight against its own red
 // channel (`_desaturate`, `scale.w`: `mix(adv.r, adv, w)`).
 
-import package::bindings::{emissives, scene};
+import package::bindings::{emissive_scale, emissive_tint, scene};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import oag_shaders::target::{gamma_to_target, linear_out};
@@ -53,10 +53,10 @@ fn holo_billboard(in: VertexOutput) -> vec4<f32> {
         let lightmap = textures[material.lightmap];
         let pad_mask = textures[material.pad_mask];
     }
-    let entry = (in.slots >> 24u) & 127u;
-    let rates = emissives.tint_offset[entry];
-    let tint = emissives.tint_offset[entry + 1u].rgb;
-    let finish = emissives.scale[entry + 1u];
+    let entry = (in.slots >> 24u) & 63u;
+    let rates = emissive_tint(entry);
+    let tint = emissive_tint(entry + 1u).rgb;
+    let finish = emissive_scale(entry + 1u);
     let t = scene.time.x;
     let layer_uv = in.lightmap_texcoord.xy;
     let scan_uv = in.lightmap_texcoord.zw;

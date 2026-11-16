@@ -11,6 +11,21 @@ Two rules hold everywhere in this tree:
 2. **State the confidence.** Every reverse-engineering claim carries a score
    from the [confidence rubric](reverse-engineering/confidence-rubric.md).
 
+## Three kinds of pages
+
+- **Specs** ([`specs/`](specs/README.md)): short, standalone descriptions of the
+  file formats and the game's behaviour. Start here to learn how the engine
+  works.
+- **Evidence** (most of [`formats/`](formats/README.md), [`ghidra/`](ghidra/),
+  [`physics/`](physics/), [`rendering/`](rendering/), [`gameplay/`](gameplay/)):
+  the long record behind each claim, with addresses, captures, test corpora and
+  superseded readings. Read it to check a claim or to continue the
+  reverse-engineering, not to learn the engine. `ghidra/` alone is about half
+  of this tree.
+- **Working notes** (`HANDOVER.md` at the repository root and the thread
+  directory beside it): open work in flight, one file per thread, deleted when
+  the work lands. They are not documentation, and nothing here links into them.
+
 ## Reading order
 
 New to the project? Read these in order:
@@ -34,6 +49,7 @@ Then, depending on what you are here to do:
 | Reverse engineer something | [Methodology](reverse-engineering/methodology.md) |
 | Set up Ghidra and the emulators | [Toolchain](reverse-engineering/toolchain.md) |
 | Decode an asset format | [Format index](formats/README.md) |
+| Read a short standalone spec, without the evidence trail | [Specs](specs/README.md) |
 | Know what is on the discs | [PSP](psp/pulse-disc-layout.md) / [PS2](ps2/pulse-disc-layout.md) |
 | Use the tools | [Tool docs](tools/README.md) |
 | Mod the game: tracks, AI pilots, menu rows | [Modding guide](tools/modding.md) |
@@ -44,6 +60,7 @@ Then, depending on what you are here to do:
 | Run the game | [Front-end boot](architecture/frontend-boot.md) |
 | Keep the loading screen from freezing | [Load-to-race transition](architecture/race-load-transition.md) |
 | Know where a load spends its time | [Load time](architecture/load-time.md) |
+| See what each dependency upgrade changed, and what is held back and why | [Dependency upgrades](architecture/dependency-upgrades.md) |
 | Know which thread reads and decodes music | [Music threads](architecture/music-threads.md) |
 | Add or change a menu | [Menus](architecture/menus.md) |
 | Persist something to a player's own machine | [Persistence](architecture/persistence.md) |
@@ -62,6 +79,7 @@ ghidra/                 conventions and per-function documentation
   functions/            one page per analysed function, per binary
   memory-maps/          address space layouts
 formats/                one page per asset format, plus a status index
+specs/                  concise standalone specifications distilled from formats/ and the behaviour pages
 psp/  ps2/              platform-specific findings
 comparisons/            PSP vs PS2, and cross-title comparisons
 gameplay/ physics/ rendering/ ui/ networking/
@@ -74,12 +92,7 @@ tools/                  command line tool reference, and packaging
 ## Status
 
 **[`overview/roadmap.md`](overview/roadmap.md) is the authority**; this page
-carries a one-paragraph summary and nothing per-item, because a status kept in
-two places is a status that drifts in one of them. It already had: this section
-still said "milestone M0, nothing about the game's runtime behaviour has been
-established yet" on 2026-08-18, several milestones and one booted HD front end
-later, which made the first page a new contributor reads the most wrong one
-(finding I5 of that day's review).
+carries a one-paragraph summary and nothing per item, so the two cannot drift.
 
 Where it actually stands: **M0-M4 (foundation, asset archaeology, binary
 understanding, the verification harness, playable core) are complete**. **M5

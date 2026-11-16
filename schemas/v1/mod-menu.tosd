@@ -1,8 +1,9 @@
-# A mod's menu file, `menu.toml` at the root of a mod: rows attached to the main page,
+# A mod's menu file, `menu.toml` at the root of a mod: rows attached to the main page and pages of its own (ids namespaced <mod id>/<id> by the loader, ADR-0082),
 # see crates/ui/src/menu/definition/build.rs and docs/tools/mods.md. What cannot be said
 # here and stays the loader's: that `parent` is a top-level row's id or "top", `after`
 # a sibling under it, `target` a page and `action` one of the closed set, `string_id` an id
-# in some strings file, and that `id` is unused. A mod row is a `submenu` or an `action`.
+# in some strings file, `settings` one of this file's pages, and that `id` is unused. A mod row
+# is a `submenu` or an `action`.
 
 [toml-schema]
 version = "1.0.0"
@@ -62,6 +63,217 @@ optional = true
 type = "string"
 optional = true
 
+[types.condition]
+type = "table"
+
+[types.condition.setting]
+type = "string"
+
+[types.condition.value]
+type = "any"
+optional = true
+
+[types.condition.values]
+type = "array"
+itemtype = "any"
+optional = true
+
+[types.pinned]
+type = "table"
+
+[types.pinned.setting]
+type = "string"
+
+[types.pinned.value]
+type = "any"
+optional = true
+
+[types.pinned.values]
+type = "array"
+itemtype = "any"
+optional = true
+
+[types.pinned.shows]
+type = "string"
+
+[types.warning]
+type = "table"
+
+[types.warning.message]
+type = "string"
+
+# A warning about one setting alone describes a row that should not exist.
+[types.warning.all]
+type = "array"
+itemtype = "types.condition"
+minlength = 2
+
+# `values_from = "<fixed name>"` or `{ query = "<name>", of = "<setting key>" }` (ADR-0082). The
+# query's name and that `of` names a choice row's setting stay the loader's.
+[types.values-from-query]
+type = "table"
+
+[types.values-from-query.query]
+type = "string"
+
+[types.values-from-query.of]
+type = "string"
+optional = true
+
+# The second setting a query reads: `craft_title` on `tracks_of`, `class` on `teams_of`,
+# `team` on `variants_of` (the loader refuses one on another query).
+[types.values-from-query.craft_title]
+type = "string"
+optional = true
+
+[types.values-from-query.class]
+type = "string"
+optional = true
+
+[types.values-from-query.team]
+type = "string"
+optional = true
+
+# `launch = { ... }` on a `launch_race` row: the setting each input of the race is read
+# from. An input left out is the booted title's own.
+[types.launch]
+type = "table"
+
+[types.launch.track_title]
+type = "string"
+optional = true
+
+[types.launch.track]
+type = "string"
+optional = true
+
+[types.launch.craft_title]
+type = "string"
+optional = true
+
+[types.launch.team]
+type = "string"
+optional = true
+
+[types.launch.variant]
+type = "string"
+optional = true
+
+[types.launch.mode]
+type = "string"
+optional = true
+
+[types.launch.class]
+type = "string"
+optional = true
+
+[types.launch.difficulty]
+type = "string"
+optional = true
+
+[types.page-row]
+type = "table"
+
+[types.page-row.id]
+type = "string"
+optional = true
+
+[types.page-row.kind]
+type = "string"
+
+[types.page-row.label]
+type = "string"
+optional = true
+
+[types.page-row.target]
+type = "string"
+optional = true
+
+[types.page-row.action]
+type = "string"
+optional = true
+
+[types.page-row.launch]
+type = "types.launch"
+optional = true
+
+[types.page-row.setting]
+type = "string"
+optional = true
+
+[types.page-row.values]
+type = "array"
+itemtype = "string"
+optional = true
+
+[types.page-row.values_from]
+oneof = ["string", "types.values-from-query"]
+optional = true
+
+# A choice row's value while its mod has saved nothing for it.
+[types.page-row.default]
+type = "string"
+optional = true
+
+# A choice row's reach for a simulation module: "sim" (the default) travels with the race, "view"
+# reaches only what the module draws and stays on this device.
+[types.page-row.scope]
+type = "string"
+optional = true
+
+[types.page-row.button]
+type = "string"
+optional = true
+
+[types.page-row.disabled_by]
+type = "types.condition"
+optional = true
+
+[types.page-row.pinned]
+type = "array"
+itemtype = "types.pinned"
+optional = true
+
+[types.page-row.warn_when]
+type = "array"
+itemtype = "types.warning"
+optional = true
+
+[types.page-row.restart_required]
+type = "string"
+optional = true
+
+[types.page-row.string_id]
+type = "string"
+optional = true
+
+[types.page-row.subtitle]
+type = "string"
+optional = true
+
+[types.page-row.subtitle_string_id]
+type = "string"
+optional = true
+
+[types.page]
+type = "table"
+
+[types.page.id]
+type = "string"
+
+[types.page.title]
+type = "string"
+optional = true
+
+[types.page.title_string_id]
+type = "string"
+optional = true
+
+[types.page.entry]
+type = "array"
+itemtype = "types.page-row"
+optional = true
+
 [elements]
 
 [elements.toml-schema]
@@ -70,4 +282,15 @@ type = "types.toml-schema-reference"
 [elements.entry]
 type = "array"
 itemtype = "types.entry"
+optional = true
+
+[elements.page]
+type = "array"
+itemtype = "types.page"
+optional = true
+
+# The id of one of this file's pages that holds the mod's settings: the MODS page's SETTINGS row
+# opens it, so no `entry` needs to reach it.
+[elements.settings]
+type = "string"
 optional = true

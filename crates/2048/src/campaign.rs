@@ -27,6 +27,48 @@ pub use oag_tables::mjolnir::{Document, Field, Instance, Reference, parse};
 /// census.
 pub const SP_XML: &str = r"Data\xml\SP.xml";
 
+/// The XP award table (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`).
+pub const XP_AWARDS_XML: &str = r"Data\xml\XPAwards.xml";
+
+/// The XP rank thresholds.
+pub const XP_RANKS_XML: &str = r"Data\xml\XPRanks.xml";
+
+/// What a finished `event` is graded and paid by: its pass/elite bars, the package's
+/// `XPAwards.xml`, and the award column its kind pays. The column is **chosen, not measured**: the
+/// original's mode to column map is unread.
+#[must_use]
+pub fn event_progress(
+    archives: &mut oag_assets::Archives,
+    doc: &Document,
+    event: &Event,
+) -> (
+    Option<EventObjectives>,
+    Option<(oag_tables::xp::Awards, oag_tables::xp::Ranks)>,
+    oag_tables::xp::Column,
+) {
+    use oag_tables::xp::Column;
+    let column = match event.kind {
+        EventKind::Race => Column::Race,
+        EventKind::Elimination => Column::Elim,
+        EventKind::Zone => Column::Zone,
+    };
+    (event_objectives(doc, event), xp_tables(archives), column)
+}
+
+/// Both XP tables from the package, or `None` when either is absent or unreadable.
+#[must_use]
+pub fn xp_tables(
+    archives: &mut oag_assets::Archives,
+) -> Option<(oag_tables::xp::Awards, oag_tables::xp::Ranks)> {
+    let mut text = |name: &str| {
+        let bytes = archives.read_name(name).ok()?;
+        oag_tables::fexml::text(&bytes).ok()
+    };
+    let awards = oag_tables::xp::Awards::parse(&text(XP_AWARDS_XML)?)?;
+    let ranks = oag_tables::xp::Ranks::parse(&text(XP_RANKS_XML)?)?;
+    Some((awards, ranks))
+}
+
 /// **Not `SP.xml`'s schema.** 289 instances measured, but only
 /// [`typedef::GAME_MODE_OBJECTIVE`] (59 of them) is shared; the other 230
 /// are two typedefs `SP.xml` carries none of - `1114956821` x210, a
@@ -389,8 +431,9 @@ pub mod craft {
     }
 }
 
-/// The circuit `Event::track` resolves to, as `oag_2048::race::DEFAULT_TRACK`
-/// spells one: `Data\art\published\environments\<stem>\track.vex`, `<stem>`
+/// The circuit `Event::track` resolves to, under `dir` (`oag_title::Campaign::event_track_dir`;
+/// 2048's is the spelling `oag_2048::race::DEFAULT_TRACK` uses):
+/// `<dir>\<stem>\track.vex`, `<stem>`
 /// being [`Track::track_name`] lower-cased (every measured `track_name` is
 /// already lower-case; the call is defensive, not corrective). Confidence 90:
 /// [`Track::track_name`] matches `data/plugins/tracks/Definition.xml`'s own
@@ -404,11 +447,8 @@ pub mod craft {
 ///
 /// [`DEFAULT_TRACK`]: crate::race::DEFAULT_TRACK
 #[must_use]
-pub fn track_vex_entry(track: &Track) -> String {
-    format!(
-        r"Data\art\published\environments\{}\track.vex",
-        track.track_name.to_lowercase()
-    )
+pub fn track_vex_entry(dir: &str, track: &Track) -> String {
+    format!(r"{dir}\{}\track.vex", track.track_name.to_lowercase())
 }
 
 /// The mode token [`oag_race::Mode::from_name`] (`crates/race/src/mode.rs`)
@@ -755,6 +795,77 @@ pub fn unlock_gates(document: &Document) -> Vec<(String, Option<String>)> {
                 .map(|instance| instance.name.clone());
             (event.name.clone(), gate)
         })
+        .collect()
+}
+
+/// The event the original's chain walk starts from
+/// (`TouchCampaign_PaintChainRings` `0x810ef5fe`, the string literal it passes
+/// to the by-name lookup).
+pub const CHAIN_START: &str = "2048 - Event 1";
+
+/// The `m_options` bit `GameModeBase` vtable slot `+0x74` tests (the stub at
+/// `0x813ea23c`): the event is "locked" and the map paints nothing for it until its
+/// progress is raised.
+pub const OPTION_LOCKED: i64 = 0x10;
+
+/// Whether `event` authors [`OPTION_LOCKED`]: on the EU v1.04 package the 15 side
+/// challenges (five `"* P Ship Challenge"`, ten `"* - S Phantom Challenge"`), each
+/// of which also carries `M_RankRequired`.
+#[must_use]
+pub fn is_rank_gated(document: &Document, event: &Event) -> bool {
+    document
+        .instance(event.instance_id)
+        .and_then(|instance| instance.field("M_OPTIONS"))
+        .and_then(Field::int)
+        .is_some_and(|options| options & OPTION_LOCKED != 0)
+}
+
+/// What every name of the walk's speed-lap table (`0x8151ea78`, 40 strings)
+/// has between the circuit and the class.
+const SPEED_LAP_INFIX: &str = " Speed Lap - ";
+
+/// Each event's [`oag_title::MapRole`], by name, in the document's order: **every event in
+/// the document**, as [`unlock_gates`] does.
+///
+/// The main chain is [`CHAIN_START`] and its `M_PNEXTEVENT` successors; a branch
+/// is a chain event's `M_PBRANCHEVENT` and that event's own successors. On the
+/// EU v1.04 package that is 24 chain and 36 branch events
+/// (`crates/2048/tests/campaign_ground_truth.rs`).
+#[must_use]
+pub fn map_roles(document: &Document) -> Vec<(String, oag_title::MapRole)> {
+    use oag_title::MapRole;
+    let all = events(document);
+    let index_of = |id: i64| all.iter().position(|event| event.instance_id == id);
+    let mut roles = vec![MapRole::Side; all.len()];
+    // Only an event no walk has claimed is taken, so a cycle in authored data ends.
+    let walk = |start: Option<usize>, role: MapRole, roles: &mut Vec<MapRole>| {
+        let mut at = start;
+        while let Some(event) = at.filter(|&event| roles[event] == MapRole::Side) {
+            roles[event] = role;
+            at = all[event]
+                .next_event
+                .and_then(|next| index_of(next.instance_id));
+        }
+    };
+    let start = all.iter().position(|event| event.name == CHAIN_START);
+    walk(start, MapRole::Chain, &mut roles);
+    let chain: Vec<usize> = (0..all.len())
+        .filter(|&event| roles[event] == MapRole::Chain)
+        .collect();
+    for event in chain {
+        let branch = all[event]
+            .branch_event
+            .and_then(|branch| index_of(branch.instance_id));
+        walk(branch, MapRole::Branch, &mut roles);
+    }
+    for (event, role) in roles.iter_mut().enumerate() {
+        if *role == MapRole::Side && all[event].name.contains(SPEED_LAP_INFIX) {
+            *role = MapRole::SpeedLap;
+        }
+    }
+    all.iter()
+        .zip(roles)
+        .map(|(event, role)| (event.name.clone(), role))
         .collect()
 }
 

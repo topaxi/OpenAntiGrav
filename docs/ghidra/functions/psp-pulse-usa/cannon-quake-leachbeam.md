@@ -3765,3 +3765,151 @@ what a Quake hit shows and sounds.
 | HD / Fury | checked, applies, not wired: `.COLLISIONS` is named once, reached through a data pointer at `0x008a8e34`; the call site of the Cannon's craft-hit path (`Ship_DispatchCollisionFx` kind 1) is unread | checked, differs: no `noisematt` string in `EBOOT.elf`, so it draws none |
 | 2048 | checked, applies, not wired: `.COLLISIONS` is named twice in the decrypted `eboot.elf`; no call site read | checked, differs: no `noisematt` string in the decrypted `eboot.elf`, so it draws none |
 | Omega | not checkable: the executable cannot be read here | not checkable, follows HD: draws none |
+
+## 2026-10-31 (`hd-quake-leach-instances`): a press at the limit, re-read against HD, 2048 and Omega
+
+Re-read from the disassembly this pass, with HD, 2048 and Omega read side by side
+([`../ps3-hdfury-eu/weapon-instance-limits.md`](../ps3-hdfury-eu/weapon-instance-limits.md)):
+
+- **A LeachBeam press while a beam is up spends the pickup and fires nothing (88).**
+  `Weapon_FireLeachBeam` stores `held = -1` (`sw a1, 0x1bc(s1)` at `0x08866680`) and clears
+  `0x8000` (`0x08866688`) before it loads the live count (`lw s2, 0x68(a0)`) and branches on it
+  (`0x088666a8`); the decompile above shows the same order. `Ship_FireHeldWeapon` (`0x08844ae8`)
+  has no busy gate in front of it. The prose under "fires world-wide, not per-craft" says only that
+  one beam is up per race; the in-code comment in `crates/raceplay/src/weapons.rs` that this keeps
+  the pickup is wrong about the original. HD, 2048 and Omega spend it the same way.
+- **A Quake press while a wave is up keeps the pickup and leaves the request armed (65).**
+  `Weapon_FireQuake` returns before `held = -1` and before `fire_flags &= ~8`, and
+  `Weapons_DispatchFire` calls it again on that bit (the call at `0x08861b60`). A store search for `sw` to
+  `+0x1b8` finds no clear of bit 3 apart from the fire handlers, `Weapon_RequestFire` and the
+  whole-slot reset `FUN_088629f8`. So the original fires the second Quake by itself once the
+  first ends. Static, the same reading as HD's; **seen live 2026-11-02, below**.
+
+### 2026-11-02 (`quake-armed`): the armed press, seen live on Pulse PSP (90)
+
+PPSSPP v1.20.4 (software renderer, muted), Pulse USA, Time Trial, Talon's Junction, Venom, the
+grid save state. A breakpoint on `Weapons_DispatchFire` (`0x08861814`) reads, per dispatch frame,
+the player's record (`world + 0x70`, craft 0): `+0x1b8` (the request word), `+0x1bc` (held), and the
+Quake instance's busy byte (`*(*(world + 0x5c) + 0x60) + 0x48`) and id (`+0x44`). The press is
+**a write of bit `0x8` into `+0x1b8` inside the breakpoint** (`scripts/psp-fire-weapon.py`'s mechanism),
+not a pad press through `Ship_FireHeldWeapon`; the held id was written as `2` with the second press
+in the second run. Two runs, 420 dispatch frames each, identical:
+
+| Dispatch frame | busy | bit 3 of `+0x1b8` | held | id | |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 2 | 0 | 0 | -1 | 0 | press 1 written |
+| 3 | 1 | 0 | -1 | 1 | wave 1 live; the handler cleared the bit |
+| 60 | 1 | 0 | -1 / 2 | 1 | press 2 written (run 2 also writes held = 2) |
+| 61..306 | 1 | **1** | -1 / **2** | 1 | the bit and the held id stay set for 246 frames |
+| 307 | 0 | **1** | -1 / **2** | 1 | busy first reads clear, the bit is still set |
+| 308 | 1 | 0 | **-1** | **2** | a second wave, new id, bit cleared, held spent; no further write |
+
+So: a Quake request made while a wave is live is not cleared by `Weapon_FireQuake`'s busy return
+or by anything else in the 246 frames, and the dispatcher fires it on the very dispatch that first
+reads the busy byte clear (frame 307, visible at frame 308). Wave 1 lived from frame 3 to 306, 304
+frames, 5.07 s at 60 Hz, the page's 5.0 s lifetime. The pickup stays held until then. **Confidence
+90** for Pulse PSP (the press is a bit write, not a pad press: what `Ship_FireHeldWeapon` does to
+the bit on a real second press is read from the disassembly, not run). HD, 2048 and Omega: the
+same static reading, 65 ([weapon-instance-limits.md](../ps3-hdfury-eu/weapon-instance-limits.md)),
+**checked, applies, wired by the title-independent `Held::quake_armed`**. An absorb with the request
+armed is unread on every title (the original probably fires from an empty slot); ours cancels it,
+**chosen, not measured**.
+
+## 2026-11-11: the Cannon checked on a bank: the flight is exact, the speed is not, and the cage ends a round (weapon-bank-follow)
+
+Asked for by the maintainer during the lane ("also double check the cannon"). One round fired
+through bit `0x4000` from the original's Autopilot-flown craft on Moa Therma White's banked helix
+(spline sample 1416, roll 85 degrees, craft at 139.11 units/s), every `Cannon_UpdateRound` logged
+with its sweep by `scripts/psp-projectile-sweeps.py`; 25 updates. The lane's account is on
+[rocket-visuals.md](rocket-visuals.md#2026-11-11-code-4-is-the-collision-cage-and-what-a-bank-does-to-every-flyer-weapon-bank-follow).
+
+| | Original | Ours |
+| --- | --- | --- |
+| one update from each of the original's 24 states | | **0.000 unit, 0.00 units/s on all 24** |
+| straight flight, no probe, no fall | velocity constant between hits; the sweep is the only query | the same |
+| **a floor glance, seen live for the first time** | update 6: the sweep returns `3` (mag floor) at `(318.9, 126.8, -319.8)`, normal `(0.28, 0.11, -0.95)`; velocity `(687.3, 33.1, 299.9)` becomes `(736.7, 51.9, 134.0)`, speed kept, next position the hit plus 3.0 along the normal | the same to 0.000 (`cannon::BOUNCE_PUSH_OFF`, the mirror) |
+| **muzzle speed** | **750.60 units/s** | 278.0 units/s from the same craft speed |
+| the end | update 25, age 0.40 s: the sweep returns **`4`**, the collision cage (boundary `(553.28, 143.17, -280.29)`), `flags \|= 0x14` and the sparks, as a wall | no cage test: flies on to its 1 s reap, 440 units past that point |
+| spawn against the craft body | 5.32 ahead, 0.68 to the side, 0.00 up (this craft, one barrel) | the hull's forward extent, a quarter width to the side (chosen) |
+
+**The speed: the km/h figure is never divided by 3.6.** `Cannon_Init` (`0x088648ec`):
+
+```c
+speed            = speed_kmh + Cannon_BaseSpeedKmh(round);   // f12 + 500.0
+round->speed     = speed;                                     // + 0xdc
+round->velocity  = round->row2 * speed;                       // + 0x90 = (+ 0x70) * speed, vscl.t
+```
+
+and `row2` is the forward row of the muzzle anchor's matrix, copied in with the craft's display
+scale still on it. Read off the round at its first update: `+0xdc` **1000.801** (the craft's
+139.111 units/s times 3.6, plus 500), the three rows each **0.7500** long, `|velocity|`
+**750.601**, which is their product. So a round leaves at `0.75 * (craft km/h + 500)` units/s,
+2.7 times what `cannon::launch` then flew (`(craft km/h + 500) / 3.6`), and covers its one second
+of life in 750 units where ours covers 278; from a parked craft 375 against 138.9. Confidence
+**92**: the decompile has no divide, and the stored speed, the row length and the velocity agree to
+four digits on the shot; one shot at one speed (a second speed was not captured). `BASE_SPEED_KMH`'s
+own 90 stands; what was wrong is the unit this engine gave it.
+
+This answers two open items of the Cannon's flight: the round's path on a bank is straight, as
+read (82 becomes **92** for `Cannon_UpdateRound`'s move, sweep and reflect arms, now seen live),
+and code `4` in its wall arm is the cage, not a craft.
+
+**Wired** (`cannon::launch`: `(craft km/h + 500) * TARGET_GLOBAL_SCALE`; test
+`a_round_leaves_at_the_displayed_scale_times_craft_kmh_plus_the_base`, 750.60 at 139.111 units/s
+and 375.0 parked). The parked figure is a prediction of the law, not a capture: it stays open.
+
+**Cross-title.** HD authors a Cannon and runs the shared code: it inherits the flight
+(I:Pulse) and the speed fix; HD's own `Cannon_Init` is unread, so whether its round
+carries the same undivided figure is **not checkable** here (no HD capture of a round's velocity).
+HD and Omega run no cage off the track header. Pure has no Cannon.
+
+## 2026-11-11: a shielded target's shell under a Quake and a LeachBeam (shield-weapon-reactions)
+
+**Claim tested:** a Quake wave or a LeachBeam link reaching a craft with a running Shield raises the shell
+reaction, as the pending-damage drain calls `ShipShield_Hit` (`0x0885eb04`) for any posted amount.
+**Result: false for the Quake, true for the LeachBeam in one window** (the break tick and the 0.5 s linger).
+Static, headless decompile of `FUN_088418e0`, `LeachBeam_UpdatePool`, `LeachBeam_Drain`,
+`Ship_ApplyPendingWeaponDamage`; no live leg. `get_xrefs_to(0x0885eb04)` still returns exactly two callers:
+`Ship_ApplyPendingWeaponDamage` (`0x0883f204`) and the contact loop (`0x088426e0`).
+
+**The Quake never posts to `craft + 0x120`, so it never reaches the shell.** The wave branch of
+`FUN_088418e0` (re-decompiled whole) tests `entity->0x4c->0x1b8 & 0x10` and, with a Shield running, only clears
+the latch (`entity + 0x860 &= ~0x40`): no post, no `Ship_Damage`, no `ShipShield_Hit`. Unshielded it adds
+`slowdown_time` to `+0x130`, writes `+0x13c`/`+0x138 = 5`, calls `Ship_Damage(damage, entity, 2, 5, 0)` directly
+and plays `QUAKEHIT`. The `+0x130` drain skips `Ship_AddSlowdown` on a shielded craft too. Nothing in it
+touches `+0x120`. Confidence **88**. Ours already matches: `Wave::apply_hits` skips a shielded craft and reports
+nothing absorbed (`quake::tests::a_shielded_craft_takes_no_hit_and_absorbed_is_not_set`), so
+`advance_quake`'s `view.shield[slot].hit()` arm is unreachable for the Quake and stays as the generic
+out-parameter reader.
+
+**The LeachBeam does post to a shielded target, after its link has broken.** `LeachBeam_UpdatePool` sets
+`instance + 0x3c |= 0x40` and calls `LeachBeam_MarkDisconnected` when the target runs a Shield
+(`target->0x4c->0x1b8 & 0x10`), but the code after that chain does not read bit `0x40`. Both the break branch
+and the linger branch fall to the common tail (`0x08866d70`), which tests only the retire bit (`& 4`), the kind
+(`+0x54 == 1`) and `LeachBeam_PulseStrength > 0`, then calls `LeachBeam_Drain` (`0x08866ebc`, its only call
+site). `LeachBeam_Drain` gates on the **owner's** Shield only (`owner->0x1b8 & 0x10`), so with a Shield on the
+target alone it adds `LeachBeam_DrainRate` to `target + 0x120` and `Ship_ApplyPendingWeaponDamage`'s
+shield arm (state 1, `entity->0x8c8->active`) calls `ShipShield_Hit`. The 2026-09-08 live table already shows the
+tail's strength write (`0x08866eac`, four instructions before the call) running every frame through the linger.
+Confidence **80** on the window and the call chain. The same reading says the original keeps draining an
+**unshielded** target and crediting the owner's `+0x128` repair through the linger, which ours stops at the
+break; that is a hull-energy change, not wired here.
+
+**Not read: the tick pattern.** The tail drains only while `PulseStrength` (`age - last_pulse`, in `[0, 1]`) is
+positive; `last_pulse` is re-armed by `LeachBeam_Advance`'s pulse block at the ribbon's cursor wrap, so on a
+linger the shell reacts on the ticks inside a pulse's second. Ours has no pulse model (a locked beam drains
+every tick), so the port reports the reaction on every break and linger tick: **inherited from the model's
+own every-tick approximation, not measured**.
+
+**Port:** `Beam::advance` reports `absorbed` on the break tick and each linger tick before retire when the
+target is racing with a Shield, the owner has none and the beam drains per tick (HD's per-trip linger is unread).
+View-only: no drain, repair or shield is touched, so no state hash moves. Test:
+`tests::shield_hits::a_leach_beam_on_a_shielded_target_bulges_the_shell_through_its_linger`
+(red with the report dropped, green with it), guard
+`a_leach_beam_from_a_shielded_owner_leaves_the_targets_shell_at_rest`.
+
+**Against the other titles.** Pulse PS2: inherited from PSP. Pure: checked, differs - ships neither a Quake
+nor a LeachBeam ([weapons.md](../psp-pure-usa/weapons.md#pure-ships-no-leachbeam-checked-2026-10-12-lane-pure-leach-quake-confidence-90)).
+HD, 2048, Omega: not read for this branch. HD's beam drains once per ball trip and its linger drain and
+its Quake's shielded skip are unread (no HD or Omega handler was opened this pass), so the reaction is off
+for per-trip beams (`Beam::per_trip`) and the Quake keeps the generic shielded skip; named open in the thread.

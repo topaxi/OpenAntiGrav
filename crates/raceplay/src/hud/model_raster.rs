@@ -54,6 +54,32 @@ pub(super) fn end_of_tracks(model: &Model) -> f32 {
         .fold(0.0, f32::max)
 }
 
+/// The model's own animation clock at the key where its texture offset is furthest from the
+/// start: for a Pure weapon icon, whose quad windows ten texels of a 128-wide strip, the state
+/// that shows the glyph. The track runs `0 -> 217/256 -> 217/256 -> 0` over a second; the
+/// original's frames of every held weapon show the `217/256` state, and the model at time 0
+/// draws only the strip's empty leading texels.
+pub(super) fn held_at(model: &Model) -> f32 {
+    let mut best = (0.0f32, 0.0f32);
+    for track in &model.anim_tracks {
+        let oag_mesh::mesh::AnimTrack::Psp(t) = track else {
+            continue;
+        };
+        let unit = if t.seconds_per_key > 0.0 {
+            t.seconds_per_key
+        } else {
+            1.0 / 60.0
+        };
+        for (&time, value) in t.offset.times.iter().zip(&t.offset.values) {
+            let far = f32::from(value.0).abs().max(f32::from(value.1).abs());
+            if far > best.0 {
+                best = (far, f32::from(time) * unit);
+            }
+        }
+    }
+    best.1
+}
+
 /// Draws `model` with its texture tracks sampled at `seconds`. `None` for a model with no
 /// triangles, no decoded texture, or no extent.
 pub(super) fn raster(model: &Model, seconds: f32) -> Option<Raster> {
@@ -167,7 +193,10 @@ fn fill_draw(
         });
         for y in lo_y..hi_y {
             for x in lo_x..hi_x {
-                let p = [x as f32 + 0.5, y as f32 + 0.5];
+                // A hair off the pixel centre, so a pixel on the diagonal two triangles of a quad share
+                // belongs to exactly one of them. On the exact centre both took it, which an opaque
+                // gauge hides and a translucent backdrop shows as a dark seam.
+                let p = [x as f32 + 0.5007, y as f32 + 0.5011];
                 let w0 = ((pos[1][0] - p[0]) * (pos[2][1] - p[1])
                     - (pos[2][0] - p[0]) * (pos[1][1] - p[1]))
                     / area;
@@ -175,7 +204,7 @@ fn fill_draw(
                     - (pos[0][0] - p[0]) * (pos[2][1] - p[1]))
                     / area;
                 let w2 = 1.0 - w0 - w1;
-                if w0 < -1.0e-4 || w1 < -1.0e-4 || w2 < -1.0e-4 {
+                if w0 < 0.0 || w1 < 0.0 || w2 < 0.0 {
                     continue;
                 }
                 let blend = |f: &dyn Fn(usize) -> f32| w0 * f(0) + w1 * f(1) + w2 * f(2);

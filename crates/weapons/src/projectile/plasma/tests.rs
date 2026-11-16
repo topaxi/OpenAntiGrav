@@ -4,8 +4,13 @@
 use super::*;
 use crate::projectile::{MAX_FLIGHT_SECONDS, Projectiles};
 use oag_core::math::Quat;
+use oag_physics::params::Dimensions;
 use oag_physics::{CollisionWorld, Surface, TriangleSoup};
 use oag_tables::weapons::Weapon;
+
+/// Updates a Plasma stays off the probe under the 0.04 s window of a title without the measured
+/// craft box: ages 0, 1/60 and 2/60 are inside it, 3/60 is not.
+const UNPINNED_UPDATES: usize = 3;
 
 fn craft_at(position: Vec3, shield: f32, mass: f32) -> crate::test_craft::Ship {
     let mut ship = crate::test_craft::Ship {
@@ -55,7 +60,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
     let mut ships = one_ship(Vec3::ZERO, 0.0);
     let mut projectiles = Projectiles::new();
 
-    let (nose, forward) = muzzle(&ships[0].physics, &ships[0].handling.dimensions);
+    let (nose, forward) = muzzle(&ships[0]);
     assert!(projectiles.charge_up(nose, forward * 100.0, 0, CHARGE_SECONDS));
 
     // The wind-up with the craft turning. The hold is counted: `charge` is a float
@@ -68,19 +73,23 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
         projectiles.advance(
             TICK,
             &geometry,
+            None,
             &ships,
             None,
             None,
             None,
             crate::projectile::TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         tick += 1;
         let bolt = &projectiles.slots[0];
         assert_eq!(bolt.kind, Some(Weapon::Plasma), "the slot stays taken");
         // The reseat runs on the releasing tick too: the original calls
         // `Plasma_UpdateCharge` before testing the countdown.
-        let (nose_now, _) = muzzle(&ships[0].physics, &ships[0].handling.dimensions);
+        let (nose_now, _) = muzzle(&ships[0]);
         assert!(
             bolt.position.distance(nose_now) < 1e-3,
             "tick {tick}: the bolt sits on the nose, not where it was fired"
@@ -100,7 +109,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
     let bolt = projectiles.slots[0];
     assert_eq!(bolt.charge, 0.0, "the hold is over after CHARGE_SECONDS");
     let heading = bolt.velocity.normalize();
-    let (_, forward_now) = muzzle(&ships[0].physics, &ships[0].handling.dimensions);
+    let (_, forward_now) = muzzle(&ships[0]);
     assert!(
         heading.distance(forward_now) < 1e-3,
         "the bolt leaves along the craft's heading at release: {heading:?} against {forward_now:?}"
@@ -115,16 +124,20 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
     );
 
     // And the tick after the hold it is flying: it leaves the nose behind.
-    let (nose_at_release, _) = muzzle(&ships[0].physics, &ships[0].handling.dimensions);
+    let (nose_at_release, _) = muzzle(&ships[0]);
     projectiles.advance(
         TICK,
         &geometry,
+        None,
         &ships,
         None,
         None,
         None,
         crate::projectile::TriggerRadii::default(),
         "VENOM",
+        crate::projectile::FloorArms::SteerToRidePoint,
+        crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+        crate::projectile::PlasmaRelease::DisplayScaled,
     );
     assert!(
         projectiles.slots[0].position.distance(nose_at_release) > 1.0,
@@ -165,12 +178,16 @@ fn a_plasma_bolt_detonates_when_its_ten_seconds_are_up() {
         let impacts = projectiles.advance(
             TICK,
             &geometry,
+            None,
             &ships,
             None,
             None,
             None,
             crate::projectile::TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         ticks += 1;
         ended = impacts.into_iter().flatten().next();
@@ -246,8 +263,13 @@ fn a_timed_out_plasma_bolt_damages_nobody_standing_in_it() {
             &mut world.ships[..world.ship_count as usize],
             TICK,
             &empty,
+            None,
             Some(&table),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
+            crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
         );
@@ -303,12 +325,16 @@ fn a_plasma_bolt_that_strikes_a_craft_reports_it_struck_with_a_blast() {
             .advance(
                 1.0 / 60.0,
                 &geometry,
+                None,
                 &ships,
                 None,
                 None,
                 None,
                 crate::projectile::TriggerRadii::default(),
                 "VENOM",
+                crate::projectile::FloorArms::SteerToRidePoint,
+                crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+                crate::projectile::PlasmaRelease::DisplayScaled,
             )
             .into_iter()
             .flatten()
@@ -350,8 +376,13 @@ fn a_plasma_bolt_that_strikes_a_craft_credits_it_directly() {
             &mut world.ships[..world.ship_count as usize],
             1.0 / 60.0,
             &empty,
+            None,
             Some(&table),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
+            crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
         );
@@ -398,8 +429,13 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
             &mut world.ships[..world.ship_count as usize],
             1.0 / 60.0,
             &empty,
+            None,
             Some(&table),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
+            crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 3],
         );
@@ -418,8 +454,9 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
         world.ships[2].pending_slowdown, 0.0,
         "a bystander inside the radius took slowdown the direct hit never spends on it"
     );
-    assert!(
-        world.ships[2].physics.body.linear_velocity.length() > 0.0,
+    assert_ne!(
+        world.ships[2].physics.pending_impulse,
+        Vec3::ZERO,
         "a bystander inside the radius took no impulse at all"
     );
 
@@ -432,8 +469,8 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
         "the firer took slowdown from its own bolt"
     );
     assert_eq!(
-        world.ships[0].physics.body.linear_velocity.length(),
-        0.0,
+        world.ships[0].physics.pending_impulse,
+        Vec3::ZERO,
         "the firer is excluded from the impulse sweep, even though it sits inside the radius"
     );
 }
@@ -486,7 +523,7 @@ fn the_launch_speed_reads_the_crafts_velocity_at_release_not_at_the_press() {
     let geometry = CollisionWorld::new();
     let mut ships = one_ship(Vec3::ZERO, 0.0);
     let mut projectiles = Projectiles::new();
-    let (nose, forward) = muzzle(&ships[0].physics, &ships[0].handling.dimensions);
+    let (nose, forward) = muzzle(&ships[0]);
     // Still at the press: read now, the launch speed would be `launchSpeed`, `0.0`.
     assert!(projectiles.charge_up(nose, forward * 100.0, 0, CHARGE_SECONDS));
 
@@ -498,12 +535,16 @@ fn the_launch_speed_reads_the_crafts_velocity_at_release_not_at_the_press() {
         projectiles.advance(
             TICK,
             &geometry,
+            None,
             &ships,
             None,
             Some(&stats),
             None,
             crate::projectile::TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         tick += 1;
         assert!(tick < 120, "the hold has to end");
@@ -515,11 +556,12 @@ fn the_launch_speed_reads_the_crafts_velocity_at_release_not_at_the_press() {
         "expected 360 km/h from the craft's speed at release, got {}",
         bolt.launch_speed_kmh
     );
-    let expected_units_per_second = 360.0 / KMH_PER_UNIT_PER_SECOND;
+    // It leaves at 0.75 x that until its first floor ride: [`LAUNCH_SPEED_SCALE`].
+    let expected_units_per_second = 360.0 / KMH_PER_UNIT_PER_SECOND * LAUNCH_SPEED_SCALE;
     assert!(
         (bolt.velocity.length() - expected_units_per_second).abs() < 1e-3,
-        "the release tick's own velocity must already carry the ramp's age-0 \
-         value: expected {expected_units_per_second}, got {}",
+        "the release tick's own velocity must carry the launch scale: expected \
+         {expected_units_per_second}, got {}",
         bolt.velocity.length()
     );
 }
@@ -536,19 +578,23 @@ fn a_flying_plasma_bolts_speed_blends_from_launch_to_class_over_one_second() {
     // the speed.
     ships[0].physics.body.linear_velocity = Vec3::Z * 100.0;
     let mut projectiles = Projectiles::new();
-    let (nose, forward) = muzzle(&ships[0].physics, &ships[0].handling.dimensions);
+    let (nose, forward) = muzzle(&ships[0]);
     assert!(projectiles.charge_up(nose, forward * 100.0, 0, CHARGE_SECONDS));
 
     let advance = |projectiles: &mut Projectiles, ships: &[crate::test_craft::Ship]| {
         projectiles.advance(
             TICK,
             &geometry,
+            None,
             ships,
             None,
             Some(&stats),
             None,
             crate::projectile::TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
     };
 
@@ -584,4 +630,147 @@ fn a_flying_plasma_bolts_speed_blends_from_launch_to_class_over_one_second() {
         (after - 600.0).abs() < 1.0,
         "expected the class speed once the ramp is over, got {after}"
     );
+}
+
+/// Releases a bolt from a craft doing 100 units/s over a floor and returns the pool,
+/// the ships and the tick it was released on (counting from the press as tick 0).
+fn released_over_a_floor() -> (
+    Projectiles,
+    Vec<crate::test_craft::Ship>,
+    CollisionWorld,
+    oag_tables::weapons::PlasmaStats,
+    usize,
+) {
+    let stats = ramp_table();
+    let geometry = floor_at_y(0.0);
+    let mut ships = one_ship(Vec3::new(0.0, crate::projectile::RIDE_HEIGHT, 0.0), 0.0);
+    ships[0].physics.body.linear_velocity = Vec3::Z * 100.0;
+    let mut projectiles = Projectiles::new();
+    let (nose, forward) = muzzle(&ships[0]);
+    assert!(projectiles.charge_up(nose, forward * 100.0, 0, CHARGE_SECONDS));
+    let mut tick = 0;
+    loop {
+        advance_one(&mut projectiles, &ships, &geometry, &stats);
+        if projectiles.slots[0].launch_speed_kmh > 0.0 {
+            break;
+        }
+        tick += 1;
+        assert!(tick < 120, "the hold has to end");
+    }
+    (projectiles, ships, geometry, stats, tick)
+}
+
+fn advance_one(
+    projectiles: &mut Projectiles,
+    ships: &[crate::test_craft::Ship],
+    geometry: &CollisionWorld,
+    stats: &oag_tables::weapons::PlasmaStats,
+) {
+    projectiles.advance(
+        TICK,
+        geometry,
+        None,
+        ships,
+        None,
+        Some(stats),
+        None,
+        crate::projectile::TriggerRadii::default(),
+        "VENOM",
+        crate::projectile::FloorArms::SteerToRidePoint,
+        crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+        crate::projectile::PlasmaRelease::DisplayScaled,
+    );
+}
+
+/// The 60 s hold ends on the sixtieth update, as the original's does (`Plasma_Launch`
+/// at fire+59, the fire frame counting as the first): sixty subtractions of f32 `1/60`
+/// from `1.0` leave `2.8e-7`, which ran it to the sixty-first.
+#[test]
+fn the_wind_up_ends_on_the_sixtieth_tick() {
+    let (_, _, _, _, tick) = released_over_a_floor();
+    assert_eq!(tick, 59, "released on tick {tick}, counting the press as 0");
+}
+
+/// A bolt waits on the hull's `Ship Muzzle` locator through the craft's display scale:
+/// 4.24 ahead of the body on Assegai (`(0, 0, 5.653)` x 0.75), below the centre line
+/// where the hull authors it so (Triakis), and on the measured hold point 2.23 ahead
+/// on a hull with none. Fails with the locator ignored (2.23 everywhere) or carried
+/// through the wrong axis.
+#[test]
+fn the_muzzle_is_the_hulls_weapon_node_or_the_hold_point_without_one() {
+    let mut ships = one_ship(Vec3::new(5.0, 0.0, 0.0), 0.7);
+    let body = ships[0].physics.body;
+    let ahead_of = |nose: Vec3| (nose - body.position).dot(body.forward());
+
+    let (nose, _) = muzzle(&ships[0]);
+    // The literal is the probe's: 241.77 against the craft at 239.54.
+    assert!(
+        (ahead_of(nose) - 2.23).abs() < 1e-4,
+        "{} ahead",
+        ahead_of(nose)
+    );
+
+    ships[0].muzzle = Some(Vec3::new(0.0, 0.0, 5.653));
+    let (nose, _) = muzzle(&ships[0]);
+    let off = nose - body.position;
+    assert!(
+        (ahead_of(nose) - 4.24).abs() < 1e-3,
+        "Assegai: {} ahead",
+        ahead_of(nose)
+    );
+    assert!(off.dot(body.up()).abs() < 1e-4 && off.dot(body.right()).abs() < 1e-4);
+
+    ships[0].muzzle = Some(Vec3::new(0.0, -0.298, 4.183));
+    let (nose, _) = muzzle(&ships[0]);
+    let off = nose - body.position;
+    assert!(
+        (ahead_of(nose) - 4.183 * 0.75).abs() < 1e-3,
+        "Triakis: {} ahead",
+        ahead_of(nose)
+    );
+    assert!(
+        (off.dot(body.up()) + 0.298 * 0.75).abs() < 1e-3,
+        "Triakis: {} up",
+        off.dot(body.up())
+    );
+}
+
+/// The measured first four updates (`plasma.md`, "the detonation leg"): three that
+/// fall without riding and keep 0.75 x the release speed, then the first floor ride,
+/// which pins to the ramp. Fails with the launch scale dropped (full speed at once),
+/// or with the probe not gated (the ride on the first tick). The steer toward the
+/// ride point is not a speed; `plasma_timing_ground_truth.rs` pins it by the
+/// distance flown.
+#[test]
+fn a_plasma_bolt_keeps_three_quarters_of_its_speed_for_three_updates_then_rides() {
+    let (mut projectiles, ships, geometry, stats, _) = released_over_a_floor();
+    let launch = 360.0 / KMH_PER_UNIT_PER_SECOND;
+    for update in 1..=UNPINNED_UPDATES {
+        advance_one(&mut projectiles, &ships, &geometry, &stats);
+        let along = projectiles.slots[0].velocity.z.abs();
+        assert!(
+            (along - launch * LAUNCH_SPEED_SCALE).abs() < 1e-3,
+            "update {update} flies {along}, not {} (0.75 x the release speed)",
+            launch * LAUNCH_SPEED_SCALE
+        );
+    }
+    advance_one(&mut projectiles, &ships, &geometry, &stats);
+    let speed = projectiles.slots[0].velocity.length();
+    assert!(
+        speed > launch * 0.99,
+        "the first ride did not pin the speed: {speed}"
+    );
+}
+
+/// The riding bolt sits [`RIDE_HEIGHT`] above the floor, the Plasma's own, not the
+/// Rocket's 3.0.
+#[test]
+fn a_riding_plasma_bolt_sits_at_its_own_ride_height() {
+    let (mut projectiles, ships, geometry, stats, _) = released_over_a_floor();
+    for _ in 0..=UNPINNED_UPDATES + 1 {
+        advance_one(&mut projectiles, &ships, &geometry, &stats);
+    }
+    let height = projectiles.slots[0].position.y;
+    // 4.04 above the floor on the original, `plasma::RIDE_HEIGHT` 4.0; the Rocket's is 3.0.
+    assert!((height - 4.0).abs() < 0.05, "rides at {height}");
 }

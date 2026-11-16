@@ -344,11 +344,15 @@ impl Frontend {
     /// so something in the original can advance this screen without a press.
     /// **What that something is has not been found**, and a guess would be a
     /// hidden timeout, so it is left unfired here rather than modelled.
+    ///
+    /// **CROSS advances it too: an intended divergence** (maintainer,
+    /// 2026-10-31). The disc reads START alone here, and on Pure's
+    /// [`Self::update_title_screen`]; CROSS is the confirm button on every other
+    /// screen, and 2048's own title screen already takes any face button.
     pub(super) fn update_show_logo(&mut self, input: &mut Input) {
-        if input.is_pressed(Button::Start) {
-            input.consume_press(Button::Start);
+        if let Some(button) = take_press_start(input) {
             self.notes.push(format!(
-                "START pressed on {}, firing {}",
+                "{button:?} pressed on {}, firing {}",
                 states::SHOW_LOGO,
                 states::LAUNCH_GAME
             ));
@@ -381,11 +385,13 @@ impl Frontend {
     /// `Show Logo`'s is: a redirect with no button and no name is something the
     /// original's code fires, and what fires it has not been found on either
     /// title. Guessing a hidden timeout here would be inventing a duration.
+    ///
+    /// CROSS advances it too, as on [`Self::update_show_logo`]: ours, not the
+    /// original's.
     pub(super) fn update_title_screen(&mut self, input: &mut Input) {
-        if input.is_pressed(Button::Start) {
-            input.consume_press(Button::Start);
+        if let Some(button) = take_press_start(input) {
             self.notes.push(format!(
-                "START pressed on {}, firing {}",
+                "{button:?} pressed on {}, firing {}",
                 pure_states::TITLE_SCREEN,
                 states::LAUNCH_GAME
             ));
@@ -432,4 +438,14 @@ impl Frontend {
             self.advance("the video ended");
         }
     }
+}
+
+/// The press that leaves a PRESS START screen: START, or CROSS (ours, see
+/// [`Frontend::update_show_logo`]). Consumes it.
+fn take_press_start(input: &mut Input) -> Option<Button> {
+    let button = [Button::Start, Button::Cross]
+        .into_iter()
+        .find(|&b| input.is_pressed(b))?;
+    input.consume_press(button);
+    Some(button)
 }

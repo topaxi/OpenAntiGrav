@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd, pulse]
-updated: 2026-10-19
-summary: "LeachBeam: HD's per-trip drain is a static read; fire a real beam on PPSSPP and RPCS3 to measure the rest"
+updated: 2026-11-15
+summary: "LeachBeam: HD ball rides the strip, trip clock from state 4 (wired); shield steps and states 2/3 unread"
 ---
 
 # The LeachBeam against the original: what still differs after the 2026-09-23 rebuild
@@ -22,11 +22,24 @@ the original's jagged lightning, and the shooter's hull lights and pulses.
   "Both found the same day", confidence 80). The RPCS3 check that would
   confirm it: a locked beam's target loses shield in steps of `damage` (1.5
   on HD's Race table) every 0.3 to 1.0 s, 3.0 on the first step, with nothing
-  between. Still open on the same page: the length the trip period reads
-  (`strip+0x10`, taken as the craft-to-craft distance, chosen), whether
-  `Ship_ApplyDamage_q`'s TOC scale is the weapons-off factor, and whether
-  HD's `+0x378` slow factor persists between arrivals (this engine applies
-  `slowShipFactor` on arrival ticks only).
+  between. The ball's clock was seen live wrapping at its 0.3 s period
+  (2026-11-15, `hd-leach-2`), the shield steps were not read. Still open:
+  whether `Ship_ApplyDamage_q`'s TOC scale is the weapons-off factor, and
+  whether HD's `+0x378` slow factor persists between arrivals (this engine
+  applies `slowShipFactor` on arrival ticks only). ~~The length the trip
+  period reads~~: closed 2026-11-15, it is the craft's gap along the course
+  (`weapons.md`, "The ball rides the strip"), wired.
+
+- **HD's state 2 and 3 points along the strip are unread** (2026-11-15).
+  State 2 calls `BeamPath_PointAt` with `1 - 2.5 * clock` (shooter to target
+  over the 0.4 s ball flight) and compares it with `beam + 0xc920`; state 3
+  with `3.3333 * clock`. What each places (the launch ball? the reveal's
+  front?) is not read; start at `0x00153754`. Ours draws the drain ball from
+  the fire.
+
+- **Omega's ball runs HD's lookup on a strip ours does not draw.** Omega's
+  `FUN_0136e340` is HD's advance with the lookup inlined; our Omega has no
+  `leach_strip`, so its ball keeps the straight line between the bodies.
 
 - **The track-tube bend is measured, and the port stands.** 2026-10-01: six
   PPSSPP captures at Talon's Junction (585 chain transitions, all three plane

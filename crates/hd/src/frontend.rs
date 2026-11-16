@@ -114,6 +114,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // seen to be *consumed* by the executable.
     title_font: Some("Title"),
     body_font: None,
+    stats_font: None,
     default_face_is_row_face: true,
     // **Not authored, and the reason is the finding.** HD's main menu is a
     // `<HorizMenu>` - horizontal - so it has no first row to put a y on, and the
@@ -314,7 +315,7 @@ pub const MENU_BLOCKS: oag_title::MenuBlocks = oag_title::MenuBlocks {
 pub const BOOT_CHAIN: &[oag_title::BootStep] = &[
     oag_title::BootStep::screen(states::LANGUAGE_SELECTION),
     oag_title::BootStep::screen(states::PRE_FMV_CONNECT),
-    oag_title::BootStep::playing(states::STUDIO_LOGO, names::STUDIO_LOGO_MOVIE),
+    oag_title::BootStep::playing_authored(states::STUDIO_LOGO, names::STUDIO_LOGO_MOVIE),
     oag_title::BootStep::screen(states::EPILEPSY_WARNING),
     oag_title::BootStep::screen(states::FIRST_PLAY),
     oag_title::BootStep::screen(states::SAVE_WARNING),
@@ -392,6 +393,28 @@ const CIRCUIT_MODELS: [oag_title::CircuitModel; 12] = {
     ]
 };
 
+/// The camera `TeamSelection_Screen`'s update poses the craft on, read off the
+/// executable: the update overwrites the `ShipModel` widget's authored rotation,
+/// depth, lens and origin every frame, and `TeamSelection_FitModelDepth` steps
+/// the depth until the model's box fits. Every number is a constant of those
+/// two functions (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`).
+pub const SHIP_FIT: oag_title::ShipFit = oag_title::ShipFit {
+    rotation: [0.25, -0.6],
+    fov_degrees: 57.3,
+    far: 100.0,
+    origin: [1220.0, 500.0],
+    half_box: [1.125, 0.75],
+    fit_half_fov: 0.5,
+    unit: [1920.0, 1080.0],
+    window: [535.0, 389.0],
+    step: 0.1,
+    start: 13.0,
+    depth_ease: 0.125,
+    slide_ease: 0.0625,
+    floor: 11.0,
+    zone_box: [-4.2, 4.2],
+};
+
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
@@ -406,6 +429,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     boot: BOOT,
     menu_frame: Some(states::FE_SCREEN),
     bottom_up_gnf: &[],
+    runtime_palette_faces: false,
     // HD authors its track and ship screens in two files of their own, in
     // its own dialect - see `track_select` and `team_select`.
     race_box: None,
@@ -413,6 +437,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
     track_label_overrides: &[],
+    card_track_aliases: &[],
     track_record_empty: "-",
     track_distance_authored: false,
     // `false`: the one mesh path reads `<team>\ship_FE.vex` and `FE\forward.vex`,
@@ -423,6 +448,8 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     preview_meshes: false,
     ship_preview_hull: Some("ship.vex"),
     ship_preview_pose: None,
+    ship_preview_fit: Some(SHIP_FIT),
+    ship_preview_settle: None,
     circuit_models: &CIRCUIT_MODELS,
     // `DATA02`'s copy - `oag_assets::Archives::holder_of`'s own mount order
     // (`data` then `fe` then `extra`) reaches it first, the same precedence
@@ -434,6 +461,24 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         oag_title::EndRaceDialect::Field,
     )),
     borrows_ps2_split_screens: false,
+    model_lighting: Some(MODEL_LIGHTING),
+};
+
+/// What lights Ship Select's craft: the two styles' files, and the tone stage the front end's
+/// loader sets up (`Tone adaption boost` 35, and the block's own clamp 3 and maximum 4;
+/// confidence 85). **`adapted` is the live read of `FunkLayer + 0x25c` on Ship Select in the
+/// Fury style**, 1920x1080 at scale 100, ten reads of 0.0157 to 0.0180 whose mean is 0.0163
+/// (confidence 75, one boot); the HD style's frame is unmeasured, a white page, and is taken at the clamp.
+pub const MODEL_LIGHTING: oag_title::ModelLighting = oag_title::ModelLighting {
+    fury_file: names::FURY_MODEL_LIGHT,
+    hd_file: names::HD_MODEL_LIGHT,
+    ps4: false,
+    tone: Some(oag_title::FrontEndTone {
+        boost: 35.0,
+        clamp: 3.0,
+        maximum: 4.0,
+        adapted_fury: 0.0163,
+    }),
 };
 
 /// The sixteen plugins that carry a language, named rather than numbered.
@@ -654,17 +699,18 @@ pub mod names {
     /// `crates/game/tests/hd_movie_ground_truth.rs` are what replaced that. See
     /// [`bik.md`].
     ///
-    /// What is **not** settled by decoding it is which reel plays - that is
-    /// still the question of which `skin.xml` the runtime loads, above.
+    /// It plays where the loaded `skin.xml` names no reel the source holds: the
+    /// `Studio Logo` step takes its screen's own widget
+    /// ([`oag_title::BootStep::playing_authored`]), so a Fury disc plays
+    /// [`STUDIO_LOGO_MOVIE_FURY`].
     ///
     /// [`bik.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/bik.md
     pub const STUDIO_LOGO_MOVIE: &str = "Data/FE/Images/StudioLiverpool.bik";
 
-    /// The other family's spelling, and the only one of the two that is in
-    /// `DATA00`.
-    ///
-    /// Which of the six `skin.xml` copies the runtime loads decides which of
-    /// these plays. That question needs the executable.
+    /// Fury's own reel (red tint, a short distortion), named only by `DATA00`'s
+    /// `skin.xml`, the copy the runtime loads, and held only in `DATA00`
+    /// (`docs/formats/hd-frontend.md`, "`DATA00`'s copy is the live one"). Read off
+    /// that widget at boot, not from this constant.
     pub const STUDIO_LOGO_MOVIE_FURY: &str = "Data/FE/Images/StudioLiverpool_fury.bik";
 
     /// The menu backdrop, which on HD is **a real-time `.vex` scene** rather
@@ -683,6 +729,20 @@ pub mod names {
     ///
     /// [`menu-backdrop.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md
     pub const FURY_SETTINGS: &str = "Data/fe/fury.envsettings";
+
+    /// The front end's `HDR and Bloom` block under the Fury style: the running
+    /// settings store reads these values on the Fury menus, and the backdrop's
+    /// picture ends in the same chain as a race (`menu-backdrop.md`, "The final
+    /// composite adapts").
+    pub const FURY_BLOOM_SETTINGS: &str = "Data/fe/fe.fury.track.envsettings";
+
+    /// The settings the front end lights its models with in the Fury style, which
+    /// `FrontEnd_LoadEnvSettings` loads for Ship Select (the non-track file;
+    /// `docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`).
+    pub const FURY_MODEL_LIGHT: &str = "Data/fe/fe.fury.EnvSettings";
+
+    /// The HD style's file, loaded by the same function.
+    pub const HD_MODEL_LIGHT: &str = "Data/fe/fe.envsettings";
 
     /// The nineteen point clouds the Fury backdrop flies past, as the
     /// executable's own table at `0x009209b4` spells them - forward slashes

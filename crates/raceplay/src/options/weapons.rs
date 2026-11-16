@@ -1,4 +1,4 @@
-//! Whether a race runs with weapons, asked of either half of the options.
+//! Whether a race runs with weapons, and at which rung, asked of the options.
 
 use super::{Options, Setup};
 
@@ -10,6 +10,17 @@ impl Options {
     pub fn weapons_on(&self) -> bool {
         self.weapons_override
             .unwrap_or_else(|| self.mode.weapons_enabled())
+    }
+}
+
+impl Options {
+    /// The original's integer difficulty this race flies at, `0` Easy to `2` Hard:
+    /// [`Self::skill_level`] where the launch named a rung, else the level
+    /// [`Self::difficulty`] stands for. The index into a craft's three shield slots.
+    #[must_use]
+    pub fn skill_level(&self) -> u8 {
+        self.skill_level
+            .unwrap_or_else(|| u8::try_from(self.difficulty.level()).unwrap_or(u8::MAX))
     }
 }
 

@@ -9,7 +9,8 @@ use oag_core::{Rng, StateHasher};
 use oag_gameplay::input::{Button, Input};
 
 use super::*;
-use crate::header::GhostInfo;
+use crate::event::{Event, Kind};
+use crate::header::{Fork, GhostInfo, Setup};
 use crate::pose::Pose;
 use crate::{Recorder, Verifier};
 
@@ -17,6 +18,9 @@ use crate::{Recorder, Verifier};
 struct Toy {
     rng: Rng,
     position: f32,
+    /// What the stick is multiplied by: changed between ticks by a [`Kind::PilotAssist`] event,
+    /// and not part of the hash, as Pilot Assist's level is not part of the race's.
+    gain: f32,
 }
 
 impl Toy {
@@ -24,12 +28,19 @@ impl Toy {
         Self {
             rng: Rng::new(seed),
             position: 0.0,
+            gain: 1.0,
+        }
+    }
+
+    fn apply(&mut self, event: &Event) {
+        if event.kind() == Some(Kind::PilotAssist) {
+            self.gain = event.value as f32;
         }
     }
 
     fn step(&mut self, inputs: &PlayerInputs) {
         let snapshot = inputs.get(0);
-        self.position += snapshot.stick_x;
+        self.position += snapshot.stick_x * self.gain;
         if snapshot.buttons.is_held(Button::Cross) {
             self.position += self.rng.next_f32();
         }
@@ -78,10 +89,32 @@ fn record(ticks: u32) -> Replay {
 fn replay_hashes(replay: &Replay) -> Result<u64, crate::Desync> {
     let mut toy = Toy::new(replay.header.seed);
     let initial = toy.hash();
-    Verifier::run(replay, initial, |inputs| {
+    Verifier::run(replay, initial, |events, inputs| {
+        for event in events {
+            toy.apply(event);
+        }
         toy.step(inputs);
         toy.hash()
     })
+}
+
+/// A recording in which the gain is changed from 1 to 2 before tick 500 and back before 700.
+fn record_with_events(ticks: u32) -> Replay {
+    let mut toy = Toy::new(7);
+    let header = Header::new("toy", "line", "time_trial", "venom", "none", 7);
+    let mut recorder = Recorder::new(header, toy.hash());
+    for (tick, inputs) in scripted(ticks).into_iter().enumerate() {
+        for (at, value) in [(500, 2), (700, 1)] {
+            if tick == at {
+                let event = Event::new(recorder.ticks(), 0, Kind::PilotAssist, value);
+                toy.apply(&event);
+                recorder.event(0, Kind::PilotAssist, value);
+            }
+        }
+        toy.step(&inputs);
+        recorder.record(&inputs, || toy.hash());
+    }
+    recorder.finish()
 }
 
 #[test]
@@ -184,4 +217,331 @@ fn truncating_keeps_only_the_hashes_of_ticks_still_recorded() {
     assert_eq!(replay.ticks(), 610);
     assert_eq!(replay.hashes.len(), 10);
     assert_eq!(replay_hashes(&replay), Ok(610));
+}
+
+#[test]
+fn an_event_applied_between_the_same_two_ticks_reproduces_and_one_left_out_desyncs() {
+    let replay = Replay::from_bytes(&record_with_events(1_000).to_bytes()).expect("reads back");
+    assert_eq!(
+        replay.events,
+        vec![
+            Event::new(500, 0, Kind::PilotAssist, 2),
+            Event::new(700, 0, Kind::PilotAssist, 1)
+        ]
+    );
+    assert_eq!(replay_hashes(&replay), Ok(1_000));
+
+    let mut without = replay.clone();
+    without.events.clear();
+    let desync = replay_hashes(&without).expect_err("the event changed the run");
+    assert_eq!(
+        desync.tick, 540,
+        "the first hash after the change at tick 500"
+    );
+
+    // The stick is centred over ticks 480 to 509 and not at 479, so only an event moved onto a
+    // tick with a deflection is another run.
+    let mut early = replay;
+    early.events[0].tick = 479;
+    assert!(
+        replay_hashes(&early).is_err(),
+        "applied before another tick it is another run"
+    );
+}
+
+#[test]
+fn events_at_a_tick_are_the_ones_recorded_before_it() {
+    let replay = record_with_events(1_000);
+    assert!(replay.events_at(499).is_empty());
+    assert_eq!(replay.events_at(500).len(), 1);
+    assert!(replay.events_at(501).is_empty());
+}
+
+#[test]
+fn a_cut_file_keeps_the_events_of_the_ticks_it_keeps() {
+    let mut replay = record_with_events(1_000);
+    replay.truncate(600);
+    assert_eq!(
+        replay.events,
+        vec![Event::new(500, 0, Kind::PilotAssist, 2)]
+    );
+    assert_eq!(replay_hashes(&replay), Ok(600));
+}
+
+#[test]
+fn an_event_of_a_kind_this_build_does_not_know_is_kept_and_not_understood() {
+    let mut replay = record(120);
+    replay.events.push(Event {
+        tick: 10,
+        seat: 0,
+        kind: 4,
+        value: 9,
+    });
+    let read = Replay::from_bytes(&replay.to_bytes()).expect("reads");
+    assert_eq!(read, replay);
+    assert_eq!(
+        read.events[0].kind(),
+        None,
+        "kind 4 is not one this build knows"
+    );
+}
+
+#[test]
+fn a_replay_with_no_events_writes_no_events_chunk() {
+    let bytes = record(120).to_bytes();
+    assert!(!bytes.windows(4).any(|w| w == b"EVNT"));
+}
+
+fn head_text(bytes: &[u8]) -> String {
+    let len = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+    String::from_utf8(bytes[16..16 + len].to_vec()).unwrap()
+}
+
+/// The same recording with `HEAD` rewritten by `edit`, the checksum redone.
+fn edit_head(replay: &Replay, edit: impl FnOnce(&str) -> String) -> Vec<u8> {
+    let bytes = replay.to_bytes();
+    let len = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+    let text = edit(&head_text(&bytes));
+    let mut out = bytes[..8].to_vec();
+    chunk(&mut out, *b"HEAD", text.as_bytes());
+    let end = bytes.len() - (4 + 4 + 8);
+    out.extend_from_slice(&bytes[16 + len..end]);
+    let sum = checksum(&out);
+    chunk(&mut out, *b"END_", &sum.to_le_bytes());
+    out
+}
+
+#[test]
+fn a_header_starts_with_its_schema_line_and_the_read_says_it_was_there() {
+    let replay = record(120);
+    let bytes = replay.to_bytes();
+    let first = head_text(&bytes).lines().next().unwrap().to_string();
+    assert_eq!(first, oag_schema::inline("replay-header", 1));
+    let read = Replay::read(&bytes).expect("reads");
+    assert!(read.schema_header);
+    assert_eq!(read.replay, replay);
+}
+
+/// A file from before the line existed: the header text a build without the line wrote.
+#[test]
+fn an_old_file_without_the_schema_line_loads_and_reports_its_absence() {
+    let replay = record(120);
+    let old = edit_head(&replay, |text| {
+        text.lines().skip(1).collect::<Vec<_>>().join("\n")
+    });
+    let read = Replay::read(&old).expect("an old file still loads");
+    assert!(!read.schema_header);
+    assert_eq!(read.replay, replay);
+    assert_eq!(Replay::from_bytes(&old).expect("loads"), replay);
+}
+
+#[test]
+fn a_header_naming_another_kind_or_a_later_major_is_refused_by_name() {
+    let replay = record(120);
+    let other = edit_head(&replay, |t| {
+        t.replace("/v1/replay-header.tosd", "/v1/pilot.tosd")
+    });
+    match Replay::from_bytes(&other) {
+        Err(ReadError::Schema(oag_schema::Error::WrongKind { found, expected })) => {
+            assert_eq!(
+                (found.as_str(), expected.as_str()),
+                ("pilot", "replay-header")
+            );
+        }
+        other => panic!("{other:?}"),
+    }
+    let later = edit_head(&replay, |t| {
+        t.replace("/v1/replay-header.tosd", "/v2/replay-header.tosd")
+    });
+    match Replay::from_bytes(&later) {
+        Err(ReadError::Schema(oag_schema::Error::UnknownMajor {
+            found: 2,
+            supported: 1,
+            ..
+        })) => {}
+        other => panic!("{other:?}"),
+    }
+    let text = Replay::from_bytes(&later).unwrap_err().to_string();
+    assert!(
+        text.contains("v2") && text.contains("replay-header"),
+        "{text}"
+    );
+}
+
+#[test]
+fn the_setup_and_fork_tables_round_trip_and_an_absent_one_reads_as_none() {
+    let mut replay = record(120);
+    replay.header.setup = Some(Setup {
+        mode: "single_race".into(),
+        class: "Venom".into(),
+        opponent_teams: vec!["a".into(), "b".into()],
+        opponents: true,
+        laps_override: Some(2),
+        ..Setup::default()
+    });
+    replay.header.fork = Some(Fork {
+        tick: 90,
+        offered_at: 80,
+        seats: vec![0],
+        parent_build: "x".into(),
+        parent_hash: "0x00000000000000ff".into(),
+    });
+    assert_eq!(Replay::from_bytes(&replay.to_bytes()).unwrap(), replay);
+    assert_eq!(record(120).header.setup, None);
+    // A fork written with only some keys reads: the rest are defaults.
+    let partial = edit_head(&record(120), |t| format!("{t}\n[fork]\ntick = 5\n"));
+    assert_eq!(
+        Replay::from_bytes(&partial)
+            .unwrap()
+            .header
+            .fork
+            .unwrap()
+            .tick,
+        5
+    );
+}
+
+/// The list of replays reads this much of a file and no more: a damaged body does not hide it,
+/// and a header of another kind is still refused by name.
+#[test]
+fn the_header_alone_reads_from_a_file_whose_body_is_cut_or_damaged() {
+    let mut replay = record(600);
+    replay.header.ticks = 600;
+    replay.header.finish = Some(crate::header::Finish {
+        place: 3,
+        ticks: 590,
+    });
+    let bytes = replay.to_bytes();
+    assert_eq!(Replay::read_head(&bytes).expect("reads"), replay.header);
+    // Cut mid-body: the whole file is refused, its header is still listed.
+    let cut = &bytes[..bytes.len() / 2];
+    assert!(Replay::from_bytes(cut).is_err());
+    assert_eq!(
+        Replay::read_head(cut).expect("the header reads"),
+        replay.header
+    );
+    // A flipped byte in the body: the checksum refuses the whole file, not the header.
+    let mut flipped = bytes.clone();
+    let middle = flipped.len() - 40;
+    flipped[middle] ^= 0x01;
+    assert!(matches!(
+        Replay::from_bytes(&flipped),
+        Err(ReadError::Checksum)
+    ));
+    assert!(Replay::read_head(&flipped).is_ok());
+    let newer = edit_head(&replay, |text| {
+        text.replace("version = \"1.0.0\"", "version = \"2.0.0\"")
+    });
+    assert!(matches!(
+        Replay::read_head(&newer),
+        Err(ReadError::Schema(_))
+    ));
+    assert!(matches!(
+        Replay::read_head(b"RIFF...."),
+        Err(ReadError::BadMagic)
+    ));
+}
+
+/// A seed is drawn over all of `u64` (`oag_game::race_seed`), and a TOML integer is an `i64`: a
+/// seed above `i64::MAX` written as it stands made a header no reader could parse, so half the
+/// races a player recorded could not be listed or watched.
+#[test]
+fn a_seed_over_the_signed_range_survives_the_file() {
+    for seed in [
+        0,
+        7,
+        i64::MAX as u64,
+        i64::MAX as u64 + 1,
+        9_915_474_475_271_654_925,
+        u64::MAX,
+    ] {
+        let mut replay = record(60);
+        replay.header.seed = seed;
+        let bytes = replay.to_bytes();
+        assert_eq!(Replay::from_bytes(&bytes).expect("reads").header.seed, seed);
+        assert_eq!(
+            Replay::read_head(&bytes).expect("the head reads").seed,
+            seed
+        );
+    }
+    // A file a build wrote with a small seed, as an unsigned-looking integer, reads as it did.
+    let old = edit_head(&record(60), |text| text.replace("seed = 7", "seed = 12345"));
+    assert_eq!(Replay::from_bytes(&old).expect("reads").header.seed, 12_345);
+}
+
+fn with_pose_track(ticks: u32) -> Replay {
+    let mut replay = record(ticks);
+    let mut recorder = crate::PoseRecorder::new(3);
+    for tick in 0..=ticks {
+        let poses: Vec<Pose> = (0..3)
+            .map(|craft| Pose {
+                position: oag_core::math::Vec3::new(tick as f32 * 4.0, craft as f32 * 30.0, 0.0),
+                rotation: oag_core::math::Quat::from_rotation_y(tick as f32 * 0.002),
+            })
+            .collect();
+        recorder.push(&poses);
+    }
+    replay.pose_track = recorder.track();
+    replay
+}
+
+#[test]
+fn a_pose_track_round_trips_with_the_file() {
+    let replay = with_pose_track(700);
+    assert!(replay.pose_track.is_some());
+    assert_eq!(
+        Replay::from_bytes(&replay.to_bytes()).expect("reads"),
+        replay
+    );
+}
+
+#[test]
+fn a_recording_with_no_pose_track_writes_no_pose_chunk() {
+    assert!(!record(120).to_bytes().windows(4).any(|w| w == b"POSE"));
+}
+
+/// A build that does not know the chunk skips it: the tag renamed to one nothing reads, the
+/// checksum redone, and the file reads as the same recording without its track.
+#[test]
+fn a_build_that_does_not_know_the_pose_chunk_skips_it() {
+    let replay = with_pose_track(700);
+    let mut bytes = replay.to_bytes();
+    let at = bytes
+        .windows(4)
+        .position(|w| w == b"POSE")
+        .expect("the chunk is written");
+    bytes[at..at + 4].copy_from_slice(b"POSX");
+    let end = bytes.len() - (4 + 4 + 8);
+    bytes.truncate(end);
+    let sum = checksum(&bytes);
+    chunk(&mut bytes, *b"END_", &sum.to_le_bytes());
+    let read = Replay::from_bytes(&bytes).expect("an unknown chunk is skipped");
+    let mut expected = replay;
+    expected.pose_track = None;
+    assert_eq!(read, expected, "everything else is as it was written");
+    assert_eq!(replay_hashes(&read), Ok(700), "and it still reproduces");
+}
+
+#[test]
+fn a_cut_file_keeps_the_pose_track_of_the_ticks_it_keeps() {
+    let mut replay = with_pose_track(700);
+    replay.truncate(301);
+    let track = replay.pose_track.as_ref().expect("kept");
+    assert_eq!(track.last_tick(), 301);
+    assert_eq!(
+        Replay::from_bytes(&replay.to_bytes()).expect("reads"),
+        replay
+    );
+}
+
+#[test]
+fn a_pose_track_longer_than_the_recording_is_refused() {
+    let mut replay = with_pose_track(700);
+    replay.truncate(0);
+    let longer = with_pose_track(700).pose_track;
+    replay.pose_track = longer;
+    assert!(matches!(
+        Replay::from_bytes(&replay.to_bytes()),
+        Err(ReadError::Inconsistent(_))
+    ));
 }

@@ -170,16 +170,19 @@ impl Drawable {
             alpha_test_pipeline: self.alpha_test_pipeline.clone(),
             cutout_pipelines: self.cutout_pipelines.clone(),
             culled: self.culled.clone(),
+            unwritten: self.unwritten.clone(),
+            velocity_read: std::sync::atomic::AtomicBool::new(true),
             blend_pipeline: self.blend_pipeline.clone(),
             additive_pipeline: self.additive_pipeline.clone(),
             unblended_pipeline: self.unblended_pipeline.clone(),
             authored_pipelines: self.authored_pipelines.clone(),
             stamp_pipeline: self.stamp_pipeline.clone(),
+            foliage: self.foliage.clone(),
             prepass: self.prepass.clone(),
+            plain_draws: self.plain_draws.clone(),
             hidden: std::sync::Mutex::default(),
             reversed_indices: self.reversed_indices.clone(),
-            vertices: self.vertices.clone(),
-            texcoords: self.texcoords.clone(),
+            geometry: self.geometry.clone(),
             indices: self.indices.clone(),
             uniforms,
             uniform_bind,
@@ -213,6 +216,6 @@ impl Drawable {
     /// rather than copies of them.
     #[cfg(test)]
     pub(crate) fn shares_geometry_with(&self, other: &Self) -> bool {
-        self.vertices == other.vertices && self.indices == other.indices
+        self.geometry.shares_buffers_with(&other.geometry) && self.indices == other.indices
     }
 }

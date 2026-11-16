@@ -64,7 +64,7 @@ impl Plan {
 /// `(first, second, wipe, bars)`.
 fn paths(material: &Material) -> Option<[&str; 4]> {
     let stem = material.name.rsplit(['/', '\\']).next()?;
-    let stem = stem.strip_suffix(".rcsmaterial").unwrap_or(stem);
+    let stem = stem.trim_suffix(".rcsmaterial");
     if !stem.eq_ignore_ascii_case("nr_twinblend") {
         return None;
     }

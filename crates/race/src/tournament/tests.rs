@@ -6,20 +6,20 @@ fn the_points_table_is_the_recovered_one() {
     assert_eq!(POINTS_BY_POSITION, [8, 6, 5, 4, 3, 2, 1, 0]);
     for (place, &expected) in POINTS_BY_POSITION.iter().enumerate() {
         let place = u8::try_from(place + 1).unwrap();
-        assert_eq!(points_for_finish(place, true), expected);
+        assert_eq!(points_for_place(place, true), expected);
     }
 }
 
 #[test]
-fn a_craft_that_did_not_finish_scores_nothing_regardless_of_place() {
-    assert_eq!(points_for_finish(1, false), 0);
-    assert_eq!(points_for_finish(8, false), 0);
+fn a_craft_out_of_the_race_scores_nothing_regardless_of_place() {
+    assert_eq!(points_for_place(1, false), 0);
+    assert_eq!(points_for_place(8, false), 0);
 }
 
 #[test]
 fn a_place_outside_the_grid_scores_nothing_rather_than_panicking() {
-    assert_eq!(points_for_finish(0, true), 0);
-    assert_eq!(points_for_finish(9, true), 0);
+    assert_eq!(points_for_place(0, true), 0);
+    assert_eq!(points_for_place(9, true), 0);
 }
 
 #[test]

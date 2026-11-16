@@ -133,7 +133,7 @@ impl Race {
     pub(super) fn throw_damage_smoke(&mut self, slot: usize) {
         let ship = &self.sim.world.ships[slot];
         let shield = ship.physics.shield;
-        if shield <= 0.0 || !ship.active {
+        if shield <= 0.0 || !ship.in_world() {
             return;
         }
         let state = State::of(shield);
@@ -169,7 +169,7 @@ impl Race {
     /// [`State`]'s smoke uses. No state, no hold: every hit throws one.
     pub(super) fn throw_attached_leach_spark(&mut self, slot: usize) {
         let ship = &self.sim.world.ships[slot];
-        if !ship.active {
+        if !ship.in_world() {
             return;
         }
         let at = self.drawn_position(slot);
@@ -192,7 +192,7 @@ impl Race {
         let mut riding = std::mem::take(&mut self.view.damage_fx.riding);
         riding.retain(|smoke| {
             let ship = &self.sim.world.ships[smoke.slot];
-            if !ship.active || !self.view.stage.is_emitting(smoke.playing) {
+            if !ship.in_world() || !self.view.stage.is_emitting(smoke.playing) {
                 self.view.stage.detach(smoke.playing);
                 return false;
             }

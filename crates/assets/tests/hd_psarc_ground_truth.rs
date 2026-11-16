@@ -34,7 +34,7 @@
 use std::path::PathBuf;
 
 use oag_assets::psarc::Archive;
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 use oag_tables::handling;
 use oag_vex::{collision, pads, pvs, track, vex};
 

@@ -82,7 +82,7 @@ impl Sprite {
         data: &[u8],
         record: &pob::Emitter,
     ) -> Option<Self> {
-        if system.order != oag_formats::ByteOrder::Little {
+        if system.order != oag_bytes::ByteOrder::Little {
             return None;
         }
         let texture = system.template_texture(data, record)?;
@@ -99,13 +99,18 @@ impl Sprite {
     /// `u16` can say.
     #[must_use]
     pub fn from_gxt(blob: &[u8]) -> Option<Self> {
-        let parsed = oag_texture::gxt::Gxt::parse(blob).ok()?;
-        let texture = parsed.only()?;
-        let rgba = texture.to_rgba(blob).ok()?;
+        Self::from_container(oag_texture::decode::Container::Gxt, blob)
+    }
+
+    /// `blob` decoded as `container` by `oag_texture::decode`, base level, rows as
+    /// the file stores them; `None` when it will not decode or is larger than a
+    /// `u16` can say.
+    fn from_container(container: oag_texture::decode::Container, blob: &[u8]) -> Option<Self> {
+        let picture = oag_texture::decode::decode_as(container, blob).ok()?;
         Some(Self {
-            width: texture.width,
-            height: texture.height,
-            rgba: rgba.into_iter().flatten().collect::<Vec<u8>>().into(),
+            width: u16::try_from(picture.width).ok()?,
+            height: u16::try_from(picture.height).ok()?,
+            rgba: picture.rgba.into(),
         })
     }
 
@@ -126,12 +131,7 @@ impl Sprite {
     /// none of. `None` for a blob [`oag_texture::ps2_texture`] does not read.
     #[must_use]
     pub fn from_ps2(blob: &[u8]) -> Option<Self> {
-        let texture = oag_texture::ps2_texture::parse(blob).ok()?;
-        Some(Self {
-            width: texture.width,
-            height: texture.height,
-            rgba: texture.to_rgba().into(),
-        })
+        Self::from_container(oag_texture::decode::Container::Pct, blob)
     }
 
     /// A PS3 `.gtf`'s one texture, level 0 - the sprite Wipeout HD ships as a
@@ -140,15 +140,7 @@ impl Sprite {
     /// decode.
     #[must_use]
     pub fn from_gtf(blob: &[u8]) -> Option<Self> {
-        let parsed = oag_texture::gtf::Gtf::parse(blob).ok()?;
-        let texture = parsed.only()?;
-        let rgba = texture.to_rgba(blob).ok()?;
-        let (width, height) = texture.level_size(0);
-        Some(Self {
-            width: u16::try_from(width).ok()?,
-            height: u16::try_from(height).ok()?,
-            rgba: rgba.into_iter().flatten().collect::<Vec<u8>>().into(),
-        })
+        Self::from_container(oag_texture::decode::Container::Gtf, blob)
     }
 
     /// A PS4 `.gnf`'s base level - the sprite Wipeout: Omega Collection ships
@@ -156,13 +148,7 @@ impl Sprite {
     /// `.gnf` or whose format or tiling [`oag_texture::gnf`] does not decode.
     #[must_use]
     pub fn from_gnf(blob: &[u8]) -> Option<Self> {
-        let parsed = oag_texture::gnf::Texture::parse(blob).ok()?;
-        let rgba = parsed.decode(blob).ok()?;
-        Some(Self {
-            width: u16::try_from(parsed.width).ok()?,
-            height: u16::try_from(parsed.height).ok()?,
-            rgba: rgba.into_iter().flatten().collect::<Vec<u8>>().into(),
-        })
+        Self::from_container(oag_texture::decode::Container::Gnf, blob)
     }
 
     /// `record`'s embedded sprite, else the one `external` makes of its authored
@@ -184,7 +170,7 @@ impl Sprite {
     /// test.
     #[must_use]
     pub fn from_pob(system: &ParticleSystem, data: &[u8], record: &pob::Emitter) -> Option<Self> {
-        if system.order != oag_formats::ByteOrder::Little {
+        if system.order != oag_bytes::ByteOrder::Little {
             return None;
         }
         let texture = system.embedded_texture(data, record)?;
@@ -288,8 +274,11 @@ pub fn map_to_cell(corners: &mut [oag_mesh::mesh::GpuVertex], cell: [f32; 4]) {
 /// Every placed sprite's texels on one [`SHEET_SIZE`]-square RGBA8 image.
 #[derive(Debug, Clone, Default)]
 pub struct Sheet {
-    /// Allocated on the first placement; shared rather than copied when a
-    /// [`super::Library`] is cloned.
+    /// The rows placed so far, `SHEET_SIZE * 4` bytes each, top row first:
+    /// grown as shelves reach down rather than allocated whole, and shared
+    /// rather than copied when a [`super::Library`] is cloned. A row below the
+    /// last one placed is transparent, as the uploaded texture is before a
+    /// sync.
     pixels: Option<Arc<Vec<u8>>>,
     /// Each distinct sprite once, with where it went.
     placed: Vec<(Sprite, [f32; 4])>,
@@ -322,10 +311,12 @@ impl Sheet {
             return None;
         }
         let side = SHEET_SIZE as usize;
-        let pixels = Arc::make_mut(
-            self.pixels
-                .get_or_insert_with(|| Arc::new(vec![0; side * side * 4])),
-        );
+        let pixels = Arc::make_mut(self.pixels.get_or_insert_with(Arc::default));
+        let needed = (y + h) as usize * side * 4;
+        if pixels.len() < needed {
+            pixels.reserve_exact(needed - pixels.len());
+            pixels.resize(needed, 0);
+        }
         let row = usize::from(sprite.width) * 4;
         for line in 0..usize::from(sprite.height) {
             let to = ((y as usize + line) * side + x as usize) * 4;
@@ -344,11 +335,20 @@ impl Sheet {
         Some(rect)
     }
 
-    /// The sheet's texels, `SHEET_SIZE * SHEET_SIZE * 4` bytes, or `None`
-    /// while nothing is placed.
+    /// The sheet's texels down to the last row any sprite reaches
+    /// ([`Self::rows`] rows of `SHEET_SIZE * 4` bytes), or `None` while nothing
+    /// is placed. Every row below is transparent.
     #[must_use]
     pub fn pixels(&self) -> Option<&[u8]> {
         self.pixels.as_deref().map(Vec::as_slice)
+    }
+
+    /// How many rows [`Self::pixels`] holds, 0 while nothing is placed.
+    #[must_use]
+    pub fn rows(&self) -> u32 {
+        self.pixels.as_ref().map_or(0, |pixels| {
+            (pixels.len() / (SHEET_SIZE as usize * 4)) as u32
+        })
     }
 
     /// Changes whenever [`Self::pixels`] does.

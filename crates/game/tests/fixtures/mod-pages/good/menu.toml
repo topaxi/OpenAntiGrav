@@ -1,0 +1,19 @@
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod-menu.tosd", version = "1.0.0" }
+
+[[page]]
+id = "shelf"
+title = "SHELF"
+title_string_id = "TEST_PAGES_SHELF"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "TEST_PAGES_BACK"
+
+[[entry]]
+id = "shelf_row"
+parent = "options"
+kind = "submenu"
+label = "SHELF"
+string_id = "TEST_PAGES_SHELF"
+target = "shelf"

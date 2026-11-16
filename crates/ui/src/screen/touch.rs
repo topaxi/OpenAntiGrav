@@ -63,6 +63,26 @@ pub struct TouchButton {
     pub delay: f32,
 }
 
+/// One `<CanvasLabel>` inside a screen's `<FE3DCanvas>`: a rectangle of the
+/// `Canvas3D` lattice's cells that the canvas paints a crop of its atlas onto.
+///
+/// Authored, every field an attribute of the widget's `<Values>`. `x`, `y`
+/// are lattice cells (`docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md`,
+/// "The season cards"), `u`, `v` the crop's origin as a fraction of the atlas, and
+/// `linkedevent` the campaign event whose progress shows or hides the label.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CanvasLabel {
+    pub name: String,
+    /// The label's first cell, column then row.
+    pub cell: (i32, i32),
+    /// The crop's origin in the atlas, as a fraction of its width and height.
+    pub origin: (f32, f32),
+    /// The label's size in cells.
+    pub size: (u32, u32),
+    /// The `SP.xml` event name the label waits on, when it names one.
+    pub linked_event: Option<String>,
+}
+
 /// One `<LoadXML>` include, as the root's own list spells it.
 ///
 /// `src` names an archive path outright; `SrcRel` names a file beside the
@@ -110,6 +130,21 @@ impl Include {
 }
 
 impl Screens {
+    /// A `<CanvasLabel>`, or `None` when it lacks a position or a size.
+    pub(super) fn canvas_label_from_node(&self, node: &Node) -> Option<CanvasLabel> {
+        let number = |key: &str| self.number(node.value(key));
+        Some(CanvasLabel {
+            name: node.attr("name")?.to_string(),
+            cell: (number("x")?.round() as i32, number("y")?.round() as i32),
+            origin: (number("u")?, number("v")?),
+            size: (
+                number("width")?.round() as u32,
+                number("height")?.round() as u32,
+            ),
+            linked_event: node.value("linkedevent").map(str::to_string),
+        })
+    }
+
     pub(super) fn touch_button_from_node(&self, node: &Node, offset: (f32, f32)) -> TouchButton {
         TouchButton {
             name: node.attr("name").map(str::to_string),

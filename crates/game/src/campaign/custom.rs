@@ -10,8 +10,10 @@
 
 use std::collections::BTreeMap;
 
-use oag_mod::campaign::{CampaignDef, EventDef, MedalsDef, PilotDef, Reveal, Targets};
-use oag_tables::race_campaign::{Cell, DifficultyTargets, Grid, Medal, MedalTargets, Mode};
+use oag_mod::campaign::{CampaignDef, EventDef, MedalsDef, PilotDef, Progression, Reveal, Targets};
+use oag_tables::race_campaign::{
+    Cell, Difficulty, DifficultyTargets, Grid, Medal, MedalTargets, MedalTiers, Mode,
+};
 
 /// The mode words a campaign file may use, and what each runs as.
 pub const MODES: [(&str, Mode); 8] = [
@@ -33,6 +35,75 @@ pub enum Ai {
     Original,
     /// This project's driver (`oag_ai::Driver`).
     Ours,
+}
+
+/// The original driver's rungs, easiest first. Our driver's levels are
+/// `oag_ai::Difficulty::ALL`.
+const ORIGINAL_RUNGS: [&str; 3] = ["easy", "medium", "hard"];
+
+/// A campaign's difficulty setting (`[campaign] difficulty` and `progression`),
+/// resolved against the rungs of whichever driver an event flies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Setting {
+    /// The base as a rung of the ladder it was named in: its place and that
+    /// ladder's length. `None`: the bottom of either ladder.
+    base: Option<(usize, usize)>,
+    progression: Progression,
+    /// How many events the campaign has.
+    count: usize,
+}
+
+impl Setting {
+    /// Reads the campaign's words; a difficulty neither driver knows is an error.
+    fn of(info: &oag_mod::campaign::Info, count: usize) -> Result<Option<Self>, String> {
+        let base = match info.difficulty.as_deref() {
+            None => None,
+            Some(word) => {
+                let ours = oag_ai::Difficulty::ALL.map(|(name, _)| name);
+                let place = |ladder: &[&str]| {
+                    ladder
+                        .iter()
+                        .position(|name| name.eq_ignore_ascii_case(word))
+                        .map(|at| (at, ladder.len()))
+                };
+                Some(place(&ORIGINAL_RUNGS).or_else(|| place(&ours)).ok_or_else(|| {
+                    format!(
+                        "[campaign] difficulty {word:?}: one of {} (the original driver's) or {} (ours)",
+                        ORIGINAL_RUNGS.join(", "),
+                        ours.join(", ")
+                    )
+                })?)
+            }
+        };
+        Ok(
+            (base.is_some() || info.progression != Progression::Flat).then_some(Self {
+                base,
+                progression: info.progression,
+                count,
+            }),
+        )
+    }
+
+    /// The rung of a ladder `len` long that the event listed `ordinal`th (counting
+    /// from 0, tier by tier) runs at. The base keeps its relative place when the
+    /// ladder is the other driver's, rounding down on a tie (**chosen**:
+    /// `medium` is our `skilled`, `hard` our `ace`). A ramp climbs from there to
+    /// the top, evenly and never down.
+    fn rung(&self, len: usize, ordinal: usize) -> usize {
+        let top = len - 1;
+        let base = match self.base {
+            Some((at, from)) if from > 1 => (2 * at * top + from - 2) / (2 * (from - 1)),
+            _ => 0,
+        };
+        match self.progression {
+            Progression::Ramp if self.count > 1 => {
+                let climb = top - base;
+                let span = self.count - 1;
+                base + (2 * climb * ordinal.min(span) + span - 1) / (2 * span)
+            }
+            _ => base,
+        }
+    }
 }
 
 /// What an event asks of its race beyond what a [`Cell`] carries.
@@ -60,8 +131,82 @@ pub struct Event {
     /// Open from the start.
     pub open: bool,
     /// Each event that must have a medal first, by cell name, with the least
-    /// medal it needs (`None`: any).
+    /// medal it needs (`None`: any), a position in the campaign's [`Custom::tiers`].
     pub requires: Vec<(String, Option<Medal>)>,
+    /// One target per tier of the campaign, best tier first, for every rung.
+    pub tier_targets: TierTargets,
+}
+
+/// What each tier of a campaign asks of one event: [`Cell::gold`], [`Cell::silver`] and
+/// [`Cell::bronze`] hold the targets of the tiers named so (what the kill target of an
+/// Eliminator and the HUD's pace ladder read), and this holds every tier's.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TierTargets {
+    /// The medium rung, which is the flat targets when no rung is named.
+    flat: Vec<i64>,
+    /// The easy, medium and hard rungs, when any is named.
+    rungs: Option<[Vec<i64>; 3]>,
+}
+
+impl TierTargets {
+    /// The medium rung's targets, best tier first: what Cell Selection's target rows list.
+    #[must_use]
+    pub fn flat(&self) -> &[i64] {
+        &self.flat
+    }
+
+    /// The best tier this event awards at all: the first whose target is not the never value.
+    #[must_use]
+    pub fn best_awarded(&self, mode: &Mode) -> Option<Medal> {
+        let never = if matches!(mode, Mode::Zone | Mode::Elimination) {
+            i64::MAX
+        } else {
+            0
+        };
+        let at = self.flat.iter().position(|&target| target != never)?;
+        Medal::from_index(at)
+    }
+
+    /// The targets of `difficulty`, best tier first.
+    #[must_use]
+    pub fn for_difficulty(&self, difficulty: Difficulty) -> &[i64] {
+        match (&self.rungs, difficulty) {
+            (None, _) => &self.flat,
+            (Some(rungs), Difficulty::Easy) => &rungs[0],
+            (Some(rungs), Difficulty::Medium) => &rungs[1],
+            (Some(rungs), Difficulty::Hard) => &rungs[2],
+        }
+    }
+
+    /// The tier a result earns on `difficulty`: [`oag_tables::race_campaign::evaluate_targets`]
+    /// with `Cell::evaluate_medal`'s own no-result rule.
+    #[must_use]
+    pub fn evaluate(&self, mode: &Mode, value: i64, difficulty: Difficulty) -> Option<Medal> {
+        if value <= 0 || value == 0xFFFF_FFFF {
+            return None;
+        }
+        let flipped = matches!(mode, Mode::Zone | Mode::Elimination);
+        oag_tables::race_campaign::evaluate_targets(self.for_difficulty(difficulty), value, flipped)
+    }
+}
+
+impl Event {
+    /// Takes the campaign's difficulty for the driver this event flies, unless the
+    /// event named a rung of its own.
+    fn follow(&mut self, setting: &Setting, ordinal: usize) {
+        if self.level.is_some() || self.difficulty.is_some() {
+            return;
+        }
+        match self.ai {
+            Ai::Original => {
+                self.level = Some(setting.rung(ORIGINAL_RUNGS.len(), ordinal));
+            }
+            Ai::Ours => {
+                let ladder = oag_ai::Difficulty::ALL;
+                self.difficulty = Some(ladder[setting.rung(ladder.len(), ordinal)].1);
+            }
+        }
+    }
 }
 
 /// A track file of this project's own format (`<name>.track.toml` and the
@@ -162,6 +307,12 @@ pub struct Custom {
     /// The `title` its medals are kept under in `[[campaign]]`, so they never
     /// meet the original campaign's rows: `<title>/mod:<mod id>/<id>`.
     pub records_title: String,
+    /// The medal tiers, best first: the title's gold, silver and bronze unless the campaign
+    /// declares its own.
+    pub tiers: MedalTiers,
+    /// The mod's own `strings/<language>.toml` files, the words a tier's `string_id` names: laid
+    /// over the screens' strings by [`layer_words`].
+    pub words: Words,
     /// The tiers.
     pub grids: Vec<Grid>,
     /// Each cell's extras, by cell name.
@@ -186,6 +337,22 @@ impl Custom {
             .values()
             .filter_map(|event| event.track_title.as_deref())
             .filter(move |slug| *slug != own && seen.insert(*slug))
+    }
+
+    /// The most `grid` can earn: each event's best awarded tier's points, so a grid with a
+    /// platinum on two events and none on the rest is not asked for four points everywhere.
+    #[must_use]
+    pub fn max_points(&self, grid: &Grid) -> u32 {
+        grid.cells
+            .iter()
+            .filter_map(|cell| {
+                let event = self.events.get(&cell.name)?;
+                Some(
+                    self.tiers
+                        .points(event.tier_targets.best_awarded(&cell.mode)?),
+                )
+            })
+            .sum()
     }
 
     /// How grid `which`'s unopened cells show.
@@ -264,12 +431,116 @@ pub const PILOTS: &str = "pilots";
 pub struct Launch {
     /// See [`Custom::records_title`].
     pub records_title: String,
+    /// See [`Custom::tiers`].
+    pub tiers: MedalTiers,
+    /// See [`Custom::words`].
+    pub words: Words,
+    /// What each tier asks of this event ([`Event::tier_targets`]).
+    pub tier_targets: TierTargets,
     /// Whose driver flies.
     pub ai: Ai,
     /// The original driver's rung, in place of the screen's.
     pub level: Option<usize>,
     /// Every opponent's pilot, already resolved.
     pub pilot: Option<oag_raceplay::pilots::Entry>,
+}
+
+/// A campaign mod's `strings/<language>.toml` files, by lower-case language name.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Words(BTreeMap<String, String>);
+
+impl Words {
+    /// Every `strings/<language>.toml` the mod carries.
+    #[must_use]
+    pub fn read(module: &oag_mod::Mod) -> Self {
+        Self(
+            module
+                .files_under("strings", "toml")
+                .into_iter()
+                .filter_map(|file| {
+                    let language = file
+                        .rsplit('/')
+                        .next()?
+                        .strip_suffix(".toml")?
+                        .to_ascii_lowercase();
+                    let text = module.strings(&language).ok().flatten()?;
+                    Some((language, text))
+                })
+                .collect(),
+        )
+    }
+
+    /// The words of `files`, each a `(language, toml text)`.
+    #[must_use]
+    pub fn of<'a>(files: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
+        Self(
+            files
+                .into_iter()
+                .map(|(language, text)| (language.to_ascii_lowercase(), text.to_string()))
+                .collect(),
+        )
+    }
+}
+
+/// Lays a campaign mod's own words over `table`, so a medal tier's `string_id` resolves:
+/// `english.toml` first, then `language`'s file (`None` is English) over it, so a word the
+/// language leaves out stays English. A file that does not parse is skipped.
+pub fn layer_words(
+    table: &mut oag_ui::language::StringTable,
+    words: &Words,
+    language: Option<&str>,
+) {
+    let language = language.map_or_else(|| "english".to_string(), str::to_ascii_lowercase);
+    let wanted = ["english", language.as_str()];
+    for (index, name) in wanted.into_iter().enumerate() {
+        if index == 1 && name == "english" {
+            break;
+        }
+        if let Some(text) = words.0.get(name)
+            && let Err(reason) = oag_ui::strings::overlay_text(table, text)
+        {
+            log::warn!("campaign words ({name}): {reason}");
+        }
+    }
+}
+
+impl Launch {
+    /// The tier called `name` when the title has no end-of-race phrase for it: any tier but
+    /// gold, silver and bronze. What `EndRace Rewards` names in its award line.
+    #[must_use]
+    pub fn own_phrase_tier(&self, name: &str) -> Option<oag_tables::race_campaign::MedalTier> {
+        if matches!(name, "gold" | "silver" | "bronze") {
+            return None;
+        }
+        let tier = self.tiers.get(self.tiers.find(name)?)?;
+        Some(tier.clone())
+    }
+
+    /// Keeps what `tier` (a name of [`Self::tiers`]) earned on `cell` under this campaign's own
+    /// records title. `None` records a race that earned nothing, as `Store::record_campaign` does.
+    pub fn record_result(
+        &self,
+        records: &mut crate::records::Store,
+        cell: &str,
+        tier: Option<&str>,
+        difficulty: Option<crate::records::Difficulty>,
+    ) {
+        let order: Vec<&str> = self
+            .tiers
+            .iter()
+            .map(|(_, tier)| tier.name.as_str())
+            .collect();
+        let earned = tier.and_then(|name| {
+            let medal = self.tiers.find(name)?;
+            Some(crate::records::TierEarned {
+                name: &self.tiers.get(medal)?.name,
+                class: crate::unlock::to_records_medal(self.tiers.class(medal)),
+                points: self.tiers.points(medal),
+                order: &order,
+            })
+        });
+        records.record_campaign_tier(&self.records_title, cell, earned, difficulty);
+    }
 }
 
 /// RACE CAMPAIGN as a page picking between the disc's campaign and each of
@@ -280,6 +551,7 @@ pub fn add_picker(
     definition: &mut oag_ui::menu::Definition,
     listing: &mut [crate::mods::Listing],
     installed: &Installed,
+    title: &oag_title::Title,
     strings: &oag_ui::language::StringTable,
 ) {
     for (mod_id, reason) in &installed.failed {
@@ -303,7 +575,52 @@ pub fn add_picker(
         })
         .collect();
     let (id, english) = crate::mods::words::CAMPAIGN_PICKER;
-    definition.add_campaign_picker(strings.get(id).unwrap_or(english), &rows);
+    let (row_id, row_english) = crate::mods::words::CAMPAIGN_EDITOR;
+    let (sub_id, sub_english) = crate::mods::words::CAMPAIGN_EDITOR_SUBTITLE;
+    let say = |id: &str, english: &'static str| strings.get(id).unwrap_or(english).to_string();
+    // With no mod campaign the picker would hold the disc's campaign and the editor alone;
+    // the campaign row stays one press and Square on it opens the editor instead
+    // (`editor_on_square`).
+    let editor = (editor_offered(title) && !rows.is_empty())
+        .then(|| (say(row_id, row_english), say(sub_id, sub_english)));
+    definition.add_campaign_picker(
+        strings.get(id).unwrap_or(english),
+        &rows,
+        editor
+            .as_ref()
+            .map(|(row, sub)| (row.as_str(), sub.as_str())),
+    );
+}
+
+/// Square on the campaign row opens the campaign editor, with NEW CAMPAIGN in the footer's
+/// Square prompt, where the editor is offered and there is no campaign picker to hold it (no
+/// mod campaign). Set where the reset prompt is (`settings::supply_reset`).
+pub fn editor_on_square(
+    model: &mut oag_ui::menu::Menu,
+    title: &oag_title::Title,
+    strings: &oag_ui::language::StringTable,
+) {
+    use oag_ui::menu::Action;
+    let (row_id, row_english) = crate::mods::words::CAMPAIGN_EDITOR;
+    let on = editor_offered(title)
+        && (model.definition())
+            .page(oag_ui::menu::CAMPAIGN_PICKER_PAGE)
+            .is_none();
+    let words = if on {
+        strings.get_or_fallback(row_id, row_english)
+    } else {
+        ""
+    };
+    model.set_square_action(Action::OpenCampaign, Action::OpenCampaignEditor, words);
+}
+
+/// Whether the campaign editor is offered on `title`: where mod campaigns draw on the
+/// disc's own hex screens (`Cell Selection`) and not on HD's, which draws another
+/// screen behind the same names. Pulse; HD/Fury and Omega are open
+/// (`docs/formats/custom-campaign.md`).
+#[must_use]
+pub fn editor_offered(title: &oag_title::Title) -> bool {
+    title.campaign.custom_campaigns && !title.campaign.dialect.draws_hd_screens()
 }
 
 /// The records `title` a mod campaign's medals are kept under.
@@ -337,14 +654,23 @@ pub fn compile(
         .race
         .speed_classes
         .map_or(&[][..], |classes| classes.names);
+    let setting = Setting::of(info, def.grids.iter().map(|grid| grid.events.len()).sum())
+        .map_err(|problem| format!("{prefix}: {problem}"))?;
+    let tiers = tiers_of(def).map_err(|problem| format!("{prefix}: {problem}"))?;
     let mut grids = Vec::with_capacity(def.grids.len());
     let mut events = BTreeMap::new();
+    let mut ordinal = 0;
     for (index, grid_def) in def.grids.iter().enumerate() {
         let mut cells = Vec::with_capacity(grid_def.events.len());
         for event_def in &grid_def.events {
             let at = format!("{prefix} grid {:?} event {:?}", grid_def.id, event_def.slot);
-            let (cell, event) = compile_event(index, event_def, &names, ladder, pilots, files)
-                .map_err(|problem| format!("{at}: {problem}"))?;
+            let (cell, mut event) =
+                compile_event(index, event_def, &names, &tiers, ladder, pilots, files)
+                    .map_err(|problem| format!("{at}: {problem}"))?;
+            if let Some(setting) = &setting {
+                event.follow(setting, ordinal);
+            }
+            ordinal += 1;
             events.insert(cell.name.clone(), event);
             cells.push(cell);
         }
@@ -401,6 +727,8 @@ pub fn compile(
             .map(|grid| grid.reveal.unwrap_or(info.reveal))
             .collect(),
         records_title: records_title(title, mod_id, &info.id),
+        tiers,
+        words: Words::default(),
         grids,
         events,
     })
@@ -465,6 +793,7 @@ fn compile_event(
     grid: usize,
     def: &EventDef,
     names: &BTreeMap<String, String>,
+    tiers: &MedalTiers,
     ladder: &[&str],
     pilots: &Pilots,
     files: &Files<'_>,
@@ -599,14 +928,19 @@ fn compile_event(
     let flipped = matches!(mode, Mode::Zone | Mode::Elimination);
     let timed = matches!(mode, Mode::TimeTrial | Mode::SpeedLap);
     if let Some(medals) = &def.medals {
-        let (medium, rungs) = medal_targets(medals, flipped, timed)?;
+        let (medium, rungs, every) = medal_targets(medals, tiers, flipped, timed)?;
         cell.gold = medium.gold;
         cell.silver = medium.silver;
         cell.bronze = medium.bronze;
         cell.difficulty_targets = rungs;
+        event.tier_targets = every;
     } else {
         let never = if flipped { i64::MAX } else { 0 };
         (cell.gold, cell.silver, cell.bronze) = (never, never, never);
+        event.tier_targets = TierTargets {
+            flat: vec![never; tiers.len()],
+            rungs: None,
+        };
     }
 
     if let Some(unlock) = &def.unlock {
@@ -619,10 +953,10 @@ fn compile_event(
                 .get(&requirement.event)
                 .ok_or_else(|| format!("requires {:?}: no such event", requirement.event))?;
             let least = match requirement.medal.as_str() {
-                "gold" => Some(Medal::Gold),
-                "silver" => Some(Medal::Silver),
-                "bronze" => Some(Medal::Bronze),
-                _ => None,
+                "any" => None,
+                word => Some(tiers.find(word).ok_or_else(|| {
+                    format!("requires medal {word:?}: no such tier in this campaign")
+                })?),
             };
             event.requires.push((name.clone(), least));
         }
@@ -655,9 +989,10 @@ fn inline_pilot(cell: &str, table: &toml::Table) -> Result<oag_raceplay::pilots:
 /// positive result meets, and `i64::MAX` on a counting one.
 fn medal_targets(
     medals: &MedalsDef,
+    tiers: &MedalTiers,
     flipped: bool,
     timed: bool,
-) -> Result<(MedalTargets, Option<DifficultyTargets>), String> {
+) -> Result<(MedalTargets, Option<DifficultyTargets>, TierTargets), String> {
     let never = if flipped { i64::MAX } else { 0 };
     let convert = |value: Option<f64>| -> Result<i64, String> {
         let Some(value) = value else {
@@ -673,7 +1008,13 @@ fn medal_targets(
         )]
         Ok(scaled.round() as i64)
     };
-    let triple = |targets: Targets| -> Result<MedalTargets, String> {
+    let column = |targets: &Targets| -> Result<Vec<i64>, String> {
+        tiers
+            .iter()
+            .map(|(_, tier)| convert(targets.of(&tier.name)))
+            .collect()
+    };
+    let triple = |targets: &Targets| -> Result<MedalTargets, String> {
         Ok(MedalTargets {
             gold: convert(targets.gold)?,
             silver: convert(targets.silver)?,
@@ -681,19 +1022,64 @@ fn medal_targets(
         })
     };
     let flat = medals.all();
-    let rung = |own: Option<Targets>| own.filter(|t| !t.is_empty()).unwrap_or(flat);
-    let medium = triple(rung(medals.medium))?;
-    let per_rung = medals.easy.is_some() || medals.medium.is_some() || medals.hard.is_some();
-    let rungs = if per_rung {
-        Some(DifficultyTargets {
-            easy: triple(rung(medals.easy))?,
-            medium,
-            hard: triple(rung(medals.hard))?,
-        })
-    } else {
-        None
+    let rung = |own: &Option<Targets>| {
+        own.clone()
+            .filter(|t| !t.is_empty())
+            .unwrap_or(flat.clone())
     };
-    Ok((medium, rungs))
+    let medium_targets = rung(&medals.medium);
+    let medium = column(&medium_targets)?;
+    let per_rung = medals.easy.is_some() || medals.medium.is_some() || medals.hard.is_some();
+    let (rungs, every) = if per_rung {
+        let (easy, hard) = (rung(&medals.easy), rung(&medals.hard));
+        (
+            Some(DifficultyTargets {
+                easy: triple(&easy)?,
+                medium: triple(&medium_targets)?,
+                hard: triple(&hard)?,
+            }),
+            Some([column(&easy)?, medium.clone(), column(&hard)?]),
+        )
+    } else {
+        (None, None)
+    };
+    Ok((
+        triple(&medium_targets)?,
+        rungs,
+        TierTargets {
+            flat: medium,
+            rungs: every,
+        },
+    ))
+}
+
+/// The campaign's medal tiers: its `[[medal-tier]]` list, or the title's own three. A tier
+/// named gold, silver or bronze with no string id of its own keeps the title's word for it.
+fn tiers_of(def: &CampaignDef) -> Result<MedalTiers, String> {
+    if def.medal_tiers.is_empty() {
+        return Ok(MedalTiers::standard().clone());
+    }
+    let standard = MedalTiers::standard();
+    let tiers = def
+        .medal_tiers
+        .iter()
+        .map(|tier| {
+            let argb = tier
+                .argb()
+                .ok_or_else(|| format!("medal tier {:?}: colour {:?}", tier.name, tier.colour))?;
+            let string_id = tier.string_id.clone().or_else(|| {
+                let own = standard.get(standard.find(&tier.name)?)?;
+                own.string_id.clone()
+            });
+            Ok(oag_tables::race_campaign::MedalTier {
+                name: tier.name.clone(),
+                points: tier.points,
+                argb,
+                string_id,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    MedalTiers::new(tiers).map_err(|e| e.to_string())
 }
 
 /// What a session's mods add for one title: the campaigns that compiled, a
@@ -709,11 +1095,45 @@ pub struct Installed {
     /// (`true`) rather than not installed. What the MODS page's NEEDS line says.
     pub needs: Vec<(String, String, bool)>,
     /// Every `tracks/*.track.toml` of a folder mod for this title, raced from
-    /// RACE REMIX's CUSTOM title as well as from a campaign.
+    /// a two-title race page's CUSTOM title as well as from a campaign.
     pub tracks: Vec<std::path::PathBuf>,
+    /// The medal art each mod that is on and carries `[campaign-medals]` for this title asks
+    /// the campaign screens to draw ([`Self::medals_for`] picks one).
+    pub medals: Vec<MedalAsk>,
+    /// A mod's id and the name of a title whose disc it needs (`needs-titles`) and this
+    /// machine has none of. What the MODS page's NEEDS line says.
+    pub needs_discs: Vec<(String, String)>,
+}
+
+/// One mod's `[campaign-medals]`, with what reading it needs from the mod.
+#[derive(Debug, Clone)]
+pub struct MedalAsk {
+    /// The mod's id.
+    pub mod_id: String,
+    /// The declaration.
+    pub medals: oag_mod::CampaignMedals,
+    /// The bytes of the mod's own atlas file, for a `{ mod = ... }` source that could be read.
+    pub atlas: Option<Vec<u8>>,
+    /// The mod carries campaigns of its own: its art is theirs, and the disc's campaign and
+    /// other mods' campaigns keep the title's swatches (a mod with none, like HD's medals on
+    /// Pulse, is title-wide).
+    pub own_campaigns: bool,
 }
 
 impl Installed {
+    /// The medal art the screens of the campaign `open` (`None`: the disc's own) draw: the art
+    /// of a mod that carries that campaign, else the first title-wide art. A mod's own art wins
+    /// over a title-wide mod's whatever order the mods load in.
+    #[must_use]
+    pub fn medals_for(&self, open: Option<&Custom>) -> Option<&MedalAsk> {
+        open.and_then(|custom| {
+            self.medals
+                .iter()
+                .find(|ask| ask.own_campaigns && ask.mod_id == custom.mod_id)
+        })
+        .or_else(|| self.medals.iter().find(|ask| !ask.own_campaigns))
+    }
+
     /// Reads and compiles every campaign the mods carry for `title`: a mod or
     /// campaign whose `titles` leave this title out is skipped quietly, a broken
     /// one, or one with an event on a disc `has_disc` (by title slug) says this
@@ -733,7 +1153,7 @@ impl Installed {
         let mut installed = Self::default();
         let slug = title.slug();
         let mods: Vec<&oag_mod::Mod> = mods.into_iter().collect();
-        // Tracks race on every title (RACE REMIX's CUSTOM); campaigns only
+        // Tracks race on every title (a two-title race page's CUSTOM); campaigns only
         // where the hex grid draws.
         for module in mods.iter().filter(|module| module.is_for(&slug)) {
             installed.tracks.extend(
@@ -744,6 +1164,45 @@ impl Installed {
                     .filter_map(|name| module.local_path(name)),
             );
         }
+        for module in mods.iter().filter(|module| module.is_for(&slug)) {
+            for needed in &module.manifest.needs_titles {
+                if !has_disc(needed) {
+                    let name =
+                        oag_source::title::by_slug(needed).map_or(needed.as_str(), |t| t.name);
+                    installed
+                        .needs_discs
+                        .push((module.manifest.id.clone(), name.to_string()));
+                }
+            }
+        }
+        installed.medals = mods
+            .iter()
+            .filter(|module| module.is_for(&slug))
+            .filter_map(|module| {
+                let medals = module.manifest.campaign_medals.clone()?;
+                let atlas = match &medals.source {
+                    oag_mod::MedalSource::Mod(key) => {
+                        let path = module.manifest.icons.get(key)?;
+                        match module.read(path) {
+                            Ok(bytes) => bytes,
+                            Err(e) => {
+                                log::warn!("campaign medals: {}: {path}: {e}", module.manifest.id);
+                                None
+                            }
+                        }
+                    }
+                    oag_mod::MedalSource::Title(_) => None,
+                };
+                Some(MedalAsk {
+                    mod_id: module.manifest.id.clone(),
+                    medals,
+                    atlas,
+                    own_campaigns: !module
+                        .files_under(oag_mod::campaign::DIRECTORY, "toml")
+                        .is_empty(),
+                })
+            })
+            .collect();
         if !title.campaign.custom_campaigns {
             return installed;
         }
@@ -784,7 +1243,10 @@ impl Installed {
                     Ok(Some(custom))
                 });
                 match compiled {
-                    Ok(Some(custom)) => installed.campaigns.push(custom),
+                    Ok(Some(mut custom)) => {
+                        custom.words = Words::read(module);
+                        installed.campaigns.push(custom);
+                    }
                     Ok(None) => {}
                     Err(reason) => {
                         if let Some((other, is_off)) = needed.into_inner() {

@@ -37,7 +37,7 @@
 //! the light where the clock has put it.
 
 use crate::vex::{self, Node, NodeChain};
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Class ID of a `wopoint` node.
 pub const CLASS_WOPOINT: u32 = 0x3cf;

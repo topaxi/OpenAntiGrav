@@ -23,13 +23,15 @@
 //! its authored 122x96 with the glyph centred, and a box that carries text
 //! carries it inside, white, centred.
 //!
-//! **Chosen, not measured - no confidence score**: the pad cursor. The
-//! captures show no selected state at all and the original's grids answer
-//! touch only, so the tile the pad is on is outlined in `Orange2048`, a colour
-//! the skin declares for something, drawn as a 4-unit ring - **only once the
-//! pad has moved on the screen** ([`TouchState::pad_cursor`]), never on entry
-//! or under a pointer, as in the original. What the original draws for a pad
-//! is unread.
+//! **Authored, but not as a focus**: the executable's `TouchButton` item draws its fill in
+//! `Orange2048` instead of `Blue2048` while the tile is pressed, latched (`toggle`) or flagged
+//! by its screen (`FUN_810edc10`, `docs/ghidra/functions/vita-2048-eu-v104/pad-focus.md`).
+//! **The mapping of that look onto a pad cursor is chosen, not measured**: none of the six
+//! `Touch*` item classes reads a pad or the per-item focus flag, so the original's grids answer
+//! touch only and draw no focus. The tile the pad is on is therefore filled in the tile's own
+//! pressed colour. It shows whenever the pad is the device in use ([`TouchState::pad_cursor`]):
+//! from the moment a screen is entered, so a controller player always sees where Cross lands;
+//! never under a pointer, as in the original.
 //!
 //! # One tap on a mode tile
 //!
@@ -53,17 +55,17 @@
 //! cross-play are network sessions this build does not have. Confirming one
 //! of those says so in a note and stays.
 //!
-//! # Three tiles the disc does not author: RACE BOX, REMIX and MULTIPLAYER
+//! # Tiles the disc does not author: RACE BOX, the rows mods hang under it, MULTIPLAYER
 //!
 //! **This build's own, not on the disc**, and the one place this module
 //! adds to what the file draws. 2048 ships no race box and no
 //! `CellMode_Definition.xml` - its front end is the campaign map and the
 //! network modes - and every other title in this project reaches this
-//! build's own race box, RACE REMIX and MULTIPLAYER pages (`assets/ui/menu.toml`,
-//! ADR-0034) from its own front end. So the three are appended **after** the
-//! four authored tiles, never mixed into `Screen::touch_buttons`, labelled
-//! with this project's own `OAG_MENU_RACEBOX`/`OAG_MENU_REMIX`/`OAG_MENU_MULTIPLAYER` strings (the
-//! same ids the menu tree uses), and drawn as the labelled 122x96 box the
+//! build's own race box, the pages mods attach under it (a two-title race page when the
+//! official `oag.remix` is on) and MULTIPLAYER from its own front end. So they are
+//! appended **after** the four authored tiles, never mixed into
+//! `Screen::touch_buttons`, labelled as the menu tree labels those rows, and drawn as the
+//! labelled 122x96 box the
 //! disc's own game-list screen authors for a text button - an authored
 //! shape holding an unauthored destination. Split screen is the MULTIPLAYER tile's
 //! page (LOCAL MULTIPLAYER). **Their positions are chosen,
@@ -74,8 +76,8 @@
 //! (`GameModeChoice` is nested inside `newFEshell`) authors a `<TouchNews>`
 //! at `(16, 432)`, but that widget carries no size and this build draws
 //! nothing for it, so the rect is empty in the picture. See
-//! [`EXTRA_TILES`]. No disc icon exists for either, so neither draws one. A
-//! compare shot leaves all three out (`oag-game --original-menu`, maintainer
+//! [`EXTRA_TILES`]; a fifth row has no slot and is dropped with a warning. No disc
+//! icon exists for any, so none draws one. A compare shot leaves them all out (`oag-game --original-menu`, maintainer
 //! 2026-10-27): the original's page has none, a player keeps them.
 
 use crate::pointer::{Pointer, contains};
@@ -84,8 +86,13 @@ use crate::screen::{Screen, TouchButton, argb_to_rgba, parse_argb};
 use super::*;
 use oag_2048::frontend::states as w2048;
 
-/// The pad cursor's ring, in grid units. Chosen - see the module docs.
+/// A slider's focus ring, in grid units. Chosen - see the module docs.
 const CURSOR_RING: f32 = 4.0;
+/// A screen's tick is authored 122 by 96; the profile's arrows are 64 wide and
+/// the `team` hotspots 428 by 120 and 280 by 40.
+fn is_tick_sized(rect: [f32; 4]) -> bool {
+    (100.0..=130.0).contains(&rect[2]) && (80.0..100.0).contains(&rect[3])
+}
 /// From the tile's bottom edge to the label's cap line. Measured - see the
 /// module docs. The 22 units between a wrapped label's lines is not a
 /// constant here: it is the face's own 37-unit line height at
@@ -115,13 +122,9 @@ pub enum Launch {
     /// node of one of [`super::Tier`]'s maps, resolved against the grids the
     /// boot read.
     Cell(String),
-    /// This build's own race box - the `race` page of `assets/ui/menu.toml`.
-    RaceBox,
-    /// This build's own RACE REMIX page (ADR-0034).
-    Remix,
-    /// This build's own MULTIPLAYER page (local and LAN, with online for later): the one
-    /// entry to split screen, here a tile where the other titles have a row.
-    Multiplayer,
+    /// A page of this build's menu tree, by id: what one of [`ExtraTile`]s opens (the race
+    /// box's `race`, a mod's page, `multiplayer`).
+    Page(String),
 }
 
 /// One of this build's own tiles on `GameModeChoice`, in the terms the
@@ -133,15 +136,16 @@ pub struct ExtraTile {
     pub launch: Launch,
 }
 
-/// Where the two extra tiles sit, in the order [`Frontend::set_extra_tiles`]
+/// Where the extra tiles sit, in the order [`Frontend::set_extra_tiles`]
 /// was given them. **Chosen, not measured** - see the module docs. The
 /// 122x96 is the tick's own authored size; the 20-unit gap between them
 /// is this build's. Stacked in the left column, clear of the v1.04 grid's
 /// three columns that start at x=228.
-pub const EXTRA_TILES: [[f32; 4]; 3] = [
+pub const EXTRA_TILES: [[f32; 4]; 4] = [
     [16.0, 110.0, 122.0, 96.0],
     [16.0, 226.0, 122.0, 96.0],
     [16.0, 342.0, 122.0, 96.0],
+    [16.0, 458.0, 122.0, 80.0],
 ];
 
 /// Where the touch front end is: which tile the pad is on, which mode has
@@ -152,10 +156,15 @@ pub struct TouchState {
     pub selected: usize,
     /// The `idstring` of the toggle tile last tapped on `GameModeChoice`.
     pub chosen_mode: Option<String>,
-    /// Whether the pad has moved on this screen: the ring shows only then. The
-    /// original's touch grids draw no focus at all; the ring is this build's
-    /// own, for a pad (see the module docs).
+    /// Whether the pad is the device in use: the focused tile is filled in
+    /// `Orange2048` then, on every screen from its first frame. Set by any pad
+    /// press and by [`Frontend::set_pad_driving`], cleared by a pointer that
+    /// moves or clicks. The original's touch grids draw no focus at all (see
+    /// the module docs).
     pub pad_cursor: bool,
+    /// Draw no pad focus whichever device is in use, for a frame compared
+    /// against the original's grids, which have none.
+    pub focus_hidden: bool,
     /// What a confirmed tap asked for, once one has. Read by the
     /// composition root through [`Frontend::launch`].
     pub launch: Option<Launch>,
@@ -190,6 +199,11 @@ pub struct TouchState {
     /// Which of `OptionsAudio`'s two sliders Up/Down last focused: `0` music,
     /// `1` SFX.
     pub audio_slider: usize,
+    /// `OptionsCamera`'s SCREEN SIZE control - see [`Frontend::set_screen_size`].
+    pub screen_size: Option<super::options2048::ScreenSize>,
+    /// Which of `OptionsCamera`'s two controls Up/Down last focused: `0` the camera list, `1`
+    /// SCREEN SIZE.
+    pub camera_row: usize,
     /// `OptionsControls`' `Motion Sensor` list. Drawn and cycled; not wired
     /// to any setting - see `frontend::options2048`'s module doc.
     pub controls_index: usize,
@@ -245,6 +259,11 @@ impl Frontend {
     #[must_use]
     pub fn chosen_mode(&self) -> Option<&str> {
         self.touch.chosen_mode.as_deref()
+    }
+
+    /// Draws no pad focus from here on - see [`TouchState::focus_hidden`].
+    pub fn hide_pad_focus(&mut self) {
+        self.touch.focus_hidden = true;
     }
 
     /// Gives `GameModeChoice` this build's own tiles - see the module docs.
@@ -324,7 +343,7 @@ impl Frontend {
     }
 
     /// The pad on a touch grid.
-    pub(super) fn update_touch(&mut self, input: &mut Input) {
+    pub(super) fn update_touch(&mut self, dt: f64, input: &mut Input) {
         let Some(current) = self.machine.current().map(str::to_string) else {
             return;
         };
@@ -336,6 +355,9 @@ impl Frontend {
         if current == w2048::NEW_FE_SHELL {
             if self.event_card_open() {
                 self.update_event_card(input);
+                return;
+            }
+            if self.leave_hosted_map(input) {
                 return;
             }
             for (button, target) in [
@@ -352,10 +374,11 @@ impl Frontend {
                     return;
                 }
             }
-            self.update_campaign_map(input);
+            self.update_campaign_map(dt, input);
             return;
         }
-        let count = self.tiles(&current).len();
+        let tiles = self.tiles(&current);
+        let count = tiles.len();
         if count == 0 {
             return;
         }
@@ -368,17 +391,63 @@ impl Frontend {
             input.consume_press(Button::Left);
             self.touch.pad_cursor = true;
             self.touch.selected = (self.touch.selected + count - 1) % count;
+        } else if input.is_pressed(Button::Down) || input.is_pressed(Button::Up) {
+            let down = input.is_pressed(Button::Down);
+            input.consume_press(if down { Button::Down } else { Button::Up });
+            self.touch.pad_cursor = true;
+            let rects: Vec<[f32; 4]> = tiles.iter().map(|tile| tile.rect).collect();
+            if let Some(next) = vertical_neighbour(&rects, self.touch.selected, down) {
+                self.touch.selected = next;
+            }
         } else if input.is_pressed(Button::Cross) || input.is_pressed(Button::Start) {
             input.consume_press(Button::Cross);
             input.consume_press(Button::Start);
+            self.touch.pad_cursor = true;
             self.activate_touch(&current, self.touch.selected);
+        } else if input.is_pressed(Button::Circle) {
+            input.consume_press(Button::Circle);
+            self.touch.pad_cursor = true;
+            self.go_back(&current, &tiles);
         }
     }
 
-    /// Back to the first tile, ring hidden: a screen was left or entered.
+    /// Circle on a grid: the screen's own tick - the unlabelled button the file
+    /// authors at the bottom right, which `Home` and the sub-screens leave by -
+    /// else the way the screen was entered by (`PreviousScreen`'s stack).
+    /// **Chosen, not measured**: the original's grids answer touch only.
+    fn go_back(&mut self, current: &str, tiles: &[Tile]) {
+        // The root grid: its own tick is the hidden confirm, and nothing is behind it.
+        if current == w2048::GAME_MODE_CHOICE {
+            return;
+        }
+        let tick = tiles.iter().find(|tile| {
+            tile.label.is_none()
+                && is_tick_sized(tile.rect)
+                && matches!(tile.action, Action::Redirect(_))
+        });
+        if let Some(tick) = tick
+            && let Action::Redirect(target) = tick.action.clone()
+        {
+            let label = tick.name.clone();
+            self.redirect_touch(current, &label, &target);
+        } else if !self.touch.history.is_empty() {
+            self.redirect_touch(current, "Circle", "PreviousScreen");
+        }
+    }
+
+    /// The pad is the device in use, or is not (the composition root's read
+    /// of which device spoke last). Drives the focus fill on the touch grids.
+    pub fn set_pad_driving(&mut self, driving: bool) {
+        self.touch.pad_cursor = driving;
+        if !driving {
+            self.campaign.cursor.hide();
+        }
+    }
+
+    /// Back to the first tile: a screen was left or entered. Which device is
+    /// in use does not change with the screen.
     fn reset_touch_cursor(&mut self) {
         self.touch.selected = 0;
-        self.touch.pad_cursor = false;
     }
 
     /// Where `current`'s own `confirmButton` leads, when it authors one: the
@@ -533,6 +602,9 @@ impl Frontend {
         if pointer.is_idle() {
             return true;
         }
+        if pointer.moved || pointer.clicked {
+            self.touch.pad_cursor = false;
+        }
         let Some(at) = pointer.at else {
             return true;
         };
@@ -557,6 +629,21 @@ impl Frontend {
     /// The tiles of screen `name`, over its own header widgets already in
     /// `out`.
     pub(super) fn draw_touch(&self, name: &str, out: &mut Vec<Draw>) {
+        self.draw_touch_marking(
+            name,
+            (self.touch.pad_cursor && !self.touch.focus_hidden).then_some(self.touch.selected),
+            out,
+        );
+    }
+
+    /// [`Self::draw_touch`] with the marked tile given: the pad's, or the one the screen shows
+    /// the state of (`options` marks the button of the panel that is open, as the original's).
+    pub(super) fn draw_touch_marking(
+        &self,
+        name: &str,
+        marked: Option<usize>,
+        out: &mut Vec<Draw>,
+    ) {
         let Some(screen) = self.screens.by_name(name) else {
             return;
         };
@@ -576,8 +663,8 @@ impl Frontend {
                 }
                 _ => tile,
             };
-            let ringed = self.touch.pad_cursor && at == self.touch.selected;
-            self.draw_tile(drawn, colour, ringed, cursor, out);
+            let focused = marked == Some(at);
+            self.draw_tile(drawn, colour, focused, cursor, out);
         }
     }
 
@@ -628,8 +715,8 @@ impl Frontend {
         &self,
         tile: &Tile,
         colour: [f32; 4],
-        selected: bool,
-        cursor: [f32; 4],
+        focused: bool,
+        pressed: [f32; 4],
         out: &mut Vec<Draw>,
     ) {
         let rect = tile.rect;
@@ -638,11 +725,8 @@ impl Frontend {
         // 122x96 box - its authored size - with the glyph centred in it.
         out.push(Draw::Fill {
             rect,
-            color: colour,
+            color: if focused { pressed } else { colour },
         });
-        if selected {
-            self.draw_cursor_ring(rect, cursor, out);
-        }
         if let Some(placed) = tile.src.as_deref().and_then(|src| {
             self.placements
                 .iter()
@@ -660,12 +744,7 @@ impl Frontend {
                     w,
                     h,
                 ],
-                uv: [
-                    placed.x as f32,
-                    placed.y as f32,
-                    placed.width as f32,
-                    placed.height as f32,
-                ],
+                uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
                 color: tile.color,
             });
         }
@@ -726,9 +805,23 @@ impl Frontend {
         });
     }
 
-    /// The pad cursor: a ring outside `rect`. Chosen - see the module docs.
+    /// A ring outside `rect`, for the controls whose own fill already means
+    /// something else (a slider's value). Chosen, not measured.
     pub(super) fn draw_cursor_ring(&self, rect: [f32; 4], cursor: [f32; 4], out: &mut Vec<Draw>) {
-        out.extend(cursor_ring(rect, cursor));
+        let [x, y, w, h] = rect;
+        let r = CURSOR_RING;
+        out.extend(
+            [
+                [x - r, y - r, w + 2.0 * r, r],
+                [x - r, y + h, w + 2.0 * r, r],
+                [x - r, y, r, h],
+                [x + w, y, r, h],
+            ]
+            .map(|rect| Draw::Fill {
+                rect,
+                color: cursor,
+            }),
+        );
     }
 
     /// A skin colour by its global name, or white: the names this reads
@@ -743,20 +836,26 @@ impl Frontend {
     }
 }
 
-/// The pad cursor's ring around `rect`, four bars [`CURSOR_RING`] thick.
-/// Shared with the screens that reuse this front end's tile idiom
-/// (`oag_ui_screens::endrace::touch`). Chosen, not measured.
-#[must_use]
-pub fn cursor_ring(rect: [f32; 4], color: [f32; 4]) -> [Draw; 4] {
-    let [x, y, w, h] = rect;
-    let r = CURSOR_RING;
-    [
-        [x - r, y - r, w + 2.0 * r, r],
-        [x - r, y + h, w + 2.0 * r, r],
-        [x - r, y, r, h],
-        [x + w, y, r, h],
-    ]
-    .map(|rect| Draw::Fill { rect, color })
+/// The tile `from` leaves for when the pad goes down or up: the nearest by
+/// vertical distance, the same column preferred. `None` at the edge; the
+/// grids do not wrap vertically.
+fn vertical_neighbour(rects: &[[f32; 4]], from: usize, down: bool) -> Option<usize> {
+    let centre = |rect: &[f32; 4]| (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5);
+    let from_rect = rects.get(from)?;
+    let (fx, fy) = centre(from_rect);
+    rects
+        .iter()
+        .enumerate()
+        .filter_map(|(at, rect)| {
+            let (x, y) = centre(rect);
+            let dy = if down { y - fy } else { fy - y };
+            // A neighbour in the next row, not a tile beside this one that happens to sit a
+            // few units lower.
+            let row = 0.5 * from_rect[3].min(rect[3]);
+            (at != from && dy >= row).then_some((at, dy + 2.0 * (x - fx).abs()))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(at, _)| at)
 }
 
 /// A button's own square.

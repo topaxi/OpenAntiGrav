@@ -38,6 +38,7 @@ fn shell(path: &std::path::Path) -> boot::Shell {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     boot::load_shell(&options).expect("the shell loads").0
 }
@@ -700,6 +701,98 @@ fn pure_reads_its_own_screen_names_and_previews_with_stills() {
 /// `entries.xml` - and each team's per-model ratings in tenths. HD's track
 /// screen is read too, see the next test. See `docs/ui/campaign-screens.md`'s
 /// "Wipeout HD/Fury: `Team Selection`" section.
+/// HD's Ship Select prints the highlighted team's banked loyalty total and sets the bar by
+/// `total / 100000` (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-loyalty.md`).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_ship_select_shows_the_highlighted_teams_loyalty_total() {
+    let Some(path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let shell = shell(&path);
+    let layout = shell.ship_select.as_ref().expect("Team Selection reads");
+    let block = layout
+        .screen
+        .blocks
+        .iter()
+        .find(|block| block.name.as_deref() == Some("Slide_4"))
+        .expect("the loyalty block");
+    let nobble = layout
+        .screen
+        .images
+        .iter()
+        .find(|image| image.name.as_deref() == Some("Nobble_4"))
+        .expect("the loyalty nobble");
+    let teams: Vec<(String, String)> = shell
+        .teams
+        .iter()
+        .take(2)
+        .map(|team| (team.id.clone(), team.label(&shell.strings).to_string()))
+        .collect();
+    assert_eq!(teams.len(), 2);
+    let totals = [7u32, 50_000];
+    let entries: Vec<Entry> = teams
+        .iter()
+        .zip(totals)
+        .map(|((id, label), total)| Entry {
+            id: id.clone(),
+            label: label.clone(),
+            details: Details::Ship {
+                rating: None,
+                variants: Vec::new(),
+                stats: Vec::new(),
+                models: Vec::new(),
+                logo: None,
+                loyalty: Some(total),
+            },
+        })
+        .collect();
+    let face = shell.menu_font.as_ref().unwrap_or(&shell.font);
+    let skin = oag_ui::menu::Skin::new(shell.menu_skin, shell.space, face.line_height);
+    let read = |selected: &str| -> (Vec<String>, Option<f32>) {
+        let picker = Picker::new(Kind::Ship, entries.clone(), Some(selected), None);
+        let layers = oag_ui_screens::picker::draw_list(
+            &picker,
+            layout,
+            &skin,
+            &shell.frame,
+            None,
+            false,
+            &|src| shell.sprites.get(src),
+            &|text| oag_ui::font::measure(face, text),
+        );
+        let texts = layers
+            .body
+            .iter()
+            .filter_map(|draw| match draw {
+                oag_ui::frontend::Draw::Text { text, .. }
+                | oag_ui::frontend::Draw::FacedText { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect();
+        let nobble_x = layers.body.iter().find_map(|draw| match draw {
+            oag_ui::frontend::Draw::Sprite { rect, .. } if rect[1] == nobble.y => Some(rect[0]),
+            _ => None,
+        });
+        (texts, nobble_x)
+    };
+    let (first_texts, first_x) = read(&teams[0].0);
+    let (second_texts, second_x) = read(&teams[1].0);
+    assert!(first_texts.contains(&"007".to_string()), "{first_texts:?}");
+    assert!(!first_texts.contains(&"50000".to_string()));
+    assert!(
+        second_texts.contains(&"50000".to_string()),
+        "{second_texts:?}"
+    );
+    let (first_x, second_x) = (first_x.expect("nobble"), second_x.expect("nobble"));
+    let moved = second_x - first_x;
+    let expected = block.width * (0.5 - 7.0 / 100_000.0);
+    assert!(
+        (moved - expected).abs() < 0.01,
+        "{moved} against {expected}"
+    );
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn hd_reads_its_own_team_selection() {
@@ -916,6 +1009,51 @@ fn the_kills_row_offers_the_discs_own_eliminations_list() {
     assert_eq!(
         shell(&path).race_setup.kill_targets,
         ["5", "10", "15", "20", "25"]
+    );
+}
+
+/// HD's `Eliminations` is a `Slider` (`minSlide` 200, `maxSlide` 600, `incSlide` 20), and the
+/// TARGET row offers its steps. Fails if the file is not read or the steps are a const here.
+#[test]
+#[ignore = "needs an HD disc image in data/images/"]
+fn the_target_row_offers_the_steps_of_hds_eliminations_slider() {
+    let Some(path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let setup = shell(&path).race_setup;
+    let want: Vec<String> = (200..=600).step_by(20).map(|n| n.to_string()).collect();
+    assert_eq!(setup.score_targets, want);
+    assert!(
+        setup.kill_targets.is_empty(),
+        "a slider is not the KILLS list: {:?}",
+        setup.kill_targets
+    );
+}
+
+/// Omega's `racebox_definition.xml` authors an `Eliminations` slider of its own (50 to 600 by 25,
+/// HD's is 200 to 600 by 20), yet Omega races an Eliminator on kills (`oag_omega::TITLE.eliminator`,
+/// inherited, its score law unmeasured), so the TARGET row stays off Omega: the row follows the
+/// rule, not the file.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_authors_its_own_eliminations_slider_but_races_on_kills() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut opened =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("Omega opens");
+    let name = match oag_hd::TITLE.eliminator.value {
+        oag_title::eliminator::EliminatorRule::Score(rule) => rule.race_setup,
+        oag_title::eliminator::EliminatorRule::Kills => panic!("HD ends on a score"),
+    };
+    let xml = oag_tables::fexml::text(&opened.archives.read_name(name).expect("the racebox file"))
+        .expect("front-end XML");
+    let slider = oag_tables::race_setup::slider(&xml, "Eliminations").expect("a slider");
+    assert_eq!((slider.min, slider.max, slider.step), (50, 600, 25));
+    assert_eq!(
+        oag_omega::TITLE.eliminator.value,
+        oag_title::eliminator::EliminatorRule::Kills
     );
 }
 

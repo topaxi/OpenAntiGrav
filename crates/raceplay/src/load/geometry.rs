@@ -5,14 +5,17 @@
 //! absent, one that will not decode, and one in a container this build reads
 //! are three outcomes with one fallback between them.
 
+use oag_mesh::mesh::rcs::siblings::{Siblings, Spelling};
 use oag_mesh::mesh::{self, Model};
 
 /// The `.rcsmodel` beside a circuit's `.vex`, and the name it was found under.
 ///
-/// Tried in this order: **`trackZone.rcsmodel` in a Zone race on Wipeout
-/// 2048, only when [`super::Options::zone_model`] asks for it** (its road
-/// is `fc01_dummy`, drawn as the fog colour), then `track.rcsmodel`, then the Omega Collection's
-/// `track.final.rcsmodel` (see `mesh::rcs::sibling_name_cooked`). The Zone
+/// Tried in the order `oag_mesh::mesh::rcs::siblings::Siblings::probe` lists
+/// them: **`trackZone.rcsmodel` in a Zone race on Wipeout 2048, only when
+/// [`super::Options::zone_model`] asks for it** (its road is `fc01_dummy`,
+/// drawn as the fog colour), then `track.rcsmodel`, then the Omega Collection's
+/// `track.final.rcsmodel`. No circuit ships both of the last two, so the order
+/// only decides which title's lookup pays a second, failing read. The Zone
 /// model is its own circuit art with its own skeleton, clip and PVS, found
 /// by the same stem rule, so everything downstream that follows
 /// `geometry_name` follows it too. A Zone model in any other container (the
@@ -24,35 +27,38 @@ pub(super) fn sibling_model(
     zone: bool,
     report: &mut Vec<String>,
 ) -> (Option<Vec<u8>>, Option<String>) {
-    if zone
-        && let Some(name) = mesh::rcs::psp2::zone_model_name(track)
-        && let Ok(blob) = archives.read_name(&name)
-        && mesh::rcs::psp2::is_psp2(&blob)
-        && !oag_rcs::rcsmodel::psp2::is_ps4(&blob)
-    {
-        report.push(format!(
-            "zone: {name} is this circuit's Zone model, drawn in place of track.rcsmodel"
-        ));
-        return (Some(blob), Some(name));
-    }
-    let names = [
-        mesh::rcs::sibling_name(track),
-        mesh::rcs::sibling_name_cooked(track),
-    ];
-    let found = names
-        .into_iter()
-        .flatten()
-        .find_map(|name| archives.read_name(&name).ok().map(|blob| (name, blob)));
-    match found {
-        Some((name, blob)) => (Some(blob), Some(name)),
-        None => {
+    for set in Siblings::probe(track, zone) {
+        let Ok(blob) = archives.read_name(&set.model) else {
+            continue;
+        };
+        if set.spelling == Spelling::Zone {
+            if !mesh::rcs::psp2::is_psp2(&blob) || oag_rcs::rcsmodel::psp2::is_ps4(&blob) {
+                continue;
+            }
             report.push(format!(
-                "{track}: a PS3 .vex with no .rcsmodel beside it - drawing the \
-                 derived ribbon instead, as --ribbon does"
+                "zone: {} is this circuit's Zone model, drawn in place of track.rcsmodel",
+                set.model
             ));
-            (None, None)
         }
+        return (Some(blob), Some(set.model));
     }
+    report.push(format!(
+        "{track}: a PS3 .vex with no .rcsmodel beside it - drawing the \
+         derived ribbon instead, as --ribbon does"
+    ));
+    (None, None)
+}
+
+/// A `.vex` circuit's model with its batches' own cull bit honoured where the title's rule says
+/// so (`oag_title::Looks::batch_back_face_cull`, `docs/rendering/batch-cull.md`).
+pub(super) fn with_batch_cull(
+    mut model: Model,
+    looks: &oag_title::Looks,
+    platform: oag_title::Platform,
+) -> Model {
+    model.per_batch_cull = looks.batch_back_face_cull.applies(platform)
+        || looks.batch_back_face_cull_carried.applies(platform);
+    model
 }
 
 /// The circuit's authored geometry, or `None` when the caller should draw the
@@ -77,6 +83,11 @@ pub(super) fn sibling_model(
 /// **And the chunks the original draws only behind the glass** (Vineta K):
 /// they come back as their own two models, for the scene's
 /// behind-the-glass target - see `oag_mesh::mesh::rcs::build_scene_views`.
+///
+/// `zone` is whether the race is in Zone mode: 2048's and Omega's Zone passes
+/// keep the `wohdmeshrefract` meshes in the main view and draw no refraction target
+/// (`psp2::refraction_only`).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn track_model(
     archives: &mut oag_assets::Archives,
     track: &str,
@@ -84,6 +95,8 @@ pub(super) fn track_model(
     geometry: &Option<Vec<u8>>,
     model_name: Option<&str>,
     looks: &oag_title::Looks,
+    zone: bool,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> (Option<Model>, crate::BehindGlassModels) {
     let none = crate::BehindGlassModels::default;
@@ -109,12 +122,56 @@ pub(super) fn track_model(
         // `oag_mesh::mesh::rcs::psp2`.
         Some(geometry) if mesh::rcs::psp2::is_psp2(geometry) => {
             let animation = psp2_animation(archives, track, model_name, report);
-            match mesh::rcs::psp2::build(track, geometry, animation.as_ref(), &mut |path| {
-                archives.read_name(path).ok()
-            }) {
-                Ok((model, built)) => {
+            match mesh::rcs::psp2::build(
+                track,
+                geometry,
+                animation.as_ref(),
+                &mut crate::stages::reader(archives),
+            ) {
+                Ok((mut model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));
-                    (Some(biased(model)), none())
+                    // 2048 and Omega draw a mesh named `wohdmeshrefract` only into their
+                    // refraction target, never the main view, outside Zone mode
+                    // (`psp2::refraction_only`); the target gets those meshes.
+                    let split = if zone {
+                        mesh::rcs::psp2::refraction_only::Split::default()
+                    } else {
+                        mesh::rcs::psp2::refraction_only::split_refraction_target(
+                            &mut model, geometry,
+                        )
+                    };
+                    let mut behind = none();
+                    if split.out == 0 {
+                        // No target, so nothing for the tunnel glass to sample.
+                        mesh::rcs::psp2::refraction::clear(&mut model);
+                    } else {
+                        report.push(format!(
+                            "{track}: {} mesh(es) named `wohdmeshrefract` left out of the main \
+                             view and drawn into the refraction target with {} `0x30` mesh(es)",
+                            split.out, split.in_target
+                        ));
+                        let mut groups = split.target;
+                        for group in [&mut groups.alternate_fog, &mut groups.primary_fog]
+                            .into_iter()
+                            .flatten()
+                        {
+                            group.material_lod_bias = material_lod_bias;
+                        }
+                        behind = crate::BehindGlassModels {
+                            groups,
+                            alternate_fog: None,
+                            size: mesh::rcs::psp2::refraction_only::target_size(
+                                oag_rcs::rcsmodel::psp2::is_ps4(geometry),
+                            ),
+                        };
+                    }
+                    // 2048 and Omega take the cull bit alone: the rest of the
+                    // word has no draw list on either (`Model::honour_cull`).
+                    model.material_lod_bias = material_lod_bias;
+                    if render_state {
+                        model.honour_cull();
+                    }
+                    (Some(model), behind)
                 }
                 Err(error) => {
                     report.push(format!(
@@ -126,9 +183,14 @@ pub(super) fn track_model(
             }
         }
         Some(geometry) => {
-            match mesh::rcs::build_scene_views(track, track_blob, geometry, &mut |path| {
-                archives.read_name(path).ok()
-            }) {
+            let built = mesh::rcs::build_scene_views(
+                track,
+                track_blob,
+                geometry,
+                &mut crate::stages::reader(archives),
+                store,
+            );
+            match built {
                 Ok((model, mut groups, built)) => {
                     groups.alternate_fog = groups.alternate_fog.map(biased);
                     groups.primary_fog = groups.primary_fog.map(biased);
@@ -145,6 +207,7 @@ pub(super) fn track_model(
                         crate::BehindGlassModels {
                             groups,
                             alternate_fog,
+                            ..crate::BehindGlassModels::default()
                         },
                     )
                 }
@@ -177,9 +240,13 @@ fn psp2_animation(
     // Beside the `.rcsmodel` that was actually found, so the Omega Collection's
     // `track.final.rcsmodel` reads `track.final.rcsskeleton` and not a
     // `track.rcsskeleton` that does not exist.
-    let (skeleton_name, clip_name) = match model_name {
-        Some(model) => mesh::rcs::psp2::animation_names_beside(model)?,
-        None => mesh::rcs::psp2::animation_names(track)?,
+    let Siblings {
+        skeleton: skeleton_name,
+        clip: clip_name,
+        ..
+    } = match model_name {
+        Some(model) => Siblings::beside(model)?,
+        None => Siblings::plain(track)?,
     };
     let Ok(skeleton) = archives.read_name(&skeleton_name) else {
         report.push(format!(

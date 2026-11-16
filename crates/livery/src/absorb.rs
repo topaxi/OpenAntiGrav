@@ -78,7 +78,8 @@ pub(super) const LEACH: (&str, &str) = (LEACH_OVERLAY_TEXTURE, "LeachBeam");
 
 /// The hull redrawn under one of the two hull-overlay textures -
 /// `oag_fx::hull_overlay`, [`ABSORB`] or [`LEACH`] - or `None`, reported,
-/// when `wanted` is false (every title but Pulse), when the texture does not
+/// when `wanted` is false (a title with no such overlay: every one but Pulse and Pure, and Pure
+/// for the LeachBeam), when the texture does not
 /// resolve, or when the hull's batches share no one scale (every PS2 hull).
 pub(super) fn overlay(
     archives: &mut oag_assets::Archives,
@@ -159,12 +160,13 @@ pub(super) fn shell(
     team: &str,
     ship_dir: &str,
     wanted: bool,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Option<oag_mesh::mesh::Model> {
     if !wanted {
         return None;
     }
-    let name = oag_pulse::race::ships::entry_name_in(ship_dir, team, SHELL_STEM);
+    let name = oag_title::race::entry_name_in(ship_dir, team, SHELL_STEM);
     let pair = archives.read_name(&name).ok().and_then(|blob| {
         let sibling = oag_mesh::mesh::rcs::sibling_name(&name)?;
         Some((blob, archives.read_name(&sibling).ok()?))
@@ -178,6 +180,7 @@ pub(super) fn shell(
         &blob,
         &geometry,
         &mut |path| archives.read_name(path).ok(),
+        store,
         |c| c.mesh,
     );
     let (mut model, built) = match built {

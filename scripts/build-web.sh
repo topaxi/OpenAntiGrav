@@ -6,6 +6,8 @@
 #   scripts/build-web.sh --dev      # a debug build, no wasm-opt: quick to iterate
 #   scripts/build-web.sh --serve    # ... then serve dist on 127.0.0.1:8000
 #                                   # with the COOP/COEP headers threads need
+#   scripts/build-web.sh --check    # `cargo check` of the module with the same
+#                                   # flags, nothing written to dist (`just check-web`)
 #
 # The module is threaded (docs/tools/web.md, "Threads"): built with a pinned
 # nightly, `-Z build-std` and the atomics target feature, which the prebuilt
@@ -18,11 +20,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 profile=dist
 serve=
+check=
 port=${OAG_WEB_PORT:-8000}
 for arg in "$@"; do
   case $arg in
     --dev) profile=dev ;;
     --serve) serve=1 ;;
+    --check) check=1 ;;
     *) echo "unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
@@ -33,9 +37,13 @@ toolchain=${OAG_WEB_TOOLCHAIN:-nightly-2026-10-08}
 # sharing `target/` would throw the stable build's artifacts away each time.
 target_dir=${CARGO_TARGET_DIR:-target}/web-threads
 out=target/web/dist
-want=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/"/, "", $3); print $3; exit }' Cargo.lock)
+if [[ -n $check ]]; then
+  want=
+else
+  want=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/"/, "", $3); print $3; exit }' Cargo.lock)
+fi
 have=$(wasm-bindgen --version 2>/dev/null | awk '{ print $2 }')
-if [[ "$have" != "$want" ]]; then
+if [[ -n $want && "$have" != "$want" ]]; then
   echo "wasm-bindgen $want is needed (found: ${have:-none}): cargo install wasm-bindgen-cli --version $want" >&2
   exit 1
 fi
@@ -47,16 +55,37 @@ fi
 # Shared, imported memory up to wasm32's whole 4 GiB, and the TLS exports
 # wasm-bindgen sets each thread up with. rustc does not pass these for the
 # atomics feature alone (nightly-2026-10-08 linked an unshared memory).
+# The page's thread runs on the linker's stack, 1 MiB unless told otherwise;
+# this is a native main thread's 8 MiB. The boot's call chain is over 1 MiB in
+# the `dist` build, and an overflow runs below address 0 and traps as "memory
+# access out of bounds" (docs/tools/web.md, "The page's stack").
+stack_size=8388608
 link=""
-for arg in --shared-memory --import-memory --max-memory=4294967296 \
+for arg in --shared-memory --import-memory --max-memory=4294967296 -zstack-size=$stack_size \
   --export=__wasm_init_tls --export=__tls_size --export=__tls_align --export=__tls_base; do
   link+=" -C link-arg=$arg"
 done
+# OAG_WEB_FAULT_TEST=1 adds the module's `fault_test` hook, which raises each
+# failure the page reports on demand (docs/tools/web.md, "Troubleshooting").
+# Never set in pages.yml: a published module has no such export.
+features=web
+[[ -n ${OAG_WEB_FAULT_TEST:-} ]] && features+=,fault-test
+rustflags="-C target-feature=+atomics,+bulk-memory,+mutable-globals $link"
+if [[ -n $check ]]; then
+  # Both feature sets: the published module and the fault-test one.
+  for features in web web,fault-test; do
+    CARGO_TARGET_DIR=$target_dir RUSTFLAGS=$rustflags \
+      cargo "+$toolchain" check -Z build-std=std,panic_abort \
+      --target wasm32-unknown-unknown -p oag-game --no-default-features \
+      --example oag_web --features "$features"
+  done
+  exit 0
+fi
 CARGO_TARGET_DIR=$target_dir \
-  RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals $link" \
+  RUSTFLAGS=$rustflags \
   cargo "+$toolchain" build -Z build-std=std,panic_abort \
   --target wasm32-unknown-unknown --profile "$profile" \
-  -p oag-game --example oag_web --features web
+  -p oag-game --no-default-features --example oag_web --features "$features"
 dir=$profile
 [[ $profile == dev ]] && dir=debug
 wasm="$target_dir/wasm32-unknown-unknown/$dir/examples/oag_web.wasm"
@@ -68,24 +97,38 @@ wasm-bindgen --target web --no-typescript --out-dir "$out/pkg" "$wasm"
 # build that lost the atomics flags would boot and then fail on its first
 # worker, so it fails here instead.
 grep -q thread_stack_size "$out/pkg/oag_web.js" || { echo "the module has no shared memory: the threads flags did not apply" >&2; exit 1; }
-# OAG_WEB_NO_OPT=1 skips wasm-opt, so the module keeps its function names for
-# a browser CPU profile (`web-screenshot.py --profile`).
+# The stack the module was linked with, and no frame a large share of it.
+python3 scripts/check-wasm-stack.py "$out/pkg/oag_web_bg.wasm" --stack "$stack_size"
+# Every lock wait on the page's thread reports instead of blocking: Firefox
+# lets the page's thread wait on a lock and freezes the tab there, where
+# Chromium traps (docs/tools/web.md, "The page's thread may not wait").
+python3 scripts/web-page-wait-guard.py "$out/pkg/oag_web_bg.wasm" --stack "$stack_size" \
+  --names "$out/pkg/page-waits.txt"
+# Two modules from the one build: oag_web_bg.wasm, names stripped, the one a
+# page loads; oag_web_bg.named.wasm, the same code with its function names
+# kept, which the page loads for `?profile=1` or `?debug=1` (a profiler's and a
+# report's frames then read as Rust names; docs/tools/web.md, "Troubleshooting").
+# OAG_WEB_NO_OPT=1 (and --dev) skip wasm-opt, so both keep their names.
+named="$out/pkg/oag_web_bg.named.wasm"
 if [[ $profile != dev && -z ${OAG_WEB_NO_OPT:-} ]]; then
   # The `dist` profile's own goal (docs/tools/packaging.md), for the module:
   # wasm-bindgen's output is not size-optimised, and binaryen's -O pass takes a
   # few percent more off after LLVM's. Bulk memory and the other post-MVP
-  # features rustc already emits are enabled so binaryen keeps them.
-  wasm-opt -O --enable-threads --enable-bulk-memory --enable-nontrapping-float-to-int \
-    --enable-sign-ext --enable-mutable-globals --enable-reference-types \
-    --enable-multivalue \
-    -o "$out/pkg/oag_web_bg.wasm" "$out/pkg/oag_web_bg.wasm"
+  # features rustc already emits are enabled so binaryen keeps them. `-g`
+  # keeps the name section, and nothing else differs between the two.
+  binaryen=(--enable-threads --enable-bulk-memory --enable-nontrapping-float-to-int
+    --enable-sign-ext --enable-mutable-globals --enable-reference-types --enable-multivalue)
+  wasm-opt -O -g "${binaryen[@]}" -o "$named" "$out/pkg/oag_web_bg.wasm"
+  wasm-opt -O "${binaryen[@]}" -o "$out/pkg/oag_web_bg.wasm" "$out/pkg/oag_web_bg.wasm"
+else
+  cp "$out/pkg/oag_web_bg.wasm" "$named"
 fi
 # The module and its glue go under a directory named for their content, so a
 # host may cache them forever (`_headers`) and a deploy never pairs new glue
 # with an old module: the page's one import is rewritten to name it.
-hash=$(cat "$out/pkg/oag_web.js" "$out/pkg/oag_web_bg.wasm" | sha256sum | cut -c1-16)
+hash=$(cat "$out/pkg/oag_web.js" "$out/pkg/oag_web_bg.wasm" "$named" | sha256sum | cut -c1-16)
 mv "$out/pkg" "$out/$hash" && mkdir "$out/pkg" && mv "$out/$hash" "$out/pkg/$hash"
-cp web/index.html web/style.css web/worker.js web/audio.js web/audio-worklet.js web/movie.js web/_headers "$out/"
+cp web/index.html web/style.css web/worker.js web/fault.js web/audio.js web/audio-worklet.js web/movie.js web/_headers "$out/"
 sed "s#\"./pkg/oag_web.js\"#\"./pkg/$hash/oag_web.js\"#" web/main.js > "$out/main.js"
 grep -q "./pkg/$hash/oag_web.js" "$out/main.js" || { echo "main.js import not rewritten" >&2; exit 1; }
 # The TOML Schemas every project file names in its [toml-schema] header, served at

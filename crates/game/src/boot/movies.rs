@@ -85,6 +85,22 @@ pub(super) fn resolve_pure_movie_region(
     )
 }
 
+/// The movie `step`'s own screen names in the loaded front-end XML, when the step
+/// plays what its screen authors ([`oag_title::BootStep::movie_from_screen`]) and the
+/// source holds that entry; `None` leaves the step's own spelling to play.
+pub(super) fn authored_movie(
+    step: &oag_title::BootStep,
+    screens: &oag_ui::screen::Screens,
+    archives: &oag_assets::Archives,
+) -> Option<String> {
+    if !step.movie_from_screen {
+        return None;
+    }
+    let widget = screens.by_name(step.state)?.movies.first()?;
+    let name = widget.entry_name(oag_ui::screen::DEFAULT_REGION);
+    archives.locate(&name).is_some().then_some(name)
+}
+
 /// How an archive entry was asked for.
 ///
 /// A WAD directory stores only the hash of each name, and three of the disc's
@@ -418,4 +434,159 @@ pub(super) fn load_loose_movie(
         (None, None) => {}
     }
     Ok(Some(movie))
+}
+
+/// Whether two movies can share one set of I420 planes.
+///
+/// The front end is drawn by one renderer with one plane set, and
+/// [`crate::render::Renderer::upload_frame`] slices a frame by *those*
+/// dimensions rather than by the frame's own - so handing it a
+/// differently-shaped picture is a garbled image rather than an error.
+///
+/// The display aspect is deliberately **not** compared: that differs per movie on
+/// the PS2 and is handled by the pillarbox rect, not by the plane size.
+///
+/// **Unknown geometry is not disagreeing geometry.** `VideoFormat::of` answers
+/// `None` for a movie with no decoded frames - `--no-video`, no `ffmpeg`, a
+/// failed transcode - and there are then no planes to conflict over, because
+/// nothing will be uploaded. Reading that as a mismatch dropped the second movie
+/// on every `--no-video` load, which is the configuration the ground-truth tests
+/// use.
+pub(super) fn same_planes(a: &Movie, b: &Movie) -> bool {
+    match (
+        crate::render::VideoFormat::of(a),
+        crate::render::VideoFormat::of(b),
+    ) {
+        (Some(a), Some(b)) => {
+            (a.width, a.height, a.chroma_width, a.chroma_height)
+                == (b.width, b.height, b.chroma_width, b.chroma_height)
+        }
+        _ => true,
+    }
+}
+
+/// Decodes Pure's second boot movie - see
+/// [`oag_pure::names::FMV_INTRO_MOVIE`]'s own doc comment for what it is, how
+/// its name was found, and what it takes to actually draw it (the other half
+/// of that work, done alongside this function: see `oag_ui::frontend::Frontend`
+/// and `crate::main::FrontendStage` for the rest).
+///
+/// `None`, and nothing attempted at all, for a source whose `screens` has no
+/// `FMV Intro` state - every Pulse source, and any future title this build
+/// has not seen. Checked against `screens` rather than tried unconditionally
+/// the way [`load_backdrop`] tries `BACKDROP_MOVIE` for every source: a miss
+/// there is silent by construction (no report line), but `FMV_INTRO_MOVIE` is
+/// a Pure-specific literal, and trying it against a Pulse source would add a
+/// "no second boot movie" line nobody asked about.
+pub(super) fn load_second_movie(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    options: &Options,
+    report: &mut Vec<String>,
+    watch: crate::movie::Watch<'_>,
+) -> Option<Movie> {
+    let wanted = Options {
+        extent: Extent::Whole,
+        ..options.clone()
+    };
+    match load_movie(archives, name, &wanted, report, watch) {
+        Ok(movie) => movie,
+        Err(e) => {
+            report.push(format!("no second boot movie: {e:#}"));
+            None
+        }
+    }
+}
+
+/// Decodes the intro movie's ATRAC3+ track, if it should be heard at all.
+///
+/// # The widget decides, not the container
+///
+/// A `.PMF` having an audio stream is not the same question as whether the
+/// front end plays it. `Data\Movies\Backdrop` is `sound="false"` **and** has no
+/// track, so it is silent twice over; a movie that had a track and a widget
+/// saying `sound="false"` would still have to be silent, and this is what makes
+/// that true rather than the container's own contents. `Data\Movies\Intro` is
+/// `sound="true"`.
+///
+/// A movie no widget names - `--movie` pointing at an entry by hash, which is
+/// how the three unnamed reels are addressed - is played **with** its sound.
+/// The widget is the authority when there is one, and its absence is an absence
+/// of instruction rather than an instruction to be silent.
+///
+/// # Never fatal
+///
+/// A decode that fails names the reason on the report and leaves the movie
+/// silent, exactly as a missing `ffmpeg` leaves it with a black picture. This
+/// is the degradation ADR-0019 asks for, and it is the only one available:
+/// there is no second decoder to fall back to.
+pub(super) fn load_movie_sound(
+    movie: Option<&Movie>,
+    screens: &Screens,
+    movie_name: &str,
+    movie_region: &str,
+    options: &Options,
+    report: &mut Vec<String>,
+) -> Option<oag_music::at3::Pcm> {
+    let movie = movie?;
+    if options.no_video {
+        // Said here rather than left to the branch below, which would report a
+        // track that could not be unwrapped: `--no-video` never reads the movie
+        // at all, so there was nothing to unwrap. Worth stating, because the
+        // flag names only the picture and takes the sound with it.
+        report.push(
+            "  audio: --no-video skips reading the movie, so it has no sound either".to_string(),
+        );
+        return None;
+    }
+    let Some(audio) = movie.audio.as_ref() else {
+        // A header that declares a track and a demux that could not recover one
+        // has already said why on stderr; this is the line that says the movie
+        // is silent as a result, so the two are not read as unrelated.
+        if movie
+            .header
+            .as_ref()
+            .is_some_and(|header| header.audio.is_some())
+        {
+            report.push("  audio: declared but not recovered, so it stays silent".to_string());
+        }
+        return None;
+    };
+
+    let silent = screens
+        .with_movies()
+        .flat_map(|screen| screen.movies.iter())
+        .any(|widget| {
+            widget
+                .entry_name(movie_region)
+                .eq_ignore_ascii_case(movie_name)
+                && widget.sound == Some(false)
+        });
+    if silent {
+        report.push(format!(
+            "  audio: {} channel(s) at {} Hz, muted - the widget playing it is sound=\"false\"",
+            audio.channels(),
+            audio.sample_rate()
+        ));
+        return None;
+    }
+
+    match audio.decode(&options.audio_cache) {
+        Ok(pcm) => {
+            report.push(format!(
+                "  audio: {} channel(s) at {} Hz, {}, decoded to {:.2}s",
+                pcm.channels,
+                pcm.sample_rate,
+                audio.codec_clause(),
+                pcm.samples.len() as f64
+                    / f64::from(pcm.channels.max(1))
+                    / f64::from(pcm.sample_rate.max(1))
+            ));
+            Some(pcm)
+        }
+        Err(error) => {
+            report.push(format!("  audio: not decoded ({error:#})"));
+            None
+        }
+    }
 }

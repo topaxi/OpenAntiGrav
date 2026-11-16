@@ -86,7 +86,7 @@ pub(super) struct ContactFx {
     /// holds the attachment across the ticks of one contact.
     ///
     /// **Confidence 55 on the owner, and reading HD's own dispatch
-    /// complicated rather than confirmed it (2026-08-31, see
+    /// complicated rather than confirmed it (see
     /// `docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`).** That a
     /// looping effect needs one is the flag's own contract - not in
     /// question. That the owner is *wall contact* specifically still is:

@@ -1,12 +1,29 @@
-//! The circuit's baked environment probes, `<track>.probes`: what a Wipeout HD hull's
-//! ambient is blended from. See [`oag_vex::probes`].
+//! The circuit's baked probes: HD's `<track>.probes` and Omega's `<track>.shprobes`, what a hull's
+//! ambient is blended from. See [`oag_vex::probes`], [`oag_vex::shprobes`].
 
-/// The probes beside `track`, or `None`.
+use crate::env_probes::Baked;
+
+/// The probes beside `track`: HD's by its own file, Omega's (a `.rcsmodel` of the PS4 kind) by
+/// [`super::read_sh_probes`], and neither for any other title.
+pub(in crate::load) fn read_probes(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    geometry: Option<&[u8]>,
+    report: &mut Vec<String>,
+) -> Baked {
+    let ps4 = super::GeometryKind::of(geometry) == super::GeometryKind::Ps4;
+    Baked {
+        hd: read_hd_probes(archives, track, report),
+        sh: super::read_sh_probes(archives, track, ps4, report),
+    }
+}
+
+/// HD's probes beside `track`, or `None`.
 ///
 /// **Silent where the circuit ships none**, which is every title but Wipeout HD: an
 /// absence true of a whole title is not news. A file that is there and does not parse is
 /// reported, and the hulls then keep the constant ambient.
-pub(in crate::load) fn read_probes(
+fn read_hd_probes(
     archives: &mut oag_assets::Archives,
     track: &str,
     report: &mut Vec<String>,

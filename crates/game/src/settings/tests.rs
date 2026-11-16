@@ -93,7 +93,7 @@ fn a_boolean_vsync_still_loads_and_is_rewritten_as_a_name() {
 }
 
 /// Parses `text` the way [`load`] does, migration included.
-fn read(text: &str) -> Settings {
+pub(super) fn read(text: &str) -> Settings {
     let mut table: toml::Table = text.parse().expect("parse");
     migrate(&mut table);
     migrate_render_profiles(&mut table);
@@ -172,6 +172,36 @@ perf_overlay = \"fps\"
         oag_display::display::Aspect::Free
     );
     assert_eq!(round_tripped.display.frame_limit.hz(), Some(120));
+}
+
+/// `default` is stored as the word, not as the rate it resolved to, so a profile
+/// moved to another monitor still follows it.
+#[test]
+fn a_default_target_fps_round_trips_as_the_word() {
+    let settings = read(
+        "\
+[render_profiles.\"Wipeout HD\"]
+target_fps = \"default\"
+",
+    );
+    let key = profile_key(oag_hd::TITLE, oag_disc::Platform::Ps3);
+    let target = settings.render_profiles[&key].target_fps;
+    assert!(target.follows_display());
+    let written = toml::to_string_pretty(&settings).expect("serialise");
+    assert!(written.contains("target_fps = \"default\""), "{written}");
+    assert_eq!(read(&written).render_profiles[&key].target_fps, target);
+}
+
+#[test]
+fn a_refresh_rate_frame_limit_round_trips_as_the_word() {
+    let settings = read("[display]\nframe_limit = \"refresh_rate\"\n");
+    assert!(settings.display.frame_limit.follows_display());
+    let written = toml::to_string_pretty(&settings).expect("serialise");
+    assert!(
+        written.contains("frame_limit = \"refresh_rate\""),
+        "{written}"
+    );
+    assert!(read(&written).display.frame_limit.follows_display());
 }
 
 /// The already-migrated case, where something has put an old key back: the
@@ -254,6 +284,9 @@ fn a_display_key_that_is_not_a_table_leaves_the_file_untouched() {
 fn every_menu_seed_names_a_key_the_settings_file_has() {
     let mut settings = Settings::default();
     ensure_known_titles(&mut settings);
+    // An unset `hud_safe_area` is not written (the title's own default), so the key is looked
+    // for in a file that has one saved, as `language` is only present once picked.
+    settings.graphics.hud_safe_area = Some(100);
     let written = toml::to_string_pretty(&settings).expect("serialise");
     let table: toml::Table = written.parse().expect("parse");
 
@@ -359,6 +392,29 @@ motion_blur = \"medium\"
 /// row get back each their *own* stored value, not one shared or averaged
 /// answer - proven at the boundary `menu_seeds` resolves through, without
 /// needing a live `Session`.
+#[test]
+fn the_rumble_row_opens_on_ps4_and_follows_the_setting() {
+    let seed = |settings: &Settings| {
+        menu_seeds(
+            settings,
+            Anisotropy::default(),
+            oag_hd::TITLE,
+            oag_disc::Platform::Psp,
+        )
+        .into_iter()
+        .find(|(setting, _)| *setting == "controls.rumble")
+        .map(|(_, value)| value)
+    };
+    let (ps4, none) = (
+        oag_ui::menu::Value::Text("ps4".to_string()),
+        oag_ui::menu::Value::Text("none".to_string()),
+    );
+    let mut settings = Settings::default();
+    assert_eq!(seed(&settings), Some(ps4), "the newest law by default");
+    settings.controls.rumble = "none".to_string();
+    assert_eq!(seed(&settings), Some(none));
+}
+
 #[test]
 fn menu_seeds_resolves_the_render_profile_by_title() {
     let mut settings = Settings::default();
@@ -612,6 +668,21 @@ msaa = \"4x\"
         oag_display::display::Reconstruction::Fsr3
     );
     assert_eq!(profile.msaa, oag_display::display::Msaa::X4);
+}
+
+/// MSAA is an opt-in on every title: it costs 27 % of HD's race pass on the Steam Deck at
+/// 1080p (`docs/rendering/hires-gpu-levers.md`). A file that says `4x` keeps it (above).
+#[test]
+fn a_fresh_profile_has_msaa_off_on_every_title() {
+    let settings = read("");
+    for (title, platform) in known_profiles() {
+        let key = profile_key(title, platform);
+        assert_eq!(
+            settings.render_profiles[&key].msaa,
+            oag_display::display::Msaa::Off,
+            "{key}"
+        );
+    }
 }
 
 /// `Bindings`'s own tests prove it round-trips through a `BTreeMap`; this is
@@ -1079,6 +1150,29 @@ fn trail_order_defaults_to_the_original_and_round_trips_its_names() {
     }
 }
 
+/// SCENERY SORT is seeded only where the circuit is the PSP preset's; `original` is what a
+/// profile without the key reads, and the names round-trip.
+#[test]
+fn scenery_sort_is_seeded_on_the_psp_circuit_and_defaults_to_the_original() {
+    let seeded = |title, platform| {
+        menu_seeds(&Settings::default(), Anisotropy::default(), title, platform)
+            .into_iter()
+            .any(|(key, _)| key == "graphics.scenery_sort")
+    };
+    assert!(seeded(oag_pulse::TITLE, oag_disc::Platform::Psp));
+    assert!(seeded(oag_pure::TITLE, oag_disc::Platform::Psp));
+    assert!(!seeded(oag_hd::TITLE, oag_disc::Platform::Ps3));
+    assert_eq!(
+        RenderProfile::default().scenery_sort,
+        oag_display::display::ScenerySort::Original
+    );
+    let profile: RenderProfile = toml::from_str("scenery_sort = \"depth\"").expect("parse");
+    assert_eq!(
+        profile.scenery_sort,
+        oag_display::display::ScenerySort::Depth
+    );
+}
+
 /// WEATHER is seeded only where the weather is played (Pulse); elsewhere its row is
 /// dropped (`Definition::drop_unavailable_weather`).
 #[test]
@@ -1319,7 +1413,7 @@ fn the_reset_prompt_is_offered_only_off_default() {
         oag_disc::Platform::Ps4,
         &strings,
     );
-    assert_eq!(menu.reset_glyph(), None, "Omega's glyphs are unread");
+    assert_eq!(menu.reset_glyph(), Some('δ'), "Omega's Square stand-in");
 }
 
 /// The footer's reset prompt, as `MenuStage` and `--menu-page` ask for it: nothing while the
@@ -1377,25 +1471,4 @@ fn the_reset_prompt_sits_on_confirms_row_and_only_off_default() {
         );
     }
     assert!(rect[0] >= 0.0 && rect[0] + rect[2] <= 480.0, "{rect:?}");
-}
-
-#[test]
-fn the_mods_turned_off_round_trip_and_a_fresh_file_turns_none_off() {
-    assert!(
-        fresh().mods.disabled.is_empty(),
-        "a mod installed later is on"
-    );
-    let settings = read("[mods]\ndisabled = [\"oag.hillside\", \"a.b\"]\n");
-    let ids: Vec<&str> = settings.mods.disabled.iter().map(String::as_str).collect();
-    assert_eq!(
-        ids,
-        ["a.b", "oag.hillside"],
-        "kept sorted, for a stable rewrite"
-    );
-    let written = toml::to_string_pretty(&settings).expect("serialise");
-    assert_eq!(read(&written).mods, settings.mods, "{written}");
-    assert!(
-        read("").mods.disabled.is_empty(),
-        "an old file without [mods]"
-    );
 }

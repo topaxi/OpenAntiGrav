@@ -178,7 +178,7 @@ pub struct TournamentRow {
     /// label on this screen follows.
     pub team_name: Option<String>,
     /// This row's own points: this leg's
-    /// (`oag_race::tournament::points_for_finish`, [`TournamentResults::leg`])
+    /// (`oag_race::tournament::points_for_place`, [`TournamentResults::leg`])
     /// or the running total across every leg so far
     /// (`crate::race::tournament::Progress::points`,
     /// [`TournamentResults::standings`]) - which one depends on which table
@@ -259,7 +259,7 @@ impl TournamentResults {
         self.elapsed += seconds;
         if self.elapsed > 3.0 {
             self.elapsed = 0.0;
-            self.showing_standings = !self.showing_standings;
+            self.showing_standings.toggle();
         }
     }
 
@@ -312,6 +312,23 @@ pub struct FieldRow {
     pub seat: Option<u8>,
     /// The name a person raced under (a network race), drawn in place of `PLAYER n`.
     pub name: Option<String>,
+    /// The craft's team, by string-table id (its folder name): `Grid1.r` is the
+    /// record's own idstring, which the draw localises (`0x0022b688`, the
+    /// non-multiplayer branch; `docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md`).
+    /// Drawn when neither `name` nor `seat` is. `None` where no team is known.
+    pub team: Option<String>,
+    /// What an Eliminator craft ended on, `Some` on every row of a scored race: the table then
+    /// has the `POINTS` layout of `EndRaceResults`' Eliminator filler ([`hd`]).
+    pub score: Option<FieldScore>,
+}
+
+/// An Eliminator craft's points and the two counts the headline reads
+/// (`0x00229bf0`: the record's `+0x150` points, `+0x158` kills, `+0x15c` deaths).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FieldScore {
+    pub points: u32,
+    pub kills: u32,
+    pub deaths: u32,
 }
 
 /// Wipeout HD/Fury's own `EndRace Results`: the headline (the same
@@ -326,6 +343,14 @@ pub struct FieldResults {
     /// `loyalty2`). `None` draws neither - a race with no team behind it has
     /// no total to show, and the disc's own placeholder text never draws.
     pub loyalty: Option<HdLoyalty>,
+}
+
+impl FieldResults {
+    /// Whether this is a points table: every row carries a score.
+    #[must_use]
+    pub fn scored(&self) -> bool {
+        !self.rows.is_empty() && self.rows.iter().all(|row| row.score.is_some())
+    }
 }
 
 /// HD's loyalty block, in its final state - the one the ticker
@@ -350,7 +375,11 @@ pub struct HdLoyalty {
 /// the module doc.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Rewards {
+    /// The medal's class, gold, silver or bronze: what the title's own phrase and trophy say.
     pub medal: Option<Medal>,
+    /// The tier a campaign mod's own list awarded when the title has no phrase for it (a
+    /// platinum above gold): the phrase names the tier. `None` for every disc campaign.
+    pub tier: Option<oag_tables::race_campaign::MedalTier>,
     pub campaign: bool,
     /// `RewardLine2`/`RewardLoyaltyActive`/`loyaltynum`/`loyaltybar`'s own
     /// row - `None` draws none of it, the same absence this project's own
@@ -386,8 +415,11 @@ pub struct Loyalty {
 /// `Results` ([`HdLoyalty`], on [`FieldResults`]), and its own law is not
 /// [`Loyalty`]'s (the PSP's), so this screen's four loyalty widgets draw
 /// nothing rather than Pulse's numbers under HD's layout.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HdRewards {
+    /// The tier a campaign mod's own list awarded when the title has no phrase for it, as
+    /// [`Rewards::tier`].
+    pub tier: Option<oag_tables::race_campaign::MedalTier>,
     /// The player's own finishing place, 1-based - `BigPos`'s figure.
     /// `None` for a race with no place (a field of one that never finished),
     /// which draws `BigPos` and the tile it sits on as absent.
@@ -425,6 +457,10 @@ pub enum MenuOption {
     ReturnToMenu,
     RaceAgain,
     ViewResultsAgain,
+    /// Ours (ADR-0087, decision 1): the race just driven, watched again from its recording.
+    /// After `ViewResultsAgain`, on the dialect whose list can draw a row the disc does not
+    /// author.
+    WatchReplay,
 }
 
 impl MenuOption {
@@ -437,6 +473,7 @@ impl MenuOption {
             Self::ReturnToMenu => "ER_RETURN_MENU",
             Self::RaceAgain => "ER_RACE_AGAIN",
             Self::ViewResultsAgain => "ER_VIEW_AGAIN",
+            Self::WatchReplay => "OAG_ENDRACE_WATCH_REPLAY",
         }
     }
 
@@ -456,6 +493,8 @@ impl MenuOption {
             Self::ReturnToMenu => "return_to_menu",
             Self::RaceAgain => "race_again",
             Self::ViewResultsAgain => "view_again",
+            // HD's screen authors no such block, so its list never carries this row.
+            Self::WatchReplay => "watch_replay",
         }
     }
 }

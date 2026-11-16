@@ -37,7 +37,7 @@ pub const NOISE_TEXTURE: &str = r"Data\Tex\engineFlare\Engine_noise.mip";
 
 #[cfg(feature = "view")]
 /// The LeachBeam ribbon's own texture, a literal in the executable - found
-/// 2026-09-17, spelled "lee**ch**" on disc rather than "leach", which is why
+/// by its spelling, "lee**ch**" on disc rather than "leach", which is why
 /// the earlier `(?i)leach` search over `.rodata` missed it.
 ///
 /// At `0x08a7cc60`, loaded by `LeachBeam_LoadTexture` (`0x088730d4`) into
@@ -58,9 +58,9 @@ pub const LEACHBEAM_TEXTURE: &str = r"Data\Weapons\Textures\pulse_leechbeam1_ADD
 /// `oag_title::flare::Flare` is: the LeachBeam is Pulse's own weapon and this
 /// is its one literal path, found and read on one binary.
 ///
-/// `own_strips` is a title with its own LeachBeam model (HD): its beam is two
-/// SPU-extruded strips of `leachbeam_triangle`, unread, so it is not asked for
-/// Pulse's texture.
+/// `own_strips` is a title with its own LeachBeam strip (HD,
+/// `WeaponModels::leach_strip`, loaded and reported beside the ribbons), so it
+/// is not asked for Pulse's texture.
 ///
 /// `authored` is whether the title's weapon table authors a LeachBeam at all.
 /// Wipeout Pure's does not (no `LeachBeam` block, no string for one in either
@@ -78,19 +78,10 @@ pub(super) fn leach_beam_texture(
         return None;
     }
     if own_strips {
-        report.push("the LeachBeam's own strips are not built - no ribbon body".into());
+        report.push("the LeachBeam draws this title's own strip (`WeaponModels::leach_strip`): Pulse's ribbon texture is not loaded".into());
         return None;
     }
-    let own = platform_sibling(archives, LEACHBEAM_TEXTURE);
-    let found = match &own {
-        Some(entry) => decode_texture(archives, entry).map(|texture| {
-            (
-                texture,
-                format!("{entry}: the LeachBeam ribbon's own texture"),
-            )
-        }),
-        None => exhaust_texture(archives, LEACHBEAM_TEXTURE),
-    };
+    let found = exhaust_texture(archives, LEACHBEAM_TEXTURE);
     match found {
         Ok((texture, note)) => {
             report.push(note);
@@ -101,6 +92,36 @@ pub(super) fn leach_beam_texture(
             None
         }
     }
+}
+
+#[cfg(feature = "view")]
+/// [`particle_effect`] with the per-effect laws a title lists for `name`
+/// (`oag_title::Effects::{sprites, extents, far_bars, pool_bars, templates}`).
+pub(super) fn listed_particle_effect(
+    archives: &mut oag_assets::Archives,
+    dir: &str,
+    effects: &oag_title::Effects,
+    name: &'static str,
+    pulse_psp: bool,
+) -> std::result::Result<(psys::Effect, String), String> {
+    particle_effect(
+        archives,
+        dir,
+        name,
+        pulse_psp,
+        effects.extents.contains(&name),
+        effects.sprites.contains(&name),
+        psys::streak::Kept {
+            bar: if effects.far_bars.contains(&name) {
+                psys::streak::KeptBar::Far
+            } else if effects.pool_bars.contains(&name) {
+                psys::streak::KeptBar::Mean
+            } else {
+                psys::streak::KeptBar::No
+            },
+            templates: effects.templates.contains(&name),
+        },
+    )
 }
 
 #[cfg(feature = "view")]
@@ -118,6 +139,7 @@ pub(super) fn particle_effect(
     pulse_psp: bool,
     extent_law: bool,
     gtf_sprites: bool,
+    kept: psys::streak::Kept,
 ) -> std::result::Result<(psys::Effect, String), String> {
     let path = psys::effect_path_in(dir, name);
     let blob = archives
@@ -147,7 +169,7 @@ pub(super) fn particle_effect(
         _ => None,
     };
     let (mut sprites, mut absent) = (0usize, Vec::new());
-    let mut effect = psys::Effect::parse_with(&blob, scale, &mut |authored| {
+    let mut effect = psys::Effect::parse_listed(&blob, scale, kept.templates, &mut |authored| {
         let ext = ext?;
         let stem = authored.rsplit(['\\', '/']).next()?.rsplit_once('.')?.0;
         let entry = if ext == "gnf" {
@@ -195,7 +217,9 @@ pub(super) fn particle_effect(
         if !extent_law {
             effect.without_extents();
         }
-        effect.without_pulse_psp_draw();
+        effect.without_pulse_psp_draw_but(kept);
+    } else if effect.name == oag_title::engine_effects::PLASMA_FLARE_EFFECT {
+        effect.draw_root_under_alpha();
     }
     let sprite_note = if ext.is_some() {
         let mut note = format!(", {sprites} sprite(s) read");
@@ -315,7 +339,13 @@ pub(super) fn trail_texture(
                 // code reads 2048, whose own executable was not measured for
                 // any of the laws `load` reports under the ribbon.
                 if let oag_title::flare::Flare::PerTeam(a) = title.flare
-                    && (a.sprite.ends_with(".gxt") || a.sprite.ends_with(".gnf"))
+                    && matches!(
+                        oag_texture::decode::Container::of_name(a.sprite),
+                        Some(
+                            oag_texture::decode::Container::Gxt
+                                | oag_texture::decode::Container::Gnf
+                        )
+                    )
                 {
                     report.push(format!(
                         "{} reads its ribbon, flare and boost reveal on HD's laws: \
@@ -415,11 +445,9 @@ fn authored_ribbon(
     let noise_texture = decode_texture(archives, noise)
         .map_err(|why| format!("{why} (named by {model}'s material)"))?;
     let (width, height) = (noise_texture.width, noise_texture.height);
-    let container = match noise.to_ascii_lowercase() {
-        n if n.ends_with(".gxt") => ".gxt",
-        n if n.ends_with(".gnf") => ".gnf",
-        _ => ".gtf",
-    };
+    let container = oag_texture::decode::Container::of_name(noise)
+        .unwrap_or(oag_texture::decode::Container::Gtf)
+        .extension();
     let blend = mesh::rcs::blend_state(src, dst);
     let mut notes = vec![
         format!(
@@ -446,109 +474,22 @@ fn authored_ribbon(
 }
 
 #[cfg(feature = "view")]
-/// [`decode_gtf`] or [`decode_gxt`], by the name's own extension.
+/// The texture `name` as this source ships it (`Archives::read_texture`: the
+/// name as written, then the platform's spelling), decoded by the container
+/// its resolved name says (`oag_texture::decode`).
 pub(crate) fn decode_texture(
     archives: &mut oag_assets::Archives,
     name: &str,
 ) -> std::result::Result<FlareTexture, String> {
-    let lower = name.to_ascii_lowercase();
-    if lower.ends_with(".gxt") {
-        decode_gxt(archives, name)
-    } else if lower.ends_with(".gnf") {
-        decode_gnf(archives, name)
-    } else {
-        decode_gtf(archives, name)
-    }
-}
-
-#[cfg(feature = "view")]
-/// Pulse's `.mip` (or HD's `.gtf`) entry `name` as this source ships the same texture: the
-/// same directory and stem with the platform's own extension, `.gxt` on the
-/// Vita and `.gnf` on the PS4. `None` on a platform whose textures keep the
-/// name as authored. 2048 and Omega ship `Cannon_bolt`, `cannon_muzzle_flash`
-/// and `pulse_leechbeam1_ADD` under `Data\Weapons\Textures` this way, and
-/// both executables name `Cannon_bolt` and `Cannon_muzzle`.
-pub(crate) fn platform_sibling(archives: &oag_assets::Archives, name: &str) -> Option<String> {
-    let ext = match archives.layout.platform {
-        oag_assets::Platform::Vita => "gxt",
-        oag_assets::Platform::Ps4 => "gnf",
-        _ => return None,
-    };
-    let stem = name
-        .strip_suffix(".mip")
-        .or_else(|| name.strip_suffix(".gtf"))?;
-    Some(format!("{stem}.{ext}"))
-}
-
-#[cfg(feature = "view")]
-/// One PS4 `.gnf` out of the archive set, base level - [`decode_gxt`]'s
-/// Omega counterpart.
-pub(crate) fn decode_gnf(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-) -> std::result::Result<FlareTexture, String> {
-    let blob = archives
-        .read_name(name)
+    let (held, blob) = archives
+        .read_texture(name)
         .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
-    let sprite = psys::sprite::Sprite::from_gnf(&blob)
-        .ok_or_else(|| format!("{name}: {} bytes, does not decode", blob.len()))?;
+    let picture = oag_texture::decode::decode_named(&held, &blob)
+        .map_err(|e| format!("{held}: {} bytes, {e}", blob.len()))?;
     Ok(FlareTexture {
-        width: u32::from(sprite.width),
-        height: u32::from(sprite.height),
-        rgba: sprite.rgba.to_vec(),
-    })
-}
-
-#[cfg(feature = "view")]
-/// One Vita `.gxt` out of the archive set, as pixels the exhaust pipeline can
-/// bind - 2048's counterpart of [`decode_gtf`].
-pub(crate) fn decode_gxt(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-) -> std::result::Result<FlareTexture, String> {
-    let pixels = archives
-        .read_name(name)
-        .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
-    let gxt = oag_texture::gxt::Gxt::parse(&pixels)
-        .map_err(|e| format!("{name}: {} bytes, does not parse ({e})", pixels.len()))?;
-    let texture = gxt
-        .only()
-        .ok_or_else(|| format!("{name}: parses, but is not a single texture"))?;
-    let rgba = texture
-        .to_rgba(&pixels)
-        .map_err(|e| format!("{name}: does not decode ({e})"))?;
-    Ok(FlareTexture {
-        width: u32::from(texture.width),
-        height: u32::from(texture.height),
-        rgba: rgba.into_iter().flatten().collect(),
-    })
-}
-
-#[cfg(feature = "view")]
-/// One `.gtf` out of the archive set, as pixels the exhaust pipeline can bind.
-///
-/// The `.gtf` half of [`authored_ribbon`], lifted out when the ribbon needed a
-/// second texture and both wanted the same reporting.
-pub(crate) fn decode_gtf(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-) -> std::result::Result<FlareTexture, String> {
-    let pixels = archives
-        .read_name(name)
-        .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
-    let gtf = oag_texture::gtf::Gtf::parse(&pixels)
-        .map_err(|e| format!("{name}: {} bytes, does not parse ({e})", pixels.len()))?;
-    let texture = gtf
-        .only()
-        .ok_or_else(|| format!("{name}: parses, but is not a single texture"))?;
-    let rgba = texture
-        .to_rgba(&pixels)
-        .map_err(|e| format!("{name}: does not decode ({e})"))?;
-    let (width, height) = texture.level_size(0);
-    Ok(FlareTexture {
-        width,
-        height,
-        rgba: rgba.into_iter().flatten().collect(),
+        width: picture.width,
+        height: picture.height,
+        rgba: picture.rgba,
     })
 }
 
@@ -622,58 +563,54 @@ pub(super) fn flare_texture(
 }
 
 #[cfg(feature = "view")]
+/// [`decode_texture`] for a texture the active texture pack may replace (a PSP
+/// `.mip`), with the load-report note saying where the pixels came from.
+///
+/// The note names the container, because "64x64" alone does not distinguish a
+/// PSP disc from a PS2 one in the load report, and the two reach this point by
+/// different names.
 pub(super) fn exhaust_texture(
     archives: &mut oag_assets::Archives,
     name: &str,
 ) -> std::result::Result<(FlareTexture, String), String> {
-    let blob = oag_pulse::read_image(archives, name)
+    let (held, blob) = archives
+        .read_texture(name)
         .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
-    decode_either(name, &blob)
-}
-
-#[cfg(feature = "view")]
-/// Decodes whichever of the two texture formats the blob is, with the pixels a
-/// [`FlareTexture`] wants.
-///
-/// The PSP's `.mip` is tried first and **its** error is the one reported, the
-/// same rule `oag_hud::sprite::Image::decode` follows: a `.mip` that will not
-/// parse is far and away the commoner failure, and reporting the PS2 parser's
-/// complaint about a PSP blob sends the reader after the wrong decoder.
-///
-/// The note names the format, because "64x64" alone does not distinguish a PSP
-/// disc from a PS2 one in the load report, and the two reach this point by
-/// different names.
-fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, String), String> {
-    match oag_texture::texture::Texture::parse(blob) {
-        Ok(texture) => Ok((
+    if let Some(image) = oag_texture::replacer::mip(&blob) {
+        return Ok((
             FlareTexture {
-                width: u32::from(texture.width),
-                height: u32::from(texture.height),
-                rgba: texture.to_rgba(),
+                width: image.width,
+                height: image.height,
+                rgba: image.rgba.clone(),
             },
             format!(
-                "{name}: {}x{} .mip, {} mip level(s)",
-                texture.width, texture.height, texture.mip_levels
+                "{name}: {}x{} from the texture pack",
+                image.width, image.height
             ),
-        )),
-        Err(psp) => match oag_texture::ps2_texture::parse(blob) {
-            Ok(texture) => Ok((
-                FlareTexture {
-                    width: u32::from(texture.width),
-                    height: u32::from(texture.height),
-                    rgba: texture.to_rgba(),
-                },
-                format!(
-                    "{name}: {}x{} .pct, {} bpp",
-                    texture.width, texture.height, texture.bits_per_pixel
-                ),
-            )),
-            Err(_) => Err(format!(
-                "{name}: {} bytes, does not parse ({psp})",
-                blob.len()
-            )),
-        },
+        ));
     }
+    let picture = oag_texture::decode::decode_named(&held, &blob)
+        .map_err(|e| format!("{held}: {} bytes, {e}", blob.len()))?;
+    let read_as = if held == name {
+        String::new()
+    } else {
+        format!(" (read as {held})")
+    };
+    let note = format!(
+        "{name}: {}x{} {}, {} bpp{read_as}",
+        picture.width,
+        picture.height,
+        picture.container.extension(),
+        picture.bits_per_pixel
+    );
+    Ok((
+        FlareTexture {
+            width: picture.width,
+            height: picture.height,
+            rgba: picture.rgba,
+        },
+        note,
+    ))
 }
 
 #[cfg(feature = "view")]
@@ -806,7 +743,7 @@ pub(super) fn zone_circuit_miss(
 /// [`oag_title::ZoneCraft`] for what the shipped file does carry and why the
 /// mode plausibly wants it.
 pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
-    if mode != Mode::Zone {
+    if !mode.on_zone_mask() {
         return None;
     }
     Some(format!(
@@ -822,8 +759,8 @@ pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
 /// **The title's own entry name, not `oag_tables::weapons::RACE_ENTRY`.** That
 /// constant is Pulse's spelling and Wipeout HD answers it too, but Pure names one
 /// lower-cased `Data\XML\weaponstats.xml` and ships no Eliminator variant - so
-/// until 2026-08-26 a Pure race found no table, parsed no weapons and handed out
-/// no pickups, with one report line to say so and nothing else. See
+/// a Pure race looking up that constant finds no table, parses no weapons and
+/// hands out no pickups. See
 /// `oag_title::weapons::Weapons`.
 ///
 /// Read on every mode rather than only the ones with weapons on: it is a
@@ -832,7 +769,7 @@ pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
 /// they pick the mode that needs it.
 ///
 /// **`Mode::Eliminator` opens [`oag_title::weapons::Weapons::elimination`]
-/// instead, from 2026-09-08.** That is the recovered mechanism behind the
+/// instead.** That is the recovered mechanism behind the
 /// disc's own *"weapons do more damage"* in `MSC_EVENT_ELIM` - a whole second
 /// table, not a multiplier this build would have to invent - and it is the
 /// field `Weapons::elimination`'s own doc comment already named as unread. A
@@ -869,7 +806,17 @@ pub(super) fn load_weapon_ai(
         .and_then(|blob| Ok(oag_tables::weapons::ai::from_blob(&blob)?));
     match parsed {
         Ok(stats) => {
-            report.push(format!("{entry}: opponents fire on its odds"));
+            let terms = title.weapons.opponent_fire.value;
+            let law = if terms == oag_title::weapons::OpponentFire::PULSE {
+                "Pulse's decision terms"
+            } else if terms == oag_title::weapons::OpponentFire::HD {
+                "HD's decision terms (step scale, AllWeapons, Eliminator scales)"
+            } else if terms == oag_title::weapons::OpponentFire::OMEGA {
+                "Omega's decision terms (HD's, a missing Eliminator row unscaled)"
+            } else {
+                "its own decision terms"
+            };
+            report.push(format!("{entry}: opponents fire on its odds, {law}"));
             Some(stats)
         }
         Err(e) => {

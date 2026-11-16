@@ -21,7 +21,7 @@ pub const ABSORB_BURST: Burst = Burst::Sequential {
     stagger: 0.1,
 };
 
-/// Pure's tables. Hit sparks and the wreck are unread (`Ship_Damage` is not),
+/// Pure's tables. Hit sparks and the wreck's node effects are Pulse's rule (`Ship_Damage` is unread),
 /// and Pure's Cannon throws no weapon spark of its own that has been read. The
 /// engine's own names are Pulse's, taken by inheritance: Pure's loader tries
 /// each and a disc without it costs one report line.
@@ -31,6 +31,91 @@ pub const EFFECTS: &Effects = &{
             Trigger::ShieldAbsorb,
             EffectSpec::new(engine_effects::ABSORB_EFFECT, Origin::Measured)
                 .with_burst(ABSORB_BURST),
+        )
+        // Hit sparks and the wreck's node blast and death sparks are Pulse's trigger rule, inherited: Pure's
+        // `Ship_Damage` and `Ship_SetState` are unread, but its `Data.wad` authors those three
+        // effect files and its hulls carry the locators (`docs/formats/pure-status.md`).
+        .with(
+            Trigger::HitSpark,
+            EffectSpec::new(
+                engine_effects::COLLISION_SPARK_EFFECT,
+                Origin::InheritedFrom("Wipeout Pulse"),
+            ),
+        )
+        .with(
+            Trigger::WreckNode,
+            EffectSpec::new(
+                engine_effects::FXNODE_EXPLO_EFFECT,
+                Origin::InheritedFrom("Wipeout Pulse"),
+            ),
+        )
+        .with(
+            Trigger::WreckSparks,
+            EffectSpec::new(
+                engine_effects::DEATH_SPARKS_EFFECT,
+                Origin::InheritedFrom("Wipeout Pulse"),
+            ),
+        )
+        // `FUN_089258b8`, the wreck's 1.5 s timeout (state 5, `Ship_SetState` case 5 arms it):
+        // `docs/ghidra/functions/psp-pure-usa/wreck-big-blast.md`.
+        .with(
+            Trigger::WreckBigNode,
+            EffectSpec::new(engine_effects::BIG_EXPLO_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::WreckDebris,
+            EffectSpec::new(engine_effects::EXPLOSION_DEBRIS_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::WreckSmoke,
+            EffectSpec::new(engine_effects::EXPLO_SMOKE_EFFECT, Origin::Measured),
+        )
+        // The Missile, Mine, Bomb and Plasma triggers are read on Pure's own executable and are
+        // Pulse's law (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, `plasma.md`):
+        // `Missile_Init` (head, twice), `Missile_Update` (bounce), `Missile_SpawnExplosion`,
+        // `Mine_SpawnExplosion`, `BombBlast_Construct` (smoke ring) and `Plasma_SpawnDetonation`.
+        .with(
+            Trigger::MissileFlare,
+            EffectSpec::new(engine_effects::MISSILE_FLARE_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::MissileBounce,
+            EffectSpec::new(engine_effects::MISSILE_BOUNCE_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::MissileExplo,
+            EffectSpec::new(engine_effects::MISSILE_EXPLO_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::MineExplo,
+            EffectSpec::new(engine_effects::MINE_EXPLO_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::BombSmokering,
+            EffectSpec::new(engine_effects::BOMB_SMOKERING_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::PlasmaBlast,
+            EffectSpec::new(engine_effects::PLASMA_BLAST_EFFECT, Origin::Measured),
+        )
+        // Pure's own: the laid Bomb's glow and the Disruptor's three effects
+        // (`weapon-effects.md`, "Bomb" and "Disruptor"). `WO_DISRUPTOR_LAUNCH` is gated on the
+        // firing hull authoring a `Ship Muzzle` node.
+        .with(
+            Trigger::BombGlow,
+            EffectSpec::new(engine_effects::BOMB_GLOW_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::DisruptorHead,
+            EffectSpec::new(engine_effects::DISRUPTOR_HEAD_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::DisruptorExplo,
+            EffectSpec::new(engine_effects::DISRUPTOR_EXPLO_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::DisruptorLaunch,
+            EffectSpec::new(engine_effects::DISRUPTOR_LAUNCH_EFFECT, Origin::Measured),
         )
         // Pure ships no LeachBeam: its `weaponstats.xml` authors none, neither
         // pressing's executable names one and none of Pulse's six LeachBeam
@@ -61,9 +146,16 @@ pub const EFFECTS: &Effects = &{
         .without(Trigger::MagstripSparks)
         .without(Trigger::MagstripZone);
     effects.extents = EXTENTS;
+    effects.pool_bars = POOL_BARS;
     effects.quake_look = QUAKE_LOOK;
     effects
 };
+
+/// The effects whose class-6 emitters draw as the pool bar on Pure: the absorb burst, whose one
+/// emitter is class 6. `FUN_088746c8`, the handler `FUN_088756bc` (`ParticleSystem_DrawEmitterPool`'s
+/// counterpart) dispatches index 5 to, builds `ParticleSystem_DrawPoolBars`' strip
+/// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`).
+const POOL_BARS: &[&str] = &[engine_effects::ABSORB_EFFECT];
 
 /// The effects whose emitters spread by the extent law on Pure: the Quake's
 /// wave. `Quake_Update` (`0x08879d54`) writes `edge distance / 50` into slot 1
@@ -98,6 +190,15 @@ const QUAKE_LOOK: QuakeLook = QuakeLook {
 /// unmeasured title runs Pulse's (`docs/formats/pure-status.md` measures none
 /// of the shell).
 pub const LOOKS: &Looks = &Looks {
+    // The weapon-absorb hull overlay, `FUN_0886e954` (Pulse's `HullOverlay_Submit`): batch state `0x282`, texture
+    // `absorb_surface.mip` read from its own global (`0x08ac9a00`, stored by the loader at `0x0886d664`), `10.0`
+    // repeats (`0x08a8f510`), `-1.5 * pulse` on the second axis and the pulse folded at `1.0`; its gate `0x08924998`
+    // is `(clock + 0x960 - stamp + 0x9ac) * 2` inside one second. Pulse's law constant for constant
+    // (`docs/ghidra/functions/psp-pure-usa/hull-overlay.md`).
+    hull_overlay: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     // The Mine's pose is Pulse's code: `Mine_Construct` (`0x0885bab4`) writes
     // the same `0.6` scale, `Mine_Init` (`0x0885bd0c`) rolls the same random
     // axis, and its pose node (`0x0885bf4c`) turns it by `4 x` the fuse.
@@ -138,6 +239,12 @@ pub const LOOKS: &Looks = &Looks {
     // pair is built from the same `-1.0`/`0.3` radian literals
     // (`0x08a8e8ec`) in `FUN_08864018`
     // (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`).
+    // The swap to `Shipwreck.vex` and its locators ride the same inherited rule as the wreck
+    // effects above.
+    hull_wreck: Rule {
+        on: Platforms::Only(&[oag_title::Platform::Psp]),
+        origin: Origin::InheritedFrom("Wipeout Pulse"),
+    },
     hull_shine: Rule {
         on: Platforms::Only(&[oag_title::Platform::Psp]),
         origin: Origin::Measured,
@@ -166,6 +273,16 @@ pub const LOOKS: &Looks = &Looks {
     bloom_under_hud: Rule {
         on: Platforms::Only(&[oag_title::Platform::Psp]),
         origin: Origin::Measured,
+    },
+    // The opt-in HD-style shield, `graphics.own_shield`: `docs/rendering/own-shield.md`.
+    own_shield: Rule {
+        on: Platforms::Any,
+        origin: Origin::Chosen,
+    },
+    // The opt-in rocket effect, `graphics.own_rockets`: `docs/rendering/own-rockets.md`.
+    own_rockets: Rule {
+        on: Platforms::Any,
+        origin: Origin::Chosen,
     },
     ..Looks::unread(ShieldPalettes {
         ps2: ShieldPalette::Ps2Pulse,

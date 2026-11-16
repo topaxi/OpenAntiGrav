@@ -91,9 +91,7 @@
 //! This file is the root: the constants, [`Telemetry`], the [`Race`] struct
 //! itself, and the re-exports that keep every path a caller already uses. The
 //! work is in the modules beside it, and each one is a move out of this file
-//! rather than a rewrite - the split landed on 2026-08-16 under the 1,000-line
-//! rule in `scripts/check-file-size.py`, with `just test` reporting the same
-//! 1,896 passed / 223 skipped either side of it.
+//! rather than a rewrite.
 //!
 //! Loading a race: `options` (what is asked for and what comes back), `load`
 //! (the read itself), `assets`, `hud`, `spawn`.
@@ -108,6 +106,7 @@
 //! drives).
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 #[cfg(feature = "view")]
@@ -142,10 +141,7 @@ use oag_physics::{CollisionWorld, Environment, Evaluated, Handling};
 #[cfg(feature = "view")]
 use oag_present::perf::SceneStats;
 use oag_race::chase_rig::{ChaseParams, Target};
-use oag_race::recovery::{
-    BENEATH_LINE, PLAYER_RESCUE_HALF_WIDTHS, PLAYER_RESCUE_TICKS, RESCUE_HALF_WIDTHS, RESCUE_TICKS,
-    RESPAWN_COOLDOWN_TICKS, RESPAWN_GIVE_UP, STALL_SPEED, STALL_TICKS,
-};
+use oag_race::recovery::{PLAYER_RESCUE_HALF_WIDTHS, RESCUE_HALF_WIDTHS, RESPAWN_GIVE_UP};
 use oag_race::sight;
 use oag_race::{Course, Mode, RaceState};
 #[cfg(feature = "view")]
@@ -199,6 +195,9 @@ mod craft_flash;
 mod cues;
 #[cfg(feature = "view")]
 mod damage_fx;
+mod demo;
+#[cfg(feature = "view")]
+pub mod demo_overlay;
 #[cfg(feature = "view")]
 mod destroy_camera;
 #[cfg(feature = "view")]
@@ -213,11 +212,16 @@ pub mod env_probes;
 pub mod extension_effects;
 #[cfg(feature = "extensions")]
 mod extension_pickup;
+#[cfg(feature = "view")]
+pub mod extension_shaders;
+#[cfg(feature = "view")]
+pub mod extension_sounds;
 pub mod extensions;
 mod field;
 #[cfg(feature = "view")]
 pub mod finish_camera;
 mod finished_thrust;
+mod flip;
 pub mod foreign;
 #[cfg(feature = "view")]
 pub mod gantry;
@@ -237,6 +241,8 @@ pub mod hull_gather;
 #[cfg(feature = "view")]
 mod hull_shake;
 #[cfg(feature = "view")]
+mod incoming_warnings;
+#[cfg(feature = "view")]
 pub mod intro_camera;
 pub mod lap_messages;
 pub mod launch_hover;
@@ -252,21 +258,32 @@ mod magstrip_wake;
 #[cfg(feature = "view")]
 mod missile_blast;
 #[cfg(feature = "view")]
+pub mod missile_smoke;
+#[cfg(feature = "view")]
 mod models;
 #[cfg(feature = "view")]
 pub mod now_playing;
 mod options;
 mod original_ai;
 mod original_tables;
+#[cfg(feature = "view")]
+mod own_rockets;
 mod pads;
 #[cfg(feature = "view")]
 mod perfect_start;
+#[cfg(feature = "view")]
+pub mod photo;
 mod pilot_assist;
 pub mod pilots;
-pub mod player_step;
-mod reconcile;
 #[cfg(feature = "view")]
-mod replay;
+mod plasma_launch;
+pub mod player_step;
+#[cfg(feature = "view")]
+mod player_tags;
+#[cfg(feature = "view")]
+mod portal_view;
+mod reconcile;
+pub mod replay;
 #[cfg(feature = "view")]
 mod repulser_field;
 mod respawn;
@@ -277,10 +294,16 @@ pub mod rocket_smoke;
 mod roll_payout;
 mod routes;
 #[cfg(feature = "view")]
+pub mod rumble_library;
+#[cfg(feature = "view")]
 mod scene;
 #[cfg(feature = "view")]
 pub mod scenery_fx;
+mod score_law;
+pub mod score_pace;
 pub mod scoreboard;
+#[cfg(feature = "view")]
+pub mod sh_probes;
 #[cfg(feature = "view")]
 mod shadow;
 mod sim;
@@ -289,19 +312,27 @@ mod slot_hud;
 mod spawn;
 mod speed_plan;
 mod spline;
+mod spline_table;
 #[cfg(feature = "view")]
 mod split_gap;
 mod stages;
 mod start;
 mod takeoff_line;
 mod telemetry;
+pub mod texture_pack;
 #[cfg(feature = "view")]
 mod texture_sink;
 mod tick;
+pub mod timeline;
 pub mod tournament;
 #[cfg(feature = "view")]
 pub mod track_panel;
+pub mod transit;
+#[cfg(feature = "view")]
+mod transit_camera;
 mod view;
+#[cfg(feature = "view")]
+pub mod viewer;
 #[cfg(feature = "view")]
 mod viewpoint;
 #[cfg(feature = "view")]
@@ -310,12 +341,15 @@ mod visibility;
 mod weapon_light;
 mod weapons;
 #[cfg(feature = "view")]
+pub mod wingtip;
+#[cfg(feature = "view")]
 mod wreck_fx;
 mod wrong_way_kill;
 #[cfg(feature = "view")]
 pub(crate) use weapons::{CannonAssets, CannonDraw};
 #[cfg(feature = "view")]
 mod worker;
+pub mod xp_tally;
 #[cfg(feature = "view")]
 pub mod zone_grade;
 
@@ -338,13 +372,16 @@ pub use load::authored_length;
 pub use load::load_event;
 #[cfg(feature = "view")]
 pub use load::ripple::{Ripples, SpanPlaces};
+#[cfg(feature = "view")]
+pub use load::{authored_light, hd_bloom_params};
 pub use load::{export_track, load};
 #[cfg(feature = "view")]
 pub(crate) use oag_title::Trigger;
 pub use options::{
     CameraOverride, Campaign2048Progress, CaptureHud, CaptureZone, Loaded, Options, PoseRequest,
-    SeatPick, Setup, Sighting,
+    SeatPick, Setup, Sighting, TrailHits, WingtipContrails,
 };
+pub use replay::{ApplyError, Launch, OriginalAi, UnknownOption, rebuild};
 #[cfg(feature = "view")]
 pub use replay::{Ghost, GhostCapture};
 pub use respawn::RespawnCause;
@@ -358,6 +395,7 @@ pub use scene::WindowEffects;
 #[cfg(feature = "view")]
 pub use scene::behind_glass::BehindGlassModels;
 pub use sim::RaceSim;
+pub use speed_plan::{PlanSteps, RouteProbe};
 pub use spline::{Spline, circuit_length};
 pub use telemetry::{Telemetry, describe};
 #[cfg(feature = "view")]
@@ -380,7 +418,7 @@ pub use worker::{LoadProgress, LoadWorker};
 #[cfg(feature = "view")]
 pub use assets::{FLARE_TEXTURE, NOISE_TEXTURE};
 #[cfg(feature = "view")]
-use assets::{particle_effect, unrecovered_or_absent, untextured_note};
+use assets::{listed_particle_effect, unrecovered_or_absent, untextured_note};
 
 #[cfg(feature = "view")]
 use camera::target_of;
@@ -471,7 +509,7 @@ pub const AUTHORED_ASPECT: f32 = oag_display::space::SCREEN.0 / oag_display::spa
 /// Degrees of extra field of view per unit/s of **forward** speed.
 ///
 /// A recovered constant, not a taste decision, and it is the whole of a
-/// behaviour this project was missing until 2026-08-09: the original's field
+/// behaviour: the original's field
 /// widens as the craft goes faster. It is a code literal at `0x08a7b6a0`, read
 /// at the top of `FUN_088455ec` as
 /// `craft[0x790] = dot(fwd, vel) * 0.075 + craft[0x7c]`, and `craft+0x790` is
@@ -506,11 +544,9 @@ const SPEED_FOV_GAIN_DEG: f32 = 0.075;
 /// for a craft that has been teleported or handed an absurd velocity by a test.
 const FOV_GUARD_DEG: (f32, f32) = (1.0, 179.0);
 
-/// The world's generator seed.
-///
-/// Fixed and arbitrary: nothing in the recovered force law draws from the
-/// generator, so this exists only so the seed is written down in one place for
-/// whenever something does. See `crates/core/src/rng.rs`.
+/// The world's generator seed when nothing names one: `--race`, headless runs
+/// and tests. The front end draws a fresh seed per race (`oag_game::race_seed`).
+/// See `crates/core/src/rng.rs`.
 pub const SEED: u64 = 1;
 
 /// Seed for the player's exhaust flicker, kept distinct from [`SEED`].
@@ -622,8 +658,7 @@ pub const BOMB_MODEL_ENTRY: &str = r"Data\Weapons\Pulse_Bomb.vex";
 /// `Cannon_muzzle_flash.mip` (`Cannon_LoadTextures`, `0x08864b00`) - see
 /// [`CANNON_BOLT_TEXTURE_ENTRY`]/[`CANNON_MUZZLE_FLASH_TEXTURE_ENTRY`],
 /// which list is which, and both quads' own geometry, now recovered and
-/// drawn; see `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
-/// the 2026-09-17 section.
+/// drawn; see `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
 pub const CANNON_MODEL_ENTRY: &str = r"Data\Weapons\pulse_muzzleflash.vex";
 
 /// The archive entry the Cannon round's bolt streak textures from.
@@ -720,10 +755,7 @@ pub use oag_gameplay::spawn::{box_inertia, capped_spawn_height, rig_spawn_height
 /// A race in progress: the world, the track it is on, and the camera behind it.
 ///
 /// **Two halves and nothing else.** [`RaceSim`] decides what happens;
-/// [`RaceView`] exists so it can be seen and heard. Until 2026-09-09 this was
-/// one struct of ninety-seven fields in which the two were interleaved, and the
-/// only thing keeping a renderer handle out of the simulation was that nobody
-/// had put one there. The eighteen `impl Race` blocks are unchanged and stay
+/// [`RaceView`] exists so it can be seen and heard, so no renderer handle can reach the simulation. The eighteen `impl Race` blocks are unchanged and stay
 /// here: most of them read both halves - drawing an exhaust needs a ship's
 /// position, and raising a cue needs the bank - and that is what `Race` is for.
 /// The one that did not, [`RaceSim::state_hash`], moved.
@@ -744,7 +776,7 @@ pub struct Race {
     /// in one place instead of interleaved with the world above. Nothing in
     /// here reaches [`RaceSim::state_hash`], and nothing above it may be reached
     /// *from* here - see [`view`] for the argument.
-    view: RaceView,
+    view: Box<RaceView>,
     /// The recording of this race, if one was asked for, and the ghost it
     /// races against, if any. Neither reaches [`RaceSim::state_hash`] - see
     /// [`replay`].
@@ -754,6 +786,10 @@ pub struct Race {
     /// half's state: it is the caller's statement that this tick is a replay
     /// whose picture and sound already happened. Read through [`Race::draws`].
     quiet: bool,
+    /// Speed plans being learned on a thread, see [`Race::begin_speed_plans`]. Not
+    /// state: it only moves work off the frame thread, and its result is adopted
+    /// only if the race still matches what it was learned from.
+    speed_plan_job: Option<speed_plan::SpeedPlanJob>,
     /// The weapon events a replay raised and a drawn tick presented, matched by
     /// [`Race::settle_presentation`]. Neither half's state: no hash reads it.
     #[cfg(feature = "view")]
@@ -765,6 +801,9 @@ pub struct Race {
     /// The craft pairs that touched on the last tick, for the same test.
     #[cfg(test)]
     pair_contacts: Vec<(usize, usize)>,
+    /// Each of [`Self::pair_contacts`]' contact impulse, in the same order.
+    #[cfg(test)]
+    pair_impulses: Vec<f32>,
 }
 
 /// How fast the kick opens, per second, as an exponential approach.

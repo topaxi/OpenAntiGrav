@@ -49,6 +49,12 @@ pub const TITLE: &Title = &Title {
     front_end: Some(FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
+    eliminator: oag_title::pre_race::Sourced::inherited(
+        oag_title::eliminator::EliminatorRule::Kills,
+        "Wipeout Pulse",
+    ),
+    // No flip in this executable: no `FE_FLIP`, no flip tunable, no `5 pi`.
+    eliminator_flip: oag_title::pre_race::Sourced::measured(None),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Pulse,
@@ -62,10 +68,32 @@ pub const TITLE: &Title = &Title {
     exhaust: &oag_title::exhaust::Exhaust::Named(r"Data\Tex\engineFlare\Engine_noise.mip"),
     // The same sprite Pulse names, and found under the same name on Pure's
     // disc - see `oag_pulse`'s note for the literal it was read from.
+    wingtip: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
-    // No prompt glyph of this title's has been read; the disc's own draw unchanged.
-    prompts: &oag_title::prompts::Prompts::UNREAD,
+    // Measured: the six glyphs of `FX300ANG.fnt` - see `prompts`.
+    prompts: prompts::PROMPTS,
+    profile: oag_title::profile::Profile::NAME_AND_TAG,
+    photo: oag_title::photo::Strings::NONE,
+    photo_shot: None,
+    // Pure's own recovery is unread; Pulse's law.
+    reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
+    contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
+    // Pure's effects law is unread; Pulse's commit helper squares the group volume.
+    effects_volume_law: oag_title::pre_race::Sourced::inherited(
+        oag_title::group_volume::GroupVolumeLaw::Squared,
+        "Pulse",
+    ),
+    speech_volume_law: oag_title::pre_race::Sourced::inherited(
+        oag_title::group_volume::GroupVolumeLaw::Squared,
+        "Pulse",
+    ),
+    // Group 2 takes the SFX fraction and the flyby fade (`docs/gameplay/race-intro.md`, "The Speech group").
+    speech_follows_effects: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
+    // Measured lower than Pulse in the same race, so a smaller trim than Pulse's
+    // (`docs/ghidra/functions/psp-pulse-usa/audio-levels.md`, "Master trim").
+    master_trim_db: oag_title::pre_race::Sourced::chosen(-3.0),
+    rear_occlusion: None,
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     // **`None`, and it is a measurement.** Neither
@@ -80,6 +108,23 @@ pub const TITLE: &Title = &Title {
     // Pure authors none of the seven shadow classes (`docs/formats/pure-status.md`): nothing is the right picture.
     original_shadows: oag_title::shadow::OriginalShadows::Absent,
     weather: oag_title::weather::Weather::Unplayed,
+    // No motors on a PSP (`docs/gameplay/rumble.md`, "Provenance per title").
+    rumble: oag_title::rumble::Rumble::Absent,
+    // Inherited by lineage, `docs/ui/attract-demo.md`.
+    demo: oag_title::demo::Demo {
+        // `Demo_Definition.xml` is shared verbatim by both discs (`docs/ui/attract-demo.md`).
+        screen: match oag_title::demo::Demo::PULSE.screen {
+            Some(screen) => Some(oag_title::pre_race::Sourced::inherited(
+                screen.value,
+                "Pulse",
+            )),
+            None => None,
+        },
+        ..oag_title::demo::Demo::inheriting(
+            "Pulse",
+            oag_title::pre_race::Sourced::chosen(oag_title::demo::Exit::AnyInput),
+        )
+    },
     // **One table, all lower case, and no Eliminator variant.**
     // `Data\XML\weaponstats.xml` at `0x08a445a0` in `/psp-pure-usa/BOOT.BIN`,
     // three strings before the `"WeaponStats"` and `"Weapon"` element names the
@@ -91,6 +136,12 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Pulse's law, inherited: Pure's own drain is unread.
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        blast_push: oag_title::pre_race::Sourced::inherited(
+            oag_title::weapons::BlastPush::Posted,
+            "Wipeout Pulse",
+        ),
+        // Pure ships no LeachBeam, so this is never read; the value matches the other titles.
+        leach_beams: oag_title::pre_race::Sourced::chosen(8),
         // The gate is Pulse's law, inherited: Pure's own is unread (`psp-pure-usa/quake.md`).
         // The eye stays level, **chosen, not measured**: the maintainer, 2026-10-26, "in Pure this
         // does not exist" - the original Pure's road does not lift under a Quake, so its cockpit
@@ -105,6 +156,25 @@ pub const TITLE: &Title = &Title {
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::measured(false),
         // Pulse's law, inherited: Pure's pad grant is unread.
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout Pulse"),
+        pads_stamp_in_eliminator: oag_title::pre_race::Sourced::inherited(true, "Wipeout Pulse"),
+        launch_normal_is_track_up: oag_title::pre_race::Sourced::inherited(true, "Wipeout Pulse"),
+        floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::inherited(
+            true,
+            "Wipeout Pulse",
+        ),
+        // Pulse's law, inherited: Pure's `Plasma_Launch` caller is unread.
+        plasma_release_at_display_scale: oag_title::pre_race::Sourced::inherited(
+            true,
+            "Wipeout Pulse",
+        ),
+        // Pulse's raycast, gate and box; a box hit runs no arm (`psp-pure-usa/own-craft-box.md`).
+        own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::OwnCraftBox::Holds,
+        ),
+        // Measured: Pure's decision code equals Pulse's law (`psp-pure-usa/weapon-ai-fire.md`).
+        opponent_fire: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::OpponentFire::PULSE,
+        ),
     },
     // **Pure's own names, read off `BOOT.BIN` (2026-10-08), not Pulse's.**
     // Every Pulse literal this table used to carry (`Pulse_Mine.vex`,
@@ -121,12 +191,44 @@ pub const TITLE: &Title = &Title {
         // Pure hands out no Cannon (no `Cannon` string in the executable).
         cannon: None,
         plasma_ball: None,
-        // Pure's Plasma blast is a three-model shell too (`plasma_halo`,
-        // `plasma_hemisphere_noglow`, `plasma_hemisphere`, built by
-        // `0x0885b2a0`) but over three 255-to-0 key tables of its own, not
-        // Pulse's baked anim-time track: unread, so nothing is wired.
-        plasma_blast_pulse: None,
+        plasma_blast_pulse: Some(oag_title::weapons::PulsePlasmaBlast {
+            halo: r"Data\Weapons\plasma_halo.vex",
+            hemisphere2: r"Data\Weapons\plasma_hemisphere_noglow.vex",
+            hemisphere1: r"Data\Weapons\plasma_hemisphere.vex",
+            // `PlasmaBlast_Construct` (`0x0885b2a0`) and `PlasmaBlast_Update` (`0x0885ae9c`),
+            // confidence 85 for the tables and 88 for the life; the targets are the read `15, 8,
+            // 7.8` divided by `PULSE_MODEL_UNIT` (`0.025`), which carries over only if Pure's
+            // three models share Pulse's extents (`docs/ghidra/functions/psp-pure-usa/plasma.md`).
+            law: oag_title::weapons::PlasmaBlastLaw {
+                tint: [(0.2, 0.5), (0.3, 1.0), (0.0, 1.0)],
+                ease_targets: [600.0, 320.0, 312.0],
+                ease_rates: [0.1, 0.07, 0.07],
+                life: 2.0,
+                halo_hide_at: None,
+                hemisphere_drop: 3.5,
+                origin: oag_title::Origin::Measured,
+            },
+        }),
         plasma_blast_hd: None,
+        // `DisruptorExplo_Construct` loads it and `DisruptorExplo_Update` eases it
+        // (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor", confidence 80).
+        disruptor_halo: Some(oag_title::weapons::DisruptorHalo {
+            model: r"Data\Weapons\electric_halo2.vex",
+            target: 16.0,
+            rate: 0.05,
+            life: 1.0,
+            origin: oag_title::Origin::Measured,
+        }),
+        // `DisruptorFx_Construct` (`0x08859b78`) loads the model; its update (`0x0885a010`) runs
+        // the ease. Both read live on the player's craft
+        // (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor").
+        disruptor_craft: Some(oag_title::weapons::DisruptorCraftFx {
+            model: r"Data\Weapons\disruptor_effect.vex",
+            target: 1.0,
+            rate: 0.1,
+            retire_below: 0.05,
+            origin: oag_title::Origin::Measured,
+        }),
         // Pure's Bomb has no fuse, but it does detonate when a craft enters
         // its `trigger_radius` (`BombPool_Detonate`, `0x0884f214`), which
         // builds this pair (`0x08858710`: the same two models, the same
@@ -149,8 +251,10 @@ pub const TITLE: &Title = &Title {
         magstrip_wake: None,
         magstrip_pob: false,
         rocket_trail: None,
+        missile_trail: None,
         leach_strip: None,
         leachbeam_ball: None,
+        missile_head: None,
         shuriken: None,
         // No Cannon on Pure, so no Cannon draw.
         cannon_look: None,
@@ -173,6 +277,7 @@ pub const TITLE: &Title = &Title {
     // its `Definition.xml` and each circuit's `stats.xml`
     // (`docs/formats/pure-campaign.md`).
     main_menu: main_menu::MAIN_MENU,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pure,
         definition_entry: None,
@@ -186,6 +291,7 @@ pub const TITLE: &Title = &Title {
         main_row: Some(campaign::MAIN_ROW),
         circuit_unlocks: false,
         loyalty_unlocks: false,
+        model_unlocks: None,
         // Pure authors no `Grid` or loyalty `<Unlock>`; its 17 rows are
         // `MedalCount`, `Track` + `medal` and `Tournament` + `class` + `medal`,
         // which the list campaign evaluates itself.
@@ -195,9 +301,14 @@ pub const TITLE: &Title = &Title {
         grid_archive: None,
         fury_card_gain: None,
         grid_card_pose: None,
+        selection_card_scale: None,
+        medal_tier_rows: None,
+        // Pulse's law, inherited: Pure's Zone cells count up.
+        counting_modes: &["Zone", "Elimination"],
         frontend_glow: None,
         origin: oag_title::Origin::Measured,
         custom_campaigns: false,
+        event_track_dir: None,
     },
     pressings: Some(frontend::PRESSINGS),
     pre_race: None,
@@ -236,6 +347,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
     now_playing: Some(NOW_PLAYING),
     // Pure's music player is unread for this; it runs Pulse's rule (the same engine, and Pulse's
     // is read). Chosen by inheritance, not measured.
+    spectrum_extension: None,
     race_song_start: oag_title::pre_race::Sourced::inherited(
         oag_title::race_song::RaceSongStart::AtGo,
         "Wipeout Pulse",
@@ -314,6 +426,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `docs/formats/pure-status.md`.
     menu_frame: Some(frontend::states::FE_SCREEN),
     bottom_up_gnf: &[],
+    // The pack's own readme: "Due to dynamic CLUT, the HUD font textures in WipEout Pure are almost
+    // impossible to replace reliably" (`docs/formats/ppsspp-texture-pack.md`, "The 2026 pack").
+    runtime_palette_faces: true,
     // Pure's race box is a chain of screens (`Class Selection`, `League
     // Selection`, `Tournament Selection`, `Track Selection`,
     // `Team Selection`, ...) authored in one file, read 2026-09-10 - see
@@ -328,6 +443,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     track_select: None,
     race_setup: None,
     track_label_overrides: &[],
+    card_track_aliases: &[],
     track_record_empty: "-",
     track_distance_authored: false,
     // Pure ships neither `FE\forward.vex` nor `ship_FE.vex`; both screens
@@ -335,12 +451,15 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     preview_meshes: false,
     ship_preview_hull: None,
     ship_preview_pose: None,
+    ship_preview_fit: None,
+    ship_preview_settle: None,
     circuit_models: &[],
     // Not checked this pass - a gap, not a measurement that Pure ships no
     // such screen. See `oag_title::FrontEnd::endrace_entry`.
     endrace_entry: None,
     endrace_style: None,
     borrows_ps2_split_screens: false,
+    model_lighting: None,
 };
 
 pub mod campaign;
@@ -348,6 +467,8 @@ pub mod effects;
 pub mod frontend;
 pub mod hud;
 pub mod main_menu;
+pub mod pause_menu;
+pub mod prompts;
 pub mod race;
 
 /// Name hashes for `Data.wad` entries whose names are not recovered.
@@ -733,6 +854,13 @@ pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pures_opponent_fire_law_is_measured_not_inherited() {
+        let fire = TITLE.weapons.opponent_fire;
+        assert_eq!(fire.origin, oag_title::Origin::Measured);
+        assert_eq!(fire.value, oag_title::weapons::OpponentFire::PULSE);
+    }
 
     /// The deny-list rules out, never in - the same asymmetry `oag_pulse`'s has.
     #[test]

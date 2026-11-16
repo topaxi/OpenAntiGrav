@@ -64,6 +64,81 @@ pub const BLUR_WEIGHTS: [f32; 3] = [1.0, 0.799_804_7, 0.5];
 /// The blur's sum is multiplied by this, the half `0x32f2` (1 / 4.6).
 pub const BLUR_NORMALISE: f32 = 0.217_041_02;
 
+/// `vignetteTint`, the half4 `PostFx_RenderChain` packs from `0x816aef08..0x816aef14`, which
+/// `PostFx_RegisterPrograms` (`0x8103d2ae`, stores at `0x8103d762..0x8103d770`) seeds to
+/// `(1.0, 1.0, 0.97, 1.0)` and nothing else writes.
+pub const VIGNETTE_TINT: [f32; 3] = [1.0, 1.0, 0.97];
+
+/// The vignette mesh's centre height in clip space, the float at `0x8151c6b4`
+/// (`0xbf628f5c`): the mesh is drawn round `(0, -0.885)`, low in the frame, so the
+/// picture's top corners are the far edge.
+pub const VIGNETTE_CENTRE_Y: f32 = -0.885;
+
+/// The radius, in clip units, inside which the vignette is 0, `0x8151c6b8` (1.5).
+pub const VIGNETTE_INNER: f32 = 1.5;
+
+/// The radius at which `w` reaches [`VIGNETTE_STRENGTH`], `0x8151c6bc` (`0x4009999a`, 2.15).
+pub const VIGNETTE_OUTER: f32 = f32::from_bits(0x4009_999a);
+
+/// `w` on the outer ring, `0x8151c6b0` (1.0); `PostFx_RenderChain` writes 0 there instead
+/// while `FUN_81021ef6` reports a photo capture job running (`exposure.md`, "The vignette").
+/// Ours keeps it on in its own photo mode's accumulated shot: a departure, the switch is
+/// read at confidence 60 and not wired.
+pub const VIGNETTE_STRENGTH: f32 = 1.0;
+
+/// The mesh is a fan and a ring of this many sectors, `2 pi / 0.19634952`.
+pub const VIGNETTE_SECTORS: u32 = 32;
+
+/// The vignette factor `v` of the composite for a mesh `w`: `wo_composite_vp` forms
+/// `t = vignetteTint * w` and `wo_composite_nocc_fp` multiplies by `1 - t * t`.
+#[must_use]
+pub fn vignette(w: f32) -> [f32; 3] {
+    VIGNETTE_TINT.map(|tint| 1.0 - (tint * w) * (tint * w))
+}
+
+/// The `w` the mesh interpolates to at a point of clip space, over the same triangles
+/// `PostFx_RenderChain` builds: per sector a fan from the centre to the inner circle
+/// (`w` 0) and a ring quad split along the diagonal from the inner circle's far corner
+/// to the outer circle's near one (`w` 0 inside, [`VIGNETTE_STRENGTH`] outside). Beyond
+/// the outer polygon the mesh draws nothing and the frame keeps what it held, which is
+/// no vignette; the frame's own corners are inside it.
+#[must_use]
+pub fn vignette_w(clip: [f32; 2]) -> f32 {
+    let p = [clip[0], clip[1] - VIGNETTE_CENTRE_Y];
+    let step = std::f32::consts::TAU / VIGNETTE_SECTORS as f32;
+    let angle = p[0].atan2(p[1]).rem_euclid(std::f32::consts::TAU);
+    let sector = ((angle / step) as u32).min(VIGNETTE_SECTORS - 1);
+    let point = |k: u32, radius: f32| {
+        let a = k as f32 * step;
+        [radius * a.sin(), radius * a.cos()]
+    };
+    let (b, c) = (
+        point(sector, VIGNETTE_INNER),
+        point(sector + 1, VIGNETTE_INNER),
+    );
+    let (d, e) = (
+        point(sector, VIGNETTE_OUTER),
+        point(sector + 1, VIGNETTE_OUTER),
+    );
+    let inside = |w: [f32; 3]| w.iter().all(|&weight| weight >= -1e-5);
+    let bcd = barycentric(p, b, c, d);
+    if inside(bcd) {
+        return bcd[2] * VIGNETTE_STRENGTH;
+    }
+    let cde = barycentric(p, c, d, e);
+    if inside(cde) {
+        return (cde[1] + cde[2]) * VIGNETTE_STRENGTH;
+    }
+    0.0
+}
+
+fn barycentric(p: [f32; 2], a: [f32; 2], b: [f32; 2], c: [f32; 2]) -> [f32; 3] {
+    let det = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
+    let wa = ((b[1] - c[1]) * (p[0] - c[0]) + (c[0] - b[0]) * (p[1] - c[1])) / det;
+    let wb = ((c[1] - a[1]) * (p[0] - c[0]) + (a[0] - c[0]) * (p[1] - c[1])) / det;
+    [wa, wb, 1.0 - wa - wb]
+}
+
 fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
@@ -100,7 +175,8 @@ pub fn adapt(exposure: f32, a: f32, p: &Params) -> f32 {
 }
 
 /// `wo_composite_nocc_fp` for one pixel of the scene and the bloom under it,
-/// with the vignette at 1 and the screen tint at 0 (both unread).
+/// before the vignette [`vignette`] (multiply the result by it) and with the screen
+/// tint at 0 (unread).
 #[must_use]
 pub fn composite(main: [f32; 3], bloom: [f32; 3], exposure: f32, bloom_factor: f32) -> [f32; 3] {
     let e = main.map(|c| exposure * c.max(0.0));

@@ -1,5 +1,5 @@
 extern crate std;
-use std::{vec, vec::Vec};
+use std::{format, string::ToString, vec, vec::Vec};
 
 use super::*;
 
@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 23] {
+fn every_command() -> [Command; 38] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -64,7 +64,7 @@ fn every_command() -> [Command; 23] {
         },
         Command::PickupLook {
             slot: slot(9),
-            icon: Icon::Mod(ModIcon::new("bolt").unwrap()),
+            icon: Icon::Mod(ModName::new("bolt").unwrap()),
             colour: Colour::Title(Weapon::Shield),
         },
         Command::HudShake {
@@ -115,10 +115,93 @@ fn every_command() -> [Command; 23] {
             slot: slot(11),
             route: 3,
         },
+        Command::Emit {
+            slot: slot(12),
+            channel: channel_key("oag.example/gate"),
+            value: -2.5,
+        },
+        Command::Transit {
+            slot: slot(2),
+            ticks: 60,
+            distance: crate::Distance::Seconds(2.0),
+            exit_factor: 0.9,
+        },
+        Command::ScaleSpeed {
+            slot: slot(3),
+            factor: 0.5,
+        },
+        Command::ProbeClearance {
+            slot: slot(4),
+            distance: crate::Distance::Units(120.0),
+            radius: 8.0,
+        },
+        Command::ScreenFill {
+            slot: slot(5),
+            rgba: Rgba::new(0x10, 0x20, 0x30, 0x40),
+            shader: Some(ModName::new("wormhole").unwrap()),
+        },
+        Command::FovOffset {
+            slot: slot(6),
+            degrees: 12.5,
+        },
+        Command::FireModEffectAhead {
+            slot: slot(7),
+            effect: ModName::new("lock").unwrap(),
+            distance: crate::Distance::Units(100.0),
+        },
+        Command::PlayModSound {
+            slot: slot(8),
+            sound: ModName::new("transit").unwrap(),
+            mode: crate::SoundMode::Loop,
+        },
+        Command::DrawBeam {
+            slot: slot(9),
+            to: slot(2),
+            rgba: Rgba::new(1, 2, 3, 4),
+            half_width: 1.5,
+            shader: Some(ModName::new("beam").unwrap()),
+        },
+        Command::SetShaderParam {
+            slot: slot(10),
+            shader: ModName::new("tunnel").unwrap(),
+            index: MAX_SHADER_PARAMS - 1,
+            value: -0.25,
+        },
+        Command::PortalView {
+            slot: slot(11),
+            entrance: 1234.5,
+            exit: crate::Distance::Progress(0.0),
+            radius: 255,
+            update: crate::ViewUpdate::Once,
+            generation: crate::MAX_VIEW_GENERATION - 1,
+        },
+        Command::PortalView {
+            slot: slot(11),
+            entrance: 12.5,
+            exit: crate::Distance::Trigger(u16::MAX),
+            radius: 8,
+            update: crate::ViewUpdate::Continuous,
+            generation: 0,
+        },
+        Command::RaiseWarning {
+            slot: slot(0),
+            warning: Warning::Title(WarningIcon::Bomb),
+        },
+        Command::RaiseWarning {
+            slot: slot(2),
+            warning: Warning::Mod {
+                side: WarningSide::Forward,
+                icon: ModName::new("portal").unwrap(),
+            },
+        },
+        Command::StopModEffect {
+            slot: slot(3),
+            effect: ModName::new("portal_hd").unwrap(),
+        },
     ]
 }
 
-fn every_event() -> [Event; 8] {
+fn every_event() -> [Event; 11] {
     [
         Event::WallContact { slot: slot(0) },
         Event::PickupFire { slot: slot(1) },
@@ -144,6 +227,18 @@ fn every_event() -> [Event; 8] {
             amount: 17.5,
             weapon: Weapon::Cannon,
         },
+        Event::Mod {
+            slot: slot(7),
+            from: channel_key("oag.example"),
+            channel: channel_key("oag.example/gate"),
+            value: 4.25,
+        },
+        Event::TransitEnd { slot: slot(5) },
+        Event::Clearance {
+            slot: slot(6),
+            fits: true,
+            ahead: 250.0,
+        },
     ]
 }
 
@@ -152,6 +247,7 @@ fn a_craft() -> Craft {
         pickup: Pickup::Weapon(Weapon::Disruptor),
         person: true,
         fire_held: false,
+        in_transit: true,
         racing: true,
         shielded: true,
         lap: 3,
@@ -162,16 +258,15 @@ fn a_craft() -> Craft {
     }
 }
 
+/// A command through its record and back, with the pool its string reads from.
+fn round_trip(command: &Command) -> Result<Command, Malformed> {
+    Command::decode_in(&command.encode_pooled(0), &pool_for(command))
+}
+
 /// The pool a command's string reads from: its entry at offset 0.
 fn pool_for(command: &Command) -> Vec<u8> {
-    let text = match command {
-        Command::HudText { text, .. } => text.as_str(),
-        Command::HudIcon { sprite, .. } => sprite.as_str(),
-        Command::PickupLook {
-            icon: Icon::Mod(name),
-            ..
-        } => name.as_str(),
-        _ => return Vec::new(),
+    let Some(text) = command.pooled_name() else {
+        return Vec::new();
     };
     let mut pool = vec![text.len() as u8];
     pool.extend_from_slice(text.as_bytes());
@@ -187,6 +282,7 @@ fn layout_fold() -> u64 {
         MAX_SLOTS,
         MAX_EVENTS as u32,
         MAX_STATE_BYTES as u32,
+        MAX_MEMORY_PAGES,
         MAX_COMMANDS as u32,
         MAX_CRAFTS as u32,
         ABI_AT as u32,
@@ -202,9 +298,19 @@ fn layout_fold() -> u64 {
         COMMAND_LEN as u32,
         CRAFTS_AT as u32,
         CRAFT_LEN as u32,
+        TITLE_AT as u32,
         EVENT_KIND as u32,
         EVENT_SLOT as u32,
         EVENT_INDEX as u32,
+        EVENT_CHANNEL as u32,
+        EVENT_FROM as u32,
+        MAX_EMITS_PER_TICK as u32,
+        MAX_MOD_EVENTS as u32,
+        MAX_TRACK_EVENTS as u32,
+        MAX_FIRE_EFFECTS_PER_TICK as u32,
+        MAX_CHANNEL_LEN as u32,
+        TRACK_SENDER,
+        channel_key("oag.example/gate"),
         MAX_PAD_FACTOR.to_bits(),
         track::MAX_ENTITIES as u32,
         track::MAX_TRIGGERS as u32,
@@ -245,6 +351,13 @@ fn layout_fold() -> u64 {
         CRAFT_SHIELD as u32,
         CRAFT_SHIELD_MAX as u32,
         CRAFT_SPEED as u32,
+        COURSE_LENGTH_AT as u32,
+        TRACKING_AT as u32,
+        TRACKING_LEN as u32,
+        TRACKING_PROGRESS as u32,
+        TRACKING_PLACE as u32,
+        TRACKING_FLAGS as u32,
+        u32::from(TRACKING_FIXED),
         u32::from(CRAFT_PERSON),
         u32::from(CRAFT_FIRE_HELD),
         u32::from(CRAFT_RACING),
@@ -261,6 +374,25 @@ fn layout_fold() -> u64 {
         Cue::ALL.len() as u32,
         Effect::ALL.len() as u32,
         u32::from(Pickup::Ours.code()),
+        u32::from(crate::MAX_TRANSIT_TICKS),
+        crate::MAX_SPEED_FACTOR.to_bits(),
+        crate::MAX_PROBE_RADIUS.to_bits(),
+        crate::MAX_FOV_OFFSET_DEG.to_bits(),
+        crate::motion::EXIT_FACTOR_STEPS.to_bits(),
+        u32::from(crate::CRAFT_IN_TRANSIT),
+        AIM_AT as u32,
+        AIM_SLOTS as u32,
+        AIM_LEN as u32,
+        AIM_STEP.to_bits(),
+        u32::from(MAX_PICKUP_KINDS),
+        u32::from(Pickup::Other(0).code()),
+        u32::from(Pickup::Other(MAX_PICKUP_KINDS - 1).code()),
+        RACE_LEN as u32,
+        RACE_OPTIONS_AT as u32,
+        u32::from(RACE_WEAPONS),
+        u32::from(RACE_CAMPAIGN),
+        RUN,
+        SKIP,
     ];
     // Each code by name: a reordered variant moves a byte's meaning on the wire.
     let codes = [
@@ -294,20 +426,34 @@ fn layout_fold() -> u64 {
     )
     .chain([Effect::CollisionSpark, Effect::HitSpark].map(|effect| u32::from(effect.code())))
     .chain([WeatherKind::Rain].map(|kind| u32::from(kind.code())))
+    .chain(WarningIcon::ALL.iter().map(|icon| u32::from(icon.code())))
+    .chain(WarningSide::ALL.iter().map(|side| u32::from(side.code())))
     .chain(HudElement::ALL.iter().map(|e| u32::from(e.code())))
-    .chain(Anchor::ALL.iter().map(|a| u32::from(a.code())));
+    .chain(Anchor::ALL.iter().map(|a| u32::from(a.code())))
+    .chain(SoundMode::ALL.iter().map(|m| m.code()))
+    .chain(RaceMode::ALL.iter().map(|m| u32::from(m.code())));
     let commands = every_command().into_iter().flat_map(|c| c.encode_pooled(0));
     let events = every_event().into_iter().flat_map(Event::encode);
     let craft = a_craft().encode();
-    fnv(consts
-        .into_iter()
-        .chain(codes)
-        .chain(commands.chain(events).chain(craft).map(u32::from)))
+    let tracking = a_tracking().encode();
+    let aim = Aim::from_offset(61.0, -3.0, 0.4).encode();
+    let mut race_io = [0; IO_LEN];
+    a_race().write(&mut race_io);
+    let race = race_io[..RACE_LEN].to_vec();
+    fnv(consts.into_iter().chain(codes).chain(
+        commands
+            .chain(events)
+            .chain(craft)
+            .chain(tracking)
+            .chain(aim)
+            .chain(race)
+            .map(u32::from),
+    ))
 }
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0xcd8b_7acc_a066_e416);
+const REVISION_AND_FOLD: (u32, u64) = (6, 0x2253_437d_baa3_23a7);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -421,7 +567,7 @@ fn a_record_breaking_its_own_rules_is_malformed() {
     pad[COMMAND_SLOT] = 2;
     assert!(matches!(
         Command::decode(&pad),
-        Err(Malformed::PadFactor { slot: 2, .. })
+        Err(Malformed::PadSlot { slot: 2 })
     ));
     let mut cue = Command::PlayCue {
         slot: slot(0),
@@ -430,6 +576,13 @@ fn a_record_breaking_its_own_rules_is_malformed() {
     .encode();
     cue[COMMAND_ARG] = 6;
     assert_eq!(Command::decode(&cue), Err(Malformed::Cue(6)));
+    let mut warning = Command::RaiseWarning {
+        slot: slot(0),
+        warning: Warning::Title(WarningIcon::Mine),
+    }
+    .encode();
+    warning[COMMAND_ARG] = 10;
+    assert_eq!(Command::decode(&warning), Err(Malformed::WarningIcon(10)));
     let mut roll = Command::PickupRoll {
         weapon: Weapon::Turbo,
         every: 2,
@@ -470,6 +623,32 @@ fn a_record_breaking_its_own_rules_is_malformed() {
     assert_eq!(Command::decode(&unknown), Err(Malformed::Kind(200)));
 }
 
+fn a_tracking() -> Tracking {
+    Tracking {
+        progress: Some(-12.5),
+        place: 3,
+    }
+}
+
+#[test]
+fn a_negative_progress_is_a_fix_and_no_fix_is_a_flag_not_a_number() {
+    let grid = Tracking {
+        progress: Some(-40.0),
+        place: 8,
+    };
+    assert_eq!(Tracking::decode(&grid.encode()), grid);
+    let none = Tracking {
+        progress: None,
+        place: 1,
+    };
+    assert_eq!(Tracking::decode(&none.encode()), none);
+    assert_eq!(
+        Tracking::decode(&Tracking::default().encode()).progress,
+        None,
+        "an empty record has no fix"
+    );
+}
+
 #[test]
 fn the_observation_reads_back_through_the_guest_sections() {
     let mut io = [0; IO_LEN];
@@ -480,6 +659,13 @@ fn the_observation_reads_back_through_the_guest_sections() {
         0b11,
         &every_event(),
         &crafts,
+        &Course {
+            length: 5120.0,
+            tracking: &[Tracking::default(), a_tracking()],
+            title: channel_key("wipeout-hd"),
+            aiming: None,
+            options: [3, 2, 1, 0],
+        },
         &[9, 8, 7],
     );
     let sections = Sections::split(&mut io);
@@ -487,12 +673,21 @@ fn the_observation_reads_back_through_the_guest_sections() {
     assert_eq!(Sections::active(sections.head), 0b11);
     assert_eq!(Sections::state_len(sections.head), 3);
     assert_eq!(&sections.state[..3], &[9, 8, 7]);
-    let events: [Option<Event>; 8] =
+    let events: [Option<Event>; 11] =
         core::array::from_fn(|i| Sections::event_record(sections.head, i).and_then(Event::decode));
     assert_eq!(events, every_event().map(Some));
-    assert_eq!(Sections::event_count(sections.head), 8);
+    assert_eq!(Sections::event_count(sections.head), 11);
     let craft = Sections::craft_record(sections.crafts, slot(1)).map(Craft::decode);
     assert_eq!(craft, Some(a_craft()));
+    assert_eq!(Sections::course_length(sections.head), 5120.0);
+    assert_eq!(Sections::title(sections.crafts), channel_key("wipeout-hd"));
+    assert_eq!(
+        [0, 1, 2, 3, 4].map(|n| Sections::option(sections.crafts, n)),
+        [3, 2, 1, 0, 0]
+    );
+    let tracking = |s| Sections::tracking_record(sections.crafts, slot(s)).map(Tracking::decode);
+    assert_eq!(tracking(1), Some(a_tracking()));
+    assert_eq!(tracking(0), Some(Tracking::default()), "no fix, no place");
     Sections::put_command(sections.reply, 0, &every_command()[4]);
     Sections::put_count(sections.reply, 1);
     assert_eq!(reply_count(&io), Ok(1));
@@ -746,4 +941,532 @@ fn a_hud_record_out_of_range_is_malformed_by_name() {
         Err(Malformed::HudPlace),
         "the ninth anchor does not exist"
     );
+}
+
+#[test]
+fn a_non_finite_emit_value_is_refused_by_name() {
+    let mut record = Command::Emit {
+        slot: slot(1),
+        channel: channel_key("oag.example/gate"),
+        value: 1.0,
+    }
+    .encode();
+    record[COMMAND_VALUE..COMMAND_VALUE + 4].copy_from_slice(&f32::NAN.to_bits().to_le_bytes());
+    let err = Command::decode(&record).unwrap_err();
+    assert!(matches!(err, Malformed::EmitValue { .. }), "{err:?}");
+    assert!(err.to_string().contains("emit value"), "{err}");
+}
+
+#[test]
+fn a_mod_event_carries_its_channel_sender_and_value_through_the_record() {
+    let event = Event::Mod {
+        slot: slot(9),
+        from: 0xdead_beef,
+        channel: channel_key("oag.a/b"),
+        value: f32::from_bits(0x3f80_0001),
+    };
+    let record = event.encode();
+    assert_eq!(record.len(), EVENT_LEN);
+    assert_eq!(Event::decode(&record), Some(event));
+    let track = Event::Mod {
+        slot: slot(0),
+        from: TRACK_SENDER,
+        channel: 1,
+        value: 0.0,
+    };
+    assert_eq!(Event::decode(&track.encode()), Some(track));
+}
+
+#[test]
+fn a_channel_name_is_a_mod_id_a_slash_and_a_name() {
+    for good in ["oag.example/gate", "a/b", "my-mod_2/x-1"] {
+        assert_eq!(check_channel(good), Ok(()), "{good}");
+    }
+    for (bad, why) in [
+        ("gate", BadChannel::Shape),
+        ("a/b/c", BadChannel::Shape),
+        ("/b", BadChannel::Shape),
+        ("a/", BadChannel::Shape),
+        ("Oag/gate", BadChannel::Character('O')),
+        ("a/ga.te", BadChannel::Character('.')),
+        ("a/ga te", BadChannel::Character(' ')),
+    ] {
+        assert_eq!(check_channel(bad), Err(why), "{bad}");
+    }
+    let long = format!("a/{}", "b".repeat(MAX_CHANNEL_LEN));
+    assert_eq!(check_channel(&long), Err(BadChannel::TooLong));
+    assert_eq!(namespace("oag.example/gate"), "oag.example");
+}
+
+/// The bytes of one of every command, in `every_command`'s order, as hex. Spelled out so a
+/// layout change shows in the diff, and so a refactor of the encoder is held to today's bytes.
+const COMMAND_BYTES: [&str; 33] = [
+    "010100000000803e00000000",
+    "02020000000060c000000000",
+    "030300000000000000000000",
+    "080400000000000000000000",
+    "090005000000000002000000",
+    "0d002c010000c03f00000000",
+    "0e0500000000000000000000",
+    "050603000000000000000000",
+    "060701000000000000000000",
+    "100f050000000000e02021ff",
+    "1603050000000000e0202080",
+    "160900800600000000000000",
+    "110103000000204000000000",
+    "120202006666663fff2020ff",
+    "1303008068d8ff7f01020304",
+    "1404000044001080ffffffff",
+    "0a0000000000403f00000000",
+    "0b0000000000003f00000000",
+    "0c0000000000803e00000000",
+    "180800000000000000000000",
+    "190900000000000000000000",
+    "1a0a00000000000000000000",
+    "150b03000000000000000000",
+    "170c0000000020c064a50f37",
+    "1b023c000000004001002823",
+    "1c0300000000003f00000000",
+    "1d0400000000f04200000041",
+    "1e0501000000000010203040",
+    "1f0600000000484100000000",
+    "200700000000c84200000000",
+    "210800000000000001000000",
+    "220912000000c03f01020304",
+    "230a0000000080be03000000",
+];
+
+/// The bytes of one of every event, in `every_event`'s order, as hex.
+const EVENT_BYTES: [&str; 11] = [
+    "01000000000000000000000000000000",
+    "02010000000000000000000000000000",
+    "03020000000000000000000000000000",
+    "050f0201000000000000000000000000",
+    "06030700000000000000000000000000",
+    "07043f00000000000000000000000000",
+    "08050100000000000000000000000000",
+    "0906040000008c410000000000000000",
+    "0a0700000000884064a50f37ce86334d",
+    "0b050000000000000000000000000000",
+    "0c06010000007a430000000000000000",
+];
+
+fn hex(bytes: &[u8]) -> std::string::String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[test]
+fn every_command_encodes_to_the_bytes_it_always_has() {
+    for (command, expected) in every_command().iter().zip(COMMAND_BYTES) {
+        assert_eq!(hex(&command.encode_pooled(0)), expected, "{command:?}");
+    }
+}
+
+#[test]
+fn every_event_encodes_to_the_bytes_it_always_has() {
+    for (event, expected) in every_event().iter().zip(EVENT_BYTES) {
+        assert_eq!(hex(&event.encode()), expected, "{event:?}");
+    }
+}
+
+/// `fire-mod-effect` shares `fire-effect`'s code, told apart by bit 15 of the argument; the
+/// pool offset of an own-string `hud-text` rides in the same argument with the same flag.
+#[test]
+fn the_own_flag_rides_bit_15_of_the_argument() {
+    let effect = Command::FireModEffect {
+        slot: slot(3),
+        effect: ModName::new("sputter").unwrap(),
+    };
+    assert_eq!(hex(&effect.encode_pooled(0)), "060300800000000000000000");
+    assert_eq!(round_trip(&effect), Ok(effect));
+}
+
+/// `raise-warning` is kind 37 with the icon's code as the argument; the icon fixes the group.
+#[test]
+fn a_raise_warning_is_kind_37_with_the_icon_code() {
+    let bomb = Command::RaiseWarning {
+        slot: slot(0),
+        warning: Warning::Title(WarningIcon::Bomb),
+    };
+    assert_eq!(hex(&bomb.encode()), "250009000000000000000000");
+    assert_eq!(Command::decode(&bomb.encode()), Ok(bomb));
+    assert_eq!(WarningIcon::ALL.len(), 10);
+}
+
+/// A mod's own icon is the pool entry's offset with the own flag in the argument and the
+/// group in the word; the title's icons keep their groups.
+#[test]
+fn a_mod_raise_warning_names_a_pool_entry_and_a_group() {
+    let portal = Command::RaiseWarning {
+        slot: slot(1),
+        warning: Warning::Mod {
+            side: WarningSide::Forward,
+            icon: ModName::new("portal").unwrap(),
+        },
+    };
+    let pool = pool_for(&portal);
+    assert_eq!(hex(&portal.encode_pooled(0)), "250100800000000001000000");
+    assert_eq!(
+        Command::decode_in(&portal.encode_pooled(0), &pool),
+        Ok(portal)
+    );
+    assert_eq!(WarningIcon::Rocket.side(), WarningSide::Rear);
+    assert_eq!(WarningIcon::Mine.side(), WarningSide::Forward);
+    assert_eq!(WarningIcon::Bomb.side(), WarningSide::Forward);
+    assert_eq!(
+        WarningIcon::ALL
+            .iter()
+            .filter(|icon| icon.side() == WarningSide::Rear)
+            .count(),
+        8
+    );
+}
+
+#[test]
+fn a_mod_raise_warning_with_an_unknown_group_or_pool_entry_is_refused() {
+    let mut record = Command::RaiseWarning {
+        slot: slot(0),
+        warning: Warning::Mod {
+            side: WarningSide::Rear,
+            icon: ModName::new("portal").unwrap(),
+        },
+    }
+    .encode_pooled(0);
+    let pool = [6, b'p', b'o', b'r', b't', b'a', b'l'];
+    assert!(Command::decode_in(&record, &pool).is_ok());
+    record[COMMAND_WORD..COMMAND_WORD + 4].copy_from_slice(&2u32.to_le_bytes());
+    assert_eq!(
+        Command::decode_in(&record, &pool),
+        Err(Malformed::WarningSide(2))
+    );
+    record[COMMAND_WORD..COMMAND_WORD + 4].copy_from_slice(&0u32.to_le_bytes());
+    assert_eq!(Command::decode_in(&record, &[]), Err(Malformed::Pool(0)));
+}
+
+#[test]
+fn the_kind_table_agrees_with_the_commands() {
+    for (i, kind) in CommandKind::ALL.iter().enumerate() {
+        assert_eq!(CommandKind::from_code(kind.code()), Some(*kind));
+        assert!(
+            CommandKind::ALL[..i]
+                .iter()
+                .all(|k| k.code() != kind.code()),
+            "{} repeats a code",
+            kind.name()
+        );
+    }
+    assert_eq!(CommandKind::from_code(0), None);
+    assert_eq!(CommandKind::from_code(4), None);
+    for command in every_command() {
+        let kind = command.kind();
+        assert_eq!(command.encode()[COMMAND_KIND], kind.code());
+        assert_eq!(
+            command.slot().is_none(),
+            kind.race_wide(),
+            "{}",
+            kind.name()
+        );
+    }
+}
+
+/// The motion commands' own ranges: each out-of-range record is malformed, never clamped.
+#[test]
+fn a_motion_command_out_of_its_ranges_is_malformed() {
+    let transit = |ticks, distance, exit_factor| Command::Transit {
+        slot: slot(1),
+        ticks,
+        distance,
+        exit_factor,
+    };
+    let bad = [
+        transit(0, crate::Distance::Units(10.0), 1.0),
+        transit(
+            crate::MAX_TRANSIT_TICKS + 1,
+            crate::Distance::Units(10.0),
+            1.0,
+        ),
+        transit(60, crate::Distance::Lap(0.0), 1.0),
+        transit(60, crate::Distance::Seconds(f32::NAN), 1.0),
+        transit(60, crate::Distance::Units(10.0), 2.5),
+        Command::ScaleSpeed {
+            slot: slot(1),
+            factor: -0.1,
+        },
+        Command::ProbeClearance {
+            slot: slot(1),
+            distance: crate::Distance::Units(10.0),
+            radius: crate::MAX_PROBE_RADIUS * 2.0,
+        },
+    ];
+    for command in bad {
+        assert!(
+            matches!(
+                Command::decode(&command.encode()),
+                Err(Malformed::Motion { .. })
+            ),
+            "{command:?}"
+        );
+    }
+    for (kind, amount) in [(3, -1.0), (4, 2.5), (4, 70_000.0), (0, 0.0)] {
+        assert_eq!(crate::Distance::join(kind, amount), None, "{kind} {amount}");
+    }
+    assert_eq!(
+        crate::Distance::join(3, 0.0),
+        Some(crate::Distance::Progress(0.0))
+    );
+    assert_eq!(
+        crate::Distance::join(4, 3.0),
+        Some(crate::Distance::Trigger(3))
+    );
+    let portal = transit(30, crate::Distance::Trigger(5), 1.0);
+    assert_eq!(Command::decode(&portal.encode()), Ok(portal));
+    let mut unknown = transit(60, crate::Distance::Units(10.0), 1.0).encode();
+    unknown[COMMAND_WORD] = 7;
+    assert!(Command::decode(&unknown).is_err(), "distance kind 7");
+}
+
+/// The view commands' own ranges: each out-of-range record is malformed, never clamped.
+#[test]
+fn a_scene_command_out_of_its_ranges_is_malformed() {
+    let bad = [
+        Command::FovOffset {
+            slot: slot(1),
+            degrees: crate::MAX_FOV_OFFSET_DEG * 1.5,
+        },
+        Command::FovOffset {
+            slot: slot(1),
+            degrees: f32::NAN,
+        },
+        Command::FireModEffectAhead {
+            slot: slot(1),
+            effect: ModName::new("ring").unwrap(),
+            distance: crate::Distance::Units(0.0),
+        },
+        Command::FireModEffectAhead {
+            slot: slot(1),
+            effect: ModName::new("ring").unwrap(),
+            distance: crate::Distance::Units(f32::NAN),
+        },
+        Command::DrawBeam {
+            slot: slot(1),
+            to: slot(1),
+            rgba: Rgba::new(1, 2, 3, 4),
+            half_width: 1.0,
+            shader: None,
+        },
+        Command::DrawBeam {
+            slot: slot(1),
+            to: slot(2),
+            rgba: Rgba::new(1, 2, 3, 4),
+            half_width: 0.0,
+            shader: None,
+        },
+        Command::DrawBeam {
+            slot: slot(1),
+            to: slot(2),
+            rgba: Rgba::new(1, 2, 3, 4),
+            half_width: crate::MAX_BEAM_HALF_WIDTH * 2.0,
+            shader: None,
+        },
+        Command::SetShaderParam {
+            slot: slot(1),
+            shader: ModName::new("tunnel").unwrap(),
+            index: MAX_SHADER_PARAMS,
+            value: 1.0,
+        },
+        Command::SetShaderParam {
+            slot: slot(1),
+            shader: ModName::new("tunnel").unwrap(),
+            index: 0,
+            value: f32::INFINITY,
+        },
+        Command::PortalView {
+            slot: slot(1),
+            entrance: f32::NAN,
+            exit: crate::Distance::Progress(10.0),
+            radius: 8,
+            update: crate::ViewUpdate::Continuous,
+            generation: 0,
+        },
+        Command::PortalView {
+            slot: slot(1),
+            entrance: 10.0,
+            exit: crate::Distance::Progress(-1.0),
+            radius: 8,
+            update: crate::ViewUpdate::Continuous,
+            generation: 0,
+        },
+        Command::PortalView {
+            slot: slot(1),
+            entrance: 10.0,
+            exit: crate::Distance::Progress(20.0),
+            radius: 0,
+            update: crate::ViewUpdate::Continuous,
+            generation: 0,
+        },
+    ];
+    for command in bad {
+        assert!(
+            matches!(round_trip(&command), Err(Malformed::Scene { .. })),
+            "{command:?}"
+        );
+    }
+    let unknown = Command::FireModEffectAhead {
+        slot: slot(1),
+        effect: ModName::new("ring").unwrap(),
+        distance: crate::Distance::Units(10.0),
+    };
+    let mut record = unknown.encode_pooled(0);
+    record[COMMAND_WORD] = 9;
+    assert!(
+        Command::decode_in(&record, &pool_for(&unknown)).is_err(),
+        "distance kind 9"
+    );
+}
+
+/// Another mod's pickup has a code of its own per kind: never a title weapon's, never the
+/// reader's own, and back to the same kind.
+#[test]
+fn another_mods_pickup_codes_are_one_per_kind_and_collide_with_nothing() {
+    let mut seen = [false; 256];
+    for weapon in Weapon::ALL {
+        seen[usize::from(weapon.code())] = true;
+    }
+    seen[usize::from(Pickup::None.code())] = true;
+    seen[usize::from(Pickup::Ours.code())] = true;
+    for kind in 0..MAX_PICKUP_KINDS {
+        let code = Pickup::Other(kind).code();
+        assert!(!seen[usize::from(code)], "kind {kind} reuses code {code}");
+        seen[usize::from(code)] = true;
+        assert_eq!(Pickup::from_code(code), Some(Pickup::Other(kind)));
+    }
+}
+
+#[test]
+fn an_aim_quantises_to_steps_saturates_and_survives_the_buffer() {
+    let aim = Aim::from_offset(61.0, -3.0, 0.4);
+    assert_eq!((aim.forward, aim.right, aim.up), (31, -2, 0));
+    assert_eq!((aim.ahead(), aim.across(), aim.above()), (62.0, -4.0, 0.0));
+    let far = Aim::from_offset(1.0e9, -1.0e9, f32::NAN);
+    assert_eq!((far.forward, far.right, far.up), (127, -127, 0));
+    assert_eq!(Aim::decode(&aim.encode()), aim);
+
+    let mut aiming = Aiming::default();
+    aiming.set(2, 5, aim);
+    aiming.set(AIM_SLOTS, 0, aim);
+    let mut io = [0; IO_LEN];
+    aiming.write(&mut io);
+    let sections = Sections::split(&mut io);
+    assert_eq!(read_aim(sections.crafts, 2, 5), aim);
+    assert_eq!(
+        read_aim(sections.crafts, 5, 2),
+        Aim::default(),
+        "not symmetric"
+    );
+    assert_eq!(read_aim(sections.crafts, AIM_SLOTS, 0), Aim::default());
+}
+
+#[test]
+fn a_cone_is_in_front_inside_the_range_and_within_its_spread() {
+    let at = |forward, right, up| Aim::from_offset(forward, right, up);
+    assert!(at(50.0, 10.0, 0.0).in_cone(100.0, 0.3));
+    assert!(!at(50.0, 20.0, 0.0).in_cone(100.0, 0.3), "too far across");
+    assert!(!at(50.0, 0.0, 20.0).in_cone(100.0, 0.3), "too far up");
+    assert!(!at(150.0, 0.0, 0.0).in_cone(100.0, 0.3), "out of range");
+    assert!(!at(-50.0, 0.0, 0.0).in_cone(100.0, 0.3), "behind");
+    assert!(!at(0.0, 0.0, 0.0).in_cone(100.0, 0.3), "on top of it");
+}
+
+#[test]
+fn a_mod_sound_round_trips_each_mode_and_refuses_a_mode_the_abi_lacks() {
+    for mode in SoundMode::ALL {
+        let command = Command::PlayModSound {
+            slot: slot(3),
+            sound: ModName::new("transit").unwrap(),
+            mode,
+        };
+        assert_eq!(round_trip(&command), Ok(command));
+    }
+    let once = Command::PlayModSound {
+        slot: slot(1),
+        sound: ModName::new("transit").unwrap(),
+        mode: SoundMode::Once,
+    };
+    let mut record = once.encode_pooled(0);
+    record[COMMAND_WORD] = 3;
+    assert!(matches!(
+        Command::decode_in(&record, &pool_for(&once)),
+        Err(Malformed::ModSound { word: 3, .. })
+    ));
+}
+
+/// `portal-view`'s exit word is a progress's `f32` bits, or a trigger: the sign bit and the
+/// index. The progress form is the word it always was.
+#[test]
+fn a_portal_views_exit_is_a_progress_or_a_trigger() {
+    let view = |exit| Command::PortalView {
+        slot: slot(2),
+        entrance: 10.0,
+        exit,
+        radius: 8,
+        update: crate::ViewUpdate::Continuous,
+        generation: 1,
+    };
+    let progress = view(crate::Distance::Progress(20.0));
+    let trigger = view(crate::Distance::Trigger(7));
+    assert_eq!(hex(&progress.encode()), "24020608000020410000a041");
+    assert_eq!(hex(&trigger.encode()), "240206080000204107000080");
+    for command in [progress, trigger] {
+        assert_eq!(Command::decode(&command.encode()), Ok(command));
+    }
+    for exit in [
+        crate::Distance::Units(5.0),
+        crate::Distance::Lap(0.5),
+        crate::Distance::Progress(-1.0),
+    ] {
+        assert!(
+            Command::decode(&view(exit).encode()).is_err(),
+            "{exit:?} is not a portal's exit"
+        );
+    }
+}
+
+fn a_race() -> RaceInfo {
+    RaceInfo {
+        title: channel_key("wipeout-hd"),
+        class: channel_key("venom"),
+        mode: RaceMode::Eliminator,
+        weapons: true,
+        campaign: false,
+        people: 2,
+        crafts: 8,
+        options: [3, 0, 1, 2],
+    }
+}
+
+#[test]
+fn a_race_description_reads_back_as_written() {
+    let mut io = [0xAA; IO_LEN];
+    for mode in RaceMode::ALL {
+        for (weapons, campaign) in [(false, false), (true, false), (false, true), (true, true)] {
+            let race = RaceInfo {
+                mode: *mode,
+                weapons,
+                campaign,
+                ..a_race()
+            };
+            race.write(&mut io);
+            assert_eq!(RaceInfo::read(&io), Some(race));
+        }
+    }
+}
+
+#[test]
+fn a_race_description_with_an_unknown_mode_does_not_read() {
+    let mut io = [0; IO_LEN];
+    a_race().write(&mut io);
+    for code in [0, RaceMode::ALL.len() as u8 + 1, 255] {
+        io[RACE_MODE_AT] = code;
+        assert_eq!(RaceInfo::read(&io), None, "mode code {code}");
+    }
 }

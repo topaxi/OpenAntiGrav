@@ -79,11 +79,37 @@ fn altimas_own_sun_and_ambient_are_drawn_not_the_stand_in_rig() {
         light_line.contains("ambient [0.15, 0.25, 0.38]"),
         "expected Altima's own Constant ambient colour (0.15, 0.25, 0.38); was {light_line}"
     );
-    // 2048 authors the Nova triple too (`1 0 1 0`), but its shader is unread:
-    // only Wipeout: Omega Collection's PS4 container takes the Nova path.
+    // 2048's lightmapped and vertex-lit programs take the Nova triple too (`novaScaleBiasPower`,
+    // read off the USSE programs): the rig is flagged, with the power held at 1 because those
+    // programs never read it.
     assert_eq!(
-        loaded.light.nova, 0.0,
-        "2048 must not take Omega's prelit combination"
+        loaded.light.nova, 1.0,
+        "2048 takes the Nova combine (scale * lightmap + bias, no constant ambient)"
+    );
+    // The Vita's lightmap atlases and its `NOVAColor` vertex light reach the draw: before
+    // 2026-10-31 `Material::lightmap` was `None` on every Vita material and `lightmapUV` was
+    // read against the PS4's half type, so the report carried neither phrase.
+    let model_line = loaded
+        .report
+        .iter()
+        .find(|line| line.contains("lightmap atlas(es) bound"))
+        .unwrap_or_else(|| {
+            panic!(
+                "no lightmap atlas was bound on Altima; was {:#?}",
+                loaded.report
+            )
+        });
+    assert!(
+        model_line.contains(", 0 unresolved"),
+        "an Altima lightmap atlas did not resolve: {model_line}"
+    );
+    assert!(
+        !model_line.contains("; 0 lightmap atlas(es) bound"),
+        "no atlas bound: {model_line}"
+    );
+    assert!(
+        model_line.contains("lit by their NOVAColor vertex stream"),
+        "no submesh took its NOVAColor vertex light: {model_line}"
     );
     altima_draws_its_own_wo_composite(&loaded);
 }
@@ -247,4 +273,32 @@ fn a_dlc_circuit_lights_and_fogs_with_the_packs_copy() {
             );
         }
     }
+}
+
+/// Vineta K's blue floor panels are `diffuse_normal_specular_emmissive_alpha`, whose program adds
+/// `Texture2Alpha.rgb^2 * Constant1` after the light. The load must admit them (38 blue
+/// submeshes share a few materials): the report carries the count, and none is left to the
+/// generic reading.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn vineta_ks_blue_panels_add_their_emissive_after_the_light() {
+    let Some(source) = source() else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: source.display().to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        track: Some("Data\\art\\published\\DLC1\\environments\\Vineta_K\\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .unwrap_or_else(|e| panic!("loading Vineta K: {e:#}"));
+    let line = loaded
+        .report
+        .iter()
+        .find(|line| line.contains("emissive-alpha material(s)"))
+        .unwrap_or_else(|| panic!("no emissive add admitted; was {:#?}", loaded.report));
+    assert!(
+        line.contains("(0 left to the generic reading)"),
+        "a family material was not admitted: {line}"
+    );
 }

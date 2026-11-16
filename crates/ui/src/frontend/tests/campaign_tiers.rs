@@ -29,17 +29,22 @@ fn patched_xml() -> String {
     )
 }
 
+/// A downloadable campaign's node, `x` and `y` in its cell steps from 1: three
+/// columns and two rows of the canvas a step, from the bias.
 fn cell(name: &str, x: f32, y: f32) -> MapEvent {
     MapEvent {
         name: name.to_string(),
-        x,
-        y,
+        x: 55.0 + 3.0 * (x - 1.0),
+        y: 25.0 + 2.0 * (y - 1.0),
         detail: "circuit / mode".to_string(),
         requires: None,
         kind: EventIcon::Race,
         forced_craft: None,
         refused_craft: Vec::new(),
         card: EventCard::default(),
+        role: oag_title::MapRole::default(),
+        rank_gated: false,
+        rank_required: None,
     }
 }
 
@@ -111,7 +116,9 @@ fn a_pointer_opens_a_tier_from_its_tile_and_launches_one_of_its_cells() {
         .draw_list()
         .iter()
         .find_map(|draw| match draw {
-            Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(*rect),
+            Draw::Fill { rect, color } if (rect[2] - 119.4).abs() < 0.1 && color[3] == 1.0 => {
+                Some(*rect)
+            }
             _ => None,
         })
         .expect("a node on the map");
@@ -172,6 +179,23 @@ fn leaving_for_the_mode_grid_and_choosing_single_player_brings_its_map_back() {
     );
 }
 
+/// Back on the grid with HD's map still the one on screen, its tile is still
+/// drawn and opens it again (it was hidden: only parked maps were asked).
+#[test]
+fn back_from_a_campaign_map_its_tile_still_shows_and_opens_it_again() {
+    let hd_rect = [500.0, 95.0, 135.0, 135.0];
+    let (mut frontend, mut input) = on_the_grid(vec![hd()]);
+    choose(&mut frontend, &mut input, 1);
+    assert_eq!(frontend.campaign_tile(), Some("FE_RC_HD"));
+    press(&mut frontend, &mut input, Button::Circle);
+    assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
+    assert!(frontend.has_campaign_tier("FE_RC_HD"));
+    tile_fill(&frontend, hd_rect);
+    choose(&mut frontend, &mut input, 1);
+    assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
+    assert_eq!(frontend.campaign_tile(), Some("FE_RC_HD"));
+}
+
 /// The tile's own colour on the grid: the fill of its rect.
 fn tile_fill(frontend: &Frontend, rect: [f32; 4]) -> [f32; 4] {
     frontend
@@ -189,7 +213,9 @@ fn the_tile_draws_as_enabled_with_its_package_and_a_network_mode_as_gated() {
     let hd_rect = [500.0, 95.0, 135.0, 135.0];
     let sp_rect = [320.0, 95.0, 140.0, 140.0];
     let mp_rect = [228.0, 320.0, 140.0, 140.0];
-    let (with, _) = on_the_grid(vec![hd()]);
+    let (mut with, _) = on_the_grid(vec![hd()]);
+    // The plain colours: no pad focus on the first tile.
+    with.set_pad_driving(false);
     assert_eq!(
         tile_fill(&with, hd_rect),
         tile_fill(&with, sp_rect),
@@ -216,8 +242,14 @@ fn a_save_and_a_lock_reach_a_map_that_is_not_on_screen() {
         frontend.campaign_event_state("grid0_1_2"),
         Some(ProgressState::Locked)
     );
-    // A locked cell refuses to launch, as a gated event does.
-    press(&mut frontend, &mut input, Button::Right);
+    // A locked cell refuses to launch, as a gated event does. The d-pad does
+    // not land on it, so the selection is put there.
+    let locked = frontend
+        .campaign_events()
+        .iter()
+        .position(|event| event.name == "grid0_1_2")
+        .unwrap();
+    frontend.campaign.selected = locked;
     press(&mut frontend, &mut input, Button::Cross);
     assert!(!frontend.is_finished());
     let notes = frontend.take_notes();
@@ -269,7 +301,8 @@ fn the_shell_helper_reaches_the_single_player_map_unchanged() {
 /// its own blue whatever the network state (`mode_grid.rs`).
 #[test]
 fn adhoc_is_as_blue_as_single_player_and_multiplayer_is_grey() {
-    let (frontend, _) = on_the_grid(vec![hd()]);
+    let (mut frontend, _) = on_the_grid(vec![hd()]);
+    frontend.set_pad_driving(false);
     let sp = tile_fill(&frontend, [320.0, 95.0, 140.0, 140.0]);
     assert_eq!(tile_fill(&frontend, [410.0, 320.0, 140.0, 140.0]), sp);
     assert_ne!(tile_fill(&frontend, [228.0, 320.0, 140.0, 140.0]), sp);

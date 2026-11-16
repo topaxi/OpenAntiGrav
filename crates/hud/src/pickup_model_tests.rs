@@ -50,6 +50,7 @@ fn pure_pickup_sheet() -> crate::sprite::Sheet {
                 quad_extent: Some([50.0, 50.0]),
                 quad_centre: None,
                 blend: None,
+                scale: [1.0, 1.0],
             },
         ),
         (
@@ -62,6 +63,7 @@ fn pure_pickup_sheet() -> crate::sprite::Sheet {
                 quad_extent: Some([31.423_908, 6.484_658_2]),
                 quad_centre: None,
                 blend: None,
+                scale: [1.0, 1.0],
             },
         ),
         (
@@ -74,6 +76,7 @@ fn pure_pickup_sheet() -> crate::sprite::Sheet {
                 quad_extent: Some([56.622_99, 11.677_669]),
                 quad_centre: None,
                 blend: None,
+                scale: [1.0, 1.0],
             },
         ),
     ])
@@ -90,6 +93,7 @@ fn pure_pickup_context<'a>(
 ) -> Context<'a> {
     Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout,
         strings,
         sheet,
@@ -115,7 +119,7 @@ fn pure_draws_the_backdrop_grid_and_the_held_weapons_own_coloured_icon() {
     let cx = pure_pickup_context(&layout, &strings, &sheet);
 
     assert_eq!(
-        oag_pure::hud::PICKUP_ICON_MODELS[Weapon::Turbo as usize],
+        oag_pure::hud::PICKUP_ICON_MODELS[Weapon::Turbo.index()],
         Some("TURBO_icon")
     );
 
@@ -151,13 +155,14 @@ fn pure_draws_the_backdrop_grid_and_the_held_weapons_own_coloured_icon() {
         argb_to_rgba(0xff40_ff40),
         "TURBO_icon's own colour"
     );
-    // Centred on the model's authored (240, 250), the quad's own width and
-    // height either side.
+    // Centred on the model's authored (240, 250) with `y` counted up from the
+    // bottom of the 272-high screen (the original draws the box at the top
+    // middle), the quad's own width and height either side.
     assert_eq!(
         rect,
         [
             240.0 - 31.423_908 / 2.0,
-            250.0 - 6.484_658_2 / 2.0,
+            (272.0 - 250.0) - 6.484_658_2 / 2.0,
             31.423_908,
             6.484_658_2
         ]
@@ -197,7 +202,7 @@ fn a_weapon_with_no_icon_model_still_draws_the_backdrop_and_nothing_else() {
     let cx = pure_pickup_context(&layout, &strings, &sheet);
 
     assert_eq!(
-        oag_pure::hud::PICKUP_ICON_MODELS[Weapon::Shuriken as usize],
+        oag_pure::hud::PICKUP_ICON_MODELS[Weapon::Shuriken.index()],
         None,
         "this test is asserting the no-icon path, which only fires when this is None"
     );
@@ -217,6 +222,7 @@ fn a_title_with_no_icon_model_table_draws_nothing_through_this_path() {
     let sheet = crate::sprite::Sheet::default();
     let cx = Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,
@@ -229,5 +235,65 @@ fn a_title_with_no_icon_model_table_draws_nothing_through_this_path() {
     assert!(oag_pulse::hud::ART.pickup_icon_models.is_none());
     assert!(
         pickup_model_draws(&cx, Weapon::Turbo, &super::ext_draws::Outputs::default()).is_empty()
+    );
+}
+
+/// A mod's own PNG on Pure draws over the backdrop grid, centred on the grid's quad at its own
+/// size, not nothing: the grid is the frame and the icon is the glyph alone.
+#[test]
+fn a_mod_icon_on_pure_draws_centred_on_the_backdrop_grid() {
+    use crate::sprite::Placed;
+    use oag_tables::pickup_look::{Colour, Icon, PickupLook};
+    use oag_tables::weapons::{ModKind, Weapon};
+    let layout = Layout::from_xml(PURE_PICKUP_ICONS);
+    let strings = strings();
+    let mut sheet = crate::sprite::Sheet::placed_at(&[
+        (
+            r"Data\HUD\grid.vex",
+            Placed {
+                x: 0,
+                y: 0,
+                width: 64,
+                height: 64,
+                quad_extent: Some([70.0, 40.0]),
+                quad_centre: None,
+                blend: None,
+                scale: [1.0, 1.0],
+            },
+        ),
+        (
+            "mod:test/glyph",
+            Placed {
+                x: 64,
+                y: 0,
+                width: 64,
+                height: 36,
+                quad_extent: None,
+                quad_centre: None,
+                blend: None,
+                scale: [1.0, 1.0],
+            },
+        ),
+    ]);
+    sheet.width = 128;
+    let cx = pure_pickup_context(&layout, &strings, &sheet);
+    let ext = super::ext_draws::Outputs {
+        pickup_look: Some(PickupLook {
+            icon: Icon::Mod("mod:test/glyph".into()),
+            colour: Colour::Rgba([0, 0, 0, 0]),
+        }),
+        ..super::ext_draws::Outputs::default()
+    };
+    let held = Weapon::Extension(ModKind::FIRST);
+    // The backdrop is drawn, and no title icon with it.
+    assert_eq!(pickup_model_draws(&cx, held, &ext).len(), 1);
+    let Some(Draw::Sprite { rect, .. }) = mod_icon_draw(&cx, "mod:test/glyph", None) else {
+        panic!("a mod icon draws on Pure");
+    };
+    assert_eq!((rect[2], rect[3]), (64.0, 36.0), "at its own size");
+    assert_eq!(
+        (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5),
+        (240.0, 272.0 - 250.0),
+        "centred on the grid"
     );
 }

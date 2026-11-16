@@ -200,3 +200,11 @@ fn tune_at_scale_clamps_outside_its_domain() {
     let elite = Difficulty::Elite.tune(&measured);
     assert!((above.lateral_accel - elite.lateral_accel).abs() <= f32::EPSILON);
 }
+
+#[test]
+fn the_level_runs_easy_to_hard_and_the_default_is_medium() {
+    assert_eq!(Difficulty::Novice.level(), 0);
+    assert_eq!(Difficulty::Skilled.level(), 1);
+    assert_eq!(Difficulty::default().level(), 1);
+    assert_eq!(Difficulty::Ace.level(), 2);
+}

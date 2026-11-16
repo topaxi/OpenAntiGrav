@@ -1,6 +1,12 @@
 //! What the wall-contact response in [`super`] is asserted to do. Split out of `wall.rs` under the
 //! 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use super::*;
 use crate::collide::{CollisionWorld, TriangleSoup};
 use crate::params::Dimensions;
@@ -500,6 +506,38 @@ fn a_sample_point_behind_two_walls_is_scrubbed_twice() {
         state.body.linear_velocity.z < five,
         "{:?} should have lost more than the five-contact case's {five}",
         state.body.linear_velocity
+    );
+}
+
+/// The frame's largest single contact is reported beside the sum, with its normal
+/// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "Who fills them: the ring walk").
+/// Ten contacts here, so the largest is strictly between a tenth of the sum and the sum.
+#[test]
+fn the_largest_contact_impulse_is_reported_beside_the_sum() {
+    let mut world = CollisionWorld::new();
+    push_quad(&mut world, 1.5, Surface::Wall, 0);
+    push_quad(&mut world, 1.6, Surface::Wall, 1);
+
+    let mut state = ship_at(1.0, 0.0);
+    state.body.linear_velocity = Vec3::new(0.0, 0.0, 40.0);
+
+    let response = resolve(&mut state, &handling(), &Environment::default(), &world);
+
+    assert_eq!(response.resolved_count, 10, "{response:?}");
+    assert!(response.impulse_largest > 0.0, "{response:?}");
+    assert!(
+        response.impulse_largest < response.impulse_sum,
+        "one of ten contacts is less than their sum: {response:?}"
+    );
+    assert!(
+        response.impulse_largest * 10.0 >= response.impulse_sum,
+        "the largest of ten is at least their mean: {response:?}"
+    );
+    let normal = response.impulse_largest_normal;
+    assert!((normal.length() - 1.0).abs() < 1e-5, "{normal:?}");
+    assert!(
+        normal.x.abs() > 0.99,
+        "a wall facing the ship's side: {normal:?}"
     );
 }
 

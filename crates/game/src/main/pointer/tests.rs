@@ -210,3 +210,39 @@ fn losing_focus_with_a_finger_down_lifts_it() {
     assert!(tick.released && !tick.clicked, "{tick:?}");
     assert_eq!(tick.drag, (0.0, 0.0));
 }
+
+#[test]
+fn a_held_left_button_pans_when_the_screen_asks_and_a_tap_clicks_on_release() {
+    let mut window = Window::default();
+    window.set_mouse_pans(true);
+    window.cursor_moved(100.0, 100.0);
+    window.take();
+    window.button(MouseButton::Left, ElementState::Pressed);
+    let down = window.take();
+    assert!(down.pressed && !down.clicked, "a press alone is not a click: {down:?}");
+    window.cursor_moved(140.0, 130.0);
+    window.cursor_moved(160.0, 150.0);
+    window.button(MouseButton::Left, ElementState::Released);
+    let lift = window.take();
+    assert_eq!(lift.drag, (60.0, 50.0));
+    assert!(lift.released && !lift.clicked && !lift.moved);
+
+    window.button(MouseButton::Left, ElementState::Pressed);
+    window.take();
+    window.button(MouseButton::Left, ElementState::Released);
+    let tap = window.take();
+    assert!(tap.clicked && tap.moved && tap.released);
+    assert_eq!(tap.at, Some((160.0, 150.0)), "the mouse stays where it clicked");
+}
+
+#[test]
+fn the_left_button_clicks_on_the_press_when_the_screen_does_not_pan() {
+    let mut window = Window::default();
+    window.cursor_moved(10.0, 20.0);
+    window.take();
+    window.button(MouseButton::Left, ElementState::Pressed);
+    let down = window.take();
+    assert!(down.clicked && !down.pressed);
+    window.cursor_moved(80.0, 90.0);
+    assert_eq!(window.take().drag, (0.0, 0.0));
+}

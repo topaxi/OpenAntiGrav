@@ -15,6 +15,19 @@ use oag_ui::language::StringTable;
 use oag_ui::menu::{Added, Definition, Error, For, ModMenu};
 use oag_ui::strings;
 
+/// The title a texture pack's `[games]` serial belongs to, as a mod's `titles` spells it.
+fn pack_title(serial: &str) -> Option<String> {
+    oag_source::title::by_serial(serial).map(|title| title.slug())
+}
+
+/// Whether `module` is for a source of `platform`. A mod is, except a PPSSPP texture pack
+/// (`[texture-pack]` is `ppsspp`, the only format), which is keyed by the PSP's guest memory
+/// and so is the PSP's alone: Pulse PS2 is the same title, and still not a PSP.
+#[must_use]
+pub fn is_for_platform(module: &oag_mod::Mod, platform: oag_assets::Platform) -> bool {
+    module.manifest.texture_pack.is_none() || platform == oag_assets::Platform::Psp
+}
+
 #[derive(Debug)]
 /// The mods this run has: the built-in extras and what the search found.
 ///
@@ -70,12 +83,21 @@ pub struct Listing {
     /// The player's switch for it: `None` for a candidate that never opened (its id is a
     /// file name, nothing to switch). The built-in is always `Some(true)`.
     pub enabled: Option<bool>,
+    /// What the mod is when the player has not switched it: off for a texture pack.
+    pub default_enabled: bool,
+    /// Whether the mod is a texture pack, which adds no rows.
+    pub texture_pack: bool,
     /// Why it is not in the game, when it is not.
     pub error: Option<String>,
     /// What of it is left out while the mod itself is in, as detail lines (label,
     /// value): the mod a campaign needs that is off or missing, or a campaign file that
     /// did not compile ([`note_left_out`]). The log has the whole reason.
     pub problems: Vec<(String, String)>,
+    /// The channels its modules and its track files send, and the ones it hears
+    /// (`[channels]`; the track files' own `publishes` count as sent).
+    pub publishes: Vec<String>,
+    /// See [`Self::publishes`].
+    pub listens: Vec<String>,
 }
 
 /// The string id and English text of each label and word the MODS page draws.
@@ -96,6 +118,8 @@ pub mod words {
     pub const LICENSE_FILE: (&str, &str) = ("OAG_MODS_LICENSE_FILE", "SEE %s");
     /// A mod that added no row.
     pub const NOTHING: (&str, &str) = ("OAG_MODS_NOTHING", "NOTHING");
+    /// What a texture pack that is on adds.
+    pub const TEXTURE_PACK: (&str, &str) = ("OAG_MODS_TEXTURE_PACK", "TEXTURES");
     /// The ADDS line of a mod the player turned off: it adds nothing while off.
     pub const TURNED_OFF: (&str, &str) = ("OAG_MODS_TURNED_OFF", "NOTHING, TURNED OFF");
     /// The ENABLED row's two values.
@@ -116,8 +140,23 @@ pub mod words {
     pub const NEEDS_OFF: (&str, &str) = ("OAG_MODS_NEEDS_OFF", "%s, OFF");
     /// After the needed mod's id: no such mod is installed.
     pub const NEEDS_MISSING: (&str, &str) = ("OAG_MODS_NEEDS_MISSING", "%s, MISSING");
+    /// After NEEDS: a title's disc the mod draws from, and this machine has none of; `%s` is the title.
+    pub const NEEDS_DISC: (&str, &str) = ("OAG_MODS_NEEDS_DISC", "%s DISC");
+    /// The detail line naming the event channels a mod sends.
+    pub const SENDS: (&str, &str) = ("OAG_MODS_SENDS", "SENDS");
+    /// The detail line naming the event channels a mod hears.
+    pub const HEARS: (&str, &str) = ("OAG_MODS_HEARS", "HEARS");
+    /// The warning line naming a channel a mod hears that no loaded mod or track sends.
+    pub const NO_ONE_SENDS: (&str, &str) = ("OAG_MODS_NO_ONE_SENDS", "NO ONE SENDS");
     /// The page RACE CAMPAIGN opens once a mod adds a campaign (ADR-0077).
     pub const CAMPAIGN_PICKER: (&str, &str) = ("OAG_MENU_CAMPAIGN_PICKER", "CAMPAIGNS");
+    /// The campaign picker's last row, which opens the campaign editor.
+    pub const CAMPAIGN_EDITOR: (&str, &str) = ("OAG_MENU_CAMPAIGN_EDITOR", "NEW CAMPAIGN");
+    /// That row's second line.
+    pub const CAMPAIGN_EDITOR_SUBTITLE: (&str, &str) = (
+        "OAG_MENU_CAMPAIGN_EDITOR_SUBTITLE",
+        "Place events on the hex grid and save them as a campaign",
+    );
     /// The built-in mod's mark after its name.
     pub const BUILT_IN: (&str, &str) = ("OAG_MODS_BUILT_IN", "BUILT IN");
 }
@@ -188,6 +227,17 @@ pub fn note_left_out(
             }
         }
     }
+    for (mod_id, title) in &installed.needs_discs {
+        if let Some(entry) = listing.iter_mut().find(|entry| &entry.id == mod_id) {
+            let line = (
+                say(words::NEEDS),
+                say(words::NEEDS_DISC).replace("%s", &title.to_ascii_uppercase()),
+            );
+            if !entry.problems.contains(&line) {
+                entry.problems.push(line);
+            }
+        }
+    }
     for (mod_id, reason) in &installed.failed {
         let needs = installed.needs.iter().any(|(m, _, _)| m == mod_id);
         let file = reason.split(':').next().unwrap_or(reason);
@@ -200,9 +250,34 @@ pub fn note_left_out(
     }
 }
 
-/// The mod the MODS page's MOD row is on, open or not.
+/// Puts a NO ONE SENDS line on each mod that is on and hears a channel no mod that is on
+/// (or track file of one) sends. A warning, never a refusal: the sender may simply be off.
+pub fn note_channels(listing: &mut [Listing], strings: &StringTable) {
+    let say = |(id, english): (&str, &str)| strings.get_or_fallback(id, english).to_string();
+    let on = |entry: &Listing| entry.error.is_none() && entry.enabled != Some(false);
+    let sent: BTreeSet<String> = (listing.iter())
+        .filter(|entry| on(entry))
+        .flat_map(|entry| entry.publishes.iter().cloned())
+        .collect();
+    for entry in listing.iter_mut().filter(|entry| on(entry)) {
+        for channel in entry.listens.clone() {
+            if !sent.contains(&channel) {
+                let line = (say(words::NO_ONE_SENDS), channel);
+                if !entry.problems.contains(&line) {
+                    entry.problems.push(line);
+                }
+            }
+        }
+    }
+}
+
+/// The id of the mod the MODS page's MOD row is on, open or not.
+///
+/// The row is stored nowhere (a settings key would be the wrong place for a cursor), so a menu
+/// model built again starts on the first mod: a rebuild that keeps the player where they stood
+/// reads this off the old model and [`reseat`]s the new one.
 #[must_use]
-pub fn selected<'a>(model: &oag_ui::menu::Menu, listing: &'a [Listing]) -> Option<&'a Listing> {
+pub fn selection(model: &oag_ui::menu::Menu) -> Option<String> {
     let held = model
         .definition()
         .pages
@@ -213,7 +288,26 @@ pub fn selected<'a>(model: &oag_ui::menu::Menu, listing: &'a [Listing]) -> Optio
     let oag_ui::menu::Value::Text(id) = held else {
         return None;
     };
+    Some(id)
+}
+
+/// The mod the MODS page's MOD row is on, open or not.
+#[must_use]
+pub fn selected<'a>(model: &oag_ui::menu::Menu, listing: &'a [Listing]) -> Option<&'a Listing> {
+    let id = selection(model)?;
     listing.iter().find(|mod_| mod_.id == id)
+}
+
+/// Puts the MOD row of a menu model built again on the mod `id` and gives the ENABLED row
+/// that mod's switch.
+pub fn reseat(
+    model: &mut oag_ui::menu::Menu,
+    id: &str,
+    listing: &[Listing],
+    strings: &StringTable,
+) {
+    model.seed(SELECTED, &oag_ui::menu::Value::Text(id.to_string()));
+    resupply_switch(model, listing, strings);
 }
 
 /// Supplies and seeds the ENABLED row for whichever mod the MOD row holds.
@@ -224,18 +318,42 @@ pub fn resupply_switch(model: &mut oag_ui::menu::Menu, listing: &[Listing], stri
     let (choices, value) = switch_for(mod_, strings);
     model.supply(oag_ui::menu::ValueSource::ModSwitch, &choices);
     model.seed(ENABLED, &oag_ui::menu::Value::Text(value.to_string()));
+    let has_settings = settings_page(model, listing).is_some();
+    model.offer(oag_ui::menu::Action::OpenModSettings, has_settings);
+}
+
+/// The settings page (its tree id) of the mod the MOD row is on, when that mod is on and its
+/// `menu.toml` names one: what the SETTINGS row opens. An off mod's pages are not in the tree.
+#[must_use]
+pub fn settings_page(model: &oag_ui::menu::Menu, listing: &[Listing]) -> Option<String> {
+    let mod_ = selected(model, listing)?;
+    model.definition().mod_settings.get(&mod_.id).cloned()
 }
 
 /// Turns `id` on or off in `disabled`. Returns whether anything changed. The built-in is
 /// never turned off ([`words::ALWAYS_ON`]).
-pub fn switch(disabled: &mut BTreeSet<String>, id: &str, on: bool) -> bool {
+///
+/// `default_enabled` is the mod's own ([`Listing::default_enabled`]): a mod that starts off is
+/// switched through `switches.enabled`, every other through `switches.disabled`.
+pub fn switch(
+    switches: &mut crate::settings::Mods,
+    id: &str,
+    on: bool,
+    default_enabled: bool,
+) -> bool {
     if id == oag_mod::extras::ID {
         return false;
     }
-    if on {
-        disabled.remove(id)
+    let (set, other) = if default_enabled {
+        (&mut switches.disabled, &mut switches.enabled)
     } else {
-        disabled.insert(id.to_string())
+        (&mut switches.enabled, &mut switches.disabled)
+    };
+    other.remove(id);
+    if on == default_enabled {
+        set.remove(id)
+    } else {
+        set.insert(id.to_string())
     }
 }
 
@@ -279,8 +397,18 @@ impl Listing {
             rows,
             builtin,
             enabled: Some(enabled || builtin),
+            default_enabled: m.default_enabled,
+            texture_pack: m.texture_pack.is_some(),
             error,
             problems: Vec::new(),
+            publishes: m
+                .channels
+                .publishes
+                .iter()
+                .cloned()
+                .chain(module.track_channels())
+                .collect(),
+            listens: m.channels.listens.clone(),
         }
     }
 
@@ -294,8 +422,12 @@ impl Listing {
             rows: Vec::new(),
             builtin: false,
             enabled: None,
+            default_enabled: true,
+            texture_pack: false,
             error: Some(failed.cause().to_string()),
             problems: Vec::new(),
+            publishes: Vec::new(),
+            listens: Vec::new(),
         }
     }
 
@@ -331,6 +463,8 @@ impl Listing {
         };
         let adds = if self.enabled == Some(false) {
             say(words::TURNED_OFF)
+        } else if self.texture_pack {
+            say(words::TEXTURE_PACK)
         } else if self.rows.is_empty() {
             say(words::NOTHING)
         } else {
@@ -343,19 +477,34 @@ impl Listing {
             (say(words::LICENSE), fit(&license)),
             (say(words::ADDS), fit(&adds)),
         ];
+        for (word, channels) in [
+            (words::SENDS, &self.publishes),
+            (words::HEARS, &self.listens),
+        ] {
+            if self.enabled != Some(false) && !channels.is_empty() {
+                lines.push((say(word), fit(&channels.join(", "))));
+            }
+        }
         lines.extend((self.problems.iter()).map(|(label, value)| (label.clone(), fit(value))));
         lines
     }
 
     /// [`Self::table`] cut to `room` lines: the ones a player can do least with go
-    /// first (AUTHORS, then VERSION, then LICENSE), the rest keep their order. A
+    /// first (AUTHORS, then VERSION, then LICENSE, then SENDS and HEARS, so a warning line
+    /// such as NO ONE SENDS outlasts the channels it is about), the rest keep their order. A
     /// flat-list front end (Pulse) has room for four under the MODS page's rows, HD
     /// for all.
     #[must_use]
     pub fn table_within(&self, strings: &StringTable, room: usize) -> Vec<(String, String)> {
         let say = |(id, english): (&str, &str)| strings.get_or_fallback(id, english).to_string();
         let mut lines = self.table(strings);
-        for least in [words::AUTHORS, words::VERSION, words::LICENSE] {
+        for least in [
+            words::AUTHORS,
+            words::VERSION,
+            words::LICENSE,
+            words::SENDS,
+            words::HEARS,
+        ] {
             if lines.len() <= room {
                 break;
             }
@@ -371,15 +520,36 @@ fn game_version() -> semver::Version {
         .unwrap_or_else(|_| semver::Version::new(0, 0, 0))
 }
 
+/// Whether a race with `m` on differs from one without: it carries a simulation module, a
+/// `tracks/*.track.toml` or a `campaigns/*.toml`.
+fn changes_a_race(m: &oag_mod::Mod) -> bool {
+    m.manifest.extension.as_ref().is_some_and(|e| e.simulation)
+        || m.files_under("tracks", "toml")
+            .iter()
+            .any(|name| name.ends_with(".track.toml"))
+        || !m.files_under("campaigns", "toml").is_empty()
+}
+
 impl Mods {
-    /// The extras and whatever lies on the default search path, with the mods in
-    /// `disabled` (the player's `settings::Mods::disabled`) turned off.
+    /// The extras and whatever lies on the default search path, with the mods the player's
+    /// switches (`settings::Mods`) turn off turned off.
     ///
     /// # Errors
     ///
     /// The built-in extras will not open, which is a build defect.
-    pub fn load(disabled: &BTreeSet<String>) -> Result<Self> {
-        Self::load_from(&oag_mod::mods_search_path(), disabled)
+    pub fn load(switches: &crate::settings::Mods) -> Result<Self> {
+        static CHECKED: std::sync::Once = std::sync::Once::new();
+        CHECKED.call_once(|| {
+            for line in stale_submodules(oag_net::SUBMODULE_PINS, |path| {
+                path.join(".git")
+                    .exists()
+                    .then(|| oag_mod::checkout_head(path))
+                    .flatten()
+            }) {
+                log::warn!("{line}");
+            }
+        });
+        Self::load_from(&oag_mod::mods_search_path(), switches)
     }
 
     /// [`Self::load`] with the switches of the profile's own settings file: for a
@@ -390,19 +560,31 @@ impl Mods {
     /// As [`Self::load`].
     pub fn load_for_profile() -> Result<Self> {
         let settings = crate::settings::load().unwrap_or_default();
-        Self::load(&settings.mods.disabled)
+        Self::load(&settings.mods)
     }
 
-    /// The extras and whatever lies in `bases`, `disabled` turned off.
+    /// The extras and whatever lies in `bases`, the mods `switches` turn off turned off.
     ///
     /// # Errors
     ///
     /// As [`Self::load`].
-    pub fn load_from(bases: &[PathBuf], disabled: &BTreeSet<String>) -> Result<Self> {
+    pub fn load_from(bases: &[PathBuf], switches: &crate::settings::Mods) -> Result<Self> {
         let extras = oag_mod::extras::builtin().context("opening the built-in oag-extras")?;
-        let found = oag_mod::load(bases, &game_version());
-        let mut disabled = disabled.clone();
+        let mut found = oag_mod::load(bases, &game_version());
+        for module in &mut found.mods {
+            oag_mod::texture_pack::assign_titles(&mut module.manifest, &pack_title);
+        }
+        let mut disabled = switches.disabled.clone();
         disabled.remove(oag_mod::extras::ID);
+        // A mod that starts off is off until the player has turned it on.
+        disabled.extend(
+            found
+                .mods
+                .iter()
+                .filter(|m| !m.manifest.default_enabled)
+                .map(|m| m.manifest.id.clone())
+                .filter(|id| !switches.enabled.contains(id)),
+        );
         Ok(Self {
             extras,
             player: found.mods,
@@ -417,7 +599,7 @@ impl Mods {
     ///
     /// As [`Self::load`].
     pub fn extras_only() -> Result<Self> {
-        Self::load_from(&[], &BTreeSet::new())
+        Self::load_from(&[], &crate::settings::Mods::default())
     }
 
     /// Whether the mod `id` is turned off.
@@ -437,17 +619,29 @@ impl Mods {
             .collect()
     }
 
-    /// A fingerprint of the player mods loaded (id and release of each, in id order; the built-in
-    /// extras are the build's own). Mods may change the simulation, so a LAN host and a joiner
-    /// must agree on it (`oag_net::discovery::compat`). FNV-1a, **chosen**. The repository's
-    /// own examples ([`oag_mod::EXAMPLES`], found when the game runs from a checkout) are left
-    /// out: they change no race a LAN session plays, and an installed joiner has none.
+    /// A fingerprint of the player mods that are on and change a race (id and release of each,
+    /// in id order; the built-in extras are the build's own): a simulation module, a track or a
+    /// campaign. A mod of pages, rows, strings or pilots is left out, so a machine with one and
+    /// a machine without can race (`docs/architecture/adr/0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md`).
+    /// FNV-1a, **chosen**. The repository's own examples ([`oag_mod::EXAMPLES`], found when the
+    /// game runs from a checkout) are left out: they change no race a LAN session plays, and an
+    /// installed joiner has none.
     #[must_use]
-    pub fn content_fingerprint(&self) -> u64 {
+    ///
+    /// A simulation module's `sim` picks (`picks`) are part of what it fingerprints, as
+    /// `id@version#row=pick` for each off index 0; a `view` pick never is.
+    pub fn content_fingerprint(&self, picks: &crate::settings::mod_settings::ModSettings) -> u64 {
         let named: Vec<String> = self
             .player()
             .filter(|m| !std::path::Path::new(&m.label()).starts_with(oag_mod::EXAMPLES))
-            .map(|m| format!("{}@{}", m.manifest.id, m.manifest.version))
+            .filter(|m| changes_a_race(m))
+            .map(|m| {
+                let picked: String = crate::mod_extensions::options_of(m, picks)
+                    .identity()
+                    .map(|(row, pick)| format!("#{row}={pick}"))
+                    .collect();
+                format!("{}@{}{picked}", m.manifest.id, m.manifest.version)
+            })
             .collect();
         oag_net::discovery::content_fingerprint(&named)
     }
@@ -457,6 +651,57 @@ impl Mods {
         self.player
             .iter()
             .filter(|m| !self.disabled.contains(&m.manifest.id))
+    }
+
+    /// [`Self::player`] for the mods whose `titles` admit `title`: what a race or a front end
+    /// on that title loads. A mod for other titles only is never loaded or offered on it.
+    pub fn player_for<'a>(
+        &'a self,
+        title: &oag_title::Title,
+    ) -> impl Iterator<Item = &'a oag_mod::Mod> + Clone + use<'a> {
+        let slug = title.slug();
+        self.player().filter(move |m| m.is_for(&slug))
+    }
+
+    /// [`Self::player_for`] without the mods that are not for `platform` ([`is_for_platform`]):
+    /// what a race or a front end on that source loads.
+    pub fn player_on<'a>(
+        &'a self,
+        title: &oag_title::Title,
+        platform: oag_assets::Platform,
+    ) -> impl Iterator<Item = &'a oag_mod::Mod> + Clone + use<'a> {
+        self.player_for(title)
+            .filter(move |m| is_for_platform(m, platform))
+    }
+
+    /// The ids of the loaded mods that are not for the source `target` builds for, which a
+    /// build treats as left out: not in the tree, the strings or the MODS page. A mod is not
+    /// for it when its `titles` leave out the title or ([`is_for_platform`]) it is made for
+    /// another platform.
+    fn left_out_for(&self, target: Option<For<'_>>) -> Vec<String> {
+        let Some(target) = target else {
+            return Vec::new();
+        };
+        let slug = target.title.slug();
+        self.player
+            .iter()
+            .filter(|m| {
+                if !m.is_for(&slug) {
+                    log::debug!("mod {}: for {:?}, not {slug}", m.label(), m.manifest.titles);
+                    return true;
+                }
+                if !is_for_platform(m, target.platform) {
+                    log::debug!(
+                        "mod {}: a PPSSPP texture pack is the PSP's, not {:?}'s",
+                        m.label(),
+                        target.platform
+                    );
+                    return true;
+                }
+                false
+            })
+            .map(|m| m.manifest.id.clone())
+            .collect()
     }
 
     /// The campaigns and tracks the mods that are on carry for `title`
@@ -511,7 +756,7 @@ impl Mods {
         language: Option<&str>,
         target: Option<For<'_>>,
     ) -> Result<Built> {
-        let mut left_out: Vec<String> = Vec::new();
+        let mut left_out = self.left_out_for(target);
         let mut problems = Vec::new();
         let mut listed = Vec::new();
         loop {
@@ -522,6 +767,7 @@ impl Mods {
                     built
                         .listing
                         .extend(self.failed.iter().map(Listing::failed));
+                    note_channels(&mut built.listing, &built.strings);
                     return Ok(built);
                 }
                 Err(error) => self.leave_out(&error, &mut left_out, &mut problems, &mut listed)?,
@@ -573,7 +819,7 @@ impl Mods {
         strings: &StringTable,
         target: Option<For<'_>>,
     ) -> Result<Built> {
-        let mut left_out: Vec<String> = Vec::new();
+        let mut left_out = self.left_out_for(target);
         let mut problems = Vec::new();
         let mut listed = Vec::new();
         loop {
@@ -590,6 +836,7 @@ impl Mods {
                     built
                         .listing
                         .extend(self.failed.iter().map(Listing::failed));
+                    note_channels(&mut built.listing, &built.strings);
                     return Ok(built);
                 }
                 Err(error) => self.leave_out(&error, &mut left_out, &mut problems, &mut listed)?,
@@ -669,11 +916,18 @@ impl Mods {
             .filter(|m| !left_out.contains(&m.manifest.id))
             .map(|module| {
                 let enabled = !self.disabled.contains(&module.manifest.id);
-                let rows = added
+                let mut rows = added
                     .iter()
                     .find(|a| a.mod_id == module.manifest.id)
                     .filter(|_| enabled)
                     .map_or_else(Vec::new, |a| a.rows.clone());
+                // A settings page is reached from this page rather than from a row, and is
+                // still something the mod adds.
+                if let Some((_, short)) = (definition.mod_settings.get(&module.manifest.id))
+                    .and_then(|page| page.split_once('/'))
+                {
+                    rows.push(short.to_string());
+                }
                 Listing::loaded(
                     module,
                     rows,
@@ -730,7 +984,7 @@ impl Mods {
                     .is_some_and(|e| e.rules.is_some() || e.track.is_some())
             {
                 lines.push(format!(
-                    "mod {}: its simulation module does not run, this build has no `extensions` feature (`just play` has it unless `OAG_NO_EXTENSIONS` is set)",
+                    "mod {}: its simulation module does not run, this build has no `extensions` feature (on by default; off on the web and iOS, or with `OAG_NO_EXTENSIONS`/`--no-default-features`)",
                     module.manifest.id
                 ));
             }
@@ -741,11 +995,38 @@ impl Mods {
             .filter(|m| self.disabled.contains(&m.manifest.id))
         {
             lines.push(format!(
-                "mod {} - turned off on the MODS page",
-                module.describe()
+                "mod {} - {}",
+                module.describe(),
+                if module.manifest.default_enabled {
+                    "turned off on the MODS page"
+                } else {
+                    "off until turned on on the MODS page (its manifest's default-enabled is false)"
+                }
             ));
         }
         lines.extend(self.failed.iter().map(|p| format!("mod problem: {p}")));
         lines
     }
+}
+
+/// A line for each submodule of `pins` (`oag_net::SUBMODULE_PINS`, paths relative to the working
+/// directory) that is checked out at another commit than the build's own pins: `git pull` moves
+/// no submodule, and the game then loads the old mod files with nothing else to say so.
+#[must_use]
+pub fn stale_submodules(
+    pins: &str,
+    head: impl Fn(&std::path::Path) -> Option<String>,
+) -> Vec<String> {
+    (pins.split(';'))
+        .filter_map(|pin| pin.split_once('='))
+        .filter_map(|(path, pinned)| {
+            let at = head(std::path::Path::new(path))?;
+            (at != pinned).then(|| {
+                format!(
+                    "{path} is at {at}, this build's commit pins {pinned}: its mods are the old files \
+                     until `git submodule update`"
+                )
+            })
+        })
+        .collect()
 }

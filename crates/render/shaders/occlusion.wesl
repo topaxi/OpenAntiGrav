@@ -13,6 +13,8 @@
 // sampling this map darkens at exactly the texel the road under it does. See
 // `docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md`.
 
+import oag_shaders::colour::srgb_encode;
+
 struct Caster {
     // The craft's sun-view view-projection times the track's model matrix.
     mvp: mat4x4<f32>,
@@ -66,6 +68,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // alpha 12 passes a quarter of the sun, not a twentieth. The encode is the pass's own
     // (the target is written through it); only the lightmap carrier is measured, and the vertex
     // carrier goes through the same write. See `docs/rendering/shadows.md`.
-    let encoded = select(1.055 * pow(mask, 1.0 / 2.4) - 0.055, mask * 12.92, mask <= 0.0031308);
+    let encoded = srgb_encode(vec3<f32>(mask)).x;
     return vec4<f32>(encoded, 0.0, 0.0, 1.0);
 }

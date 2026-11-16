@@ -23,9 +23,10 @@ pub enum TrailOrder {
     #[default]
     Original,
     /// The ribbons after the circuit's blended list, with the flares, so no
-    /// translucent floor dims them: the order this project drew before the
-    /// original's was measured. **Chosen, not measured**, for a player who
-    /// prefers the brighter trail.
+    /// translucent floor dims them. **Chosen, not measured**, for a player who
+    /// prefers the brighter trail. It moves the ribbons and nothing else: the
+    /// blended list (trees) still draws after the pads and the hulls, as in the
+    /// original.
     OverFloors,
 }
 

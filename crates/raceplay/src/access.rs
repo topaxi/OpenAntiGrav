@@ -7,6 +7,27 @@
 
 use super::*;
 
+/// How long after release a Plasma does not probe on a title that has not measured the firing
+/// craft's box, in seconds (chosen, not measured): between the last slow age and the first
+/// riding one of Pulse's recorded bolts, so a tick of rounding cannot move it.
+const UNMEASURED_PLASMA_PROBE_WINDOW: f32 = 0.04;
+
+/// The flight's probe rule for a title's own-craft box. A title that has not measured it keeps a
+/// Plasma off the probe for [`UNMEASURED_PLASMA_PROBE_WINDOW`] seconds (chosen).
+#[must_use]
+pub(crate) fn own_craft_probe_for(
+    own_box: oag_title::weapons::OwnCraftBox,
+) -> oag_weapons::projectile::OwnCraftProbe {
+    use oag_title::weapons::OwnCraftBox;
+    use oag_weapons::projectile::OwnCraftProbe;
+    match own_box {
+        OwnCraftBox::Falls => OwnCraftProbe::CraftBox,
+        OwnCraftBox::Holds => OwnCraftProbe::CraftBoxHolds,
+        OwnCraftBox::Absent => OwnCraftProbe::NoBox,
+        OwnCraftBox::PlasmaWindow => OwnCraftProbe::PlasmaWindow(UNMEASURED_PLASMA_PROBE_WINDOW),
+    }
+}
+
 impl Race {
     /// Chooses which control scheme maps the pilot's buttons.
     ///
@@ -133,6 +154,42 @@ impl Race {
     }
 
     #[cfg(feature = "view")]
+    /// How the circuit's blended list is sorted - `[render_profiles.<title>] scenery_sort`.
+    /// Render-only and idempotent like [`Self::set_trail_order`], so the frame loop sets it
+    /// every frame and the menu row applies live.
+    pub fn set_scenery_sort(&mut self, sort: oag_display::display::ScenerySort) {
+        self.view.scenery_sort = sort;
+    }
+
+    #[cfg(feature = "view")]
+    /// Whether the circuit's blended foliage lays its own depth down before the list draws
+    /// ([`oag_display::display::ScenerySort::Depth`]). Only the PSP preset's list B has a
+    /// per-mesh key to correct; HD's tube and the titles that share it keep their own order,
+    /// and the menu offers no choice there.
+    #[must_use]
+    pub fn writes_foliage_depth(&self) -> bool {
+        !self.hd_trail_active() && self.view.scenery_sort.writes_foliage_depth()
+    }
+
+    #[cfg(feature = "view")]
+    /// How long the PSP ribbons are - `[render_profiles.<title>] trail_length`. Render-only
+    /// and idempotent: the frame loop sets it every frame, and a change of length restarts
+    /// every ring, so the ribbons draw again once they are full. HD's tube has its own length
+    /// and ignores it.
+    pub fn set_trail_length(&mut self, length: oag_display::display::TrailLength) {
+        if self.view.hd_trail_active {
+            return;
+        }
+        let samples = match length {
+            oag_display::display::TrailLength::Original => oag_fx::exhaust::TRAIL_SAMPLES,
+            oag_display::display::TrailLength::Hd => oag_fx::exhaust::LONG_TRAIL_SAMPLES,
+        };
+        for exhaust in &mut self.view.exhaust {
+            exhaust.set_trail_samples(samples);
+        }
+    }
+
+    #[cfg(feature = "view")]
     /// Whether this frame records the ribbons ahead of the circuit's blended
     /// list (`Recorder::draw_ribbons`): the original's order for the PSP
     /// preset unless the player chose [`oag_display::display::TrailOrder::OverFloors`].
@@ -141,6 +198,19 @@ impl Race {
     #[must_use]
     pub fn ribbons_first(&self) -> bool {
         !self.hd_trail_active() && self.view.trail_order.ribbons_first()
+    }
+
+    #[cfg(feature = "view")]
+    /// Whether the circuit's blended list (list B: trees, translucent floor patches, glass)
+    /// draws after the pads and the hulls rather than inside the circuit's own draw. The PSP
+    /// preset's order whichever [`oag_display::display::TrailOrder`] is chosen, since the
+    /// setting places the ribbons and nothing else: a list-B mesh writes no depth, so drawn
+    /// before a pad it is painted over by the pad behind it
+    /// (`docs/rendering/draw-order.md`, "Hull, pads and trees on Platinum Rush White"). HD's
+    /// tube keeps the circuit whole: its queue keys are unread.
+    #[must_use]
+    pub fn blended_after_craft(&self) -> bool {
+        !self.hd_trail_active()
     }
 
     #[cfg(feature = "view")]
@@ -254,7 +324,8 @@ impl Race {
     /// How many times the player's picture has jumped to a different shot: each
     /// of their respawns, and the destroy camera taking over and letting go
     /// ([`super::destroy_camera`]), and the spectator camera's take-over and cuts
-    /// ([`super::finish_camera`]). What the temporal upscaler's history reset
+    /// ([`super::finish_camera`]), and a viewer's seek ([`Self::restore_for_viewing`]).
+    /// What the temporal upscaler's history reset
     /// watches, so a cut throws the history away the way a respawn does.
     #[must_use]
     pub fn camera_cuts(&self) -> u32 {
@@ -268,10 +339,20 @@ impl Race {
             .intro
             .as_ref()
             .map_or(0, intro_camera::IntroCamera::cuts);
-        self.sim.respawns[0]
+        let photo = self.view.photo.as_ref().map_or(0, photo::Photo::cuts);
+        self.placements_of(0)
             .wrapping_add(self.view.destroy_camera.cuts)
             .wrapping_add(spectator)
             .wrapping_add(intro)
+            .wrapping_add(photo)
+            .wrapping_add(self.view.restores)
+    }
+
+    #[cfg(feature = "view")]
+    /// How many times a viewer has put this race at another tick ([`Self::restore_for_viewing`]).
+    #[must_use]
+    pub fn viewer_restores(&self) -> u32 {
+        self.view.restores
     }
 
     /// The same, for any craft on the grid.
@@ -282,6 +363,15 @@ impl Race {
     #[must_use]
     pub fn respawns_of(&self, slot: usize) -> u32 {
         self.sim.respawns.get(slot).copied().unwrap_or(0)
+    }
+
+    /// How many times `slot`'s craft has been put somewhere else on the circuit: its
+    /// respawns and its moves along it (`crate::transit`). What a camera or the
+    /// between-ticks blend cuts on rather than sweeping across the gap.
+    #[must_use]
+    pub fn placements_of(&self, slot: usize) -> u32 {
+        let jumps = self.sim.jumps.get(slot).copied().unwrap_or(0);
+        self.respawns_of(slot).wrapping_add(jumps)
     }
 
     /// The speed a reset would launch `slot` at now: its speed latched on its
@@ -374,6 +464,19 @@ impl Race {
         self.sim.wall_damage.get(slot).copied().unwrap_or(0.0)
     }
 
+    /// What craft-to-craft bumps took from a craft's pool, in shield-pool units.
+    #[must_use]
+    pub fn pair_shield_lost_of(&self, slot: usize) -> f32 {
+        self.sim.pair_damage.get(slot).copied().unwrap_or(0.0)
+    }
+
+    /// Ticks a craft has spent touching another craft, counted once a tick
+    /// however many pairs it is in.
+    #[must_use]
+    pub fn pair_contact_ticks_of(&self, slot: usize) -> u32 {
+        self.sim.pair_contact_ticks.get(slot).copied().unwrap_or(0)
+    }
+
     /// How many ticks a craft was still racing - the denominator
     /// [`Self::wall_contact_ticks_of`] and [`Self::wall_shield_charged_of`] are
     /// counted over. A wrecked craft is released and keeps being integrated, so
@@ -387,14 +490,43 @@ impl Race {
     /// chain does not close.
     #[must_use]
     pub fn race_distance_of(&self, slot: usize) -> Option<f32> {
-        let course = self.sim.course.as_ref()?;
+        let course = self.sim.course.as_deref()?;
         Some(self.sim.world.ships.get(slot)?.standing.distance(course))
     }
 
     /// The race's weapon table, `None` with weapons off or none read.
     #[must_use]
     pub fn weapon_stats(&self) -> Option<&oag_tables::weapons::WeaponStats> {
-        self.sim.weapons.as_ref()
+        self.sim.weapons.as_deref()
+    }
+
+    /// How this title's projectiles write their velocity on a floor,
+    /// `oag_title::weapons::Weapons::floor_arms_steer_to_ride_point`.
+    #[must_use]
+    pub fn floor_arms(&self) -> oag_weapons::projectile::FloorArms {
+        if self.sim.floor_arms_steer_to_ride_point {
+            oag_weapons::projectile::FloorArms::SteerToRidePoint
+        } else {
+            oag_weapons::projectile::FloorArms::ParallelToFloor
+        }
+    }
+
+    /// How fast this title's Plasma bolt leaves the craft's weapon node,
+    /// `oag_title::weapons::Weapons::plasma_release_at_display_scale`.
+    #[must_use]
+    pub fn plasma_release(&self) -> oag_weapons::projectile::PlasmaRelease {
+        if self.sim.plasma_release_at_display_scale {
+            oag_weapons::projectile::PlasmaRelease::DisplayScaled
+        } else {
+            oag_weapons::projectile::PlasmaRelease::Unscaled
+        }
+    }
+
+    /// How a projectile's first probes treat the firing craft,
+    /// `oag_title::weapons::Weapons::own_craft_box_hides_track` ([`own_craft_probe_for`]).
+    #[must_use]
+    pub fn own_craft_probe(&self) -> oag_weapons::projectile::OwnCraftProbe {
+        own_craft_probe_for(self.sim.own_craft_box_hides_track)
     }
 
     /// The fixed timestep, from [`TickRate::DEFAULT`].
@@ -516,7 +648,7 @@ impl Race {
     pub fn missile_stats(&self) -> Option<oag_tables::weapons::MissileStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::missile)
     }
 
@@ -532,7 +664,7 @@ impl Race {
     pub fn leach_beam_stats(&self) -> Option<oag_tables::weapons::LeachBeamStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::leach_beam)
     }
 
@@ -545,7 +677,7 @@ impl Race {
     pub fn mine_stats(&self) -> Option<oag_tables::weapons::MineStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::mine)
     }
 
@@ -559,7 +691,7 @@ impl Race {
     pub fn quake_stats(&self) -> Option<oag_tables::weapons::QuakeStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::quake)
     }
 
@@ -572,7 +704,7 @@ impl Race {
     pub fn shuriken_stats(&self) -> Option<oag_tables::weapons::ShurikenStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::shuriken)
     }
 
@@ -587,7 +719,7 @@ impl Race {
     pub fn rocket_stats(&self) -> Option<oag_tables::weapons::RocketStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::rocket)
     }
 
@@ -600,7 +732,7 @@ impl Race {
     pub fn plasma_stats(&self) -> Option<oag_tables::weapons::PlasmaStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::plasma)
     }
 
@@ -613,7 +745,7 @@ impl Race {
     pub fn cannon_stats(&self) -> Option<oag_tables::weapons::CannonStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::cannon)
     }
 
@@ -627,7 +759,10 @@ impl Race {
     /// craft's timer is asserted *against* rather than a value to assert.
     #[must_use]
     pub fn slowdown_limit(&self) -> Option<f32> {
-        self.sim.weapons.as_ref().map(|table| table.slowdown_limit)
+        self.sim
+            .weapons
+            .as_deref()
+            .map(|table| table.slowdown_limit)
     }
 
     /// The Bomb's authored `<Stats>`, or `None` when the table did not load or
@@ -636,7 +771,7 @@ impl Race {
     pub fn bomb_stats(&self) -> Option<oag_tables::weapons::BombStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::bomb)
     }
 }
@@ -659,5 +794,28 @@ pub(super) fn chase_block_for(
     match view {
         oag_display::display::CameraView::Close => close,
         oag_display::display::CameraView::Internal | oag_display::display::CameraView::Far => far,
+    }
+}
+
+#[cfg(test)]
+mod own_craft_box_tests {
+    use super::own_craft_probe_for;
+    use oag_weapons::projectile::OwnCraftProbe;
+
+    /// Each title's measured own-craft box reaches the flight as the rule its executable runs
+    /// (`docs/gameplay/projectile-floor.md`, "The other titles").
+    #[test]
+    fn each_title_flies_its_own_measured_box() {
+        let probe = |title: &oag_title::Title| {
+            own_craft_probe_for(title.weapons.own_craft_box_hides_track.value)
+        };
+        assert_eq!(probe(oag_pulse::TITLE), OwnCraftProbe::CraftBox);
+        assert_eq!(probe(oag_pure::TITLE), OwnCraftProbe::CraftBoxHolds);
+        assert_eq!(probe(oag_2048::TITLE), OwnCraftProbe::NoBox);
+        assert_eq!(probe(oag_omega::TITLE), OwnCraftProbe::NoBox);
+        assert!(matches!(
+            probe(oag_hd::TITLE),
+            OwnCraftProbe::PlasmaWindow(_)
+        ));
     }
 }

@@ -17,6 +17,12 @@ struct Params {
     levels: vec4<f32>,
 }
 
+// The edge program's `0.34` as its literal reads, the half-precision value
+// nearest it: `a = floor(EDGE_SUM_SCALE * sum_rgb(t0))` is 1 where the scene
+// left the white alone
+// (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop-scene.md`).
+const EDGE_SUM_SCALE: f32 = 0.340088;
+
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var source: texture_2d<f32>;
 @group(0) @binding(2) var source_sampler: sampler;
@@ -43,7 +49,7 @@ fn fs_edge(in: ClipUv) -> @location(0) vec4<f32> {
     let t3 = tap(base + vec2<f32>(0.0, params.taps.y));
     let d = abs(t0 - t2) + abs(t1 - t3);
     let e = min(6.0 * (d.x + d.y + d.z), 1.0);
-    let a = floor(0.340088 * (t0.x + t0.y + t0.z));
+    let a = floor(EDGE_SUM_SCALE * (t0.x + t0.y + t0.z));
     let grey = 1.0 - e * params.levels.x - (1.0 - e) * (1.0 - a) * params.levels.z;
     return vec4<f32>(vec3<f32>(grey), 1.0);
 }

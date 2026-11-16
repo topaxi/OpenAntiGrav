@@ -1,77 +1,90 @@
 use super::*;
 
-/// `frames` stereo frames of a full-scale sine at `hz`, interleaved.
+/// `frames` samples of a full-scale sine at `hz`.
 fn tone(hz: f32, sample_rate: u32, frames: usize) -> Vec<f32> {
     #[expect(clippy::cast_precision_loss, reason = "test data, small counts")]
     let rate = sample_rate as f32;
-    let mut out = Vec::with_capacity(frames * 2);
-    for i in 0..frames {
-        #[expect(clippy::cast_precision_loss, reason = "test data, small counts")]
-        let t = i as f32 / rate;
-        let s = (2.0 * std::f32::consts::PI * hz * t).sin();
-        out.push(s);
-        out.push(s);
-    }
-    out
+    (0..frames)
+        .map(|i| {
+            #[expect(clippy::cast_precision_loss, reason = "test data, small counts")]
+            let t = i as f32 / rate;
+            (2.0 * std::f32::consts::PI * hz * t).sin()
+        })
+        .collect()
 }
 
-/// A pure tone lights up the band nearest its own frequency more than every
-/// other band - the property that makes this usable as a spectrum at all,
-/// not just a loudness meter.
-#[test]
-fn a_pure_tone_peaks_the_band_nearest_its_own_frequency() {
-    let sample_rate = 44_100;
-    let samples = tone(1_000.0, sample_rate, 512);
-    let mono: Vec<f32> = samples
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|frame| (frame[0] + frame[1]) * 0.5)
-        .collect();
+/// The amplitudes of one spectrum of a tone, band by band.
+fn band_sums(hz: f32, sample_rate: u32) -> [f32; BANDS] {
+    let fft = Fft::new();
+    let samples: Box<[f32; FFT_SIZE]> = tone(hz, sample_rate, FFT_SIZE)
+        .into_boxed_slice()
+        .try_into()
+        .expect("FFT_SIZE samples");
+    let mut real = Box::new([0.0; FFT_SIZE]);
+    let mut imaginary = Box::new([0.0; FFT_SIZE]);
+    let mut magnitudes = Box::new([0.0; HALF]);
+    fft.magnitudes(&samples, &mut real, &mut imaginary, &mut magnitudes);
+    bins_at(sample_rate as f32).map(|(first, last)| magnitudes[first..=last].iter().sum())
+}
 
-    // **On the amplitude, not on the level.** `Range` normalises each band
-    // against its own recent span, so a *steady* tone eventually fills every
-    // band that hears any of it at all - that is the recovered curve working,
-    // not a defect, and it makes the level the wrong place to look for
-    // frequency selectivity. The selectivity is Goertzel's, and it is here.
-    let frequencies = band_frequencies();
-    let amplitudes: Vec<f32> = frequencies
-        .iter()
-        .map(|&hz| {
-            band_amplitude(
-                goertzel_magnitude(&mono, sample_rate as f32, hz),
-                mono.len(),
-            )
-        })
-        .collect();
-    let (peak_band, _) = amplitudes
-        .iter()
+/// The band a tone fills most.
+fn peak_band(sums: &[f32; BANDS]) -> usize {
+    sums.iter()
         .enumerate()
         .max_by(|(_, a), (_, b)| a.total_cmp(b))
-        .expect("BANDS is non-zero");
-    let nearest = frequencies
-        .iter()
-        .enumerate()
-        .min_by(|(_, a), (_, b)| (*a - 1_000.0).abs().total_cmp(&(*b - 1_000.0).abs()))
-        .map(|(i, _)| i)
-        .expect("BANDS is non-zero");
+        .map(|(band, _)| band)
+        .expect("BANDS is non-zero")
+}
 
-    // Within one band of the true nearest: geometric spacing means adjacent
-    // bands near 1 kHz are close enough that Goertzel's own filter width can
-    // legitimately favour a neighbour by a hair.
-    assert!(
-        peak_band.abs_diff(nearest) <= 1,
-        "a 1 kHz tone peaked band {peak_band} ({:.0} Hz), nearest is {nearest} ({:.0} Hz)",
-        frequencies[peak_band],
-        frequencies[nearest]
-    );
+/// A pure tone lands in the band whose authored bins hold its frequency, the
+/// property that makes this a spectrum and not a loudness meter. The level is
+/// the wrong place to look: [`Range`] fills every band that hears a steady
+/// tone at all.
+#[test]
+fn a_pure_tone_lands_in_the_band_holding_its_frequency() {
+    for (hz, band) in [(5_000.0, 10), (7_000.0, 11), (9_000.0, 12), (500.0, 4)] {
+        let sums = band_sums(hz, 48_000);
+        assert_eq!(peak_band(&sums), band, "{hz} Hz: {sums:?}");
+    }
+}
+
+/// The bins are frequencies: a device off the authored rate reads the same
+/// tone into the same band.
+#[test]
+fn the_bins_follow_the_sample_rate() {
+    assert_eq!(peak_band(&band_sums(5_000.0, 44_100)), 10);
+    assert_eq!(bins_at(48_000.0)[15], (329, 511));
+}
+
+/// The bins tile the spectrum, nothing read twice and nothing missed.
+#[test]
+fn the_bins_tile_the_spectrum() {
+    assert_eq!(BINS[0].0, 0);
+    assert_eq!(usize::from(BINS[BANDS - 1].1), HALF - 1);
+    for pair in BINS.windows(2) {
+        assert_eq!(pair[0].1 + 1, pair[1].0);
+    }
+}
+
+/// One spectrum every hop, however the chunks that feed it fall.
+#[test]
+fn a_spectrum_lands_every_hop_whatever_the_chunk_size() {
+    let samples = tone(5_000.0, 48_000, HOP * 8);
+    let mut whole = Analyzer::new();
+    let at_once = whole.process(&samples, 48_000);
+    let mut parts = Analyzer::new();
+    let mut in_pieces = [0.0; BANDS];
+    for piece in samples.chunks(37) {
+        in_pieces = parts.process(piece, 48_000);
+    }
+    assert_eq!(at_once, in_pieces);
 }
 
 /// Silence produces silence - no invented level with nothing playing.
 #[test]
 fn silence_reads_as_all_zero() {
     let sample_rate = 44_100;
-    let samples = vec![0.0f32; 512 * 2];
+    let samples = vec![0.0f32; HOP * 2];
     let mut analyzer = Analyzer::new();
     let levels = analyzer.process(&samples, sample_rate);
     assert!(
@@ -108,19 +121,14 @@ fn spectrum_starts_silent_and_reflects_the_latest_publish() {
 fn a_silent_chunk_reads_zero_because_the_hold_lives_in_the_visualiser() {
     let sample_rate = 44_100;
     let mut analyzer = Analyzer::new();
-    let loud = tone(1_000.0, sample_rate, 512);
+    let loud = tone(1_000.0, sample_rate, FFT_SIZE);
     let first = analyzer.process(&loud, sample_rate);
-    let peak_band = first
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| a.total_cmp(b))
-        .map(|(i, _)| i)
-        .expect("BANDS is non-zero");
-    assert!(first[peak_band] > 0.0, "the tone should light its band");
+    let peak = peak_band(&first);
+    assert!(first[peak] > 0.0, "the tone should light its band");
 
-    let silence = vec![0.0f32; 512 * 2];
+    let silence = vec![0.0f32; FFT_SIZE];
     let second = analyzer.process(&silence, sample_rate);
-    assert_eq!(second[peak_band], 0.0);
+    assert_eq!(second[peak], 0.0);
 }
 
 /// **The auto-ranging curve's own contract**: a band measures its amplitude

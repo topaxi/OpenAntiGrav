@@ -70,7 +70,7 @@ fn psn_opens_the_base_campaign_with_no_chooser() {
     let campaign = load(&mut archives, title);
     assert_eq!(campaign.grids.len(), 8, "grid_00..grid_07");
     assert!(campaign.selection_layout.is_none(), "no HD/Fury chooser");
-    assert!(campaign.grid_layout_fury.is_none());
+    assert!(campaign.chooser.is_none());
 }
 
 /// The disc's HD branch is unchanged: its chooser and Fury screen still read.
@@ -81,7 +81,7 @@ fn the_disc_still_has_its_chooser() {
     let campaign = load(&mut archives, oag_hd::TITLE);
     assert_eq!(campaign.grids.len(), 16);
     assert!(campaign.selection_layout.is_some());
-    assert!(campaign.grid_layout_fury.is_some());
+    assert!(campaign.chooser.is_some());
 }
 
 /// What the PSN package carries is the disc's own, byte for byte, where it

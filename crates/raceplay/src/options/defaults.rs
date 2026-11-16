@@ -9,6 +9,7 @@ impl Default for Options {
             source: oag_source::source::DEFAULT_IMAGE.to_string(),
             craft_source: None,
             difficulty: oag_ai::Difficulty::default(),
+            skill_level: None,
             // Empty rather than the search path: a default that read the
             // filesystem would make two runs of the same test differ by what
             // the developer happens to have downloaded. The composition root
@@ -18,10 +19,17 @@ impl Default for Options {
             foreign_track: None,
             extensions: Vec::new(),
             find_extensions: None,
+            recorded_mods: None,
+            find_texture_packs: None,
             boost_zoom: None,
+            trail_hits: TrailHits::Off,
+            wingtip_contrails: WingtipContrails::Off,
+            own_shield: false,
+            own_rockets: false,
             team: None,
             hull_variant: None,
             skin: None,
+            livery: None,
             // Empty for the same reason `dlc` is: the ids come off the
             // player's own disc, and `load` may not invent one. The
             // composition root fills it from the catalogue.
@@ -42,7 +50,9 @@ impl Default for Options {
             language: None,
             hud_style: None,
             add_on_campaign: None,
+            campaign: false,
             eliminator_kill_target: None,
+            eliminator_score_target: None,
             laps_override: None,
             weapons_override: None,
             no_driver_for_class: false,
@@ -62,6 +72,7 @@ impl Default for Options {
             world_clock_offset: 0.0,
             gantry_seconds: None,
             camera: None,
+            demo: false,
         }
     }
 }

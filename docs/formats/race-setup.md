@@ -17,7 +17,8 @@ Confidence scores follow the
 On Wipeout Pulse, `MainMenu_Definition.xml` redirects
 `Main Menu->Mode == FE_RACEBOX` to a screen named **`Single Player`**. The
 screen actually named `Racebox` offers `RB_SP` / `RB_LOAD_GRID` /
-`RB_EDIT_GRID` and is the **custom-grid editor**.
+`RB_EDIT_GRID` and is the **custom-race screen**: the originals ship no editor, and what the
+screen names is a custom race (a grid of cells the player lays out as a race of their own).
 
 Wipeout HD does the same and comments on it in the file: its
 `racebox_definition.xml` carries
@@ -27,8 +28,8 @@ authoring note saying it formerly went to `Racebox`
 old idstring.
 
 So: **`FE_RACEBOX` is the entry, `Single Player` is the screen, and the
-grid editor kept the name.** Code or documentation that greps for a screen
-called `Racebox` finds the editor.
+custom-race screen kept the name.** Code or documentation that greps for a screen
+called `Racebox` finds the custom-race screen.
 
 ## The shape four titles agree on
 
@@ -68,6 +69,16 @@ name="Single Player">`. Five `<List>` widgets, read directly. Confidence 92.
 **The widget name and the persisted key differ on the difficulty row** -
 `Difficulty` against `SkillLevel` - on all three titles that have it. Code
 keying off the widget name will not find the saved value.
+
+**`Eliminations` is a false friend across titles. Do not unify it.** On Pulse
+and the PS2 it is a list of kill counts (5, 10, 15, 20, 25). On HD the widget
+of that name is a `<Slider>`, not a list
+([hd-frontend.md](hd-frontend.md), "`Eliminations` is a `<Slider>`"), and HD's
+TARGET row is a separate row fed by the score rule's own file
+(`ScoreRule::race_setup`): a score target, not a kill count. An earlier note
+gave the HD slider as min 200, max 600, step 20, disabled (an `a`-prefixed
+`aSlider`); that was not re-read from the HD files in this audit, so treat the
+range as single-source and unscored.
 
 **When the `Eliminations` row shows** (read 2026-09-30 off the screen's per-mode visibility
 routine `FUN_088e715c`, called with the mode index, Pulse PSP USA; confidence 75 - the
@@ -269,7 +280,7 @@ swaps the livery with `%s\%s.dat` - the skin file decoded in
 `IMAGE.DAT` and `Custom` sit in the same block and are **unattributed** - they
 are recorded here because the rest of the block is, not because anything places
 them. On the evidence here neither is a preview asset: no path template joins
-them to a directory, and `Custom` is also the vocabulary of the grid editor
+them to a directory, and `Custom` is also the vocabulary of the custom-race screen
 (`CustomGridMC`). Do not read `IMAGE.DAT` as evidence against the mesh reading
 without checking what loads it.
 
@@ -654,7 +665,43 @@ title branch: `Campaign::circuit_unlocks`). Craft variants gate on the two loyal
 (`oag-wad cat --expand`): Pulse USA and EU identical, 85 rows, 21 with `Grid=`, 24 `PI_Track`; **Pure USA and EU
 identical, 17 rows, none with `Grid` or loyalty: `MedalCount` 10/25/40/60/60/70 on the Classic circuits,
 `Track`+`medal` chaining Zone 1..4, `Tournament` Alpha/Beta - checked, differs, and since 2026-10-12 read and wired as Pure's SINGLE PLAYER chain: [`pure-campaign.md`](pure-campaign.md)**; HD: see
-`hd-status.md` (its own progression is `hd-campaign`'s).
+`hd-status.md` (its own progression is `hd-campaign`'s); its craft models: [HD-era model unlocks](#hd-era-model-unlocks).
+
+## HD-era model unlocks
+
+Wipeout HD/Fury and Omega gate each team's `PI_TeamModel`s (its hull and livery rows on `Team
+Selection`'s `HexSelection` column) on the model's own `<Unlock>` row. Evidence, the rows for all
+twelve HD-era teams and confidences: [model-unlock.md](../ghidra/functions/ps3-hdfury-eu/model-unlock.md).
+Feisar, in hex-column order:
+
+| Model | Races | Opens when |
+| --- | --- | --- |
+| `chrome_c1` | `Feisar_c1` in `livery4` | gold on all 80 `Fury` campaign cells (`MedalCountFURY="80"`) |
+| `nitro` | `Feisar_n1` | `grid8`'s own points met (`grid="grid8"`) |
+| `concept1` | `Feisar_c1` | always |
+| `normal` | `Feisar` | always |
+| `SKIN1` | `Feisar` in `livery2` | Feisar loyalty 4000 |
+| `SKIN2` | `Feisar` in `livery3` | Feisar loyalty 8000 |
+| `chrome` | `Feisar` in `livery4` | gold on all 87 `HD` campaign cells (`MedalCountHD="87"`) |
+
+**Status 2026-11-14 (implemented, HD and Omega).** `oag_raceplay::catalogue::ModelUnlock` reads the
+rows; `oag_game::unlock::ModelGate` evaluates them against the records and the title's campaign grids
+(`oag_title::Campaign::model_unlocks`); Ship Select's model row (`livery_row::gated_variant_choices`)
+offers the open models in file order, so `Down` steps down the column, and a locked model is a
+padlock. A model is stored as its variant id: the directory suffix (`""`, `_c1`, `_n1`) for the
+directory's own model, the suffix and its `texturelocation` after an `@` (`"@livery2"`,
+`"_c1@livery4"`) for another livery there (`oag_title::race::split_livery`). The race reads every
+texture the hull names in the directory's own folder from the picked one (`oag_livery::LiveryFolder`,
+the Zone livery's path substitution), for the player's craft; opponents flying the player's variant
+keep the directory's livery (**chosen**). The Ship Select preview hull wears it too. A texture the
+picked folder lacks draws untextured and the loader says so (none is missing on either disc).
+`--livery <folder>` names one for `--race`. `--unlock-all` opens every model.
+
+**What is read off the data, not the code** (the evaluator is not found): medal counts are golds over
+the grids whose `Campaign` matches (87 and 80 are those campaigns' cell counts), loyalty is the named
+team's own total, `grid` is Pulse's `Unlock_GridPointsMet`. **Open:** split-screen seats past the first
+race their model's directory in its own livery (`SeatPick` carries no livery); the `--menu-page` RACE
+page still's VARIANT row is the uncut variant table (no grids are read for it).
 
 ## The Race Campaign: the disc's own campaign grid, shape yes, content no
 
@@ -720,7 +767,7 @@ reads on `Track Creation`'s `1/1`/`1/3` counters and the placeholder circuit
 names - a template the executable substitutes into, not shipped content.
 
 Selecting a tier opens `Cell Selection` (`type="CellSelection"`): the same
-hex `GridController` as `Cell Creation`'s custom-grid editor (below), each
+hex `GridController` as `Cell Creation`'s custom-race grid (below), each
 cell a `Medal_x_y` / `Outline_x_y` / `Lock_x_y` triple - filled hex, outline,
 and a lock glyph overlay. `MaxX="7" MaxY="5"` is the bounding box, not the
 cell count: a hex grid staggers, and counting the authored `Medal_x_y` nodes
@@ -1034,7 +1081,7 @@ So the race length is **mode- and circuit-determined, not player-chosen**.
 
 ## Pure differs in shape, not only in value
 
-Pure has no `Racebox`, no hex grid and no grid editor. Confidence 94. Its chain:
+Pure has no `Racebox`, no hex grid and no custom-race screen. Confidence 94. Its chain:
 
 ```
 Main Menu -> Single Player (mode only) -> Class Selection -> League | Tournament

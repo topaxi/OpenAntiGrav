@@ -14,7 +14,7 @@
 //! fell off the ring at the last push, met at the tail's age by a lerp. The
 //! ring itself, and with it every query of it (the HD trail-hit test reads
 //! `Tube::nearest`), is unchanged. The extra segment is why the vertex budgets,
-//! [`super::TRAIL_MAX_VERTICES_PER_CRAFT`] and
+//! [`super::TRAIL_MAX_VERTICES_PER_CRAFT`] (the ribbon at its longest) and
 //! [`super::hd::MAX_VERTICES_PER_CRAFT`], count one segment more than the ring
 //! holds.
 
@@ -24,9 +24,8 @@ use oag_mesh::mesh::GpuVertex;
 use super::{
     Exhaust, LAYER_COLOUR, LAYER_SCROLL_U, LAYER_SCROLL_V, LAYER_TEX_SCALE_U, LAYER_WIDTH, LAYERS,
     PS2_FIRST_LAYER, PS2_GS_COLOUR_SCALE, SCROLL_U_GAIN, SUBSTEP_DT, TEXCOORD_U16_GAIN,
-    TRAIL_FADE_STEP, TRAIL_FINS, TRAIL_MAX_VERTICES_PER_CRAFT, TRAIL_SAMPLES, TRAIL_WIDTH_BASE,
-    TRAIL_WIDTH_GAIN, TrailLaw, rib_vertex, trail_fade_at, trail_stencil, trail_stretch_at,
-    trail_taper_at,
+    TRAIL_CAPACITY, TRAIL_FADE_STEP, TRAIL_FINS, TRAIL_SAMPLES, TRAIL_WIDTH_BASE, TRAIL_WIDTH_GAIN,
+    TrailLaw, rib_vertex, trail_fade_at, trail_stencil, trail_stretch_at, trail_taper_at,
 };
 
 /// Where a frame drawn between two ticks puts a trail's nozzle, and how far
@@ -113,13 +112,13 @@ impl Exhaust {
             TrailLaw::Ramped => (self.layer_alphas(), 0, true),
             TrailLaw::Baked => ([PS2_GS_COLOUR_SCALE; LAYERS], PS2_FIRST_LAYER, false),
         };
-        let mut ring = [(Vec3::ZERO, Vec3::ZERO); TRAIL_SAMPLES];
+        let mut ring = [(Vec3::ZERO, Vec3::ZERO); TRAIL_CAPACITY];
         for (slot, sample) in ring.iter_mut().zip(self.trail_samples()) {
             *slot = sample;
         }
-        let mut points = [((Vec3::ZERO, Vec3::ZERO), 0.0); TRAIL_SAMPLES + 1];
+        let mut points = [((Vec3::ZERO, Vec3::ZERO), 0.0); TRAIL_CAPACITY + 1];
         let count = aged::<RibbonPoint>(
-            &ring,
+            &ring[..self.trail_cap],
             self.trail_dropped,
             head,
             |(_, back), position| (position, back),
@@ -132,7 +131,7 @@ impl Exhaust {
             .map_or(0.0, |head| 1.0 - head.alpha);
         let width_scale = self.intensity * TRAIL_WIDTH_GAIN + TRAIL_WIDTH_BASE;
 
-        out.reserve(TRAIL_MAX_VERTICES_PER_CRAFT);
+        out.reserve(self.max_vertices());
         // The rim, in `Trail_DrawRibbon`'s own order. The fifth entry closes
         // the tube; `v` runs 0..1 once around it in quarters.
         let rim = [up, right, -up, -right, up];
@@ -157,12 +156,15 @@ impl Exhaust {
             for k in 0..points.len() - 1 {
                 let ((a, back_a), age_a) = points[k];
                 let ((b, back_b), age_b) = points[k + 1];
-                let pa = a + back_a * trail_stretch_at(age_a);
-                let pb = b + back_b * trail_stretch_at(age_b);
-                let wa = base_width * trail_taper_at(age_a);
-                let wb = base_width * trail_taper_at(age_b);
-                let fade_a = ramp * trail_fade_at(age_a);
-                let fade_b = ramp * trail_fade_at(age_b);
+                // The preset's laws read the age scaled to its ten samples, so a longer ring
+                // stretches them rather than running them out ([`Exhaust::shape_age`]).
+                let (shape_a, shape_b) = (self.shape_age(age_a), self.shape_age(age_b));
+                let pa = a + back_a * trail_stretch_at(shape_a);
+                let pb = b + back_b * trail_stretch_at(shape_b);
+                let wa = base_width * trail_taper_at(shape_a);
+                let wb = base_width * trail_taper_at(shape_b);
+                let fade_a = ramp * trail_fade_at(shape_a);
+                let fade_b = ramp * trail_fade_at(shape_b);
                 let ca = [colour[0] * fade_a, colour[1] * fade_a, colour[2] * fade_a];
                 let cb = [colour[0] * fade_b, colour[1] * fade_b, colour[2] * fade_b];
                 // One stencil byte per segment, not interpolated across it:
@@ -171,7 +173,7 @@ impl Exhaust {
                 // is the segment index and the byte is the recorded one).
                 let glow = if glow_stamp {
                     let last = (TRAIL_SAMPLES - 2) as f32;
-                    let at = age_a.min(last);
+                    let at = shape_a.min(last);
                     let whole = at.floor();
                     let low = trail_stencil(self.intensity, whole as usize);
                     let high = trail_stencil(self.intensity, (whole + 1.0).min(last) as usize);

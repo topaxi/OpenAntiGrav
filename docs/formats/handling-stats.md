@@ -58,6 +58,9 @@ gets. The ground-truth tests assert shapes and signs, never magnitudes.
     <AirbrakeGraphics amount down_speed up_speed/>
     <Misc height length shield easyshield width weight_distribution/>
     <FE speed thrust handling shield/>
+    <BespokeStats>             <!-- 2048 and Omega's own five teams -->
+      <Weapons number_of_rockets number_of_mines weapon_damage_multiplier lockon_speed_multiplier gift_cannon_time/>
+    </BespokeStats>
 
     <Class name="VENOM|FLASH|RAPIER|PHANTOM">
       <Engine   accelcap amount falloff gain turbo/>
@@ -77,6 +80,15 @@ gets. The ground-truth tests assert shapes and signs, never magnitudes.
 presentation only and need not agree with the physics.
 
 `easyshield` alongside `shield` implies a difficulty-scaled shield pool.
+
+`<Stats><BespokeStats><Weapons number_of_rockets number_of_mines/></BespokeStats></Stats>` is
+authored only by 2048's and Omega's own five teams (`weapon_damage_multiplier`,
+`lockon_speed_multiplier` and `gift_cannon_time` ride on the same line, unread). Both titles'
+executables read the two counts, truncate and clamp them to `1..=3` and `1..=5`, and give a
+craft that omits one three rockets and five mines; Pulse, Pure and HD author and read none
+([weapon-counts.md](../ghidra/functions/ps4-omega-eu/weapon-counts.md)). Parsed to
+`handling::Stats::weapons`, spent by `oag_weapons::counts::WeaponCounts`
+(`two_title_2048_sources_ground_truth::rocket_and_mine_counts_per_craft`).
 
 ## What is decoded
 
@@ -217,6 +229,17 @@ difficulty-scaled shield pool" from an inference into a reading: there are three
 difficulty slots, the files set the easy one explicitly and let `shield` cover the
 other two.
 
+**Ours used to race every difficulty on the medium slot; it follows the difficulty now**
+(`hd-difficulty-shield`; see [Which difficulty picks the shield slot](#which-difficulty-picks-the-shield-slot)).
+The defect was measured on HD: `DATA02.PSARC` `/data/ships/<team>/handlingstats.xml` authors both
+`shield` and `easyshield`, and at Novice on RPCS3 (HD Fury EU, Racebox Eliminator, Vineta K,
+Venom) the field's live shields read at the authored `easyshield`, not `shield`.
+`scripts/rpcs3-hd-eliminator-score.py` reads them at `*(craft+0x5fac)+0x78`, then
+`+0x90 + difficulty * 4`; the person's craft refilled a lap at 0.2 of an `easyshield` pool
+([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md)). Confidence 85 that
+the original's Novice pool is the easy slot; the medium and hard slots were not read live. Pulse
+authors `easyshield` too and is wired the same way.
+
 Three things follow, and they are why this element is worth its own section.
 
 **`weight_distribution` is the scalar the PSP's `Ship_UpdatePitch` reads.**
@@ -249,6 +272,55 @@ element and every attribute with no defaults, and
 `crates/tables/tests/handling_ground_truth.rs` parses all eight - re-run this
 session, 8 teams and 32 parameter sets on each disc. What is still open is *which
 PSP function* writes `0x78`..`0x90`; see the question added below.
+
+### Which difficulty picks the shield slot
+
+`Ship_SetShield` and `Ship_ResetShield` index the three `<Misc>` slots by one global,
+`g_skill_level` (`0` easy, `1` medium, `2` hard), for **every** craft: the player's and the
+opponents' alike (Pulse PSP, `docs/ghidra/functions/psp-pulse-usa/shield.md`, "The pool is
+`entity + 0x88`", confidence 88). The global is the race setup's `SkillLevel` key: the Single
+Player screen's `Difficulty` row writes it (Easy, Medium, Hard; the row opens on Easy,
+`docs/formats/race-setup.md`) and Cell Selection's commit writes the cell's browsed rung
+(`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`). With no key `Race_ReadSetupOptions`
+(`0x08896b84`) leaves it at `1`.
+
+Ours reads the same index from the race: `oag_raceplay::Options::skill_level` where the launch
+names a rung (a campaign cell's, or a mod event's `level`; a cell with none reads Medium), else
+`oag_ai::Difficulty::level` of the race box's `[ai] difficulty`: Novice `0`, Skilled and Elite `1`,
+Ace `2` (**chosen, not measured**: the original has three rungs and this project four names). It
+is the same integer the original driver's pack shuffle gets, so one race has one rung. The
+default race (Elite) stays on the medium slot; only Novice and an Easy campaign cell move.
+`oag_gameplay::handling_for` takes the index and `Misc::shield_for` picks the slot; the pool is
+every craft's maximum and its start (`Ship_ResetShield`), the player's included.
+
+What each title's files and executable say, and what ours does (a census of the starting pools by
+`oag_raceplay::load`, Single Race, each title's default roster; no values are quoted, see the
+top of this page):
+
+| Title | Files author | Mapping read | Player too | Ours |
+| --- | --- | --- | --- | --- |
+| Pulse PSP (USA, EU) | `easyshield` on every team, above `shield` by the same margin on all | `Ship_SetShield` indexes `0x84 + skill * 4` (confidence 88) | yes, same global | wired: Novice starts on `easyshield`, Skilled, Elite and Ace on `shield` |
+| Pulse PS2 | same as PSP | the parser's three slots are PS2-read; the index is inherited from PSP | inherited from PSP | wired, as PSP |
+| HD / Fury | `easyshield` on every team, same margin, no medium or hard slot | **measured live, confidence 85**: the original's HD Eliminator at Novice (RPCS3, Vineta K, Venom; `scripts/rpcs3-hd-eliminator-score.py`, `data/reference/hd-eliminator-score/run2-ai-field.csv`, column `shield`) reads the AI field's shields at an authored `easyshield` and above `shield`, through `*(craft+0x5fac)+0x78`, then `+0x90 + difficulty * 4` (the same `0x84 + skill * 4` index as Pulse, rebased). One run, one difficulty; the medium and hard slots were not read live | **confidence 80**: the person's own craft refilled a lap at 0.2 of an `easyshield` pool (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`); single run | wired, `CraftLaws::shield_by_skill` measured |
+| Pure | no team authors a slot beyond `shield` | not read; nothing to select | not applicable | held, every rung reads the same pool |
+| 2048 (Vita) | `easyshield` on every team that ships a handling file | `Ship_SetShield` (`0x811bb524`) clamps to `stats + 0x98 + level * 4`, static, confidence 84 ([craft-laws.md](../ghidra/functions/vita-2048-eu-v104/craft-laws.md)); a campaign event's level is `1` | yes, same global | wired: a Novice race box starts on `easyshield`; a campaign event starts on the medium slot whatever the difficulty |
+| Omega (PS4) | `easyshield` on every team | `Ship_SetShield` (`0x012f3360`) clamps to `stats + 0x98 + skill * 4`, with a skill of `-2` reading the medium slot, static, confidence 84 ([craft-laws.md](../ghidra/functions/ps4-omega-eu/craft-laws.md)) | yes, same global | wired: Novice starts on `easyshield`, the rest on `shield` |
+
+No shipped file authors `mediumshield` or `hardshield` (HD's test asserts it), so Skilled, Elite
+and Ace read plain `shield` on every title today. The 2048 census runs on the extracted
+`PCSF00007` tree (`shield_difficulty_ground_truth::a_2048_novice_field_starts_on_each_teams_easyshield`);
+a slot whose team ships no handling file flies the player's tuning, and the test follows that.
+
+A replay rebuilds with the rung it was recorded at: `[options] skill_level`, written for a
+campaign cell only (`docs/formats/replay-file.md`). A free race derives the rung from
+`difficulty`, which the header carries. Replays recorded before this change at Novice (or at an
+Easy cell) rebuild with the easy slot and no longer reproduce their stored hashes.
+
+Ours differs from the original in two ways: the race box opens on Elite (medium), where the
+original's row opens on Easy; and `Difficulty::Ace` and a campaign Hard cell share the hard
+slot, which no title fills differently from `shield`. `oag_raceplay::finished_thrust::rung`
+maps Elite to Hard for the finished player's thrust law, which reads a different original
+integer (`AI_ResolveSkillScale`) and is left as it is.
 
 ## The self-check: completeness
 
@@ -413,7 +485,7 @@ Three parts are decoded, because they are the three with consumers (`<StartBoost
   <GlobalClass name="VECTOR|VENOM|FLASH|RAPIER|PHANTOM">
     <SpeedupPads amount time/>                           <- decoded
     <GravityMul airborne/>
-    <WeaponPad refresh_time elimination_refresh_time/>
+    <WeaponPad refresh_time elimination_refresh_time/>   <- 0.55/0.05 Pulse, 0.75/0.15 HD, 2048, Omega; Pure only refresh_time
   </GlobalClass>                                          x5
   <ExternalCloseCamPitchMod/> <ExternalFarCamPitchMod/> <ReplayCamPitchMod/>
   <CameraSideOffset/>
@@ -561,7 +633,7 @@ first left at four so Pulse and HD would not get a fabricated fifth entry.
 
 Instead a race carries the rung as **the name the disc spells** and resolves it
 against the file that authored it: `Stats::class_named`, `Global::class_named`
-and `oag_weapons::pickup::table_for`. A title asked for four gets four and
+and `WeaponStats::pickups_for`. A title asked for four gets four and
 grows nothing. Per-class *weapon speeds* need no fifth entry either - Pure
 authors a single class-independent `speed` per weapon, which `class_speeds`
 records as `class_independent` rather than inferring from four equal values.

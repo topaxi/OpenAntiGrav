@@ -31,15 +31,25 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // The directory three of the four titles spell identically; Wipeout 2048 is
     // the one that does not. See `oag_title::RaceDefaults::ship_dir`.
     ship_dir: oag_title::race::SHIP_DIR,
+    ship_hull: "Ship",
     // The same directory: this title keeps a team's tuning beside its models.
     handling_dir: oag_title::race::SHIP_DIR,
     effect_dir: oag_title::race::EFFECT_DIR,
     effect_dir_by_circuit: &[],
+    hull_by_track_type: &[],
+    circuit_lineages: &[],
     // `true`: unverified, see `ZONE_TRACKS`'s own docs and
     // `oag_title::ZoneCircuit::Separate`'s - a play-based lead says ordinary
     // HD/Fury circuits belong in the Zone picker too, not just these four.
     zone: oag_title::ZoneCircuit::Separate(ZONE_TRACKS, true),
-    zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_SHIP),
+    // The Zone hull wears the picked team's livery: the ship loader's mode-6 case
+    // queues `zoneship_zone` -> the craft's `zone` model `texturelocation` as a
+    // texture path substitution (`docs/ghidra/functions/ps3-hdfury-eu/zone-craft.md`).
+    zone_craft: oag_title::ZoneCraft::OwnShipAt {
+        root: oag_title::race::SHIP_DIR,
+        ship: ZONE_SHIP,
+        livery_key: "zoneship_zone",
+    },
     // Not measured: HD's `Team Selection` was not read in Zone, so Pulse's rule.
     zone_team_step: oag_title::ZoneTeamStep::Offered,
     // **Not a claim HD has no boost plume** - HD ships `EF_Boost`, a subtree
@@ -73,11 +83,14 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     original_opponent: true,
     original_driver: Some(&ORIGINAL_DRIVER),
     zone_class_announcer: Some(ZONE_CLASS_ANNOUNCER),
-    // One title-wide table, layered over whichever circuit races - the shape
-    // `ZoneCircuit::Separate(_, true)` above already implies, since ordinary
-    // circuits are offered in the Zone picker too. `zonemodedlc3` is a second
-    // revision this does not point at; what selects it is unread.
-    zone_palette: Some(oag_title::ZonePalette::TitleWide(ZONE_PALETTE)),
+    // One title-wide table over an ordinary circuit, the DLC3 table on the
+    // four Zone circuits: `Environment_LoadRaceScene`'s own split. See
+    // `ZONE_CIRCUIT_PALETTE`.
+    zone_palette: Some(oag_title::ZonePalette::TitleWide {
+        entry: ZONE_PALETTE,
+        zone_circuits: ZONE_TRACKS,
+        zone_circuit_entry: ZONE_CIRCUIT_PALETTE,
+    }),
     // Recovered 2026-08-31, and the writer of `craftArray[n]->+0x640` with it.
     // See `ZONE_STAGES`.
     zone_stages: Some(ZONE_STAGES),
@@ -86,8 +99,17 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_transition: Some(ZONE_TRANSITION),
     zoom_ring: Some(&ZOOM_RING),
     borrows_zoom_ring: false,
+    // `FE_GHOST`, the `GhostOption` list on the Time Trial and Speed Lap pause screens
+    // (`crate::pause_menu`), is the ghost ship's visibility; HD authors no other of the three.
+    game_options: oag_title::race::GameOptions {
+        ship_visible: true,
+        auto_load: false,
+        multiplayer_tags: false,
+    },
     zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
+    zone_fallback: None,
     zone_sky: Some(ZONE_SKY),
+    detonator: Some(DETONATOR),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: None,
     // HD/Fury's own reskins are `team_variants`' own measured shape - a
@@ -108,7 +130,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     }),
     speed_classes: Some(oag_title::SpeedClasses {
         names: oag_title::SpeedClasses::PULSE_LADDER,
-        remix_only: &[],
+        union_only: &[],
     }),
 };
 
@@ -382,9 +404,35 @@ pub const ZONE_STAGE_TEXTURES: &oag_title::ZoneStageTextures = &oag_title::ZoneS
     stages: 15,
 };
 
+/// Wipeout HD/Fury's Detonator: its grade table, its DLC3 revision on the four Zone
+/// circuits, its two fifteen-entry texture sets (`DATA00.PSARC`) and its `0.7` camera.
+///
+/// `Environment_LoadStageTextures` passes `g_detonator_mode_texture_names` (`0x007b26c8`)
+/// instead of Zone's on mode `14`, and its track set `g_detonator_mode_track_texture_names`
+/// (`0x007b28b8`) beside it; `Environment_LoadRaceScene` splits the Detonator tables on the
+/// same four circuits as Zone's (`docs/formats/effectsettings.md`, "Which HD table a race
+/// loads"). The camera scale is `camera.md`'s. Its gate byte `0x009384e1` is unread and taken
+/// clear: set, `Environment_UpdateStageBlend` would skip the mode dispatch and never read
+/// Detonator's stage counter at all.
+pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
+    palette: Some(oag_title::ZonePalette::TitleWide {
+        entry: "/data/environments/detonatormode.effectsettings",
+        zone_circuits: ZONE_TRACKS,
+        zone_circuit_entry: "/data/environments/detonatormodedlc3.effectsettings",
+    }),
+    fallback_palette: None,
+    stage_textures: Some(&oag_title::ZoneStageTextures {
+        general: "/data/tex/detonatormode",
+        track: "/data/tex/detonatormodetrack",
+        extension: ".gtf",
+        stages: 15,
+    }),
+    camera_scale: 0.7,
+};
+
 /// Wipeout HD/Fury's Zone milestone announcer.
 ///
-/// `Data\Sound\speech_zone.bnk` (`DATA01.PSARC`) names fifteen numbered cues -
+/// `Data\Sound\speech_zone.bnk` names fifteen numbered cues -
 /// every five zones to 50, then every ten to 100 - a third ladder, not Pulse's
 /// or Pure's re-read. It also carries a `ready`/`321_GO`/`go` countdown set and
 /// the fourteen `MR_*` speed-class lines [`ZONE_CLASS_ANNOUNCER`] wires - see
@@ -399,15 +447,21 @@ pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer 
 };
 
 /// Wipeout HD/Fury's Zone **speed-class** announcer - the voice line called
-/// on a speed-class step, not a zone-count milestone. See
-/// [`oag_title::ZoneClassAnnouncer`] for the evidence and what is and is not
-/// established about it.
+/// on a speed-class step, not a zone-count milestone - and the `light_wipe`
+/// tone keyed with it. See [`oag_title::ZoneClassAnnouncer`] for the evidence.
 pub const ZONE_CLASS_ANNOUNCER: &oag_title::ZoneClassAnnouncer = &oag_title::ZoneClassAnnouncer {
-    bank: r"Data\Sound\speech_class.bnk",
+    bank: r"Data\Sound\speech_zone.bnk",
     classes: &[
         "MR_SVE", "MR_VEN", "MR_SFL", "MR_FLA", "MR_SRA", "MR_RAP", "MR_SPH", "MR_PHA", "MR_SUP",
         "MR_ZEN", "MR_SUZ", "MR_Z_SUB", "MR_Z_M1", "MR_Z_SUP",
     ],
+    tick: oag_title::SequenceTick::Ps3,
+    // The race's environment-bank slot (`*0x00b6cc50`), `env0_zone.bnk` in Zone.
+    tone: Some(oag_title::ZoneClassTone {
+        bank: r"Data\Sound\env0_zone.bnk",
+        cue: "light_wipe",
+        tick: oag_title::SequenceTick::Ps3,
+    }),
 };
 
 /// Where each race cue lives, and the one title where two of them move.
@@ -487,6 +541,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
         origin: oag_title::Origin::Measured,
     },
     crossfade: None,
+    wwise: None,
 };
 
 /// The ship directory a Zone race flies out of.
@@ -506,10 +561,9 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
 ///
 /// `/data/ships/zone/ship.vex` resolves and decodes - 29 meshes, 29,678
 /// triangles through its `.rcsmodel` sibling, probed 2026-08-19. Confidence
-/// **94** for the name; **nothing about which mode selects it has been read in
-/// this executable**, so the identification rests on the directory's name, its
-/// classless handling file and its company in `MODE_SHIPS`, exactly as Pure's
-/// does.
+/// **94** for the name. Game mode 6 (Zone) names `Data\Ships\Zone\Ship.vex` in
+/// `Ship_ReloadModelForSkin` (`0x000dbdc8`) without reading the craft
+/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-craft.md`).
 ///
 /// Spelled without a leading slash and capitalised the way Pulse spells a team,
 /// because it goes through `oag_pulse::race::ships::entry_name` like every other
@@ -518,20 +572,33 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
 /// is what the manifest stores.
 pub const ZONE_SHIP: &str = "zone";
 
-/// The per-stage colour grade a Zone race climbs, one file for the whole
-/// title.
+/// The per-stage colour grade a Zone race climbs on an ordinary circuit.
 ///
-/// **Title-wide rather than per-circuit**, which is what makes it usable on an
-/// ordinary circuit as well as on the four dedicated ones - the arrangement
+/// **Not per-circuit**: one file for every ordinary circuit, which is what makes
+/// Zone usable on them at all - the arrangement
 /// [`oag_title::ZoneCircuit::Separate`]'s own `also_race_circuits` flag
 /// already asserts for this title. 21,160 bytes, fifteen stages named `Start`
 /// through `Supersonic`, parsed by `oag_tables::effectsettings` and checked
-/// against the disc in `effectsettings_ground_truth.rs`.
-///
-/// **This is the base revision, not `zonemodedlc3.effectsettings`.** That file
-/// is a second, twice-as-large authoring of the same table; what selects
-/// between them is unread, so nothing here selects.
+/// against the disc in `effectsettings_ground_truth.rs`. The four Zone
+/// circuits take [`ZONE_CIRCUIT_PALETTE`] instead.
 pub const ZONE_PALETTE: &str = "/data/environments/zonemode.effectsettings";
+
+/// The stage table a Zone race takes on one of the four [`ZONE_TRACKS`].
+///
+/// `Environment_LoadRaceScene` (`0x003f3fb0`) compares the race's track id
+/// against `25_Track`..`28_Track` (the table at `0x008b8104`, a case-blind
+/// compare at `0x0043e838`) and on a match loads
+/// `Data/Environments/ZoneModeDLC3.effectSettings`, otherwise
+/// `ZoneMode.effectSettings` (the path table at `0x008b8114`). Confidence 88:
+/// read off the branch, and this table's stage 3 `Sun colour`
+/// `1.143733 1.091405 1.906221` is the live `directionalLight0Colour` read on
+/// RPCS3 in a `zone_1` race at `Sub Flash`, where the base table authors
+/// `1 1 1`. Evidence: `docs/ghidra/functions/ps3-hdfury-eu/zone-palette-select.md`.
+///
+/// Its second half (the `Scene.*`/`Track.*` gradients and middle colours, the
+/// EQ, aurora and Detonator colours) is parsed and reported; it carries 48 keys
+/// a stage where the base file carries 23.
+pub const ZONE_CIRCUIT_PALETTE: &str = "/data/environments/zonemodedlc3.effectsettings";
 
 /// The circuit a Zone race loads when the caller names none.
 ///
@@ -652,6 +719,8 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     // charging - see `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
     plasma_ball: Some(r"Data\Weapons\HD_plasma_ball.vex"),
     plasma_blast_pulse: None,
+    disruptor_halo: None,
+    disruptor_craft: None,
     // `WeaponExplosions_Start` (`0x00127cd0`) loads these three, in this
     // order, into `+0x54`/`+0x58`/`+0x5c` - see plasma.md's own "detonation"
     // section for the ease each one is scrubbed by.
@@ -699,6 +768,53 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         texture: "Data/RibbonEffects/textures/smoke_trails_frame2_alpha.gtf",
         opacity_ramp: "Data/RibbonEffects/textures/smoke_trails_opacity_ramp.tga",
     }),
+    // The Missile's four `FatLine` elements: `Missile_Init_q` (`0x0011c5d0`)
+    // takes two of `RibbonEffects` pool `+0x50` (the stub) and two of pool `+0x68`
+    // (the helix), and `FatLine_PushChains` (`0x002ab9d0`) lays their nodes. The
+    // numbers are the two static config blocks at `0x00920fd0` and `0x00921010`,
+    // read from the ELF; the texture is the blocks' own `ThickLine_Red.gtf`. See
+    // `docs/ghidra/functions/ps3-hdfury-eu/missile-ribbon.md`.
+    missile_trail: Some(oag_title::weapons::MissileTrail {
+        texture: "Data/Tex/ThickLine_Red.gtf",
+        stub: oag_title::weapons::FatLineSpec {
+            width: [0.5, 0.0],
+            lifetime: 0.3,
+            u_per_unit: 0.2,
+            chains: 1,
+            capacity: 50,
+            phase_step: 0.0,
+            radius: 0.0,
+            ramp: false,
+        },
+        helix: oag_title::weapons::FatLineSpec {
+            width: [0.08, 0.3],
+            lifetime: 2.8,
+            u_per_unit: 0.2,
+            chains: 3,
+            capacity: 350,
+            phase_step: 0.06,
+            radius: 0.6,
+            ramp: true,
+        },
+        // `RibbonEffects` pool `+0x5c`, config block `0x00921050` (read from the ELF,
+        // `docs/ghidra/functions/ps3-hdfury-eu/missile-explosion.md`, "How a streak is
+        // drawn"): width `2 (1 - t)`, node life 1.2 s, alpha `1 - t`. Twenty elements; the
+        // explosion takes sixteen.
+        blast_streak: Some(oag_title::weapons::BlastStreak {
+            texture: "Data/Tex/ThickLine_bighalo.gtf",
+            line: oag_title::weapons::FatLineSpec {
+                width: [0.0, 2.0],
+                lifetime: 1.2,
+                u_per_unit: 0.2,
+                chains: 1,
+                capacity: 350,
+                phase_step: 0.06,
+                radius: 0.6,
+                ramp: false,
+            },
+            pool: 20,
+        }),
+    }),
     // `leachbeam_triangle.rcsmodel`'s material names the glow and the noise;
     // the live draw binds a 128x128 on unit 0 and a 256x256 on unit 1. See
     // `docs/ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md`, "hd-leach-draw".
@@ -707,6 +823,9 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         noise: "Data/RibbonEffects/textures/hd_waketrail_clouds.gtf",
     }),
     leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),
+    // `Missile.cpp`'s constructor (`0x0011ccc8`) loads it twice, into the
+    // object's `+0x1c0` and `+0x1c4`: the flying head, not the explosion.
+    missile_head: Some(r"Data\Weapons\HD_missile_ball_bloomring.vex"),
     shuriken: None,
     cannon_look: Some(CANNON_LOOK),
     // No `staticglow` string in HD's EBOOT: it never binds a ghost static.
@@ -967,6 +1086,17 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // match the geometry on 16 of 16 hits this way and miss on three with the textbook form
     // (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Confidence 85.
     wall_point_rate_body_local: oag_title::pre_race::Sourced::measured(true),
+    // `Body_Integrate` (`0x000f6870`) ends its linear update with `v -= v * dt * body+0x4bc`
+    // (`0x000f6fd8`-`0x000f6ff8`), and the body initialiser (`0x000f5878`) writes `0.01`
+    // (`0x008a92f4`) there. Live under held throttle, one step of ours without it lands
+    // `1.65e-4` to `1.77e-4` of the speed fast per frame at twenty speeds from 8 to 121 units/s,
+    // `0.01 / 60`; with it the residual is under `2e-4` units/s
+    // (`docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`). Confidence 92.
+    body_linear_damping: oag_title::pre_race::Sourced::measured(0.01),
+    // The angular twin, `w -= w * dt * body+0x4b8` (`0x000f70f8`-`0x000f7118`), written by the
+    // same store of the same `0.01`. Read, not isolated live: it is `0.2 %` of the craft's own
+    // yaw damping (same page). Confidence 85.
+    body_angular_damping: oag_title::pre_race::Sourced::measured(0.01),
     // No cage from the track header: HD's `CollisionCageFx` module (`0x0007bf40`-`0x0007d0f0`,
     // Pulse's literals) has no static caller, the track's `collisionCageEnabled` definition
     // attribute (`+0x1b7`, default `0`) is set by no HD definition, and on Chenghou Project, the
@@ -975,6 +1105,9 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     cage_from_track_header: oag_title::pre_race::Sourced::measured(false),
     // Not read: the view matrix is Pulse's orthonormal look-at until measured.
     chase_view_sheared: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    // The original's Novice field started on each team's `easyshield`, read live off RPCS3
+    // (`docs/formats/handling-stats.md`, "Which difficulty picks the shield slot").
+    shield_by_skill: oag_title::pre_race::Sourced::measured(true),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,
@@ -1025,12 +1158,27 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     tick: oag_title::SequenceTick::Ps3,
     hashed: false,
     event: None,
+    event_every_mode: false,
     beat: Some("HBEAT"),
 };
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// HD's rigid body damps both velocities at `0.01` a second, read off `Body_Integrate` and
+    /// `Body_Init` and measured under held throttle.
+    #[test]
+    fn the_body_damping_is_hds_own_measured_law() {
+        assert_eq!(
+            CRAFT_LAWS.body_linear_damping,
+            oag_title::pre_race::Sourced::measured(0.01)
+        );
+        assert_eq!(
+            CRAFT_LAWS.body_angular_damping,
+            oag_title::pre_race::Sourced::measured(0.01)
+        );
+    }
 
     /// HD's engine doubles its output, read off `Craft_UpdateThrottle` and measured under
     /// player input, not inherited from Pulse.

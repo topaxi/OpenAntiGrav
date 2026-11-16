@@ -3,8 +3,9 @@
 # pad, GDB proxy and /proc memory, in about 10 s.
 #
 #   scripts/emu-restore-state.sh <lane> <state-file> [--restart] [--no-gdb] [--interpreter] [--pause] [--serial BCES00664]
-#   --pause holds the game on the state's own tick as soon as the stub answers (a mid-race state
-#   otherwise runs on for the 10 s the script takes to return); a capture then resumes for a moment.
+#   --pause holds the game as soon as the stub answers (a mid-race state otherwise runs on for the 10 s the
+#   script takes to return); it lands a variable game time after the load, not on the state's own tick (one
+#   HD race state stopped at race clocks 11.2 s and 7.3 s on two restores); a capture then resumes for a moment.
 #
 # <lane> is the scratch dir of a private tree (scripts/emu-env.sh <lane> ...).
 # --restart then runs the pause menu's Restart Race (another ~8 s), which prints
@@ -48,7 +49,7 @@ for _ in $(seq 1 480); do
   sleep 0.25
 done
 grep -q "^serving" "$W/serve.log" || { tail -5 "$W/serve.log" >&2; echo "restore failed" >&2; exit 1; }
-printf 'restored in %.1f s\n' "$(echo "$(date +%s.%N)-$t0" | bc)"
+awk -v a="$(date +%s.%N)" -v b="$t0" 'BEGIN { printf "restored in %.1f s\n", a - b }'
 if [ "$restart" = 1 ]; then
   export OAG_RPCS3_ATTACH=1
   uv run --with evdev python3 scripts/emu-run.py -- python3 -u scripts/rpcs3-drive.py \

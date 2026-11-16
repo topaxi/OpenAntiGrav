@@ -151,7 +151,7 @@ pub fn survey(paths: &[PathBuf]) -> Vec<Candidate> {
 
 /// Every playable candidate, one per distinct title.
 ///
-/// Race Remix's own reader of a survey: it wants "which titles can this
+/// A two-title race's own reader of a survey: it wants "which titles can this
 /// machine race today", not "which files are on the search path" - two
 /// pressings of the same title (a US and an EU disc) are one row, the first
 /// one found. Order is `rows`' own, so the same "known names first" rule
@@ -163,6 +163,80 @@ pub fn distinct_titles(rows: &[Candidate]) -> Vec<Candidate> {
         .filter(|row| row.is_playable() && seen.insert(row.title().to_string()))
         .cloned()
         .collect()
+}
+
+/// The source to lend a title that authors no trail-hit burst its `WO_TRAIL_HITSHIP`
+/// (`graphics.trail_hits`): Wipeout HD's when `rows` holds it, else the first playable row whose
+/// title authors the effect itself (2048, Omega). `None` when this machine has no such source.
+#[must_use]
+pub fn trail_hit_lender(rows: &[Candidate]) -> Option<&Candidate> {
+    lender(rows, |title| {
+        title.effect_on(oag_title::Trigger::TrailHitship).is_some()
+    })
+}
+
+/// Wipeout HD's row when `rows` holds it and `authors` holds for its title, else the first
+/// playable row whose title does.
+fn lender(rows: &[Candidate], authors: impl Fn(&oag_title::Title) -> bool) -> Option<&Candidate> {
+    let authors = |row: &&Candidate| row.playable().is_some_and(&authors);
+    rows.iter()
+        .filter(authors)
+        .find(|row| {
+            row.playable()
+                .is_some_and(oag_source::title::is_preferred_trail_hit_lender)
+        })
+        .or_else(|| rows.iter().find(authors))
+}
+
+/// The source to lend a title that has no wingtip contrails its config and texture
+/// (`graphics.wingtip_contrails`): Wipeout HD's when `rows` holds it, else the first playable row
+/// whose title carries them (2048, Omega). `None` when this machine has no such source.
+#[must_use]
+pub fn wingtip_lender(rows: &[Candidate]) -> Option<&Candidate> {
+    lender(rows, |title| title.wingtip.is_some())
+}
+
+/// [`oag_raceplay::Options::wingtip_contrails`] for the player's `graphics.wingtip_contrails`,
+/// from a survey the caller already holds.
+#[must_use]
+pub fn wingtip_contrails_from(on: bool, rows: &[Candidate]) -> oag_raceplay::WingtipContrails {
+    if !on {
+        return oag_raceplay::WingtipContrails::Off;
+    }
+    oag_raceplay::WingtipContrails::On {
+        lender: wingtip_lender(rows).map(|row| row.source.clone()),
+    }
+}
+
+/// [`wingtip_contrails_from`] for a caller with no survey (the command line's race).
+#[must_use]
+pub fn wingtip_contrails(on: bool) -> oag_raceplay::WingtipContrails {
+    if !on {
+        return oag_raceplay::WingtipContrails::Off;
+    }
+    wingtip_contrails_from(on, &survey(&oag_source::source::candidates()))
+}
+
+/// [`oag_raceplay::Options::trail_hits`] for the player's `graphics.trail_hits`, from a survey
+/// the caller already holds (the session's own).
+#[must_use]
+pub fn trail_hits_from(on: bool, rows: &[Candidate]) -> oag_raceplay::TrailHits {
+    if !on {
+        return oag_raceplay::TrailHits::Off;
+    }
+    oag_raceplay::TrailHits::On {
+        lender: trail_hit_lender(rows).map(|row| row.source.clone()),
+    }
+}
+
+/// [`trail_hits_from`] for a caller with no survey (the command line's race): surveys the
+/// machine's sources, and only when the setting is on.
+#[must_use]
+pub fn trail_hits(on: bool) -> oag_raceplay::TrailHits {
+    if !on {
+        return oag_raceplay::TrailHits::Off;
+    }
+    trail_hits_from(on, &survey(&oag_source::source::candidates()))
 }
 
 /// Whether `source` is an encrypted PS3 image no key opens, which a stated
@@ -243,7 +317,7 @@ fn why_not(platform: Platform) -> String {
 ///
 /// `None` for a row that opened. Separate from what the screen draws because
 /// stdout has no right edge: this is where the pointer into `docs/` goes, and
-/// where a maintainer reading a terminal gets the whole story rather than the
+/// where a person reading a terminal gets the whole story rather than the
 /// half that fits in 480 units.
 #[must_use]
 pub fn advice(row: &Candidate) -> Option<String> {
@@ -817,7 +891,7 @@ fn list_draw(launcher: &Launcher) -> Vec<Draw> {
     // soon as something is wrong is a screen that helps least when it matters.
     out.push(text(MARGIN, SCREEN.1 - 20.0, 1.0, DIM, HINT));
 
-    // The build's own short commit hash, bottom right - `env!` reads
+    // The build's own short commit hash and commit date, bottom right - `env!` reads
     // `oag_net::GIT_HASH`, set at compile time by `oag-net`'s `build.rs`. This is the one
     // screen every build shows before anything else can go wrong, which
     // makes it the answer to "which build is this" for a bug report or a
@@ -829,11 +903,20 @@ fn list_draw(launcher: &Launcher) -> Vec<Draw> {
         color: DIM,
         border: None,
         align: Align::Right,
-        text: oag_net::GIT_HASH.to_string(),
+        text: build_label(),
         wrap_width: None,
     });
 
     out
+}
+
+/// The hash, then the commit's date when the build knows it.
+fn build_label() -> String {
+    if oag_net::BUILD_DATE.is_empty() {
+        oag_net::GIT_HASH.to_string()
+    } else {
+        format!("{} {}", oag_net::GIT_HASH, oag_net::BUILD_DATE)
+    }
 }
 
 /// Which row a point is over: the band [`draw_list`] highlights the

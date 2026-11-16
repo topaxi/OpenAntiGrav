@@ -26,6 +26,7 @@ mod pure_campaign_ground_truth;
 mod pure_flow_ground_truth;
 mod pure_weapons_ground_truth;
 mod race_campaign_ground_truth;
+mod rumble_ground_truth;
 mod speed_ladder_ground_truth;
 mod start_gantry_pure_ground_truth;
 mod track_stats_ground_truth;

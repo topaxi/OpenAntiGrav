@@ -134,6 +134,7 @@ impl Ahead {
             // can afford to allocate and run a per-band transform at all -
             // see `spectrum`'s own module docs.
             let mut analyzer = Analyzer::new();
+            let mut music = vec![0.0f32; CHUNK_FRAMES];
             while !flag.load(Ordering::Relaxed) {
                 // Fill while another whole chunk still fits under the
                 // target, then sleep. A partial push would leave the ring's
@@ -142,17 +143,19 @@ impl Ahead {
                     && ring.slots() >= scratch.len()
                 {
                     match mixer.lock() {
-                        Ok(mut mixer) => mixer.render(&mut scratch),
+                        Ok(mut mixer) => {
+                            mixer.render(&mut scratch);
+                            music.copy_from_slice(mixer.music_tap());
+                        }
                         // A poisoned mixer is a panic somewhere else that
                         // this thread cannot fix; it stops rather than
                         // spinning on a lock that will never be taken.
                         Err(_) => return,
                     }
                     // Analysed on exactly what was just rendered, before it
-                    // leaves for the ring - the freshest samples this
-                    // thread ever sees, and the same ones the device will
-                    // play a queue-depth later.
-                    spectrum.publish(analyzer.process(&scratch, sample_rate));
+                    // leaves for the ring: the freshest samples this thread
+                    // ever sees.
+                    spectrum.publish(analyzer.process(&music, sample_rate));
                     ring.push(&scratch);
                 }
                 std::thread::sleep(POLL);

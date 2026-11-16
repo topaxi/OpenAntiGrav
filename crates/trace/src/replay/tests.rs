@@ -34,6 +34,14 @@ fn inert_handling() -> Handling {
     handling
 }
 
+/// Pulse's laws without the body's own velocity damping: mass cannot make that term negligible,
+/// as it is a fraction of the velocity rather than a force, so a free body needs it off.
+fn free_environment() -> Environment {
+    let mut environment = Environment::default();
+    environment.laws.body_damping = oag_physics::laws::BodyDamping::NONE;
+    environment
+}
+
 fn frame(position: Vec3, velocity: Vec3) -> Frame {
     Frame {
         position,
@@ -186,7 +194,7 @@ fn a_coasting_ship_tracks_a_straight_line_recording() {
     let simulated = replay(
         &recorded,
         &inert_handling(),
-        &Environment::default(),
+        &free_environment(),
         &CollisionWorld::new(),
         &Options::default(),
         None,
@@ -218,7 +226,7 @@ fn speed_cached_is_the_forward_projection_and_not_the_magnitude() {
     let simulated = replay(
         &recorded,
         &inert_handling(),
-        &Environment::default(),
+        &free_environment(),
         &CollisionWorld::new(),
         &Options::default(),
         None,
@@ -263,7 +271,7 @@ fn rows_are_sampled_before_the_step_not_after() {
     let simulated = replay(
         &recorded,
         &inert_handling(),
-        &Environment::default(),
+        &free_environment(),
         &CollisionWorld::new(),
         &Options::default(),
         None,

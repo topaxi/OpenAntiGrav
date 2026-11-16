@@ -12,42 +12,56 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 mod perturb;
 
 mod hd_ai_craft_laws_ground_truth;
 mod hd_air_pose_walk;
 mod hd_chenghou_jumps_sweep;
+mod hd_eliminator_hud_ground_truth;
 mod hd_engine_flare_ground_truth;
 mod hd_env_probes_ground_truth;
 mod hd_envsettings_carry_ground_truth;
 mod hd_flare_spike_names_ground_truth;
+mod hd_flip_ground_truth;
 mod hd_flyby_ground_truth;
 mod hd_grid_hover_ground_truth;
 mod hd_hud_ground_truth;
 mod hd_livery_ground_truth;
+mod hd_missile_ribbon_ground_truth;
 mod hd_mix_ground_truth;
 mod hd_opponent_variant_ground_truth;
 mod hd_original_ai_ground_truth;
 mod hd_pad_illumination_ground_truth;
 mod hd_pickup_icon_ground_truth;
+mod hd_plasma_flight_ground_truth;
 mod hd_record_target_ground_truth;
 mod hd_rim_glow_ground_truth;
 mod hd_rocket_smoke_ground_truth;
+mod hd_shield_colour_ground_truth;
 mod hd_sky_tint_ground_truth;
+mod hd_texture_spelling_ground_truth;
+mod hd_thrust_ground_truth;
 mod hd_tiny_sun_direction_ground_truth;
 mod hd_trackwall_ground_truth;
+mod hd_wingtip_ground_truth;
 mod hd_zone_hover_ground_truth;
 mod head_to_head_people_ground_truth;
 mod hillside_rain_ground_truth;
+mod hit_effects_inherit_ground_truth;
 mod hud_layout_ground_truth;
 mod hud_style_ground_truth;
 mod hull_gather_ground_truth;
 mod hull_light_scale_ground_truth;
+mod incoming_warnings_ground_truth;
 mod intro_camera_ground_truth;
 mod language_offered_ground_truth;
 mod lap_times_ground_truth;
 mod launch_boost_ground_truth;
 mod leach_energy_ground_truth;
+mod leach_pool_ground_truth;
 mod leach_tube_ground_truth;
 mod livery_ground_truth;
 mod lock_sight_ground_truth;

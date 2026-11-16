@@ -99,6 +99,7 @@ pub(super) fn per_team(
     ship_dir: &str,
     authored: &oag_title::flare::Authored,
     nozzle: Option<Vec3>,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Flare {
     let name = ship_entry_name_for(ship_dir, team, authored.stem);
@@ -137,6 +138,7 @@ pub(super) fn per_team(
             &blob,
             &geometry,
             &mut |path| archives.read_name(path).ok(),
+            store,
             |c| c.mesh,
         )
         .map(|(model, built)| (model, built.describe()))
@@ -503,7 +505,7 @@ fn translate(model: &mut Model, offset: Vec3) {
 }
 
 /// `<ship_dir>\<Team>\<stem>.vex`, the way every other per-team model is
-/// composed - see [`crate::race::ship_entry_name`].
+/// composed - see `oag_title::race::ShipPaths::hull_entry_name`.
 fn ship_entry_name_for(ship_dir: &str, team: &str, stem: &str) -> String {
-    oag_pulse::race::ships::entry_name_in(ship_dir, team, stem)
+    oag_title::race::entry_name_in(ship_dir, team, stem)
 }

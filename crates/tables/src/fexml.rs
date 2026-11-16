@@ -171,7 +171,7 @@ pub fn expand(data: &[u8]) -> Result<String> {
 /// at `index > 1`, not `> 0`: callers slice `rest[1..close]`, which panics for
 /// `close == 0`, so a second-character `<` (a stray `<<`, not on any disc) and
 /// the tag's own opening `<` must not end it.
-fn tag_end(rest: &str) -> Option<usize> {
+pub(crate) fn tag_end(rest: &str) -> Option<usize> {
     if let Some(body) = rest.strip_prefix("<!--") {
         return body.find("-->").map(|at| at + "<!--".len() + 2);
     }
@@ -367,7 +367,7 @@ pub fn parse(xml: &str) -> Node {
 /// Whitespace uses the **ASCII** predicate: `char`'s also matches `U+0085` and
 /// `U+00A0`, whose bytes inside a `&str` are only UTF-8 continuation bytes, so a
 /// name containing one would be sliced mid-character and panic.
-fn attributes(body: &str) -> Vec<(String, String)> {
+pub(crate) fn attributes(body: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let bytes = body.as_bytes();
     let mut at = 0usize;
@@ -380,12 +380,21 @@ fn attributes(body: &str) -> Vec<(String, String)> {
         while at < bytes.len() && bytes[at] != b'=' && !bytes[at].is_ascii_whitespace() {
             at += 1;
         }
-        if key_at == at || at >= bytes.len() || bytes[at] != b'=' {
+        let key_end = at;
+        // XML allows whitespace around the `=`; Pure's HUD layouts write
+        // `BorderColor= "0x40000000"`.
+        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        if key_at == key_end || at >= bytes.len() || bytes[at] != b'=' {
             break;
         }
-        let key = body[key_at..at].to_string();
+        let key = body[key_at..key_end].to_string();
 
         at += 1; // '='
+        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
         if at >= bytes.len() || bytes[at] != b'"' {
             break;
         }

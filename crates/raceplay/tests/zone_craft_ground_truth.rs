@@ -25,8 +25,8 @@ fn check(
 ) {
     for team in teams {
         let paths = defaults.ships_for(team);
-        let racing = oag_livery::entry::ship_entry_name(paths, team, Mode::TimeTrial, None);
-        let zoning = oag_livery::entry::ship_entry_name(paths, team, Mode::Zone, None);
+        let racing = paths.hull_entry_name(team, false, None);
+        let zoning = paths.hull_entry_name(team, true, None);
         assert_ne!(
             racing, zoning,
             "{title}/{team}: Zone must not fly the race hull"
@@ -117,15 +117,20 @@ fn omega_zone_hull_wears_the_livery_its_definition_names() {
             archives,
             &[team.to_string()],
             &oag_livery::LoadContext {
+                store: Default::default(),
                 race: oag_omega::TITLE.race,
                 mode: Mode::Zone,
                 flare: oag_omega::TITLE.flare,
                 hull_overlay: false,
+                leach_overlay: false,
                 hull_shine: false,
                 hull_wreck: false,
                 absorb_shell: false,
+                own_shield: false,
                 zone_liveries: &liveries,
                 forced_skins: &[],
+                circuit_hull: None,
+                player_livery: None,
             },
             None,
             None,
@@ -146,5 +151,155 @@ fn omega_zone_hull_wears_the_livery_its_definition_names() {
         "{absent}"
     );
     let kept = load(&mut archives, r"Feisar2048\3");
+    assert!(kept.contains("authors no Zone livery"), "{kept}");
+}
+
+/// HD/Fury's Zone hull wears the picked team's livery the way 2048's does: its
+/// texture requests all sit under `data/ships/zone/zoneship_zone/`, and the ship
+/// loader's mode-6 case swaps that component for the craft's `zone` model
+/// `texturelocation` (`docs/ghidra/functions/ps3-hdfury-eu/zone-craft.md`). Without the
+/// swap the hull reads the default `zoneship_zone` set, which ships only four of
+/// the nine textures it asks for. The report line names the swap and the
+/// absence of "does not hold" says every swapped texture was on the disc.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_zone_hull_wears_the_picked_teams_livery() {
+    let Some(path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut archives =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening HD/Fury")
+            .archives;
+    assert_eq!(
+        oag_hd::race::DEFAULTS.zone_craft.livery_key(),
+        Some("zoneship_zone"),
+        "HD's Zone hull takes a livery"
+    );
+    let blob = archives
+        .read_name(oag_hd::TITLE.plugin_definition)
+        .expect("teams definition");
+    let xml = oag_tables::fexml::text(&blob).expect("the definition reads");
+    let liveries: Vec<(String, String)> = oag_raceplay::catalogue::teams(&xml)
+        .iter()
+        .filter_map(|team| Some((team.id.clone(), team.zone_livery.clone()?)))
+        .collect();
+    assert_eq!(liveries.len(), 12, "{liveries:?}");
+    for (team, livery) in &liveries {
+        let name = format!(r"Data\Ships\Zone\{livery}\team.gtf");
+        assert!(
+            archives.read_name(&name).is_ok_and(|blob| !blob.is_empty()),
+            "{team}: {name} is not on the disc"
+        );
+    }
+    let mut load = |team: &str| {
+        let mut report = Vec::new();
+        oag_livery::load(
+            &mut archives,
+            &[team.to_string()],
+            &oag_livery::LoadContext {
+                store: Default::default(),
+                race: oag_hd::TITLE.race,
+                mode: Mode::Zone,
+                flare: oag_hd::TITLE.flare,
+                hull_overlay: false,
+                leach_overlay: false,
+                hull_shine: false,
+                hull_wreck: false,
+                absorb_shell: false,
+                own_shield: false,
+                zone_liveries: &liveries,
+                forced_skins: &[],
+                circuit_hull: None,
+                player_livery: None,
+            },
+            None,
+            None,
+            &[],
+            &mut report,
+        )
+        .expect("the Zone hull loads");
+        report.join("\n")
+    };
+    for (team, livery) in [
+        ("Qirex", "zoneship_quirex"),
+        ("AG_Systems", "zoneship_ag_sys"),
+        ("Feisar", "zoneship_faisar"),
+        ("Icaras", "zoneship_icaras"),
+    ] {
+        let report = load(team);
+        assert!(
+            report.contains(&format!(
+                "{team}: Zone livery {livery} replaces zoneship_zone on "
+            )),
+            "{report}"
+        );
+        assert!(!report.contains("does not hold"), "{report}");
+    }
+}
+
+/// 2048 v1.04 carries the same twelve HD-era Zone liveries as HD and Omega, under
+/// HD's key `zoneship_zone` (`docs/ghidra/functions/vita-2048-eu-v104/zone-craft.md`):
+/// an HD-era team's swap reaches the hull's textures and finds them all, and a
+/// native 2048 craft authors none and keeps the default.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn vita_2048_zone_hull_wears_the_livery_its_definition_names() {
+    let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let mut archives = oag_2048::open(&path.display().to_string()).expect("opening 2048");
+    let blob = archives
+        .read_name(oag_2048::TITLE.plugin_definition)
+        .expect("teams definition");
+    let xml = oag_tables::fexml::text(&blob).expect("the definition reads");
+    let liveries: Vec<(String, String)> = oag_raceplay::catalogue::teams(&xml)
+        .iter()
+        .filter_map(|team| Some((team.id.clone(), team.zone_livery.clone()?)))
+        .collect();
+    assert_eq!(liveries.len(), 12, "{liveries:?}");
+    let mut load = |team: &str| {
+        let mut report = Vec::new();
+        oag_livery::load(
+            &mut archives,
+            &[team.to_string()],
+            &oag_livery::LoadContext {
+                store: Default::default(),
+                race: oag_2048::TITLE.race,
+                mode: Mode::Zone,
+                flare: oag_2048::TITLE.flare,
+                hull_overlay: false,
+                leach_overlay: false,
+                hull_shine: false,
+                hull_wreck: false,
+                absorb_shell: false,
+                own_shield: false,
+                zone_liveries: &liveries,
+                forced_skins: &[],
+                circuit_hull: None,
+                player_livery: None,
+            },
+            None,
+            None,
+            &[],
+            &mut report,
+        )
+        .expect("the Zone hull loads");
+        report.join("\n")
+    };
+    for (team, livery) in [
+        ("Qirex", "zoneship_quirex"),
+        ("AG_Systems", "zoneship_ag_sys"),
+    ] {
+        let report = load(team);
+        assert!(
+            report.contains(&format!(
+                "{team}: Zone livery {livery} replaces zoneship_zone on "
+            )),
+            "{report}"
+        );
+        assert!(!report.contains("does not hold"), "{report}");
+    }
+    let kept = load(r"feisar2048\1");
     assert!(kept.contains("authors no Zone livery"), "{kept}");
 }

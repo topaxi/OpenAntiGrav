@@ -96,7 +96,7 @@
 //! reversed back here. Strings are byte arrays and read as-is, which is why
 //! this is a byte-order *parameter* and never a swap of the whole file.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// The container magic.
 pub const MAGIC: &[u8; 4] = b"SYSP";
@@ -690,6 +690,12 @@ pub struct Emitter {
     /// word is not this field, and for a record too short to hold it. See
     /// `docs/ghidra/functions/ps4-omega-eu/heat-haze.md`.
     pub distort_strength: f32,
+    /// `+0xc84` on a draw class 6 emitter: the `kColourScale` the particle renderer binds for
+    /// the emitter's batch (`0.7` on `WO_TRAIL_HITSHIP`'s first emitter, `1.0` on `CORE_IMPACT`).
+    /// Omega's CPU renderer reads it so (`docs/ghidra/functions/ps4-omega-eu/heat-haze.md`,
+    /// `Particle_PushQuadBatch`); HD's own reader of the word is unread. `1.0` for every other
+    /// class, where the word is not this field, and for a record too short to hold it.
+    pub colour_scale: f32,
     /// `+0x778`: how fast the sprite-atlas frame advances, frames per tick.
     /// The fourth channel the load-time baker `FUN_088f9024` merges, after
     /// alpha, size and roll; see `docs/formats/pob.md`, "The frame-rate
@@ -709,7 +715,9 @@ pub struct Emitter {
     pub animated_attributes: i32,
     /// `+0x940`'s records, in order - see [`attribute`].
     pub attribute_animations: Vec<attribute::AttributeAnimation>,
-    /// `+0x9a0`: sprite-atlas grid, columns and rows.
+    /// `+0x9a0`: sprite-atlas grid, columns and rows, one `u32` read in the
+    /// file's byte order with the columns in the high half (`docs/formats/pob.md`,
+    /// "The atlas grid word").
     pub atlas_grid: (u16, u16),
     /// `+0x9ac`. **Not the frame count**: `ParticleSystem_InitParticle`
     /// draws `Psys_RandIntRange(1, n)` into bits 4-7 of a per-particle flag
@@ -832,7 +840,6 @@ fn parse_emitter(
     let name = String::from_utf8_lossy(&record[..nul]).into_owned();
 
     let word = |at: usize| order.u32(record, at);
-    let half = |at: usize| order.u16(record, at);
     let float = |at: usize| order.f32(record, at);
     let int = |at: usize| order.u32(record, at) as i32;
 
@@ -881,6 +888,11 @@ fn parse_emitter(
         } else {
             0.0
         },
+        colour_scale: if word(0xb8) == 5 && record.len() >= 0xc88 {
+            float(0xc84)
+        } else {
+            1.0
+        },
         frame_rate: parse_channel(record, order, 0x778)?,
         emission_scale: parse_channel(record, order, 0x858)?,
         playback_rate: float(0x4cc),
@@ -888,7 +900,7 @@ fn parse_emitter(
         child_spawn_probability: float(0x4d4),
         animated_attributes: int(0x93c),
         attribute_animations: attribute::parse_list(data, order, base, record)?,
-        atlas_grid: (half(0x9a0), half(0x9a2)),
+        atlas_grid: ((word(0x9a0) >> 16) as u16, word(0x9a0) as u16),
         atlas_frames: int(0x9ac),
         modifiers,
         death_child: None,

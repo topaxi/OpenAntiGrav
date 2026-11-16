@@ -13,6 +13,7 @@ pub mod campaign;
 pub mod endrace;
 pub mod join;
 pub mod marquee;
+pub mod pause;
 pub mod picker;
 pub mod prompt;
 pub mod pure_chain;

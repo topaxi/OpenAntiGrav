@@ -16,9 +16,7 @@ impl Race {
     ///
     /// # One snapshot per grid slot, and every person's craft stepped from its own
     ///
-    /// This took a single [`InputSnapshot`] until 2026-09-16, which made "the
-    /// player" and "slot 0" the same statement and left nowhere to put a second
-    /// person's controls. It now takes [`PlayerInputs`] - one snapshot per slot,
+    /// It takes [`PlayerInputs`] - one snapshot per slot,
     /// indexed the same way [`oag_gameplay::World::race`] and
     /// `World::controllers` are - so split screen, a second window and a remote
     /// client differ only in where a snapshot comes from.
@@ -29,9 +27,7 @@ impl Race {
     /// says. Each gets its own controls, autopilot, pickup spend, pads, force
     /// law, off-track rescue and race rules (`crate::player_step`); an AI slot
     /// is still flown by [`Self::step_opponents`] and a person's slot is
-    /// skipped by it. Until 2026-10-13 only the primary slot was stepped and a
-    /// second human's snapshot reached nothing (ADR-0052 recorded that as a
-    /// consequence of its own decision).
+    /// skipped by it.
     ///
     /// The return value is one [`Evaluations`] entry per stepped slot; the
     /// camera and the full-screen HUD read the primary's through
@@ -48,7 +44,11 @@ impl Race {
     pub fn tick(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluations {
         #[cfg(feature = "view")]
         let queued = self.sim.cues.len();
+        if let Some(xp) = self.sim.xp.as_mut() {
+            xp.advance_window();
+        }
         let evaluations = self.tick_body(inputs);
+        self.observe_xp();
         #[cfg(feature = "view")]
         self.note_cues(queued);
         evaluations
@@ -69,25 +69,29 @@ impl Race {
         // anything this tick can arm it, gives the same order - the frame an
         // impact lands in shows the shake at progress 0 and the next one at
         // one tick - where advancing at the end of the tick would show the
-        // impact frame already one tick in. Measured 2026-09-30, see
+        // impact frame already one tick in. Measured, see
         // `oag_render::camera::shake`.
         #[cfg(feature = "view")]
         if self.draws() {
             self.advance_now_playing();
             self.view.contact.shake.advance(self.sim.dt);
             self.advance_seat_shakes(self.sim.dt);
+            if !self.view.camera_shake_on {
+                self.view.contact.shake.cancel();
+            }
             let mut shown = false;
             for slot in 0..MAX_SHIPS {
                 if self.sim.world.person_flown(slot) {
                     let board = &mut self.view.huds[slot].messages;
                     board.advance();
-                    shown |= board.just_shown();
+                    let showing = board.just_shown();
+                    shown |= showing && self.heard_here(slot);
                 }
             }
             if shown {
                 self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::Message,
-                    0,
+                    self.player_slot(),
                 ));
             }
         }
@@ -104,7 +108,7 @@ impl Race {
         // and a restart, which rebuilds the race, always begins in it. Physics
         // reads the flag; see `oag_physics::ShipState::on_grid`.
         //
-        // **Zone is in it too** (2026-10-02, read live on a Zone engine): flags bit 1 is
+        // **Zone is in it too** (read live on a Zone engine): flags bit 1 is
         // the grid state and reads `0x3` through Zone's countdown with the craft still,
         // and Zone's auto-speed is gated on it (`Ship_UpdateEngine`'s `(flags & 1) &&
         // !(flags & 2)`), as the four-corner epilogue's `craft+0x2a4` guard is. See
@@ -129,6 +133,10 @@ impl Race {
         }
         self.set_wrong_way_kill();
         self.set_hover_caps();
+        // A transit whose count ran out puts its craft further round before anything
+        // reads where it is: its controls, its autopilot's lane snap, the modules' call
+        // (whose `transit-end` this is) and its step all see it out.
+        let transited = self.advance_transits();
         // Every craft a person is flying this tick. Slot 0 alone under
         // `World::SINGLE_PLAYER`, which is every session this engine starts
         // today; a second `Local` or `Remote` slot is stepped the same way and
@@ -140,10 +148,12 @@ impl Race {
                 *slot_controls = self.player_controls(slot, inputs.get(slot));
             }
         }
+        self.tick_flips(inputs, &mut controls);
         #[cfg(test)]
         {
             self.last_controls = controls;
             self.pair_contacts.clear();
+            self.pair_impulses.clear();
         }
 
         // **Before every craft is stepped, and over the whole field at once.**
@@ -156,15 +166,22 @@ impl Race {
         // `oag_weapons::slowdown::drain`.
         oag_weapons::slowdown::drain(
             &mut self.sim.world.ships[..self.sim.world.ship_count as usize],
-            self.sim.weapons.as_ref().map(|table| table.slowdown_limit),
+            self.sim
+                .weapons
+                .as_deref()
+                .map(|table| table.slowdown_limit),
         );
 
+        self.cancel_pickup_use_of_downed_crafts();
         // Before the force law, so a Turbo fired this tick boosts this tick.
         // `tick_autopilot` after it, so a pickup armed this tick gets its whole
         // duration rather than a tick less, and so the cancel-on-absorb branch
         // inside `spend_pickup` is not immediately undone by a decrement.
         for slot in 0..MAX_PLAYERS {
-            if self.sim.world.person_flown(slot) {
+            // A press in a transit is not heard: the craft is out of the world.
+            if self.sim.world.person_flown(slot) && self.sim.world.ships[slot].transit.is_some() {
+                self.tick_autopilot(slot);
+            } else if self.sim.world.person_flown(slot) {
                 self.spend_pickup(slot, inputs.get(slot));
                 self.tick_autopilot(slot);
             } else if self.sim.opponent_autopilot {
@@ -178,6 +195,8 @@ impl Race {
         // pressed. A mine never moves again, so this is the only tick that can
         // place it correctly.
         self.lay_mines();
+        // A Quake press made under a live wave, now that the wave may have ended.
+        self.fire_armed_quakes();
         // Right after, for the same reason: a Cannon's own countdown has to
         // see every tick the button is down, and a round fired this tick has
         // to leave from where the craft started it. It reads the snapshot for
@@ -185,7 +204,7 @@ impl Race {
         // above consumes - see `Race::advance_cannons`'s own doc comment.
         self.advance_cannons(inputs);
         // Phase C: each simulation mod's one call, its commands into the steps below.
-        self.tick_extensions(inputs);
+        self.tick_extensions(inputs, transited);
 
         // Each person's craft, in slot order, against the same unmoved
         // projectile pool and the same unspent field-wide effects: the force law
@@ -234,13 +253,29 @@ impl Race {
         #[cfg(feature = "view")]
         let orientations_before: [Quat; oag_weapons::projectile::MAX_PROJECTILES] =
             std::array::from_fn(|slot| self.sim.world.projectiles.slots[slot].orientation);
+        let floor_arms = self.floor_arms();
+        let own_craft = self.own_craft_probe();
+        let plasma_release = self.plasma_release();
         let impacts = oag_weapons::projectile::step(
             &mut self.sim.world.projectiles,
             &mut self.sim.world.ships[..self.sim.world.ship_count as usize],
             self.sim.dt,
-            &self.sim.collision,
-            self.sim.weapons.as_ref(),
+            &*self.sim.collision,
+            self.sim
+                .spline
+                .cage()
+                .map(|cage| cage as &dyn oag_physics::cage::Containment),
+            self.sim.weapons.as_deref(),
             &self.sim.class,
+            floor_arms,
+            own_craft,
+            plasma_release,
+            match self.sim.blast_push {
+                oag_title::weapons::BlastPush::Posted => oag_weapons::projectile::BlastPush::Posted,
+                oag_title::weapons::BlastPush::Immediate => {
+                    oag_weapons::projectile::BlastPush::Immediate
+                }
+            },
             damage_rules,
             &mut hits,
         );
@@ -253,6 +288,12 @@ impl Race {
                 self.note_weapon_hit(slot);
             }
         }
+        self.credit_impact_points(&impacts, &hits);
+        let by = std::array::from_fn(|slot| {
+            self.impact_reaching(&impacts, slot)
+                .map(|impact| (impact.owner, impact.kind))
+        });
+        self.xp_weapon_hits(&hits, &by);
         // A hit that got through throws the struck hull's own sparks - the
         // victim's `Ship_Damage`, not the weapon. See `race::hit_sparks`.
         #[cfg(feature = "view")]
@@ -264,6 +305,7 @@ impl Race {
         #[cfg(feature = "view")]
         if self.draws() {
             self.advance_projectile_flares();
+            self.advance_plasma_launch();
         }
         // `slot` is read only by the drawn blast below.
         #[cfg_attr(not(feature = "view"), allow(unused_variables))]
@@ -287,6 +329,19 @@ impl Race {
                 impact.struck.map(usize::from),
                 orientations_before[slot],
             );
+            // A Pulse Plasma craft hit detonates twice in the same tick: the
+            // bolt's own blast above, and one at the struck craft.
+            #[cfg(feature = "view")]
+            if let Some(at) =
+                self.plasma_craft_hit_blast_point(impact.kind, impact.struck.map(usize::from))
+            {
+                self.note_blast(
+                    impact.kind,
+                    at,
+                    impact.struck.map(usize::from),
+                    orientations_before[slot],
+                );
+            }
             // `Plasma_SweepCraftHit` (`0x0886afb8`) plays `PLASMAHITSHIP` on a
             // craft hit and clears the bolt's own emitter before
             // `Plasmas_Update`'s pass-two teardown would otherwise play
@@ -527,6 +582,8 @@ impl Race {
             self.advance_leach_beam_ribbon();
             self.advance_leach_strip();
             self.advance_rocket_smoke();
+            self.advance_missile_smoke();
+            self.advance_wingtip();
         }
 
         // Beside them for the same reason: a Repulser's wave sweep reads every
@@ -546,10 +603,19 @@ impl Race {
 
         #[cfg(feature = "view")]
         if self.draws() {
+            self.advance_transit_seats();
             let target = self.camera_target();
-            self.view
-                .camera
-                .advance(target, &self.view.chase_params, self.sim.dt);
+            // A craft put further round (`Race::move_to`) takes its camera with it, settled:
+            // the spring would sweep the eye across the gap.
+            let jumps = self.sim.jumps[self.player_slot()];
+            if std::mem::replace(&mut self.view.camera_jumps, jumps) == jumps {
+                let step = self.camera_step(self.player_slot());
+                self.view
+                    .camera
+                    .advance(target, &self.view.chase_params, step);
+            } else {
+                self.view.camera = Chase::snapped(target, &self.view.chase_params);
+            }
             // The split-screen views' own cameras, view-side: a no-op with one view.
             self.advance_viewpoints();
             // After the chase camera and before the eye is read: behind the end-race panels the
@@ -660,6 +726,8 @@ impl Race {
         #[cfg(feature = "view")]
         if self.draws() {
             self.advance_slot_huds();
+        } else {
+            self.view.incoming_raises.clear();
         }
 
         // Every person-flown craft's wall-contact cue, in slot order, drawn tick
@@ -674,8 +742,12 @@ impl Race {
             .filter_map(|(slot, step)| step.as_ref().map(|step| (slot, step.evaluated)))
         {
             let shielded = self.sim.world.ships[slot].physics.shield_pickup_timer > 0.0;
-            self.raise_contact_cue(slot, evaluated.wall.impact, shielded);
+            self.raise_wall_cue(slot, &evaluated.wall, shielded);
+            self.note_wall_contact(slot, &evaluated.wall);
         }
+        // After every contact of the tick is noted: the opponents' walls
+        // (`step_opponents`), the craft pairs (`resolve_craft_pairs`) and the walls above.
+        self.raise_impulse_cues();
         // The sparks, the shake and the shield edge are the seat's own: the
         // craft this machine's person flies, which is `primary_slot` except on a
         // network client seated elsewhere. Every other local person has their own

@@ -3,7 +3,7 @@
 //! that already plays through [`super::weapons::visuals`]'s ordinary
 //! [`Trigger::BombSmokering`] mechanism and needs no
 //! render-side state of its own. See
-//! `docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-23-the-blasts-own-per-tick-animator-read`
+//! `docs/ghidra/functions/psp-pulse-usa/mine.md` ("the blast's own per-tick animator")
 //! for the full read this plays back - `BombBlast_Construct` (`0x08872078`)
 //! and `BombBlast_Update` (`0x0887250c`), confidence 90/85.
 //!
@@ -40,11 +40,10 @@
 //! [`bomb_blast_basis`]'s own doc comment: `oag-view --mesh` on both `.vex`
 //! files shows a dome resting pole-up and a ring lying flat, both on their
 //! own local `Y`, so `dir` has to sit in this basis's own `Y` column for
-//! either model to draw upright. An earlier version of this basis put `dir`
-//! in `Z` (mirroring `blast_models::billboard_matrix`'s own column order for
-//! a camera-facing basis) and scaled the wrong pair of axes on the shockwave
-//! as a direct consequence - caught by comparing a rendered capture against
-//! these two mesh views, not by re-reading the decompile.
+//! either model to draw upright. Putting `dir` in `Z` (as
+//! `blast_models::billboard_matrix` does for a camera-facing basis) scales the
+//! wrong pair of axes on the shockwave; checked against a rendered capture and
+//! these two mesh views, not the decompile.
 //!
 //! **Substituted, chosen rather than measured, no confidence score - carried
 //! from [`oag_weapons::projectile::mine::frozen_pose`]'s own hedge:** what
@@ -57,7 +56,7 @@
 //! carries on the original's own bomb entity is not established; only which
 //! *slot* of the basis the authored models expect it to fill is.
 //!
-//! **The shockwave's fading alpha is applied (2026-10-01).** `BombBlast_Update` stamps a white word whose alpha
+//! **The shockwave's fading alpha is applied.** `BombBlast_Update` stamps a white word whose alpha
 //! is the `+0xf4` ease (`1.0 -> 0.0`) onto the shockwave's meshes through `Image_SetVertexColours` (`mesh+0x6c`,
 //! `0x089122b4`). It reaches the GE as the **ambient light's** alpha: the ring's strips are drawn with lighting
 //! on, no lights, `MATERIALUPDATE` `7` (the vertex colours are the material) and `0x5d` (ambient light alpha)
@@ -68,7 +67,7 @@
 //! authored vertex words are indeed untouched in the buffer, as a lit material would leave them.) It was
 //! recovered and left unapplied until the ship explosion's own shockwave needed the same mechanism.
 //!
-//! # The ship explosion's shockwave (2026-10-01)
+//! # The ship explosion's shockwave
 //!
 //! `Ship_SpawnExplosionBig` (`FUN_088407b0`) builds a second object of the same
 //! `Bomb_Shockwave.vex` (`FUN_0885ecf0`, update `FUN_0885efc4`), read whole and
@@ -82,7 +81,7 @@
 //! chase camera at the same height sees edge-on as the thin orange line along the
 //! horizon that the original's explosion leaves for about fifty frames. (The white band that
 //! covers the first five frames is **not** the ring: it is the explosion's `Glow` template, drawn with
-//! its own sprite since 2026-10-01 - see `ship-shockwave.md`.) Confidence **90** for the law (decompile
+//! its own sprite - see `ship-shockwave.md`.) Confidence **90** for the law (decompile
 //! and one live boot agree to every digit); the picture reading is **seen once**. The original's
 //! updates step `(int)(dt / (1/60))` times with no remainder, which on PPSSPP skipped a third of the
 //! frames; ours steps once a tick (`ship-shockwave.md`).

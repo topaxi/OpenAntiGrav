@@ -17,7 +17,7 @@
 //! are invented** per
 //! [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md);
 //! the real-track check is
-//! `race_ground_truth::the_ai_drives_the_field_along_the_track`.
+//! `race_field_ground_truth::the_ai_drives_the_field_along_the_track`.
 
 use crate::{Context, Driver, Field, Frame, Line, Pilot, Rival, Tuning};
 use oag_core::hash::StateHasher;
@@ -511,7 +511,10 @@ pub fn speed_plan() -> (u64, crate::plan::Report) {
         respawn: &placed,
         reset: &|_, _, _| false,
         max_airborne: f32::INFINITY,
+        beneath: f32::INFINITY,
+        beneath_ticks: 0,
         pad: &|_, _| None,
+        drive_again: false,
     };
     let craft = crate::plan::Craft {
         handling,

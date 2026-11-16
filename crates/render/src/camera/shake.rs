@@ -90,7 +90,7 @@
 //! determined" if a second caller ever turns up.
 
 use oag_core::Rng;
-use oag_core::math::{Mat4, Quat, Vec3, quat_from_axis_angle, sin_cos};
+use oag_core::math::{Mat4, Quat, Vec3, lerp, quat_from_axis_angle, sin_cos};
 
 /// Magnitude scale on the arming severity - `DAT_0027e8dc`/`DAT_08ab0dfc`,
 /// read identically off both binaries' `.data`.
@@ -225,7 +225,7 @@ impl Shake {
                 let t = (progress - ENVELOPE_POS[i - 1]) / (ENVELOPE_POS[i] - ENVELOPE_POS[i - 1]);
                 let v0 = ENVELOPE_VALUE[i - 1] * self.magnitude;
                 let v1 = ENVELOPE_VALUE[i] * self.magnitude;
-                return v0 + (v1 - v0) * t;
+                return lerp(v0, v1, t);
             }
         }
         ENVELOPE_VALUE[ENVELOPE_VALUE.len() - 1] * self.magnitude

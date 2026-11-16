@@ -51,7 +51,7 @@ impl Area {
     }
 }
 
-#[derive(Default, Clone, Debug, PartialEq, Eq)]
+#[derive(Default, Clone, Debug, PartialEq)]
 struct Census {
     files: usize,
     all: Area,
@@ -89,6 +89,24 @@ struct Census {
     /// Resolved submeshes whose own diffuse attribute is of a type the reader does not decode
     /// (it draws nothing for them).
     own_undecoded: Area,
+    /// Resolved submeshes whose declaration names `uv1_uvDirt` and no `Uv1`: the road families
+    /// (`tarmac_*`) of Omega's `environments2048` circuits. Their diffuse coordinate is
+    /// `uv1_uvDirt`'s first pair, not the first half pair in file order (`uvMarkings`).
+    uv_dirt: Area,
+    /// Of those, the ones whose coordinates the reader returned that differ from a fresh decode
+    /// of `uv1_uvDirt`'s first two halves at the attribute's own offset, found by hash here.
+    uv_dirt_differs: usize,
+    /// Of those, the ones whose `markings_texcoords` or `dirt_texcoords` differ from a fresh
+    /// decode of `uvMarkings` at its own offset and of `uv1_uvDirt`'s second pair (four bytes
+    /// on), or are empty where the declaration names `uvMarkings`.
+    uv_layers_differ: usize,
+    /// Of those, the ones whose declaration names no `uvMarkings`.
+    uv_markings_absent: usize,
+    /// Of those, the ones whose material is a `tarmac_*` family.
+    uv_dirt_tarmac: usize,
+    /// Per `tarmac_*` material name, the box (`[min u, min v]`, `[max u, max v]`) of the
+    /// coordinates the reader returned, merged over the submeshes that draw it.
+    tarmac_box: BTreeMap<String, CoordBox>,
     /// Resolved submeshes whose material names a lightmap sampler / whose own declaration
     /// carries `lightmapUV`: both, neither, and the two off-diagonal cells.
     lm_both: usize,
@@ -101,6 +119,28 @@ struct Census {
     own_uv_no_named_diffuse: usize,
     /// Resolved submeshes whose vertex buffer pointer could not be located for the re-read.
     unlocated: usize,
+    /// Resolved PS4 submeshes whose diffuse coordinate is the lower-case `uv1` as an `f32`
+    /// pair, and of those the ones whose material names no diffuse-family sampler (the
+    /// `fc02_effects_uscroll_vscroll_colour_emissive_alpha` family: an `EmissiveMap` only).
+    uv1_float: (usize, usize),
+    /// Sum over the `own_float` submeshes of their coordinate box (`min u + max u + min v + max v`):
+    /// independent of vertex order, so a re-cooked sibling title's model can be compared on it.
+    own_float_box: i64,
+    /// The `own_empty_named_diffuse` submeshes by material path and declaration (stride, then
+    /// each attribute as `hash:components x type @offset`), named in the failure message.
+    named_no_uv: BTreeMap<String, Area>,
+}
+
+type CoordBox = ([f32; 2], [f32; 2]);
+
+fn merge_box(a: Option<CoordBox>, b: Option<CoordBox>) -> Option<CoordBox> {
+    match (a, b) {
+        (Some((a, b)), Some((c, d))) => Some((
+            [a[0].min(c[0]), a[1].min(c[1])],
+            [b[0].max(d[0]), b[1].max(d[1])],
+        )),
+        (a, b) => a.or(b),
+    }
 }
 
 impl Census {
@@ -119,6 +159,15 @@ impl Census {
         self.own_float.plus(o.own_float);
         self.own_fallback.plus(o.own_fallback);
         self.own_undecoded.plus(o.own_undecoded);
+        self.uv_dirt.plus(o.uv_dirt);
+        self.uv_dirt_differs += o.uv_dirt_differs;
+        self.uv_layers_differ += o.uv_layers_differ;
+        self.uv_markings_absent += o.uv_markings_absent;
+        self.uv_dirt_tarmac += o.uv_dirt_tarmac;
+        for (k, b) in &o.tarmac_box {
+            let merged = merge_box(self.tarmac_box.get(k).copied(), Some(*b));
+            self.tarmac_box.extend(merged.map(|m| (k.clone(), m)));
+        }
         self.relocated += o.relocated;
         self.lm_both += o.lm_both;
         self.lm_neither += o.lm_neither;
@@ -127,6 +176,12 @@ impl Census {
         self.own_empty_named_diffuse += o.own_empty_named_diffuse;
         self.own_uv_no_named_diffuse += o.own_uv_no_named_diffuse;
         self.unlocated += o.unlocated;
+        self.own_float_box += o.own_float_box;
+        self.uv1_float.0 += o.uv1_float.0;
+        self.uv1_float.1 += o.uv1_float.1;
+        for (k, a) in &o.named_no_uv {
+            self.named_no_uv.entry(k.clone()).or_default().plus(*a);
+        }
     }
     fn flat(&self) -> Area {
         Area {
@@ -212,30 +267,74 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
             })
         });
         let half = if ps4 { vertex_decl::PS4_HALF2 } else { 8 };
-        let own_attr = own.own_diffuse_texcoord(half).copied();
-        if own_attr.is_some_and(|a| a.gxm_type == vertex_decl::FLOAT2) {
+        let float = if ps4 {
+            vertex_decl::PS4_FLOAT2
+        } else {
+            vertex_decl::FLOAT2
+        };
+        let own_attr = own.own_diffuse_texcoord(half, float).copied();
+        if own_attr.is_some_and(|a| a.gxm_type == float) {
             out.own_float.add(tris);
+            let (mut lo, mut hi) = ([f32::MAX; 2], [f32::MIN; 2]);
+            for uv in &s.texcoords {
+                for k in 0..2 {
+                    lo[k] = lo[k].min(uv[k]);
+                    hi[k] = hi[k].max(uv[k]);
+                }
+            }
+            if !s.texcoords.is_empty() {
+                out.own_float_box +=
+                    (f64::from(lo[0] + hi[0] + lo[1] + hi[1]) * 100.0).round() as i64;
+            }
         }
-        if own.diffuse_texcoord_is_fallback(half) {
+        if own.diffuse_texcoord_is_fallback(half, float) {
             out.own_fallback.add(tris);
         }
-        if own_attr.is_some_and(|a| a.gxm_type != half && a.gxm_type != vertex_decl::FLOAT2) {
+        if own_attr.is_some_and(|a| a.gxm_type != half && a.gxm_type != float) {
             out.own_undecoded.add(tris);
         }
-        let own_off = own_attr.map(|a| a.offset);
+        if ps4
+            && own_attr.is_some_and(|a| {
+                a.name_hash == vertex_decl::LOWERCASE_UV1_HASH && a.gxm_type == float
+            })
+        {
+            out.uv1_float.0 += 1;
+            out.uv1_float.1 += usize::from(!named_diffuse);
+        }
         match (own_attr.is_some(), named_diffuse) {
-            (false, true) => out.own_empty_named_diffuse += 1,
+            (false, true) => {
+                out.own_empty_named_diffuse += 1;
+                let material = s.material.map_or("", |m| model.materials[m].name.as_str());
+                let attributes: Vec<String> = own
+                    .attributes
+                    .iter()
+                    .map(|a| {
+                        format!(
+                            "{:08x}:{}x{}@{}",
+                            a.name_hash, a.components, a.gxm_type, a.offset
+                        )
+                    })
+                    .collect();
+                out.named_no_uv
+                    .entry(format!(
+                        "{material} stride {} [{}]",
+                        own.stride,
+                        attributes.join(" ")
+                    ))
+                    .or_default()
+                    .add(tris);
+            }
             (true, false) => out.own_uv_no_named_diffuse += 1,
             _ => {}
         }
-        let width = if !ps4 && own_attr.is_some_and(|a| a.gxm_type == vertex_decl::FLOAT2) {
+        let own_off = own_attr.map(|a| a.offset);
+        let width = if own_attr.is_some_and(|a| a.gxm_type == float) {
             8
         } else {
             4
         };
         let off = own_off.map(usize::from).filter(|&o| s.stride >= o + width);
-        let decoded = ps4
-            || own_attr.is_some_and(|a| a.gxm_type == half || a.gxm_type == vertex_decl::FLOAT2);
+        let decoded = ps4 || own_attr.is_some_and(|a| a.gxm_type == half || a.gxm_type == float);
         let Some(off) = off.filter(|_| decoded) else {
             out.own_empty.add(tris);
             if !s.texcoords.is_empty() {
@@ -303,6 +402,54 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
         if differs {
             out.disagree.add(tris);
         }
+        if let Some(tiling) = own
+            .attribute(vertex_decl::UV1_UVDIRT_HASH)
+            .filter(|a| own.diffuse_texcoord().is_none() && a.components == 4 && a.gxm_type == half)
+        {
+            let mut uvs = Vec::with_capacity(s.positions.len());
+            for v in 0..s.positions.len() {
+                let a = base + v * s.stride + usize::from(tiling.offset);
+                uvs.push(psp2::unpack_texcoord(blob[a..a + 4].try_into().unwrap()));
+            }
+            out.uv_dirt.add(tris);
+            out.uv_dirt_differs += usize::from(uvs != s.texcoords);
+            if let Some(markings) = own.markings_texcoord(half) {
+                let fresh = |offset: u8| -> Vec<[f32; 2]> {
+                    (0..s.positions.len())
+                        .map(|v| {
+                            let a = base + v * s.stride + usize::from(offset);
+                            psp2::unpack_texcoord(blob[a..a + 4].try_into().unwrap())
+                        })
+                        .collect()
+                };
+                out.uv_layers_differ += usize::from(
+                    fresh(markings.offset) != s.markings_texcoords
+                        || fresh(tiling.offset + 4) != s.dirt_texcoords,
+                );
+            } else {
+                out.uv_markings_absent += 1;
+                out.uv_layers_differ +=
+                    usize::from(!s.markings_texcoords.is_empty() || !s.dirt_texcoords.is_empty());
+            }
+            let material = s
+                .material
+                .and_then(|m| model.materials[m].name.rsplit('/').next())
+                .map(|n| n.trim_suffix(".rcsmaterial"))
+                .filter(|n| n.starts_with("tarmac_"));
+            if let Some(material) = material {
+                out.uv_dirt_tarmac += 1;
+                let (mut lo, mut hi) = ([f32::MAX; 2], [f32::MIN; 2]);
+                for uv in &s.texcoords {
+                    for k in 0..2 {
+                        lo[k] = lo[k].min(uv[k]);
+                        hi[k] = hi[k].max(uv[k]);
+                    }
+                }
+                let merged = merge_box(out.tarmac_box.get(material).copied(), Some((lo, hi)));
+                out.tarmac_box
+                    .extend(merged.map(|m| (material.to_string(), m)));
+            }
+        }
         let own_flat = all_zero && !finite_nonzero;
         if own_flat {
             out.own_all_zero.add(tris);
@@ -333,7 +480,7 @@ fn sweep(rel: &str, ps4: bool) -> Option<BTreeMap<String, Census>> {
             .unwrap_or_else(|e| panic!("reading {entry}: {e}"));
         let c = census_of(&blob, ps4);
         let dir = entry.rsplit_once('/').map_or("", |(d, _)| d);
-        let dir = dir.strip_prefix("data/art/published/").unwrap_or(dir);
+        let dir = dir.trim_prefix("data/art/published/");
         let zone = entry.to_ascii_lowercase().ends_with("trackzone.rcsmodel");
         let key = if zone {
             format!("{dir} [zone]")
@@ -388,7 +535,11 @@ fn report(name: &str, by_dir: &BTreeMap<String, Census>) -> Census {
     for (dir, c) in by_dir {
         total.plus(c);
         if sweep && (c.flat().triangles > 200 || dir.contains("nvironments")) {
-            println!("{name} {dir}: {}", line(c));
+            println!(
+                "{name} {dir}: {} box {} (hundredths)",
+                line(c),
+                c.own_float_box
+            );
         }
     }
     if sweep {
@@ -413,9 +564,36 @@ struct Expect {
     /// Submeshes with no diffuse coordinate in their own declaration whose material names a
     /// diffuse-family sampler. Zero on every Vita archive.
     empty_named_diffuse: usize,
+    /// Lower-case `uv1` `f32`-pair diffuse coordinates, and those on a material with no
+    /// diffuse-family sampler. Omega only.
+    uv1_float: (usize, usize),
+    /// Submeshes whose diffuse coordinate is `uv1_uvDirt`'s tiling pair, and of those the `tarmac_*`
+    /// ones. Omega's `environments2048` circuits only; zero on every Vita archive.
+    uv_dirt: (usize, usize),
+    /// Directories (full key) whose `own_float_box` is pinned: identical on 2048 and Omega for
+    /// `tower`, `park`, `sol` and `square`, whose float-pair submesh sets are the same.
+    boxes: &'static [(&'static str, i64)],
 }
 
-fn check(name: &str, total: &Census, e: &Expect) {
+/// `own_float_box` of the circuits whose float-pair coordinate sets are identical in 2048 and
+/// Omega (same submesh and triangle counts): Omega's `f32` `uv1` pair is 2048's float pair.
+const VITA_BOXES: [(&str, i64); 4] = [
+    ("environments/tower", -409_402),
+    ("environments/park", -79_947),
+    ("environments/sol", 9_848),
+    ("environments/square", -372_134),
+];
+const OMEGA_DATA00_BOXES: [(&str, i64); 1] = [("Data/environments2048/tower", -409_402)];
+const OMEGA_DATA04_BOXES: [(&str, i64); 3] = [
+    ("Data/environments2048/park", -79_947),
+    ("Data/environments2048/sol", 9_848),
+    ("Data/environments2048/square", -372_134),
+];
+
+fn check(name: &str, by_dir: &BTreeMap<String, Census>, total: &Census, e: &Expect) {
+    for (key, want) in e.boxes {
+        assert_eq!(by_dir[*key].own_float_box, *want, "{name}: {key} box");
+    }
     let got = Expect {
         files: total.files,
         submeshes: total.all.submeshes,
@@ -424,12 +602,27 @@ fn check(name: &str, total: &Census, e: &Expect) {
         disagree: total.disagree.submeshes,
         flat_fixed: (total.flat_fixed.submeshes, total.flat_fixed.triangles),
         empty_named_diffuse: total.own_empty_named_diffuse,
+        uv1_float: total.uv1_float,
+        uv_dirt: (total.uv_dirt.submeshes, total.uv_dirt_tarmac),
+        boxes: &[],
     };
     if std::env::var_os("OAG_SWEEP").is_some() {
         println!(
-            "{name} PIN files {} sub {} flat {:?} resolved {} disagree {} fixed {:?}",
-            got.files, got.submeshes, got.flat, got.resolved, got.disagree, got.flat_fixed
+            "{name} PIN files {} sub {} flat {:?} resolved {} disagree {} fixed {:?} uv1 {:?}",
+            got.files,
+            got.submeshes,
+            got.flat,
+            got.resolved,
+            got.disagree,
+            got.flat_fixed,
+            got.uv1_float
         );
+        println!("{name} UVDIRT {:?}", got.uv_dirt);
+        for (k, c) in by_dir {
+            for (m, b) in &c.tarmac_box {
+                println!("{name} TARMAC {k} {m}: {b:?}");
+            }
+        }
     }
     assert_eq!(
         (
@@ -440,6 +633,8 @@ fn check(name: &str, total: &Census, e: &Expect) {
             got.disagree,
             got.flat_fixed,
             got.empty_named_diffuse,
+            got.uv1_float,
+            got.uv_dirt,
         ),
         (
             e.files,
@@ -449,6 +644,8 @@ fn check(name: &str, total: &Census, e: &Expect) {
             e.disagree,
             e.flat_fixed,
             e.empty_named_diffuse,
+            e.uv1_float,
+            e.uv_dirt,
         ),
         "{name}"
     );
@@ -465,6 +662,38 @@ fn check(name: &str, total: &Census, e: &Expect) {
         "{name}: lightmap control group"
     );
     assert_eq!(total.unlocated, 0, "{name}: vertex buffer located");
+    // A `uv1_uvDirt` road reads that attribute's first pair and no other set. The pair tiles the
+    // road, u -54 to 57 over Rockway Stadium's road material, where `uvMarkings` (the set the
+    // file-order rule used to take) spans u 0.79 to 0.99: a regression to it fails the width.
+    assert_eq!(
+        total.uv_dirt_differs, 0,
+        "{name}: tiling pair read as declared"
+    );
+    // The decal and dirt pairs ride the same declaration: `uvMarkings` at its own offset and the
+    // second half pair of `uv1_uvDirt`, and only where both are named.
+    assert_eq!(
+        total.uv_layers_differ, 0,
+        "{name}: markings and dirt pairs read as declared"
+    );
+    for (key, c) in by_dir {
+        let road = c
+            .tarmac_box
+            .get("tarmac_markings_dirt_markingsnormal_emis")
+            .filter(|_| key.ends_with("environments2048/arena"));
+        if let Some((lo, hi)) = road {
+            assert!(
+                hi[0] - lo[0] > 80.0,
+                "{name}: {key} road box {lo:?} {hi:?} is not the tiling pair"
+            );
+        }
+    }
+    // A diffuse-family sampler always has a coordinate to sample with: no submesh names one
+    // without the other.
+    assert_eq!(
+        total.named_no_uv,
+        BTreeMap::new(),
+        "{name}: diffuse sampler, no diffuse coordinate"
+    );
 }
 
 macro_rules! vita {
@@ -477,6 +706,7 @@ macro_rules! vita {
             };
             check(
                 stringify!($test),
+                &by_dir,
                 &report(stringify!($test), &by_dir),
                 &$expect,
             );
@@ -713,13 +943,33 @@ const fn pin(
         disagree,
         flat_fixed,
         empty_named_diffuse,
+        uv1_float: (0, 0),
+        uv_dirt: (0, 0),
+        boxes: &[],
+    }
+}
+
+impl Expect {
+    const fn with_boxes(mut self, boxes: &'static [(&'static str, i64)]) -> Self {
+        self.boxes = boxes;
+        self
+    }
+
+    const fn with_uv_dirt(mut self, all: usize, tarmac: usize) -> Self {
+        self.uv_dirt = (all, tarmac);
+        self
+    }
+
+    const fn with_uv1_float(mut self, all: usize, without_diffuse_sampler: usize) -> Self {
+        self.uv1_float = (all, without_diffuse_sampler);
+        self
     }
 }
 
 vita!(
     vita_base,
     "vita/PCSF00007/base/PSP2/data.psarc",
-    pin(953, 170_164, (46_569, 4_655_125), 0, (0, 0), 0)
+    pin(953, 170_164, (46_569, 4_655_125), 0, (0, 0), 0).with_boxes(&VITA_BOXES)
 );
 vita!(
     vita_dlc1,
@@ -752,6 +1002,7 @@ macro_rules! omega {
             };
             check(
                 stringify!($test),
+                &by_dir,
                 &report(stringify!($test), &by_dir),
                 &$expect,
             );
@@ -762,12 +1013,15 @@ macro_rules! omega {
 omega!(
     omega_data00,
     "ps4/omega-eu/uroot/data00.psarc",
-    pin(625, 38_362, (14_673, 2_905_293), 0, (0, 0), 235)
+    pin(625, 38_362, (14_438, 2_849_186), 0, (0, 0), 0)
+        .with_uv1_float(235, 0)
+        .with_uv_dirt(122, 122)
+        .with_boxes(&OMEGA_DATA00_BOXES)
 );
 omega!(
     omega_data01,
     "ps4/omega-eu/uroot/data01.psarc",
-    pin(316, 27_942, (2_741, 1_478_396), 0, (0, 0), 0)
+    pin(316, 27_942, (2_574, 1_455_344), 0, (0, 0), 0)
 );
 omega!(
     omega_data02,
@@ -782,7 +1036,10 @@ omega!(
 omega!(
     omega_data04,
     "ps4/omega-eu/uroot/data04.psarc",
-    pin(40, 108_417, (36_645, 4_892_704), 0, (0, 0), 432)
+    pin(40, 108_417, (36_177, 4_678_390), 0, (0, 0), 0)
+        .with_uv1_float(467, 35)
+        .with_uv_dirt(539, 539)
+        .with_boxes(&OMEGA_DATA04_BOXES)
 );
 omega!(
     omega_patch_data05,

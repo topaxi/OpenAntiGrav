@@ -12,6 +12,7 @@
 use super::*;
 
 mod no_audio;
+mod pool;
 mod race_pick;
 mod race_song;
 mod race_switch;
@@ -39,6 +40,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: None,
         ps3: None,
@@ -59,6 +61,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -256,6 +259,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -269,6 +273,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
     let ps2 = Arc::new(Sound::new(vec![0i16; 180 * 48_000 * 2], 2, 48_000).expect("a sound"));
 
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),
@@ -282,14 +287,18 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
             (Platform::Ps2, Arc::clone(&ps2)),
         ],
         movie: None,
+        pre_race_voice: Default::default(),
+        sfx_fade: Default::default(),
         race_voice: None,
         race_from: None,
         race_index: None,
+        race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -297,8 +306,10 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
     audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
     assert_eq!(
@@ -362,6 +373,7 @@ fn asking_for_the_music_again_never_restarts_it() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -371,6 +383,7 @@ fn asking_for_the_music_again_never_restarts_it() {
     };
     let ps2 = Arc::new(Sound::new(vec![0i16; 180 * 48_000 * 2], 2, 48_000).expect("a sound"));
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),
@@ -381,14 +394,18 @@ fn asking_for_the_music_again_never_restarts_it() {
         music_from: None,
         held: vec![(Platform::Ps2, Arc::clone(&ps2))],
         movie: None,
+        pre_race_voice: Default::default(),
+        sfx_fade: Default::default(),
         race_voice: None,
         race_from: None,
         race_index: None,
+        race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -396,8 +413,10 @@ fn asking_for_the_music_again_never_restarts_it() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
 
     audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
@@ -427,6 +446,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: None,
         ps2: None,
         ps3: None,
@@ -435,6 +455,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         booted: None,
     };
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: None,
         music: None,
@@ -442,14 +463,18 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         music_from: None,
         held: Vec::new(),
         movie: None,
+        pre_race_voice: Default::default(),
+        sfx_fade: Default::default(),
         race_voice: None,
         race_from: None,
         race_index: None,
+        race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -457,8 +482,10 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
     audio.start_music(&nothing, MusicSource::Auto, Path::new("unused"));
     assert!(audio.music.is_none(), "there was nothing to play");
@@ -470,6 +497,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: None,
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -497,6 +525,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -509,6 +538,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
     let ps2 = Arc::new(Sound::new(vec![0i16; 180 * 48_000 * 2], 2, 48_000).expect("a sound"));
 
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),
@@ -521,14 +551,18 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         // pass by the swap finding nothing.
         held: vec![(Platform::Ps2, Arc::clone(&ps2))],
         movie: None,
+        pre_race_voice: Default::default(),
+        sfx_fade: Default::default(),
         race_voice: None,
         race_from: None,
         race_index: None,
+        race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -536,8 +570,10 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
     audio.music = audio
         .output
@@ -575,6 +611,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
 #[test]
 fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),
@@ -585,14 +622,18 @@ fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
         music_from: None,
         held: Vec::new(),
         movie: None,
+        pre_race_voice: Default::default(),
+        sfx_fade: Default::default(),
         race_voice: None,
         race_from: None,
         race_index: None,
+        race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -600,8 +641,10 @@ fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
     for _ in 0..120 {
         audio.tick();
@@ -630,6 +673,7 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
     let sound = Sound::new(vec![0i16; frames * 2], 2, rate).expect("a sound");
 
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),
@@ -640,14 +684,18 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
         music_from: None,
         held: Vec::new(),
         movie: None,
+        pre_race_voice: Default::default(),
+        sfx_fade: Default::default(),
         race_voice: None,
         race_from: None,
         race_index: None,
+        race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -655,8 +703,10 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
     assert!(audio.start_movie(sound), "a free voice");
 
@@ -691,6 +741,7 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
 #[test]
 fn a_mixer_that_is_never_advanced_offers_no_clock() {
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: None,
         music: None,
@@ -698,14 +749,18 @@ fn a_mixer_that_is_never_advanced_offers_no_clock() {
         music_from: None,
         held: Vec::new(),
         movie: None,
+        pre_race_voice: Default::default(),
+        sfx_fade: Default::default(),
         race_voice: None,
         race_from: None,
         race_index: None,
+        race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -713,8 +768,10 @@ fn a_mixer_that_is_never_advanced_offers_no_clock() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
     let sound = Sound::new(vec![0i16; 44_100 * 2], 2, 44_100).expect("a sound");
     assert!(audio.start_movie(sound), "a free voice");
@@ -731,6 +788,7 @@ fn a_mixer_that_is_never_advanced_offers_no_clock() {
 #[test]
 fn a_movie_with_no_voice_has_no_playhead() {
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),
@@ -741,14 +799,18 @@ fn a_movie_with_no_voice_has_no_playhead() {
         music_from: None,
         held: Vec::new(),
         movie: None,
+        pre_race_voice: Default::default(),
+        sfx_fade: Default::default(),
         race_voice: None,
         race_from: None,
         race_index: None,
+        race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -756,8 +818,10 @@ fn a_movie_with_no_voice_has_no_playhead() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
     assert_eq!(audio.movie_playhead(), None, "nothing started");
 
@@ -774,6 +838,7 @@ fn a_movie_with_no_voice_has_no_playhead() {
 #[test]
 fn a_run_with_no_dump_accumulates_nothing() {
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: None,
         music: None,
@@ -781,14 +846,18 @@ fn a_run_with_no_dump_accumulates_nothing() {
         music_from: None,
         held: Vec::new(),
         movie: None,
+        pre_race_voice: Default::default(),
+        sfx_fade: Default::default(),
         race_voice: None,
         race_from: None,
         race_index: None,
+        race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -796,8 +865,10 @@ fn a_run_with_no_dump_accumulates_nothing() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
     for _ in 0..120 {
         audio.tick();
@@ -830,6 +901,7 @@ pub(super) fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
     let menu_sound = silence(28.0, 2, 44_100);
     let race_sound = silence(180.0, 2, 44_100);
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),
@@ -840,14 +912,18 @@ pub(super) fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
         music_from: None,
         held: Vec::new(),
         movie: None,
+        pre_race_voice: Default::default(),
+        sfx_fade: Default::default(),
         race_voice: None,
         race_from: None,
         race_index: None,
+        race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: Some((Platform::Psp, MUSIC_TRACK, Arc::clone(&race_sound))),
         menu_sound: Some(Arc::clone(&menu_sound)),
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -855,11 +931,45 @@ pub(super) fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
     audio.music = audio
         .output
         .with_mixer(|mixer| mixer.play(Play::looping(Arc::clone(&menu_sound), Bus::Music)));
     (audio, menu_sound, race_sound)
+}
+
+/// The map's levels are the spectrum row at the music voice's own position, and nothing without
+/// a spectrum or a voice.
+#[test]
+fn the_music_levels_follow_the_voice_through_the_spectrum() {
+    let (mut audio, ..) = psp_boot_fixture();
+    assert_eq!(audio.music_levels(), None, "no sidecar loaded");
+
+    // 300 rows, band 1 rising from 0 to 1 over ten seconds.
+    let mut bytes = b"AFEX".to_vec();
+    for word in [1u32, 12, 300] {
+        bytes.extend(word.to_le_bytes());
+    }
+    for row in 0..300 {
+        for band in 0..12 {
+            let level = if band == 1 { row as f32 / 300.0 } else { 0.0 };
+            bytes.extend(level.to_le_bytes());
+        }
+    }
+    audio.menu_spectrum = Some(oag_music::spectrum::Spectrum::parse(&bytes).unwrap());
+    let voice = audio.music.expect("the fixture plays the menu loop");
+    assert!(audio.output.with_mixer(|mixer| mixer.seek(voice, 5.0)));
+    let levels = audio.music_levels().expect("a spectrum and a voice");
+    assert!(
+        (levels[1] - 0.5).abs() < 0.01,
+        "5 s of 10 s is 0.5, got {}",
+        levels[1]
+    );
+
+    audio.music = None;
+    assert_eq!(audio.music_levels(), None, "no voice, no levels");
 }

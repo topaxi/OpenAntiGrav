@@ -94,9 +94,8 @@
 //! That test has one hole, and [`super::RESIDUAL_SHARE`] is what plugs it. A
 //! display refreshing *below* the target - vsync on at 60 Hz against a 90 Hz
 //! target - makes every frame overrun the period while still sleeping, and
-//! this build cannot ask a surface what its refresh is (see
-//! [`super::Target::at_most`], which clamps to a frame limiter for the same
-//! reason and cannot clamp to a panel). So the learned estimate is capped at
+//! the target is clamped to the display only where its refresh is known (see
+//! [`super::Target::at_most`] and `crate::refresh`), which is not everywhere. So the learned estimate is capped at
 //! the constant: **`RESIDUAL_SHARE` stops being the reserve and becomes the
 //! most that may ever be reserved.** In that configuration the budget is the
 //! one this build already shipped, and everywhere else it can only be larger.

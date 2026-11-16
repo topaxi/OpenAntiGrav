@@ -234,7 +234,7 @@ fn the_strips_colour_is_the_widgets_own_and_not_textcolor() {
 ///
 /// The frame tests need it: what is on screen behind a menu is the parsed
 /// screens *and* the sprite sheet built from them, and only a boot has both.
-fn shell(image: &Path) -> oag_game::boot::Shell {
+pub(crate) fn shell(image: &Path) -> oag_game::boot::Shell {
     let options = oag_game::boot::Options {
         language: None,
         source: image.display().to_string(),
@@ -247,6 +247,7 @@ fn shell(image: &Path) -> oag_game::boot::Shell {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     oag_game::boot::load_shell(&options)
         .expect("HD's front end is wired; see ADR-0025")

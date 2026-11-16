@@ -107,8 +107,14 @@ fn position_error() -> Option<Vec<f32>> {
     .expect("parsing the global stats")
     .expect("a <Global>");
     let (speedup_pads, _, _) = global.class_named(CLASS).expect("VENOM's <GlobalClass>");
-    let handling =
-        handling_for(&stats, CLASS, speedup_pads, global.special).expect("the team authors VENOM");
+    let handling = handling_for(
+        &stats,
+        CLASS,
+        speedup_pads,
+        global.special,
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
+    )
+    .expect("the team authors VENOM");
 
     let options = Options {
         inputs: Inputs::Scripted(script.with_capture_lead(2).states),

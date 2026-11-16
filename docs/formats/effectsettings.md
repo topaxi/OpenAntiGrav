@@ -36,7 +36,7 @@ just psarc cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 | Title | Path | Size | Scope |
 | --- | --- | --- | --- |
 | HD/Fury | `/data/environments/zonemode.effectsettings` | 21,160 B | Zone, one file, title-wide |
-| HD/Fury | `/data/environments/zonemodedlc3.effectsettings` | 43,417 B | A second, larger revision of the same table |
+| HD/Fury | `/data/environments/zonemodedlc3.effectsettings` | 43,417 B | A second, larger revision of the same table: **what a Zone race on `zone_1`..`zone_4` loads** (below) |
 | HD/Fury | `/data/environments/detonatormode.effectsettings` | 43,240 B | Detonator, reusing Zone's own stage ladder |
 | HD/Fury | `/data/environments/detonatormodedlc3.effectsettings` | 43,230 B | Detonator's DLC3 revision |
 | 2048 | `Data\art\published\environments\<circuit>\ZoneMode2048.effectSettings` | 43,812 B | Zone. Ships in all 10 base circuits, **byte-identical** across every one |
@@ -144,6 +144,21 @@ distinct files (2048's ten are one file duplicated ten times, not ten
 independent authorings), and nothing here reads either title's executable -
 see [Open](#open) for what that leaves unsettled.
 
+## Which HD table a race loads (2026-11-01, `hd-zone-hull-light`)
+
+**A Zone race on one of HD's four Zone circuits (`25_Track`..`28_Track`, `zone_1`..`zone_4`)
+loads `zonemodedlc3.effectsettings`; on any other circuit, `zonemode.effectsettings`.**
+`Environment_LoadRaceScene` (`0x003f3fb0`) compares the track id against the four names
+and picks one of four paths (Detonator splits the same way). Confidence 88: read off the
+branch, and DLC3's stage 3 `Sun colour` `1.143733 1.091405 1.906221` is the hull's live
+`directionalLight0Colour` in a `zone_1` race at `Sub Flash`, where the base file authors
+`1 1 1`. Evidence: [zone-palette-select.md](../ghidra/functions/ps3-hdfury-eu/zone-palette-select.md).
+`oag_title::ZonePalette::TitleWide` carries the split (`zone_circuits`,
+`zone_circuit_entry`). The DLC3 table authors 48 keys a stage against the base file's 23,
+so the Zone circuits' whole grade moves with it, not the sun alone. Omega ships both HD
+tables (`Data/zoneenvironmenthdfury/`, the DLC3 one byte-identical) and draws no Zone grade
+yet: checked, applies, not wired.
+
 ## What is read and what is not
 
 **2026-08-30: the table now grades a Zone race, from an explicit stage.**
@@ -201,10 +216,14 @@ Confidence 86. So the texture set and the colour group are a single choice, and
 this engine - which binds the track set, the one carrying real art - takes
 `Track.Texture Colour`. It is not cosmetic: `Start` authors
 `Scene.Texture Colour` pure black and `Track.Texture Colour` at `9.0`, and an
-HD Zone race rests on `Start`. Three terms of the rule
-stay undrawn for want of a source: the rim-lit `zoneAnisoPalette` summand (no
-filling write located, and this file authors no `Scene.Aniso Power` on any of
-its fifteen stages), the visualiser glow (`zoneTexVis` is built from a table
+HD Zone race rests on `Start`. **Corrected 2026-11-11**: the rim-lit
+`zoneAnisoPalette` summand has a filler, a 17-texel ramp built per stage from
+`Near Colour`, `Base Colour`, `Base Colour Middle`, `Base Colour Highlight`,
+`Base Colour Highlight Middle` and `Aniso Curve`
+([zone-palette-textures.md](../ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md)),
+and only the four Zone arenas' materials read it, from
+`zonemodedlc3.effectsettings`, which authors all of them; this file authors none.
+The other terms that stayed undrawn when this was written: the visualiser glow (`zoneTexVis` is built from a table
 inside the executable), and the inner/outer sphere test (`zoneOrigin` has no
 located writer - and it is a no-op in this build, both sides reading the same
 stage). See
@@ -375,6 +394,16 @@ packages (base, DLC1, DLC2).
 circuits reaches for four files, all of them absent.** This is not a gap in
 this project's reading; it is the original game's own code reaching for data
 its own disc does not carry.
+
+**Correction, 2026-11-13 (`modes-zone-battle-detonator`): the v1.04 patch ships them.** The
+check above covered base, DLC1 and DLC2 only. `patch-v104/PSP2/data2.psarc` carries
+`data/ZoneEnvironmentHDFury/DetonatorModeHDFury.effectSettings` (43,240 B) and
+`DetonatorModeHDFuryDLC3.effectSettings` (43,230 B), the sizes of HD's own two Detonator
+tables, `ZoneModeHDFury.effectSettings` (21,160 B) and `ZoneModeHDFuryDLC3.effectSettings`
+(43,417 B), plus `data/Tex/detonatorModeTrack0..14.gxt` and `zoneModeTrack*.gxt`
+(`python3 scripts/psarc.py list` on that archive). So on a patched 2048 the fallback finds all
+four. A 2048 Detonator race reads Detonator's pair (`oag_2048::race::DETONATOR`); a 2048 Zone
+race on a ported circuit does not read Zone's yet (checked, applies, not wired).
 
 ## `Zone_UpdateStage` (`0x81044cfc`) is the real per-stage selection - a second pass, same day
 

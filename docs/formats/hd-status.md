@@ -18,7 +18,7 @@ just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 
 The [roadmap](../overview/roadmap.md#a-circuit-draws-as-of-2026-08-17) is where
 that is accounted for. Three things it is worth knowing here: the
-[`.psarc` reader](psarc.md) is in `oag-formats` now; `oag_formats::ByteOrder`
+[`.psarc` reader](psarc.md) is in `oag-formats` now; `oag_bytes::ByteOrder`
 exists and **neither `vex::nodes` nor `track::parse` takes it as an argument**,
 because each file declares its own order in its own magic; and `--mesh` **now
 draws**, because the container the geometry left for has since been read - see
@@ -764,14 +764,15 @@ survived the decode. Piranha's 3,937 against a field of 14,000 to 27,000 is
 therefore an authored difference and not a decode miss; it is a question for
 [rcsmodel](rcsmodel.md) or for the artist rather than for the roster.
 
-### `Unlock` is not read, on any title
+### `Unlock`: model rows read, team and circuit rows not
 
-Most of HD's `PI_Team` nodes carry `<Unlock purchase="1">` and most of its
-`PI_Track` nodes carry `<Unlock grid="gridN">`; 69 `Unlock` elements in all.
-`oag_raceplay::catalogue` reads none of them on HD (Pulse's `Grid` and loyalty rows are
-read since 2026-09-29, `race-setup.md`), so everything HD declares is offered. That is a defensible answer for a build with no
-progression and it is **not a measurement** of what the original gates - what
-`purchase`, `grid`, `loyalty` and `MedalCount` select has not been read.
+Most of HD's `PI_Team` nodes carry `<Unlock purchase="1">` and most of its `PI_Track` nodes carry
+`<Unlock grid="gridN">`; 69 `Unlock` elements in all. **The `PI_TeamModel` rows are read and gate Ship
+Select since 2026-11-14** (`loyalty`, `MedalCountHD`, `MedalCountFURY`, `grid`; Feisar's `SKIN1` at
+4000 loyalty, `chrome` at 87 HD golds): [race-setup.md](race-setup.md#hd-era-model-unlocks), evidence
+[model-unlock.md](../ghidra/functions/ps3-hdfury-eu/model-unlock.md). The team rows (`purchase`) and
+the circuit rows are still not read, so every team and circuit is offered; what `purchase` selects has
+not been read.
 
 ## What is genuinely new
 

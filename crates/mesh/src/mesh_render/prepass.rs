@@ -25,6 +25,17 @@ pub struct Prepass {
     /// The opaque pipeline's own shading, `LessEqual` against the prepass's
     /// depth, depth not written.
     pub shade: wgpu::RenderPipeline,
+    /// [`Self::shade`] specialised to the draws of [`super::Built::plain_draws`], which name no
+    /// emissive row. `None` on a model the split does not help.
+    pub plain: Option<wgpu::RenderPipeline>,
+}
+
+impl Prepass {
+    /// The shading pipeline for a draw of the plain half (`plain`) or the rest.
+    #[must_use]
+    pub fn shading(&self, plain: bool) -> &wgpu::RenderPipeline {
+        self.plain.as_ref().filter(|_| plain).unwrap_or(&self.shade)
+    }
 }
 
 /// What [`pipelines`] shares with the opaque pipeline `build` has made.
@@ -34,6 +45,8 @@ pub(super) struct Shared<'a> {
     pub layout: &'a wgpu::PipelineLayout,
     pub vertex_buffers: &'a [Option<wgpu::VertexBufferLayout<'a>>],
     pub constants: &'a [(&'static str, f64)],
+    /// [`Self::constants`] for [`Prepass::plain`], where the model has a plain half.
+    pub plain_constants: Option<&'a [(&'static str, f64)]>,
     pub velocity: super::Velocity,
     /// The opaque pipeline's own targets and fragment entry.
     pub targets: &'a [Option<wgpu::ColorTargetState>],
@@ -63,7 +76,8 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Prepass {
     let make = |label: &str,
                 entry: &'static str,
                 targets: &[Option<wgpu::ColorTargetState>],
-                depth: wgpu::DepthStencilState| {
+                depth: wgpu::DepthStencilState,
+                constants: &[(&'static str, f64)]| {
         pipeline_cache::cached_pipeline(
             shared.shader,
             "vs_main",
@@ -73,7 +87,7 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Prepass {
             shared.primitive,
             Some(depth.clone()),
             shared.multisample,
-            shared.constants,
+            constants,
             || {
                 shared
                     .device
@@ -91,7 +105,7 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Prepass {
                             entry_point: Some(entry),
                             targets,
                             compilation_options: wgpu::PipelineCompilationOptions {
-                                constants: shared.constants,
+                                constants,
                                 ..Default::default()
                             },
                         }),
@@ -112,12 +126,23 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Prepass {
                 .entry("fs_depth_only", "fs_depth_only_velocity"),
             &masked,
             depth_state(true, wgpu::CompareFunction::Less),
+            shared.constants,
         ),
         shade: make(
             "mesh prepassed shade",
             shared.fragment_entry,
             shared.targets,
             depth_state(false, wgpu::CompareFunction::LessEqual),
+            shared.constants,
         ),
+        plain: shared.plain_constants.map(|constants| {
+            make(
+                "mesh prepassed shade, plain draws",
+                shared.fragment_entry,
+                shared.targets,
+                depth_state(false, wgpu::CompareFunction::LessEqual),
+                constants,
+            )
+        }),
     }
 }

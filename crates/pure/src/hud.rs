@@ -36,7 +36,7 @@
 //! widget of any kind to colour". That was checked by grepping `<Image
 //! name=` alone, and it was wrong, not merely incomplete - `Arcade_HUD.xml`'s
 //! and `TimeTrial_HUD.xml`'s own `<Mode3D>` block authors ten weapon icons as
-//! `<Model>` widgets, each with an authored `colour="0xAARRGGBB"` beside its
+//! `<Model>` widgets, each with an authored `colour="0xAABBGGRR"` beside its
 //! `.vex`, e.g. `<Model name="TURBO_icon"><Values
 //! Src="Data\HUD\Weapon_turbo.vex" colour="0xff40ff40" .../></Model>`. Byte-
 //! identical between the two files, so this is the played mode's data, not a
@@ -95,6 +95,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     elimination: layouts::ARCADE,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_Pure.toml"),
+    player_tags: None,
     skins: &[],
 };
 
@@ -114,13 +115,16 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Moot on a disc whose layouts name no texture, and `None` on the same
     // terms as Pulse's: this is a PSP disc, and its own XML asks for `.mip`.
-    texture_extension: None,
     always_on: ALWAYS_ON,
     raster: true,
     ink_aligned_text: false,
     half_unit_glyph_quads: false,
     lit_alpha: None,
     text_shadow: None,
+    // Measured: `docs/formats/pure-status.md`, "Pure's HUD text outline".
+    text_outline_alpha: Some(oag_title::pre_race::Sourced::measured(
+        oag_title::hud::TextOutlineAlpha { byte: 0x66 },
+    )),
     // Four instances of one corner-bracket model plus the closed box at the
     // middle, bound by `HudSight_Bind` (`0x0881b604`) in this order - which is
     // also the order `sight::BRACKET_ROTATIONS` is indexed by. See
@@ -222,12 +226,18 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             table_crossings: 6,
         },
     }),
+    incoming_warnings: false,
     runtime: None,
     lap_one_shift: None,
     bar_tip: None,
     boost_smear: None,
+    absorb_glow: None,
     sway: None,
-    safe_area: None,
+    // The disc authors no `Safe Area Setting` (`docs/formats/hd-hud.md`, "SCREEN SIZE on every
+    // title"), so the shared slider stands in, drawn 1:1 until the player moves it.
+    safe_area: Some(oag_title::pre_race::Sourced::chosen(
+        oag_title::hud::SafeArea::SHARED,
+    )),
     // `Options_Definition.xml` lists `Music Volume`, `SFX Volume`, `Camera`, `Language`, `Auto Load
     // Ghost` and `Music Order`: no `Dynamic HUD` (checked on the USA disc, 2026-10-26).
     dynamic_hud: None,

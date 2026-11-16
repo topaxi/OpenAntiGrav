@@ -14,7 +14,8 @@
 //! cycle outside the tick: see `Session::frame`, which stops calling `tick` once
 //! [`Race::finished`] answers yes - **unless the player crossed the line**
 //! ([`Race::runs_on_after_the_line`]), where the original keeps the race running
-//! behind the panels and so does this.
+//! behind the panels and so does this. The board taken at the line is then kept
+//! current as the rest of the field finishes ([`Race::refresh_results`]).
 
 use super::*;
 
@@ -43,7 +44,7 @@ pub struct RunStats {
     /// 0x94` each time a human-flown craft **enters a new pad** - the same edge that
     /// arms the exhaust flare and, in Zone, scores 100 - and `Race_BuildEndRaceResult`
     /// copies the four-or-five laps it reports into the third column. Read off a live
-    /// write watchpoint (2026-09-30): the field's only writer is that instruction.
+    /// write watchpoint: the field's only writer is that instruction.
     /// Indexed by lap - 1, like [`oag_race::RaceState::lap_splits`] and bounded by the
     /// same [`oag_race::MAX_RECORDED_LAPS`].
     pub boosts_by_lap: [u32; oag_race::MAX_RECORDED_LAPS],
@@ -118,7 +119,7 @@ impl Race {
     /// **Only the line.** A race that ended any other way - the player's craft
     /// destroyed in a single race, an Eliminator's kill target, a Zone run - is
     /// left standing as before: the original's behaviour there was not measured
-    /// (Time Trial and Single Race on Talon's Junction, 2026-10-01), and a wreck
+    /// (Time Trial and Single Race on Talon's Junction), and a wreck
     /// that respawns under the panels, or a Zone session that restarts itself,
     /// would be an invention. See `docs/gameplay/after-the-finish.md`.
     #[must_use]
@@ -132,12 +133,12 @@ impl Race {
     /// Whether the player's wreck in a **Single Race** is what ended the race: the
     /// one other ending whose world also goes on under the end-race screens.
     ///
-    /// **The original never leaves `InGame` after that wreck** - measured
-    /// 2026-10-02, 17,800+ frames with the field racing on, the HUD hidden and the
+    /// **The original never leaves `InGame` after that wreck** - measured,
+    /// 17,800+ frames with the field racing on, the HUD hidden and the
     /// spectator camera cutting, no legend and no panel
     /// (`docs/gameplay/after-the-finish.md`). Ours runs the world on in the same
     /// way and then shows `Race End Photo` and the panels, because a wrecked
-    /// player needs a way out: **the maintainer's decision of 2026-10-02**, "hold,
+    /// player needs a way out: a design decision, "hold,
     /// then results". That the legend shows at all, and when, is chosen, not
     /// measured. Zone is not included: it ends the same way but was not looked at.
     #[must_use]
@@ -200,6 +201,7 @@ impl Race {
     pub fn tick_finished(&mut self) {
         if self.runs_on_after_the_end() {
             self.tick(&oag_gameplay::PlayerInputs::none());
+            self.refresh_results();
         } else {
             #[cfg(feature = "view")]
             self.tick_cosmetics();
@@ -225,7 +227,9 @@ impl Race {
     }
 
     /// Names the person flying each slot, by slot (empty for a slot with none): what the end
-    /// screens of a network race call the people. View-only; the simulation never reads it.
+    /// screens and the multiplayer tags call the people. A network race gives the lobby's names;
+    /// a local one gives seat 1 the stored player name
+    /// (`oag_game::split_screen::name_first_seat`). View-only; the simulation never reads it.
     pub fn set_person_names(&mut self, names: Vec<String>) {
         self.view.person_names = names;
     }
@@ -240,17 +244,54 @@ impl Race {
     /// The results, once there are any.
     ///
     /// `None` for the whole race and `Some` from the finishing tick on. The
-    /// table is taken at that instant and never revised - see [`RaceView::results`]'s
-    /// field for why that matters.
+    /// table is taken at that instant. After it, only [`Race::refresh_results`]
+    /// revises it, and only what the rest of the field does: the player's own
+    /// row, [`Board::tick`] and the people's names are the ones taken at the
+    /// finish.
     #[must_use]
     pub fn results(&self) -> Option<&Board> {
         self.view.results.as_ref()
     }
 
-    /// Takes the board, on the tick the race finishes and only then.
+    /// How many times the board has been replaced since it was first taken:
+    /// what a screen drawn from a copy of it compares to know it is stale.
+    #[must_use]
+    pub fn results_revision(&self) -> u32 {
+        self.view.results_revision
+    }
+
+    /// Re-takes the board from the world as it is now, while the field runs on
+    /// behind the end screens ([`Race::runs_on_after_the_line`]): a craft that
+    /// crosses after the player gets its time and its place, and one still
+    /// lapping its laps and its running place.
     ///
-    /// Called at the end of [`Race::tick`], after the standings have been
-    /// advanced, so the last crossing is already in the table it reads.
+    /// **Presentation-side, like the first capture**: the board is read from
+    /// the simulation and nothing is written back, so no hash moves. The
+    /// player's row cannot move either - every craft still racing when they
+    /// crossed is placed behind them, and `Board::tick` and the names stay as
+    /// the finish took them. The revision counts only a board that differs from
+    /// the one held, and nothing is done once every craft has finished. A race
+    /// that ended any other way stands still and has nothing to refresh.
+    ///
+    /// Scored races (Eliminator) end on a kill target with no lap target, so
+    /// they never run on after the line and their points do not change here.
+    pub fn refresh_results(&mut self) {
+        if !self.runs_on_after_the_line() {
+            return;
+        }
+        let Some(held) = &self.view.results else {
+            return;
+        };
+        if held.rows.iter().all(scoreboard::Row::finished) {
+            return;
+        }
+        let fresh = self.take_board(held.tick);
+        if self.view.results.as_ref() != Some(&fresh) {
+            self.view.results = Some(fresh);
+            self.view.results_revision = self.view.results_revision.wrapping_add(1);
+        }
+    }
+
     /// Takes the board again from the simulation as it is now, replacing the one
     /// taken at the finish. A network client's: its board was taken on the tick
     /// its *prediction* finished, and the server's confirmed state is the race's
@@ -263,10 +304,51 @@ impl Race {
         }
     }
 
+    /// Takes the board, on the tick the race finishes and only then.
+    ///
+    /// Called at the end of [`Race::tick`], after the standings have been
+    /// advanced, so the last crossing is already in the table it reads.
     pub(super) fn capture_results(&mut self) {
         if !self.finished() || self.view.results.is_some() {
             return;
         }
+        let board = self.take_board(oag_race::race_clock_ticks(self.sim.world.tick));
+        self.view.results = Some(board);
+        self.view.results_revision = self.view.results_revision.wrapping_add(1);
+    }
+
+    /// The player's 1-based place on an Eliminator's end-of-race board, off the standings as
+    /// they are now: `oag_race::score::final_places` over each craft's whole points on a score
+    /// race, kills on a kill race. The number a campaign cell's medal is read from on a title
+    /// that awards it by place (`docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`).
+    ///
+    /// A kill race (Omega's, whose score law is unmeasured) ranks on kills with the kill count
+    /// as the first key and again as the tie-break: chosen, not measured.
+    #[must_use]
+    pub fn eliminator_place(&self) -> u8 {
+        let scored = self.sim.score_law.is_some();
+        let field: Vec<oag_race::score::Finisher> = (0..usize::from(self.sim.world.ship_count))
+            .map(|slot| {
+                let standing = &self.sim.world.ships[slot].standing;
+                oag_race::score::Finisher {
+                    points: if scored {
+                        standing.whole_score()
+                    } else {
+                        standing.kills
+                    },
+                    kills: standing.kills,
+                    person: self.sim.world.person_flown(slot),
+                }
+            })
+            .collect();
+        oag_race::score::final_places(&field)
+            .get(self.player_slot())
+            .copied()
+            .unwrap_or(1)
+    }
+
+    /// The board off the world as it is now, ended on `tick`.
+    fn take_board(&self, tick: u64) -> Board {
         let places = self.places();
         // Every slot the grid has, whether or not the mode fielded a full one:
         // `ship_count` is 8 for a single race and 1 for the three single-ship
@@ -277,6 +359,7 @@ impl Race {
         // cut. That table is what the HUD's own position readout comes from,
         // and a scoreboard that renumbered would contradict the number the
         // player was just looking at.
+        let scored = self.sim.score_law.is_some();
         let crafts: Vec<Craft> = (0..usize::from(self.sim.world.ship_count))
             .map(|slot| {
                 let ship = &self.sim.world.ships[slot];
@@ -293,15 +376,12 @@ impl Race {
                     // only times slot 0 - the two agree there, which is what
                     // `crates/raceplay/tests/lap_times_ground_truth.rs` asserts.
                     best_lap_ticks: ship.standing.best_lap_ticks,
+                    points: scored.then(|| scoreboard::Points::of(&ship.standing)),
                 }
             })
             .collect();
-        let mut board = scoreboard::build(
-            &crafts,
-            self.sim.world.laps_target(),
-            oag_race::race_clock_ticks(self.sim.world.tick),
-        );
-        // A network race names its people; every other race has no names to give.
+        let mut board = scoreboard::build(&crafts, self.sim.world.laps_target(), tick);
+        // A race names the people it was given names for (the lobby's, or seat 1's stored name).
         for row in board.rows.iter_mut().filter(|row| row.player) {
             row.name = self
                 .view
@@ -310,7 +390,7 @@ impl Race {
                 .filter(|name| !name.is_empty())
                 .cloned();
         }
-        self.view.results = Some(board);
+        board
     }
 }
 

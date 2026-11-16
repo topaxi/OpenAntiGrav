@@ -107,7 +107,7 @@ location" section):
 | --- | --- | ---: | --- | --- | --- |
 | `Bc7` | `0x0d` (`Thin_1DThin`) | 1,378 | 2x1 .. 8192x8192 | all nine | `Data/fe/images/badges.2x.gnf` |
 | `Bc4` | `0x0d` | 11 | 1024x512 .. 4096x2048 | patch `data08` | `data/fe/fonts/chinese.gnf` |
-| `Bc1` | `0x0d` | 4 | 4096x4096 | base `data00`, `data04` | `Grass_Patch_Red_Terrain_BC1.gnf` |
+| `Bc1` | `0x0d` | 4 | 4096x4096 | base `data00`, `data04` | `Grass_Patch_Red_Terrain_BC1.gnf` (untiles, see "BC1 under `TileMode(13)`") |
 | `Other(0x01)` | `0x0d` | 7 | 2048x1024 .. 4096x2048 | base `data00`, patch `data07` | `data/fe/fonts/chinese.gnf` |
 | `Other(0x05)` | `0x0d` | 6 | 512x512 .. 1024x1024 | base `data01`, `data02` | `ds_wall_displacement_df2.gnf` |
 | `Other(0x0c)` | `0x0d` | 1 | 512x1024 | base `data01` | `ds_stripe_displacement_df3.gnf` |
@@ -493,6 +493,56 @@ channel, in 8-bit units, over the archives: 1.04 (`data08`) to 2.75
 path, differs by a mean 0.88 of 255 with 0.7% of pixels over 16, at
 high-contrast edges: the authored mips, plus the GPU's own BC7 decode of the
 base. Both are the hardware's own doing, which is what the original ran.
+
+## BC1 under `TileMode(13)`
+
+2026-11-04. **Confidence: 85.** The module doc said no sampled `.gnf` ships BC1 micro-tiled; it
+does. `Data/environments2048/shared/objectlibrary/textures/grass_terrain_bc1.gnf` (base
+`data00`) is `Bc1`, `TileMode(13)`, 4096x4096, 13 levels, 11,187,456 bytes, and the terrain
+grass of Omega's `park`, `square`, `tower` and `arena`: before this, `from_gnf` refused it and
+**160 draws** (park 61, arena 42, square 32, tower 25, counted in
+`Report::unbound.decode_refused`) drew the shared white texel.
+
+`Thin_1DThin`'s in-tile order is `x0, y0, x1, y1, x2, y2` for any element size (addrlib
+`ComputePixelIndexWithinMicroTile`, thin, non-displayable), so a BC1 surface untiles with the BC7
+code and 8-byte elements: a micro tile is 8x8 blocks of 8 bytes, 512 bytes. The chain's
+arithmetic holds as for BC7 (13 levels, each padded to whole micro tiles, summing to the file
+exactly). BC1 has no invalid-block signature, so the corrupt-block guard does not apply.
+Evidence, `the_micro_tiled_bc1_grass_terrain_untiles_to_a_coherent_chain`
+(`crates/texture/tests/omega_gnf_ground_truth.rs`): level 1 against a box filter of level 0 is
+a mean 5.5 per channel (BC1 on high-frequency grass), against 20.6 for the same filter read 4
+texels off, which a wrong tile order cannot beat; the base level read by eye is a coherent grass
+picture with no tile seams. `from_gnf` keeps the chain as `BlockFormat::Bc1` blocks.
+
+The same decode binds **203 more Omega normal maps** (`omega_normal_map_ground_truth.rs`: 24,590
+of 25,977 tangent-carrying submeshes drew with their normal map, 24,793 now, `unread` 203 to 0):
+those maps are micro-tiled BC1 too.
+
+2048 against Omega: **checked, differs.** 2048's Vita textures are `.gxt`, not `.gnf`; its
+terrain grass is a `.gxt` that already decodes (no `decode_refused` on a 2048 circuit).
+
+## A half-float channel and a cube array (2026-11-16)
+
+Both were taken apart for the panel-map road
+([panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md), which holds the
+evidence). Both are read since 2026-11-16: `Texture::half_floats` and
+`Texture::cube_faces`, held against the disc by `omega_gnf_ground_truth.rs`
+(`the_panel_map_is_a_distance_field_in_texture_heights`: the median gradient is exactly `1/256`
+a texel; `sols_sky_cube_is_four_ever_blurrier_cubes_with_the_sun_on_plus_z`: the layout accounts
+for every byte, detail falls cube by cube, and the brightest face of cube 0 is slice 4, `+Z`).
+
+- **One 16-bit float channel**: surface format `0x02`, channel type `7`, `TileMode(13)`
+  (`Track_A_Floor_panel_df.gnf`, `Track_A_Floor_RunOff_panel_df.gnf`). 8x8-texel micro tiles
+  row-major, texels inside a tile in the same `x0 y0 x1 y1 x2 y2` order the BC7 blocks use, two
+  bytes each. Confidence 92: of the 720 bit orders it alone yields a smooth field, whose gradient
+  is then exactly one unit per texture height.
+- **A cube array with a chain**: texture type `0xB` in word 3 bits 31:28, slices 0 to 23, 11
+  levels (`skyCube.gnf`, 1024x1024 BC7). Level-major; every level stores 32 slices (the count
+  rounded up to a power of two), each `max(8, w/4)^2` blocks, so
+  `offset(level, slice) = sum over k < level of 32 * size(k) + slice * size(level)`; slice
+  `6 * cube + face`. Confidence 92: the sizes sum to the file's 44,892,160 data bytes exactly and
+  the 24 slices decode to four progressively blurred sets of six faces. `block_levels` still
+  refuses the file (`ChainLayout`): it reads one 2D chain, and `cube_faces` reads this shape.
 
 ## Implemented where
 

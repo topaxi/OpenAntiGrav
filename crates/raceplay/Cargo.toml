@@ -27,6 +27,7 @@ oag-core.workspace = true
 oag-ballisticng = { workspace = true, optional = true }
 oag-disc.workspace = true
 oag-display.workspace = true
+oag-bytes.workspace = true
 oag-formats.workspace = true
 oag-fx = { workspace = true, optional = true }
 oag-gameplay.workspace = true
@@ -34,9 +35,11 @@ oag-gpu = { workspace = true, optional = true }
 oag-hd.workspace = true
 oag-hud = { workspace = true, optional = true }
 oag-input = { workspace = true, optional = true }
+oag-mod = { workspace = true, optional = true }
 oag-livery = { workspace = true, optional = true }
 oag-mesh = { workspace = true, optional = true }
-oag-ext-abi = { workspace = true, optional = true }
+oag-audio = { workspace = true, optional = true }
+oag-ext-abi.workspace = true
 oag-modhost = { workspace = true, optional = true }
 oag-physics.workspace = true
 oag-pob.workspace = true
@@ -63,6 +66,7 @@ oag-ui-screens = { workspace = true, optional = true }
 oag-vex.workspace = true
 oag-weapons.workspace = true
 anyhow.workspace = true
+thiserror.workspace = true
 bytemuck = { workspace = true, features = ["derive"], optional = true }
 png = { workspace = true, optional = true }
 dirs = "7"
@@ -83,11 +87,13 @@ default = ["view"]
 # docs/architecture/workspace-layout.md, "The lean race".
 view = [
     "dep:bytemuck",
+    "dep:oag-audio",
     "dep:oag-fx",
     "dep:oag-gpu",
     "dep:oag-hud",
     "dep:oag-input",
     "dep:oag-livery",
+    "dep:oag-mod",
     "dep:oag-mesh",
     "dep:oag-post",
     "dep:oag-present",
@@ -105,9 +111,13 @@ view = [
 # builds it so it does not rot. Own-format track files need none of it.
 ballisticng = ["dep:oag-ballisticng", "dep:oag-unity"]
 # Simulation mods: WebAssembly modules called once per tick through `oag-modhost`
-# (wasmtime). Off by default; off, nothing of wasmtime is compiled or linked and a
-# race offered a module says it was left out. See `crate::extensions`.
-extensions = ["dep:oag-modhost", "dep:oag-ext-abi"]
+# (wasmtime). Off here; `oag-game` turns it on by default (not on the web or iOS).
+# Off, nothing of wasmtime is compiled or linked and a race offered a module says it
+# was left out. See `crate::extensions`.
+extensions = ["dep:oag-modhost"]
+# Simulation mods on wasmtime's Pulley interpreter instead of Cranelift's native code
+# (`oag-modhost`'s `pulley`). Implies `extensions`.
+wasm-interpreter = ["extensions", "oag-modhost/pulley"]
 # See `oag-render`'s feature of the same name. Off by default.
 perf-probe = ["view", "oag-render/perf-probe"]
 
@@ -116,14 +126,12 @@ workspace = true
 
 [dev-dependencies]
 oag-audio.workspace = true
-# `wall_penalty_ground_truth` reads the example mod as the game does.
-oag-mod.workspace = true
 oag-omega.workspace = true
 oag-schema = { workspace = true, features = ["validate"] }
 oag-testdata.workspace = true
 pollster.workspace = true
 # The extension tests' guests, in the text format.
-wat = "1.262.0"
+wat = "1.263.0"
 
 [[test]]
 name = "it_a_g"

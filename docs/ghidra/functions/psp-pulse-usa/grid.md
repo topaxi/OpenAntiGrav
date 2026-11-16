@@ -297,7 +297,7 @@ drops each slot onto its own footprint. Eight craft take the grid on any track
 that authors a `Start Position`; **nothing drives the seven opponents**, so they
 hold station until AI lands.
 
-`crates/game/tests/race_ground_truth.rs::our_grid_is_the_originals_grid` compares
+`crates/game/tests/race_grid_ground_truth.rs::our_grid_is_the_originals_grid` compares
 every slot against the eight positions above, on the same track:
 
 | | worst | where it goes |

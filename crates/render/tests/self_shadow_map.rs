@@ -37,6 +37,7 @@ fn vertex(position: Vec3) -> GpuVertex {
         glow: 0.0,
         texcoord2: [0.0, 0.0],
         tangent: 0,
+        depth_bias: 0.0,
     }
 }
 
@@ -122,6 +123,8 @@ fn a_wing_shadows_the_fuselage_under_it_and_the_rest_of_the_hull_is_lit() {
         mapped_at_creation: false,
     });
     queue.write_buffer(&vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+    let vertex_buffer =
+        oag_mesh::mesh_render::Geometry::single(vertex_buffer, vertices.len() as u32);
     let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("craft indices"),
         size: std::mem::size_of_val(&indices[..]) as u64,
@@ -133,7 +136,7 @@ fn a_wing_shadows_the_fuselage_under_it_and_the_rest_of_the_hull_is_lit() {
     // clippy reads a one-element `[a..b]` literal as a mistyped `(a..b)`.
     let ranges = std::array::from_fn::<_, 1, _>(|_| 0..indices.len() as u32);
     let caster = Caster {
-        vertices: &vertex_buffer,
+        geometry: &vertex_buffer,
         indices: &index_buffer,
         ranges: &ranges,
         model: Mat4::IDENTITY,
@@ -148,7 +151,7 @@ fn a_wing_shadows_the_fuselage_under_it_and_the_rest_of_the_hull_is_lit() {
         towards_light: Vec3::Y,
     };
     let track = Track {
-        vertices: &vertex_buffer,
+        geometry: &vertex_buffer,
         indices: &index_buffer,
         draws: &[],
         cutouts: &[],
@@ -157,8 +160,9 @@ fn a_wing_shadows_the_fuselage_under_it_and_the_rest_of_the_hull_is_lit() {
         model: Mat4::IDENTITY,
     };
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    assert_eq!(maps.render(&queue, &mut encoder, 2, &fit, &track), 0);
-    let drawn = maps.render_self_shadow(&queue, &mut encoder, 2, &caster);
+    assert_eq!(maps.render(&mut encoder, 2, &fit, &track), 0);
+    let drawn = maps.render_self_shadow(&mut encoder, 2, &caster);
+    maps.write_uniforms(&queue);
     queue.submit([encoder.finish()]);
     assert_eq!(drawn, 1);
     assert_eq!(maps.self_shadow().drawn(2), 1);

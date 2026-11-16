@@ -114,6 +114,20 @@ pub struct Keyed {
     pub rotation_keys: Option<KeyTrack<4>>,
     /// Scale keys.
     pub scale_keys: Option<KeyTrack<3>>,
+    /// The channel (`oag_ext_abi::channel_key`) that starts the tracks: they hold their
+    /// first key until it fires, then play from the moment it did. `None` plays from
+    /// the clock's zero.
+    pub on: Option<Start>,
+}
+
+/// What starts a channel-driven animation: a channel, and optionally the one value
+/// the event must carry (`oag_on_value`). `value: None` starts on any event.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Start {
+    /// `oag_ext_abi::channel_key` of the channel.
+    pub channel: u32,
+    /// The value the event must carry; `None` for any.
+    pub value: Option<f32>,
 }
 
 impl Keyed {
@@ -124,6 +138,17 @@ impl Keyed {
             .as_ref()
             .and_then(|k| k.slerp(seconds))
             .unwrap_or(self.rotation)
+    }
+
+    /// The clock the tracks read at world clock `seconds`, given when each channel last
+    /// fired (`started`): the world clock itself for a node no channel starts, else the
+    /// time since its channel fired (with its value, if it names one), `0` before it has.
+    #[must_use]
+    pub fn clock(&self, seconds: f32, started: &dyn Fn(Start) -> Option<f32>) -> f32 {
+        match self.on {
+            None => seconds,
+            Some(start) => started(start).map_or(0.0, |at| (seconds - at).max(0.0)),
+        }
     }
 
     /// The local matrix at `seconds`: scale, then rotate, then translate,
@@ -172,6 +197,49 @@ mod tests {
         a.iter().zip(&b).all(|(x, y)| (x - y).abs() < 1e-5)
     }
 
+    /// A node a channel starts reads the clock since the channel fired (zero before it has),
+    /// and a node no channel starts reads the world clock.
+    #[test]
+    fn a_channel_started_node_reads_the_time_since_its_channel_fired() {
+        let node = |on| Keyed {
+            translation: [0.0; 3],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            scale: [1.0; 3],
+            translation_keys: Some(track(&[0.0, 2.0], &[[0.0; 3], [10.0, 0.0, 0.0]], false)),
+            rotation_keys: None,
+            scale_keys: None,
+            on,
+        };
+        let any = |channel| Start {
+            channel,
+            value: None,
+        };
+        let only = |channel, value| Start {
+            channel,
+            value: Some(value),
+        };
+        let fired_at =
+            |s: Start| (s.channel == 7 && s.value.is_none_or(|v| v == 2.0)).then_some(10.0);
+        assert_eq!(node(None).clock(11.0, &fired_at), 11.0);
+        assert_eq!(node(Some(any(7))).clock(11.0, &fired_at), 1.0);
+        assert_eq!(
+            node(Some(any(7))).clock(9.0, &fired_at),
+            0.0,
+            "before the fire"
+        );
+        assert_eq!(
+            node(Some(any(8))).clock(11.0, &fired_at),
+            0.0,
+            "its channel never fired"
+        );
+        assert_eq!(node(Some(only(7, 2.0))).clock(11.0, &fired_at), 1.0);
+        assert_eq!(
+            node(Some(only(7, 3.0))).clock(11.0, &fired_at),
+            0.0,
+            "another value"
+        );
+    }
+
     /// glTF's `T * R * S` applied to a column vector is this matrix applied to
     /// a row vector: a point one unit along +X, scaled by 2, turned 90 degrees
     /// about +Y (to -Z) and moved by the translation halfway between its keys.
@@ -185,6 +253,7 @@ mod tests {
             translation_keys: Some(track(&[0.0, 2.0], &[[0.0; 3], [10.0, 4.0, 0.0]], false)),
             rotation_keys: None,
             scale_keys: None,
+            on: None,
         };
         let m = node.sample(1.0);
         assert!(near(point(&m, [1.0, 0.0, 0.0]), [5.0, 2.0, -2.0]), "{m:?}");

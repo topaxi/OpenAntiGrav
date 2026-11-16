@@ -25,6 +25,7 @@ fn placed(x: u32, width: u32, extent: [f32; 2], centre: [f32; 2]) -> crate::spri
         quad_extent: Some(extent),
         quad_centre: Some(centre),
         blend: None,
+        scale: [1.0, 1.0],
     }
 }
 
@@ -47,6 +48,7 @@ fn gauge_draws(speed: f32, shield: f32) -> Vec<Draw> {
     ]);
     let cx = Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,
@@ -101,6 +103,7 @@ fn a_title_with_no_bar_models_draws_no_gauge() {
     let sheet = crate::sprite::Sheet::default();
     let cx = Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,

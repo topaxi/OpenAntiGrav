@@ -155,8 +155,7 @@ pub fn targets(
         // widget lists names of any length - so the band is the run from the
         // widget's x to the panel's left edge, which is the column the names
         // are drawn down.
-        let scale = layout.face_scale(&menu.font) * menu.scale;
-        let pitch = skin.line_height() * scale;
+        let (scale, pitch) = super::entry_geometry(layout, skin, menu);
         let width = (layout.panel[0] - menu.x).max(pitch);
         // Centred on the face's capitals rather than laid from the pen, for
         // the reason `RowInk` gives: the face keeps room above its cap line.

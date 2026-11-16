@@ -406,3 +406,72 @@ bar, then the fade. Whether the original holds the screen until the bar crosses
 the 90 % threshold (`149.4`, TOC `+0x60cc`, read at `0x002b7a44`) was not read;
 `0x002b7a44` is the widget-clock branch, not a wait.
 
+
+## 2026-11-01: the race load's layout, read for a screen-layout file
+
+Lane `hd-loading-layout`. Read from the **disassembly** of `LoadingScreen_Draw` (`0x002b61c8`, the `+4 == 4`
+race-load kind with screen type `+0x440 == 0`) and its five drawing helpers, with every `lfs`/`lwz` through the
+function's own TOC (`scripts/ps3-toc.py`; this function sits below the `0x32d5e0` break). The decompile drops the float
+arguments, so the numbers below are the `li`/`lfs` operands in front of each `bl`. All of them are in **the 1920x1080
+grid**, unscaled.
+
+| address | name | confidence | what |
+| --- | --- | ---: | --- |
+| `0x002b2f70` | `LoadingScreen_DrawCorner` | 80 | `(obj, ctx, x=f1, y=f2, flipX=r7, flipY=r8)`: a 16x16 bracket from `corner.gtf` (`obj+0xac`), tinted `HD_Grey` (`obj+0x960`); a flipped axis moves the sprite 12 back from the edge |
+| `0x002b2d38` | `LoadingScreen_DrawImage` | 82 | `(obj, ctx, texture slot, x=r6, y=r7, w=r8, h=r9, colour=r10, u1=f1, v0=f2, u0=f3, v1=f4)`: one textured quad, integer rectangle, the four floats a UV window |
+| `0x002b3190` | `LoadingScreen_DrawText` | 72 | `(obj, ctx?, scale=f1,f2, string=r5, x=r6, y=r7, colour=r10)`, stack: font name, wrap width, line pitch. The wrap width and pitch are read off the one paragraph call (`780`, `40`) and agree with the frame |
+| `0x002b3368` | `LoadingScreen_DrawTitleRow` | 78 | `(obj, ctx, string, arrow slot, x, y)`: a 32x32 arrow quad at `(x, y)` and the text in font `default` at scale `0.8` (`0x6110`) at `(x + 34, y - 4)` |
+| `0x002b36d0` | `LoadingScreen_DrawLabel` | 85 | already named; adds: font `default`, scale `0.45` (`0x6114`), bullet 16x16 at `(x, y)`, text at `(x + 22, y)` |
+
+### What the race load draws, in order - confidence 80 unless stated
+
+Fonts are the front end's named roles (`hd-frontend.md`: `Default` = `helv.fnt`, line height 33; `Title` = `helvb.fnt`, 44),
+drawn at the **scale stated, not normalised**: ours' `font_scale` against a PSP line height is a stand-in for this.
+
+| element | where (1920 grid) | address |
+| --- | --- | --- |
+| top rule, `line.gtf` | `(160, 110)` 1600 x 8 | `0x002b6d20` |
+| bottom rule | `(160, 975)` 1600 x 8 | `0x002b6d78` |
+| caption arrow `Title_Arrow_HD` | `(160, 73)` 32 x 32 | `0x002b6e7c` |
+| caption text `FE_LOADINGDOT` + circuit, font `Title`, scale 1.0 | `(194, 62)`, drawn twice at the same point | `0x002b6e18`, `0x002b6e48` |
+| label `WIPEOUT® HD` (`obj+0x468`) | `(160, 48)` | `0x002b6cd0` |
+| label `FE_PROG_BAR` | `(160, 670)` | `0x002b6eb8` |
+| label `FE_MODE_ICON` | `(1510, 670)` | `0x002b6ed4` |
+| label `FE_FEATURE_IMAGE` | `(160, 125)` | `0x002b6ef0` |
+| label `FE_FEATURE_DESC` | `(960, 125)` | `0x002b6f0c` |
+| brackets, feature image panel | corners of `(160, 155)` - `(950, 655)` | `0x002b6f20..0x002b6f90` |
+| brackets, description panel | corners of `(960, 155)` - `(1756, 655)` | `0x002b6f98..0x002b7004` |
+| brackets, progression bar | corners of `(160, 700)` - `(1500, 950)` | `0x002b73f4..0x002b7464` |
+| brackets, mode icon panel | corners of `(1510, 700)` - `(1756, 950)` | `0x002b7020..0x002b70a0` |
+| dot bar | `(168, 708)` - `(1496, 948)`, 166 x 30 tiles of 8, lit `HD_Blue`, unlit `HD_LightGrey` | `0x002b70b8..0x002b73ec` (read 2026-10-05) |
+| mode icon | video widget quad `(1510, 700)` 250 x 250 | `0x002b7574..0x002b76b4` (confidence 70: the quad's corners are the floats `700` and `1760`, the width is inferred) |
+| feature illustration, texture `obj+0xc4` | `(180, 190)` 896 x 480, UV `u 0..0.875`, `v 0.0625..1` (a 1024 x 512 texture's `(0, 32)` - `(896, 512)`) | `0x002b76d8..0x002b7710` |
+| feature title row (arrow + text) | `(175, 175)`, text `(209, 171)` | `0x002b771c` |
+| description heading row | `(975, 175)`, text `(1009, 171)` | `0x002b7738` |
+| paragraph, font `default`, scale 1.0, `HD_Grey` | `(975, 215)`, wrap 780, line pitch 40 | `0x002b774c..0x002b7784` |
+
+Confidence 70 on the illustration's UV reading: the four floats are `0.875`, `0.0625`, `0`, `1` in the order `f1..f4`, and the
+sizes `896 x 480` match a `1024 x 512` texture window exactly, but which float is which UV bound was inferred from that
+fit, not read out of the quad builder.
+
+### Pixel check: the original's frame is the grid scaled 96 % about its centre
+
+The pair's original frame (`hd-loading`, Safe Area `96 %` from the save file) is every number above under
+`x' = 960 + (x - 960) * 0.96`, `y' = 540 + (y - 540) * 0.96`:
+
+| measured in the frame | predicted from the code |
+| --- | --- |
+| top rule rows 130-133, x 192..1727 | `127.2..134.9`, `192..1728` |
+| bottom rule rows 961-963 | `957.6..965.3` |
+| icon clip `240` px at `(1488, 694)` (2026-10-05, ring match) | `250 * 0.96 = 240` at `(1510, 700)` -> `(1488, 694)` |
+| label text starts x 212 (`FEATURE IMAGE`) | `182 -> 213` |
+| `BARREL ROLL` text starts x 238 | `209 -> 239` |
+| paragraph right edge 1727 | `975 + 780 = 1755 -> 1727` |
+| corner brackets at y 172 | `155 -> 170.4` |
+
+Two sources (code operand and pixel) agree on every row, which is what raises the figures above 70. The earlier
+hand-measured "bar top 177.0, rule 242.0" in ours' 480x272 grid were these numbers seen through the safe area.
+
+**Not read:** the text colours of the caption and the second `Title` draw (a border or shadow pass at the same point is the
+reading), and the line break rule of the paragraph (width and pitch only). The tournament screen (`+0x440 == 1`) and kind 8
+(`+4 == 8`) are separate blocks with other numbers (`0x002b778c`, `0x002b6a64`) and are left unread.

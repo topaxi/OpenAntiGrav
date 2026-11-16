@@ -19,7 +19,43 @@ pub(crate) enum Lists<'a> {
     /// the fourth row of the view's view-projection matrix and puts list-B meshes
     /// in the original's back-to-front order ([`oag_mesh::mesh::Model::blended_order`]);
     /// without it the list keeps its build order.
-    Blended { depth_plane: Option<[f32; 4]> },
+    Blended {
+        depth_plane: Option<[f32; 4]>,
+        /// Draws of another pipeline queued at keys of their own, put among the list's.
+        between: Option<Interleave<'a>>,
+        /// Whether the list's foliage lays its own depth down before the list draws
+        /// (`ScenerySort::Depth`): the original writes none.
+        foliage_depth: bool,
+    },
+}
+
+/// Whether `OAG_DEBUG_REVERSE_BLENDED` asks for the circuit's blended list in the opposite order:
+/// a diagnostic that shows which pixels of a frame the order decides. Off unless set to a value
+/// other than `0`; a flare placed among the list keeps the place the unreversed order gave it.
+fn reverse_blended() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        std::env::var("OAG_DEBUG_REVERSE_BLENDED").is_ok_and(|v| !matches!(v.trim(), "" | "0"))
+    })
+}
+
+/// Draws that sit among the blended list by queue key: a craft's flare is queued with the
+/// list-B meshes (`ExhaustFlare_Submit`), so a mesh nearer than it draws after it.
+#[derive(Clone, Copy)]
+pub(crate) struct Interleave<'a> {
+    /// The queue key of draw `i`, comparable with the list's own
+    /// ([`oag_mesh::mesh::flare_key`]).
+    pub(crate) keys: &'a [u32],
+    /// Draws number `i`. It binds its own pipeline, so the list re-binds its own afterwards.
+    pub(crate) draw: &'a dyn Fn(&mut wgpu::RenderPass<'_>, usize),
+}
+
+impl std::fmt::Debug for Interleave<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Interleave")
+            .field("keys", &self.keys)
+            .finish_non_exhaustive()
+    }
 }
 
 /// [`Lists::Solid`]'s `order`.
@@ -43,6 +79,16 @@ thread_local! {
 }
 
 impl Drawable {
+    /// Binds the groups a drawable keeps for the whole of a draw: its uniforms, the fog and the
+    /// animation table. Bound again after a draw of another pipeline sat among its own.
+    fn bind_frame(&self, pass: &mut wgpu::RenderPass<'_>, block: ViewBlock) {
+        pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
+        // Fog is per-frame, not per draw call, and group 2 survives the `set_pipeline` calls.
+        pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
+        // Same reasoning as fog: the table is per frame, not per draw call.
+        pass.set_bind_group(3, &self.anim_bind, &[]);
+    }
+
     /// Appends one line per submitted draw to the file `OAG_DRAW_DUMP` names:
     /// the list, the diffuse texture's label, the index count and the draw's
     /// bounds. A diagnostic for comparing a frame's draw list against a
@@ -66,23 +112,39 @@ impl Drawable {
         &wgpu::RenderPipeline,
         &[(f32, wgpu::RenderPipeline)],
     ) {
-        match &self.culled {
+        let write_velocity = self.unwritten.is_none()
+            || self
+                .velocity_read
+                .load(std::sync::atomic::Ordering::Relaxed);
+        let culled_set = match (&self.unwritten, write_velocity) {
+            (Some(unwritten), false) => unwritten.culled.as_ref(),
+            _ => self.culled.as_ref(),
+        };
+        match culled_set {
             Some(set) if culled => (
                 &set.pipeline,
                 set.prepass.as_ref(),
                 &set.alpha_test_pipeline,
                 &set.cutout_pipelines,
             ),
-            _ => (
-                &self.pipeline,
-                self.prepass.as_ref(),
-                &self.alpha_test_pipeline,
-                &self.cutout_pipelines,
-            ),
+            _ => match &self.unwritten {
+                Some(unwritten) if !write_velocity => (
+                    &unwritten.base.pipeline,
+                    unwritten.base.prepass.as_ref(),
+                    &unwritten.base.alpha_test_pipeline,
+                    &unwritten.base.cutout_pipelines,
+                ),
+                _ => (
+                    &self.pipeline,
+                    self.prepass.as_ref(),
+                    &self.alpha_test_pipeline,
+                    &self.cutout_pipelines,
+                ),
+            },
         }
     }
 
-    fn trace_draw(&self, list: &str, draw: &DrawCall) {
+    fn trace_draw(&self, list: &str, draw: &DrawCall, queue_key: Option<u32>) {
         use std::io::Write;
         static PATH: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
         let Some(path) = PATH.get_or_init(|| std::env::var_os("OAG_DRAW_DUMP").map(Into::into))
@@ -102,13 +164,32 @@ impl Drawable {
         {
             let _ = writeln!(
                 file,
-                "{list}\t{label}\t{}\t{:.1}\t{:.1}\t{:.1}\t{:.0}\t{}",
+                "{list}\t{label}\t{}\t{:.1}\t{:.1}\t{:.1}\t{:.0}\t{}\t{:#010x}\t{}\t{:?}\t{}",
                 draw.range.end - draw.range.start,
                 c[0],
                 c[1],
                 c[2],
                 draw.bounds.radius,
-                draw.chunk.map_or(-1, i64::from)
+                draw.chunk.map_or(-1, i64::from),
+                draw.layer,
+                draw.node.map_or(-1, i64::from),
+                draw.depth_point,
+                queue_key.map_or_else(|| "-".to_string(), |key| format!("{key:#010x}"))
+            );
+            let corner = |at: u32| {
+                let index = self.model.indices[at as usize];
+                self.model.vertices[index as usize].position
+            };
+            let last = draw.range.end.saturating_sub(3);
+            let _ = writeln!(
+                file,
+                "#tri\tfirst {:?} {:?} {:?}\tlast {:?} {:?} {:?}",
+                corner(draw.range.start),
+                corner(draw.range.start + 1),
+                corner(draw.range.start + 2),
+                corner(last),
+                corner(last + 1),
+                corner(last + 2),
             );
         }
     }
@@ -151,9 +232,13 @@ impl Drawable {
     ) -> SceneStats {
         let solid = !matches!(lists, Lists::Blended { .. });
         let blended = !matches!(lists, Lists::Solid { .. });
-        let depth_plane = match lists {
-            Lists::Blended { depth_plane } => depth_plane,
-            Lists::All | Lists::Solid { .. } => None,
+        let (depth_plane, between, foliage_depth) = match lists {
+            Lists::Blended {
+                depth_plane,
+                between,
+                foliage_depth,
+            } => (depth_plane, between, foliage_depth),
+            Lists::All | Lists::Solid { .. } => (None, None, false),
         };
         let order = match lists {
             Lists::Solid { order } => order,
@@ -170,7 +255,7 @@ impl Drawable {
                 set,
                 chunks,
                 frustum,
-                (order, depth_plane),
+                (order, depth_plane, between, foliage_depth),
                 (solid, blended),
                 shown,
             )
@@ -187,7 +272,12 @@ impl Drawable {
         set: Option<&VisibleSet>,
         chunks: Option<&ChunkSet>,
         frustum: Option<&Frustum>,
-        (order, depth_plane): (SolidOrder<'_>, Option<[f32; 4]>),
+        (order, depth_plane, between, foliage_depth): (
+            SolidOrder<'_>,
+            Option<[f32; 4]>,
+            Option<Interleave<'_>>,
+            bool,
+        ),
         (solid, blended): (bool, bool),
         shown: &mut Shown,
     ) -> SceneStats {
@@ -205,15 +295,11 @@ impl Drawable {
         };
         let shows = self.shows(block);
         oag_gpu::perfprobe::pipeline_set();
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
-        // Bound once for the whole drawable: fog is per-frame, not per draw call,
-        // and group 2 survives the `set_pipeline` calls below.
-        pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
-        // Same reasoning as fog: the table is per frame, not per draw call.
-        pass.set_bind_group(3, &self.anim_bind, &[]);
+        let (base_pipeline, base_prepass, _, _) = self.solid(false);
+        pass.set_pipeline(base_pipeline);
+        self.bind_frame(pass, block);
         self.bind_materials(pass, &mut last_bound);
-        self.bind_vertices(pass);
+        let mut cursor = self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
         let opaque_draws = if solid { &self.model.draws[..] } else { none };
@@ -236,7 +322,7 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
-            self.trace_draw("opaque", draw);
+            self.trace_draw("opaque", draw, None);
             shown.push(index as u32);
         }
         // The prepass's own order: `order` where given, filtered to what is
@@ -244,7 +330,7 @@ impl Drawable {
         // it arrives in, so nearest first only lets the depth test reject
         // sooner - it cannot change a pixel.
         depth_order.clear();
-        if let Some(order) = order.filter(|_| self.prepass.is_some()) {
+        if let Some(order) = order.filter(|_| base_prepass.is_some()) {
             flags.clear();
             flags.resize(opaque_draws.len(), false);
             for &index in shown.iter() {
@@ -267,7 +353,7 @@ impl Drawable {
         // draws go out without switching it: half of HD's circuit binds, and what the wgpu
         // encoder validates at `finish`. The shade half binds as usual from this state.
         // With the arrays bound ([`Self::bind_materials`]) there is nothing to bind.
-        if self.bindless.is_none() && self.prepass.is_some() && !shown.is_empty() {
+        if self.bindless.is_none() && base_prepass.is_some() && !shown.is_empty() {
             pass.set_bind_group(1, &self.textures[0], &[]);
             last_bound = Some(0);
         }
@@ -275,18 +361,21 @@ impl Drawable {
         // wants the other one switches it and the rest do not - see
         // `Self::solid`.
         let mut draw_one = |pass: &mut wgpu::RenderPass<'_>,
+                            cursor: &mut mesh_render::Cursor<'_>,
                             index: u32,
                             reversed: bool,
                             shade: bool,
-                            culling: &mut bool| {
+                            culling: &mut (bool, bool)| {
             let draw = &opaque_draws[index as usize];
             let want = self.wants_cull(draw);
-            if want != *culling {
-                *culling = want;
+            // The shaded half's pipeline also follows the draw's class (`Built::plain_draws`).
+            let plain = shade && self.plain_draws.get(index as usize) == Some(&true);
+            if (want, plain) != *culling {
+                *culling = (want, plain);
                 oag_gpu::perfprobe::pipeline_set();
                 let (opaque, prepass, ..) = self.solid(want);
                 pass.set_pipeline(match prepass {
-                    Some(prepass) if shade => &prepass.shade,
+                    Some(prepass) if shade => prepass.shading(plain),
                     _ => opaque,
                 });
             }
@@ -318,9 +407,9 @@ impl Drawable {
             } else {
                 draw.range.clone()
             };
-            pass.draw_indexed(range, 0, 0..1);
+            cursor.draw_of(pass, draw.range.start, &range);
         };
-        match &self.prepass {
+        match base_prepass {
             // Depth first, then the shading against it, **backwards** - see
             // `mesh_render::Prepass` for why the reversal keeps every
             // coplanar tie where the plain pipeline puts it.
@@ -344,25 +433,33 @@ impl Drawable {
                         let (_, twin, ..) = self.solid(want);
                         pass.set_pipeline(&twin.unwrap_or(prepass).depth);
                     }
-                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
+                    cursor.draw(pass, &draw.range);
                 }
+                oag_gpu::perfprobe::marks::mark(pass, "track solid, shaded");
                 pass.set_pipeline(&prepass.shade);
-                let mut culling = false;
+                let mut culling = (false, false);
                 let reversed = self.reversed_indices.as_ref();
                 if let Some(reversed) = reversed {
                     pass.set_index_buffer(reversed.slice(..), wgpu::IndexFormat::Uint32);
                 }
                 for &index in shown.iter().rev() {
-                    draw_one(pass, index, reversed.is_some(), true, &mut culling);
+                    draw_one(
+                        pass,
+                        &mut cursor,
+                        index,
+                        reversed.is_some(),
+                        true,
+                        &mut culling,
+                    );
                 }
                 if reversed.is_some() {
                     pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
                 }
             }
             _ => {
-                let mut culling = false;
+                let mut culling = (false, false);
                 for &index in shown.iter() {
-                    draw_one(pass, index, false, false, &mut culling);
+                    draw_one(pass, &mut cursor, index, false, false, &mut culling);
                 }
             }
         }
@@ -409,7 +506,7 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
-            self.trace_draw("cutout", draw);
+            self.trace_draw("cutout", draw, None);
             // Switched only when the reference changes, so a model naming one
             // (or none) still pays for a single `set_pipeline`.
             let cutout = if self.wants_cull(draw) {
@@ -432,7 +529,7 @@ impl Drawable {
             }
             // Elided when unchanged, as above.
             self.bind_slot(pass, &mut last_bound, slot);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            cursor.draw(pass, &draw.range);
         }
 
         // Third pipeline group, same pass: transparent batches, blended.
@@ -458,13 +555,89 @@ impl Drawable {
         if !blended {
             return stats;
         }
+        // `ScenerySort::Depth`: every foliage draw lays its solid texels' depth down before any
+        // of the list is coloured, so the colour pass below shows a texel only where nothing
+        // nearer is solid, whatever order the list draws in.
+        let foliage = self.foliage.as_ref().filter(|_| foliage_depth);
+        if let Some(foliage) = foliage {
+            for (index, draw) in self.model.transparent_draws.iter().enumerate() {
+                if !mesh_render::Foliage::takes_part(draw)
+                    || !shows.draw(draw)
+                    || !visible(
+                        draw,
+                        DrawSections::at(transparent, index),
+                        set,
+                        chunks,
+                        frustum,
+                    )
+                {
+                    continue;
+                }
+                let pipeline = &foliage.depth[usize::from(draw.culled)];
+                if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
+                    oag_gpu::perfprobe::pipeline_set();
+                    pass.set_pipeline(pipeline);
+                    current = Some(pipeline);
+                }
+                let slot = draw
+                    .texture
+                    .map_or(0, |t| t + 1)
+                    .min(self.textures.len() - 1);
+                if self.bindless.is_none() {
+                    binds.record(slot);
+                }
+                self.bind_slot(pass, &mut last_bound, slot);
+                cursor.draw(pass, &draw.range);
+            }
+        }
         // The original's order for list B: far to near by the mesh's view depth,
-        // which depends on this view - `Model::blended_order`.
-        let blend_order = depth_plane.and_then(|plane| self.model.blended_order(plane));
-        let blend_order = blend_order.as_deref();
-        for index in (0..self.model.transparent_draws.len())
-            .map(|at| blend_order.map_or(at, |order| order[at] as usize))
-        {
+        // which depends on this view - `Model::blended_sorted`.
+        let sorted = depth_plane.and_then(|plane| self.model.blended_sorted(plane));
+        let blend_order = sorted.as_ref().map(|sorted| sorted.order.as_slice());
+        // Where each interleaved draw falls in that order, nearest-last: a draw keyed past
+        // every mesh (or a list with no depth to key by) goes after the glow stamps, where
+        // everything of the kind drew before.
+        let transparent_count = self.model.transparent_draws.len();
+        let mut inserts: Vec<(usize, usize)> = between
+            .map(|between| {
+                let mut at: Vec<_> = between
+                    .keys
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &key)| {
+                        let position = sorted
+                            .as_ref()
+                            .map_or(transparent_count, |sorted| sorted.position_of(key));
+                        (position, i)
+                    })
+                    .collect();
+                at.sort_by_key(|&(position, i)| (position, between.keys[i]));
+                at
+            })
+            .unwrap_or_default();
+        let mut next_insert = 0;
+        let reversed = reverse_blended();
+        for (at, index) in (0..transparent_count).map(|at| {
+            let place = if reversed {
+                transparent_count - 1 - at
+            } else {
+                at
+            };
+            (at, blend_order.map_or(place, |order| order[place] as usize))
+        }) {
+            while let (Some(between), Some(&(position, i))) = (between, inserts.get(next_insert))
+                && position <= at
+            {
+                (between.draw)(pass, i);
+                next_insert += 1;
+                // Its pipeline, textures and buffers replaced ours.
+                self.bind_frame(pass, block);
+                self.bind_arrays(pass);
+                cursor = self.bind_vertices(pass);
+                pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
+                current = None;
+                last_bound = None;
+            }
             let draw = &self.model.transparent_draws[index];
             if !shows.draw(draw) {
                 continue;
@@ -479,7 +652,10 @@ impl Drawable {
                 stats.draws_culled += 1;
                 continue;
             }
-            let pipeline = pipelines.select(draw);
+            let pipeline = match foliage.filter(|_| mesh_render::Foliage::takes_part(draw)) {
+                Some(foliage) => &foliage.colour[usize::from(draw.culled)],
+                None => pipelines.select(draw),
+            };
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
                 oag_gpu::perfprobe::pipeline_set();
                 pass.set_pipeline(pipeline);
@@ -487,7 +663,11 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
-            self.trace_draw("blended", draw);
+            self.trace_draw(
+                "blended",
+                draw,
+                sorted.as_ref().map(|sorted| sorted.key_at(at)),
+            );
             let slot = draw
                 .texture
                 .map_or(0, |t| t + 1)
@@ -498,15 +678,21 @@ impl Drawable {
             }
             // Elided when unchanged, as above.
             self.bind_slot(pass, &mut last_bound, slot);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            cursor.draw(pass, &draw.range);
         }
         self.draw_stamps(
             pass,
             &shows,
             transparent,
             blend_order,
+            &mut cursor,
             (set, chunks, frustum),
         );
+        for (_, i) in inserts.drain(next_insert..) {
+            if let Some(between) = between {
+                (between.draw)(pass, i);
+            }
+        }
         stats
     }
 }

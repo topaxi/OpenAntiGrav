@@ -84,7 +84,7 @@ impl Stage {
     pub(crate) fn loading(
         gpu: &Gpu,
         shell: boot::Shell,
-        media: Option<boot::MediaWorker>,
+        media: Option<boot::worker::MediaWorker>,
         assets: &loading::Assets,
         trace: bool,
         // The player's chosen language, so this screen's own invented prose
@@ -94,13 +94,16 @@ impl Stage {
         // language plugin does, so `Settings::language` is the only source
         // there is.
         language: Option<&str>,
+        // `[graphics] hud_safe_area`: the screen is drawn inside the title's `Safe Area
+        // Setting`, as the original draws it.
+        hud_safe_area: Option<u8>,
     ) -> Result<Self> {
         // The **disc's** font, not the built-in 5x7 set: the tips are the
         // disc's own prose in the player's own language, and `push_text` skips
         // a glyph the atlas has no cell for - so accented text would silently
         // lose characters rather than fail. No video pipeline, this screen
         // having no movie; there is no loading movie in either build.
-        let renderer = Renderer::new(
+        let mut renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
             gpu.output.config.format,
@@ -118,6 +121,16 @@ impl Stage {
         // against, so HD's much larger face draws at the size this layout was
         // written for. See `loading::Screen::new`.
         let line_height = shell.font.line_height;
+        renderer.set_face_atlas(
+            &gpu.device,
+            &gpu.queue,
+            shell.title_font.clone(),
+            shell.title_font.as_ref().map(|_| "Title"),
+        );
+        let safe_area = shell.title.hud_art.safe_area_scale(hud_safe_area);
+        let mut screen = loading::Screen::new(assets, line_height, 0, language);
+        screen.set_safe_area(safe_area);
+        renderer.set_space(screen.space());
         // Sample count 1, matching `upscale::Framebuffer`'s target, which is
         // what this draws into.
         let wave = oag_render::loading::Pipeline::new(
@@ -133,7 +146,7 @@ impl Stage {
             wave,
             // Seed 0 on the boot screen: it goes up once per run, and the
             // title that has features does not draw this one anyway.
-            screen: loading::Screen::new(assets, line_height, 0, language),
+            screen,
             shell: Some(shell),
             media,
             race: None,
@@ -141,6 +154,7 @@ impl Stage {
             built_race: None,
             music: None,
             trace,
+            icon: None,
         })))
     }
 
@@ -160,7 +174,7 @@ impl Stage {
     pub(crate) fn race_loading(
         gpu: &Gpu,
         worker: race::LoadWorker,
-        music: oag_sound::MusicFetchWorker,
+        music: Option<oag_sound::MusicFetchWorker>,
         font: &oag_ui::font::Atlas,
         sprites: &oag_hud::sprite::Sheet,
         assets: &loading::Assets,
@@ -171,18 +185,60 @@ impl Stage {
         trace: bool,
         // See `Stage::loading`'s own parameter of the same name.
         language: Option<&str>,
+        // The title's `Title`-role face, which a layout's caption is drawn in, and the
+        // title's Safe Area for the player's `hud_safe_area`. See `Stage::loading`.
+        title_font: Option<&oag_ui::font::Atlas>,
+        safe_area: f32,
+        // What the track being raced supplies of its own loading screen, when it is a track
+        // file with a `[loading]` table.
+        track: Option<&loading::TrackLoading>,
+        // The card the race was launched from, drawn behind the box on a title that does.
+        card: Option<oag_ui::frontend::LaunchedCard>,
     ) -> Result<Self> {
-        let renderer = Renderer::new(
+        // The mode icon's clip, where the title maps one for this mode: the
+        // renderer's planes are sized from its header, and the clip itself is
+        // opened on a thread of its own (`loading_icon::Icon`).
+        let clip = loading::icon::clip(assets, mode);
+        // The track's own picture goes under the title's sheet when it supplies one.
+        let own_sheet = track.and_then(|track| track.sheet(assets));
+        let mut renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
             gpu.output.config.format,
-            None,
+            clip.and_then(loading::icon::format),
             font.clone(),
             // The illustration's own sheet where the title ships one; see
             // `Stage::loading`, which chooses the same way and for the same
             // reason.
-            assets.art.as_ref().map_or(sprites, |art| &art.sheet),
+            own_sheet
+                .as_ref()
+                .map(|(sheet, _)| sheet)
+                .or(assets.art.as_ref().map(|art| &art.sheet))
+                .unwrap_or(sprites),
         )?;
+        renderer.set_face_atlas(
+            &gpu.device,
+            &gpu.queue,
+            title_font.cloned(),
+            title_font.map(|_| "Title"),
+        );
+        let mut screen = loading::Screen::for_mode(assets, font.line_height, draw, language, mode);
+        screen.set_safe_area(safe_area);
+        match card {
+            Some(card) => screen.set_card(card, assets.game_tips.as_ref(), draw),
+            None if assets.game_tips.is_some() => log::debug!(
+                "race load: this race was not launched from an event card, so the box and the \
+                 meter draw over the ground and no card is made up"
+            ),
+            None => {}
+        }
+        if let Some(track) = track {
+            for note in &track.notes {
+                log::warn!("{note}");
+            }
+            screen.apply_track(track, own_sheet.as_ref().map(|(_, rect)| *rect));
+        }
+        renderer.set_space(screen.space());
         let wave = oag_render::loading::Pipeline::new(
             &gpu.device,
             &gpu.queue,
@@ -194,14 +250,22 @@ impl Stage {
             atlas: font.clone(),
             renderer,
             wave,
-            screen: loading::Screen::for_mode(assets, font.line_height, draw, language, mode),
+            screen,
             shell: None,
             media: None,
             race: Some(worker),
             build: None,
             built_race: None,
-            music: Some(music),
+            music,
             trace,
+            icon: clip
+                .filter(|clip| loading::icon::format(clip).is_some())
+                .map(|clip| {
+                    crate::loading_icon::Icon::spawn(
+                        clip.clone(),
+                        oag_source::cache::default_cache_dir(),
+                    )
+                }),
         })))
     }
 
@@ -308,7 +372,14 @@ impl Stage {
     /// the offscreen target rather than the surface. Getting it from the window
     /// is right only at a render scale of 100 % on an unshaped aspect, which is
     /// exactly the case that would let it ship looking correct.
+    ///
+    /// Never inlined: the `RaceStage` it builds (about 350 KiB) and its
+    /// temporaries sit on the stack before they are boxed, and inlined they
+    /// would sit in `App::open_with`'s frame on every leg, the browser's front
+    /// end included, which never takes this one (`docs/tools/web.md`, "The
+    /// page's stack").
     #[allow(clippy::too_many_arguments)]
+    #[inline(never)]
     pub(crate) fn race(
         gpu: &impl GpuContext,
         loaded: race::Loaded,
@@ -406,6 +477,7 @@ impl Stage {
             title,
             hud,
             track_panel,
+            demo_overlay,
             track_model,
             behind_glass,
             liveries,
@@ -447,36 +519,22 @@ impl Stage {
             ghost_static,
             ripples,
             started,
+            circuit,
             ..
         } = loaded;
         // Read before `setup` moves into `race::Race::start` below - `mode`
         // is `Copy` and would survive that move, but `class` would not.
         //
-        // **`track_entry.or(Some(title.race.track))`, not `track_entry`
-        // alone.** `race::Options::track` is `None` on the ordinary `--race`
-        // invocation with no `--track` flag - confirmed live: a real
-        // `--race --mode time_trial --autopilot` run with no `--track`
-        // wrote `track = "(no circuit)"` before this fallback existed,
-        // because `race::load` resolves its own default *internally* and
-        // never hands the resolved name back to the caller. `title.race`
-        // (`&'static oag_title::race::RaceDefaults`) is the same fallback
-        // `race::load` itself falls back to - `RaceDefaults::track`'s own
-        // doc calls it "archive entry of the `.vex` a race loads when the
-        // caller names none" - so this reads the disc's own stated default
-        // rather than re-deriving or inventing one. Not exact for a Zone
-        // race, whose own further remap (`ZoneCircuit::variant_of`) lives in
-        // `race::load` and is not replicated here - the record still lands
-        // on a real, disc-authored circuit id rather than [`NO_CIRCUIT`],
-        // just not always the exact zone variant `race::load` actually drew.
-        // A foreign track is its own circuit: filed under the disc's default
-        // it would take that circuit's best lap and ghost.
+        // A run that named no circuit files under the one `race::load` resolved
+        // (`Loaded::circuit`): the title's default, or the first circuit the
+        // source ships when the default is not in it. A foreign track is its own
+        // circuit: filed under the disc's default it would take that circuit's
+        // best lap and ghost.
         let foreign_key = setup.foreign.as_ref().map(|id| format!("foreign:{id}"));
-        let result_key = oag_game::records::Key::new(
+        let result_key = oag_game::records::Key::raced(
             title.name,
-            foreign_key
-                .as_deref()
-                .or(track_entry)
-                .or(Some(title.race.track)),
+            foreign_key.as_deref().or(track_entry),
+            &circuit,
             setup.mode.name(),
             &setup.class,
         );
@@ -492,7 +550,7 @@ impl Stage {
             standing.and_then(|record| record.best_total_ticks),
             standing.and_then(|record| record.best_lap_ticks),
         );
-        let mut scene = race::Scene::new(
+        let mut scene = Box::new(race::Scene::new(
             gpu.device(),
             gpu.queue(),
             track_model,
@@ -535,7 +593,7 @@ impl Stage {
             shadows,
             shadow_hulls,
             behind_glass,
-        )?;
+        )?);
         scene.attach_ripples(ripples);
         scene.attach_mist(
             gpu.device(),
@@ -554,6 +612,7 @@ impl Stage {
             gpu.format(),
             setup.scenery_fx.lens_flare.as_deref(),
         );
+        scene.attach_mod_shaders(gpu.device(), gpu.queue(), setup.handles.shaders().list());
         // Time Trial and Speed Lap race a ghost - see `oag_game::ghosts`.
         scene.prepare_ghost(
             gpu.device(),
@@ -563,60 +622,25 @@ impl Stage {
             &liveries,
             ghost_static.as_ref(),
         );
-        // Against the **surface** format, like every other renderer here, because
-        // the HUD is composited into the offscreen target which shares it.
-        let overlay = oag_game::hud_overlay::Overlay::new(
-            gpu.device(),
-            gpu.queue(),
-            gpu.format(),
-            &hud,
-            settings.graphics.hud_scale,
-        )
-        .context("building the HUD overlay")?
-        .map(|mut overlay| {
-            overlay.set_dynamic_hud(settings.display.dynamic_hud);
-            overlay.with_safe_area(settings.graphics.hud_safe_area)
-        });
-        // The results table, built from the same assets and drawn into the same
-        // target - see `oag_game::scoreboard`, which is where the "this is ours,
-        // the disc's own Race End chain is not built" argument lives. Built with
-        // the race rather than when it ends: a load is the one moment a stage may
-        // stall, and doing it at the finish would drop frames on the lap the
-        // player is most likely to be watching.
-        let scoreboard =
-            oag_game::scoreboard::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), &hud)
-                .context("building the scoreboard overlay")?;
-        // The countdown's own `<Mode3D>` model, when this mode's layout carries
-        // one - see `oag_game::hud_countdown`. Built the same way `overlay`
-        // just was, against the same surface format.
-        let countdown = countdown_model
-            .map(|(model, widget)| {
-                oag_game::hud_countdown::Countdown::new(
-                    gpu.device(),
-                    gpu.queue(),
-                    gpu.format(),
-                    model,
-                    &widget,
-                )
-            })
-            .transpose()
-            .context("building the countdown overlay")?;
-        // The track-description panel the original lays over the flyby, built the same way.
-        let track_panel = track_panel
-            .map(|assets| {
-                oag_game::track_panel::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), assets)
-            })
-            .transpose()
-            .context("building the track-description panel")?;
+        // Each overlay is built in a function of its own, so the copies a `?`, a
+        // `.context()` and a `.map()` make of it in a debug build live in a frame
+        // that is gone before the next one is built, and this one holds a pointer.
+        let overlay = hud_overlay(gpu, &hud, settings)?;
+        let scoreboard = scoreboard_overlay(gpu, &hud)?;
+        let countdown = countdown_overlay(gpu, countdown_model)?;
+        let track_panel = track_panel_overlay(gpu, track_panel)?;
+        let demo_overlay = demo_screen_overlay(gpu, demo_overlay)?;
         // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
         // fallback when the flag was not given.
         let difficulty = setup.difficulty;
         let (mode, seed) = (setup.mode, setup.seed);
+        // Photo mode's rewind starts a second race from this when it is first used.
+        let keeper_setup = oag_game::photo::SAVES.then(|| setup.clone());
         // Started on the web's load worker already, from a copy of the same
         // setup (`race::Loaded::started`).
         let mut race = match started {
-            Some(race) => *race,
-            None => race::Race::start(setup),
+            Some(race) => race,
+            None => Box::new(race::Race::start(setup)),
         };
         race.set_boost_fov_kick(settings.graphics.boost_fov_kick);
         // The reticle projects through the same field the picture is drawn at.
@@ -626,9 +650,19 @@ impl Stage {
         // set again whenever the cycle button or the menu row moves it - see
         // `Session::cycle_camera_view`.
         race.set_camera_view(settings.graphics.camera_view);
-        race.set_control_scheme(scheme);
-        race.set_autopilot(autopilot);
-        race.set_pilot_assist(settings.controls.pilot_assist);
+        let launch = race::Launch {
+            scheme,
+            difficulty,
+            autopilot,
+            pilot_assist: settings.controls.pilot_assist,
+            original_ai: None,
+            campaign_skill: None,
+            skill_level: None,
+        };
+        race.apply_launch(&launch);
+        if let Some(progress) = campaign_2048_event.as_ref() {
+            race.arm_event_xp(progress);
+        }
         if autopilot {
             info!("--autopilot: the player's craft is being flown for them");
             let skill = autopilot_skill.unwrap_or(difficulty);
@@ -640,29 +674,33 @@ impl Stage {
                 race.set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
             }
         }
+        race.set_ghost_visible(settings.display.ghost_ship_shown(title));
+        race.set_player_tags(settings.display.multiplayer_tags_shown(title));
+        oag_game::split_screen::name_first_seat(&mut race, &settings.player, &title.profile);
+        let team = liveries.first().map_or("", |l| l.team.as_str());
+        let replay_header =
+            crate::race_stage::ghost::header_for(&result_key, team, seed, launch.to_table());
         crate::race_stage::ghost::arm(
             &mut race,
             &result_key,
             mode,
-            liveries.first().map_or("", |l| l.team.as_str()),
+            settings.display.ghost_auto_loads(title),
+            team,
             seed,
-            oag_game::ghosts::race_options(
-                scheme,
-                difficulty,
-                autopilot,
-                settings.controls.pilot_assist,
-                None,
-            ),
+            launch.to_table(),
         );
+        let keeper = keeper_setup.map(|setup| Box::new(race::timeline::Keeper::new(setup, &race)));
         Ok(Box::new(RaceStage {
             scene,
             race,
+            keeper,
             hud: overlay,
             scoreboard,
             countdown,
             resume_art: None,
             resume_go: String::new(),
             track_panel,
+            demo_overlay,
             result_key,
             record_target,
             personal_best: None,
@@ -672,6 +710,7 @@ impl Stage {
             // which drain `Session::campaign_cell` into here. Never known
             // here: this function has no `Session` to read it from.
             campaign_cell: None,
+            title,
             campaign_custom: None,
             campaign_difficulty: None,
             campaign_ai_skill_scale: None,
@@ -684,6 +723,7 @@ impl Stage {
             // `SP.xml` `Document` in hand at exactly that point - see
             // `race::Loaded::campaign_2048_event`'s own doc.
             campaign_2048_event,
+            xp_banked: None,
             // Built lazily once the race finishes - see
             // `crate::main::session::endrace` and `RaceStage::endrace`'s own
             // doc. Never known here for the same reason `campaign_cell`
@@ -696,6 +736,94 @@ impl Stage {
             endrace_prefetch_started: false,
             endrace_cancel: std::sync::Arc::default(),
             earned_medal: None,
+            replay_header,
+            auto_replay: false,
+            watching: false,
+            demo: None,
         }))
     }
+}
+
+fn hud_overlay(
+    gpu: &impl GpuContext,
+    hud: &oag_hud::Assets,
+    settings: &settings::Settings,
+) -> Result<Option<Box<oag_game::hud_overlay::Overlay>>> {
+    // Against the **surface** format, like every other renderer here, because
+    // the HUD is composited into the offscreen target which shares it.
+    Ok(oag_game::hud_overlay::Overlay::new(
+        gpu.device(),
+        gpu.queue(),
+        gpu.format(),
+        hud,
+        settings.graphics.hud_scale,
+    )
+    .context("building the HUD overlay")?
+    .map(|mut overlay| {
+        overlay.set_dynamic_hud(settings.display.dynamic_hud);
+        Box::new(overlay.with_safe_area(settings.graphics.hud_safe_area))
+    }))
+}
+
+/// The results table, built from the same assets and drawn into the same
+/// target - see `oag_game::scoreboard`. Built with the race rather than when it
+/// ends: a load is the one moment a stage may stall, and doing it at the finish
+/// would drop frames on the lap the player is most likely to be watching.
+fn scoreboard_overlay(
+    gpu: &impl GpuContext,
+    hud: &oag_hud::Assets,
+) -> Result<Box<oag_game::scoreboard::Overlay>> {
+    Ok(Box::new(
+        oag_game::scoreboard::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), hud)
+            .context("building the scoreboard overlay")?,
+    ))
+}
+
+/// The countdown's own `<Mode3D>` model, when this mode's layout carries one -
+/// see `oag_game::hud_countdown`.
+fn countdown_overlay(
+    gpu: &impl GpuContext,
+    model: Option<(oag_mesh::mesh::Model, oag_hud::Model)>,
+) -> Result<Option<Box<oag_game::hud_countdown::Countdown>>> {
+    model
+        .map(|(model, widget)| {
+            oag_game::hud_countdown::Countdown::new(
+                gpu.device(),
+                gpu.queue(),
+                gpu.format(),
+                model,
+                &widget,
+            )
+            .map(Box::new)
+        })
+        .transpose()
+        .context("building the countdown overlay")
+}
+
+/// The track-description panel the original lays over the flyby.
+fn track_panel_overlay(
+    gpu: &impl GpuContext,
+    assets: Option<race::track_panel::Assets>,
+) -> Result<Option<Box<oag_game::track_panel::Overlay>>> {
+    assets
+        .map(|assets| {
+            oag_game::track_panel::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), assets)
+                .map(Box::new)
+        })
+        .transpose()
+        .context("building the track-description panel")
+}
+
+/// The attract demo's screen.
+fn demo_screen_overlay(
+    gpu: &impl GpuContext,
+    assets: Option<race::demo_overlay::Assets>,
+) -> Result<Option<Box<oag_game::demo_overlay::Overlay>>> {
+    assets
+        .map(|assets| {
+            oag_game::demo_overlay::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), &assets)
+                .map(Box::new)
+        })
+        .transpose()
+        .context("building the demo screen")
 }

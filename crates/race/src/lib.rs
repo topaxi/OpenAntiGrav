@@ -34,6 +34,7 @@ pub mod course;
 pub mod mode;
 pub mod recovery;
 pub mod roster;
+pub mod score;
 pub mod sight;
 pub mod standing;
 pub mod state;
@@ -45,6 +46,7 @@ pub(crate) mod testing;
 
 pub use course::{Course, Located};
 pub use mode::{Mode, SpeedClass};
+pub use score::ScoreLaw;
 pub use standing::{Standing, places};
 pub use state::{
     COUNTDOWN_TICKS, LapGate, MAX_RECORDED_LAPS, Outcome, RaceState, race_clock_ticks,

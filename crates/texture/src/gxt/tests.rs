@@ -299,3 +299,63 @@ fn a_zero_sized_texture_is_refused() {
         })
     );
 }
+
+/// The twiddle as it was computed per cell: masks derived from the grid size,
+/// then a bit-by-bit deposit.
+fn twiddle_per_cell(bx: u32, by: u32, across: u32, down: u32) -> u32 {
+    let (mut w, mut h, mut shift) = (across, down, 0u32);
+    let (mut mask_x, mut mask_y) = (0u32, 0u32);
+    while w > 1 || h > 1 {
+        if w > 1 && h > 1 {
+            mask_y |= 1 << shift;
+            mask_x |= 1 << (shift + 1);
+            shift += 2;
+        } else if w > 1 {
+            mask_x |= 1 << shift;
+            shift += 1;
+        } else {
+            mask_y |= 1 << shift;
+            shift += 1;
+        }
+        w >>= 1;
+        h >>= 1;
+    }
+    let deposit = |value: u32, mask: u32| {
+        let mut out = 0;
+        let mut source = value;
+        for bit in 0..32 {
+            if mask & (1 << bit) != 0 {
+                out |= (source & 1) << bit;
+                source >>= 1;
+            }
+        }
+        out
+    };
+    deposit(bx, mask_x) | deposit(by, mask_y)
+}
+
+#[test]
+fn the_twiddle_tables_agree_with_the_per_cell_computation() {
+    for (across, down) in [
+        (1, 1),
+        (1, 7),
+        (7, 1),
+        (2, 2),
+        (4, 2),
+        (2, 8),
+        (5, 3),
+        (16, 16),
+        (64, 33),
+    ] {
+        let order = Twiddle::new(across, down);
+        for y in 0..down {
+            for x in 0..across {
+                assert_eq!(
+                    order.index(x as usize, y as usize) as u32,
+                    twiddle_per_cell(x, y, across, down),
+                    "({x}, {y}) in {across}x{down}"
+                );
+            }
+        }
+    }
+}

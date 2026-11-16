@@ -1,9 +1,8 @@
 //! A race's effects, resolved once at load: each [`Trigger`] to the loaded
 //! effect it plays, or nothing.
 //!
-//! The firing sites used to look an effect up by its string in
-//! [`oag_fx::psys::Library`] every time one fired (some every frame), so a
-//! misspelt name drew nothing and said nothing. They index this by
+//! A string lookup in [`oag_fx::psys::Library`] at each firing (some every
+//! frame) would let a misspelt name draw nothing and say nothing. Firing sites index this by
 //! [`Trigger`] instead: the name is read once, off the title's own table
 //! ([`oag_title::Effects`]), and a trigger that does not exist is a compile
 //! error. The [`Library`] stays for what only the
@@ -18,16 +17,21 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub struct EffectHandles {
     slots: [Option<Arc<Effect>>; Trigger::COUNT],
+    /// Triggers whose effect was lent: see [`Self::lending`].
+    lent: [bool; Trigger::COUNT],
     quake_look: oag_title::QuakeLook,
     own: crate::extension_effects::ModEffects,
+    shaders: crate::extension_shaders::ModShaders,
 }
 
 impl Default for EffectHandles {
     fn default() -> Self {
         Self {
             slots: std::array::from_fn(|_| None),
+            lent: [false; Trigger::COUNT],
             quake_look: oag_title::QuakeLook::track(oag_title::Origin::Measured),
             own: crate::extension_effects::ModEffects::default(),
+            shaders: crate::extension_shaders::ModShaders::default(),
         }
     }
 }
@@ -55,6 +59,46 @@ impl EffectHandles {
     #[must_use]
     pub fn with_own(mut self, own: crate::extension_effects::ModEffects) -> Self {
         self.own = own;
+        self
+    }
+
+    /// Adds the shaders the race's mods ship.
+    #[must_use]
+    pub fn with_shaders(mut self, shaders: crate::extension_shaders::ModShaders) -> Self {
+        self.shaders = shaders;
+        self
+    }
+
+    /// The race's mod shaders.
+    #[must_use]
+    pub fn shaders(&self) -> &crate::extension_shaders::ModShaders {
+        &self.shaders
+    }
+
+    /// Plays `effect` on `trigger` where the title's own table names none (a lent burst, the
+    /// player's `graphics.trail_hits`). `None` leaves the trigger as it was.
+    #[must_use]
+    pub fn lending(mut self, trigger: Trigger, effect: Option<Arc<Effect>>) -> Self {
+        if effect.is_some() {
+            self.slots[trigger.index()] = effect;
+            self.lent[trigger.index()] = true;
+        }
+        self
+    }
+
+    /// Whether `trigger` plays an effect [`Self::lending`] put there, which its title's own table
+    /// does not name.
+    #[must_use]
+    pub fn is_lent(&self, trigger: Trigger) -> bool {
+        self.lent[trigger.index()]
+    }
+
+    /// Plays nothing on `trigger`: a title's own trail-hit burst with the player's
+    /// `graphics.trail_hits` off, on a title whose original never fires it.
+    #[must_use]
+    pub fn without(mut self, trigger: Trigger) -> Self {
+        self.slots[trigger.index()] = None;
+        self.lent[trigger.index()] = false;
         self
     }
 

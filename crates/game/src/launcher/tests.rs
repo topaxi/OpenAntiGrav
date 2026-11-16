@@ -615,3 +615,80 @@ fn a_dropped_non_image_is_listed_as_one_that_will_not_open() {
     assert!(!l.rows()[1].is_playable());
     std::fs::remove_dir_all(&dir).ok();
 }
+
+/// The build's hash is drawn, with the commit's date after it when the build has one.
+#[test]
+fn the_build_hash_and_date_are_drawn() {
+    let list = draw_list(&Launcher::new(vec![playable("a.chd")]));
+    let expected = if oag_net::BUILD_DATE.is_empty() {
+        oag_net::GIT_HASH.to_string()
+    } else {
+        format!("{} {}", oag_net::GIT_HASH, oag_net::BUILD_DATE)
+    };
+    assert!(
+        list.iter()
+            .any(|draw| matches!(draw, Draw::Text { text, .. } if *text == expected)),
+        "{expected:?} not drawn"
+    );
+    assert_eq!(build_label(), expected);
+}
+
+fn of(name: &str, title: &'static oag_title::Title) -> Candidate {
+    Candidate {
+        state: State::Playable(title),
+        ..playable(name)
+    }
+}
+
+/// The burst is lent from HD when this machine has it, else from the first source that authors
+/// one itself, and from nothing when only Pulse and Pure are here: no stand-in is drawn.
+#[test]
+fn the_trail_hit_lender_is_hd_then_any_title_that_authors_the_burst() {
+    let rows = vec![
+        of("pulse.chd", oag_pulse::TITLE),
+        of("2048", oag_2048::TITLE),
+        of("hd.iso", oag_hd::TITLE),
+    ];
+    assert_eq!(trail_hit_lender(&rows).unwrap().name, "hd.iso");
+    assert_eq!(trail_hit_lender(&rows[..2]).unwrap().name, "2048");
+    assert!(trail_hit_lender(&rows[..1]).is_none());
+    assert!(trail_hit_lender(&[broken("enc.iso")]).is_none());
+}
+
+/// The contrails are lent from HD's row when it is mounted, else from the first title that carries
+/// them (2048, Omega); Pulse and Pure carry none and are never lenders.
+#[test]
+fn the_wingtip_contrails_lender_is_a_title_that_carries_them() {
+    let rows = vec![
+        of("pulse.chd", oag_pulse::TITLE),
+        of("2048", oag_2048::TITLE),
+        of("hd.iso", oag_hd::TITLE),
+    ];
+    assert_eq!(wingtip_lender(&rows).unwrap().name, "hd.iso");
+    assert_eq!(wingtip_lender(&rows[..2]).unwrap().name, "2048");
+    assert!(wingtip_lender(&rows[..1]).is_none());
+    assert_eq!(
+        wingtip_contrails_from(false, &rows),
+        oag_raceplay::WingtipContrails::Off
+    );
+    assert_eq!(
+        wingtip_contrails_from(true, &rows),
+        oag_raceplay::WingtipContrails::On {
+            lender: Some("data/images/hd.iso".to_string())
+        }
+    );
+}
+
+/// Off surveys nothing and lends nothing.
+#[test]
+fn the_setting_off_hands_the_race_no_lender() {
+    assert_eq!(trail_hits(false), oag_raceplay::TrailHits::Off);
+    let rows = vec![of("hd.iso", oag_hd::TITLE)];
+    assert_eq!(trail_hits_from(false, &rows), oag_raceplay::TrailHits::Off);
+    assert_eq!(
+        trail_hits_from(true, &rows),
+        oag_raceplay::TrailHits::On {
+            lender: Some("data/images/hd.iso".to_string())
+        }
+    );
+}

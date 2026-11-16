@@ -68,7 +68,7 @@
 //! comparison wants a picture of a window; a bug report does not.
 
 use anyhow::Result;
-use log::{info, warn};
+use log::{debug, warn};
 
 use oag_post::{fsr1, fsr3, fullscreen_layout, fxaa, smaa};
 
@@ -215,6 +215,7 @@ pub struct Framebuffer {
 /// scene must not be graded twice - and the player's brightness and gamma on
 /// the way out. One buffer would have to hold both at once.
 struct Output {
+    texture: wgpu::Texture,
     view: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
     grade: wgpu::Buffer,
@@ -548,7 +549,7 @@ impl Framebuffer {
                 && self.fsr3_sizes != Some(sizes)
             {
                 let mib = |bytes: u64| bytes as f64 / (1024.0 * 1024.0);
-                info!(
+                debug!(
                     "FSR 3.1 intermediates ({} formats): {:.1} MiB ({:.1} render, {:.1} half, {:.1} presentation)",
                     fsr.formats().name(),
                     mib(sizes.total()),
@@ -782,6 +783,13 @@ impl Framebuffer {
     #[must_use]
     pub fn output(&self) -> &wgpu::TextureView {
         &self.output.view
+    }
+
+    /// The texture behind [`Framebuffer::output`], for reading the finished picture back: what a
+    /// photo mode shot copies, before the grade and anything drawn over the surface.
+    #[must_use]
+    pub fn output_texture(&self) -> &wgpu::Texture {
+        &self.output.texture
     }
 
     /// How big [`Framebuffer::output`] actually is.

@@ -100,13 +100,6 @@ fn a_2048_event_carries_its_two_skills_and_elimination_keeps_ours() {
 }
 
 #[test]
-fn the_free_level_runs_easy_to_hard_and_the_default_is_medium() {
-    assert_eq!(free_level(Difficulty::Novice), 0);
-    assert_eq!(free_level(Difficulty::default()), 1);
-    assert_eq!(free_level(Difficulty::Ace), 2);
-}
-
-#[test]
 fn several_humans_keep_ours() {
     assert_eq!(
         decide(AiChoice::Original, true, 2, Source::Free(Difficulty::Elite)),

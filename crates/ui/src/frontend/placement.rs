@@ -50,4 +50,25 @@ pub struct Placed {
     /// them from. See `docs/ui/hud.md` and
     /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`.
     pub blend: Option<oag_vex::vex::BlendClass>,
+    /// Sheet pixels per pixel of the disc's own picture, on each axis: `[1.0, 1.0]` unless a
+    /// texture pack drew the image larger (`oag_texture::replacer`). [`Self::width`],
+    /// [`Self::height`] and every layout rect stay in the disc's pixels; a draw that samples
+    /// the sheet goes through [`Self::sheet_rect`].
+    pub scale: [f32; 2],
+}
+
+impl Placed {
+    /// `rect`, `[x, y, width, height]` in the disc's pixels of this image, as the sheet's
+    /// pixels: the origin offset by where it sits, everything scaled by [`Self::scale`]. A
+    /// width or height may be negative (a mirrored patch) or zero.
+    #[must_use]
+    pub fn sheet_rect(&self, rect: [f32; 4]) -> [f32; 4] {
+        let [sx, sy] = self.scale;
+        [
+            self.x as f32 + rect[0] * sx,
+            self.y as f32 + rect[1] * sy,
+            rect[2] * sx,
+            rect[3] * sy,
+        ]
+    }
 }

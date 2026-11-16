@@ -1,7 +1,7 @@
 //! The full-screen washes a craft's own state changes start: its destruction
 //! and, for the local player, its reset.
 //!
-//! # Recovered (Pulse, PSP), 2026-09-30
+//! # Recovered (Pulse, PSP)
 //!
 //! `ScreenFlash_Start` (`0x088f00c0`) has four callers in the craft's own
 //! state machine:
@@ -54,8 +54,8 @@ use super::Race;
 /// 5 writes `1.5` to the state timer and `Ship_UpdateDestroyed` counts it down.
 pub(super) const BLOWUP_DELAY: f32 = super::eliminator::DESTROYED_DWELL;
 
-/// `FUN_0883e064`'s `Camera_ArmShake(0.3, 0.4, camera, 3)` at state 5, read
-/// 2026-10-01: (magnitude, duration in seconds, side).
+/// `FUN_0883e064`'s `Camera_ArmShake(0.3, 0.4, camera, 3)` at state 5:
+/// (magnitude, duration in seconds, side).
 const STATE_5_SHAKE: (f32, f32, Side) = (0.3, 0.4, Side::Ahead);
 
 /// `FUN_088407b0`'s `Camera_ArmShake(0.8, 0.6, camera, 1)` at state 6.

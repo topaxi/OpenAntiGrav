@@ -32,15 +32,15 @@
 //!
 //! # What is here and what is absent
 //!
-//! Present: the control force law (`engine.md`), the two-probe air cushion
-//! (`docs/physics/README.md`), the airbrakes with lateral grip and sideshift, and the
-//! magstrip hold ([`crate::maglock`], not a force: it runs inside step 8 and writes the
-//! body directly).
+//! Present: the control force law (`engine.md`) with turbo's lift, the auto-speed law and
+//! the Autopilot and Turbo flag gates, the two-probe air cushion and the four-corner hover
+//! (`docs/physics/README.md`), the airbrakes with lateral grip and sideshift, both arms of
+//! the speed-pad boost ([`crate::engine::speedup_pad`]), and the magstrip hold
+//! ([`crate::maglock`], not a force: it runs inside step 8 and writes the body directly).
 //!
-//! **Absent**, because each would mean inventing an undecoded trigger: the four-corner
-//! hover variant and the auto-speed law behind its selector, turbo, every flag-gated engine
-//! and steering variant, and two arms of the speed-pad boost
-//! ([`crate::engine::speedup_pad`]). See `docs/physics/README.md`, "what is implemented".
+//! **Absent**, because the original never runs them or they are unnamed: the flag bits with
+//! no writer (steering bias at `craft+0x2e4`, reversed controls) and the `craft+0x2a4` mode
+//! enum. See `docs/physics/README.md`, "Deliberately not implemented".
 
 use oag_core::math::Vec3;
 
@@ -60,9 +60,9 @@ use crate::{controls, engine, passive};
 ///
 /// **The extents are the hull's body-axis ones; the original applies the resulting
 /// diagonal in *world* axes** (`0x0884e380`-`0x0884e39c`, measured exactly by
-/// `scripts/trace-inertia-frame-fit.py`). This crate applies it in body axes, which
-/// differs only while a craft is pitched or rolled (`diag(a, b, a)` is yaw-invariant).
-/// Unmeasured against play; see `docs/ghidra/functions/psp-pulse-usa/rigid-body.md`.
+/// `scripts/trace-inertia-frame-fit.py`). This crate does the same for Pulse
+/// ([`crate::ship::InertiaFrame::World`], the default); HD's tensor rotates with the craft
+/// ([`crate::ship::InertiaFrame::Body`]). See `docs/ghidra/functions/psp-pulse-usa/rigid-body.md`.
 pub const INERTIA_BOX_X: f32 = 12.0;
 
 /// The body-space inertia box, `y`. See [`INERTIA_BOX_X`].
@@ -84,7 +84,8 @@ pub const INERTIA_MASS: f32 = 0.9;
 ///
 /// The tensor is a diagonal fixed in **world** axes (corrected 2026-09-10,
 /// `docs/physics/cornering-ground-truth.md`); that changes the frame a caller applies it
-/// in, not this value. This crate applies it body-locally, deliberately.
+/// in, not this value. [`crate::integrate::integrate`] applies it in the title's
+/// [`crate::ship::InertiaFrame`].
 ///
 /// **Recovered, not fitted**: it replaced `YAW_DRIVE_CALIBRATION`, a fitted `0.0452`
 /// (`0.046296` recovered, `2.4 %` apart, inside the fits' own spread).
@@ -435,6 +436,48 @@ pub struct Evaluated {
     /// original's does not, and a deviation that cannot be counted cannot be shown tuned
     /// right. [`crate::barrel_roll::arm`] charges the pool, `roll_cost` percent of it.
     pub roll_armed: bool,
+}
+
+impl Evaluated {
+    /// A frame in which nothing was evaluated: every force zero, no contact, no wall
+    /// response. For a craft that was not stepped this tick (one out of the world).
+    #[must_use]
+    pub fn idle(state: &ShipState) -> Self {
+        let probe = crate::hover::HoverProbe::miss(state.body.position);
+        Self {
+            accumulators: Accumulators::default(),
+            hover: Hover {
+                probes: [probe; crate::hover::MAX_PROBES],
+                count: 0,
+                contacts: 0,
+                average_normal: Vec3::ZERO,
+                alignment_torque: Vec3::ZERO,
+                downforce: Vec3::ZERO,
+                local_angular_torque: Vec3::ZERO,
+                escape: Vec3::ZERO,
+            },
+            mag_lock: None,
+            airbrake: AirbrakeForces::default(),
+            engine: engine::EngineForce::default(),
+            brakes: Vec3::ZERO,
+            lateral_grip: Vec3::ZERO,
+            gravity: Vec3::ZERO,
+            drag: Vec3::ZERO,
+            rolling_resistance: Vec3::ZERO,
+            vertical_damping: Vec3::ZERO,
+            speedup_pad: Vec3::ZERO,
+            weathervane: Vec3::ZERO,
+            angular_damping: Vec3::ZERO,
+            steering: 0.0,
+            pitch: 0.0,
+            forward_speed: 0.0,
+            control_grounded: state.grounded,
+            contact_grounded: state.grounded,
+            wall: crate::wall::WallResponse::default(),
+            shield: crate::damage::Shield::default(),
+            roll_armed: false,
+        }
+    }
 }
 
 /// Evaluates every force for one frame, at full `dt`, exactly once.

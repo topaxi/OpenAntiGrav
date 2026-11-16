@@ -117,7 +117,10 @@ fn event_3_is_park_flash_two_laps() {
     );
     assert_eq!(oag_2048::campaign::engine_mode(&event), Some("single_race"));
     assert_eq!(
-        oag_2048::campaign::track_vex_entry(&track),
+        oag_2048::campaign::track_vex_entry(
+            oag_2048::TITLE.campaign.event_track_dir.expect("events"),
+            &track
+        ),
         r"Data\art\published\environments\park\track.vex"
     );
 }
@@ -327,4 +330,80 @@ fn the_weapon_callout_census_over_every_event_is_pinned() {
         ],
         "141 events: 63 have no item, 54 offer everything, 24 say something"
     );
+}
+
+/// The original's chain walk (`TouchCampaign_PaintChainRings` `0x810ef5fe`) takes
+/// 24 events down `M_PNEXTEVENT` from `"2048 - Event 1"`, 36 more through the
+/// chain's `M_PBRANCHEVENT`s, and its second loop paints exactly the 40 `"<circuit>
+/// Speed Lap - <class>"` events of the name table at `0x8151ea78` (ten circuits
+/// by four classes). Every other event with a cell is a side challenge.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_chain_walk_finds_24_chain_36_branch_and_40_speed_lap_events() {
+    use oag_title::MapRole;
+
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let doc = sp_xml_document(&mut archives);
+    let roles = oag_2048::campaign::map_roles(&doc);
+    let names = |wanted: MapRole| -> Vec<&str> {
+        roles
+            .iter()
+            .filter(|(_, role)| *role == wanted)
+            .map(|(name, _)| name.as_str())
+            .collect()
+    };
+    assert_eq!(names(MapRole::Chain).len(), 24, "the main chain");
+    assert_eq!(names(MapRole::Branch).len(), 36, "the branches");
+    let laps = names(MapRole::SpeedLap);
+    assert_eq!(laps.len(), 40, "the speed-lap table: {laps:?}");
+    for class in ["Flash", "Rapier", "Phantom", "Super P"] {
+        let of_class = laps
+            .iter()
+            .filter(|name| name.ends_with(&format!(" Speed Lap - {class}")))
+            .count();
+        assert_eq!(of_class, 10, "ten circuits of {class}: {laps:?}");
+    }
+}
+
+/// `XPAwards.xml` and `XPRanks.xml` parse off the disc: 78 award rows whose indices are 0-77, the
+/// completion and finishing rows this crate pays carry the names they are read for, and the 50
+/// rank thresholds ascend through the ranks the campaign map gates on.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn xp_tables_parse_off_the_disc() {
+    use oag_tables::xp::{Column, award};
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let (awards, ranks) = oag_2048::campaign::xp_tables(&mut archives).expect("both XP tables");
+
+    assert_eq!(awards.awards.len(), 78);
+    assert!(
+        awards
+            .awards
+            .iter()
+            .enumerate()
+            .all(|(i, a)| a.index as usize == i)
+    );
+    assert_eq!(awards.class_multipliers, [1.0; 5]);
+    assert_eq!(awards.skill_multipliers, [1.0; 3]);
+    let name = |index| awards.get(index).map(|a| a.name.as_str());
+    assert_eq!(name(award::EVENT_PASS), Some("Event complete- PASS"));
+    assert_eq!(name(award::EVENT_ELITE), Some("Event complete- ELITE"));
+    assert_eq!(name(award::FINISHED_1ST), Some("Finished 1st!"));
+    assert_eq!(name(award::FINISHED_8TH), Some("Finished 8th!"));
+    assert_eq!(awards.xp(award::EVENT_PASS, Column::Race), 10_000);
+    assert_eq!(awards.xp(award::FINISHED_1ST, Column::Race), 50);
+
+    assert_eq!(ranks.maximum, 50);
+    assert_eq!(ranks.thresholds.len(), 50);
+    assert!(ranks.thresholds.windows(2).all(|w| w[0] < w[1]));
+    assert_eq!(ranks.threshold_xp(10, 0), 420_000);
+    assert_eq!(ranks.threshold_xp(20, 0), 1_020_000);
+    assert_eq!(ranks.threshold_xp(30, 0), 1_720_000);
+    assert_eq!(ranks.threshold_xp(50, 0), 3_580_000);
+    assert_eq!(ranks.rank(419_999), 9);
+    assert_eq!(ranks.rank(420_000), 10);
 }

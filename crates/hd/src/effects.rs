@@ -14,7 +14,7 @@ use oag_title::{
 /// `FUN_000d9398`: six `absorb` locators, three mirrored pairs at `0.0`, `0.2`
 /// and `0.4` s (the settings block's `+0x54`, `0.2` in `.data`) -
 /// `docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md`.
-pub const ABSORB_BURST: Burst = Burst::MirroredPairs { stagger: 0.2 };
+pub const ABSORB_BURST: Burst = Burst::HD;
 
 /// The scenery effects HD's own disc authors: `wo_blue_welder.pob` and
 /// `wo_modesto_steam_a.pob` in `DATA02`. Pulse's list also names `WO_RAIN`,
@@ -72,34 +72,88 @@ pub const EFFECTS: &Effects = &{
             Trigger::BombRays,
             EffectSpec::new(engine_effects::BOMB_RAYS_EFFECT, Origin::Measured),
         )
+        // `Plasma_Init` and `Plasma_Launch`; `plasma.md`, "The effects and their triggers".
+        .with(
+            Trigger::PlasmaCharging,
+            EffectSpec::new(engine_effects::PLASMA_CHARGING_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::PlasmaLaunch,
+            EffectSpec::new(engine_effects::PLASMA_LAUNCH_EFFECT, Origin::Measured),
+        )
+        // The disc ships `wo_plasma_flash.pob` and the executable never names it: the
+        // detonation is `WO_PLASMA_LIGHTNING_EXPAND` (same section).
+        .without(Trigger::PlasmaBlast)
         .without(Trigger::EngineFlare)
         .without(Trigger::MagstripSparks)
         .without(Trigger::MagstripZone);
     effects.scenery = SCENERY;
     effects.sprites = SPRITES;
     effects.extents = EXTENTS;
+    effects.far_bars = FAR_BARS;
+    effects.templates = TEMPLATES;
     effects
 };
+
+/// The effects whose class-6 particles draw as HD's view-space bar: the engine's two
+/// trail hits, and the Plasma's five, whose lightning is that class. Paired against the
+/// original phase by phase: with the bar the launch's and the blast's white blobs are
+/// lightning (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The pairs").
+const FAR_BARS: &[&str] = &[
+    engine_effects::TRAIL_HITSHIP_EFFECT,
+    engine_effects::TRAIL_HITSHIP_RED_EFFECT,
+    engine_effects::PLASMA_FLARE_EFFECT,
+    engine_effects::PLASMA_CHARGING_EFFECT,
+    engine_effects::PLASMA_LAUNCH_EFFECT,
+    engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
+    engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
+];
+
+/// The effects whose sprite templates play: the Plasma head's ring and glow and the
+/// wind-up's glow. The release's `FLASH` and the blast's `START_FLASH` stay muted: with
+/// them on the frame whites out for their few ticks where the original's does not, and
+/// why is unread (same page).
+const TEMPLATES: &[&str] = &[
+    engine_effects::PLASMA_FLARE_EFFECT,
+    engine_effects::PLASMA_CHARGING_EFFECT,
+];
 
 /// The effects whose `.gtf` sprites HD plays: the Rocket's wall burst, whose
 /// nine emitters name nine entries under `/data/psys/tex/` that all decode
 /// (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's
-/// smoke"). Every other HD effect still draws the procedural profile until a
-/// matched capture says its sprite reads right.
+/// smoke"), the Quake's wave, and the Missile's two heads, whose red
+/// filament-ring atlas the colour ramp is authored against (`weapons.md`,
+/// "The Missile's red rings"), and the Plasma's five, paired against the
+/// original phase by phase (`plasma.md`, "The pairs"). Every other HD effect
+/// still draws the procedural profile until a matched capture says its sprite
+/// reads right.
 const SPRITES: &[&str] = &[
     engine_effects::TRACK_BLAST_EFFECT,
     engine_effects::QUAKE_EFFECT,
+    engine_effects::MISSILE_FLARE_EFFECT,
+    engine_effects::TRAIL_HITSHIP_EFFECT,
+    engine_effects::PLASMA_FLARE_EFFECT,
+    engine_effects::PLASMA_CHARGING_EFFECT,
+    engine_effects::PLASMA_LAUNCH_EFFECT,
+    engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
+    engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
 ];
 
 /// The effects whose emitters spread by the extent law on HD: the Quake's wave,
 /// which the original draws as a band of fire across the whole road
-/// (`docs/ghidra/functions/ps3-hdfury-eu/quake.md`). Every other HD effect keeps
-/// its emitters at their anchors until a matched capture says otherwise.
-const EXTENTS: &[&str] = &[engine_effects::QUAKE_EFFECT];
+/// (`docs/ghidra/functions/ps3-hdfury-eu/quake.md`), and the Plasma blast's two,
+/// whose lightning fills the blast instead of bunching at its centre (`plasma.md`,
+/// "The pairs"). Every other HD effect keeps its emitters at their anchors until a
+/// matched capture says otherwise.
+const EXTENTS: &[&str] = &[
+    engine_effects::QUAKE_EFFECT,
+    engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
+    engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
+];
 
-/// Two of the palette's three colours are read off HD's executable
-/// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`); the settled target is
-/// chosen, and `oag_render::shield::HD_PALETTE` says so.
+/// The activation and hit colours are read off HD's executable; the settled
+/// target is each team's own authored `ShieldColour`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`).
 const SHIELD: ShieldPalettes = ShieldPalettes {
     ps2: ShieldPalette::Hd,
     elsewhere: ShieldPalette::Hd,
@@ -164,6 +218,21 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
+    // The last full-screen quad of a frame runs fragment program `0x01113c41` with unit 0
+    // filter `0x02022000` and TEXCOORD0 at `(0.5 / width, 0.5 / height)` of the scaled
+    // source: 23 of 23 1080p frames, 8 of them races at widths 1300, 1320 and 1660.
+    // `docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "A race's final composite
+    // is the same quad", confidence 90.
+    final_composite_half_texel: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
+    // The launch boost: HD authors `<StartBoost>`; the grading law is Pulse PSP's, unmeasured on
+    // HD (`docs/physics/launch-boost.md`).
+    start_boost: Rule {
+        on: Platforms::Any,
+        origin: Origin::InheritedFrom("Wipeout Pulse (PSP)"),
+    },
     ..Looks::unread(SHIELD)
 };
 
@@ -190,6 +259,18 @@ mod tests {
         assert!(
             !Looks::unread(SHIELD)
                 .material_render_state
+                .applies_everywhere()
+        );
+    }
+
+    /// HD's final composite reads half a source texel off; an unread title's does not.
+    #[test]
+    fn hd_reads_its_final_composite_half_a_texel_off_and_an_unread_title_does_not() {
+        assert!(LOOKS.final_composite_half_texel.applies_everywhere());
+        assert_eq!(LOOKS.final_composite_half_texel.origin, Origin::Measured);
+        assert!(
+            !Looks::unread(SHIELD)
+                .final_composite_half_texel
                 .applies_everywhere()
         );
     }

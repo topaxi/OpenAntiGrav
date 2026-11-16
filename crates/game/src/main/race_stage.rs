@@ -8,6 +8,8 @@ use oag_raceplay as race;
 
 use crate::gpu::GpuContext;
 
+#[path = "race_stage/auto_replay.rs"]
+pub(crate) mod auto_replay;
 #[path = "race_stage/endrace.rs"]
 pub(crate) mod endrace;
 #[path = "race_stage/endrace_touch.rs"]
@@ -21,20 +23,23 @@ mod medal_message;
 
 /// A race, and everything only it needs.
 pub(crate) struct RaceStage {
-    pub(crate) scene: race::Scene,
-    pub(crate) race: race::Race,
+    pub(crate) scene: Box<race::Scene>,
+    pub(crate) race: Box<race::Race>,
+    /// The race's keyframes since its first tick, for photo mode's rewind; `None` where photo
+    /// mode is not offered (`oag_game::photo::SAVES`).
+    pub(crate) keeper: Option<Box<race::timeline::Keeper>>,
     /// The HUD, or `None` when the disc's layout could not be read.
-    pub(crate) hud: Option<oag_game::hud_overlay::Overlay>,
+    pub(crate) hud: Option<Box<oag_game::hud_overlay::Overlay>>,
     /// The results table, drawn once the race has one.
     ///
     /// Not an `Option`, unlike the HUD: that one needs a layout off the disc and
     /// there may be none, where this needs only a font and
     /// `oag_ui::font::Atlas::build` always answers with the built-in 5x7 set.
-    pub(crate) scoreboard: oag_game::scoreboard::Overlay,
+    pub(crate) scoreboard: Box<oag_game::scoreboard::Overlay>,
     /// The start-line countdown's own `<Mode3D>` model, or `None` when this
     /// mode's layout carries no `Cockpit321Go` widget to place it by - see
     /// `oag_game::hud_countdown`.
-    pub(crate) countdown: Option<oag_game::hud_countdown::Countdown>,
+    pub(crate) countdown: Option<Box<oag_game::hud_countdown::Countdown>>,
     /// The countdown art's own clock in seconds while a resume counts down (and
     /// `GO` lingers after it), set by the session each frame; `None` otherwise.
     /// The art is drawn on this clock through the same model the start uses, and
@@ -46,7 +51,9 @@ pub(crate) struct RaceStage {
     pub(crate) resume_go: String,
     /// The track-description panel over the pre-race flyby, or `None` off Pulse's PSP disc and
     /// when any part of it would not read - see `oag_game::track_panel`.
-    pub(crate) track_panel: Option<oag_game::track_panel::Overlay>,
+    pub(crate) track_panel: Option<Box<oag_game::track_panel::Overlay>>,
+    /// The screen an attract demo draws over its race, when the title authors one and it read.
+    pub(crate) demo_overlay: Option<Box<oag_game::demo_overlay::Overlay>>,
     /// Which circuit/mode/class row [`oag_game::records`] persists this
     /// race's outcome under - resolved once, at load, from
     /// [`oag_raceplay::Loaded::title`] and the [`oag_raceplay::Options`]
@@ -95,13 +102,16 @@ pub(crate) struct RaceStage {
     /// not lose that write; it only stops it from blocking the next one.
     pub(crate) result_saved: bool,
     /// The campaign cell this race was launched against, or `None` for an
-    /// ordinary RACE-page/RACE REMIX/`--race` launch. Drained from
+    /// ordinary RACE-page/two-title race page/`--race` launch. Drained from
     /// `Session::campaign_cell` into here the moment this stage is built
     /// (`crate::main::session::load::finish_loading`) - the mirror of
     /// `DAT_08b30ffc`, per
     /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a
     /// campaign event launches". Read by [`RaceStage::observation`] alone.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    /// The title this race runs, for the law its campaign cell's medal is read with
+    /// ([`oag_title::Campaign::counting_modes`]).
+    pub(crate) title: &'static oag_title::Title,
     /// A mod campaign event's extras, drained from `Session::campaign_custom`
     /// with [`Self::campaign_cell`]: where its medal is kept, and its AI.
     pub(crate) campaign_custom: Option<oag_game::campaign::custom::Launch>,
@@ -144,6 +154,9 @@ pub(crate) struct RaceStage {
     /// see that field's own doc for why this rides on `Loaded` rather than
     /// through `Session` the way [`Self::campaign_cell`] does.
     pub(crate) campaign_2048_event: Option<race::Campaign2048Progress>,
+    /// What the finish banked into the profile's XP total, for the EndRace page: `None` until the
+    /// finish banks, and for a race that armed no tally.
+    pub(crate) xp_banked: Option<oag_game::endrace::touch::XpBanked>,
     /// The EndRace flow (`Results` -> `Rewards`/`Menu`) once the race has
     /// finished and this title carries `EndRace_Definition.xml` - `None`
     /// until then, and forever `None` on a title that does not (or on an
@@ -183,6 +196,19 @@ pub(crate) struct RaceStage {
     /// The best medal [`Self::tick_messages`] has already announced, so a medal
     /// is raised once however many ticks it stays earned.
     pub(super) earned_medal: Option<oag_tables::race_campaign::Medal>,
+    /// The header a recording of this race is filed under: the records key, the team, the seed
+    /// and the launch settings. Kept from the build so the session can start the recording once
+    /// it has finished writing to the race.
+    pub(crate) replay_header: oag_replay::Header,
+    /// Whether this race is recorded for the REPLAYS page and not yet written
+    /// ([`Self::arm_auto_replay`]).
+    pub(crate) auto_replay: bool,
+    /// Whether this race is a recording being watched: it is never parked behind the menus, and
+    /// nothing it does is a record, a ghost or a replay.
+    pub(crate) watching: bool,
+    /// Set when this race is an attract demo: every craft is flown by the AI, nothing it does is
+    /// a result, a ghost or a recording, and it is never parked behind the menus.
+    pub(crate) demo: Option<oag_game::demo::Run>,
 }
 
 impl Drop for RaceStage {
@@ -191,6 +217,7 @@ impl Drop for RaceStage {
     /// SIGSEGV on leaving a race with the prefetch unfinished). Waits only for the phase the
     /// worker is in; a stage dropped off the frame thread (`drop_off_thread`) waits there.
     fn drop(&mut self) {
+        self.write_auto_replay();
         self.endrace_cancel
             .store(true, std::sync::atomic::Ordering::Relaxed);
         if let Some(mut task) = self.endrace_prefetch.take() {
@@ -273,7 +300,7 @@ impl RaceStage {
                 },
             );
         }
-        // A split screen draws one scene per view, each submitted on its own, so
+        // A split screen draws one scene per view, in command buffers of its own, so
         // `encoder` keeps only what the caller records after it: see
         // `Scene::render_viewports`. The blur runs once per view after the last, its
         // timestamp pair bracketing every chain; no scene timer. Each view jitters on its
@@ -394,6 +421,17 @@ impl RaceStage {
         self.scene.temporal(window)
     }
 
+    /// Hands the end screens the race's board when it was retaken since they were built:
+    /// [`oag_raceplay::Race::refresh_results`]'s craft that crossed after the person, now
+    /// with a time. Touches no race state; the screen keeps its page and its cursor.
+    pub(crate) fn refresh_endrace_board(&mut self) {
+        if let (Some(endrace_touch::EndRace::Disc(runtime)), Some(board)) =
+            (&mut self.endrace, self.race.results())
+        {
+            runtime.refresh_field(board, self.race.results_revision());
+        }
+    }
+
     /// Reads the player's own outcome so far, straight off [`race::Race`]'s
     /// already-public state - never from inside a tick.
     ///
@@ -405,9 +443,17 @@ impl RaceStage {
     pub(crate) fn observation(&self) -> oag_game::records::Observation {
         let standing = self.race.player_standing();
         let finished = self.race.finished();
+        // A scored race (an HD Eliminator) is placed on its points, the board's own order, which
+        // the results table, the headline, the voice and the record all read.
+        let place = self
+            .race
+            .results()
+            .filter(|board| board.scored())
+            .and_then(|board| board.player())
+            .map_or_else(|| self.race.player_place(), |row| row.place);
         oag_game::records::Observation {
             finished,
-            place: Some(self.race.player_place()),
+            place: Some(place),
             laps_completed: oag_game::records::laps_completed(
                 standing.lap,
                 finished,
@@ -514,6 +560,36 @@ impl RaceStage {
         finished: bool,
         best_lap_ticks: Option<u32>,
     ) -> Option<oag_game::records::Medal> {
+        let tier = self.campaign_tier(finished, best_lap_ticks)?;
+        Some(oag_game::unlock::to_records_medal(
+            self.campaign_tiers().class(tier),
+        ))
+    }
+
+    /// The medal tiers this race's campaign awards: a mod campaign's own list, else the title's.
+    pub(crate) fn campaign_tiers(&self) -> &oag_tables::race_campaign::MedalTiers {
+        self.campaign_custom.as_ref().map_or(
+            oag_tables::race_campaign::MedalTiers::standard(),
+            |launch| &launch.tiers,
+        )
+    }
+
+    /// The name of the tier this race has earned on its campaign cell, as the campaign's own
+    /// list calls it; recorded under a mod campaign's title by
+    /// `Launch::record_result`.
+    pub(crate) fn campaign_tier_name(&self) -> Option<String> {
+        let standing = self.race.player_standing();
+        let tier = self.campaign_tier(self.race.finished(), standing.best_lap_ticks)?;
+        Some(self.campaign_tiers().get(tier)?.name.clone())
+    }
+
+    /// The tier this race earns against [`Self::campaign_cell`]: [`Self::campaign_medal`]'s law,
+    /// as a position in [`Self::campaign_tiers`].
+    fn campaign_tier(
+        &self,
+        finished: bool,
+        best_lap_ticks: Option<u32>,
+    ) -> Option<oag_tables::race_campaign::Medal> {
         use oag_tables::race_campaign::Mode as CampaignMode;
         let cell = self.campaign_cell.as_ref()?;
         let value = match cell.mode {
@@ -533,7 +609,15 @@ impl RaceStage {
                 best_lap_ticks.map(|ticks| ticks_to_centiseconds(u64::from(ticks)))
             }
             CampaignMode::Zone => oag_game::medal_watch::live_value(&cell.mode, &self.race),
-            CampaignMode::Elimination => Some(i64::from(self.race.player_standing().kills)),
+            // Kills on a title that flips Elimination, the place on the end-of-race board
+            // elsewhere (HD, Omega): `oag_game::medal_watch::elimination_value`.
+            CampaignMode::Elimination => oag_game::medal_watch::elimination_value(
+                self.title.campaign.counting_modes,
+                self.campaign_custom.is_some(),
+                finished,
+                self.race.player_standing().kills,
+                self.race.eliminator_place(),
+            ),
             CampaignMode::Tournament => self.tournament_final_rank.map(i64::from),
             CampaignMode::CustomGrid | CampaignMode::AiRace | CampaignMode::Other(_) => None,
         }?;
@@ -547,12 +631,16 @@ impl RaceStage {
         let difficulty = self
             .campaign_difficulty
             .unwrap_or(oag_tables::race_campaign::Difficulty::Medium);
-        let medal = cell.evaluate_medal_for_difficulty(value, difficulty)?;
-        Some(match medal {
-            oag_tables::race_campaign::Medal::Gold => oag_game::records::Medal::Gold,
-            oag_tables::race_campaign::Medal::Silver => oag_game::records::Medal::Silver,
-            oag_tables::race_campaign::Medal::Bronze => oag_game::records::Medal::Bronze,
-        })
+        match &self.campaign_custom {
+            Some(launch) => launch
+                .tier_targets
+                .evaluate(&cell.mode, value, difficulty),
+            None => cell.evaluate_medal_for_difficulty(
+                value,
+                difficulty,
+                self.title.campaign.counting_modes,
+            ),
+        }
     }
 
     /// [`oag_tables::race_campaign::Difficulty`] -> `oag_game::records::Difficulty`,
@@ -618,6 +706,37 @@ impl RaceStage {
             self.race.views_drawn(),
             self.race.cut(),
         );
+        self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
+    }
+
+    /// The attract demo's screen over `view`, `seconds` into the demo. Nothing off a demo, in a
+    /// wallpaper (which has no one to tell to press a button) or with no screen to draw.
+    pub(crate) fn draw_demo_screen(
+        &mut self,
+        gpu: &impl GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+    ) {
+        let Some(run) = self.demo.as_ref().filter(|run| !run.wallpaper()) else {
+            return;
+        };
+        let seconds = run.ticks() as f32 / 60.0;
+        if let Some(screen) = &mut self.demo_overlay {
+            screen.draw(gpu.device(), gpu.queue(), encoder, view, seconds, viewport);
+        }
+    }
+
+    /// The race's HUD alone over `view`: photo mode with its HUD row on, and a parked race under
+    /// the pause screen's tint. No end screens and no track panel, which are not part of the view.
+    pub(crate) fn draw_view_hud(
+        &mut self,
+        gpu: &impl GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
+    ) {
         self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
     }
 
@@ -762,8 +881,7 @@ impl RaceStage {
             // than adding a second, narrower guess on top.
             //
             // **Not while the gantry is showing it.** The countdown
-            // belongs on the start gantry - the maintainer's account
-            // of the original, and what `race::gantry` now draws -
+            // belongs on the start gantry - the original's, and what `race::gantry` now draws -
             // so this overlay is the fallback for a circuit that
             // stands no gantry, not a second countdown beside one.
             //

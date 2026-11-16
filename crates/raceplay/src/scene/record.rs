@@ -19,7 +19,8 @@
 
 use super::viewports::Layer;
 use super::*;
-use crate::drawable::draw::Lists;
+use crate::drawable::TrackCull;
+use crate::drawable::draw::{Interleave, Lists};
 
 /// One thing a view's scene pass draws, in the order the pass draws them.
 pub(super) enum Draw<'a> {
@@ -28,8 +29,8 @@ pub(super) enum Draw<'a> {
     /// The circuit: its solid lists, the sky, its blended list and its shine pass
     /// ([`Recorder::draw_track`]), under the view's sets and frustum.
     Track,
-    /// The circuit's blended list alone, once the hulls and the ribbons are down
-    /// ([`ViewPass::ribbon_first`]).
+    /// The circuit's blended list alone, once the pads and the hulls (and, with
+    /// [`ViewPass::ribbon_first`], the ribbons) are down ([`ViewPass::blended_after_craft`]).
     TrackBlended,
     /// The craft's ribbons alone ([`Recorder::draw_ribbons`]).
     Ribbon,
@@ -43,9 +44,21 @@ pub(super) enum Draw<'a> {
     Overlay(&'a Drawable),
     /// The blob and hull shadows, [`ViewPass::shadow_runs`].
     Shadow,
+    /// A mod's backdrop fill ([`oag_fx::mod_shader::Drawer::draw_backdrop`]): over the world
+    /// drawn so far and before the crafts, hiding what is drawn after it where it stands.
+    Backdrop,
+    /// The depth range the draws after it land in, of the pass's `0..1`: a craft flown through
+    /// a backdrop is drawn in a slice nearer than the backdrop's own depth
+    /// ([`NEAR_SLICE`]), every other draw in the whole range.
+    Depth(f32, f32),
     /// The blended effects over everything solid ([`Recorder::draw_effects`]).
     Effects,
 }
+
+/// The slice of the depth range a craft flown through a backdrop is drawn in: nearer than
+/// `mod_shader.wesl`'s `BACKDROP_DEPTH`, so the backdrop does not hide it, and a range of its
+/// own, so the hull still hides its own far side.
+pub(super) const NEAR_SLICE: (f32, f32) = (0.0, 0.001);
 
 /// The draws one view decided, built by its prepare.
 pub(super) struct DrawList<'a>(pub(super) Vec<Draw<'a>>);
@@ -71,17 +84,33 @@ impl<'a> DrawList<'a> {
         self.0.push(Draw::Overlay(drawable));
     }
 
-    /// The ribbons, then the circuit's blended list over them, when `ribbon_first`
-    /// ([`ViewPass::ribbon_first`]); nothing otherwise, the circuit having drawn it whole.
-    pub(super) fn ribbons_then_blended(&mut self, ribbon_first: bool) {
+    /// The circuit's blended list after the pads and the hulls, over the ribbons where they draw
+    /// first: the ribbons then the list when `ribbon_first`, the list alone when only
+    /// `blended_after_craft` ([`ViewPass::blended_after_craft`]); nothing otherwise, the circuit
+    /// having drawn it whole.
+    pub(super) fn blended_after_craft(&mut self, ribbon_first: bool, blended_after_craft: bool) {
         if ribbon_first {
             self.0.push(Draw::Ribbon);
+        }
+        if blended_after_craft {
             self.0.push(Draw::TrackBlended);
         }
     }
 
     pub(super) fn push(&mut self, draw: Draw<'a>) {
         self.0.push(draw);
+    }
+
+    /// `draws` in the near slice when `flown`, the craft being one flown through a backdrop;
+    /// as they stand otherwise.
+    pub(super) fn flown(&mut self, flown: bool, draws: impl FnOnce(&mut Self)) {
+        if flown {
+            self.0.push(Draw::Depth(NEAR_SLICE.0, NEAR_SLICE.1));
+        }
+        draws(self);
+        if flown {
+            self.0.push(Draw::Depth(0.0, 1.0));
+        }
     }
 }
 
@@ -99,12 +128,14 @@ pub(super) struct EffectsDrawn {
     clouds: Option<(oag_fx::cloud::Drawer, oag_fx::cloud::Drawn)>,
     weapon_quads: (oag_fx::weapon_quads::Drawer, oag_fx::weapon_quads::Drawn),
     mist: Option<(oag_fx::mist::Drawer, oag_fx::mist::Drawn)>,
+    mod_shaders: Option<(oag_fx::mod_shader::Drawer, oag_fx::mod_shader::Drawn)>,
     shadow: oag_render::shadow::Drawer,
 }
 
 /// The strip pipelines, in the order the effects draw them: the Leach beam, the magstrip wake's
-/// contact quads and arcs, the Rocket smoke and HD's Leach strip.
-const BEAMS: usize = 5;
+/// contact quads and arcs, the Missile's ribbons and explosion streaks, the wingtip contrails,
+/// the Rocket smoke and HD's Leach strip.
+const BEAMS: usize = 8;
 
 /// One view's scene pass, decided: everything [`Recorder::record`] reads that is not the scene's
 /// own GPU objects.
@@ -117,6 +148,12 @@ pub(super) struct ViewPass<'a> {
     /// The fourth row of the unjittered view-projection matrix: `clip.w`, the view
     /// depth the blended list's list-B meshes are put in order by.
     pub(super) depth_plane: [f32; 4],
+    /// Whether the circuit's blended foliage lays its own depth down (`ScenerySort::Depth`).
+    pub(super) foliage_depth: bool,
+    /// The queue key of each craft's engine flare that is drawn among the circuit's blended
+    /// list rather than after it (`flare_key`), in the order of the exhaust pipeline's flare
+    /// quads. Empty unless [`Self::ribbon_first`].
+    pub(super) flare_keys: Vec<u32>,
     pub(super) frustum: Option<Frustum>,
     pub(super) visible_set: Option<VisibleSet>,
     pub(super) chunk_set: Option<ChunkSet>,
@@ -129,7 +166,14 @@ pub(super) struct ViewPass<'a> {
     /// list, which then draws over them where it passes its own depth test. Set where the
     /// title's ribbon is the PSP preset's; see [`Recorder::draw_ribbons`].
     pub(super) ribbon_first: bool,
+    /// The circuit's blended list is a draw of its own after the pads and the hulls, not part of
+    /// the circuit's draw: the PSP preset's order whichever way the ribbons go
+    /// ([`Race::blended_after_craft`]).
+    pub(super) blended_after_craft: bool,
     pub(super) shadow_runs: Vec<oag_render::shadow::Run>,
+    /// The list the depth prepass's order is sorted into while the view records
+    /// ([`opaque_order`]), carried in so a list kept from the last frame is refilled.
+    pub(super) opaque_order: std::cell::Cell<Vec<(f32, u32)>>,
     pub(super) ghost: Option<(oag_render::ghost::Hull<'a>, oag_render::ghost::Fade)>,
     /// What the prepare already drew (the behind-the-glass target), counted in.
     pub(super) stats: SceneStats,
@@ -138,11 +182,35 @@ pub(super) struct ViewPass<'a> {
     pub(super) blur_lens: Mat4,
 }
 
+impl ViewPass<'_> {
+    /// The pass without what belongs to a screen: a mod's shaded surfaces and the lens mist.
+    pub(super) fn without_view_surfaces(mut self) -> Self {
+        self.effects.mod_shaders = None;
+        self.effects.mist = None;
+        self
+    }
+}
+/// A [`ViewPass`]'s lists, kept between frames by the scene.
+#[derive(Debug, Default)]
+pub(super) struct ViewLists {
+    pub(super) shadow_runs: Vec<oag_render::shadow::Run>,
+    pub(super) opaque_order: Vec<(f32, u32)>,
+}
+
 impl Scene {
     /// The strip pipelines, in [`BEAMS`]' order; `None` where the title builds none.
     fn beams(&self) -> [Option<&std::cell::RefCell<oag_fx::beam::Pipeline>>; BEAMS] {
-        let [contact, atlas, smoke, leach] = self.ribbons.cells();
-        [self.beam.as_ref(), contact, atlas, smoke, leach]
+        let [contact, atlas, fat, streaks, vortex, smoke, leach] = self.ribbons.cells();
+        [
+            self.beam.as_ref(),
+            contact,
+            atlas,
+            fat,
+            streaks,
+            vortex,
+            smoke,
+            leach,
+        ]
     }
 
     /// What every effect pipeline's last upload left, and the handles that draw it, for the
@@ -171,8 +239,28 @@ impl Scene {
                 .borrow()
                 .as_ref()
                 .map(|mist| (mist.drawer().clone(), mist.drawn())),
+            mod_shaders: self
+                .mod_shaders
+                .borrow()
+                .as_ref()
+                .map(|stage| (stage.drawer().clone(), stage.drawn())),
             shadow: self.shadow.borrow().drawer().clone(),
         }
+    }
+
+    /// The lists a recorded [`ViewPass`] carried, kept for the next view's
+    /// [`Self::take_view_lists`] so a frame refills them rather than making new ones. A pass
+    /// that is dropped instead (a split recorded in a batch) costs only new lists next time.
+    pub(super) fn keep_view_lists(&self, pass: ViewPass<'_>) {
+        *self.view_lists.borrow_mut() = ViewLists {
+            shadow_runs: pass.shadow_runs,
+            opaque_order: pass.opaque_order.into_inner(),
+        };
+    }
+
+    /// The lists [`Self::keep_view_lists`] kept, or empty ones.
+    pub(super) fn take_view_lists(&self) -> ViewLists {
+        std::mem::take(&mut *self.view_lists.borrow_mut())
     }
 
     /// The shadow pipeline's runs as the view's upload left them.
@@ -205,7 +293,15 @@ pub(super) struct Recorder<'a> {
     attachments: &'a motion::Attachments,
 }
 
-impl Recorder<'_> {
+impl<'a> Recorder<'a> {
+    /// The recorder, drawing into `attachments`: a target of a size of its own.
+    pub(super) fn into_attachments(self, attachments: &'a motion::Attachments) -> Self {
+        Self {
+            attachments,
+            ..self
+        }
+    }
+
     /// Records `pass`'s scene pass into `encoder`, and returns what it drew.
     pub(super) fn record(
         &self,
@@ -317,7 +413,7 @@ impl Recorder<'_> {
                 Draw::Track => stats.add(self.draw_track(
                     &mut render,
                     pass,
-                    BlendedList::with_ribbons(pass.ribbon_first),
+                    BlendedList::after_craft(pass.blended_after_craft),
                 )),
                 Draw::TrackBlended => {
                     stats.add(self.draw_track(&mut render, pass, BlendedList::Only));
@@ -337,9 +433,16 @@ impl Recorder<'_> {
                 Draw::Additive(drawable) => stats.add(drawable.draw_additive(&mut render, block)),
                 Draw::Overlay(drawable) => stats.add(drawable.draw_overlay(&mut render, block)),
                 Draw::Shadow => pass.effects.shadow.draw(&mut render, &pass.shadow_runs),
+                Draw::Backdrop => {
+                    if let Some((stage, drawn)) = &pass.effects.mod_shaders {
+                        stage.draw_backdrop(&mut render, drawn);
+                    }
+                }
+                Draw::Depth(near, far) => render.set_viewport(x, y, w, h, *near, *far),
                 Draw::Effects => self.draw_effects(&mut render, pass, &mut stats),
             }
         }
+        oag_gpu::perfprobe::marks::close(&mut render);
         stats
     }
 
@@ -389,7 +492,8 @@ impl Recorder<'_> {
             match stage {
                 TrackStage::Solid => {
                     oag_gpu::perfprobe::marks::mark(render, "track solid");
-                    let order = opaque_order(self.track, pass.eye);
+                    let mut order = pass.opaque_order.take();
+                    opaque_order(self.track, pass.eye, &mut order);
                     stats.add(self.track.draw_lists(
                         render,
                         block,
@@ -401,6 +505,7 @@ impl Recorder<'_> {
                             order: Some(&order),
                         },
                     ));
+                    pass.opaque_order.set(order);
                 }
                 TrackStage::Sky => {
                     oag_gpu::perfprobe::marks::mark(render, "sky");
@@ -414,20 +519,21 @@ impl Recorder<'_> {
                 TrackStage::Shine => {
                     oag_gpu::perfprobe::marks::mark(render, "track shine");
                     if let Some((shine, sources)) = self.track_shine {
-                        stats.add(shine.draw_track_shine(
-                            render,
-                            block,
-                            self.track,
-                            sources,
-                            self.sections,
+                        let cull = TrackCull {
+                            sections: self.sections,
                             set,
                             chunks,
                             frustum,
-                        ));
+                        };
+                        stats.add(shine.draw_track_shine(render, block, self.track, sources, cull));
                     }
                 }
                 TrackStage::Blended => {
                     oag_gpu::perfprobe::marks::mark(render, "track blended");
+                    let (drawer, drawn) = &pass.effects.exhaust;
+                    let flare = |render: &mut wgpu::RenderPass<'_>, index: usize| {
+                        drawer.draw_flare(render, *drawn, index);
+                    };
                     stats.add(self.track.draw_lists(
                         render,
                         block,
@@ -435,7 +541,14 @@ impl Recorder<'_> {
                         set,
                         chunks,
                         frustum,
-                        track_blended(pass.depth_plane),
+                        track_blended(
+                            pass.depth_plane,
+                            (!pass.flare_keys.is_empty()).then_some(Interleave {
+                                keys: &pass.flare_keys,
+                                draw: &flare,
+                            }),
+                            pass.foliage_depth,
+                        ),
                     ));
                 }
             }
@@ -481,6 +594,9 @@ impl Recorder<'_> {
         for (beam, drawn) in effects.beams.iter().flatten() {
             beam.draw(render, *drawn);
         }
+        if let Some((stage, drawn)) = &effects.mod_shaders {
+            stage.draw_surfaces(render, drawn);
+        }
         if let Some((clouds, drawn)) = &effects.clouds {
             clouds.draw(render, *drawn);
         }
@@ -495,7 +611,9 @@ impl Recorder<'_> {
             mist.draw(render, *drawn);
         }
         effects.sparks.0.draw_flash(render, effects.sparks.1);
-        oag_gpu::perfprobe::marks::mark(render, "end");
+        if let Some((stage, drawn)) = &effects.mod_shaders {
+            stage.draw_fill(render, drawn);
+        }
     }
 }
 
@@ -515,10 +633,10 @@ pub(crate) enum BlendedList {
 }
 
 impl BlendedList {
-    /// What the circuit's own draw takes: with the ribbons first the blended list is a draw of its
-    /// own, after them.
-    pub(crate) const fn with_ribbons(ribbon_first: bool) -> Self {
-        if ribbon_first {
+    /// What the circuit's own draw takes: where the blended list is a draw of its own, after the
+    /// pads and the hulls, the circuit leaves it out.
+    pub(crate) const fn after_craft(blended_after_craft: bool) -> Self {
+        if blended_after_craft {
             Self::Without
         } else {
             Self::With
@@ -544,10 +662,16 @@ pub(crate) const TRACK_STAGES: [TrackStage; 4] = [
 
 /// The circuit's blended list for a view whose `depth_plane` is the fourth row of its
 /// view-projection matrix: list-B meshes far to near by view depth
-/// ([`oag_mesh::mesh::Model::blended_order`]).
-pub(crate) fn track_blended<'a>(depth_plane: [f32; 4]) -> Lists<'a> {
+/// ([`oag_mesh::mesh::Model::blended_order`]), with `between` drawn among them by queue key.
+pub(crate) fn track_blended<'a>(
+    depth_plane: [f32; 4],
+    between: Option<Interleave<'a>>,
+    foliage_depth: bool,
+) -> Lists<'a> {
     Lists::Blended {
         depth_plane: Some(depth_plane),
+        between,
+        foliage_depth,
     }
 }
 
@@ -558,23 +682,24 @@ pub(crate) fn track_blended<'a>(depth_plane: [f32; 4]) -> Lists<'a> {
 ///
 /// **Only the prepass reads it, and that is why it moves no pixel.** The depth `Less` leaves
 /// is the nearest surface whatever order it arrives in.
-/// Sorting the shading itself was tried first, 2026-10-03: 44.1 -> 37.4 ms at 3200x1800 on an
+/// Sorting the shading itself was slower to land: 44.1 -> 37.4 ms at 3200x1800 on an
 /// integrated GPU, at the cost of 1 to 419 pixels a capture where coplanar ties resolved to the
 /// nearer batch. The prepass took that to 32.4 ms with the original's picture back; the shading
-/// that follows keeps the model's own order. `sort_by` is stable, so equal keys keep the model's
-/// order. Per view, from its own eye, while the view records.
-fn opaque_order(track: &Drawable, eye: Vec3) -> Vec<(f32, u32)> {
-    let mut order: Vec<(f32, u32)> = track
-        .opaque_draws()
-        .iter()
-        .zip(0u32..)
-        .map(|(draw, i)| {
-            let centre = Vec3::from_array(draw.bounds.centre);
-            (centre.distance(eye) - draw.bounds.radius, i)
-        })
-        .collect();
-    order.sort_by(|a, b| a.0.total_cmp(&b.0));
-    order
+/// that follows keeps the model's own order. Equal keys keep the model's order: the index breaks
+/// the tie, which is what a stable sort would do, without the scratch buffer it allocates. Per
+/// view, from its own eye, while the view records, into `order`, emptied first.
+fn opaque_order(track: &Drawable, eye: Vec3, order: &mut Vec<(f32, u32)>) {
+    order.clear();
+    order.extend(track.opaque_draws().iter().zip(0u32..).map(|(draw, i)| {
+        let centre = Vec3::from_array(draw.bounds.centre);
+        (centre.distance(eye) - draw.bounds.radius, i)
+    }));
+    nearest_first(order);
+}
+
+/// Sorts `(key, index)` pairs by key, ties by index.
+fn nearest_first(order: &mut [(f32, u32)]) {
+    order.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
 }
 
 // A view's recording reads only these, from a thread of its own (`Scene::render_slots`). wgpu's
@@ -595,24 +720,46 @@ mod tests {
     /// list-B mesh, which then paints over it where it passes its own depth test (the ribbon
     /// writes no depth). The ribbons must be recorded before the circuit's blended list, and the
     /// circuit's own draw must leave that list out, or it draws twice and over the ribbon.
+    /// Equal distances keep the model's order, as the stable sort this replaced did.
+    #[test]
+    fn the_prepass_order_breaks_ties_by_model_order() {
+        let keys = [2.0, -1.0, 2.0, 0.5, -1.0, 2.0, 0.5, 0.0];
+        let mut stable: Vec<(f32, u32)> = keys.iter().copied().zip(0u32..).collect();
+        stable.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut order: Vec<(f32, u32)> = keys.iter().copied().zip(0u32..).collect();
+        nearest_first(&mut order);
+        assert_eq!(order, stable);
+    }
+
     #[test]
     fn the_ribbons_are_drawn_before_the_blended_list() {
         let mut list = DrawList(Vec::new());
-        list.ribbons_then_blended(true);
+        list.blended_after_craft(true, true);
         assert!(matches!(
             list.0.as_slice(),
             [Draw::Ribbon, Draw::TrackBlended]
         ));
-        assert_eq!(BlendedList::with_ribbons(true), BlendedList::Without);
+        assert_eq!(BlendedList::after_craft(true), BlendedList::Without);
+    }
+
+    /// `trail_order = over-floors` places the ribbons and nothing else: the blended list is
+    /// still a draw of its own after the pads and the hulls (a tree writes no depth, so a pad
+    /// drawn after it would show through), and no ribbon draw is recorded ahead of it.
+    #[test]
+    fn over_floors_keeps_the_blended_list_after_the_craft() {
+        let mut list = DrawList(Vec::new());
+        list.blended_after_craft(false, true);
+        assert!(matches!(list.0.as_slice(), [Draw::TrackBlended]));
+        assert_eq!(BlendedList::after_craft(true), BlendedList::Without);
     }
 
     /// HD's tube keeps the old order, its queue key unread: the circuit draws whole and no extra
     /// draw is pushed.
     #[test]
-    fn without_ribbons_first_the_circuit_draws_whole() {
+    fn without_a_psp_ribbon_the_circuit_draws_whole() {
         let mut list = DrawList(Vec::new());
-        list.ribbons_then_blended(false);
+        list.blended_after_craft(false, false);
         assert!(list.0.is_empty());
-        assert_eq!(BlendedList::with_ribbons(false), BlendedList::With);
+        assert_eq!(BlendedList::after_craft(false), BlendedList::With);
     }
 }

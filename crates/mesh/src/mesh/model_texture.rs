@@ -196,6 +196,11 @@ pub enum BlockFormat {
     Bc3,
     /// BC7: 16 bytes, the PS4 Omega Collection's own.
     Bc7,
+    /// **Not compressed: one half-float channel**, a level being row-major little-endian IEEE half
+    /// bits, one texel to a "block". Omega's panel map, a distance field whose values must stay
+    /// floats (an 8-bit copy would quantise its 0.42 range coarser than the field's walls);
+    /// uploaded as `R16Float`, its one level, never decoded to RGBA8 (`decode_level` is `None`).
+    R16Float,
 }
 
 impl BlockFormat {
@@ -221,6 +226,7 @@ impl BlockFormat {
             Self::Bc2 => oag_texture::gtf::Format::Dxt23,
             Self::Bc3 => oag_texture::gtf::Format::Dxt45,
             Self::Bc7 => return oag_texture::gnf::decode_bc7_level(blocks, width, height),
+            Self::R16Float => return None,
         };
         // `linear` is inert: the decoder does not consult the flag for a
         // block-compressed format.
@@ -240,13 +246,15 @@ impl BlockFormat {
             Self::Bc2 => wgpu::TextureFormat::Bc2RgbaUnorm,
             Self::Bc3 => wgpu::TextureFormat::Bc3RgbaUnorm,
             Self::Bc7 => wgpu::TextureFormat::Bc7RgbaUnorm,
+            Self::R16Float => wgpu::TextureFormat::R16Float,
         }
     }
 
-    /// Bytes one 4x4 block occupies.
+    /// Bytes one 4x4 block occupies ([`Self::R16Float`]: one texel).
     #[must_use]
     pub const fn block_len(self) -> u32 {
         match self {
+            Self::R16Float => 2,
             Self::Bc1 => 8,
             Self::Bc2 | Self::Bc3 | Self::Bc7 => 16,
         }
@@ -288,9 +296,41 @@ impl ModelTexture {
         })
     }
 
+    /// Decodes one `.gxt` blob, or `None` for one that will not parse or names a format this
+    /// build cannot decode.
+    ///
+    /// **A `.gxt` that will not decode draws nothing rather than something** - the same rule
+    /// [`Self::from_gtf`] applies to a Wipeout HD `.gtf`.
+    #[must_use]
+    pub fn from_gxt(label: &str, blob: &[u8]) -> Option<Self> {
+        let parsed = oag_texture::gxt::Gxt::parse(blob).ok()?;
+        let texture = parsed.only()?;
+        let rgba = texture.to_rgba(blob).ok()?;
+        Some(Self::rgba8(
+            label.to_string(),
+            u32::from(texture.width),
+            u32::from(texture.height),
+            rgba.into_iter().flatten().collect(),
+            None,
+        ))
+    }
+
+    /// Decodes one `.gtf`, `.gxt` or `.gnf` blob by the extension of `label`, or `None` for any
+    /// other extension or a blob that will not decode.
+    #[must_use]
+    pub fn from_container(label: &str, blob: &[u8]) -> Option<Self> {
+        use oag_texture::decode::Container;
+        match Container::of_name(label)? {
+            Container::Gtf => Self::from_gtf(label, blob),
+            Container::Gxt => Self::from_gxt(label, blob),
+            Container::Gnf => Self::from_gnf(label, blob),
+            Container::Mip | Container::Pct => None,
+        }
+    }
+
     /// Decodes one `.gnf` blob, or says `None` for one this build cannot.
     ///
-    /// **A BC7 chain the file authors keeps its blocks**, the way
+    /// **A BC7 or BC1 chain the file authors keeps its blocks**, the way
     /// [`Self::from_gtf`] keeps a DXT one: 1 byte a texel on the CPU and on the
     /// GPU where the decoded picture is 4, and the authored chain in place of a
     /// box-filtered one. The conditions are [`Self::gtf_blocks`]'s: a chain of
@@ -322,7 +362,11 @@ impl ModelTexture {
         };
         let texels = match blocks {
             Some(levels) => Texels::Blocks {
-                format: BlockFormat::Bc7,
+                format: if parsed.surface_format == oag_texture::gnf::SurfaceFormat::Bc1 {
+                    BlockFormat::Bc1
+                } else {
+                    BlockFormat::Bc7
+                },
                 levels,
             },
             None => Texels::Rgba8(parsed.decode(blob).ok()?.into_iter().flatten().collect()),
@@ -398,6 +442,41 @@ impl ModelTexture {
             texels: Texels::Chain(levels),
             mip_count: None,
         }
+    }
+
+    /// A texture pack's picture in place of a PSP `.vex` texture that is `original` pixels with
+    /// `mip_count` levels, in the same form the disc's own would have taken: a
+    /// [`Texels::Chain`] when `chained` (so the model's slope level selection stays on for
+    /// every slot, as it is for the disc's), else straight RGBA8.
+    ///
+    /// The picture is some multiple of the original, and a level's footprint on screen is
+    /// what the original's levels were chosen for, so the chain gains the levels the scale
+    /// adds: the deepest level is as small on screen as the original's was.
+    #[must_use]
+    pub fn replaced(
+        label: String,
+        image: &oag_texture::replacer::Image,
+        original: (u32, u32),
+        mip_count: u8,
+        chained: bool,
+    ) -> Self {
+        let scale = (image.width / original.0.max(1)).max(1);
+        let levels = u32::from(mip_count.max(1)) + scale.ilog2();
+        if !chained {
+            return Self::rgba8(
+                label,
+                image.width,
+                image.height,
+                image.rgba.clone(),
+                Some(levels),
+            );
+        }
+        let chain = crate::mesh_render::texture::mip_chain(image.width, image.height, &image.rgba)
+            .into_iter()
+            .take(levels as usize)
+            .map(|(_, _, rgba)| rgba)
+            .collect();
+        Self::chain(label, image.width, image.height, chain)
     }
 
     /// Bytes of texel data this texture holds on the CPU.

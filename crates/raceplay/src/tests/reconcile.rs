@@ -211,7 +211,7 @@ fn reconciling_a_correct_prediction_changes_nothing() {
 /// what slot 1's stick did behind the collision. Slot 1 is active, because
 /// a slot with no craft is not flown at all - the previous version of this test
 /// left it inactive, which is why it could pass for the wrong reason.
-fn two_person_race(controller: Controller) -> Race {
+pub(super) fn two_person_race(controller: Controller) -> Race {
     let mut race = loopback_race();
     // The fixture's craft cannot turn (`Handling::ZERO` has no yaw authority),
     // and "slot 1 turned" is the claim, so both get some.
@@ -454,7 +454,7 @@ fn slot_fingerprint(race: &Race, slot: usize) -> String {
 
 /// Inputs that move both craft differently every tick, so a divergence between
 /// two paths shows within the run.
-fn varied(tick: u32) -> PlayerInputs {
+pub(super) fn varied(tick: u32) -> PlayerInputs {
     let wave = |phase: f32| ((tick as f32) * 0.07 + phase).sin();
     two_steering(wave(0.0), wave(2.0))
 }

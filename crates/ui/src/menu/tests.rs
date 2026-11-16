@@ -10,12 +10,17 @@
 
 mod blocks;
 mod drawing;
+mod expand;
 mod frame;
 mod hide;
 mod jump;
+mod launch;
 mod nav;
 mod navigation;
+mod pause;
 mod pointer;
+mod queries;
+mod relabel;
 mod reset;
 mod reveal;
 mod rows;
@@ -24,6 +29,7 @@ mod strip;
 
 use super::*;
 use crate::frontend::Align;
+use crate::frontend::Draw;
 
 /// [`draw_list`] flattened, which is what every test below wants: the
 /// layer split exists for the transition, and none of these animate.
@@ -84,9 +90,29 @@ fn built_in() -> Definition {
         .expect("the built-in menu must parse")
 }
 
-/// HD's main menu the way the game builds it: its own four rows and the extras around them,
-/// without the split rows Pulse and Pure show. The strip and reveal tests model HD's front
-/// end, so they read this and not the title-less tree, which keeps every vanilla row.
+/// A mod's row under RACEBOX opening a page of its own, the shape an official mod such as
+/// `oag.remix` adds; the strip and reveal tests read it as the row attached to RACEBOX.
+const ATTACHED_MOD: &str = r#"toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod-menu.tosd", version = "1.0.0" }
+[[entry]]
+id = "remix"
+parent = "racebox"
+kind = "submenu"
+label = "REMIX"
+target = "remix"
+
+[[page]]
+id = "remix"
+title = "REMIX"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+"#;
+
+/// HD's main menu the way the game builds it: its own four rows, the extras around them and
+/// [`ATTACHED_MOD`]'s row under RACEBOX, without the split rows Pulse and Pure show. The strip
+/// and reveal tests model HD's front end, so they read this and not the title-less tree,
+/// which keeps every vanilla row.
 fn built_in_hd() -> Definition {
     let extras = oag_mod::extras::builtin().unwrap();
     let text = extras.menu().unwrap().unwrap_or_default();
@@ -97,12 +123,19 @@ fn built_in_hd() -> Definition {
         &english,
         Some(For {
             title: oag_hd::TITLE,
+            platform: oag_assets::Platform::Psp,
             updated: false,
         }),
-        &[ModMenu {
-            id: oag_mod::extras::ID,
-            text: &text,
-        }],
+        &[
+            ModMenu {
+                id: oag_mod::extras::ID,
+                text: &text,
+            },
+            ModMenu {
+                id: "test.mod",
+                text: ATTACHED_MOD,
+            },
+        ],
     )
     .expect("HD's menu must build")
     .0

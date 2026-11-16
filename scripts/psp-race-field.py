@@ -53,6 +53,8 @@ WEAPONS_ENABLED = 0x08B30FA8
 SKILL_LEVEL = 0x08B31044
 #: `Ship_SetShield`: the pool `entity+0x88` is clamped to `*(*(craft+0x6c) + g_skill_level*4 + 0x84)` (shield.md).
 SHIELD = 0x88
+STEER_LEAN = 0x854
+ROLL_PHASE = 0x87C
 
 
 #: `g_named_registry` (race-progress.md): 256 pointers from +0, the entry count at +0xc00. `PLAYER_HUD` is one of them, the
@@ -136,6 +138,9 @@ class Field:
                 "shield": rail.f32s(self.dbg, s["entity"] + SHIELD, 1)[0],
                 "shield_max": self.shield_max(s),
                 "lap_time": rail.f32s(self.dbg, s["entity"] + RACE_TIME, 1)[0],
+                #: the drawn lean and barrel-roll phase, `entity+0x854` / `+0x87c` (`psp_trace_fields.ENTITY_FIELDS`)
+                "steer_lean": rail.f32s(self.dbg, s["entity"] + STEER_LEAN, 1)[0],
+                "roll_phase": rail.f32s(self.dbg, s["entity"] + ROLL_PHASE, 1)[0],
             })
             if s["player"]:
                 out[-1]["hud_kmh"] = self.hud_kmh(out[-1]["lap_time"])

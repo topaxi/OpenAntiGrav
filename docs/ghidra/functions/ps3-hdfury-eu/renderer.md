@@ -7923,7 +7923,18 @@ reads the same `adapted`, so the bloom is a little weaker at steady state; that 
    nothing either way; whether its vertex-lit and emissive surfaces match is open.
 3. Non-road families still read 1.1-1.4: the sun and specular terms (`x8` on the specular) and per-draw saturation are not
    matched term by term outside the road.
-4. Particles and effects (draws 444-522) also end on `/2`; `oag-fx` does not apply it.
+4. ~~Particles and effects (draws 444-522) also end on `/2`; `oag-fx` does not apply it.~~ **Corrected 2026-11-09
+   (`hd-absorb-burst-half`): the `psys_*` programs have no `/2`.** `scripts/ps3-microcode.py fp` on the EBOOT's particle
+   fragment blocks (`psys_normal` `0x00927a80`, `psys_simplegeom` `0x00927a00`, `cloudshader` `0x00927f00`, `lineshader`
+   `0x00927c00`, `psys_lit` `0x00927b00`) prints a plain `MUL H0, f[COL0], R0` or `MOV H0, f[COL0]` with no scale field, where
+   the same disassembler prints `/2` on `hd_absorbinternal`'s fogged blocks and on every material program. The census line
+   "every program of draws 87-522 ends scaled" therefore counts material-driven effect draws (the absorb shell, the flame, the
+   weapon models), not `psys` batches; the `psys` batches are probably in the late blended draws 523-547, which carry none
+   (not matched draw by draw: the bound fragment block per draw was not read). The only brightness terms a particle has are in
+   the vertex programs: `psys_normal_vp` multiplies the decoded colour by `kColourScale` (`c467`) and `psys_simplegeom_vp`
+   halves the colour **before** its 2.2 power (`(0.5 c)^2.2`, a factor 0.218, not 0.5). Which state binds which program
+   (`state+0x1c`, set from `record+0xca4` at load) and the value written to `c467` are unread. Nothing here licenses a
+   blanket `/2` on `oag-fx`'s psys draws.
 
 **Ported to ours:** `Looks::lit_output_halved` (a `Rule`, HD `Measured`, every other title `UNREAD`) sets
 `Light::output_scale` to 0.5 in the loader; `shade.wesl` multiplies the whole authored lit sum by it (specular and glows
@@ -8225,3 +8236,11 @@ alpha = A.z                                    MOV H0.w, R0.zzzz
 **What is left on the panel: the add is linear, the original's is in gamma.** Mean RGB over a 50x80 box inside the panel (800,130): what is behind it (slot 435 skipped) `(40, 102, 123)`, the original `(118, 181, 203)`, ours after `(96, 128, 145)`. The original adds a uniform `(+78, +79, +80)` in display values, which is a `ONE`/`ONE` add on gamma-encoded values; ours adds about `0.09` grey in linear light, which shows as `(+56, +27, +22)` and leaves the panel greyer. The race target is linear for every HD blend, so this is a renderer-wide convention and was not changed for one material. The size of the original's add (about `0.31` encoded) is also larger than the program's `overlay * 0.2893 / 2` (about `0.1` encoded at this advert); what supplies the rest is not read (the frame's tone and bloom stages are the candidates, `docs/rendering/hd-track-tone.md`).
 
 **Other titles.** Omega ships `scanlinebillboard`, `_1`, `_2`, `_alphaboost*` and `_desaturate_2` under its re-shipped `talons_junction` and `tech_de_ra` (`data02.psarc`); its programs are GCN and unread, and `Program::parse` refuses them, so they do not bind: **checked, applies, not wired**. 2048 ships no `scanlinebillboard` material (name census of `data.psarc`, `data1`/`data2.psarc` and both DLC packs): **checked, differs**.
+
+## 2026-11-06: the photo-mode float at `[sp+0x7c]`
+
+Lane `photo-read`. "The correction variant's three extra colour parameters are photo mode" above left
+open which slider the one float at `[sp+0x7c]` is. There is no one float: `0x00676968`, a `sscanf`,
+rereads that slot per row. `f1` is `(Exposure - 33.3) * -0.03003`, `f2` is `Saturation * 0.05`.
+[photo-mode.md](photo-mode.md#photomode_update). `FUN_00241940` is `PhotoMode_ScreenUpdate`.
+

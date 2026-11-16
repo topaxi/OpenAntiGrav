@@ -3,9 +3,8 @@
 //!
 //! **The law is recovered**: every craft flips a fair coin at every fork,
 //! independently, on entering the path before it, and holds the choice to the
-//! merge (`Ai_ChooseBranch`, `0x08854920`; `oag_ai::branch`). Before this, every
-//! craft followed the ring and so took the same side at every fork, which is
-//! what the maintainer saw.
+//! merge (`Ai_ChooseBranch`, `0x08854920`; `oag_ai::branch`). Without it every
+//! craft follows the ring and takes the same side at every fork.
 //!
 //! **How a route is driven is ours.** A route line is the ring from the
 //! route's merge round to its split, then the route's own samples: a full lap,
@@ -20,7 +19,7 @@
 //! route our physics cannot drive (`07_Track`'s centre ramp) would park half
 //! of ours.
 
-use log::{info, warn};
+use log::{debug, warn};
 
 use super::*;
 
@@ -28,7 +27,7 @@ use super::*;
 /// moves onto its line: about 480 units, past the furthest a driver looks or
 /// brakes ahead. **Chosen, not measured**: the original has no second line to
 /// move onto, its lookahead walks the excluded path from the moment it draws.
-const SWITCH_SAMPLES: usize = 320;
+pub(crate) const SWITCH_SAMPLES: usize = 320;
 
 /// Line samples either side of a driver's index its own line is scored over
 /// when deciding a re-commit - the driver's own search window. Ours.
@@ -64,6 +63,19 @@ pub(super) struct RouteLine {
 }
 
 impl RouteLine {
+    /// The index and squared distance of this route's own sample (past its ring stretch)
+    /// nearest `position`; the earlier one on a tie.
+    pub(super) fn nearest_own_sample(&self, position: Vec3) -> Option<(usize, f32)> {
+        let mut best: Option<(usize, f32)> = None;
+        for i in self.kept..self.line.len() {
+            let distance = self.line.point(i).distance_squared(position);
+            if best.is_none_or(|(_, b)| distance < b) {
+                best = Some((i, distance));
+            }
+        }
+        best
+    }
+
     /// `branching` for a craft found on this route's own samples (route
     /// number `route`, `k + 1`): past the split, its fork decided. The visit
     /// count is kept, so the next coin is fresh. Ours, as
@@ -153,7 +165,7 @@ pub(super) fn route_lines(
             plan: None,
         });
     }
-    info!("ai routes: {} way(s) round {} fork(s)", out.len(), {
+    debug!("ai routes: {} way(s) round {} fork(s)", out.len(), {
         let mut forks: Vec<u16> = out.iter().map(|r| r.pre_fork).collect();
         forks.dedup();
         forks.len()
@@ -200,7 +212,7 @@ const MOUTH_CORRIDOR: f32 = 1.0;
 /// whole road at its fork, and until the two roads separate that includes the
 /// ring's side: on `05_Track` a Novice holding the far side of the route's
 /// corridor rode the ring's take-off ramp at route sample 112, flew a second,
-/// and met the divider at 161, every lap (`fork_trace`, 2026-10-05), and an
+/// and met the divider at 161, every lap (`fork_trace`), and an
 /// Ace field lost two craft there. Past the mouth the corridor is the
 /// author's again.
 fn narrow_the_mouth(
@@ -242,7 +254,9 @@ fn narrow_the_mouth(
         })
         .collect();
     let unsupported: Vec<bool> = (0..line.len()).map(|i| line.is_unsupported(i)).collect();
-    oag_ai::Line::with_corridor(points, corridor).with_unsupported(unsupported)
+    oag_ai::Line::with_corridor(points, corridor)
+        .with_unsupported(unsupported)
+        .with_strides(oag_ai::Tuning::default().curvature_span)
 }
 
 /// The line a driver on `route` follows: the ring for `0`, else that route's.
@@ -268,7 +282,7 @@ impl Race {
         self.ensure_speed_plans();
         plan_for(
             &self.sim.routes,
-            self.sim.speed_plan.as_ref(),
+            self.sim.speed_plan.as_deref(),
             super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
             self.sim.world.ships[slot].driver.branching.route,
         )
@@ -321,7 +335,7 @@ impl Race {
         if self.sim.routes.is_empty() {
             return;
         }
-        let Some(course) = self.sim.course.as_ref() else {
+        let Some(course) = self.sim.course.as_deref() else {
             return;
         };
         let n = course.len();
@@ -408,12 +422,11 @@ impl Race {
         let mut best: Option<(u16, usize, f32)> = None;
         for (k, r) in self.sim.routes.iter().enumerate() {
             let route = u16::try_from(k + 1).unwrap_or(0);
-            for i in r.kept..r.line.len() {
-                let distance = r.line.point(i).distance_squared(position);
+            if let Some((i, distance)) = r.nearest_own_sample(position)
                 // Strictly nearer, so a tie keeps the earlier candidate.
-                if best.is_none_or(|(_, _, b)| distance < b) {
-                    best = Some((route, i, distance));
-                }
+                && best.is_none_or(|(_, _, b)| distance < b)
+            {
+                best = Some((route, i, distance));
             }
         }
         best
@@ -439,14 +452,14 @@ impl Race {
     /// short of `05_Track`'s first jump onto route 1's deck kept steering at the
     /// ring 60 units above it and ground the wall until its shield was gone.
     fn recommit(&mut self, slot: usize, original: bool) {
-        let Some(n) = self.sim.course.as_ref().map(Course::len) else {
+        let Some(n) = self.sim.course.as_deref().map(Course::len) else {
             return;
         };
         let ship = &self.sim.world.ships[slot];
         // **Not in the air, ours.** Over a jump both lines are under the craft
         // at once, neither is "the track", and scoring them flipped a craft
         // between them every tick across `05_Track`'s first jump (328 switches
-        // in one five-minute run, 2026-10-05).
+        // in one five-minute run).
         if ship.physics.time_airborne > 0.0 {
             return;
         }

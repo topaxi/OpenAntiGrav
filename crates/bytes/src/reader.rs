@@ -1,11 +1,6 @@
 use std::marker::PhantomData;
 
-/// A byte order as a value, for a format that names its own at run time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ByteOrder {
-    Little,
-    Big,
-}
+use crate::ByteOrder;
 
 pub trait Endian {
     const ORDER: ByteOrder;

@@ -17,9 +17,7 @@ use super::*;
 // drawing it with the ordinary lerp blend looks plausible and is
 // wrong.
 //
-// **Which additive blend changed on 2026-08-08, from the ribbon's
-// `TRAIL_BLEND` to the flare's `exhaust::BLEND`, and it is a bug fix
-// rather than a retuning.** The two differ only in the source factor -
+// **The flare's `exhaust::BLEND`, not the ribbon's `TRAIL_BLEND`.** The two differ only in the source factor -
 // `One` against `SrcAlpha` - and the plume is the one model here whose
 // authored vertex alpha is not constant: it is bimodal, `0` on the
 // orange rim and `255` in the white core (pinned by
@@ -48,11 +46,10 @@ use super::*;
 // Extent 4x better and the red/blue balance three times closer to the
 // original's neutral. The premultiplied build was blue-dominant; raw
 // alpha alone recovers the hue but draws the fins as hard-edged solid
-// wedges, which is the 2026-08-07 and 2026-08-08 result reproduced
-// exactly, and `SrcAlpha` is what supplies the falloff those wedges are
+// wedges, and `SrcAlpha` is what supplies the falloff those wedges are
 // missing. Still 22% of the original's extent - but that comparison is
 // against the original's frame, so it is one of the readings the
-// 2026-08-09 projection finding invalidates: our whole image is zoomed
+// projection finding invalidates: our whole image is zoomed
 // 1.12-1.26x depending on speed, because the original widens its fov
 // with speed and we do not. Re-take it with `--camera-fov` before
 // leaning on the number. The missing bright-pass is unaffected and
@@ -72,8 +69,7 @@ use super::*;
 // across 8 teams - `cargo run -p oag-assets --example
 // boost_vertex_type`), so that generation has something to vary with.
 //
-// **Environment-mapped UV generation was implemented here 2026-08-09
-// and replaced 2026-08-10**: the plume's compiled list is replayed
+// **Not environment-mapped UV generation**: the plume's compiled list is replayed
 // under `TEXMAPMODE` 0 (settled by reading the recorded frame stream
 // in GE order - mesh-draw.md, "The plume is replayed under
 // `TEXMAPMODE` 0"), so the original samples the *authored* UVs

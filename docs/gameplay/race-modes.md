@@ -38,17 +38,15 @@ and Zone alike, screenshotted for all seven of the original's race types on
 [shield.md](../ghidra/functions/psp-pulse-usa/shield.md#g_weapons_enableds-per-mode-default-spelled-out-and-checked-against-every-race-type).
 Two consequences in `crates/raceplay/src/lib.rs`:
 
-- **The grid never spawns opponents for any mode yet.** For the three
-  single-ship modes that is the original's own answer; for a single race it is
-  not - `MSC_EVENT_SR` promises "a full grid of opponents" and the AI
-  `DIFFICULTY` row is selectable. Nothing drives an opponent here, and seven
-  parked hulls wearing the player's livery is a worse race than an empty track,
-  so `Mode::has_opponents` answers `false` for it too and says why.
-  The grid *arithmetic* is right and measured - [grid.md](../ghidra/functions/psp-pulse-usa/grid.md)
+- **The grid spawns opponents only for the modes that field them.**
+  `Mode::opponent_count` answers `7` for single race, Eliminator and Tournament,
+  `1` for Head2Head and `0` for the three single-ship modes (time trial, speed
+  lap, Zone), which is the original's own answer for those. The grid
+  *arithmetic* is measured: [grid.md](../ghidra/functions/psp-pulse-usa/grid.md)
   took it against a real *Single Race*, the "one reachable race type with a full
-  field" - it is only unused. `Options::opponents` is the escape hatch that
-  measurement's own ground-truth test and `--opponents` on `just play` use to
-  place all eight without a mode asking for them.
+  field". `Options::opponents` is the escape hatch that measurement's own
+  ground-truth test and `--opponents` on `just play` use to place all eight
+  without a mode asking for them.
 - **`Weapon Pad`s decode but are drawn and armed only in a single race.** The original does the
   equivalent at a different layer - `World_CollectNodeLists` clears the
   node's own visibility bits rather than skipping the decode - documented on
@@ -81,7 +79,8 @@ Two consequences in `crates/raceplay/src/lib.rs`:
   original's.
 
 The rules live in `crates/race`; how a lap is decided at all is
-[lap counting](lap-counting.md), and it is a convention rather than a recovery.
+[lap counting](lap-counting.md), where the loop's shape and the start of a lap are
+recovered (confidence 88).
 
 Selected on the RACE menu page, which opens on the time trial, or with
 `--mode time_trial|speed_lap|zone|single_race|eliminator` on the command line. `--race` skips the menus,
@@ -227,7 +226,7 @@ executables. The ladder is 2048's; the clock driving it is not.
 `Ship_LoadModel` loads `<Team>\Zone.vex` instead of `<Team>\Ship.vex` under the
 same selector, and every team's `Zone.vex` decodes to the same hull - see
 [zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md#the-ship-model-is-not-the-players-own-hull).
-Confidence 84. `oag_livery::entry::ship_entry_name` picks the model this way, and
+Confidence 84. `oag_title::race::ShipPaths::hull_entry_name` picks the model this way, and
 the menu greys the TEAM row while MODE is Zone so a player is not offered a
 choice that no longer changes the shape drawn - only the colour it is drawn in.
 
@@ -240,7 +239,7 @@ made *one* decision that shows up twice:
 | --- | --- | --- |
 | Pulse | the race circuit's directory, `zone_`-prefixed | the player's team, `Zone.vex` |
 | Pure | `Data\Zone\NN_Zone\track.vex` | `Data\Ships\Zone_01\Ship.vex` |
-| HD / Fury | `/data/environments/zone_N/track.vex` | `/data/ships/zone/ship.vex` |
+| HD / Fury | `/data/environments/zone_N/track.vex` | `/data/ships/zone/ship.vex`, in the picked team's `zoneship_<x>` livery |
 | 2048 | the race circuit itself, unchanged | the player's own ship, unchanged |
 
 Pulse hangs Zone off the entities a race already has; Pure and HD give Zone
@@ -249,6 +248,12 @@ Pulse's is the only one with a recovered *selector* behind it (`case 6`,
 confidence 84); the other two are name resolution at 94, and neither title's
 executable has been read. HD's was already half-recovered before anything wanted
 it - `zone` is one of the four `oag_hd::names::MODE_SHIPS` read off the manifest.
+
+**HD's team does reach the paint.** The hull is shared, but HD's ship loader
+queues `zoneship_zone` -> the team's `zone` model `texturelocation` as a texture
+path substitution, so the Zone craft carries the picked team's branding, as on
+2048 and Omega. Confidence 80, from `Ship_ReloadModelForSkin`'s mode-6 case:
+[ps3-hdfury-eu/zone-craft.md](../ghidra/functions/ps3-hdfury-eu/zone-craft.md).
 
 **2048 is a fourth shape on both axes at once, not a variant of the other
 three, and its source is play rather than the disc.** `oag_2048::race` used to
@@ -405,7 +410,7 @@ says so rather than substituting numbers.
   a clean zone pays back something a dirty run actually lost. See
   [shield](../ghidra/functions/psp-pulse-usa/shield.md).
 
-### Zone has no ending yet, and now we know what it should be
+### Zone ends when the ship is destroyed
 
 **A Zone run ends when the ship is destroyed.** The disc says so: `ER_ZONE_DEST`
 reads `"Ship destroyed on zone"`, and `MSC_EVENT_ZONE` describes the mode as
@@ -581,7 +586,7 @@ nothing until now.
 **A craft destroyed mid-race takes "Ship destroyed" as its result instead of a
 finishing place. It does not come back.** Confidence **75**, and the evidence is
 the disc's own text plus the executable's field list - the same method
-[`ER_ZONE_DEST`](#zone-has-no-ending-yet-and-now-we-know-what-it-should-be) was
+[`ER_ZONE_DEST`](#zone-ends-when-the-ship-is-destroyed) was
 settled by, one notch lower because the field-list ordering is read rather than
 traced to the widget that consumes it.
 
@@ -659,13 +664,15 @@ status:
   "weapons do more damage" *is* in the recovered engine: a second, real table,
   not an invented multiplier. A title with no second table (Pure) falls back
   to the ordinary one and says so in the load report.
-- **Pads refresh an order of magnitude faster.** `<WeaponPad
+- **Pads refresh an order of magnitude faster - on Pulse only.** `<WeaponPad
   elimination_refresh_time>` is `0.05` seconds against the ordinary
-  `refresh_time`'s `0.55` on both shipped PSP discs -
-  `oag_tables::handling::global::WeaponPad`'s own doc comment already named
-  Eliminator by name before this mode existed to read it. `race::load` selects
-  it the same way it selects the weapon table above, falling back to the
-  ordinary figure for a title with none. See [pickups](pickups.md#the-refresh-timer-is-a-debounce-not-a-respawn).
+  `refresh_time`'s `0.55` on both shipped PSP discs, and Pulse stamps it
+  (measured live, `docs/gameplay/pickups.md`, "Eliminator and the pads, per
+  title"). **HD, 2048 and Omega author `0.15` against `0.75` and never stamp a
+  pad in Eliminator at all**: HD measured on RPCS3, 2048 and Omega read in
+  `WeaponPads_TestCraft`, where the Eliminator family skips the stamp. `race::load`
+  still selects the elimination figure for every title that authors it, which is
+  right on Pulse and wrong on those three; the wiring is a handover thread.
 - **No energy from an absorb; the absorb is a one-second Shield instead
   (2026-10-03, read statically, confidence 80).** `Mode::pickups_absorb` answers
   `false` for Eliminator alone. Until 2026-10-03 both absorb paths then kept
@@ -761,6 +768,13 @@ Custom Race outside the campaign still has no cell to read, so
 `oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT`, **5** as of 2026-09-30 (the race box's
 first `KILLS` entry, see below) - the only figure a `--mode eliminator` run with no campaign
 cell in play can have.
+
+### The flip (2026-11-07)
+
+HD and Fury's Eliminator gives the player a half turn on L1: `0.2 s`, velocity kept, free, so the
+engine stops the craft and sends it back up the circuit at the field. Opponents do it too, in the
+original only. Law, evidence and the other titles:
+[eliminator-flip.md](../ghidra/functions/ps3-hdfury-eu/eliminator-flip.md).
 
 ### The kill target of a non-campaign Eliminator is the race box's `KILLS` row, and it starts on 5 (2026-09-30)
 
@@ -925,7 +939,8 @@ blends its finished lateral offset toward the pad's offset on a smoothstep, tota
 corridor clamp still bounds it. `PadSeeking::for_mode` turns it on for an Eliminator and off for
 every other mode, and a driver handed no pad computes the same bits as before, so no golden hash
 moved. A held weapon blocks a pickup, so a full-slot craft keeps the line. The player's own slot
-is never handed a pad, so an autopilot driving the player does not detour.
+is never handed a pad, so an autopilot driving the player does not detour. A score Eliminator (HD's) seeks
+no pad ([The pace of a score Eliminator](#the-pace-of-a-score-eliminator-2026-11-09)).
 
 **A pad off the lap's road is skipped.** `05_Track`, `14_Track` and `07_Track` author pads on
 the branch of a split their lap ring does not drive, and `07_Track` one on a deck stacked over
@@ -1005,6 +1020,123 @@ section. Guarded by
 `crates/raceplay/tests/eliminator_pads_ground_truth.rs` (pickups per empty craft-minute over seeds 1
 to 6, one game-minute each: 7.20 with the steering, 5.48 without).
 
+### The pace of a score Eliminator (2026-11-09)
+
+**Ours, chosen, not measured.** HD's Eliminator is won on points
+([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md)). The original's
+Novice race on Vineta K (Venom, target 200) ended when its leading opponent was on lap 10, nine
+laps done. That is one race, so n = 1, and nothing of the original's Skilled or Elite is
+measured. `oag_raceplay::score_pace` holds ours near it. Its terms apply only where the race's
+Eliminator is won on points, so a kill Eliminator (Pulse, 2048, Omega) and every other mode run as
+before:
+
+| Term | What it does | Why |
+| --- | --- | --- |
+| Trigger | Every tier drops Mines and Bombs and holds the Cannon on `TRIGGER_SHARE = 0.2` of its pilot's own trigger span | Novice's appetite is `0` (`Difficulty::aggression`). A Novice opponent that took a Mine, Bomb or Cannon held it for good, so its slot never took another pad |
+| Absorb | The measured decision's absorb half spends the weapon on the Eliminator's 1 s Shield (`Race::eliminator_absorb`, the player's path) instead of keeping it | The decision and HD's `absorbScale` (`3.6 / 2.6 / 0.6`) are measured ([weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md)); keeping the weapon fired it later instead |
+| Hold | The Hard rung (Elite, Ace) keeps a fresh pickup 20 s before spending it in any way (fire, drop, absorb, Turbo, Autopilot), on top of the measured 0.8 s gate | Measured on ours: an Elite opponent spent a Missile 1.5 to 1.8 s after taking it, and scaling the fire odds by 0.2 did not lengthen that. Why is unverified; the window's flat second chance (`rates[4]`, which ignores the odds) is a candidate. A held weapon blocks the next pad, so the hold paces supply. Novice and Skilled absorb enough of theirs |
+| No pad seeking | `PadSeeking::Off` ([Steering for weapon pads](#steering-for-weapon-pads-2026-10-03)) | Tuned for Pulse's five-kill race. Here it doubled the supply |
+| No pack | `Race::eliminator_pack_scale` is `1.0` | Tuned for Pulse's five-kill race. A pack this dense let one Repulser take several kills at once |
+
+**Before and after.** Measured on Vineta K, Venom, the person under autopilot, seeds 1 to 12.
+Race length is the leading opponent's completed laps when the race ends; a race still running at
+60,000 ticks (1,000 s) counts at the laps it had.
+
+| Tier | Before: laps, median (range) | Before: time, median | After: laps, median (range) | After: time, median |
+| --- | --- | --- | --- | --- |
+| Novice | 19 (5-20); 7 of 12 never reached 200 | 957 s | 10 (2-19) | 524 s |
+| Skilled | 1 (0-2) | 90 s | 7.5 (2-23); seed 5 never reached 200 | 350 s |
+| Elite | 1 (0-1) | 71 s | 6 (4-13) | 289 s |
+
+Those rows were measured with every craft on the medium shield slot. Novice now starts on its
+`easyshield` slot ([handling-stats.md](../formats/handling-stats.md), "Which difficulty picks the
+shield slot"), which moves the pace; Skilled and Elite read the plain shield as before. The same
+twelve seeds, one binary (`Options::skill_level` `1` for the medium slot, unset for the
+difficulty's own), the leading opponent's completed laps when the race ends:
+
+| Tier | Medium slot: laps, median (range) | Medium slot: time, median | Difficulty's slot: laps, median (range) | Difficulty's slot: time, median |
+| --- | --- | --- | --- | --- |
+| Novice | 10 (2-19); seed 9 still running at 1,000 s | 517 s | 8 (2-17), every seed reaches 200 | 433 s |
+| Elite | 6 (4-13) | 289 s | 6 (4-13), the same slot | 289 s |
+
+The original's nine laps (n = 1) sit between the two medians. Novice's sorted laps on the
+difficulty's slot: 2, 3, 6, 7, 7, 7, 9, 10, 12, 12, 15, 17. Seed 1 alone read 11 laps on the medium
+slot and 7 on the difficulty's: a single seed moved by the shield, which is why the pin takes the
+median over all twelve.
+
+Opponents' points by award kind, pooled. Per completed lap, then per craft-minute:
+
+| Run | Damage | Kill | Death | Lap | All |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Original, Novice (runs 2 and 3, 35 craft-laps) | 4.70 / 3.11 | 5.26 / 3.48 | -1.14 / -0.76 | 5.75 / 3.81 | 14.57 / 9.65 |
+| Ours before, Novice | 0.89 / 1.04 | 0.93 / 1.10 | -0.17 / -0.19 | 5.75 / 6.75 | 7.40 / 8.69 |
+| Ours before, Skilled | 39.98 / 29.26 | 64.44 / 47.16 | -10.68 / -7.82 | 6.25 / 4.57 | 100.00 / 73.17 |
+| Ours before, Elite | 52.65 / 37.92 | 83.60 / 60.21 | -12.72 / -9.16 | 7.00 / 5.04 | 130.53 / 94.01 |
+| Ours after, Novice | 2.82 / 3.24 | 4.24 / 4.87 | -0.92 / -1.06 | 5.75 / 6.60 | 11.89 / 13.65 |
+| Ours after, Skilled | 3.54 / 4.39 | 5.17 / 6.42 | -0.92 / -1.15 | 6.25 / 7.76 | 14.03 / 17.43 |
+| Ours after, Elite | 4.05 / 5.27 | 5.12 / 6.66 | -0.90 / -1.18 | 7.00 / 9.10 | 15.27 / 19.85 |
+
+Opponents' shield, Novice. Per lap (the shield at each lap crossing) and at the end of the run are
+separate figures. Original: per lap 106.8, 58.6 and 90.7 in runs 2, 3 and 4; end of run 85.0, 40.2
+and 82.1. Ours after, seeds 1 to 3: per lap 53.1, 56.4 and 51.2; end of run 35.1, 59.4 and 63.0.
+
+**What was high.** The awards match the original row for row, so the rate was how often a hit
+landed. Our opponents spent most pickups within about 2 s of taking them. Before, Skilled and Elite opponents took 4
+to 9 pickups a lap. The Repulser and the Quake dealt the most damage. HD's Repulser runs Pulse's
+law (`I:Pulse` in [weapon-lineage.md](weapon-lineage.md)), and in a bunched field one wave took
+up to five kills. At Novice it was the reverse: the clogged slot gave 0.1 pickups a lap. Scaling
+the fire odds by 0.2 moved neither the hold time nor the race length; why is unverified.
+
+**Still different, not tuned here:**
+
+- Our opponents lap Vineta K in about 48 s at Novice. The original's took 80 to 100 s in these
+  runs.
+- The spread is wide: seeds of one tier range from 2 to 19 laps, because one craft's run of kills
+  decides a race.
+
+Reproduce: the `OAG_SWEEP` test `hd_eliminator_hud_ground_truth::sweep_score_changes` writes one
+race's CSV (`OAG_SWEEP_OUT`, `OAG_SWEEP_SEED`, `OAG_SWEEP_DIFFICULTY`). `scripts/hd-eliminator-award-rates.py`
+pools the award table off ours or the original's CSVs. `sweep_race_length` (`OAG_SWEEP`,
+`OAG_SWEEP_DIFFICULTY`, `OAG_SWEEP_RUNG`, `OAG_SWEEP_SEEDS`, `OAG_SWEEP_OUT`) writes one line per
+seed for the length table.
+
+The pins take the median over the twelve seeds, not one seed's race. Novice
+(`hd_eliminator_hud_ground_truth::a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace`):
+the median is 6 to 12 laps, a third either way of the original's 9 (measured 10 since projectiles
+launch along the located track's up, 9 before). A race still running at 1,000 s counts at the laps
+it had, and the median must not depend on it: fewer than half unended, each at or past the median
+(seed 1, at 19). Elite
+(`an_elite_score_eliminator_takes_more_than_a_few_laps`): every seed reaches 200 and the median is
+at least 4 (measured 9, 6 before the launch normal moved; 1 before the hold). Every race either
+pin ends is also checked for a board ranked on points
+([projectile-launch-normal.md](../ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md),
+"Landed"). Between seeds the same tier spans 2 to 17 laps, so a
+single seed's bound fell out when the shield moved one seed from 11 laps to 7.
+
+**HD's LeachBeam drain on its measured trip law (2026-11-15, `hd-leach-2`).** Two changes to the
+per-trip drain, both read off `EBOOT.elf` and checked on RPCS3
+([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md#the-ball-rides-the-strip-2026-11-15-hd-leach-2)):
+the trip's length is the two craft's gap along the course (`Craft_GetTrackGap`, `0x000d0398`,
+stored at `strip + 0x140` by `BeamPath_Rebuild`), not their distance in space; and the ball's clock
+runs only in `LeachBeam_Update`'s state 4 (`0x00153960`), 0.7 s after the fire. Both make drains
+rarer, so opponents score damage points more slowly. Novice, the leading opponent's completed laps,
+one binary per row:
+
+| Drain | Seeds | Median | Sorted laps |
+| --- | --- | ---: | --- |
+| straight distance, from the fire (before) | 1-12 | 10 | (recorded above) |
+| track gap, from the fire | 1-12 | 13 | 2, 5, 6, 9, 10, 12, 14, 14, 16, 17, 19, 20 |
+| track gap, from state 4 | 1-12 | 10 | 4, 4, 5, 5, 7, 10, 11, 16, 17, 17, 18, 20 |
+| track gap, from state 4 | 13-24 | 6 | 3, 5, 5, 6, 6, 6, 6, 7, 7, 10, 17, 18 |
+| track gap, from state 4 | 1-24 | 7 | the two rows above together |
+
+On seeds 1 to 12 the track gap alone made 243 arrivals where the straight distance made 306, and
+the not-located fallback (the course length) never fired. With the clock in place the median moved
+four laps between two sets of twelve seeds, more than one set can pin, so the Novice pin now takes
+the median over seeds 1 to 24 (`NOVICE_PACE_SEEDS`). The window stays 6 to 12, anchored on the
+original's 9 laps (n = 1, a third either way); 7 sits inside it. Elite keeps seeds 1 to 12 and
+passed unchanged.
+
 ### Firing on the original's law (2026-10-03)
 
 **Read, then ported.** An opponent now decides when to fire its Rocket, Missile, Plasma,
@@ -1031,8 +1163,10 @@ and `WeaponAIStats2048.xml`, both 1,369 bytes and byte-identical to each other a
 carries both spellings too; `oag_omega::TITLE` names the unsuffixed one, which has **no**
 Eliminator row (see the next section). So the maintainer's rule (an unmeasured title runs Pulse's
 law) needed no restated table: **every title runs `oag_ai::weapon_ai` on its own odds, inherited
-from Pulse and unmeasured on HD, Omega and 2048**, with no confidence score for those three. HD's
-and Omega's decision code is unread.
+from Pulse and unmeasured on HD, Omega and 2048**, with no confidence score for those three. Omega's
+decision code is read since 2026-11-03 and differs on a missing Eliminator row
+([weapon-ai-fire.md](../ghidra/functions/ps4-omega-eu/weapon-ai-fire.md)); HD's is read and differs from Pulse
+([weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md)).
 `crates/raceplay/tests/fire_law_inherit_ground_truth.rs` pins that a race on each of the three loads
 the table and runs `FireLaw::Original`. A title with no table would still have to run Pulse's
 odds; that case does not exist, so no cross-title read or restated constant was built for it.
@@ -1074,9 +1208,9 @@ at `+176 .. +228` of a 232-byte object embedded in the RaceManager at `+6240`, i
 `normalFlip`, `infrontFlip`, flip e/m/h, use e/m/h, absorb e/m/h, score e/m/h. The constructor
 defaults the two flips to `1.0` and every scale to `0.0`, so a file without the row (`DATA02`'s,
 Omega's unsuffixed one) leaves every scale at zero. `AllWeapons` is the 14th three-float row,
-stored after the thirteen weapons. **The consumer of those fields was not found** within the
-hour: no direct `lfs` of `RaceManager+6416..6468` exists, so the reads go through a computed
-pointer.
+stored after the thirteen weapons. **The consumer was found 2026-11-03**: the reads go through the weapon
+AI's own stats pointer (`ps3-hdfury-eu/weapon-ai-fire.md`, 80), which replaces the "no mapping
+reaches 70" verdicts below: use scale replaces `x5`, absorb scale replaces the forced index.
 
 **Against Pulse's hard-coded Eliminator terms** (`weapon-ai.md`, "Mode 8"):
 
@@ -1086,7 +1220,7 @@ pointer.
 | absorb rate `0.001` | `*AbsorbScale` 3.6 / 2.6 / 0.6, falling with difficulty | Opposite shape: Pulse's is one tiny constant for every skill. Conflicts on its face | 20 |
 | `+0x34` forced `0` (a skill index) | none | Not a flip; no counterpart | n/a |
 | none | `normalFlip`, `infrontFlip`, `*FlipScale` | New. Plausibly the chance a craft that is ahead, or in front of the player, flips a pickup into a different weapon; **unread, a hypothesis** | below 50 |
-| none | `*ScoreScale` | New | below 50 |
+| none | `*ScoreScale` | Multiplies an opponent's every Eliminator award ([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md), 1.15 read live at Novice) | 90 |
 
 No mapping reaches 70, so **nothing is wired**: HD, Omega and 2048 stay on Pulse's hard-coded
 mode-8 terms (the maintainer's inherit rule), Pulse and Pure are untouched, and no golden moved.
@@ -1136,7 +1270,7 @@ rule) and the `oag_ai::weapon_ai` unit tests.
   resolution above it are wired, 2026-09-14 - see
   `docs/architecture/persistence.md`'s "where a career system attaches".
 - **Presentation.** The same "the sound is built, the HUD hide and the camera
-  swing are not" gap [Zone's own ending](#zone-has-no-ending-yet-and-now-we-know-what-it-should-be)
+  swing are not" gap [Zone's own ending](#zone-ends-when-the-ship-is-destroyed)
   already carries applies here too.
 - **`ER_YOU_ELIM`'s exact wording** ("You have been eliminated!") is not
   drawn anywhere; nothing in this pass settled whether it belongs to the
@@ -1181,11 +1315,25 @@ onward) scored as one event:
   bonus. Confidence 88, a direct table read (`g_tournament_points_by_position`,
   `0x08ab0ba4`) - implemented in [`oag_race::tournament`], with the running
   per-slot totals and the standings rank in the same module.
-  **Chosen, not measured:** the original zeroes points for a craft whose
-  own race-state byte reads "destroyed"/"retired" (state `7`), a byte this
-  engine does not carry; not having finished the leg when it ended is the
-  closest honest stand-in, and is what `Progress::record_leg`
-  (`crates/raceplay/src/tournament.rs`) actually reads off the board.
+  Every craft scores the place it holds **when the leg ends**: a leg ends on
+  the person's finish and the original's `Race_BuildEndRaceResult` scores
+  every craft off `craft+0xbd8`, the live rank `Race_UpdatePositions` writes
+  each tick (`race-progress.md`, confidence 90), so an opponent still racing
+  scores its running place. (Until 2026-10-30 an unfinished opponent scored
+  `0`, so a person winning every leg saw 8 and everyone else 0.) The
+  original's two zero conditions are the destroyed flag and `Ship_State` 7;
+  `Row::in_the_race` (`crates/raceplay/src/scoreboard.rs`) maps them onto
+  the one case this engine ends a leg without a finish, a wrecked person.
+  **Chosen, not measured:** an opponent wrecked at that exact tick is not
+  zeroed (this engine respawns it and the board row carries no state).
+  **Other titles (checked 2026-10-30):** `Session::frame` folds every title's
+  Tournament leg into the same `Progress`, so HD/Fury, Omega and 2048 shared
+  the zero-for-unfinished fault: it fed their campaign medal's standings rank
+  (`RaceStage::tournament_final_rank`), and is fixed there by the same change.
+  HD authors no Tournament standings table (`hd-endrace-screens.md`), so there is
+  no page to read; their per-place points are unmeasured and inherit Pulse's
+  table (**checked, applies**, not separately measured). The carry across legs
+  was already right (two-leg live run, 14/11/8 totals after leg 2).
 - **A leg advances when the player picks `Race Again`'s mid-tournament
   sibling, `ER_NEXT_RACE`**, offered on `EndRace Menu` for every leg but
   the last (`endrace-screens.md`) - `Session::advance_tournament_leg`
@@ -1333,6 +1481,34 @@ section is what implements it.
 [`oag_race::Mode::max_people`]: ../../crates/race/src/mode.rs
 [`oag_race::Mode::weapons_enabled`]: ../../crates/race/src/mode.rs
 [`Mode::ALL`]: ../../crates/race/src/mode.rs
+
+## Detonator
+
+HD/Fury's Fury-pack mode, also on 2048 (its Fury DLC) and Omega: one craft, alone,
+through fourteen stages. **Wired 2026-11-13 as `oag_race::Mode::Detonator`**, offered only
+where a title names its data (`oag_title::RaceDefaults::detonator`: HD, 2048, Omega; the
+RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure refuses).
+
+- **A stage is a lap.** `Detonator_UpdateRace` steps its stage counter on the player's own
+  forward line crossing (never the race's first), opens it at `1` and ends the race at `15`,
+  so fourteen laps on every class. 2048 and Omega run the same law. Confidence 78 (HD),
+  70 (2048, Omega). Evidence: [detonator-mode.md](../ghidra/functions/ps3-hdfury-eu/detonator-mode.md).
+  `detonator_ground_truth.rs` races it on HD and sees stages `1`..`15`, one a lap.
+- **The grade** is Detonator's own table (`detonatormode.effectsettings`, the DLC3 revision on
+  the four Zone circuits) and texture sets, through the same `ZoneGrade` and HD transition
+  sphere Zone uses, stepping on the lap. 2048 reads the circuit's own table and falls back to
+  HD/Fury's (shipped in the v1.04 patch) on the ported circuits; Omega's grade is not drawn,
+  as its Zone grade is not.
+- **HD's Zone-modes mask covers it** (`0x206040`, modes 6, 13, 14, 21): a Detonator craft on
+  HD flies the Zone handling file, the Zone hover rig with no brakes, and the Zone grid hover
+  (`Mode::on_zone_mask`). The same mask skips split recording; this build still shows lap times.
+- **The chase camera** scales the craft by `0.7` instead of `0.75` (HD and 2048 read; Omega
+  inherited from HD). **The start board** is `321go_hd_detonator.vex` on all three.
+- **Not here, each named on the evidence page**: the mines and bombs (placed per stage by
+  `FUN_000654e0`), the pulse cannon, the EMP and its pads, the score and the end-of-run
+  percentage, the out-of-race ending, the "automatic and ever-increasing" acceleration the
+  manual promises (no law read; the player throttles), and `detonator_hud.xml` (the race
+  draws the time trial's HUD, whose lap counter is the stage: chosen, not measured).
 
 ## What happens when a race ends
 

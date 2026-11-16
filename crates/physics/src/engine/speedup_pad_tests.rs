@@ -1,6 +1,12 @@
 //! What the speed-up pad boost in [`super`] is asserted to do. Split out of `engine.rs` under the
 //! 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use super::{
     PAD_RAMP_FLOOR, PAD_RAMP_RATE, SPEEDPAD_JUMP_THRESHOLD, advance_pad_fade, speedup_pad,
 };

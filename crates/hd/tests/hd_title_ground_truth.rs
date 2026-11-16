@@ -83,9 +83,11 @@ fn all_seven_archives_open_as_psarcs_off_one_disc() {
     assert_eq!(opened.len(), 7, "{opened:?}");
     opened.sort_unstable();
 
+    // The update chain is on no disc.
     let expected: Vec<String> = TITLE
         .archive_names()
         .iter()
+        .filter(|name| !TITLE.archives.patch.iter().any(|(patch, _)| patch == name))
         .map(|name| {
             format!(
                 "{}:PS3_GAME/{name}",
@@ -323,57 +325,27 @@ fn the_race_defaults_both_read_through_archives() {
     );
 }
 
-/// `race::ZONE_CLASS_ANNOUNCER` against the disc's own dedicated bank, by cue
-/// *index* rather than by trusting the constant's own ordering: this is the
-/// assertion that would catch a re-ordered `classes` array, which reading the
-/// names back in whatever order the bank happens to print them would not.
+/// `race::ZONE_CLASS_ANNOUNCER` against the speech bank a Zone race has loaded,
+/// by cue *index* rather than by trusting the constant's own ordering: this is
+/// the assertion that would catch a re-ordered `classes` array, which reading
+/// the names back in whatever order the bank happens to print them would not.
 ///
-/// Also checks the second copy of the same fourteen cues inside the general
-/// `speech_zone.bnk` `race::ZONE_ANNOUNCER` reads, at the offset the
-/// dedicated bank's own cue `0` (`ZONEMALE`) does not carry - see
-/// `docs/formats/psp-audio.md` and `oag_title::ZoneClassAnnouncer`'s own docs
-/// for why two copies exist.
+/// The fourteen `MR_*` cues sit at indices 26-39 of `speech_zone.bnk`, the same
+/// bank `race::ZONE_ANNOUNCER` reads. The dedicated `speech_class.bnk` (`DATA01`)
+/// names the same fourteen at 1-14 but is not loaded in a Zone race; see
+/// `oag_title::ZoneClassAnnouncer`.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn the_speed_class_announcer_names_the_disc_s_own_dedicated_bank_by_cue_index() {
+fn the_speed_class_announcer_names_the_zone_speech_bank_by_cue_index() {
     let Some(mut archives) = opened() else { return };
 
-    let dedicated = archives
-        .read_name(race::ZONE_CLASS_ANNOUNCER.bank)
-        .expect("speech_class.bnk reads");
-    let dedicated = oag_formats::sblk::Bank::parse(&dedicated).expect("speech_class.bnk decodes");
-    let mut dedicated_names = dedicated.sound_names();
-    dedicated_names.sort_by_key(|n| n.cue);
-
     assert_eq!(
-        dedicated_names.len(),
-        1 + race::ZONE_CLASS_ANNOUNCER.classes.len(),
-        "cue 0 (ZONEMALE) plus the fourteen speed classes, nothing else"
+        race::ZONE_CLASS_ANNOUNCER.bank,
+        oag_hd::race::ZONE_ANNOUNCER.bank,
+        "the class lines are in the Zone voice bank"
     );
-    assert_eq!(
-        dedicated_names[0].name, "ZONEMALE",
-        "the one cue this ladder does not name"
-    );
-    for (i, &class) in race::ZONE_CLASS_ANNOUNCER.classes.iter().enumerate() {
-        let stage = u16::try_from(i + 1).unwrap();
-        assert_eq!(
-            dedicated_names[i + 1].cue,
-            stage,
-            "stage {stage}'s cue sits at consecutive index {}, not wherever the name sorts to",
-            i + 1
-        );
-        assert_eq!(
-            dedicated_names[i + 1].name,
-            class,
-            "stage {stage} names {class} in oag_title::ZoneClassAnnouncer"
-        );
-    }
-
-    // The second copy, inside the general Zone voice bank, at cue indices
-    // 26-39 - read directly rather than assumed, the same way the dedicated
-    // bank above is.
     let general = archives
-        .read_name(oag_hd::race::ZONE_ANNOUNCER.bank)
+        .read_name(race::ZONE_CLASS_ANNOUNCER.bank)
         .expect("speech_zone.bnk reads");
     let general = oag_formats::sblk::Bank::parse(&general).expect("speech_zone.bnk decodes");
     let mut general_names: std::collections::BTreeMap<u16, String> = general
@@ -386,7 +358,8 @@ fn the_speed_class_announcer_names_the_disc_s_own_dedicated_bank_by_cue_index() 
         assert_eq!(
             general_names.remove(&cue).as_deref(),
             Some(class),
-            "speech_zone.bnk's own cue {cue} names the same {class} the dedicated bank does"
+            "speech_zone.bnk's cue {cue} names stage {} ({class})",
+            i + 1
         );
     }
 }

@@ -27,6 +27,7 @@ fn the_picture_flags_reach_the_movie_loaders_independently() {
         no_video: false,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     assert_eq!(
         base.decode(),
@@ -50,6 +51,7 @@ fn the_picture_flags_reach_the_movie_loaders_independently() {
 
     let cached = super::Options {
         prefer_av1_cache: true,
+        find_texture_packs: None,
         ..base.clone()
     };
     assert_eq!(
@@ -185,14 +187,57 @@ fn a_name_that_looks_like_a_hash_is_still_a_name() {
     );
 }
 
+/// The tiles of 2048's grid for the mods under `bases`: the page each opens.
+fn tiles_with(bases: &[std::path::PathBuf]) -> Vec<String> {
+    let mods = crate::mods::Mods::load_from(bases, &crate::settings::Mods::default()).unwrap();
+    let built = mods
+        .build(
+            oag_ui::menu::BUILT_IN,
+            None,
+            Some(oag_ui::menu::For {
+                title: oag_2048::TITLE,
+                platform: oag_assets::Platform::Psp,
+                updated: false,
+            }),
+        )
+        .unwrap();
+    super::campaign2048::tiles_of(&built.definition)
+        .into_iter()
+        .map(|tile| match tile.launch {
+            oag_ui::frontend::Launch::Page(page) => page,
+            other => panic!("a tile opens a page, not {other:?}"),
+        })
+        .collect()
+}
+
 #[test]
-fn wipeout_2048s_grid_gets_the_race_box_remix_and_multiplayer_tiles() {
-    use oag_ui::frontend::Launch;
-    let tiles = super::campaign2048::extra_tiles(None, oag_2048::TITLE, false);
-    let launches: Vec<Launch> = tiles.iter().map(|tile| tile.launch.clone()).collect();
-    // The split entry is the MULTIPLAYER tile's page, as it is a row on the other titles.
+fn wipeout_2048s_grid_gets_the_race_box_replays_and_multiplayer_tiles_with_no_mod() {
+    // The split entry is the MULTIPLAYER tile's page, as it is a row on the other titles; the
+    // recorded races are the REPLAYS tile's, which hangs off RACEBOX.
+    assert_eq!(tiles_with(&[]), ["race", "replays", "multiplayer"]);
+}
+
+#[test]
+fn a_mods_row_under_racebox_is_a_tile_between_them_and_replays_still_fits() {
+    let official =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/mods/official");
+    if !official.join("remix/oag-mod.toml").is_file() {
+        eprintln!("skipped: the official-mods submodule is not checked out");
+        return;
+    }
     assert_eq!(
-        launches,
-        [Launch::RaceBox, Launch::Remix, Launch::Multiplayer]
+        tiles_with(&[official]),
+        ["race", "replays", "oag.remix/remix", "multiplayer"]
     );
+}
+
+/// Pure names a `Stats` face and has no `Buttons` role, so its third glyph slot is labelled with the
+/// `Stats` role (the one a `font="Stats"` or `font="scroll"` draw asks for); a title that names none
+/// keeps the slot for the button glyphs.
+#[test]
+fn a_title_with_a_stats_face_labels_the_third_slot_with_it() {
+    let (_, role) = super::fonts::third_atlas_slot(oag_pure::FRONT_END.menu.unwrap(), None, None);
+    assert_eq!(role, oag_ui::language::roles::STATS);
+    let (_, role) = super::fonts::third_atlas_slot(oag_hd::frontend::MENU_SKIN, None, None);
+    assert_eq!(role, oag_ui::language::roles::BUTTONS);
 }

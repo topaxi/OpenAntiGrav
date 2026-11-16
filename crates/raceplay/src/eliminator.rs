@@ -9,7 +9,7 @@
 //!
 //! # A destroyed craft outside the Eliminator stays down
 //!
-//! **Measured live, 2026-10-02 (pulse-state6, PPSSPP v1.20.4, Pulse USA,
+//! **Measured live (PPSSPP v1.20.4, Pulse USA,
 //! Single Race, two runs, two slots, two ways of destroying the craft)**: an AI
 //! craft that reaches state 5 goes to state 6 after `1.5` s, its `entity+0x874`
 //! timer (`0.8` s, `Ship_SetState`'s case 6) crosses zero about `0.8` s later,
@@ -21,8 +21,8 @@
 //! agrees with the per-state jump table at `0x08a7bb88`, which sends state 6
 //! to `FUN_08840500`, a bare timer countdown, and state 8 alone to
 //! `Ship_UpdateRespawn` - and state 8 is the Eliminator's. So **a destroyed
-//! craft in a single race does not come back**; this port used to return an
-//! opponent after `1.5 + 0.8` s on a misreading of `shield.md`. Confidence 85:
+//! craft in a single race does not come back**, so no opponent returns after
+//! `1.5 + 0.8` s. Confidence 85:
 //! two runs under injection (`Ship_SetState(4)` and `Ship_Damage`), 13 s each,
 //! not a natural death by a weapon and not a full race to the flag. See
 //! `docs/ghidra/functions/psp-pulse-usa/shield.md`.
@@ -78,21 +78,20 @@ pub(super) const DESTROYED_DWELL: f32 = 1.5;
 /// `entity+0x368` is zero. State 8's own update is `Ship_UpdateRespawn`
 /// (`0x08847914`): the per-state jump table at `0x08a7bb88` sends state `8` to
 /// the call at `0x08841e44`, counts the timer down, and at zero relocates the
-/// craft, refills the shield and goes to state 1. **Measured live 2026-10-02
-/// (pulse-state6, run `e3`)**: the player's craft wrecked by `Ship_Damage` in an
+/// craft, refills the shield and goes to state 1. **Measured live
+/// (run `e3`)**: the player's craft wrecked by `Ship_Damage` in an
 /// Eliminator went 4 (0.5 s), 5 (1.5 s), 8 with `+0x874` reading `1.0`, then state 1
 /// with a refilled shield 60 frames later. Confidence 90: one run, agreeing with the
 /// disassembly (`lui 0x3F80` on the zero branch).
 pub(super) const ELIMINATOR_PLAYER_WAIT: f32 = 1.0;
 
 /// The same wait for every other craft: **`0.8`**, the same constant state 6's
-/// case arms for a non-zero `entity+0x368`. **Measured live 2026-10-02
-/// (pulse-state6, runs `e1` and `e2`, two boots of one race, slots 2 and 4)**: an
+/// case arms for a non-zero `entity+0x368`. **Measured live
+/// (runs `e1` and `e2`, two boots of one race, slots 2 and 4)**: an
 /// Eliminator opponent destroyed by `Ship_Damage` on PPSSPP went 4 (0.5 s), 5 (1.5 s),
 /// 8 with `entity+0x874` reading `0.8`, then state 1 and a refilled shield `48` frames
-/// later, both times. This used to be `2.0`, read off `Ship_SetState`'s case 8
-/// with its branch-delay `lui 0x3F4C` (which executes on both paths) taken for
-/// dead code. Confidence 92: two runs and the corrected disassembly agree.
+/// later, both times, not `2.0`: `Ship_SetState`'s case 8 has a branch-delay
+/// `lui 0x3F4C` that executes on both paths. Confidence 92: two runs and the corrected disassembly agree.
 pub(super) const ELIMINATOR_OPPONENT_WAIT: f32 = 0.8;
 
 /// Seconds an Eliminator craft spends out before it returns: state 5's
@@ -109,6 +108,13 @@ pub(super) fn eliminator_respawn_delay(is_player: bool) -> f32 {
 }
 
 impl Race {
+    /// What this race's Eliminator ends on: kills on a kill rule, points on a score rule. The
+    /// kill-count default where the race was handed none.
+    #[must_use]
+    pub fn eliminator_target(&self) -> u32 {
+        self.sim.eliminator_kill_target
+    }
+
     /// Brings a destroyed craft back, on the terms its mode sets.
     ///
     /// **Only the Eliminator brings one back.** Every craft there returns after
@@ -154,6 +160,9 @@ impl Race {
                 self.sim.respawn_delay[slot] = delay;
                 if mode == Mode::Eliminator {
                     self.credit_kill(slot);
+                    if let Some(law) = self.sim.score_law {
+                        law.charge_death(&mut self.sim.world.ships[slot].standing);
+                    }
                 }
             }
             self.sim.respawn_delay[slot] -= self.sim.dt;
@@ -218,14 +227,21 @@ impl Race {
         }
 
         let target = self.sim.eliminator_kill_target;
+        let scored = self.sim.score_law.is_some();
         let kills = self.sim.world.ships[..self.sim.world.ship_count as usize]
             .iter()
             .filter(|ship| ship.active)
-            .map(|ship| ship.standing.kills)
+            .map(|ship| {
+                if scored {
+                    ship.standing.whole_score()
+                } else {
+                    ship.standing.kills
+                }
+            })
             .max()
             .unwrap_or(0);
-        // Every person's race ends on the same kill count; the field's leader is
-        // the event's, not a slot's.
+        // Every person's race ends on the same count; the field's leader is the
+        // event's, not a slot's.
         for slot in 0..oag_gameplay::MAX_PLAYERS {
             if self.sim.world.person_flown(slot) {
                 self.sim.world.race[slot].eliminator_finished(target, kills);
@@ -235,8 +251,8 @@ impl Race {
 
     /// Refills a fifth of a craft's shield on a completed lap, Eliminator only.
     ///
-    /// **Measured as of 2026-09-16, and this used to be a full refill chosen
-    /// off `MSC_EVENT_ELIM`'s "you regain health after each lap".**
+    /// **Measured, not the full refill that `MSC_EVENT_ELIM`'s "you regain health
+    /// after each lap" suggests.**
     /// `Eliminator_UpdateKillTarget` (`0x0882ce18`) and the multiplayer
     /// mode's racing-state update both call `Ship_RefillLapShield`
     /// (`0x0883de30`) on the player's craft when its crossing count
@@ -305,7 +321,7 @@ impl Race {
         let time = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Shield))
             .map(|shield| shield.time);
         self.sim.world.ships[slot].pickup.take();
@@ -333,12 +349,12 @@ impl Race {
     /// that follower is [`PACK_REACH`] + [`PACK_EASE_SPAN`] behind. The throttle
     /// is only ever *reduced*, so the AI obeys the player's physics and gets
     /// nothing the player's craft lacks. **Whether a throttle lift that exists
-    /// only to bunch the field is acceptable is the maintainer's call**: it is
+    /// only to bunch the field is acceptable is a design call**: it is
     /// catch-up by slowing the front. Measured with it off (`PACK_MIN_THRUST = 1.0`) on `16_Track`,
     /// player parked, eight fixed seeds, six game-minutes: 0 of 8 fields reach
     /// five kills, against 22 of 24 over three sets of eight with it on.
     ///
-    /// **Why the earlier setting looked insensitive, 2026-10-02**: the scale was
+    /// **Why the earlier setting looked insensitive**: the scale was
     /// logged per tick per slot. At `PACK_REACH = 60` a leader with any follower
     /// inside 60 units ran full, which a tight pack is nearly always, so the
     /// easing acted on 73 of 1,680 samples; and every craft the respawn fault
@@ -352,7 +368,8 @@ impl Race {
     /// ignored, and so is one more than [`PACK_LOST`] behind, which is a craft
     /// that has come off the circuit rather than one to wait for.
     pub(super) fn eliminator_pack_scale(&self, slot: usize) -> f32 {
-        if self.sim.world.mode() != Mode::Eliminator {
+        // A score Eliminator keeps no pack (`crate::score_pace`).
+        if self.sim.world.mode() != Mode::Eliminator || self.sim.score_pace.is_some() {
             return 1.0;
         }
         let Some(course) = &self.sim.course else {
@@ -408,7 +425,76 @@ impl Race {
             && killer as usize != victim
             && self.sim.world.ships[killer as usize].active
         {
-            self.sim.world.ships[killer as usize].standing.kills += 1;
+            let killer = killer as usize;
+            self.sim.world.ships[killer].standing.kills += 1;
+            if let Some(law) = self.sim.score_law {
+                let person = self.sim.world.person_flown(killer);
+                law.credit_kill(&mut self.sim.world.ships[killer].standing, person);
+            }
+        }
+    }
+
+    /// Credits a landed weapon hit's points to its attacker, the craft's own blast apart.
+    /// A swallowed hit never reaches here: the original's award is past `Ship_ApplyDamage`'s
+    /// Shield return.
+    pub(super) fn credit_hit_points(&mut self, victim: usize, attacker: u8, amount: f32) {
+        let attacker = attacker as usize;
+        let Some(law) = self.sim.score_law else {
+            return;
+        };
+        if attacker == victim || !self.sim.world.ships[attacker].active {
+            return;
+        }
+        let person = self.sim.world.person_flown(attacker);
+        law.credit_damage(&mut self.sim.world.ships[attacker].standing, person, amount);
+    }
+
+    /// The impact that reached `slot` this tick: the one that struck it, or whose blast radius
+    /// holds it. The owner of that impact is who hit `slot`.
+    pub(super) fn impact_reaching<'a>(
+        &self,
+        impacts: &'a [Option<oag_weapons::projectile::Impact>],
+        slot: usize,
+    ) -> Option<&'a oag_weapons::projectile::Impact> {
+        let position = self.sim.world.ships[slot].physics.body.position;
+        impacts.iter().flatten().find(|impact| {
+            impact.struck.is_some_and(|struck| struck as usize == slot)
+                || oag_weapons::projectile::blast_stats(self.sim.weapons.as_deref(), impact.kind)
+                    .is_some_and(|stats| (position - impact.point).length() <= stats.radius)
+        })
+    }
+
+    /// Credits this tick's projectile hits: each struck or blasted craft to the impact that
+    /// reached it, the way [`Self::credit_blast`] names an owner.
+    pub(super) fn credit_impact_points(
+        &mut self,
+        impacts: &[Option<oag_weapons::projectile::Impact>],
+        hits: &[oag_weapons::projectile::WeaponHit; MAX_SHIPS],
+    ) {
+        if self.sim.score_law.is_none() {
+            return;
+        }
+        for (slot, hit) in hits.iter().enumerate() {
+            if !hit.landed || hit.amount <= 0.0 {
+                continue;
+            }
+            if let Some(owner) = self
+                .impact_reaching(impacts, slot)
+                .map(|impact| impact.owner)
+            {
+                self.credit_hit_points(slot, owner, hit.amount);
+            }
+        }
+    }
+
+    /// A completed lap's points, Eliminator only.
+    pub(super) fn credit_lap_points(&mut self, slot: usize) {
+        if self.sim.world.mode() != Mode::Eliminator {
+            return;
+        }
+        if let Some(law) = self.sim.score_law {
+            let person = self.sim.world.person_flown(slot);
+            law.credit_lap(&mut self.sim.world.ships[slot].standing, person);
         }
     }
 
@@ -504,7 +590,7 @@ impl Race {
             return;
         }
         let Some(stats) =
-            oag_weapons::projectile::blast_stats(self.sim.weapons.as_ref(), impact.kind)
+            oag_weapons::projectile::blast_stats(self.sim.weapons.as_deref(), impact.kind)
         else {
             return;
         };

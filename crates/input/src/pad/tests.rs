@@ -55,6 +55,7 @@ fn every_bound_button_is_in_the_polled_list() {
 fn an_unbound_button_changes_nothing() {
     assert_eq!(map_button(gilrs::Button::Mode), None);
     assert_eq!(map_button(gilrs::Button::LeftThumb), None);
+    assert_eq!(map_button(gilrs::Button::RightThumb), None);
     // The analog triggers are deliberately not buttons: they are read as
     // axes and turned into airbrakes, or thrust and brake, by `resolve`.
     assert_eq!(map_button(gilrs::Button::RightTrigger2), None);

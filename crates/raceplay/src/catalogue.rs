@@ -49,12 +49,55 @@
 
 use oag_tables::fexml::{Node, parse};
 
+mod model_unlock;
+pub use model_unlock::{MedalCount, ModelUnlock};
+
 /// How many laps the race a player is setting up runs: the mode's own count
 /// for the speed class, `None` where no lap ends it. An unresolved class
 /// reads as no count rather than a guess.
 #[must_use]
 pub fn race_laps(mode: oag_race::Mode, class: &str) -> Option<u32> {
     mode.laps_target(oag_race::SpeedClass::census(class)?)
+}
+
+/// The lap count a circuit family fixes for a single race on it, if `circuit` is in one
+/// ([`oag_title::race::CircuitLineage::laps_by_class`]); `None` leaves the engine's count.
+#[must_use]
+pub fn lineage_laps(
+    title: &oag_title::Title,
+    circuit: &str,
+    mode: oag_race::Mode,
+    class: &str,
+) -> Option<u32> {
+    let laps = title.race.circuit_lineage(circuit)?.laps_by_class?;
+    (mode == oag_race::Mode::SingleRace)
+        .then(|| oag_race::SpeedClass::census(class))
+        .flatten()
+        .map(|rung| laps[rung.index()])
+}
+
+/// The lap count a launch pins: the caller's own [`crate::Options::laps_override`], else
+/// [`lineage_laps`] for the circuit it races.
+#[must_use]
+pub fn launch_laps(
+    title: &oag_title::Title,
+    circuit: &str,
+    options: &crate::Options,
+) -> Option<u32> {
+    options
+        .laps_override
+        .or_else(|| lineage_laps(title, circuit, options.mode, &options.class))
+}
+
+/// [`race_laps`] for a race on `circuit` of `title`: [`lineage_laps`] where it answers.
+#[must_use]
+pub fn race_laps_on(
+    title: &oag_title::Title,
+    circuit: &str,
+    mode: oag_race::Mode,
+    class: &str,
+) -> Option<u32> {
+    lineage_laps(title, circuit, mode, class).or_else(|| race_laps(mode, class))
 }
 
 #[cfg(feature = "view")]
@@ -189,12 +232,24 @@ pub struct Track {
     /// fresh profile lists reached the play call with this value. See
     /// `docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`, "The name voices".
     pub sound_register: Option<u8>,
+    /// The `StringTableId` the entry authors: the key its name is filed under
+    /// in the string table, where that is not the entry's own id. Omega's ten
+    /// circuits of 2048 (`altima`, `arena`, ...) author it (`Track_Altima_0`);
+    /// the twenty-eight numbered ones do not, and are named by their id.
+    pub string_id: Option<String>,
     /// The foreign (Unity) track file this entry stands for, or `None` for a
     /// circuit of the source's own. See [`crate::foreign`].
     pub foreign: Option<std::path::PathBuf>,
 }
 
 impl Track {
+    /// The string table key this circuit's name is under: its authored
+    /// `StringTableId`, else its own id.
+    #[must_use]
+    pub fn name_key(&self) -> &str {
+        self.string_id.as_deref().unwrap_or(&self.id)
+    }
+
     /// The archive entry name of the `.vex` a *race* loads on this circuit.
     ///
     /// The four-file rule from `docs/formats/track.md`: a circuit ships
@@ -268,7 +323,7 @@ pub fn tracks_of_kind(definition_xml: &str, kind: &str) -> Vec<Track> {
 /// reliable way to ask "which are this title's Zone circuits".** Pure
 /// declares its four `type="Zone"`, which `tracks_of_kind(xml, "Zone")`
 /// finds; HD/Fury declares its own four `type="Race"` with a separate
-/// `zone="true"` flag - measured 2026-08-28 against
+/// `zone="true"` flag - measured against
 /// `hdfury-ps3-eu-dec.iso`'s `Data\Plugins\frontend\definition.xml`, all four
 /// and only the four pointing at `Zone_1`..`Zone_4`, out of 28 `PI_Track`
 /// entries total - so the same kind query answers empty there. Matching by
@@ -352,6 +407,9 @@ pub struct Team {
     /// `TMTX_NAME` plays. `None` where it declares none. Measured on all eight
     /// of a fresh profile's teams; see [`Track::sound_register`].
     pub sound_register: Option<u8>,
+    /// The `multiplayer="true"` the entry authors: a team the original's multiplayer pickers and
+    /// its attract demo's field draw on. `false` where the entry declares none.
+    pub multiplayer: bool,
     /// The alternate paint jobs this team declares, in file order.
     ///
     /// Every `PI_ModelSkin` nested under this team's
@@ -376,7 +434,7 @@ pub struct Team {
     /// at `+0xb4..+0xc0` - and it was in the plugin definition all along,
     /// under a child element named for the front end. Assegai's authored
     /// `8/8/9/7`, Qirex's `8/7/8/9`, AG Systems' `7/9/9/8` and Piranha's
-    /// `10/6/6/9` are exactly the four bars a 2026-09-09 PPSSPP capture of the
+    /// `10/6/6/9` are exactly the four bars a PPSSPP capture of the
     /// screen shows (`docs/ui/selection-screens.md`), which is what settles
     /// it as the source rather than a coincidence. Distinct from
     /// `HandlingStats.xml`: these are the *advertised* ratings, not the
@@ -428,10 +486,19 @@ pub struct TeamModel {
     /// each as three digits (`085`), which is the same number. `None`
     /// unless all four are there.
     pub rating_tenths: Option<Rating>,
+    /// The `<FE>` element's `length`, in thousandths (`length="3.8"` is
+    /// `3800`): what HD's `Team Selection` fits its craft's depth to
+    /// (`oag_title::ShipFit`). `None` where the element authors none.
+    pub length_milli: Option<u16>,
     /// Whether the model carries an `<Unlock>` child at all - a model with
-    /// none is available from a fresh profile. What each unlock condition
-    /// means is not read here.
+    /// none is available from a fresh profile.
     pub has_unlock: bool,
+    /// The model's `<Unlock>` rows, in file order: what each asks for. Whether one holds is
+    /// `oag_game::unlock::ModelGate`'s.
+    pub unlock: Vec<ModelUnlock>,
+    /// The `texturelocation`: the livery folder inside [`Self::model_location`] the hull is
+    /// painted from (`livery1`; `SKIN1` is `livery2`). `None` where the model authors none.
+    pub texture_location: Option<String>,
     /// The `LiveryNumber` the model's front-end thumbnail is named by:
     /// `<modellocation>\FE\thumb<LiveryNumber>.gtf` exists on the disc for
     /// every model of every team (Feisar's `concept1` is `4`, `Feisar_c1\FE\thumb4.gtf`).
@@ -577,6 +644,7 @@ fn read_team(node: &Node) -> Option<Team> {
         sound_register: values
             .attr("soundregister")
             .and_then(|v| v.trim().parse().ok()),
+        multiplayer: values.attr("multiplayer") == Some("true"),
         skins: read_skins(node),
         rating: read_rating(node),
         models: read_models(node),
@@ -596,6 +664,34 @@ fn read_zone_livery(team: &Node) -> Option<String> {
         })?
         .value("texturelocation")
         .map(str::to_string)
+}
+
+impl Team {
+    /// `(team id, livery name)` for this team and each variant of it that races (a Fury `_c1`
+    /// craft wears its base team's livery): the rows [`oag_livery::zone_livery::swap`] reads.
+    /// Empty for a team with no [`Self::zone_livery`].
+    #[must_use]
+    pub fn zone_liveries(&self, race: &oag_title::RaceDefaults) -> Vec<(String, String)> {
+        let Some(livery) = &self.zone_livery else {
+            return Vec::new();
+        };
+        let mut out = vec![(self.id.clone(), livery.clone())];
+        if let Some(table) = race.team_variants_for(&self.id) {
+            for variant in table.variants {
+                out.push((table.join.combine(&self.id, variant.suffix), livery.clone()));
+            }
+        }
+        out
+    }
+}
+
+/// [`Team::zone_liveries`] of every team: what a Zone race's hull build is given.
+#[must_use]
+pub fn zone_liveries(teams: &[Team], race: &oag_title::RaceDefaults) -> Vec<(String, String)> {
+    teams
+        .iter()
+        .flat_map(|team| team.zone_liveries(race))
+        .collect()
 }
 
 /// Every `PI_TeamModel` under `team` that authors an `<FE>` - see
@@ -618,11 +714,20 @@ fn read_models(team: &Node) -> Vec<TeamModel> {
                     shield: tenths("shield")?,
                 })
             })();
+            let length_milli = fe.attr("length").and_then(|length| {
+                let milli = (length.trim().parse::<f32>().ok()? * 1000.0).round();
+                (0.0..=f32::from(u16::MAX))
+                    .contains(&milli)
+                    .then_some(milli as u16)
+            });
             Some(TeamModel {
                 name: model.attr("name")?.to_string(),
                 model_location: model.value("modellocation")?.to_string(),
                 rating_tenths,
+                length_milli,
                 has_unlock: model.children_named("Unlock").next().is_some(),
+                unlock: model_unlock::read(model),
+                texture_location: model.value("texturelocation").map(str::to_string),
                 livery_number: model
                     .value("LiveryNumber")
                     .and_then(|number| number.trim().parse().ok()),
@@ -652,15 +757,15 @@ impl Team {
         }
         variant_ids
             .into_iter()
-            .map(|suffix| {
-                let rating = self
-                    .model_for_directory(&join.combine(&self.location, suffix))?
-                    .rating_tenths?;
+            .map(|id| {
+                let model = self.model_for_variant(join, id)?;
+                let rating = model.rating_tenths?;
                 Some(oag_ui_screens::picker::hd::Stats {
                     speed: rating.speed,
                     thrust: rating.thrust,
                     handling: rating.handling,
                     shield: rating.shield,
+                    length_milli: model.length_milli,
                 })
             })
             .collect()
@@ -686,12 +791,10 @@ impl Team {
     /// whether it can be picked right now.
     ///
     /// A row is open when it is the model one of `variant_ids` races as
-    /// ([`Self::model_for_directory`], carrying that variant's index) and
-    /// padlocked otherwise - every model with an `<Unlock>` the build does
-    /// not offer. The original draws exactly the two `<Unlock>`-free models
-    /// of Feisar open on a fresh profile; this build keeps no unlock state
-    /// on HD, so a model it lets a player race (`nitro`, through the `_n1`
-    /// variant) is drawn open as well. Pulse's law, unmeasured on HD.
+    /// ([`Self::model_for_variant`], carrying that variant's index) and
+    /// padlocked otherwise: the caller passes the ids the profile has opened
+    /// (`oag_game::livery_row`), so a model whose `<Unlock>` row does not hold
+    /// is a padlock, as the original draws Feisar's on a fresh profile.
     #[must_use]
     pub fn hex_cells<'a>(
         &self,
@@ -700,8 +803,8 @@ impl Team {
     ) -> Vec<oag_ui_screens::picker::hd::hex::ModelCell> {
         let offered: Vec<Option<usize>> = variant_ids
             .into_iter()
-            .map(|suffix| {
-                let model = self.model_for_directory(&join.combine(&self.location, suffix))?;
+            .map(|id| {
+                let model = self.model_for_variant(join, id)?;
                 self.models.iter().position(|candidate| candidate == model)
             })
             .collect();
@@ -722,14 +825,78 @@ impl Team {
     }
 
     /// The model a race directory `directory` (a [`Self::location`] plus a
-    /// title's variant suffix, e.g. `Data\Ships\Feisar_c1`) races as,
-    /// among [`Self::models`]: the one whose `modellocation` names that
-    /// directory, case-insensitively, preferring one with no `<Unlock>` -
-    /// `Feisar_c1` is both `chrome_c1` (locked) and `concept1` (not), and
-    /// only the second is on a fresh profile's grid. Of several with no
-    /// `<Unlock>` the one named `normal` wins. **Chosen, not
-    /// measured**: which of two models sharing a directory the original
-    /// means is decided by its unlock state, which this build does not keep.
+    /// title's variant suffix, e.g. `Data\Ships\Feisar_c1`) races as in its
+    /// own livery, among [`Self::models`]: the one whose `modellocation` names
+    /// that directory, case-insensitively, preferring one with no `<Unlock>` -
+    /// `Feisar_c1` is both `chrome_c1` (`livery4`, locked) and `concept1`
+    /// (`livery1`, open), and the plain `_c1` variant is the second. Of several
+    /// with no `<Unlock>` the one named `normal` wins (**chosen**: Omega's
+    /// `Tigron_x` names one directory for every model). The other models of a
+    /// directory are reached by their livery, [`Self::model_for_variant`].
+    /// The model the stored variant id `id` races as: [`oag_title::race::split_livery`]'s suffix
+    /// joined to [`Self::location`] by `join`, in its own livery
+    /// ([`Self::model_for_directory`]) or, for an id naming one, the model of that directory
+    /// whose `texturelocation` is that livery (`"@livery2"` is Feisar's `SKIN1`).
+    #[must_use]
+    pub fn model_for_variant(&self, join: oag_title::VariantJoin, id: &str) -> Option<&TeamModel> {
+        let (suffix, livery) = oag_title::race::split_livery(id);
+        let directory = join.combine(&self.location, suffix);
+        let Some(livery) = livery else {
+            return self.model_for_directory(&directory);
+        };
+        self.models.iter().find(|model| {
+            paths_match(&model.model_location, &directory)
+                && model
+                    .texture_location
+                    .as_deref()
+                    .is_some_and(|own| own.eq_ignore_ascii_case(livery))
+        })
+    }
+
+    /// Every model raced out of one of `suffixes`' directories, in file order, with the variant
+    /// id it is raced by: the plain suffix for the directory's own model
+    /// ([`Self::model_for_directory`]), the suffix with its `texturelocation`
+    /// ([`oag_title::race::livery_variant`]) for a model painted from another livery there. A
+    /// model whose livery is its directory's own is that model's duplicate and is left out, as is
+    /// one in no directory `suffixes` names (Omega's `vr_hd`).
+    #[must_use]
+    pub fn model_variants<'a>(
+        &self,
+        join: oag_title::VariantJoin,
+        suffixes: impl IntoIterator<Item = &'a str>,
+    ) -> Vec<(String, &TeamModel)> {
+        let directories: Vec<(&str, String)> = suffixes
+            .into_iter()
+            .map(|suffix| (suffix, join.combine(&self.location, suffix)))
+            .collect();
+        let mut out: Vec<(String, &TeamModel)> = Vec::new();
+        for model in &self.models {
+            let Some((suffix, directory)) = directories
+                .iter()
+                .find(|(_, directory)| paths_match(&model.model_location, directory))
+            else {
+                continue;
+            };
+            let Some(base) = self.model_for_directory(directory) else {
+                continue;
+            };
+            let id = if std::ptr::eq(base, model) {
+                (*suffix).to_string()
+            } else {
+                match (&model.texture_location, &base.texture_location) {
+                    (Some(own), Some(base)) if !own.eq_ignore_ascii_case(base) => {
+                        oag_title::race::livery_variant(suffix, Some(own))
+                    }
+                    _ => continue,
+                }
+            };
+            if !out.iter().any(|(seen, _)| *seen == id) {
+                out.push((id, model));
+            }
+        }
+        out
+    }
+
     #[must_use]
     pub fn model_for_directory(&self, directory: &str) -> Option<&TeamModel> {
         // The whole path, not its leaf: a numbered craft's directory is `3` under
@@ -905,7 +1072,7 @@ fn raceable(
         // The ordinary hull, spelled directly rather than through the mode-aware
         // `race::ship_entry_name`: this asks whether a team is *raceable*, which is a question
         // about the normal hull and never about the Zone one.
-        .locate(&oag_pulse::race::ships::entry_name_in(
+        .locate(&oag_title::race::entry_name_in(
             ship_dir,
             id,
             oag_pulse::race::ships::HULL,
@@ -978,6 +1145,30 @@ pub fn all_tracks_of_kind(documents: &[String], kind: &str) -> Vec<Track> {
     out
 }
 
+/// The circuit entry a race opens when the caller names none: `default` (the
+/// title's own, `oag_title::race::RaceDefaults::track`) when `shipped` has it,
+/// else the first of `tracks` that `shipped` has, in the order the title's
+/// definition lists them. `None` when the source ships no circuit at all.
+///
+/// A source can ship fewer circuits than its title declares: the 2048 demo holds
+/// `tower` alone, and the title's default is `altima`.
+/// `shipped` is "does this source's archive set hold this entry", asked of
+/// [`oag_assets::Archives::locate`] by the caller.
+#[must_use]
+pub fn circuit_to_open(
+    default: &str,
+    tracks: &[Track],
+    shipped: impl Fn(&str) -> bool,
+) -> Option<String> {
+    if shipped(default) {
+        return Some(default.to_string());
+    }
+    tracks
+        .iter()
+        .map(Track::entry_name)
+        .find(|entry| shipped(entry))
+}
+
 /// [`tracks_named`] across `documents`, the first spelling of an id winning -
 /// on the same partial-pack-set terms as [`all_tracks`].
 #[must_use]
@@ -1018,6 +1209,7 @@ fn read_track(node: &Node, wanted: Option<&str>) -> Option<Track> {
         sound_register: values
             .attr("soundregister")
             .and_then(|v| v.trim().parse().ok()),
+        string_id: values.attr("StringTableId").map(str::to_string),
         foreign: None,
     })
 }

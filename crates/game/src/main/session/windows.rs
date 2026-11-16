@@ -12,7 +12,7 @@
 //! like a split screen. Anything else gets a holding frame.
 
 use anyhow::Result;
-use log::{info, warn};
+use log::{debug, info, warn};
 
 use oag_display::display;
 use oag_present::perf;
@@ -119,7 +119,7 @@ impl Session {
                 });
             match opened {
                 Ok(screen) => {
-                    info!(
+                    debug!(
                         "window {}: {title} ({}x{})",
                         window + 1,
                         screen.output.config.width,
@@ -222,6 +222,9 @@ impl Session {
     #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
     pub(super) fn window_title(&self, window: usize) -> String {
         let table = strings::project_table(self.settings.language.as_deref());
+        if self.demo.cli == Some(true) {
+            return crate::hints::title(&table).to_string();
+        }
         let word = table.get("OAG_JOIN_PLAYER").unwrap_or("PLAYER");
         format!(
             "{} - {}",
@@ -342,7 +345,7 @@ impl Session {
         if window < self.window_layout.len() {
             self.window_layout.remove(window);
         }
-        info!("window {} closed: slot(s) {slots:?} flown by the AI", window + 1);
+        debug!("window {} closed: slot(s) {slots:?} flown by the AI", window + 1);
     }
 
     /// Further window `index` was resized to `size`: its surface follows; its framebuffer
@@ -727,6 +730,8 @@ impl Session {
         view: &wgpu::TextureView,
     ) {
         let profile = self.governed_profile();
+        // A demo's HUD is hidden in every window, as in window 1 (`Session::race_hud_hidden`).
+        let hud_hidden = self.race_hud_hidden();
         let surface = screen.output.size();
         let fullscreen = crate::window::is_fullscreen(&screen.output.window);
         let rect = display::viewport(surface, crate::window::scene_aspect(&self.settings.display, fullscreen));
@@ -854,14 +859,16 @@ impl Session {
                 rect,
                 window,
             );
-            stage.draw_window_hud(
-                &self.gpu,
-                encoder,
-                screen.framebuffer.output(),
-                rect,
-                screen.framebuffer.output_size(),
-                window,
-            );
+            if !hud_hidden {
+                stage.draw_window_hud(
+                    &self.gpu,
+                    encoder,
+                    screen.framebuffer.output(),
+                    rect,
+                    screen.framebuffer.output_size(),
+                    window,
+                );
+            }
         }
         stage
             .scene
@@ -931,6 +938,12 @@ impl Session {
         let surface = screen.output.size();
         let space = perf::grid(surface);
         self.overlay.set_space(space);
+        // A wallpaper's window waits for its camera in black: nobody sits at it.
+        let label = if self.demo.cli == Some(true) {
+            String::new()
+        } else {
+            windows::label(word, &seats)
+        };
         let list = [Draw::Text {
             x: space.size.0 * 0.5,
             y: space.size.1 * 0.5 - 12.0,
@@ -938,7 +951,7 @@ impl Session {
             color: HOLD_TEXT,
             border: None,
             align: Align::Centre,
-            text: windows::label(word, &seats),
+            text: label,
             wrap_width: None,
         }];
         self.overlay.render(

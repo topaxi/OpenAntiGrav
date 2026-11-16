@@ -21,6 +21,10 @@ use std::collections::HashMap;
 /// surveyed.
 pub const MAX_ENTRY: usize = 1 << 20;
 
+/// The largest neighbour entry kept (a PS2 circuit's texture set, which a
+/// load asks for once per pass that builds a model and reads again each time).
+pub const MAX_NEIGHBOUR: usize = 16 << 20;
+
 /// The most bytes kept in all, over every entry.
 pub const BUDGET: usize = 64 << 20;
 
@@ -49,7 +53,12 @@ impl ReadMemo {
 
     /// Keeps `blob` as `name`'s bytes, if it fits.
     pub fn keep(&mut self, name: &str, blob: &[u8]) {
-        if blob.len() > MAX_ENTRY || self.bytes + blob.len() > BUDGET {
+        self.keep_up_to(name, blob, MAX_ENTRY);
+    }
+
+    /// As [`Self::keep`], with `largest` in place of [`MAX_ENTRY`].
+    pub fn keep_up_to(&mut self, name: &str, blob: &[u8], largest: usize) {
+        if blob.len() > largest || self.bytes + blob.len() > BUDGET {
             return;
         }
         self.bytes += blob.len();

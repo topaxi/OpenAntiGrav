@@ -51,7 +51,42 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     elimination: skins::played::ELIMINATION,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
+    player_tags: None,
     skins: &[],
+};
+
+/// The class name the HD-layout Zone HUD writes into `SpeedClass`, keyed on the zone counter.
+///
+/// `FUN_811538c2` (`0x811538c2`, v1.04) walks fourteen `{ zoneThreshold, stringId }` records at
+/// `0x8151f434`, descending from 75 to 0, takes the first whose threshold
+/// the zone counter (`*(*(hud + 0x3c) + 0x20)`, the number `ZoneNumber` prints) has reached, and
+/// writes its string into the `SpeedClass` widget. Thresholds and ids are HD's own table byte for
+/// byte (`docs/ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md`); the names are the
+/// `MSC_*`/`IG_HUD_*` ids of that table, and the frame `68-zone-5.png` reads `FLASH` at zone 5.
+/// Omega's eboot carries the same table (`oag_omega::hud::ART` does not use it yet).
+/// This is not [`crate::race::ZONE_STAGES`], the seventeen-record `*_CLASS` ladder that grades
+/// the circuit. See `docs/ghidra/functions/vita-2048-eu-v104/zone-speed-class-text.md`.
+///
+/// Rung `n` begins at `rung_zones[n]`. No caption blanks: `FUN_811538c2` writes none.
+pub const ZONE_SPEED_CLASSES: &oag_title::ZoneSpeedClasses = &oag_title::ZoneSpeedClasses {
+    ids: &[
+        Some("MSC_SVENOM"),
+        Some("Venom"),
+        Some("MSC_SFLASH"),
+        Some("Flash"),
+        Some("MSC_SRAPIER"),
+        Some("Rapier"),
+        Some("MSC_SPHANTOM"),
+        Some("Phantom"),
+        Some("MSC_SPPHANTOM"),
+        Some("MSC_ZEN"),
+        Some("IG_HUD_SUPZEN"),
+        Some("IG_HUD_SUBSON"),
+        Some("IG_HUD_MACH1"),
+        Some("IG_HUD_SUPSON"),
+    ],
+    rung_zones: Some(&[0, 2, 3, 5, 7, 12, 16, 20, 27, 35, 42, 50, 60, 75]),
+    caption_hidden_from_zone: None,
 };
 
 /// The layouts the HD and Fury Campaigns' events read ([`oag_title::AddOn::hud`]): the
@@ -73,36 +108,20 @@ pub const HD_CAMPAIGN: &oag_title::HudLayouts = &oag_title::HudLayouts {
     elimination: skins::campaign::ELIMINATION,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
+    player_tags: None,
     skins: &[],
 };
 
 /// How 2048's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]
 /// carries it.
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
-    // **Measured.** The Vita's texture container is `.gxt`; a layout's `src`
-    // is either already spelled that way (the `2048_hud` skin's own five
-    // references) or carries the HD-inherited `.gtf`/`.mip`/.tga` spelling
-    // the root/`wo3_hud`/`2097_hud` skins still author, unconverted. All
-    // nineteen distinct references across all 26 composed layouts resolve
-    // once this rule is applied -
-    // `crates/hud/tests/vita_2048_hud_ground_truth.rs`. Confidence 90, on the
-    // same terms as [`oag_hd::hud::texture_entry`]'s own row: every reference
-    // this title's HUD carries resolves under it, none needed the literal
-    // spelling.
-    //
-    // Until 2026-08-26 this constant was `"gxt"`, missing the leading dot -
-    // `oag_title::hud::replace_extension` builds `format!("{stem}{extension}")`,
-    // so every 2048 HUD texture lookup silently resolved to a name like
-    // `missile_reticulegxt` and never found the file. Composing was never run
-    // against real data until now, which is how a bug that broke every
-    // texture reference on the title went unnoticed.
-    texture_extension: Some(TEXTURE_EXTENSION),
     always_on: ALWAYS_ON,
     raster: false,
     ink_aligned_text: false,
     half_unit_glyph_quads: false,
     lit_alpha: None,
     text_shadow: None,
+    text_outline_alpha: None,
     // **Concentric sprites, read off this title's own composed layouts, not
     // copied from HD.** Every one of the 26 layouts that authors a reticle at
     // all authors it as `<Image>` widgets named `MissileSightBG/Outer/Inner/
@@ -153,18 +172,19 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "LeachBeamSightMiddle",
             "LeachBeamSightInner",
         ]),
+        live: None,
     },
     // `None` is "draw what the layout authors", which is the conservative
     // answer for a title whose pickup backdrop colour nothing has measured -
     // Pulse's colour substitution is the one that would need evidence.
     pickup_backdrop_colour: None,
-    // Not just unmeasured: `HUD_pickups.xml`'s `PickupBackground` authors no
-    // `<Values>` at all, and the icon is one widget (`PickupIcon`) whose UV
-    // rect the runtime rewrites per weapon (see `pickup_icon_uv` below)
-    // rather than thirteen names `pickup_icon_name` can select between the
-    // way Pulse's and HD's own dialects allow. A colour table keyed by name
-    // has nothing to attach to yet - see `docs/formats/2048-hud.md`'s "What
-    // is not done".
+    // The coloured backdrop is never drawn: `HUD_pickups.xml`'s `PickupBackground`
+    // authors no `<Values>` (no texture, no size) and a held Rocket on Vita3K shows
+    // only the icon disc inside `PickupBgFrame`'s fixed grey arc. The icon is one
+    // widget (`PickupIcon`) whose UV rect the runtime rewrites per weapon (see
+    // `pickup_icon_uv` below), so there is no per-weapon name for a colour table to
+    // key on either (`docs/ghidra/functions/vita-2048-eu-v104/pickup-backdrop.md`,
+    // "What draws it").
     pickup_colours: None,
     pickup_fade: None,
     // 2048's `PickupIcon` is a single `<Image>` widget whose UV rect the
@@ -175,10 +195,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     bar_models: None,
     time_ladder_captions: None,
     pickup_icon_uv: Some(PICKUP_ICON_UV),
-    // `None`: 2048's Zone HUD shows a class per *band* of zones off
-    // `oag_2048::race::ZONE_STAGES`, which is a different shape from the
-    // per-zone ladder this row carries. See `oag_title::ZoneSpeedClasses`.
-    zone_speed_classes: None,
+    // The class name above `ZONE`, off the zone: see [`ZONE_SPEED_CLASSES`].
+    zone_speed_classes: Some(ZONE_SPEED_CLASSES),
     // **Measured `true`, 2026-09-16.** Every Vita3K race frame reads the
     // shield with a `%` - `100%` on the grid, `99%`/`95%`/`93%` after wall
     // hits, `27%` in Zone - under the silhouette at `EnergyText`'s authored
@@ -239,10 +257,12 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             table_crossings: 100,
         },
     }),
+    incoming_warnings: false,
     runtime: None,
     lap_one_shift: None,
     bar_tip: None,
     boost_smear: None,
+    absorb_glow: None,
     // Inherited from HD through Omega, which ships this title's own HUD set under the same
     // `<Screen name="HUD">` root. The Vita executable's `Hud_Update` was not read. The **literal**
     // is inherited, and it acts in this title's own 960x544 grid (`Space::VITA`), so on screen it
@@ -252,24 +272,15 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         oag_title::hud::HudSway { x_per_lean: -15 },
         "hd",
     )),
-    // Checked 2026-10-21: the patch front end (`data09.psarc`) authors no `Safe Area Setting`.
-    safe_area: None,
+    // The disc authors no `Safe Area Setting` (`docs/formats/hd-hud.md`, "SCREEN SIZE on every
+    // title"), so the shared slider stands in, drawn 1:1 until the player moves it.
+    safe_area: Some(oag_title::pre_race::Sourced::chosen(
+        oag_title::hud::SafeArea::SHARED,
+    )),
     dynamic_hud: None,
     resume_countdown: oag_title::hud::ResumeCountdown::Text,
     assist: None,
 };
-
-/// What a layout's texture reference becomes on this title.
-///
-/// See [`ART`]; [`oag_title::hud::replace_extension`] is the rule that
-/// applies it.
-#[must_use]
-pub fn texture_entry(reference: &str) -> String {
-    oag_title::hud::replace_extension(reference, TEXTURE_EXTENSION)
-}
-
-/// What [`texture_entry`] replaces a reference's extension with.
-pub const TEXTURE_EXTENSION: &str = ".gxt";
 
 /// The sprite widgets 2048 draws whenever its HUD is up.
 ///
@@ -374,7 +385,8 @@ pub const TEXTURE_EXTENSION: &str = ".gxt";
 ///   Assist was switched to Extreme in the options; absent at Normal.
 /// - `ZoneLight0`-`9` and `ZoneSpeedLogo`: lit per zone, and never seen (the
 ///   class was drawn as text, `VENOM`/`FLASH`, not as the badge).
-/// - `Radar`, `PlayerDot`, `RadarDot*`: never seen in any state reached.
+/// - `RadarDot0`-`7`: the opponents behind the craft on the radar, placed and faded per tick
+///   (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`); not drawn yet.
 /// - `ManualShield`, `GiftCannon*`, `TargetShip*`, `TargetReticule*`,
 ///   `ReverseShipPos*`, `VoiceCom*`, `ObjectivePoint*`, `GloryMoment*`,
 ///   `ProtoTypeShipLogo`, `SpeedPad*`, `RaceMedal`, `MissileSight*`,
@@ -389,6 +401,11 @@ pub const ALWAYS_ON: &[&str] = &[
     "EnergyBar",
     "EnergyBarDelay",
     "ZoneCounterBG",
+    // The radar under the craft (`HUD_half_radar.xml`, `HUD_full_radar.xml`): bound to a local
+    // and never hidden by the HUD's bind, and `PlayerDot` is never named by code, so both stay
+    // as authored (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`).
+    "Radar",
+    "PlayerDot",
 ];
 
 /// `PickupIcon`'s per-weapon source rectangle, as [`oag_title::HudArt::pickup_icon_uv`]
@@ -571,20 +588,5 @@ mod tests {
         seen.dedup();
         assert_eq!(seen.len(), before);
         assert_eq!(before, 25);
-    }
-
-    #[test]
-    fn the_extension_rule_carries_a_leading_dot() {
-        // The bug this test exists for: a bare `"gxt"` builds
-        // `format!("{stem}{extension}")` into `missile_reticulegxt`, silently
-        // dangling every reference. See the doc comment on `ART` above.
-        assert_eq!(
-            texture_entry(r"Data\HUD\Textures\missile_reticule.gtf"),
-            r"Data\HUD\Textures\missile_reticule.gxt"
-        );
-        assert_eq!(
-            texture_entry(r"Data\XML\2048_hud\Texture\missile_reticule.gxt"),
-            r"Data\XML\2048_hud\Texture\missile_reticule.gxt"
-        );
     }
 }

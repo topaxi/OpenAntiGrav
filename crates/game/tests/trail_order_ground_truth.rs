@@ -1,4 +1,4 @@
-//! TRAIL ORDER reaches the frame a player sees.
+//! TRAIL ORDER and TRAIL LENGTH reach the frame a player sees.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs a Pulse disc image under
 //! `data/images/` and a GPU adapter.
@@ -20,12 +20,24 @@
 //! the frame) makes them byte-identical.
 //!
 //! `original` is also the default: a run with no flag is byte-identical to it.
+//!
+//! The setting places the ribbons and nothing else: the circuit's blended list (trees) is drawn
+//! after the pads under both orders, so a pad behind a tree stays hidden
+//! (`docs/rendering/draw-order.md`, "Hull, pads and trees on Platinum Rush White").
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn capture(image: &Path, scratch: &Path, order: Option<&str>) -> Vec<u8> {
-    let out = scratch.join(format!("trail-{}.png", order.unwrap_or("default")));
+    capture_with(image, scratch, order.map(|o| ["--trail-order", o]))
+}
+
+/// A posed capture with one extra `--flag value` pair, or none.
+fn capture_with(image: &Path, scratch: &Path, flag: Option<[&str; 2]>) -> Vec<u8> {
+    let name = flag.map_or("default".to_string(), |[flag, value]| {
+        format!("{}-{value}", flag.trim_start_matches('-'))
+    });
+    let out = scratch.join(format!("trail-{name}.png"));
     let mut command = Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
@@ -50,12 +62,12 @@ fn capture(image: &Path, scratch: &Path, order: Option<&str>) -> Vec<u8> {
         .env("XDG_CONFIG_HOME", scratch.join("config"))
         .env("XDG_STATE_HOME", scratch.join("state"))
         .env("XDG_DATA_HOME", scratch.join("data"));
-    if let Some(order) = order {
-        command.args(["--trail-order", order]);
+    if let Some(flag) = flag {
+        command.args(flag);
     }
     let status = command.status().expect("running oag-game");
-    assert!(status.success(), "oag-game --trail-order {order:?}");
-    std::fs::read(&out).expect("reading the screenshot")
+    assert!(status.success(), "oag-game {flag:?}");
+    oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
 fn scratch() -> PathBuf {
@@ -81,4 +93,123 @@ fn each_trail_order_draws_its_own_picture_over_a_translucent_floor() {
         original, over_floors,
         "over-floors must draw the ribbon after the floor patch"
     );
+}
+
+/// `--trail-length hd` reaches the ribbon the frame draws, and `original` is the default: a run
+/// with no flag is byte-identical to it. The posed capture fills the ring at the length the
+/// race holds, so a length that never reached the race draws the same picture as `original`.
+#[test]
+#[ignore = "needs a Pulse disc image in data/images/ and a GPU adapter"]
+fn the_hd_trail_length_draws_a_longer_ribbon() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let scratch = scratch();
+    let default = capture_with(&image, &scratch, None);
+    let original = capture_with(&image, &scratch, Some(["--trail-length", "original"]));
+    let hd = capture_with(&image, &scratch, Some(["--trail-length", "hd"]));
+    std::fs::remove_dir_all(&scratch).ok();
+
+    assert_eq!(default, original, "original is the default length");
+    assert_ne!(original, hd, "hd must draw the longer ribbon");
+}
+
+/// Platinum Rush White, a camera aimed from the hillside at speed pad 2 across the valley: a
+/// bush stands in front of it. The pad draws before the circuit's blended list under both
+/// orders, so the bush hides it; with the list drawn inside the circuit (the ribbons moved
+/// together with it) the pad's chevrons show through the bush. The craft is behind the camera,
+/// so no ribbon is in view and the two frames must be the same bytes.
+#[test]
+#[ignore = "needs a Pulse disc image in data/images/ and a GPU adapter"]
+fn a_bush_hides_the_speed_pad_behind_it_under_both_trail_orders() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let scratch = scratch();
+    let shot = |order: &str| {
+        let out = scratch.join(format!("pad-{order}.png"));
+        let status = Command::new(env!("CARGO_BIN_EXE_oag-game"))
+            .arg(&image)
+            .args(["--race", "--no-audio", "--size", "960x544"])
+            .args([
+                "--render-scale",
+                "100",
+                "--msaa",
+                "off",
+                "--motion-blur",
+                "off",
+            ])
+            .args(["--screen-filter", "off", "--anisotropy", "off"])
+            .args(["--track", "Data\\Environments\\13_Track\\track.vex"])
+            .args(["--ticks", "0", "--pose=226.7,98.0,172.9", "--pose-hold"])
+            .args(["--camera-pose=226.7,102.0,172.9,-0.777,-0.192,0.600,0,1,0"])
+            .args(["--trail-order", order])
+            .arg("--screenshot")
+            .arg(&out)
+            .env("XDG_CONFIG_HOME", scratch.join("config"))
+            .env("XDG_STATE_HOME", scratch.join("state"))
+            .env("XDG_DATA_HOME", scratch.join("data"))
+            .status()
+            .expect("running oag-game");
+        assert!(status.success(), "oag-game {order}");
+        oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
+    };
+    let original = shot("original");
+    let over_floors = shot("over-floors");
+    std::fs::remove_dir_all(&scratch).ok();
+    assert_eq!(
+        original, over_floors,
+        "over-floors moves the ribbons only: the pad stays behind the bush"
+    );
+}
+
+/// `OAG_DEBUG_TINT_BLENDED` reaches the frame: with a unit named, the circuit's blended list (the
+/// trees on Platinum Rush) draws in flat colours, and with it unset or `0` the frame is the same
+/// bytes as any other. Dropping the hook in `Scene::new` makes the tinted frame equal the plain
+/// one. The camera is the bush's, so a tree is in the picture.
+#[test]
+#[ignore = "needs a Pulse disc image in data/images/ and a GPU adapter"]
+fn the_debug_tint_repaints_the_blended_list_and_off_is_the_plain_frame() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let scratch = scratch();
+    let shot = |tint: Option<&str>| {
+        let out = scratch.join(format!("tint-{}.png", tint.unwrap_or("unset")));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_oag-game"));
+        command
+            .arg(&image)
+            .args(["--race", "--no-audio", "--size", "480x272"])
+            .args([
+                "--render-scale",
+                "100",
+                "--msaa",
+                "off",
+                "--motion-blur",
+                "off",
+            ])
+            .args(["--screen-filter", "off", "--anisotropy", "off"])
+            .args(["--track", "Data\\Environments\\13_Track\\track.vex"])
+            .args(["--ticks", "0", "--pose=226.7,98.0,172.9", "--pose-hold"])
+            .args(["--camera-pose=226.7,102.0,172.9,-0.777,-0.192,0.600,0,1,0"])
+            .arg("--screenshot")
+            .arg(&out)
+            .env("XDG_CONFIG_HOME", scratch.join("config"))
+            .env("XDG_STATE_HOME", scratch.join("state"))
+            .env("XDG_DATA_HOME", scratch.join("data"));
+        match tint {
+            Some(unit) => command.env("OAG_DEBUG_TINT_BLENDED", unit),
+            None => command.env_remove("OAG_DEBUG_TINT_BLENDED"),
+        };
+        assert!(command.status().expect("running oag-game").success());
+        oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
+    };
+    let plain = shot(None);
+    let zero = shot(Some("0"));
+    let by_tree = shot(Some("tree"));
+    let by_draw = shot(Some("draw"));
+    std::fs::remove_dir_all(&scratch).ok();
+    assert_eq!(plain, zero, "0 is off");
+    assert_ne!(plain, by_tree, "tree paints the blended list");
+    assert_ne!(plain, by_draw, "draw paints the blended list");
 }

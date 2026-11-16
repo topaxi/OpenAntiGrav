@@ -6,24 +6,30 @@
 //! A guest exports `memory`, `oag_abi() -> u32` (returns [`ABI_WORD`]),
 //! `oag_io() -> u32` (the address of an [`IO_LEN`]-byte buffer in its memory),
 //! `tick() -> u32` (0 on success) and, optionally, `oag_state_len() -> u32` (its state
-//! blob's length, checked against the manifest). Before `tick` the host writes the
+//! blob's length, checked against the manifest) and `oag_wants_race() -> u32` (asked once
+//! before the race is built whether it runs in it: [`race`]). Before `tick` the host writes the
 //! observation; after it, the host reads the state blob back from where it wrote it and
 //! the reply from [`REPLY_AT`].
 //!
 //! | Offset | Size | Field |
 //! | --- | --- | --- |
 //! | [`ABI_AT`] | 4 | ABI major |
+//! | [`COURSE_LENGTH_AT`] | 4 | course length `f32`, units (0: no course) |
 //! | [`TICK_AT`] | 8 | world tick |
 //! | [`SLOTS_AT`] | 4 | slot count ([`MAX_SLOTS`]) |
 //! | [`ACTIVE_AT`] | 4 | active mask, one bit per slot holding a craft |
 //! | [`EVENT_COUNT_AT`] | 4 | event count |
 //! | [`STATE_LEN_AT`] | 4 | state length |
-//! | [`EVENTS_AT`] | [`EVENT_LEN`] x [`MAX_EVENTS`] | events ([`Event`]): kind `u8`, slot `u8`, index `u16`, 4 bytes zero |
+//! | [`EVENTS_AT`] | [`EVENT_LEN`] x [`MAX_EVENTS`] | events ([`Event`]): kind `u8`, slot `u8`, index `u16`, value `f32`, then for a `mod` event the channel key `u32` and the sender key `u32` (zero in the others) |
 //! | [`STATE_AT`] | [`MAX_STATE_BYTES`] | the module's state blob, in and out |
 //! | [`REPLY_AT`] | 4 | command count, written by the guest |
 //! | [`REPLY_AT`] + 4 | [`COMMAND_LEN`] x [`MAX_COMMANDS`] | commands ([`Command`]): kind `u8`, slot `u8`, `u16` argument, `f32`, `u32` |
-//! | [`POOL_AT`] | [`POOL_LEN`] | the reply's string pool: entries of a length byte then UTF-8, named by offset from a `hud-text` or `hud-icon` command |
+//! | [`POOL_AT`] | [`POOL_LEN`] | the reply's string pool: entries of a length byte then UTF-8, named by offset from a `hud-text`, `hud-icon`, `pickup-look`, `raise-warning` or mod-asset command |
 //! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
+//! | [`TRACKING_AT`] | [`TRACKING_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Tracking`]): progress `f32`, place `u8`, flags `u8` (bit 0: progress is a fix), 2 bytes unused |
+//! | [`TITLE_AT`] | 4 | the title's key: `channel_key` of its lowercased hyphenated name (0: none) |
+//! | [`OPTIONS_AT`] | [`OPTIONS_LEN`] | the module's options, one byte each: the index of the player's pick on the mod's own choice rows |
+//! | [`AIM_AT`] | [`AIM_TOTAL`] | [`AIM_SLOTS`] observers x [`AIM_SLOTS`] targets ([`Aim`]): where the target sits ahead of, right of and above the observer, three `i8` in [`AIM_STEP`] units |
 //!
 //! The track region is a second buffer, written by the host before each call when the
 //! guest exports `oag_track() -> u32`: [`track`] lays it out.
@@ -38,19 +44,48 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
-use core::fmt;
-
+pub use aiming::{AIM_AT, AIM_LEN, AIM_SLOTS, AIM_STEP, AIM_TOTAL, Aim, Aiming, read as read_aim};
+pub use channel::{
+    BadChannel, MAX_CHANNEL_LEN, MAX_EMITS_PER_TICK, MAX_MOD_EVENTS, MAX_TRACK_EVENTS,
+    TRACK_SENDER, channel_key, check_channel, namespace,
+};
+pub use craft::{
+    CRAFT_FIRE_HELD, CRAFT_FLAGS, CRAFT_IN_TRANSIT, CRAFT_LAP, CRAFT_LAPS_TARGET, CRAFT_PERSON,
+    CRAFT_PICKUP, CRAFT_RACING, CRAFT_SHIELD, CRAFT_SHIELD_MAX, CRAFT_SHIELDED, CRAFT_SPEED, Craft,
+    SPEED_TO_KMH, TICKS_PER_SECOND,
+};
+pub use event::Event;
 use hud::pool_string;
 pub use hud::{
-    Anchor, HudElement, HudPlace, HudStr, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_HUD_TEXT,
+    Anchor, HudElement, HudPlace, HudStr, MAX_FIRE_EFFECTS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS,
+    MAX_HUD_SHAKE, MAX_HUD_TEXT,
 };
-pub use pickup::{Colour, Icon, ModIcon};
+pub use kind::CommandKind;
+pub use malformed::Malformed;
+pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS};
+pub use name::ModName;
+pub use pickup::{Colour, Icon, Pickup};
+pub use race::{
+    RACE_ABI_AT, RACE_CAMPAIGN, RACE_CLASS_AT, RACE_CRAFTS_AT, RACE_FLAGS_AT, RACE_LEN,
+    RACE_MODE_AT, RACE_OPTIONS_AT, RACE_PEOPLE_AT, RACE_TITLE_AT, RACE_WEAPONS, RUN, RaceInfo,
+    RaceMode, SKIP,
+};
+pub use scene::{
+    MAX_BEAM_HALF_WIDTH, MAX_BEAMS_PER_TICK, MAX_FOV_OFFSET_DEG, MAX_SHADER_PARAMS,
+    MAX_VIEW_GENERATION, ViewUpdate,
+};
+pub use sound::SoundMode;
+pub use tracking::{
+    COURSE_LENGTH_AT, Course, OPTIONS_AT, OPTIONS_LEN, TITLE_AT, TRACKING_AT, TRACKING_FIXED,
+    TRACKING_FLAGS, TRACKING_LEN, TRACKING_PLACE, TRACKING_PROGRESS, Tracking,
+};
+pub use warning::{Warning, WarningSide};
 
 /// The ABI major. A manifest's `[extension] api` names it.
 pub const ABI: u32 = 1;
 /// The layout revision within [`ABI`]: bumped by hand on any edit to the layout. A
 /// module built before revisions existed returns the bare major and is revision 0.
-pub const REVISION: u32 = 3;
+pub const REVISION: u32 = 6;
 const _: () = assert!(REVISION > 0 && REVISION < 256);
 const _: () = assert!(CRAFTS_AT + CRAFT_LEN * MAX_CRAFTS <= IO_LEN);
 const _: () = assert!(MAX_CRAFTS <= MAX_SLOTS as usize);
@@ -72,8 +107,12 @@ pub const fn split_abi_word(word: u32) -> (u32, Option<u32>) {
 pub const IO_LEN: usize = 4096;
 /// Grid slots the active mask can name.
 pub const MAX_SLOTS: u32 = 32;
-/// Events per call. Past it the newest are dropped by the caller, which counts them.
+/// Events per call. Past it the later are dropped by the caller, which counts and logs
+/// them (the mod events come first, so only the engine's own can be).
 pub const MAX_EVENTS: usize = 32;
+/// The most linear memory a module may ask for, in 64 KiB pages (16 MiB). Proposed in the
+/// README (section 4.1), chosen.
+pub const MAX_MEMORY_PAGES: u32 = 256;
 /// The longest state blob.
 pub const MAX_STATE_BYTES: usize = 1024;
 /// Commands per reply; more is a fault (README 2.1 proposed 64; 96 leaves a slot's
@@ -97,7 +136,7 @@ pub const STATE_LEN_AT: usize = 28;
 /// Where the events start.
 pub const EVENTS_AT: usize = 32;
 /// One event record.
-pub const EVENT_LEN: usize = 8;
+pub const EVENT_LEN: usize = 16;
 /// Where the state blob starts.
 pub const STATE_AT: usize = EVENTS_AT + EVENT_LEN * MAX_EVENTS;
 /// Where the guest writes its reply: the count, then the records.
@@ -130,31 +169,13 @@ pub const COMMAND_ARG: usize = 2;
 pub const COMMAND_VALUE: usize = 4;
 /// Within a command record: the `u32`.
 pub const COMMAND_WORD: usize = 8;
-/// Within a craft record: the pickup code.
-pub const CRAFT_PICKUP: usize = 0;
-/// Within a craft record: the flags.
-pub const CRAFT_FLAGS: usize = 1;
-/// Within a craft record: the lap being driven, 1-based, saturating at 255.
-pub const CRAFT_LAP: usize = 2;
-/// Within a craft record: the laps the race ends after; 0 for a race with no target.
-pub const CRAFT_LAPS_TARGET: usize = 3;
-/// Within a craft record: the shield, `f32`.
-pub const CRAFT_SHIELD: usize = 4;
-/// Within a craft record: the shield maximum, `f32`.
-pub const CRAFT_SHIELD_MAX: usize = 8;
-/// Within a craft record: the speed in km/h, `f32`.
-pub const CRAFT_SPEED: usize = 12;
 /// Within an event record: the `f32` of an event that carries an amount (`hit`).
 pub const EVENT_VALUE: usize = 4;
-
-/// Craft flag: a person flies the slot.
-pub const CRAFT_PERSON: u8 = 1;
-/// Craft flag: a person flying the slot holds the fire button (`SQUARE`) this tick.
-pub const CRAFT_FIRE_HELD: u8 = 2;
-/// Craft flag: the craft is racing: past the start, not wrecked, not respawning.
-pub const CRAFT_RACING: u8 = 4;
-/// Craft flag: the craft's Shield is running, so a weapon hit this tick is absorbed.
-pub const CRAFT_SHIELDED: u8 = 8;
+/// Offset of a `mod` event's channel key, a `u32` ([`channel_key`]).
+pub const EVENT_CHANNEL: usize = 8;
+/// Offset of a `mod` event's sender, a `u32`: the key of the sending mod's id, or
+/// [`TRACK_SENDER`].
+pub const EVENT_FROM: usize = 12;
 
 /// The largest `scale-pad` factor, race-wide or per slot. Chosen.
 pub const MAX_PAD_FACTOR: f32 = 2.0;
@@ -173,34 +194,21 @@ const EVENT_WEAPON_PAD: u8 = 6;
 const EVENT_TRIGGER_ENTER: u8 = 7;
 const EVENT_TRIGGER_EXIT: u8 = 8;
 const EVENT_HIT: u8 = 9;
-/// Command kind codes.
-const COMMAND_SCALE_THRUST: u8 = 1;
-const COMMAND_SHIELD_DELTA: u8 = 2;
-const COMMAND_GIVE_PICKUP: u8 = 3;
-const COMMAND_PLAY_CUE: u8 = 5;
-const COMMAND_FIRE_EFFECT: u8 = 6;
-const COMMAND_CLEAR_PICKUP: u8 = 8;
-const COMMAND_PICKUP_ROLL: u8 = 9;
-const COMMAND_SET_WEATHER: u8 = 10;
-const COMMAND_SET_SUN: u8 = 11;
-const COMMAND_GRADE_SKY: u8 = 12;
-const COMMAND_SCALE_PAD: u8 = 13;
-const COMMAND_SCALE_SLOT_PADS: u8 = 14;
-const COMMAND_HUD_TINT: u8 = 16;
-const COMMAND_HUD_SHAKE: u8 = 17;
-const COMMAND_HUD_BAR_EXTRA: u8 = 18;
-const COMMAND_HUD_TEXT: u8 = 19;
-const COMMAND_HUD_ICON: u8 = 20;
-const COMMAND_PREFER_ROUTE: u8 = 21;
-const COMMAND_PICKUP_LOOK: u8 = 22;
-/// Bit 15 of a `hud-text`, `hud-icon` or `fire-effect` argument: the string or effect is
-/// the sending mod's own, not the title's. The pool offset or effect index is the rest.
+const EVENT_MOD: u8 = 10;
+const EVENT_TRANSIT_END: u8 = 11;
+const EVENT_CLEARANCE: u8 = 12;
+/// Bit 15 of a `hud-text`, `hud-icon`, `pickup-look`, `raise-warning` or `fire-effect`
+/// argument: the string, icon or effect is the sending mod's own, not the title's. The rest is the name's pool offset.
 const OWN_FLAG: u16 = 1 << 15;
-const COMMAND_GIVE_SHIELD: u8 = 24;
-const COMMAND_HOLD_SHIELD: u8 = 25;
-const COMMAND_CLEAR_SHIELD: u8 = 26;
 /// The craft record's pickup code for a simulation mod's own pickup.
 const PICKUP_OURS: u8 = u8::MAX;
+/// The craft record's first pickup code for another mod's pickup: [`MAX_PICKUP_KINDS`] codes
+/// from the code after the last title weapon.
+const PICKUP_OTHER_FIRST: u8 = Weapon::Disruptor.code() + 1;
+/// The mods that can each hand out a pickup of their own in one race.
+pub const MAX_PICKUP_KINDS: u8 = 32;
+const PICKUP_OTHER_LAST: u8 = PICKUP_OTHER_FIRST + MAX_PICKUP_KINDS - 1;
+const _: () = assert!(PICKUP_OTHER_LAST < PICKUP_OURS);
 
 /// A grid slot that may hold a craft: below [`MAX_CRAFTS`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -327,44 +335,38 @@ coded! {
 }
 
 coded! {
+    /// `raise-warning`'s title icons: the title's incoming-weapon warning icons, by the weapon
+    /// each is the warning of. An icon fixes its group: the eight shots warn on the rear slot
+    /// (a threat behind), a mine or bomb on the forward slot (a threat laid ahead).
+    WarningIcon: u16, first 0 {
+        /// Rear slot, `RearWarningRocketIcon`.
+        Rocket,
+        /// Rear slot, `RearWarningMissileIcon`.
+        Missile,
+        /// Rear slot, `RearWarningQuakeIcon`.
+        Quake,
+        /// Rear slot, `RearWarningCannonIcon`.
+        Cannon,
+        /// Rear slot, `RearWarningPlasmaIcon`.
+        Plasma,
+        /// Rear slot, `RearWarningLeachBeamIcon`.
+        LeachBeam,
+        /// Rear slot, `RearWarningRepulserIcon`.
+        Repulser,
+        /// Rear slot, `RearWarningShurikenIcon`.
+        Shuriken,
+        /// Forward slot, `ForwardWarningMineIcon`.
+        Mine,
+        /// Forward slot, `ForwardWarningBombIcon`.
+        Bomb,
+    }
+}
+
+coded! {
     /// `set-weather`'s kinds: the host title's own weather, by kind.
     WeatherKind: u16, first 0 {
         /// The title's authored rain.
         Rain,
-    }
-}
-
-/// What a craft holds.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum Pickup {
-    /// Nothing.
-    #[default]
-    None,
-    /// One of the title's weapons.
-    Weapon(Weapon),
-    /// A simulation mod's own pickup (`give-pickup`).
-    Ours,
-}
-
-impl Pickup {
-    /// Its code in a craft record.
-    #[must_use]
-    pub const fn code(self) -> u8 {
-        match self {
-            Self::None => 0,
-            Self::Weapon(weapon) => weapon.code(),
-            Self::Ours => PICKUP_OURS,
-        }
-    }
-
-    /// The pickup a code names, if any.
-    #[must_use]
-    pub fn from_code(code: u8) -> Option<Self> {
-        match code {
-            0 => Some(Self::None),
-            PICKUP_OURS => Some(Self::Ours),
-            _ => Weapon::from_code(code).map(Self::Weapon),
-        }
     }
 }
 
@@ -399,207 +401,6 @@ impl Rgba {
     pub const fn from_u32(packed: u32) -> Self {
         let [r, g, b, a] = packed.to_le_bytes();
         Self { r, g, b, a }
-    }
-}
-
-/// One grid slot as a guest reads it: copies of what the HUD already shows.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct Craft {
-    /// The held pickup.
-    pub pickup: Pickup,
-    /// A person flies the slot.
-    pub person: bool,
-    /// A person flying the slot holds the fire button this tick.
-    pub fire_held: bool,
-    /// Racing: past the start, not wrecked, not respawning.
-    pub racing: bool,
-    /// The craft's Shield is running: a weapon hit is absorbed (it still raises `hit`).
-    pub shielded: bool,
-    /// The lap being driven, 1-based, saturating at 255.
-    pub lap: u8,
-    /// The laps the race ends after; 0 when it has no target.
-    pub laps_target: u8,
-    /// The energy pool.
-    pub shield: f32,
-    /// Its maximum: the bound of a `shield-delta` for this slot.
-    pub shield_max: f32,
-    /// The body's speed, km/h.
-    pub speed_kmh: f32,
-}
-
-impl Craft {
-    /// The record.
-    #[must_use]
-    pub fn encode(&self) -> [u8; CRAFT_LEN] {
-        let mut record = [0; CRAFT_LEN];
-        record[CRAFT_PICKUP] = self.pickup.code();
-        record[CRAFT_FLAGS] = [
-            (self.person, CRAFT_PERSON),
-            (self.fire_held, CRAFT_FIRE_HELD),
-            (self.racing, CRAFT_RACING),
-            (self.shielded, CRAFT_SHIELDED),
-        ]
-        .into_iter()
-        .fold(0, |flags, (on, bit)| if on { flags | bit } else { flags });
-        record[CRAFT_LAP] = self.lap;
-        record[CRAFT_LAPS_TARGET] = self.laps_target;
-        put_u32(&mut record, CRAFT_SHIELD, self.shield.to_bits());
-        put_u32(&mut record, CRAFT_SHIELD_MAX, self.shield_max.to_bits());
-        put_u32(&mut record, CRAFT_SPEED, self.speed_kmh.to_bits());
-        record
-    }
-
-    /// The craft a record describes. A pickup code this revision does not know reads
-    /// as [`Pickup::None`]; the host writes none.
-    #[must_use]
-    pub fn decode(record: &[u8; CRAFT_LEN]) -> Self {
-        let flags = record[CRAFT_FLAGS];
-        Self {
-            pickup: Pickup::from_code(record[CRAFT_PICKUP]).unwrap_or_default(),
-            person: flags & CRAFT_PERSON != 0,
-            fire_held: flags & CRAFT_FIRE_HELD != 0,
-            racing: flags & CRAFT_RACING != 0,
-            shielded: flags & CRAFT_SHIELDED != 0,
-            lap: record[CRAFT_LAP],
-            laps_target: record[CRAFT_LAPS_TARGET],
-            shield: f32::from_bits(get_u32(record, CRAFT_SHIELD)),
-            shield_max: f32::from_bits(get_u32(record, CRAFT_SHIELD_MAX)),
-            speed_kmh: f32::from_bits(get_u32(record, CRAFT_SPEED)),
-        }
-    }
-}
-
-/// Something that happened in the race since the last call (README 2.1, `event`).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Event {
-    /// A craft touched a wall (`hooks.md`, `wall-contact`).
-    WallContact {
-        /// The grid slot.
-        slot: Slot,
-    },
-    /// A craft holding the mod's own pickup ([`Pickup::Ours`]) asked to fire it: a
-    /// person's fire press, or an AI craft's decision to fire. The pickup is kept.
-    PickupFire {
-        /// The grid slot.
-        slot: Slot,
-    },
-    /// A craft absorbed the mod's own pickup: the pickup is gone and the engine paid no
-    /// energy for it.
-    PickupAbsorbed {
-        /// The grid slot.
-        slot: Slot,
-    },
-    /// A craft entered a speed pad: its index among the track's speed pads, the order
-    /// of the track region's speed-pad entities. Raised on every entry, whatever the
-    /// pad's `scale-pad` factor.
-    SpeedPad {
-        /// The grid slot.
-        slot: Slot,
-        /// The pad.
-        pad: u16,
-    },
-    /// A craft entered a weapon pad, cooling down or not, granting or not.
-    WeaponPad {
-        /// The grid slot.
-        slot: Slot,
-        /// The pad, among the track's weapon pads.
-        pad: u16,
-    },
-    /// A craft entered a trigger volume of the track file.
-    TriggerEnter {
-        /// The grid slot.
-        slot: Slot,
-        /// The trigger, among the track's triggers.
-        trigger: u16,
-    },
-    /// A craft left a trigger volume.
-    TriggerExit {
-        /// The grid slot.
-        slot: Slot,
-        /// The trigger.
-        trigger: u16,
-    },
-    /// Weapons hit a craft since the last call, a hit the craft's Shield absorbed
-    /// included. At most one per craft per tick: `amount` is the sum of what the tick's
-    /// hits would have dealt, `weapon` the first of them.
-    Hit {
-        /// The grid slot struck.
-        slot: Slot,
-        /// The energy the hits would have taken, before any Shield.
-        amount: f32,
-        /// The weapon that hit first.
-        weapon: Weapon,
-    },
-}
-
-impl Event {
-    /// The slot it happened to.
-    #[must_use]
-    pub const fn slot(self) -> Slot {
-        match self {
-            Self::WallContact { slot }
-            | Self::PickupFire { slot }
-            | Self::PickupAbsorbed { slot }
-            | Self::SpeedPad { slot, .. }
-            | Self::WeaponPad { slot, .. }
-            | Self::TriggerEnter { slot, .. }
-            | Self::TriggerExit { slot, .. }
-            | Self::Hit { slot, .. } => slot,
-        }
-    }
-
-    /// The record.
-    #[must_use]
-    pub fn encode(self) -> [u8; EVENT_LEN] {
-        let (kind, index) = match self {
-            Self::WallContact { .. } => (EVENT_WALL_CONTACT, 0),
-            Self::PickupFire { .. } => (EVENT_PICKUP_FIRE, 0),
-            Self::PickupAbsorbed { .. } => (EVENT_PICKUP_ABSORBED, 0),
-            Self::SpeedPad { pad, .. } => (EVENT_SPEED_PAD, pad),
-            Self::WeaponPad { pad, .. } => (EVENT_WEAPON_PAD, pad),
-            Self::TriggerEnter { trigger, .. } => (EVENT_TRIGGER_ENTER, trigger),
-            Self::TriggerExit { trigger, .. } => (EVENT_TRIGGER_EXIT, trigger),
-            Self::Hit { weapon, .. } => (EVENT_HIT, weapon.code() as u16),
-        };
-        let mut record = [0; EVENT_LEN];
-        record[EVENT_KIND] = kind;
-        record[EVENT_SLOT] = self.slot().0;
-        let [lo, hi] = index.to_le_bytes();
-        record[EVENT_INDEX] = lo;
-        record[EVENT_INDEX + 1] = hi;
-        if let Self::Hit { amount, .. } = self {
-            put_u32(&mut record, EVENT_VALUE, amount.to_bits());
-        }
-        record
-    }
-
-    /// The event a record describes, or `None` for a kind or slot this revision does
-    /// not know (a guest skips it).
-    #[must_use]
-    pub fn decode(record: &[u8; EVENT_LEN]) -> Option<Self> {
-        let slot = Slot::new(usize::from(record[EVENT_SLOT]))?;
-        let index = u16::from_le_bytes([record[EVENT_INDEX], record[EVENT_INDEX + 1]]);
-        Some(match record[EVENT_KIND] {
-            EVENT_WALL_CONTACT => Self::WallContact { slot },
-            EVENT_PICKUP_FIRE => Self::PickupFire { slot },
-            EVENT_PICKUP_ABSORBED => Self::PickupAbsorbed { slot },
-            EVENT_SPEED_PAD => Self::SpeedPad { slot, pad: index },
-            EVENT_WEAPON_PAD => Self::WeaponPad { slot, pad: index },
-            EVENT_TRIGGER_ENTER => Self::TriggerEnter {
-                slot,
-                trigger: index,
-            },
-            EVENT_TRIGGER_EXIT => Self::TriggerExit {
-                slot,
-                trigger: index,
-            },
-            EVENT_HIT => Self::Hit {
-                slot,
-                amount: f32::from_bits(get_u32(record, EVENT_VALUE)),
-                weapon: u8::try_from(index).ok().and_then(Weapon::from_code)?,
-            },
-            _ => return None,
-        })
     }
 }
 
@@ -682,13 +483,14 @@ pub enum Command {
     },
     /// Fire one of the sending mod's own particle effects (`[effects]` of its manifest)
     /// at the craft's nozzle. An output: drawn, never hashed. Shares `fire-effect`'s
-    /// code, told apart by bit 15 of the argument; an `index` the mod has no effect at
-    /// draws nothing, and the load report names the effects that did not load.
+    /// code, told apart by bit 15 of the argument, the rest naming the effect in the
+    /// reply's pool. A name the manifest lacks faults the module; an effect that did not
+    /// load draws nothing, and the load report names it.
     FireModEffect {
         /// The grid slot.
         slot: Slot,
-        /// The effect's place in the mod's `[effects]`, in name order (15 bits).
-        index: u16,
+        /// The effect, by its key in the mod's `[effects]`.
+        effect: ModName,
     },
     /// This tick, recolour the slot's HUD `element`. An output, re-sent each tick it
     /// should hold: drawn, never hashed. A title without the element draws nothing.
@@ -818,9 +620,220 @@ pub enum Command {
         /// The route, below the region's route count.
         route: u16,
     },
+    /// Send `value` on `channel` about the slot: every module receives a `mod` event for
+    /// it on the next tick, the track's and the mods' together, in an order that does not
+    /// depend on which module sent. The channel must be one the sending mod publishes
+    /// (`oag-mod.toml` `[channels]`), at most [`MAX_EMITS_PER_TICK`] a module a tick;
+    /// either rule broken faults the module. The queue is race state: hashed.
+    Emit {
+        /// The craft it is about.
+        slot: Slot,
+        /// The channel ([`channel_key`]).
+        channel: u32,
+        /// What to attach, finite.
+        value: f32,
+    },
+    /// Take the craft out of the world for `ticks` ticks, then put it `distance` further
+    /// round the circuit at `exit_factor` times the speed it had when this landed. Out of
+    /// the world it is frozen where it was: not stepped, not drawn, not collided with,
+    /// not hit, its controls and pickup presses ignored, its reset triggers held. Its
+    /// laps count through the jump; a finish in it is timed at the exit tick. A
+    /// `transit-end` event follows the exit. Refused (a fault) on a track with no
+    /// course, a craft not racing or already in one, or a distance not inside
+    /// `(0, half the lap)`.
+    Transit {
+        /// The grid slot.
+        slot: Slot,
+        /// Ticks out of the world, `1..=MAX_TRANSIT_TICKS`.
+        ticks: u16,
+        /// How far round it comes out.
+        distance: Distance,
+        /// Its exit speed over its entry speed, `[0, MAX_SPEED_FACTOR]`, in steps of
+        /// `1 / EXIT_FACTOR_STEPS`.
+        exit_factor: f32,
+    },
+    /// Multiply the craft's velocity by `factor`, once, at the call.
+    ScaleSpeed {
+        /// The grid slot.
+        slot: Slot,
+        /// The scale, in `[0, MAX_SPEED_FACTOR]`.
+        factor: f32,
+    },
+    /// This tick, wash the slot's view with `rgba` over the whole picture (the alpha is
+    /// the strength). Re-sent each tick it should hold; never hashed. The slot's own
+    /// view: a split-screen seat flown by that slot wears it, no other. With a `shader`
+    /// the sending mod's shader draws the fill, handed `rgba` as its colour, in place of
+    /// the additive wash; one that did not load draws nothing.
+    ScreenFill {
+        /// The grid slot whose view is filled.
+        slot: Slot,
+        /// The colour, straight alpha.
+        rgba: Rgba,
+        /// The shader, by its key in the mod's `[shaders]`.
+        shader: Option<ModName>,
+    },
+    /// This tick, widen (positive) or narrow (negative) the vertical field of view of the
+    /// slot's view by `degrees`, in `[-MAX_FOV_OFFSET_DEG, MAX_FOV_OFFSET_DEG]`, before the
+    /// player's setting and the aspect fit. Re-sent each tick it should hold; never hashed.
+    FovOffset {
+        /// The grid slot whose view changes.
+        slot: Slot,
+        /// Degrees.
+        degrees: f32,
+    },
+    /// Play the sending mod's own effect `effect` (its key in `[effects]`) at the
+    /// course point `distance` ahead of the craft, on the road's centre line, where it
+    /// stays for the effect's own lifetime: a sprite of the mod's texture standing in the
+    /// world (a portal). Counts toward [`MAX_FIRE_EFFECTS_PER_TICK`]; a distance that
+    /// does not resolve draws nothing. Never hashed.
+    FireModEffectAhead {
+        /// The grid slot the point is ahead of.
+        slot: Slot,
+        /// The effect, by its key in the mod's `[effects]`.
+        effect: ModName,
+        /// How far ahead along the circuit.
+        distance: Distance,
+    },
+    /// This tick, draw a ribbon facing the camera from the craft in `slot` to the craft in
+    /// `to`, flat `rgba` or through the sending mod's shader. Re-sent each tick it should
+    /// hold; draws nothing while either craft is out of the world, or with a shader that
+    /// did not load. Never hashed. At most [`MAX_BEAMS_PER_TICK`].
+    DrawBeam {
+        /// The craft it starts at.
+        slot: Slot,
+        /// The craft it ends at, never `slot`.
+        to: Slot,
+        /// The colour, straight alpha.
+        rgba: Rgba,
+        /// Half its width in world units, above 0 and at most [`MAX_BEAM_HALF_WIDTH`].
+        half_width: f32,
+        /// The shader, by its key in the mod's `[shaders]`.
+        shader: Option<ModName>,
+    },
+    /// This tick, scalar `index` (its place in the shader's header, under
+    /// [`MAX_SHADER_PARAMS`]) of the sending mod's shader, as the view of `slot` draws it.
+    /// Re-sent each tick it should hold; unset, the header's default. Never hashed.
+    SetShaderParam {
+        /// The grid slot whose view reads it.
+        slot: Slot,
+        /// The shader, by its key in the mod's `[shaders]`.
+        shader: ModName,
+        /// The scalar.
+        index: u8,
+        /// Its value, finite.
+        value: f32,
+    },
+    /// This tick, the view of `slot` wants what its camera would see through a portal pair on
+    /// the course, in the texture a mod shader reads as `engine_texture`. Re-sent each tick
+    /// it should hold; a progress off the lap, or a race with no shader, asks for nothing.
+    /// Never hashed.
+    PortalView {
+        /// The grid slot whose camera looks through it.
+        slot: Slot,
+        /// The entrance, its progress on the lap in track units.
+        entrance: f32,
+        /// The exit: [`Distance::Progress`], a place on the lap in track units, or
+        /// [`Distance::Trigger`], the point of the course (or of the fork route) the track
+        /// file's trigger volume of that index stands on, as a `transit` to it resolves. Any
+        /// other kind is not a portal's exit.
+        exit: Distance,
+        /// How far from the entrance's centre the surface reaches, in whole world units,
+        /// from 1: what decides whether the view has the portal in it.
+        radius: u8,
+        /// When the texture is drawn.
+        update: ViewUpdate,
+        /// Under [`ViewUpdate::Once`], a new value draws the snapshot again. Under
+        /// [`MAX_VIEW_GENERATION`].
+        generation: u8,
+    },
+    /// Play the sending mod's own sound `sound` (its key in `[sounds]`) from the craft, placed like a title cue (positioned, HRTF and rear cue
+    /// apply; the player's own craft is heard dry). One the mod lacks or that did not
+    /// load plays nothing and the load report says so. Heard, never hashed.
+    PlayModSound {
+        /// The grid slot the sound comes from.
+        slot: Slot,
+        /// The sound, by its key in the mod's `[sounds]`.
+        sound: ModName,
+        /// Once, a loop to start, or a loop to stop.
+        mode: SoundMode,
+    },
+    /// Ask whether a disc of `radius` standing upright across the track `distance` ahead
+    /// of the craft fits without touching track geometry: answered by a `clearance`
+    /// event at the next call.
+    ProbeClearance {
+        /// The grid slot.
+        slot: Slot,
+        /// How far ahead along the circuit.
+        distance: Distance,
+        /// The disc's radius, `(0, MAX_PROBE_RADIUS]`.
+        radius: f32,
+    },
+    /// Raise the incoming-warning HUD of the slot's person with `warning`, as a weapon fired
+    /// behind (or a mine laid ahead) does: the warning's group lights for 2.0 s, blinking at
+    /// 4 Hz. An output, never hashed. Edge-triggered, not re-sent: a raise restarts the group's
+    /// timer, and a timer re-armed every tick is never lit. Drawn only where the title draws
+    /// the warnings and the slot is the one person's view; anywhere else it is dropped.
+    RaiseWarning {
+        /// The grid slot whose HUD warns.
+        slot: Slot,
+        /// The icon: the title's own, which fixes the group, or the mod's, which names it.
+        warning: Warning,
+    },
+    /// End the surfaces of the sending mod's own effect `effect` that it placed for `slot` with
+    /// [`Self::FireModEffectAhead`] before this tick, at once: a portal that closes, a marker
+    /// that is picked up. Particles it still holds go with it. None standing is not a fault.
+    /// An output, never hashed.
+    StopModEffect {
+        /// The grid slot the surfaces were placed for.
+        slot: Slot,
+        /// The effect, by its key in the mod's `[effects]`.
+        effect: ModName,
+    },
 }
 
 impl Command {
+    /// Its record's kind.
+    #[must_use]
+    pub const fn kind(&self) -> CommandKind {
+        match *self {
+            Self::ScaleThrust { .. } => CommandKind::ScaleThrust,
+            Self::ShieldDelta { .. } => CommandKind::ShieldDelta,
+            Self::GivePickup { .. } => CommandKind::GivePickup,
+            Self::ClearPickup { .. } => CommandKind::ClearPickup,
+            Self::PickupRoll { .. } => CommandKind::PickupRoll,
+            Self::ScalePad { .. } => CommandKind::ScalePad,
+            Self::ScaleSlotPads { .. } => CommandKind::ScaleSlotPads,
+            Self::PlayCue { .. } => CommandKind::PlayCue,
+            Self::RaiseWarning { .. } => CommandKind::RaiseWarning,
+            Self::StopModEffect { .. } => CommandKind::StopModEffect,
+            Self::FireEffect { .. } | Self::FireModEffect { .. } => CommandKind::FireEffect,
+            Self::HudTint { .. } => CommandKind::HudTint,
+            Self::HudShake { .. } => CommandKind::HudShake,
+            Self::HudBarExtra { .. } => CommandKind::HudBarExtra,
+            Self::HudText { .. } => CommandKind::HudText,
+            Self::HudIcon { .. } => CommandKind::HudIcon,
+            Self::PickupLook { .. } => CommandKind::PickupLook,
+            Self::SetWeather { .. } => CommandKind::SetWeather,
+            Self::SetSun { .. } => CommandKind::SetSun,
+            Self::GradeSky { .. } => CommandKind::GradeSky,
+            Self::GiveShield { .. } => CommandKind::GiveShield,
+            Self::HoldShield { .. } => CommandKind::HoldShield,
+            Self::ClearShield { .. } => CommandKind::ClearShield,
+            Self::PreferRoute { .. } => CommandKind::PreferRoute,
+            Self::Emit { .. } => CommandKind::Emit,
+            Self::Transit { .. } => CommandKind::Transit,
+            Self::ScaleSpeed { .. } => CommandKind::ScaleSpeed,
+            Self::ProbeClearance { .. } => CommandKind::ProbeClearance,
+            Self::ScreenFill { .. } => CommandKind::ScreenFill,
+            Self::FovOffset { .. } => CommandKind::FovOffset,
+            Self::FireModEffectAhead { .. } => CommandKind::FireModEffectAhead,
+            Self::DrawBeam { .. } => CommandKind::DrawBeam,
+            Self::SetShaderParam { .. } => CommandKind::SetShaderParam,
+            Self::PortalView { .. } => CommandKind::PortalView,
+            Self::PlayModSound { .. } => CommandKind::PlayModSound,
+        }
+    }
+
     /// The slot it names; a race-wide command names none.
     #[must_use]
     pub const fn slot(&self) -> Option<Slot> {
@@ -831,6 +844,7 @@ impl Command {
             | Self::ClearPickup { slot }
             | Self::ScaleSlotPads { slot, .. }
             | Self::PlayCue { slot, .. }
+            | Self::RaiseWarning { slot, .. }
             | Self::FireEffect { slot, .. }
             | Self::FireModEffect { slot, .. }
             | Self::HudTint { slot, .. }
@@ -842,12 +856,54 @@ impl Command {
             | Self::GiveShield { slot }
             | Self::HoldShield { slot }
             | Self::ClearShield { slot }
-            | Self::PreferRoute { slot, .. } => Some(slot),
+            | Self::PreferRoute { slot, .. }
+            | Self::Emit { slot, .. }
+            | Self::Transit { slot, .. }
+            | Self::ScaleSpeed { slot, .. }
+            | Self::ProbeClearance { slot, .. }
+            | Self::ScreenFill { slot, .. }
+            | Self::FovOffset { slot, .. }
+            | Self::FireModEffectAhead { slot, .. }
+            | Self::DrawBeam { slot, .. }
+            | Self::SetShaderParam { slot, .. }
+            | Self::PortalView { slot, .. }
+            | Self::PlayModSound { slot, .. }
+            | Self::StopModEffect { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
             | Self::SetWeather { .. }
             | Self::SetSun { .. }
             | Self::GradeSky { .. } => None,
+        }
+    }
+
+    /// The string this command's record names in the reply's pool, if it names one: a
+    /// `hud-text` string, a `hud-icon` sprite, or the name of an asset of the sending mod.
+    #[must_use]
+    pub fn pooled_name(&self) -> Option<&str> {
+        match self {
+            Self::HudText { text, .. } => Some(text.as_str()),
+            Self::HudIcon { sprite, .. } => Some(sprite.as_str()),
+            Self::PickupLook {
+                icon: Icon::Mod(name),
+                ..
+            }
+            | Self::RaiseWarning {
+                warning: Warning::Mod { icon: name, .. },
+                ..
+            }
+            | Self::ScreenFill {
+                shader: Some(name), ..
+            }
+            | Self::DrawBeam {
+                shader: Some(name), ..
+            }
+            | Self::SetShaderParam { shader: name, .. }
+            | Self::FireModEffect { effect: name, .. }
+            | Self::FireModEffectAhead { effect: name, .. }
+            | Self::StopModEffect { effect: name, .. }
+            | Self::PlayModSound { sound: name, .. } => Some(name.as_str()),
+            _ => None,
         }
     }
 
@@ -862,43 +918,34 @@ impl Command {
     /// reply's pool.
     #[must_use]
     pub fn encode_pooled(&self, pool_at: u16) -> [u8; COMMAND_LEN] {
-        let (kind, arg, value, word) = match *self {
-            Self::ScaleThrust { factor, .. } => (COMMAND_SCALE_THRUST, 0, factor.to_bits(), 0),
-            Self::ShieldDelta { amount, .. } => (COMMAND_SHIELD_DELTA, 0, amount.to_bits(), 0),
-            Self::GivePickup { .. } => (COMMAND_GIVE_PICKUP, 0, 0, 0),
-            Self::ClearPickup { .. } => (COMMAND_CLEAR_PICKUP, 0, 0, 0),
-            Self::PickupRoll { weapon, every } => (
-                COMMAND_PICKUP_ROLL,
-                u16::from(weapon.code()),
-                0,
-                u32::from(every),
-            ),
-            Self::ScalePad { pad, factor } => (COMMAND_SCALE_PAD, pad, factor.to_bits(), 0),
-            Self::ScaleSlotPads { factor, .. } => (COMMAND_SCALE_SLOT_PADS, 0, factor.to_bits(), 0),
-            Self::PlayCue { cue, .. } => (COMMAND_PLAY_CUE, cue.code(), 0, 0),
-            Self::FireEffect { effect, .. } => (COMMAND_FIRE_EFFECT, effect.code(), 0, 0),
-            Self::FireModEffect { index, .. } => (COMMAND_FIRE_EFFECT, index | OWN_FLAG, 0, 0),
-            Self::HudTint { element, rgba, .. } => {
-                (COMMAND_HUD_TINT, element.code(), 0, rgba.to_u32())
-            }
+        let (arg, value, word) = match *self {
+            Self::ScaleThrust { factor, .. } => (0, factor.to_bits(), 0),
+            Self::ShieldDelta { amount, .. } => (0, amount.to_bits(), 0),
+            Self::GivePickup { .. } => (0, 0, 0),
+            Self::ClearPickup { .. } => (0, 0, 0),
+            Self::PickupRoll { weapon, every } => (u16::from(weapon.code()), 0, u32::from(every)),
+            Self::ScalePad { pad, factor } => (pad, factor.to_bits(), 0),
+            Self::ScaleSlotPads { factor, .. } => (0, factor.to_bits(), 0),
+            Self::PlayCue { cue, .. } => (cue.code(), 0, 0),
+            Self::RaiseWarning { warning, .. } => match warning {
+                Warning::Title(icon) => (icon.code(), 0, 0),
+                Warning::Mod { side, .. } => (pool_at | OWN_FLAG, 0, u32::from(side.code())),
+            },
+            Self::FireEffect { effect, .. } => (effect.code(), 0, 0),
+            Self::FireModEffect { .. } => (pool_at | OWN_FLAG, 0, 0),
+            Self::HudTint { element, rgba, .. } => (element.code(), 0, rgba.to_u32()),
             Self::HudShake {
                 element, amplitude, ..
-            } => (COMMAND_HUD_SHAKE, element.code(), amplitude.to_bits(), 0),
+            } => (element.code(), amplitude.to_bits(), 0),
             Self::HudBarExtra {
                 element,
                 extra,
                 rgba,
                 ..
-            } => (
-                COMMAND_HUD_BAR_EXTRA,
-                element.code(),
-                extra.to_bits(),
-                rgba.to_u32(),
-            ),
+            } => (element.code(), extra.to_bits(), rgba.to_u32()),
             Self::HudText {
                 place, rgba, own, ..
             } => (
-                COMMAND_HUD_TEXT,
                 pool_at | if own { OWN_FLAG } else { 0 },
                 place.to_bits(),
                 rgba.to_u32(),
@@ -906,7 +953,6 @@ impl Command {
             Self::HudIcon {
                 place, rgba, own, ..
             } => (
-                COMMAND_HUD_ICON,
                 pool_at | if own { OWN_FLAG } else { 0 },
                 place.to_bits(),
                 rgba.to_u32(),
@@ -920,20 +966,30 @@ impl Command {
                     Icon::Title(weapon) => u16::from(weapon.code()),
                     Icon::Mod(_) => pool_at | OWN_FLAG,
                 };
-                (COMMAND_PICKUP_LOOK, arg, value, word)
+                (arg, value, word)
             }
-            Self::SetWeather { kind, strength } => {
-                (COMMAND_SET_WEATHER, kind.code(), strength.to_bits(), 0)
+            Self::SetWeather { kind, strength } => (kind.code(), strength.to_bits(), 0),
+            Self::SetSun { intensity } => (0, intensity.to_bits(), 0),
+            Self::GradeSky { grey } => (0, grey.to_bits(), 0),
+            Self::GiveShield { .. } => (0, 0, 0),
+            Self::HoldShield { .. } => (0, 0, 0),
+            Self::ClearShield { .. } => (0, 0, 0),
+            Self::PreferRoute { route, .. } => (route, 0, 0),
+            Self::Emit { channel, value, .. } => (0, value.to_bits(), channel),
+            Self::Transit { .. } | Self::ScaleSpeed { .. } | Self::ProbeClearance { .. } => {
+                motion::encode(self).unwrap_or_default()
             }
-            Self::SetSun { intensity } => (COMMAND_SET_SUN, 0, intensity.to_bits(), 0),
-            Self::GradeSky { grey } => (COMMAND_GRADE_SKY, 0, grey.to_bits(), 0),
-            Self::GiveShield { .. } => (COMMAND_GIVE_SHIELD, 0, 0, 0),
-            Self::HoldShield { .. } => (COMMAND_HOLD_SHIELD, 0, 0, 0),
-            Self::ClearShield { .. } => (COMMAND_CLEAR_SHIELD, 0, 0, 0),
-            Self::PreferRoute { route, .. } => (COMMAND_PREFER_ROUTE, route, 0, 0),
+            Self::ScreenFill { .. }
+            | Self::FovOffset { .. }
+            | Self::FireModEffectAhead { .. }
+            | Self::DrawBeam { .. }
+            | Self::SetShaderParam { .. }
+            | Self::PortalView { .. } => scene::encode(self, pool_at).unwrap_or_default(),
+            Self::PlayModSound { .. } => sound::encode(self, pool_at).unwrap_or_default(),
+            Self::StopModEffect { .. } => (pool_at, 0, 0),
         };
         let mut record = [0; COMMAND_LEN];
-        record[COMMAND_KIND] = kind;
+        record[COMMAND_KIND] = self.kind().code();
         record[COMMAND_SLOT] = self.slot().map_or(0, |slot| slot.0);
         let [lo, hi] = arg.to_le_bytes();
         record[COMMAND_ARG] = lo;
@@ -959,11 +1015,12 @@ impl Command {
     ///
     /// A [`Malformed`] naming the broken rule.
     pub fn decode_in(record: &[u8; COMMAND_LEN], pool: &[u8]) -> Result<Self, Malformed> {
-        let (kind, raw_slot) = (record[COMMAND_KIND], record[COMMAND_SLOT]);
+        let (raw_kind, raw_slot) = (record[COMMAND_KIND], record[COMMAND_SLOT]);
+        let known = CommandKind::from_code(raw_kind);
         let arg = u16::from_le_bytes([record[COMMAND_ARG], record[COMMAND_ARG + 1]]);
         let value = f32::from_bits(get_u32(record, COMMAND_VALUE));
         let word = get_u32(record, COMMAND_WORD);
-        if kind == COMMAND_PICKUP_ROLL {
+        if known == Some(CommandKind::PickupRoll) {
             let weapon = u8::try_from(arg).ok().and_then(Weapon::from_code);
             let every = u8::try_from(word).ok().filter(|every| *every > 0);
             return match (raw_slot, weapon, every) {
@@ -975,50 +1032,50 @@ impl Command {
                 }),
             };
         }
-        if matches!(kind, COMMAND_SCALE_PAD | COMMAND_SCALE_SLOT_PADS)
-            && !(0.0..=MAX_PAD_FACTOR).contains(&value)
+        if matches!(
+            known,
+            Some(CommandKind::ScalePad | CommandKind::ScaleSlotPads)
+        ) && !(0.0..=MAX_PAD_FACTOR).contains(&value)
         {
             return Err(Malformed::PadFactor {
                 slot: raw_slot,
                 factor: value,
             });
         }
-        if kind == COMMAND_SCALE_PAD {
+        if known == Some(CommandKind::ScalePad) {
             if raw_slot != 0 {
-                return Err(Malformed::PadFactor {
-                    slot: raw_slot,
-                    factor: value,
-                });
+                return Err(Malformed::PadSlot { slot: raw_slot });
             }
             return Ok(Self::ScalePad {
                 pad: arg,
                 factor: value,
             });
         }
-        if matches!(
-            kind,
-            COMMAND_SET_WEATHER | COMMAND_SET_SUN | COMMAND_GRADE_SKY
-        ) {
+        if let Some(
+            kind @ (CommandKind::SetWeather | CommandKind::SetSun | CommandKind::GradeSky),
+        ) = known
+        {
             if raw_slot != 0 || !(0.0..=1.0).contains(&value) {
                 return Err(Malformed::Unit {
-                    kind,
+                    kind: raw_kind,
                     slot: raw_slot,
                     value,
                 });
             }
             return Ok(match kind {
-                COMMAND_SET_WEATHER => Self::SetWeather {
+                CommandKind::SetWeather => Self::SetWeather {
                     kind: WeatherKind::from_code(arg).ok_or(Malformed::Weather(arg))?,
                     strength: value,
                 },
-                COMMAND_SET_SUN => Self::SetSun { intensity: value },
+                CommandKind::SetSun => Self::SetSun { intensity: value },
                 _ => Self::GradeSky { grey: value },
             });
         }
         let slot = Slot::new(usize::from(raw_slot)).ok_or(Malformed::Slot(raw_slot))?;
         let hud_element = || HudElement::from_code(arg).ok_or(Malformed::HudElement(arg));
+        let kind = known.ok_or(Malformed::Kind(raw_kind))?;
         Ok(match kind {
-            COMMAND_SCALE_THRUST => {
+            CommandKind::ScaleThrust => {
                 if !(0.0..=MAX_THRUST_FACTOR).contains(&value) {
                     return Err(Malformed::Factor {
                         slot,
@@ -1030,7 +1087,7 @@ impl Command {
                     factor: value,
                 }
             }
-            COMMAND_SHIELD_DELTA => {
+            CommandKind::ShieldDelta => {
                 if !value.is_finite() {
                     return Err(Malformed::Amount {
                         slot,
@@ -1042,35 +1099,62 @@ impl Command {
                     amount: value,
                 }
             }
-            COMMAND_GIVE_PICKUP => Self::GivePickup { slot },
-            COMMAND_CLEAR_PICKUP => Self::ClearPickup { slot },
-            COMMAND_SCALE_SLOT_PADS => Self::ScaleSlotPads {
+            CommandKind::GivePickup => Self::GivePickup { slot },
+            CommandKind::ClearPickup => Self::ClearPickup { slot },
+            CommandKind::ScaleSlotPads => Self::ScaleSlotPads {
                 slot,
                 factor: value,
             },
-            COMMAND_PLAY_CUE => Self::PlayCue {
+            CommandKind::PlayCue => Self::PlayCue {
                 slot,
                 cue: Cue::from_code(arg).ok_or(Malformed::Cue(arg))?,
             },
-            COMMAND_FIRE_EFFECT if arg & OWN_FLAG != 0 => Self::FireModEffect {
+            CommandKind::RaiseWarning if arg & OWN_FLAG != 0 => {
+                let at = arg & !OWN_FLAG;
+                Self::RaiseWarning {
+                    slot,
+                    warning: Warning::Mod {
+                        side: u16::try_from(word)
+                            .ok()
+                            .and_then(WarningSide::from_code)
+                            .ok_or(Malformed::WarningSide(word))?,
+                        icon: ModName::from_string(
+                            pool_string(pool, at).ok_or(Malformed::Pool(at))?,
+                        ),
+                    },
+                }
+            }
+            CommandKind::RaiseWarning => Self::RaiseWarning {
                 slot,
-                index: arg & !OWN_FLAG,
+                warning: Warning::Title(
+                    WarningIcon::from_code(arg).ok_or(Malformed::WarningIcon(arg))?,
+                ),
             },
-            COMMAND_FIRE_EFFECT => Self::FireEffect {
+            CommandKind::FireEffect if arg & OWN_FLAG != 0 => {
+                let at = arg & !OWN_FLAG;
+                Self::FireModEffect {
+                    slot,
+                    effect: ModName::from_string(pool_string(pool, at).ok_or(Malformed::Pool(at))?),
+                }
+            }
+            CommandKind::FireEffect => Self::FireEffect {
                 slot,
                 effect: Effect::from_code(arg).ok_or(Malformed::Effect(arg))?,
             },
-            COMMAND_HUD_TINT if arg == HudElement::Pickup.code() => {
+            CommandKind::HudTint if arg == HudElement::Pickup.code() => {
                 return Err(Malformed::PickupTint);
             }
-            COMMAND_HUD_TINT => Self::HudTint {
+            CommandKind::HudTint => Self::HudTint {
                 slot,
                 element: hud_element()?,
                 rgba: Rgba::from_u32(word),
             },
-            COMMAND_HUD_SHAKE => {
+            CommandKind::HudShake => {
                 if !(0.0..=MAX_HUD_SHAKE).contains(&value) {
-                    return Err(Malformed::HudValue { kind, value });
+                    return Err(Malformed::HudValue {
+                        kind: raw_kind,
+                        value,
+                    });
                 }
                 Self::HudShake {
                     slot,
@@ -1078,9 +1162,12 @@ impl Command {
                     amplitude: value,
                 }
             }
-            COMMAND_HUD_BAR_EXTRA => {
+            CommandKind::HudBarExtra => {
                 if !(value > 0.0 && value <= MAX_HUD_EXTRA) {
-                    return Err(Malformed::HudValue { kind, value });
+                    return Err(Malformed::HudValue {
+                        kind: raw_kind,
+                        value,
+                    });
                 }
                 Self::HudBarExtra {
                     slot,
@@ -1089,14 +1176,14 @@ impl Command {
                     rgba: Rgba::from_u32(word),
                 }
             }
-            COMMAND_HUD_TEXT | COMMAND_HUD_ICON => {
+            CommandKind::HudText | CommandKind::HudIcon => {
                 let place = HudPlace::from_bits(get_u32(record, COMMAND_VALUE))
                     .ok_or(Malformed::HudPlace)?;
                 let own = arg & OWN_FLAG != 0;
                 let at = arg & !OWN_FLAG;
                 let string = pool_string(pool, at).ok_or(Malformed::Pool(at))?;
                 let rgba = Rgba::from_u32(word);
-                if kind == COMMAND_HUD_TEXT {
+                if kind == CommandKind::HudText {
                     Self::HudText {
                         slot,
                         place,
@@ -1114,12 +1201,12 @@ impl Command {
                     }
                 }
             }
-            COMMAND_PICKUP_LOOK => {
+            CommandKind::PickupLook => {
                 let raw = get_u32(record, COMMAND_VALUE);
                 let bad = Malformed::PickupLook { arg, value: raw };
                 let icon = if arg & OWN_FLAG != 0 {
                     let at = arg & !OWN_FLAG;
-                    Icon::Mod(ModIcon::from_string(
+                    Icon::Mod(ModName::from_string(
                         pool_string(pool, at).ok_or(Malformed::Pool(at))?,
                     ))
                 } else {
@@ -1141,183 +1228,59 @@ impl Command {
                 };
                 Self::PickupLook { slot, icon, colour }
             }
-            COMMAND_GIVE_SHIELD => Self::GiveShield { slot },
-            COMMAND_HOLD_SHIELD => Self::HoldShield { slot },
-            COMMAND_CLEAR_SHIELD => Self::ClearShield { slot },
-            COMMAND_PREFER_ROUTE => Self::PreferRoute { slot, route: arg },
-            other => return Err(Malformed::Kind(other)),
+            CommandKind::GiveShield => Self::GiveShield { slot },
+            CommandKind::HoldShield => Self::HoldShield { slot },
+            CommandKind::ClearShield => Self::ClearShield { slot },
+            CommandKind::PreferRoute => Self::PreferRoute { slot, route: arg },
+            CommandKind::Transit | CommandKind::ScaleSpeed | CommandKind::ProbeClearance => {
+                return motion::decode(kind, slot, (arg, value, word));
+            }
+            CommandKind::ScreenFill
+            | CommandKind::FovOffset
+            | CommandKind::FireModEffectAhead
+            | CommandKind::DrawBeam
+            | CommandKind::SetShaderParam
+            | CommandKind::PortalView => {
+                return scene::decode(kind, slot, (arg, value, word), pool);
+            }
+            CommandKind::PlayModSound => return sound::decode(slot, arg, word, pool),
+            CommandKind::StopModEffect => Self::StopModEffect {
+                slot,
+                effect: ModName::from_string(pool_string(pool, arg).ok_or(Malformed::Pool(arg))?),
+            },
+            CommandKind::Emit => {
+                if !value.is_finite() {
+                    return Err(Malformed::EmitValue { slot, value });
+                }
+                Self::Emit {
+                    slot,
+                    channel: word,
+                    value,
+                }
+            }
+            // The race-wide kinds returned above.
+            CommandKind::PickupRoll
+            | CommandKind::ScalePad
+            | CommandKind::SetWeather
+            | CommandKind::SetSun
+            | CommandKind::GradeSky => return Err(Malformed::Kind(raw_kind)),
         })
     }
 }
-
-/// A reply record that breaks a rule of its own. The host faults the module; it never
-/// clamps.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Malformed {
-    /// More commands than [`MAX_COMMANDS`].
-    TooMany(u32),
-    /// A kind code this revision does not know.
-    Kind(u8),
-    /// A slot with no record.
-    Slot(u8),
-    /// A `scale-thrust` factor outside `[0, MAX_THRUST_FACTOR]`, or not a number.
-    Factor {
-        /// The slot.
-        slot: Slot,
-        /// The factor sent.
-        factor: f32,
-    },
-    /// A `scale-pad` factor outside `[0, MAX_PAD_FACTOR]` (NaN included), or a
-    /// race-wide one with a slot other than 0.
-    PadFactor {
-        /// The slot byte.
-        slot: u8,
-        /// The factor sent.
-        factor: f32,
-    },
-    /// A `shield-delta` that is not finite.
-    Amount {
-        /// The slot.
-        slot: Slot,
-        /// The amount sent.
-        amount: f32,
-    },
-    /// A `play-cue` code outside [`Cue::ALL`].
-    Cue(u16),
-    /// A `fire-effect` code outside [`Effect::ALL`].
-    Effect(u16),
-    /// A `pickup-roll` with a slot other than 0, an unknown weapon, or a period
-    /// outside `1..=MAX_ROLL_EVERY`.
-    Roll {
-        /// The slot byte.
-        slot: u8,
-        /// The weapon code.
-        weapon: u16,
-        /// The period.
-        every: u32,
-    },
-    /// A race-wide `set-weather`, `set-sun` or `grade-sky` with a slot other than 0, or a
-    /// value outside `[0, 1]` (NaN included).
-    Unit {
-        /// The command kind code.
-        kind: u8,
-        /// The slot byte.
-        slot: u8,
-        /// The value sent.
-        value: f32,
-    },
-    /// A `set-weather` kind code outside [`WeatherKind::ALL`].
-    Weather(u16),
-    /// A `hud-*` element code outside [`HudElement::ALL`].
-    HudElement(u16),
-    /// A `hud-shake` amplitude or `hud-bar-extra` share out of range, or not a number.
-    HudValue {
-        /// The command kind code.
-        kind: u8,
-        /// The value sent.
-        value: f32,
-    },
-    /// A `hud-text` or `hud-icon` anchor or scale out of range.
-    HudPlace,
-    /// A `hud-tint` of the pickup element: a mod's pickup is coloured by `pickup-look`.
-    PickupTint,
-    /// A `pickup-look` naming no weapon, as its icon (`arg`) or its backdrop colour
-    /// (`value`).
-    PickupLook {
-        /// The record's argument.
-        arg: u16,
-        /// The record's value.
-        value: u32,
-    },
-    /// A `hud-text` or `hud-icon` whose pool offset holds no whole string of at most
-    /// [`MAX_HUD_TEXT`] bytes of UTF-8.
-    Pool(u16),
-}
-
-impl fmt::Display for Malformed {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self::TooMany(count) => write!(f, "{count} commands, the most is {MAX_COMMANDS}"),
-            Self::Kind(kind) => write!(f, "unknown command kind {kind}"),
-            Self::Slot(slot) => write!(f, "slot {slot} is not a grid slot"),
-            Self::Factor { slot, factor } => write!(
-                f,
-                "scale-thrust factor {factor} for slot {} is not in [0, {MAX_THRUST_FACTOR}]",
-                slot.0
-            ),
-            Self::PadFactor { slot, factor } => write!(
-                f,
-                "scale-pad factor {factor} (slot byte {slot}) is not in [0, {MAX_PAD_FACTOR}], or a race-wide one names a slot"
-            ),
-            Self::Amount { slot, amount } => {
-                write!(f, "shield-delta {amount} for slot {} is not finite", slot.0)
-            }
-            Self::Cue(code) => write!(f, "play-cue code {code} is not one of {}", Cue::ALL.len()),
-            Self::Effect(code) => write!(
-                f,
-                "fire-effect code {code} is not one of {}",
-                Effect::ALL.len()
-            ),
-            Self::Unit { kind, slot, value } => write!(
-                f,
-                "race-wide command {kind} slot {slot} value {value}: slot 0 and a value in [0, 1]"
-            ),
-            Self::Weather(code) => write!(
-                f,
-                "set-weather kind {code} is not one of {}",
-                WeatherKind::ALL.len()
-            ),
-            Self::HudElement(code) => write!(
-                f,
-                "hud element {code} is not one of {}",
-                HudElement::ALL.len()
-            ),
-            Self::HudValue { kind, value } => write!(
-                f,
-                "hud command {kind} value {value}: hud-shake in [0, {MAX_HUD_SHAKE}], hud-bar-extra in (0, {MAX_HUD_EXTRA}]"
-            ),
-            Self::PickupTint => write!(
-                f,
-                "hud-tint no longer reaches the pickup: use pickup-look to give a mod pickup its colour"
-            ),
-            Self::PickupLook { arg, value } => write!(
-                f,
-                "pickup-look icon argument {arg} and colour value {value}: each a weapon in 1..={} (or an own icon, or an rgba)",
-                Weapon::ALL.len()
-            ),
-            Self::HudPlace => write!(
-                f,
-                "hud placement: an anchor of the nine and a scale of 1..=15 quarters"
-            ),
-            Self::Pool(at) => write!(
-                f,
-                "hud string at pool offset {at} is not whole UTF-8 of at most {MAX_HUD_TEXT} bytes"
-            ),
-            Self::Roll {
-                slot,
-                weapon,
-                every,
-            } => write!(
-                f,
-                "pickup-roll slot {slot} weapon {weapon} every {every}: slot 0, a weapon in 1..={}, every in 1..={MAX_ROLL_EVERY}",
-                Weapon::ALL.len()
-            ),
-        }
-    }
-}
-
 /// Writes one tick's observation into a whole buffer, the state blob included. Events
-/// past [`MAX_EVENTS`] and crafts past [`MAX_CRAFTS`] are left out.
+/// past [`MAX_EVENTS`] and crafts and tracking records past [`MAX_CRAFTS`] are left out.
 pub fn write_observation(
     io: &mut [u8; IO_LEN],
     tick: u64,
     active: u32,
     events: &[Event],
     crafts: &[Craft],
+    course: &Course<'_>,
     state: &[u8],
 ) {
     let events = &events[..events.len().min(MAX_EVENTS)];
     put_u32(io, ABI_AT, ABI);
+    put_u32(io, COURSE_LENGTH_AT, course.length.to_bits());
     io[TICK_AT..TICK_AT + 8].copy_from_slice(&tick.to_le_bytes());
     put_u32(io, SLOTS_AT, MAX_SLOTS);
     put_u32(io, ACTIVE_AT, active);
@@ -1332,6 +1295,15 @@ pub fn write_observation(
         let at = CRAFTS_AT + i * CRAFT_LEN;
         io[at..at + CRAFT_LEN].copy_from_slice(&craft.encode());
     }
+    for (i, tracking) in course.tracking.iter().take(MAX_CRAFTS).enumerate() {
+        let at = TRACKING_AT + i * TRACKING_LEN;
+        io[at..at + TRACKING_LEN].copy_from_slice(&tracking.encode());
+    }
+    put_u32(io, TITLE_AT, course.title);
+    if let Some(aiming) = course.aiming {
+        aiming.write(io);
+    }
+    io[OPTIONS_AT..OPTIONS_AT + OPTIONS_LEN].copy_from_slice(&course.options);
 }
 
 /// The reply's command count.
@@ -1416,6 +1388,36 @@ impl<'a> Sections<'a> {
         head.get(at..at + EVENT_LEN)?.try_into().ok()
     }
 
+    /// The course length, units; 0 when the race has no course.
+    #[must_use]
+    pub fn course_length(head: &[u8]) -> f32 {
+        f32::from_bits(get_u32(head, COURSE_LENGTH_AT))
+    }
+
+    /// The slot's tracking record; `crafts` is [`Self::crafts`], which starts at
+    /// [`CRAFTS_AT`].
+    #[must_use]
+    pub fn tracking_record(crafts: &[u8], slot: Slot) -> Option<&[u8; TRACKING_LEN]> {
+        let at = (TRACKING_AT - CRAFTS_AT) + slot.index() * TRACKING_LEN;
+        crafts.get(at..at + TRACKING_LEN)?.try_into().ok()
+    }
+
+    /// The module's `n`-th option ([`OPTIONS_AT`]); `crafts` is [`Self::crafts`], which
+    /// starts at [`CRAFTS_AT`]. 0 past [`OPTIONS_LEN`].
+    #[must_use]
+    pub fn option(crafts: &[u8], n: usize) -> u8 {
+        if n >= OPTIONS_LEN {
+            return 0;
+        }
+        crafts.get(OPTIONS_AT - CRAFTS_AT + n).copied().unwrap_or(0)
+    }
+
+    /// The title's key; `crafts` is [`Self::crafts`], which starts at [`CRAFTS_AT`].
+    #[must_use]
+    pub fn title(crafts: &[u8]) -> u32 {
+        get_u32(crafts, TITLE_AT - CRAFTS_AT)
+    }
+
     /// The slot's craft record.
     #[must_use]
     pub fn craft_record(crafts: &[u8], slot: Slot) -> Option<&[u8; CRAFT_LEN]> {
@@ -1450,9 +1452,22 @@ fn get_u32(buffer: &[u8], at: usize) -> u32 {
     }
 }
 
+mod aiming;
+mod channel;
+mod craft;
+mod event;
 pub mod hud;
+mod kind;
+mod malformed;
+pub mod motion;
+mod name;
 mod pickup;
+pub mod race;
+mod scene;
+mod sound;
 pub mod track;
+mod tracking;
+mod warning;
 
 #[cfg(test)]
 mod tests;

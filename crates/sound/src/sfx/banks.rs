@@ -5,7 +5,7 @@
 //! at load time from per-title data, so it cannot go through [`load_cue`].
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use log::warn;
@@ -13,6 +13,7 @@ use oag_assets::source::Archives;
 use oag_audio::Sound;
 use oag_core::Rng;
 use oag_formats::sblk;
+use oag_formats::wwise::name_hash;
 
 use super::CueTables;
 use super::layers::{self, CueVoice, Program, Timeline};
@@ -66,9 +67,25 @@ pub struct Banks {
     /// HD's authored group volumes, read with the engine tables and gated the
     /// same way. See [`crate::hd_mix`].
     pub(super) mix: Option<Arc<crate::hd_mix::Maps>>,
+    /// The sounds the race's mods ship, loaded by the race (`oag_raceplay::extension_sounds`).
+    pub mod_sounds: super::ModSounds,
     /// The start a title's own events play, decoded beside the named pair and
     /// held until [`Banks::use_event_start`].
     pub(super) event_start: Option<Box<StagedStart>>,
+    /// The player's own version of a cue where the title authors one (Omega's
+    /// `<cue>_PC__<bank>`), played in place of [`Self::timelines`]'s from the
+    /// player's emitter. See [`Self::load_wwise_cues`].
+    pub(super) player_timelines: BTreeMap<Cue, Vec<Timeline>>,
+    /// Cues whose player version the title authors and this port cannot play:
+    /// silent from the player's emitter, never the non-player event in its place.
+    pub(super) player_silent: BTreeSet<Cue>,
+    /// Cues loaded from the Wwise event a title posts for them
+    /// ([`Self::load_wwise_cues`]), which [`Self::held_voices`] plays whole.
+    pub(super) wwise: BTreeSet<Cue>,
+    /// HD's contact cues as the list plays for each block of cue variables it can be handed,
+    /// `[severity, surface, perspective, 0]`; a cue is here for all of its blocks or none.
+    /// See [`Self::contact_voices`].
+    pub(super) contacts: ContactTimelines,
 }
 
 /// [`Cue::Ready`] and [`Cue::Go`] as a title's own events play them.
@@ -96,7 +113,11 @@ impl Banks {
         zone: bool,
         tick: oag_title::SequenceTick,
     ) -> Self {
-        Self::load_cues(archives, banks, zone, tick, &Cue::ALL, &|cue| cue.name())
+        let mut cues = Cue::ALL.to_vec();
+        if tick.walks_cue_variables() {
+            cues.extend(Cue::HD_CONTACT);
+        }
+        Self::load_cues(archives, banks, zone, tick, &cues, &|cue| cue.name())
     }
 
     /// Reads the front end's navigation cues, [`Cue::FRONT_END`], and the results
@@ -142,6 +163,8 @@ impl Banks {
         let mut sounds = BTreeMap::new();
         let mut timelines = BTreeMap::new();
         let mut programs = BTreeMap::new();
+        let mut player_timelines = BTreeMap::new();
+        let mut contacts = BTreeMap::new();
         let mut report = Vec::new();
         let mut blobs: BTreeMap<BankName, Vec<u8>> = BTreeMap::new();
 
@@ -166,6 +189,8 @@ impl Banks {
                 Tables {
                     timelines: &mut timelines,
                     programs: &mut programs,
+                    players: Some(&mut player_timelines),
+                    contacts: Some(&mut contacts),
                 },
                 &mut report,
             );
@@ -176,6 +201,8 @@ impl Banks {
             report,
             timelines,
             programs,
+            player_timelines,
+            contacts,
             ..Default::default()
         }
     }
@@ -200,6 +227,27 @@ impl Banks {
         voice: &oag_title::CountdownVoice,
     ) {
         let mut report = Vec::new();
+        if voice.event_every_mode
+            && let Some(event) = voice.event
+        {
+            for (cue, event_cue) in [(Cue::Ready, event.ready), (Cue::Go, event.go)] {
+                match event_cue {
+                    oag_title::StartCue::Plays(name) => self.load_start_cues(
+                        archives,
+                        event.bank,
+                        voice,
+                        &[(cue, name)],
+                        None,
+                        &mut report,
+                    ),
+                    oag_title::StartCue::Unplayed { name, why } => {
+                        report.push(format!("sfx: {name} not played: {why}"));
+                    }
+                }
+            }
+            self.report.extend(report);
+            return;
+        }
         let mut named: Vec<(Cue, &str)> = if voice.hashed {
             vec![(Cue::Ready, "ready"), (Cue::Go, "go")]
         } else {
@@ -232,6 +280,41 @@ impl Banks {
             self.event_start = Some(Box::new(staged));
         }
         self.report.extend(report);
+    }
+
+    /// Loads `cue` as the Wwise event `event` (the full name the title posts)
+    /// out of the bank `entry`, one child of every random/sequence container it
+    /// reaches drawn by `rng`. Returns whether it loaded; why not is one line
+    /// of [`Self::report`], and the cue stays silent.
+    pub fn load_wwise_event(
+        &mut self,
+        archives: &mut Archives,
+        entry: &str,
+        cue: Cue,
+        event: &str,
+        rng: &mut Rng,
+    ) -> bool {
+        let line = match archives.read_name(entry) {
+            Err(e) => format!("sfx: {entry} not read: {e}"),
+            Ok(blob) => match super::wwise_start::load(&blob, event, rng) {
+                Ok(loaded) => {
+                    self.report.push(format!(
+                        "sfx: {event} -> {} voice(s) from {entry}, one child of {} container(s)",
+                        loaded.timeline.layers.len(),
+                        loaded.picks.len()
+                    ));
+                    self.report
+                        .extend(loaded.notes.iter().map(|n| format!("sfx: {event}: {n}")));
+                    self.sounds.insert(cue, loaded.loaded);
+                    self.timelines.insert(cue, vec![loaded.timeline]);
+                    return true;
+                }
+                Err(e) => format!("sfx: {event} not loaded: {e:#}"),
+            },
+        };
+        warn!("{line}");
+        self.report.push(line);
+        false
     }
 
     /// Swaps the title's event start in for `ready`, `go` and the start beat,
@@ -275,6 +358,32 @@ impl Banks {
                 return;
             }
         };
+        // A Wwise bank (Omega) plays its cues as the events the title posts.
+        if blob.starts_with(b"BKHD") {
+            for &(cue, name) in cues {
+                let (sounds, timelines) = match staged.as_deref_mut() {
+                    Some(area) => (&mut area.sounds, &mut area.timelines),
+                    None => (&mut self.sounds, &mut self.timelines),
+                };
+                match super::wwise_start::load(
+                    &blob,
+                    name,
+                    &mut Rng::new(u64::from(name_hash(name))),
+                ) {
+                    Ok(event) => {
+                        report.push(format!(
+                            "sfx: {name} -> {} voice(s) from {entry}, the Wwise event's timeline",
+                            event.timeline.layers.len()
+                        ));
+                        report.extend(event.notes.iter().map(|n| format!("sfx: {name}: {n}")));
+                        sounds.insert(cue, event.loaded);
+                        timelines.insert(cue, vec![event.timeline]);
+                    }
+                    Err(e) => report.push(format!("sfx: {name} not loaded: {e:#}")),
+                }
+            }
+            return;
+        }
         for &pair in cues {
             let (sounds, timelines, programs) = match staged.as_deref_mut() {
                 Some(area) => (&mut area.sounds, &mut area.timelines, &mut area.programs),
@@ -292,6 +401,8 @@ impl Banks {
                 Tables {
                     timelines,
                     programs,
+                    players: None,
+                    contacts: None,
                 },
                 report,
             );
@@ -345,6 +456,8 @@ impl Banks {
                     Tables {
                         timelines: &mut self.timelines,
                         programs: &mut self.programs,
+                        players: None,
+                        contacts: None,
                     },
                     &mut report,
                 );
@@ -387,6 +500,8 @@ impl Banks {
                 Tables {
                     timelines: &mut self.timelines,
                     programs: &mut self.programs,
+                    players: None,
+                    contacts: None,
                 },
                 &mut report,
             );
@@ -478,6 +593,55 @@ impl Banks {
         Some(variants[index].voices(rng))
     }
 
+    /// [`Self::voices`], from the player's emitter when `player`: the cue's
+    /// player version where the title authors one, nothing where that version
+    /// is authored but did not load, else the same as anyone's.
+    #[must_use]
+    pub fn voices_for(&self, cue: Cue, player: bool, rng: &mut Rng) -> Option<Vec<CueVoice>> {
+        if player && self.player_silent.contains(&cue) {
+            return None;
+        }
+        if player && let Some(variants) = self.player_timelines.get(&cue) {
+            let index = self.draw(cue, variants.len(), rng);
+            return Some(variants[index].voices(rng));
+        }
+        self.voices(cue, rng)
+    }
+
+    /// Everything one play of a HD contact cue starts for the cue variables its caller hands the
+    /// list, `[severity, surface, perspective, 0]`, drawn by `rng` as [`Self::voices`] draws.
+    ///
+    /// `None` when the cue has no timeline for that block (it did not build, or `variables` is
+    /// not one the game hands it): a contact never falls back to the flat pick.
+    #[must_use]
+    pub fn contact_voices(
+        &self,
+        cue: Cue,
+        variables: [i8; 4],
+        rng: &mut Rng,
+    ) -> Option<Vec<CueVoice>> {
+        let variants = self.contacts.get(&(cue, variables))?;
+        let index = self.draw(cue, variants.len(), rng);
+        Some(variants[index].voices(rng))
+    }
+
+    /// Whether any cue plays from a Wwise event.
+    #[must_use]
+    pub fn has_wwise_cues(&self) -> bool {
+        !self.wwise.is_empty()
+    }
+
+    /// Everything a held cue's Wwise event starts, its looping layers held until
+    /// the game releases it and its one-shot layers fired once; `None` for a cue
+    /// not loaded from a Wwise event, which keeps its title's own held path.
+    #[must_use]
+    pub fn held_voices(&self, cue: Cue, rng: &mut Rng) -> Option<Vec<CueVoice>> {
+        self.wwise
+            .contains(&cue)
+            .then(|| self.voices(cue, rng))
+            .flatten()
+    }
+
     /// The uniform, never-repeating draw among `len` alternates of `cue`.
     fn draw(&self, cue: Cue, len: usize, rng: &mut Rng) -> usize {
         match u32::try_from(len) {
@@ -514,6 +678,12 @@ impl Banks {
 struct Tables<'a> {
     timelines: &'a mut BTreeMap<Cue, Vec<Timeline>>,
     programs: &'a mut BTreeMap<Cue, Program>,
+    /// Where a cue's player-seat timelines go, for a title that builds them
+    /// (HD's race cues); `None` where none is built.
+    players: Option<&'a mut BTreeMap<Cue, Vec<Timeline>>>,
+    /// Where a contact cue's per-block timelines go ([`Banks::contacts`]); `None` where the
+    /// cues loaded are not the contact cues.
+    contacts: Option<&'a mut ContactTimelines>,
 }
 
 /// How a bank's cues are read: what its delays count in, and whether its cue
@@ -548,9 +718,22 @@ fn load_one(
     let Tables {
         timelines,
         programs,
+        players,
+        contacts,
     } = tables;
     match load_cue(blob, (cue, name), read) {
-        Ok((loaded, skipped, timeline, program)) => {
+        Ok(Decoded {
+            loaded,
+            skipped,
+            timeline,
+            program,
+            contact,
+        }) => {
+            let (timeline, player) = match timeline {
+                Ok(Some(variants)) => (Ok(Some(variants.anyone)), variants.player),
+                Ok(None) => (Ok(None), None),
+                Err(e) => (Err(e), None),
+            };
             let undecoded = if skipped == 0 {
                 String::new()
             } else {
@@ -562,6 +745,31 @@ fn load_one(
                 loaded.waveforms.len()
             );
             let mut extra = None;
+            let mut contact_built = false;
+            let mut contact_failed = None;
+            if let (Some(result), Some(contacts)) = (contact, contacts) {
+                match result {
+                    Ok(blocks) => {
+                        let voices = blocks
+                            .iter()
+                            .flat_map(|(_, t)| t.iter().map(|v| v.layers.len()))
+                            .max()
+                            .unwrap_or(0);
+                        line.push_str(&format!(
+                            "; plays its timeline: {} contact variant block(s) of up to {voices} voice(s)",
+                            blocks.len()
+                        ));
+                        for (variables, built) in blocks {
+                            contacts.insert((cue, variables), built);
+                        }
+                        contact_built = true;
+                    }
+                    Err(e) => {
+                        contact_failed =
+                            Some(format!("sfx: {name} contact variants not built: {e:#}"));
+                    }
+                }
+            }
             match timeline {
                 Ok(Some(t)) => {
                     line.push_str(&format!(
@@ -570,7 +778,16 @@ fn load_one(
                         t.iter().map(|v| v.layers.len()).max().unwrap_or(0)
                     ));
                     timelines.insert(cue, t);
+                    if let (Some(player), Some(players)) = (player, players) {
+                        line.push_str(&format!(
+                            "; the player's own: {} variant(s) of {} voice(s)",
+                            player.len(),
+                            player.iter().map(|v| v.layers.len()).max().unwrap_or(0)
+                        ));
+                        players.insert(cue, player);
+                    }
                 }
+                Ok(None) if contact_built => {}
                 Ok(None) => extra = not_one_event(cue, &loaded),
                 Err(e) => line.push_str(&format!("; timeline not built, flat pick kept: {e}")),
             }
@@ -587,6 +804,7 @@ fn load_one(
             }
             report.push(line);
             report.extend(extra);
+            report.extend(contact_failed);
             sounds.insert(cue, loaded);
         }
         // A report line, not a fallback: nothing is substituted for a cue that
@@ -597,19 +815,92 @@ fn load_one(
 
 /// What building a cue's timeline came to: none worth having, or a failure that
 /// leaves the flat pick in place.
-type TimelineResult = anyhow::Result<Option<Vec<Timeline>>>;
+type TimelineResult = anyhow::Result<Option<Variants>>;
+
+/// A cue's timelines, and the player's own version where the title hands the
+/// cue's list a different perspective for the player's craft.
+struct Variants {
+    anyone: Vec<Timeline>,
+    player: Option<Vec<Timeline>>,
+}
+
+/// HD's contact cues' timelines, by cue and by the block of cue variables the list is handed.
+type ContactTimelines = BTreeMap<(Cue, [i8; 4]), Vec<Timeline>>;
+
+/// What [`load_cue`] decoded: the waveforms and the ways the cue plays.
+struct Decoded {
+    loaded: Loaded,
+    skipped: usize,
+    timeline: TimelineResult,
+    program: anyhow::Result<Option<Program>>,
+    contact: ContactResult,
+}
+
+/// A contact cue's timelines for each block of cue variables it can be handed, or why not all
+/// could be built; `None` for a cue that is not walked as one.
+type ContactResult = Option<anyhow::Result<Vec<([i8; 4], Vec<Timeline>)>>>;
+
+/// The blocks of cue variables the game can hand a contact cue's list, `[severity, surface,
+/// perspective, 0]`: the player's `.COLLISIONS` carries perspective 1 and another craft's 2,
+/// `.COLLSHIELD` is the player's alone, and the grind pair never sets one (collision-cues.md,
+/// "`Ship_UpdateCollisionCues`").
+fn contact_blocks(cue: Cue) -> Option<Vec<[i8; 4]>> {
+    let perspectives: &[i8] = match cue {
+        Cue::Collision => &[1, 2],
+        Cue::CollisionShield => &[1],
+        Cue::Grind | Cue::GrindShield => &[0],
+        _ => return None,
+    };
+    let mut blocks = Vec::new();
+    for severity in 0..=2 {
+        for surface in 0..=1 {
+            for &perspective in perspectives {
+                blocks.push([severity, surface, perspective, 0]);
+            }
+        }
+    }
+    Some(blocks)
+}
+
+/// Every block of `cue`'s contact variables as a timeline, all or none. A child cue sees its
+/// parent's four variables (`Scream_DoGrainPlayChild`), so the replacing child (`0x08`) is
+/// walked with them (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`, "Where the four
+/// variables come from").
+fn contact_variants(
+    bank: &sblk::Bank,
+    (cue, name): (Cue, &str),
+    tick: oag_title::SequenceTick,
+) -> ContactResult {
+    let blocks = contact_blocks(cue)?;
+    let build = || -> anyhow::Result<Vec<([i8; 4], Vec<Timeline>)>> {
+        let mut built = Vec::with_capacity(blocks.len());
+        for variables in blocks {
+            let timelines = layers::timelines(
+                bank,
+                name,
+                tick,
+                layers::Walking {
+                    cue_variables: Some(variables),
+                    replace_with_child: true,
+                    ..layers::Walking::default()
+                },
+            )?;
+            let Some(timelines) = timelines else {
+                anyhow::bail!("the walk at variables {variables:?} is not a complete timeline");
+            };
+            built.push((variables, timelines));
+        }
+        Ok(built)
+    };
+    Some(build())
+}
 
 /// Resolves one cue in one bank blob and decodes what it binds.
 fn load_cue(
     blob: &[u8],
     (cue, name): (Cue, &str),
     Reading { tick, hashed }: Reading,
-) -> anyhow::Result<(
-    Loaded,
-    usize,
-    TimelineResult,
-    anyhow::Result<Option<Program>>,
-)> {
+) -> anyhow::Result<Decoded> {
     let bank = sblk::Bank::parse(blob)?;
     let (loaded, skipped) = if hashed {
         load_track_cue(&bank, name)?
@@ -620,22 +911,83 @@ fn load_cue(
     // that law spreads over layers is unread: it keeps its flat set.
     let timeline = if cue == Cue::Engine {
         Ok(None)
+    } else if tick.walks_cue_variables() && cue.walks_variables() {
+        race_variants(&bank, (cue, name), tick)
     } else {
         layers::timelines(
             &bank,
             name,
             tick,
-            cue.bank() == BankName::Frontend,
-            Cue::COUNTDOWN.contains(&cue) || cue == Cue::StartBeat,
-            hashed,
+            layers::Walking {
+                front_end: cue.bank() == BankName::Frontend,
+                replace_with_child: Cue::COUNTDOWN.contains(&cue) || cue == Cue::StartBeat,
+                hashed,
+                ..layers::Walking::default()
+            },
         )
+        .map(|t| {
+            t.map(|anyone| Variants {
+                anyone,
+                player: None,
+            })
+        })
     };
     let program = if cue.repeats() {
         layers::program(&bank, name, tick)
     } else {
         Ok(None)
     };
-    Ok((loaded, skipped, timeline, program))
+    let contact = if tick.walks_cue_variables() {
+        contact_variants(&bank, (cue, name), tick)
+    } else {
+        None
+    };
+    Ok(Decoded {
+        loaded,
+        skipped,
+        timeline,
+        program,
+        contact,
+    })
+}
+
+/// An HD race cue walked with its cue variables: what everyone hears, and the
+/// player's own version when the variables differ for the player's craft.
+///
+/// Both or neither: a cue whose player version cannot be built keeps its flat
+/// pick for everyone, never the other craft's mix in the player's ear.
+fn race_variants(
+    bank: &sblk::Bank,
+    (cue, name): (Cue, &str),
+    tick: oag_title::SequenceTick,
+) -> TimelineResult {
+    let build = |player: bool| {
+        layers::timelines(
+            bank,
+            name,
+            tick,
+            layers::Walking {
+                cue_variables: Some(cue.variables(player)),
+                ..layers::Walking::default()
+            },
+        )
+    };
+    let silent = |timelines: &[Timeline]| timelines.iter().all(|t| t.layers.is_empty());
+    let Some(anyone) = build(false)? else {
+        return Ok(None);
+    };
+    if cue.variables(true) == cue.variables(false) {
+        return Ok((!silent(&anyone)).then_some(Variants {
+            anyone,
+            player: None,
+        }));
+    }
+    Ok(build(true)?
+        .filter(|player| !(silent(player) && silent(&anyone)))
+        .map(|player| Variants {
+            anyone,
+            player: Some(player),
+        }))
 }
 
 /// The length ratio past which a cue's waveforms cannot all be alternates of one

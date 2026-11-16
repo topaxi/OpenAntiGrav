@@ -20,10 +20,17 @@ pub(super) struct Voices {
 /// How loud and where `slot` is heard from. A craft out of range or with no pose
 /// is silent, not refused: the hum is held and the craft may return to range.
 fn heard(slot: usize, listener: &oag_audio::Listener, craft: &[Option<(Vec3, f32)>]) -> VoicePlace {
-    let placed = place(CueEvent::new(Cue::Magstrip, slot), listener, craft);
+    // `Magstrip` is placed off its craft whoever owns it, so no seat is the dry one.
+    let placed = place(
+        CueEvent::new(Cue::Magstrip, slot),
+        listener,
+        craft,
+        usize::MAX,
+    );
     VoicePlace {
         gain: placed.map_or(0.0, |p| p.gain),
         pan: placed.and_then(|p| p.pan),
+        front: placed.map_or(1.0, |p| p.front),
     }
 }
 
@@ -39,6 +46,10 @@ const DRAWS: usize = 64;
 /// and a one-shot would end a second into a visit it should last, so it draws
 /// until one loops.
 fn held_draw(banks: &Banks, rng: &mut Rng) -> Option<Vec<layers::CueVoice>> {
+    // A Wwise event marks its own loops: every layer it starts sounds.
+    if let Some(event) = banks.held_voices(Cue::Magstrip, rng) {
+        return Some(event);
+    }
     let first = banks.voices(Cue::Magstrip, rng)?;
     if first.iter().all(|voice| voice.looping) {
         return Some(first);
@@ -75,12 +86,22 @@ impl Voices {
                 Cue::Magstrip.bus(),
                 heard(slot, listener, craft),
             );
+            log::trace!(
+                "sfx: held Magstrip opened on slot {slot}, {} voice(s)",
+                held.len()
+            );
         }
     }
 
     /// Ends `slot`'s hum.
     pub(super) fn stop(&mut self, slot: usize, mixer: &mut Mixer) {
         if let Some(held) = self.held.get_mut(slot) {
+            if !held.is_empty() {
+                log::trace!(
+                    "sfx: held Magstrip released on slot {slot}, {} voice(s)",
+                    held.len()
+                );
+            }
             for id in held.drain(..) {
                 mixer.stop(id);
             }
@@ -103,6 +124,7 @@ impl Voices {
             for &id in held.iter() {
                 mixer.set_gain(id, at.gain);
                 mixer.set_pan(id, at.pan);
+                mixer.set_front(id, at.front);
             }
         }
     }

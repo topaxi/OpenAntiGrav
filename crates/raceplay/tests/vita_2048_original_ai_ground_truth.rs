@@ -34,6 +34,8 @@ fn loaded(event: &str) -> Option<oag_raceplay::Loaded> {
     let options = oag_raceplay::Options {
         source: source.display().to_string(),
         seed: Some(1),
+        // The race is flown for its simulation, which no track art feeds.
+        ribbon: true,
         ..oag_raceplay::Options::default()
     };
     Some(oag_raceplay::load_event(&options, event).expect("the event loads"))
@@ -78,7 +80,7 @@ fn held(skill: f32, from: f32, to: f32) -> Option<Vec<Vec<(u8, f32)>>> {
     let mut race = race("2048 - Event 4", Some(skill))?;
     let mut out = Vec::new();
     while seconds(&race) <= to {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         if seconds(&race) >= from {
             let places = race.places();
             let field = race.original_ai_field().expect("the field is on");
@@ -243,7 +245,7 @@ fn fly_at(event: &str, respawns: u32, offset: f32) {
     let mut weapon = [None; 8];
     let mut owned = [0usize; 8];
     while seconds(&race) <= limit && !(1..8).all(|s| race.sim.world.ships[s].standing.finished()) {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         let mut now = [0usize; 8];
         for projectile in &race.sim.world.projectiles.slots {
             if projectile.kind.is_some() && usize::from(projectile.owner) < 8 {
@@ -324,8 +326,11 @@ macro_rules! circuit {
 /// parked player, so its finish time is bimodal (277 s or past the 300 s limit) and flips with any
 /// nudge. Measured 2026-10-26 over the nine `OAG_PERTURB` scales: 1 of 9 runs missed the limit
 /// with the 2048 grid hover off, 2 of 9 (the unperturbed one among them) with it on, and the
-/// craft's heights agree within a second of the green light. Three of the five scales must
-/// finish; a fault that stops the field fails all five.
+/// craft's heights agree within a second of the green light. With the Cannon at its measured
+/// muzzle speed 9 of 45 runs miss over the nine `perturb::BOUND_OFFSETS` times five scales (the
+/// missing field is held up by slowdown, slots 1 and 2 on lap 3 at 300 s), 20 %; two of the five
+/// scales must finish (a miss rate of 20 % fails that bar under 1 % of the time), and a fault
+/// that stops the field fails all five.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn the_field_finishes_tower() {
@@ -333,7 +338,7 @@ fn the_field_finishes_tower() {
         .iter()
         .filter(|offset| std::panic::catch_unwind(|| fly_at("2048 - Event 1", 0, **offset)).is_ok())
         .count();
-    assert!(finished >= 3, "Tower: {finished} of 5 scales finished");
+    assert!(finished >= 2, "Tower: {finished} of 5 scales finished");
 }
 circuit!(the_field_finishes_mall, "2048 - Event 2", 0);
 circuit!(the_field_finishes_bridge, "2048 - Event 2-1", 0);
@@ -410,7 +415,7 @@ fn the_super_phantom_field_runs_square_clean() {
     let mut lap = [1u32; 8];
     let mut per_lap: [Vec<f32>; 8] = Default::default();
     while seconds(&race) <= 120.0 {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         for slot in 1..8 {
             let ship = &race.sim.world.ships[slot];
             if ship.standing.lap != lap[slot] {
@@ -443,7 +448,7 @@ fn the_super_phantom_field_runs_square_clean() {
     }
 }
 
-/// A RACE REMIX style race on Super Phantom, which this project's driver is
+/// A two-title race page style race on Super Phantom, which this project's driver is
 /// not verified on, fields no opponents; the same race on Phantom fields all
 /// seven. (`oag_ai::coverage`; the campaign's own controller is separate.)
 #[test]
@@ -459,6 +464,8 @@ fn a_super_phantom_race_box_race_runs_without_opponents() {
             class: class.to_string(),
             no_driver_for_class: !oag_ai::coverage::project_driver_covers(class),
             seed: Some(1),
+            // The race is flown for its simulation, which no track art feeds.
+            ribbon: true,
             ..oag_raceplay::Options::default()
         };
         let loaded = oag_raceplay::load(&options).expect("loads");

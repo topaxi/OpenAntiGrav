@@ -14,6 +14,10 @@
 //! the result is what the rows below cite: the exhaust ribbon and the menu frame
 //! are the executable's own literals. The default circuit, the Zone shape and
 //! the mount order are choices, labelled as such.
+//!
+//! An install patched in place carries `data05` to `data08` as well and is still
+//! this variant. Its executable is 02.51, not the one measured here, and what it
+//! offers beyond these rows is unread: `docs/formats/hd-psn.md`, "A patched install".
 
 use oag_title::{
     FrontEnd, MenuBlocks, MenuSkin, RaceDefaults, Title, ZoneCircuit, exhaust::Exhaust,

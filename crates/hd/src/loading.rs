@@ -109,7 +109,28 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
     deck: Some(DECK),
     labels: Some(LABELS),
     progression: Some(PROGRESSION),
+    layout: Some(r"Data\XML\LoadingScreen_HD.toml"),
+    game_tips: None,
 };
+
+/// The Bink clip in the mode icon's panel, by mode id, in the Fury styling.
+///
+/// **Only mode 3 (`SPArcade`, a single race) is mapped, because it is the only
+/// one seen.** An RPCS3 frame of a `GetMode()==3` race (Racebox, Vineta K,
+/// 2026-11-01) shows the panel playing `single_race_icon_fury.bik`: the ring
+/// logo builds up and the grey ship appears at its corner, a pixel match of
+/// the ring's red against the clip's frame 60, scaled 0.6 (400 to 240 px) with
+/// its top left at (1488, 694) of 1080. Where the executable picks the clip
+/// from the mode is unread, so the other ids draw no icon rather than a guess
+/// from the file names. Confidence **85** on this row (a live match, no
+/// reader).
+pub const MODE_ICONS_FURY: &[(u32, &str)] = &[(3, r"Data\FE\Images\single_race_icon_fury.bik")];
+
+/// The same row in the base game's styling: `single_race_icon.bik`, the
+/// non-Fury clip under the same name. **Chosen, not measured**: no frame of the
+/// base styling's loading screen has been captured, the file name pairing is
+/// all this rests on.
+pub const MODE_ICONS_HD: &[(u32, &str)] = &[(3, r"Data\FE\Images\single_race_icon.bik")];
 
 /// The five features the screen draws from, **in the order the executable
 /// names them**.
@@ -143,6 +164,9 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
 pub const FEATURES: &[oag_title::loading::FeatureStyle] = &[
     oag_title::loading::FeatureStyle {
         name: STYLE_HD,
+        dark_ground: false,
+        mode_icons: MODE_ICONS_HD,
+        mode_stills: oag_title::loading::ModeStills::NONE,
         features: &[
             feature(
                 r"Data\FE\Images\Barrel_Roll.gtf",
@@ -178,6 +202,9 @@ pub const FEATURES: &[oag_title::loading::FeatureStyle] = &[
     },
     oag_title::loading::FeatureStyle {
         name: STYLE_FURY,
+        dark_ground: true,
+        mode_icons: MODE_ICONS_FURY,
+        mode_stills: oag_title::loading::ModeStills::NONE,
         features: &[
             feature(
                 r"Data\FE\Images\Barrel_Roll_fury.gtf",
@@ -275,12 +302,14 @@ pub const PROGRESSION: oag_title::loading::Progression = oag_title::loading::Pro
     milestones: &[0.4, 0.5, 0.75, 0.95],
     rate: 0.1,
     columns: 166.0,
+    rules: oag_title::loading::Rules::HD,
 };
 
 /// The base game's style, as `OPT_FE_STYLE`'s own first entry spells it.
 ///
-/// White and blue. First in [`FEATURES`], so a source with no saved choice gets
-/// it.
+/// White and blue. A source with no saved choice gets the style whose
+/// `dark_ground` matches the front end it serves, which is Fury's on the disc's
+/// `DATA00`.
 pub const STYLE_HD: &str = "HD";
 
 /// Fury's style, as `OPT_FE_STYLE`'s second entry spells it.
@@ -374,7 +403,6 @@ pub const CHROME: &[(oag_title::loading::Chrome, &str)] = &[
 /// `FE_MODE_ICON`), each drawn behind a `square.gtf` bullet. An earlier reading
 /// called them a debug overlay; the strings are in the retail string table.
 pub const LABELS: oag_title::loading::Labels = oag_title::loading::Labels {
-    brand: "WIPEOUT\u{ae} HD",
     feature_image: "FE_FEATURE_IMAGE",
     feature_description: "FE_FEATURE_DESC",
     progression_bar: "FE_PROG_BAR",

@@ -36,7 +36,7 @@ pub(super) fn row_width(n: usize, size: f32) -> f32 {
     n as f32 * size + (n - 1) as f32 * GAP
 }
 
-impl Frontend {
+impl CardPaint<'_> {
     /// The icons on the objective page's glyph row: `left` is the slot's left
     /// edge, the row is centred on `y`, and nothing is captioned.
     pub(super) fn draw_callout_row(

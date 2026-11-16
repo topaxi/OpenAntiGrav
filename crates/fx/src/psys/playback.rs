@@ -158,12 +158,14 @@ pub(super) struct Frame {
     pub anchor: Vec3,
     pub across: Vec3,
     pub up: Vec3,
+    /// The length of the matrix's rows: what the frame does to a local offset.
+    pub scale: f32,
 }
 
 impl Frame {
     /// `v`, written in this frame's axes, in world axes.
     fn to_world(self, v: Vec3) -> Vec3 {
-        self.across * v.x + self.up * v.y + self.across.cross(self.up) * v.z
+        (self.across * v.x + self.up * v.y + self.across.cross(self.up) * v.z) * self.scale
     }
 
     /// `v`, in world axes, written in this frame's axes.
@@ -172,7 +174,7 @@ impl Frame {
             v.dot(self.across),
             v.dot(self.up),
             v.dot(self.across.cross(self.up)),
-        )
+        ) / self.scale
     }
 }
 
@@ -216,14 +218,26 @@ impl System {
             anchor: self.anchor,
             across: self.across,
             up: self.up,
+            scale: self.ride_scale,
         }
+    }
+
+    /// The length of the rows of the matrix a riding instance's local-space
+    /// particles are drawn through (`1.0` unless set). Once the frame is ridden, a
+    /// change carries every live local-space particle's offset, origin and velocity
+    /// from the old scale to the new, and newborns spawn at it. No effect unless
+    /// [`System::set_rides_frame`] is on.
+    pub fn set_ride_scale(&mut self, scale: f32) {
+        self.ride_scale = scale;
     }
 
     /// Carries every live particle of a local-space root emitter from the frame it
     /// was last carried to into the instance's current one, as drawing it through
     /// the live matrix does. Velocity turns with the frame; drag and gravity act on
-    /// it in world axes, which equals the frame's own for the only emitter riding
-    /// today (`WO_REPULSER_BLAST`: isotropic drag, no gravity flag).
+    /// it in world axes, where the original's act in the frame's
+    /// (`ParticleSystem_ApplyDrag`). The two agree for `WO_REPULSER_BLAST` (isotropic
+    /// drag, no gravity flag) and are a few degrees apart for `WO_PLASMA_HEAD`, whose
+    /// `0.4` lands on world up rather than on a banked craft's up.
     pub(super) fn ride(&mut self, effect: &super::Effect) {
         let Some(from) = self.ridden else {
             return;
@@ -253,6 +267,21 @@ impl Stage {
     pub fn set_rides_frame(&mut self, playing: Playing, rides: bool) {
         if let Some(instance) = self.get_mut(playing) {
             instance.system.set_rides_frame(rides);
+        }
+    }
+
+    /// Sets the ride scale - see [`System::set_ride_scale`]. A no-op on a stale handle.
+    pub fn set_ride_scale(&mut self, playing: Playing, scale: f32) {
+        if let Some(instance) = self.get_mut(playing) {
+            instance.system.set_ride_scale(scale);
+        }
+    }
+
+    /// Sets whether an instance's particles draw at its live severity - see
+    /// [`System::set_draws_live_severity`]. A no-op on a stale handle.
+    pub fn set_draws_live_severity(&mut self, playing: Playing, live: bool) {
+        if let Some(instance) = self.get_mut(playing) {
+            instance.system.set_draws_live_severity(live);
         }
     }
 

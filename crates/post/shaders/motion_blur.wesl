@@ -41,7 +41,8 @@ struct Constants {
     inv_size: vec2<f32>,
     // The tile edge in pixels, as an integer for the reduction loops.
     tile: u32,
-    _pad: f32,
+    // The most taps the gather spends on one pixel: odd, at least `MIN_TAPS`.
+    max_taps: u32,
     // The camera's lens - its impact shake and its field of view - as a
     // clip-space map from a pixel to where the same direction sat a frame ago
     // under the lens alone; identity for none.
@@ -255,13 +256,17 @@ fn fs_neighbour_max(in: VertexOutput) -> @location(0) vec2<f32> {
     return best;
 }
 
-// An odd count so one tap can land on the pixel itself; the per-pixel jitter
-// below hides the banding a fixed lattice of this few taps would show.
-const TAPS: i32 = 15;
-// The fewest taps a moving pixel gets, and the smear length each further tap
-// is spent on - see `fs_reconstruct`.
+// The fewest taps a moving pixel gets (the tier's own cap, `max_taps`, is
+// odd so one tap can land on the pixel itself, and never below this), and
+// the smear length each further tap is spent on - see `fs_reconstruct`. The
+// per-pixel jitter below hides the banding a fixed lattice of this few taps
+// would show.
 const MIN_TAPS: i32 = 5;
 const TAP_SPACING_PX: f32 = 4.0;
+// The share of the dominant reach the taps span, end to end: fifteen taps'
+// `15 / 16`, held for every count so a lower tier samples the same smear
+// more coarsely rather than a shorter one.
+const SPAN: f32 = 0.9375;
 
 // How far apart two NDC depths must be before one surface counts as
 // decisively in front of the other. Chosen for this renderer's projection
@@ -346,12 +351,12 @@ fn gather(position: vec4<f32>) -> Gathered {
     // That lattice is anchored to the window rather than to the world, so the
     // scene flows through a stationary grid and the eye reads squares.
     //
-    // This used to offset the lookup by up to +/-half a tile with a per-pixel
-    // hash, trading the lattice for noise. Measured in
-    // `docs/rendering/motion-blur.md` that wobble was most of the grain in a
-    // smear: every pixel landed on a different tile, so neighbours gathered
-    // along different spans. Interpolating makes the span a continuous
-    // function of the pixel instead, so there is neither a lattice nor noise.
+    // Offsetting the lookup by up to +/-half a tile with a per-pixel hash would
+    // trade the lattice for noise: measured in `docs/rendering/motion-blur.md`,
+    // that wobble is most of the grain in a smear, because every pixel lands on
+    // a different tile and neighbours gather along different spans.
+    // Interpolating makes the span a continuous function of the pixel instead,
+    // so there is neither a lattice nor noise.
     // Each of the four tiles is a neighbour-max, so the blend still covers a
     // pixel's own neighbourhood wherever motion is smooth; at a real edge of a
     // fast object it falls to a fraction of the object's reach over the tile's
@@ -378,13 +383,16 @@ fn gather(position: vec4<f32>) -> Gathered {
     // The centre tap's weight: the paper's `N / (K * |v(X)|)` shape - a
     // fast-moving pixel trusts its own sample less, spreading its energy
     // along its path, while a still one keeps most of its own colour.
-    // **As many taps as the smear is long, up to `TAPS`**: one per
-    // `TAP_SPACING_PX` of the neighbourhood's reach, odd so one still lands on
-    // the pixel, and never fewer than `MIN_TAPS`. A short smear sampled
-    // fifteen times re-reads the same few texels; this spends the fetches
-    // where the distance is. Measured on HD at 1600x900 on an integrated GPU,
-    // the gather 13.7 -> 9.4 ms for a mean change of 0.7/255.
-    let taps = clamp(i32(ceil(dominant_len / TAP_SPACING_PX)) | 1, MIN_TAPS, TAPS);
+    // **As many taps as the smear is long, up to the tier's `max_taps`**: one
+    // per `TAP_SPACING_PX` of the neighbourhood's reach, odd so one still
+    // lands on the pixel, and never fewer than `MIN_TAPS`. A short smear
+    // sampled fifteen times re-reads the same few texels; this spends the
+    // fetches where the distance is. Measured on HD at 1600x900 on an
+    // integrated GPU, the gather 13.7 -> 9.4 ms for a mean change of 0.7/255.
+    // The cap moves where the taps fall, never how far they reach: `t` below
+    // spans the whole smear at any count. Costs per tier:
+    // `docs/rendering/motion-blur.md`, "Fewer taps".
+    let taps = clamp(i32(ceil(dominant_len / TAP_SPACING_PX)) | 1, MIN_TAPS, i32(constants.max_taps));
     let centre_weight = f32(taps) / max(own_reach, 0.5);
     var weight = centre_weight;
     var sum = centre * weight;
@@ -394,7 +402,11 @@ fn gather(position: vec4<f32>) -> Gathered {
         if i == taps / 2 {
             continue; // the centre tap, already counted
         }
-        let t = (f32(i) + dither + 1.0) / f32(taps + 1) - 0.5;
+        // Each tap jittered inside its own `1 / taps` share of `SPAN`, so the
+        // outermost taps reach as far at any count: at 15 these are the
+        // positions `(i + 1 + dither) / 16 - 0.5` the chain was tuned with,
+        // up to rounding.
+        let t = ((f32(i) + 0.5 + dither) / f32(taps) - 0.5) * SPAN;
         let offset_px = dominant * t;
         let distance = length(offset_px);
         let uv = here + offset_px / constants.rect_pixels * constants.rect_size;
@@ -480,8 +492,9 @@ fn fs_reconstruct_half(half_res: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>((found.colour / total).rgb * amount, amount);
 }
 
-// The half-size blend `fs_reconstruct` wrote, laid over the scene at full
-// resolution into the scratch target `fs_copy` then carries home.
+// The half-size blend `fs_reconstruct_half` wrote, upsampled to full
+// resolution and laid over the scene by the pipeline's blend (`SMEAR_OVER` in
+// `motion_blur.rs`), so no copy follows.
 //
 // **Upsampled by depth as well as by distance.** Each of the four half-size
 // texels around this pixel is weighted bilinearly *and* by how near the depth
@@ -494,13 +507,12 @@ fn fs_reconstruct_half(half_res: VertexOutput) -> @location(0) vec4<f32> {
 //
 // The blend is premultiplied, so a texel with no smear pulls toward nothing
 // rather than toward black. Bound differently from the gather: the blend is
-// `colour_tex`, the full-size depths are `prepared_tex`, and the scene is read
-// exactly through `tile_tex`'s load slot. Alpha is the scene's own - the glow
-// mask the bloom has already read.
+// `colour_tex` and the full-size depths are `prepared_tex`; the scene is the
+// render target, so no slot holds it. The pipeline keeps the scene's own
+// alpha - the glow mask the bloom has already read.
 @fragment
 fn fs_composite(in: VertexOutput) -> @location(0) vec4<f32> {
     let pixel = vec2<i32>(in.position.xy);
-    let scene = textureLoad(tile_tex, pixel, 0);
     let depth = textureLoad(prepared_tex, pixel, 0).z;
     let half_last = vec2<i32>(textureDimensions(colour_tex)) - vec2<i32>(1);
     let full_last = vec2<i32>(textureDimensions(prepared_tex)) - vec2<i32>(1);
@@ -528,7 +540,7 @@ fn fs_composite(in: VertexOutput) -> @location(0) vec4<f32> {
         }
     }
     let smear = select(nearest, sum / max(total, 1.0e-6), total > 1.0e-4);
-    return vec4<f32>(scene.rgb * (1.0 - smear.a) + smear.rgb, scene.a);
+    return smear;
 }
 
 // The result back onto the scene target: the gather cannot sample the

@@ -128,6 +128,17 @@ impl Session {
         Some(self.settings.render_profiles.entry(key).or_default())
     }
 
+    /// Whether this race is a verification run that must leave no record, medal, loyalty or ghost.
+    /// See [`oag_game::official`].
+    pub(crate) fn race_is_unofficial(&self) -> bool {
+        // A demo leaves no record, medal, loyalty or ghost.
+        self.in_unrecorded_demo()
+            || self
+                .race_options
+                .as_ref()
+                .is_some_and(|options| oag_game::official::unofficial(options, self.give))
+    }
+
     /// What this session's campaign rows are filed under - see
     /// [`oag_game::records::campaign_title`]. `None` before any source is open.
     pub(crate) fn campaign_title(&self) -> Option<String> {
@@ -321,6 +332,47 @@ impl Session {
                     return;
                 }
             },
+            // Applied on the spot to the menus: the inset is set here, and the pointer reads it
+            // back out of the same renderer. A race parked behind the menus takes it from the
+            // settings on the first frame after it resumes.
+            "graphics.hud_safe_area" => match text.parse::<u8>() {
+                Ok(percent) => {
+                    self.settings.graphics.hud_safe_area = Some(percent);
+                    if let (Some(shell), Stage::Menu(stage)) = (&self.shell, &mut self.stage) {
+                        stage.renderer.set_inset(
+                            shell.title.hud_art.safe_area_scale(Some(percent)),
+                        );
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            // Applied on the spot: the mixer reads the mode on its next block.
+            "audio.spatial_audio" => match text.parse::<oag_audio::SpatialChoice>() {
+                Ok(choice) => {
+                    let device = self.audio.route_device().map(str::to_owned);
+                    self.settings
+                        .audio
+                        .choose_spatial(device.as_deref(), choice);
+                    self.audio.apply(&self.settings.audio);
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            "audio.music_order" => match text.parse::<oag_sound::MusicOrder>() {
+                Ok(order) => {
+                    self.settings.audio.music_order = order;
+                    self.audio.set_music_order(order);
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "audio.music_source" => match text.parse::<oag_sound::MusicSource>() {
                 Ok(source) => {
                     self.settings.audio.music_source = source;
@@ -507,6 +559,32 @@ impl Session {
                 }
             },
             // Applied by the next frame the race draws: the session hands the
+            // sort to `Race::set_scenery_sort` every frame.
+            "graphics.scenery_sort" => match text.parse::<oag_display::display::ScenerySort>() {
+                Ok(sort) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.scenery_sort = sort;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            // Applied by the next frame the race draws: the session hands the
+            // length to `Race::set_trail_length` every frame.
+            "graphics.trail_length" => match text.parse::<oag_display::display::TrailLength>() {
+                Ok(length) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.trail_length = length;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            // Applied by the next frame the race draws: the session hands the
             // setting to `Race::set_weather` every frame.
             "graphics.weather" => match text.parse::<oag_display::display::Weather>() {
                 Ok(weather) => {
@@ -564,6 +642,34 @@ impl Session {
                     return;
                 }
             },
+            // Applied by the next frame the race draws: the session hands the choice to the race
+            // every frame.
+            "display.ghost_ship_visible" => match text.as_str() {
+                "on" => self.settings.display.ghost_ship_visible = true,
+                "off" => self.settings.display.ghost_ship_visible = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
+            // Read when the next race loads.
+            "display.auto_load_ghost" => match text.as_str() {
+                "on" => self.settings.display.auto_load_ghost = true,
+                "off" => self.settings.display.auto_load_ghost = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
+            // Applied by the next frame the race draws.
+            "display.multiplayer_tags" => match text.as_str() {
+                "on" => self.settings.display.multiplayer_tags = true,
+                "off" => self.settings.display.multiplayer_tags = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
             "display.pause_on_focus_loss" => match text.as_str() {
                 // Read at the next focus event; nothing to apply now.
                 "on" => self.settings.display.pause_on_focus_loss = true,
@@ -589,6 +695,7 @@ impl Session {
                     // assume it is broken, and the frame limiter that comes
                     // with it would then look broken too.
                     self.gpu.output.set_vsync(&self.gpu.device, vsync);
+                    self.display.reset();
                     // The frames either side of a surface reconfigure are not
                     // frames anyone is going to present at that rate.
                     self.stalled = true;
@@ -630,6 +737,42 @@ impl Session {
             "graphics.boost_zoom" => match text.as_str() {
                 "on" => self.settings.graphics.boost_zoom = true,
                 "off" => self.settings.graphics.boost_zoom = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
+            // Read when a race loads (`race::Options::trail_hits`), so the next race.
+            "graphics.trail_hits" => match text.as_str() {
+                "on" => self.settings.graphics.trail_hits = true,
+                "off" => self.settings.graphics.trail_hits = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
+            // Read when a race loads (`race::Options::wingtip_contrails`), so the next race.
+            "graphics.wingtip_contrails" => match text.as_str() {
+                "on" => self.settings.graphics.wingtip_contrails = true,
+                "off" => self.settings.graphics.wingtip_contrails = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
+            // Read when a race loads (`race::Options::own_shield`), so the next race.
+            "graphics.own_shield" => match text.as_str() {
+                "on" => self.settings.graphics.own_shield = true,
+                "off" => self.settings.graphics.own_shield = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
+            // Read when a race loads (`race::Options::own_rockets`), so the next race.
+            "graphics.own_rockets" => match text.as_str() {
+                "on" => self.settings.graphics.own_rockets = true,
+                "off" => self.settings.graphics.own_rockets = false,
                 _ => {
                     warn!("ignoring {setting} = {text:?}: expected on or off");
                     return;
@@ -691,6 +834,19 @@ impl Session {
                     return;
                 }
             },
+            // Applies now: the next pattern played reads it; what is sounding
+            // stops, so a change to NONE is felt at once.
+            "controls.rumble" => match oag_input::rumble::Mode::from_name(&text) {
+                Some(mode) => {
+                    self.settings.controls.rumble = mode.name().to_string();
+                    self.controls.silence_motors();
+                    self.arm_rumble();
+                }
+                None => {
+                    warn!("ignoring {setting} = {text:?}: not none, original, ps3 or ps4");
+                    return;
+                }
+            },
             "controls.touch_go_zones" => match text.as_str() {
                 // Read by the next tick's `feed_touch`.
                 "on" => self.settings.controls.touch_go_zones = true,
@@ -746,13 +902,7 @@ impl Session {
                 // menu. See `Session::resupply_tracks_for_mode`.
                 self.resupply_tracks_for_mode();
             }
-            "race.class" => {
-                self.settings.race.class = text;
-                // RACE REMIX's TEAM row hides a team that does not author
-                // this class (`Session::remix_craft_catalogue`).
-                self.resupply_remix_teams();
-                self.resupply_remix_variant();
-            }
+            "race.class" => self.settings.race.class = text,
             // VARIANT's own list depends on which team this names - the
             // same reason `race.mode` above resupplies CIRCUIT.
             "race.team" => {
@@ -762,29 +912,15 @@ impl Session {
             "race.track" => self.settings.race.track = text,
             "race.variant" => self.settings.race.variant = text,
             "race.kill_target" => self.settings.race.kill_target = text,
+            "race.score_target" => self.settings.race.score_target = text,
             "race.weapons" => self.settings.race.weapons = text,
             "ai.difficulty" => self.settings.ai.difficulty = text,
-            // The two title rows resupply their scoped TRACK/TEAM the same
-            // way `race.mode` resupplies the ordinary TRACK row above -
-            // `Menu::supply` only runs at menu-open, and nothing else tells
-            // RemixTracks/RemixTeams that the title underneath them moved.
-            "remix.track_title" => {
-                self.settings.remix.track_title = text;
-                self.resupply_remix_tracks();
+            _ if setting.starts_with("mod.") => {
+                if !settings::mod_settings::set(&mut self.settings.mod_settings, setting, &text) {
+                    warn!("ignoring {setting} = {text:?}: not mod.<id>.<key>");
+                    return;
+                }
             }
-            "remix.craft_title" => {
-                self.settings.remix.craft_title = text;
-                self.resupply_remix_teams();
-                // VARIANT depends on the team, which just moved to whichever
-                // this craft title's roster offers first.
-                self.resupply_remix_variant();
-            }
-            "remix.track" => self.settings.remix.track = text,
-            "remix.team" => {
-                self.settings.remix.team = text;
-                self.resupply_remix_variant();
-            }
-            "remix.variant" => self.settings.remix.variant = text,
             // **Applied immediately now, not deferred to the next boot** -
             // this row used to be a bare settings write, and `Self::apply_window`'s
             // own doc comment named it beside anisotropy as the two rows a
@@ -814,9 +950,18 @@ impl Session {
                 self.resupply_mod_switch();
                 return;
             }
+            // The REPLAY row moves the detail lines; nothing is stored.
+            oag_game::replays::page::SELECTED => return,
             // Saved by the switch itself, into `[mods] disabled`, and rebuilt live.
             oag_game::mods::ENABLED => {
                 self.switch_selected_mod(text == "on");
+                return;
+            }
+            // A MUSIC page row: one source on or off, saved into `[audio] music_switches`.
+            other if oag_game::music_pool::source_of(other).is_some() => {
+                if let Some(id) = oag_game::music_pool::source_of(other) {
+                    self.switch_music_source(id, text == "on");
+                }
                 return;
             }
             other => {
@@ -824,6 +969,7 @@ impl Session {
                 return;
             }
         }
+        self.resupply_queries(Some(setting));
         if let Err(e) = settings::save(&self.settings) {
             error!("could not save settings: {e:#}");
         }

@@ -66,7 +66,7 @@ Reads the held weapon's internal id from `*(int*)(*(int*)(param_1+0xc)+0x58)` an
 
 ### The grant announcement (2026-10-27, `2048-hud-state`)
 
-**Confidence: 75** on the timer, **60** on the fly that follows. The same function, second decompile:
+**Confidence: 75** on the timer and the fly's arithmetic (read in full below). The same function, second decompile:
 
 - On a held-id change it writes `1.0` (`0x3f800000`) into `hud+0x228`, resets `hud+0x21c` and puts `PickupParent`
   back at its cached bind-time `x`/`y` (`+0x204`/`+0x208`), the authored top-centre rect.
@@ -77,8 +77,54 @@ Reads the held weapon's internal id from `*(int*)(*(int*)(param_1+0xc)+0x58)` an
   announcement and the icon only reaches the slot afterwards.
 - A frame with nothing held clears the memory (`hud+0x230 = 0`), so the next grant announces again.
 
-Ours: `SlotHud::advance` keeps the timer (`Readout::pickup_announcing`); the fly and the scale ramp are not drawn, the
-icon snaps to the slot at the end of the second. Frame `35-w-2.png` (icon top-centre, `MISSILE`) is what it matches.
+**The fly, read in full (2026-11-08, `hud-2048-fly`; confidence 75 on the arithmetic, the frame anchor is not
+measured).** The announcement frame is the same one that starts the fly (the check is `0 >= timer` after the
+subtraction), so the first 30 px step lands on the tick the caption goes. `PickupParent` is the group at
+`OffsetX="480" OffsetY="60"` in `HUD_pickups.xml` and the icon is `Centred` at its origin, so the fly moves the icon's
+centre; the cached origin `hud+0x204`/`+0x208` is `(480, 60)`.
+
+- **Destination, from `Hud_BindWidgets` (`0x81192cd0`).** `hud+0x20c = DamageBarParent.x + frame.x + frame.width * 0.5 +
+  2.0` and `hud+0x210 = DamageBarParent.y + frame.y + frame.height * 0.5`, with `PickupBgFrame` authored in
+  `HUD_damage_indicator.xml` at `(36, -27)` 110x95, `Centred="false"`, under `DamageBarParent` at `(51, 427)`. So the
+  slot is `(144, 447.5)`: the frame's centre, **2 px right of it**. `hud+0x214` is the frame's authored width (110).
+- **Per frame**, once the timer is zero: `y = min(y + dt * 1800, slot_y)`; `x = max(x - dt * 1800 * (x0 - slot_x) /
+  (slot_y - y0), slot_x)`, a straight line that arrives with y (336 px left over 387.5 px down, 13 ticks at 60 Hz);
+  `hud+0x218 = y / slot_y` (the absolute coordinate over the slot's, **not** the distance flown over the distance, so
+  the frame is 13% wide on the first fly tick); `PickupBgFrame` width `= hud+0x218 * hud+0x214`, its height untouched.
+  The vector-multiply-subtract hides its accumulator in the decompile; reading it as the current `x` is what makes the
+  line arrive, confidence 75.
+- **The settled icon is `(101.5, 404.5)`**, not the `(99.5, 404.5)` of the measurement below: the icon pixel box
+  measured there (`x: 102-186`, `y: 405-488`) fits 101.5 as well as it fitted 99.5, and the 2 px is the decompiled value.
+- **Wired 2026-11-13 (`w2048-hud-leftovers`)**: the pop-in and the frame's colour. `Hud_UpdatePickupIcon`'s held branch, re-read in full: every held frame `hud+0x220 = max(hud+0x220 - 70 dt, 1)` and `hud+0x224 = min(hud+0x224 + 7 dt, 1)`, and the icon's size is the table's `w x h` times those (so it starts a flat 10x-wide bar, about its centre). They are **not** reset by a change of held weapon (only `hud+0x228`/`hud+0x21c` are); the not-held branch shrinks `hud+0x224` at `10 dt` and only once it is zero resets `0x220 = 10`, `0x224 = 0`, so a regrant inside 0.1 s of a use does not pop again. `PickupBgFrame` is set to `0xFFA7A5A7` every held frame after the announcement and, once its progress reaches 1, `(t + dt) * 8` odd sets `0xFFFFFFFF` for the first second. Ours: `SlotHud::pickup_pop` to `Readout::pickup_pop`, `oag_hud::dialect_2048::grant_look` (arrival time derived from `Readout::pickup_fly`, so the blink phase is at most one tick off). Tests: `crates/raceplay/src/tests/slot_hud.rs` (`the_grant_icon_pops_in_and_re_arms_only_once_it_has_shrunk_away`, `a_grant_on_a_race_reads_its_pop_in_off_the_readout`), `crates/hud/src/tests.rs` (`the_2048_grant_pops_in_and_the_frame_blinks_on_arrival`). No original frame mid-pop exists (130 ms); confidence 75 on the arithmetic. Still read and undrawn: the `hud+0x22c` alpha pulse (nothing in this function sets it), the release shrink of the icon (ours has no icon once nothing is held) and `DenyPickup`'s blink.
+
+**Re-read in full 2026-11-16 (`2048-hud-left`, decompile of `0x81194f9c`, confidence 75):**
+
+- **The `hud+0x22c` alpha pulse is inert.** `search_instructions` for stores to `#0x22c]` finds one in the HUD's own range, the constructor's (`FUN_81192940`, `0x811929ea`); no other function writes it (`str`, `str.w`; no `vstr`). The pulse (`1 + 0.1 * sin(4 pi (1 - t))` on `PickupIcon`'s alpha at `+0xfc`, `t` counting down while above zero) therefore never runs. Nothing to draw.
+- **The release is not hidden at once.** The not-held branch with `hud+0x224 > 0` only takes `10 dt` off `0x224` and sets the icon's height to the table's `h * 0x224` (a 0.1 s collapse, the icon staying at the slot with its width); `PickupParent` is hidden, `0x230` cleared and `0x228`/`0x220`/`0x224` reset only on the frame `0x224` has reached zero, and that same branch then takes `10 dt` off `0x218` and sets `PickupBgFrame`'s width to `0x218 * 0x214` (frame width collapsing for up to 0.1 s). Ours keeps `0x224` already (`SlotHud::pickup_pop`, falling at 10/s) and draws nothing for it because `Readout::pickup` is `None`. The wire is: remember the last held weapon, draw the icon at `[wide, pop[1]]` while `pop[1] > 0`, then shrink the frame; about 12 frames at 60 Hz, no original frame to check it against. Left open.
+- **`DenyPickup`'s blink** (`hud+0xb0`, timer `hud+0x6e4`): while `>= 0` it is white and blinks `0x64ffffff` on odd eighths, the timer counting down; the held branch sets it to `-1.0`. The setter of a positive value is not in this function (the deny event, unread): no trigger, so unwired.
+- **Read, not drawn (open, superseded in part by the line above)**: the icon's own pop-in (`hud+0x220` falls `10 -> 1` at `70/s` and scales the icon's
+  width, `hud+0x224` rises `0 -> 1` at `7/s` and scales its height, so the icon starts as a wide flat bar), the
+  `hud+0x22c` sine pulse on `PickupIcon`'s alpha (`1 + 0.1 * sin(4 pi t)`), the frame shrinking at `10/s` when nothing is
+  held, the frame's `0xFFA7A5A7` during the fly and its 8 Hz white blink for a second after arrival
+  ([pickup-backdrop.md](pickup-backdrop.md)), and `DenyPickup`'s blink.
+- **Which edge of the frame holds as its width changes is not measured**: it is authored `Centred="false"`, and ours
+  keeps the left edge.
+
+Ours: `SlotHud::advance` keeps the timer (`Readout::pickup_announcing`) and the distance (`Readout::pickup_fly`);
+`oag_hud::dialect_2048::pickup_flight` draws the line and the frame width. Frame `35-w-2.png` (icon top-centre,
+`MISSILE`) is what the announcement matches; the fly has no original frame yet. Tests:
+`crates/raceplay/src/tests/slot_hud.rs` (`the_grant_flies_at_1800_pixels_a_second_once_the_announcement_ends`,
+`a_grant_on_a_race_reads_its_flight_off_the_readout`), `crates/hud/src/tests.rs`
+(`the_2048_grant_flies_from_the_announcement_rect_to_the_slot`) and, on the disc's layout,
+`crates/raceplay/tests/vita_2048_hud_event_ground_truth.rs` (`pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths`
+ends on the fly check, sharing its load).
+
+**Omega: checked, differs** (same code, no widget to move). `FUN_012bba20` (`0x012bba20`, the eboot) carries the same update:
+the `1800.0` (`0x01801134`, its only reader), the `-70`/`7` pop-in, the `0.1` sine at `4 pi`, `y / ty` as the progress
+and the same `FE_ROCKETS` string table. The race layouts Omega plays (`Data/xml/wo3_hud/hud_pickups.xml`,
+`hud_damage_indicator.xml`) author neither `PickupIcon` nor `PickupBgFrame`, only HD-style per-weapon icons, so there is
+no widget for it to fly; the `2048_hud` set Omega also ships authors `PickupIcon` as 2048 does, and no race loads it.
+`oag_omega::hud::ART` has no `pickup_icon_uv`.
 
 ## `g_pickup_icon_uv_table` - `0x81489070`
 
@@ -136,6 +182,10 @@ and the Rocket held in the bottom-left slot
 (`~/.cache/oag/2048-hud/frames/50-r4-20.png`) matches the table's `(203,201)`
 tile in shape and colour (the frame's own scene lighting dims it, so the
 match is shape/position, not raw RGB).
+
+**Superseded in part (2026-11-08):** the destination is `Hud_BindWidgets`'s `hud+0x20c`/`+0x210`, the frame's centre
+plus 2 px in x, which puts the icon at `(101.5, 404.5)` (see "The grant announcement"); the paragraph below is the
+measurement that first located it.
 
 **The held icon's on-screen rect is not read from this function** -
 `Hud_UpdatePickupIcon` only ever writes the four UV fields, never `PickupIcon`'s

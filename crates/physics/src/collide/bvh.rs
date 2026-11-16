@@ -87,6 +87,7 @@ impl Bvh {
 
 /// Item indices a query collected, sorted ascending: the linear scan's order. Held inline
 /// up to [`Indices::INLINE`], so the common query allocates nothing.
+#[derive(Debug)]
 pub(super) struct Indices {
     inline: [u32; Self::INLINE],
     len: usize,

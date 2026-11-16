@@ -334,7 +334,7 @@ fn a_missile_glances_off_the_circuits_barriers() {
 /// **Scans seeds rather than pinning one.** `pickup::IMPLEMENTED` is expected to
 /// grow, and the draw walks it in order, so a magic seed goes quietly wrong the
 /// next time a weapon lands - the same rule
-/// `race_ground_truth::a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race`
+/// `race_weapons_ground_truth::a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race`
 /// records and for the same reason.
 #[test]
 #[ignore = "needs a disc image in data/images/"]

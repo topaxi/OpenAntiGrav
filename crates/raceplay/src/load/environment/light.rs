@@ -34,30 +34,42 @@ pub(in crate::load) fn envsettings_light(
     ps4: bool,
     report: &mut Vec<String>,
 ) -> mesh_render::Light {
-    let Some(name) = envsettings_name(track) else {
-        return mesh_render::Light::stand_in();
-    };
-    let Some((_, blob)) = read_circuit_envsettings(archives, &name) else {
-        return mesh_render::Light::stand_in();
-    };
+    envsettings_name(track)
+        .and_then(|name| authored_light(archives, &name, psp2, ps4, report))
+        .unwrap_or_else(mesh_render::Light::stand_in)
+}
+
+/// The rig the `.envsettings` file `name` authors, or `None`: silently for a file the source
+/// does not hold, with a report line for one that is there and yields no rig. What
+/// [`envsettings_light`] reads for a circuit and what a front end reads for its own models
+/// (`oag_game::preview::model_light`); `psp2` and `ps4` pick the key spelling as they do there.
+pub fn authored_light(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    psp2: bool,
+    ps4: bool,
+    report: &mut Vec<String>,
+) -> Option<mesh_render::Light> {
+    let (_, blob) = read_circuit_envsettings(archives, name)?;
     let text = match String::from_utf8(blob) {
         Ok(text) => text,
         Err(_) => {
             report.push(format!("{name}: not text; lighting with the stand-in rig"));
-            return mesh_render::Light::stand_in();
+            return None;
         }
     };
     let env = match EnvSettings::parse(&text) {
         Ok(env) => env,
         Err(e) => {
             report.push(format!("{name}: {e}; lighting with the stand-in rig"));
-            return mesh_render::Light::stand_in();
+            return None;
         }
     };
     use oag_tables::envsettings::{
         AMBIENT_COLOUR, NOVA_PRELIT, NOVA_PRELIT_DEFAULT, OMEGA_SUN_DIFFUSE_INTENSITY,
-        PRELIT_POWER, PRELIT_SCALE, PSP2_AMBIENT_COLOUR, PSP2_SUN_DIFFUSE_COLOUR, SUN_COLOUR,
-        SUN_DIRECTION, SUN_SPECULAR_SCALE,
+        OMEGA_SUN_SPECULAR_COLOUR, OMEGA_SUN_SPECULAR_INTENSITY, PRELIT_POWER, PRELIT_SCALE,
+        PSP2_AMBIENT_COLOUR, PSP2_SUN_DIFFUSE_COLOUR, SUN_COLOUR, SUN_DIRECTION,
+        SUN_SPECULAR_SCALE,
     };
     let ambient_key = if psp2 {
         PSP2_AMBIENT_COLOUR
@@ -78,7 +90,7 @@ pub(in crate::load) fn envsettings_light(
             "{name}: no usable sun direction, colour and ambient; lighting with the \
              stand-in rig"
         ));
-        return mesh_render::Light::stand_in();
+        return None;
     };
     // The prelit curve and the specular weight feed terms whose *combination*
     // is read out of the circuit's own fragment microcode on HD - see
@@ -112,10 +124,33 @@ pub(in crate::load) fn envsettings_light(
     // `Lighting.Nova prelit scale bias power` triple, or the executable's own
     // static default `(1.4, 0.2, 1.5)` for a file that omits it - 9 of the
     // title's 97 files do, none of them a circuit's.
-    let nova = ps4.then(|| env.vec3(NOVA_PRELIT).unwrap_or(NOVA_PRELIT_DEFAULT));
+    // **2048's combination is the same law without the power**, read out of its own USSE
+    // fragment programs (Vita3K's translation of the `fc06_lambert_simple` family,
+    // docs/formats/2048-material-params.md "Vertex-lit and lightmapped combines"): `scale *
+    // lightmap + bias + sun * max(N.L, 0) * lightmap.a` multiplies the squared texel, with no
+    // constant ambient; the `power` lane of `novaScaleBiasPower` is never read, so it is held at 1.
+    // A file with no key takes the identity (2048 has no executable default read).
+    let nova = if ps4 {
+        Some(env.vec3(NOVA_PRELIT).unwrap_or(NOVA_PRELIT_DEFAULT))
+    } else if psp2 {
+        let [scale, bias, _] = env.vec3(NOVA_PRELIT).unwrap_or([1.0, 0.0, 1.0]);
+        Some([scale, bias, 1.0])
+    } else {
+        None
+    };
     let light = match nova {
         Some([scale, bias, power]) => light.with_nova_prelit(scale, bias, power),
         None => light,
+    };
+    // **Omega's sun lobe colour** is the authored specular colour times its intensity
+    // (default 1.0), the product the executable builds beside the diffuse pair. A file that
+    // authors no colour leaves the lobe off (zero).
+    let light = match env.vec3(OMEGA_SUN_SPECULAR_COLOUR) {
+        Some(colour) if ps4 => {
+            let intensity = env.scalar(OMEGA_SUN_SPECULAR_INTENSITY).unwrap_or(1.0);
+            light.with_sun_specular(colour.map(|c| c * intensity))
+        }
+        _ => light,
     };
     let prelit = match nova {
         Some([scale, bias, power]) => format!("{scale:.1}*lightmap^{power:.1} + {bias:.2}"),
@@ -125,10 +160,10 @@ pub(in crate::load) fn envsettings_light(
         "Omega's own: pow(lightmap, power) * scale + bias on the raw atlas, no constant \
          ambient on a lightmapped draw"
     } else if psp2 {
-        "2048 authors no equivalent prelit or specular keys, so both stay at the identity"
+        "2048's own: scale * lightmap + bias on the raw atlas (its programs never read the \
+         power), no constant ambient on a lightmapped or vertex-lit draw, no specular key"
     } else {
-        "the combination is the microcode's own; the render target's saturation stands in \
-         for HD's tonemap"
+        "the combination is the microcode's own, ahead of the tone stage"
     };
     report.push(format!(
         "{name}: sun [{:.2}, {:.2}, {:.2}] colour [{:.2}, {:.2}, {:.2}] over ambient \
@@ -144,7 +179,7 @@ pub(in crate::load) fn envsettings_light(
         light.ambient[2],
         specular_scale,
     ));
-    light
+    Some(light)
 }
 
 /// Omega's `Tonemap` block, read into [`oag_post::omega_tonemap::Params`].
@@ -179,6 +214,8 @@ pub(in crate::load) fn envsettings_tonemap(
         source_end_b: t.source_colour_end_b,
         start_angle: t.start_angle,
         end_angle: t.end_angle,
+        composite: omega_composite(&env, &name, report),
+        store: oag_gpu::formats::SceneStore::Computed,
     };
     report.push(format!(
         "{name}: Tonemap applied - exposure ({:.3} + {:.3} LAvg) / LAvg in {:.2}..{:.2}, \
@@ -197,4 +234,52 @@ pub(in crate::load) fn envsettings_tonemap(
         params.end_angle,
     ));
     Some(params)
+}
+
+/// The composite's disc-authored terms: the `Vignette.*` and `Bloom.*` keys.
+/// `ColorScale` and `ScreenTint` rest at `(1, 1, 1)` and zero (`colorscale.md`).
+/// A file with neither draws neither, and says so. The bright pass's mask is not
+/// drawn: no draw writes the scene's `m_Alpha` (`tonemap.md`, "The bloom chain").
+fn omega_composite(
+    env: &EnvSettings,
+    name: &str,
+    report: &mut Vec<String>,
+) -> oag_post::omega_tonemap::Composite {
+    use oag_tables::envsettings::{VIGNETTE_INNER_RADIUS, VIGNETTE_OUTER_INTENSITY};
+    let (Some(inner), Some(outer)) = (
+        env.scalar(VIGNETTE_INNER_RADIUS),
+        env.scalar(VIGNETTE_OUTER_INTENSITY),
+    ) else {
+        report.push(format!(
+            "{name}: no Vignette block; the composite draws no vignette"
+        ));
+        return oag_post::omega_tonemap::Composite::NONE;
+    };
+    let bloom = env
+        .bright_pass("Bloom")
+        .map(|b| oag_post::omega_tonemap::Bloom {
+            threshold: b.threshold,
+            offset: b.offset,
+            scale: b.scale,
+            power: b.power,
+            alpha_scale: b.alpha_scale,
+            blend_factors: b.blend_factors,
+        });
+    report.push(match bloom {
+        Some(b) => format!(
+            "{name}: composite vignette inner radius {inner:.3}, edge intensity {outer:.3}; \
+             bloom threshold {:.3} scale {:.3} over four levels from 960x540, factors {:?}; \
+             its mask term (alpha scale {:.3} on the scene's m_Alpha) and the low-resolution \
+             additive layer not drawn",
+            b.threshold, b.scale, b.blend_factors, b.alpha_scale,
+        ),
+        None => format!(
+            "{name}: composite vignette inner radius {inner:.3}, edge intensity {outer:.3}; \
+             no complete Bloom block, so no bloom; the low-resolution additive layer not drawn"
+        ),
+    });
+    oag_post::omega_tonemap::Composite {
+        bloom,
+        ..oag_post::omega_tonemap::Composite::at_rest(inner, outer)
+    }
 }

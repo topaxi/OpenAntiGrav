@@ -68,7 +68,7 @@ pub struct FlowFiles {
     pub selection: &'static str,
     /// How far apart the chain's rows sit, in the PSP's 272-line grid. Not
     /// authored (the screens' `<Menu>` widgets state no pitch): **measured** on a
-    /// PPSSPP capture, 2026-10-12, as rows 36 px apart in a window drawn at 2x,
+    /// PPSSPP capture, as rows 36 px apart in a window drawn at 2x,
     /// the same on `Main Menu`, `Single Player`, `Class Selection` and the
     /// screens after it.
     pub row_pitch: u16,
@@ -126,7 +126,7 @@ pub struct Campaign {
     /// The speed classes a fresh profile offers, by the name the class menu
     /// authors; `None` offers every class from the start. Pure's
     /// `Class Selection` lists Vector and Venom on a fresh profile (PPSSPP
-    /// capture, 2026-09-10). Which later class opens when is not read.
+    /// capture). Which later class opens when is not read.
     pub classes_at_start: Option<&'static [&'static str]>,
     /// The main menu's campaign row where the title's original names it
     /// differently (`SINGLE PLAYER` on Pure); `None` keeps `RACE CAMPAIGN`.
@@ -136,6 +136,11 @@ pub struct Campaign {
     pub circuit_unlocks: bool,
     /// Whether craft variants carry `loyalty` unlock rows this build reads.
     pub loyalty_unlocks: bool,
+    /// The grids definition a `PI_TeamModel`'s own `<Unlock>` rows are evaluated against, on a
+    /// title whose models carry Wipeout HD/Fury's rows (`loyalty`, `MedalCountHD`,
+    /// `MedalCountFURY`, `grid`): Ship Select offers a model only once its row holds. `None` gates
+    /// no model. See `docs/formats/race-setup.md`, "HD-era model unlocks".
+    pub model_unlocks: Option<&'static str>,
     /// Where [`Self::circuit_unlocks`] and [`Self::loyalty_unlocks`] came from,
     /// apart from [`Self::origin`]: a `false` there is "measured absent" on one
     /// title (Pure authors none) and merely "not wired" on the others, which is
@@ -167,6 +172,27 @@ pub struct Campaign {
     /// measured off one shadPS4 frame and chosen, its own camera constants
     /// unread (`docs/ui/campaign-screens.md`).
     pub grid_card_pose: Option<CardPose>,
+    /// The factor `Campaign Selection`'s flyer widgets' placement (their `x y z`
+    /// after `orthoScale`) is multiplied by, where the cards stand nearer than
+    /// those numbers say. `None` is `1.0`. Omega: fitted off one shadPS4 frame
+    /// (the selected card 837 by 717 px where the numbers give 756 by 648), chosen,
+    /// not read.
+    pub selection_card_scale: Option<f32>,
+    /// Which stored row of `Hexmedal_HD`'s difficulty block (0..3, 61 px apiece) holds gold,
+    /// silver and bronze, where it is not HD's `[0, 1, 2]` (gold on top). Omega's atlas keeps
+    /// HD's blocks in HD's order but stores each block's tiers bronze, silver, gold from the
+    /// top, so the authored `v = 0/61/122` of `Target0/1/2 Medal` lands on bronze, silver, gold
+    /// (`docs/formats/omega-status.md`, "The medal atlas"). `None` is HD's order; Pulse, Pure
+    /// and 2048 draw no such atlas.
+    pub medal_tier_rows: Option<[u8; 3]>,
+    /// The campaign cell modes (`mode=` spellings, `oag_tables::race_campaign::Mode::as_str`)
+    /// whose medal is a count to reach: the cell's `Gold`/`Silver`/`Bronze` are compared with
+    /// `>=` where every other mode's are `<=` (a place or a time). A mode listed here is also
+    /// measured as the player's count (an Eliminator's kills); one that is not is measured as
+    /// a place. Pulse: Zone and Elimination (`Cell_EvaluateMedal`). HD and Omega: Zone and
+    /// Detonator, so an Eliminator cell's `1`/`2`/`3` are place thresholds
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`).
+    pub counting_modes: &'static [&'static str],
     /// Whether the front end ends its frame with the race's bloom over a glow mask its widgets
     /// stamp, and how well that is known. Pulse PSP: its Grid and Cell Selection frames end with
     /// `Bloom_Draw` (a GE dump), reading the stencil references the `Selector`, the card title
@@ -182,4 +208,20 @@ pub struct Campaign {
     /// **Chosen**: Pulse, HD/Fury and Omega; Pure draws a list and 2048 has no
     /// hex screens to draw them on yet.
     pub custom_campaigns: bool,
+    /// Where an `SP.xml` event campaign's circuits live, as the directory holding one
+    /// `<track_name>\track.vex` per `TrackDefinition`; `None` on a title that ships no such
+    /// campaign. 2048: `Data\art\published\environments`; Omega: `Data\Environments2048`
+    /// (10 of 10 `SP.xml` tracks resolve there, none under 2048's spelling).
+    pub event_track_dir: Option<&'static str>,
+}
+
+impl Campaign {
+    /// [`Self::medal_tier_rows`] with HD's order where the title does not set one.
+    #[must_use]
+    pub const fn medal_rows(&self) -> [u8; 3] {
+        match self.medal_tier_rows {
+            Some(rows) => rows,
+            None => [0, 1, 2],
+        }
+    }
 }

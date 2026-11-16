@@ -22,9 +22,8 @@
 /// inside the sphere and the old stage's outside it, with the sphere
 /// re-centred on the local craft's position every frame.
 ///
-/// Read statically from the instruction stream and the `.data` image on
-/// 2026-09-15, then reproduced live on RPCS3 the same day at two independent
-/// frame counts, to the tenth - see
+/// Read statically from the instruction stream and the `.data` image, then
+/// reproduced live on RPCS3 at two independent frame counts, to the tenth - see
 /// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`,
 /// passes thirty and thirty-one. The two schema keys that would author the
 /// speed and acceleration (`Transition start speed`, `Transition

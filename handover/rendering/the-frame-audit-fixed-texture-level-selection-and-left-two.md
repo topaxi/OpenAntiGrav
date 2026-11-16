@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [pulse]
-updated: 2026-10-02
-summary: "Pulse frame audit: two differences it could not trace; the hull sheen gap is only partly closed"
+updated: 2026-11-10
+summary: "Pulse frame audit: hull sheen closed (the extra pass takes the hull's light colour); open: Pure's twin, the plume's list, far-field texture level"
 ---
 
 # The Pulse frame audit fixed texture level selection and left two differences it could not trace
@@ -20,22 +20,31 @@ of it the same day; see `frame-audit.md`.
 
 ## Open
 
-- **The hull's sheen: drawn 2026-09-30, gap partly closed.** ~~Lead: the single
-  `Glass_ADD` batch.~~ The cause is the `0x2000` extra pass - six batches per hull
-  drawn under environment mapping with their material's second texture
-  (`envtest4bit.tga`), `model+0x1a8 == 1` so the basis is the fixed world-space
-  pair (read live; `mesh-draw.md`, "The hull's extra pass"). `oag_render::shine`
-  draws it; it closes roughly a third to a half of the measured spine gap
-  (`frame-audit.md` section 2). Closed 2026-10-01 on a second GE dump of `07_Track`
-  ("Re-read on a second dump" in `mesh-draw.md`): ~~replace-then-add against our
-  single additive redraw~~ (the sums are equal; the canopy's depth test is on, not
-  off), ~~fog on the pass~~ (on, colour `0`; written), ~~a track's `*_shinemap`
-  batches~~ (rows 0 and 1 of the view matrix, confirmed at two yaws; drawn,
-  `--no-track-shine`). ~~The airbrakes' flap deflection on the pass~~ **closed 2026-10-01** (`pulse-hull-pass`:
-  the flap's mode-2 PRIM carries its twin's node matrix in three GE lists; the pass now swings
-  with the hull's own `Flap::swung`; a *deflected* GE list was not recorded; and Feisar's and
-  Triakis's flaps were mis-spanned in the base draw too, fixed). The wreck model has no
-  extra pass (closed 2026-10-01, `pulse-wreck`).
+- ~~**The hull's sheen: drawn 2026-09-30, gap partly closed.**~~ **Closed 2026-11-10**
+  (`pulse-hull-sheen`). The "third to a half" was measured before the point lights, the
+  spline scales and the flaps landed; against today's renderer the `talon-mid2` spine reads
+  the original's to within a level, and on the six best PSP grid pairs 80 to 94 % of the
+  hull's remaining error is edge pixels. The one law still missing made the pass too
+  **strong**, on one circuit: the extra pass is drawn in the colour
+  `SceneLight_BuildLightingList` returns (the hull's lights times its spline scale bytes,
+  clamped), not white - `MATERIALAMBIENT` `0x72a6b7` on Metropia's grid in a recorded GE
+  list, predicted to the unit from the disc. Wired (`HullPassColour`,
+  `Race::ship_shine_colour`, `Looks::hull_shine_lit`); the original's sheen as a fraction of
+  ours went 0.57/0.60 to 0.94/0.99 on Metropia, 0.85 to 0.97 on De Konstruct White, 19 of 24
+  grid frames bit-identical (`mesh-draw.md`, "The extra pass's colour is the light the hull
+  stands in"). Left open by it:
+  - **Pure**: `FUN_08840cac` is the same rebuild, the builder's accumulator is unread and
+    Pure's four GE lists all saturate; `oag_pure`'s `hull_shine_lit` is unread. One dump on
+    a Pure circuit or tunnel whose light sum is under 255 settles it.
+  - **The boost plume** replays its own material list through the same prologue
+    (`model+0x1a8` set); whether that list is ever rebuilt, and so whether the plume dims
+    with the hull, is not read.
+  - **A tunnel dump** (scale 127) and an AI craft's colour were not recorded.
+  - **A track file under a Pulse host** keeps a white pass (`foreign::art` does not build
+    the terms).
+  - Not this law: Basilico Black's hull is 13 levels off in base colour and Fort Gale
+    Black's 3.5 (the regression's intercept), and the craft box's plume share is 10 to 25
+    levels on Tech de Ra Black, Arc Prime White, De Konstruct White and Metropia Black.
 - ~~**The tunnel rim's neon strip.**~~ **Closed 2026-10-01** (`pulse-glow`). It
   was not the shine pass and not a missing batch: the arch lights and rim light
   are **blended batches with the glow bits**, which the original stamps into the

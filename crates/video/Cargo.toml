@@ -11,14 +11,15 @@ autotests = false
 
 [features]
 # AV1 decoding, for the movie cache. Off by default so that the tools which
-# only demux the originals' containers keep building with no dependencies at
-# all - which, with `av1` off, this crate has none of.
+# only demux the originals' containers keep building with `oag-bytes` alone,
+# which, with `av1` off, is this crate's only dependency.
 av1 = ["dep:re_rav1d"]
 
 [dependencies]
 # `default-features = false` drops the `asm` feature, which needs `nasm` at
 # build time. A 480x272 movie decodes around 900fps without it - thirty times
 # faster than playback. `bitdepth_8` is all the 8-bit I420 path needs.
+oag-bytes.workspace = true
 re_rav1d = { workspace = true, optional = true }
 
 # Ground-truth tests read a real `.PSS` off a disc image, and a real

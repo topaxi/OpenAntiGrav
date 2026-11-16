@@ -40,7 +40,7 @@ is not read.**
 by a fade (rate `-5.0` per second on a scalar broadcast to all channels). So the composite
 `out = ColorScale * vignette * (Frame + LowResAdditive + BloomScale * Bloom) + ScreenTint`
 is the base's picture when no fade runs. **To wire**: pass `(1, 1, 1)`; the tint's placement outside the vignette is the
-only visible change, and only once `oag_post::omega_tonemap` draws tint and vignette at all.
+only visible change. **Wired 2026-11-04 (`omega-composite`)**: `oag_post::omega_tonemap` passes `(1, 1, 1)` and draws the vignette and the tint after the curve ([tonemap.md](tonemap.md), "The composite's constants").
 
 ## Not what it is
 

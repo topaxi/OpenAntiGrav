@@ -8,6 +8,7 @@ explanations arrive, that a pair without recorded times shows none (no file-time
 """
 import importlib.util
 import json
+import struct
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,7 @@ sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 import compare_menu as cm  # noqa: E402
 import compare_provenance as cprov  # noqa: E402
+import pcsx2_state  # noqa: E402
 
 spec = importlib.util.spec_from_file_location("compare_page", HERE / "compare-page.py")
 cp = importlib.util.module_from_spec(spec)
@@ -130,9 +132,85 @@ def check_safe_area(root):
     assert cm.profile_is_locked(locked) and doc["dev"]["unlock_everything"] is False and doc["race"]["track"] == "01_vineta_k"
 
 
+def check_ps2_world_clock(root):
+    """A Pulse PS2 pair's animated surfaces (Orcus' neon strips cycle magenta, cyan, yellow) run on `*(g_ingame + 0x40)`, not on ours' tick
+    count: the offset comes from a state's `g_ingame` clock, run on to the grab and less ours' `ticks / 60`. A record with no bracket gives none."""
+    ram = bytearray(0x400000)
+    struct.pack_into("<I", ram, pcsx2_state.G_INGAME, 0x325000)
+    struct.pack_into("<f", ram, 0x325000 + pcsx2_state.INGAME_CLOCK, 33.5)
+    import zipfile
+    with zipfile.ZipFile(root / "state.p2s", "w") as z:
+        z.writestr("eeMemory.bin", bytes(ram))
+    rec = {"original": {"state": {"file": "state.p2s"}, "race_clock_live_s": {"before_grab": 27.5, "after_grab": 28.0, "state_file": 26.0}},
+           "ours": {"ticks": 1683}}
+    want = 33.5 + (27.75 - 26.0) - 1683 / 60
+    got = pcsx2_state.record_world_clock_offset(rec, root)
+    assert got is not None and abs(got - want) < 1e-4, (got, want)
+    assert abs(want - 7.2) < 0.01, want
+    # the rerender puts it on a pulse-ps2 record that has none, leaves a record that has one, and gives a menu pair (no bracket) nothing
+    spec = importlib.util.spec_from_file_location("compare_rerender_ours", HERE / "compare-rerender-ours.py")
+    rro = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rro)
+    rro.ROOT = root
+    rec["profile"] = "pulse-ps2"
+    added = rro.ps2_world_clock_flags(rec, ["--race"])
+    assert added[:1] == ["--race"] and added[1] == "--world-clock-offset" and abs(float(added[2]) - want) < 1e-3, added
+    assert rec["ours"]["world_clock_offset_s"] == got
+    assert rro.ps2_world_clock_flags(rec, ["--world-clock-offset", "1.0"]) == ["--world-clock-offset", "1.0"]
+    assert rro.ps2_world_clock_flags({"profile": "pulse-ps2", "ours": {}, "original": {}}, ["--race"]) == ["--race"]
+    rec["profile"] = "pulse-psp"
+    assert rro.ps2_world_clock_flags(rec, ["--race"]) == ["--race"]
+    del rec["original"]["race_clock_live_s"]
+    assert pcsx2_state.record_world_clock_offset(rec, root) is None
+    struct.pack_into("<I", ram, pcsx2_state.G_INGAME, 0)
+    with zipfile.ZipFile(root / "state.p2s", "w") as z:
+        z.writestr("eeMemory.bin", bytes(ram))
+    assert pcsx2_state.world_clock(root / "state.p2s") is None
+
+
 def tomllib_load(path):
     import tomllib
     return tomllib.loads(Path(path).read_text())
+
+
+def check_anisotropy(root):
+    """Omega's original asks for 16x anisotropy on its mipmapped colour samplers and the port honours it, so its profile
+    runs ours at 16x, written to the settings file and read back; every other platform stays off."""
+    assert ce.platform("omega")["ours"]["anisotropy"] == "16x"
+    for key in ("pulse-psp", "pulse-ps2", "hd-fury", "2048"):  # 2048 (Vita) is not measured: it keeps the default
+        assert ce.platform(key)["ours"]["anisotropy"] == "off", key
+    plat = ce.platform("omega")
+    ce.write_ours_settings(plat, root / "omega")
+    assert tomllib_load(ce.settings_path(root / "omega"))["graphics"]["anisotropy"] == "16x"
+    got, bad = ce.read_back(plat, root / "omega")
+    assert got["anisotropy"] == "16x" and not bad, bad
+    assert ["--anisotropy", "16x"] == ce.ours_flags(plat)[ce.ours_flags(plat).index("--anisotropy"):][:2]
+    # a stored race pair that says `off` re-renders at the profile's level; a menu pair keeps its own; every other profile
+    # is `off` on the measured claim that HD asks for none, the PSP and PS2 emulators are set to 0, and 2048 (Vita) is unmeasured
+    old = ["--race", "--anisotropy", "off", "--no-hull-shake"]
+    assert ce.profile_anisotropy_flags(old, plat) == ["--race", "--anisotropy", "16x", "--no-hull-shake"]
+    assert ce.profile_anisotropy_flags(["--race"], plat, "race") == ["--race", "--anisotropy", "16x"]
+    assert ce.profile_anisotropy_flags(old, plat, "menu") == old
+    assert ce.profile_anisotropy_flags(old, ce.platform("hd-fury")) == old
+
+
+def check_loading_bar(root):
+    """`compare_menu.lit_bar_columns` counts the lit columns of HD's race-load bar, and the tick that states them follows."""
+    from PIL import Image, ImageDraw
+    for lit in (0, 1, 32, 33, 166):
+        img = Image.new("RGB", (1920, 1080))
+        draw = ImageDraw.Draw(img)
+        for column in range(lit):
+            x = 201 + round(column * 7.66)
+            draw.rectangle([x, 703, x + 5, 929], fill=(172, 7, 23))
+        for column in range(lit, 166):  # the unlit dots are grey and are not counted
+            x = 201 + round(column * 7.66)
+            draw.rectangle([x, 703, x + 5, 929], fill=(40, 40, 40))
+        draw.rectangle([1500, 700, 1700, 900], fill=(172, 7, 23))  # the mode icon is outside the bar
+        path = root / ("bar%d.png" % lit)
+        img.save(path)
+        assert cm.lit_bar_columns(path) == lit, (lit, cm.lit_bar_columns(path))
+    assert cm.LOADING_BAR_TICKS_PER_COLUMN == 10 and cm.LOADING_BAR_FIRST_TARGET_COLUMNS == 33
 
 
 def main():
@@ -173,6 +251,12 @@ def main():
         check_menu_route(Path(t))
     with tempfile.TemporaryDirectory() as t:
         check_safe_area(Path(t))
+    with tempfile.TemporaryDirectory() as t:
+        check_ps2_world_clock(Path(t))
+    with tempfile.TemporaryDirectory() as t:
+        check_loading_bar(Path(t))
+    with tempfile.TemporaryDirectory() as t:
+        check_anisotropy(Path(t))
     print("compare environment: round trip ok")
 
 

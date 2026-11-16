@@ -24,6 +24,7 @@ import argparse
 import hashlib
 import http.server
 import json
+import os
 import re
 import shutil
 import socket
@@ -37,6 +38,10 @@ import compare_env  # noqa: E402  (the metric explanations live beside the metri
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = ROOT / "data" / "compare"
+# The maintainer's curated publishing set: `just publish-compare` with no argument publishes it. Its
+# manifests live in the private repository beside the pairs they pick, and name their images through
+# `[page] images` (ADR-0085).
+CURATED = ROOT / "data" / "reference" / "curated"
 
 # The screenshot-policy ADR that allows publishing curated screenshots, and the
 # Pages project it may go to. The number is filled in once the ADR exists; until
@@ -128,6 +133,11 @@ def statement_html() -> str:
     return f"<strong>{lead}</strong> {esc}"
 
 
+def image_root(path: Path, page: dict) -> Path:
+    """The directory a manifest's image paths are relative to: its own, or `[page] images` from it."""
+    return path.parent / page.get("images", ".")
+
+
 def load_all(paths: list[Path], strict: bool = False) -> dict:
     """The first manifest's [page]; every file's entries, each remembering its own directory."""
     merged = None
@@ -138,7 +148,7 @@ def load_all(paths: list[Path], strict: bool = False) -> dict:
             if e["id"] in ids:
                 refuse(f"{path}: entry id {e['id']!r} already used by an earlier manifest")
             ids.add(e["id"])
-            e["_base"] = path.parent
+            e["_base"] = image_root(path, doc["page"])
         if merged is None:
             merged = doc
         else:
@@ -175,7 +185,7 @@ def load_manifest(path: Path, strict: bool = False) -> dict:
         if len(have) < 2:
             refuse(f"{where}: needs at least two of original/before/ours; has {have or 'none'}")
         for s in have:
-            p = path.parent / e[s]
+            p = image_root(path, page) / e[s]
             if not p.is_file():
                 refuse(f"{where}: `{s}` image {p} does not exist")
         if "environment" in e and not isinstance(e["environment"], dict):
@@ -191,6 +201,17 @@ def magick(*args):
     if r.returncode != 0:
         refuse(f"magick {' '.join(args[:3])}...: {r.stderr.strip()}")
     return r.stdout
+
+
+def magick_to(out: Path, *args):
+    """Run magick writing `out` through a temporary file renamed into place, so a concurrent
+    run (the --serve watcher beside compare-rerender-ours) never reads a half-written PNG."""
+    tmp = out.with_name(f".{out.stem}.{os.getpid()}.tmp.png")
+    try:
+        magick(*args, f"png:{tmp}")
+        os.replace(tmp, out)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def dims(p: Path) -> tuple[int, int]:
@@ -237,7 +258,7 @@ def normalise(entry: dict, base: Path, img: Path) -> dict:
         args = [str(src) + "[0]"]
         if crop:
             args += ["-crop", crop, "+repage"]
-        magick(*args, "-alpha", "off", str(out))
+        magick_to(out, *args, "-alpha", "off")
     # One size for every slot: the aspect of the first slot, never stretched; a slot
     # of another aspect is fitted inside it and padded, so a mismatch stays visible.
     w, h = dims(files[ref_slot])
@@ -245,10 +266,10 @@ def normalise(entry: dict, base: Path, img: Path) -> dict:
         cw, ch = dims(out)
         if (cw, ch) != (w, h):
             if abs(cw / ch - w / h) < 0.01:
-                magick(str(out), "-filter", "Lanczos", "-resize", f"{w}x{h}!", str(out))
+                magick_to(out, str(out), "-filter", "Lanczos", "-resize", f"{w}x{h}!")
             else:
-                magick(str(out), "-filter", "Lanczos", "-resize", f"{w}x{h}", "-background", "black",
-                       "-gravity", "center", "-extent", f"{w}x{h}", str(out))
+                magick_to(out, str(out), "-filter", "Lanczos", "-resize", f"{w}x{h}", "-background", "black",
+                          "-gravity", "center", "-extent", f"{w}x{h}")
         sizes[slot] = [w, h]
     rec = {s: f"img/{files[s].name}" for s in files}
     diffs = {}
@@ -257,8 +278,8 @@ def normalise(entry: dict, base: Path, img: Path) -> dict:
         if a in files and b in files:
             d = img / f"{entry['id']}-{a}-{b}-diff-{key}.png"
             if not d.exists():
-                magick(str(files[a]), str(files[b]), "-compose", "difference", "-composite",
-                       "-evaluate", "multiply", "2", str(d))
+                magick_to(d, str(files[a]), str(files[b]), "-compose", "difference", "-composite",
+                          "-evaluate", "multiply", "2")
             diffs[f"{a}|{b}"] = f"img/{d.name}"
     caption = {k: entry[k] for k in CAPTION_KEYS if k in entry}
     return {
@@ -298,8 +319,8 @@ def build(manifests: list[Path], out: Path, strict: bool = False) -> Path:
     # Drop images no entry references any more, so a rebuilt page carries nothing stale.
     used = {Path(p).name for r in records for p in [*r["images"].values(), *r["diffs"].values()]}
     for f in img.glob("*.png"):
-        if f.name not in used:
-            f.unlink()
+        if f.name not in used and not f.name.startswith("."):
+            f.unlink(missing_ok=True)
     page = {"title": doc["page"]["title"], "intro": doc["page"].get("intro", ""), "entries": records,
             "metric_hints": {key: hint for key, _, _, hint in compare_env.METRICS},
             "metric_bands": compare_env.METRIC_BANDS}
@@ -369,6 +390,68 @@ def publish_lock() -> str | None:
     return None
 
 
+# Where `just compare-rerender-all` writes, and the fields a re-render rewrites in an entry.
+REFERENCE = ROOT / "data" / "reference" / "compare-page"
+RERENDER_FIELDS = ("rmse", "edge_ncc", "mean_grey", "build", "binary", "rendered_at")
+RERENDER_FILES = ("ours.png", "side.png", "pair.json")
+
+
+def entry_blocks(text: str) -> list[str]:
+    """The manifest split at each `[[entry]]`; block 0 is the `[page]` header."""
+    return re.split(r"(?m)^(?=\[\[entry\]\]\s*$)", text)
+
+
+def block_field(block: str, key: str) -> str | None:
+    m = re.search(rf'(?m)^{key} = "(.*)"$', block)
+    return m.group(1) if m else None
+
+
+def refresh_curated(curated: Path, reference: Path = REFERENCE) -> None:
+    """Carry newer re-renders from `reference` into the curated set, entry by entry.
+
+    The curated set chooses which pairs are published and may reword them; a re-render writes
+    only into `reference`. For each curated entry whose id has a newer `rendered_at` there and
+    whose original image is byte-identical, the re-render's metric fields and files are copied.
+    Titles, notes and every other curated line stay as curated."""
+    fresh: dict[str, tuple[str, Path]] = {}
+    for m in sorted(reference.glob("*.toml")):
+        for block in entry_blocks(m.read_text())[1:]:
+            if (eid := block_field(block, "id")):
+                fresh[eid] = (block, reference)
+    for m in sorted(curated.glob("*.toml")):
+        images = image_root(m, tomllib.loads(m.read_text()).get("page", {}))
+        blocks = entry_blocks(m.read_text())
+        changed = False
+        for i, block in enumerate(blocks[1:], 1):
+            eid = block_field(block, "id")
+            if eid not in fresh:
+                continue
+            ref_block, ref_root = fresh[eid]
+            if (block_field(ref_block, "rendered_at") or "") <= (block_field(block, "rendered_at") or ""):
+                continue
+            ours, ref_ours = block_field(block, "ours"), block_field(ref_block, "ours")
+            original, ref_original = block_field(block, "original"), block_field(ref_block, "original")
+            if not ours or ours != ref_ours or original != ref_original:
+                continue
+            if (images / original).read_bytes() != (ref_root / ref_original).read_bytes():
+                print(f"publish-compare: {eid}: original differs from the re-render's, kept as curated")
+                continue
+            for key in RERENDER_FIELDS:
+                value = block_field(ref_block, key)
+                if value is not None and block_field(block, key) is not None:
+                    block = re.sub(rf'(?m)^{key} = ".*"$', f'{key} = "{value}"', block)
+            pair_dir = Path(ours).parent
+            for name in RERENDER_FILES:
+                src, dst = ref_root / pair_dir / name, images / pair_dir / name
+                if src.is_file() and src.resolve() != dst.resolve():
+                    shutil.copy2(src, dst)
+            blocks[i] = block
+            changed = True
+            print(f"publish-compare: {eid}: re-render of {block_field(ref_block, 'rendered_at')} taken")
+        if changed:
+            m.write_text("".join(blocks))
+
+
 def publish(manifests: list[Path], out: Path):
     why = publish_lock()
     if why:
@@ -414,8 +497,13 @@ def main():
         return
     if not a.manifest:
         if a.publish:
-            ap.error("--publish needs the curated manifest directory; the seed set is not a publishing set")
-        a.manifest = [str(ROOT / "data" / "reference" / "compare-page")]
+            if not CURATED.is_dir():
+                ap.error(f"--publish with no manifest publishes {CURATED}, which does not exist; "
+                         "pull data/reference (the seed set is not a publishing set)")
+            refresh_curated(CURATED)
+            a.manifest = [str(CURATED)]
+        else:
+            a.manifest = [str(ROOT / "data" / "reference" / "compare-page")]
     try:
         if a.publish:
             publish(manifest_files(a.manifest), a.out.resolve())

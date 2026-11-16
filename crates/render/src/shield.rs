@@ -76,6 +76,12 @@
 /// `ShipShield_Update` multiplies the colour delta by it once per substep.
 pub const COLOUR_RATE: f32 = 0.15;
 
+/// The colour rate of Omega's and 2048's 2048-content modes (mode id `>= 0x17`),
+/// `ShipShield_Activate`'s `0.05` branch
+/// (`docs/ghidra/functions/ps4-omega-eu/shield.md`). No race this project
+/// launches is one, so no palette carries it yet.
+pub const CONTENT_2048_COLOUR_RATE: f32 = 0.05;
+
 /// How far the swell moves toward its target per 60 Hz substep.
 ///
 /// `+0x6c`, `0.2`. About a fifth of a second to settle a hit, which is what
@@ -229,6 +235,14 @@ pub struct Palette {
     /// is then drawn at its authored colours, scaled by the swell, until it
     /// switches off. See `docs/ghidra/functions/ps2-pulse-eu/shield-pickup.md`.
     pub tints_shell: bool,
+    /// How far the colour moves toward its target per substep ([`COLOUR_RATE`]
+    /// everywhere a race is launched; [`CONTENT_2048_COLOUR_RATE`] is the
+    /// 2048-content modes' value).
+    pub colour_rate: f32,
+    /// Whether the target alpha is the larger of the shell's and the cockpit
+    /// sphere's (Omega and 2048's `ShipShield_Construct`), a model that did not
+    /// load counting as `1.0`. The loader applies it to the authored target.
+    pub target_alpha_from_cockpit: bool,
 }
 
 /// Pulse's own palette - [`ACTIVATION_COLOUR`], [`TARGET_COLOUR`],
@@ -238,6 +252,8 @@ pub const PULSE_PALETTE: Palette = Palette {
     target: TARGET_COLOUR,
     hit: HIT_COLOUR,
     tints_shell: true,
+    colour_rate: COLOUR_RATE,
+    target_alpha_from_cockpit: false,
 };
 
 /// Pulse on the PS2: [`PULSE_PALETTE`]'s colours - the object's fields run the
@@ -250,24 +266,52 @@ pub const PS2_PULSE_PALETTE: Palette = Palette {
 
 /// HD/Fury's palette.
 ///
-/// **Two of three are measured, one is not.** [`HD_ACTIVATION_COLOUR`] and
-/// [`HD_HIT_COLOUR`] are read off `/ps3-hdfury-eu/EBOOT.elf`. The steady-state
-/// `target` is **not**: HD's own `ShipShield_Activate` counterpart
-/// (`FUN_00125ae8`) takes the settled colour as a call argument rather than
-/// hardcoding it the way Pulse's does, which reads as a per-team
-/// `ShieldColour` hook (`FUN_000dba30` parses a config key of that name), and
-/// the call site that supplies the argument was not traced through HD's
-/// TOC-corrupted decompile in the time this pass had. So `target` here is
-/// **[`TARGET_COLOUR`], chosen rather than measured** - Pulse's white is the
-/// multiply identity against the mesh's own vertex colours regardless of
-/// title, so it is the least-invented default until the real argument is
-/// read. See the "What is not verified" section of
-/// `docs/ghidra/functions/ps3-hdfury-eu/shield.md`.
+/// [`HD_ACTIVATION_COLOUR`] and [`HD_HIT_COLOUR`] are read off
+/// `/ps3-hdfury-eu/EBOOT.elf`. The steady-state `target` is per team: each
+/// `shipshield.rcsmodel` authors a `ShieldColour` on its material
+/// (`ShipShield_BindColourParam`, `docs/ghidra/functions/ps3-hdfury-eu/shield.md`,
+/// "The steady-state colour is read"), which the loader reads
+/// (`oag_livery::Livery::shield_colour`) and replaces `target` with. The
+/// [`TARGET_COLOUR`] here is only the constructor default the original also
+/// starts from, used when a shell carries no such parameter.
 pub const HD_PALETTE: Palette = Palette {
     activation: HD_ACTIVATION_COLOUR,
     target: TARGET_COLOUR,
     hit: HD_HIT_COLOUR,
     tints_shell: true,
+    colour_rate: COLOUR_RATE,
+    target_alpha_from_cockpit: false,
+};
+
+/// Omega's and 2048's: HD's colours and law, with the target alpha taken from
+/// the larger of the shell's and the cockpit sphere's
+/// (`docs/ghidra/functions/ps4-omega-eu/shield.md`, `ShipShield_Construct`).
+pub const OMEGA_PALETTE: Palette = Palette {
+    target_alpha_from_cockpit: true,
+    ..HD_PALETTE
+};
+
+/// Our own HD/Fury-style shield's colours (`graphics.own_shield`, `docs/rendering/own-shield.md`):
+/// it fades up from a deep blue, settles to an ice blue and flashes amber on an absorbed hit,
+/// the three moments HD's shell colours by.
+pub const OWN_ACTIVATION_COLOUR: [f32; 4] = [0.10, 0.25, 0.80, 0.0];
+
+/// What our own shell settles to while the shield is up.
+pub const OWN_TARGET_COLOUR: [f32; 4] = [0.45, 0.80, 1.0, 1.0];
+
+/// What an absorbed hit flashes our own shell to.
+pub const OWN_HIT_COLOUR: [f32; 4] = [1.0, 0.55, 0.10, 1.0];
+
+/// The palette of our own shield: the animation law is the shared one, the colours are
+/// [`OWN_ACTIVATION_COLOUR`], [`OWN_TARGET_COLOUR`] and [`OWN_HIT_COLOUR`]. The shell's own shader
+/// takes the colour as its tint on every platform, so it always reaches the shell.
+pub const OWN_PALETTE: Palette = Palette {
+    activation: OWN_ACTIVATION_COLOUR,
+    target: OWN_TARGET_COLOUR,
+    hit: OWN_HIT_COLOUR,
+    tints_shell: true,
+    colour_rate: COLOUR_RATE,
+    target_alpha_from_cockpit: false,
 };
 
 /// The substep the update runs its two lerps at, `1.0 / 60.0` as the original
@@ -416,7 +460,7 @@ impl ShipShield {
         for _ in 0..steps {
             for channel in 0..4 {
                 self.rgba[channel] +=
-                    (self.rgba_target[channel] - self.rgba[channel]) * COLOUR_RATE;
+                    (self.rgba_target[channel] - self.rgba[channel]) * self.palette.colour_rate;
             }
             self.swell += (self.swell_target - self.swell) * SWELL_RATE;
         }

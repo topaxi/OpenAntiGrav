@@ -35,7 +35,7 @@ pub fn safe_area_frame(frame: Frame, scale: f32, size: (f32, f32)) -> Frame {
         offset: [(1.0 - scale) * size.0 * 0.5, (1.0 - scale) * size.1 * 0.5],
         clip: [-1.0e9, -1.0e9, 2.0e9, 2.0e9],
     };
-    frame.placed(&placement)
+    frame.into_placed(&placement)
 }
 
 /// One view of a split screen: the layout it draws from, the slot's readout and
@@ -76,10 +76,23 @@ pub fn views_frame(views: &[ViewDraw<'_>]) -> Frame {
                     .filter_map(|draw| oag_hud::place(draw, at))
                     .collect()
             };
+        if view.items.is_none() && !view.readout.player_tags.is_empty() {
+            // The tags were projected into the reticle's grid, so they go where the reticle goes.
+            let at = view.sight.as_ref().unwrap_or(&view.placement);
+            let mut mine = Frame::default();
+            oag_hud::player_tags::append(&mut mine, &view.cx, &view.readout);
+            let mut mine = mine.into_placed(at);
+            mine.spans.clear();
+            mine.spans.push(Span {
+                clip: at.clip,
+                start: [0; 5],
+            });
+            frame.extend(mine);
+        }
         if let Some(grid) = view.items {
             let mut mine = Frame::default();
             oag_hud::ext_draws::append(&mut mine, &view.cx, &view.readout.ext, grid);
-            let mut mine = mine.placed(&view.placement);
+            let mut mine = mine.into_placed(&view.placement);
             mine.spans.clear();
             mine.spans.push(Span {
                 clip: view.placement.clip,
@@ -101,14 +114,13 @@ pub fn views_frame(views: &[ViewDraw<'_>]) -> Frame {
             continue;
         }
         let Some(sight_at) = &view.sight else {
-            frame.extend(draw_list(&view.cx, &view.readout).placed(&view.placement));
+            frame.extend(draw_list(&view.cx, &view.readout).into_placed(&view.placement));
             continue;
         };
-        let mut readout = view.readout.clone();
-        let sight = readout.sight.take();
-        let mut mine = draw_list(&view.cx, &readout).placed(&view.placement);
-        if let Some(sight) = sight {
-            mine.sprites.extend(sight_draws(&sight, sight_at));
+        let mut mine =
+            oag_hud::draw_list_without_sight(&view.cx, &view.readout).into_placed(&view.placement);
+        if let Some(sight) = &view.readout.sight {
+            mine.sprites.extend(sight_draws(sight, sight_at));
         }
         frame.extend(mine);
     }
@@ -157,12 +169,34 @@ pub struct Overlay {
     split: Option<oag_hud::SplitAssets>,
     split_columns: Option<oag_hud::SplitAssets>,
     split_hud: Option<oag_hud::split_hud::SplitHudAssets>,
+    /// The player-tag face, [`Assets::tag_label`].
+    tag_label: Option<oag_hud::Label>,
     /// The whole HUD's scale about the screen's centre, [`oag_title::HudArt::safe_area`] at the
     /// player's value; `1.0` for a title with no such option.
     safe_area_scale: f32,
     /// Whether the HUD is drawn: `false` under Pulse's `Dynamic HUD` set to off
     /// ([`Self::set_dynamic_hud`]). The resume countdown is the host's own and still draws.
     hud_shown: bool,
+    /// The mods' vector icons, kept so they are rasterised again when the HUD's pixel size
+    /// changes (a resize, another HUD scale, a window of another shape).
+    vector: Option<Retarget>,
+}
+
+/// Rasterises a race's vector icons again, off the frame loop, for the pixels per layout unit
+/// the HUD is now drawn at.
+struct Retarget {
+    icons: Vec<oag_hud::svg::VectorIcon>,
+    /// The sheet before any vector icon was put in it.
+    base: oag_hud::sprite::Sheet,
+    layout: Layout,
+    art: &'static oag_title::HudArt,
+    /// Pixels per layout unit the sheet in use was rasterised at.
+    density: f32,
+    pending: Option<(f32, oag_thread::Task<oag_hud::sprite::Sheet>)>,
+    /// The size the last draw asked for. A change is acted on only when the next draw asks
+    /// for the same, so windows of different sizes drawing through one overlay in turn never
+    /// start a raster each frame.
+    asked: f32,
 }
 
 impl std::fmt::Debug for Overlay {
@@ -264,8 +298,29 @@ impl Overlay {
             split: assets.split.clone(),
             split_columns: assets.split_columns.clone(),
             split_hud: assets.split_hud.clone(),
+            tag_label: assets.tag_label.clone(),
             safe_area_scale: assets.art.safe_area_scale(None),
             hud_shown: true,
+            vector: assets
+                .layout
+                .as_ref()
+                .filter(|_| !assets.vector_icons.is_empty())
+                .map(|layout| Retarget {
+                    icons: assets.vector_icons.clone(),
+                    base: assets
+                        .vector_base
+                        .clone()
+                        .unwrap_or_else(|| assets.sheet.clone()),
+                    layout: layout.clone(),
+                    art: assets.art,
+                    density: assets
+                        .vector_icons
+                        .first()
+                        .and_then(|icon| assets.sheet.texel_density(&icon.src))
+                        .unwrap_or(0.0),
+                    pending: None,
+                    asked: 0.0,
+                }),
         }))
     }
 
@@ -280,8 +335,14 @@ impl Overlay {
     /// no `Safe Area Setting` keeps its HUD at full size whatever this says.
     #[must_use]
     pub fn with_safe_area(mut self, percent: Option<u8>) -> Self {
-        self.safe_area_scale = self.art.safe_area_scale(percent);
+        self.set_safe_area(percent);
         self
+    }
+
+    /// [`Self::with_safe_area`] on a built overlay. Idempotent, so the frame loop sets it every
+    /// frame and a race resumed from the pause menu's OPTIONS takes the SCREEN SIZE row at once.
+    pub fn set_safe_area(&mut self, percent: Option<u8>) {
+        self.safe_area_scale = self.art.safe_area_scale(percent);
     }
 
     /// The placement [`Self::safe_area`] applies, or `None` at full size.
@@ -319,6 +380,70 @@ impl Overlay {
         self.art.resume_countdown
     }
 
+    /// Keeps the vector icons at the pixel size the HUD is drawn at in `viewport`: when it
+    /// differs from the size they were rasterised at, they are rasterised again on another
+    /// thread and the sheet swapped in the frame the work finishes. Until then the icon is
+    /// drawn from the old raster, as a PNG would be.
+    fn retarget(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        viewport: (f32, f32, f32, f32),
+    ) {
+        let Some(vector) = self.vector.as_mut() else {
+            return;
+        };
+        if let Some((density, task)) = vector.pending.as_mut() {
+            if !task.is_finished() {
+                return;
+            }
+            let density = *density;
+            let finished = vector.pending.take().and_then(|(_, mut task)| task.join());
+            if let Some(Ok(sheet)) = finished {
+                self.sheet = sheet;
+                vector.density = density;
+                for renderer in [
+                    &mut self.values,
+                    &mut self.captions,
+                    &mut self.rows,
+                    &mut self.skin,
+                ] {
+                    renderer.set_sprites(device, queue, &self.sheet);
+                }
+            }
+        }
+        let wanted =
+            crate::render::hud_pixels_per_grid(self.space, viewport) * self.safe_area_scale;
+        let same = |a: f32, b: f32| (a - b).abs() <= b * 0.005;
+        if wanted <= 0.0 || same(wanted, vector.density) {
+            vector.asked = 0.0;
+            return;
+        }
+        if !same(wanted, vector.asked) {
+            vector.asked = wanted;
+            return;
+        }
+        let (icons, base, layout, art) = (
+            vector.icons.clone(),
+            vector.base.clone(),
+            vector.layout.clone(),
+            vector.art,
+        );
+        vector.pending = Some((
+            wanted,
+            oag_thread::Task::spawn("hud-vector-icons", move || {
+                oag_hud::svg::place(&base, &layout, art, &icons, wanted, &mut Vec::new())
+            }),
+        ));
+    }
+
+    /// Texels per layout unit the first vector icon of the sheet in use was rasterised at.
+    #[must_use]
+    pub fn vector_density(&self) -> Option<f32> {
+        let icon = self.vector.as_ref()?.icons.first()?;
+        self.sheet.texel_density(&icon.src)
+    }
+
     /// The context [`draw_list`] takes.
     #[must_use]
     pub fn context(&self) -> Context<'_> {
@@ -332,6 +457,7 @@ impl Overlay {
             default_line_height: self.default_line_height,
             skin_line_height: self.skin_line_height,
             default_border: self.layout.default_border(),
+            tag_label: self.tag_label.as_ref(),
         }
     }
 
@@ -357,6 +483,8 @@ impl Overlay {
         countdown: Option<&str>,
         viewport: (f32, f32, f32, f32),
     ) -> Vec<oag_hud::boost_smear::GlowStamp> {
+        self.retarget(device, queue, viewport);
+        oag_gpu::perfprobe::mark("hud-readout");
         let mut frame = if self.hud_shown {
             let cx = self.context();
             let mut list = draw_list(&cx, readout);
@@ -386,7 +514,9 @@ impl Overlay {
             );
         }
         let glow = frame.glow.clone();
+        oag_gpu::perfprobe::mark("hud-frame");
         self.paint(device, queue, encoder, view, frame, viewport);
+        oag_gpu::perfprobe::mark("hud-paint");
         glow
     }
 
@@ -411,7 +541,9 @@ impl Overlay {
         cut: oag_render::viewport::Cut,
         viewport: (f32, f32, f32, f32),
     ) -> Vec<oag_hud::boost_smear::GlowStamp> {
+        oag_gpu::perfprobe::mark("hud-readout");
         let count = readouts.len();
+        self.retarget(device, queue, viewport);
         let mut frame = if self.hud_shown {
             views_frame(&crate::hud_views::view_draws(
                 self.context(),
@@ -437,7 +569,9 @@ impl Overlay {
             ));
         }
         let glow = frame.glow.clone();
+        oag_gpu::perfprobe::mark("hud-frame");
         self.paint(device, queue, encoder, view, frame, viewport);
+        oag_gpu::perfprobe::mark("hud-paint");
         glow
     }
 
@@ -502,3 +636,6 @@ impl Overlay {
         }
     }
 }
+
+#[cfg(test)]
+mod retarget_tests;

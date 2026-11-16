@@ -20,7 +20,7 @@ use oag_core::math::{Mat4, Vec3};
 
 use oag_mesh::mesh::{DrawCall, Model};
 
-use super::{FX350_TEXTURE, basename};
+use super::is_fx350_texture;
 
 /// The key a draw is named by in a hidden set: its index range's start.
 #[must_use]
@@ -37,7 +37,7 @@ fn all_draws(model: &Model) -> impl Iterator<Item = &DrawCall> {
         .chain(&model.transparent_draws)
 }
 
-/// The keys of every draw bound to [`FX350_TEXTURE`]: what
+/// The keys of every draw bound to [`is_fx350_texture`]: what
 /// [`super::strip_fx350_art`] would remove, named instead of removed.
 #[must_use]
 pub fn fx350_draws(model: &Model) -> Vec<u32> {
@@ -45,7 +45,7 @@ pub fn fx350_draws(model: &Model) -> Vec<u32> {
         .filter(|draw| {
             draw.texture
                 .and_then(|slot| model.textures.get(slot)?.as_ref())
-                .is_some_and(|t| basename(&t.label).eq_ignore_ascii_case(FX350_TEXTURE))
+                .is_some_and(|t| is_fx350_texture(&t.label))
         })
         .map(key)
         .collect()

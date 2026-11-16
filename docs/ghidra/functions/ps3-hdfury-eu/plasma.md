@@ -84,12 +84,14 @@ same as Omega.
 Confidence **88**. `*(param_1 + 0x54) = DAT_008a9f44._4_4_` - that is the
 word at `0x008a9f48` = `0x3f800000` = **1.0** - with `+0x50 = 1`
 (charging), `+0x58 = 0` (age), `+0x40 |= 8`, `+0x110 = -(craft + 0x7850)`
-(the carried normal starts as minus the craft's up), and `+0x124 =
+(the carried normal starts as minus the located track sample's down, that is the
+track's up, not the craft's: [projectile-launch-normal.md](projectile-launch-normal.md)), and `+0x124 =
 *(0x008c1868 + 4)` = `0xbf99999a` = **-1.2**, the same seed Omega's
 `Plasma_Init` writes as a literal. Two particle systems are attached at
 `p + 0xb0`: `'PLHE'` (`WO_PLASMA_HEAD`) and `'PLCG'` (`WO_PLASMA_CHARGING`),
 both owned by the race-wide `RaceManager` instance as
-[weapons.md](weapons.md) already noted for the explosions. Rumble
+[weapons.md](weapons.md) already noted for the explosions. A camera shake,
+not controller rumble ([rumble.md](rumble.md#not-this-library)),
 `FUN_000a3528(0.07, 1.0, ...)` (`0x008aa000 = 0x3d8f5c29`, `0x008a9f48`)
 if the craft is local, and two light descriptors are registered from
 `p + 0x1a0` (`FUN_00677c78`, descriptors at `*0x008a9f40 + 4` and `+ 0x74`).
@@ -802,3 +804,191 @@ fixed on the shell (537,340 pixels differ at tick 185, 41,672 at 200, 152,234
 at 215, 58,312 at 230; 0 at 175, before the blast). Subtle by construction:
 0.1 per second over a 1.3 s window is 0.13 of the texture. Pulse's frame of
 the same shot is pixel-identical before and after (ticks 200 and 230).
+
+## 2026-11-03: the 2026-10-05 reading rechecked, and the Omega/2048 cross-check
+
+A lane briefed to play `UV_offset` from keys parsed out of the explosion `.vex`
+found the work already done: the trio's `Anim Transform` track has a single
+scale key and a single translation key (static), and `UV_offset` is the
+blast's age, played on the ring and halo (`slots::CLOCK_SCROLL_RING`/`_HALO`,
+`model_clock`). No reader or test was added; there is no curve to decode.
+
+Cross-check: Omega loads the same trio (`oag_omega::weapons::WEAPON_MODELS`,
+`docs/formats/omega-status.md` "Weapon bodies") through `mesh::rcs::psp2`, so
+the same age-driven slots apply to it as **checked, applies, not measured on
+PS4** (the PS4 program's `UV_offset` use was not read; the draw is HD's
+inherited). 2048 ships `Data/Weapons2048` bodies under a different root and
+mode, unwired: **checked, applies, not wired**.
+
+## 2026-11-15: the wind-up, the release, the muzzle, the ball's frame and the blast's programs, paired
+
+Lanes `hd-plasma` and `hd-plasma-2`. Every phase of one shot (charge, release, flight, blast) was
+filmed on RPCS3 and on this engine with the same ship, track and pose, and the differences are fixed
+where the law is read, listed below where it is not.
+
+**The instrument.** RPCS3 on the EU Fury disc, Racebox Single Race, Talon's Junction, Venom, Feisar,
+the craft at rest on its grid slot, pickup state 7 fired. A scratch poller found the live bolt through
+the `PlasmaManager` instance (vtable `0x00864698`, list `+0x84`, count `+0xc4`) and read it out of
+`/proc/<pid>/mem` at every game tick, pausing the emulator on a charge, age or explosion-age condition
+for a frame. Three shots: one down the grid (frames at charge 0.15, 0.5, 0.9 s and flight 0.03, 0.12,
+0.3, 0.6 s), one with the craft yawed ten degrees so the bolt meets the left wall at age 0.95 s 132
+units out (frames at blast age 0.03, 0.17, 0.4, 0.82, 1.2, 1.5 s), and a first straight shot through
+the whole life. Ours: `oag-game --screenshot` with `--pose-hold-ticks` (a resting craft held on its
+pose every tick, as the original's rests) through `scripts/hd-weapon-pair.py`.
+
+### Measured live
+
+Confidence 85 to 95 each, two or three shots.
+
+- **The charge is 1.0 s of game time, 60 ticks**, as `Plasma_Init` reads.
+- **Launch speed** is the craft's speed x 3.6 + `launchSpeed` (200), and the bolt flies the ramp
+  `(1 - age) * launch + age * class` (850 on Venom) **from its first tick, with no lower hold**: the
+  first four flying ticks of the straight shot read 212.9, 211.2, 221.6 and 229.5 km/h (each step's
+  length over its own `dt`, which runs 0.016 to 0.0173 s), where Pulse's bolt leaves at 0.75 x its
+  release speed until its first floor ride. HD's caller orthonormalises the node matrix before
+  `Plasma_Launch` (`0x0011f810`) reads its forward, so nothing carries the display scale into the
+  speed. The steps lag the ramp at their own age by about a tick, as this engine's do.
+- **The floor follower** `v' = normalize(v - (v.n')n') * speed` holds exactly per tick (error 0 over
+  133 ticks).
+- **The flown distance** from the charge point at age 0.0997, 0.2945, 0.5994 and 0.9924 s: 6.38, 23.84,
+  64.91, 142.61. The yawed shot's bolt meets the wall at `(1.4376, -50.3203, -207.0496)`, age 0.95 s.
+- **A wall hit starts the explosion** (flags `9` to `5`), which lives 3.5 s. Its three scale ramps step
+  `cur += (target - cur) * rate` once per draw (ring 1.0, sphere 2.13, halo 1.4 after one draw); the
+  ring stops at 1.7 s. This settles the "How to falsify this" check of the 2026-09-23 section and the
+  hedge on `0x00126d80`.
+- **The bolt object.** Matrix `+0x70..+0xa0`; effect frame `+0xb0` (rows: side, minus forward, up; unit
+  length; constant from the press to the end); velocity `+0xf0`, previous position `+0x100`, ridden
+  normal `+0x110`; visual matrix `+0x150`; charge glow `+0x190`, easing to 0.8 at rate 0.05.
+- **The charge point** is 4.62 ahead of the body and 0.27 under it on Feisar: the hull's `Ship Muzzle`
+  node through the 0.75 hull scale (next section). Original charge points, straight and yawed:
+  `(-127.6546, -49.8659, -175.5523)`, `(-127.7169, -49.8071, -176.3296)`.
+
+Wired as `Weapons::plasma_release_at_display_scale` (`false` on HD, measured; `true` on Pulse,
+measured, and Pure, inherited) and `oag_weapons::projectile::PlasmaRelease`; HD's probe window skips the
+probe, not the ramp. `crates/raceplay/tests/hd_plasma_flight_ground_truth.rs` asserts the charge point,
+the sixty charging ticks, the four first-tick speeds (red at 150 km/h with Pulse's hold), the flown
+distances within 2.5 and the wall point within 15.
+
+### The muzzle
+
+HD's hull files author no `Ship Muzzle`; the team's `Locators.vex` beside the hull does: node
+`ship_muzzle`, class `0x3e2`, `(0, -0.316, 6.215)` on Feisar. `ShipMuzzle_AttachToShip`
+(`0x002dae70`, 80, [cannon.md](cannon.md)) stores it at `ship+0x5f34`. Through the craft's 0.75 rows
+that is the measured charge point above. `crates/raceplay/src/load/muzzle.rs` reads the locator file
+when the hull authors none, so HD no longer falls back to Pulse's 2.23 hold point.
+
+### The effects and their triggers
+
+Read statically (the executable disassembled at the call sites, TOC-resolved strings), confidence 85
+to 88:
+
+| effect | spawned by | call | on |
+| --- | --- | --- | --- |
+| `WO_PLASMA_HEAD` (`'PLHE'`) | `Plasma_Init` `0x00120fe8` | `0x001211b8` | the bolt's `+0xb0` frame |
+| `WO_PLASMA_CHARGING` (`'PLCG'`) | `Plasma_Init` | `0x00121264` | the same frame |
+| `WO_PLASMA_LAUNCH` | `Plasma_Launch` `0x0011f810` | `0x0011fc08` | the craft's `Ship Muzzle` node matrix, when `craft+0x5f42 == 0` |
+| `WO_PLASMA_LIGHTNING_EXPAND` / `_COLLAPSE` | `Plasma_Detonate` | (2026-09-17 section) | the blast |
+
+`Plasma_Init` also registers two light descriptors (`0x993e50 + 4`, `+ 0x74`); `Plasma_Launch` adds a
+light candidate at `0x0011fae8` (`SpuLight_AddCandidate`, radius 24, weight 1, colour `(2.2, 1.6,
+2.2)`). **`WO_PLASMA_FLASH` is named nowhere in the executable** (five effect names, the five above):
+the disc's `wo_plasma_flash.pob` is unplayed on HD, so `oag_hd::effects` answers no `PlasmaBlast`.
+
+Wired: `Trigger::PlasmaCharging` and `Trigger::PlasmaLaunch` (`oag_hd::effects`,
+`crates/raceplay/src/plasma_launch.rs`): the wind-up plays beside the head on the bolt, the release
+rides the firing craft's muzzle node while it emits. Their class-6 particles draw as HD's view-space bar
+(`FAR_BARS`); the head's and wind-up's sprite templates play (`TEMPLATES`), the release's `FLASH` and
+the blast's `START_FLASH` do not (Open, 3).
+
+### The bolt's two frames
+
+The bolt carries two frames, both constant for its whole life. The **effect frame** `+0xb0` has unit
+rows, its `+Y` the firing craft's backward axis: the head and the wind-up emit about it, where Pulse's
+head keeps world up. The **visual matrix** `+0x150` that draws `HD_plasma_ball` has model `X` down the
+carried up, `Y` across and `Z` along the firing direction, rows 0.5625, 0.5625 and 0.4219 long
+(`0.75^2`, `0.75^2`, `0.75^3`), charging and flying alike: the short axis is along the heading. The
+release effect rides the muzzle node's own matrix instead (`+Y` the craft's up, rows `0.75^2`).
+
+### The blast's three programs
+
+Read off the cooked programs (`ps3-microcode`), `t` the blast's age (`UV_offset`, the 2026-10-05
+section):
+
+- **Ring**, `hd_plasmaring_glow` `@0x1900`, and **halo**, `hd_plasmahalo_glow` `@0x1960`: unlit; the
+  tap times the vertex colour, alpha the tap's channel sum. The ring's colour tap reads raw (unit 0
+  nibble 0), the halo's decoded (`docs/rendering/hd-unlit-programs.md`).
+- **Sphere**, `plasmasphere_glow` `@0x2690`, three samplers: alpha `2 rim^(2t) sum(c) (1 - 0.585 t)`;
+  colour `f c light (1.93, 1.2, 8) + 20 noise spec sun + probe * iblScalePower`, the noise at
+  `(5u + 10t, 15v + 10t)`.
+- The ring's and the sphere's first tap is `(u, 4 (v + 0.01 t))`: an `x4` output scale on the texture
+  coordinate. The Bomb's and Missile's shockwave code reads the same field without it (out of this
+  lane; recorded here).
+
+The full arithmetic is beside the code (`crates/mesh/shaders/shade.wesl`, "The Plasma blast's three
+programs"). Carried as `slots::CLOCK_SCROLL_RING`, `_HALO` and `PLASMA_SPHERE`.
+`crates/game/tests/hd_weapon_scene_ground_truth.rs` holds the routing.
+
+### The pairs
+
+A box mean absolute RGB difference around the bolt (floor about 12 on the straight shot, 7 to 19 on
+the yawed one), the pose held on both sides, before and after this work:
+
+| frame | before | after |
+| --- | ---: | ---: |
+| charge 0.15 s | 22.23 | 22.36 |
+| charge 0.5 s | 27.16 | 24.18 |
+| charge 0.9 s | 19.94 | 17.13 |
+| launch 0.03 s | 17.49 | 12.87 |
+| launch 0.12 s | 25.45 | 29.34 (worse: the burst too wide and violet) |
+| flight 0.3 s | 12.34 | 11.53 |
+| flight 0.6 s | 11.92 | 11.59 |
+| blast 0.03 s | 6.91 | 8.11 |
+| blast 0.17 s | 29.49 | 25.99 |
+| blast 0.40 s | 29.23 | 26.06 |
+| blast 0.82 s | 30.38 | 33.11 (worse: the original keeps a bright haze) |
+| blast 1.2 s | 29.99 | 31.11 |
+| blast 1.5 s | 18.90 | 18.60 |
+
+The blast's lightning effects fill the blast (`EXTENTS`) instead of bunching at its centre; with the
+bar the launch's and the blast's white blobs read as lightning.
+
+### Lineage
+
+- **Omega: checked, applies, not wired.** Its `Plasma_Init` (`0x0135cad0`) spawns `'PLHE'` and
+  `'PLCG'` and its `Plasma_Launch` (`0x0135d5d0`) spawns `'PLLH'` at the weapon node
+  ([ps4-omega-eu/plasma.md](../ps4-omega-eu/plasma.md)); `oag_omega`'s effect table answers neither trigger yet. Its release
+  takes `node_matrix.forward` as HD's does; whether its walker orthonormalises the node is unread, so
+  `plasma_release_at_display_scale` is **inherited from HD**. The three blast programs are recooked
+  GCN, not read (the models are HD's, 2026-11-03 section).
+- **2048: checked, applies, not wired.** Its `Plasma_Init` (`0x811fcb40`) spawns `'PLHE'`/`'PLCG'`
+  with HD's `1.0` charge ([projectile-launch-normal.md](projectile-launch-normal.md), "2048"); its launch is unread, the release law
+  **inherited from HD** through Omega. Its blast bodies are unwired (2026-11-03 section).
+- **The `+0x87c` template sprite field** holds on HD 38/38, 2048 36/36 and Omega 55/55 template
+  records (`docs/formats/pob.md`): checked, applies; read on all three.
+
+### Open
+
+In the order a player notices them; each with what is known of its cause.
+
+1. **The flying bolt.** The original's is a white-hot core in a violet halo; ours a small bright ring
+   trailing violet sparkles. The head's two templates (`glow3` on `WO_RING_BW_64x64`, `glow2` on
+   `psysed_default_glow`) load; whether they draw under the ball or wrongly is not determined. The
+   head's emitters probably ride the effect frame `+0xb0` (unit rows) so nothing trails.
+2. **The charge glow at 0.9 s.** The original's is a large white-blue glow (`WO_PLASMA_CHARGING`'s
+   `GLOW` template near its peak); ours is faint. Unread: the template's scale curve as played.
+3. **The release.** Ours' lightning burst is wider and more violet, with no white core. The `FLASH`
+   and `START_FLASH` templates are muted because they white the frame out for their few ticks (the
+   same symptom as Pure's absorb burst); the cause is unread.
+4. **The blast after 0.5 s.** The original keeps a bright haze and a lit scene to 1.2 s (halo, and the
+   two explosion lights at `*0x008aa260 + 0x30` and `+ 0xa0`, unwired); ours fades to wisps.
+5. **The sphere's colour** is paler: `iblScalePower` and the probe are the scenery glass's measured
+   value, not read on the sphere's draw. Two RSX dump attempts never caught the draw
+   (`scripts/rpcs3-hd-whiteout.py --fire-state 7 --behind --delay 1.25 --want-mats DIR
+   --want-name plasmasphere_glow`).
+6. **The flight past one second.** On the banked climb ours bends with the road; the original's holds
+   its heading and meets the right-hand wall at age 2.24 s. Ours drifts 1.4 degrees off the craft's
+   heading where the original's drifts 0.6, so the yawed shot's wall point is 12.2 short at 132.
+   `Plasma_Update` (`0x0011fc88`) is read; HD's floor arms are `ParallelToFloor` (chosen,
+   `floor_arms_steer_to_ride_point`), the likely cause, unread on HD.
+7. **The Plasma's lights**: the wind-up's two descriptors, the release candidate and the blast's two
+   are unwired.

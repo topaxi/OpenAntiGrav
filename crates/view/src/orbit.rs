@@ -185,31 +185,7 @@ struct Session {
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     depth_view: wgpu::TextureView,
-    pipeline: wgpu::RenderPipeline,
-    alpha_test_pipeline: wgpu::RenderPipeline,
-    /// One per alpha-test reference this model's own batches ask for - see
-    /// `mesh_render::Built::cutout_pipelines`.
-    cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
-    blend_pipeline: [wgpu::RenderPipeline; 2],
-    additive_pipeline: [wgpu::RenderPipeline; 2],
-    unblended_pipeline: [wgpu::RenderPipeline; 2],
-    /// One pair per equation this model's own file authors - see
-    /// `mesh_render::Built::authored_pipelines`.
-    authored_pipelines: Vec<((wgpu::BlendState, bool), [wgpu::RenderPipeline; 2])>,
-    uniform_buffer: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    texture_binds: Vec<wgpu::BindGroup>,
-    /// Bind group 2. The viewer never fogs, so this stays at
-    /// [`mesh_render::Fog::off`] for the session's lifetime.
-    fog_bind: wgpu::BindGroup,
-    /// Bind group 3, rewritten every frame from the model's authored
-    /// texture-transform tracks.
-    anim_bind: wgpu::BindGroup,
-    anim_buffer: wgpu::Buffer,
-    node_anim_buffer: wgpu::Buffer,
-    model: Model,
+    scene: Scene,
     orbit: Orbit,
     held: Held,
     /// Which mouse button is dragging, and from where.
@@ -275,68 +251,7 @@ impl Session {
         config.view_formats = vec![config.format];
         surface.configure(&device, &config);
 
-        let mesh_render::Built {
-            pipeline,
-            alpha_test_pipeline,
-            cutout_pipelines,
-            blend_pipeline,
-            additive_pipeline,
-            unblended_pipeline,
-            authored_pipelines,
-            bind_group: placeholder_bind_group,
-            vertex_buffer,
-            index_buffer,
-            texture_binds,
-            bindless: _,
-            fog_bind,
-            fog_buffer: _,
-            zone_vis_texture: _,
-            zone_rebind: _,
-            anim_bind,
-            anim_buffer,
-            node_anim_buffer,
-            emissive_buffer: _,
-            stamp_pipeline: _,
-            prepass: _,
-            culled: _,
-        } = mesh_render::build(
-            &device,
-            &queue,
-            &model,
-            config.format,
-            anisotropy,
-            1,
-            mesh_render::Depth::Scene,
-            mesh_render::TRANSPARENT_BLEND,
-            // The asset viewer runs no bloom, so the mask is moot here, and
-            // it draws into one target, so there is no velocity buffer.
-            mesh_render::GlowMask::Protected,
-            mesh_render::Velocity::None,
-            // The asset viewer draws a model, not a race, so no Zone stage.
-            &mesh_render::zone::StageArt::NONE,
-            // And no shadow map, and nothing receiving one: a viewer shows a
-            // model against nothing, which is what makes it a reference.
-            mesh_render::ShadowMaps::NONE,
-            mesh_render::ShadowReceiver::Never,
-        )?;
-        let _ = placeholder_bind_group;
-
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("orbit uniforms"),
-            size: UNIFORMS_SIZE,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let bind_group_layout = pipeline.get_bind_group_layout(0);
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("orbit uniforms"),
-            layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
-        });
-
+        let scene = Scene::new(&device, &queue, model, config.format, anisotropy)?;
         let depth_view = make_depth_view(&device, config.width, config.height);
 
         Ok(Self {
@@ -346,23 +261,7 @@ impl Session {
             surface,
             config,
             depth_view,
-            pipeline,
-            alpha_test_pipeline,
-            cutout_pipelines,
-            blend_pipeline,
-            additive_pipeline,
-            unblended_pipeline,
-            authored_pipelines,
-            uniform_buffer,
-            bind_group,
-            vertex_buffer,
-            index_buffer,
-            texture_binds,
-            fog_bind,
-            anim_bind,
-            anim_buffer,
-            node_anim_buffer,
-            model,
+            scene,
             orbit,
             held: Held::default(),
             drag: Drag::default(),
@@ -477,29 +376,12 @@ impl Session {
 
         self.orbit = advance(self.orbit, &self.held, dt);
 
-        let anims = mesh_render::TexAnims::sample(
-            &self.model,
-            now.duration_since(self.opened).as_secs_f32(),
-        );
-        self.queue
-            .write_buffer(&self.anim_buffer, 0, bytemuck::bytes_of(&anims));
-        // The viewer's clock moves a track's `Anim Transform` nodes too, so a
-        // circuit opened in `oag-view` shows the same scenery motion a race
-        // does rather than a frozen first frame.
-        let nodes = mesh_render::NodeAnims::sample(
-            &self.model,
-            now.duration_since(self.opened).as_secs_f32(),
-        );
-        self.queue
-            .write_buffer(&self.node_anim_buffer, 0, bytemuck::bytes_of(&nodes));
-
         let aspect = self.config.width as f32 / self.config.height.max(1) as f32;
-        mesh_render::write_uniforms(
+        self.scene.update(
             &self.queue,
-            &self.uniform_buffer,
-            &self.model,
             aspect,
             self.orbit,
+            now.duration_since(self.opened).as_secs_f32(),
         );
 
         let frame = match self.surface.get_current_texture() {
@@ -522,115 +404,234 @@ impl Session {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("orbit frame"),
             });
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("orbit frame"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.06,
-                            g: 0.07,
-                            b: 0.09,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Discard,
+        self.scene.draw(&mut encoder, &view, &self.depth_view);
+        self.queue.submit(Some(encoder.finish()));
+        self.queue.present(frame);
+        Ok(())
+    }
+}
+
+/// The GPU resources one model is drawn with, and the render pass that draws
+/// it. Nothing here knows a window: [`Session::frame`] hands it a target view,
+/// and a test hands it an offscreen one.
+struct Scene {
+    pipeline: wgpu::RenderPipeline,
+    alpha_test_pipeline: wgpu::RenderPipeline,
+    /// One per alpha-test reference this model's own batches ask for - see
+    /// `mesh_render::Built::cutout_pipelines`.
+    cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
+    blend_pipeline: [wgpu::RenderPipeline; 2],
+    additive_pipeline: [wgpu::RenderPipeline; 2],
+    unblended_pipeline: [wgpu::RenderPipeline; 2],
+    /// One pair per equation this model's own file authors - see
+    /// `mesh_render::Built::authored_pipelines`.
+    authored_pipelines: Vec<((wgpu::BlendState, bool), [wgpu::RenderPipeline; 2])>,
+    uniform_buffer: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+    geometry: mesh_render::Geometry,
+    index_buffer: wgpu::Buffer,
+    texture_binds: Vec<wgpu::BindGroup>,
+    /// Bind group 2. The viewer never fogs, so this stays at
+    /// [`mesh_render::Fog::off`] for the scene's lifetime.
+    fog_bind: wgpu::BindGroup,
+    /// Bind group 3, rewritten every frame from the model's authored
+    /// texture-transform tracks.
+    anim_bind: wgpu::BindGroup,
+    anim_buffer: wgpu::Buffer,
+    node_anim_buffer: wgpu::Buffer,
+    model: Model,
+}
+
+impl Scene {
+    fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        model: Model,
+        target_format: wgpu::TextureFormat,
+        anisotropy: Anisotropy,
+    ) -> Result<Self> {
+        let mesh_render::Built {
+            pipeline,
+            alpha_test_pipeline,
+            cutout_pipelines,
+            blend_pipeline,
+            additive_pipeline,
+            unblended_pipeline,
+            authored_pipelines,
+            bind_group: placeholder_bind_group,
+            geometry,
+            index_buffer,
+            texture_binds,
+            bindless: _,
+            fog_bind,
+            fog_buffer: _,
+            zone_vis_texture: _,
+            zone_rebind: _,
+            anim_bind,
+            anim_buffer,
+            node_anim_buffer,
+            emissive_buffer: _,
+            stamp_pipeline: _,
+            prepass: _,
+            plain_draws: _,
+            culled: _,
+            unwritten: _,
+            foliage: _,
+        } = mesh_render::build(
+            device,
+            queue,
+            &model,
+            target_format,
+            anisotropy,
+            1,
+            mesh_render::Depth::Scene,
+            mesh_render::TRANSPARENT_BLEND,
+            // The asset viewer runs no bloom, so the mask is moot here, and
+            // it draws into one target, so there is no velocity buffer.
+            mesh_render::GlowMask::Protected,
+            mesh_render::Velocity::None,
+            // The asset viewer draws a model, not a race, so no Zone stage.
+            &mesh_render::zone::StageArt::NONE,
+            // And no shadow map, and nothing receiving one: a viewer shows a
+            // model against nothing, which is what makes it a reference.
+            mesh_render::ShadowMaps::NONE,
+            mesh_render::ShadowReceiver::Never,
+        )?;
+        let _ = placeholder_bind_group;
+
+        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("orbit uniforms"),
+            size: UNIFORMS_SIZE,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let bind_group_layout = pipeline.get_bind_group_layout(0);
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("orbit uniforms"),
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+        });
+
+        Ok(Self {
+            pipeline,
+            alpha_test_pipeline,
+            cutout_pipelines,
+            blend_pipeline,
+            additive_pipeline,
+            unblended_pipeline,
+            authored_pipelines,
+            uniform_buffer,
+            bind_group,
+            geometry,
+            index_buffer,
+            texture_binds,
+            fog_bind,
+            anim_bind,
+            anim_buffer,
+            node_anim_buffer,
+            model,
+        })
+    }
+
+    /// Writes the per-frame uniforms: the texture and node animation tracks at
+    /// `seconds`, and the camera.
+    fn update(&self, queue: &wgpu::Queue, aspect: f32, orbit: Orbit, seconds: f32) {
+        let anims = mesh_render::TexAnims::sample(&self.model, seconds);
+        queue.write_buffer(&self.anim_buffer, 0, bytemuck::bytes_of(&anims));
+        // The viewer's clock moves a track's `Anim Transform` nodes too, so a
+        // circuit opened in `oag-view` shows the same scenery motion a race
+        // does rather than a frozen first frame.
+        let nodes = mesh_render::NodeAnims::sample(&self.model, seconds);
+        queue.write_buffer(&self.node_anim_buffer, 0, bytemuck::bytes_of(&nodes));
+        mesh_render::write_uniforms(queue, &self.uniform_buffer, &self.model, aspect, orbit);
+    }
+
+    /// Records the frame: clears `view`, then draws the model into it.
+    fn draw(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        depth_view: &wgpu::TextureView,
+    ) {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("orbit frame"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.06,
+                        g: 0.07,
+                        b: 0.09,
+                        a: 1.0,
                     }),
-                    stencil_ops: None,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: depth_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Discard,
                 }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            // `Buffer::slice` panics on a zero-length buffer, so a model with no
-            // geometry skips every command below and the frame is the clear
-            // colour alone. Matches the guard in `mesh_render::capture_from`.
-            if !self.model.vertices.is_empty() && !self.model.indices.is_empty() {
-                pass.set_pipeline(&self.pipeline);
-                pass.set_bind_group(0, &self.bind_group, &[0]);
-                // The asset viewer never fogs: it shows what is on the disc, and fog
-                // is a property of the race the asset sits in, not of the asset.
-                pass.set_bind_group(2, &self.fog_bind, &[0]);
-                pass.set_bind_group(3, &self.anim_bind, &[]);
-                pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-                pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        // `Buffer::slice` panics on a zero-length buffer, so a model with no
+        // geometry skips every command below and the frame is the clear
+        // colour alone. Matches the guard in `mesh_render::capture_from`.
+        if !self.model.vertices.is_empty() && !self.model.indices.is_empty() {
+            pass.set_pipeline(&self.pipeline);
+            pass.set_bind_group(0, &self.bind_group, &[0]);
+            // The asset viewer never fogs: it shows what is on the disc, and fog
+            // is a property of the race the asset sits in, not of the asset.
+            pass.set_bind_group(2, &self.fog_bind, &[0]);
+            pass.set_bind_group(3, &self.anim_bind, &[]);
+            let mut cursor = self.geometry.cursor(&mut pass);
+            pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
-                // One draw per material run. Slot 0 is the white fallback, so a
-                // texture index of n binds slot n + 1. Matches `mesh_render::capture_from`.
-                for draw in &self.model.draws {
-                    let slot = draw.texture.map_or(0, |t| t + 1);
-                    pass.set_bind_group(
-                        1,
-                        &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
-                        &[],
-                    );
-                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
-                }
+            // One draw per material run. Slot 0 is the white fallback, so a
+            // texture index of n binds slot n + 1. Matches `mesh_render::capture_from`.
+            for draw in &self.model.draws {
+                let slot = draw.texture.map_or(0, |t| t + 1);
+                pass.set_bind_group(
+                    1,
+                    &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
+                    &[],
+                );
+                cursor.draw(&mut pass, &draw.range);
+            }
 
-                // Second pipeline group, same pass: alpha-tested batches,
-                // cutout. One pipeline per reference the batches themselves
-                // ask for, switched only when it changes - see
-                // `mesh_render::cutout`.
-                let cutouts = mesh_render::CutoutPipelines {
+            // Cutout then transparent batches, selected per draw call
+            // exactly as the game does: the viewer is only useful as a
+            // reference if it renders the same way.
+            mesh_render::draw_cutout_then_transparent(
+                &mut pass,
+                &mut cursor,
+                &self.model,
+                mesh_render::CutoutPipelines {
                     default: &self.alpha_test_pipeline,
                     by_reference: &self.cutout_pipelines,
-                };
-                let mut cutout_set: Option<&wgpu::RenderPipeline> = None;
-                for draw in &self.model.alpha_tested_draws {
-                    let cutout = cutouts.select(draw);
-                    if !cutout_set.is_some_and(|set| std::ptr::eq(set, cutout)) {
-                        pass.set_pipeline(cutout);
-                        cutout_set = Some(cutout);
-                    }
-                    let slot = draw.texture.map_or(0, |t| t + 1);
-                    pass.set_bind_group(
-                        1,
-                        &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
-                        &[],
-                    );
-                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
-                }
-
-                // Third pipeline group, same pass: transparent batches,
-                // blended, with the equation the batch's own `pass_mask` asks
-                // for - see `oag_vex::vex::Batch::blend_class`. The viewer
-                // selects per draw call exactly as the game does, because it
-                // is only useful as a reference if it renders the same way.
-                let pipelines = mesh_render::TransparentPipelines {
+                },
+                mesh_render::TransparentPipelines {
                     alpha_over: &self.blend_pipeline,
                     additive: &self.additive_pipeline,
                     unblended: &self.unblended_pipeline,
                     authored: &self.authored_pipelines,
-                };
-                let mut current: Option<&wgpu::RenderPipeline> = None;
-                for draw in &self.model.transparent_draws {
-                    let pipeline = pipelines.select(draw);
-                    if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                        pass.set_pipeline(pipeline);
-                        current = Some(pipeline);
-                    }
+                },
+                |draw| {
                     let slot = draw.texture.map_or(0, |t| t + 1);
-                    pass.set_bind_group(
-                        1,
-                        &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
-                        &[],
-                    );
-                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
-                }
-            }
+                    &self.texture_binds[slot.min(self.texture_binds.len() - 1)]
+                },
+            );
         }
-        self.queue.submit(Some(encoder.finish()));
-        self.queue.present(frame);
-        Ok(())
     }
 }
 
@@ -651,3 +652,6 @@ fn make_depth_view(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Text
     });
     depth.create_view(&wgpu::TextureViewDescriptor::default())
 }
+
+#[cfg(test)]
+mod tests;

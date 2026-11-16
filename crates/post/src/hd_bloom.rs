@@ -102,6 +102,14 @@ pub const ADAPT_LUMINANCE: [f32; 3] = [0.3, 0.59, 0.11];
 /// `0x8b743c`.
 pub const ADAPTION_FADE_SCALE: f32 = 0.25;
 
+/// The resolve's read exposure: `maximum - min(adapted * boost, clamp)`, the `scale` the
+/// resolve pass multiplies the scene by (`hd_bloom.wesl`'s `fs_encode`), for a caller that
+/// applies the same stage to one draw rather than running the chain.
+#[must_use]
+pub fn exposure(adapted: f32, boost: f32, clamp: f32, maximum: f32) -> f32 {
+    maximum - (adapted * boost).min(clamp)
+}
+
 /// The blur kernel of `FunkLayerBloomBlurVertical_fp`/`Horizontal_fp`:
 /// nine taps, weights `1, 0.8, 0.5, 0.2, 0.1` mirrored, divided by exactly
 /// 4.2 (the microcode's final `MUL` by `0.238095`).
@@ -163,6 +171,11 @@ pub struct Params {
     pub tone_darkening_clamp: f32,
     /// `Tone maximum brightness`: the exposure on a black frame.
     pub tone_maximum_brightness: f32,
+    /// The final composite reads the scene half a source texel off, `(0.5 / width,
+    /// 0.5 / height)` of the drawn rectangle, so each pixel is the mean of four texels in
+    /// linear light (a title's `final_composite_half_texel` rule, injected by the
+    /// caller; this crate reaches no title). `false` reads on the texel centres.
+    pub final_half_texel: bool,
     /// HD's boost and damage zoom-streak ring, when the title has one. See
     /// [`super::hd_zoom`].
     pub zoom: Option<super::hd_zoom::Tuning>,
@@ -245,7 +258,9 @@ struct Constants {
     tone_adaption_boost: f32,
     tone_darkening_clamp: f32,
     tone_maximum_brightness: f32,
-    _pad: [f32; 2],
+    /// The resolve's read offset in the drawn rectangle's `0..1`; zero for every pass but
+    /// the scene-read one, and for a title that reads on the texel centres.
+    read_shift: [f32; 2],
     /// Which sub-rectangle of every source in the chain was drawn.
     ///
     /// **One pair for the whole ladder**, which is what makes this tractable:
@@ -312,7 +327,7 @@ impl Constants {
             tone_adaption_boost: params.tone_adaption_boost,
             tone_darkening_clamp: params.tone_darkening_clamp,
             tone_maximum_brightness: params.tone_maximum_brightness,
-            _pad: [0.0; 2],
+            read_shift: [0.0; 2],
             uv_scale: rect.scale,
             uv_max: rect.max,
             uv_offset: rect.offset,
@@ -385,7 +400,7 @@ pub struct Chain {
     sampler: wgpu::Sampler,
     sized: Sized,
     /// Each split seat's adaptation, built when a split first draws it. See `lanes.rs`.
-    seats: lanes::SeatLanes,
+    seats: crate::seat_lanes::SeatLanes<Lane>,
     /// What the four uniform buffers last held, so a frame that moved nothing writes nothing.
     written: std::cell::Cell<Option<Placement>>,
     /// The zoom-streak ring, when the title has one, and the pulses it draws
@@ -540,7 +555,7 @@ impl Chain {
             layout,
             sampler,
             sized,
-            seats: lanes::SeatLanes::default(),
+            seats: crate::seat_lanes::SeatLanes::default(),
             written: std::cell::Cell::new(None),
             zoom,
             zoom_frame: std::cell::Cell::new(None),
@@ -737,7 +752,7 @@ impl Chain {
     /// `crates/raceplay/src/scene/frame.rs`'s call site.
     pub fn run(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         origin: (f32, f32),
@@ -767,7 +782,7 @@ impl Chain {
     /// reach of `(1, 1)`, which is every bit the chain ever drew.
     fn run_placed(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         lane: &Lane,
@@ -816,7 +831,15 @@ impl Chain {
                 ],
                 rect,
             );
-            write(&self.sized.buffers[3], [0.0, 0.0], scene_rect);
+            let read = Constants {
+                read_shift: if self.params.final_half_texel {
+                    [0.5 / viewport.0 as f32, 0.5 / viewport.1 as f32]
+                } else {
+                    [0.0; 2]
+                },
+                ..Constants::new(self.params, [0.0, 0.0], scene_rect)
+            };
+            queue.write_buffer(&self.sized.buffers[3], 0, bytemuck::bytes_of(&read));
             self.written.set(Some(placement));
         }
 
@@ -835,7 +858,7 @@ impl Chain {
         // with its draw left off rather than a second copy of the descriptor.
         let pass =
             |encoder: &mut wgpu::CommandEncoder,
-             label: &str,
+             label: &'static str,
              pipeline: Option<&wgpu::RenderPipeline>,
              stage: &Pass,
              target: Option<&wgpu::TextureView>,
@@ -864,11 +887,14 @@ impl Chain {
                     occlusion_query_set: None,
                     multiview_mask: None,
                 });
-                let Some(pipeline) = pipeline else { return };
-                pass.set_pipeline(pipeline);
-                pass.set_viewport(origin.0, origin.1, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
-                pass.set_bind_group(0, &stage.group, &[]);
-                pass.draw(0..3, 0..1);
+                oag_gpu::perfprobe::marks::mark(&mut pass, label);
+                if let Some(pipeline) = pipeline {
+                    pass.set_pipeline(pipeline);
+                    pass.set_viewport(origin.0, origin.1, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
+                    pass.set_bind_group(0, &stage.group, &[]);
+                    pass.draw(0..3, 0..1);
+                }
+                oag_gpu::perfprobe::marks::close(&mut pass);
             };
         let clear = wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT);
         // `self.sized.downsamples` always has at least two entries - see its
@@ -1062,6 +1088,8 @@ fn level_viewport(level: (u32, u32), viewport: (u32, u32), scene: (u32, u32)) ->
 mod lanes;
 mod zoom;
 
+#[cfg(test)]
+mod half_texel_tests;
 #[cfg(test)]
 mod split_tests;
 #[cfg(test)]

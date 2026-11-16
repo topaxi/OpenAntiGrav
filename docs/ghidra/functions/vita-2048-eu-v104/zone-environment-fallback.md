@@ -104,6 +104,16 @@ it is the original game's own data falling short of its own code's
 expectations. **What actually happens when that load fails is now answered**
 - see `Zone_UpdateStage` below.
 
+**Correction, 2026-11-13 (`modes-zone-battle-detonator`): the v1.04 patch ships them.** The
+check above covered base, DLC1 and DLC2 only. `patch-v104/PSP2/data2.psarc` carries
+`data/ZoneEnvironmentHDFury/DetonatorModeHDFury.effectSettings` (43,240 B) and
+`DetonatorModeHDFuryDLC3.effectSettings` (43,230 B), the sizes of HD's own two Detonator
+tables, `ZoneModeHDFury.effectSettings` (21,160 B) and `ZoneModeHDFuryDLC3.effectSettings`
+(43,417 B), plus `data/Tex/detonatorModeTrack0..14.gxt` and `zoneModeTrack*.gxt`
+(`python3 scripts/psarc.py list` on that archive). So on a patched 2048 the fallback finds all
+four. A 2048 Detonator race reads Detonator's pair (`oag_2048::race::DETONATOR`); a 2048 Zone
+race on a ported circuit reads Zone's table too (wired 2026-11-16, see "Wired on HD's ported circuits" below).
+
 ## `Environment_LoadHDFuryContent` (`0x8102493c`), confidence 75 - a separate subsystem, not a shared one
 
 **2026-08-28, fourth pass.** Called with the raw effectSettings path string
@@ -845,6 +855,55 @@ before because the plumbing is all traced. It is exactly the case
 
 **What would close it**: a USSE disassembler (Vita3K has a recompiler; this
 project has no decoder), or observing the pass's output directly.
+
+## 2026-11-16: wired on HD's ported circuits, and what is still open
+
+**The surface is HD's, on these circuits.** A census of every GXP program on the three packages
+(`crates/rcs/tests/gxp_ground_truth.rs`, `zone_parameters`) finds `zoneColourTint` in **9,392**
+programs, all under `data/art/published/DLC1/environments/` (the twelve HD-lineage race circuits,
+`tech_de_ra/materials/adverts`, `zone_1..4`) and none in a native circuit's materials, with
+`zoneEffectInner`/`Outer`, `zoneBaseInner`/`Outer`, `zoneBaseAltInner`/`Outer`, `zoneTexInner`/`Outer`,
+`zoneOrigin` and (`zone_N`) `zoneAnisoLookupTex` beside it: HD's Zone variant, names and all
+(confidence 85 on "the same parameter set"; the USSE bytes are unread, so the arithmetic is HD's
+microcode by inheritance, not read here). `FUN_8101d068` (`0x8101d068`, the shader-parameter
+registrar) lists them, and the technique names `ZoneDirectional`, `ZoneTransDirectional`,
+`ZoneDirectionalTrack`, `ZoneTransDirectionalTrack`, `ZoneMode2048`, `ZoneTrack2048`, `ZoneFin2048`.
+The native circuits' flat Zone look is `trackZone.rcsmodel`'s `Zone_ColourN` materials instead.
+
+**What is wired** (`oag_title::RaceDefaults::zone_fallback`, `oag_2048::race::ZONE_FALLBACK`): when a
+circuit's own `ZoneMode2048.effectSettings` is not in the archive set, `Environment_Load`'s branch
+above is `ZoneModeHDFury.effectSettings` (`...DLC3` on `zone_1..4`) out of `data2.psarc`, the same
+fifteen stages as HD, with `data/Tex/zoneMode<n>.gxt` and `zoneModeTrack<n>.gxt` as the two texture
+sets. The grade now draws the recolour on those circuits (`ZoneGrade::zone_uniform` is on once a
+stage texture decodes). Native circuits are unchanged (own table, no stage art, no surface).
+
+**The ladder is HD's fourteen records, one frame behind it.** `ZONE_STAGES` (seventeen records)
+puts zone 5 on stage 2 (`Venom`, green); `68-zone-5.png` (Vineta K, zone 5, HUD `FLASH`) draws stage
+4's `Flash` colours: `4 Flash.Scene.Texture Colour` `0.71 0.97 0.0` (yellow-green) and
+`Scene.Base Colour` `0.62 0 2.0` (purple). So the fifteen-stage table is stepped by HD's
+fourteen-record ladder (`stage = 14 - i`, `oag_2048::race::FALLBACK_ZONE_STAGES`), the thresholds the
+Zone HUD's class name walks (`0x8151f434`). Confidence 60: one frame, and the writer of the stage on
+these circuits is not read.
+
+**Open: the Track/Scene bit.** `FUN_813b9670` (`0x813b9670`, the per-submesh technique pick) chooses
+`ZoneDirectionalTrack` over `ZoneDirectional` on bit 0 of a word at `+0x60` of the loaded
+`.rcsmaterial` resource (`FUN_812f14ec` stores that resource at `+0x0c` of the model's material
+entry), `& 0xe` keeps the plain `Directional` program, `& 0x800` is `ZoneFin2048`. HD's per-chunk
+`.rcsmodel` halfword is the same idea (bit 0 track, plain bits) on a different carrier. Where the
+resource's `+0x60` comes from is **not read** (the file's `+0x60` is a constant offset table word on
+the 47 Vineta K materials; the object is built at load), so the port draws every chunk of a 2048 or
+Omega circuit from the `Scene` group: the road is yellow-green where the original's is purple and
+black with yellow lines. Next: read `FUN_812f0958` (the resource constructor) for the `+0x60` store.
+Also open: the Zone sky (`data/Tex/zoneSky.gxt` is on the disc, the dome keeps the circuit's own),
+`ZoneFin2048`, and 2048's transition law (`zone_transition` stays `None`).
+
+**Checked against Omega: ported, with two differences.** Omega ships the same files
+(`Data/zoneenvironmenthdfury/ZoneModeHDFury(DLC3).effectSettings`, `Data/tex/zoneSky.gnf`) and a
+`ZoneMode2048.effectSettings` beside each of its ten `Environments2048` circuits. It ships
+`zoneModeTrack<n>.gnf` (fifteen) and **no `zoneMode<n>` set**, so the general slot binds the flat
+white HD's set measures as (inherited). Its `Environments2048` circuits keep their own `trackZone`
+model, which this build passes over (`sibling_model`), so `ZoneFallback::own_model_under` holds them
+back rather than tint a circuit the original draws another way. The Omega ladder is HD's, inherited.
 
 ## See also
 

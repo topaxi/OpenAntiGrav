@@ -190,6 +190,7 @@ fn the_stat_value_prints_three_digits_at_its_split() {
         thrust: 80,
         handling: 100,
         shield: 85,
+        length_milli: None,
     };
     let picker = Picker::new(
         Kind::Ship,
@@ -270,6 +271,7 @@ fn sheet(name: &str) -> Option<Placed> {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     })
 }
 
@@ -431,6 +433,7 @@ fn red_fills(picker: &Picker, extra: &TeamScreen, layout: &Layout) -> Vec<[f32; 
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     let frame = Frame {
         blocks: Some(oag_ui::menu::block::BlockArt {
@@ -458,6 +461,7 @@ fn variant_picker(variant: &str) -> Picker {
         thrust: 80,
         handling: 100,
         shield: 80,
+        length_milli: Some(3800),
     };
     Picker::new(
         Kind::Ship,
@@ -874,6 +878,7 @@ fn art(src: &str) -> Option<Placed> {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     })
 }
 

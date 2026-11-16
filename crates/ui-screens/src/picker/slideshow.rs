@@ -456,22 +456,40 @@ fn collect_widgets(
 /// [`crate::picker::body`]'s own text draws: every widget this module reads
 /// carries `font="Stats"`, a role `Layout::face_scale` does not recognise
 /// and falls through to `1.0` for, so applying it would be a no-op dressed
-/// up as a dependency.
+/// up as a dependency. It is drawn in the `Stats` glyph role, which a title
+/// with a `Stats` face of its own loads (Pure's `LTe50325.fnt`) and every other
+/// draws in the menu face.
 fn label_draw(text: &Text) -> Option<Draw> {
     let content = text.string.clone()?;
-    Some(Draw::Text {
-        x: text.x,
-        y: text.y,
-        scale: text.scale,
-        color: argb_to_rgba(text.color),
-        border: None,
-        align: match text.align.to_ascii_lowercase().as_str() {
-            "right" => Align::Right,
-            "centre" | "center" => Align::Centre,
-            _ => Align::Left,
+    let (x, y, scale) = (text.x, text.y, text.scale);
+    let color = argb_to_rgba(text.color);
+    let align = match text.align.to_ascii_lowercase().as_str() {
+        "right" => Align::Right,
+        "centre" | "center" => Align::Centre,
+        _ => Align::Left,
+    };
+    Some(match crate::picker::stats_role(&text.font) {
+        Some(role) => Draw::FacedText {
+            role,
+            x,
+            y,
+            scale,
+            color,
+            border: None,
+            align,
+            text: content,
+            wrap_width: text.wrap_width,
         },
-        text: content,
-        wrap_width: text.wrap_width,
+        None => Draw::Text {
+            x,
+            y,
+            scale,
+            color,
+            border: None,
+            align,
+            text: content,
+            wrap_width: text.wrap_width,
+        },
     })
 }
 

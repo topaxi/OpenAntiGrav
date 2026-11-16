@@ -9,7 +9,7 @@ reading (a static evaluator, checked against the live frame on the sign, the sky
 
 Code: `oag_rcs::rcsmaterial::fragment::Program::output_alpha` reads the alpha lane of a program, `oag_mesh::mesh::rcs::glow` turns it
 into `GpuVertex::glow`, and `mesh_render::GlowMask::StampedByProgram` writes it. Tests: `crates/rcs/src/rcsmaterial/fragment/glow_alpha/tests.rs`,
-`crates/render/tests/hd_program_glow_mask.rs` (fails if the model flag, the write mask, the override or the decode is dropped) and the
+`crates/mesh/tests/hd_program_glow_mask.rs` (fails if the model flag, the write mask, the override or the decode is dropped) and the
 disc-backed `hd_program_glow_ground_truth.rs` and `crates/raceplay/tests/hd_sky_tint_ground_truth.rs`.
 
 ## What the original does (RPCS3, Metropia Harimau time trial start, 2026-10-21)
@@ -85,6 +85,10 @@ Three findings, the first two by-products of the same frame:
   RAM the pose, clock and gantry time come from (the HUD's lap clock read `0.21.0` against RAM's `21.2`, and ours at the RAM time pulsed a half cycle off). `OAG_CAPTURE_FLUSH`
   (3 s in `rpcs3-hd-pair.py`) lets it catch up: the HUD then reads `0.12.1` against RAM's `12.208`, about one tick.
 
+**Closed 2026-11-11 (`hd-worst-pairs`):** Metropia's cards read R +15 to +22 and G +18 to +24 whatever the card held
+because its `cf_vex_billboard` is a compile without `k` that the classifier refused, so the card was lit by the sun and
+never multiplied by the glow ([rcsmaterial.md](../formats/rcsmaterial.md), "The gantry boards on Metropia").
+
 **Closed 2026-10-26:** the cards' panel red read about +9 over the scenery because the original's card is `R5G6B5` in linear light (`start-gantry.md`, "The card is 5-6-5 in linear light"), not the multiply-versus-add leftover below, which `cf_vex_billboard`'s mode 1 already settled. **Still open on the board:** the side cards. Ours shows the `FX-350` advert on the two side boards and the original's are plain teal in that frame (the advert's own timeline, not the gantry's;
 `adverts.rs` runs it off the race clock); and `cf_vex_billboard`'s program is a multiply by the card (`card * (glow.a * k + glow.rgb * light)`) where ours adds the second texture to the
 albedo: the GO card reads right through the halo, Vineta K's yellow `harimau` billboard (`(255, 255, 28)` against ours `(164, 183, 118)`) does not (rcsmaterial.md, "Not drawn, named").
@@ -123,7 +127,7 @@ shipped pair stays the reference. Largest differences left on the 13: Tech de Ra
   project) and Omega's are GNM (no capture path), so neither title's alpha lane can be read. Their `rcsmodel` readers do not go through `mesh::rcs::build`, so the new flag is not set on
   them and nothing changed.
 - **Sky colour's fourth byte: checked, applies, not wired.** The HD-lineage `.envsettings` of 2048 and Omega carry the same key; whether their sky draws write it is not checkable (no live frame).
-- **The gantry pin: checked, differs.** 2048 and Omega place no gantry (start-gantry.md).
+- **The gantry pin: checked, differs.** The HD pin is a race-manager window on HD's own `GO` edge; 2048 and Omega play the node-driven `321Go_2048.vex` on a clock from the release instead (start-gantry.md, "Omega and 2048").
 - **Does the bloom finding transfer to Pulse (Fort Gale White's tunnel halo)?** Not directly. The finding is that HD's programs write the mask and ours did not; Pulse's mask is the GE stencil
   stamp and ours already writes it (`GlowMask::Stamped`, glow-mask.md), and Fort Gale's note says the original's mask there is 255 on the halo's pixels. The open question there is whether
   ours' own stamp covers the same pixels, which needs a dump of our mask (`OAG_DUMP_GLOW_MASK` dumps the final frame's alpha only); it is a mask question, as here, and the method (read the

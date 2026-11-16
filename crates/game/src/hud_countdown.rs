@@ -125,9 +125,8 @@
 use oag_core::math::{Mat4, Vec3, camera};
 use oag_mesh::mesh::Model;
 use oag_mesh::mesh_render::{
-    Anisotropy, Built, CutoutPipelines, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowReceiver,
-    TRANSPARENT_BLEND, TexAnims, TransparentPipelines, UNIFORMS_SIZE, Velocity, build,
-    write_uniforms_raw,
+    Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowReceiver, TRANSPARENT_BLEND,
+    TexAnims, UNIFORMS_SIZE, Velocity, build, draw_cutout_then_transparent, write_uniforms_raw,
 };
 
 use oag_display::space::SCREEN;
@@ -426,7 +425,7 @@ impl Countdown {
         pass.set_bind_group(0, &self.bind_group, &[0]);
         pass.set_bind_group(2, &self.built.fog_bind, &[0]);
         pass.set_bind_group(3, &self.built.anim_bind, &[]);
-        pass.set_vertex_buffer(0, self.built.vertex_buffer.slice(..));
+        let mut cursor = self.built.geometry.cursor(&mut pass);
         pass.set_index_buffer(self.built.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
         let bind = |draw: &oag_mesh::mesh::DrawCall| {
@@ -447,40 +446,16 @@ impl Countdown {
         pass.set_pipeline(&self.built.pipeline);
         for draw in &self.model.draws {
             pass.set_bind_group(1, bind(draw), &[]);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            cursor.draw(&mut pass, &draw.range);
         }
-        // One pipeline per alpha-test reference the model's batches ask for,
-        // switched only when it changes - see `mesh_render::cutout`.
-        let cutouts = CutoutPipelines {
-            default: &self.built.alpha_test_pipeline,
-            by_reference: &self.built.cutout_pipelines,
-        };
-        let mut cutout_set: Option<&wgpu::RenderPipeline> = None;
-        for draw in &self.model.alpha_tested_draws {
-            let cutout = cutouts.select(draw);
-            if !cutout_set.is_some_and(|set| std::ptr::eq(set, cutout)) {
-                pass.set_pipeline(cutout);
-                cutout_set = Some(cutout);
-            }
-            pass.set_bind_group(1, bind(draw), &[]);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
-        }
-        let pipelines = TransparentPipelines {
-            alpha_over: &self.built.blend_pipeline,
-            additive: &self.built.additive_pipeline,
-            unblended: &self.built.unblended_pipeline,
-            authored: &self.built.authored_pipelines,
-        };
-        let mut current: Option<&wgpu::RenderPipeline> = None;
-        for draw in &self.model.transparent_draws {
-            let pipeline = pipelines.select(draw);
-            if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                pass.set_pipeline(pipeline);
-                current = Some(pipeline);
-            }
-            pass.set_bind_group(1, bind(draw), &[]);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
-        }
+        draw_cutout_then_transparent(
+            &mut pass,
+            &mut cursor,
+            &self.model,
+            self.built.cutout_set(),
+            self.built.transparent_set(),
+            bind,
+        );
     }
 }
 

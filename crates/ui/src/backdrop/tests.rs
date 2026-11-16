@@ -18,7 +18,7 @@ fn a_clip_runs_its_duration_in_frames_then_the_next_path_is_picked() {
     let first = fury.path();
     let frames = (fury.settings().static_paths[first].duration * FRAMES_PER_SECOND) as u32;
     for _ in 0..frames - 1 {
-        fury.tick();
+        fury.tick(&SILENCE);
     }
     assert_eq!(
         fury.path(),
@@ -26,7 +26,7 @@ fn a_clip_runs_its_duration_in_frames_then_the_next_path_is_picked() {
         "still on the first path on its last frame"
     );
     assert!((fury.seconds() - (frames - 1) as f32 / 60.0).abs() < 1e-5);
-    fury.tick();
+    fury.tick(&SILENCE);
     assert_ne!(fury.path(), first, "the next pick never repeats the last");
     assert_eq!(fury.seconds(), 0.0);
     assert_eq!(fury.cloud(), 3, "a static path never asks for a new cloud");
@@ -37,7 +37,7 @@ fn the_picker_never_repeats_within_the_queue_and_never_stalls() {
     let mut fury = Fury::new(settings(), 0, 7).expect("authored");
     let mut history = vec![fury.path()];
     while history.len() < 60 {
-        fury.tick();
+        fury.tick(&SILENCE);
         if fury.seconds() == 0.0 {
             history.push(fury.path());
         }
@@ -102,8 +102,11 @@ fn the_frame_carries_the_pages_constants_at_1080_lines() {
         [-3.0, -0.25, -7.0]
     ));
     assert!((frame.fog_factors[3] - 0.3).abs() < 1e-6);
-    // `0.016 * 24 * 0.6` is over the `0.15` ceiling, so the cap is the ceiling.
-    assert_eq!(frame.source_max, [0.15; 3]);
+    assert_eq!(
+        (frame.glow_gain * 255.0).round() as u32,
+        5,
+        "the floor with the bands at zero: the byte RPCS3's stream carries"
+    );
     assert_eq!(frame.feedback, [0.6; 3]);
 }
 
@@ -154,17 +157,17 @@ fn tints_read_the_widgets_screen_settings_and_fall_back_to_default() {
 fn force_path_plays_that_path_from_its_start_and_refuses_an_unauthored_one() {
     let mut fury = Fury::new(settings(), 3, 1).expect("authored");
     for _ in 0..30 {
-        fury.tick();
+        fury.tick(&SILENCE);
     }
     assert!(fury.force_path(5).is_some());
     assert_eq!(fury.path(), 5);
     assert_eq!(fury.seconds(), 0.0);
     // Path 5 authors six seconds: it runs them, then the picker takes over.
     for _ in 0..(6 * FRAMES_PER_SECOND as u32) - 1 {
-        fury.tick();
+        fury.tick(&SILENCE);
     }
     assert_eq!(fury.path(), 5);
-    fury.tick();
+    fury.tick(&SILENCE);
     assert_ne!(fury.path(), 5);
     let before = fury.path();
     assert!(fury.force_path(8).is_none(), "no ninth static path");
@@ -182,6 +185,140 @@ fn the_music_pulse_reads_silence_as_bands_at_zero() {
         (frame.particle_colour[0] - expected).abs() < 1e-6,
         "{}",
         frame.particle_colour[0]
+    );
+}
+
+/// Bands with `value` in the three the pulse reads.
+fn pulse_bands(value: f32) -> [f32; BANDS] {
+    let mut bands = SILENCE;
+    bands[10..13].fill(value);
+    bands
+}
+
+#[test]
+fn the_music_pulse_follows_the_bands_as_they_came_not_the_hold() {
+    let mut settings = settings();
+    settings.music_pulse_base = 0.7;
+    settings.music_pulse_factor = 1.1;
+    let mut fury = Fury::new(settings, 3, 1).expect("authored");
+    let pulse = |fury: &Fury| {
+        fury.frame(1080.0, 16.0 / 9.0, [1.0; 4]).particle_colour[0] / (0.5 * BRIGHTNESS_AT_REST)
+    };
+    assert!(
+        (pulse(&fury) - 0.23).abs() < 1e-5,
+        "silent: {}",
+        pulse(&fury)
+    );
+    fury.tick(&pulse_bands(1.0));
+    assert!((pulse(&fury) - 1.33).abs() < 1e-5, "full: {}", pulse(&fury));
+    fury.tick(&SILENCE);
+    assert!(
+        (pulse(&fury) - 0.23).abs() < 1e-5,
+        "the pulse does not hold: {}",
+        pulse(&fury)
+    );
+}
+
+#[test]
+fn a_held_band_falls_the_damp_speed_a_frame_and_stops_at_zero() {
+    let mut fury = Fury::new(settings(), 3, 1).expect("authored");
+    fury.settings.equaliser_damp_speed = 0.25;
+    fury.tick(&pulse_bands(0.6));
+    assert_eq!(fury.held[10], 0.6);
+    fury.tick(&SILENCE);
+    assert!((fury.held[10] - 0.35).abs() < 1e-6);
+    fury.tick(&pulse_bands(0.5));
+    assert_eq!(fury.held[10], 0.5, "a band over the hold takes it");
+    for _ in 0..3 {
+        fury.tick(&SILENCE);
+    }
+    assert_eq!(fury.held[10], 0.0);
+}
+
+#[test]
+fn the_glow_gain_is_high_only_on_a_frame_the_held_mean_rises() {
+    assert_eq!(
+        (glow_gain(0.0, false) * 255.0).round() as u32,
+        5,
+        "the floor"
+    );
+    assert_eq!(
+        (glow_gain(1.0, true) * 255.0).round() as u32,
+        0x26,
+        "the ceiling"
+    );
+    assert_eq!(
+        (glow_gain(1.0, false) * 255.0).round() as u32,
+        5,
+        "held high but not rising"
+    );
+    let mut fury = Fury::new(settings(), 0, 1).expect("authored");
+    let gain = |fury: &Fury| (fury.frame(1080.0, 16.0 / 9.0, [1.0; 4]).glow_gain * 255.0).round();
+    assert_eq!(gain(&fury), 5.0, "no bands: the floor");
+    fury.tick(&pulse_bands(1.0));
+    assert_eq!(gain(&fury), 38.0, "the attack");
+    fury.tick(&pulse_bands(1.0));
+    assert_eq!(gain(&fury), 5.0, "held flat");
+}
+
+#[test]
+fn the_pivot_wanders_on_held_bands_thirteen_and_fourteen() {
+    let mut fury = Fury::new(settings(), 0, 1).expect("authored");
+    let pivot = |fury: &Fury| fury.frame(1080.0, 16.0 / 9.0, [1.0; 4]).pivot_offset;
+    assert_eq!(pivot(&fury), [-0.05, -0.05]);
+    let mut bands = SILENCE;
+    bands[13] = 1.0;
+    bands[14] = 0.5;
+    fury.tick(&bands);
+    let [x, y] = pivot(&fury);
+    assert!((x - 0.05).abs() < 1e-6 && y.abs() < 1e-6, "{x} {y}");
+}
+
+#[test]
+fn the_band_falls_a_hundredth_a_frame_and_wraps_every_two_hundred() {
+    let mut fury = Fury::new(settings(), 0, 1).expect("authored");
+    let top = |fury: &Fury| fury.frame(1080.0, 16.0 / 9.0, [1.0; 4]).band_top;
+    assert_eq!(top(&fury), 1.0);
+    fury.tick(&SILENCE);
+    assert!((top(&fury) - 0.99).abs() < 1e-6);
+    for _ in 1..199 {
+        fury.tick(&SILENCE);
+    }
+    assert!((top(&fury) - -0.99).abs() < 1e-5);
+    fury.tick(&SILENCE);
+    assert_eq!(
+        top(&fury),
+        1.0,
+        "the wrap, a clock that survives a new clip"
+    );
+}
+
+#[test]
+fn the_wave_pivot_is_the_clouds_centre_on_screen_moved_by_the_bands() {
+    let fury = Fury::new(settings(), 0, 1).expect("authored");
+    let mut frame = fury.frame(1080.0, 16.0 / 9.0, [1.0; 4]);
+    // A view that leaves the point five in front of the eye, and a plain
+    // perspective: `(1, 0.5, -5)` lands at `(0.2, 0.1)`.
+    frame.world_view = std::array::from_fn(|i| std::array::from_fn(|j| f32::from(i == j)));
+    frame.proj = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, -1.0, -1.0],
+        [0.0, 0.0, -0.01, 0.0],
+    ];
+    frame.pivot_offset = [0.0, 0.0];
+    let [x, y] = frame.wave_pivot([1.0, 0.5, -5.0]);
+    assert!((x - 0.2).abs() < 1e-6 && (y - 0.1).abs() < 1e-6, "{x} {y}");
+    frame.pivot_offset = [-0.05, -0.05];
+    let [x, y] = frame.wave_pivot([1.0, 0.5, -5.0]);
+    assert!(
+        (x - 0.15).abs() < 1e-6 && (y - 0.05).abs() < 1e-6,
+        "{x} {y}"
+    );
+    assert_eq!(
+        frame.wave_pivot([50.0, -50.0, -5.0]),
+        [1.0, -1.0],
+        "kept on"
     );
 }
 

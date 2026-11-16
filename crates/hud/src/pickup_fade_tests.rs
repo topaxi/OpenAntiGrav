@@ -211,6 +211,7 @@ fn pulse_draws_the_fade_in_the_backdrop_word_the_size_and_the_icon() {
                 &super::ext_draws::Outputs::default(),
                 art,
                 false,
+                None,
                 Some(look),
             ),
         )

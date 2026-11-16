@@ -43,6 +43,8 @@ fn started_seeded(track: &str, seed: Option<u64>) -> Option<Race> {
         weapons_override: Some(false),
         track: Some(track.to_string()),
         seed,
+        // The race is flown for its simulation, which no track art feeds.
+        ribbon: true,
         ..race::Options::default()
     })
     .expect("loading the race");
@@ -129,7 +131,7 @@ fn runs_of(race: &mut Race, slots: &[usize], ticks: u64) -> Vec<Run> {
                 )
             })
             .collect();
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         for (i, &slot) in slots.iter().enumerate() {
             let ship = &race.sim.world.ships[slot];
             let lost = before[i].0 - ship.physics.shield;

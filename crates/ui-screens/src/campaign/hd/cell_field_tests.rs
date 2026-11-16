@@ -87,6 +87,7 @@ fn drawn(summary: &GridSummary, next: Option<&str>) -> Vec<String> {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         })
     };
     let layers = hd_cell_draw_list(
@@ -102,6 +103,7 @@ fn drawn(summary: &GridSummary, next: Option<&str>) -> Vec<String> {
         &CellArt {
             next_flyer: next,
             fury: true,
+            medal_tier_rows: [0, 1, 2],
             track_emblems: &std::collections::HashMap::new(),
         },
         None,

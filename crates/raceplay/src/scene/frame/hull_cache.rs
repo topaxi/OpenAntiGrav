@@ -28,11 +28,11 @@
 //!   racing, a move past `SNAP_DISTANCE`: [`Race::ship_swept_from`]) draws its
 //!   current gather, which is where the per-frame gather put it too.
 
-use oag_core::math::{Mat4, Vec3};
+use oag_core::math::Vec3;
 use oag_mesh::mesh::GpuVertex;
 
 use crate::Race;
-use crate::hull_gather::HullGather;
+use crate::hull_gather::{GatherScratch, HullGather};
 use crate::scene::FrameWork;
 
 /// While a draw keeps finding no previous gather to blend from, seeding the cache
@@ -40,21 +40,36 @@ use crate::scene::FrameWork;
 /// it is tried on one such draw in this many.
 const SEED_EVERY: u32 = 16;
 
-/// The last two ticks' gathers, and how long the draws have been missing the
-/// previous one.
+/// The last two ticks' gathers, how long the draws have been missing the
+/// previous one, and what the next gather is made in.
 #[derive(Default, Debug)]
 pub(in crate::scene) struct HullCache {
     current: Option<HullGather>,
     previous: Option<HullGather>,
     misses: u32,
+    scratch: GatherScratch,
 }
 
 impl HullCache {
     /// Forgets both gathers, so the next draw gathers afresh. For the render
     /// bench, which draws one tick over and over and would otherwise measure a
-    /// cache hit on every frame.
+    /// cache hit on every frame. Their lists are kept for the next gather, as a
+    /// new tick keeps the one it lets go of.
     pub(in crate::scene) fn forget(&mut self) {
-        *self = Self::default();
+        for gather in [self.current.take(), self.previous.take()]
+            .into_iter()
+            .flatten()
+        {
+            self.scratch.recycle(gather);
+        }
+        self.misses = 0;
+    }
+
+    /// The current tick's gathered hull vertices, empty with none.
+    pub(in crate::scene) fn current_vertices(&self) -> &[GpuVertex] {
+        self.current
+            .as_ref()
+            .map_or(&[], |gather| &gather.vertices[..])
     }
 }
 
@@ -67,37 +82,59 @@ impl super::super::Scene {
 
     /// The projected hulls the `original` tier draws this frame, at the race's
     /// draw alpha, cast along `axis` (the title's own shadow direction).
-    pub(super) fn original_hulls(&self, race: &Race, axis: Vec3) -> Vec<GpuVertex> {
+    ///
+    /// Returns `true` when they are the cache's current gather as it stands
+    /// ([`HullCache::current_vertices`], a draw at alpha `1.0`), which is read in
+    /// place rather than copied; otherwise they are in `out`, emptied first.
+    pub(super) fn original_hulls(&self, race: &Race, axis: Vec3, out: &mut Vec<GpuVertex>) -> bool {
+        out.clear();
         let alpha = race.draw_alpha();
         let generation = race.pose_generations();
-        let models: Vec<Mat4> = (0..usize::from(race.ship_count()))
-            .map(|slot| race.ship_tick_model(slot))
-            .collect();
+        let models = || (0..usize::from(race.ship_count())).map(|slot| race.ship_tick_model(slot));
         let mut cache = self.hull_cache.borrow_mut();
         let fresh = cache.current.as_ref().is_some_and(|gather| {
-            gather.generation == generation.current && gather.models == models
+            gather.generation == generation.current && gather.models.iter().copied().eq(models())
         });
         if !fresh {
-            let predecessor = cache
-                .current
-                .take()
-                .filter(|gather| gather.generation == generation.previous);
+            let predecessor = match cache.current.take() {
+                Some(gather) if gather.generation == generation.previous => Some(gather),
+                Some(stale) => {
+                    cache.scratch.recycle(stale);
+                    None
+                }
+                None => None,
+            };
             let seed = alpha >= 1.0
                 || predecessor.is_some()
                 || cache.misses < 2
                 || cache.misses.is_multiple_of(SEED_EVERY);
             if !seed {
                 cache.misses += 1;
-                return self.live_hulls(race, axis);
+                if let Some(predecessor) = predecessor {
+                    cache.scratch.recycle(predecessor);
+                }
+                drop(cache);
+                out.append(&mut self.live_hulls(race, axis));
+                return false;
             }
             cache.misses = if predecessor.is_some() {
                 0
             } else {
                 cache.misses + 1
             };
-            cache.previous = predecessor;
+            if let Some(older) = std::mem::replace(&mut cache.previous, predecessor) {
+                cache.scratch.recycle(older);
+            }
             self.count_gather();
-            cache.current = Some(HullGather::at_tick(race, &self.shadow_hulls, axis));
+            let HullCache {
+                current, scratch, ..
+            } = &mut *cache;
+            *current = Some(HullGather::at_tick_with(
+                race,
+                &self.shadow_hulls,
+                axis,
+                scratch,
+            ));
         }
         let HullCache {
             current: Some(current),
@@ -105,19 +142,21 @@ impl super::super::Scene {
             ..
         } = &*cache
         else {
-            return Vec::new();
+            return false;
         };
         if alpha >= 1.0 {
-            return current.vertices.clone();
+            return true;
         }
-        if let Some(blended) = previous
+        if previous
             .as_ref()
-            .and_then(|previous| HullGather::blend(race, previous, current, alpha))
+            .is_some_and(|previous| HullGather::blend_into(race, previous, current, alpha, out))
         {
-            return blended;
+            return false;
         }
         drop(cache);
-        self.live_hulls(race, axis)
+        out.clear();
+        out.append(&mut self.live_hulls(race, axis));
+        false
     }
 
     /// The hulls projected from the poses this draw blends to, as the per-frame

@@ -518,7 +518,7 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
             );
             assert_eq!(
                 pob::byte_order(&blob),
-                oag_formats::ByteOrder::Big,
+                oag_bytes::ByteOrder::Big,
                 "{entry}: a PS3 blob that is not big-endian"
             );
             blobs.push((blobs.len(), blob));
@@ -577,6 +577,54 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
     );
 }
 
+/// The word at `+0xc84` of every emitter of HD's `WO_WEAPON_ABSORB`, `WO_MISSILE_EXPLO` and
+/// `WO_TRAIL_HITSHIP`, read raw whatever the emitter's render mode.
+///
+/// HD's `psys_normal_vp` multiplies the decoded colour by `kColourScale` (`c467`) and its
+/// fragment programs carry no `/2` (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The
+/// psys programs", and `absorb-feedback.md`), so this word is the only authored brightness term a
+/// particle draw has. The absorb burst's two emitters (render mode 5 and 2) both read `1.0`:
+/// nothing in the file halves the burst. `WO_MISSILE_EXPLO`'s mode-2 emitter reads `0.5`, a word
+/// [`Emitter::colour_scale`] does not surface (it reads mode 5 only).
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn hd_absorb_burst_authors_a_unit_colour_scale_on_both_emitters() {
+    let Some(path) = image(HD_IMAGE) else { return };
+    let mut seen = std::collections::BTreeMap::new();
+    for spec in hd_psarc_specs(&path) {
+        let mut archive = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+        let paths: Vec<String> = archive
+            .paths()
+            .iter()
+            .filter(|entry| entry.to_ascii_lowercase().ends_with(".pob"))
+            .cloned()
+            .collect();
+        for entry in paths {
+            let blob = archive.read_path(&entry).expect("the entry reads");
+            let system = ParticleSystem::parse(&blob).expect("parse");
+            if !["WO_WEAPON_ABSORB", "WO_MISSILE_EXPLO", "WO_TRAIL_HITSHIP"]
+                .contains(&system.name.as_str())
+            {
+                continue;
+            }
+            let words: Vec<(u32, u32, f32)> = system
+                .emitters(&blob)
+                .expect("emitters")
+                .iter()
+                .map(|e| {
+                    let at = system.resource_base() + e.offset + 0xc84;
+                    let word = f32::from_be_bytes(blob[at..at + 4].try_into().unwrap());
+                    (e.render_mode, e.blend_class, word)
+                })
+                .collect();
+            seen.entry(system.name.clone()).or_insert(words);
+        }
+    }
+    assert_eq!(seen["WO_WEAPON_ABSORB"], [(5, 2, 1.0), (2, 2, 1.0)]);
+    assert_eq!(seen["WO_MISSILE_EXPLO"], [(2, 2, 0.5)]);
+    assert_eq!(seen["WO_TRAIL_HITSHIP"], [(5, 2, 0.7), (5, 2, 1.0)]);
+}
+
 /// An emitter's own texture-path string, resolved through whichever slot
 /// names `emitter.offset + 0x4c4` as its fixup site - this project already
 /// reads that field as "an emitter's own texture slot" on PSP, see
@@ -596,6 +644,76 @@ fn own_texture_path(system: &ParticleSystem, blob: &[u8], emitter: &Emitter) -> 
     let raw = &blob[target..target + end];
     (!raw.is_empty() && raw.iter().all(|&b| b.is_ascii_graphic() || b == b' '))
         .then(|| String::from_utf8_lossy(raw).into_owned())
+}
+
+/// What HD's sprite templates name: a template record carries its own texture path at
+/// `+0x87c`, where an emitter's is at `+0x4c4`
+/// (`oag_pob::texture::TEMPLATE_TEXTURE_PATH_FIELD`, `docs/formats/pob.md`, "An HD template
+/// names its sprite at `+0x87c`").
+#[derive(Default)]
+struct TemplateNames {
+    records: usize,
+    named: usize,
+    shipped: usize,
+    /// The emitter's own field read on a template record: never a path.
+    by_emitter_field: usize,
+    missing: std::collections::BTreeSet<String>,
+}
+
+impl TemplateNames {
+    fn check(
+        &mut self,
+        system: &ParticleSystem,
+        blob: &[u8],
+        emitter: &Emitter,
+        gtf_basenames: &std::collections::HashSet<String>,
+    ) {
+        for template in &emitter.initial_particles {
+            self.records += 1;
+            if system
+                .texture_path(blob, template)
+                .is_some_and(|path| path.to_ascii_lowercase().ends_with(".tga"))
+            {
+                self.by_emitter_field += 1;
+            }
+            let Some(path) = system.template_texture_path(blob, template) else {
+                continue;
+            };
+            let lower = path.to_ascii_lowercase();
+            let Some(stem) = lower
+                .rsplit(['\\', '/'])
+                .next()
+                .and_then(|name| name.strip_suffix(".tga"))
+            else {
+                continue;
+            };
+            self.named += 1;
+            let gtf = format!("{stem}.gtf");
+            if gtf_basenames.contains(&gtf) {
+                self.shipped += 1;
+            } else {
+                self.missing.insert(gtf);
+            }
+        }
+    }
+
+    fn assert_all_named(self) {
+        println!(
+            "hd: {} sprite template record(s), {} naming a .tga at +0x87c, {} of those shipped \
+             as a .gtf, {} naming one at the emitter's +0x4c4; not shipped: {:?}",
+            self.records, self.named, self.shipped, self.by_emitter_field, self.missing
+        );
+        assert_eq!(self.records, 38, "hd: the disc's sprite template records");
+        assert_eq!(
+            (self.named, self.shipped),
+            (self.records, self.records),
+            "hd: every template record names a shipped texture at +0x87c"
+        );
+        assert_eq!(
+            self.by_emitter_field, 0,
+            "hd: the emitter's +0x4c4 is not a template's field"
+        );
+    }
 }
 
 /// HD does not embed sprite pixels the way PSP does (see
@@ -641,10 +759,12 @@ fn hd_own_textures_mostly_resolve_to_a_shipped_gtf() {
     let mut resolved = std::collections::BTreeSet::new();
     let mut unresolved = std::collections::BTreeSet::new();
     let mut no_own_reference = 0usize;
+    let mut templates = TemplateNames::default();
     for blob in &blobs {
         let system = ParticleSystem::parse(blob).expect("parse");
         let parsed = system.emitters(blob).expect("emitters");
         for emitter in &parsed {
+            templates.check(&system, blob, emitter, &gtf_basenames);
             let Some(path) = own_texture_path(&system, blob, emitter) else {
                 no_own_reference += 1;
                 continue;
@@ -678,6 +798,7 @@ fn hd_own_textures_mostly_resolve_to_a_shipped_gtf() {
         "hd: every emitter named its own texture in the session this was measured - \
          a nonzero count here is a real change, not noise"
     );
+    templates.assert_all_named();
     // The exact unresolved set is asserted, not just its size, per this
     // project's own "measurement, not a tolerance" convention -
     // `vandergraf_balls_1024x1024.gtf` ships under a size-renamed sibling

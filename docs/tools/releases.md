@@ -12,11 +12,11 @@ rerun of the same commands (see "What was verified" below).
 | --- | --- | --- |
 | `check` | `fmt`, `clippy -D warnings`, `nextest --workspace`, the Python ratchets | No `data/` on the runner: every disc-backed test is `#[ignore]`d or skips. Installs `libpipewire-0.3-dev`, `libasound2-dev`, `libudev-dev`, `libclang-dev`, `pkg-config` - the list `packaging/appimage/Containerfile` already uses. |
 | `docs` | `scripts/check-doc-links.py` | |
-| `msrv` | `cargo +1.97.1 build --workspace` | The floor is **1.97.1**: `wesl` 0.6 and its siblings (the shader linker) declare it. `Cargo.toml`'s `rust-version` says the same. Lowering it means dropping or downgrading `wesl`; raising it is free, but then `rust-version` and this job move together. |
+| `msrv` | `cargo +1.100.0 build --workspace` | The floor is **1.100**: the code calls `str::trim_prefix`, `str::trim_suffix` and `bool::toggle`, stabilised in 1.100. `Cargo.toml`'s `rust-version` says the same. Lowering it means undoing those call sites (the shader linker `wesl` 0.6 alone needs 1.97.1); raising it is free, but then `rust-version` and this job move together. It equals the pinned toolchain today, so the job only guards against the two drifting apart. |
 | `determinism` | the three `*_determinism_report` examples and the four `determinism` test suites, release and debug, on Linux, Windows and macOS | Never edit a reference constant to make it pass. |
 | `leakage` | `scripts/check-leakage.py` | |
 
-Pinned toolchain: `rust-toolchain.toml` (1.99.0). `ci.yml` installs the same
+Pinned toolchain: `rust-toolchain.toml` (1.100.0). `ci.yml` installs the same
 version, so rustup never downloads a second toolchain mid-job.
 
 ### Why every run on `main` was red (at least since 2026-08-28)
@@ -40,7 +40,7 @@ independent causes, none a real regression in the simulation:
    - `talons-junction-clean-lap.csv` was never tracked, so three `oag-trace` tests
      panicked on a runner ([ADR-0046](../architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md));
      it is tracked now.
-   - `oag-render`'s `psp_slope_lod` read a no-GPU sentinel (`usize::MAX`) as a pixel
+   - `oag-mesh`'s `psp_slope_lod` read a no-GPU sentinel (`usize::MAX`) as a pixel
      count; it now skips without an adapter like the rest of the file. If the
      runner image has lavapipe those GPU tests run there instead of skipping.
    - Raising `rust-version` to 1.97.1 turns on clippy's `manual_isolate_lowest_one`;
@@ -66,7 +66,30 @@ Runs 37595443950, 37599197810 and 37599357599, after the fixes above:
   so one push shows every stage on every OS.
 
 `ci.yml` also pinned 1.98.0 against `rust-toolchain.toml`'s 1.99.0; rustup's override
-meant it only cost a second download, but both say 1.99.0 now.
+meant it only cost a second download, but both said 1.99.0 afterwards, and both say
+1.100.0 now.
+
+### What the bump to 1.100.0 turned on (2026-11-13)
+
+The pin, `rust-version` (now 1.100), `ci.yml` and `release.yml` all moved together.
+
+- clippy's `needless_range_loop` now also fires on `for slot in 0..n` when the
+  indexed place is a field path (`race.sim.world.ships[slot]`), where it used to
+  need a plain local. 86 sites in the default build, 79 of them in tests, plus one more test site behind the `ballisticng` feature. The seven in shipped code
+  iterate (`iter_mut().enumerate().take(n)`); the tests index several parallel
+  slot arrays with one slot, so each test binary and test module tree carries
+  `#![allow(clippy::needless_range_loop)]` at its root, and nowhere else.
+- `needless_nonzero_get` (`index % every.get()` in `oag-trace`) and two
+  `needless_range_loop` sites in `oag-rcs`' GCN decoder were fixed in place.
+- `[workspace.lints.cargo]` sets `unused_dependencies = "warn"`. It reads the
+  build as compiled, so it caught `oag-mobile`'s `log` (iOS only; now a
+  `cfg(target_os = "ios")` dependency) and `oag-schema`'s `toml` (only the
+  `validate` feature and the tests use it; now optional behind `validate`, with a
+  dev-dependency for the tests). It skips dev-dependencies and a dependency only
+  tests use, so `just check-unused-deps` (cargo shear) stays. A cargo lint is not
+  turned into an error by `-D warnings`, so this one only warns.
+- `str::trim_prefix`/`trim_suffix` replace `strip_prefix(p).unwrap_or(x)`, and
+  `bool::toggle` replaces `x = !x`.
 
 ## release.yml
 
@@ -117,8 +140,12 @@ and run through `python3 scripts/check-leakage.py --dir <unpacked>`, the same
 extension list `just audit-leakage` applies to the git tree, so the repository and
 the packages are held to one definition. `scripts/build-appimage.sh` calls the
 same mode on its AppDir (it used to keep a shorter hand-copied list that lacked
-`psarc` among others). The one allowance is the generated window icon
-`oag-game.png`, by path rather than by extension.
+`psarc` among others). The allowances, each by path or by provenance rather than by extension:
+
+- the generated window and launcher icons (`oag-game.png` and the Android and iOS sizes);
+- a screenshot a packaged mod's `README.md` names, beside its `oag-mod.toml`;
+- a `.png` inside a mod folder whose source `src/<stem>.svg` sits beside it: the mod's own
+  vector art, rendered (official-mods' `slipstream/icons/`).
 
 ### Cutting a release
 

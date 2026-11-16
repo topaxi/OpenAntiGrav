@@ -17,6 +17,15 @@
 //! Wall time is not measured here (`docs/architecture/determinism.md`): the caller
 //! times the call if it wants to show it.
 
+// The web build runs modules on the browser's own engine and iOS needs Pulley without a
+// JIT, neither built yet (README, section 5). `oag-game` builds both with
+// `--no-default-features`. On desktop the `pulley` feature swaps native Cranelift code
+// for the interpreter, for measuring.
+#[cfg(any(target_arch = "wasm32", target_os = "ios"))]
+compile_error!(
+    "oag-modhost runs modules on wasmtime's Cranelift, which the web and iOS builds cannot use; build oag-game with --no-default-features there"
+);
+
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -26,13 +35,12 @@ use wasmtime::{
 };
 
 use oag_ext_abi::track::TRACK_LEN;
-use oag_ext_abi::{ABI, ABI_WORD, Command, Craft, Event, IO_LEN, MAX_STATE_BYTES, REVISION};
+use oag_ext_abi::{
+    ABI, ABI_WORD, Command, Craft, Event, IO_LEN, MAX_MEMORY_PAGES, MAX_STATE_BYTES, REVISION,
+    RaceInfo,
+};
 
 mod reply;
-
-/// The most a module may ask for, in 64 KiB pages (16 MiB). Proposed in the README
-/// (section 4.1), chosen.
-pub const MAX_MEMORY_PAGES: u32 = 256;
 
 /// Fuel for one tick's call, instantiation included. Chosen: Wall Penalty uses a few
 /// thousand units on a full grid; fuel is checked at function entries and loop
@@ -61,6 +69,30 @@ fn engine() -> Result<&'static Engine, LoadError> {
     if let Some(engine) = ENGINE.get() {
         return Ok(engine);
     }
+    let built = build_engine(cfg!(feature = "pulley"))?;
+    let engine = ENGINE.get_or_init(|| {
+        ENGINES_CREATED.fetch_add(1, Ordering::SeqCst);
+        built
+    });
+    Ok(engine)
+}
+
+/// What runs the process's modules: `"Pulley"` (wasmtime's interpreter, the `pulley`
+/// feature) or `"Cranelift"` (native code); `None` until the first module is compiled.
+#[must_use]
+pub fn engine_name() -> Option<&'static str> {
+    ENGINE.get().map(|engine| {
+        if engine.is_pulley() {
+            "Pulley"
+        } else {
+            "Cranelift"
+        }
+    })
+}
+
+/// An engine with the pinned settings; `pulley` compiles to the interpreter's bytecode
+/// (`pulley64`) instead of the host's native code.
+fn build_engine(pulley: bool) -> Result<Engine, LoadError> {
     let mut pool = wasmtime::PoolingAllocationConfig::default();
     pool.total_memories(POOL_INSTANCES)
         .total_tables(POOL_INSTANCES)
@@ -77,13 +109,16 @@ fn engine() -> Result<&'static Engine, LoadError> {
         .wasm_relaxed_simd(false)
         .wasm_multi_memory(false)
         .wasm_memory64(false);
+    #[cfg(feature = "pulley")]
+    if pulley {
+        config
+            .target("pulley64")
+            .map_err(|e| LoadError::Engine(e.to_string()))?;
+    }
+    #[cfg(not(feature = "pulley"))]
+    let _ = pulley;
     // No `threads` cargo feature: a module declaring shared memory does not compile.
-    let built = Engine::new(&config).map_err(|e| LoadError::Engine(e.to_string()))?;
-    let engine = ENGINE.get_or_init(|| {
-        ENGINES_CREATED.fetch_add(1, Ordering::SeqCst);
-        built
-    });
-    Ok(engine)
+    Engine::new(&config).map_err(|e| LoadError::Engine(e.to_string()))
 }
 
 /// Why a module was left out of a race. Each says what to fix.
@@ -105,7 +140,7 @@ pub enum LoadError {
         /// The layout revision it was built for.
         revision: Option<u32>,
     },
-    /// The module's `oag_state_len` export disagrees with the manifest's `state_bytes`.
+    /// The module's `oag_state_len` export disagrees with the `state_bytes` its manifest declares.
     State {
         /// What the module exports.
         module: u32,
@@ -156,7 +191,9 @@ impl std::error::Error for LoadError {}
 pub struct Limits {
     /// The guest's maximum linear memory, 64 KiB pages, at most [`MAX_MEMORY_PAGES`].
     pub memory_pages: u32,
-    /// The state blob's length, at most [`MAX_STATE_BYTES`].
+    /// The state blob's length, at most [`MAX_STATE_BYTES`]. 0 takes the length the module
+    /// exports as `oag_state_len` (a module that exports none has no state); another number
+    /// must equal it.
     pub state_bytes: u32,
     /// Fuel per tick.
     pub fuel: u64,
@@ -181,6 +218,8 @@ struct HostData {
 pub struct Module {
     pre: InstancePre<HostData>,
     limits: Limits,
+    /// The module exports `oag_wants_race`.
+    checks_race: bool,
 }
 
 impl std::fmt::Debug for Module {
@@ -223,6 +262,8 @@ pub struct Observation<'a> {
     pub events: &'a [Event],
     /// Each grid slot, in slot order.
     pub crafts: &'a [Craft],
+    /// The course's length and each slot's progress and place.
+    pub course: oag_ext_abi::Course<'a>,
     /// The track region (`oag_ext_abi::track`), as many bytes of it as were used: the
     /// same every tick of a race. Written only to a guest exporting `oag_track`.
     pub track: &'a [u8],
@@ -239,6 +280,31 @@ pub struct Cost {
     pub fuel_used: u64,
     /// The budget it ran under.
     pub fuel_budget: u64,
+    /// The guest's linear memory in bytes when the call ended, growth included. 0 when the
+    /// instance never came up. Reporting only: the cap is [`Limits::memory_pages`].
+    pub memory_bytes: u64,
+}
+
+/// What a call leaves on the instance, read before the pooled instance is dropped.
+#[derive(Default)]
+struct Left {
+    fuel: Option<u64>,
+    memory_bytes: u64,
+}
+
+/// Refuses an export that is not `() -> i32`, the shape of every function the ABI names,
+/// so a wrong signature is a load refusal by name and never a mid-race fault.
+fn returns_a_word(name: &str, func: &wasmtime::FuncType) -> Result<(), LoadError> {
+    let word = func.params().len() == 0
+        && func.results().len() == 1
+        && matches!(func.results().next(), Some(wasmtime::ValType::I32));
+    if word {
+        Ok(())
+    } else {
+        Err(LoadError::Export(format!(
+            "`{name}` must be `() -> i32`, it has another signature"
+        )))
+    }
 }
 
 impl Module {
@@ -260,7 +326,10 @@ impl Module {
                 limits.state_bytes
             )));
         }
-        let engine = engine()?;
+        Self::compile_on(engine()?, wasm, limits)
+    }
+
+    fn compile_on(engine: &Engine, wasm: &[u8], limits: Limits) -> Result<Self, LoadError> {
         let module = wasmtime::Module::new(engine, wasm)
             .map_err(|e| LoadError::Compile(format!("{e:#}")))?;
         // The linker holds the `oag` namespace, which is empty in ABI 1: any import at
@@ -279,7 +348,8 @@ impl Module {
             ("tick", true),
         ] {
             match (module.get_export(name), want_func) {
-                (Some(ExternType::Memory(_)), false) | (Some(ExternType::Func(_)), true) => {}
+                (Some(ExternType::Memory(_)), false) => {}
+                (Some(ExternType::Func(func)), true) => returns_a_word(name, &func)?,
                 (Some(_), _) => {
                     return Err(LoadError::Export(format!("`{name}` has the wrong kind")));
                 }
@@ -290,7 +360,24 @@ impl Module {
         let pre = linker
             .instantiate_pre(&module)
             .map_err(|e| LoadError::Start(format!("{e:#}")))?;
-        let loaded = Self { pre, limits };
+        // Optional: a module that picks its races exports the question's answer.
+        let checks_race = match module.get_export("oag_wants_race") {
+            None => false,
+            Some(ExternType::Func(func)) => {
+                returns_a_word("oag_wants_race", &func)?;
+                true
+            }
+            Some(_) => {
+                return Err(LoadError::Export(
+                    "`oag_wants_race` has the wrong kind".to_string(),
+                ));
+            }
+        };
+        let mut loaded = Self {
+            pre,
+            limits,
+            checks_race,
+        };
         // A first instance at load, so a module that cannot start (too much memory, a
         // trapping start function, the wrong ABI) is refused here and never mid-race.
         let (mut store, instance) = loaded
@@ -305,20 +392,36 @@ impl Module {
             return Err(LoadError::Abi { major, revision });
         }
         // Optional: a module that reads the track region exports its buffer.
-        if let Some(export) = module.get_export("oag_track")
-            && !matches!(export, ExternType::Func(_))
-        {
-            return Err(LoadError::Export(
-                "`oag_track` has the wrong kind".to_string(),
-            ));
+        match module.get_export("oag_track") {
+            None => {}
+            Some(ExternType::Func(func)) => returns_a_word("oag_track", &func)?,
+            Some(_) => {
+                return Err(LoadError::Export(
+                    "`oag_track` has the wrong kind".to_string(),
+                ));
+            }
         }
-        // Optional: a module that says how long its state is must agree with its manifest.
-        if module.get_export("oag_state_len").is_some() {
+        // Optional: a module that says how long its state is must agree with its manifest,
+        // and a manifest that declares none (0) takes the module's.
+        if let Some(export) = module.get_export("oag_state_len") {
+            let ExternType::Func(func) = export else {
+                return Err(LoadError::Export(
+                    "`oag_state_len` has the wrong kind".to_string(),
+                ));
+            };
+            returns_a_word("oag_state_len", &func)?;
             let len = instance
                 .get_typed_func::<(), u32>(&mut store, "oag_state_len")
                 .and_then(|f| f.call(&mut store, ()))
                 .map_err(|e| LoadError::Export(format!("`oag_state_len`: {e:#}")))?;
-            if len != limits.state_bytes {
+            if limits.state_bytes == 0 {
+                if len as usize > MAX_STATE_BYTES {
+                    return Err(LoadError::Limits(format!(
+                        "the module's state is {len} bytes, over {MAX_STATE_BYTES}"
+                    )));
+                }
+                loaded.limits.state_bytes = len;
+            } else if len != limits.state_bytes {
                 return Err(LoadError::State {
                     module: len,
                     manifest: limits.state_bytes,
@@ -348,6 +451,48 @@ impl Module {
         Ok((store, instance))
     }
 
+    /// Asks the module whether it runs in `race`, once, before the race is built: a fresh
+    /// instance, the description at the start of the buffer, `oag_wants_race` called under
+    /// the module's own fuel budget (a load cost, never a tick's). A module that exports no
+    /// `oag_wants_race` runs in every race.
+    ///
+    /// # Errors
+    ///
+    /// A [`Fault`] when the call traps, runs out of fuel or answers neither
+    /// [`oag_ext_abi::RUN`] nor [`oag_ext_abi::SKIP`]; the caller leaves the module out of
+    /// the race, since a broken check must not run a module its guest meant to withhold.
+    pub fn wants_race(&self, race: &RaceInfo) -> Result<bool, Fault> {
+        if !self.checks_race {
+            return Ok(true);
+        }
+        let (mut store, instance) = self.instantiate().map_err(trap)?;
+        let memory: Memory = instance
+            .get_memory(&mut store, "memory")
+            .ok_or_else(|| Fault::Trap("no memory".to_string()))?;
+        let io = instance
+            .get_typed_func::<(), u32>(&mut store, "oag_io")
+            .and_then(|f| f.call(&mut store, ()))
+            .map_err(trap)? as usize;
+        let mut buffer = Box::new([0_u8; IO_LEN]);
+        race.write(&mut buffer);
+        memory.write(&mut store, io, &buffer[..]).map_err(|e| {
+            Fault::Trap(format!("the I/O buffer at {io:#x} is outside memory: {e}"))
+        })?;
+        let answer = instance
+            .get_typed_func::<(), u32>(&mut store, "oag_wants_race")
+            .and_then(|f| f.call(&mut store, ()))
+            .map_err(trap)?;
+        match answer {
+            oag_ext_abi::RUN => Ok(true),
+            oag_ext_abi::SKIP => Ok(false),
+            other => Err(Fault::Reply(format!(
+                "oag_wants_race returned {other}, not {} (run) or {} (skip)",
+                oag_ext_abi::RUN,
+                oag_ext_abi::SKIP
+            ))),
+        }
+    }
+
     /// Runs one tick on a fresh instance. `state` is the module's blob
     /// ([`Limits::state_bytes`] long): read before the call and, on success, replaced by
     /// the guest's. `commands` receives the checked reply. On a fault neither changes.
@@ -361,11 +506,12 @@ impl Module {
         state: &mut [u8],
         commands: &mut Vec<Command>,
     ) -> Result<Cost, (Fault, Cost)> {
-        let mut store_fuel = None;
-        let result = self.run(observation, state, &mut store_fuel);
+        let mut left = Left::default();
+        let result = self.run(observation, state, &mut left);
         let cost = Cost {
-            fuel_used: self.limits.fuel - store_fuel.unwrap_or(0),
+            fuel_used: self.limits.fuel - left.fuel.unwrap_or(0),
             fuel_budget: self.limits.fuel,
+            memory_bytes: left.memory_bytes,
         };
         match result {
             Ok((reply_state, reply)) => {
@@ -382,7 +528,7 @@ impl Module {
         &self,
         observation: &Observation<'_>,
         state: &[u8],
-        fuel_left: &mut Option<u64>,
+        left: &mut Left,
     ) -> Result<(Vec<u8>, Vec<Command>), Fault> {
         let (mut store, instance) = self.instantiate().map_err(trap)?;
         let outcome = (|| {
@@ -400,6 +546,7 @@ impl Module {
                 observation.active,
                 observation.events,
                 observation.crafts,
+                &observation.course,
                 state,
             );
             memory.write(&mut store, io, &buffer[..]).map_err(|e| {
@@ -434,7 +581,10 @@ impl Module {
             let at = oag_ext_abi::STATE_AT;
             Ok((buffer[at..at + state.len()].to_vec(), commands))
         })();
-        *fuel_left = store.get_fuel().ok();
+        left.fuel = store.get_fuel().ok();
+        left.memory_bytes = instance
+            .get_memory(&mut store, "memory")
+            .map_or(0, |memory| memory.data_size(&store) as u64);
         outcome
     }
 }

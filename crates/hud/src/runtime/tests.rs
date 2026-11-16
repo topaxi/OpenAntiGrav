@@ -54,6 +54,7 @@ fn sheet() -> crate::sprite::Sheet {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         },
     )])
 }
@@ -65,6 +66,7 @@ fn with_hd<R>(art: &oag_title::HudArt, f: impl FnOnce(&Context<'_>) -> R) -> R {
     let sheet = sheet();
     let cx = Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,

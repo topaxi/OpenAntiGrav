@@ -1,39 +1,46 @@
 ---
-status: re-first
+status: measure
 titles: [pure]
-updated: 2026-10-12
-summary: "Pure Plasma blast keys, Bomb tumble axes, Disruptor and Missile visuals unread"
+updated: 2026-11-11
+summary: "Pure weapon effects wired from reads (Disruptor complete bar cockpit); open: Plasma/halo capture at a matched state, craft-hit count"
 ---
 
-# Pure's weapons: Mine, Bomb, the Bomb blast and the Quake are wired; Plasma, Disruptor, Missile are open
+# Pure's weapons: all wired from reads; captures and a few gates open
 
 2026-10-08. Evidence: `docs/ghidra/functions/psp-pure-usa/weapons-gfx.md`. Pure's table named Pulse's
 weapon models (absent on its disc); it now names `Mine.vex`, `Bomb.vex` and the Bomb blast pair.
 
 ## Open
 
-1. **Plasma blast**: `0x0885b2a0` loads `plasma_halo`, `plasma_hemisphere_noglow`, `plasma_hemisphere`
-   over three 255-to-0 key tables (`+0x90`, `+0xc0`, `+0xf0`); read the keys and the placement, then wire.
-   `plasma_blast_pulse` stays `None` until then (a billboard, not Pulse's baked track).
-2. **Bomb tumble**: axes of the two turns in `Bomb_UpdateSpin` (`0x088583d8`, tables at `0x5420`/`0x5450`)
-   are unread; ours yaws at `-3.5 rad/s` (chosen). The scale is `0.4` and the drop point the rear anchor
-   (`4.875` behind the body), both measured live on Feisar; other teams' anchors are assumed alike - measure one.
-3. **Mine shading**: our Pure Mine draws darker than the original's light grey; compare textures/lighting.
-4. **Triggers unread** for `WO_MINE_EXPLO`, `WO_BOMB_GLOW`, `WO_BOMB_SMOKERING`, `WO_MISSILE_HEAD/EXPLO/BOUNCE`,
-   `WO_DISRUPTOR_*`, `disruptor_effect`, `electric_halo2`, `explosion_gaseous`. (`WO_QUAKE` is wired, below.)
-5. **A detonating Bomb** has not been seen on either side (needs a craft entering the trigger radius).
-6. **State match**: the pair is time-matched (race time `2.1 s`), not speed-matched; Pure's HUD km/h and our
-   speed unit differ. Missile, Disruptor, Shield, Autopilot, Turbo were not captured (the Quake was, 2026-10-12).
-7. **Quake** (lane pure-leach-quake, `docs/ghidra/functions/psp-pure-usa/quake.md`): wired - the extent law
-   for Pure's own `WO_QUAKE`, a world-up frame lifted 10 units, and the orange wash (`oag_title::QuakeLook`).
-   Still open: **the road ripple** (Vineta K carries one class `0x379` `Quake` node; Pure's ripple is unread
-   and ours draws none), Pure's `ScreenFlash_Update`/draw (the wash is Pulse's law, inherited), the wave's
-   speed (Pulse's 270, chosen), the second instance on a fork, the VR build (`WO_QUAKE_VR`, no lift), and a
-   state-matched capture (Pure's physics is unimplemented, so ours is further along at the same race time).
-   Pulse-only names still in Pure's effect table report as absent on every load (`WO_CANNON_SPARKS`,
-   `WO_REPULSER*`, `WO_SHURIKEN_*`, the Cannon textures); the LeachBeam ones are gone (Pure ships no LeachBeam).
+Wired 2026-11-03 (lane `pure-weapons-wire`, [plasma.md](../../docs/ghidra/functions/psp-pure-usa/plasma.md) and
+[weapon-effects.md](../../docs/ghidra/functions/psp-pure-usa/weapon-effects.md), "Wired"): the Plasma blast (own key tables,
+targets, 2.0 s life, 3.5 hemisphere drop, through `PlasmaBlastLaw`), the Missile/Mine/Bomb/Plasma triggers as `Measured`,
+`WO_BOMB_GLOW`, the Bomb tumble axes (confidence 60), `WO_DISRUPTOR_HEAD`, `WO_DISRUPTOR_EXPLO` and `electric_halo2`. Wired 2026-11-11 (lane
+`pure-disruptor-finish`, [weapon-effects.md](../../docs/ghidra/functions/psp-pure-usa/weapon-effects.md), "Disruptor"): `WO_DISRUPTOR_LAUNCH` at the hull's
+`Ship Muzzle` node (the gate is the hull authoring one, not a table field) and `disruptor_effect.vex` on a disrupted craft. Still open:
+
+1. **A Pure capture of the blast and the halo, at a matched state.** All of it is read, none matched: the Pulse-fitted model unit (`0.025`)
+   is assumed for Pure's models, the halo's texture clock is the age by analogy, and the hemisphere drop's sign is Pulse's (against the track's
+   up, read off Pulse's GE dumps). Lane `pure-disruptor-finish` captured a Disruptor fire (launch burst, bolt, wall spark) and the on-craft
+   effect on PPSSPP (recipe on the evidence page, "Not settled") but not a Plasma blast or a halo against a wall at a state ours can match:
+   a Time Trial has no opponent to hit and the craft that fires pins itself on the wall. Fire weapon 8 from the loaded
+   `time-trial-vineta-vector-feisar-restart.ppst` (`psp-state.py --serial UCUS98612_2.00`) at the grid pose and run ours from the grid pose.
+2. **Craft-hit blast count on Pure** (ours spawns Pulse's two; Pure's callers were not walked, confidence 50).
+3. **`disruptor_cockpit.vex`**: the cockpit view's half of the on-craft effect (the model shows when `*(craft+0xe5)` is non-zero, which
+   read `1` after the second SELECT press); its placement in the eye's frame is unread, and ours draws no on-craft effect on the player's craft
+   in its internal view.
+4. ~~Pulse's own hemisphere drop~~ done (plasma-dome-specks): `3.5` on Pulse's row, sign read off the dumps; the dark discs are `WO_PLASMA_FLASH` particles, not the shell texture.
+5. **The laid Bomb's glow** was not seen in a headless shot (the bomb had not left the craft); a detonating Bomb has not been
+   seen on either side.
+6. **Mine shading**: our Pure Mine draws darker than the original's light grey.
+7. **Quake** (lane pure-leach-quake, [quake.md](../../docs/ghidra/functions/psp-pure-usa/quake.md)): wired. Still open: the road
+   ripple (Vineta K carries one class `0x379` `Quake` node; Pure's ripple is unread and ours draws none), Pure's
+   `ScreenFlash_Update`/draw (the wash is Pulse's law, inherited), the wave's speed (Pulse's 270, chosen), the second instance
+   on a fork, the VR build (`WO_QUAKE_VR`, no lift), and a state-matched capture.
+   Pulse-only names still in Pure's effect table report as absent on every load (`WO_CANNON_SPARKS`, `WO_REPULSER*`,
+   `WO_SHURIKEN_*`, the Cannon textures).
 
 ## Next Steps
 
-Capture a detonating Bomb and a Mine hit with `scripts/psp-pure-weapon-fire.py` (walk to Time Trial by hand,
-RESTART, run it); then Plasma's key tables.
+Capture a Pure Plasma blast at a state ours can match (recipe in item 1) to check the model unit, the drop and the halo, then read the
+cockpit view's `disruptor_cockpit.vex` placement.

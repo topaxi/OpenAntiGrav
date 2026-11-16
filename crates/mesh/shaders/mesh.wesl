@@ -6,7 +6,8 @@
 // black.
 
 import package::alpha_test::{alpha_test_ref};
-import package::bindings::{anims, emissives, node_anims, scene, uniforms};
+import package::bindings::{anims, emissive_scale, emissive_tint, node_anims, scene, uniforms};
+import package::depth_bias::{biased_clip};
 import package::fog::{fogged};
 import package::glow::{stamp_discards, stamp_value, stamped_alpha};
 import package::quake::{quake_lifted};
@@ -37,7 +38,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     if in.quake > 0.5 {
         world = vec4<f32>(quake_lifted(world.xyz), world.w);
     }
-    out.clip = uniforms.view_projection * world;
+    out.clip = biased_clip(uniforms.view_projection * world, in.depth_bias);
     // **The normal goes through the node matrix's inverse transpose**, not the
     // matrix itself: a per-axis scale skews a normal turned by the plain
     // matrix. The model matrix is uniform-scale, so it needs none. The cofactor
@@ -109,14 +110,16 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // the entry's scale and `offset` the animation-table row its offset names, which plays
     // the material's own curve. Laid here into the chunk's unused second pair because the
     // table is a vertex-stage binding and the coordinate is linear in `uv`.
-    let chevron_entry = (in.slots >> 24u) & 127u;
-    if (in.slots & 2147483648u) != 0u && chevron_entry != 0u
-        && emissives.scale[chevron_entry].z > 2.5 && emissives.scale[chevron_entry].z < 3.5 {
-        let row = u32(emissives.tint_offset[chevron_entry].w + 0.5);
+    let chevron_entry = (in.slots >> 24u) & 63u;
+    // 2048's and Omega's centre lane takes the entry without `LIT_ALPHA` (`program[1]` 2).
+    if ((in.slots & 2147483648u) != 0u || emissive_scale(chevron_entry).w > 1.5)
+        && chevron_entry != 0u
+        && emissive_scale(chevron_entry).z > 2.5 && emissive_scale(chevron_entry).z < 3.5 {
+        let row = u32(emissive_tint(chevron_entry).w + 0.5);
         let offset = anims.transform[min(row, 63u)].z;
         out.lightmap_texcoord = vec4<f32>(
             in.lightmap_texcoord,
-            in.texcoord * emissives.scale[chevron_entry].x + vec2<f32>(offset),
+            in.texcoord * emissive_scale(chevron_entry).x + vec2<f32>(offset),
         );
     }
     // `uv * scale + offset`, the GE's own `TEXSCALE`/`TEXOFFSET` arithmetic -
@@ -150,6 +153,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(target_out(opaque_colour(in, shaded)), stamped_alpha(in, shaded.a));
 }
 
+const FOLIAGE_DEPTH_ALPHA: f32 = 0.5;
+
 // Used only by the blended pipeline - see
 // `oag_mesh::mesh::Model::transparent_draws`. Identical to `fs_main` except
 // it outputs the texture's alpha times the vertex colour's alpha instead of a
@@ -180,6 +185,18 @@ fn fs_main_blend_velocity(in: VertexOutput) -> BlendMrtOutput {
     );
 }
 
+// The depth half of a foliage draw - `mesh_render::FoliageDepth`. Every target's write mask is
+// empty; what it leaves is the depth of the texels whose alpha is at least one half, so a
+// blended mesh's solid body occludes what a farther mesh draws after it while its soft edge
+// still blends. The colour pass is `fs_main_blend` against that depth.
+@fragment
+fn fs_blend_cutout_depth(in: VertexOutput) -> @location(0) vec4<f32> {
+    if lit_texel(in).a < FOLIAGE_DEPTH_ALPHA {
+        discard;
+    }
+    return vec4<f32>(0.0);
+}
+
 // Used only by the cutout pipeline - see
 // `oag_mesh::mesh::Model::alpha_tested_draws`. Unlike `fs_main_blend`, this
 // keeps depth write on (see `mesh_render::build`): a batch tagged
@@ -188,11 +205,11 @@ fn fs_main_blend_velocity(in: VertexOutput) -> BlendMrtOutput {
 // blended - `discard` is what lets the pixels below the threshold contribute
 // neither colour nor depth, so surfaces behind a cutout's "empty" corners
 // still show through and still get occluded correctly by whatever the
-// cutout's solid pixels do draw. `shaded.a` is now the texture's alpha times
+// cutout's solid pixels do draw. `shaded.a` is the texture's alpha times
 // the vertex colour's, per `lit_texel` above; measured directly against every
 // alpha-tested batch on `01_Track`/`16_Track` that no vertex reference in
 // this path carries baked alpha at or below `ALPHA_TEST_THRESHOLD`, so this
-// fold-in does not newly discard any fragment that used to pass on real
+// fold-in discards no fragment the texture's alpha alone would pass on real
 // track data.
 @fragment
 fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {

@@ -1,5 +1,5 @@
 //! What launching with the RACE page's VARIANT row's pick means; the row's own
-//! choices are `oag_game::livery_row`. Shared with RACE REMIX - see `super::remix`.
+//! choices are `oag_game::livery_row`. Shared with the two-title race pickers - see `super::queries`.
 //!
 //! Split out of `menus.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
@@ -24,6 +24,9 @@ pub(crate) fn combine_variant(
     team: &str,
     stored: &str,
 ) -> (String, Option<&'static str>, Option<String>) {
+    // A model in another livery of the same directory (`"@livery2"`) races out of that directory:
+    // the livery is `Options::livery`'s, set by `apply_race_team`.
+    let (stored, _) = oag_title::race::split_livery(stored);
     if let Some(team_variants) = title.race.team_variants_for(team) {
         let (suffix, warning) = match team_variants.variants.iter().find(|v| v.suffix == stored) {
             Some(variant) => (variant.suffix, None),

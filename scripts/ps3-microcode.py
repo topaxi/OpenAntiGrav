@@ -369,6 +369,23 @@ def fp_src(bits: int, const: list[float] | None, input_src: int, absolute: bool 
 # one-sided cull that the original's own eye and vertex buffer contradict.
 FP_SRC_ABS = ((1, 29), (2, 18), (3, 18))
 
+#: Each source's 3-bit precision modifier, `SRC1` word (`d2`) bits 19-21 (source
+#: 0), 22-24 (source 1) and 25-27 (source 2): RPCS3's `SRC1::src{0,1,2}_prec_mod`
+#: and `register_precision` (`rpcs3/Emu/RSX/Program/RSXFragmentProgram.h`), which
+#: its `FragmentProgramDecompiler::GetSRC` applies after the swizzle and before
+#: `abs` (saturate) or after it (the others), then `neg`. Code 4 is a clamp of the
+#: *source* to [0, 1]; Cg folds `saturate(N.L)` into the consumer this way, which is
+#: why a lightmapped program's `DP3` can be unsaturated and its sun term still
+#: clamped. 0 none and 5 (unknown, hwtests show no effect) print nothing; 1 half
+#: is a clamp to the fp16 range and is not printed either.
+FP_SRC_PREC_SHIFT = (19, 22, 25)
+FP_PREC_NAMES = {2: "fx12", 3: "fx9", 4: "sat"}
+
+
+def fp_src_precision(d2: int, k: int) -> str:
+    """Source `k`'s precision-modifier wrapper name, or `""`."""
+    return FP_PREC_NAMES.get((d2 >> FP_SRC_PREC_SHIFT[k]) & 7, "")
+
 
 def fp_src_plain(bits: int, const: list[float] | None, input_src: int) -> str:
     ty = bits & 3
@@ -542,8 +559,11 @@ def fp_code(raw: bytes, start: int, code_len: int, patches: dict) -> None:
         arity = FP_SRC_ARITY.get(name, 2)
         words = (d0, d1, d2, d3)
         ops = ", ".join(
-            fp_src(b, const, input_src, bool((words[w] >> bit) & 1))
-            for b, (w, bit) in zip(srcs[:arity], FP_SRC_ABS)
+            (lambda text, wrap: f"{wrap}({text})" if wrap else text)(
+                fp_src(b, const, input_src, bool((words[w] >> bit) & 1)),
+                fp_src_precision(d2, k),
+            )
+            for k, (b, (w, bit)) in enumerate(zip(srcs[:arity], FP_SRC_ABS))
         )
         unit = f" unit{(d0 >> 17) & 0xF}" if name in ("TEX", "TXP", "TXB", "TXL", "TXD") else ""
         slot = (pos - start) // 16

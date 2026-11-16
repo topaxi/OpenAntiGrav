@@ -300,10 +300,11 @@ sets. Use `data/cache/`, never `/tmp`.
   rubric reserves 95+ for a runtime trace, so what closes this is a breakpoint
   in PCSX2 catching the rate as it is programmed. The second-binary half of that
   requirement is already met by the PSP disc.
-- **The clip names.** Hash-keyed like every other archive here, and unmined. The
-  executable's `Data\Sound\PreRaceDialogue\%d_Track.at3` is the PSP-side
-  equivalent path and may be the way in. The bijection above means one mined
-  name resolves two entries.
+- **The clip names.** Mined on the PSP side (2026-11-02): the 32 streams are
+  `Data\Sound\PreRaceDialogue\1_Track.at3` to `32_Track.at3` (unpadded; the circuit's
+  `PI_Track` id `03_Track` plays `3_Track`), every name hashing to one of the 32 entries
+  ([race-intro.md](../ghidra/functions/psp-pulse-usa/race-intro.md#the-music-the-two-counter-calls-and-the-exit-stop-read-2026-11-02-lane-pulse-flyby-music)).
+  The bijection above carries each name to its PS2 entry.
 - **What `Data.wad` 899-930 are.** 32 entries, 16 distinct clips stored twice,
   2.3-3.2 s each at half the bitrate of the pre-race set. Short enough to be
   stingers or per-pilot barks rather than dialogue, and they have no PS2

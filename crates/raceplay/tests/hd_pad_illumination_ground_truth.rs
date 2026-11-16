@@ -12,7 +12,7 @@
 //!
 //! # What this pins that PSP's own pad test does not
 //!
-//! `crates/game/tests/race_ground_truth.rs::the_weapon_pads_are_drawn_where_they_trigger`
+//! `crates/game/tests/race_weapons_ground_truth.rs::the_weapon_pads_are_drawn_where_they_trigger`
 //! already checks a PSP track's pad geometry against its trigger volumes. HD
 //! needed a second pass entirely - `mesh::rcs::build_pads`/`build_weapon_pads`
 //! read a `.rcsmodel` chunk through a node-ordered walk that has nothing in
@@ -63,7 +63,7 @@ fn load_track(track: Option<&str>) -> Option<race::Loaded> {
 /// units of slack because a pad's mesh is a flat plate and its volume is a
 /// box around the craft that crosses it, so the two are the same *place*
 /// rather than the same extent - the same check and the same tolerance
-/// `race_ground_truth.rs::the_weapon_pads_are_drawn_where_they_trigger` uses
+/// `race_weapons_ground_truth.rs::the_weapon_pads_are_drawn_where_they_trigger` uses
 /// for PSP.
 fn assert_pads_drawn_where_they_trigger(
     label: &str,

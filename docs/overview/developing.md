@@ -22,7 +22,7 @@ of the working rules (written for an AI agent, readable by anyone).
 
 ### Required
 
-- **Rust**, the version pinned in `rust-toolchain.toml` (1.99.0). Install
+- **Rust**, the version pinned in `rust-toolchain.toml` (1.100.0). Install
   [rustup](https://rustup.rs) and it fetches that version on the first build.
   The oldest compiler the code is promised to build on is 1.97.1 (`ci.yml`'s
   `msrv` job).

@@ -294,11 +294,60 @@ fn a_linear_single_channel_texture_reads_rows_in_order() {
     }
 }
 
+/// A cube's faces start on 128-byte boundaries, not where the previous face's
+/// mip chain ends (`docs/formats/gtf.md`, "Each face starts on a 128-byte
+/// boundary"). 8x8 `DXT1` with four levels is 32 + 8 + 8 + 8 = 56 bytes a face,
+/// so 72 bytes of padding follow each of the first five: 696 bytes, which the
+/// old unaligned reading also accepted as `6 * 56 + 360`.
+#[test]
+fn a_mip_chained_cubemap_reads_each_face_from_its_aligned_start() {
+    const FACE: usize = 56;
+    const STRIDE: usize = 128;
+    // One solid `R5G6B5` colour per face: both endpoints alike, every selector 0.
+    let colours: [u16; 6] = [0xf800, 0x07e0, 0x001f, 0xffe0, 0xf81f, 0x07ff];
+    let mut texels = vec![0xaau8; STRIDE * 5 + FACE];
+    for (face, colour) in colours.iter().enumerate() {
+        let [lo, hi] = colour.to_le_bytes();
+        let block = [lo, hi, lo, hi, 0, 0, 0, 0];
+        for at in (0..FACE).step_by(8) {
+            texels[face * STRIDE + at..face * STRIDE + at + 8].copy_from_slice(&block);
+        }
+    }
+    let mut d = descriptor(0x86, 8, 8, texels.len() as u32);
+    d[13] = 4;
+    d[15] = 1;
+    let data = blob(&d, &texels);
+    let gtf = Gtf::parse(&data).expect("parses");
+    let texture = gtf.only().expect("one");
+    assert_eq!(texture.face_stride(), STRIDE);
+    assert_eq!(texture.chain_len(), 696);
+    let expand = |c: u16| {
+        let (r, g, b) = (c >> 11, (c >> 5) & 0x3f, c & 0x1f);
+        [
+            ((r << 3) | (r >> 2)) as u8,
+            ((g << 2) | (g >> 4)) as u8,
+            ((b << 3) | (b >> 2)) as u8,
+            255,
+        ]
+    };
+    for (face, colour) in colours.iter().enumerate() {
+        let rgba = texture.face_to_rgba(&data, face).expect("decodes");
+        assert_eq!(rgba.len(), 64);
+        assert!(
+            rgba.iter().all(|&texel| texel == expand(*colour)),
+            "face {face} read {:?}, not its own colour {:?}",
+            rgba[0],
+            expand(*colour)
+        );
+    }
+}
+
 #[test]
 fn a_cubemap_parses_and_is_not_decoded() {
-    let mut d = descriptor(0x86, 4, 4, 48);
+    // An 8-byte face still starts on the next 128-byte boundary: 5 * 128 + 8.
+    let mut d = descriptor(0x86, 4, 4, 648);
     d[15] = 1;
-    let data = blob(&d, &[0u8; 48]);
+    let data = blob(&d, &[0u8; 648]);
     let gtf = Gtf::parse(&data).expect("parses");
     let texture = gtf.only().expect("one");
     assert!(texture.cubemap);

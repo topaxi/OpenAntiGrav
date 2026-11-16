@@ -30,6 +30,7 @@ fn sheet() -> Sheet {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         },
     )])
 }
@@ -42,6 +43,7 @@ fn fill_at(kmh: f32) -> Option<([f32; 4], [f32; 4], [f32; 4])> {
     let sheet = sheet();
     let cx = Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,
@@ -120,6 +122,7 @@ fn thrust_at(percent: f32) -> (Option<f32>, Option<String>) {
     let sheet = sheet();
     let cx = Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,

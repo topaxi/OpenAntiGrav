@@ -70,6 +70,7 @@ fn model_with_nodes(nodes: &[u32]) -> Model {
             glow: 0.0,
             texcoord2: [0.0, 0.0],
             tangent: 0,
+            depth_bias: 0.0,
         }));
         model.indices.extend(start..start + 3);
         model.draws.push(DrawCall {

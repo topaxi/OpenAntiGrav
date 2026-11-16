@@ -23,9 +23,13 @@
 //!
 //! What is **not** the disc's, stated rather than hidden:
 //!
-//! - **The vignette and the screen tint are left out.** The composite's
-//!   `vignetteTint` and the mesh it is drawn as, and the tint's source, are
-//!   unread, so `v = 1` and the tint is 0.
+//! - **The vignette is the original's** (`law::vignette`): the composite is drawn as the
+//!   mesh `PostFx_RenderChain` builds, a fan and a ring round clip-space `(0, -0.885)`
+//!   whose `pos.w` runs 0 to 1, and `v = 1 - (vignetteTint * w)^2`. The original turns it
+//!   off while a photo capture job runs (`FUN_81021ef6`, read at confidence 60); ours does not,
+//!   and its photo mode's shot draws through this chain with the vignette on. **The screen tint is left out**: its
+//!   source is unread, so it is 0. A split view draws its own vignette over its own
+//!   rectangle (chosen, not measured: the original has no split screen).
 //! - **`alphaTex` reads as empty**: the original composites a second texture
 //!   over the scene (`c = alpha.rgb + (1 - alpha.a) * main`); this renderer
 //!   draws everything into the scene, so `c = main`.
@@ -46,6 +50,9 @@ pub use law::{Exposure, Params, RESET_EXPOSURE};
 use anyhow::Result;
 
 use oag_gpu::formats::SCENE_FORMAT;
+
+use crate::pass::{self, Target, draw, draw_mesh};
+use crate::seat_lanes::SeatLanes;
 
 /// The quarter-resolution targets' format: the display surface's, which
 /// `PostFx_CreateTargets` reads with `sceGxmColorSurfaceGetFormat` - the Vita
@@ -122,6 +129,9 @@ fn quarter_of(size: (u32, u32)) -> (u32, u32) {
     ((size.0 >> 2).max(1), (size.1 >> 2).max(1))
 }
 
+/// The vignette mesh's vertex count: [`law::VIGNETTE_SECTORS`] sectors of nine.
+const VIGNETTE_VERTICES: u32 = 9 * law::VIGNETTE_SECTORS;
+
 /// `State` in the shader.
 const STATE_SIZE: u64 = 16;
 
@@ -190,43 +200,6 @@ impl Seat {
     }
 }
 
-/// One colour texture and its view.
-#[derive(Debug)]
-struct Target {
-    #[expect(dead_code, reason = "held so the view stays valid")]
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
-}
-
-impl Target {
-    fn new(
-        device: &wgpu::Device,
-        label: &str,
-        format: wgpu::TextureFormat,
-        (width, height): (u32, u32),
-    ) -> Self {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(label),
-            size: wgpu::Extent3d {
-                width: width.max(1),
-                height: height.max(1),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format,
-            // `COPY_DST` so a test can lay known pixels into the scene.
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        Self { texture, view }
-    }
-}
-
 /// The scene-sized half: the float target, the three quarter targets and the
 /// groups that read each.
 #[derive(Debug)]
@@ -262,9 +235,7 @@ pub struct Chain {
     /// The window's own picture's exposure.
     window: Seat,
     /// Each split seat's, built when a split first draws it ([`Chain::run_view`]).
-    seats: std::cell::RefCell<Vec<Option<Seat>>>,
-    /// How many seats' exposures have been built, for [`Chain::seat_lane_builds`].
-    seat_builds: std::cell::Cell<u64>,
+    seats: SeatLanes<Seat>,
     state_rw: wgpu::BindGroupLayout,
     state_ro: wgpu::BindGroupLayout,
     sized: Sized,
@@ -371,31 +342,14 @@ impl Chain {
                       entry: &str,
                       layout: &wgpu::PipelineLayout,
                       format: wgpu::TextureFormat| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[],
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some(entry),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend: None,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                    compilation_options: Default::default(),
-                }),
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview_mask: None,
-                cache: None,
-            })
+            pass::fullscreen_pipeline(
+                device,
+                &shader,
+                layout,
+                label,
+                entry,
+                pass::replacing(format),
+            )
         };
         let compute = |label: &str, entry: &str| {
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -418,11 +372,14 @@ impl Chain {
         // The composite's square root is the encode, written as numbers, so it
         // targets the caller's format without the sRGB suffix - the same as
         // `hd_bloom`'s encode and `omega_tonemap`'s apply.
-        let composite = render(
-            "wo composite",
-            "fs_composite",
+        let composite = pass::mesh_pipeline(
+            device,
+            &shader,
             &composed,
-            surface_format.remove_srgb_suffix(),
+            "wo composite",
+            "vs_vignette",
+            "fs_composite",
+            pass::replacing(surface_format.remove_srgb_suffix()),
         );
         let adapt = compute("wo composite adapt", "cs_adapt");
         let prime = compute("wo composite prime", "cs_prime");
@@ -447,8 +404,7 @@ impl Chain {
             sampler,
             uniform,
             window,
-            seats: std::cell::RefCell::new(Vec::new()),
-            seat_builds: std::cell::Cell::new(0),
+            seats: SeatLanes::default(),
             state_rw,
             state_ro,
             sized,
@@ -521,6 +477,12 @@ impl Chain {
         &self.sized.scene.view
     }
 
+    /// The scene target's texture, for a test that writes pixels into it.
+    #[cfg(test)]
+    fn scene_texture(&self) -> &wgpu::Texture {
+        &self.sized.scene.texture
+    }
+
     /// The window's exposure state buffer, for a test that reads it back.
     #[cfg(test)]
     fn window_state(&self) -> &wgpu::Buffer {
@@ -545,7 +507,7 @@ impl Chain {
     /// `viewport` - the rectangle the race pass drew - and steps the exposure.
     pub fn run(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         origin: (f32, f32),
@@ -565,7 +527,7 @@ impl Chain {
     /// lands at `placement.1` of `view`, exposed by `seat`.
     fn run_placed(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         seat: &Seat,
@@ -629,7 +591,7 @@ impl Chain {
             (0.0, 0.0),
             quarter,
         );
-        draw(
+        draw_mesh(
             encoder,
             "wo composite",
             &self.composite,
@@ -637,6 +599,7 @@ impl Chain {
             view,
             origin,
             placement.viewport,
+            VIGNETTE_VERTICES,
         );
         if adapting {
             self.step(encoder, &self.adapt, seat);
@@ -654,67 +617,41 @@ impl Chain {
             label: Some("wo composite step"),
             timestamp_writes: None,
         });
+        oag_gpu::perfprobe::marks::mark_compute(&mut pass, "wo composite step");
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, &self.sized.gated_group, &[]);
         pass.set_bind_group(1, &seat.step, &[]);
         pass.dispatch_workgroups(1, 1, 1);
+        oag_gpu::perfprobe::marks::close_compute(&mut pass);
     }
 
     /// Runs the chain over one view of a split: the view's own exposure (the seat's), the
     /// composite over the view's rectangle and nothing outside it. **Call it once per view
-    /// with its own encoder and submit each before the next**: the constants are written
+    /// with its own encoder, its writes landing ahead of it**: the constants are written
     /// with the queue, which lands before the submission that follows. **The per-seat
     /// exposure is this project's, chosen, not measured**: the original has no split screen.
     pub fn run_view(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         run: View,
     ) {
         let seat = run.seat.min(MAX_SEATS - 1);
-        {
-            let mut seats = self.seats.borrow_mut();
-            if seats.len() <= seat {
-                seats.resize_with(seat + 1, || None);
-            }
-            if seats[seat].is_none() {
-                seats[seat] = Some(Seat::new(
-                    device,
-                    &self.state_rw,
-                    &self.state_ro,
-                    self.params.exposure,
-                ));
-                self.seat_builds.set(self.seat_builds.get() + 1);
-            }
-        }
-        let seats = self.seats.borrow();
+        let lane = self.seats.get_or_build(seat, || {
+            Seat::new(device, &self.state_rw, &self.state_ro, self.params.exposure)
+        });
         let (x, y, w, h) = run.rect;
         if run.first {
             // A pass that clears and draws nothing: the composite loads.
-            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("wo composite clear"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            pass::clear(encoder, "wo composite clear", view);
         }
         self.run_placed(
             queue,
             encoder,
             view,
-            seats[seat].as_ref().expect("built above"),
+            &lane,
             ((x, y), (x as f32, y as f32)),
             (w, h),
         );
@@ -723,61 +660,25 @@ impl Chain {
     /// How many seats hold an exposure of their own right now.
     #[must_use]
     pub fn seat_lanes(&self) -> usize {
-        self.seats.borrow().iter().flatten().count()
+        self.seats.built()
     }
 
     /// Forgets every seat's exposure, for the first whole-picture frame after a split.
     pub fn retire_seats(&self) {
-        self.seats.borrow_mut().clear();
+        self.seats.clear();
     }
 
     /// Forgets one seat's exposure, for a seat that was not drawn as a split view last frame.
     pub fn retire_seat(&self, seat: usize) {
-        if let Some(lane) = self.seats.borrow_mut().get_mut(seat.min(MAX_SEATS - 1)) {
-            lane.take();
-        }
+        self.seats.retire(seat.min(MAX_SEATS - 1));
     }
 
     /// How many seat lanes have been built so far, a lane forgotten and built again counting
     /// twice (`hd_bloom::Chain::seat_lane_builds`).
     #[must_use]
     pub fn seat_lane_builds(&self) -> u64 {
-        self.seat_builds.get()
+        self.seats.builds()
     }
-}
-
-/// One full-screen pass with no blending, loading what is there.
-fn draw(
-    encoder: &mut wgpu::CommandEncoder,
-    label: &str,
-    pipeline: &wgpu::RenderPipeline,
-    groups: &[&wgpu::BindGroup],
-    target: &wgpu::TextureView,
-    origin: (f32, f32),
-    rect: (u32, u32),
-) {
-    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: Some(label),
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: target,
-            depth_slice: None,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Load,
-                store: wgpu::StoreOp::Store,
-            },
-        })],
-        depth_stencil_attachment: None,
-        timestamp_writes: None,
-        occlusion_query_set: None,
-        multiview_mask: None,
-    });
-    pass.set_pipeline(pipeline);
-    pass.set_viewport(origin.0, origin.1, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
-    for (index, group) in groups.iter().enumerate() {
-        pass.set_bind_group(index as u32, *group, &[]);
-    }
-    pass.draw(0..3, 0..1);
 }
 
 #[cfg(test)]

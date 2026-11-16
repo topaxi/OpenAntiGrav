@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-10-27
-summary: "HD fidelity queue: bitangent sign wired 2026-10-27 (Omega read, 2048 open), Bomb, weapon taps, Amphiseum scene, scenery clock, exposure"
+updated: 2026-11-15
+summary: "HD fidelity queue: bitangent sign and hull/mine/bomb LOD bias wired (pads open), Bomb, weapon taps, Amphiseum scene, exposure"
 difficulty: medium (35)
 ---
 
@@ -75,10 +75,16 @@ with pink, no rays; nozzle box down 1.5-5.9 grey on 12 of 13 pairs), the trail t
 (`hd-race/talons-pack` whole 46.47 to 46.12) and the Bomb's fireball (yellow where it was near white); the Bomb's
 shockwave ring reads raw on the console too (nibble 0), so its white burn is the console's law. Evidence:
 engine-trail.md, "The flame's colour tap is decoded on fetch" and "The trail's colour taps are decoded on fetch";
-hd-unlit-programs.md, "The Bomb's units, read live". **Still unread**: the Missile blast's three programs, the
-LeachBall and its ring, the Plasma trio, the rocket smoke, the absorb shell, the light cone. Method: one
-`rsx-draw-list.py --samplers` of a frame that draws them (the stored dumps under `data/reference/hd-flame-tap/` hold
-none of these), read unit 0's nibble, decode in `shade.wesl` on `encoded_out` only.
+hd-unlit-programs.md, "The Bomb's units, read live". **Read 2026-11-14 (`hd-weapon-taps`, hd-unlit-programs.md, "The weapon units, read live")**: the Missile
+blast's core and rays 7 (wired), its shockwave ring 0; the LeachBall and its ring 7 (ball wired, ring on the
+authored path, decodes already); the Plasma head 7 (wired), sphere 7, halo 7, ring 0; the Rocket smoke 7 on both
+taps (wired; reverses `rocket-trail.md`'s WCB-off film note); the track light cone was read live before and is
+decoded. **Still open**: ~~the Plasma ring reads raw but ours lights it through the authored path~~ **closed
+2026-11-15** (the ring, halo and sphere run their own programs, hd-unlit-programs.md); the sphere's probe read on its
+own draw; the
+absorb shell's landing; Omega's and 2048's sampler state (their programs are recooked GCN / Vita; "checked,
+applies, not wired" for the models they ship). Tools: `rpcs3-hd-whiteout.py --fire-state N
+--behind --want-mats DIR`, `rsx_fp_match.py` (attribute a dumped draw to the disc program it runs).
 
 **Fragment-stage texture budget** (2026-10-22, `hd-texture-slots`): the per-slot mesh fragment stage is at 16 sampled
 textures (group 1's six, group 2's ten) after the Zone Inner/Outer fold, which is WebGPU's and GL's ceiling. A seventh material
@@ -113,6 +119,9 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
   of it: the 0.5-level gap against the RPCS3 fit (-0.75 matched, the filter word says -1.5; RPCS3's LOD computation or our
   `textureSampleBias` with derivative scaling), the warm light pool on the Vineta K kerb, and the Tech de Ra glass grid (missing content,
   not blur). Open: a bias on the glass sheen's grid tap alone. Anisotropy: the original asks for none, the default is 16x.
+  **2026-11-09 (`hd-material-lod-bias-reach`): the word is also on the hull, mine and bomb units and now wired there; the pads read it by inference only**
+  (`docs/rendering/hd-track-tone.md`, "The LOD bias on hulls, pads and weapons"). Open: the pads (a frame with one on screen), the rocket, cannon, plasma, leach ball, wreck and
+  the shield/absorb overlays were not read; Omega's and 2048's sampler-state word (`+0x20`) is the next step for their rule.
 - **Glass road mid and far brightness** (Tech de Ra, Talon's): the original's pixel implies the facing
   ramp read at `u` about 0.36-0.5 where ours reads 0.10-0.20. Next: dump draw 354's vertex constant
   `c[209]` (`eyePositionWorldSpace`, `0x3466fc0e`) at the cold pair's tick against our view eye, then

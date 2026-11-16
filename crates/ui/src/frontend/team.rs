@@ -76,7 +76,7 @@
 //! `crate::main::session::frame`'s own comment for why that is the one
 //! place both can land before the menus first read either. From there the
 //! existing [`oag_title::RaceDefaults::team_variants_for`]/`combine_variant`
-//! machinery `Session::launch_race` and the RACE/REMIX pages already use
+//! machinery `Session::launch_race` and the RACE page and a mod's race page already use
 //! settles it into a real `race::Options::team`, unchanged by this module.
 //! The skin list is not drawn and reaches nothing: `teamskin_touch`'s three
 //! values (`1`/`2`/`3`) do not obviously map onto `race::Options::skin`'s
@@ -267,9 +267,16 @@ impl Frontend {
                 NATIVE_TEAMS[team], SHIP_TYPES[craft]
             ));
         }
-        if input.is_pressed(Button::Circle) {
-            input.consume_press(Button::Circle);
-            self.redirect_touch(w2048::TEAM, "select_button", "PreviousScreen");
+        // Cross and Start press the confirm tick, which the file authors as
+        // `PreviousScreen` like Circle; chosen, the original's tick is touch only.
+        for button in [Button::Circle, Button::Cross, Button::Start] {
+            if input.is_pressed(button) {
+                input.consume_press(Button::Circle);
+                input.consume_press(Button::Cross);
+                input.consume_press(Button::Start);
+                self.redirect_touch(w2048::TEAM, "select_button", "PreviousScreen");
+                break;
+            }
         }
     }
 

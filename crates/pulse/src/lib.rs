@@ -25,6 +25,7 @@ pub mod hud;
 pub mod loading;
 pub mod main_menu;
 pub mod movies;
+pub mod pause_menu;
 pub mod pre_race;
 pub mod prompts;
 pub mod race;
@@ -51,6 +52,11 @@ pub const TITLE: &Title = &Title {
     front_end: Some(FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
+    eliminator: oag_title::pre_race::Sourced::measured(
+        oag_title::eliminator::EliminatorRule::Kills,
+    ),
+    // No flip in this executable: no `FE_FLIP`, no flip tunable, no `5 pi`.
+    eliminator_flip: oag_title::pre_race::Sourced::measured(None),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Pulse,
@@ -66,11 +72,35 @@ pub const TITLE: &Title = &Title {
     // The flare's own texture, a second literal in the same executable -
     // `Texture_LoadEngineFlare` at `0x08a84c80`. Note the directory case
     // differs from the noise map's; the WAD hash is case-insensitive.
+    wingtip: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     // Measured: the six stand-in codepoints and the glyph each draws, read off
     // `pulse_text.fnt`, `Pulse_14.fnt` and `Pulse_20.fnt` - see `prompts`.
     prompts: prompts::PROMPTS,
+    profile: oag_title::profile::Profile::NAME_AND_TAG,
+    photo: oag_title::photo::Strings::PULSE,
+    photo_shot: None,
+    // The reset state `FUN_088418e0` enters (`docs/gameplay/leaving-the-track.md`).
+    reset_enables: oag_title::recovery::ResetEnables::PULSE,
+    contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
+    // `FUN_089957c0` multiplies a voice by its group volume squared; the flyby's fade reads `fade ** 2`
+    // (`docs/gameplay/race-intro.md`, "What the original plays under the flyby").
+    effects_volume_law: oag_title::pre_race::Sourced::measured(
+        oag_title::group_volume::GroupVolumeLaw::Squared,
+    ),
+    // The SPEECH bank's voices are group 2, committed by the same helper
+    // (`docs/gameplay/race-intro.md`, "The Speech group").
+    speech_volume_law: oag_title::pre_race::Sourced::measured(
+        oag_title::group_volume::GroupVolumeLaw::Squared,
+    ),
+    // Group 2 takes the SFX fraction and the flyby fade (`docs/gameplay/race-intro.md`, "The Speech group").
+    speech_follows_effects: oag_title::pre_race::Sourced::measured(true),
+    // Pulse's cues sum to about twice full scale in a busy race (the original clamps). A fixed trim
+    // brings the integrated loudness near HD's so the limiter works on far fewer frames
+    // (`docs/ghidra/functions/psp-pulse-usa/audio-levels.md`, "Master trim").
+    master_trim_db: oag_title::pre_race::Sourced::chosen(-6.0),
+    rear_occlusion: None,
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),
@@ -84,6 +114,10 @@ pub const TITLE: &Title = &Title {
         // lens); Outpost 7's is snow.
         rain_circuit: Some(r"Data\Environments\14_Track\track.vex"),
     },
+    // PSP: no motors; the PS2 level-and-timer law is documented and not played (`docs/gameplay/rumble.md`).
+    rumble: oag_title::rumble::Rumble::Absent,
+    // The 60 s idle test and the 120 s timeout are read off the executable; `docs/ui/attract-demo.md`.
+    demo: oag_title::demo::Demo::PULSE,
     // The two tables Pulse picks between by race mode. `DAT_08b32428` is what
     // selects the file - measured `0` in a single race and `1` in Eliminator,
     // at Venom both times, so it is the *file* and not the speed class. See
@@ -93,6 +127,11 @@ pub const TITLE: &Title = &Title {
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        blast_push: oag_title::pre_race::Sourced::measured(oag_title::weapons::BlastPush::Posted),
+        // **Chosen, not measured** (maintainer, 2026-10-31: eight everywhere). Pulse measures one
+        // (`Weapon_FireLeachBeam`'s `pool->live != 0`, `cannon-quake-leachbeam.md`); it takes the
+        // later titles' pool of eight as an intended divergence.
+        leach_beams: oag_title::pre_race::Sourced::chosen(8),
         // Measured on PPSSPP: `cannon-quake-leachbeam.md`, "2026-10-26: what a Quake does to the craft it reaches".
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::Measured,
@@ -102,6 +141,19 @@ pub const TITLE: &Title = &Title {
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::measured(true),
         // Read statically, confidence 80: the grant request sits behind `craft+0x1b8 & 0x800`.
         autopilot_pad_grants: oag_title::pre_race::Sourced::measured(false),
+        // Run on PPSSPP: the stamp store takes `elimination_refresh_time` in game mode 8.
+        pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(true),
+        launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
+        floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::measured(true),
+        // Measured: `docs/ghidra/functions/psp-pulse-usa/plasma.md`, the first records at 0.75.
+        plasma_release_at_display_scale: oag_title::pre_race::Sourced::measured(true),
+        // Measured on PPSSPP: 2,302 probes of 56 captures, 0 mispredicted (`rocket-visuals.md`).
+        own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::OwnCraftBox::Falls,
+        ),
+        opponent_fire: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::OpponentFire::PULSE,
+        ),
     },
     weapon_models: race::WEAPON_MODELS,
     effects: effects::EFFECTS,
@@ -110,6 +162,7 @@ pub const TITLE: &Title = &Title {
     // `docs/formats/race-campaign.md`'s `<Unlock Grid>` rows and
     // `docs/formats/race-setup.md`'s `Loyalty` unlock.
     main_menu: main_menu::MAIN_MENU,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: Some(campaign::DEFINITION_ENTRY),
@@ -119,15 +172,21 @@ pub const TITLE: &Title = &Title {
         main_row: None,
         circuit_unlocks: true,
         loyalty_unlocks: true,
+        model_unlocks: None,
         unlocks_origin: oag_title::Origin::Measured,
         selection_strings: false,
         screen_archive: None,
         grid_archive: None,
         fury_card_gain: None,
         grid_card_pose: None,
+        selection_card_scale: None,
+        medal_tier_rows: None,
+        // `Cell_EvaluateMedal` (`0x088bf620`) compares these modes with `>=`: a kill count is a target to reach.
+        counting_modes: &["Zone", "Elimination"],
         frontend_glow: Some(oag_title::Origin::Measured),
         origin: oag_title::Origin::Measured,
         custom_campaigns: true,
+        event_track_dir: None,
     },
     pressings: None,
     pre_race: Some(&pre_race::PRE_RACE),
@@ -154,9 +213,10 @@ pub const TITLE: &Title = &Title {
         // advert passes share the gantry's 128 x 128 target and every prim of every run has
         // `LIGHTINGENABLE` 0, as the gantry's own pass does.
         adverts_unlit: true,
-        card_565: false,
+        card_store: oag_title::adverts::CardStore::R5G6B5Gamma,
         card_unlit: true,
-        zone_gantry: None,
+        gantry_boards: None,
+        mode_gantries: &[],
         origin: oag_title::Origin::Measured,
     }),
 };
@@ -183,6 +243,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
     // (`docs/ghidra/functions/psp-pulse-usa/now-playing.md`, "When the song starts"). Read on the
     // PSP; the PS2 pressing is the same title data and carries the PSP's rule, its executable's
     // music player unread (as `particle_laws` carries the PSP's law).
+    spectrum_extension: None,
     race_song_start: oag_title::pre_race::Sourced::measured(
         oag_title::race_song::RaceSongStart::AtGo,
     ),
@@ -235,6 +296,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // picture this build already draws.
     menu_frame: Some(frontend::states::FE_SCREEN),
     bottom_up_gnf: &[],
+    runtime_palette_faces: false,
     race_box: Some(names::RACE_BOX_DEFINITION),
     team_select: None,
     track_select: None,
@@ -242,6 +304,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `TrackSelection_ApplySelection` hands `MSC_DISTANCE` to `Info1 Title` through
     // `0x088ede50` (`0x088cd0f4` sets the label); the XML's `IG_HUD_DISTANCE` is never shown.
     track_label_overrides: &[("Info1 Title", "MSC_DISTANCE")],
+    card_track_aliases: &[],
     // The literal at `0x08a84914`, drawn by `0x088edd60` for an unset record.
     track_record_empty: "-.--.--",
     // `<Physical Length>` of the circuit's `stats.xml`, printed `%d` (`0x088ede50`).
@@ -251,6 +314,8 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     preview_meshes: true,
     ship_preview_hull: None,
     ship_preview_pose: None,
+    ship_preview_fit: None,
+    ship_preview_settle: None,
     circuit_models: &[],
     // `Data\Plugins\PI001\GUI\EndRace_Definition.xml` - `oag_game::endrace`'s
     // own long-standing constant, restated here now that a second title
@@ -260,6 +325,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         oag_title::EndRaceDialect::Pulse,
     )),
     borrows_ps2_split_screens: true,
+    model_lighting: None,
 };
 
 /// The bulk archive's candidates, in the order they are tried.

@@ -1,7 +1,8 @@
 //! Engine, brakes, steering and pitch: the control force law.
 //!
 //! Transcribed from `docs/ghidra/functions/psp-pulse-usa/engine.md`, which read them out
-//! of `BOOT.BIN`. The page caps itself at 84 because nothing here is runtime-verified.
+//! of `BOOT.BIN`. Each term carries the confidence its own doc gives; several are
+//! runtime-measured.
 //!
 //! Not what a reimplementation would guess:
 //!

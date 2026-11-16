@@ -122,3 +122,32 @@ fn sample_at_slope_level(uv: vec2<f32>, lod: f32) -> vec4<f32> {
     let new_y = select(long_axis, short_axis, x_is_long) / size;
     return textureSampleGrad(albedo, albedo_sampler, uv, new_x, new_y);
 }
+
+// `material_sample` with explicit gradients: Omega's panel-map road samples its diffuse, normal and
+// emissive at the marched coordinate with the *unshifted* coordinate's derivatives
+// (`docs/ghidra/functions/ps4-omega-eu/panel-displacement.md`, `image_sample_cd`), so the level
+// does not jump at a channel's wall. [`material_lod_bias`] is not applied: no HD draw takes it.
+fn material_sample_grad(picture: u32, uv: vec2<f32>, ddx: vec2<f32>, ddy: vec2<f32>) -> vec4<f32> {
+    @if(bindless) {
+        let albedo = textures[material.albedo];
+        let albedo_sampler = samplers[material.albedo_sampler];
+        let pad_mask = textures[material.pad_mask];
+        let wave_map = textures[material.wave_map];
+        let fifth_map = textures[material.fifth_map];
+        let sixth_map = textures[material.sixth_map];
+    }
+    switch picture {
+        case 2u: { return textureSampleGrad(pad_mask, albedo_sampler, uv, ddx, ddy); }
+        case 3u: { return textureSampleGrad(wave_map, albedo_sampler, uv, ddx, ddy); }
+        case 4u: { return textureSampleGrad(fifth_map, albedo_sampler, uv, ddx, ddy); }
+        case 5u: { return textureSampleGrad(sixth_map, albedo_sampler, uv, ddx, ddy); }
+        default: { return textureSampleGrad(albedo, albedo_sampler, uv, ddx, ddy); }
+    }
+}
+
+// The screen derivatives of `uv`, `(dpdx, dpdy)`. Its derivative-uniformity diagnostic is off for
+// the reason `sample_at_slope_level`'s is.
+@diagnostic(off, derivative_uniformity)
+fn uv_gradients(uv: vec2<f32>) -> mat2x2<f32> {
+    return mat2x2<f32>(dpdx(uv), dpdy(uv));
+}

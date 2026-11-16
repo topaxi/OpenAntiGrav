@@ -167,7 +167,8 @@ lists `track_a_floor_panel_df` (`0x4736b3bf`, a 1024x256 single-channel `R16F` p
 map the decoder refuses) first, and Altima's whole road drew untextured. Omega: **ported**
 (altima unresolved draws 690 to 449). 2048's Vita road is
 `fc16_phong_alphaspec_normal_emissive` with `track_a_floor_ds` as `DiffuseMap`: **checked,
-differs**, unchanged. The R16F map's own use (a panel layout the shader reads) is unread.
+differs**, unchanged. The R16F map is a signed distance field the pixel program ray-marches (read 2026-11-16,
+[panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md)).
 
 ## What scrolls, and what is acted on
 
@@ -253,7 +254,7 @@ Anulpha Pass 18 (2048) and 11 (Omega), Ubermall 10 and 11, Amphiseum 6 and 15,
 Modesto Heights 4 and 7, Tech de Ra 3 and 5, Moa Therma 3 and 7-9, Vineta K 2
 and 6, Sol 2 1 and 1, Chenghou 0 and 2; **0 on every 2048 circuit of its own** (and Altima's frames are byte-identical on main and this branch, on 2048 and on Omega),
 which is the guard that nothing switched on beyond the families checked.
-`crates/render/tests/psp2_glow_ground_truth.rs` pins Anulpha Pass on both titles.
+`crates/mesh/tests/psp2_glow_ground_truth.rs` pins Anulpha Pass on both titles.
 
 **Checked, differs:** 2048's `mr_uvanim_em_*`, `cf_chenghou_sign*`, `nr_twinblend`
 and the like declare `time` and author no HD rate hash, so their constants are
@@ -276,7 +277,7 @@ Both flipbook and `TimeScaler`-alone need a decoded instruction stream, which
 reach Omega through the same plan; Omega's `scrollingalpha` `V_Offset` is on no
 circuit material (weapons and muzzle flash only), as on HD.
 
-`crates/render/tests/psp2_glow_ground_truth.rs` holds what the build does with
+`crates/mesh/tests/psp2_glow_ground_truth.rs` holds what the build does with
 `arena`'s three glow layers (rates `0.05`, `1.0`, `3.0`) and two plain scrolls
 (`0.3`), and `altima`'s twelve plain scrolls.
 
@@ -339,3 +340,180 @@ compare.
   0.001)`, referenced by no Omega code) has the shape of this triple, a hypothesis below 50 and not applied.
   No term was scaled on a guess, so Tower is unchanged.
 - **Fragment-program blend in the executable:** [fragment-programs.md](../ghidra/functions/vita-2048-eu-v104/fragment-programs.md).
+
+## Vertex-lit and lightmapped combines (2026-10-31, `2048-track-lighting`)
+
+**Method.** Vita3K caches the SPIR-V it translates each program to under the SHA-256 of the GXP
+container (`~/.cache/Vita3K/shaders/<title>/eboot.bin/vk13-<sha>.spv`), so hashing every container
+`scripts/vita-gxp.py` finds (`patch-v104/eboot.elf`, `data.psarc`, `dlc1.psarc`, `data1.psarc`)
+names the translation of a program a race actually ran: 940 of 984 cached programs matched. The
+SPIR-V was walked symbolically over its half-register files (the same walker as the exposure read,
+with `FMax`'s second argument kept). Vita3K is a behaviour oracle only; the formulas below are
+written by hand. Conf. in brackets.
+
+**The lightmapped family** (every program that declares `lightmap`: 123 of 473 cached fragment
+programs; all take `novaScaleBiasPower`, `liveLighting0diffuse`, `liveLighting0direction`,
+`fogColour`, and **none declares `constantAmbientColour`**) [90]. For `fc06_lambert_simple` +
+`DiffuseMap` + `lightmap` (sha `efaebb76...`):
+
+```text
+N      = normalize(interpolated normal)
+L      = lightmap texel (rgba, raw, no decode)
+prelit = L.rgb * scale + bias + sunDiffuse * max(0, N . liveLighting0direction) * L.a
+rgb    = mix(fogColour, prelit * D*D, fogVisibility)        D = DiffuseMap texel
+```
+
+`(scale, bias)` are the first two lanes of `novaScaleBiasPower`; **the third lane (power) is read by
+no instruction**, unlike Omega's, whose GCN applies `pow(lightmap, power)`
+([lightmap-prelit.md](../ghidra/functions/ps4-omega-eu/lightmap-prelit.md)). So the combine is
+Omega's law with the power fixed at 1: *ported*, with the Omega-only power left out. The lightmap's
+alpha is the sun mask, as on HD and Omega.
+
+**The vertex-lit family** (a submesh whose vertex declaration carries `NOVAColor`, no lightmap; the
+variants `fc06_lambert_simple` `45dd7539...` and its vertex program `e0625aba...`) [88]. The vertex
+program writes `rgb = NOVAColor.rgb * scale + bias` and `a = NOVAColor.a` as varyings (no power, no
+log/exp), and the fragment program computes `(sunDiffuse * max(0, N . dir) * a + rgb) * D*D`,
+fogged. No constant ambient either. The attribute name is proved: `~crc32("NOVAColor") =
+0x1aaf7631`, a four-byte attribute `rcsmodel_decl_ground_truth.rs` had counted as unnamed (type `0x44`,
+four unsigned normalised bytes, at stride offset 0x14 on Vineta K's 24-byte layout).
+
+**The ambient family** (`constantAmbientColour`, no lightmap, no `NOVAColor`; `2a9a18e3...`):
+`(ambient + sunDiffuse * max(0, N . dir)) * D*D`, fogged. This is what ours drew everywhere.
+
+**Two reader bugs this turned up** (both fixed here):
+
+1. `Material::lightmap` was hard-coded `None` on the Vita, so no atlas was ever bound
+   (no `lightmap atlas(es) bound` report line at all on Vineta K, though its floor materials name
+   `nova_mesh_combine_track_N-lmap.gxt`). It is now the sampler table's
+   `LIGHTMAP_SAMPLER` entry: 20 atlases bound on Vineta K.
+2. `SubMesh::lightmap_texcoords` filtered on the PS4's half type (`1`), so no Vita submesh ever
+   yielded a lightmap coordinate; the Vita's half type is `8`. Fixed (`half_type`).
+
+**What changed in the picture** (ours only, three 2048 race pairs at 960x544, `--hold-exposure
+1.15`; boxes `x0,y0,x1,y1`):
+
+| Region | Original | Before | After |
+| --- | --- | --- | --- |
+| Vineta K floor `(0,330,960,544)` | 32/38/43 | 29/28/28 | 24/23/22 |
+| Vineta K right wall `(600,140,960,330)` | 69/55/50 | 56/43/44 | 46/36/33 |
+| Empire Climb road `(150,250,800,544)` | 141/111/88 | 116/99/84 | 111/92/73 |
+| Mall, mean grey distance (lower is nearer) | - | 25.92 | 23.51 |
+| Vineta K, mean grey distance | - | 23.29 | 20.64 |
+| Empire Climb, mean grey distance | - | 32.16 | 25.94 |
+
+The wall's large baked roof shadow now appears (it was absent: the atlas was unbound). The mean
+grey distance to the original fell on all three pairs, the colour targets (floor B-R >= +8, road
+R >= 130) were **not** met: ours is now darker than the original. Left over, none of it read yet:
+the floor's blue panels are an **emissive** layer (`diffuse_normal_specular_emmissive`: `DiffuseMap`,
+`EmissiveMap`, `lightmap`) that ours does not draw on this family; `Lighting.Exposure*`/`BloomFactor`
+act on the composite only; the floor's own normal map and `shadowMap`/`occlusionMap` terms.
+
+**Against Omega:** the lightmapped law is *ported* (shared `with_nova_prelit` path, power held at
+1 for 2048). The vertex-lit `NOVAColor` family is wired for 2048 only (`slots`: `sun_mask >= 2`
+marker in `shade.wesl`); Omega's `NOVAColor` variant stays *checked, applies, not wired* (its
+declaration reader differs, type nibble `11` is the PS4 colour, and the 2048 filter excludes it).
+
+## Anulpha Pass's alpha-lit families (2026-11-14, `anulpha-tone`)
+
+`reversed_diffuse_specular_normal`, `cf_chevron_pulse` and `cf_chevron_pulse_time` (Anulpha Pass
+only) multiply the light by the albedo's **alpha** and tint the specular with its squared RGB
+(`mul.f16 light, pa6.www`; `sa_spec * T.rgb * T.rgb * pow`), HD's `slots::LIT_ALPHA` law, read on
+the USSE and wired with Omega (**ported**; listings, Omega's GCN and the before/after regions in
+[`hd-track-tone.md`](../rendering/hd-track-tone.md#2048-and-omega-2026-11-14-anulpha-tone)). The
+chevron's unlit `max(E^2, Colour * mix(E^2, W^2, E.a))` emissive is drawn with `Colour` held at
+zero (chosen, its live value unread), and the centre lane `cf_centre_plasma_pulse` adds
+`Normal_EmissMask.a * W^2` after its colour-lit light (#16 words 21 and 30).
+
+## The emissive add of the `*_emmissive_alpha` family (2026-10-31, `2048-floor-emissive`)
+
+**The lane's premise was off by one name.** The floor panels of Vineta K are not the
+`diffuse_normal_specular_emmissive` programs with an `EmissiveMap`, and not the lightmapped
+`diffuse_normal_specular` floor (`ds_floorplain_*`, which declares no emissive input at all). They are
+`diffuse_normal_specular_emmissive_alpha` (`ds_wall_cs`, `ds_wall_n`, `ds_wall_a`: 17 + 11 + 10 submeshes
+with a blue `Constant1`), opaque (state 124, mode `Opaque`, no `OpKill` in the program). Method as in the
+section above (Vita3K's cached SPIR-V by container SHA-256, walked symbolically; handles mapped to
+bindings through their `OpLoad %fragTex_*`). Conf. in brackets.
+
+**Isolation, the picture.** A temporary needle on the material name (not kept) hid one family at a time
+on the `dlc-vineta-k` pair frame (960x544, tick 179, exposure held 1.15):
+
+| Hidden | Floor box `(0,330,960,544)` mean | What shows |
+| --- | --- | --- |
+| nothing (main `84ba82deb`) | 24/23/22 | black panels in a grey grid |
+| `diffuse_normal_specular_emmissive*` | - | a large blue-teal surface underneath, where the original draws its blue panels [90] |
+| `fc06_lambert_emmissive*` | unchanged | the floor is not this one |
+| `fc17_phong*`, `diffuse_normal_specular` | 24.7/24.6/23.2, 24.3/25.2/24.9 | no panel change |
+
+So ours draws the panel opaque and black over a blue layer; the original's panel is itself blue.
+
+**The law** (program `f7b139cf...`, `diffuse_normal_specular_emmissive_alpha`, binding order `Texture1`,
+`Texture2`, `Texture2Alpha`, `lightmap`, `occlusionMap`, `shadowMap`) [80]:
+
+```text
+lit  = the lightmapped combine of the section above (L = lightmap, D = Texture1, N from Texture2)
+rgb  = mix(fogColour, spec + Texture2Alpha.rgb^2 * Constant1 + lit * D*D, fogVisibility)
+```
+
+`Texture2Alpha` is `0x21745d36` (`~crc32("Texture2Alpha")`, verified); `Constant1` is `0x7611a2d8`
+(`~crc32("Constant1")`, the same hash the HD pad doc names). The emissive term sits **outside** the
+lightmap product: it is neither lit nor shadowed, so a dark baked panel still glows. `Constant1` is
+`(0.0, 0.7686, 0.9922)` on the 38 blue submeshes (the panel colour) and `0.9912` grey on the `_lh`
+variants. The `lightmap` alpha times `Texture1.a` (gloss) gates the `liveLighting0specular` term,
+unchanged from the section above.
+
+**Its sibling, `fc06_lambert_emmissive_alpha`** (program `d8bd89a9...`, `DiffuseMap` + `lightmap`, uniform
+`Tint`, `0x71c4bbb5`) [80]:
+
+```text
+rgb = mix(fogColour, Tint * D.a + prelit_sun * D*D, fogVisibility)
+```
+
+`D.a` is the glow mask here (no second texture), the add again outside the light. Vineta K authors 23 tints
+such as `1.0 0.858 0.604` (`and_tunnellights`), `0.008 0.807 0.930` (`j_lampost`).
+
+**Wired (2026-10-31, `2048-emissive-wire`), and the floor was the plain family after all.** Painting
+each family's add a solid red on the `dlc-vineta-k` pair frame showed:
+
+- the `*_emmissive_alpha` family (`ds_wall_cs`/`ds_wall_n`/`ds_wall_a`) covers the **side walls** and
+  nothing on the floor; its add (mode 8, `Texture2Alpha.rgb^2 * Constant1`) is wired and draws, but the
+  floor box does not move (24/23/22 -> 24/24/23);
+- the plain `diffuse_normal_specular_emmissive` (13 slots, techs `Track_Surface_New3`...) is exactly the
+  panel shape in the original's floor. Its programs (`a17f5c52...` vertex-lit, `419db654...` lightmapped,
+  `Constant1`, `Texture1`, `Texture2`, the same symbolic walk) add **`Texture2.a * Constant1`**, the
+  normal map's alpha as the mask, **unsquared**, outside the lit terms and under the fog mix [70: the
+  lane order of `Constant1`'s packed halves is read, not tested against a capture; the picture decides it].
+  Mode 9.
+
+| `dlc-vineta-k` (960x544, held exposure 1.15) | Original | Main `b7b08dd80` | Wired |
+| --- | --- | --- | --- |
+| floor `(0,330,960,544)` mean R/G/B | 32/38/43 (B-R +11) | 24/23/22 | 26/31/37 (B-R +11) |
+| right wall `(600,140,960,330)` | 69/55/50 | 46/36/33 | 49/39/36 |
+| mean-grey distance | - | 20.64 | 18.66 |
+| Empire Climb, Queens Mall distance | - | 25.94, 23.51 | 25.94, 23.51 (unchanged) |
+
+Wiring: `mesh::rcs::psp2::emissive_add` (`Texture2`/`Texture2Alpha` in `Model::pad_masks`, the tint
+(`Constant1`) in a glow-table entry of `PROGRAM_EMISSIVE_ADD`/`PROGRAM_EMISSIVE_ALPHA_MASK`, the vertex's
+material-index bits), added to `shade.wesl`'s `pad_glow`. Vita only. `fc06_lambert_emmissive_alpha`'s
+`Tint * D.a` is **not wired** (unchanged: read, open). The add is dimmer than the original's (floor G/B
+31/37 against 38/43) with the rest of the frame, the open darkness item.
+
+**Against Omega: checked, applies, wired 2026-11-11 (supersedes "differs, not wired").** The earlier
+reading (`0x6bcbd09c`: one diffuse sampler, no `Texture2`) does not match the file's pixel programs as
+listed by `gcn_dump ... Diffuse_Normal_Specular_Emmissive.rcsmaterial --summary` (identical on Vineta K
+and Chenghou): every lit and ambient permutation names `Texture1Sampler` and `Texture2Sampler`, the
+lightmapped ones (`@0xaf44`, `@0xe784`, and `@0x9c64`/`@0xd324` with `shadowMapSampler`) beside
+`lightmapSampler`. In `@0xaf44` the `Texture2` fetch is `dmask:0xf` (its rgb is the normal) and its
+alpha register is multiplied by `Constant1` (`v_mul_f32 s24/s25/s26, v8`, offsets `0x330` to `0x340`)
+and summed into the colour before the fog mix; the ambient program `@0x3244` fetches it with
+`dmask:0x8`. The sampler assignment (`Texture2` = the `_ne` map = the alpha one) is read off the
+reflection's slot order and agrees with 2048's USSE program and HD's block (confidence 80, not 88).
+`mesh::rcs::psp2::emissive_add` admits Omega's plain member (13 circuits ship the file: Vineta K,
+Metropia, Moa Therma, Chenghou, Ubermall, Sebenco, Sol 2, Anulpha, Amphiseum, Modesto, Talons,
+Tech De Ra). Omega's `_emmissive_alpha` stays unread and not wired.
+
+(`diffuse_normal_specular_emmissive`, `fc06_lambert_emmissive_alpha`: 63 and 33 entries per variant over
+its packages), but its GCN programs were not read here, so whether Omega applies the same
+outside-the-light add is open. `diffuse_normal_specular_emmissivenew` (Chenghou, 7 slots) is the plain member with `Norm` for
+`Texture2` and the colour named `Texture1`: read and wired 2026-11-11 (`gxp.md`,
+"`diffuse_normal_specular_emmissivenew` colours by `Texture1`"). Omega's plain member is wired the
+same way (its ambient GCN program read; **ported**).

@@ -45,7 +45,7 @@ pub(crate) struct App {
     ///
     /// Joined by [`Session::finish_loading`], which is also where the two
     /// halves become a `boot::Boot`.
-    pub(crate) media: Option<boot::MediaWorker>,
+    pub(crate) media: Option<boot::worker::MediaWorker>,
     /// `--overlay`, applied to the sequence once it exists.
     pub(crate) boot_overlay: bool,
     /// `--pick-language`: show the picker even when the settings name one.
@@ -53,6 +53,12 @@ pub(crate) struct App {
     /// `--measure-race-load`, the number of races to time. See
     /// `session::load_probe`.
     pub(crate) measure_race_load: Option<u32>,
+    /// `--demo`: `Some(wallpaper)`. See `session::demo`.
+    pub(crate) demo: Option<bool>,
+    /// `--wallpaper-fps`, when the run is a wallpaper.
+    pub(crate) demo_limit: Option<oag_present::perf::FrameLimit>,
+    /// `--replay-png`: the screenshot to open in the viewer once the main menu is up.
+    pub(crate) replay_png: Option<std::path::PathBuf>,
     /// `--give`, resolved to a weapon at startup. See the CLI field.
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--no-intro`: skip the pre-race flyby. See the CLI field.
@@ -382,12 +388,13 @@ impl App {
                 &self.loading_assets,
                 self.trace,
                 self.settings.language.as_deref(),
+                self.settings.graphics.hud_safe_area,
             )?
         } else {
             return Ok(None);
         };
 
-        let mut controls = Controls::new();
+        let mut controls = controls_for(gpu.is_headless());
         // `--players N`: the keyboard and the first pad on slot 0, each further
         // pad on the next slot in connection order. Chosen, not measured; the
         // join screen (`Session::open_join`) seats by who pressed instead.
@@ -404,6 +411,7 @@ impl App {
         // The keyboard's own live table - a rebind changes it again, and
         // persists it, through `Session::rebind`.
         controls.set_bindings(crate::args::resolve_bindings(&self.settings));
+        controls.set_music_bindings(crate::args::resolve_music_bindings(&self.settings));
         for name in controls.pad().names() {
             info!("gamepad: {name}");
         }
@@ -463,7 +471,12 @@ impl App {
             }
         );
 
-        Ok(Some(Session {
+        let interactive_launch = self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| pending.cli.is_interactive());
+        let mut session = Session {
+            idle: Default::default(),
             gpu,
             framebuffer,
             stage,
@@ -473,6 +486,7 @@ impl App {
             touch_overlay: crate::touch::Overlay::default(),
             audio,
             music_discs: self.music_discs.clone(),
+            music_pool_seen: String::new(),
             music_place,
             screen_filters,
             missing_screen_filter: None,
@@ -495,7 +509,13 @@ impl App {
             present_cost: perf::Meter::new(),
             governor: oag_present::governor::Governor::new(),
             governor_gpu: None,
+            governor_gpu_at: 0,
             last_present_seconds: 0.0,
+            display: oag_present::refresh::Display::new(),
+            logged_display_hz: None,
+            display_polled: None,
+            display_mode: None,
+            display_configures: 0,
             frame_timing: Default::default(),
             phases: crate::session::phases::PhaseClock::new(self.dev.frame_log),
             drs_unreachable_said: false,
@@ -507,7 +527,19 @@ impl App {
             cursor_sheet,
             cursor_title: None,
             stalled: true,
+            stutter: Default::default(),
             pause: oag_game::pause::State::Running,
+            photo: None,
+            replay_list: Vec::new(),
+            replay_refused: std::collections::BTreeMap::new(),
+            watching: None,
+            demo: crate::session::DemoState::with_cli(self.demo, self.demo_limit),
+            viewer: None,
+            notice: None,
+            shot_cli: self.replay_png.clone(),
+            shot_pending: false,
+            return_to_replays: false,
+            rumbler: None,
             wall: 0.0,
             go_at: None,
             wall_origin: web_time::Instant::now(),
@@ -543,8 +575,14 @@ impl App {
             scheme: self.scheme,
             anisotropy: self.anisotropy,
             launched: false,
+            interactive_launch,
+            player_asked: false,
+            soft_keyboard: false,
             pending_event: None,
+            pending_card: None,
             races_launched: 0,
+            menu_source: Default::default(),
+            opening_reads: Default::default(),
             settings: self.settings.clone(),
             // Loaded fresh here rather than carried on `App`: there is one
             // window per run and `App::open` only ever runs once for it, so
@@ -557,7 +595,7 @@ impl App {
             shell: self.shell.clone(),
             race_title: self.race_title,
             race_platform: self.race_platform,
-            // Race Remix's title pickers - see the field's own doc comment
+            // A two-title race's title pickers - see the field's own doc comment
             // for why this is a fresh survey rather than the chooser's.
             titles: launcher::distinct_titles(&launcher::survey(&source::candidates())),
             // The search path's tracks, then the mods' that are on (`docs/tools/mods.md`).
@@ -580,6 +618,7 @@ impl App {
             backdrop: None,
             backdrop_shape: None,
             held_menu_backdrop: None,
+            parked_menu: None,
             // Nothing running yet on either line: the conversion may not start
             // until the boot's own movies are done with the cache, which is
             // what `start_prefetch` waits for.
@@ -633,7 +672,10 @@ impl App {
                 error!("could not load pilots: {e:#}");
                 pilots::Roster::built_in()
             }),
-        }))
+        };
+        // A direct `--race` lands in a race without the load hand-over that arms it.
+        session.arm_rumble();
+        Ok(Some(session))
     }
 
     /// Waits for a conversion the window has outlived.
@@ -682,6 +724,17 @@ impl App {
             // never came. There is nothing to write and no reason to complain.
             None => Ok(()),
         }
+    }
+}
+
+/// The devices a run reads. A run with no window (`--drive`) is non-interactive
+/// and gets no gamepad, so a pad in use on the host cannot steer it; a test that
+/// needs pad input injects a synthetic one. The one place that decides.
+pub(crate) fn controls_for(headless: bool) -> Controls {
+    if headless {
+        Controls::without_pad()
+    } else {
+        Controls::new()
     }
 }
 
@@ -895,6 +948,8 @@ impl ApplicationHandler for App {
                 // `crate::pointer::Window::other_device`.
                 if event.state == ElementState::Pressed {
                     session.pointer.other_device();
+                    // Any key, bound or not, is somebody at the machine (`session::demo`).
+                    session.demo.key = true;
                 }
                 // A CONTROLS row is waiting for its new key, and this raw event
                 // is the only place that key still exists as itself - past
@@ -1006,6 +1061,7 @@ impl ApplicationHandler for App {
                 if session.too_early_for_frame(web_time::Instant::now()) {
                     return;
                 }
+                session.sync_soft_keyboard();
                 if let Err(e) = session.frame() {
                     error!("frame error: {e:#}");
                     event_loop.exit();
@@ -1037,10 +1093,10 @@ impl ApplicationHandler for App {
         // Every way out of the run ends here (window close, a menu's quit, a
         // quit from the race), so the playlist's place is saved once, whichever.
         if let Some(session) = self.state.as_mut() {
-            session.save_race_music();
-            session.keep_campaign_position();
+            session.wind_down();
+        } else {
+            oag_game::records::finish_background_saves();
         }
-        oag_game::records::finish_background_saves();
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
@@ -1086,7 +1142,7 @@ impl ApplicationHandler for App {
         match session.next_frame_at() {
             // On the web winit's `Poll` and `WaitUntil` both wake the loop
             // through a `postTask` plus an `AbortController` per wake, a
-            // quarter of the page's thread in a race (measured, 2026-10-10).
+            // quarter of the page's thread in a race (measured).
             // `Wait` plus a redraw request is driven by
             // `requestAnimationFrame` alone, and the limit holds by skipping
             // redraws in `RedrawRequested`.

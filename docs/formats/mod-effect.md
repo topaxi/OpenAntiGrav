@@ -11,8 +11,10 @@ discharge = "fx/discharge.toml"
 ```
 
 A module fires one with `fire-effect` and bit 15 of the argument set (`Command::FireModEffect`,
-SDK `reply.fire_mod_effect(&craft, index)`): the index is the effect's place in `[effects]`
-in name order. It plays at the craft's nozzle (the hull's back end along the body's heading),
+SDK `reply.fire_mod_effect(&craft, "discharge")`): the effect is named by its key in `[effects]`,
+carried in the reply's string pool, so adding a file never renumbers the others; a key the manifest
+lacks faults the module, naming it. `reply.stop_mod_effect` ends the surfaces
+`fire_mod_effect_ahead` placed (`hooks.md`). It plays at the craft's nozzle (the hull's back end along the body's heading),
 its cone axis `rear` (away from the nose) or `up`. Render-side only: never hashed, never in
 the simulation; a race firing mod effects hashes like one firing none
 (`tests::extensions::on::a_mod_effect_is_queued_under_its_mod_and_a_race_firing_one_hashes_like_one_firing_none`).
@@ -43,6 +45,9 @@ texture = "fx/glow.png"  # optional: a PNG of the mod, or a disc texture by name
 # none draws the soft round default
 ```
 
+`speed` is signed: a negative centre throws a particle against the cone axis (this project's own rocket effect lays
+its trail that way, [own-rockets.md](../rendering/own-rockets.md)).
+
 Ranges are the loader's (`parametric.rs`); the schema carries the shape. A file that fails to
 read, parse or validate **draws nothing**, the load report names it
 (`mod <id>: effect <name> left out: <why>; draws nothing`) and the race runs
@@ -61,6 +66,24 @@ A `fire-effect`, the title's or the mod's, plays at the hull's back end along th
 model's `+Z`, which put them near the nose (seen 2026-10-30 on Pulse PSP's Energy Turbo); both
 now share the body anchor. The orange sparks at the nose of a craft scraping a wall are the
 vanilla wall-scrape sparks (a run without the mod shows them).
+
+## Drawn by a shader
+
+An emitter with `shader = "<name>"`, a name in the mod's `[shaders]`, draws each particle through
+that shader instead of a blend class: a quad facing the camera, `uv` `0..1`, the particle's colour
+and alpha as `input.colour`. It takes the shader's own blend and texture, so a `texture` beside it
+is refused; a name the mod has not got refuses the file; a shader that did not load draws nothing.
+See [`mod-shaders.md`](../architecture/wasm-extensions/mod-shaders.md).
+
+## Placed ahead: `fire-mod-effect-ahead`
+
+The effect stands at the middle of the road `distance` ahead, lifted a little off the surface, and a
+particle sprite is a billboard centred on that point. A half disc standing on the road is therefore
+a PNG with its flat edge on the **middle row** and the disc in the upper half (the lower half is
+under the road and the depth test hides it). The stage draws half-size in world units (a portal
+of radius 12 is `size = 12`). On a pale circuit an `additive` sprite is nearly invisible: use
+`alpha-over` in a deep colour. Seen on Pulse PSP EU `16_Track` and HD (the official mod
+`oag.slipstream`, `slipstream_ground_truth`).
 
 ## Open
 

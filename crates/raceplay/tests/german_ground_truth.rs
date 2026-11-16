@@ -76,7 +76,7 @@ fn check(source: &str, ids: &[&str], expect_filled: bool) {
             );
         }
     }
-    for id in ["OAG_RACE_TRACK", "OAG_REMIX_PAGE_TITLE", "OAG_MENU_BACK"] {
+    for id in ["OAG_RACE_TRACK", "OAG_MENU_BACK"] {
         assert!(non_empty(&table, id).is_some(), "{source}: {id} missing");
     }
     assert_eq!(table.get("OAG_RACE_TRACK"), Some("STRECKE"));

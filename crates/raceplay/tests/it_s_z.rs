@@ -12,6 +12,9 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 mod perturb;
 
 mod scenery_fx_ground_truth;
@@ -19,10 +22,15 @@ mod sfx_repeating_ground_truth;
 mod sfx_timeline_ground_truth;
 mod sfx_xfade_2048_ground_truth;
 mod sfx_xfade_ground_truth;
+mod sh_probes_ground_truth;
 mod shadow_ground_truth;
 mod shadow_stability_ground_truth;
+mod shield_difficulty_ground_truth;
 mod ship_spawn_ground_truth;
 mod shuriken_ground_truth;
+mod slipstream_energy_turbo_ground_truth;
+mod slipstream_ground_truth;
+mod sol_ground_truth;
 mod speed_plan_ground_truth;
 mod stall_rescue_ground_truth;
 mod start_gantry_clock_inherit_ground_truth;
@@ -36,10 +44,13 @@ mod start_line_ground_truth;
 mod start_pose_ground_truth;
 #[cfg(feature = "ballisticng")]
 mod survey;
+mod texture_pack_ground_truth;
 mod texture_stream_ground_truth;
 mod track_audio_hd_ground_truth;
 mod track_props_ground_truth;
 mod trackfile_ground_truth;
+mod trail_hits_lent_ground_truth;
+mod transit_ground_truth;
 mod vita_2048_campaign_grid_ground_truth;
 mod vita_2048_countdown_ground_truth;
 mod vita_2048_hud_event_ground_truth;
@@ -57,6 +68,7 @@ mod web_picker_table;
 mod window_flyby_ground_truth;
 mod zone_announcer_ground_truth;
 mod zone_craft_ground_truth;
+mod zone_fallback_ground_truth;
 mod zone_grade_ground_truth;
 mod zone_ground_truth;
 mod zone_hover_sweep;
@@ -95,3 +107,5 @@ fn every_test_file_is_listed() {
         );
     }
 }
+
+mod zz_contact_sweep;

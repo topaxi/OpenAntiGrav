@@ -329,3 +329,46 @@ fn backdrops_puts_the_movie_between_a_full_screen_mark_and_the_chrome() {
         "nothing full-screen survives a race behind the menus"
     );
 }
+
+/// `Layers::behind` is the frame's backdrop and nothing else, and
+/// `push_title` is the skin's title in the chrome layer: the pair every
+/// screen's draw list starts from.
+#[test]
+fn layers_behind_holds_the_frame_backdrop_and_push_title_the_chrome() {
+    let skin = Skin::new(
+        oag_hd::frontend::MENU_SKIN,
+        oag_display::space::Space::HD,
+        22.0,
+    );
+    let mark = Draw::Sprite {
+        rect: [20.0, 0.0, 224.0, 24.0],
+        uv: [0.0, 257.0, 224.0, 24.0],
+        color: [1.0; 4],
+    };
+    let frame = Frame {
+        marks: vec![mark.clone()],
+        ..Frame::default()
+    };
+
+    let mut layers = Layers::behind(&skin, &frame, None, false);
+    assert_eq!(
+        layers.backdrop,
+        frame.backdrops(skin.space(), skin.background(), None, false)
+    );
+    assert!(layers.backdrop.contains(&mark));
+    assert!(layers.chrome.is_empty() && layers.body.is_empty());
+
+    layers.push_title(&skin, &frame, "TITLE".to_string());
+    let (x, y, scale) = skin.title_at();
+    assert_eq!(
+        layers.chrome,
+        vec![Draw::title(
+            skin.title_font(),
+            x,
+            y,
+            scale,
+            skin.title_color(frame.ink),
+            "TITLE".to_string()
+        )]
+    );
+}

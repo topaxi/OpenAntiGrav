@@ -384,3 +384,66 @@ mod navs {
         assert_eq!(entry.take_nav(), [Nav::Decline]);
     }
 }
+
+/// WCAG contrast ratio of two sRGB colours (alpha ignored: the panel is near opaque).
+fn contrast(a: [f32; 4], b: [f32; 4]) -> f32 {
+    let luminance = |c: [f32; 4]| {
+        let lin = |v: f32| {
+            if v <= 0.03928 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2])
+    };
+    let (hi, lo) = (
+        luminance(a).max(luminance(b)),
+        luminance(a).min(luminance(b)),
+    );
+    (hi + 0.05) / (lo + 0.05)
+}
+
+/// The title's colour and the panel's, off a drawn list.
+fn title_over_panel(title_colour: u32) -> ([f32; 4], [f32; 4]) {
+    let mut geometry = geometry(3);
+    let mut title = geometry
+        .confirm
+        .clone()
+        .expect("the fixture has a confirm label");
+    title.idstring = Some("PRO_ENTER_NAME".to_string());
+    title.color = title_colour;
+    geometry.title = Some(title);
+    let draws = TagEntry::new(labels(), geometry, ALPHABET, "").draw(&skin());
+    let panel = match &draws[1] {
+        Draw::Fill { color, .. } => *color,
+        other => panic!("the second draw is the panel, not {other:?}"),
+    };
+    let ink = draws
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Text { text, color, .. } if text == "RENAME PILOT" => Some(*color),
+            _ => None,
+        })
+        .expect("the title is drawn");
+    (ink, panel)
+}
+
+/// Pulse authors the title in `FEGlobals->TitleColor`, black. The panel this draws over is
+/// dark, so black reads as nothing.
+#[test]
+fn a_black_authored_title_is_drawn_so_it_reads_on_the_dark_panel() {
+    let (ink, panel) = title_over_panel(0xFF00_0000);
+    assert!(
+        contrast(ink, panel) >= 4.5,
+        "the title {ink:?} over the panel {panel:?} is {:.2}:1",
+        contrast(ink, panel)
+    );
+}
+
+/// A title the page authors in a light colour keeps it: the swap is for unreadable ink only.
+#[test]
+fn a_light_authored_title_keeps_its_own_colour() {
+    let (ink, _) = title_over_panel(0xFF33_A6B9);
+    assert_eq!(ink, argb_to_rgba(0xFF33_A6B9));
+}

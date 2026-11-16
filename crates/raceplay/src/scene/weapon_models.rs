@@ -210,6 +210,16 @@ impl super::Scene {
             None,
         );
         write_one_kind(
+            &self.plasma_blast.missile_head,
+            weapon_scene,
+            &race.missile_head_model_matrices(),
+            &prev.missile_heads,
+            queue,
+            view_projection,
+            prev_vp,
+            None,
+        );
+        write_one_kind(
             &self.mines,
             weapon_scene,
             &mine_matrices,
@@ -261,6 +271,17 @@ impl super::Scene {
         }
     }
 
+    /// Draws the `live` Missile heads [`Self::write_weapon_models`] wrote.
+    pub(super) fn draw_missile_heads<'a>(
+        &'a self,
+        live: usize,
+        list: &mut super::record::DrawList<'a>,
+    ) {
+        for drawable in self.plasma_blast.missile_head.iter().take(live) {
+            list.mesh(drawable);
+        }
+    }
+
     /// Writes this tick's transform and anim-time scrub onto every live
     /// Plasma blast's three drawables, and hands back which slots are live
     /// so the caller knows which to draw.
@@ -268,14 +289,13 @@ impl super::Scene {
     /// **Sparse, unlike [`Self::write_weapon_models`]'s four pools.** A
     /// projectile pool swap-removes to keep its live entries packed from
     /// slot 0, so those four are bounded by a simple live *count*; a blast
-    /// frees its own slot the moment [`blast_models::PLASMA_BLAST_LIFETIME_SECONDS`]
+    /// frees its own slot the moment its title's `PlasmaBlastLaw::life`
     /// runs out, independent of every other slot, so this hands back which
     /// slots are live rather than how many.
     ///
-    /// **One `matrix` writes all three drawables** - see
-    /// [`blast_models::PlasmaBlastDraw`]'s own doc comment for why - so only
-    /// the anim-time scrub passed to [`Drawable::write_node_anims`] differs
-    /// per model.
+    /// **Each drawable takes its own matrix and tint**, see
+    /// [`blast_models::PlasmaBlastDraw`]; the clock is the blast's age for
+    /// all three.
     ///
     /// **No previous-frame matrix is tracked for this pool**, so a blast
     /// draws with no motion blur of its own: `prev_mvp` is passed as this
@@ -291,15 +311,15 @@ impl super::Scene {
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
     ) -> [bool; blast_models::PLASMA_BLAST_SLOTS] {
-        let draws = race.plasma_blast_draws(race.camera_position());
+        let draws = race.plasma_blast_draws(race.view().inverse());
         let mut active = [false; blast_models::PLASMA_BLAST_SLOTS];
         for (slot, draw) in draws.iter().enumerate() {
             let Some(draw) = draw else { continue };
             active[slot] = true;
-            for (index, (drawables, seconds)) in [
-                (&self.plasma_blast.halo, draw.halo_seconds),
-                (&self.plasma_blast.hemisphere2, draw.hemisphere2_seconds),
-                (&self.plasma_blast.hemisphere1, draw.hemisphere1_seconds),
+            for (index, drawables) in [
+                &self.plasma_blast.halo,
+                &self.plasma_blast.hemisphere2,
+                &self.plasma_blast.hemisphere1,
             ]
             .into_iter()
             .enumerate()
@@ -307,33 +327,113 @@ impl super::Scene {
                 let Some(drawable) = drawables.get(slot) else {
                     continue;
                 };
-                // **HD scales each model on top of the shared billboard
-                // basis; Pulse scrubs a baked anim-time track on the basis
-                // alone.** See `blast_models`'s own module doc comment for
-                // why these do not fold into one branch.
-                let matrix = match draw.hd_scale {
-                    Some(scale) => draw.matrix * Mat4::from_scale(Vec3::splat(scale[index])),
-                    None => draw.matrix,
-                };
+                let matrix = draw.matrices[index];
                 let mvp = view_projection * matrix;
                 write_fog(drawable, queue, weapon_scene);
-                if draw.hd_scale.is_some() {
-                    drawable.write_clocked(queue, view_projection, matrix, mvp, draw.hd_clock);
+                if draw.hd {
+                    drawable.write_clocked(queue, view_projection, matrix, mvp, draw.clock);
                 } else {
                     drawable.write(queue, view_projection, matrix, mvp);
-                }
-                if draw.hd_scale.is_none() {
-                    drawable.write_node_anims(queue, seconds);
+                    drawable.write_node_anims(queue, draw.clock);
                     // `Node_SetAnimTimeTree` hands the one scrubbed time to
                     // the `Anim Transform` and `Mesh` nodes of the tree alike
                     // (anim-transform.md), so the texture offsets ride the
-                    // same `age * rate`. `hemisphere1` has no node animation
-                    // at all: this is the only thing it writes.
-                    drawable.write_anims(queue, seconds);
+                    // same clock. `hemisphere1` has no node animation at
+                    // all: this is the only thing it writes.
+                    drawable.write_anims(queue, draw.clock);
+                    // The model's grey ambient, which multiplies its texture
+                    // in the original (lighting on, no light lit). Rewrites
+                    // the vertex colours from the authored ones every frame,
+                    // so a slot's next blast starts at full again.
+                    let tint = draw.tints[index];
+                    drawable.tint(queue, [tint, tint, tint, 1.0], &mut Vec::new());
                 }
             }
         }
         active
+    }
+
+    /// Writes this tick's matrix and grey tint onto every live Disruptor
+    /// halo's drawable and hands back which slots are live.
+    pub(super) fn write_disruptor_halos(
+        &self,
+        race: &Race,
+        queue: &Uploads<'_>,
+        view_projection: Mat4,
+        weapon_scene: &mesh_render::Scene,
+    ) -> [bool; blast_models::PLASMA_BLAST_SLOTS] {
+        let mut active = [false; blast_models::PLASMA_BLAST_SLOTS];
+        for (slot, draw) in race
+            .disruptor_halo_draws(race.view().inverse())
+            .into_iter()
+            .enumerate()
+        {
+            let (Some((matrix, tint, age)), Some(drawable)) =
+                (draw, self.plasma_blast.disruptor_halo.get(slot))
+            else {
+                continue;
+            };
+            active[slot] = true;
+            write_fog(drawable, queue, weapon_scene);
+            drawable.write(queue, view_projection, matrix, view_projection * matrix);
+            drawable.write_node_anims(queue, age);
+            drawable.write_anims(queue, age);
+            drawable.tint(queue, [tint, tint, tint, 1.0], &mut Vec::new());
+        }
+        active
+    }
+
+    /// Writes this tick's matrix and grey tint onto every disrupted craft's on-craft effect and
+    /// hands back which ship slots are live.
+    pub(super) fn write_disruptor_craft_fx(
+        &self,
+        race: &Race,
+        queue: &Uploads<'_>,
+        view_projection: Mat4,
+        seconds: f32,
+        weapon_scene: &mesh_render::Scene,
+    ) -> [bool; oag_gameplay::MAX_SHIPS] {
+        let mut active = [false; oag_gameplay::MAX_SHIPS];
+        for (slot, draw) in race.disruptor_craft_draws().into_iter().enumerate() {
+            let (Some((matrix, tint)), Some(drawable)) =
+                (draw, self.plasma_blast.disruptor_craft.get(slot))
+            else {
+                continue;
+            };
+            active[slot] = true;
+            write_fog(drawable, queue, weapon_scene);
+            drawable.write(queue, view_projection, matrix, view_projection * matrix);
+            drawable.write_node_anims(queue, seconds);
+            drawable.write_anims(queue, seconds);
+            drawable.tint(queue, [tint, tint, tint, 1.0], &mut Vec::new());
+        }
+        active
+    }
+
+    /// Draws the on-craft effects [`Self::write_disruptor_craft_fx`] wrote.
+    pub(super) fn draw_disruptor_craft_fx<'a>(
+        &'a self,
+        active: &[bool; oag_gameplay::MAX_SHIPS],
+        list: &mut super::record::DrawList<'a>,
+    ) {
+        for (slot, _) in active.iter().enumerate().filter(|(_, live)| **live) {
+            if let Some(drawable) = self.plasma_blast.disruptor_craft.get(slot) {
+                list.mesh(drawable);
+            }
+        }
+    }
+
+    /// Draws the live Disruptor halos [`Self::write_disruptor_halos`] wrote.
+    pub(super) fn draw_disruptor_halos<'a>(
+        &'a self,
+        active: &[bool; blast_models::PLASMA_BLAST_SLOTS],
+        list: &mut super::record::DrawList<'a>,
+    ) {
+        for (slot, _) in active.iter().enumerate().filter(|(_, live)| **live) {
+            if let Some(drawable) = self.plasma_blast.disruptor_halo.get(slot) {
+                list.mesh(drawable);
+            }
+        }
     }
 
     /// Draws every live blast's three models - `active` is
@@ -671,8 +771,8 @@ impl super::Scene {
     /// Both play their authored animation on `seconds`: MagEffect2's `Anim
     /// Transform` (the halo's spin) through [`Drawable::write_node_anims`] and
     /// both meshes' texture-offset tracks (the lightning scrolls `v` about
-    /// 1.2 per second) through [`Drawable::write_anims`]. Until 2026-10-05
-    /// only the first was written, so the streaks held one texture phase.
+    /// 1.2 per second) through [`Drawable::write_anims`]. Both are
+    /// needed or the streaks hold one texture phase.
     fn write_mag_floor_fx(
         &self,
         race: &Race,
@@ -703,9 +803,8 @@ impl super::Scene {
 /// `anim-transform.md`) for a model whose own `Anim Transform` nodes play, or
 /// `None` to leave the identity table `mesh_render::build` initialised. The
 /// Mine and the Bomb pass it: the Bomb's `orbit` ring tumbles about its own `X`
-/// and its `bomb` body about `Y`; neither was ever written before, so both drew
-/// at their time-zero pose. Their texture-offset tracks ride the same clock
-/// (`Drawable::write_anims`, 2026-10-05).
+/// and its `bomb` body about `Y`, driven by the same clock. Their texture-offset tracks ride it
+/// (`Drawable::write_anims`).
 #[allow(clippy::too_many_arguments)]
 fn write_one_kind(
     drawables: &[Drawable],
@@ -760,7 +859,7 @@ impl super::Scene {
     /// weapon's materials are the GE's fixed pipeline, its stand-in light was
     /// never measured against a scene block, and that is another lane's.
     ///
-    /// **Written since 2026-10-07**: HD's Bomb blast (`write_hd_bomb_blasts`),
+    /// **Written**: HD's Bomb blast (`write_hd_bomb_blasts`),
     /// framed with `--force-bomb-trip`. **Not written, and open**: the Bomb
     /// blast's Pulse pair (Pulse draws no scene block), the Repulser field and
     /// the mag floor.

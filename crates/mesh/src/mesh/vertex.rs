@@ -165,6 +165,15 @@ pub struct GpuVertex {
     /// See `mesh::rcs::hull_normal`. Last, for the reason
     /// [`Self::lightmap_texcoord`] gives.
     pub tangent: u32,
+    /// The batch's authored depth bias, `0.0..=9.0`: `oag_vex::vex::Batch::depth_bias` on a
+    /// `.vex` batch, `0.0` on every other vertex.
+    ///
+    /// `depth_bias.wesl` pulls the vertex toward the camera by `6 * bias` of the original's
+    /// depth units, as `sceGuDepthRange(1001 + 6 * bias, 64946 + 6 * bias)` does. A float like
+    /// [`Self::quake`]: four bytes on every vertex of every title (100 to 104), the price of not
+    /// overloading a lane another title reads. Last, for the reason
+    /// [`Self::lightmap_texcoord`] gives. See `docs/rendering/depth-bias.md`.
+    pub depth_bias: f32,
 }
 
 /// Whether a material's chunks carry their authored `tangent`, and how its vertex program
@@ -385,8 +394,10 @@ pub mod slots {
     /// texture is addressed by the **model's own clock**, the declared
     /// `UV_offset` parameter - `AnimNode_GetTime`'s `node + 0xc0`, which
     /// `WeaponExplosions_Draw` sets to the blast's age - not the scene's
-    /// `time`. Matched by `mesh::rcs::rim_glow`'s fingerprint. See
-    /// `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, 2026-10-05.
+    /// `time`. Unlit: the tap times the vertex colour, its alpha the tap's
+    /// channel sum. Matched by `mesh::rcs::rim_glow`'s fingerprint. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The blast's three
+    /// programs".
     pub const CLOCK_SCROLL_RING: u32 = 1 << 15;
 
     /// The same for the explosion halo's program
@@ -485,6 +496,17 @@ pub mod slots {
     /// fade on the alpha. [`RIM_EDGE`] and [`CLOCK_SCROLL_RING`] together.
     pub const MISSILE_SHOCK: u32 = RIM_EDGE | CLOCK_SCROLL_RING;
 
+    /// The Plasma explosion's sphere (`plasmasphere_glow.rcsmaterial`, block
+    /// `@0x2690`): a lit Fresnel shell whose exponent and fade are the blast's
+    /// age, with a noise-modulated sun highlight read from the second binding.
+    /// [`RIM_EDGE`] and [`CLOCK_SCROLL_HALO`] together, for [`BOMB_FIRE`]'s reason.
+    pub const PLASMA_SPHERE: u32 = RIM_EDGE | CLOCK_SCROLL_HALO;
+
+    /// The four bits the weapon programs are carried on, alone or in pairs: a
+    /// test for one program compares the word under this mask.
+    pub const WEAPON_PROGRAM_BITS: u32 =
+        RIM_GLOW | RIM_EDGE | CLOCK_SCROLL_RING | CLOCK_SCROLL_HALO;
+
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///
@@ -517,15 +539,29 @@ pub mod slots {
     /// [`material_index`] masks the top bit off.
     pub const LIT_ALPHA: u32 = 1 << 31;
 
+    /// This chunk's render-block flags say a Zone race keeps its plain material
+    /// program: `oag_rcs::rcsmodel::Mesh::zone_plain`, bits 9 to 11 of the
+    /// chunk's flags (`oag_rcs::rcsmodel::RENDER_ZONE_PLAIN`).
+    ///
+    /// **Per chunk, like [`ZONE_TRACK`]**, so two chunks of one material can
+    /// differ. Bit 30, above the index: the glow table holds
+    /// [`EMISSIVE_LIMIT`](super::rcs::EMISSIVE_LIMIT) (64) entries, so the index
+    /// is six bits ([`MATERIAL_MASK`]) and the seventh was never set.
+    pub const ZONE_PLAIN: u32 = 1 << 30;
+
+    /// The bits of the glow-table index, [`MATERIAL_SHIFT`] up: six, for the 64
+    /// entries a model holds.
+    pub const MATERIAL_MASK: u32 = 0x3f;
+
     /// The mask covering every role bit - the low half of the word plus
-    /// [`LIT_ALPHA`], with [`MATERIAL_SHIFT`]'s index excluded.
-    pub const ROLE_MASK: u32 = ((1 << MATERIAL_SHIFT) - 1) | LIT_ALPHA;
+    /// [`LIT_ALPHA`] and [`ZONE_PLAIN`], with [`MATERIAL_SHIFT`]'s index excluded.
+    pub const ROLE_MASK: u32 = ((1 << MATERIAL_SHIFT) - 1) | LIT_ALPHA | ZONE_PLAIN;
 
     /// This material's [`Model::emissive`](super::Model::emissive) index plus
     /// one, or `0` where it has no entry.
     #[must_use]
     pub const fn material_index(packed: u32) -> u32 {
-        (packed >> MATERIAL_SHIFT) & 0x7f
+        (packed >> MATERIAL_SHIFT) & MATERIAL_MASK
     }
 
     /// Which channel of that texture the alpha is, in bits 3 and 4.

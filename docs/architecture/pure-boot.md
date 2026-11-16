@@ -19,7 +19,7 @@ reading of this same sequence was wrong.
 | 2 | `Developer Publisher Screen` | Plays the dev/pub reel off the parent's `IntroMovie1` widget, holding at frames 144 and 231 | the reel running out, ~12.7 s | 95 |
 | 3 | `MemoryStickWarning` | Storage-access disclaimer, six text widgets from the XML | cross ("PRESS X TO CONTINUE") | 90 |
 | 4 | `FMV Intro` | Plays `Data\Movies\WoFMVNew_US.PMF`, 2847 frames, ~95 s | plays out, or a skip | 90 |
-| 5 | `Title Screen` | "wipEout pure" and PRESS START BUTTON | START; **where it goes is this build's, not the disc's** - see below | 90 |
+| 5 | `Title Screen` | "wipEout pure" and PRESS START BUTTON | START (CROSS too, ours); **where it goes is this build's, not the disc's** - see below | 90 |
 
 Observed on **both** pressings, `pure-psp-usa.chd` and `pure-psp-eu.chd`, with
 the same shape and the same timings. The only difference found between them is
@@ -42,6 +42,10 @@ a text widget whose `idstring` is the literal `PRESS START`, drawn beside a
 blinking `_` in the same face, and the PPSSPP session that established this
 chain watched the real firmware sit on the screen until START was pressed. That
 is authored evidence plus a runtime observation, which is what a 90 means here.
+
+**This build also takes CROSS** here and on Pulse's `Show Logo` (2026-10-31, an
+intended divergence at the maintainer's request): CROSS confirms on every other
+screen, and 2048's own title screen already takes any face button.
 
 **Where it goes, on the original**: **still not established**, and this is the
 part not to guess at. `TitleRedirect` carries no `forward` attribute at all -

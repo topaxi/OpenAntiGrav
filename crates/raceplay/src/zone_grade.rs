@@ -97,7 +97,7 @@ pub struct StageBlend {
     /// current stage alone and `0.0` for the stage before it - the convention
     /// [`oag_tables::effectsettings::cross_fade_rgba8`] documents.
     ///
-    /// **The direction is answered, 2026-09-15.** The commit writes `+0x18 =
+    /// **The direction is answered.** The commit writes `+0x18 =
     /// 0` and every later frame adds `0.01f` to it until it clamps at `1.0`
     /// (`Environment_UpdateStageBlend`, `0x003dd398`; reproduced live), so
     /// the weight is the *new* stage's share, rising from nothing on the
@@ -211,6 +211,12 @@ pub struct ZoneGrade {
     /// title's own ladder instead of being overwritten by it on the next
     /// frame that steps the zone counter. See [`Self::pin_stage`].
     pinned: bool,
+    /// The race runs on one of the title's Zone arenas, whose materials
+    /// compile the aniso shape. See [`Self::with_arena`].
+    arena: bool,
+    /// The stage is a lap counter's ([`Self::show_stage`]), not a zone ladder's: a
+    /// Detonator race. See [`Self::with_lap_stages`].
+    lap_stages: bool,
 }
 
 impl ZoneGrade {
@@ -236,6 +242,8 @@ impl ZoneGrade {
             art,
             scene_art,
             pinned: false,
+            lap_stages: false,
+            arena: false,
         })
     }
 
@@ -253,6 +261,55 @@ impl ZoneGrade {
         self.transition = transition;
         self.wavefront = Wavefront::settled(self.blend.current, self.settled_radius());
         self
+    }
+
+    /// Marks the race as running on one of the title's Zone arenas.
+    ///
+    /// HD's four `zone_N` circuits are the only environments whose materials
+    /// compile the aniso Zone shader (all 25 of their materials carry
+    /// `zoneAnisoPalette`, none `zoneBaseInner`; every racing circuit's carry the
+    /// reverse), and the same four take `zonemodedlc3.effectsettings`, the table
+    /// that authors the ramps' keys. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md`, "The port".
+    #[must_use]
+    pub fn with_arena(mut self, arena: bool) -> Self {
+        self.arena = arena;
+        self
+    }
+
+    /// Marks the stage as a lap counter's, driven by [`Self::show_stage`]: a Detonator race.
+    #[must_use]
+    pub fn with_lap_stages(mut self) -> Self {
+        self.lap_stages = true;
+        self
+    }
+
+    /// The four `zoneAnisoPalette` ramps and their powers at the showing stage:
+    /// Scene and Track at stage `n` (inner) and `max(n - 1, 0)` (outer), as
+    /// `Environment_UpdateStageBlend` builds them on a commit. A group whose
+    /// stage does not author every key carries a zero ramp, which adds nothing.
+    fn aniso(&self) -> ([f32; 4], [mesh_render::ZoneRamp; 4]) {
+        use oag_tables::effectsettings::aniso::Group;
+        let current = self.blend.current;
+        let outer = current.saturating_sub(1);
+        let mut power = [0.0; 4];
+        let mut ramps = [mesh_render::ZoneRamp::default(); 4];
+        let slots = [
+            (Group::Scene, current),
+            (Group::Scene, outer),
+            (Group::Track, current),
+            (Group::Track, outer),
+        ];
+        for (k, (group, stage)) in slots.into_iter().enumerate() {
+            let Some(inputs) = self.table.aniso_group(stage, group) else {
+                continue;
+            };
+            power[k] = inputs.power;
+            for (texel, [r, g, b]) in ramps[k].texels.iter_mut().zip(inputs.ramp()) {
+                *texel = [r, g, b, 0.0];
+            }
+        }
+        (power, ramps)
     }
 
     /// The radius a settled wavefront reports: the law's cap, or zero on a
@@ -321,7 +378,7 @@ impl ZoneGrade {
     /// opens on the ladder's zone-0 stage (`Sub Venom` on HD), and whether
     /// the original runs a sphere out of `Start`'s black during the countdown
     /// or has already settled by the time the player sees the track is
-    /// unmeasured; the maintainer's own observation is the cyan already on
+    /// unmeasured; an observation of the original is the cyan already on
     /// the start line, which is what settling gives. So a stage whose ladder
     /// threshold is zone `0` carries no transition.
     ///
@@ -454,7 +511,7 @@ impl ZoneGrade {
     /// or a title with no recovered ladder.
     ///
     /// The HUD's "next speed class" bar is drawn beside **the zone number that
-    /// class starts at** - the maintainer's own observation of the original -
+    /// class starts at** - an observation of the original -
     /// so this is the row of the ladder it belongs on, counted from the current
     /// one.
     #[must_use]
@@ -491,6 +548,50 @@ impl ZoneGrade {
         self.blend.requested = stage;
         self.blend.weight = 1.0;
         true
+    }
+
+    /// Shows `stage` (clamped to the file's last), the way a counter that names its
+    /// stage directly drives the grade: HD/Fury's Detonator, whose stage-blend source is
+    /// the race manager's stage counter rather than a zone ladder
+    /// (`Environment_UpdateStageBlend`, mode `0xe`). Answers whether the stage changed.
+    /// A no-op once [`Self::pin_stage`] has pinned this grade.
+    pub fn show_stage(&mut self, stage: u32) -> bool {
+        if self.pinned {
+            return false;
+        }
+        let stage = stage.min(self.last_stage);
+        if self.blend.current == stage && self.blend.requested == stage {
+            return false;
+        }
+        self.blend.current = stage;
+        self.blend.requested = stage;
+        self.blend.weight = 1.0;
+        true
+    }
+
+    /// [`Self::follow`] for a grade driven by [`Self::show_stage`]: `frames` is the ticks
+    /// since the showing stage stepped, `None` for the opening stage, which is shown
+    /// whole. The stage swept out is the one below, as the counter only ever steps by one.
+    pub fn follow_step(&mut self, frames: Option<u32>, origin: [f32; 3]) {
+        self.wavefront.origin = origin;
+        let (Some(law), false, Some(frames)) = (self.transition, self.pinned, frames) else {
+            self.settle();
+            return;
+        };
+        self.wavefront.previous = self.blend.current.saturating_sub(1);
+        self.wavefront.frames = frames;
+        self.wavefront.radius = law.radius_after(frames);
+        self.blend.weight = law.weight_after(frames);
+    }
+
+    /// Drives a lap-staged grade (a Detonator race) for one frame: the stage after
+    /// `laps_completed` laps ([`oag_race::Mode::detonator_stage`]), stepped on the tick the
+    /// current lap began, `lap_ticks` ago. Answers whether the stage changed.
+    pub fn follow_laps(&mut self, laps_completed: u32, lap_ticks: u64, origin: [f32; 3]) -> bool {
+        let stepped = self.show_stage(oag_race::Mode::detonator_stage(laps_completed));
+        let frames = (laps_completed > 0).then(|| u32::try_from(lap_ticks).unwrap_or(u32::MAX));
+        self.follow_step(frames, origin);
+        stepped
     }
 
     /// Which stage is showing, which is asked for, and at what weight.
@@ -653,6 +754,9 @@ impl ZoneGrade {
             base.specular_scale,
         );
         let graded = graded.with_output_scale(base.output_scale);
+        // `authored` clears Omega's sun lobe colour too; a stage tints the diffuse sun only.
+        let [r, g, b, _] = base.sun_specular;
+        let graded = graded.with_sun_specular([r, g, b]);
         // **`authored` clears Omega's prelit flag and bias**, so a graded
         // Omega rig would silently go back to HD's combination. Omega ships no
         // Zone palette today (`zone_palette: None`), so nothing reaches this
@@ -728,8 +832,8 @@ impl ZoneGrade {
     /// selects per fragment. It matters: `Scene.Texture Colour` is authored
     /// black on stage `Start` and its `Track` sibling is `9.0` there, which
     /// is a dark environment around a lit road - the original's own opening
-    /// frame. Until 2026-09-15 this build bound the track group to every
-    /// chunk and drew the whole circuit in the road's colours.
+    /// frame. Binding the track group to every chunk would draw the whole
+    /// circuit in the road's colours.
     ///
     /// **Two stages' own palettes, not [`Self::palette`]'s cross-fade.** The
     /// original does not blend these in colour space at all: it hands the
@@ -820,6 +924,7 @@ impl ZoneGrade {
         let (track, scene) = groups(&palette);
         let (track_outer, scene_outer) = groups(&outer);
         let [x, y, z] = self.wavefront.origin;
+        let (aniso_power, aniso) = self.aniso();
         mesh_render::Zone {
             uv_scale,
             enabled: 1.0,
@@ -829,6 +934,9 @@ impl ZoneGrade {
             scene,
             track_outer,
             scene_outer,
+            aniso_power,
+            shape: [if self.arena { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0],
+            aniso,
         }
     }
 
@@ -869,6 +977,10 @@ impl ZoneGrade {
             .next_back()
             .map_or("?", |stage| stage.name.as_str());
         let ladder = match self.stages {
+            _ if self.lap_stages => format!(
+                "stepping one stage per completed lap from stage {} (Detonator's stage counter)",
+                self.blend.current,
+            ),
             Some(stages) => format!(
                 "escalating off this title's own {}-record zone-number ladder, starting on \
                  stage {} ({})",

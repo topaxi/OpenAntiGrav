@@ -173,6 +173,8 @@ pub(super) struct CameraPose {
     /// The two speed terms [`Race::vertical_fov`] widens the field by.
     pub(super) forward_speed: f32,
     pub(super) boost_kick: f32,
+    /// A module's `fov-offset` for the player's view, degrees.
+    pub(super) fov_offset: f32,
     key: CameraKey,
 }
 
@@ -346,6 +348,7 @@ impl Race {
                 unshaken: self.tick_view_unshaken(),
                 forward_speed: self.tick_forward_speed(),
                 boost_kick: self.view.boost_kick,
+                fov_offset: self.extension_fov_offset(self.player_slot()),
                 key: self.camera_key(),
             },
             ships: std::array::from_fn(|slot| {
@@ -391,8 +394,9 @@ impl Race {
 
     fn ship_key(&self, slot: usize) -> ShipKey {
         ShipKey {
-            respawns: self.respawns_of(slot),
-            active: self.sim.world.ships[slot].active,
+            respawns: self.placements_of(slot),
+            // Out of the world in a transit: not drawn, and a change either way is a cut.
+            active: self.sim.world.ships[slot].in_world(),
         }
     }
 
@@ -403,6 +407,33 @@ impl Race {
         let previous = poses.previous.as_ref()?;
         (poses.alpha < 1.0 && previous.camera.key == self.camera_key())
             .then_some((&previous.camera, poses.alpha))
+    }
+
+    /// Whether the latest tick cut the camera: the shot, the view or the imposed pose changed
+    /// from the tick before, which is exactly when [`Self::camera_between`] draws the current
+    /// tick as it is. Whatever the draw alpha, so a draw at `1.0` reports it too.
+    #[must_use]
+    pub fn camera_cut(&self) -> bool {
+        self.view
+            .poses
+            .previous
+            .as_ref()
+            .is_some_and(|previous| previous.camera.key != self.camera_key())
+    }
+
+    /// [`Self::camera_cut`] for the view being drawn: the player's own, or an extra seat's chase
+    /// camera, which jumps when that craft is placed anew (a respawn, a jump, a transit's exit)
+    /// and for nothing else of the player's. The transit's entrance moves no seat's camera.
+    #[must_use]
+    pub fn viewed_camera_cut(&self) -> bool {
+        let Some(slot) = self.extra_viewpoint() else {
+            return self.camera_cut();
+        };
+        self.view
+            .poses
+            .previous
+            .as_ref()
+            .is_some_and(|previous| previous.ships[slot].key.respawns != self.placements_of(slot))
     }
 
     /// A view matrix at the draw alpha: `current` is this tick's, `previous`

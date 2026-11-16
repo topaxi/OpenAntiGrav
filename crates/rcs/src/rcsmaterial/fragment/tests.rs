@@ -47,6 +47,7 @@ fn insn(opcode: u8) -> Instruction {
         negate: [false; 3],
         cond: 0x727,
         scale: 0,
+        source_precision: [0; 3],
         end: false,
     }
 }
@@ -1042,4 +1043,143 @@ fn a_program_with_no_light_patch_reads_as_none() {
 #[test]
 fn a_unit_the_program_never_samples_is_none() {
     assert_eq!(lit_program(true, true).lit_albedo(1), None);
+}
+
+/// Moa Therma's `diffuse_normal_specular` (block #7 `@0x9960`) opens `TEX R0.yw
+/// unit1` then `MAD R3.zw, R0.wywy, {2, -1}.xxxx, {2, -1}.yyyy`: the fetch's
+/// write mask and the decode's read lanes are the two things varied here.
+fn packed_normal_program(fetch_mask: u8, read_lanes: [u8; 4]) -> Program {
+    let mut tex = insn(0x17);
+    tex.dst = 0;
+    tex.unit = 1;
+    tex.mask = fetch_mask;
+
+    let mut decode = insn(0x04);
+    decode.dst = 3;
+    decode.mask = 0b1100;
+    decode.sources = [reg(0, false), Source::Constant, Source::Constant];
+    decode.swizzles = [read_lanes, [0; 4], [1; 4]];
+    decode.constant = Some([2.0, -1.0, 0.0, 0.0]);
+    decode.end = true;
+
+    Program {
+        declared: Declared::default(),
+        parameter_patches: Vec::new(),
+        instructions: vec![tex, decode],
+    }
+}
+
+#[test]
+fn a_green_and_alpha_fetch_decoded_as_two_x_minus_one_is_a_packed_normal() {
+    let program = packed_normal_program(0b1010, [3, 1, 3, 1]);
+    assert!(program.samples_as_packed_normal(1));
+    assert!(
+        !program.samples_as_normal(1),
+        "two lanes are not the three-lane map"
+    );
+    assert!(
+        !program.samples_as_packed_normal(0),
+        "the unit is part of the question"
+    );
+}
+
+/// A three-lane fetch is the other normal map, and `x` from the green with `y`
+/// from the alpha would be another packing than the disc's.
+#[test]
+fn a_three_lane_fetch_or_swapped_lanes_are_not_the_packed_normal() {
+    assert!(!packed_normal_program(0b0111, [3, 1, 3, 1]).samples_as_packed_normal(1));
+    assert!(!packed_normal_program(0b1010, [1, 3, 1, 3]).samples_as_packed_normal(1));
+}
+
+/// Metropia's `dn_diffuse_specular_emiss` lightmapped block (`@0x1f`..`@0x25`): a plain `DP3`
+/// against the sun, read by an unsaturated `MUL` (the diffuse term) and by `MOV_SAT x8` (the
+/// specular's facing term).
+fn sun_program(dot_saturates: bool) -> Program {
+    const SUN: u32 = crate::rcsmaterial::SUN_DIRECTION;
+    let mut dot = insn(0x05); // DP3 R0.y, R0, {sun}
+    dot.dst = 0;
+    dot.mask = 0b0010;
+    dot.saturate = dot_saturates;
+    dot.sources = [reg(0, false), Source::Constant, Source::Input];
+    dot.constant = Some([0.0; 4]);
+    dot.const_slot = Some(9);
+
+    let mut diffuse = insn(0x02); // MUL H1.x, H4.w, R0.yyyy
+    diffuse.dst = 1;
+    diffuse.dst_half = true;
+    diffuse.mask = 0b0001;
+    diffuse.sources = [reg(4, true), reg(0, false), Source::Input];
+    diffuse.swizzles = [[3, 3, 3, 3], [1, 1, 1, 1], [0, 1, 2, 3]];
+
+    let mut facing = insn(0x01); // MOV_SAT x8 R1.w, R0.yyyy
+    facing.dst = 1;
+    facing.mask = 0b1000;
+    facing.saturate = true;
+    facing.sources = [reg(0, false), Source::Input, Source::Input];
+    facing.swizzles = [[1, 1, 1, 1]; 3];
+
+    Program {
+        declared: Declared::default(),
+        parameter_patches: vec![(9, SUN)],
+        instructions: vec![dot, diffuse, facing],
+    }
+}
+
+#[test]
+fn an_unsaturated_dot_with_an_unsaturated_diffuse_reader_leaves_the_sun_unclamped() {
+    assert!(sun_program(false).sun_diffuse_unsaturated());
+}
+
+#[test]
+fn a_saturated_dot_is_clamped() {
+    assert!(!sun_program(true).sun_diffuse_unsaturated());
+}
+
+#[test]
+fn the_specular_facing_reader_alone_is_not_a_diffuse_term() {
+    let mut program = sun_program(false);
+    program.instructions.remove(1);
+    assert!(!program.sun_diffuse_unsaturated());
+}
+
+#[test]
+fn a_reader_that_saturates_clamps_the_diffuse_term() {
+    let mut program = sun_program(false);
+    program.instructions[1].saturate = true;
+    assert!(!program.sun_diffuse_unsaturated());
+}
+
+#[test]
+fn a_dot_against_something_other_than_the_sun_is_not_the_sun_term() {
+    let mut program = sun_program(false);
+    program.parameter_patches.clear();
+    assert!(!program.sun_diffuse_unsaturated());
+}
+
+#[test]
+fn a_reader_of_another_lane_does_not_read_the_dot() {
+    let mut program = sun_program(false);
+    program.instructions[1].swizzles[1] = [2, 2, 2, 2];
+    assert!(!program.sun_diffuse_unsaturated());
+}
+
+#[test]
+fn an_overwrite_of_the_dots_lane_ends_the_search() {
+    let mut program = sun_program(false);
+    let mut overwrite = insn(0x01); // MOV R0.y, input
+    overwrite.mask = 0b0010;
+    program.instructions.insert(1, overwrite);
+    assert!(!program.sun_diffuse_unsaturated());
+}
+
+#[test]
+fn a_reader_that_saturates_the_source_it_reads_the_dot_through_clamps_the_diffuse_term() {
+    let mut program = sun_program(false);
+    program.instructions[1].source_precision = [0, super::PRECISION_SATURATE, 0];
+    assert!(!program.sun_diffuse_unsaturated());
+    program.instructions[1].source_precision = [0, 1, 0];
+    assert!(
+        program.sun_diffuse_unsaturated(),
+        "a half-precision modifier is not a clamp to [0, 1]"
+    );
 }

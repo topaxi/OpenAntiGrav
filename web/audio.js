@@ -51,6 +51,10 @@ document.addEventListener("visibilitychange", () => {
   if (!context) return;
   (document.hidden ? context.suspend() : context.resume()).catch(() => {});
 });
+// The page stopped the module (fault.js): the worklet has nothing left to play.
+window.oagAudioClose = () => {
+  context?.close().catch(() => {});
+};
 window.oagAudioSetPaused = (paused) => {
   if (context) (paused ? context.suspend() : context.resume()).catch(() => {});
 };

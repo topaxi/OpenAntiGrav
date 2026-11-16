@@ -5,12 +5,14 @@
 //! under the 1,000-line ratchet.
 
 use super::{
-    FALL_ACCELERATION, Impact, KMH_PER_UNIT_PER_SECOND, MAX_FLIGHT_SECONDS, MAX_PROJECTILES,
-    Projectile, Projectiles, RIDE_HEIGHT, SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, cannon,
-    disruptor, mine, missile, nearest_hit, plasma, rocket, shuriken,
+    FALL_ACCELERATION, FloorArms, Impact, KMH_PER_UNIT_PER_SECOND, MAX_FLIGHT_SECONDS,
+    MAX_PROJECTILES, OwnCraftProbe, PlasmaRelease, Projectile, Projectiles, RIDE_HEIGHT,
+    SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, cannon, disruptor, mine, missile, nearest_hit,
+    own_box_blocks, plasma, rocket, shuriken,
 };
 use crate::Craft;
 use oag_core::math::Vec3;
+use oag_physics::cage::Containment;
 use oag_physics::{Ray, Raycaster, Surface};
 use oag_tables::weapons::Weapon;
 
@@ -24,19 +26,32 @@ impl Projectiles {
     /// through a wall. Wall and hull are both tested and the nearer wins. The
     /// owner's own hull is excluded outright (a straight shot cannot come back),
     /// which removes the launch frame's self-hit without a grace period.
-    // Nine parameters, one table block per weapon that flies at an authored speed;
-    // a parameter struct is deferred until a fourth weapon asks for one.
+    ///
+    /// `cage` is the track's collision cage where the title runs one (`None`
+    /// elsewhere): a probe or a travel sweep that ends outside it is the
+    /// original's collision code `4`, taken before the surface class.
+    ///
+    /// `floor_arms` is how the title's weapons write their velocity on a floor
+    /// ([`FloorArms`]). `own_craft` is how the first probes treat the firing craft
+    /// ([`OwnCraftProbe`]). `plasma_release` is how fast a Plasma bolt leaves the node
+    /// ([`PlasmaRelease`]).
+    // One table block per weapon that flies at an authored speed, plus the cage and
+    // the title's floor arms; a parameter struct is deferred until another asks.
     #[allow(clippy::too_many_arguments)]
     pub fn advance<R: Raycaster + ?Sized, S: Craft>(
         &mut self,
         dt: f32,
         raycaster: &R,
+        cage: Option<&dyn Containment>,
         ships: &[S],
         missile: Option<&oag_tables::weapons::MissileStats>,
         plasma: Option<&oag_tables::weapons::PlasmaStats>,
         disruptor: Option<&oag_tables::weapons::DisruptorStats>,
         trigger_radii: TriggerRadii,
         class: &str,
+        floor_arms: FloorArms,
+        own_craft: OwnCraftProbe,
+        plasma_release: PlasmaRelease,
     ) -> [Option<Impact>; MAX_PROJECTILES] {
         let mut impacts = [None; MAX_PROJECTILES];
         // Looked up once: a string match on the class name, the same for every bolt.
@@ -61,16 +76,24 @@ impl Projectiles {
                 // the bolt where the craft is now.
                 let ship = ships.get(projectile.owner as usize);
                 let heading = ship.map(|ship| {
-                    let (position, heading) = plasma::muzzle(ship.physics(), &ship.dimensions());
+                    let (position, heading) = plasma::muzzle(ship);
                     projectile.position = position;
                     projectile.velocity = heading * projectile.velocity.length();
                     // `Plasma_Launch` writes `-craft+0xb10` as the ridden normal;
                     // seeded each held tick so the release tick has it whatever
                     // the table says.
-                    projectile.surface = ship.physics().body.up();
+                    projectile.surface = ship.launch_normal();
                     heading
                 });
                 projectile.charge = (projectile.charge - dt).max(0.0);
+                // Sixty subtractions of f32 `1/60` from `1.0` leave `2.8e-7`, so the
+                // countdown would end on the 61st tick. The original ends it on the
+                // 60th update (`Plasma_Launch` at fire+59 counting the fire frame as
+                // the first, two probe runs), its `dt` being a little over `1/60`.
+                // Under half a tick left is the 60th.
+                if projectile.charge < dt * 0.5 {
+                    projectile.charge = 0.0;
+                }
                 // Release on the tick the countdown crosses zero: `Plasmas_Update`
                 // takes `Plasma_Launch` instead of `Plasma_Update` on that tick
                 // alone, and it re-reads the craft's current velocity,
@@ -88,7 +111,12 @@ impl Projectiles {
                         * KMH_PER_UNIT_PER_SECOND
                         + stats.launch_speed;
                     projectile.launch_speed_kmh = launch_kmh;
-                    projectile.velocity = heading * (launch_kmh / KMH_PER_UNIT_PER_SECOND);
+                    // On Pulse the bolt leaves at 0.75 x the release speed and holds it
+                    // until its first floor ride, as the Rocket does: `Plasma_Launch`
+                    // takes the weapon-node matrix, which carries the craft's display
+                    // scale. HD's node is orthonormalised first. See [`PlasmaRelease`].
+                    projectile.velocity =
+                        heading * (launch_kmh / KMH_PER_UNIT_PER_SECOND * plasma_release.scale());
                 }
                 continue;
             }
@@ -158,6 +186,13 @@ impl Projectiles {
 
             let from = projectile.position;
             let mut to = from + projectile.velocity * dt;
+            // The Plasma's `g_ride_height` is not the Rocket's literal `3.0`; see
+            // [`plasma::RIDE_HEIGHT`].
+            let ride_height = if kind == Weapon::Plasma {
+                plasma::RIDE_HEIGHT
+            } else {
+                RIDE_HEIGHT
+            };
 
             // The surface probe runs before the flight sweep, as in the original:
             // look along the ridden normal; conform if floor-like, fall if
@@ -174,30 +209,99 @@ impl Projectiles {
             // moves `position + velocity * dt` and sweeps that segment, with no
             // surface probe, no ride height and no fall. A probe along a seeded
             // world up snapped a round off the muzzle on any banked track.
-            let probe = if kind == Weapon::Cannon {
+            // A probe the box held runs no arm at all (Pure's weapons branch on the hit kind
+            // themselves and have no case for a box, `psp-pure-usa/own-craft-box.md`).
+            let mut held = false;
+            let in_plasma_window = matches!(
+                (kind, own_craft),
+                (Weapon::Plasma, OwnCraftProbe::PlasmaWindow(window)) if age < window
+            );
+            // An unscaled release rides its ramp from the first tick, window or not: HD's
+            // bolt flies 211.2, 221.6 and 229.5 km/h on its second to fourth ticks off a
+            // 200 km/h release (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "Measured
+            // live").
+            if in_plasma_window
+                && plasma_release == PlasmaRelease::Unscaled
+                && let Some(kmh) = pinned_kmh
+                && projectile.velocity.length_squared() > 0.0
+            {
+                projectile.velocity =
+                    projectile.velocity.normalize() * missile::speed_units_on_surface(kmh);
+                to = from + projectile.velocity * dt;
+            }
+            let probe = if kind == Weapon::Cannon || in_plasma_window {
                 None
             } else {
-                Raycaster::raycast(
+                let segment_end = to - projectile.surface * probe_length;
+                let mesh = Raycaster::raycast(
                     raycaster,
                     Ray::new(to, -projectile.surface, probe_length),
                     None,
                     false,
-                )
+                );
+                // The firing craft's own box hides the track from a probe that crosses it
+                // first: the original's code `0x7f`, a fall. The cage below still asks about
+                // the full segment's end, as the original does.
+                let blocked = matches!(
+                    own_craft,
+                    OwnCraftProbe::CraftBox | OwnCraftProbe::CraftBoxHolds
+                ) && ships.get(projectile.owner as usize).is_some_and(|ship| {
+                    ship.active()
+                        && own_box_blocks(
+                            &ship.physics().body,
+                            &ship.dimensions(),
+                            to,
+                            segment_end,
+                            mesh.map(|hit| hit.distance),
+                        )
+                });
+                held = blocked && own_craft == OwnCraftProbe::CraftBoxHolds;
+                if blocked { None } else { mesh }
             };
+            // `Collision_SweepSegment` (`0x0883198c`) asks the cage about the
+            // probe's end after the mesh: the mesh hit's point when there is one,
+            // else the full segment's end. Outside is code `4`, whatever the mesh
+            // said, so a floor past the tube is a wall to a projectile. The Cannon
+            // has no probe.
+            let probe_escape = cage
+                .filter(|_| kind != Weapon::Cannon && !held)
+                .and_then(|cage| {
+                    let end = probe.map_or(to - projectile.surface * probe_length, |hit| hit.point);
+                    cage.outside(end).map(|(boundary, _)| boundary)
+                });
             // The branch is on the surface class, the original's collision code.
             // `Collision_SweepSegment` (`0x0883198c`) returns `0` wall, `1` floor,
-            // `3` mag floor or `0x7f` nothing. `Rocket_Update` (`0x0885d2a8`):
-            // `0x7f` falls, `0` and `4` detonate, anything else rides.
-            // `Missile_Update` (`0x0885a918`) and `Shuriken_Update` take `0`/`4`
-            // as nothing (no fall, no ride); `Plasma_Update` detonates like the
-            // Rocket. See [`nearest_hit`] for the sweep half.
+            // `3` mag floor, `4` outside the collision cage or `0x7f` nothing.
+            // `Rocket_Update` (`0x0885d2a8`): `0x7f` falls, `0` and `4` detonate,
+            // anything else rides. `Missile_Update` (`0x0885a918`) and
+            // `Shuriken_Update` take `0`/`4` as nothing (no fall, no ride);
+            // `Plasma_Update` detonates like the Rocket. See [`nearest_hit`] for
+            // the sweep half.
             match probe {
+                _ if held => {}
+                // Outside the cage: the Rocket and Plasma go off at the boundary
+                // point, spending no blast as on a wall; the Missile and Shuriken
+                // do nothing this tick, neither riding nor falling.
+                _ if probe_escape.is_some() => {
+                    if let (Some(point), Weapon::Rocket | Weapon::Plasma) = (probe_escape, kind) {
+                        impacts[index] = Some(Impact {
+                            point,
+                            kind,
+                            owner: projectile.owner,
+                            struck: None,
+                            blast: false,
+                            effect: None,
+                        });
+                        *projectile = Projectile::default();
+                        continue;
+                    }
+                }
                 // A floor: sit at the ride height, adopt its normal, turn the
                 // velocity parallel without changing speed, so a projectile
                 // follows a rolling track instead of bouncing down it.
                 Some(hit) if hit.surface.is_hoverable() => {
                     projectile.surface = hit.normal;
-                    to = hit.point + hit.normal * RIDE_HEIGHT;
+                    to = hit.point + hit.normal * ride_height;
                     // A missile or plasma bolt re-pins its speed here:
                     // `Missile_Update` and `Plasma_Update` (`0x0885c6cc`, `default:`
                     // arm, `plasma.md`) normalise and rescale on this branch, by a
@@ -211,11 +315,22 @@ impl Projectiles {
                         || projectile.velocity.length(),
                         missile::speed_units_on_surface,
                     );
-                    if kind == Weapon::Rocket {
-                        // The Rocket steers toward the ride point: `Rocket_Update`
-                        // sets velocity to `(ride point - from) / dt`, rescales to
-                        // the class speed and re-integrates from `from`. See
-                        // `rocket-visuals.md`, 2026-10-01 second pass.
+                    let steers = match kind {
+                        Weapon::Rocket | Weapon::Plasma => true,
+                        Weapon::Missile => floor_arms == FloorArms::SteerToRidePoint,
+                        _ => false,
+                    };
+                    if steers {
+                        // The Rocket and the Plasma steer toward the ride point:
+                        // `Rocket_Update` sets velocity to `(ride point - from) / dt`,
+                        // rescales to the class speed and re-integrates from `from`
+                        // (`rocket-visuals.md`, 2026-10-01 second pass).
+                        // `Plasma_Update`'s `default:` arm is the same two lines
+                        // (`plasma.md`, "`Plasma_Update` is `Rocket_Update`'s floor
+                        // follower"): it is not the parallel-to-the-floor turn below,
+                        // which left a Plasma 0.8 unit off the original's line.
+                        // `Missile_Update`'s probe floor arm is the same again
+                        // (`missile.md`, "The probe's floor arm is the Rocket's steer").
                         let toward = (to - from) / dt;
                         if toward.length_squared() > 0.0 {
                             projectile.velocity = toward.normalize() * speed;
@@ -223,6 +338,13 @@ impl Projectiles {
                         } else {
                             projectile.velocity = toward;
                         }
+                    } else if kind == Weapon::Shuriken && floor_arms == FloorArms::SteerToRidePoint
+                    {
+                        // `Shuriken_Update`'s probe floor arm stops at
+                        // `(ride point - from) / dt`: no normalise, no rescale, so
+                        // the blade's speed is whatever the step was
+                        // (`shuriken.md`, "on a bank the blade's speed drifts").
+                        projectile.velocity = (to - from) / dt;
                     } else {
                         let along =
                             projectile.velocity - hit.normal * projectile.velocity.dot(hit.normal);
@@ -281,32 +403,74 @@ impl Projectiles {
                 None
             };
 
+            // The travel sweep asks the cage the same way: about the geometry hit
+            // when the mesh found one, else about the segment's end. A hull hit
+            // is a different ending and stays one.
+            let sweep_escape = cage
+                .and_then(|cage| match hit {
+                    None => cage.outside(to),
+                    Some(hit) if hit.struck.is_none() => cage.outside(hit.point),
+                    Some(_) => None,
+                })
+                .map(|(boundary, _)| boundary);
             let mut bounced = false;
             match hit {
+                // Outside the cage: every weapon that sweeps ends at the boundary
+                // point as on a wall, with no bounce. The Rocket and Plasma spend no
+                // blast; the Missile's and the Shuriken's `flags |= 0x14` teardown
+                // reaches the explosion and no damage (`missile.md`, "The blast, and
+                // what does not reach it"; `shuriken.md`, "What is not verified"),
+                // so they spend none either (chosen: the Missile's MAX_BOUNCES wall
+                // end below still carries a blast). The Cannon ends as on a wall.
+                _ if let Some(point) = sweep_escape => {
+                    impacts[index] = Some(Impact {
+                        point,
+                        kind,
+                        owner: projectile.owner,
+                        struck: None,
+                        blast: kind == Weapon::Cannon,
+                        effect: None,
+                    });
+                    *projectile = Projectile::default();
+                    continue;
+                }
                 // A floor across the step is ridden, not struck: the original's
                 // travel-segment switch takes a floor code to the same push-out
-                // (`hit + normal * 3.0`) for all four weapons; only a wall or craft
-                // ends a flight. It carries a projectile over a crest into the dip.
+                // (`hit + normal * g_ride_height`) for all four weapons; only a wall
+                // (`0`) or the cage (`4`, above) ends a flight. It carries a
+                // projectile over a crest into the dip.
                 //
-                // The Missile only moves: `Missile_Update`'s floor arm writes no
-                // normal or velocity (its guidance rewrites it). `Rocket_Update`
-                // and `Shuriken_Update` adopt the normal and write
-                // `(next - prev) / dt`. This engine has no per-tick rescale for the
-                // Rocket, so velocity is turned parallel with speed kept (chosen,
-                // not measured).
+                // What else the arm writes differs by weapon
+                // (`rocket-visuals.md`, "By-catch in the flight arms"). The Missile
+                // and the Plasma only move: neither writes a normal or a velocity
+                // (a Missile's guidance rewrites it, a Plasma's next probe does).
+                // `Rocket_Update` and `Shuriken_Update` adopt the normal and write
+                // `(next - prev) / dt` raw, which a rocket landing on a ramp face
+                // carries upward. A title that has not measured the arms turns the
+                // velocity parallel with its length kept (chosen, not measured).
                 Some(hit)
                     if kind != Weapon::Cannon
                         && hit.struck.is_none()
                         && hit.surface.is_some_and(Surface::is_hoverable) =>
                 {
-                    projectile.position = hit.point + hit.normal * RIDE_HEIGHT;
-                    if !guided {
-                        projectile.surface = hit.normal;
-                        let along =
-                            projectile.velocity - hit.normal * projectile.velocity.dot(hit.normal);
-                        if along.length_squared() > 1e-6 {
-                            projectile.velocity = along.normalize() * projectile.velocity.length();
+                    projectile.position = hit.point + hit.normal * ride_height;
+                    match floor_arms {
+                        FloorArms::SteerToRidePoint => {
+                            if matches!(kind, Weapon::Rocket | Weapon::Shuriken) {
+                                projectile.surface = hit.normal;
+                                projectile.velocity = (projectile.position - from) / dt;
+                            }
                         }
+                        FloorArms::ParallelToFloor if !guided => {
+                            projectile.surface = hit.normal;
+                            let along = projectile.velocity
+                                - hit.normal * projectile.velocity.dot(hit.normal);
+                            if along.length_squared() > 1e-6 {
+                                projectile.velocity =
+                                    along.normalize() * projectile.velocity.length();
+                            }
+                        }
+                        FloorArms::ParallelToFloor => {}
                     }
                 }
                 Some(hit) => {

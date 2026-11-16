@@ -1,5 +1,9 @@
 # Pure's pickup icons: authored colour, shown and hidden, never recoloured
 
+> **Channel order, 2026-10-30 (`pure-hud-weapon-icons`):** the words below are ABGR vertex colours as the
+> GPU reads them, so `0xFF40ACFF` is orange and `0xFFFFC040` light blue; compared against ten live frames
+> in `docs/gameplay/pickups.md`. The `colour=` XML text is the same literal.
+
 Live read of Pure USA (`pure-psp-usa.chd`, `UCUS98612_2.00`, PPSSPP 1.20.4 software, the saved
 `time-trial-vineta-vector-feisar-restart` state) on 2026-10-30, lane `pickup-fade-titles`. Addresses
 are the USA binary's; the EU twin (`/pure/BOOT-psp-pure-eu.BIN`) was read for strings and the update.

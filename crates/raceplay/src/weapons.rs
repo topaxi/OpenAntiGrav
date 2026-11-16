@@ -10,6 +10,7 @@
 //! same rule again the day the LeachBeam landed.
 
 use super::*;
+use oag_weapons::Craft as _;
 
 mod disruptor;
 mod repulser;
@@ -26,20 +27,21 @@ pub(crate) use visuals::{CannonAssets, CannonDraw};
 // `#[cfg(test)]` any more for that reason - production code calls through
 // this path, not only `race/tests/weapons.rs`.
 #[cfg(feature = "view")]
-pub(super) use visuals::bounced_this_tick;
-// The remaining four are only reached through `crate::weapons::<name>`
+pub(super) use visuals::{bounced_this_tick, missile_flare_anchors};
+// The remaining five are only reached through `crate::weapons::<name>`
 // by `race/tests/weapons.rs`, which asserts each pure gate without a disc -
 // see the doc comments on `visuals::flare_effect_for` and its neighbours.
 // `#[cfg(test)]` because nothing in a non-test build calls through this
 // path: `visuals.rs` reaches all three directly by their bare names.
 #[cfg(all(test, feature = "view"))]
 pub(super) use visuals::{
-    bounce_effect_for, flare_effect_for, flash_for, missile_flare_anchors, plasma_flare_scale,
+    advance_one_flare, bounce_effect_for, flare_effect_for, flash_for, plasma_flare_scale,
+    plasma_ride_scale,
 };
 
 /// How far behind the body a title that lays from the craft's rear anchor
 /// starts its Mine or Bomb, world units. Pure's `Mine_Init` and `Bomb_Init`
-/// take the anchor matrix at `holder+0xa0`; live on PPSSPP (2026-10-08, Time
+/// take the anchor matrix at `holder+0xa0`; live on PPSSPP (Time
 /// Trial, Feisar, Vineta K and a second circuit) its translation sat
 /// `4.875` and `4.87` behind the body matrix at `ship+0x40` along the craft's
 /// own `-forward`, `6.5` hull units at the `0.75` craft scale, while the
@@ -116,13 +118,50 @@ impl Race {
         if self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(|w| w.simple(oag_tables::weapons::Weapon::Turbo))
             .is_none()
         {
             return;
         }
         self.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
+    }
+
+    /// Whether the craft may fire or absorb its pickup: only while racing.
+    ///
+    /// A craft in its destroyed sequence (`Destroyed`, then `Eliminated` until the
+    /// Eliminator puts it back on the line) cannot fire, lay, absorb or hold a
+    /// trigger, for a person and for the AI alike. The pickup is not touched: what
+    /// it held stays in the slot for after the respawn (`docs/gameplay/pickups.md`,
+    /// "A destroyed craft").
+    ///
+    /// Every use of a pickup asks this: the player's and the opponent's fire, the
+    /// held Cannon trigger, and a mod's own pickup (`Weapon::Extension`), which
+    /// reaches the mod only through those two fire paths. A mod adding a weapon
+    /// handles nothing itself.
+    pub(crate) fn may_use_pickup(&self, slot: usize) -> bool {
+        self.sim.may_use_pickup(slot)
+    }
+
+    /// Ends the use in progress of every craft that may not use its pickup: a mine
+    /// cluster part laid, a Cannon magazine part fired, an armed Quake press.
+    ///
+    /// Cancelled, not paused: nothing resumes after the respawn. A started mine
+    /// cluster or Cannon magazine is the pickup being used, so it is spent; an armed
+    /// Quake was never fired, so its pickup stays like any unused one. Runs first in
+    /// the weapon step, so the laying, Cannon and armed-Quake steps after it find
+    /// nothing to continue.
+    pub(super) fn cancel_pickup_use_of_downed_crafts(&mut self) {
+        for slot in 0..self.sim.world.ship_count as usize {
+            if self.may_use_pickup(slot) {
+                continue;
+            }
+            let held = &mut self.sim.world.ships[slot].pickup;
+            if held.is_dropping() || held.cannon_rounds > 0 {
+                held.take();
+            }
+            held.quake_armed = false;
+        }
     }
 
     /// Fires or absorbs whatever the craft is holding.
@@ -155,6 +194,9 @@ impl Race {
         if !fire && !absorb {
             return;
         }
+        if !self.may_use_pickup(slot) {
+            return;
+        }
         if self.sim.world.ships[slot].autopilot_timer > 0.0 {
             self.spend_pickup_under_autopilot(slot, absorb);
             return;
@@ -164,14 +206,14 @@ impl Race {
         };
         // A simulation mod's own pickup (`Weapon::Extension`): the button is the mod's,
         // and an absorb takes the pickup away with no energy paid (`crate::extensions`).
-        if weapon == oag_tables::weapons::Weapon::Extension {
+        if let oag_tables::weapons::Weapon::Extension(kind) = weapon {
             if !fire {
                 self.sim.world.ships[slot].pickup.take();
             }
-            self.sim.extensions.pickup_used(slot, !fire);
+            self.sim.extensions.pickup_used(slot, kind, !fire);
             return;
         }
-        let Some(weapons) = self.sim.weapons.as_ref() else {
+        let Some(weapons) = self.sim.weapons.as_deref() else {
             return;
         };
 
@@ -182,7 +224,7 @@ impl Race {
         if fire {
             match weapon {
                 // Routed to its mod above, before any table is read.
-                oag_tables::weapons::Weapon::Extension => {}
+                oag_tables::weapons::Weapon::Extension(_) => {}
                 oag_tables::weapons::Weapon::Turbo => {
                     let Some(simple) = weapons.simple(weapon) else {
                         // The file authors no Turbo. Nothing to fire *with*, so
@@ -190,7 +232,7 @@ impl Race {
                         return;
                     };
                     self.sim.world.ships[slot].physics.turbo_timer = simple.time;
-                    // **Recovered, 2026-10-06.** `Turbo_Fire` (`0x088614c4`) ends
+                    // **Recovered.** `Turbo_Fire` (`0x088614c4`) ends
                     // in `FUN_0890514c`, which stores `0.8f` to the exhaust
                     // flare's `+0xb8` and plays `TURBO` - the speed pad's own
                     // `ExhaustFlare_OnSpeedupPad` (`0x08904f10`) body with another
@@ -280,6 +322,8 @@ impl Race {
                         &stats,
                         &self.sim.class,
                         slot as u8,
+                        ship.weapon_counts.rockets,
+                        ship.launch_normal(),
                     ) else {
                         return;
                     };
@@ -300,12 +344,9 @@ impl Race {
                     // (`0x0886a868`) spawns once and clears its own request
                     // bit; the `<Stats>` carry no `spread` to fan a volley
                     // with. See `oag_weapons::projectile::plasma::launch`.
-                    let Some((position, velocity)) = oag_weapons::projectile::plasma::launch(
-                        &ship.physics,
-                        &ship.handling.dimensions,
-                        &stats,
-                        &self.sim.class,
-                    ) else {
+                    let Some((position, velocity)) =
+                        oag_weapons::projectile::plasma::launch(ship, &stats, &self.sim.class)
+                    else {
                         return;
                     };
                     // **Held for a second before it flies.** `Plasma_Init`
@@ -352,18 +393,12 @@ impl Race {
                     {
                         return;
                     }
-                    // Copied out before the draw because `launch` borrows the
-                    // world's generator mutably and the ship state immutably at
-                    // once; both are small `Copy` structs.
-                    let physics = self.sim.world.ships[slot].physics;
-                    let dimensions = self.sim.world.ships[slot].handling.dimensions;
                     // **One blade, twenty degrees off the nose, side chosen by
                     // a coin.** See `oag_weapons::projectile::shuriken::launch`
                     // and `docs/ghidra/functions/psp-pulse-usa/shuriken.md`.
                     let Some(thrown) = oag_weapons::projectile::shuriken::fire(
                         &mut self.sim.world.projectiles,
-                        &physics,
-                        &dimensions,
+                        &self.sim.world.ships[slot],
                         &stats,
                         &self.sim.class,
                         &mut self.sim.world.rng,
@@ -415,8 +450,9 @@ impl Race {
                     }
                 }
                 oag_tables::weapons::Weapon::Mine | oag_tables::weapons::Weapon::Bomb => {
+                    let counts = self.sim.world.ships[slot].weapon_counts;
                     let Some(drop) =
-                        oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons)
+                        oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons, counts)
                     else {
                         // As the Rocket: nothing to lay.
                         return;
@@ -451,13 +487,13 @@ impl Race {
                         // As the Rocket: nothing to fasten onto anybody.
                         return;
                     };
-                    // **The busy check first, and it is a whole-race one.**
-                    // `Weapon_FireLeachBeam` (`0x08866658`) returns on
-                    // `pool->live != 0` - a world cursor, not a per-craft
-                    // cooldown - so a press while *anybody's* beam is up keeps
-                    // the pickup. The strictest gate any weapon here has; see
-                    // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
-                    if self.sim.world.leach_beam.is_some() {
+                    // **The limit check spends the pickup.** `Weapon_FireLeachBeam`
+                    // (`0x08866658`) returns on `pool->live != 0` after the press has
+                    // already cleared the held slot, and the same holds on HD,
+                    // 2048 and Omega (`weapon-instance-limits.md`): a press at the
+                    // limit fires nothing - no beam, no cue - and the pickup is gone.
+                    if self.leach_beams_at_limit() {
+                        self.sim.world.ships[slot].pickup.take();
                         return;
                     }
                     // The lock is the Missile's own, unmodified - the same
@@ -477,13 +513,16 @@ impl Race {
                     // unlocked one - see `Cue::Leach` and `Cue::LeachFail`.
                     //
                     // **The player's lock needs the reticle's lock, under the Pulse
-                    // law** (read 2026-10-01): `Ship_FireHeldWeapon` (`0x08844ae8`)
+                    // law** (read): `Ship_FireHeldWeapon` (`0x08844ae8`)
                     // passes `Weapon_RequestFire` the target only when
                     // `entity+0x860 & 1`, the flag `HudSight_UpdateLeachBeam` sets
                     // when its extent reaches `6.0`, about `0.34` s after a first
                     // sighting; before that it passes `(0, -1)`, the unlocked arm.
-                    // Wipeout HD's LeachBeam reticle is a different function, so it
-                    // keeps firing off the window alone. An opponent has no reticle.
+                    // HD's own update closes its rings over the same `0.34` s and
+                    // turns them red there, so it takes the same gate (inherited
+                    // from the PSP: HD's fire path was not read for it). A title
+                    // whose reticle keeps the Missile's law fires off the window
+                    // alone. An opponent has no reticle.
                     //
                     // **Every person-flown slot holds the lock.** The
                     // [`Race::sight_target`] window is computed for `slot` itself,
@@ -497,7 +536,7 @@ impl Race {
                     let target = self.sight_target(slot).filter(|_| {
                         !self.sim.locks[slot].leach_law() || self.lock_taken(slot).unwrap_or(true)
                     });
-                    self.sim.world.leach_beam = Some(match target {
+                    let beam = match target {
                         Some(target) => {
                             self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                                 oag_gameplay::cue::Cue::Leach,
@@ -514,15 +553,16 @@ impl Race {
                             ));
                             oag_weapons::projectile::leach_beam::Beam::unlocked(slot as u8, &stats)
                         }
-                    });
+                    };
+                    self.arm_leach_beam(beam);
                 }
                 oag_tables::weapons::Weapon::Quake => {
-                    let Some(stats) = weapons.quake() else {
+                    if weapons.quake().is_none() {
                         // No authored Quake, so nothing to launch - the same
                         // "keep the pickup" rule the Rocket's and the
                         // Plasma's arms follow for a missing table.
                         return;
-                    };
+                    }
                     // `QUAKELAUNCH`, on the press itself - see
                     // `Cue::QuakeLaunch`'s own doc comment for why this sits
                     // ahead of the busy check below: `Ship_FireHeldWeapon`'s
@@ -535,42 +575,21 @@ impl Race {
                     ));
                     // **The busy check - matching `Weapon_FireQuake`'s
                     // own `if (q->active != 0) return;`, which runs before
-                    // the original ever clears the held slot.** Only one
-                    // wave can be in flight in the whole race at once, so a
-                    // press while one is already travelling keeps the
-                    // pickup rather than spending it on nothing. See
+                    // the original ever clears the held slot or the request
+                    // bit.** Only one wave can be in flight in the whole race
+                    // at once, so a press while one is already travelling
+                    // keeps the pickup rather than spending it on nothing, and
+                    // **stays armed**: `Race::fire_armed_quakes` launches it
+                    // the tick after the live wave ends (measured on Pulse
+                    // PSP). See
                     // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
                     if self.sim.world.quake.is_some() {
+                        self.sim.world.ships[slot].pickup.quake_armed = true;
                         return;
                     }
-                    let ship = &self.sim.world.ships[slot];
-                    let Some(progress) = ship.standing.progress else {
-                        // Not yet located on the course - nowhere on the
-                        // track's own spline to launch a travelling wave
-                        // from. Keep the pickup; this is a startup edge case
-                        // a moving craft clears within a tick or two.
+                    if !self.launch_quake(slot) {
                         return;
-                    };
-                    // The direction sign: dot the firing craft's own forward
-                    // against the track's own tangent where it currently
-                    // stands, the same dot product `Quake_Init` reads to
-                    // pick which way the wave travels. `unwrap_or(1.0)` is
-                    // the same "forward, not stalled" default
-                    // `oag_weapons::projectile::quake::Wave::launch` itself
-                    // takes for an exactly-perpendicular dot - see that
-                    // function's own doc comment for why.
-                    let forward_dot_tangent = ship
-                        .standing
-                        .course_index
-                        .and_then(|index| self.sim.course.as_ref()?.tangent(index as usize))
-                        .map(|tangent| tangent.dot(ship.physics.body.forward()))
-                        .unwrap_or(1.0);
-                    self.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
-                        slot as u8,
-                        progress,
-                        forward_dot_tangent,
-                        &stats,
-                    ));
+                    }
                 }
                 oag_tables::weapons::Weapon::Repulser => {
                     // `Weapon_FireRepulser` - see `Race::fire_repulser` for
@@ -648,14 +667,14 @@ impl Race {
     /// almost all of the time: [`oag_weapons::pickup::Held::advance_drop`]
     /// returns immediately on a zero counter.
     pub(super) fn lay_mines(&mut self) {
-        let Some(weapons) = self.sim.weapons.as_ref() else {
+        let Some(weapons) = self.sim.weapons.as_deref() else {
             // No table. A craft cannot have started a drop without one - the arm
             // above gates on exactly this - so there is nothing in flight to
             // abandon.
             return;
         };
         for slot in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[slot].active
+            if !self.sim.world.ships[slot].in_world()
                 || !self.sim.world.ships[slot].pickup.is_dropping()
             {
                 continue;
@@ -667,7 +686,9 @@ impl Race {
             let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
                 continue;
             };
-            let Some(drop) = oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons)
+            let counts = self.sim.world.ships[slot].weapon_counts;
+            let Some(drop) =
+                oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons, counts)
             else {
                 continue;
             };
@@ -710,7 +731,7 @@ impl Race {
     /// button is held down.
     ///
     /// **The countdown only advances while fire is held**, which is what makes
-    /// this weapon behave as the maintainer describes the original: hold to
+    /// this weapon behave as the original does: hold to
     /// fire at the authored `rate`, or tap repeatedly for a few frames of
     /// countdown per tap. `Cannon_UpdateReload` (`0x0883f424`) opens with
     /// `if (*(*(entity+0x94)+0x78) + 0x16 == 0) return;`, and that byte is the
@@ -761,7 +782,7 @@ impl Race {
         let Some(cannon) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::cannon)
         else {
             // No table, or the table authors no Cannon - Pure's does not.
@@ -774,9 +795,11 @@ impl Race {
         let places = self.places();
         for slot in 0..self.sim.world.ship_count as usize {
             // A human slot follows its own pad; every other slot asks its own
-            // driver. This read the literal slot 0 until 2026-09-16 - the same
-            // single slot while slot 0 is the only human, and now the question
-            // the grid actually answers.
+            // driver. Not the literal slot 0, which is the same
+            // only while slot 0 is the only human.
+            if !self.may_use_pickup(slot) {
+                continue;
+            }
             let holds_fire = if self.sim.world.controllers[slot].is_human() {
                 // That slot's own held state. An autopilot blend takes the pad
                 // out of the loop entirely, exactly as above.
@@ -815,17 +838,18 @@ impl Race {
     /// One craft's Cannon countdown, and the round it puts in the air when the
     /// countdown reaches zero. See [`Self::advance_cannons`] for the gate.
     fn advance_one_cannon(&mut self, slot: usize, cannon: &oag_tables::weapons::CannonStats) {
-        if !self.sim.world.ships[slot].active
+        if !self.sim.world.ships[slot].in_world()
             || self.sim.world.ships[slot].pickup.weapon != Some(oag_tables::weapons::Weapon::Cannon)
         {
             return;
         }
+        // Saturating: a disc that ever authored more than 255 rounds
+        // would clamp here rather than panic, and none measured does.
+        let rounds = cannon.rounds.max(0.0).round() as u8;
         let Some(remaining) = self.sim.world.ships[slot].pickup.advance_cannon_reload(
             self.sim.dt,
             cannon.rate,
-            // Saturating: a disc that ever authored more than 255 rounds
-            // would clamp here rather than panic, and none measured does.
-            cannon.rounds.max(0.0).round() as u8,
+            rounds,
         ) else {
             // The countdown moved but has not reached zero yet.
             return;
@@ -856,7 +880,7 @@ impl Race {
         // banked craft is drawn rolled with it. Measured basis `(up x f, up, f)`
         // only on a near-flat track, where it cannot tell the two apart; that it
         // is the craft's up on a bank is the anchor copy read, not measured
-        // (`cannon-quake-leachbeam.md`, 2026-09-24).
+        // (`cannon-quake-leachbeam.md`).
         if self.sim.world.projectiles.spawn_riding(
             oag_tables::weapons::Weapon::Cannon,
             position,
@@ -869,6 +893,14 @@ impl Race {
                 oag_gameplay::cue::Cue::Cannon,
                 slot,
             ));
+            // The press that starts a burst announces once; the rounds that follow
+            // while fire is held do not (`Weapon_RequestFire` runs on the press, the
+            // rounds come from `Cannon_UpdateReload`), or the warning's 2.0 s timer
+            // would restart on every round and never reach a lit phase.
+            #[cfg(feature = "view")]
+            if remaining + 1 == rounds {
+                self.note_incoming_fire(slot, oag_tables::weapons::Weapon::Cannon);
+            }
         }
     }
 
@@ -943,7 +975,7 @@ impl Race {
             position,
             ship.physics.body.forward(),
             stats,
-            self.sim.course.as_ref().map(oag_race::Course::length),
+            self.sim.course.as_deref().map(oag_race::Course::length),
         );
         // Only a person-flown craft needs the extra hold - see
         // "The lock test is shared; the hold is not" above. A press before the
@@ -960,7 +992,7 @@ impl Race {
             slot as u8,
             target,
             launch_kmh,
-            self.sim.world.ships[slot].physics.body.up(),
+            self.sim.world.ships[slot].launch_normal(),
         );
         // Both `Race::spend_pickup`'s player press and
         // `Race::fire_opponent_missile` reach here, so pushing the cue in

@@ -18,6 +18,10 @@ pub(super) struct PreviewRequest {
     /// The skin `.dat` to paint it in, when the settings name one the team
     /// declares.
     pub skin: Option<String>,
+    /// The livery folders the selected model paints the hull from
+    /// ([`crate::preview::variant::livery_folders`]), or a Zone race's
+    /// ([`crate::preview::variant::zone_folders`]).
+    pub livery: Option<crate::preview::variant::Folders>,
     /// The race hull a front-end hull's flaps are seated from - see
     /// [`crate::preview::race_hull_entry`].
     pub race_hull: Option<String>,
@@ -36,6 +40,13 @@ pub(super) struct PreviewRequest {
     /// HD's `ShipModel` widget: frames the race hull on its own authored pose,
     /// see [`crate::preview::ship_model`]. Takes the place of the fixed orbit.
     pub ship_model: Option<oag_ui_screens::picker::hd::ShipModel>,
+    /// The title's own fit of the craft's depth and where it has the selected
+    /// model, which frame the hull in place of `ship_model`'s authored pose - see
+    /// [`crate::preview::ship_model::framed`].
+    pub ship_fit: Option<(oag_title::ShipFit, crate::preview::ship_model::Framing)>,
+    /// How large the craft is against its rest size, for a title that poses it itself: the
+    /// fit's settle, see [`crate::preview::ship_model::placement`]. `1.0` otherwise.
+    pub ship_scale: f32,
     /// HD's `TrackModel` widget: places the circuit model on its own camera,
     /// see [`crate::preview::track_model`]. Takes the place of `mode3d` and
     /// the orbit.
@@ -46,6 +57,9 @@ pub(super) struct PreviewRequest {
     /// Seconds since the screen opened and since a selection step, for the
     /// race hull's swap - see [`crate::preview::hull_swap`].
     pub hull_clock: (f32, f32),
+    /// Whether the served front end is the Fury style, which picks the light its models are
+    /// drawn in - see [`crate::preview::model_light`].
+    pub fury: bool,
 }
 
 /// The source a capture's race options name, opened with its packs, for the
@@ -71,15 +85,28 @@ pub(super) fn draw_preview(
     viewport: (f32, f32, f32, f32),
     target_size: (u32, u32),
     space: oag_display::space::Space,
+    title: &oag_title::Title,
     race: &oag_raceplay::Options,
     request: &PreviewRequest,
     anisotropy: Anisotropy,
+    safe_area: f32,
 ) {
     let swap = crate::preview::hull_swap::phase(request.hull_clock.0, request.hull_clock.1);
     if request.hull_only && !swap.visible {
         return;
     }
     let built = open_for_previews(race).and_then(|mut archives| {
+        let light = if request.hull_only {
+            let mut report = Vec::new();
+            let light =
+                crate::preview::model_light(&mut archives, title, request.fury, &mut report);
+            for line in report {
+                log::debug!("preview {}: {line}", request.entry);
+            }
+            light
+        } else {
+            None
+        };
         let mut model = if request.track_model.is_some() {
             crate::preview::psp2_scene::model(&mut archives, &request.entry)?
         } else {
@@ -88,6 +115,10 @@ pub(super) fn draw_preview(
                 &request.entry,
                 request.fallback.as_deref(),
                 request.race_hull.as_deref(),
+                request
+                    .livery
+                    .as_ref()
+                    .map(crate::preview::variant::Folders::folder),
             )?
             .0
         };
@@ -117,6 +148,10 @@ pub(super) fn draw_preview(
             anisotropy,
             model,
         )?;
+        let preview = match light {
+            Some(light) => preview.lit_by(queue, light),
+            None => preview,
+        };
         Ok(match ramp {
             Some(ramp) => preview.with_ramp(ramp),
             None => preview,
@@ -139,8 +174,17 @@ pub(super) fn draw_preview(
         }
         Ok(mut preview) if request.hull_only && request.ship_model.is_some() => {
             let widget = request.ship_model.as_ref().expect("checked by the guard");
-            let (view_projection, model) =
-                crate::preview::ship_model::matrices(widget, space, swap.scale);
+            let fit = request
+                .ship_fit
+                .as_ref()
+                .map(|(fit, framing)| (fit, *framing));
+            let (view_projection, model) = crate::preview::ship_model::framed(
+                widget,
+                fit,
+                space,
+                request.ship_scale,
+                safe_area,
+            );
             preview.draw_matrices(
                 device,
                 queue,
@@ -164,13 +208,7 @@ pub(super) fn draw_preview(
             space,
             request.mode3d.as_ref(),
             request.rect,
-            {
-                let mut orbit = crate::preview::capture_orbit(request.hull_only, request.kind);
-                if request.hull_only {
-                    orbit.zoom /= swap.scale;
-                }
-                orbit
-            },
+            crate::preview::capture_orbit(request.hull_only, request.kind),
             request.seconds,
         ),
         Err(error) => log::warn!("{}: {error:#} - the preview draws nothing", request.entry),

@@ -64,9 +64,14 @@ struct Log {
     arcs_without_vertices: usize,
 }
 
-fn fly(drop_edges: bool, audio: Option<&mut oag_sound::Audio>) -> (Log, Vec<i16>) {
+fn fly(
+    drop_edges: bool,
+    audio: Option<&mut oag_sound::Audio>,
+    on_loaded: impl FnOnce(&race::Race),
+) -> Log {
     let mut race = load().expect("the HD disc");
     assert!(race.has_magstrip_wake(), "HD builds the wake");
+    on_loaded(&race);
     let mut audio = audio;
     let mut log = Log::default();
     let mut was = [false; 8];
@@ -112,16 +117,11 @@ fn fly(drop_edges: bool, audio: Option<&mut oag_sound::Audio>) -> (Log, Vec<i16>
             audio.tick();
         }
     }
-    (log, Vec::new())
+    log
 }
 
-#[test]
-#[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn every_craft_visits_a_strip_and_its_edges_match_its_cues() {
-    if load().is_none() {
-        return;
-    }
-    let (log, _) = fly(false, None);
+/// Every craft visits a strip, and each visit and departure has its cue.
+fn every_craft_visits_a_strip_and_its_edges_match_its_cues(log: &Log) {
     println!(
         "rising {:?}\nfalling {:?}\nstarts {:?}\nstops {:?}",
         log.rising, log.falling, log.starts, log.stops
@@ -147,10 +147,8 @@ fn every_craft_visits_a_strip_and_its_edges_match_its_cues() {
     assert_eq!(log.arcs_without_vertices, 0, "live arcs that drew nothing");
 }
 
-#[test]
-#[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn the_hum_is_in_shiphd_bnk_and_changes_the_audio_only_on_the_strip() {
-    let Some(race) = load() else { return };
+/// `~magstrip01` loads from `shiphd.bnk`.
+fn the_hum_is_in_shiphd_bnk(race: &race::Race) {
     let mut rng = oag_core::Rng::new(1);
     let voices = race
         .sounds()
@@ -175,7 +173,14 @@ fn the_hum_is_in_shiphd_bnk_and_changes_the_audio_only_on_the_strip() {
         "~magstrip01 over 200 draws: {} one-shot, {} looping voices",
         seen[0], seen[1]
     );
-    drop(race);
+}
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_flight_visits_every_strip_and_the_hum_changes_the_audio_only_on_it() {
+    if oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso").is_none() {
+        return;
+    }
 
     let render = |drop_edges: bool| {
         let wav = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
@@ -190,7 +195,11 @@ fn the_hum_is_in_shiphd_bnk_and_changes_the_audio_only_on_the_strip() {
             oag_audio::MIN_BUFFER,
             false,
         );
-        let (log, _) = fly(drop_edges, Some(&mut audio));
+        let log = fly(drop_edges, Some(&mut audio), |race| {
+            if !drop_edges {
+                the_hum_is_in_shiphd_bnk(race);
+            }
+        });
         audio.finish().expect("writing the dump");
         let file = std::fs::read(&wav).expect("the dump");
         let pcm: Vec<i16> = file[44..]
@@ -202,6 +211,7 @@ fn the_hum_is_in_shiphd_bnk_and_changes_the_audio_only_on_the_strip() {
         (log, pcm)
     };
     let (log, on) = render(false);
+    every_craft_visits_a_strip_and_its_edges_match_its_cues(&log);
     let (_, off) = render(true);
     let first_start = log.starts.iter().map(|e| e.0).min().expect("a start") as usize;
     let at = first_start * FRAMES_PER_TICK * 2;
@@ -216,4 +226,245 @@ fn the_hum_is_in_shiphd_bnk_and_changes_the_audio_only_on_the_strip() {
         after.iter().zip(&off[at..]).any(|(a, b)| a != b),
         "dropping the hum changed nothing once a craft was on a strip"
     );
+}
+
+#[derive(Default)]
+struct Pad {
+    sets: Vec<(usize, oag_input::rumble::Motors)>,
+}
+
+impl oag_input::rumble::MotorOutput for Pad {
+    fn set(&mut self, seat: usize, motors: oag_input::rumble::Motors) {
+        self.sets.push((seat, motors));
+    }
+    fn silence(&mut self) {}
+}
+
+fn count(fired: &[(&'static str, u32)], name: &str) -> u32 {
+    fired
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map_or(0, |(_, c)| *c)
+}
+
+/// What the local player's pad did over `ticks` ticks of the autopiloted field:
+/// the pad's writes, the rumbler's tally, and the player's own strip and pad
+/// edges for comparison.
+struct Run {
+    pad: Pad,
+    fired: Vec<(&'static str, u32)>,
+    rises: u32,
+    falls: u32,
+    pad_cues: u32,
+    bot_pad_cues: u32,
+}
+
+/// One flight of the autopiloted field with a rumbler per `(token, paused_from)`
+/// variant, each writing to its own pad. A rumbler reads the race and never
+/// writes it, so the variants share the simulation; `give_autopilot` changes the
+/// simulation and so has its own flight.
+fn rumble_runs(give_autopilot: bool, variants: &[(&str, Option<u64>)]) -> Option<Vec<Run>> {
+    let mut race = load()?;
+    let mut rumblers: Vec<_> = variants
+        .iter()
+        .map(|&(token, _)| oag_game::rumble::Rumbler::new(&race, token, oag_hd::TITLE.rumble))
+        .collect();
+    for (&(token, _), rumbler) in variants.iter().zip(&rumblers) {
+        if token == "none" {
+            assert!(rumbler.is_none(), "RUMBLE none builds no rumbler");
+        }
+    }
+    if give_autopilot {
+        race.sim.world.ships[0].autopilot_timer = 4.0;
+    }
+    let mut runs: Vec<Run> = variants
+        .iter()
+        .map(|_| Run {
+            pad: Pad::default(),
+            fired: Vec::new(),
+            rises: 0,
+            falls: 0,
+            pad_cues: 0,
+            bot_pad_cues: 0,
+        })
+        .collect();
+    let mut was = false;
+    for tick in 0..TICKS {
+        race.tick(&PlayerInputs::none());
+        let (mut pad_cues, mut bot_pad_cues) = (0, 0);
+        for event in race.pending_cues() {
+            if event.cue == Cue::SpeedupPad {
+                if event.slot == 0 {
+                    pad_cues += 1;
+                } else {
+                    bot_pad_cues += 1;
+                }
+            }
+        }
+        let over = race.over_magstrip(0);
+        let (rise, fall) = (u32::from(over && !was), u32::from(!over && was));
+        was = over;
+        for ((run, rumbler), &(_, paused_from)) in runs.iter_mut().zip(&mut rumblers).zip(variants)
+        {
+            run.pad_cues += pad_cues;
+            run.bot_pad_cues += bot_pad_cues;
+            run.rises += rise;
+            run.falls += fall;
+            if let Some(rumbler) = rumbler {
+                rumbler.tick(
+                    &race,
+                    paused_from.is_some_and(|from| tick >= from),
+                    &mut run.pad,
+                );
+            }
+        }
+        race.drain_cues();
+    }
+    for (run, rumbler) in runs.iter_mut().zip(&rumblers) {
+        if let Some(rumbler) = rumbler {
+            run.fired = rumbler.fired();
+        }
+    }
+    Some(runs)
+}
+
+fn rumble_run(token: &str, paused_from: Option<u64>, give_autopilot: bool) -> Option<Run> {
+    rumble_runs(give_autopilot, &[(token, paused_from)])?.pop()
+}
+
+/// The player's pad plays the disc's edge patterns, a bot's events reach no
+/// motor, RUMBLE none fires nothing, and a pause silences the motors: three
+/// rumblers on one flight.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_players_pad_plays_the_discs_edge_patterns_none_fires_nothing_and_a_pause_silences_the_motors()
+ {
+    let Some([run, none, paused]) =
+        rumble_runs(false, &[("ps3", None), ("none", None), ("ps3", Some(0))])
+            .and_then(|runs| <[Run; 3]>::try_from(runs).ok())
+    else {
+        return;
+    };
+    println!("fired {:?}", run.fired);
+    assert!(run.rises >= 1, "the player reaches a strip");
+    assert_eq!(count(&run.fired, "enter_mag_rumble"), run.rises);
+    assert_eq!(count(&run.fired, "exit_mag_rumble"), run.falls);
+    assert_eq!(count(&run.fired, "travel_mag_rumble"), run.rises);
+    assert_eq!(
+        count(&run.fired, "pad_speed"),
+        run.pad_cues,
+        "one pad_speed per speed pad the player crossed; seven bots crossed {} more",
+        run.bot_pad_cues
+    );
+    assert!(run.pad_cues >= 1, "the player crosses a speed pad");
+    assert!(run.pad.sets.iter().any(|(_, m)| m.large > 0), "a motor ran");
+    assert!(
+        run.pad.sets.iter().all(|(seat, _)| *seat == 0),
+        "only the player's seat is written"
+    );
+
+    assert!(none.fired.is_empty() && none.pad.sets.is_empty());
+
+    assert!(
+        paused
+            .pad
+            .sets
+            .iter()
+            .all(|(_, m)| m.large == 0 && m.small == 0),
+        "paused from the first tick, nothing is felt"
+    );
+    assert!(
+        count(&paused.fired, "enter_mag_rumble") >= 1,
+        "voices still start while paused: the patterns run on"
+    );
+}
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn a_held_autopilot_loops_until_the_pickup_runs_out_then_finishes() {
+    let Some(run) = rumble_run("ps3", None, true) else {
+        return;
+    };
+    assert_eq!(count(&run.fired, "autopilot_active_rumble"), 1);
+    let running = run
+        .pad
+        .sets
+        .iter()
+        .take(4 * 60)
+        .filter(|(_, m)| m.large > 0)
+        .count();
+    assert!(
+        running > 3 * 60,
+        "held for the 4 s, not a one-shot: {running} ticks"
+    );
+}
+
+fn flown_into_the_wall(stick: f32) -> Option<(Run2, race::Race)> {
+    let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    let mut rumbler = oag_game::rumble::Rumbler::new(&race, "ps3", oag_hd::TITLE.rumble)
+        .expect("HD builds a rumbler");
+    let mut buttons = oag_gameplay::input::Input::EMPTY;
+    buttons.begin_frame(oag_gameplay::input::Button::Cross.bit());
+    let inputs = PlayerInputs::single(oag_gameplay::input::InputSnapshot {
+        buttons,
+        stick_x: stick,
+        ..oag_gameplay::input::InputSnapshot::EMPTY
+    });
+    let mut run = Run2 {
+        pad: Pad::default(),
+        contact_ticks: 0,
+        fired: Vec::new(),
+    };
+    for _ in 0..3600u64 {
+        race.tick(&inputs);
+        run.contact_ticks += u32::from(race.wall_contact_of(0).is_some());
+        rumbler.tick(&race, false, &mut run.pad);
+        race.drain_cues();
+    }
+    run.fired = rumbler.fired();
+    Some((run, race))
+}
+
+struct Run2 {
+    pad: Pad,
+    contact_ticks: u32,
+    fired: Vec<(&'static str, u32)>,
+}
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn a_scrape_down_a_wall_plays_the_collision_bands_the_contact_size_calls_for() {
+    let Some((run, _)) = flown_into_the_wall(1.0) else {
+        return;
+    };
+    println!("fired {:?}", run.fired);
+    let started = |prefix: &str| {
+        run.fired
+            .iter()
+            .filter(|(n, _)| n.starts_with(prefix))
+            .map(|(_, c)| *c)
+            .sum::<u32>()
+    };
+    assert!(run.contact_ticks > 0, "the ship reaches a wall");
+    assert!(
+        started("collision_heavy") >= 1,
+        "pressed hard against the wall"
+    );
+    assert!(
+        started("collision_right") + started("collision_left") >= 1,
+        "a glancing scrape decays through the lighter bands"
+    );
+    assert!(
+        started("collision_") <= run.contact_ticks,
+        "no voice starts without a contact tick"
+    );
+    assert!(run.pad.sets.iter().any(|(_, m)| m.large > 0));
 }

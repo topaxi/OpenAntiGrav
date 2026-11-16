@@ -48,7 +48,11 @@ fn off(ids: &[&str]) -> BTreeSet<String> {
 }
 
 fn load(base: &Path, disabled: &BTreeSet<String>) -> Mods {
-    Mods::load_from(&[base.to_path_buf()], disabled).unwrap()
+    let switches = oag_game::settings::Mods {
+        disabled: disabled.clone(),
+        ..Default::default()
+    };
+    Mods::load_from(&[base.to_path_buf()], &switches).unwrap()
 }
 
 fn build(mods: &Mods) -> mods::Built {
@@ -57,6 +61,7 @@ fn build(mods: &Mods) -> mods::Built {
         None,
         Some(oag_ui::menu::For {
             title: oag_pulse::TITLE,
+            platform: oag_assets::Platform::Psp,
             updated: false,
         }),
     )
@@ -124,9 +129,14 @@ fn the_built_in_cannot_be_turned_off() {
         "the MODS row is the built-in's; it stays"
     );
     assert_eq!(built.listing[0].enabled, Some(true));
-    let mut disabled = BTreeSet::new();
-    assert!(!mods::switch(&mut disabled, oag_mod::extras::ID, false));
-    assert!(disabled.is_empty());
+    let mut switches = oag_game::settings::Mods::default();
+    assert!(!mods::switch(
+        &mut switches,
+        oag_mod::extras::ID,
+        false,
+        true
+    ));
+    assert!(switches.disabled.is_empty());
     let (choices, value) = mods::switch_for(&built.listing[0], &StringTable::default());
     assert_eq!(value, "on");
     assert_eq!(choices.len(), 1, "one value: nothing to step to");
@@ -139,15 +149,16 @@ fn the_built_in_cannot_be_turned_off() {
 
 #[test]
 fn the_switch_turns_a_mod_off_and_on_again_in_the_set() {
-    let mut disabled = BTreeSet::new();
-    assert!(mods::switch(&mut disabled, "test.garage", false));
+    let mut switches = oag_game::settings::Mods::default();
+    assert!(mods::switch(&mut switches, "test.garage", false, true));
     assert!(
-        !mods::switch(&mut disabled, "test.garage", false),
+        !mods::switch(&mut switches, "test.garage", false, true),
         "already off"
     );
-    assert_eq!(disabled, off(&["test.garage"]));
-    assert!(mods::switch(&mut disabled, "test.garage", true));
-    assert!(disabled.is_empty());
+    assert_eq!(switches.disabled, off(&["test.garage"]));
+    assert!(mods::switch(&mut switches, "test.garage", true, true));
+    assert!(switches.disabled.is_empty());
+    assert!(switches.enabled.is_empty());
 }
 
 #[test]
@@ -194,14 +205,268 @@ fn the_enabled_row_follows_the_mod_row() {
     );
 }
 
-#[test]
-fn a_mod_turned_off_is_not_in_the_lan_fingerprint() {
-    let dir = base("fingerprint");
-    let empty = std::env::temp_dir().join(format!("oag-mods-switch-{}-none", std::process::id()));
+/// A mod `folder` (id `test.<folder>`) with the manifest `extra` appended and `files` beside it.
+fn fingerprint_mod(dir: &Path, folder: &str, extra: &str, files: &[&str]) {
+    let path = dir.join(folder);
+    std::fs::create_dir_all(&path).unwrap();
+    let text = MANIFEST
+        .replace("test.garage", &format!("test.{folder}"))
+        .replace("Garage", folder)
+        + extra;
+    std::fs::write(path.join("oag-mod.toml"), text).unwrap();
+    for file in files {
+        let target = path.join(file);
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::write(target, b"x").unwrap();
+    }
+}
+
+fn fingerprint_of(dir: &Path) -> u64 {
+    load(dir, &BTreeSet::new()).content_fingerprint(&Default::default())
+}
+
+fn empty_base(name: &str) -> PathBuf {
+    let empty = std::env::temp_dir().join(format!("oag-mods-switch-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&empty);
     std::fs::create_dir_all(&empty).unwrap();
-    let none = load(&empty, &BTreeSet::new()).content_fingerprint();
-    let on = load(&dir, &BTreeSet::new()).content_fingerprint();
-    let turned_off = load(&dir, &off(&["test.garage"])).content_fingerprint();
-    assert_ne!(on, none);
-    assert_eq!(turned_off, none, "a mod that is off changes no race");
+    empty
+}
+
+#[test]
+fn a_page_or_string_only_mod_leaves_the_lan_fingerprint_alone() {
+    let dir = base("fingerprint-pages");
+    let none = fingerprint_of(&empty_base("fingerprint-pages-none"));
+    assert_eq!(none, oag_net::discovery::NO_MODS);
+    assert_eq!(fingerprint_of(&dir), none, "a row-only mod");
+    fingerprint_mod(&dir, "words", "", &["strings/english.toml"]);
+    fingerprint_mod(&dir, "pilots", "", &["pilots/ace.toml"]);
+    assert_eq!(fingerprint_of(&dir), none, "strings and pilots too");
+}
+
+#[test]
+fn a_simulation_track_or_campaign_mod_changes_the_lan_fingerprint() {
+    let none = oag_net::discovery::NO_MODS;
+    let simulation = "\n[extension]\nsimulation = true\napi = 1\nstate_bytes = 64\n\n[extension.rules]\nmodule = \"ext/rules.wasm\"\n";
+    let cases: [(&str, &str, &[&str]); 3] = [
+        ("sim", simulation, &["ext/rules.wasm"]),
+        ("track", "", &["tracks/lagoon.track.toml"]),
+        ("campaign", "", &["campaigns/run.toml"]),
+    ];
+    for (folder, extra, files) in cases {
+        let dir = base(&format!("fingerprint-{folder}"));
+        fingerprint_mod(&dir, folder, extra, files);
+        assert_ne!(fingerprint_of(&dir), none, "a {folder} mod changes a race");
+        let off =
+            load(&dir, &off(&[&format!("test.{folder}")])).content_fingerprint(&Default::default());
+        assert_eq!(off, none, "and does not when it is off");
+    }
+}
+
+fn channel_mod(dir: &Path, folder: &str, id: &str, channels: &str) {
+    let path = dir.join(folder);
+    std::fs::create_dir_all(&path).unwrap();
+    let text = MANIFEST
+        .replace("test.garage", id)
+        .replace("Garage", folder)
+        + "\n[channels]\n"
+        + channels;
+    std::fs::write(path.join("oag-mod.toml"), text).unwrap();
+}
+
+#[test]
+fn a_channel_nobody_loaded_sends_is_warned_about_by_name_on_the_listener() {
+    let dir = base("channels");
+    channel_mod(
+        &dir,
+        "ear",
+        "test.ear",
+        "listens = [\"test.mouth/hello\"]\n",
+    );
+    channel_mod(
+        &dir,
+        "mouth",
+        "test.mouth",
+        "publishes = [\"test.mouth/hello\"]\n",
+    );
+    let strings = StringTable::default();
+    let lines = |built: &mods::Built, id: &str| {
+        built
+            .listing
+            .iter()
+            .find(|m| m.id == id)
+            .unwrap()
+            .table(&strings)
+    };
+    let both = build(&load(&dir, &BTreeSet::new()));
+    let ear = lines(&both, "test.ear");
+    assert!(
+        ear.contains(&("HEARS".into(), "test.mouth/hello".into())),
+        "{ear:?}"
+    );
+    assert!(ear.iter().all(|(l, _)| l != "NO ONE SENDS"), "{ear:?}");
+    assert!(lines(&both, "test.mouth").contains(&("SENDS".into(), "test.mouth/hello".into())));
+    let silent = build(&load(&dir, &off(&["test.mouth"])));
+    assert!(
+        lines(&silent, "test.ear").contains(&("NO ONE SENDS".into(), "test.mouth/hello".into())),
+        "{:?}",
+        lines(&silent, "test.ear")
+    );
+}
+
+#[test]
+fn a_flat_list_front_end_with_four_lines_keeps_the_no_one_sends_warning() {
+    let dir = base("narrow");
+    channel_mod(
+        &dir,
+        "ear",
+        "test.ear",
+        "listens = [\"test.mouth/hello\"]\n",
+    );
+    let strings = StringTable::default();
+    let built = build(&load(&dir, &BTreeSet::new()));
+    let ear = built.listing.iter().find(|m| m.id == "test.ear").unwrap();
+    let lines = ear.table_within(&strings, 4);
+    assert!(lines.len() <= 4, "{lines:?}");
+    assert!(
+        lines.contains(&("NO ONE SENDS".into(), "test.mouth/hello".into())),
+        "{lines:?}"
+    );
+    assert!(lines.iter().any(|(l, _)| l == "ADDS"), "{lines:?}");
+}
+
+/// A mod that starts off (a texture pack) is off until the player turns it on, and the switch
+/// is the `enabled` list, not `disabled`: so it is a mod installed later that takes its own
+/// default, and turning it off again leaves nothing behind.
+#[test]
+fn a_texture_pack_starts_off_and_its_switch_is_the_enabled_list() {
+    let dir = base("pack");
+    let pack = dir.join("Some Pulse Pack");
+    std::fs::create_dir_all(&pack).unwrap();
+    std::fs::write(
+        pack.join("textures.ini"),
+        "[options]\nhash = xxh64\n[games]\nUCES00465 = textures.ini\n[hashes]\n",
+    )
+    .unwrap();
+    let id = "ppsspp.some-pulse-pack";
+
+    let mut switches = oag_game::settings::Mods::default();
+    let loaded = Mods::load_from(std::slice::from_ref(&dir), &switches).unwrap();
+    assert!(
+        loaded.is_disabled(id),
+        "off before the player says otherwise"
+    );
+    assert!(loaded.player().all(|m| m.manifest.id != id));
+    let listing = build(&loaded).listing;
+    let entry = listing.iter().find(|l| l.id == id).expect("listed");
+    assert_eq!(entry.enabled, Some(false));
+    assert!(!entry.default_enabled);
+
+    assert!(mods::switch(&mut switches, id, true, entry.default_enabled));
+    assert!(switches.enabled.contains(id) && switches.disabled.is_empty());
+    let loaded = Mods::load_from(std::slice::from_ref(&dir), &switches).unwrap();
+    assert!(!loaded.is_disabled(id));
+    assert!(loaded.player().any(|m| m.manifest.id == id));
+
+    assert!(mods::switch(
+        &mut switches,
+        id,
+        false,
+        entry.default_enabled
+    ));
+    assert!(switches.enabled.is_empty() && switches.disabled.is_empty());
+    assert!(Mods::load_from(&[dir], &switches).unwrap().is_disabled(id));
+}
+
+const TUNER_MENU: &str = r#"
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod-menu.tosd", version = "1.0.0" }
+
+settings = "tuning"
+
+[[page]]
+id = "tuning"
+title = "TUNING"
+
+[[page.entry]]
+kind = "choice"
+label = "GRIP"
+setting = "mod.test.tuner.grip"
+values = ["low", "high"]
+"#;
+
+/// Whether the MODS page offers the SETTINGS row with `id` on the MOD row.
+fn offers_settings(model: &mut Menu, built: &mods::Built, id: &str) -> bool {
+    let strings = StringTable::default();
+    model.seed(mods::SELECTED, &Value::Text(id.into()));
+    mods::resupply_switch(model, &built.listing, &strings);
+    model.page().entries.iter().any(|entry| {
+        matches!(
+            entry,
+            oag_ui::menu::Entry::Run {
+                action: oag_ui::menu::Action::OpenModSettings,
+                ..
+            }
+        )
+    })
+}
+
+#[test]
+fn the_settings_row_opens_the_selected_mods_own_page_and_only_while_it_has_one() {
+    let dir = base("settings");
+    let tuner = dir.join("tuner");
+    std::fs::create_dir_all(&tuner).unwrap();
+    let manifest = MANIFEST
+        .replace("test.garage", "test.tuner")
+        .replace("Garage", "Tuner");
+    std::fs::write(tuner.join("oag-mod.toml"), manifest).unwrap();
+    std::fs::write(tuner.join("menu.toml"), TUNER_MENU).unwrap();
+
+    let built = build(&load(&dir, &off(&[])));
+    let strings = StringTable::default();
+    let mut model = Menu::new(built.definition.clone());
+    model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
+    assert!(model.open(mods::PAGE));
+    assert!(offers_settings(&mut model, &built, "test.tuner"));
+    assert_eq!(
+        mods::settings_page(&model, &built.listing).as_deref(),
+        Some("test.tuner/tuning")
+    );
+    assert!(model.push("test.tuner/tuning"), "the page is in the tree");
+    assert!(model.open(mods::PAGE));
+    assert!(
+        !offers_settings(&mut model, &built, "test.garage"),
+        "garage names no settings page"
+    );
+    assert!(!offers_settings(&mut model, &built, "oag.extras"));
+
+    let built = build(&load(&dir, &off(&["test.tuner"])));
+    let mut model = Menu::new(built.definition.clone());
+    model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
+    assert!(model.open(mods::PAGE));
+    assert!(
+        !offers_settings(&mut model, &built, "test.tuner"),
+        "an off mod's page is not in the tree"
+    );
+}
+
+#[test]
+fn a_submodule_at_another_commit_than_the_build_pins_is_named() {
+    let pins = "assets/mods/examples=b71dfaf;assets/mods/official=0d2c1da";
+    let lines = mods::stale_submodules(pins, |path| {
+        Some(
+            if path.ends_with("official") {
+                "c6cd38a"
+            } else {
+                "b71dfaf"
+            }
+            .to_string(),
+        )
+    });
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(lines[0].starts_with("assets/mods/official is at c6cd38a"));
+    assert!(lines[0].contains("pins 0d2c1da"));
+    assert!(mods::stale_submodules("", |_| Some("x".into())).is_empty());
+    assert!(
+        mods::stale_submodules(pins, |_| None).is_empty(),
+        "not a checkout"
+    );
 }

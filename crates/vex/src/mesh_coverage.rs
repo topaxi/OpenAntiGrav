@@ -17,7 +17,7 @@
 //! `payload_size`, not a call into `mesh_batches`, which returns vertices and
 //! never the file offsets they came from.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 use oag_formats::coverage::Coverage;
 
 use crate::vex;

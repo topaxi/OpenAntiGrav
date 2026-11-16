@@ -34,7 +34,6 @@ use anyhow::Result;
 
 use oag_core::math::{Mat4, Vec3};
 use oag_rcs::rcsmodel::psp2;
-use oag_texture::gxt;
 
 use super::Textures;
 use crate::mesh::{Bounds, DrawCall, Flap, GnfForm, GpuVertex, Model, ModelTexture};
@@ -42,342 +41,41 @@ use oag_rcs::gxp::sampler_use;
 use oag_rcs::rcsmaterial::name_hash;
 use oag_rcs::rcsmodel::psp2::lighting_only;
 
+mod alpha_emissive;
+mod alpha_product;
+mod chevron;
+mod crowd;
+mod emissive_add;
+mod flat_constant;
 mod glow;
+mod hull_colour;
+mod lit_alpha;
 mod normal_map;
+mod panel_map;
 pub mod placement;
+pub mod refraction;
+pub mod refraction_only;
+mod report;
+mod shield_lightning;
+mod sky_reflection;
 mod static_hologram;
+mod tarmac;
 mod transparency;
 mod twin_blend;
+mod uv_keys;
 
+pub use chevron::PLASMA_COMBINE;
+pub use hull_colour::Census as HullColourCensus;
 pub use normal_map::Census as NormalMapCensus;
 pub use twin_blend::INHERITED_RATE as TWIN_BLEND_RATE;
 
 pub use placement::Animation;
-
-/// What one build found.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct Report {
-    /// Submeshes drawn.
-    pub submeshes: usize,
-    /// Triangles emitted.
-    pub triangles: usize,
-    /// Relocation entries naming a GPU pointer this reading does not account
-    /// for - see [`psp2::Model::unpaired_pointers`].
-    pub unpaired: usize,
-    /// Vertices whose normal came from the file rather than off the
-    /// triangles - see [`super::face_normals`]. Reported for the same reason
-    /// HD's own build counts it: the fallback is silent and the difference is
-    /// visible.
-    pub authored_normals: usize,
-    /// Vertices whose decoded diffuse texcoord was non-finite and got
-    /// substituted with the origin - see
-    /// [`psp2::SubMesh::non_finite_texcoords`]. `0` on almost every model;
-    /// surfaced because a hidden substitution here is a hidden difference
-    /// from what the file authored, the same reasoning
-    /// [`Self::authored_normals`] already applies to its own fallback.
-    pub non_finite_texcoords: usize,
-    /// Vertices whose submesh's declaration named a `tangent` attribute for
-    /// this stride, so [`psp2::SubMesh::tangents`] carries one - **not** a
-    /// count of non-zero/well-formed tangents the way [`Self::authored_normals`]
-    /// counts real values against a zero sentinel. `docs/formats/2048-rcsmodel.md`'s
-    /// own reading measures ~42% of decoded tangents as short or near-zero
-    /// (degenerate at UV poles/seams), so this field answers "was the
-    /// attribute present", not "was the value good" - naming it
-    /// `authored_tangents` would have implied the latter.
-    ///
-    /// **Drawn with on a PS4 model only** ([`Self::normal_maps`]). Nothing in 2048's
-    /// mesh path samples a tangent-space normal map (its programs are unread GXP), so
-    /// there is no visual difference between a Vita model with this at `0` and one with
-    /// it equal to [`Self::submeshes`]' own vertex total - see
-    /// `docs/formats/2048-rcsmodel.md#tangent-is-cracked-too-at-a-lower-confidence`
-    /// for why this is reported anyway (confidence 76, not yet wired into a
-    /// consumer) rather than silently dropped on the way from `oag_rcs`.
-    pub decoded_tangents: usize,
-    /// What the PS4 normal-map binding found - see `normal_map`. All zero on a Vita model.
-    pub normal_maps: NormalMapCensus,
-    /// How many materials this model's own table names, whether or not this
-    /// build could bind one to a draw - see [`psp2::material`]. `0` for a
-    /// model with no readable table, which is not the same state as a model
-    /// this build simply chose not to texture.
-    pub materials: usize,
-    /// The first texture this build painted anything with, for a one-line
-    /// report. `None` when nothing painted at all.
-    pub diffuse_texture: Option<String>,
-    /// Distinct `.gxt` files decoded and uploaded.
-    pub textures: usize,
-    /// Draws that got a texture bound.
-    pub textured_draws: usize,
-    /// Distinct lightmap atlases decoded and bound as materials' second
-    /// texture - see [`psp2::material::Material::lightmap`].
-    pub lightmaps: usize,
-    /// Lightmap atlases a material named that did not resolve in the archive or
-    /// would not decode. Such a draw binds the black placeholder, which is the
-    /// same picture as no lightmap at all.
-    pub lightmap_misses: usize,
-    /// Textured draws routed to the blended list by their material's state word
-    /// (alpha-over, chosen) - see [`transparency`].
-    pub blended_draws: usize,
-    /// Of [`Self::blended_draws`], those drawn with the factor pair Wipeout HD
-    /// authors for a material of the same name, not the alpha-over default - see
-    /// [`psp2::lineage_blend`].
-    pub inherited_blend_draws: usize,
-    /// Textured draws routed to the alpha-tested list (reference `0.5`, chosen).
-    pub cutout_draws: usize,
-    /// Draws whose material named a texture that did not resolve in the
-    /// archive or would not decode - the honest count of what is still
-    /// missing, kept apart from a submesh that simply has no material.
-    pub unresolved_draws: usize,
-    /// Materials that draw an additive glow layer off their own
-    /// `Emissive_UV_Offset`/`Scale` - see `glow`'s module doc.
-    pub glow_layers: usize,
-    /// Materials that scroll their one texture off `speed_multipliaer`.
-    pub scrolling_materials: usize,
-    /// Materials that scroll off HD's vertex law, **inherited by shader name and
-    /// authored rate hashes, no 2048 or Omega instruction read** - see
-    /// `vertex_scroll::inherited_rate`.
-    pub inherited_scrolls: usize,
-    /// Of those, the ones admitted without a readable shader program to
-    /// confirm the vertex stage declares `time` (every Omega one: GCN).
-    pub inherited_unread: usize,
-    /// `nr_twinblend` materials drawn by HD's law - **inherited from HD**, no 2048 or Omega
-    /// instruction read - see `twin_blend`.
-    pub twin_blend_materials: usize,
-    /// `nr_twinblend` materials left as the generic reading drew them: a picture would not
-    /// decode, or a submesh carries no `barsUV_blendUV`.
-    pub twin_blend_unread: usize,
-    /// `dc_hologramwithstatic` materials drawn by HD's mode 7 without its `/2` - see
-    /// `static_hologram`.
-    pub static_hologram_materials: usize,
-    /// Of that name, the ones left as the generic reading drew them (a picture or a rate
-    /// missing).
-    pub static_hologram_unread: usize,
-    /// Submeshes on a placeholder shader (`fc01_dummy`), drawn as the fog colour - see
-    /// [`psp2::material::Material::is_placeholder`].
-    pub placeholder_submeshes: usize,
-    /// Submeshes whose albedo is their material's `Zone_ColourN` uniform - see
-    /// [`psp2::material::Material::zone_colour`]. Counted among
-    /// [`Self::unresolved_draws`] too, since they have no texture.
-    pub zone_colour_submeshes: usize,
-    /// Submeshes bound to a node of the model's own table and placed by
-    /// it - through the skeleton where one was given, through the model's
-    /// bind matrix otherwise. See [`placement`].
-    pub node_bound: usize,
-    /// Of those, the submeshes the shader's node table moves per frame.
-    pub moving: usize,
-    /// Nodes the table moves - the entries of [`Model::anim_nodes`].
-    pub anim_nodes: usize,
-    /// Submeshes under a node authored invisible that nothing ever shows,
-    /// not emitted.
-    pub hidden: usize,
-    /// Submeshes on a node the file gives no transform - no written bind
-    /// matrix, no skeleton entry - not emitted, since nothing authored says
-    /// where they go. Counted apart from [`Self::hidden`], which is the
-    /// file's own choice. See [`placement::Placement::unplaced`].
-    pub unplaced: usize,
-    /// Model nodes the skeleton did not name, placed by the model's own bind
-    /// matrix - see [`placement::Plan::unmatched`].
-    pub unmatched_nodes: usize,
-    /// Nodes frozen at time zero past the table's ceiling - see
-    /// [`placement::Plan::frozen`].
-    pub frozen_nodes: usize,
-    /// How the `.gnf` textures this build decoded were held - see
-    /// [`ModelTexture::from_gnf_form`]. Counted per decode, so a texture two
-    /// materials name is counted once for each.
-    pub gnf: crate::mesh::GnfCounts,
-    /// Materials whose picture the build refused because the material's own
-    /// fragment programs declare it only in their lit permutations
-    /// (`oag_rcs::gxp::sampler_use`): a normal, specular or reflection lookup.
-    pub lighting_only_materials: usize,
-    /// Of those, the materials that drew the constant colour their ambient-only
-    /// program names, as a one-texel picture.
-    pub constant_colour_materials: usize,
-    /// Of those, the ones whose answer is 2048's, carried over because the
-    /// material's record matches it exactly and its own programs (PS4) are
-    /// unread - `oag_rcs::rcsmodel::psp2::lighting_only`.
-    pub inherited_lighting_only: usize,
-}
+pub use report::Report;
 
 /// The vertex colour of a `fc01_dummy` submesh before the loader knows the
 /// fog: negative components no authored colour has. `oag_raceplay` replaces it
 /// with the circuit's `fogColour`; one left in place is drawn black.
 pub const FOG_FLAT: [f32; 4] = [-1.0, -1.0, -1.0, 1.0];
-
-impl Report {
-    /// One line for a load report.
-    #[must_use]
-    pub fn describe(&self) -> String {
-        let texture = match (&self.diffuse_texture, self.materials) {
-            (Some(path), n) => format!(
-                "{}/{} draw(s) textured from {} of {n} material(s) (e.g. {path}), \
-                 {} unresolved",
-                self.textured_draws, self.submeshes, self.textures, self.unresolved_draws
-            ),
-            (None, 0) => "untextured, no material table".to_string(),
-            (None, n) => format!("untextured, {n} material(s), none of whose textures resolved"),
-        };
-        let placeholders = if self.placeholder_submeshes == 0 {
-            String::new()
-        } else {
-            format!(
-                "; {} submesh(es) on fc01_dummy drawn as the circuit's fog colour (its three-instruction program outputs `fogColour` and nothing else)",
-                self.placeholder_submeshes
-            )
-        };
-        let scrolls = if self.glow_layers + self.scrolling_materials + self.inherited_scrolls == 0 {
-            String::new()
-        } else {
-            format!(
-                "; {} glow layer(s) and {} plain scroll(s) off the materials' own uniforms \
-                 (rates chosen, not measured), {} scroll(s) inherited from HD's vertex law by \
-                 shader name and authored rate (no instruction read here)",
-                self.glow_layers, self.scrolling_materials, self.inherited_scrolls
-            )
-        };
-        let twins = if self.twin_blend_materials + self.twin_blend_unread == 0 {
-            String::new()
-        } else {
-            format!(
-                "; {} nr_twinblend material(s) drawn by HD's law (two pictures, a wipe scrolling at HD's rate, bars; inherited from HD, not measured here), {} left as the generic reading",
-                self.twin_blend_materials, self.twin_blend_unread
-            )
-        };
-        let holograms = if self.static_hologram_materials + self.static_hologram_unread == 0 {
-            String::new()
-        } else {
-            format!(
-                "; {} dc_hologramwithstatic material(s) drawn by HD's law without its /2 (units and rates from the material record; the GCN arithmetic read, the units' gamma inherited from HD), {} left as the generic reading",
-                self.static_hologram_materials, self.static_hologram_unread
-            )
-        };
-        let zone_colours = if self.zone_colour_submeshes == 0 {
-            String::new()
-        } else {
-            format!(
-                "; {} submesh(es) take a Zone_ColourN uniform as their colour, drawn unlit (chosen, not measured)",
-                self.zone_colour_submeshes
-            )
-        };
-        let poisoned = if self.non_finite_texcoords == 0 {
-            String::new()
-        } else {
-            format!(
-                ", {} non-finite texcoord(s) zeroed",
-                self.non_finite_texcoords
-            )
-        };
-        let tangents = if self.decoded_tangents == 0 {
-            String::new()
-        } else if self.normal_maps.submeshes == 0 {
-            format!(
-                "; {} tangent(s) decoded, unused (no normal-map consumer yet)",
-                self.decoded_tangents
-            )
-        } else {
-            self.normal_maps.describe()
-        };
-        let see_through = if self.blended_draws + self.cutout_draws == 0 {
-            String::new()
-        } else {
-            format!(
-                "; {} draw(s) blended off the state word ({} with HD's authored factors, for the same material name or by equivalence (the start-grid laser), the rest alpha-over, chosen: neither title authors factors) and {} alpha-tested at 0.5 (chosen)",
-                self.blended_draws, self.inherited_blend_draws, self.cutout_draws
-            )
-        };
-        let lightmaps = if self.lightmaps == 0 && self.lightmap_misses == 0 {
-            String::new()
-        } else {
-            format!(
-                "; {} lightmap atlas(es) bound, {} unresolved",
-                self.lightmaps, self.lightmap_misses
-            )
-        };
-        let nodes = if self.node_bound == 0 {
-            String::new()
-        } else {
-            let frozen = if self.frozen_nodes == 0 {
-                String::new()
-            } else {
-                format!(", {} frozen past the table", self.frozen_nodes)
-            };
-            let unmatched = if self.unmatched_nodes == 0 {
-                String::new()
-            } else {
-                format!(", {} node(s) not in the skeleton", self.unmatched_nodes)
-            };
-            let hidden = if self.hidden == 0 {
-                String::new()
-            } else {
-                format!(", {} hidden", self.hidden)
-            };
-            let unplaced = if self.unplaced == 0 {
-                String::new()
-            } else {
-                format!(
-                    ", {} on a node with no matrix and no skeleton entry, not drawn",
-                    self.unplaced
-                )
-            };
-            format!(
-                "; {} node-bound submesh(es), {} moving on {} animated node(s){hidden}{unplaced}{frozen}{unmatched}",
-                self.node_bound, self.moving, self.anim_nodes
-            )
-        };
-        let gnf = self.gnf.describe();
-        let lighting_only = if self.lighting_only_materials == 0 {
-            String::new()
-        } else {
-            format!(
-                "; {} material(s) bind no picture from a sampler their own programs read only for lighting ({} drew the constant colour the unlit program names, {} of them 2048's answer carried over where the record matches)",
-                self.lighting_only_materials,
-                self.constant_colour_materials,
-                self.inherited_lighting_only
-            )
-        };
-        format!(
-            "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}",
-            self.triangles, self.submeshes, self.authored_normals, self.unpaired
-        )
-    }
-}
-
-/// The `.rcsskeleton` and `.rcsanimclip` a Wipeout 2048 circuit ships beside
-/// its `.vex`, in that order - the pair [`Animation::parse`] takes.
-///
-/// Same stem rule as [`super::sibling_name`]. Wipeout HD ships neither (its scenery
-/// animation is in the `.vex` itself), so a caller reads them where they
-/// resolve and passes `None` where they do not.
-#[must_use]
-pub fn animation_names(vex_name: &str) -> Option<(String, String)> {
-    animation_names_beside(&super::sibling_name(vex_name)?)
-}
-
-/// The `.rcsskeleton` and `.rcsanimclip` that sit beside an `.rcsmodel`
-/// already found, whatever its spelling - `track.rcsmodel` gives
-/// `track.rcsskeleton`, and the Omega Collection's `track.final.rcsmodel`
-/// gives `track.final.rcsskeleton`. See [`super::sibling_name_cooked`].
-#[must_use]
-pub fn animation_names_beside(model_name: &str) -> Option<(String, String)> {
-    let stem = model_name.strip_suffix(".rcsmodel")?;
-    Some((format!("{stem}.rcsskeleton"), format!("{stem}.rcsanimclip")))
-}
-
-/// The Zone-mode model that sits beside a 2048 circuit's `track.vex`:
-/// `trackZone.rcsmodel`, whose `.rcsskeleton`, `.rcsanimclip` and `.pvs`
-/// carry the same stem.
-///
-/// **A model of its own, not a second skeleton for `track.rcsmodel`**: on
-/// `altima` it is 37 MB against the race model's 17, with its own PVS. The
-/// reversed circuit ships no Zone model, so both directions map to the same
-/// file. `None` for a name that is not a `.vex`.
-#[must_use]
-pub fn zone_model_name(vex_name: &str) -> Option<String> {
-    let dir_end = vex_name.rfind(['\\', '/']).map_or(0, |at| at + 1);
-    vex_name[dir_end..]
-        .to_ascii_lowercase()
-        .ends_with(".vex")
-        .then(|| format!("{}trackZone.rcsmodel", &vex_name[..dir_end]))
-}
 
 /// Whether a blob is 2048's container rather than Wipeout HD's.
 ///
@@ -388,24 +86,6 @@ pub fn is_psp2(model_blob: &[u8]) -> bool {
     model_blob
         .get(0..4)
         .is_some_and(|b| u32::from_le_bytes(b.try_into().expect("four bytes")) == psp2::MAGIC)
-}
-
-/// Decodes one material's diffuse `.gxt`, or `None` for a blob that will not
-/// parse as one or names a texture this build cannot decode.
-///
-/// **A `.gxt` that will not decode draws nothing rather than something** - the
-/// same rule [`super::skin::decode_texture`] applies to a Wipeout HD `.gtf`.
-fn decode_gxt_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
-    let parsed = gxt::Gxt::parse(blob).ok()?;
-    let texture = parsed.only()?;
-    let rgba = texture.to_rgba(blob).ok()?;
-    Some(ModelTexture::rgba8(
-        label.to_string(),
-        u32::from(texture.width),
-        u32::from(texture.height),
-        rgba.into_iter().flatten().collect(),
-        None,
-    ))
 }
 
 /// Decodes a material's diffuse texture in whichever container its path names.
@@ -423,16 +103,17 @@ fn decode_material_texture(path: &str, blob: &[u8], report: &mut Report) -> Opti
 /// [`decode_material_texture`]'s decode alone: the texture, and the form a
 /// `.gnf` took for the report's counts.
 fn decode_texture_form(path: &str, blob: &[u8]) -> Option<(ModelTexture, Option<GnfForm>)> {
-    if path.to_ascii_lowercase().ends_with(".gnf") {
-        ModelTexture::from_gnf_form(path, blob).map(|(texture, form)| (texture, Some(form)))
-    } else {
-        decode_gxt_texture(path, blob).map(|texture| (texture, None))
+    match oag_texture::decode::Container::of_name(path) {
+        Some(oag_texture::decode::Container::Gnf) => {
+            ModelTexture::from_gnf_form(path, blob).map(|(texture, form)| (texture, Some(form)))
+        }
+        _ => ModelTexture::from_gxt(path, blob).map(|texture| (texture, None)),
     }
 }
 
 /// A diffuse decoded once per path, and the form to count again on each
 /// material that shares it, so the report reads as it did per material.
-type Decoded = Option<(std::sync::Arc<ModelTexture>, Option<GnfForm>)>;
+type Decoded = (std::sync::Arc<ModelTexture>, Option<GnfForm>);
 
 /// Builds every submesh of a 2048 `.rcsmodel` into one model.
 ///
@@ -460,6 +141,7 @@ pub fn build(
         label,
         model_blob,
         &|scene| placement::plan(scene, animation),
+        None,
         textures,
     )
 }
@@ -481,6 +163,32 @@ pub fn build_with_vex(
         label,
         model_blob,
         &|scene| placement::plan_from_vex(scene, vex_blob),
+        None,
+        textures,
+    )
+}
+
+/// [`build_with_vex`] for a billboard: its meshes also ride the UV keys their
+/// `.vex` nodes author, which is how 2048 and Omega play what Wipeout HD
+/// authors as a material curve - see [`uv_keys`].
+///
+/// A billboard build alone, because the engine points a material's
+/// `uvOffset`/`uvScale` at the keyed instance in its billboard loader.
+///
+/// # Errors
+///
+/// Propagates [`psp2::parse`].
+pub fn build_billboard(
+    label: &str,
+    model_blob: &[u8],
+    vex_blob: &[u8],
+    textures: Textures<'_>,
+) -> Result<(Model, Report)> {
+    build_planned(
+        label,
+        model_blob,
+        &|scene| placement::plan_from_vex(scene, vex_blob),
+        Some(vex_blob),
         textures,
     )
 }
@@ -490,7 +198,7 @@ pub fn build_with_vex(
 /// node under it, `Airbrake_LeftShape`, is the same mesh).
 fn flap_side(path: &str) -> Option<usize> {
     let leaf = path.rsplit(['|', '/']).next().unwrap_or(path);
-    let leaf = leaf.strip_suffix("Shape").unwrap_or(leaf);
+    let leaf = leaf.trim_suffix("Shape");
     if leaf.eq_ignore_ascii_case("Airbrake_Left") {
         Some(0)
     } else if leaf.eq_ignore_ascii_case("Airbrake_Right") {
@@ -504,6 +212,7 @@ fn build_planned(
     label: &str,
     model_blob: &[u8],
     planner: &dyn Fn(&psp2::nodes::Scene) -> placement::Plan,
+    billboard_vex: Option<&[u8]>,
     textures: Textures<'_>,
 ) -> Result<(Model, Report)> {
     let decoded = psp2::parse(model_blob)
@@ -512,6 +221,7 @@ fn build_planned(
     let ps4 = psp2::is_ps4(model_blob);
 
     let mut model = Model::none(label);
+    model.sky_reflection = sky_reflection::load(label, ps4, &mut *textures);
     let mut report = Report {
         unpaired: decoded.unpaired_pointers,
         materials: decoded.materials.len(),
@@ -521,6 +231,7 @@ fn build_planned(
         ..Report::default()
     };
     model.anim_nodes = plan.anim_nodes;
+    report.panel.sky_reflection = model.sky_reflection.is_some();
     // Each material's own scroll, resolved before any vertex is written; the
     // glow layer's emissive texture is decoded here too, so a layer exists
     // only where its picture does.
@@ -534,18 +245,85 @@ fn build_planned(
         &mut *textures,
         &mut report,
     );
+    // `diffuse_normal_specular_emmissive_alpha` adds `Texture2Alpha^2 * Constant1` after the light.
+    let mut emissive_add = emissive_add::plan(
+        &decoded,
+        ps4,
+        &mut glow.emissive,
+        &mut *textures,
+        &mut report,
+    );
+    // `2048_shipshield_old`'s Lightning layer rides the same third binding.
+    shield_lightning::plan(
+        &decoded,
+        ps4,
+        &mut emissive_add,
+        &mut glow.emissive,
+        &mut *textures,
+        &mut report,
+    );
+    // The `alpha_emissive` families add the picture's alpha times `glowtinrt` after the light.
+    alpha_emissive::plan(
+        &decoded,
+        &mut glow,
+        &mut emissive_add,
+        &mut *textures,
+        &mut report,
+    );
+    // `mt_tunnelrefraction` and `cl_tunnelrefraction` read the refraction target.
+    let glass = refraction::plan(&decoded.materials, &mut glow.emissive, &mut report);
     // A PS4 submesh with a tangent reads a normal map, bound third.
     let normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
+    // Omega's hull programs multiply `VertexColour1` into the light (`psp2::hull_colour`).
+    let hull_colour = hull_colour::plan(&decoded, ps4, &mut *textures, &mut report.hull_colour);
+    // Omega's `tarmac_markings_*` roads lay a dirt splat and a decal atlas over the diffuse.
+    let mut tarmac = tarmac::plan(&decoded, &mut glow.emissive, &mut *textures, &mut report);
+    // Omega's panel-map roads march a panel map and reflect the sky cube (`psp2::panel_map`).
+    let sky = (ps4, &normals);
+    panel_map::plan(
+        &decoded,
+        sky,
+        &mut tarmac,
+        &mut glow.emissive,
+        textures,
+        &mut report,
+    );
+    // Omega's crowd sprites carry `Shadowed` and `Ambient` in the lit sum (`psp2::crowd`).
+    let crowd = crowd::plan(&decoded, ps4, &mut glow.emissive, &mut report);
+    // Anulpha Pass's chevrons add their emissive mask and wave after the light.
+    let chevron = chevron::plan(
+        &decoded,
+        &mut glow.emissive,
+        &mut glow.tracks,
+        &mut *textures,
+        &mut report,
+    );
     model.emissive = glow.emissive.clone();
     model.anim_tracks = glow.tracks.clone();
+    let uv_keys = billboard_vex.map_or_else(uv_keys::Plan::default, |vex_blob| {
+        uv_keys::plan(&decoded, vex_blob, &mut model.anim_tracks, &mut report)
+    });
     // Every draw is pushed in submesh order below, and `bind_textures`
     // zips on that; a hidden submesh still gets its draw, empty, so the
     // zip stays a binding.
     for submesh in &decoded.submeshes {
-        let place = submesh
+        let mut place = submesh
             .node
             .and_then(|n| plan.placements.get(n).copied())
             .unwrap_or(placement::Placement::STATIC);
+        // The diagnostic filter (`OAG_SKIP_MATERIAL` and friends) hides a submesh as a hidden
+        // node is, keeping its draw empty so `bind_textures` still zips.
+        let filtered = {
+            let material = submesh.material.and_then(|m| decoded.materials.get(m));
+            let paths: Vec<&str> = material
+                .into_iter()
+                .flat_map(|m| {
+                    std::iter::once(m.name.as_str()).chain(m.textures.iter().map(String::as_str))
+                })
+                .collect();
+            super::isolate::excludes_psp2(submesh.material, None, &paths)
+        };
+        place.hidden |= filtered;
         report.node_bound += usize::from(submesh.node.is_some());
         report.moving += usize::from(place.xform != 0);
         report.hidden += usize::from(place.hidden && !place.unplaced);
@@ -582,6 +360,11 @@ fn build_planned(
             .and_then(|m| decoded.materials.get(m))
             .and_then(|m| m.zone_colour());
         report.zone_colour_submeshes += usize::from(zone.is_some());
+        let emissive = (submesh.material.and_then(|m| decoded.materials.get(m)))
+            .filter(|_| ps4)
+            .and_then(flat_constant::emissive_colour);
+        report.emissive_colour_submeshes += usize::from(emissive.is_some());
+        let zone = zone.or(emissive);
         // HD's `nr_twinblend`: unlit, three coordinate pairs, one glow-table entry.
         let twin_here = twin.of(submesh.material);
         let (colour, lit, role) = match zone {
@@ -604,6 +387,53 @@ fn build_planned(
             ),
             None => ([1.0; 4], 1.0, role),
         };
+        // Anulpha Pass's alpha-lit families, read on each title's own programs (`lit_alpha`).
+        let alpha_lit = lit > 0.5
+            && submesh
+                .material
+                .and_then(|m| decoded.materials.get(m))
+                .is_some_and(lit_alpha::admits);
+        let role = if alpha_lit {
+            role | crate::mesh::slots::LIT_ALPHA
+        } else {
+            role
+        };
+        report.lit_alpha_submeshes += usize::from(alpha_lit && !place.hidden);
+        // **A vertex-lit surface**: a submesh whose declaration names `NOVAColor` and no
+        // lightmap. Its vertex program lays `scale * rgb + bias` on the baked colour and passes
+        // `a` on as the sun's mask, and its fragment program adds the two to the sun and
+        // multiplies the albedo - **no constant ambient** (docs/formats/2048-material-params.md,
+        // "Vertex-lit and lightmapped combines"). The marker rides `sun_mask`, which
+        // `shade.wesl` reads as `2 + mask`.
+        let nova_vertex = !ps4
+            && lit > 0.5
+            && twin_here.is_none()
+            && !submesh.colours.is_empty()
+            && submesh.lightmap_texcoords.is_empty();
+        let role = if nova_vertex {
+            role | crate::mesh::slots::NO_AMBIENT
+        } else {
+            role
+        };
+        report.nova_vertex_submeshes += usize::from(nova_vertex && !place.hidden);
+        let hull_factor = hull_colour.of(submesh.material)
+            && lit > 0.5
+            && twin_here.is_none()
+            && !submesh.colours.is_empty()
+            && submesh.lightmap_texcoords.is_empty()
+            && tarmac.of(submesh.material).is_none()
+            && !glass.is_ice(submesh.material);
+        if hull_factor && !place.hidden {
+            let name = submesh
+                .material
+                .and_then(|m| decoded.materials.get(m))
+                .map_or("", |m| m.name.as_str());
+            *report
+                .hull_colour
+                .submeshes
+                .entry(name.to_string())
+                .or_default() += 1;
+        }
         let to_world = Mat4::from_cols_array(&place.to_world);
         let at_zero = Mat4::from_cols_array(&place.world_at_zero);
         // Normals through the bake's inverse transpose: 166 skeleton nodes
@@ -676,6 +506,44 @@ fn build_planned(
             let pair = twin_here.and_then(|_| submesh.bars_blend_texcoords.get(i));
             let lightmap_texcoord = pair.map_or(lightmap_texcoord, |p| [p[2], p[3]]);
             let texcoord2 = pair.map_or([0.0, 0.0], |p| [p[0], p[1]]);
+            // `2048_shipshield_old` reads both pairs of its packed `Uv1_Uv2`: the first is the
+            // diffuse's, the second the Lightning layer's.
+            let (texcoord, texcoord2) = match submesh.packed_texcoords.get(i) {
+                Some(&[a, b, c, d]) if emissive_add.mask(submesh.material).is_some() => {
+                    ([a, b], [c, d])
+                }
+                _ => (texcoord, texcoord2),
+            };
+            // The road's decal pair rides `texcoord2` and its dirt pair `colour.xy`
+            // (`psp2::tarmac`); the fragment stage reads the vertex colour as white there.
+            let (texcoord2, colour) = match (
+                tarmac.of(submesh.material),
+                submesh.markings_texcoords.get(i),
+                submesh.dirt_texcoords.get(i),
+            ) {
+                (Some(_), Some(&markings), Some(&[u, v])) => (markings, [u, v, 1.0, 1.0]),
+                _ => (texcoord2, colour),
+            };
+            let (colour, sun_mask) = match submesh.colours.get(i) {
+                Some(&bytes) if hull_factor => hull_colour::vertex(bytes),
+                Some(&[r, g, b, a]) if nova_vertex => (
+                    [
+                        f32::from(r) / 255.0,
+                        f32::from(g) / 255.0,
+                        f32::from(b) / 255.0,
+                        1.0,
+                    ],
+                    2.0 + f32::from(a) / 255.0,
+                ),
+                _ => (colour, 1.0),
+            };
+            // `rt_icetunnel` weights its grab by the baked colour's red (`refraction::is_ice`).
+            let colour = match submesh.colours.get(i) {
+                Some(&[r, ..]) if glass.is_ice(submesh.material) => {
+                    [1.0, 1.0, 1.0, f32::from(r) / 255.0]
+                }
+                _ => colour,
+            };
             model.vertices.push(GpuVertex {
                 quake: 0.0,
                 position,
@@ -684,18 +552,28 @@ fn build_planned(
                 texcoord,
                 lit,
                 lightmap_texcoord,
-                anim: glow.anim(submesh.material),
-                slots: if submesh.lightmap_texcoords.is_empty() && twin_here.is_none() {
+                anim: uv_keys
+                    .anim(
+                        submesh.mesh,
+                        submesh.material.and_then(|m| decoded.materials.get(m)),
+                    )
+                    .unwrap_or_else(|| glow.anim(submesh.material)),
+                slots: (if submesh.lightmap_texcoords.is_empty() && twin_here.is_none() {
                     role | glow.role(submesh.material)
                 } else {
                     role
-                },
+                }) | emissive_add.role(submesh.material)
+                    | tarmac.role(submesh.material)
+                    | crowd.role(submesh.material)
+                    | chevron.role(submesh.material)
+                    | glass.role(submesh.material),
                 xform: place.xform,
-                sun_mask: 1.0,
+                sun_mask,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                 glow: 0.0,
                 texcoord2,
                 tangent: normals.tangent(submesh.material, submesh.tangents.get(i), &to_world),
+                depth_bias: 0.0,
             });
         }
         if !place.hidden {
@@ -765,7 +643,7 @@ fn build_planned(
 
     bind_textures(
         &decoded,
-        (&glow, &twin, &normals),
+        (&glow, &twin, &normals, &emissive_add, &tarmac, &chevron),
         &mut model,
         &mut report,
         textures,
@@ -774,6 +652,16 @@ fn build_planned(
     transparency::route(&decoded, &mut model, &mut report);
     Ok((model, report))
 }
+
+/// The readings whose bindings ride beside a draw's picture.
+type Plans<'a> = (
+    &'a glow::Plan,
+    &'a twin_blend::Plan,
+    &'a normal_map::Plan,
+    &'a emissive_add::Plan,
+    &'a tarmac::Plan,
+    &'a chevron::Plan,
+);
 
 /// Binds each draw to its own submesh's material's texture.
 ///
@@ -785,7 +673,7 @@ fn build_planned(
 /// missing archive entry costs one lookup rather than one per submesh.
 fn bind_textures(
     decoded: &psp2::Model,
-    (glow, twin, normals): (&glow::Plan, &twin_blend::Plan, &normal_map::Plan),
+    (glow, twin, normals, emissive_add, tarmac, chevron): Plans<'_>,
     model: &mut Model,
     report: &mut Report,
     textures: Textures<'_>,
@@ -796,7 +684,7 @@ fn bind_textures(
     // and a misbound draw would paint a submesh with its neighbour's texture,
     // the one outcome `psp2::parse` already refuses to allow.
     debug_assert_eq!(model.draws.len(), decoded.submeshes.len());
-    let mut cache: Vec<Option<Option<usize>>> = vec![None; decoded.materials.len()];
+    let mut cache: Vec<Option<Result<usize, Unbound>>> = vec![None; decoded.materials.len()];
     // A material file's programs say which of its samplers feed only the
     // lighting; read once per distinct file.
     let mut rules: std::collections::HashMap<&str, Option<LightingRule>> =
@@ -808,7 +696,14 @@ fn bind_textures(
     // Materials share a `.gxt` between them as well: Altima's track resolves
     // 523 material slots to 164 distinct files. Each slot still gets its own
     // entry, so a lightmap stays positionally beside its diffuse.
-    let mut diffuses: std::collections::HashMap<&str, Decoded> = std::collections::HashMap::new();
+    let mut diffuses: std::collections::HashMap<&str, Result<Decoded, Unbound>> =
+        std::collections::HashMap::new();
+    // One alpha-times-constant picture per (map, constant).
+    type AlphaKey<'p> = (&'p str, [u32; 3]);
+    let mut alpha_pictures: std::collections::HashMap<
+        AlphaKey<'_>,
+        Option<std::sync::Arc<ModelTexture>>,
+    > = std::collections::HashMap::new();
     for (draw, submesh) in model.draws.iter_mut().zip(&decoded.submeshes) {
         let Some(index) = submesh.material else {
             continue;
@@ -824,8 +719,20 @@ fn bind_textures(
             let refused: Vec<u32> = rule.as_ref().map_or_else(Vec::new, |r| r.refused.clone());
             let path = match layer {
                 _ if twin_here.is_some() => twin_here.map(|t| t.first.as_str()),
+                _ if refraction::is_pictureless(material) => None,
                 Some(layer) => Some(layer.diffuse.as_str()),
-                None => material.diffuse_texture_without(&refused),
+                None => emissive_add
+                    .colour(Some(index))
+                    .or_else(|| alpha_emissive::specular_picture(material).map(|s| s.picture))
+                    .or_else(|| {
+                        let mut not_pictures = refused.clone();
+                        if super::skin::NITRO_FAMILIES
+                            .contains(&lighting_only::family(material).as_str())
+                        {
+                            not_pictures.extend(super::skin::NITRO_LOOKUPS);
+                        }
+                        material.diffuse_texture_without(&not_pictures)
+                    }),
             };
             let refused_here = layer.is_none()
                 && material
@@ -833,24 +740,62 @@ fn bind_textures(
                     .iter()
                     .any(|(hash, _)| refused.contains(hash));
             report.lighting_only_materials += usize::from(refused_here && path.is_none());
-            let (texture, form) = match path {
-                Some(path) => diffuses
-                    .entry(path)
-                    .or_insert_with(|| {
-                        let blob = textures(path)?;
-                        let (texture, form) = decode_texture_form(path, &blob)?;
+            let alpha = (layer.is_none() && twin_here.is_none())
+                .then(|| alpha_product::source(material))
+                .flatten()
+                .and_then(|(map, colour)| {
+                    alpha_pictures
+                        .entry((map, colour.map(f32::to_bits)))
+                        .or_insert_with(|| {
+                            let (texture, _) = decode_texture_form(map, &textures(map)?)?;
+                            let picture = alpha_product::picture(&texture, colour)?;
+                            Some(std::sync::Arc::new(
+                                crate::mesh_render::offer_to_texture_sink(picture),
+                            ))
+                        })
+                        .clone()
+                });
+            report.alpha_product_materials += usize::from(alpha.is_some());
+            let (texture, form) = match (alpha, path) {
+                (Some(picture), _) => (picture, None),
+                (None, Some(path)) => {
+                    let entry = diffuses.entry(path).or_insert_with(|| {
+                        let blob = textures(path).ok_or(Unbound::ArchiveMiss)?;
+                        let (texture, form) =
+                            decode_texture_form(path, &blob).ok_or(Unbound::DecodeRefused)?;
                         let texture = crate::mesh_render::offer_to_texture_sink(texture);
-                        Some((std::sync::Arc::new(texture), form))
-                    })
-                    .clone()?,
-                None => {
-                    let colour = refused_here
+                        Ok((std::sync::Arc::new(texture), form))
+                    });
+                    match entry.clone() {
+                        Ok(found) => found,
+                        Err(why) => {
+                            log::trace!(
+                                "psp2 material {index} ({}) unbound ({why:?}): {path}",
+                                material.name
+                            );
+                            return Err(why);
+                        }
+                    }
+                }
+                (None, None) => {
+                    let lighting_colour = refused_here
                         .then(|| constant_colour(material, rule.as_ref()?.colour?))
-                        .flatten()?;
-                    report.constant_colour_materials += 1;
-                    report.inherited_lighting_only +=
-                        usize::from(rule.as_ref().is_some_and(|r| r.inherited));
-                    (std::sync::Arc::new(colour), None)
+                        .flatten();
+                    if let Some(colour) = lighting_colour {
+                        report.constant_colour_materials += 1;
+                        report.inherited_lighting_only +=
+                            usize::from(rule.as_ref().is_some_and(|r| r.inherited));
+                        (std::sync::Arc::new(colour), None)
+                    } else if let Some(colour) =
+                        ps4.then(|| flat_constant::diffuse(material)).flatten()
+                    {
+                        report.constant_diffuse_materials += 1;
+                        (std::sync::Arc::new(colour), None)
+                    } else {
+                        let why = unbound_without_picture(material, refused_here);
+                        log::trace!("psp2 material {index} unbound ({why:?}): {}", material.name);
+                        return Err(why);
+                    }
                 }
             };
             let path = path.unwrap_or("constant colour");
@@ -859,20 +804,47 @@ fn bind_textures(
             }
             let at = model.textures.len();
             model.textures.push(Some(texture));
+            // The material's render-state word, positionally beside its
+            // texture as `Model::material_state` is defined (bit 4 culls).
+            debug_assert_eq!(model.material_state.len(), at);
+            model
+                .material_state
+                .push(material.state.map_or(0, u32::from));
             // Positionally beside the diffuse, as `Model::lightmaps` is
             // defined; left empty for a model no material of which names one,
             // which is every Vita model.
-            if twin.any() || normals.any() {
+            if twin.any() || normals.any() || emissive_add.any() {
                 debug_assert_eq!(model.pad_masks.len(), at);
                 model.pad_masks.push(
                     twin_here
                         .map(|t| t.wipe.clone())
+                        .or_else(|| emissive_add.mask(Some(index)).cloned())
                         .or_else(|| normals.of(Some(index)).cloned()),
                 );
             }
-            if twin.any() {
+            if tarmac.any() || chevron.any() {
+                let layers = tarmac.of(Some(index));
+                let pulse = chevron.of(Some(index));
+                debug_assert_eq!(model.fifth_maps.len(), at);
+                model.fifth_maps.push(
+                    layers
+                        .and_then(|l| l.fifth.clone())
+                        .or_else(|| pulse.map(|p| p.emask.clone())),
+                );
+                debug_assert_eq!(model.sixth_maps.len(), at);
+                model.sixth_maps.push(
+                    layers
+                        .and_then(|l| l.sixth.clone())
+                        .or_else(|| pulse.map(|p| p.wave.clone())),
+                );
+            }
+            if twin.any() || tarmac.any() {
                 debug_assert_eq!(model.wave_maps.len(), at);
-                model.wave_maps.push(twin_here.and_then(|t| t.bars.clone()));
+                model.wave_maps.push(
+                    twin_here
+                        .and_then(|t| t.bars.clone())
+                        .or_else(|| tarmac.of(Some(index)).and_then(|l| l.emissive.clone())),
+                );
             }
             if glow.has_layers()
                 || twin.any()
@@ -906,15 +878,134 @@ fn bind_textures(
                 report.diffuse_texture = Some(path.to_string());
             }
             report.textures += 1;
-            Some(at)
+            Ok(at)
         });
         match resolved {
-            Some(at) => {
+            Ok(at) => {
                 draw.texture = Some(at);
                 report.textured_draws += 1;
             }
-            None => report.unresolved_draws += 1,
+            Err(why) => {
+                report.unresolved_draws += 1;
+                report.unbound.count(why);
+            }
         }
+    }
+}
+
+/// Why `bind_textures` left a material's draws without a picture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Unbound {
+    /// A `fc01_dummy` placeholder: its program outputs the fog colour.
+    Placeholder,
+    /// A `Zone_ColourN` material: drawn unlit in that colour.
+    ZoneColour,
+    /// The material names no texture of its own (a lightmap aside): flat by design.
+    NamesNoTexture,
+    /// The material names a texture of its own, and none of them is a diffuse sampler.
+    NoDiffusePath,
+    /// Tunnel glass whose program takes the lit term untextured.
+    PicturelessGlass,
+    /// A lighting-only material whose unlit program names no colour value.
+    NoConstantColour,
+    /// The named `.gxt` is not in the archive set the loader reads.
+    ArchiveMiss,
+    /// The `.gxt` is there and its format would not decode.
+    DecodeRefused,
+}
+
+/// Draws left without a picture, by the exit of `bind_textures` that left them;
+/// together they are [`Report::unresolved_draws`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UnboundDraws {
+    /// On a `fc01_dummy` placeholder.
+    pub placeholder: usize,
+    /// On a `Zone_ColourN` material.
+    pub zone_colour: usize,
+    /// On a material that names no texture of its own.
+    pub names_no_texture: usize,
+    /// On a material that names a texture of its own, none of them a diffuse sampler.
+    pub no_diffuse_path: usize,
+    /// Tunnel glass drawn without a picture.
+    pub pictureless_glass: usize,
+    /// Lighting-only material with no constant colour.
+    pub no_constant_colour: usize,
+    /// Named `.gxt` absent from the archive set.
+    pub archive_miss: usize,
+    /// Named `.gxt` present but not decodable.
+    pub decode_refused: usize,
+}
+
+impl UnboundDraws {
+    /// Adds another model's counts.
+    pub fn add(&mut self, other: &Self) {
+        self.placeholder += other.placeholder;
+        self.zone_colour += other.zone_colour;
+        self.names_no_texture += other.names_no_texture;
+        self.no_diffuse_path += other.no_diffuse_path;
+        self.pictureless_glass += other.pictureless_glass;
+        self.no_constant_colour += other.no_constant_colour;
+        self.archive_miss += other.archive_miss;
+        self.decode_refused += other.decode_refused;
+    }
+
+    /// The non-zero exits, as ` (n no diffuse path, ...)`; empty when there are none.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        let parts: Vec<String> = [
+            (self.placeholder, "placeholder"),
+            (self.zone_colour, "Zone colour"),
+            (self.names_no_texture, "name no texture"),
+            (self.no_diffuse_path, "name a texture, none diffuse"),
+            (self.pictureless_glass, "pictureless glass"),
+            (self.no_constant_colour, "lighting-only without a colour"),
+            (self.archive_miss, "texture not in the archive set"),
+            (self.decode_refused, "texture would not decode"),
+        ]
+        .into_iter()
+        .filter(|(n, _)| *n > 0)
+        .map(|(n, what)| format!("{n} {what}"))
+        .collect();
+        if parts.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", parts.join(", "))
+        }
+    }
+
+    fn count(&mut self, why: Unbound) {
+        match why {
+            Unbound::Placeholder => self.placeholder += 1,
+            Unbound::ZoneColour => self.zone_colour += 1,
+            Unbound::NamesNoTexture => self.names_no_texture += 1,
+            Unbound::NoDiffusePath => self.no_diffuse_path += 1,
+            Unbound::PicturelessGlass => self.pictureless_glass += 1,
+            Unbound::NoConstantColour => self.no_constant_colour += 1,
+            Unbound::ArchiveMiss => self.archive_miss += 1,
+            Unbound::DecodeRefused => self.decode_refused += 1,
+        }
+    }
+}
+
+/// Which of the picture-less exits a material that bound no picture and no colour took.
+fn unbound_without_picture(material: &psp2::material::Material, lighting_only: bool) -> Unbound {
+    if lighting_only {
+        Unbound::NoConstantColour
+    } else if refraction::is_pictureless(material) {
+        Unbound::PicturelessGlass
+    } else if material.is_placeholder() {
+        Unbound::Placeholder
+    } else if material.zone_colour().is_some() {
+        Unbound::ZoneColour
+    } else if material
+        .textures
+        .iter()
+        .chain(material.samplers.iter().map(|(_, path)| path))
+        .all(|t| Some(t) == material.lightmap.as_ref())
+    {
+        Unbound::NamesNoTexture
+    } else {
+        Unbound::NoDiffusePath
     }
 }
 

@@ -23,6 +23,8 @@
 //! | the flyby ends when the animation reaches `AnimEnd`, or when [`Button::Cross`] is **held** | read (`GridCamera_Progress`, the `Input_IsHeld(5)` test) and measured: the animation ended at `24.99` s of `25.0`, and a held cross ended it as soon as the lock lifted |
 //! | neither can end it before the title's lock ticks have passed | read (`+0x1a04`, a counter from 60) and measured (it reads `57` at the third tick and `0` from the sixtieth) |
 //! | the world does not tick meanwhile: the countdown's 272 ticks start when the flyby ends | measured: the race clock reads zero and the mode state `0` throughout, and the first state after the flyby is the one a skip always reached |
+//! | the circuit's voice-over starts on the tick the lock counter reaches zero and stops when the flyby ends | read (`MusicPlayer_StartPreRaceDialogue` after the counter's last decrement, `MusicPlayer_Stop` in the exit branch) |
+//! | the draws are masked by the one section under the camera, wherever it flies | read (`FUN_08882cbc`) and measured on two whole flybys ([`Race::flyby_camera_section`]) |
 //! | the HUD is hidden through the flyby and for the title's HUD delay ticks after it | read (`g_hud+0x2c` flags, cleared at the intro's start and set when its `0.5` s fade-out substate ends) and seen: no HUD at tick 30, HUD at tick 60 |
 //!
 //! # What is chosen, not measured
@@ -39,9 +41,9 @@
 //!
 //! # What is not ported
 //!
-//! The flyby's music, the screen wash the original starts when it ends (`RaceMode_UpdateIntro`
-//! calls `ScreenFlash` kind 10, which this port does not draw), the Demo mode's automatic skip,
-//! and the unread byte at mode object `+0x40` that also ends a flyby without a held button.
+//! The Demo mode's automatic skip, the unread byte at mode object `+0x40` that also ends a flyby
+//! without a held button, and the SFX fade-in the original starts at the counter's `0x28`
+//! (`FUN_0893a958`; the flyby here runs no race sounds, so there is nothing to fade).
 
 use super::*;
 
@@ -61,6 +63,24 @@ enum Phase {
     Playing,
     /// Over, by running out or by a held button.
     Finished,
+}
+
+/// What the flyby asks of the audio, once per tick it happens on. A per-tick output like a sound
+/// cue: nothing here is `World` state.
+#[derive(Debug, Clone, PartialEq)]
+pub enum IntroCue {
+    /// Play this archive entry (the circuit's voice-over) through the music player.
+    Start(String),
+    /// Stop whatever the flyby started.
+    Stop,
+    /// Snap the sound effects to silence (`Audio_SetSfxFadeTarget(0)`).
+    SilenceEffects,
+    /// Start the effects fade-in from silence, `per_tick` more gain on each tick after this one
+    /// (`Audio_StartSfxFadeIn`).
+    FadeInEffects {
+        /// The gain added per tick.
+        per_tick: f32,
+    },
 }
 
 /// What one tick of the flyby's clock says.
@@ -150,6 +170,10 @@ pub struct IntroCamera {
     /// A pointer press asked to skip. It stands in for a held Cross and **stays held until the
     /// lock lifts**: a tap is one tick long and the lock is 60, so an edge alone would miss it.
     skip_requested: bool,
+    /// The voice-over's archive entry, where the title plays one.
+    voice: Option<String>,
+    /// Audio calls raised and not yet taken, in order.
+    cues: Vec<IntroCue>,
 }
 
 impl IntroCamera {
@@ -166,7 +190,22 @@ impl IntroCamera {
             cuts: 0,
             last_shown: None,
             skip_requested: false,
+            voice: None,
+            cues: Vec::new(),
         }
+    }
+
+    /// Gives the flyby the voice-over entry it starts, or none.
+    #[must_use]
+    pub fn with_voice(mut self, entry: Option<String>) -> Self {
+        self.voice = entry;
+        self
+    }
+
+    /// Whether the title's rule has the race's sound effects sound under the flyby: it fades them in.
+    #[must_use]
+    pub fn plays_race_sounds(&self) -> bool {
+        self.rule.effects_fade_in.is_some()
     }
 
     /// Whether the flyby is on screen.
@@ -224,7 +263,32 @@ impl IntroCamera {
             Skip::Held => skip_held,
             Skip::Press => pressed,
         };
-        let shown = match self.timeline.step(skip || self.skip_requested, dt) {
+        // Tick 0 is the intro's substate 0; the lock counter then counts 59 down to 0 over the
+        // next 60 ticks and reads zero on tick `lock_ticks`. The voice starts in that call,
+        // before the exit test: a flyby that ends on the same tick (a held Cross) starts and
+        // stops it in one call, so it is never heard.
+        let k = self.timeline.ticks();
+        let beat = self.timeline.step(skip || self.skip_requested, dt);
+        // The effects go silent in the intro's first call and the fade-in starts when the counter
+        // reads its value, both before the exit test, so a skip cannot cut the fade short.
+        if let Some((start, per_tick)) = self.rule.effects_fade_start() {
+            if k == 0 {
+                self.cues.push(IntroCue::SilenceEffects);
+            }
+            if k == start {
+                self.cues.push(IntroCue::FadeInEffects { per_tick });
+            }
+        }
+        if let Some(entry) = &self.voice {
+            match beat {
+                Beat::Over if k > self.rule.lock_ticks.value => self.cues.push(IntroCue::Stop),
+                Beat::Show(_) if k == self.rule.lock_ticks.value => {
+                    self.cues.push(IntroCue::Start(entry.clone()));
+                }
+                _ => {}
+            }
+        }
+        let shown = match beat {
             Beat::Over => {
                 self.phase = Phase::Finished;
                 self.cuts = self.cuts.wrapping_add(1);
@@ -275,6 +339,31 @@ impl Race {
         self.view.intro.as_ref().is_some_and(|intro| {
             !intro.finished() && (intro.playing() || self.view.camera_override.is_none())
         })
+    }
+
+    /// The archive entry of the voice-over the flyby will start, for the session to have decoded
+    /// before the flyby reaches it.
+    #[must_use]
+    pub fn intro_voice_entry(&self) -> Option<&str> {
+        self.view.intro.as_ref()?.voice.as_deref()
+    }
+
+    /// Whether the flyby's title has the race's sound effects sound under it
+    /// ([`IntroCamera::plays_race_sounds`]).
+    #[must_use]
+    pub fn intro_plays_race_sounds(&self) -> bool {
+        self.view
+            .intro
+            .as_ref()
+            .is_some_and(IntroCamera::plays_race_sounds)
+    }
+
+    /// Takes the audio calls the flyby has raised since the last call, in order.
+    pub fn take_intro_cues(&mut self) -> Vec<IntroCue> {
+        self.view
+            .intro
+            .as_mut()
+            .map_or_else(Vec::new, |intro| std::mem::take(&mut intro.cues))
     }
 
     /// Whether the flyby is still to play or playing - the session steps it instead of the world

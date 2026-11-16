@@ -160,7 +160,13 @@ impl Atlas {
             for column in 0..width {
                 let at = ((pen.y + row) * self.width + pen.x + column) as usize;
                 self.coverage[at] = alpha[(row * width + column) as usize];
-                self.luma[at] = 255;
+                // An outlined face takes opacity from this plane alone, so its mask must end
+                // where the ink does; a one-pass face reads it as colour and stays solid body.
+                self.luma[at] = if self.is_outlined() {
+                    alpha[(row * width + column) as usize]
+                } else {
+                    255
+                };
             }
         }
         self.glyphs.insert(

@@ -82,6 +82,16 @@ impl Model {
                 draw.alpha_test_ref = Some(COVERAGE_REFERENCE);
                 draw
             }));
+        self.honour_cull();
+        moved
+    }
+
+    /// Only the cull half of [`Self::honour_render_state`]: every draw of a
+    /// material carrying [`STATE_CULL`] is back-face culled, in all three
+    /// lists. Wipeout 2048 and Omega take this and nothing else of the word:
+    /// bit 4 is censused on their materials, the coverage and depth-write bits
+    /// have no draw list there to read.
+    pub fn honour_cull(&mut self) {
         let states = &self.material_state;
         for draw in self
             .draws
@@ -92,7 +102,6 @@ impl Model {
             let state = draw.texture.and_then(|slot| states.get(slot)).copied();
             draw.culled |= state.is_some_and(|state| state & STATE_CULL != 0);
         }
-        moved
     }
 }
 

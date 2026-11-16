@@ -28,6 +28,7 @@ fn tech_de_ras_grid_takes_the_list_the_ge_was_handed() {
     let lights = HullPointLights {
         lights: vec![fixed([-58.024, -5.471, 89.36])],
         slots: 1,
+        pass: None,
     };
     let got = lights.at([-58.021, -9.514, 79.939], 0.0, [249, 249]);
     assert_eq!(unpack(got[0][3]), [61, 142, 157]);
@@ -41,6 +42,7 @@ fn a_light_beyond_its_outer_radius_takes_no_slot() {
     let lights = HullPointLights {
         lights: vec![fixed([0.0, 0.0, 0.0])],
         slots: 2,
+        pass: None,
     };
     assert_eq!(lights.at([0.0, 0.0, 15.5], 0.0, [255, 255]), [[0.0; 4]; 2]);
     assert_ne!(lights.at([0.0, 0.0, 14.0], 0.0, [255, 255])[0][3], 0.0);
@@ -51,6 +53,7 @@ fn inside_the_inner_radius_is_full_strength() {
     let lights = HullPointLights {
         lights: vec![fixed([0.0, 0.0, 0.0])],
         slots: 1,
+        pass: None,
     };
     // 0.388 * 255 = 98.9, so 98, at the full 256 scale.
     assert_eq!(
@@ -68,6 +71,7 @@ fn the_strongest_lights_win_the_slots_and_a_tie_keeps_the_first() {
             fixed([0.0, 0.0, 8.0]),
         ],
         slots: 2,
+        pass: None,
     };
     // Distances 10, 12 and 8: the third replaces the weaker second, in its place.
     let got = lights.at([0.0; 3], 0.0, [255, 255]);
@@ -79,6 +83,7 @@ fn the_strongest_lights_win_the_slots_and_a_tie_keeps_the_first() {
             fixed([10.0, 0.0, 0.0]),
         ],
         slots: 2,
+        pass: None,
     };
     let got = tie.at([0.0; 3], 0.0, [255, 255]);
     assert!(
@@ -98,6 +103,7 @@ fn a_spot_is_dark_outside_its_cone() {
     let lights = HullPointLights {
         lights: vec![PlacedLight::fixed(spot)],
         slots: 1,
+        pass: None,
     };
     assert_ne!(
         lights.at([0.0, 0.0, 5.0], 0.0, [255, 255])[0][3],
@@ -120,6 +126,32 @@ fn none_and_no_free_slot_light_nothing() {
     let full = HullPointLights {
         lights: vec![fixed([0.0, 0.0, 5.0])],
         slots: 0,
+        pass: None,
     };
     assert!(full.is_empty());
+}
+
+/// The builder's returned colour takes each chosen light as colour x strength x 255 x the
+/// scale byte, not shifted down: a light that reaches the craft at all saturates.
+#[test]
+fn a_chosen_light_adds_its_unshifted_product_to_the_pass_colour() {
+    let lights = HullPointLights {
+        lights: vec![fixed([0.0, 0.0, 11.0])],
+        slots: 1,
+        pass: None,
+    };
+    // 11 units from a light of radii 7 and 15: t = 0.5, strength 0.5.
+    let sum = lights.accumulated([0.0; 3], 0.0, [200, 100]);
+    let want = [0.388, 0.907, 1.0].map(|c: f32| c * (0.5 * 255.0) * 200.0);
+    for k in 0..3 {
+        assert!((sum[k] - want[k]).abs() < 1.0, "{sum:?} against {want:?}");
+    }
+    assert_eq!(
+        lights.accumulated([0.0, 0.0, 40.0], 0.0, [200, 100]),
+        [0.0; 3]
+    );
+    assert_eq!(
+        HullPointLights::none().accumulated([0.0; 3], 0.0, [255, 255]),
+        [0.0; 3]
+    );
 }

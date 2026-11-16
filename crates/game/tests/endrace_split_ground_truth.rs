@@ -63,6 +63,7 @@ fn placed(_: &str) -> Option<Placed> {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     })
 }
 
@@ -284,6 +285,7 @@ fn the_stamped_rewards_split_draws_what_the_ps2_file_draws() {
 
 fn panel(team: &str, award: u32, total: u32) -> Rewards {
     Rewards {
+        tier: None,
         medal: None,
         campaign: false,
         loyalty: Some(Loyalty {

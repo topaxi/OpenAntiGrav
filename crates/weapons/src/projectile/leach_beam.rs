@@ -4,14 +4,15 @@
 //! [`super::Projectiles`]: `Weapon_FireLeachBeam` (`0x08866658`) spawns no body, it
 //! resolves a link to a craft the Missile's lock picked and transfers energy each
 //! tick. See `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`;
-//! the single instance lives in `oag_gameplay::World::leach_beam`.
+//! the instances live in `oag_gameplay::World::leach_beams`, at most [`POOL_SIZE`].
 //!
 //! # What is recovered and what is ours
 //!
 //! **Recovered.**
 //!
-//! - One beam in the whole race: `Weapon_FireLeachBeam`'s
-//!   `if (pool->live != 0) return;` on a world cursor.
+//! - A whole-race limit: `Weapon_FireLeachBeam`'s `if (pool->live != 0) return;` on a
+//!   world cursor (one beam on Pulse and HD; eight on 2048 and Omega). A press at the
+//!   limit spends the pickup and fires nothing.
 //! - Firing without a lock does nothing: `LeachBeam_InitUnlocked` (`0x08872da8`)
 //!   builds `kind = 2` targeting the shooter, and `LeachBeam_UpdatePool`
 //!   (`0x08866b08`) gives it no distance test, drain or damage, only expiry at
@@ -81,10 +82,14 @@ pub enum Kind {
     Unlocked,
 }
 
-/// The single LeachBeam a race ever has in flight, matching
-/// `Weapon_FireLeachBeam`'s pool cursor, so `oag_gameplay::World` carries
-/// `Option<Beam>` rather than a [`super::Projectiles`] slot, as for
-/// [`super::quake::Wave`].
+/// How many LeachBeams a race can hold at once at most: the pool 2048 and Omega
+/// measure (`LeachBeamManager_Update`'s eight entries, confidence 85). The
+/// per-title limit (`oag_title::weapons::Weapons::leach_beams`) is at or under it.
+pub const POOL_SIZE: usize = 8;
+
+/// One LeachBeam in flight, an entry of `oag_gameplay::World::leach_beams`
+/// (`Weapon_FireLeachBeam`'s pool), so a beam is not a [`super::Projectiles`]
+/// slot, as for [`super::quake::Wave`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Beam {
     /// Which ship slot fired it.
@@ -136,18 +141,50 @@ pub struct Beam {
 /// first) move once a trip. HD's pending damage reaches the shield unscaled
 /// (`Ship_ApplyPendingDamage_q`, `0x000e8de0`).
 pub mod trip {
-    /// Beam length at or under which a trip takes [`PERIOD_MIN_SECONDS`]
-    /// (`DAT_008a9c88`). **What the length is, is chosen**: the original reads
-    /// `strip+0x10`, whose writer is unread; this engine passes the straight
-    /// distance between the two craft.
+    /// Track gap at or under which a trip takes [`PERIOD_MIN_SECONDS`]
+    /// (`DAT_008a9c88`). The length the period reads is the [`gap`] between
+    /// the two craft along the course, not the beam's drawn length.
     pub const PERIOD_MIN_LENGTH: f32 = 20.0;
-    /// Beam length at or over which a trip takes [`PERIOD_MAX_SECONDS`]
+    /// Track gap at or over which a trip takes [`PERIOD_MAX_SECONDS`]
     /// (`DAT_008a9c8c`).
     pub const PERIOD_MAX_LENGTH: f32 = 100.0;
     /// The shortest trip, seconds (`DAT_008a9c80`).
     pub const PERIOD_MIN_SECONDS: f32 = 0.3;
     /// The longest trip, seconds (`DAT_008a9c90`).
     pub const PERIOD_MAX_SECONDS: f32 = 1.0;
+    /// The beam's age at which the ball starts its trips: `LeachBall_Advance`
+    /// runs only in `LeachBeam_Update`'s state 4, entered after the 0.4 s ball
+    /// flight (state 2, `2.5 * clock`, TOC `-0x22c8`) and the 0.3 s reveal
+    /// (state 3, `3.3333 * clock`, TOC `-0x22c0`). Live, the ball's clock read
+    /// 0.2 after one 0.3 s wrap at 0.5 s into state 4
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "The ball rides the
+    /// strip").
+    pub const HELD_AFTER_SECONDS: f32 = 0.7;
+
+    /// The signed distance along the course from the shooter to the target,
+    /// folded into half a lap either way: `0x000d0398`, which `BeamPath_Rebuild`
+    /// stores at `strip + 0x140` and `LeachBall_Advance` reads as its length
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "The ball rides the
+    /// strip"; live, the stored gap equals the two craft's `+0x7010` difference).
+    /// A craft not yet located gives the course length, as the original's
+    /// does, so the trip takes its longest period.
+    #[must_use]
+    pub fn gap(shooter: Option<f32>, target: Option<f32>, course_length: f32) -> f32 {
+        let (Some(shooter), Some(target)) = (shooter, target) else {
+            return course_length;
+        };
+        let mut gap = target - shooter;
+        if course_length > 0.0 {
+            let half = course_length * 0.5;
+            while gap > half {
+                gap -= course_length;
+            }
+            while gap < -half {
+                gap += course_length;
+            }
+        }
+        gap
+    }
 
     /// `LeachBall_Advance`'s remap: `|length|` clamped to
     /// `[PERIOD_MIN_LENGTH, PERIOD_MAX_LENGTH]` and mapped linearly onto
@@ -183,7 +220,7 @@ pub struct Report {
     pub drained: bool,
     /// The link broke this tick, having held at least one tick.
     pub disconnected: bool,
-    /// The beam retired this tick; `oag_gameplay::World::leach_beam` is now `None`.
+    /// The beam retired this tick; its `oag_gameplay::World::leach_beams` entry is now `None`.
     pub retired: bool,
     /// A hit landed on a target whose Shield pickup swallowed it: the only thing
     /// that makes the shell react. The same out-parameter shape as
@@ -250,16 +287,18 @@ impl Beam {
     /// finished.
     ///
     /// Returns `true`-style via [`Report::retired`] when the caller should set
-    /// `oag_gameplay::World::leach_beam` to `None`. The order is
+    /// its `oag_gameplay::World::leach_beams` entry to `None`. The order is
     /// `LeachBeam_UpdatePool`'s: age, link test, drain, retire.
     pub fn advance<S: Craft>(
         &mut self,
         ships: &mut [S; MAX_SHIPS],
         ship_count: u8,
         rules: oag_physics::DamageRules,
+        course_length: f32,
         dt: f32,
     ) -> Report {
         let mut report = Report::default();
+        let held_before = self.age >= trip::HELD_AFTER_SECONDS;
         self.age += dt;
 
         if self.kind == Kind::Unlocked {
@@ -269,21 +308,28 @@ impl Beam {
 
         if let Some(broken_at) = self.disconnected_at {
             report.retired = self.age >= broken_at + DISCONNECT_LINGER_SECONDS;
+            report.absorbed = !report.retired && self.shell_swallows(ships, ship_count);
             return report;
         }
 
         if self.link_broken(ships, ship_count) {
             self.disconnected_at = Some(self.age);
             report.disconnected = true;
+            report.absorbed = self.shell_swallows(ships, ship_count);
             return report;
         }
 
         if let Some(elapsed) = self.trip.as_mut() {
-            let length = slot(ships, ship_count, self.owner)
-                .zip(slot(ships, ship_count, self.target))
-                .map_or(0.0, |(owner, target)| {
-                    (owner.physics().body.position - target.physics().body.position).length()
-                });
+            // The ball's clock runs from the first tick the beam starts
+            // already held, as state 4's does from the tick after its entry.
+            if !held_before {
+                return report;
+            }
+            let length = trip::gap(
+                slot(ships, ship_count, self.owner).and_then(Craft::progress),
+                slot(ships, ship_count, self.target).and_then(Craft::progress),
+                course_length,
+            );
             if !trip::advance(elapsed, dt, length) {
                 return report;
             }
@@ -330,6 +376,33 @@ impl Beam {
         }
         let separation = owner.physics().body.position - target.physics().body.position;
         separation.length() > self.range
+    }
+
+    /// Whether the shell of a target that holds a Shield reacts to a link that is
+    /// broken or lingering. `LeachBeam_UpdatePool` marks a link disconnected
+    /// when the target runs a Shield, then falls through to `LeachBeam_Drain`
+    /// on that tick and on every tick of the linger (`LeachBeam_Drain` gates on
+    /// the owner's Shield only), so the target's pending damage is posted and
+    /// `Ship_ApplyPendingWeaponDamage` answers a running Shield with
+    /// `ShipShield_Hit` (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+    /// "A shielded target's shell under a broken link"). A reaction only: the
+    /// drain itself still stops at the break.
+    ///
+    /// Pulse's every-tick cadence alone; the per-trip beam's linger drain is unread.
+    fn shell_swallows<S: Craft>(&self, ships: &[S; MAX_SHIPS], ship_count: u8) -> bool {
+        if self.trip.is_some() {
+            return false;
+        }
+        let (Some(owner), Some(target)) = (
+            slot(ships, ship_count, self.owner),
+            slot(ships, ship_count, self.target),
+        ) else {
+            return false;
+        };
+        target.active()
+            && target.physics().craft_state == CraftState::Racing
+            && target.physics().shield_pickup_timer > 0.0
+            && owner.physics().shield_pickup_timer <= 0.0
     }
 
     /// One tick of the transfer; returns what `Ship_Damage` did to the victim.

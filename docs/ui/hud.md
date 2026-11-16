@@ -428,7 +428,7 @@ the player's team name where the original prints the profile tag (this build
 has none), and the tie order follows this build's grid array. `PosTag` is no
 longer skipped by `hud::is_screen_positioned`.
 
-**`PlrTag0`-`PlrTag7` are the genuine runtime anchor** - a separate,
+**`PlrTag0`-`PlrTag7` are the genuine runtime anchor** (drawn since: `oag_hud::player_tags`, in the reticle's placement) - a separate,
 multiplayer-only layout (`MPTag_HUD.xml`), and its eight `<Text>` widgets
 carry no `x`/`y` at all, unlike `PosTag`. That is the one case
 `hud::is_screen_positioned`'s exemption still describes correctly: nothing
@@ -561,7 +561,7 @@ Three traps, all of which cost time here:
 | What does `ShieldBarText` show? | **`100%`** - a percentage, not the raw `<Misc shield/>` pool. Confirmed from the writer as of 2026-08-10: `Ship_SetShield` (`0x0883e6f4`) calls `Hud_SetEnergyBar((shield / max) * 100, ...)` itself, so the percentage is the original's own arithmetic rather than a reading of a frame. |
 | Does the shield bar move? | **Yes, now.** It read a constant full for as long as nothing depleted the pool; wall contact does as of the shield work, so `ShieldBar` and `ShieldBarText` are live. **In a time trial and a speed lap it will still sit near full**, and that is faithful rather than broken - both modes race with the original's `Damage` option off, which floors the pool at 20 and regenerates it at 4 a second. Zone is the mode where it visibly drains. See [shield](../ghidra/functions/psp-pulse-usa/shield.md). |
 | Where is `SpeedBarMark`? | It **slides**: authored x plus the fill's width minus 6, and so do `SpeedBarText` and the shield's `ShieldBarMark`/`ShieldBarText` (zero offset at standstill, where the fill is 6 px). Read live, 59 of 60 ticks. **Pulse's widget only**: HD authors no `SpeedBarMark`, and HD's speed fill is a `<CurveBar>` - see [hd-hud](../formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). |
-| What is HD's `ThrustBar`? | The craft's throttle after Pilot Assist's scale, `craft+0x30c * 100`, cropped to its width with a truncated `NN%` label and no chase of the HUD's own (99 or 92 with the assist on, 0 with no throttle). `Readout::thrust_percent`, on `oag_hd`'s and `oag_omega`'s `ALWAYS_ON`; see [hd-hud](../formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). Not 2048's `thrust_chase_percent`. |
+| What is HD's `ThrustBar`? | The craft's throttle after Pilot Assist's scale, `craft+0x30c * 100`, cropped to its width with a truncated `NN%` label and no chase of the HUD's own (99 or 92 with the assist on, 0 with no throttle). `Readout::thrust_percent`, on `oag_hd::hud::ALWAYS_ON` (Omega reads the same list); see [hd-hud](../formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). Not 2048's `thrust_chase_percent`. |
 
 ### And one structural finding
 
@@ -635,6 +635,9 @@ pair of the 26 code-only keys; the other 25 are not read.
   [`Readout::shield_blinking`]/[`Readout::shield_blink_phase_on`], driven off
   the pool, the post-hit flash, and absorbing together - see
   [shield.md](../ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-the-absorb-flash-2026-09-25).
+  **The absorb's glow was settled 2026-11-09**: the fill stamps the bloom's glow mask (`0xff`) for the whole window, in both
+  halves of the blink, and the original draws no white layer
+  ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md#the-absorb-flash-at-the-draw-call-2026-11-09-pulse-bar-bloom)).
   The low-shield **icon** itself (a separate widget from `ShieldBar`,
   `Hud_SetEnergyBar`'s own two-tier blink) is a different gap and still not
   reproduced.
@@ -649,8 +652,8 @@ pair of the 26 code-only keys; the other 25 are not read.
   `borderExtendPixels` and the halo closes about 43 % of the measured gap -
   see [hud-skins.md part D](hud-skins.md#d-what-was-built-2026-10-06-hud-crisp-lane).
   `[graphics] hud_scale` (default `sharp-bilinear`) is the other half, for the
-  raster HUDs. HD alone has a `Safe Area Setting` that draws the whole HUD at `percent / 100`
-  about the screen centre: `[graphics] hud_safe_area` (default 90, the disc's;
+  raster HUDs. HD alone authors a `Safe Area Setting`, which every title now offers as the SCREEN SIZE row: the whole HUD is drawn
+  at `percent / 100` about the screen centre, `[graphics] hud_safe_area` (default 90 on HD, the disc's, and 100 elsewhere;
   [hd-hud.md](../formats/hd-hud.md#the-whole-hud-is-drawn-at-the-safe-area-setting-hd-hud-leftovers-2026-10-21)).
 - **`TotalTime` overflows the right edge.** `align="left"` at `OffsetX="475"
   x="-75"` starts at 400, and a `HUD`-font time at scale 1.0 measures 92 px - 12 px
@@ -674,7 +677,7 @@ geometry - the geometry is 95 throughout.
 | Position | `Position`, `PositionOf`, `Position Outof`, `PositionTxt` | 95 | **drawn** as of 2026-08-11, from `Race::places()`, and checked against the original's own `pos 8 / 8`; only `Arcade_HUD.xml` carries them, and they take the anchor off `TotalTime` - see below |
 | Times | `CurrentTime`, `BestTime`, `TotalTime`, `CountdownTime`, `TimeDiffText`, `TimeDiffIcon`, `TimeIcon` | 70 | format `m.ss.hh`, observed as `1.11.08` on the running game. **`TimeDiffText`/`TimeDiffIcon` are the lap-line time gap** (`"+ 2.8"` red behind, `"- 2.8"` green ahead, once a lap), not a clock: [hud-message-triggers.md](../ghidra/functions/psp-pulse-usa/hud-message-triggers.md). **`TotalTime` is not drawn in a single race**: it shares an anchor with `Position` and yields it - see below |
 | Weapon | `PickupBackground`, `SubWeapon`, **13** `<Type>Icon` widgets | 95 | **drawn**; the icon is found by *name* - see below. `SubWeapon` is the text line under the icon: the Cannon's rounds left or the Autopilot's seconds left, written every frame ([sub-weapon.md](../ghidra/functions/psp-pulse-usa/sub-weapon.md)); **drawn** as of 2026-10-26 |
-| Warnings | `ForwardWarningIcons`, `RearWarningIcons` and children | 55 | incoming-weapon indicators; nothing drives them |
+| Warnings | `ForwardWarningIcons`, `RearWarningIcons` and children | 95 | **drawn on Pulse (PSP, PS2 inherited)** by `oag_hud::incoming`, raised from `Race::note_incoming_fire` at the opponent fire sites (a spent pickup, a Mine or Bomb drop that starts, a Cannon burst's first round; the original announces per fire request): an opponent's fire raises a 2.0 s warning when the along-track gap `player - firer` is inside the weapon's window (Rocket and Missile `(0, 400)`, Quake `(0, 800)`, Cannon, Plasma, LeachBeam, Repulser, Shuriken `(0, 500)` on the rear slot; Mine and Bomb `(-500, 0)` on the forward slot; "Forward" means a threat ahead); the background and the matching icon blink at 4 Hz (on while `floor(8 t)` is odd) and the slot clears at zero; the projectile's target and lock are never read. Arcade, Tournament, Eliminator and Head-to-Head only (multiplayer modes bind the widgets but never raise them; neither does a split-screen or network race here). `HudArt::incoming_warnings` is `true` on Pulse only: HD, 2048 and Omega author the same names under a different law and stay off. Measured live through the real fire path: [hud-incoming-warnings.md](../ghidra/functions/psp-pulse-usa/hud-incoming-warnings.md). A simulation mod's `raise-warning` (`oag_ext_abi::Command::RaiseWarning`, [wasm-extensions](../architecture/wasm-extensions/README.md)) goes through the same gate and the same `Warnings::raise`, for the viewer's slot only, so it is drawn where a weapon's is and nowhere else. A mod may name an icon of its own `[icons]` and a group instead of a title icon: the group's backdrop plus the art fitted to the box of `RearWarningRocketIcon` / `ForwardWarningMineIcon` (chosen, not measured), a vector icon rasterised again at that box's pixels (`oag_hud::svg::place`); art the sheet lacks lights no group |
 | Countdown | `ReadyText`, `GoText`, plus the `Mode3D` models | 65 | |
 | Wrong way | `WrongWay` | 70 | `dot(forward, tangent)` is a sufficient source |
 | Zone | `Zone`, `Score`, `Zone_Bar_*` | 50 | Zone mode is a separate scope item |
@@ -1070,8 +1073,8 @@ Recorded so none of this reads as undiscovered work.
 - ~~**Medal targets.** `IG_HUD_GOLD`/`SILVER`/`BRONZE`/`RECORD` need
   progression data...~~ **Closed 2026-09-28** - see "Medal targets, closed
   2026-09-28" below.
-- **`IG_PAUSE_QUIT`.** There is no pause: leaving a race drops the `World` rather
-  than suspending it.
+- **`IG_PAUSE_QUIT`.** Drawn since 2026-11-07, as the pause screen's QUIT RACE row ([the pause
+  menu](pause-menu.md)); it drops the parked race.
 - **Unreferenced `Data\HUD\*.vex` models** (Pure's gauge set, `Bar_1`/`Bar_3`/`Bar_outline_1` and `Zone_*`, is referenced and drawn as of 2026-10-22; the rest of the 26 below is not). `Bar_1`, `Speed`, `Shield`, `Lap`,
   `Position`, `Thrust`, 11 `Weapon_*`, `Zone_Bar_*`, `ghostship`, `grid`,
   `memory_stick_anim`. Referenced by **no** layout's `Src=` and by no string in
@@ -1360,3 +1363,91 @@ text, bar; 480x272) went 9.46 to 5.63 over these three changes, speed text 15.8 
 record 10.8 to 7.4. Moa Therma Black (a tilted HUD in the original), the Zone Talon's pair and `talons-boost` (text the
 original draws mid-fade) are not text errors any more and keep their scene-bound scores.
 
+## HD HUD text: ink-aligned ends and half-unit glyph quads (2026-10-22, `hd-sharp-hud`, `hd-hud-leftovers`)
+
+`HudArt::ink_aligned_text` (HD **measured**, 2026-10-22): `LAP`, `Record` and `0 kmh` (right-aligned) sat 2.8, 3.9 and
+about 4 px left of the original's at 1920x1080, `100` and the lap digit (centred) 1.7 px, on all 13 cold pairs alike,
+while the whole-HUD, the bars and the left-aligned `KM/H` sat within 0.1 px. With the rule on, the text crops'
+phase-correlation peak is within 0.3 px on the pairs measured. Omega inherits HD's HUD engine and font, unmeasured;
+Pulse and Pure keep the narrower rule above (right-aligned only, on `HudArt::raster`); 2048 is unmeasured.
+
+`HudArt::half_unit_glyph_quads` (HD **measured**, 2026-10-22): the RPCS3 draw capture's lap `1` (scale 1.0) is a 15x81
+quad over the 14x80 cell, and the lap count `3` (scale 0.6) a 26.8x49.0 quad over the 43x80 cell, both with the uv grown
+0.5 texel (44x81): `43 * 0.6 + 1.0` and `80 * 0.6 + 1.0`, so the glyph is magnified 1.5 % past its scale. Omega
+inherits HD's HUD engine, unmeasured. Pulse's PSP path does the same on its own flag (`HudArt::raster`); 2048 is
+unmeasured.
+
+
+## HD's Eliminator race line (2026-11-06, `eliminator-hud`)
+
+The maintainer's report: in HD's Eliminator the HUD is missing many elements. Compared on RPCS3
+(HD Fury EU, Racebox Eliminator, Vineta K, weapons on: the intro board, the countdown, 30 s of
+racing with a weapon held; evidence and addresses in
+[`eliminator-hud.md`](../ghidra/functions/ps3-hdfury-eu/eliminator-hud.md)) against
+`oag-game --race --mode eliminator --track Data\Environments\01_Vineta_K\track.vex` (the default circuit differs). **The original draws `DATA00`'s
+`elimination_hud.xml`** (the `HUD_Elim_*` fragments), not `DATA02`'s `KillsText` design: its
+executable has no `KillsText`, and the frames show the widgets only `DATA00` authors.
+
+| Element | Original | Ours before | Ours now |
+| --- | --- | --- | --- |
+| Lap panel `LAP` and the digit | yes | yes | yes |
+| Hexagon round the lap digit (`LapPanel2`) | yes | no | **yes** |
+| Shield hexagon and `100` | yes | yes | yes |
+| Message line (`Machine Gun`, clipped at its left in both) | yes | yes | yes |
+| Race line: bar, two end panels, marker per craft | yes | no | **yes** |
+| `ShipsBehind` / `ShipsInFront` (`0` ... `7` on a grid of eight) | yes | no | **yes** |
+| `TARGET ( 200 )` header | yes | no | **open** |
+| Ranked `NAME ( score )` rows, player's highlighted, rank digit and bracket | yes | no | **open** |
+| `MPWeaponIcon` | never in a single-player Eliminator, hidden at bind ([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md)) | no | closed |
+| `ScoreFeedBack` popups | authored, not caught in a frame | no | **open** |
+
+Region metric, the fraction of the original's red HUD pixels (relative redness over 45, within 6 px
+of one of ours), the countdown frame against ours at tick 60 on the same circuit (Vineta K,
+1280x720, safe area 100 percent): lap panel **0.93** (0.40 before the hexagon), race-line band
+**0.51**, whole frame 0.24 (rows missing). The band is 0.0 before the race line existed. Safe
+area 100 percent is **inferred from panel geometry** (the original's panels start 52 px in on 1278,
+ours match there; at HD's default 90 percent ours sit 40 px further in), the profile was not read.
+The grid marker sits at about 0.98 of the bar in ours and 0.96 in the original (x 1085 against
+1069 on a 926 px bar): the same end of the bar, 16 px apart, which is the unread `RM+0x1948`
+offset or the grid's own placement, not explained. A loose metric (the two worlds differ); the
+side-by-sides are the evidence, and the pair is an ad-hoc HUD-region one, not a compare-page pair.
+
+The law is on the page above: each craft's marker at `bar_x + fraction * bar_width`, the fraction
+the distance into the lap wrapped to one lap, the player's the last slot, the counts the markers
+at or past the player's against the rest (`oag_hud::race_line`). The wiring is generic (a layout
+that authors `ShipLinePos0` draws it for a readout that carries a line, `oag_raceplay` fills one
+in every Eliminator) and the guard is `crates/raceplay/tests/hd_eliminator_hud_ground_truth.rs`.
+
+**Open, and why.** The rows print a *score*, `craft+0x6f80`, not kills: HD's Eliminator is "reach
+the target score", with points for damage, for an elimination and for laps, and a loss on being
+eliminated. This build races Pulse's kill-count rule, so there is no number to print and a row of
+invented `( 0 )`s would be a stand-in for data the original has. The scoring law, the `200`
+target (`g_GameState+0x20`) and the row writer `0x0008c6f8` are unread. The marker half turn
+(`craft+0x6ad8`) was read 2026-11-07, [eliminator-flip.md](../ghidra/functions/ps3-hdfury-eu/eliminator-flip.md). Not captured: a frame after a kill (none was reachable without
+the scoring), the split-screen Eliminator pair (`splitscreen_elimination_hud_{0,1}.xml` author the
+same line and take the same code path, unchecked). 2048 and Omega: both executables name `ShipLinePos%d`, `ShipsInFront` and `EliminatorPositions`
+and both packages ship the same `Elimination_HUD` / `hud_elim_*` fragments (Omega's
+`hud_elim_lap_counters.xml` is 1,482 bytes, HD's size), so the race line **now draws on an
+Eliminator race of either through the shared path, unmeasured on both** (no 2048 or Omega
+Eliminator frame): **ported, unmeasured**. `LapPanel2` (the lap number's hexagon):
+**Omega: ported** - `HUD_Elim_lap_counters.xml` ships in the base package (`data00.psarc`, no
+patch copy), 1,482 bytes like HD's, with `LapPanel2` at the same screen rectangle as HD's and the
+atlas UVs doubled for `fury_hud`'s 2048 square; the default Eliminator root, both split-screen
+pairs (horizontal and vertical) compose it and no other Omega root does, retro skins included
+(`omega_hud_ground_truth::the_eliminator_lap_hexagon_is_authored_by_omegas_eliminator_roots_alone`).
+Omega's `always_on` is `oag_hd::hud::ALWAYS_ON` itself, so its Eliminator draws the hexagon
+(`an_omega_eliminator_draws_the_lap_hexagon`; before the share the lap number floated with no
+hexagon behind it). Unmeasured against an Omega frame. **2048: checked, differs** (confidence 90,
+a literal read of the package's own layouts). The skin 2048 plays authors no lap hexagon: both its
+Eliminator roots, `2048_hud\Elimination_HUD.xml` and the campaign's `2048_hud\Elimination_HUD_HD.xml`
+(patch `data2.psarc`), include `2048_hud\HUD_lap_counters.xml`, 507 bytes in the base package,
+which authors neither `LapPanel` nor `LapPanel2`. The HD-lineage `HUD_Elim_lap_counters.xml`
+(1,482 bytes, `LapPanel2` present) and `SplitScreen_elim_lap_counters.xml` ship in `data.psarc`,
+but only the bare-root `Data\XML\Elimination_HUD.xml` includes the former, and that root is the
+attract-mode demo's, never a race a player starts
+(`oag_2048::hud::skins::DEMO`). So `oag_2048::hud::ALWAYS_ON` keeps its own list without
+`LapPanel2`: naming it would draw nothing in any played race, and it is not shared with HD's
+list (ADR-0090 clause 3: only data the descendant's own files confirm). Pinned by
+`vita_2048_hud_ground_truth::the_eliminator_lap_hexagon_is_authored_only_by_the_unplayed_bare_root`;
+no 2048 Eliminator frame was captured, so whether the original's Eliminator shows a lap counter
+at all is read from the layouts alone.

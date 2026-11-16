@@ -68,13 +68,17 @@ pub struct Boot {
     pub ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     /// The style's animated menu backdrop - see [`backdrop::load`]. `None` where none.
     pub fury_backdrop: Option<Arc<backdrop::MenuBackdrop>>,
+    /// The title's pause screens, read off its definition file: one per screen
+    /// [`oag_title::PauseMenu::screens`] names. Empty for a title that draws its pause page as
+    /// the front end's own list.
+    pub pause_screens: screens::PauseScreens,
     /// The race box's selection screens. See [`Shell::track_select`].
     pub track_select: Option<oag_ui_screens::picker::Layout>,
     pub ship_select: Option<oag_ui_screens::picker::Layout>,
     /// `Team SelectionSplit`'s two halves where the source authors it (Pulse's PS2
     /// pressing) - see [`oag_ui_screens::picker::Layout::read_split`].
     pub ship_select_split: Option<[oag_ui_screens::picker::Layout; 2]>,
-    /// The `KILLS` and `WEAPONS` rows' values - see [`Shell::race_setup`].
+    /// The `KILLS`, `TARGET` and `WEAPONS` rows' values - see [`Shell::race_setup`].
     pub race_setup: RaceSetup,
     /// The circuit names, for a capture's circuit labels.
     pub circuit_names: oag_ui::language::CircuitNames,
@@ -195,6 +199,8 @@ pub struct Shell {
     pub title: &'static oag_title::Title,
     /// Which console this source is for - see `crate::settings::profile_key`.
     pub platform: oag_disc::Platform,
+    /// The disc's serial, which names the pressing; `None` where the source carries none.
+    pub serial: Option<String>,
     /// The front-end XML. Cloned for the media worker, moved into
     /// [`Frontend::booting`] by [`assemble`].
     pub screens: Screens,
@@ -204,10 +210,14 @@ pub struct Shell {
     /// [`crate::loading::Assets::load`] needs to put a tip on the loading
     /// screen, which is the other reason this phase exists.
     pub strings: StringTable,
+    /// The campaign map a title's menus hand off to, see [`campaign2048::map_screens`].
+    pub map_screens: Option<Screens>,
     /// The raceable circuits, for the menus.
     pub tracks: Vec<oag_raceplay::catalogue::Track>,
     /// The circuits a Zone race can be picked from. See [`oag_title::ZoneCircuit::menu_tracks`].
     pub zone_tracks: Vec<oag_raceplay::catalogue::Track>,
+    /// What the title's own `DemoConfig.xml` authors for its attract demo, when it ships one.
+    pub demo_config: Option<oag_tables::demo_config::DemoConfig>,
     /// The chosen language's string-table entry, when it names one.
     ///
     /// Carried because the loading screen needs the *other copies* of it: two
@@ -230,6 +240,8 @@ pub struct Shell {
     pub circuit_names: oag_ui::language::CircuitNames,
     /// The raceable teams, for the menus.
     pub teams: Vec<oag_raceplay::catalogue::Team>,
+    /// What gates [`Self::teams`]' models on Ship Select, read off this source's campaign grids.
+    pub model_gate: crate::unlock::ModelGate,
     /// The text atlas.
     pub font: oag_ui::font::Atlas,
     /// The front-end sprite sheet.
@@ -274,6 +286,10 @@ pub struct Shell {
     pub ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     /// The style's menu backdrop, read here for the same reason the frame is.
     pub fury_backdrop: Option<Arc<backdrop::MenuBackdrop>>,
+    /// The title's pause screens, read off its definition file: one per screen
+    /// [`oag_title::PauseMenu::screens`] names. Empty for a title that draws its pause page as
+    /// the front end's own list.
+    pub pause_screens: screens::PauseScreens,
     /// The race box's two selection screens, read off the same XML the
     /// frame was - `Track Creation` and `Team Selection` on Pulse - with
     /// every string resolved. `None` on a title that authors neither, which
@@ -441,13 +457,10 @@ pub fn load_shell(
     report.push(archives.layout.describe());
     report.push(format!("{}: boot sequence", title.name));
     report.extend(provenance::caveat(title.name, profile.provenance));
-    if !archives.packs.is_empty() {
-        report.push(format!(
-            "dlc: {} archive(s) mounted behind this source",
-            archives.packs.len()
-        ));
+    for label in archives.dlc_labels() {
+        log::info!("dlc: {label}");
     }
-    report.extend(problems.into_iter().map(|p| format!("dlc: {p}")));
+    report.extend(oag_raceplay::loader_log::dlc_problems(problems));
     report.push(format!(
         "{}: {} entries",
         archives.data.label(),
@@ -478,9 +491,18 @@ pub fn load_shell(
     // Omega's faces are HD's at twice the pixel size; see
     // `oag_display::space::Space::font_texel_scale`. `1.0` for every other source.
     let texel_scale = oag_display::space::Space::font_texel_scale(archives.layout.platform);
-    let font = load_font(&mut archives, &languages, preferred_language, &mut report)
-        .with_prompts(title.prompts)
-        .with_texel_scale(texel_scale);
+    // The pack that is on and names this disc is active for the faces and the sprite sheet
+    // below and nothing after them: it is switched off once they are built.
+    let pack = fonts::engage_pack(front_end, title, options, &archives, &mut report);
+    let font = load_font(
+        &mut archives,
+        &languages,
+        preferred_language,
+        title.prompts,
+        &mut report,
+    )
+    .with_prompts(title.prompts)
+    .with_texel_scale(texel_scale);
     // The picker and the menus' language row draw in `font`, so a language whose
     // name `font` cannot spell is not offered; it still loads for a saved choice.
     let offered = oag_ui::language::load::pickable(&languages, &font, &mut report);
@@ -511,7 +533,7 @@ pub fn load_shell(
     )?;
     // A touch front end's screens are in the root's includes - see
     // `boot::includes` for why only that idiom is followed.
-    if front_end.touch.is_some() {
+    if front_end.touch_shell().is_some() {
         includes::follow(
             &mut archives,
             front_end.root,
@@ -549,7 +571,7 @@ pub fn load_shell(
         &screens,
         &mut report,
     );
-    let race_setup = screens::read_race_setup(&mut archives, front_end, &mut report);
+    let race_setup = screens::read_race_setup(&mut archives, title, front_end, &mut report);
     let strings = load_strings(
         &mut archives,
         &languages,
@@ -570,17 +592,14 @@ pub fn load_shell(
     // has one atlas; the ratio each face's line height stands to `Default`
     // is what keeps the others the right size. Not measured for the other
     // titles here, whose screens were matched against captures without it.
-    let face_scales = if front_end.touch.is_some() {
-        fonts::face_scales(
-            &mut archives,
-            preferred_language,
-            font.line_height,
-            &mut report,
-        )
-    } else {
-        Vec::new()
-    };
+    let face_scales = fonts::face_scales(
+        &mut archives,
+        preferred_language.filter(|_| front_end.touch_shell().is_some()),
+        font.line_height,
+        &mut report,
+    );
     steps.lap("menu and title fonts");
+    let map_screens = campaign2048::map_screens(&mut archives, front_end, &screens, &mut report);
     let (campaign_events, extra_tiles) = campaign2048::touch_menus(
         front_end.touch.is_some(),
         (&mut archives, &strings, &mut report),
@@ -596,10 +615,15 @@ pub fn load_shell(
         ],
         &mut report,
     );
-    let team_ratings =
-        team_ratings2048::load(title, front_end.touch.is_some(), &documents, &mut report);
+    let team_ratings = team_ratings2048::load(
+        title,
+        front_end.touch_shell().is_some(),
+        &documents,
+        &mut report,
+    );
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
     let zone_tracks = load_zone_tracks(&mut archives, title.race.zone, &documents, &mut report);
+    let demo_config = demo_config::load(&mut archives, title, &mut report);
     let teams = load_teams(
         &mut archives,
         title.race,
@@ -620,6 +644,7 @@ pub fn load_shell(
         &mut archives,
         &tracks,
         &circuit_names,
+        front_end.card_track_aliases,
         &strings,
         &mut report,
     );
@@ -627,6 +652,18 @@ pub fn load_shell(
     // The menu blocks' three textures are the executable's own, named by no
     // screen - see `oag_title::MenuBlocks` - so they are asked for by name
     // alongside everything the screens name.
+    // The race load's game tips, in the sheet the card draws from (`oag_title::loading::GameTips`).
+    let tip_textures: Vec<String> = title
+        .loading
+        .and_then(|loading| loading.game_tips)
+        .map(|tips| {
+            tips.rows
+                .iter()
+                .map(|row| tips.entry(row.texture))
+                .chain(std::iter::once(tips.entry(tips.question_mark)))
+                .collect()
+        })
+        .unwrap_or_default();
     let mut block_textures: Vec<&str> = menu_skin
         .blocks
         .map(|blocks| {
@@ -637,13 +674,11 @@ pub fn load_shell(
             ]
         })
         .unwrap_or_default();
-    // The campaign map's hex art, its four mode icons and the team grid's
-    // `teamgrid/` art: named by no screen, drawn by the executable (see
-    // `oag_ui::frontend::campaign_map::HEX_FILLED`).
+    // The campaign map's selection ring, its four mode icons and the team
+    // grid's `teamgrid/` art: named by no screen, drawn by the executable (see
+    // `oag_ui::frontend::HEX_SELECT`).
     if front_end.touch.is_some() {
         block_textures.extend([
-            oag_ui::frontend::HEX_FILLED,
-            oag_ui::frontend::HEX_OUTLINE,
             oag_ui::frontend::HEX_SELECT,
             oag_ui::frontend::EventIcon::Race.texture_name(),
             oag_ui::frontend::EventIcon::SpeedLap.texture_name(),
@@ -654,6 +689,7 @@ pub fn load_shell(
         block_textures.extend(oag_ui::frontend::team_info_textures());
         block_textures.extend(campaign2048::card_textures(&campaign_events));
         block_textures.extend(tiers2048::card_textures(&tiers));
+        block_textures.extend(tip_textures.iter().map(String::as_str));
     }
     let logos = screens::team_logos(team_box.is_some(), &teams);
     block_textures.extend(logos.iter().map(String::as_str));
@@ -663,6 +699,7 @@ pub fn load_shell(
         &mut archives,
         &std::iter::once(&screens)
             .chain(race_box.as_ref())
+            .chain(map_screens.as_ref())
             .chain(team_box.as_ref().map(|team_box| &team_box.screens))
             .chain(track_box.as_ref().map(|track_box| &track_box.screens))
             .collect::<Vec<_>>(),
@@ -670,6 +707,7 @@ pub fn load_shell(
         front_end,
         &mut report,
     );
+    drop(pack);
     steps.lap("sprites");
     report.extend(archives.take_layer_report());
     // Which step the boot opens on, from this title's own chain. `--reel`
@@ -691,11 +729,10 @@ pub fn load_shell(
     // silently shortened sequence is exactly the kind of thing that reads as
     // finished work, which is how this build once shipped Pure's order wrong.
     //
-    // **The chain's first step goes through the same two checks**, which it did
-    // not until finding G3 of the 2026-08-18 review: `walked` started with
-    // `profile.start()` unconditionally, so a pressing lacking the boot screen -
-    // a demo or trial disc - walked an unbacked state that any *later* step
-    // would have been skipped and reported for. The report is the point: a boot
+    // **The chain's first step goes through the same two checks**: starting
+    // `walked` with `profile.start()` unconditionally would let a pressing
+    // lacking the boot screen (a demo or trial disc) walk an unbacked state
+    // that any *later* step would have been skipped and reported for. The report is the point: a boot
     // that opens on a screen this source does not carry should say so, not
     // present as a blank one.
     //
@@ -771,10 +808,12 @@ pub fn load_shell(
     );
     // `--movie` overrides whichever movie the sequence draws first, so the flag
     // stays a preview tool on a title whose own boot screen is silent.
-    let movie_name = options
-        .movie
-        .clone()
-        .or_else(|| default_movie_name.map(str::to_string));
+    let movie_name = options.movie.clone().or_else(|| {
+        playing
+            .first()
+            .and_then(|step| authored_movie(step, &screens, &archives))
+            .or_else(|| default_movie_name.map(str::to_string))
+    });
     // The grid this source authors in, needed before the front end is built so
     // that a boot with no movie falls back to the *source's* shape rather than
     // to the PSP's. `frontend.set_space` takes the same value.
@@ -820,6 +859,22 @@ pub fn load_shell(
     if let Some(legend) = &nav_legend {
         report.push(format!("nav legend: {}", legend.describe()));
     }
+    let pause_screens = screens::read_pause_screens(
+        &mut archives,
+        title,
+        &screens.globals,
+        &strings,
+        preferred_language.and_then(|language| language.entries.as_deref()),
+        oag_ui_screens::picker::FaceScales {
+            default: menu_font.as_ref().map_or(
+                oag_ui_screens::picker::FaceScales::default().default,
+                |menu| font.line_height / menu.line_height,
+            ),
+            ..oag_ui_screens::picker::FaceScales::default()
+        },
+        space,
+        &mut report,
+    );
     // See [`screens::read_ticker`]'s own doc.
     let ticker = read_ticker(skin_xml.as_deref(), &screens.globals);
     if let Some(ticker) = &ticker {
@@ -836,23 +891,29 @@ pub fn load_shell(
         menu_skin.default_face_is_row_face,
         space,
         title.front_end,
+        title.campaign.flow.map(|flow| f32::from(flow.row_pitch)),
         &mut report,
     );
+    let model_gate = crate::unlock::ModelGate::read(title, &mut archives);
     report.push(steps.describe("the boot's first half"));
 
     Ok((
         Shell {
             title,
             platform: archives.layout.platform,
+            serial: archives.layout.serial.clone(),
             screens,
+            map_screens,
             entries: preferred_language.and_then(|language| language.entries.clone()),
             loading: title.loading,
             languages: offered,
             strings,
             tracks,
             zone_tracks,
+            demo_config,
             circuit_names,
             teams,
+            model_gate,
             font,
             sprites,
             space,
@@ -862,6 +923,7 @@ pub fn load_shell(
             nav_legend,
             ticker,
             fury_backdrop,
+            pause_screens,
             track_select,
             ship_select,
             ship_select_split,
@@ -1014,147 +1076,6 @@ pub fn load_media(
     }
 }
 
-/// What the media phase is being asked to read, resolved by the shell phase.
-///
-/// A struct rather than three arguments because the three travel together across
-/// a thread boundary and are all answers to the same question - which movies this
-/// title's chain names - decided where the chain is.
-#[derive(Debug, Clone)]
-pub struct MediaPlan {
-    pub movie_name: Option<String>,
-    pub second_movie_name: Option<&'static str>,
-    /// See [`Shell::movie_region`].
-    pub movie_region: &'static str,
-    pub menu_backdrop: Option<&'static str>,
-}
-
-impl MediaPlan {
-    /// How many loads [`load_media`] will attempt for this plan.
-    ///
-    /// Counted from the names rather than from what succeeds, because this is
-    /// the denominator of a bar that goes up while the loads are still running:
-    /// a total that shrank when a movie failed would make the fraction jump
-    /// backwards. A load that degrades to `None` still counts as done - the wait
-    /// it represents happened either way, which is the only thing the bar
-    /// measures.
-    ///
-    /// Each named movie is **two** loads, its picture and its ATRAC3+ track, and
-    /// they are counted apart because they are two out-of-process decodes with
-    /// nothing but the name in common. The backdrop has no track and is one.
-    #[must_use]
-    pub fn loads(&self) -> usize {
-        usize::from(self.movie_name.is_some()) * 2
-            + usize::from(self.second_movie_name.is_some()) * 2
-            + usize::from(self.menu_backdrop.is_some())
-    }
-}
-
-/// [`load_media`] running on a thread of its own, so a window can open first.
-///
-/// **This is the whole reason the boot is in halves.** On a `native-video`
-/// build the movies are 4.9 of a 5.0-second boot of the EU disc - `GstDecoder`
-/// decodes every frame of both reels into memory before it returns - and all
-/// of that used to happen before winit had been told to make a window. There
-/// was nothing on screen to say the game had started because there was no
-/// screen.
-#[derive(Debug)]
-pub struct MediaWorker {
-    /// `None` once joined, which is what makes [`Self::join`] idempotent.
-    #[cfg(not(target_arch = "wasm32"))]
-    handle: Option<std::thread::JoinHandle<Media>>,
-    /// The web build has no threads, so [`Self::spawn`] loads the media
-    /// inline and the result waits here. See docs/tools/web.md.
-    #[cfg(target_arch = "wasm32")]
-    handle: Option<Media>,
-    /// What the loading screen draws its bar from while the thread runs.
-    progress: Arc<Mutex<MediaProgress>>,
-}
-
-impl MediaWorker {
-    /// Starts the media phase in the background.
-    ///
-    /// Takes copies rather than borrows because the thread outlives this call
-    /// by seconds; `Screens` is a dozen parsed widget trees and `Options` a
-    /// handful of paths, which is nothing beside what the thread then decodes.
-    #[must_use]
-    pub fn spawn(archives: oag_assets::Archives, shell: &Shell, options: &Options) -> Self {
-        let screens = shell.screens.clone();
-        let plan = shell.media_plan();
-        let options = options.clone();
-        // The total is filled in on the thread, by `load_media` - but it is
-        // known here, and a bar that only appeared once the thread had been
-        // scheduled would flicker in on the first frame. So it starts correct.
-        let progress = Arc::new(Mutex::new(MediaProgress {
-            total: plan.loads(),
-            ..MediaProgress::default()
-        }));
-        #[cfg(target_arch = "wasm32")]
-        let handle = load_media(archives, &screens, &plan, &options, &progress);
-        #[cfg(not(target_arch = "wasm32"))]
-        let handle = std::thread::Builder::new()
-            // Named so it is obvious in a debugger and in `top` which thread
-            // the boot is waiting on, the same way `movie-decode` is.
-            .name("boot-media".to_string())
-            .spawn({
-                let progress = Arc::clone(&progress);
-                move || load_media(archives, &screens, &plan, &options, &progress)
-            })
-            .expect("spawning the boot's media thread");
-        Self {
-            handle: Some(handle),
-            progress,
-        }
-    }
-
-    /// Whether the movies have arrived, so the loading screen may start fading.
-    #[must_use]
-    pub fn is_finished(&self) -> bool {
-        #[cfg(target_arch = "wasm32")]
-        return true;
-        #[cfg(not(target_arch = "wasm32"))]
-        self.handle
-            .as_ref()
-            .is_none_or(std::thread::JoinHandle::is_finished)
-    }
-
-    /// How far the movies have got, right now.
-    #[must_use]
-    pub fn progress(&self) -> MediaProgress {
-        lock_media(&self.progress).clone()
-    }
-
-    /// Waits for the movies and takes them.
-    ///
-    /// **A worker that panicked yields a boot with no movies rather than a
-    /// panic here**, because the alternative is a loading screen that never
-    /// fades: the sequence copes with `None` on every one of these fields
-    /// already - that is what a source with no backdrop, or a machine with no
-    /// `ffmpeg`, has always produced - so the game reaches its menus and says
-    /// what happened. A second call yields the same empty `Media`, which
-    /// cannot happen today and would otherwise be a second panic.
-    pub fn join(&mut self) -> Media {
-        let Some(handle) = self.handle.take() else {
-            return Self::nothing("the boot's movies were already taken");
-        };
-        #[cfg(target_arch = "wasm32")]
-        return handle;
-        #[cfg(not(target_arch = "wasm32"))]
-        match handle.join() {
-            Ok(media) => media,
-            Err(_) => Self::nothing(
-                "the thread loading the movies panicked, so the sequence plays with no picture",
-            ),
-        }
-    }
-
-    fn nothing(why: &str) -> Media {
-        Media {
-            report: vec![why.to_string()],
-            ..Media::default()
-        }
-    }
-}
-
 /// Builds the sequence out of the two halves.
 ///
 /// Everything here needs a frame count or a plane size, which is why it is a
@@ -1165,15 +1086,19 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     let Shell {
         title,
         platform,
+        serial: _,
         screens,
+        map_screens: _,
         entries,
         loading: _,
         languages,
         strings,
         tracks,
         zone_tracks: _,
+        demo_config: _,
         circuit_names,
         teams,
+        model_gate: _,
         font,
         sprites,
         space,
@@ -1183,6 +1108,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         nav_legend,
         ticker,
         fury_backdrop,
+        pause_screens,
         track_select,
         ship_select,
         ship_select_split,
@@ -1263,22 +1189,16 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         languages,
         placements,
     );
-    frontend.set_menu_skin(menu_skin);
-    // Only where they were measured - see `load_shell`'s own gate.
-    if !face_scales.is_empty() {
-        frontend.set_face_scales(face_scales.clone(), font.line_height);
-    }
-    if profile.picker_from_loaded_faces {
-        frontend.set_picker_line_height(font.line_height);
-    }
-    if !campaign_events.is_empty() {
-        frontend.set_campaign(campaign_events);
-    }
-    if !extra_tiles.is_empty() {
-        frontend.set_extra_tiles(extra_tiles);
-    }
-    frontend.set_tiers(tiers);
-    frontend.set_team_ratings(team_ratings);
+    configure::apply(
+        &mut frontend,
+        menu_skin,
+        (
+            &face_scales,
+            font.line_height,
+            profile.picker_from_loaded_faces,
+        ),
+        (campaign_events, extra_tiles, tiers, team_ratings),
+    );
 
     // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's `Skin.xml`
     // places widgets in a 640x448 grid rather than the PSP's 480x272, so every widget
@@ -1388,6 +1308,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         nav_legend,
         ticker,
         fury_backdrop,
+        pause_screens,
         track_select,
         ship_select,
         ship_select_split,
@@ -1410,128 +1331,6 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         after_language_movie_sound,
         sprites,
         report,
-    }
-}
-
-/// Whether two movies can share one set of I420 planes.
-///
-/// The front end is drawn by one renderer with one plane set, and
-/// [`crate::render::Renderer::upload_frame`] slices a frame by *those*
-/// dimensions rather than by the frame's own - so handing it a
-/// differently-shaped picture is a garbled image rather than an error.
-///
-/// The display aspect is deliberately **not** compared: that differs per movie on
-/// the PS2 and is handled by the pillarbox rect, not by the plane size.
-///
-/// **Unknown geometry is not disagreeing geometry.** `VideoFormat::of` answers
-/// `None` for a movie with no decoded frames - `--no-video`, no `ffmpeg`, a
-/// failed transcode - and there are then no planes to conflict over, because
-/// nothing will be uploaded. Reading that as a mismatch dropped the second movie
-/// on every `--no-video` load, which is the configuration the ground-truth tests
-/// use.
-fn same_planes(a: &Movie, b: &Movie) -> bool {
-    match (
-        crate::render::VideoFormat::of(a),
-        crate::render::VideoFormat::of(b),
-    ) {
-        (Some(a), Some(b)) => {
-            (a.width, a.height, a.chroma_width, a.chroma_height)
-                == (b.width, b.height, b.chroma_width, b.chroma_height)
-        }
-        _ => true,
-    }
-}
-
-/// Decodes the intro movie's ATRAC3+ track, if it should be heard at all.
-///
-/// # The widget decides, not the container
-///
-/// A `.PMF` having an audio stream is not the same question as whether the
-/// front end plays it. `Data\Movies\Backdrop` is `sound="false"` **and** has no
-/// track, so it is silent twice over; a movie that had a track and a widget
-/// saying `sound="false"` would still have to be silent, and this is what makes
-/// that true rather than the container's own contents. `Data\Movies\Intro` is
-/// `sound="true"`.
-///
-/// A movie no widget names - `--movie` pointing at an entry by hash, which is
-/// how the three unnamed reels are addressed - is played **with** its sound.
-/// The widget is the authority when there is one, and its absence is an absence
-/// of instruction rather than an instruction to be silent.
-///
-/// # Never fatal
-///
-/// A decode that fails names the reason on the report and leaves the movie
-/// silent, exactly as a missing `ffmpeg` leaves it with a black picture. This
-/// is the degradation ADR-0019 asks for, and it is the only one available:
-/// there is no second decoder to fall back to.
-fn load_movie_sound(
-    movie: Option<&Movie>,
-    screens: &Screens,
-    movie_name: &str,
-    movie_region: &str,
-    options: &Options,
-    report: &mut Vec<String>,
-) -> Option<oag_music::at3::Pcm> {
-    let movie = movie?;
-    if options.no_video {
-        // Said here rather than left to the branch below, which would report a
-        // track that could not be unwrapped: `--no-video` never reads the movie
-        // at all, so there was nothing to unwrap. Worth stating, because the
-        // flag names only the picture and takes the sound with it.
-        report.push(
-            "  audio: --no-video skips reading the movie, so it has no sound either".to_string(),
-        );
-        return None;
-    }
-    let Some(audio) = movie.audio.as_ref() else {
-        // A header that declares a track and a demux that could not recover one
-        // has already said why on stderr; this is the line that says the movie
-        // is silent as a result, so the two are not read as unrelated.
-        if movie
-            .header
-            .as_ref()
-            .is_some_and(|header| header.audio.is_some())
-        {
-            report.push("  audio: declared but not recovered, so it stays silent".to_string());
-        }
-        return None;
-    };
-
-    let silent = screens
-        .with_movies()
-        .flat_map(|screen| screen.movies.iter())
-        .any(|widget| {
-            widget
-                .entry_name(movie_region)
-                .eq_ignore_ascii_case(movie_name)
-                && !widget.sound
-        });
-    if silent {
-        report.push(format!(
-            "  audio: {} channel(s) at {} Hz, muted - the widget playing it is sound=\"false\"",
-            audio.channels(),
-            audio.sample_rate()
-        ));
-        return None;
-    }
-
-    match audio.decode(&options.audio_cache) {
-        Ok(pcm) => {
-            report.push(format!(
-                "  audio: {} channel(s) at {} Hz, {}, decoded to {:.2}s",
-                pcm.channels,
-                pcm.sample_rate,
-                audio.codec_clause(),
-                pcm.samples.len() as f64
-                    / f64::from(pcm.channels.max(1))
-                    / f64::from(pcm.sample_rate.max(1))
-            ));
-            Some(pcm)
-        }
-        Err(error) => {
-            report.push(format!("  audio: not decoded ({error:#})"));
-            None
-        }
     }
 }
 
@@ -1587,61 +1386,36 @@ fn load_backdrop(
     }
 }
 
-/// Decodes Pure's second boot movie - see
-/// [`oag_pure::names::FMV_INTRO_MOVIE`]'s own doc comment for what it is, how
-/// its name was found, and what it takes to actually draw it (the other half
-/// of that work, done alongside this function: see `oag_ui::frontend::Frontend`
-/// and `crate::main::FrontendStage` for the rest).
-///
-/// `None`, and nothing attempted at all, for a source whose `screens` has no
-/// `FMV Intro` state - every Pulse source, and any future title this build
-/// has not seen. Checked against `screens` rather than tried unconditionally
-/// the way [`load_backdrop`] tries `BACKDROP_MOVIE` for every source: a miss
-/// there is silent by construction (no report line), but `FMV_INTRO_MOVIE` is
-/// a Pure-specific literal, and trying it against a Pulse source would add a
-/// "no second boot movie" line nobody asked about.
-fn load_second_movie(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-    options: &Options,
-    report: &mut Vec<String>,
-    watch: crate::movie::Watch<'_>,
-) -> Option<Movie> {
-    let wanted = Options {
-        extent: Extent::Whole,
-        ..options.clone()
-    };
-    match load_movie(archives, name, &wanted, report, watch) {
-        Ok(movie) => movie,
-        Err(e) => {
-            report.push(format!("no second boot movie: {e:#}"));
-            None
-        }
-    }
-}
-
 pub mod backdrop;
 pub(crate) mod campaign2048;
+mod configure;
+pub mod demo_config;
 pub mod fonts;
 pub mod fury;
 mod images;
 mod includes;
+pub mod map_seed;
 mod movies;
 mod options;
 mod progress;
 mod provenance;
+pub mod reveals2048;
 pub(crate) mod roster;
 pub mod scene;
 mod screens;
 pub mod tiers2048;
-pub use screens::RaceSetup;
+pub use screens::{PauseScreens, RaceSetup};
 pub(crate) mod sprites;
 mod steps;
 mod team_ratings2048;
+pub mod worker;
 
 use fonts::load_font;
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
-use movies::{load_movie, resolve_movie_region, resolve_pure_movie_region};
+use movies::{
+    authored_movie, load_movie, load_movie_sound, load_second_movie, resolve_movie_region,
+    resolve_pure_movie_region, same_planes,
+};
 use oag_ui::language::load::{chosen_language, load_languages, load_strings};
 use oag_ui::xml::expand;
 pub use progress::MediaProgress;
@@ -1651,6 +1425,7 @@ use screens::{
     load_included_screens, load_screens, read_nav_legend, read_ticker, selection_layouts,
 };
 use steps::Steps;
+use worker::MediaPlan;
 
 #[cfg(test)]
 mod tests;

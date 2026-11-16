@@ -1,0 +1,16 @@
+# Wipeout Pulse and Pure rumble: the wrong-way warning: two short insistent knocks.
+# Read through the fallback asset layer; a disc pattern of the same name wins, and a file
+# in overrides/<title>/Data/XML/Rumble/ replaces this one.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/rumble.tosd"
+version = "1.0.0"
+
+[pattern]
+type = "OneShot"
+class = "Game"
+priority = "Low"
+
+[tracks]
+large = [230, 230, 0, 0, 230, 230, 120, 40]
+small = [1, 1, 0, 0, 1, 1]

@@ -35,6 +35,7 @@
 //! constant - and bit 16 is its negate.
 
 use super::Block;
+use oag_bytes::be::{u16_at, u32_at};
 
 /// A vector opcode's source slots, as nouveau's own emitter fills them.
 ///
@@ -189,19 +190,6 @@ pub struct ClockRate {
     pub from: usize,
     /// The literal the clock is multiplied by.
     pub rate: f32,
-}
-
-fn u16_at(data: &[u8], at: usize) -> Option<u16> {
-    Some(u16::from_be_bytes([*data.get(at)?, *data.get(at + 1)?]))
-}
-
-fn u32_at(data: &[u8], at: usize) -> Option<u32> {
-    Some(u32::from_be_bytes([
-        *data.get(at)?,
-        *data.get(at + 1)?,
-        *data.get(at + 2)?,
-        *data.get(at + 3)?,
-    ]))
 }
 
 impl Program {

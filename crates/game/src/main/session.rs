@@ -25,6 +25,8 @@ mod apply;
 mod cpu_governor;
 #[path = "session/campaign.rs"]
 mod campaign;
+#[path = "session/campaign_editor.rs"]
+mod campaign_editor;
 #[path = "session/draw.rs"]
 mod draw;
 #[path = "session/endrace.rs"]
@@ -32,6 +34,8 @@ pub(crate) mod endrace;
 // `Session::escape` and `Session::resume_race` - split out of `menus.rs`
 // under the 1,000-line rule; see `escape.rs`'s own doc for why this pair is
 // the seam.
+#[path = "session/demo.rs"]
+mod demo;
 #[path = "session/escape.rs"]
 mod escape;
 #[path = "session/frame.rs"]
@@ -40,10 +44,20 @@ mod frame;
 pub(crate) mod frame_timing;
 #[path = "session/lifecycle.rs"]
 pub(crate) mod lifecycle;
+#[path = "session/replays.rs"]
+pub(crate) mod replays;
+#[path = "session/shot_open.rs"]
+mod shot_open;
+#[path = "session/rumble.rs"]
+mod rumble;
 #[path = "session/phases.rs"]
 pub(crate) mod phases;
 #[path = "session/language.rs"]
 mod language;
+#[path = "session/launch_keys.rs"]
+mod launch_keys;
+#[path = "session/hosted_map.rs"]
+mod hosted_map;
 #[path = "session/launch2048.rs"]
 mod launch2048;
 #[path = "session/load.rs"]
@@ -52,22 +66,31 @@ mod load;
 mod load_probe;
 #[path = "session/menu_sound.rs"]
 mod menu_sound;
+#[path = "session/menu_source.rs"]
+mod menu_source;
+#[path = "session/opening_reads.rs"]
+mod opening_reads;
 #[path = "session/music.rs"]
 mod music;
 #[path = "session/mods_page.rs"]
 mod mods_page;
+#[path = "session/music_pool_page.rs"]
+mod music_pool_page;
+pub(crate) use demo::State as DemoState;
 pub(crate) use load_probe::LoadProbe;
+pub(crate) use mods_page::Rebuilt;
 #[path = "session/menus.rs"]
 pub(crate) mod menus;
 #[path = "session/pacing.rs"]
 mod pacing;
 #[path = "session/pause.rs"]
 pub(crate) mod pause;
+#[path = "session/pause_menu.rs"]
+mod pause_menu;
 #[path = "session/picker.rs"]
 mod picker;
 // Named `pilot_editor`, not `pilots` - `oag_raceplay::pilots` is already imported
-// unaliased above, and a sibling module of the same name would shadow it,
-// the same reason `remix_menu` below is not called `remix`.
+// unaliased above, and a sibling module of the same name would shadow it.
 #[path = "session/pilot_editor.rs"]
 mod pilot_editor;
 #[path = "session/custom_tracks.rs"]
@@ -88,12 +111,20 @@ mod online;
 mod online;
 #[path = "session/multiplayer.rs"]
 mod multiplayer;
+#[path = "session/player_name.rs"]
+mod player_name;
 #[path = "session/seat_assign.rs"]
 mod seat_assign;
 #[path = "session/window_layout.rs"]
 mod window_layout;
 #[path = "session/devrun.rs"]
 pub(crate) mod devrun;
+#[path = "session/photo.rs"]
+mod photo;
+#[path = "session/photo_meta.rs"]
+pub(crate) mod photo_meta;
+#[path = "session/photo_rewind.rs"]
+mod photo_rewind;
 #[path = "session/pure_chain.rs"]
 mod pure_chain;
 #[path = "session/placeholder.rs"]
@@ -104,16 +135,21 @@ mod pointer;
 pub(crate) mod timing;
 #[path = "session/windows.rs"]
 mod windows;
+#[cfg(target_os = "linux")]
+#[path = "session/wallpaper.rs"]
+mod wallpaper;
 #[path = "session/tournament.rs"]
 mod tournament;
-// Named `remix_menu`, not `remix` - `oag_game::remix` is already imported
-// unaliased throughout `session::menus`, and a sibling module of the same
-// name would shadow it at every one of those call sites.
-#[path = "session/remix.rs"]
-mod remix_menu;
+#[path = "session/stutter.rs"]
+mod stutter;
+#[path = "session/queries.rs"]
+mod queries;
 
 /// Everything that only exists once there is a window.
 pub(crate) struct Session {
+    /// Keeps the desktop awake while someone plays. Before `gpu` so it lets go of the window's
+    /// surface before the window can drop.
+    pub(crate) idle: oag_game::idle::Idle,
     pub(crate) gpu: Gpu,
     pub(crate) stage: Stage,
     /// One set of devices for both stages: they belong to the window rather than
@@ -139,6 +175,8 @@ pub(crate) struct Session {
     pub(crate) audio: oag_sound::Audio,
     /// Which Pulse releases this machine has. See [`App::music_discs`].
     pub(crate) music_discs: oag_sound::MusicDiscs,
+    /// What the MUSIC page's rows were last made from. See `music_pool_page`.
+    pub(crate) music_pool_seen: String,
     /// The race playlist's saved place: whether this run has already put it back,
     /// what was last written and the ticks since a race last wrote it. See
     /// `oag_game::music_state` and `session/music.rs`.
@@ -228,7 +266,7 @@ pub(crate) struct Session {
     /// **The third meter, and the one that made the budget honest.** Motion
     /// blur draws through the render extent, so its cost falls with the
     /// resolution exactly as the scene pass's does - and it was entirely
-    /// invisible: measured 2026-09-03 on an HD/Fury circuit at 2560x1440,
+    /// invisible: measured on an HD/Fury circuit at 2560x1440,
     /// `high` costs about 1.7 ms against a 9.3 ms frame, with the scene pass
     /// and the FSR 3.1 chain both unmoved. A controller that could not see it
     /// was budgeting against a fifth of the work it controls. See
@@ -305,9 +343,25 @@ pub(crate) struct Session {
     /// The newest whole-frame GPU time the resolution controller was fed, in seconds: the
     /// governor's "is the GPU the bound side" reading.
     pub(crate) governor_gpu: Option<f32>,
+    /// The frame index [`Session::governor_gpu`] was written on, so a reading older than a few
+    /// frames (a build with no scene, a skipped window) is not taken for this frame's.
+    pub(crate) governor_gpu_at: u64,
     /// The last frame's swapchain acquire plus `present` time, in seconds, so the governor
     /// reads CPU time without the wait.
     pub(crate) last_present_seconds: f32,
+    /// What the output can show: the monitor's report and the frames that prove it
+    /// (`oag_present::refresh`), read through [`oag_present::refresh::held_hz`].
+    pub(crate) display: oag_present::refresh::Display,
+    /// The last display rate logged, so a change is one `debug` line.
+    pub(crate) logged_display_hz: Option<Option<u32>>,
+    /// When the monitor's report was last asked for.
+    pub(crate) display_polled: Option<web_time::Instant>,
+    /// The present mode the current race's display frames were taken under, or `None` outside a
+    /// race; a change drops the measurement.
+    pub(crate) display_mode: Option<wgpu::PresentMode>,
+    /// The surface's configure count the display frames were taken under; a rebuilt swapchain
+    /// (a resize, an outdated or lost surface) drops the measurement.
+    pub(crate) display_configures: u64,
     /// Where each window frame's input sample sat against its swapchain
     /// acquire, summed a second at a time and logged at `debug`. See
     /// [`frame_timing`].
@@ -359,12 +413,44 @@ pub(crate) struct Session {
     /// Starts `true`: the first frame's `elapsed` reaches back to before the
     /// window existed.
     pub(crate) stalled: bool,
-    /// Moved by `Start` while a race is running: freezes the tick, nothing else,
+    /// The `frame: N ms` warn's rate limit - see [`stutter::Stutter`].
+    pub(crate) stutter: stutter::Stutter,
+    /// Moved by `Start` while a race is running on a title with no pause screen
+    /// of its own, or in a split-screen race: freezes the tick, nothing else,
     /// and counts a resume down in a race with more than one person. There is
-    /// deliberately no pause screen behind it, only the line under it - see
+    /// deliberately no pause screen behind it, only the line under it (a title
+    /// that has one opens it instead, `session::pause_menu`) - see
     /// `session::pause`, which owns the rules and the one gate
     /// (`pause::State::ticks`).
     pub(crate) pause: oag_game::pause::State,
+    /// Photo mode while it is open: the race stands still and the camera is the player's
+    /// (`session::photo`).
+    pub(crate) photo: Option<photo::Open>,
+    /// The recorded races the REPLAYS page lists, read each time the menus open
+    /// (`session::replays`).
+    pub(crate) replay_list: Vec<oag_game::replays::Entry>,
+    /// Replays WATCH opened and the rebuild refused, with the reason: the page lists them
+    /// dimmed (`oag_game::replays::page::Context::refused`).
+    pub(crate) replay_refused: std::collections::BTreeMap<std::path::PathBuf, String>,
+    /// A recording WATCH asked to open, from the launch to the race's hand-over
+    /// (`session::replays`).
+    pub(crate) watching: Option<replays::Watching>,
+    /// The attract demo's idle count, chain and the demo being loaded (`session::demo`).
+    pub(crate) demo: demo::State,
+    /// The replay viewer while a recording is being watched (`session::replays`).
+    pub(crate) viewer: Option<replays::Active>,
+    /// The line over the screen that says why a dropped screenshot did not open
+    /// (`session::shot_open`).
+    pub(crate) notice: Option<shot_open::Notice>,
+    /// The screenshot `--replay-png` names, until the main menu is up to open it.
+    pub(crate) shot_cli: Option<std::path::PathBuf>,
+    /// A screenshot's viewer is loading: a failure then is told to the player, not listed.
+    pub(crate) shot_pending: bool,
+    /// Whether the menus open on the REPLAYS page: set by leaving the viewer and by a recording
+    /// the rebuild refused.
+    pub(crate) return_to_replays: bool,
+    /// The live race's pad rumble, or `None` (`session::rumble`).
+    pub(crate) rumbler: Option<oag_game::rumble::Rumbler>,
     /// The session's wall clock in seconds, read once a frame: what a pause's
     /// owner timeout and the resume countdown are measured on. A race that is
     /// frozen has no ticks to count, so this is not simulation time and is never
@@ -394,7 +480,7 @@ pub(crate) struct Session {
     pub(crate) race_options: Option<race::Options>,
     /// The track the command line named (`--ballisticng-track`/`--track-file`), which
     /// every launch that does not pick its own sets on `race_options`; a CUSTOM
-    /// remix sets its file there instead, and RACE AGAIN keeps whatever was
+    /// a two-title race sets its file there instead, and RACE AGAIN keeps whatever was
     /// raced. See [`Session::inherit_cli_foreign_track`].
     pub(crate) cli_foreign_track: Option<std::path::PathBuf>,
     /// What the command line decided, until a pick turns it into a boot.
@@ -447,11 +533,20 @@ pub(crate) struct Session {
     /// Set the first time `Launch Game` starts a race, so a load that fails is
     /// reported once rather than on every frame.
     pub(crate) launched: bool,
+    /// Whether a person is at this launch (`Cli::is_interactive`): only then may the first-run
+    /// name prompt open.
+    pub(crate) interactive_launch: bool,
+    /// The first-run prompt has been shown this run, answered or not.
+    pub(crate) player_asked: bool,
+    /// Whether the phone's soft keyboard is up (`soft_keyboard`).
+    pub(crate) soft_keyboard: bool,
     /// The Wipeout 2048 campaign event the next [`Session::launch_race`]
     /// starts, by its `SP.xml` name - set by the front end's own
     /// `Launch 2048` and taken by that one launch. `None` is an ordinary
     /// race from the menus' own options. See `oag_raceplay::load_event`.
     pub(crate) pending_event: Option<String>,
+    /// The card that event was launched from, which the race load draws behind its box.
+    pub(crate) pending_card: Option<oag_ui::frontend::LaunchedCard>,
     /// The persisted settings, kept because the menus change them and every
     /// change is written straight back.
     pub(crate) settings: settings::Settings,
@@ -515,6 +610,12 @@ pub(crate) struct Session {
     pub(crate) quit: bool,
     /// What the menus need, when this run has menus at all.
     pub(crate) shell: Option<Shell>,
+    /// The source the race box's selection screens read, opened on a worker on the first menu
+    /// frame - see `session::menu_source`.
+    pub(crate) menu_source: menu_source::MenuSource,
+    /// What Track Select and Ship Select would open on, read ahead - see
+    /// `session::opening_reads`.
+    pub(crate) opening_reads: opening_reads::OpeningReads,
     pub(crate) prompt: oag_game::prompts::PromptState,
     /// Every screen filter this run can offer: the built-ins and the player's
     /// own `shaders/` directory, polled once a second by the frame loop so a
@@ -530,9 +631,9 @@ pub(crate) struct Session {
     /// The platform that same source is for - see `App::race_platform`.
     pub(crate) race_platform: Option<oag_disc::Platform>,
     /// Every title this machine can currently open a source for, one row per
-    /// distinct title - what the RACE REMIX page's TRACK TITLE and CRAFT
-    /// TITLE rows offer, and how `Action::LaunchRemix` turns a picked title's
-    /// name back into a source path.
+    /// distinct title - what a `titles_available` and a `craft_titles` row
+    /// offer, and how a `launch_race` row with a title key turns a picked
+    /// title's name back into a source path.
     ///
     /// Surveyed once here rather than reused from whatever decided the disc
     /// chooser in `main.rs`: the two run in different processes' worth of
@@ -541,7 +642,7 @@ pub(crate) struct Session {
     /// which happens once per windowed boot, not per frame. See
     /// `oag_game::launcher::{survey, distinct_titles}`.
     pub(crate) titles: Vec<oag_game::launcher::Candidate>,
-    /// RACE REMIX's CUSTOM tracks. See [`oag_game::custom_tracks`].
+    /// A two-title race page's CUSTOM tracks. See [`oag_game::custom_tracks`].
     pub(crate) custom_tracks: oag_game::custom_tracks::Scan,
     /// What the loading screen draws, kept for the *second* time it goes up.
     ///
@@ -589,6 +690,9 @@ pub(crate) struct Session {
     /// every later one, the same way `stage.frontend.held_backdrop` is simply
     /// left behind rather than reset.
     pub(crate) held_menu_backdrop: Option<crate::frontend_stage::HeldFrame>,
+    /// The menus a hosted campaign map was opened from, waiting for the map to
+    /// hand the window back - see `session/hosted_map.rs`.
+    pub(crate) parked_menu: Option<Box<crate::menu_stage::MenuStage>>,
     /// The `--prefetch` worker, when this run started one.
     ///
     /// **On the session and not on the loading stage.** The stage is replaced
@@ -644,8 +748,8 @@ pub(crate) struct Session {
     /// exists, only the composition root.
     ///
     /// `None` on every path but a campaign launch: an ordinary RACE-page or
-    /// RACE REMIX launch clears it defensively (`Session::launch_from_settings`,
-    /// `Session::launch_remix`) so a cell abandoned by backing out of `Team
+    /// keyed launch clears it defensively (`Session::launch_from_settings`,
+    /// `Session::launch_keyed`) so a cell abandoned by backing out of `Team
     /// Selection` cannot leak into the next unrelated race.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
     /// A mod campaign event's extras for the race [`Self::campaign_cell`]
@@ -816,10 +920,10 @@ pub(crate) struct Session {
 
 impl Drop for Session {
     /// The GPU workers finish before the device, the surface and the instance go: see
-    /// [`oag_game::gpu_workers`]. Every route out of a run (window close, QUIT, a finished
+    /// [`oag_thread::gpu_workers`]. Every route out of a run (window close, QUIT, a finished
     /// `--drive` or `--screenshot`) drops the session, so the wait lives here once.
     fn drop(&mut self) {
-        oag_game::gpu_workers::finish();
+        oag_thread::gpu_workers::finish();
     }
 }
 
@@ -880,6 +984,8 @@ pub(crate) struct Shell {
     /// [`Self::tracks`] - what the CIRCUIT row shows once MODE is Zone. See
     /// `boot::Shell::zone_tracks` and [`Self::tracks_for`].
     pub(crate) zone_tracks: Vec<(catalogue::Track, String)>,
+    /// What the title's `DemoConfig.xml` authors for its attract demo (`session::demo`).
+    pub(crate) demo_config: Option<oag_tables::demo_config::DemoConfig>,
     /// Every team, valued by its id and labelled off the disc's string table.
     ///
     /// A pack's teams are in here too, and indistinguishable from the disc's -
@@ -913,6 +1019,8 @@ pub(crate) struct Shell {
     pub(crate) modes: Vec<menu::Choice>,
     /// The `KILLS` row's values, off the disc's own `Eliminations` list.
     pub(crate) kill_targets: Vec<menu::Choice>,
+    /// The `TARGET` row's values, off the disc's own `Eliminations` slider.
+    pub(crate) score_targets: Vec<menu::Choice>,
     /// The `WEAPONS` row's two states, valued by the disc's `On`/`Off` and
     /// labelled by its own `FE_ON`/`FE_OFF` strings.
     pub(crate) weapons: Vec<menu::Choice>,
@@ -940,7 +1048,7 @@ pub(crate) struct Shell {
     /// `boot::Shell::title`, not re-derived. Lets the RACE page's own
     /// VARIANT row ask this title's own
     /// [`oag_title::RaceDefaults::team_variants`] for whichever team
-    /// `race.team` names, the same question RACE REMIX's craft-side VARIANT
+    /// `race.team` names, the same question a two-title race page's craft-side VARIANT
     /// row asks of a *picked* title instead of the booted one.
     pub(crate) title: &'static oag_title::Title,
     /// Which console this source is for, carried the same way `title` is -
@@ -949,6 +1057,8 @@ pub(crate) struct Shell {
     /// PS2-sourced Pulse race and a PSP-sourced one now read and write
     /// different `[render_profiles.<key>]` rows.
     pub(crate) platform: oag_disc::Platform,
+    /// The disc's serial, from `boot::Shell::serial`: what a screenshot names the pressing by.
+    pub(crate) serial: Option<String>,
     /// The grid that skin's numbers are in, and the one the rows are drawn in.
     ///
     /// Carried beside the skin for the reason the skin is carried at all: it is
@@ -996,6 +1106,9 @@ pub(crate) struct Shell {
     /// `None` where the source has none, and then the menus sit on the movie or
     /// the page's clear.
     pub(crate) fury_backdrop: Option<std::sync::Arc<oag_game::boot::backdrop::MenuBackdrop>>,
+    /// The title's pause screens as its disc lays them out, read at boot - see
+    /// `oag_game::boot::Shell::pause_screens`.
+    pub(crate) pause_screens: oag_game::boot::PauseScreens,
     /// The race box's two selection screens, read at boot - see
     /// `oag_game::boot::Shell::track_select`. `None` launches straight from
     /// the RACE page.
@@ -1007,6 +1120,11 @@ pub(crate) struct Shell {
     /// its skins - where [`Self::teams`] is only the id and the label the
     /// RACE page's own row needs.
     pub(crate) team_details: Vec<catalogue::Team>,
+    /// What gates [`Self::team_details`]' models on Ship Select (`oag_game::unlock::ModelGate`).
+    pub(crate) model_gate: oag_game::unlock::ModelGate,
+    /// The 2048 campaign map this title's chooser hands off to, when it has
+    /// one - see `oag_game::boot::map_seed`.
+    pub(crate) map: Option<oag_game::boot::map_seed::MapSeed>,
 }
 
 impl Shell {
@@ -1041,11 +1159,15 @@ impl Shell {
             menu_sfx: None,
             title,
             platform: boot_shell.platform,
+            serial: boot_shell.serial.clone(),
             circuit_names: boot_shell.circuit_names.clone(),
             strings: boot_shell.strings.clone(),
             entries: boot_shell.entries.clone(),
-            modes: menu::mode_choices(&boot_shell.strings),
+            modes: menu::mode_choices(&boot_shell.strings, title),
             kill_targets: (boot_shell.race_setup.kill_targets.iter())
+                .map(menu::Choice::plain)
+                .collect(),
+            score_targets: (boot_shell.race_setup.score_targets.iter())
                 .map(menu::Choice::plain)
                 .collect(),
             weapons: boot_shell.race_setup.weapon_choices(&boot_shell.strings),
@@ -1081,6 +1203,7 @@ impl Shell {
                     )
                 })
                 .collect(),
+            demo_config: boot_shell.demo_config.clone(),
             zone_tracks: boot_shell
                 .zone_tracks
                 .iter()
@@ -1121,10 +1244,13 @@ impl Shell {
             nav_legend: boot_shell.nav_legend.clone(),
             ticker: boot_shell.ticker.clone(),
             fury_backdrop: boot_shell.fury_backdrop.clone(),
+            pause_screens: boot_shell.pause_screens.clone(),
             track_select: boot_shell.track_select.clone(),
             ship_select: boot_shell.ship_select.clone(),
             ship_select_split: boot_shell.ship_select_split.clone(),
             team_details: boot_shell.teams.clone(),
+            model_gate: boot_shell.model_gate.clone(),
+            map: oag_game::boot::map_seed::MapSeed::of(boot_shell),
         }
     }
 

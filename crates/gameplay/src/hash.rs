@@ -36,7 +36,7 @@ use oag_core::hash::StateHasher;
 use oag_race::{LapGate, Mode, RaceState};
 use oag_tables::weapons::{DisruptorEffectKind, Weapon};
 
-use crate::world::{Controller, Ship, World};
+use crate::world::{Controller, Ship, Transit, World};
 use oag_weapons::pickup::Held;
 use oag_weapons::projectile::leach_beam::{Beam, Kind as BeamKind};
 use oag_weapons::projectile::quake::Wave;
@@ -69,7 +69,7 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
         controllers,
         projectiles,
         quake,
-        leach_beam,
+        leach_beams,
         repulsers,
     } = world;
 
@@ -108,7 +108,17 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
     }
     write_projectiles(hasher, projectiles);
     write_quake(hasher, quake);
-    write_leach_beam(hasher, leach_beam);
+    // Entry 0 exactly as the single beam always hashed, so a race that never
+    // has two beams up keeps its hash; a further entry adds its index and body
+    // only when live.
+    let [first, rest @ ..] = leach_beams;
+    write_leach_beam(hasher, first);
+    for (at, beam) in rest.iter().enumerate() {
+        if beam.is_some() {
+            hasher.write_u8(u8::try_from(at + 1).unwrap_or(u8::MAX));
+            write_leach_beam(hasher, beam);
+        }
+    }
     for repulser in repulsers {
         write_repulser(hasher, repulser);
     }
@@ -118,6 +128,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     let Ship {
         physics,
         handling,
+        weapon_counts,
         segment,
         pickup,
         driver,
@@ -128,7 +139,10 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         pending_thrust_scale,
         quake_lift,
         disruption,
+        muzzle,
+        track_up,
         active,
+        transit,
     } = ship;
 
     oag_physics::probe::hash_state(hasher, physics);
@@ -138,6 +152,14 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // the simulation did. Named in the destructure so this is a decision rather
     // than an omission.
     let _ = handling;
+    // `weapon_counts` is load-time data from the same file, constant through the race.
+    let _ = weapon_counts;
+    // `muzzle` is the same kind of thing: the hull's locator, loaded once and
+    // constant through the race. Named for the same reason.
+    let _ = muzzle;
+    // `track_up` is a cache of the pose's own track sample, written every step; the
+    // projectile it seeds is hashed.
+    let _ = track_up;
     hasher.write_u32(u32::from(*segment));
     write_held(hasher, pickup);
     write_driver(hasher, driver);
@@ -179,6 +201,20 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // time this struct has done that. See `oag_weapons::disruption`.
     write_disruption(hasher, disruption);
     hasher.write_u8(u8::from(*active));
+    // Only while a jump runs, so every race without one hashes as before.
+    if let Some(Transit {
+        ticks_left,
+        to,
+        route,
+        exit_speed,
+    }) = transit
+    {
+        hasher.write_u8(0x7a);
+        hasher.write_u32(u32::from(*ticks_left));
+        hasher.write_u32(*to);
+        hasher.write_u32(u32::from(*route));
+        hasher.write_f32(*exit_speed);
+    }
 }
 
 fn write_disruption(hasher: &mut StateHasher, disruption: &oag_weapons::disruption::Disruption) {
@@ -319,6 +355,7 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
         best_lap_ticks,
         lap_splits,
         kills,
+        score,
         deaths,
     } = standing;
 
@@ -364,6 +401,16 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
     // Eliminator-only counts, `0` on every other mode - see `Standing::kills`.
     hasher.write_u32(*kills);
     hasher.write_u32(*deaths);
+    write_score(hasher, *score);
+}
+
+/// A score Eliminator's points, written only once there are any so that a kill-count race
+/// hashes as it did before the field.
+fn write_score(hasher: &mut StateHasher, score: f32) {
+    if score != 0.0 {
+        hasher.write_u8(0x5C);
+        hasher.write_f32(score);
+    }
 }
 
 /// The backward-crossing deficit, written only while there is one so that a
@@ -375,6 +422,11 @@ fn write_reversed(hasher: &mut StateHasher, reversed: u32) {
     }
 }
 
+/// Marks an armed Quake press in the state stream. Any byte works; it only has to
+/// differ from the byte the next field starts with, so a set flag and an absent one
+/// cannot hash alike.
+const QUAKE_ARMED_TAG: u8 = 0xB7;
+
 fn write_held(hasher: &mut StateHasher, held: &Held) {
     let Held {
         weapon,
@@ -383,6 +435,7 @@ fn write_held(hasher: &mut StateHasher, held: &Held) {
         drop_reload,
         cannon_rounds,
         cannon_reload,
+        quake_armed,
     } = held;
     write_weapon(hasher, *weapon);
     // **The previous grant is state, not a convenience.** The draw refuses to
@@ -406,6 +459,12 @@ fn write_held(hasher: &mut StateHasher, held: &Held) {
     // `oag_weapons::pickup::Held::advance_cannon_reload`.
     hasher.write_u8(*cannon_rounds);
     hasher.write_f32(*cannon_reload);
+    // **A press waiting for the live Quake wave to end is state**: it decides
+    // whether a wave launches a few seconds from now. Written only when set, like
+    // `write_reversed`, so a world that never armed one hashes as before.
+    if *quake_armed {
+        hasher.write_u8(QUAKE_ARMED_TAG);
+    }
 }
 
 /// A weapon slot as a discriminant byte, with `0` reserved for "nothing".
@@ -418,8 +477,9 @@ fn write_weapon(hasher: &mut StateHasher, weapon: Option<Weapon>) {
     let discriminant = match weapon {
         None => 0,
         // A mod's pickup: outside the titles' pool, so a code no position in it reaches
-        // (no vanilla race holds one, so no committed hash moves).
-        Some(Weapon::Extension) => u8::MAX,
+        // (no vanilla race holds one, so no committed hash moves). The first kind keeps the
+        // byte a race with one pickup mod always wrote; the next count down from it.
+        Some(Weapon::Extension(kind)) => u8::MAX - kind.index() as u8,
         Some(weapon) => Weapon::ALL
             .iter()
             .position(|&candidate| candidate == weapon)
@@ -468,6 +528,7 @@ fn write_race(hasher: &mut StateHasher, race: &RaceState) {
         Mode::Eliminator => 4,
         Mode::Tournament => 5,
         Mode::Head2Head => 6,
+        Mode::Detonator => 7,
     });
     hasher.write_u32(*lap);
     write_option_u32(hasher, *laps_target);

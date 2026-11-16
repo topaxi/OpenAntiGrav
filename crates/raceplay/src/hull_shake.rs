@@ -141,7 +141,7 @@ impl Race {
         }
         for slot in 0..self.sim.world.ship_count as usize {
             let ship = &self.sim.world.ships[slot];
-            if !ship.active {
+            if !ship.in_world() {
                 continue;
             }
             let speed = ship.physics.body.linear_velocity.length();

@@ -102,7 +102,7 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
         );
     }
     assert_eq!(named.len(), 2);
-    let seats: Vec<u8> = oag_game::results_tables::field_rows(Some(board))
+    let seats: Vec<u8> = oag_game::results_tables::field_rows(Some(board), &[])
         .iter()
         .filter_map(|row| row.seat)
         .collect();
@@ -254,7 +254,7 @@ fn head_to_head_people_end_on_a_board_of_two_with_a_winner() {
             "seat {seat} is on the table: {named:?}"
         );
     }
-    let seats: Vec<u8> = oag_game::results_tables::field_rows(Some(board))
+    let seats: Vec<u8> = oag_game::results_tables::field_rows(Some(board), &[])
         .iter()
         .filter_map(|row| row.seat)
         .collect();

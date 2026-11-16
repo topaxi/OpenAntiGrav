@@ -12,6 +12,7 @@
 //! and weapons code reaches a craft only through the generic [`Craft`] trait
 //! (not `dyn`), which `oag_gameplay::Ship` implements.
 
+pub mod counts;
 pub mod craft;
 pub mod disruption;
 pub mod pickup;

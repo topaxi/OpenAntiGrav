@@ -74,8 +74,8 @@ fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
     // *exactly* the un-kicked matrix rather than to something near it. Both
     // races are still in lockstep, so `off` is the right reference at
     // whatever speed they have both decayed to.
-    kicked.sim.speedup_pads.clear();
-    off.sim.speedup_pads.clear();
+    kicked.sim.speedup_pads = Vec::new().into();
+    off.sim.speedup_pads = Vec::new().into();
     for _ in 0..600 {
         kicked.tick(&PlayerInputs::none());
         off.tick(&PlayerInputs::none());

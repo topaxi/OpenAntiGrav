@@ -194,6 +194,15 @@ pub struct Model {
     /// Wipeout HD's absorb shell program (`hd_absorbinternal`), for the one
     /// model that is one. See `oag_fx::absorb_shell`.
     pub absorb_shell: bool,
+    /// Wipeout HD's shield shell: the drawn colour is multiplied by the vertex
+    /// colour, which the caller sets each frame to the shield's `ShieldColour`
+    /// (on an HD model the vertex colour is otherwise a light term the generic
+    /// path ignores as a tint).
+    pub shield_shell: bool,
+    /// Our own HD/Fury-style shield (`graphics.own_shield`): the model is drawn by
+    /// `own_shield.wesl`, with the vertex colour carrying the shield's animated colour as
+    /// `shield_shell`'s does. Set only on the models `oag_livery::own_shield` builds for it.
+    pub own_shield: bool,
     /// Levels added to the sampler's own selection for this model's material
     /// textures (negative reads finer), `0.0` for none. A title's own number -
     /// Wipeout HD's is `-1.5` on a circuit's albedo, normal and lightmap units
@@ -209,6 +218,22 @@ pub struct Model {
     /// honours is a title's rule (`oag_title::Looks::material_render_state`),
     /// applied by [`Self::honour_render_state`].
     pub material_state: Vec<u32>,
+    /// Whether each draw's own [`DrawCall::culled`] picks the culling twin of the
+    /// opaque and cutout pipelines ([`mesh_render::Built::culled`]) although the
+    /// model records no [`Self::material_state`].
+    ///
+    /// **A `.vex` circuit's batches author their own cull bit**
+    /// (`oag_vex::vex::Batch::is_culled`, `pass_mask & 0x20 == 0`), and a board
+    /// built as a front copy and a back copy lies in one plane: drawn two-sided the
+    /// copies z-fight. Whether a title's circuit may act on the bit is its rule
+    /// (`oag_title::Looks::batch_back_face_cull`); the loader sets this where it
+    /// does. `false` leaves a model two-sided except under HD's material rule.
+    pub per_batch_cull: bool,
+    /// The circuit's sky as a reflection map, a [`sky_paraboloid`] mip chain, where the sky's
+    /// loader found one beside it: Omega's `skyCube.gnf`, which the circuit loader opens next to
+    /// `skycube.rcsmodel` (`docs/ghidra/functions/ps4-omega-eu/panel-displacement.md`, "The CPU
+    /// side"). `None` on every other model; HD's sky map comes from its cube faces instead.
+    pub sky_reflection: Option<std::sync::Arc<Vec<u8>>>,
     /// The alpha-test reference [`Self::alpha_tested_draws`] is compared
     /// against, when the model's own materials author one.
     ///
@@ -283,11 +308,31 @@ impl Model {
     /// be constructible by accident, which this must not be.
     #[must_use]
     pub fn none(label: &str) -> Self {
+        Self::from_draws(label, Vec::new(), Vec::new(), Vec::new(), [0.0; 3], 0.0, 0)
+    }
+
+    /// A model of synthetic geometry: `draws` over `vertices` and `indices`, bounded by
+    /// `centre` and `radius`, `mesh_count` meshes. No textures, materials, animation or
+    /// flags: the caller sets the few a synthetic model does want (the sky cube's textures).
+    ///
+    /// The one literal of every field a synthetic model leaves empty, so a field added to
+    /// [`Model`] is a compile error here and nowhere else. A parsed model builds its own
+    /// literal, because it sets most of them.
+    #[must_use]
+    pub fn from_draws(
+        label: &str,
+        vertices: Vec<GpuVertex>,
+        indices: Vec<u32>,
+        draws: Vec<DrawCall>,
+        centre: [f32; 3],
+        radius: f32,
+        mesh_count: usize,
+    ) -> Self {
         Self {
             label: label.to_string(),
-            vertices: Vec::new(),
-            indices: Vec::new(),
-            draws: Vec::new(),
+            vertices,
+            indices,
+            draws,
             alpha_tested_draws: Vec::new(),
             transparent_draws: Vec::new(),
             textures: Vec::new(),
@@ -313,12 +358,16 @@ impl Model {
 
             flame: None,
             absorb_shell: false,
+            shield_shell: false,
+            own_shield: false,
             material_lod_bias: 0.0,
             material_state: Vec::new(),
+            per_batch_cull: false,
+            sky_reflection: None,
             alpha_test_ref: None,
-            centre: [0.0; 3],
-            radius: 0.0,
-            mesh_count: 0,
+            centre,
+            radius,
+            mesh_count,
             airbrakes: [None, None],
             anim_tracks: Vec::new(),
             node_vertex_ranges: Vec::new(),
@@ -345,13 +394,15 @@ mod anim_node;
 pub use anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
 
 pub mod keyed;
-pub use keyed::{KeyTrack, Keyed, slerp};
+pub use keyed::{KeyTrack, Keyed, Start, slerp};
 
 mod emissive;
 pub use emissive::{
-    Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, PROGRAM_CHEVRON, PROGRAM_SHINE_MASK,
-    PROGRAM_SNOW, PROGRAM_STATIC_HOLOGRAM, PROGRAM_TWIN_BLEND, REFLECTION_RATE,
-    WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
+    ALPHA_EMISSIVE_SPECULAR_MAP, Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, PROGRAM_CHEVRON,
+    PROGRAM_CROWD, PROGRAM_EMISSIVE_ADD, PROGRAM_EMISSIVE_ALPHA_MASK, PROGRAM_ICE_GLASS,
+    PROGRAM_PANEL_MAP, PROGRAM_PICTURE_ALPHA_EMISSIVE, PROGRAM_SHIELD_LIGHTNING,
+    PROGRAM_SHINE_MASK, PROGRAM_SNOW, PROGRAM_STATIC_HOLOGRAM, PROGRAM_TARMAC, PROGRAM_TWIN_BLEND,
+    PROGRAM_UV_OVERLAY, REFLECTION_RATE, WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
 };
 
 mod flap;
@@ -837,6 +888,7 @@ fn build_class(
                         glow: glow::batch_value(&batch, material_texture, &glow_bytes),
                         texcoord2: [if road { ROAD_MARK } else { 0.0 }, 0.0],
                         tangent: 0,
+                        depth_bias: f32::from(batch.depth_bias),
                     });
                 }
                 for tri in batch.triangles() {
@@ -864,22 +916,22 @@ fn build_class(
                     // one instant - which is all it can ever be, and why
                     // `moving` turns the tests off rather than trusting it.
                     let centre = bounds_matrix.map_or(centre, |m| vex::transform_point(&m, centre));
-                    // PSP batches only: the PS2 executable's submit was not read.
+                    // The PSP's list-B key, **inherited from PSP** for PS2 VIF
+                    // batches too: the PS2 executable's submit was not read, and
+                    // file order drew Talon's Junction's Zone grid out of depth order.
                     // Transparent ones only: the depth key reorders list B, but
                     // an opaque or cutout batch is depth-tested with depth
                     // written and lands the same picture in any order.
-                    let depth_point = (batch_list == 1
-                        && batch.is_transparent()
-                        && !vex::is_vif_batch(batch.vertex_type))
-                    .then_some(box_centre)
-                    .flatten()
-                    .map(|c| vex::transform_point(&to_world, c))
-                    // Lifted like `centre` above: under an `Anim Transform` the
-                    // point is in anchor space. The time-zero pose, **chosen,
-                    // not measured**: whether the original refreshes `mesh+0xb0`
-                    // as the node moves turns on the `0x40000` flag, whose
-                    // setter was not read.
-                    .map(|c| bounds_matrix.map_or(c, |m| vex::transform_point(&m, c)));
+                    let depth_point = (batch_list == 1 && batch.is_transparent())
+                        .then_some(box_centre)
+                        .flatten()
+                        .map(|c| vex::transform_point(&to_world, c))
+                        // Lifted like `centre` above: under an `Anim Transform` the
+                        // point is in anchor space. The time-zero pose, **chosen,
+                        // not measured**: whether the original refreshes `mesh+0xb0`
+                        // as the node moves turns on the `0x40000` flag, whose
+                        // setter was not read.
+                        .map(|c| bounds_matrix.map_or(c, |m| vex::transform_point(&m, c)));
                     let draw = DrawCall {
                         writes_depth: false,
                         range: first_index..last_index,
@@ -1012,8 +1064,12 @@ fn build_class(
 
         flame: None,
         absorb_shell: false,
+        shield_shell: false,
+        own_shield: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
+        per_batch_cull: false,
+        sky_reflection: None,
         alpha_test_ref: None,
         centre,
         radius,
@@ -1039,10 +1095,36 @@ fn build_class(
 ///
 /// A texture block that will not walk.
 pub fn embedded_texture_slots(data: &[u8]) -> Result<TextureSlots> {
+    // The active texture pack's picture for each texture it names (`oag_texture::replacer`),
+    // looked up in node order. Nothing is read when no pack is on but one lock.
+    let pack = oag_texture::replacer::active();
+    let tree = pack.as_ref().and_then(|_| vex::nodes(data).ok());
+    let stored = tree
+        .as_deref()
+        .and_then(|tree| vex::stored_textures(data, tree).ok());
+    let replacements: Vec<Option<std::sync::Arc<oag_texture::replacer::Image>>> =
+        match (&pack, &stored) {
+            (Some(pack), Some(stored)) => stored
+                .iter()
+                .map(|slot| {
+                    let t = slot.as_ref()?;
+                    pack.find(&oag_texture::replacement::Stored::from_vex(
+                        (t.width, t.height),
+                        t.bits_per_pixel,
+                        t.mip_count,
+                        t.flags,
+                        t.palette,
+                        t.texels,
+                    ))
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
     Ok(vex::textures(data)
         .context("extracting textures")?
         .into_iter()
-        .map(|slot| {
+        .enumerate()
+        .map(|(index, slot)| {
             slot.map(|t| {
                 let label = t
                     .asset_path
@@ -1058,7 +1140,16 @@ pub fn embedded_texture_slots(data: &[u8]) -> Result<TextureSlots> {
                 // pre-swizzled Pure one) keeps the box-filtered chain, capped
                 // at the depth it declares; `.max(1)`: a 0 would upload no
                 // base level at all.
-                if t.levels.len() + 1 == usize::from(t.mip_count.max(1)) {
+                let chained = t.levels.len() + 1 == usize::from(t.mip_count.max(1));
+                if let Some(Some(image)) = replacements.get(index) {
+                    std::sync::Arc::new(ModelTexture::replaced(
+                        label,
+                        image,
+                        (width, height),
+                        t.mip_count,
+                        chained,
+                    ))
+                } else if chained {
                     std::sync::Arc::new(ModelTexture::chain(label, width, height, t.levels_rgba()))
                 } else {
                     std::sync::Arc::new(ModelTexture::rgba8(
@@ -1086,8 +1177,97 @@ pub use model_texture::{BlockFormat, GnfCounts, GnfForm, ModelTexture, Texels, T
 mod flame;
 pub mod groups;
 pub use flame::Flame;
+mod debug_tint;
 pub mod glow;
 mod merge;
+pub use debug_tint::{Unit as DebugTintUnit, requested as debug_tint_requested};
 mod order;
+pub use order::{BlendedOrder, LIST_B_LAYER, flare_key};
 pub mod render_state;
 pub use merge::merge;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn vertex(x: f32) -> GpuVertex {
+        GpuVertex {
+            quake: 0.0,
+            position: [x, 0.0, 0.0],
+            normal: [0.0, 1.0, 0.0],
+            colour: [1.0; 4],
+            texcoord: [0.0; 2],
+            lightmap_texcoord: [0.0; 2],
+            lit: 1.0,
+            anim: 0,
+            xform: 0,
+            sun_mask: 1.0,
+            slots: slots::DEFAULT,
+            specular_exponent: DEFAULT_SPECULAR_EXPONENT,
+            glow: 0.0,
+            texcoord2: [0.0; 2],
+            tangent: 0,
+            depth_bias: 0.0,
+        }
+    }
+
+    /// Every argument lands in its own field and every other field is the empty model's, so
+    /// a synthetic model built through `from_draws` is the one the literals built.
+    #[test]
+    fn from_draws_places_each_argument_and_leaves_the_rest_empty() {
+        let draw = DrawCall {
+            writes_depth: false,
+            moving: false,
+            blend: None,
+            blend_state: None,
+            depth_point: None,
+            layer: oag_vex::vex::LAYER_DEFAULT,
+            culled: false,
+            range: 0..3,
+            texture: None,
+            bounds: Bounds {
+                centre: [1.0, 2.0, 3.0],
+                radius: 4.0,
+            },
+            node: None,
+            chunk: None,
+            alpha_test_ref: None,
+        };
+        let built = Model::from_draws(
+            "synthetic",
+            vec![vertex(0.0), vertex(1.0), vertex(2.0)],
+            vec![0, 1, 2],
+            vec![draw],
+            [5.0, 6.0, 7.0],
+            8.0,
+            9,
+        );
+        assert_eq!(built.label, "synthetic");
+        assert_eq!(built.vertices.len(), 3);
+        assert_eq!(built.indices, [0, 1, 2]);
+        assert_eq!(built.draws.len(), 1);
+        assert_eq!(built.centre, [5.0, 6.0, 7.0]);
+        assert_eq!(built.radius, 8.0);
+        assert_eq!(built.mesh_count, 9);
+
+        // Everything but those seven fields is the empty model's.
+        let mut expected = Model::none("synthetic");
+        expected.vertices.clone_from(&built.vertices);
+        expected.indices.clone_from(&built.indices);
+        expected.draws.clone_from(&built.draws);
+        expected.centre = built.centre;
+        expected.radius = built.radius;
+        expected.mesh_count = built.mesh_count;
+        assert_eq!(format!("{built:?}"), format!("{expected:?}"));
+    }
+
+    #[test]
+    fn the_empty_model_has_no_geometry_and_no_extent() {
+        let none = Model::none("empty");
+        assert!(none.vertices.is_empty() && none.indices.is_empty() && none.draws.is_empty());
+        assert_eq!(
+            (none.centre, none.radius, none.mesh_count),
+            ([0.0; 3], 0.0, 0)
+        );
+    }
+}

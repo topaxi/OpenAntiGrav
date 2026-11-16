@@ -1,6 +1,6 @@
 //! `oag-mod.toml`: who a mod is, and under what licence it travels.
 
-use oag_tables::pickup_look::{Colour, Icon, PickupLook};
+use oag_tables::pickup_look::{Colour, Icon, OddsRow, PickupLook};
 use serde::Deserialize;
 
 /// The manifest's name at a mod's root.
@@ -53,7 +53,7 @@ impl License {
 }
 
 /// A checked manifest.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Manifest {
     /// Unique and stable: `topaxi.example`.
     pub id: String,
@@ -75,21 +75,102 @@ pub struct Manifest {
     pub keywords: Vec<String>,
     /// The titles it is for (their lowercased hyphenated names); empty means any.
     pub titles: Vec<String>,
+    /// `needs-titles`: titles (lowercased hyphenated names) whose disc the mod needs for what
+    /// it draws; the mod loads without one, and the mods page says what is missing.
+    pub needs_titles: Vec<String>,
     /// The game versions it works with.
     pub oag: Option<semver::VersionReq>,
+    /// `[campaign-medals]`: the art the campaign screens draw a medal with, in place of the
+    /// title's own colour swatch.
+    pub campaign_medals: Option<CampaignMedals>,
     /// `[extension]`: the WebAssembly modules the mod runs, if any.
     pub extension: Option<Extension>,
-    /// `[icons]`: the mod's own PNGs by name, as paths in the mod. A module's `hud-icon`
+    /// `[icons]`: the mod's own PNGs or SVGs by name, as paths in the mod. A module's `hud-icon`
     /// may name one.
     pub icons: std::collections::BTreeMap<String, String>,
     /// `[effects]`: the mod's own particle effects by name, as `.toml` paths in the mod
     /// (`schemas/v1/effect.tosd`). A module's `fire-mod-effect` names one by its index in
     /// this map's name order.
     pub effects: std::collections::BTreeMap<String, String>,
+    /// `[shaders]`: the mod's own fragment shaders by name, as `.wgsl` or `.wesl` paths in
+    /// the mod (`docs/architecture/wasm-extensions/mod-shaders.md`). A module's draws and an
+    /// effect's `shader` key name one, the module by its index in this map's name order.
+    pub shaders: std::collections::BTreeMap<String, String>,
+    /// `[sounds]`: the mod's own sounds by name, as `.wav` paths in the mod
+    /// (`docs/formats/mod-sound.md`). A module's `play-mod-sound` names one by its index
+    /// in this map's name order.
+    pub sounds: std::collections::BTreeMap<String, String>,
     /// `[pickup]`: the look of the mod's own pickup, required of a simulation mod that
     /// hands one out.
     pub pickup: Option<PickupLook>,
+    /// `[pickup.titles.<title>]`: the look on one title (its lowercased hyphenated name),
+    /// each over `[pickup]` for what it leaves out: a mod's own art per title.
+    pub pickup_titles: Vec<(String, PickupLook)>,
+    /// `[[pickup.odds]]`: the weights the weapon pads hand the mod's own pickup out with,
+    /// per title and class (`oag_tables::pickup_look::odds_for`). Empty: the pads never
+    /// do, and only a module's `give-pickup` or `pickup-roll` hands it out.
+    pub pickup_odds: Vec<OddsRow>,
+    /// `[channels]`: the event channels the mod's modules publish and listen to.
+    pub channels: Channels,
+    /// `[texture-pack]`: the mod is a PPSSPP texture pack drawn in place of the disc's
+    /// textures, written or recognised ([`crate::texture_pack`]).
+    pub texture_pack: Option<TexturePack>,
+    /// Whether the mod is on until the player turns it off. `true` for every mod but a
+    /// texture pack, which changes what a race looks like and starts off.
+    pub default_enabled: bool,
 }
+
+/// Where `[campaign-medals]` takes its atlas from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MedalSource {
+    /// `{ title = "hd" }`: the medal atlas a title's own disc ships (a lowercased hyphenated
+    /// title name). The art exists only where that disc is present.
+    Title(String),
+    /// `{ mod = "<key of [icons]>" }`: the mod's own atlas image.
+    Mod(String),
+}
+
+/// `[campaign-medals]` (`docs/tools/mods.md`, "Campaign medals").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CampaignMedals {
+    /// The atlas.
+    pub source: MedalSource,
+    /// The atlas holds one block of tiers per difficulty (easy, medium, hard from the top),
+    /// and a cell draws the block of the difficulty its medal was earned on.
+    pub per_difficulty: bool,
+    /// The tier of each atlas row, top to bottom, by the names a campaign's tiers carry
+    /// (`gold`, `silver`, `bronze`, or a `[[medal-tier]]` of its own). Absent: gold, silver,
+    /// bronze. A title source ignores it: the title's own row order is used. A campaign tier
+    /// no row names draws its colour as a swatch.
+    pub tiers: Vec<String>,
+}
+
+/// `[texture-pack]` (`docs/tools/mods.md`, "Texture packs"): a PPSSPP pack read in place,
+/// its `textures.ini` naming the PNGs it replaces textures with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TexturePack {
+    /// The pack's `textures.ini`, as a path in the mod.
+    pub ini: String,
+    /// The disc serials the pack's `[games]` table names, as written there. Empty when the
+    /// manifest names none and the ini could not be read.
+    pub serials: Vec<String>,
+}
+
+/// `[channels]` (`docs/architecture/wasm-extensions/hooks.md`, "Events between mods"):
+/// namespaced names, `<mod id>/<name>`. A module may `emit` only on a channel in
+/// `publishes`, which lies in the mod's own namespace; `listens` is what the mod hears,
+/// from any mod or track. Listening to a channel no loaded mod or track publishes is
+/// warned about on the mods page, never refused: the publisher may simply be off.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Channels {
+    /// Channels the mod sends on.
+    pub publishes: Vec<String>,
+    /// Channels the mod hears.
+    pub listens: Vec<String>,
+}
+
+/// Most channels one mod publishes, or one listens to. Chosen.
+pub const MAX_CHANNELS: usize = 32;
 
 /// `[extension]` (`docs/architecture/wasm-extensions/README.md`, section 1.1). Read
 /// here; the `.wasm` it names is opened only by the race that runs it.
@@ -103,6 +184,10 @@ pub struct Extension {
     pub memory_pages: u32,
     /// The host-owned state blob's length, bytes.
     pub state_bytes: u32,
+    /// `drives_ai_pickup`: the module decides when an AI craft uses the mod's pickup, so
+    /// the engine never raises `pickup-fire` for one (default `false`: it does, wherever
+    /// the AI would fire a Turbo).
+    pub drives_ai_pickup: bool,
     /// `[extension.rules]`: a rules module, which may act on every craft of a race.
     pub rules: Option<Rules>,
     /// `[extension.track]`: a module that runs only on one track file the mod ships.
@@ -138,11 +223,90 @@ struct File {
     #[serde(rename = "mod")]
     module: Table,
     extension: Option<ExtensionTable>,
+    channels: Option<ChannelsTable>,
+    #[serde(rename = "texture-pack")]
+    texture_pack: Option<TexturePackTable>,
     #[serde(default)]
     icons: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     effects: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    shaders: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    sounds: std::collections::BTreeMap<String, String>,
     pickup: Option<PickupTable>,
+    #[serde(rename = "campaign-medals")]
+    campaign_medals: Option<CampaignMedalsTable>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CampaignMedalsTable {
+    source: MedalSourceTable,
+    #[serde(default, rename = "per-difficulty")]
+    per_difficulty: bool,
+    #[serde(default)]
+    tiers: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MedalSourceTable {
+    title: Option<String>,
+    #[serde(rename = "mod")]
+    module: Option<String>,
+}
+
+fn campaign_medals(
+    table: CampaignMedalsTable,
+    icons: &std::collections::BTreeMap<String, String>,
+) -> Result<CampaignMedals, Error> {
+    let source = match (table.source.title, table.source.module) {
+        (Some(title), None) => MedalSource::Title(title.to_ascii_lowercase()),
+        (None, Some(name)) if icons.contains_key(&name) => MedalSource::Mod(name),
+        (None, Some(name)) => {
+            return Err(bad(
+                "campaign-medals.source",
+                format!("mod = {name:?} is not a key of [icons]"),
+            ));
+        }
+        _ => {
+            return Err(bad(
+                "campaign-medals.source",
+                "exactly one of `title = \"<title>\"` and `mod = \"<icon>\"`",
+            ));
+        }
+    };
+    let mut seen = Vec::new();
+    for tier in &table.tiers {
+        if !valid_key(tier) || tier.chars().any(|c| c.is_ascii_uppercase()) {
+            return Err(bad(
+                "campaign-medals.tiers",
+                format!("{tier:?} is not a tier name: lowercase letters, digits, '-' and '_'"),
+            ));
+        }
+        if seen.contains(tier) {
+            return Err(bad(
+                "campaign-medals.tiers",
+                format!("{tier:?} is named twice"),
+            ));
+        }
+        seen.push(tier.clone());
+    }
+    Ok(CampaignMedals {
+        source,
+        per_difficulty: table.per_difficulty,
+        tiers: table.tiers,
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TexturePackTable {
+    format: String,
+    ini: Option<String>,
+    #[serde(default)]
+    serials: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -150,6 +314,54 @@ struct File {
 struct PickupTable {
     icon: IconTable,
     colour: ColourTable,
+    #[serde(default)]
+    odds: Vec<OddsTable>,
+    #[serde(default)]
+    titles: std::collections::BTreeMap<String, TitleLookTable>,
+}
+
+/// `[pickup.titles.<title>]`: what differs on one title, over `[pickup]`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TitleLookTable {
+    icon: Option<IconTable>,
+    colour: Option<ColourTable>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OddsTable {
+    title: Option<String>,
+    class: Option<String>,
+    ai: f32,
+    human: f32,
+    front: f32,
+    back: f32,
+}
+
+/// `[[pickup.odds]]` checked: every weight finite and not negative.
+fn odds(rows: Vec<OddsTable>) -> Result<Vec<OddsRow>, Error> {
+    rows.into_iter()
+        .map(|row| {
+            let weights = [row.ai, row.human, row.front, row.back];
+            if weights.iter().any(|w| !w.is_finite() || *w < 0.0) {
+                return Err(bad(
+                    "pickup.odds",
+                    format!("weights {weights:?}: each finite and not below 0"),
+                ));
+            }
+            Ok(OddsRow {
+                title: row.title,
+                class: row.class,
+                odds: oag_tables::weapons::PickupOdds {
+                    ai: row.ai,
+                    human: row.human,
+                    front: row.front,
+                    back: row.back,
+                },
+            })
+        })
+        .collect()
 }
 
 #[derive(Deserialize)]
@@ -188,8 +400,39 @@ fn weapon(key: &'static str, name: &str) -> Result<oag_tables::weapons::Weapon, 
 fn pickup(
     table: PickupTable,
     icons: &std::collections::BTreeMap<String, String>,
+) -> Result<(PickupLook, Vec<(String, PickupLook)>), Error> {
+    let base = look(table.icon, table.colour, icons)?;
+    let mut titles = Vec::new();
+    for (title, over) in table.titles {
+        let icon = match over.icon {
+            Some(icon) => look_icon(icon, icons)?,
+            None => base.icon.clone(),
+        };
+        let colour = match over.colour {
+            Some(colour) => look_colour(colour)?,
+            None => base.colour,
+        };
+        titles.push((title, PickupLook { icon, colour }));
+    }
+    Ok((base, titles))
+}
+
+fn look(
+    icon: IconTable,
+    colour: ColourTable,
+    icons: &std::collections::BTreeMap<String, String>,
 ) -> Result<PickupLook, Error> {
-    let icon = match (table.icon.title, table.icon.module) {
+    Ok(PickupLook {
+        icon: look_icon(icon, icons)?,
+        colour: look_colour(colour)?,
+    })
+}
+
+fn look_icon(
+    icon: IconTable,
+    icons: &std::collections::BTreeMap<String, String>,
+) -> Result<Icon, Error> {
+    Ok(match (icon.title, icon.module) {
         (Some(title), None) => Icon::Title(weapon("pickup.icon", &title)?),
         (None, Some(name)) if icons.contains_key(&name) => Icon::Mod(name),
         (None, Some(name)) => {
@@ -204,8 +447,11 @@ fn pickup(
                 "exactly one of `title = \"<weapon>\"` and `mod = \"<icon>\"`",
             ));
         }
-    };
-    let colour = match (table.colour.title, table.colour.rgba) {
+    })
+}
+
+fn look_colour(colour: ColourTable) -> Result<Colour, Error> {
+    Ok(match (colour.title, colour.rgba) {
         (Some(title), None) => Colour::Title(weapon("pickup.colour", &title)?),
         (None, Some(hex)) => {
             let digits = hex.len() == 8 && hex.bytes().all(|b| b.is_ascii_hexdigit());
@@ -226,8 +472,16 @@ fn pickup(
                 "exactly one of `title = \"<weapon>\"` and `rgba = \"RRGGBBAA\"`",
             ));
         }
-    };
-    Ok(PickupLook { icon, colour })
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ChannelsTable {
+    #[serde(default)]
+    publishes: Vec<String>,
+    #[serde(default)]
+    listens: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -240,6 +494,8 @@ struct ExtensionTable {
     memory_pages: u32,
     #[serde(default)]
     state_bytes: u32,
+    #[serde(default)]
+    drives_ai_pickup: bool,
     rules: Option<RulesTable>,
     track: Option<TrackTable>,
 }
@@ -279,7 +535,11 @@ struct Table {
     keywords: Vec<String>,
     #[serde(default)]
     titles: Vec<String>,
+    #[serde(default, rename = "needs-titles")]
+    needs_titles: Vec<String>,
     oag: Option<String>,
+    #[serde(rename = "default-enabled")]
+    default_enabled: Option<bool>,
 }
 
 fn bad(key: &'static str, problem: impl Into<String>) -> Error {
@@ -290,6 +550,17 @@ fn bad(key: &'static str, problem: impl Into<String>) -> Error {
 }
 
 impl Manifest {
+    /// The look of the mod's own pickup on `title` (a lowercased hyphenated title name):
+    /// its `[pickup.titles.<title>]` row, else `[pickup]`.
+    #[must_use]
+    pub fn pickup_for(&self, title: &str) -> Option<&PickupLook> {
+        self.pickup_titles
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(title))
+            .map(|(_, look)| look)
+            .or(self.pickup.as_ref())
+    }
+
     /// Reads and checks a manifest. `has` says whether the mod holds a path,
     /// for `license-file`.
     ///
@@ -300,22 +571,40 @@ impl Manifest {
         let file: File = toml::from_str(text)?;
         oag_schema::check(file.header.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)?;
         let extension = file.extension.map(|e| extension(e, has)).transpose()?;
-        let pickup = file
-            .pickup
-            .map(|table| pickup(table, &file.icons))
+        let (pickup, pickup_titles, pickup_odds) = match file.pickup {
+            Some(mut table) => {
+                let rows = odds(std::mem::take(&mut table.odds))?;
+                let (base, titles) = pickup(table, &file.icons)?;
+                (Some(base), titles, rows)
+            }
+            None => (None, Vec::new(), Vec::new()),
+        };
+        let campaign_medals = file
+            .campaign_medals
+            .map(|table| campaign_medals(table, &file.icons))
             .transpose()?;
         let t = file.module;
         for (name, path) in &file.icons {
+            if name.len() > oag_ext_abi::MAX_HUD_TEXT {
+                return Err(bad(
+                    "icons",
+                    format!(
+                        "{name:?} is over {} bytes, the longest name hud-icon can send",
+                        oag_ext_abi::MAX_HUD_TEXT
+                    ),
+                ));
+            }
             if !valid_key(name) {
                 return Err(bad(
                     "icons",
                     format!("{name:?} is not a name: letters, digits, '-', '_'"),
                 ));
             }
-            if !path.to_ascii_lowercase().ends_with(".png") || !has(path) {
+            let lower = path.to_ascii_lowercase();
+            if !(lower.ends_with(".png") || lower.ends_with(".svg")) || !has(path) {
                 return Err(bad(
                     "icons",
-                    format!("{name}: {path:?} is not a .png in the mod"),
+                    format!("{name}: {path:?} is not a .png or .svg in the mod"),
                 ));
             }
         }
@@ -341,11 +630,63 @@ impl Manifest {
             ));
         }
 
+        for (name, path) in &file.shaders {
+            if !valid_key(name) {
+                return Err(bad(
+                    "shaders",
+                    format!("{name:?} is not a name: letters, digits, '-', '_'"),
+                ));
+            }
+            let lower = path.to_ascii_lowercase();
+            if !(lower.ends_with(".wgsl") || lower.ends_with(".wesl")) || !has(path) {
+                return Err(bad(
+                    "shaders",
+                    format!("{name}: {path:?} is not a .wgsl or .wesl in the mod"),
+                ));
+            }
+        }
+        if file.shaders.len() > MAX_SHADERS {
+            return Err(bad(
+                "shaders",
+                format!("{} shaders, at most {MAX_SHADERS}", file.shaders.len()),
+            ));
+        }
+
+        for (name, path) in &file.sounds {
+            if !valid_key(name) {
+                return Err(bad(
+                    "sounds",
+                    format!("{name:?} is not a name: letters, digits, '-', '_'"),
+                ));
+            }
+            if !path.to_ascii_lowercase().ends_with(".wav") || !has(path) {
+                return Err(bad(
+                    "sounds",
+                    format!("{name}: {path:?} is not a .wav in the mod"),
+                ));
+            }
+        }
+        if file.sounds.len() > MAX_SOUNDS {
+            return Err(bad(
+                "sounds",
+                format!("{} sounds, at most {MAX_SOUNDS}", file.sounds.len()),
+            ));
+        }
+
         if !valid_id(&t.id) {
             return Err(bad(
                 "id",
                 format!(
                     "{:?} is not an id: lowercase letters, digits, '.', '-' and '_', starting with a letter",
+                    t.id
+                ),
+            ));
+        }
+        if oag_ext_abi::channel_key(&t.id) == oag_ext_abi::TRACK_SENDER {
+            return Err(bad(
+                "id",
+                format!(
+                    "{:?} hashes to the track's sender key; rename the mod",
                     t.id
                 ),
             ));
@@ -388,6 +729,12 @@ impl Manifest {
                     .map_err(|e| bad("oag", format!("{req:?} is not a version requirement: {e}")))
             })
             .transpose()?;
+        let channels = channels(file.channels, &t.id)?;
+        let texture_pack = file
+            .texture_pack
+            .map(|table| texture_pack(table, has))
+            .transpose()?;
+        let default_enabled = t.default_enabled.unwrap_or(texture_pack.is_none());
         Ok(Self {
             id: t.id,
             name: t.name,
@@ -399,11 +746,20 @@ impl Manifest {
             homepage: t.homepage,
             keywords: t.keywords,
             titles: t.titles,
+            needs_titles: t.needs_titles,
             oag,
+            campaign_medals,
             extension,
             icons: file.icons,
             effects: file.effects,
+            shaders: file.shaders,
+            sounds: file.sounds,
             pickup,
+            pickup_titles,
+            pickup_odds,
+            channels,
+            texture_pack,
+            default_enabled,
         })
     }
 
@@ -414,8 +770,119 @@ impl Manifest {
     }
 }
 
+fn texture_pack(table: TexturePackTable, has: &dyn Fn(&str) -> bool) -> Result<TexturePack, Error> {
+    if table.format != "ppsspp" {
+        return Err(bad(
+            "texture-pack.format",
+            format!(
+                "{:?} is not a pack format this build reads: \"ppsspp\"",
+                table.format
+            ),
+        ));
+    }
+    let ini = table.ini.unwrap_or_else(|| "textures.ini".to_string());
+    if !has(&ini) {
+        return Err(bad(
+            "texture-pack.ini",
+            format!("{ini:?} is not in the mod"),
+        ));
+    }
+    Ok(TexturePack {
+        ini,
+        serials: table.serials,
+    })
+}
+
+/// The `[channels]` table, each name checked by `oag_ext_abi::check_channel`; a published
+/// one must lie in the mod's own namespace, and none may repeat or hash like another.
+fn channels(table: Option<ChannelsTable>, id: &str) -> Result<Channels, Error> {
+    let Some(table) = table else {
+        return Ok(Channels::default());
+    };
+    for (key, list) in [
+        ("channels.publishes", &table.publishes),
+        ("channels.listens", &table.listens),
+    ] {
+        if list.len() > MAX_CHANNELS {
+            return Err(bad(
+                key,
+                format!("{} channels, at most {MAX_CHANNELS}", list.len()),
+            ));
+        }
+        for (i, name) in list.iter().enumerate() {
+            oag_ext_abi::check_channel(name).map_err(|why| {
+                bad(
+                    key,
+                    format!("{name:?} is not a channel name ({why}); write `<mod id>/<name>`"),
+                )
+            })?;
+            if list[..i].iter().any(|seen| seen == name) {
+                return Err(bad(key, format!("{name:?} is listed twice")));
+            }
+            let hash = oag_ext_abi::channel_key(name);
+            if let Some(other) = list[..i]
+                .iter()
+                .find(|seen| oag_ext_abi::channel_key(seen) == hash)
+            {
+                return Err(bad(
+                    key,
+                    format!("{name:?} and {other:?} hash alike; rename one"),
+                ));
+            }
+        }
+    }
+    if let Some(name) = table
+        .publishes
+        .iter()
+        .find(|name| oag_ext_abi::namespace(name) != id)
+    {
+        return Err(bad(
+            "channels.publishes",
+            format!(
+                "{name:?} is not in this mod's namespace; a channel it publishes starts `{id}/`"
+            ),
+        ));
+    }
+    Ok(Channels {
+        publishes: table.publishes,
+        listens: table.listens,
+    })
+}
+
 fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension, Error> {
     let bad_extension = |key: &'static str, problem: String| Error::Bad { key, problem };
+    if e.api != oag_ext_abi::ABI {
+        return Err(bad_extension(
+            "extension.api",
+            format!(
+                "{} is not an API this build runs ({})",
+                e.api,
+                oag_ext_abi::ABI
+            ),
+        ));
+    }
+    if e.memory_pages == 0 || e.memory_pages > oag_ext_abi::MAX_MEMORY_PAGES {
+        return Err(bad_extension(
+            "extension.memory_pages",
+            format!(
+                "{} is not in 1..={} (64 KiB pages)",
+                e.memory_pages,
+                oag_ext_abi::MAX_MEMORY_PAGES
+            ),
+        ));
+    }
+    if e.state_bytes as usize > oag_ext_abi::MAX_STATE_BYTES {
+        return Err(bad_extension(
+            "extension.state_bytes",
+            format!("{} is over {}", e.state_bytes, oag_ext_abi::MAX_STATE_BYTES),
+        ));
+    }
+    if e.rules.is_none() && e.track.is_none() {
+        return Err(bad_extension(
+            "extension",
+            "names no module: add [extension.rules] or [extension.track]".to_string(),
+        ));
+    }
     let rules = e.rules.map(|r| Rules { module: r.module });
     if let Some(rules) = &rules {
         if !e.simulation {
@@ -462,15 +929,21 @@ fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension,
         api: e.api,
         memory_pages: e.memory_pages,
         state_bytes: e.state_bytes,
+        drives_ai_pickup: e.drives_ai_pickup,
         rules,
         track,
     })
 }
 
-/// A string key or icon name: letters, digits, '-', '_'.
 /// What `fire-mod-effect`'s index (15 bits of an argument) can name, kept well inside it.
 const MAX_EFFECTS: usize = 256;
+/// The most shaders a mod may declare. Chosen.
+const MAX_SHADERS: usize = 255;
 
+/// What `play-mod-sound`'s index can name.
+const MAX_SOUNDS: usize = 64;
+
+/// A string key or icon name: letters, digits, '-', '_'.
 fn valid_key(key: &str) -> bool {
     !key.is_empty()
         && key

@@ -70,3 +70,20 @@ fn every_title_with_a_split_hud_row_has_its_file_in_the_fallback() {
         );
     }
 }
+
+#[test]
+fn the_fallback_carries_every_rumble_pattern_in_its_directory() {
+    let dir = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/fallback/Data/XML/Rumble"
+    );
+    let layer = fallback_layer();
+    let mut seen = 0;
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let name = entry.unwrap().file_name().into_string().unwrap();
+        let entry_name = format!("Data\\XML\\Rumble\\{name}");
+        assert!(layer.contains(&entry_name), "{entry_name} is not embedded");
+        seen += 1;
+    }
+    assert_eq!(seen, RUMBLE_PATTERNS.len());
+}

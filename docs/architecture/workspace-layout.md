@@ -30,17 +30,17 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 
 | Crate | Path | Purpose |
 | --- | --- | --- |
-| `oag-bytes` | `crates/bytes` | A generic byte reading and manipulation library, endian aware |
+| `oag-bytes` | `crates/bytes` | A generic byte reading and manipulation library, endian aware; owns the workspace's one `ByteOrder`. |
 | `oag-core` | `crates/core` | Deterministic math, fixed-timestep clock, seeded PRNG, state hashing. Depended on by everything. |
 | `oag-disc` | `crates/disc` | CHD and raw ISO readers, ISO 9660 walker, console identification. |
 | `oag-display` | `crates/display` | The picture's configuration vocabulary, and the grid a source authors in. Extracted from `oag-game` because it was the most-named module in the composition root, and a shared vocabulary living inside one of its own consumers is not shared. |
-| `oag-formats` | `crates/formats` | Asset containers, compression, triage, and console byte layout - what every decoder needs before it can start. Split by format family per [ADR-0050](adr/0050-format-crates-split-by-format-family.md). |
+| `oag-formats` | `crates/formats` | Asset containers, compression, triage, and the GE block swizzle - what every decoder needs before it can start. Split by format family per [ADR-0050](adr/0050-format-crates-split-by-format-family.md). |
 | `oag-rcs` | `crates/rcs` | The `RCSMODEL` scene. `rcsmodel` and `rcsmaterial` reference each other, so they are one crate by necessity as well as by subject; `rcsmodel::psp2` stays inside it, because the console is not a code axis. |
 | `oag-vex` | `crates/vex` | The `.vex` scene tree and its class-tagged payloads. They are chunks of one tree rather than neighbouring formats, which is why they are one crate. |
-| `oag-pob` | `crates/pob` | The `.pob` particle system: the `SYSP` container, emitter tree, channels, modifiers, embedded sprite textures and byte coverage. Split out of `oag-vex` on 2026-10-05: it needs only `oag-formats`, and the `.vex` scene merely names a `.pob` (class `0x3c4`), so neither crate depends on the other. This supersedes the placement ADR-0050 called arguable ("`pob` goes to `oag-vex`"). |
+| `oag-pob` | `crates/pob` | The `.pob` particle system: the `SYSP` container, emitter tree, channels, modifiers, embedded sprite textures and byte coverage. Split out of `oag-vex` on 2026-10-05: it needs only `oag-formats` and `oag-bytes`, and the `.vex` scene merely names a `.pob` (class `0x3c4`), so neither crate depends on the other. This supersedes the placement ADR-0050 called arguable ("`pob` goes to `oag-vex`"). |
 | `oag-texture` | `crates/texture` | Every pixel format the originals ship. Four consoles in one crate deliberately: `gtf` and `gxt` share the same S3TC block maths, so a console cut would run through it. |
 | `oag-tables` | `crates/tables` | Every table a title authors as XML, and the tag reader underneath them. The only crate in the workspace with no dependencies at all. |
-| `oag-video` | `crates/video` | Video containers - what the originals wrap a bitstream in, plus this project's own movie cache. The first crate carved off `oag-formats`, and the one with no workspace dependencies at all. |
+| `oag-video` | `crates/video` | Video containers - what the originals wrap a bitstream in, plus this project's own movie cache. The first crate carved off `oag-formats`, and one whose only workspace dependency is `oag-bytes`. |
 | `oag-unity` | `crates/unity` | A generic Unity asset-bundle reader: UnityFS containers (LZMA, LZ4, LZ4HC), SerializedFiles v17 to v23, a typetree-driven value reader and the built-in classes. Knows no game and no title; `check-dependency-rules.py` rule 4 allowlists `oag-bytes` and nothing else, and a game-specific layer sits on top as a separate crate, [ADR-0062](adr/0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md). Outside the determinism-bound crates. |
 | `oag-schema` | `crates/schema` | The `[toml-schema]` header every TOML file of ours carries: kind and major read from its `location`, refused by name when unknown. Depends on `toml`, `serde`, `thiserror` only; its `validate` feature (the reference TOML Schema validator, a pinned git dependency) is switched on by dev-dependencies alone. Read by `oag-ui`, `oag-raceplay` and `oag-trackfile`. [ADR-0064](adr/0064-project-toml-files-declare-a-toml-schema.md). |
 | `oag-trackfile` | `crates/trackfile` | This project's own custom-track format (glb plus TOML manifest) and the `Track` model every importer and exporter targets. Depends on `oag-vex` for the types, `gltf` (no `image`), `serde_json`, `serde`, `toml`. In the determinism scan; forbidden to gameplay crates. [ADR-0063](adr/0063-the-own-track-format-is-glb-plus-a-toml-manifest.md). |
@@ -61,7 +61,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-ai` | `crates/ai` | Opponent behaviour: a line-following driver that emits ship controls. Depends on `oag-core` and `oag-physics` only. |
 | `oag-weapons` | `crates/weapons` | Pickups, projectiles, blasts, beams, disruption and slowdown: what a craft holds, what it fires and what a hit costs. Simulation code, in `GAMEPLAY_CRATES` and the determinism scan. **Below `oag-gameplay`**: `World` and `Ship` embed its state, and it reaches a craft only through the `oag_weapons::Craft` trait, which `oag_gameplay::Ship` implements. Depends on `oag-core`, `oag-physics`, `oag-race` and `oag-tables`. |
 | `oag-gameplay` | `crates/gameplay` | The `World` struct and the input snapshot the simulation consumes. |
-| `oag-replay` | `crates/replay` | Replays: the per-slot input stream as the truth, a state hash a second to catch a desync, and a ghost lap's pose track. Created when M7 opened, per [ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). In `GAMEPLAY_CRATES`: it depends on `oag-core` and `oag-gameplay` and nothing that draws. |
+| `oag-replay` | `crates/replay` | Replays: the per-slot input stream as the truth, a state hash a second to catch a desync, and a ghost lap's pose track. Created when M7 opened, per [ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). The `Timeline` that seeks a race by keyframes ([its page](replay-timeline.md)) lives in `oag-raceplay`'s simulation half; this crate holds the event list and the pose-track chunk (`POSE`, `track.rs`) and still knows no race. In `GAMEPLAY_CRATES`: it depends on `oag-core` and `oag-gameplay` and nothing that draws. |
 | `oag-audio` | `crates/audio` | The mixer and playback device; see [ADR-0018](adr/0018-audio-mixer-architecture.md). |
 | `oag-present` | `crates/present` | The frame between the scene and the glass: `upscale` (blit, FSR/FXAA/SMAA/temporal, grade, screen filter, composite), `drs` (dynamic resolution controller) and `perf` (frame meter, cost breakdown, `SceneStats`). Depends on `oag-display`, `oag-gpu`, `oag-post` and `oag-ui`; the host passes plain data in. Its device-and-`Renderer` composite tests stay in `oag-game`. |
 | `oag-livery` | `crates/livery` | Per-slot ship assets for a race: hulls, skins (`ship_skin::apply`), shield shells, boost plumes, engine lights, wrecks, plus `entry`, the archive entry names they come from. Depends on `oag-mesh` and `oag-fx`, not `oag-render` (cut 2026-10-05). The catalogue half of skin selection (`resolve`) stays beside the race load in `oag-raceplay` (`load/skin.rs`) because it reads `catalogue`. |
@@ -75,7 +75,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-music` | `crates/music` | Soundtrack reading and decoding: a title's music listing (declared, sniffed or Omega's Wwise states) and the ATRAC3+, ATRAC9, MP3 and Wwise decoders. `oag-sound` opens the source through its `Library` and calls it. |
 | `oag-sound` | `crates/sound` | What the game plays: soundtrack selection and the music playlist, the effect banks and cues, HD's authored mix, over the `oag-audio` mixer. Depends on neither `oag-game` nor a title package; the host supplies a `Library` (opens a source as a title, lists disc images) and, per tick, a plain-data `RaceFrame`. `oag-game` keeps `oag_game::sound`, which implements the first and builds the second from a `Race`. |
 | `oag-raceplay` | `crates/raceplay` | A race from load to finish line: `race::load`, the front-to-back tick (`Race`, `RaceSim`), the scene it draws, weapon visuals, scenery effects, the replay and ghost glue, plus what a race load reads with them (`catalogue`, `pilots`, `loader_log`, the `scoreboard` table and the track-panel assets). Renderer-coupled, so it sits above `oag-render`, `oag-fx`, `oag-mesh`, `oag-sound`, `oag-hud`, `oag-livery` and `oag-present` and below `oag-game`; classified in `NOT_TITLE_PACKAGES`, nothing gameplay-side may depend on it. It reaches nothing in `oag-game`: the host builds the loading screen's `Progress` from `LoadProgress`, and the headless capture path (`oag_game::race_capture`) stays behind because it composites the front end's overlays. |
-| `oag-source` | `crates/source` | Finding a title's disc image and opening it as whichever title it is: the image search path (`source`), `title::open_source`, downloadable content (`dlc`), a race's track and craft sources (`remix::Remix`) and the derived-cache directories (`cache`). Split out so the boot, `oag-sound`'s host and `oag-raceplay`'s load can all open a source without one depending on another. |
+| `oag-source` | `crates/source` | Finding a title's disc image and opening it as whichever title it is: the image search path (`source`), `title::open_source`, downloadable content (`dlc`), a race's track and craft sources (`pair::SourcePair`) and the derived-cache directories (`cache`). Split out so the boot, `oag-sound`'s host and `oag-raceplay`'s load can all open a source without one depending on another. |
 | `oag-hud` | `crates/hud` | The in-race HUD and the sprite sheet: layout model, readouts, draw list. Extracted from `oag-game`; the two wgpu passes (`hud_overlay`, `hud_countdown`) stay behind because they need `oag-game`'s `Renderer`. Classified in `NOT_TITLE_PACKAGES` - it reads titles and depends on `oag-race`, and nothing gameplay-side may depend on it. |
 | `oag-ui` | `crates/ui` | The front end: boot movies, menus, the HUD's font, the strings a screen draws. Extracted from `oag-game` the same way `oag-display` was; `oag-game`'s own `render.rs` rasterises the `Draw` list it emits. Classified in `NOT_TITLE_PACKAGES` rather than `GAMEPLAY_CRATES` - menus draw, so it may link a renderer, which is exactly what nothing gameplay-side may ever do. |
 | `oag-ui-screens` | `crates/ui-screens` | The front end's individual screens, built on `oag-ui`'s vocabulary: the campaign map and flyer, the end-of-race screens, the garage and track pickers, the name-entry and confirm prompts, the ticker marquee and the track panel. Split out of `oag-ui`, which keeps the lower core (`frontend`, `menu`, `screen`, `language`, `pointer`, `font`) and never depends back on it. Same `NOT_TITLE_PACKAGES` classification. |
@@ -111,6 +111,17 @@ pool and the occupied slice of ships; `oag_raceplay::tick` passes
 `&mut world.ships[..world.ship_count as usize]`. `MAX_SHIPS` is defined once in
 `oag-weapons`, the lowest crate that needs it, and `oag_gameplay::MAX_SHIPS` is
 that constant.
+
+## Shared helpers and the copies that stay
+
+`oag-bytes` owns `ByteOrder`, the `Option` word readers (`u16_at`, `u32_at`,
+`u64_at`, `f32_at`, and the fixed-order `le::` / `be::` forms) and `cstr_at`;
+`oag_core::math::lerp` is `a + (b - a) * t`. A one-line `lerp` stays local where
+sharing it would add a dependency edge for one function: `oag-tables`
+(`track_stats.rs` has zero dependencies; `ai_race_stats.rs` uses
+`a * (1 - t) + t * b`, which rounds differently, so it must not move), `oag-vex`
+(`probes.rs`, `fog.rs`: no `oag-core` edge) and `oag-ui-screens` (`hex.rs`,
+`pulse.rs`: no `oag-core` edge).
 
 ## Title packages
 
@@ -291,8 +302,9 @@ of 90 and 25-36). The static build is `scripts/build-server-portable.sh musl`
 
 ## Which GPU the tests use
 
-Every GPU test gets its adapter from `oag_gpu::test_adapter` (`request` for one,
-`ordered` to walk several), never from `request_adapter` with defaults: that
+Every in-process GPU test but the capture ones below gets its adapter from
+`oag_gpu::test_adapter` (`request` for one, `ordered` to walk several), never from
+`request_adapter` with defaults: that
 takes whichever adapter the driver lists first, which on a machine with an
 integrated and a discrete GPU is usually the integrated one that also draws
 the desktop. The helper prefers the discrete GPU, and puts the integrated one
@@ -302,6 +314,103 @@ large HD scene tests. `OAG_TEST_ADAPTER=discrete|integrated|<name substring>`
 overrides the choice. The first caller in a process prints the adapter it got
 to stderr (`--no-capture`). A machine with no adapter still skips each test as
 before.
+
+Two kinds of test do not go through the helper and take the driver's default
+adapter, which on a laptop is the discrete GPU: a test that spawns `oag-game`
+(the binary's `adapter::choose` asks wgpu for its default pick) and a test that
+calls `capture_pixels_from`, `capture_pixels_through` or `capture_from` in `oag-mesh`. Those are the
+`gpu-vram` test group below.
+
+## Test groups: the `gpu-vram` cap (2026-11-05)
+
+`.config/nextest.toml` puts the tests that open the default GPU in a test group
+`gpu-vram` of 4 threads (`max-threads = 4`). A group caps concurrency inside one
+nextest run and nothing else: it does not see a second run (the `gate.lock`
+covers that) or a game on the desktop.
+
+**Why.** On a machine whose discrete GPU does not spill device memory into system
+memory (this notebook's 8 GiB NVIDIA RTX PRO 2000 on Linux), sixteen test threads
+put a dozen games on the GPU together. A full `test-data` run before the group
+(`OAG_REQUIRE_GAME_DATA=1`, no `VK_ICD_FILENAMES`, per-process memory sampled
+every 0.5 s with `nvidia-smi -q -x`, peak RSS per test from `wait4`) peaked at
+**7,782 MiB of 8,151** with 13 processes on the GPU, and five HD scene tests failed
+with `wgpu error: Out of Memory` (`hd_weapon_scene_ground_truth` two of its five,
+`hd_plasma_ball_ground_truth`, `hd_bomb_blast_ground_truth`,
+`hd_behind_glass_frame_ground_truth`). The window of each failure sat at 7,565 to
+7,782 MiB. The HD tests are alphabetically adjacent, so nextest starts them
+together.
+
+**Per-process peaks** (81 tests held 50 MiB or more, 57 held 300 MiB or more):
+
+| Test | GPU memory |
+| --- | --- |
+| A spawned game on an HD race (14 tests) | 916 MiB (1,045 for the split and flaps ones) |
+| A spawned game on Pulse, Pure or 2048 | 462 to 788 MiB |
+| `split_screen_ground_truth::omega_two_views_each_keep_their_picture` | 2,575 MiB (the only outlier) |
+| In-process `oag-render::it` tests through `capture_pixels_from` | 73 to 713 MiB |
+| In-process tests through `oag_gpu::test_adapter` | up to about 200 MiB (a context is about 2 MiB) |
+
+**The cap.** (8,151 MiB, less the desktop's 160 to 300, less headroom) over the
+1,045 MiB of the largest ordinary member is 7; the outlier at 2,575 MiB plus six
+more would be 8.8 GiB. At 4 the worst case is 2,575 + 3 x 1,045 = 5.7 GiB plus the
+desktop and the few-hundred-MiB in-process tests, which leaves 1.4 GiB. 4 was
+chosen over 5 because it costs nothing measurable (below).
+
+**Result**, the same tree, the same command, back to back under the gate lock,
+both with the measuring wrapper on (so its overhead is equal):
+
+| Run | Wall | Tests | GPU memory peak | Load (mean of 0.5 s samples) |
+| --- | --- | --- | --- | --- |
+| no group | 981 s | 10,903 passed, 6 failed | 7,782 MiB, 13 processes of 100 MiB or more | 26.4 |
+| `gpu-vram` at 4 | 959 s | 10,909 passed | 4,005 MiB, never more than 4 of 300 MiB or more | 25.5 |
+
+The 22 s is inside the noise of a machine whose load swings 13 to 77, so the
+claim is "no cost seen", not "faster". A replay of the first run's per-test
+walls through a 16 slot scheduler with and without the cap agrees (948 s without,
+947 s at 4, 945 s at 2): the group's 156 tests sum to 1,865 s of the suite's
+14,811, so a cap of 4 leaves 466 s of group work spread over a 950 s run, and the
+other twelve threads always have other tests to start. The same replay at 24
+slots (the desktop) gives 640 s without the cap and at 4, 639 s at 3, 938 s at 2;
+at 32 slots 486 s and 485 s at 4, 626 s at 3. The cap would cost wall clock only
+if the group were most of the suite: at 4 the group's 466 s is a floor under the
+run, so a machine fast enough to finish the rest in under that would feel it.
+A third full run on the final tree, without the wrapper: 10,909 passed in 941 s at
+load 15 to 12; its only red is `check-test-budget`'s 450 s ceiling, which this
+machine always trips.
+
+**The sixth failure is not VRAM.** `campaign_cursor_ground_truth::the_2048_map_reopens_on_the_event_last_started`
+exits with `SIGSEGV` (status 139) in the first run with the GPU at 2,700 MiB,
+and alone on the idle NVIDIA GPU at 787 MiB in 3 of 8 runs; it passed 7 of 7 on
+the Intel ICD. The core dump (`coredumpctl`) shows the crash on the game's
+`race-load` thread at an instruction pointer that is not in any mapping
+(`SEGV_ACCERR`), while the main thread sits in `libnvidia-eglcore` inside an
+`ioctl`. It passed in the second full run, which says nothing about it: a cap
+does not touch it. It is open as a bug in the NVIDIA path, not a test-suite
+problem.
+
+**RAM needed no group.** The largest test by peak resident size is
+`extract_ground_truth::omega::first_circuit_reproduces` at 7.5 GiB; the next are
+the other two Omega extraction tests (7.3, 6.7 GiB), two refraction tests
+(5.1, 4.4 GiB) and `ai_roll_ground_truth` (3.7 GiB). `MemAvailable` never fell
+under 35 GiB of the notebook's 62 across either full run, so no `threads-required`
+or RAM group is set. A smaller machine would see the three Omega extraction tests
+(21 GiB together) first.
+
+**Keeping the list exact.** The group is a list of test modules, so
+`scripts/check-test-groups.py` (`just check-test-groups`, in the gate, a text scan
+with no build) fails when a module in `crates/*/tests/` spawns the game or calls
+`capture_pixels_from`/`capture_from` and is not in the group, when a listed
+module no longer does, when such a marker sits where the list cannot name it (a
+crate without `tests/it*.rs` binaries, an in-crate test module), or when a new
+`request_adapter`/`enumerate_adapters` call site appears. A new module is one line
+in the override's regex. A test that opens a GPU some other way is not caught; teach the script its
+marker (`MARKER`, `OPENERS`) when the sampler shows one.
+
+**Measuring it again.** `nextest` wrapper scripts are experimental
+(`experimental = ["wrapper-scripts"]` in the config file, not set in the repository):
+a wrapper that forks the test command, reads `wait4`'s `ru_maxrss` and writes a
+line per test, plus a sampler that walks each `nvidia-smi -q -x` process back to
+its wrapper through `/proc/<pid>/stat`, give the numbers above.
 
 ## Gameplay state
 
@@ -334,6 +443,10 @@ makes replays and golden tests straightforward.
 - Nothing is published to crates.io, so the prefix exists for readability rather
   than to claim names.
 - Binaries are `oag-*` too, so they are recognisable in a `$PATH`.
+- The engine carries no Remix names; RACE REMIX is the official mod `oag.remix`. ADR-0034, 0035 and 0082 cite the
+  old spellings: `oag_source::remix::Remix` is `oag_source::pair::SourcePair`, `oag_game::remix` is
+  `oag_game::title_lists`, the session's `remix_menu` is `session::queries`, and
+  `SpeedClasses::remix_only` / `is_offered_outside_remix` are `union_only` / `is_offered_on_race_page`.
 
 ## Build profiles
 
@@ -362,8 +475,8 @@ split is by what the loop is, not by crate ownership:
 
 | optimised | left at `opt-level = 0` |
 | --- | --- |
-| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-weapons`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test; `oag-raceplay` (the whole `race/` tick, formerly in `oag-game`, which keeps its own entry for the capture loop) and `oag-render` (the particle systems it steps), added 2026-10-01 (`oag-fx`, `oag-mesh` and `oag-post`, split out of it on 2026-10-05, carry the same entry) - see [the gate-speed section](#the-race-itself-was-the-unoptimised-cost-2026-10-01) | `oag-view`, `oag-input`, `oag-audio` |
-| `oag-disc`, `oag-formats`, `oag-assets` - LZSS, the GS and GE texture swizzles, the `.vex` node walk, and the sector-at-a-time read under them; `oag-video` - demuxing a whole movie a packet at a time; `oag-tables` - a character-at-a-time XML walk over every row on the disc; `oag-texture` - per-texel palette and block-codec loops; `oag-vex` - the node walk over a whole circuit; `oag-pob` - every particle system on a disc parsed and its bytes claimed; `oag-rcs` - the RCSMODEL geometry and material walk; `oag-unity` - the LZMA and LZ4 block decodes and a typetree walk over every object of a Unity bundle | `oag-title`, `oag-pulse`, `oag-pure`, `oag-hd`, `oag-trace`, `oag-tools` |
+| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-weapons`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test; `oag-raceplay` (the whole `race/` tick, formerly in `oag-game`, which keeps its own entry for the capture loop) and `oag-render` (the particle systems it steps), added 2026-10-01 (`oag-fx`, `oag-mesh` and `oag-post`, split out of it on 2026-10-05, carry the same entry) - see [the gate-speed section](#the-race-itself-was-the-unoptimised-cost-2026-10-01) | `oag-view`, `oag-input` |
+| `oag-disc`, `oag-formats`, `oag-assets` - LZSS, the GS and GE texture swizzles, the `.vex` node walk, and the sector-at-a-time read under them; `oag-video` - demuxing a whole movie a packet at a time; `oag-tables` - a character-at-a-time XML walk over every row on the disc; `oag-texture` - per-texel palette and block-codec loops; `oag-vex` - the node walk over a whole circuit; `oag-pob` - every particle system on a disc parsed and its bytes claimed; `oag-rcs` - the RCSMODEL geometry and material walk; `oag-unity` - the LZMA and LZ4 block decodes and a typetree walk over every object of a Unity bundle; `oag-audio`, `oag-music`, `oag-sound` - the mixer, the ATRAC3+/ATRAC9/MP3/Wwise decodes and the soundtrack's segment mixing, per-sample loops over whole songs; `oag-livery` and `oag-trackfile` - every race's hulls and skins, and every circuit's track file written and read back (all five added 2026-11-06, see "Test-data suite measurements") | `oag-title`, `oag-pulse`, `oag-pure`, `oag-hd`, `oag-trace`, `oag-tools` |
 
 The right-hand column is where a debugger actually gets pointed, so it keeps the
 debuggability the paragraph above is about.
@@ -683,7 +796,7 @@ every `oag-game` selection. Three changes, none to an assertion:
   `hd_water_ground_truth` opened `hdfury-ps3-eu-dec.iso` **153,293 times**
   (`strace -e openat`, 76 s user and 63 s system time). The race never does
   this; its loader reads through `oag_assets::Archives`. A test-side cache,
-  `crates/render/tests/archive_cache/`, keeps each `Container` and each entry
+  `archive_cache/` beside the tests (`crates/mesh/tests/`, with a copy in `crates/render/tests/`), keeps each `Container` and each entry
   read for the life of the test. The 20 HD render binaries went from **2,389 s
   of test time to 126 s** (`hd_water` alone 932 s to 15 s).
 - **`ai_roll`'s six full-grid tests and `ram` raced their races in series.**
@@ -716,6 +829,11 @@ above are the ones to compare. `.config/nextest.toml` sets no thread count,
 retries or slow-timeout, so all three are nextest's defaults. A release-profile
 test build was not tried, because every crate on these tests' hot path has
 been at `opt-level = 2` in the dev profile since 2026-10-01.
+
+**The selector was rewritten on 2026-11-10** to follow what a test links, down
+to the test module; its rules, what each could miss and the replay of 50
+merges are in [`affected-gate.md`](affected-gate.md). The paragraph below is
+still the reason a render lane gains little.
 
 **Why the affected gate helps a render lane less than its test count says.**
 Selection is per package, and every `oag-game` test binary links all of
@@ -1189,4 +1307,163 @@ Moved out of `CLAUDE.md`, which keeps the rules and the ceilings.
 - **Skip cache (2026-10-13).** `scripts/test-data.py` records every test binary whose tests all passed in `target/test-data-pass.json`, hashed over the binary's bytes, its package's executables, its crate's `tests/*.rs`, `data/` (size and mtime), the repository files tests read (`REPO_INPUTS`) and the environment variables crates read. The next run skips a binary whose hash still matches and lists every skip by name before and after the run (`test-data: PARTIAL RUN: SKIPPED ...`). It builds with `OAG_GIT_HASH=test-data` so the embedded commit hash does not change every binary; `oag-game` recompiles once (about 45 s) when a plain dev build such as `just play` alternates with `just test-data`.
 - **Skip cache measured, 2026-10-13.** No change: 2.6 s. A string change in `oag-game` reran its 7 binaries (1,936 tests, 387 s at load 15-23). A string change in `oag-texture` relinked 31 crates but only 8 binaries changed bytes (`oag-texture::it` and `oag-game`'s 7), 435 s. A rebuild of unchanged source is byte-identical, so a change the optimiser discards skips everything. `oag-game`'s binaries are most of what any run still pays.
 - **Redundant walks (2026-10-12 trim).** Three binaries read and BC7-decoded every Omega `.gnf`, two copies of one helper LZSS-decompressed all of `WADS2.WAD` to find its banks, four `gxp` tests walked the same packages, and `Archive::peek` decompressed whole entries to return four bytes. See "Trimming redundant walks" above.
+- **What the 2026-11-02 tail pass measured.** Full `test-data --full` runs (10,406 tests), wall and summed per-test time: 430 s and 9,717 s at load 17, then 429.5 s and 9,715 s at load 3 to 13 (user + sys CPU for the perf-wrapped run: 8,617 s on 24 hardware threads, so about 19% of the thread-seconds idle). Four changes were tried, one at a time, each judged by a full run:
+
+  | Change | Test or suite, before | After | Kept |
+  | --- | --- | --- | --- |
+  | `Archives::read_preceding` memoised under `memoising_reads`, trackfile walk opens its archives with it | PS2 walk: 128-130 s wall in the suite, 90 and 114 s of user CPU alone (load 32 and 19); trackfile file 272-277 s summed | 95-98 s in the suite, 62 and 64 s CPU alone (load 42 and 23); file 241-263 s summed | yes |
+  | Autopilot class and difficulty test split into 20 tests (one load each) | one test, 120-124 s summed, 85-130 s wall | 160-168 s summed (four Omega loads at 2.5 GB each now overlap and slow each other: 22 s each in the suite against 17 s serial), longest 23 s | reverted: summed time rose, wall did not fall |
+  | nextest priority tiers (the 26 tests over 45 s at 90, the long tests without `ground_truth` at 40) | 434.5 s and 445 s wall | 463 s and 467 s wall, sys CPU 19.7 against 16.2 min | reverted: starting the heaviest tests together costs more than the tail it saves |
+
+  The two final-state runs (the first change only) read 462.6 s and 493.8 s at load 13-18 at the start and 36-39 at the end, against the 430 s baselines at a quiet machine, so the suite wall clock of this pass is **not** shown to have moved: the machine's own load (other members' builds, not held back by the gate lock) is larger than the change. CPU time moves less with load (user + sys per run, 8,617-8,977 s across all of them) and is the better yardstick. An overlap in one `oag-render` test pair (`omega_normal_map` builds the same Omega circuit models that `omega_transparency`'s 19 tests build, from nine archives against five) is a future share-one-pass candidate, left because the two build from different archive sets and a merge changes what each asserts.
+- **What the `test-trims` pass measured (2026-11-02).** Less work per test, each timed alone (suite times are per-test wall in a loaded run, so read the alone numbers):
+
+  | Change | Before | After | Why the claim holds |
+  | --- | --- | --- | --- |
+  | `an_uncapped_transcode_still_reports_a_total_to_divide_by`: the PS2 intro prefix a sixteenth, not a quarter (still `Extent::Whole`, `refresh: true`) | 30.5 s in the suite; 14-17 s alone at load 43 | 3.1 s and 6.8 s alone at load 50; 7.1 s in the suite | The claim is that an uncapped transcode reports a total the bar can divide by, within 5% of the frames encoded; the probe and the encode both exist for any cut at a pack boundary. |
+  | `a_transcode_reports_its_frames_as_it_encodes_them`: only the first sixteenth of the reel is handed to `movie::open` | 3.8 s | 1.6 s alone | It asserts on the first 24 frames, which the prefix holds. |
+  | `omega_wem_ground_truth::the_decoder_agrees_with_ffmpeg_up_to_polarity`: picks the smallest stereo and four-channel ATRAC9 files by directory size and reads only candidates until both are found | 9.9 s in the suite; 1.2 and 3.1 s alone | 0.2 and 0.3 s alone | Same two files as before (same printed lines), the rest of `data08` was read only to be sorted. |
+  | `omega_transparency`'s Tech De Ra check moved into `omega_normal_map`'s pass over every circuit model | 2.7 and 4.2 s alone (five archives opened, one model built) | 0 extra | It builds the same model; the patch's where the patch ships one. Every assertion held unchanged on the patched model, so no number moved. |
+
+  Left alone: `mp4_movie_ground_truth::the_intro_cache_is_lossless` (33 s in the suite) already transcodes a 90-frame prefix, and the transcode is a cache hit; 12.5 s of the 20 s alone is the byte comparison of all 90 decoded frames, which is the claim. A shorter prefix would drop the frames after the 1.5 s white fade that make the picture proof meaningful.
+
+  The nextest priority 100 for the transcode test never applied: nextest takes the first override that matches for each setting, and the general ground-truth override (50) sat above it. `.config/nextest.toml` now lists the specific one first. A full `test-data --full` after these changes: 10,415 tests, all passed, 449 s per nextest, 10,179 s summed, load 20 at the start and 11 at the end (about 30 between); the tail-pass baselines were 430 s and 9,717 s, so **no suite-level win is claimed**: the run was loaded by other members and these changes remove under a minute of summed time.
+- **What the `test-data-tail` pass measured (2026-11-02).** CPU of the test binary alone (`perf stat -e task-clock`), not wall:
+
+  | Change | Before | After | Why the claim holds |
+  | --- | --- | --- | --- |
+  | `oag-net` `extract_ground_truth::<title>::<race>_reproduces` flies the two races `extract` already loaded (`extract::extract_keeping`) instead of loading each side again: four loads become two | Omega first circuit: 19.6 and 22.6 s CPU at load 12-15 (104 s wall in the suite) | 12.15 and 12.13 s CPU at load 14-17 | Same params, same per-tick hash comparison; the source race is loaded under the recorder and flown after it stops, and the extraction race is flown after `take_misses` ran for the load, with the test's own `take_misses` check still after the flight. Both races are resident at once (the cap used was 14 GB). |
+
+  Not done, with numbers. The `view` half of those loads cannot be switched off at run time: `oag-raceplay`'s `view` is a compile-time feature and the `client` dev-dependency turns it on for the whole `oag-net` test binary (a `perf record` of the Omega test shows texture decode, `gnf::untile_level` plus `bc7`, near 12% of CPU; whole-file reads through the encrypted home filesystem about a third). `omega_transparency`'s 19 circuit tests alone cost 6.2 s (Tower) to 12.0 s (Amphiseum) of CPU each, roughly 170 s in all; five archive opens are about 2 s of each. `omega_normal_map` alone is 18.2 s. Folding the 19 into one pass saves the opens at most (about 40 s) and makes one 170 s single-core test, which the 2026-11-02 tail pass showed to lose; folding them into `omega_normal_map` changes the archive set (nine with the patch against five) and so what each asserts. Left as is. `ai_fork_split_ground_truth` in `in_parallel::map` moves wall to cores without reducing CPU, so it is not a CPU win.
+- **What the `test-data-tail-2` pass measured (2026-11-03).** CPU (user + sys, bash `time` on the test binary alone, run twice, load 2-14; Omega's two states interleaved on one binary through `OAG_EXTRACT_DIR`):
+
+  | Change | Before | After | Why the claim holds |
+  | --- | --- | --- | --- |
+  | `autopilot_original_ground_truth::an_opponent_flies_its_autopilot_by_class_and_difficulty` loads with `ribbon: true` | 47.4 and 47.0 s | 17.9 and 17.9 s | It reads `engage_opponent_autopilot(1)`, which is a rule of class, difficulty and title. The ribbon skips the `.rcsmodel` decode, which dominated a load: each Omega load fell from 8.4 to 3.1 s, HD 1.5 to 0.5 s, 2048 1.7 to 0.6 s. Same twenty loads, same assertion. |
+  | `hd_opponent_variant_ground_truth::every_opponent_flies_its_own_variants_handling_not_the_players` (the file's options set `ribbon: true`) | 35.1 and 34.6 s | 12.0 and 14.1 s | It compares handling and slot tuning, which no art feeds. All four tests in the file pass. |
+  | `extract_ground_truth` writes its extraction under `/var/tmp` (else `target/`; `OAG_EXTRACT_DIR` overrides) instead of `target/` on the encrypting home filesystem | Omega first circuit 12.2 s (sys 6.5), full grid 26.8 and 26.8 s, one lap 11.0 and 10.8 s | 9.4 s (sys 3.7), 17.1 and 15.7 s, 7.6 and 7.6 s | Same extraction and same comparison; only where the bytes go. A 2.2 GB extraction on `/tmp` (tmpfs here) cut sys the same way but would pin that much RAM per test, so `/var/tmp` is the default. |
+
+  A `test-data --full` after these changes: 10,506 tests, all passed, 423 s per nextest, load 16 at the start and 13 at the end (24 at the peak); the slowest test fell from 186 s to 93 s. Against the lead's reads of 423 to 458 s at load ~32 this is not a controlled suite comparison; the per-test CPU table above is the evidence.
+
+  Not done: a run-time sim-only load would also drop the texture decode of the Omega extraction loads (190 `cfg(feature = "view")` sites in `oag-raceplay::load`); the `ribbon` option reaches only the track-art part and an extraction's file set must stay what the lobby reads, so these loads keep the default.
+- **Throughput-bound, not tail-bound (2026-11-05).** One full run (10,889 tests, load 20 to 30): summed test time 14,394 s over 16 threads is 900 s, against 925 s of wall clock, and the slowest test is 124 s, so priority cannot help and only less work can. 389 tests over 10 s hold 71 % of the time. Families by summed seconds: `omega_gnf` 830, `autopilot_original` 617, `omega_transparency` 591, `ai_clean_lap_gate` 541, `omega_wem` 423, `extract` 363, `vita_2048_original_ai` 347, `trackfile` 329.
+- **What the `suite-lane-b` pass measured (2026-11-06).** Summed test time falls from 14,018 s to 12,321 s (-12 %), 10,950 tests, all passed, same command both sides (`flock` on the gate lock, `just test-data --full`, Intel ICD, `OAG_REQUIRE_GAME_DATA=1`), at `8c80fb335` and at the branch: wall clock 896 s to 787 s, load 4 at the start of the first and 8 at the start of the second, 13 to 21 over the minutes before each ended (other work outside the lock ran beside both, so wall is not evidence; the sum moves less). The brief's target was under 9,000 s, so the claim is **false**; the cuts that were honest are below. The "before" column is the same-session rerun at `8c80fb335` (14 of its tests failed on a half-linked `data/` and are filled in with the 2026-11-05 run's times); the 2026-11-05 run sums to 13,895 s.
+
+  | Family | 2026-11-05 | rerun | after | Cut |
+  | --- | --- | --- | --- | --- |
+  | `omega_transparency` | 583 | 568 | 211 | `track_albedo::is_normal_map` decoded a whole 4096 square BC7 level to read 4096 texels; it decodes the blocks the samples fall in |
+  | `omega_gnf` | 806 | 793 | 586 | BC7 decoder: one monomorphised copy per mode, and the three colour lanes interpolated in one multiply |
+  | `omega_music`, `music_resume` | 388 | 400 | 183 | `oag-audio`, `oag-music`, `oag-sound` at opt-level 2 in the dev profile (they were the only hot crates left at 0) |
+  | `trackfile` | 328 | 329 | 212 | `oag-livery`, `oag-trackfile` at opt-level 2; alone the PSP USA walk went from 30 s to 9 s |
+  | `ai_clean_lap_gate` | 518 | 530 | 450 | `tick_sim_only` for the solo runs |
+  | `ai_roll`, `ai_dekonstruct_*`, `vita_2048_original_ai`, `stall_rescue`, `pilot_assist_levels`, `difficulty`, `ai_fork_split` and others | | | | `tick_sim_only`; a few percent each in a loaded run |
+  | `autopilot_original`, `omega_wem`, `extract`, `speed_plan` | 474, 370, 353, 253 | 407, 356, 351, 278 | 413, 370, 346, 276 | no cut that held |
+
+  Alone, in CPU seconds, load 2 to 7 except the decoder row (alternating before and after builds, min of 25, load 14):
+
+  | Change | Before | After |
+  | --- | --- | --- |
+  | `Texture::decode` of a 4096 square BC7 texture | 91 ms | 58 ms (the block decode alone, between two runs at falling load: 85 ms to 40 ms) |
+  | `omega_vineta_k_binds_no_more_lookups_than_known` | 23.9 s | 5.6 s |
+  | `omega_music_ground_truth::songs_slice_0_mix_to_their_segment_length` | 49-54 s CPU, 26 s wall | 27-30 s CPU, 6.3 s wall |
+  | `trackfile_ground_truth::every_pulse_psp_usa_circuit_exports_and_reads_back_the_same` | 30-31 s | 8.7-9.1 s |
+  | `ai_clean_lap_gate::track_01_flash` | 5.2 s | 3.8 s |
+
+  Why each holds. The BC7 change is byte-identical: the decoded pixels of every `.gnf` in the eight Omega archives (hash over `decode` and the first two `decode_bc7_level` levels) are the same before and after, and `bcn::bc7::tests::bc7_matches_the_spec_order_decoder_on_every_mode` passes. `is_normal_map` takes the same texels: over the 12,235 block textures that the 19 Omega circuits, the 2048 circuits and HD's water walk bind, the old (`to_rgba`) and new sample lists compared equal. `quiet_replay_ground_truth` holds `tick_sim_only` equal to `tick` on the world hash every tick for one Pulse pack (eight craft, weapons in every hand); the other converted files were not compared drawn against sim-only one by one, only checked to pass and to read simulation state. For the clean-lap gate all 240 runs (48 rows x 5 perturbed runs) gave the same best lap, contact ticks, end state and deaths drawn and sim-only. The converted tests read `RaceSim` state only (laps, places, respawns, wall contact, driver state); none reads a cue, a message, a camera or the HUD.
+
+  The opt-level 2 entries for `oag-audio`, `oag-music`, `oag-sound`, `oag-livery` and `oag-trackfile` reverse the "left at 0 for debuggability" column above for those five; the build-time cost of the extra optimisation was not measured.
+
+  Measured and dropped. Whole-row `copy_from_slice` in the block scatter: no change. `atrac9dec` at opt-level 3: 12 % on one shard, inside the noise. The `omega_wem` decode is `atrac9dec`, a third-party crate, at about 15 ns per sample (1.6 G samples in 25 s for one shard); the IMDCT in it is already an FFT-shaped butterfly.
+
+  Where the rest is (a CPU sample, in-process `SIGPROF` plus `backtrace`, since `perf` and `samply` are not available: `perf_event_paranoid` is 2 and `ptrace_scope` 1). The fork circuits' AI gate rows spend about two thirds of their CPU learning speed plans (`route_speed_plan`, `hull_ring_for`, `field_speed_plan`: 1.2 to 1.7 s per `Race::start` on `07_Track`), and the clean-lap gate learns them again for each of its five perturbed runs by design (the perturbation reaches the plans). The rest of a tick is `oag-physics` collision queries (`Aabb::overlaps`, the BVH walk, `nearest_reset`) and `oag_ai::Line::walk`. Omega-loading tests that open the `.pkg` spent a quarter of their time inflating PFSC sectors (`miniz_oxide`); fixed 2026-11-06, see the next item. Within an archive 14 to 27 % of `.gnf` texels are byte-duplicates of another entry (data02: 26.6 %); the slices split by `i % 3`, so most duplicates sit in another process.
+
+- **Omega package read and `.gnf` duplicates (suite-decoders, 2026-11-06, Ryzen 9 7900, load 2 to 6).** `oag-disc` inflates PFSC sectors with `zlib-rs` (through `flate2`, already in the build for `chd` and `zip`) instead of `miniz_oxide`, and decrypts a 4 KiB XTS sector as one batch instead of a block at a time. A direct read of `data05.psarc` (685 MB) out of `omega-ps4-eu-patch.pkg`: 365 MB/s, then 455 with the inflate change, then 552 with the batched XTS; the byte hash is the same in all three. `perf` before: `miniz_oxide` 53 %, XTS 20 %. `omega_flies_the_original_autopilot` 9.25 s to 6.86 s. Tests that read `data/extracted` instead of the `.pkg` (`extract_ground_truth`, the `.gnf` sweeps) are unchanged: 7.2 s and 7.3 s. A `.gnf` slice's CPU is 60 % BC7 block decode, 11 % `decode`, 9 % untile; PSARC reads are under 2 %. Duplicate `.gnf` memoisation is not built: see the handover thread for the numbers.
+- **What the `speed-plan` pass measured (2026-11-06).** Speed-plan learning and every race tick got cheaper with the simulation bit-identical. Same command both sides (`flock` on the gate lock, `just test-data --full`, Intel ICD, `OAG_REQUIRE_GAME_DATA=1`), at `6cfd80309` and at the branch: summed test time 12,611 s to 10,753 s, wall clock 804 s to 688 s, 10,961 and 10,966 tests, all passed. Load 6 at the start of the before run and 18 at the start of the after run, so the after run was the more contended one.
+
+  | Family, summed seconds | Before | After | Change |
+  | --- | --- | --- | --- |
+  | `ai_clean_lap_gate` | 447 | 239 | -47 % |
+  | `autopilot_original` | 372 | 256 | -31 %: the Pulse circuit tests about halve; the load-bound ones hold (`an_opponent_flies_its_autopilot_by_class_and_difficulty` 83 to 77 s, about 70 % `miniz_oxide` and AES) |
+  | `vita_2048_original_ai` | 327 | 259 | -21 %; `miniz_oxide` and PVRTC on the load stay |
+  | `speed_plan` | 280 | 142 | -49 % |
+  | `ai_roll` | 227 | 121 | -47 % |
+  | `ai_dekonstruct_*` | 234 | 104 | -56 % |
+
+  One row, `ai_clean_lap_gate::track_07_flash`, user cycles on the P cores (`perf stat -e cpu_core/cycles/u`, repeat runs agree to 0.1 G, load 2 to 4), one change at a time (the rows from `reset_colliders` to `PadVolume::contains` were read with the two dropped changes below in the tree; the branch's own tip reads 18.9 before the last row):
+
+  | Change | G cycles | Why it is bit-identical |
+  | --- | --- | --- |
+  | Base | 36.4 | |
+  | `Line::with_strides` tabulates `max_curvature_stepped` for the span a driver asks every tick (11 units, `Tuning::curvature_span`): about twenty curvature readings a tick, three walks each | 28.4 | Each entry is what the walk computes at that sample, from the same index; any other span still walks. `a_tabulated_line_reads_the_same_bits_as_the_walk` |
+  | `CollisionWorld::reset_colliders`: a reset contact asks only the reset colliders | 25.5 | The same colliders in the same ascending order; the tie rule is untouched |
+  | Dense positions for `Spline::nearest`, no root unless the square is smaller | 24.7 | A length is the root of its square, so a square no smaller cannot be strictly nearer; the comparison that decides stays on lengths |
+  | `takeoff_within` tabulated at `RUN_UP_REACH` | 24.1 | As the strides |
+  | `PadVolume::contains` stops at the first axis outside | 23.5 | The length is zero exactly when every axis's square is. `contains_agrees_with_the_distance_at_every_face` |
+  | `Raycaster::region`: a hull's ten probes share one broadphase walk, in `wall::resolve` and `plan::clearance` | 18.9 | A triangle whose box overlaps a segment inside the union overlaps the union, so each probe filters the candidates by the box test its own walk would have made, ascending. `a_region_answers_each_ray_as_its_own_walk_does` |
+  | `Positions::nearest`: spheres round runs of 32 samples rule out most of the table | 17.9 | Only a run wholly past a length some sample cannot exceed is skipped, with a slack of 1e-4 over rounding of a few parts in ten million. `the_answer_is_the_scans_to_the_bit` |
+
+  Equivalence: all 240 runs of `ai_clean_lap_gate` (48 rows, five perturbed runs each) give the same best lap, contact ticks, end state, deaths and end-of-run `RaceSim::state_hash` before and after (`diff -r` empty on a throwaway dump of those fields); `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` prints the same twelve lines. No golden hash or determinism constant moved. Measured and dropped, each within the noise on `track_07_flash` and `track_01_flash`: stored segment lengths for `Line::walk` (+0.6 G cycles alone, -0.2 G at the tip, a table load is not cheaper than a root); a BVH node holding both children's boxes (-0.1 G; the walk averages 18 nodes and 7 leaf tests a query and its cost is branch misses, 25 M queries a row); `Aabb::overlaps` without early exits (no gain). What is left on that row: the single rays (`hover`, `maglock`, `clip`, `sweep`) are 14 % in `Indices::overlapping`, `CageTrack::locate` 3 %, `PadVolume::contains` 5 %, `hull_probes` 5 %.
+- **What the second `speed-plan` pass measured (2026-11-11).** A plan build no longer drives twice what it would drive identically ([`ai.md`](../gameplay/ai.md), "What a build does not drive twice"). Before is `24c1235df`, after the branch; one process each, `learn_speed_plans` on a clone of the started race, process CPU (user plus system of every thread, `/proc/self/stat`) and physics steps actually driven (a counter in `Course::tick`, both in a throwaway unit test). Median of 12 learns a side, the two binaries run turn about, load average 5 to 9, test profile. Every learned plan, report and step count compared as the whole `LearnedPlans` printed with `{:#?}`: byte-identical on all five fields.
+
+  | Field | Physics steps before | After | CPU before | After |
+  | --- | --- | --- | --- | --- |
+  | Pulse `07_Track` RAPIER | 328,295 | 253,877 (-23 %) | 1.07 s (1.03 to 1.14) | 0.91 s (0.88 to 0.96), -15 % |
+  | 2048 `altima` RAPIER | 218,704 | 157,494 (-28 %) | 1.18 s (1.13 to 2.23) | 0.97 s (0.94 to 1.02), -18 % |
+  | Pulse `06_Track` RAPIER | 242,388 | 149,233 (-38 %) | 0.76 s (0.73 to 0.83) | 0.56 s (0.53 to 0.58), -27 % |
+  | Pulse `01_Track` PHANTOM | 88,992 | 55,979 (-37 %) | 0.35 s (0.33 to 0.36) | 0.27 s (0.25 to 0.29), -23 % |
+  | 2048 `sol` RAPIER | 618,097 | 416,098 (-33 %) | 5.37 s (5.26 to 5.51) | 3.88 s (3.80 to 3.97), -28 % |
+
+  Where the steps were before: on `07_Track` calibration 3,068, learning 158,562, verification 166,665; on `altima` 10,661, 86,131 and 121,912. Verification is half of a build and calibration 1 to 5 %. Measured and not done: the `pad` closure's `Vec` per tick (`malloc` and `free` together 0.2 % of the profile); caching the clearance test across read-back ticks (the whole test is 9 % of the remaining CPU on `07_Track` and 11 % on `altima`, measured by stubbing it, and only the ticks one verification hands on to the next would hit a cache). What is left is not repeated work: each other hull's first verification of the reference's plan (two laps per hull, per ring and per route), the ticks a learning pass rewinds over, and the rest of a verification once a lowering on the second lap has changed what the first lap is asked. The in-tree comparison is `cargo nextest run -p oag-raceplay --lib --run-ignored all --no-capture speed_plan_overlap`, which prints the wall time of both ways on `07_Track` and `altima` and asserts the plans equal.
+- **What the `test-tail-3` pass measured (2026-11-13): the texture decoders.** The lead's batch gate put `gxt_ground_truth::every_shipped_gxt_parses_and_every_known_format_decodes` at 53 s and the 18 `omega_gnf_ground_truth` slices at 467 s summed. Both are `oag-texture` decode loops, so the win is in the decoder, with every file still decoded and every assertion unchanged. Measured with the test binary run alone (`--ignored --exact`), bash `time` user CPU, the old and the new binary run turn about, plus a scratch bench that decodes the same files and FNV-hashes every output byte (the hash is the identity proof; the bench is not committed).
+
+  | What | Before | After |
+  | --- | --- | --- |
+  | `gxt_ground_truth` test alone, user CPU | 27.8 and 29.6 s (load 6 and 10) | 13.7 s (load 10); 20.4 s in the one run at load 17 |
+  | The 9,910 `.gxt` decode in the bench: `PVRTII4BPP` (8,430 textures, 1,083 M texels) | 20.7 and 21.3 s (51 M texel/s) | 7.5 s (145 M texel/s) |
+  | the same, BC1/2/3 (1,368 textures, 948 M texels) | 6.7 s (130 to 150 M texel/s) | 3.6 s (255 to 266 M texel/s) |
+  | the same, all formats | 25.2 and 25.8 s | 11.1 and 11.3 s, hash `e73417b45a0585df` both |
+  | `omega_gnf_ground_truth::data01_slice_1` user CPU | 11.75 and 11.59 s | 8.11 and 8.13 s |
+  | The Omega bench (every 60th `.gnf` of `data01.psarc`), callgrind instructions | 17.58 G | 12.96 G (-26 %), same output hash |
+  | `omega_normal_map_ground_truth` alone, user CPU | 18.4 s | 16.2 s |
+
+  What changed, and why each is byte-identical. (1) `PVRTII4BPP` (`pvrtc.rs`) untwiddled, unpacked and colour-split each word once per quad it belongs to (four times), through a `twiddle` that rebuilt both bit masks on every call; it now unpacks each word once, and a quad without a hard transition (about 93 % of them, bit 15 of its top-left word) goes through `smooth_quad`, which reads only the 16 modulation codes the old 8x8 grid let through and blends four-lane `i32` colours with the same integer steps. A hard-transition quad still takes the old `quad`. `random_surfaces_decode_the_same_as_the_word_by_word_path` holds the new decode equal to the old word by word one on random surfaces of seven shapes, hard transitions in about half of the words. (2) `Twiddle` (`gxt.rs`) scatters every column and row once per surface; `the_twiddle_tables_agree_with_the_per_cell_computation` holds it to the per-cell algorithm. `argb8888`, `rgb888` and the BC `blocks` walk use it (Argb8888 33 to 830 M texel/s). (3) `gnf::decode::untile_level` read a block per output block in raster order, which strides through each tile row's 1 KiB tiles and misses cache on every block (a `perf record` put 44 % of `omega_normal_map`'s CPU on the one load of a block's first byte); it now walks the file's own order, tile by tile, and copies each block into a run of eight in its output row. A level that stops short of a tile falls back to the block walk, which names the first missing block, so errors are unchanged (`a_short_level_names_the_same_missing_block`). (4) BC7 (`bc7.rs`): `read_indices` takes each index from the window by its absolute start (an add chain rather than a shift chain) and inlines into the mode-specialised decoder; a mode whose one index drives colour and alpha (all but 4 and 5, none of which rotates) interpolates the four channels in one multiply; `row_major_blocks` copies a block wholly inside the picture as four rows of four. `bc7_matches_the_spec_order_decoder_on_every_mode` still holds. Ground truth: the unchanged `gxt_ground_truth` and `omega_gnf_ground_truth` assertions pass, and the bench's output hash is identical before and after for every `.gxt` (`e73417b45a0585df`) and for every fourth and every sixtieth `.gnf` of `data01.psarc` (`5c1f2022d6b03986`, `d67e40cea44ab3b3`).
+
+  `just test-data --full` under the gate lock on this branch (`OAG_REQUIRE_GAME_DATA=1`, other members building alongside, load 9 to 25): 12,363 passed, **suite 407 s** of 450, slowest test 59 s (`omega_normal_map`), against the lead's 466 s and 81 s at `4e2367b42` under heavier load. The 18 `omega_gnf` tests summed 318 s (467 s), `gxt_ground_truth` 44 s (84 s). Wall time followed the machine's load more than the change, so the per-test user CPU above is the measure.
+
+  Measured and not done: the hard-transition quads are now about a third of what is left of the `PVRTII4BPP` decode; a `smooth_quad`-shaped path for them needs the old `quad` kept as the test reference, for roughly 1.5 s of the test's 13.7. `omega_normal_map` is 19 % `untile_level` after the change; most of the rest is the shader and model build. The eliminator pace test (`hd_eliminator_hud_ground_truth`) is 106 s of user CPU over 12 races on four threads each, all simulation: no decoder work to remove, and the simulation must not change.
+- **What the `test-tail-4` pass measured (2026-11-16): sim-only ticks and loads without art.** The lead's full run on `ed3bc1f24` (12,686 tests, load average about 19) took 506 s against the 450 s ceiling, with `hd_eliminator_hud_ground_truth`'s Novice pace test at 95 s. Two levers, both test-side, both used before: `Race::tick_sim_only` (the hash-identical step `tick`'s doc comment describes) for a test that reads simulation state, and `ribbon: true` for a load whose assertions read the setup, the loader report or the sim (the ribbon skips the `.rcsmodel` decode). A profile of the Elite pace test showed why they pay: 25 % of its CPU was `oag_fx::psys`, `exhaust` and `fat_line` work that a drawn tick does and a score race never reads, and about 20 % was the load's `.rcsmodel`, zlib and sound-bank decode. Measured with each test binary run alone (`--ignored --exact`, bash `time` user CPU), the old and the new binary turn about, twice; the load average at the start is in brackets.
+
+  | Test or file | Before, user CPU | After, user CPU |
+  | --- | --- | --- |
+  | `a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace` (24 races) | 223.9 (45) and 188.3 (40) s | 117.0 (44) and 79.7 (20) s |
+  | `an_elite_score_eliminator_takes_more_than_a_few_laps` (12 races) | 95.4 (63) and 62.1 (27) s | 46.2 (45) and 32.1 (18) s |
+  | the other three loading tests of that file | 4.4 and 2.8, 3.5 and 2.2, 5.7 and 3.7 s | 2.2 and 1.4, 1.9 and 1.2, 2.5 and 1.6 s |
+  | `pilot_assist_levels_ground_truth::titles_without_a_level_run_2048s_and_labelled_so` | 26.1 (11) and 25.7 (7) s | 10.4 (8) and 10.4 (6) s |
+  | `omega_original_ai_ground_truth` (file) | 30.9 s (33) | 14.6 s (28) |
+  | `vita_2048_original_ai_ground_truth` (file) | 111.9 s (25) | 61.6 s (22) |
+  | `hd_ai_craft_laws_ground_truth` (file) | 31.0 s (20) | 14.9 s (19) |
+  | `replay_ground_truth::omega_single_race_rebuilds_from_its_header_at_tick_zero` | 16.1 (14) and 14.7 (20) s | 11.4 (29) and 10.2 (12) s |
+  | `replay_ground_truth::omega_time_trial_rebuilds_from_its_header_at_tick_zero` | 24.2 (13) and 22.1 (26) s | 27.4 (20) and 17.3 (15) s |
+  | `spawn_heading_ground_truth::the_psp_pulse_pressing_carries_no_stale_slot` | 9.2 (15) and 9.1 (13) s | 6.3 (14) and 6.3 (11) s |
+  | `spawn_heading_ground_truth::every_forward_hd_craft_slice_0_...` (one of eight slices) | 6.9 (15) and 6.8 (11) s | 3.0 (13) and 3.0 (10) s |
+  | `speed_plan_ground_truth` (file; its two ring-plan loads) | 79.7 (42) and 76.8 (46) s | 72.0 (45) and 50.6 (45) s |
+  | `ai_fork_split_ground_truth` (file; its 2048 run) | 4.2 and 4.3 s (43, 42) | 3.2 and 3.3 s |
+
+  Alone, the Novice test went from 50 s of wall to 34 s in a 12-way run beside the Elite one, and the Elite one from 18 s to 9 to 13 s; user CPU is the yardstick because the load average was 5 to 60 during this pass. **The sum of the CPU these changes remove is about 300 s**; over the suite's 24 threads that is on the order of 12 s of wall, so this pass alone does not bring a 506 s run under 450 s (the same tree read 411 s on 2026-11-13 at a quieter load). What to take from the pass is the method and the guard below.
+
+  **Why each change keeps its assertions.** `tick_sim_only` is the replay step of a reconciliation: the state hash after N of them equals the hash after N drawn ticks (`reconcile.rs`), and the eliminator's results board, which `assert_board_ranked_on_points` reads, is captured on a quiet tick too. All 36 pace races (24 Novice, 12 Elite) were run once with the drawn `tick` and once with `tick_sim_only` plus the ribbon, and every outcome (laps, tick the race ended on) is identical, so the medians the two tests assert are the same numbers. For `ribbon: true`, a `Setup` was compared field by field with and without it (a scratch probe, `{:?}` of each top-level field, 74 loadable tracks: Pulse PSP USA and EU (12 each), Pulse PS2 (16), HD forward and reversed (21), Omega forward and reversed (12), 2048 (1); Pure had no track by that name), and the state hash after 2,400 autopilot ticks on every title's default circuit in single race and time trial. **The ribbon is not neutral on Pulse.** `pulse_psp` is `vex_geometry && ...` in `oag-raceplay`'s `load`, and `vex_geometry` is false under the ribbon, so a Pulse PSP or PS2 load drops its track statistics and `finished_thrust.skill` reads 2.0 where the disc gives 4.0; `original_ai.rs` falls back on that skill. The Pulse-sourced tests (`ai_clean_lap_gate`, `ai_roll`, `ai_dekonstruct_black`, `ai_dekonstruct_symptoms`, `autopilot_original`, `speed_plan`'s Pulse loads, `ai_fork_split`'s 05_Track) therefore keep their art loads, and `replay_ground_truth` uses the ribbon on Omega only. On HD, Omega and 2048 the only fields that differ are view fields (`destroy_stations`, `intro_camera`, `intro_voice`, `hull_points`, `scenery_fx`, HD's `spu_vertex_lights`). Each changed file's printed output (the tables and medians its tests print) was diffed before and after: identical apart from thread ids, line numbers and timings. The Pulse-ribbon difference is a trap for any later "load without art" change: compare the `Setup` before trusting it.
+
+  Measured and not done. `hd_env_probes_ground_truth::every_circuit_loads_probes_...`: its claim is that no circuit surface is tagged as reading a probe, which is vacuous without the track surfaces built. `trackfile_ground_truth` (PS2 export) and `spawn_heading_ground_truth`'s PS2 sweep read the track model itself (`loaded.track_model`). `omega_normal_map_ground_truth::omega_circuits_bind_the_normal_map_their_programs_decode`: its census is over the built art of 25 circuit models (`psp2::build`, in `oag-mesh`'s source), so only a parallel loop would help, which moves wall time and not CPU. **The Novice pace test does not split.** Its claim is the median over all 24 seeds, so no seed's race can be dropped or stopped early, and a race that ends is what `assert_board_ranked_on_points` reads; the 24 loads cannot be shared either, because the seed picks the roster (`load/roster.rs`) and the difficulty is part of the load. What is left of the test is raycasting (`oag_physics::collide::bvh`, 40 % of it) and, per load, the sound-bank ADPCM decode and zlib inflate (about 10 %); a run-time sim-only load switch in `oag-raceplay::load` would take that, and is still open.
+- **What the `test-merge` pass measured (2026-11-16): disc tests that repeated one setup.** Nextest runs each `#[test]` in its own process, so a walk, a load or a flight is saved only when one test makes it once. Each row is the test binary run alone (`--ignored --exact`, `/usr/bin/time` user CPU; the 2048 walk is the whole `nextest` run of the filter, user CPU, compile already done), run two or three times; the load average at the time is in brackets. Wall time of a set that already ran in parallel did not move; the saving is CPU and so the contended suite.
+
+  | Change | Tests | Before | After | Why the claim holds |
+  | --- | --- | --- | --- | --- |
+  | `psp2_rcsmodel_ground_truth` and `psp2_rcsmodel_material_ground_truth`: eight corpus claims fed by one walk of the 993 `.rcsmodel` (a `Claim` each) | 10 to 3 | 94 s user CPU (load 43 to 49) | 13 s (load 49 to 60); the walk test 15.7 to 17.1 s wall | Every claim keeps its assertions and messages (the printed census lines are identical); the crate's `it` binary went 181 to 174 tests and the skipped count did not change, so no `mod` line was lost. |
+  | `magstrip_wire_hd` and `_2048`: the `every_craft...` guard probed the image instead of loading a full race to skip | 0 | HD 4.5 s, 2048 5.2 s (load 28 to 36) | HD 2.7 s, 2048 3.4 s (load 40 to 46) | A race load is 1.8 s of CPU. `fly` still loads and asserts the ribbon texture. |
+  | `magstrip_wire_hd`: `every_craft...` folded into the hum flight (the audio and no-audio `Log`s were compared field by field in one run first: equal); hum voices checked on that flight's race; the pad, `none` and paused rumblers share one flight (their pad writes, tallies and counts were compared against three separate flights first: equal) | 6 to 4 | 24.7 s summed (load 24) | 16.8 s summed (load 30 to 34) | A `Rumbler` takes `&Race`; the proof is empirical. All its `tick`s run before the single `drain_cues`. The autopilot flight changes the simulation and stays alone, as does the wall run. |
+  | `omega_held_loops`: the five cases over one settled race and one `Audio` | 5 to 1 | 14.6 s summed (load 27 to 34) | 3.0 to 3.1 s (load 23) | Each case first asserts the pool is back at idle, so a leftover voice fails the case that meets it. The five loop counts printed are the old ones. The race and the audio open were nearly all of each test. |
+  | `split_hud`: the six HD two-view tests over three loads (one, two, three views) | 6 to 1 | 15.5 s summed (load 16 to 19) | 6.9 s (load 51 to 54) | Each claim that runs a race starts it from a clone of the two-view `Setup` (`Setup` is `Clone`). |
+
+  Measured and not done. The two four-player `split_hud` tests (0.4 s each) share a load, but a fold saves 0.4 s. `magstrip_wire_2048`'s tests each take 3 to 5 s and share no flight. The thread estimates for these groups were 3 to 5 times too high for `omega_held_loops` and `magstrip_wire_hd` because they read the log at load 19; the loads, not the holds, were the cost.
+- **Inflate unified on `flate2` (inflate-unify, 2026-11-06, Ryzen 9 7900, load 2 to 14).** PSARC and WAD blocks (`oag-formats`) and `.vpk` entries (`oag-disc`) inflate through `flate2`'s `zlib-rs` backend, like the PFSC sectors, so direct `miniz_oxide` 0.9 left the workspace (`cargo tree --workspace -i miniz_oxide` shows only 0.8.9: `png` asks for `flate2`'s default `rust_backend`, which keeps it in the tree; `flate2` compiles that backend in only when no zlib feature is on, and `zlib-rs` implies one). Direct measure: a scratch sweep that reads every entry of an archive through `oag_assets::psarc::Archive::read` and times the reads, release build. HD PSN (`data01` to `data04`, 6,678 entries, 2.24 GB): 4.18 to 4.31 s before, 2.94 to 2.97 s after (**-30%**; `perf stat` cycles:u 31.2 G to 24.1 G). HD Fury disc (`hdfury-ps3-eu-dec.iso`, seven archives, 11,671 entries, 4.1 GB; the corpus the earlier -9.3% was taken on): 9.2 to 10.5 s before, 6.7 to 6.8 s after at load 12 to 14 (**-27 to -35%**). 2048 `data.psarc` (18,431 entries): about 5.5 s to 3.9 s at load 4 to 9 (best of five each). `.vpk` (2048 base, patch and both DLC, 1,988 entries, 9.7 GB): 3.32 s to 1.54 s. `perf` of the old sweep: `miniz_oxide` inflate, match copy, Adler-32 and table setup were about 53% (HD) and 50% (2048) of it, the rest being the sweep's own hash. Share of a real load, after the change: a headless HD Fury race load (`--race --screenshot --ticks 1`, `target/debug/oag-game`) spends 10.4% of its CPU samples in `zlib_rs` (`inflate_fast_help_avx2` 7.9%); the same load before is about 18% by arithmetic from the sweep's 1.9 times faster inflate, not measured. The same load also spends 25% in `memchr_aligned` and `CharSearcher::next_match` (string searches): `InstanceFlags::DEBUG` in a debug build, gone since (`load-time.md`, "`memchr` and `CharSearcher` in a debug build"). Output identity: an FNV-1a hash of every entry's bytes, plus the error text of every failing entry, is identical before and after for 44 `.psarc` files under `data/extracted` (110,421 entries, 74 GB: HD PSN and PS3 update chains, Omega base and patch, 2048 base, patches and DLC), the seven Fury archives, all four `.vpk` files, and every Pulse and Pure WAD (12,789 entries). No shipped WAD sets the zlib bit (`docs/formats/wad.md`), so the WAD sweep does not exercise inflate; `decompress_zlib` is covered by the archive tests, which use real deflate output. Omega archives store almost nothing deflated and are unchanged within noise. `miniz_oxide`'s flags checked the Adler-32 and so does `zlib-rs`, and a truncated stream is refused by both: `a_block_is_inflated_only_when_its_whole_stream_checks_out` pins a bad checksum, a short stream and a block larger than its room all falling to the raw fallback.
 - **Affected gating (2026-10-07).** `scripts/affected.py` selects the packages a branch changed since its merge base with `main` plus their dependents. Each of `oag-game`'s five test binaries links the whole crate, so a lane in `oag-mesh`, `oag-render` or `oag-fx` still selects most of the suite's time; the saving lands on lanes in the format, texture, UI and title crates.

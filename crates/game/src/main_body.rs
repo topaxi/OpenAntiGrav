@@ -1,7 +1,8 @@
 
+
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
-use log::warn;
+use log::{info, warn};
 use oag_game::{launcher, loading, settings};
 use oag_raceplay as race;
 use oag_source::source;
@@ -22,6 +23,8 @@ use winit::event_loop::{ControlFlow, EventLoop};
 mod app;
 #[path = "main/args.rs"]
 mod args;
+#[path = "main/campaign_editor_stage.rs"]
+mod campaign_editor_stage;
 #[path = "main/campaign_stage.rs"]
 mod campaign_stage;
 #[path = "main/clipboard.rs"]
@@ -33,6 +36,11 @@ mod cli;
 mod drive;
 #[path = "main/frontend_stage.rs"]
 mod frontend_stage;
+#[cfg(target_os = "linux")]
+#[path = "main/wallpaper.rs"]
+mod wallpaper;
+#[path = "main/from_png.rs"]
+mod from_png;
 #[path = "main/gpu.rs"]
 mod gpu;
 #[path = "main/headless.rs"]
@@ -41,6 +49,8 @@ mod headless;
 mod hints;
 #[path = "main/launcher_stage.rs"]
 mod launcher_stage;
+#[path = "main/loading_icon.rs"]
+mod loading_icon;
 #[path = "main/loading_stage.rs"]
 mod loading_stage;
 #[path = "main/menu_stage.rs"]
@@ -77,12 +87,17 @@ mod session;
 mod stage;
 #[path = "main/touch.rs"]
 mod touch;
+#[path = "main/soft_keyboard.rs"]
+mod soft_keyboard;
 #[path = "main/typing.rs"]
 mod typing;
 #[path = "main/window.rs"]
 mod window;
 #[path = "main/windows.rs"]
 mod windows;
+#[cfg(target_os = "linux")]
+#[path = "main/x11_refresh.rs"]
+mod x11_refresh;
 
 use crate::app::App;
 use crate::args::{autopilot_pilot, give_weapon};
@@ -130,6 +145,7 @@ use crate::pose::{
 fn init_logging() {
     oag_log::install("warn,oag=info,calloop=error", oag_log::tool::FILE_FILTER);
     oag_log::install_panic_hook();
+    oag_input::pad::silence_on_panic();
 }
 
 /// Opens the log file once the command line and the settings file are known,
@@ -194,7 +210,7 @@ fn main() -> Result<()> {
     let result = run(cli);
     // Every route out of `run` has dropped its session by now; a worker still inside the driver
     // must finish before the process exit tears the driver down under it.
-    oag_game::gpu_workers::finish();
+    oag_thread::gpu_workers::finish();
     oag_log::flush();
     result
 }
@@ -208,6 +224,10 @@ fn main() -> Result<()> {
 fn android_main(app: winit::platform::android::activity::AndroidApp) {
     oag_mobile::android::prepare(app);
     init_logging();
+    match oag_mobile::android::install_official_mods(std::path::Path::new(oag_mod::OFFICIAL)) {
+        Ok(done) => log::debug!("official mods in {}: {done:?}", oag_mod::OFFICIAL),
+        Err(why) => log::warn!("official mods not installed: {why}"),
+    }
     let args = oag_mobile::android::take_launch_args();
     if !args.is_empty() {
         log::info!("launch arguments from {}: {args:?}", oag_mobile::android::LAUNCH_ARGS_FILE);
@@ -216,7 +236,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
         Ok(cli) => run(cli),
         Err(why) => Err(anyhow::anyhow!("launch arguments: {why}")),
     };
-    oag_game::gpu_workers::finish();
+    oag_thread::gpu_workers::finish();
     oag_log::flush();
     if let Err(why) = result {
         log::error!("oag-game exited: {why:#}");
@@ -232,7 +252,7 @@ fn new_event_loop() -> Result<EventLoop<()>> {
     Ok(EventLoop::new()?)
 }
 
-fn run(cli: Cli) -> Result<()> {
+fn run(mut cli: Cli) -> Result<()> {
     // Ahead of settings and the disc search, deliberately: rasterising the
     // icon needs neither, and `just install-desktop-file` /
     // `scripts/build-appimage.sh` both call this on machines that may have no
@@ -242,8 +262,7 @@ fn run(cli: Cli) -> Result<()> {
         // **Validated here, because `rasterize`'s `expect` is not a CLI error
         // message.** That function's own docs say no player input reaches it;
         // `--icon-size` does, and `--write-icon out.png --icon-size 0` panicked
-        // rather than saying what was wrong. Finding G2 of the 2026-08-18
-        // review.
+        // rather than saying what was wrong.
         anyhow::ensure!(cli.icon.icon_size > 0, "--icon-size must be at least 1");
         let oag_game::icon::Rgba {
             width,
@@ -256,11 +275,32 @@ fn run(cli: Cli) -> Result<()> {
         return Ok(());
     }
 
+    if let Some(path) = &cli.shot.png_info {
+        return from_png::info(path);
+    }
+    let restage = match cli.shot.from_png.clone() {
+        Some(path) => Some(from_png::prepare(&mut cli, &path)?),
+        None => None,
+    };
+
     // Loaded (and, on first run or a missing key, written back complete) before
     // anything else: a bad value in the file should fail immediately, not eight
     // seconds of intro later.
     let mut settings = settings::load()?;
     attach_log_file(&cli, &settings);
+    if cli.probe_pad {
+        info!("--probe-pad: printing pad events until stopped; no window opens");
+        return oag_input::probe::run(&mut std::io::stdout(), || false).map_err(anyhow::Error::msg);
+    }
+    #[cfg(feature = "dev-cli")]
+    if let Some(pattern) = &cli.dev.rumble_pattern {
+        return oag_game::rumble::probe(&oag_game::rumble::Probe {
+            pattern,
+            source: cli.source.as_deref().or(settings.source.image.as_deref()),
+            token: &settings.controls.rumble,
+            hold: cli.dev.rumble_hold,
+        });
+    }
     let anisotropy = cli.anisotropy.unwrap_or(settings.graphics.anisotropy);
     // A CLI render-profile flag overrides *every* title's entry for this run
     // only - never persisted, the same footing `anisotropy` above is already
@@ -300,7 +340,8 @@ fn run(cli: Cli) -> Result<()> {
     let mode = oag_race::Mode::from_name(&cli.mode)
         .with_context(|| {
         format!(
-            "{:?} is not a race mode; try time_trial, speed_lap, zone, single_race or head_to_head",
+            "{:?} is not a race mode; try time_trial, speed_lap, zone, single_race, eliminator, \
+             head_to_head or detonator",
             cli.mode
         )
     })?;
@@ -313,7 +354,7 @@ fn run(cli: Cli) -> Result<()> {
         anyhow::ensure!(
             people <= most,
             "{} takes at most {most} people and {people} are seated (--players or \
-             --window-seats): it is two craft, one against the other",
+             --window-seats)",
             mode.name()
         );
     }
@@ -374,12 +415,18 @@ fn run(cli: Cli) -> Result<()> {
         .map_or(oag_audio::MIN_BUFFER, |frame| {
             frame.mul_f32(2.5).max(oag_audio::MIN_BUFFER)
         });
-    let audio = oag_sound::Audio::open(
+    let mut audio = oag_sound::Audio::open(
         &settings.audio,
         cli.dump_audio.clone(),
         tap.as_ref(),
         buffer,
         cli.no_audio,
+    );
+    // The shuffle is presentation randomness: the clock seeds it, the simulation never sees it.
+    audio.seed_music_shuffle(
+        web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_nanos() as u64),
     );
 
     let (pose, camera) = match &cli.pose_from {
@@ -461,7 +508,7 @@ fn run(cli: Cli) -> Result<()> {
         .or_else(|| cli.track_file.clone())
         .map(|path| race::foreign::entry(&path))
         .transpose()?;
-    let (definition, menu_source) = prepare::definition(&cli, settings.language.as_deref(), &settings.mods.disabled)?;
+    let (definition, menu_source) = prepare::definition(&cli, settings.language.as_deref(), &settings.mods)?;
     let pending = prepare::Pending {
         foreign_entry,
         definition,
@@ -492,6 +539,39 @@ fn run(cli: Cli) -> Result<()> {
     // anything opens it, so "no disc image found" stays a message about the
     // command line rather than something to discover eight seconds of intro
     // later.
+    // `--demo` with no window: `--dry-run` flies demos back to back, `--screenshot` captures the
+    // first one's frame through the ordinary race capture. See `docs/ui/attract-demo.md`.
+    if cli.demo.mode().is_some() && (cli.dry_run || cli.screenshot.is_some()) {
+        let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
+        let music_discs = pending.music_discs(&source);
+        let mut options = pending.race_options(&source, Vec::new());
+        let catalogue = oag_game::title_lists::catalogue(&source)?;
+        let config = oag_source::title::open_source(&source, Vec::new(), Vec::new())
+            .ok()
+            .and_then(|mut opened| {
+                oag_game::boot::demo_config::load(&mut opened.archives, opened.title, &mut Vec::new())
+            });
+        let length = if cli.ticks > 0 { cli.ticks } else { u32::MAX };
+        let seed = options.seed.unwrap_or_else(oag_game::race_seed::fresh);
+        let unlocked = oag_game::unlock::unlock_all();
+        let playable = |track: &race::catalogue::Track| unlocked || track.unlock_grid.is_none();
+        if cli.dry_run {
+            for (n, report) in oag_game::demo::chain::run(&options, &catalogue, config.as_ref(), playable, seed, 2, length)?
+                .iter()
+                .enumerate()
+            {
+                println!("demo {}: {report}", n + 1);
+            }
+            return Ok(());
+        }
+        let track = catalogue.tracks.iter().map(|(track, _)| track).find(|track| playable(track));
+        let team = catalogue.teams.first();
+        options.mode = oag_race::Mode::SingleRace;
+        options.track = track.map(race::catalogue::Track::entry_name);
+        options.team = team.map(|team| team.value.clone());
+        return run_race(cli, options, settings, anisotropy, audio, music_discs, headless::RaceRoute::default());
+    }
+
     // `--connect` is a race too: the server's.
     if cli.race || cli.net.connect.is_some() || cli.net.online.is_some() {
         // `--prefetch` is a front-end thing, and saying so is better than
@@ -525,21 +605,25 @@ fn run(cli: Cli) -> Result<()> {
             cli.net.connect(&source)?;
             None
         };
-        #[cfg_attr(not(feature = "extensions"), expect(unused_mut, reason = "extensions off"))]
         let mut options = pending.race_options(&source, Vec::new());
         // The rules modules of the mods that are on. None in a network race (the host's
         // race runs vanilla, and the lobby's fingerprint leaves the examples out), an
         // original campaign's cell (`--campaign-cell`) or a 2048 event (`--event`).
+        options.campaign = cli.wreck.campaign_cell.is_some() || cli.event.is_some();
         #[cfg(feature = "extensions")]
         {
             let vanilla = net.is_some() || cli.wreck.campaign_cell.is_some() || cli.event.is_some();
-            oag_game::mod_extensions::attach(&mut options, &settings.mods.disabled, vanilla);
+            oag_game::mod_extensions::attach(&mut options, &settings.mods, &settings.mod_settings, vanilla);
+        }
+        oag_game::texture_pack::attach(&mut options, &settings.mods);
+        if let Some(record) = &restage {
+            options.apply_replay(&record.replay.header)?;
         }
         let options = match &net {
             Some(net) => net.race_options(options)?,
             None => options,
         };
-        return run_race(cli, options, settings, anisotropy, audio, music_discs, net);
+        return run_race(cli, options, settings, anisotropy, audio, music_discs, headless::RaceRoute { net, restage });
     }
 
     // Every leg with no window loads the whole boot here and now, blocking, and
@@ -548,11 +632,15 @@ fn run(cli: Cli) -> Result<()> {
     if cli.dry_run || cli.screenshot.is_some() {
         let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
         let music_discs = pending.music_discs(&source);
+        // A `--demo` capture's race is the demo's, so the title's demo screen is read for it; the
+        // windowed session's own options never are (a demo's `Session::demo_options` says so).
+        let mut options = pending.race_options(&source, Vec::new());
+        options.demo = pending.cli.demo.mode().is_some();
         return run_windowless(
             &pending.cli,
             &pending.boot_options(&source),
             settings,
-            pending.race_options(&source, Vec::new()),
+            options,
             anisotropy,
             audio,
             music_discs,
@@ -602,9 +690,8 @@ fn run(cli: Cli) -> Result<()> {
             // One image is no choice - unless it is locked, when the screen is
             // how its key is asked for. **None at all is never a chooser**, not
             // even under `--launcher`: an empty list offers nothing but escape.
-            // It is the not-found screen below instead (it was the terminal
-            // message from `resolve` alone until 2026-10-07, which a
-            // double-click never shows), and the same message still goes to the
+            // It is the not-found screen below instead (a double-click never shows the
+            // terminal message from `resolve`), and the same message still goes to the
             // log.
             let locked = rows
                 .iter()
@@ -696,7 +783,7 @@ fn run(cli: Cli) -> Result<()> {
         };
 
     let scheme = pending.scheme();
-    let give = give_weapon(cli.give.as_deref())?;
+    let give = give_weapon(cli.give())?;
     let autopilot_pilot = autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?;
     let autopilot_skill = cli.driver.autopilot_skill;
     let ai_choice = cli.driver.ai;
@@ -730,6 +817,9 @@ fn run(cli: Cli) -> Result<()> {
         boot_overlay,
         pick_language,
         measure_race_load: cli.measure.measure_race_load,
+        demo: cli.demo.mode(),
+        demo_limit: cli.demo.limit(),
+        replay_png: cli.shot.replay_png.clone(),
         give,
         no_intro: cli.intro.no_intro,
         dev: cli.dev.dev(cli.driver.people())?,
@@ -779,6 +869,16 @@ fn run(cli: Cli) -> Result<()> {
     }
     #[cfg(target_arch = "wasm32")]
     let _ = (drive, state_log);
+    // A wallpaper on a compositor with a layer shell is the desktop background, with no window.
+    #[cfg(target_os = "linux")]
+    if app.demo == Some(true) {
+        oag_sound::probe::mark_frame_thread();
+        if crate::wallpaper::run(&mut app)? {
+            app.finish_audio()?;
+            app.finish_prefetch();
+            return Ok(());
+        }
+    }
     let event_loop = new_event_loop()?;
     // Poll rather than Wait: the intro is animated whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);

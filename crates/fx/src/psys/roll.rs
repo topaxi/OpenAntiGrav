@@ -215,11 +215,13 @@ impl Rotation {
 }
 
 impl Effect {
-    /// Takes the rotation back from every emitter and template, with
-    /// everything else [`Self::without_pulse_psp_draw`] takes back.
-    pub(super) fn mute_rotation(&mut self) {
+    /// Takes the rotation back from every emitter and, unless `keep_templates`, every
+    /// template, with everything else [`Self::without_pulse_psp_draw`] takes back.
+    pub(super) fn mute_rotation(&mut self, keep_templates: bool) {
         for spec in &mut self.emitters {
-            spec.rotation = None;
+            if !(keep_templates && spec.template) {
+                spec.rotation = None;
+            }
         }
     }
 }

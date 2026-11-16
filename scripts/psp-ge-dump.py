@@ -27,7 +27,10 @@ second (151 of 157); a batch it misses is one the two sides split differently.
 Each record also carries the texture and target state in force at the PRIM, raw
 24-bit payloads: `fbptr` (the target being drawn into), `texsize0`, `texmode`
 (max mip level in bits 16..18), `texfilter` (min bits 0..2, mag bits 8..10),
-`texwrap` (bit 0 U clamp, bit 8 V clamp, 0 = repeat), `texscale_*`, `blendenable`,
+`texwrap` (bit 0 U clamp, bit 8 V clamp, 0 = repeat), `texscale_*`, `blendenable`, `col0` (the
+first vertex's RGBA where the vertices carry an 8888 colour, a blinking widget's alpha),
+`stenciltestenable`, `stenciltest`, `stencilop` and the colour write masks `pmsk1`/`pmsk2` (a draw that
+stamps the framebuffer's alpha, the bloom's glow mask, is a stencil replace with `pmsk2` clear),
 and the vertex UV range `uv_mn`/`uv_mx` (before TEXSCALE). A draw that samples
 a render target is one whose `tex` equals an `fbptr` other draws used.
 
@@ -87,6 +90,10 @@ TEX_STATE_OPS = {
     0xDB: "alphatest",  # func bits 0..2, reference bits 8..15, mask bits 16..23
     0xDC: "stenciltest",  # func bits 0..2, reference bits 8..15, mask bits 16..23
     0xDD: "stencilop",  # fail bits 0..2, zfail 8..10, zpass 16..18
+    0x44: "zscale",  # VIEWPORTZSCALE: the depth range's half-width, sceGuDepthRange's (near - far) / 2
+    0x47: "zcenter",  # VIEWPORTZCENTER: (near + far) / 2
+    0xD6: "minz",  # MINZ: the depth clip floor
+    0xD7: "maxz",  # MAXZ
     0xDE: "ztest",  # function, 0 never .. 7 always
     0xE7: "zmask",  # bit 0 set = depth writes off
     0xE8: "pmsk1",  # colour write mask, RGB
@@ -159,6 +166,26 @@ def _read_uvs(vtype, buf, stride, count):
         tuple(c / div for c in struct.unpack_from(fmt, buf, i * stride + offset))
         for i in range(count)
     ]
+
+
+def _first_colour(vtype, buf):
+    """The first vertex's RGBA when the vertices carry an 8888 colour, else None.
+
+    The colour sits after the weights and the texture coordinates, aligned to its own size
+    (the same walk as `_layout`). It is a draw's tint: a blinking widget's alpha is read here.
+    """
+    if (vtype >> 2) & 7 != 7:
+        return None
+    wgt = (vtype >> 9) & 3
+    wcount = ((vtype >> 14) & 7) + 1
+    size = {0: 0, 1: 1, 2: 2, 3: 4}
+    offset = size[wgt] * wcount if wgt else 0
+    tex = vtype & 3
+    if tex:
+        unit = {1: 1, 2: 2, 3: 4}[tex]
+        offset = (offset + unit - 1) // unit * unit + {1: 2, 2: 4, 3: 8}[tex]
+    offset = (offset + 3) // 4 * 4
+    return list(buf[offset : offset + 4]) if len(buf) >= offset + 4 else None
 
 
 def _read_pos(buf, at, fmt):
@@ -260,6 +287,7 @@ def census(path):
                                 "nv": count,
                                 "vt": vtype,
                                 "tex": state.get("tex", 0),
+                                "col0": _first_colour(vtype, vertices),
                                 # Texture and target state in force at the PRIM, raw
                                 # 24-bit command payloads (see TEX_STATE_OPS).
                                 **{k: state.get(k) for k in TEX_STATE_OPS.values()},

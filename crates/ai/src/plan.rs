@@ -28,16 +28,19 @@
 
 use oag_physics::{CraftState, Environment, Handling, Raycaster, ShipControls, ShipState};
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{Context, Driver, Line, Tuning};
 
 mod adapt;
 mod brake;
 mod clearance;
+mod driven;
 mod harden;
+mod landing;
 mod lower;
 
+use driven::{Driven, Reader};
 use lower::Lowering;
 
 /// How much faster, as a ratio `(numerator, denominator)` of verification-lap
@@ -94,6 +97,13 @@ pub struct Course<'a, R: Raycaster + ?Sized> {
     pub reset: &'a dyn Fn(&ShipState, &Environment, oag_core::math::Vec3) -> bool,
     /// Seconds without a hover contact after which the race rescues a craft.
     pub max_airborne: f32,
+    /// How far under its line point, on the ground on a supported sample, a
+    /// craft that left its corridor counts as on another road, and for how
+    /// many ticks in a row before that is a failure ([`Failure::Beneath`]);
+    /// an infinite distance for a course with no such rule. The race passes
+    /// its own rescue's two.
+    pub beneath: f32,
+    pub beneath_ticks: u32,
     /// The push direction of the speed pad the craft is inside, given where it
     /// started the previous tick and this one: the race's own pad test, so the
     /// plan is learned with the boosts the race gives.
@@ -101,6 +111,10 @@ pub struct Course<'a, R: Raycaster + ?Sized> {
         Option<oag_core::math::Vec3>,
         oag_core::math::Vec3,
     ) -> Option<oag_core::math::Vec3>,
+    /// Whether every run from the grid is driven in full, with nothing read
+    /// back from the run before it (`driven`). False in a race; a test sets it
+    /// to compare the plans the two ways learn.
+    pub drive_again: bool,
 }
 
 /// The craft the plan is for, and where it starts.
@@ -166,6 +180,10 @@ pub struct Report {
     pub verify_contacts: u32,
     /// Times the verification run was put back on the line, either lap.
     pub verify_respawns: u32,
+    /// Line index of each rescue on the verification's first (standing) lap,
+    /// in order. A subset of `verify_respawns`; flying-lap rescues are not
+    /// listed, they are failures.
+    pub verify_standing_rescues: Vec<u32>,
     /// Ticks the verification run's second lap took, when it completed one
     /// without being put back.
     pub verify_lap_ticks: Option<u32>,
@@ -505,6 +523,12 @@ struct Run {
     /// Where the craft started the previous tick, for the pad sweep; `None`
     /// on the grid and after a rescue, as the race's own is.
     last_position: Option<oag_core::math::Vec3>,
+    /// Consecutive ticks on the ground beneath the line
+    /// ([`Course::beneath_the_line`]) after leaving its corridor.
+    beneath: u32,
+    /// Whether the craft was outside the line's corridor when it was last on
+    /// the ground and not beneath the line, or at any tick in the air since.
+    wide: bool,
 }
 
 /// Why a tick counted as a failure.
@@ -521,12 +545,23 @@ pub enum Failure {
     /// Something the race rescues a craft for that is not a wall: a reset
     /// volume touched, or longer in the air than [`Course::max_airborne`].
     Rescued,
+    /// On the ground further under its line point than [`Course::beneath`]
+    /// for [`Course::beneath_ticks`], having left the line's corridor to get
+    /// there: it ran wide onto another road, which the race rescues a craft
+    /// from. A craft under its line inside its corridor all along is where
+    /// the line's road is, as far as a speed can tell (2048 `arena`'s line
+    /// runs over a deck the field drives 21 units under, for 230 samples). **Chosen, not measured**
+    /// (`docs/gameplay/ai.md`, "A road under the line is a failure").
+    Beneath,
 }
 
 /// What one tick did.
 struct Tick {
     failure: Option<Failure>,
     contact: bool,
+    /// Whether the craft ended the tick on the ground beneath the line, having
+    /// left its corridor ([`Run::beneath`]).
+    beneath: bool,
     /// The steering the driver asked for, for [`probe`].
     steer: f32,
 }
@@ -593,6 +628,17 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
             run.best_tick = run.tick;
         }
         let contact = evaluated.wall.contacts > evaluated.wall.floor_contacts;
+        let under = self.beneath_the_line(&run.state, index);
+        if !under && self.beneath.is_finite() {
+            // On the road the craft is wide or it is not; in the air it stays
+            // wide if it took off wide, wherever the flight carries it.
+            let outside = self
+                .line
+                .outside_the_corridor(index, run.state.body.position);
+            run.wide = outside || (run.wide && run.state.time_airborne > 0.0);
+        }
+        let beneath = under && run.wide;
+        run.beneath = if beneath { run.beneath + 1 } else { 0 };
         let away = run.state.body.position.distance(self.line.point(index));
         let failure = if run.state.craft_state != CraftState::Racing {
             Some(Failure::Wrecked)
@@ -608,6 +654,8 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
             // `01_Track` at PHANTOM clean in isolation and was rescued four
             // times in the race, in the air off a crest.
             Some(Failure::Rescued)
+        } else if beneath && run.beneath >= self.beneath_ticks {
+            Some(Failure::Beneath)
         } else if run.tick > STALL_GRACE
             && (run.slow > STALL_TICKS || run.tick - run.best_tick > run.stuck_limit)
         {
@@ -618,8 +666,27 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
         Tick {
             failure,
             contact,
+            beneath,
             steer: controls.steer_x,
         }
+    }
+}
+
+impl<R: Raycaster + ?Sized> Course<'_, R> {
+    /// Whether a craft whose driver stands on line sample `index` is on the
+    /// ground more than [`Self::beneath`] under that line point, along the
+    /// sample's own up: the race's test for a road under the circuit. Never
+    /// in the air, and never where the line has no road under it (it arcs
+    /// over a gap there, and a craft that comes down early is under it on the
+    /// road it was always going to land on).
+    fn beneath_the_line(&self, state: &ShipState, index: usize) -> bool {
+        if state.time_airborne > 0.0 || self.line.is_unsupported(index) || self.samples.is_empty() {
+            return false;
+        }
+        let Some(sample) = self.samples[index % self.samples.len()] else {
+            return false;
+        };
+        (self.line.point(index) - state.body.position).dot(sample.normal()) > self.beneath
     }
 }
 
@@ -677,12 +744,18 @@ impl SpeedPlan {
 
     /// One search with one way of lowering: calibration, learning passes and
     /// their verification.
+    ///
+    /// `braking` is the calibration, measured here if no search of this craft
+    /// on this course has yet. `known` is the last run from the grid, in and
+    /// out ([`Driven`]).
     fn search<R: Raycaster + ?Sized>(
         course: &Course<'_, R>,
         craft: &Craft,
         tuning: &Tuning,
         budget: u64,
         lowering: Lowering,
+        braking: &mut Option<brake::Calibration>,
+        known: &mut Driven,
     ) -> (Self, Report) {
         let mut plan = Self::unlimited(course.line);
         let mut report = Report::default();
@@ -690,9 +763,16 @@ impl SpeedPlan {
             return (plan, report);
         }
         let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
-        let (decel, steps) = brake::calibrate(course, craft, tuning, yaw);
-        report.steps += steps;
-        plan.decel = decel;
+        if course.drive_again {
+            *braking = None;
+        }
+        let braking =
+            braking.get_or_insert_with(|| brake::Calibration::measure(course, craft, tuning, yaw));
+        // The run-up is the longest stretch a first pass, on a plan with no
+        // ceilings yet, can read back.
+        known.clone_from(&braking.run_up);
+        report.steps += braking.steps;
+        plan.decel = braking.decel;
         plan.yaw = Some(yaw);
         plan.derive_targets();
 
@@ -710,8 +790,9 @@ impl SpeedPlan {
                     lowering,
                     margin: 1.0,
                 },
+                known,
             );
-            let verify = plan.verify(course, craft, tuning, yaw, &mut report, 1.0);
+            let verify = plan.verify(course, craft, tuning, yaw, &mut report, 1.0, known);
             if verify == 0 || report.steps >= budget {
                 break;
             }
@@ -733,11 +814,17 @@ impl SpeedPlan {
             best_tick: 0,
             stuck_limit: NEVER_STUCK,
             last_position: None,
+            beneath: 0,
+            wide: false,
         }
     }
 
     /// Two laps from the grid that follow the plan and change nothing; returns
     /// the failure ticks and fills the verification fields of `report`.
+    ///
+    /// `known` is the last run from the grid: what of it this run would repeat
+    /// is read back, not driven, and it leaves as this run's record.
+    #[allow(clippy::too_many_arguments)]
     fn verify<R: Raycaster + ?Sized>(
         &mut self,
         course: &Course<'_, R>,
@@ -746,8 +833,18 @@ impl SpeedPlan {
         yaw: f32,
         report: &mut Report,
         margin: f32,
+        known: &mut Driven,
     ) -> u32 {
-        self.verify_stuck(course, craft, tuning, yaw, report, margin, NEVER_STUCK)
+        self.verify_stuck(
+            course,
+            craft,
+            tuning,
+            yaw,
+            report,
+            margin,
+            NEVER_STUCK,
+            known,
+        )
     }
 
     /// [`Self::verify`] with its runs stalled after `stuck` ticks without progress.
@@ -761,56 +858,51 @@ impl SpeedPlan {
         report: &mut Report,
         margin: f32,
         stuck: u32,
+        known: &mut Driven,
     ) -> u32 {
         let n = self.len() as i64;
-        let mut run = Self::start_run(craft);
-        run.stuck_limit = stuck;
-        let (mut failures, mut contacts) = (0u32, 0u32);
-        let mut lap_mark: Option<u32> = None;
         report.verify_lap_ticks = None;
         report.verify_respawns = 0;
-        let mut pace = vec![f32::INFINITY; self.len()];
-        let mut tight = vec![false; self.len()];
-        let mut respawned_on_flying_lap = false;
+        report.verify_standing_rescues.clear();
+        let mut seen = Verified {
+            failures: 0,
+            contacts: 0,
+            lap_mark: None,
+            pace: vec![f32::INFINITY; self.len()],
+            tight: vec![false; self.len()],
+            respawned_on_flying_lap: false,
+        };
         let limit = (4 * n as u64).max(4_000) as u32 * 2;
+        let kept = known.keep_for(
+            self,
+            course,
+            margin,
+            stuck,
+            u64::from(limit),
+            Reader::Verify,
+        );
+        let mut run = if let Some(run) = kept {
+            for (k, lived) in known.ticks.iter().enumerate() {
+                seen.count(lived, k as u32 + 1, course, craft, report);
+            }
+            run
+        } else {
+            let mut run = Self::start_run(craft);
+            run.stuck_limit = stuck;
+            known.begin(run);
+            run
+        };
         while run.progress < 2 * n && run.tick < limit {
-            let tick = course.tick(&mut run, craft, tuning, yaw, |run, _| {
+            let (_, lived) = course.lived(&mut run, craft, tuning, yaw, |run| {
                 self.follow(run, course.dt, margin)
             });
-            report.steps += 1;
-            contacts += u32::from(tick.contact);
-            if run.progress >= n {
-                pace[run.driver.index as usize] = forward_speed(&run.state);
-            }
-            if !tick.contact
-                && run.state.time_airborne <= 0.0
-                && clearance::too_close(
-                    &run.state,
-                    &craft.handling,
-                    course.env.self_collider,
-                    course.raycaster,
-                )
-            {
-                tight[run.driver.index as usize] = true;
-            }
-            if lap_mark.is_none() && run.progress >= n {
-                lap_mark = Some(run.tick);
-            }
-            let Some(failure) = tick.failure else {
-                continue;
-            };
-            if failure == Failure::Wall {
-                failures += 1;
+            known.push(lived, &run);
+            if !seen.count(&lived, run.tick, course, craft, report) {
                 continue;
             }
             // Put back past the spot, as the race's rescue would: on the
             // standing lap the underpowered case `learn` accepts, on the flying
             // lap a failure of the plan.
-            report.verify_respawns += 1;
-            if run.progress >= n {
-                failures += 1;
-                respawned_on_flying_lap = true;
-            }
             let to = (run.driver.index as usize + RESPAWN_SKIP) % n as usize;
             run = Run {
                 state: (course.respawn)(to),
@@ -825,26 +917,47 @@ impl SpeedPlan {
                 best_tick: run.tick,
                 stuck_limit: run.stuck_limit,
                 last_position: None,
+                beneath: 0,
+                wide: false,
             };
+            known.respawn(run);
         }
-        if run.progress >= 2 * n && !respawned_on_flying_lap {
-            report.verify_lap_ticks = lap_mark.map(|mark| run.tick - mark);
+        if run.progress >= 2 * n && !seen.respawned_on_flying_lap {
+            report.verify_lap_ticks = seen.lap_mark.map(|mark| run.tick - mark);
         }
-        self.pace = pace;
-        self.tight = tight;
-        report.verify_failures = failures;
-        report.verify_contacts = contacts;
-        failures
+        self.pace = seen.pace;
+        self.tight = seen.tight;
+        report.verify_failures = seen.failures;
+        report.verify_contacts = seen.contacts;
+        seen.failures
     }
 
     fn follow(&self, run: &Run, dt: f32, margin: f32) -> (f32, f32) {
-        let speed = forward_speed(&run.state);
-        if run.state.time_airborne > 0.0 {
+        self.follow_at(
+            run.driver.index,
+            forward_speed(&run.state),
+            run.state.time_airborne > 0.0,
+            dt,
+            margin,
+        )
+    }
+
+    /// The throttle and brake for a craft whose driver stands on line sample
+    /// `index` at forward speed `speed`, following `margin` of the plan.
+    fn follow_at(
+        &self,
+        index: u32,
+        speed: f32,
+        airborne: bool,
+        dt: f32,
+        margin: f32,
+    ) -> (f32, f32) {
+        if airborne {
             // No grip to brake against in the air; the same rule the driver
             // keeps. See `Driver::drive`.
             return (1.0, 0.0);
         }
-        let target = self.target_ahead(run.driver.index as usize, speed, LEAD_TICKS, dt) * margin;
+        let target = self.target_ahead(index as usize, speed, LEAD_TICKS, dt) * margin;
         longitudinal(speed, target)
     }
 
@@ -860,6 +973,7 @@ impl SpeedPlan {
     /// - **Anything else**: ceilings over the stretch are lowered to [`LOWER`]
     ///   of what the craft did, braking zones re-derived, and the run rewinds
     ///   to before the earliest one that moved.
+    #[allow(clippy::too_many_arguments)]
     fn learn<R: Raycaster + ?Sized>(
         &mut self,
         course: &Course<'_, R>,
@@ -868,6 +982,7 @@ impl SpeedPlan {
         yaw: f32,
         report: &mut Report,
         pass: Pass,
+        known: &mut Driven,
     ) {
         let Pass {
             budget,
@@ -877,11 +992,31 @@ impl SpeedPlan {
         } = pass;
         let n = self.len();
         let goal = 2 * n as i64;
-        let mut run = Self::start_run(craft);
-        run.stuck_limit = stuck;
-        let mut checkpoints: Vec<Run> = vec![run];
         // What each recent tick did, so a failure knows what led to it.
         let mut recent: Vec<Trace> = Vec::new();
+        // The stretch the last run from the grid already drove as this pass
+        // would, up to its first failure, is read back: its marks are this
+        // pass's checkpoints and its ticks the trace, at the steps it cost.
+        let kept = known.keep_for(
+            self,
+            course,
+            margin,
+            stuck,
+            budget.saturating_sub(report.steps),
+            Reader::Learn,
+        );
+        let mut run = if let Some(run) = kept {
+            for (k, lived) in known.ticks.iter().enumerate() {
+                report.steps += 1;
+                push_trace(&mut recent, Trace::of(lived, k as u32 + 1));
+            }
+            run
+        } else {
+            let mut run = Self::start_run(craft);
+            run.stuck_limit = stuck;
+            known.begin(run);
+            run
+        };
         let mut tries: BTreeMap<u32, u32> = BTreeMap::new();
         // Past this much progress, wall contact is forgiven: a site the search
         // gave up on is driven through rather than retried forever.
@@ -890,26 +1025,12 @@ impl SpeedPlan {
         while run.progress < goal && report.steps < budget {
             // Read inside the tick, after the driver has located itself, exactly
             // as `verify` does - and kept, so the trace knows what was asked.
-            let asked = std::cell::Cell::new((1.0, 0.0));
-            let tick = course.tick(&mut run, craft, tuning, yaw, |run, _| {
-                asked.set(self.follow(run, course.dt, margin));
-                asked.get()
+            let (tick, lived) = course.lived(&mut run, craft, tuning, yaw, |run| {
+                self.follow(run, course.dt, margin)
             });
-            let (thrust, brake) = asked.get();
             report.steps += 1;
-            recent.push(Trace {
-                tick: run.tick,
-                index: run.driver.index,
-                speed: forward_speed(&run.state),
-                airborne: run.state.time_airborne > 0.0,
-                full: thrust >= 1.0 && brake <= 0.0,
-            });
-            if recent.len() > LOOKBACK_TICKS * 6 {
-                recent.drain(..recent.len() - LOOKBACK_TICKS * 3);
-            }
-            if run.tick.is_multiple_of(CHECK_EVERY) {
-                checkpoints.push(run);
-            }
+            push_trace(&mut recent, Trace::of(&lived, run.tick));
+            known.push(lived, &run);
             let Some(failure) = tick.failure else {
                 continue;
             };
@@ -920,7 +1041,13 @@ impl SpeedPlan {
             let count = tries.entry(site).or_insert(0);
             *count += 1;
             let exhausted = *count > MAX_TRIES;
-            let cause = Cause::of(failure, run.state.time_airborne, &recent);
+            let cause = Cause::of(
+                failure,
+                run.state.time_airborne,
+                &recent,
+                course.line,
+                &self.hold,
+            );
             if exhausted && failure == Failure::Wall {
                 note_unresolved(report, run.driver.index, failure);
                 forgive_until = run.progress + i64::from(SITE) * 2;
@@ -946,15 +1073,23 @@ impl SpeedPlan {
                     best_tick: run.tick,
                     stuck_limit: run.stuck_limit,
                     last_position: None,
+                    beneath: 0,
+                    wide: false,
                 };
                 recent.clear();
-                checkpoints.push(run);
+                known.respawn(run);
                 continue;
             }
 
             let old = self.target.clone();
             report.lowerings += match cause {
                 Cause::ShortOfTheLip(takeoff) => self.hold_run_up(&recent[..takeoff]),
+                Cause::LandedLong(takeoff) => self.slow_held_run_up(&recent[..takeoff]),
+                Cause::LeftTheRoad(takeoff) => self.lower(
+                    &recent[..takeoff],
+                    tries.get(&site).copied().unwrap_or(1),
+                    lowering,
+                ),
                 _ => self.lower(&recent, tries.get(&site).copied().unwrap_or(1), lowering),
             };
             self.derive_targets();
@@ -963,12 +1098,7 @@ impl SpeedPlan {
             // craft meets the new braking zone from its start.
             let back = earliest_change(&old, &self.target, run.driver.index as usize);
             let resume = run.progress - back as i64 - 8;
-            while checkpoints.len() > 1 && checkpoints.last().is_some_and(|c| c.progress > resume) {
-                checkpoints.pop();
-            }
-            run = *checkpoints
-                .last()
-                .expect("the grid checkpoint is never popped");
+            run = known.rewind(resume);
             // The trace rewinds too, so the next failure still sees the run-up
             // that led to it, not only the ticks spent already too fast since
             // the checkpoint.
@@ -978,14 +1108,22 @@ impl SpeedPlan {
 
     /// Marks the run-up to a takeoff as a stretch nothing brakes through, and
     /// lifts its ceilings. `run_up` ends at the last grounded tick before it.
+    /// A sample already held whose ceiling a long landing brought down
+    /// ([`Self::slow_held_run_up`]) is raised one step instead.
     fn hold_run_up(&mut self, run_up: &[Trace]) -> u32 {
         let from = run_up.len().saturating_sub(LOOKBACK_TICKS * 2);
+        let held: BTreeSet<usize> = run_up[from..]
+            .iter()
+            .map(|trace| trace.index as usize)
+            .collect();
         let mut moved = 0;
-        for trace in &run_up[from..] {
-            let i = trace.index as usize;
+        for i in held {
             if !self.hold[i] {
                 self.hold[i] = true;
                 self.ceiling[i] = f32::INFINITY;
+                moved += 1;
+            } else if self.ceiling[i].is_finite() {
+                self.ceiling[i] = landing::raised(self.ceiling[i]);
                 moved += 1;
             }
         }
@@ -1000,8 +1138,107 @@ struct Trace {
     index: u32,
     speed: f32,
     airborne: bool,
+    /// On the ground beneath the line, having left its corridor
+    /// ([`Run::beneath`]).
+    beneath: bool,
     /// Whether the plan had the craft at full throttle with no brake.
     full: bool,
+}
+
+impl Trace {
+    /// Tick `tick` of a run, as `lived` kept it.
+    fn of(lived: &driven::Lived, tick: u32) -> Self {
+        let (thrust, brake) = lived.asked;
+        Self {
+            tick,
+            index: lived.index,
+            speed: lived.pace,
+            airborne: lived.air > 0.0,
+            beneath: lived.beneath,
+            full: thrust >= 1.0 && brake <= 0.0,
+        }
+    }
+}
+
+/// Adds a tick to a learning pass's trace, which keeps the last three to six
+/// lookbacks, and however long the craft has been off its road since (in the
+/// air, or on another road under the line), the last lookback it spent on it:
+/// a failure after a long fall (the race's rescue comes four seconds in)
+/// still finds the road the craft left, which is what its lowering lowers.
+fn push_trace(recent: &mut Vec<Trace>, trace: Trace) {
+    recent.push(trace);
+    if recent.len() > LOOKBACK_TICKS * 6 {
+        let newest = recent.len() - LOOKBACK_TICKS * 3;
+        let on_the_road = recent
+            .iter()
+            .enumerate()
+            .rev()
+            .filter(|(_, trace)| !trace.airborne && !trace.beneath)
+            .nth(LOOKBACK_TICKS - 1)
+            .map_or(0, |(at, _)| at);
+        recent.drain(..newest.min(on_the_road));
+    }
+}
+
+/// What a verification has counted so far.
+struct Verified {
+    failures: u32,
+    contacts: u32,
+    /// The tick the flying lap began on.
+    lap_mark: Option<u32>,
+    pace: Vec<f32>,
+    tight: Vec<bool>,
+    respawned_on_flying_lap: bool,
+}
+
+impl Verified {
+    /// Counts tick `tick` of the run, driven or read back. Returns whether the
+    /// verification puts the craft back on the line after it.
+    fn count<R: Raycaster + ?Sized>(
+        &mut self,
+        lived: &driven::Lived,
+        tick: u32,
+        course: &Course<'_, R>,
+        craft: &Craft,
+        report: &mut Report,
+    ) -> bool {
+        let n = self.pace.len() as i64;
+        let index = lived.index as usize;
+        report.steps += 1;
+        self.contacts += u32::from(lived.contact);
+        if lived.progress >= n {
+            self.pace[index] = lived.pace;
+        }
+        if !lived.contact
+            && lived.air <= 0.0
+            && clearance::too_close(
+                &lived.body,
+                &craft.handling,
+                course.env.self_collider,
+                course.raycaster,
+            )
+        {
+            self.tight[index] = true;
+        }
+        if self.lap_mark.is_none() && lived.progress >= n {
+            self.lap_mark = Some(tick);
+        }
+        let Some(failure) = lived.failure else {
+            return false;
+        };
+        if failure == Failure::Wall {
+            self.failures += 1;
+            return false;
+        }
+        report.verify_respawns += 1;
+        if lived.progress >= n {
+            self.failures += 1;
+            self.respawned_on_flying_lap = true;
+        } else {
+            report.verify_standing_rescues.push(lived.index);
+        }
+        true
+    }
 }
 
 /// What a failure is put down to.
@@ -1014,13 +1251,27 @@ enum Cause {
     ShortOfTheLip(usize),
     /// Stopped or off the circuit at full throttle all along: no plan helps.
     Underpowered,
+    /// Left a road the line stays on and ended on another one under it; it
+    /// left at this index into the trace. Lower the ceilings before it: the
+    /// speed that failed is the one the craft left the road at.
+    LeftTheRoad(usize),
+    /// Hit a wall soon after landing from a flight over a gap whose run-up,
+    /// ending at this index into the trace, is held: the hold carried it too
+    /// far. Bring the held run-up's ceilings down. See [`landing`].
+    LandedLong(usize),
 }
 
 impl Cause {
-    fn of(failure: Failure, airborne: f32, recent: &[Trace]) -> Self {
+    fn of(failure: Failure, airborne: f32, recent: &[Trace], line: &Line, hold: &[bool]) -> Self {
         let from = recent.len().saturating_sub(LOOKBACK_TICKS);
         let window = &recent[from..];
+        if failure == Failure::Beneath {
+            return Self::of_a_lower_road(recent, line);
+        }
         if failure == Failure::Wall && airborne < FELL_SECONDS {
+            if let Some(takeoff) = landing::long_landing(recent, line, hold) {
+                return Self::LandedLong(takeoff);
+            }
             // A wall on the road or after a short hop is answered with less
             // speed: most are a corner taken too fast. Holding the run-up for
             // every airborne wall cost ten clean verifications across the 96
@@ -1035,8 +1286,14 @@ impl Cause {
                 .iter()
                 .rposition(|t| !t.airborne)
                 .map_or(0, |grounded| grounded + 1);
-            let run_up_from = first_air.saturating_sub(LOOKBACK_TICKS * 2);
-            if recent[run_up_from..first_air].iter().any(|t| !t.full) {
+            let run_up = &recent[first_air.saturating_sub(LOOKBACK_TICKS * 2)..first_air];
+            // Only where the line itself crosses a gap: a craft that flew
+            // off a road the line stays on ran wide, and holding that run-up
+            // lifted the ceilings the failure before had lowered
+            // (`29_Track` PHANTOM, the corner exit at 2180-2250).
+            if run_up.iter().any(|t| !t.full)
+                && over_a_gap(run_up.iter().chain(&recent[first_air..=last_air]), line)
+            {
                 return Self::ShortOfTheLip(first_air);
             }
         }
@@ -1048,6 +1305,44 @@ impl Cause {
         }
         Self::TooFast
     }
+}
+
+impl Cause {
+    /// What put a craft on a road under its line ([`Failure::Beneath`]), by
+    /// the last flight before it got there.
+    ///
+    /// Where the line itself crosses a gap in that flight, the craft fell
+    /// short of a jump: the run-up is held if the plan braked on it, and at
+    /// full throttle no plan helps. Anywhere else it left a road the line
+    /// stays on, a corner taken too fast, by flying off it or by driving down.
+    fn of_a_lower_road(recent: &[Trace], line: &Line) -> Self {
+        let beneath_from = recent
+            .iter()
+            .rposition(|t| !t.beneath)
+            .map_or(0, |above| above + 1);
+        let Some(last_air) = recent[..beneath_from].iter().rposition(|t| t.airborne) else {
+            return Self::LeftTheRoad(beneath_from);
+        };
+        let first_air = recent[..last_air]
+            .iter()
+            .rposition(|t| !t.airborne)
+            .map_or(0, |grounded| grounded + 1);
+        let run_up = &recent[first_air.saturating_sub(LOOKBACK_TICKS * 2)..first_air];
+        if !over_a_gap(run_up.iter().chain(&recent[first_air..=last_air]), line) {
+            return Self::LeftTheRoad(first_air);
+        }
+        if run_up.iter().any(|t| !t.full) {
+            Self::ShortOfTheLip(first_air)
+        } else {
+            Self::Underpowered
+        }
+    }
+}
+
+/// Whether the line leaves the road anywhere on `flown`: a takeoff run-up or
+/// a sample with nothing under it.
+fn over_a_gap<'a>(mut flown: impl Iterator<Item = &'a Trace>, line: &Line) -> bool {
+    flown.any(|t| line.is_takeoff(t.index as usize) || line.is_unsupported(t.index as usize))
 }
 
 fn note_unresolved(report: &mut Report, index: u32, failure: Failure) {

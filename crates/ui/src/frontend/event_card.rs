@@ -51,6 +51,7 @@
 //! beyond the medal).
 
 mod callout;
+mod load;
 mod objective;
 mod trophy;
 
@@ -61,6 +62,8 @@ use crate::pointer::{Pointer, contains};
 
 use super::campaign_map::ProgressState;
 use super::*;
+
+pub use load::GameTip;
 use oag_2048::frontend::states as w2048;
 
 /// What the card says about one event, resolved to text by the caller so
@@ -110,6 +113,9 @@ pub struct EventCard {
     /// callout item at all, a Zone or Speed Lap event or one that offers every
     /// weapon.
     pub weapons: Option<CardWeapons>,
+    /// The mode page's paragraph (`Tut_Event_Race_1` and its siblings, resolved): what the
+    /// race load's card turns to once the race manager exists.
+    pub mode_body: Option<String>,
     /// `FE_ELITE_PASS`, the label of the elite row of the objective page.
     pub elite_label: Option<String>,
     /// The elite objective's worded line (`M_ELITEOBJECTIVE`).
@@ -164,6 +170,109 @@ enum Page {
     Trophy,
     /// Kind `4`: the event's rules (`FUN_810535fe`).
     Rules,
+    /// Kind `6`: what the mode is (`CampaignEventCard_DrawModePage`), appended by the race
+    /// manager's constructor; only the race load shows it.
+    Mode,
+}
+
+/// Counts the lines a text wraps to at a scale and a width.
+pub type LineCount<'a> = &'a dyn Fn(&str, f32, f32) -> usize;
+
+/// What the card's picture slot shows.
+#[derive(Debug, Clone, Copy)]
+pub enum Backdrop<'a> {
+    /// The circuit's photo: the front end's card.
+    Photo,
+    /// A game tip in the photo's place, as the race load's first seconds draw it.
+    Tip(&'a GameTip),
+    /// Nothing: the mode page has dropped both.
+    None,
+}
+
+/// Everything the card painter reads, so the front end and the race load draw one painter:
+/// the front end builds it from its own state ([`Frontend::card_paint`]), the race load from a
+/// [`LaunchedCard`] it was handed.
+#[derive(Clone, Copy)]
+pub struct CardPaint<'a> {
+    event: &'a MapEvent,
+    page: usize,
+    state: ProgressState,
+    launch_allowed: bool,
+    change_craft: bool,
+    mode_page: bool,
+    globals: &'a std::collections::HashMap<String, String>,
+    placements: &'a [(String, Placed)],
+    bold: f32,
+    lines: Option<LineCount<'a>>,
+}
+
+impl std::fmt::Debug for CardPaint<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CardPaint")
+            .field("event", &self.event.name)
+            .field("page", &self.page)
+            .field("mode_page", &self.mode_page)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The card a launch left, for the race load to draw behind its box: the event, the page the
+/// card was on, and what the painter reads of the front end. Taken by
+/// [`Frontend::launched_card`] before the front end is dropped.
+#[derive(Debug, Clone)]
+pub struct LaunchedCard {
+    event: MapEvent,
+    page: usize,
+    state: ProgressState,
+    globals: std::collections::HashMap<String, String>,
+    placements: Vec<(String, Placed)>,
+    bold: f32,
+}
+
+impl LaunchedCard {
+    /// A card for `event` on `page`, with the skin and the sheet empty: what a test or a tool
+    /// holds when it has no front end to take one from.
+    #[must_use]
+    pub fn new(event: MapEvent, page: usize) -> Self {
+        Self {
+            event,
+            page,
+            state: ProgressState::Open,
+            globals: std::collections::HashMap::new(),
+            placements: Vec::new(),
+            bold: 1.0,
+        }
+    }
+
+    /// The painter over this card. `mode_page` is whether the race manager has appended the
+    /// mode page (the card then turns to it); `lines` counts the lines a text wraps to at a
+    /// scale and width, which the mode page centres its body with.
+    #[must_use]
+    pub fn paint<'a>(&'a self, mode_page: bool, lines: Option<LineCount<'a>>) -> CardPaint<'a> {
+        let page = if mode_page {
+            CardPaint::card_pages(&self.event).len()
+        } else {
+            self.page
+        };
+        CardPaint {
+            event: &self.event,
+            page,
+            state: self.state,
+            launch_allowed: true,
+            change_craft: false,
+            mode_page,
+            globals: &self.globals,
+            placements: &self.placements,
+            bold: self.bold,
+            lines,
+        }
+    }
+
+    /// The event the card was for.
+    #[must_use]
+    pub fn event(&self) -> &MapEvent {
+        &self.event
+    }
 }
 
 /// The card's own textures, spelled the way every front-end `Src=` is.
@@ -240,9 +349,11 @@ impl Frontend {
         self.campaign.card.is_some()
     }
 
-    /// Puts the campaign map's cursor on the event called `name`, bringing the
-    /// downloadable campaign's map on screen first when that is where it is.
-    /// `false` when there is none. A capture-harness hook (`--until card:N:NAME`).
+    /// Puts the campaign map's cursor on the event called `name` and the view
+    /// where the map opens for it, bringing the downloadable campaign's map on
+    /// screen first when that is where it is. `false` when there is none. What
+    /// a relaunch restores the cursor with, and a capture-harness hook
+    /// (`--until card:N:NAME`).
     pub fn select_campaign_event(&mut self, name: &str) -> bool {
         let named = |events: &[MapEvent]| events.iter().position(|event| event.name == name);
         if named(&self.campaign.events).is_none() {
@@ -261,29 +372,71 @@ impl Frontend {
             return false;
         };
         self.campaign.selected = index;
-        self.campaign.follow(self.space.size);
+        self.campaign.open();
         true
+    }
+
+    /// A capture harness hook: opens the card of the event called `name` on `page` and presses
+    /// Launch on it, as a player does, and returns the card that left (`None` when the event is
+    /// unknown or refused).
+    pub fn launch_event_card(&mut self, name: &str, page: usize) -> Option<LaunchedCard> {
+        if !self.select_campaign_event(name) {
+            return None;
+        }
+        self.open_event_card();
+        if let Some(card) = self.campaign.card.as_mut() {
+            card.page = page;
+        }
+        self.press_card_button(Button3::Launch);
+        self.launched_card()
+    }
+
+    /// The card as the painter reads it, while one is open.
+    fn card_paint(&self) -> Option<CardPaint<'_>> {
+        let card = self.campaign.card?;
+        let event = self.campaign.events.get(self.campaign.selected)?;
+        Some(CardPaint {
+            event,
+            page: card.page,
+            state: self.campaign.state_of(self.campaign.selected),
+            launch_allowed: self.card_launch_allowed(),
+            change_craft: self.card_has_change_craft(),
+            mode_page: false,
+            globals: &self.screens.globals,
+            placements: &self.placements,
+            bold: self.face_scale("NEOSANS_BOLD"),
+            lines: None,
+        })
+    }
+
+    /// The card, over the map.
+    pub(super) fn draw_event_card(&self, out: &mut Vec<Draw>) {
+        if let Some(paint) = self.card_paint() {
+            paint.draw(out);
+        }
+    }
+
+    /// The card the last launch left, for the race load to draw behind its box
+    /// (`CampaignEventCard_DrawPanel` over the launched event, `race-load.md`). `None` when
+    /// nothing was launched from a card.
+    #[must_use]
+    pub fn launched_card(&self) -> Option<LaunchedCard> {
+        let card = self.campaign.launched?;
+        let event = self.campaign.events.get(self.campaign.selected)?;
+        Some(LaunchedCard {
+            event: event.clone(),
+            page: card.page,
+            state: self.campaign.state_of(self.campaign.selected),
+            globals: self.screens.globals.clone(),
+            placements: self.placements.clone(),
+            bold: self.face_scale("NEOSANS_BOLD"),
+        })
     }
 
     /// Which page the card shows, `None` while it is closed.
     #[must_use]
     pub fn event_card_page(&self) -> Option<usize> {
         self.campaign.card.map(|card| card.page)
-    }
-
-    fn card_pages(event: &MapEvent) -> Vec<Page> {
-        let mut pages = Vec::new();
-        if event.card.has_objective {
-            pages.push(Page::Objective);
-        }
-        pages.push(Page::Leaderboard);
-        if event.card.has_trophy_page {
-            pages.push(Page::Trophy);
-        }
-        if Self::rules_items(&event.card) > 0 {
-            pages.push(Page::Rules);
-        }
-        pages
     }
 
     /// Opens the card for the selected event. A locked event refuses, as it
@@ -308,7 +461,7 @@ impl Frontend {
         let page = if self.card_launch_allowed() {
             0
         } else {
-            Self::card_pages(event)
+            CardPaint::card_pages(event)
                 .iter()
                 .position(|page| *page == Page::Rules)
                 .unwrap_or(0)
@@ -332,6 +485,7 @@ impl Frontend {
             .events
             .get(self.campaign.selected)
             .is_some_and(|event| event.forced_craft.is_none())
+            && self.screens.by_name(w2048::TEAM).is_some()
     }
 
     fn press_card_button(&mut self, button: Button3) {
@@ -343,6 +497,7 @@ impl Frontend {
             Button3::Launch => {
                 self.launch_selected_event();
                 if self.touch.launch.is_some() {
+                    self.campaign.launched = self.campaign.card;
                     self.campaign.card = None;
                 }
             }
@@ -358,7 +513,7 @@ impl Frontend {
         let Some(event) = self.campaign.events.get(self.campaign.selected) else {
             return;
         };
-        let count = Self::card_pages(event).len();
+        let count = CardPaint::card_pages(event).len();
         if count < 2 {
             return;
         }
@@ -426,6 +581,28 @@ impl Frontend {
         }
         true
     }
+}
+
+impl CardPaint<'_> {
+    /// Where `src` sits in the sheet the card draws from.
+    pub(super) fn placed(&self, src: &str) -> Option<Placed> {
+        self.placements
+            .iter()
+            .find(|(name, _)| name == src)
+            .map(|(_, placed)| *placed)
+    }
+
+    /// A skin global as a colour, white where the skin has none.
+    pub(super) fn global_colour(&self, name: &str) -> [f32; 4] {
+        self.globals
+            .get(name)
+            .and_then(|value| parse_argb(value))
+            .map_or([1.0, 1.0, 1.0, 1.0], argb_to_rgba)
+    }
+
+    fn sprite_at(rect: [f32; 4], placed: Placed, color: [f32; 4]) -> Draw {
+        Frontend::sprite_at(rect, placed, color)
+    }
 
     fn card_sprite(&self, src: &str, rect: [f32; 4], color: [f32; 4], out: &mut Vec<Draw>) {
         if let Some(placed) = self.placed(src) {
@@ -466,26 +643,61 @@ impl Frontend {
         }
     }
 
-    /// The card, over the map.
-    pub(super) fn draw_event_card(&self, out: &mut Vec<Draw>) {
-        let (Some(card_state), Some(event)) = (
-            self.campaign.card,
-            self.campaign.events.get(self.campaign.selected),
-        ) else {
-            return;
-        };
+    /// The pages the card lists for `event`, in the original's order
+    /// (`CampaignEventCard_BuildPageList`).
+    fn card_pages(event: &MapEvent) -> Vec<Page> {
+        let mut pages = Vec::new();
+        if event.card.has_objective {
+            pages.push(Page::Objective);
+        }
+        pages.push(Page::Leaderboard);
+        if event.card.has_trophy_page {
+            pages.push(Page::Trophy);
+        }
+        if Self::rules_items(&event.card) > 0 {
+            pages.push(Page::Rules);
+        }
+        pages
+    }
+
+    /// The pages this card lists, with the mode page last when the race manager has appended
+    /// it (`CampaignEventCard_ShowModePage`).
+    fn pages(&self) -> Vec<Page> {
+        let mut pages = Self::card_pages(self.event);
+        if self.mode_page {
+            pages.push(Page::Mode);
+        }
+        pages
+    }
+
+    /// The card as the front end draws it: the panel, then the three buttons.
+    pub fn draw(&self, out: &mut Vec<Draw>) {
+        self.draw_panel(Backdrop::Photo, out);
+        self.draw_buttons(out);
+    }
+
+    /// The panel `CampaignEventCard_DrawPanel` draws: the picture slot, the header, the body
+    /// page and the page furniture. The race load draws this and none of the buttons.
+    pub fn draw_panel(&self, backdrop: Backdrop<'_>, out: &mut Vec<Draw>) {
         let blue = self.global_colour("Blue2048");
         let orange = self.global_colour("Orange2048");
         let white = [1.0, 1.0, 1.0, 1.0];
+        let event = self.event;
         let card = &event.card;
-        let pages = Self::card_pages(event);
+        let pages = self.pages();
 
-        if let Some(photo) = card.photo.as_deref().and_then(|src| self.placed(src)) {
-            out.push(Draw::Sprite {
-                rect: PHOTO,
-                uv: [photo.x as f32, photo.y as f32, PHOTO[2], PHOTO[3]],
-                color: white,
-            });
+        match backdrop {
+            Backdrop::Photo => {
+                if let Some(photo) = card.photo.as_deref().and_then(|src| self.placed(src)) {
+                    out.push(Draw::Sprite {
+                        rect: PHOTO,
+                        uv: photo.sheet_rect([0.0, 0.0, PHOTO[2], PHOTO[3]]),
+                        color: white,
+                    });
+                }
+            }
+            Backdrop::Tip(tip) => self.draw_tip_panel(tip, out),
+            Backdrop::None => {}
         }
         // `Transparent2048` (`0xc0ffffff`) is the vertex colour
         // `CampaignEventCard_DrawPanel` writes into both panel quads.
@@ -528,19 +740,26 @@ impl Frontend {
             out,
         );
 
-        match pages.get(card_state.page) {
+        match pages.get(self.page) {
             Some(Page::Objective) => self.draw_objective_page(event, out),
             Some(Page::Leaderboard) => self.draw_leaderboard_page(event, out),
             Some(Page::Trophy) => self.draw_trophy_page(event, out),
             Some(Page::Rules) => self.draw_rules_page(event, out),
+            Some(Page::Mode) => self.draw_mode_page(event, out),
             None => {}
         }
 
         if pages.len() > 1 {
-            self.draw_page_furniture(card_state.page, pages.len(), blue, orange, out);
+            self.draw_page_furniture(self.page, pages.len(), blue, orange, out);
         }
+    }
 
-        let allowed = self.card_launch_allowed();
+    /// Change craft, Back and Launch.
+    fn draw_buttons(&self, out: &mut Vec<Draw>) {
+        let blue = self.global_colour("Blue2048");
+        let orange = self.global_colour("Orange2048");
+        let white = [1.0, 1.0, 1.0, 1.0];
+        let allowed = self.launch_allowed;
         let launch_tint = if allowed {
             blue
         } else {
@@ -548,7 +767,7 @@ impl Frontend {
         };
         self.draw_card_button(BUTTON_X[2], PLAY, launch_tint, white, out);
         self.draw_card_button(BUTTON_X[1], CROSS, blue, white, out);
-        if self.card_has_change_craft() {
+        if self.change_craft {
             let tint = if allowed { blue } else { orange };
             self.draw_card_button(BUTTON_X[0], SHIP, tint, white, out);
         }
@@ -587,12 +806,7 @@ impl Frontend {
             out.push(Self::sprite_at([429.0, 266.0, 32.0, 32.0], arrow, blue));
             out.push(Draw::RotatedSprite {
                 rect: [904.0, 266.0, 32.0, 32.0],
-                uv: [
-                    arrow.x as f32,
-                    arrow.y as f32,
-                    arrow.width as f32,
-                    arrow.height as f32,
-                ],
+                uv: arrow.sheet_rect([0.0, 0.0, arrow.width as f32, arrow.height as f32]),
                 color: blue,
                 rotation: std::f32::consts::PI,
             });
@@ -664,7 +878,7 @@ const RULES_LAYOUT: [[(f32, f32); 6]; 6] = [
 const TAB_X: [f32; 3] = [471.0, 613.0, 755.0];
 const TAB_RECT: (f32, f32, f32) = (186.0, 138.0, 44.0);
 
-impl Frontend {
+impl CardPaint<'_> {
     /// How many icons page kind `4` would draw for `card` - the count
     /// `CampaignEventCard_BuildPageList` gates the page on. The weapon
     /// callout (`FUN_810626ce`) is an item in the original and is not read
@@ -719,10 +933,7 @@ impl Frontend {
             white,
             None,
         ));
-        if matches!(
-            self.campaign.state_of(self.campaign.selected),
-            ProgressState::Open | ProgressState::Locked
-        ) {
+        if matches!(self.state, ProgressState::Open | ProgressState::Locked) {
             out.push(Self::card_text("--", CENTRE_X, 332.0, 1.0, blue, None));
         }
     }

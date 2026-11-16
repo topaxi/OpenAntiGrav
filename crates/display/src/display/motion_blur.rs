@@ -65,6 +65,20 @@ impl MotionBlur {
             Self::High => 0.75,
         }
     }
+
+    /// The most taps the gather spends on one pixel: the smear keeps its
+    /// length at any count, and fewer taps sample it more coarsely, so a lower
+    /// tier is cheaper as well as shorter. Zero is off. Costs and pictures:
+    /// `docs/rendering/motion-blur.md`, "Fewer taps".
+    #[must_use]
+    pub fn taps(self) -> u32 {
+        match self {
+            Self::Off => 0,
+            Self::Low => 7,
+            Self::Medium => 9,
+            Self::High => 11,
+        }
+    }
 }
 
 impl std::str::FromStr for MotionBlur {

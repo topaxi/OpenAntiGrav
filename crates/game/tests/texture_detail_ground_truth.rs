@@ -10,7 +10,7 @@
 //!
 //! # What only the whole game can say here
 //!
-//! `crates/render/tests/psp_slope_lod.rs` proves the shader shifts the level by
+//! `crates/mesh/tests/psp_slope_lod.rs` proves the shader shifts the level by
 //! the scene uniform's `texlod_shift`. This proves the rest of the road: the
 //! setting is parsed, handed to the race, written into the scene uniform each
 //! frame, and read back by the same fragment stage. It runs the shipped binary
@@ -52,7 +52,7 @@ fn capture(image: &Path, scratch: &Path, detail: Option<&str>) -> Vec<u8> {
     }
     let status = command.status().expect("running oag-game");
     assert!(status.success(), "oag-game --texture-detail {detail:?}");
-    std::fs::read(&out).expect("reading the screenshot")
+    oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
 fn scratch() -> PathBuf {

@@ -3,6 +3,12 @@
 //! forms. Three different pitch words from one bank (`frontend.bnk`) falsify
 //! "one rate per bank", and each is what the descriptor bytes predict.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use super::*;
 
 /// `(centre, fine) -> pitch` pairs read at `__sceSasSetPitch` (`0x08a76c7c`) in

@@ -28,9 +28,41 @@ pub(super) struct ViewSettings<'a> {
     pub(super) shadows: oag_display::display::Shadows,
     pub(super) camera_jitter: Option<u32>,
     pub(super) zone_spectrum: &'a [f32],
+    /// `Some` for the secondary view (`scene::portal_view`).
+    pub(super) portal: Option<PortalPass>,
+}
+
+/// What a view drawn through a portal takes from the view it stands in for.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct PortalPass {
+    /// The aspect of that view, not of the texture: a point of the surface lands on the same
+    /// texture coordinate as on the screen.
+    pub(super) aspect: f32,
+    /// That view's projection.
+    pub(super) projection: Mat4,
+    /// The exit's plane in eye space: nothing behind it is drawn.
+    pub(super) exit_plane: oag_core::math::Vec4,
 }
 
 impl Scene {
+    /// Which of a PS3 circuit's chunks the viewed seat's craft and camera may draw: tier one on
+    /// a circuit that partitions by chunk rather than by section (`oag_render::pvs::ChunkSet`).
+    /// Located from world positions, because `track.pvs` carries its own cell positions and is
+    /// not indexed by the `.vex` spline at all. `None` draws every chunk.
+    pub(super) fn chunk_set(&self, race: &Race, pvs_cull: bool) -> Option<ChunkSet> {
+        self.visibility
+            .as_ref()
+            .filter(|_| pvs_cull && race.photo().is_none())
+            .and_then(|visibility| visibility.chunks())
+            .and_then(|pvs| {
+                ChunkSet::around(
+                    pvs,
+                    race.viewed_ship().physics.body.position,
+                    race.camera_position(),
+                )
+            })
+    }
+
     /// Draws one frame into `view`. One render pass with one clear: a
     /// second pass would either wipe the first's colour or need its own
     /// decision about the depth buffer.
@@ -81,14 +113,6 @@ impl Scene {
         blur_timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
         hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
     ) -> SceneStats {
-        // Every drawable's matrices of this view are staged here and written once, in runs,
-        // before the scene pass (`UniformBlocks`); anything else goes through to the queue.
-        let uploads = Uploads::begin(
-            queue,
-            &self.uniform_blocks,
-            SceneBlocks::view(race.viewed_slot()),
-            std::mem::take(&mut *self.upload_staging.borrow_mut()),
-        );
         let settings = ViewSettings {
             fov,
             cull,
@@ -97,7 +121,24 @@ impl Scene {
             shadows,
             camera_jitter,
             zone_spectrum,
+            portal: None,
         };
+        // A view of a split asks before its first view (`Scene::render_slots`).
+        if matches!(self.layer.get(), Layer::Whole | Layer::Window) && self.does_frame_work() {
+            let drawn = [(race.viewed_slot(), viewport)];
+            self.draw_portal_view(device, queue, race, &drawn, &settings);
+        }
+        // Every drawable's matrices of this view are staged here and written once, in runs,
+        // before the scene pass (`UniformBlocks`); anything else goes through to the queue.
+        // Before anything draws: whether this frame has a reader of the velocity buffer
+        // decides which pipelines the track and the hulls draw with.
+        self.gate_velocity(self.velocity_readers(motion_blur, camera_jitter));
+        let uploads = Uploads::begin(
+            queue,
+            &self.uniform_blocks,
+            SceneBlocks::view(race.viewed_slot()),
+            std::mem::take(&mut *self.upload_staging.borrow_mut()),
+        );
         let pass = self.prepare_view(
             &uploads, encoder, view, race, viewport, &settings, timestamps,
         );
@@ -109,7 +150,7 @@ impl Scene {
         oag_gpu::split_finish::split(device, encoder);
         oag_gpu::perfprobe::mark("scene-pass");
         let blur_lens = pass.blur_lens;
-        drop(pass);
+        self.keep_view_lists(pass);
         let (hd_bloom_encoded, blur_encoded) = self.finish_view(
             device,
             queue,
@@ -136,7 +177,7 @@ impl Scene {
     pub(super) fn finish_view(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         race: &Race,
@@ -147,7 +188,7 @@ impl Scene {
     ) -> (bool, bool) {
         let mut hd_bloom_encoded = false;
         // The sun flare draws over the resolved scene, ahead of every post pass and the HUD.
-        self.encode_lens_flare(device, encoder, view);
+        self.encode_lens_flare(device, queue, encoder, view);
         let depth_view = &self.attachment_views.depth;
         let velocity_view = &self.attachment_views.velocity;
 
@@ -231,19 +272,23 @@ impl Scene {
         // runs before the caller composites the HUD over `view`, so the
         // readouts stay sharp however the world moves. `motion_blur` is the
         // strength read fresh off the settings this frame, so the row
-        // applies live; at `off` the pass encodes nothing. The velocity
-        // buffer it reads was written by the scene pass above either way -
-        // see `Scene::velocity`.
+        // applies live; at `off` the pass encodes nothing. The scene pass
+        // above wrote the velocity buffer for it because the same strength
+        // opened the gate before drawing - see `scene::velocity_gate`.
         let blur_encoded = self.encode_motion_blur(
             device,
             queue,
             encoder,
             [view, velocity_view, depth_view],
             viewport,
-            motion_blur.shutter(),
+            motion_blur,
             blur_lens,
             blur_timestamps,
         );
+        // Photo mode's picture controls, last of all: they grade and blur the finished frame.
+        if whole {
+            self.run_photo_fx(device, queue, encoder, view, viewport, race);
+        }
         oag_gpu::perfprobe::mark("post-chain");
         (hd_bloom_encoded, blur_encoded)
     }
@@ -271,12 +316,16 @@ impl Scene {
             shadows,
             camera_jitter,
             zone_spectrum,
+            portal,
         } = *settings;
         // The scene blocks of the view being drawn: the craft it follows names them, so two
         // views of a frame never read or write the same one (`SceneBlocks`).
-        let block = SceneBlocks::view(race.viewed_slot());
+        let block = match portal {
+            Some(_) => SceneBlocks::portal(),
+            None => SceneBlocks::view(race.viewed_slot()),
+        };
         let queue = uploads;
-        let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
+        let aspect = portal.map_or(viewport.2.max(1.0) / viewport.3.max(1.0), |p| p.aspect);
         let projection = race.projection(aspect, self.far, fov);
         let view_projection = projection * race.view();
         // The previous tick's camera and model matrices, promoted from the
@@ -318,6 +367,11 @@ impl Scene {
         // frustum and the snapshot are above deliberately - see the call.
         let (view_projection, prev_vp) =
             self.jittered(camera_jitter, viewport, view_projection, prev_vp);
+        // Swung onto the exit, what stands behind it clipped. The frustum and the section test
+        // keep the plain matrix: the swing tilts the far plane.
+        let view_projection = portal
+            .and_then(|p| oag_render::camera::portal::oblique_near(p.projection, p.exit_plane))
+            .map_or(view_projection, |oblique| oblique * race.view());
         // Tier one, built once a frame. Both sections come from the authored
         // spline rather than from the section boxes: a control point's
         // `section_id` is what the artists wrote, while a point-in-box test is
@@ -333,18 +387,7 @@ impl Scene {
         // positions rather than from spline sample ids because `track.pvs`
         // carries its own cell positions and is not indexed by the `.vex`
         // spline at all.
-        let chunk_set = self
-            .visibility
-            .as_ref()
-            .filter(|_| pvs_cull)
-            .and_then(|visibility| visibility.chunks())
-            .and_then(|pvs| {
-                ChunkSet::around(
-                    pvs,
-                    race.viewed_ship().physics.body.position,
-                    race.camera_position(),
-                )
-            });
+        let chunk_set = self.chunk_set(race, pvs_cull);
         // The animation clock, in seconds, from the tick and never the wall
         // clock - so a replay of the same tick draws the same frame. The
         // original passes every world mesh one clock that began when the
@@ -456,6 +499,7 @@ impl Scene {
         scratch.clear();
         let super::Scratch {
             vertices,
+            flares,
             trail,
             additive,
             alpha,
@@ -465,21 +509,25 @@ impl Scene {
             recoloured,
         } = &mut *scratch;
 
-        for drawable in [
+        let mut written = self.zone_vis_written.borrow_mut();
+        for (drawable, last) in [
             Some(&self.track),
             self.collision.as_ref(),
             self.pads.as_ref(),
             self.weapon_pads.as_ref(),
         ]
         .into_iter()
-        .flatten()
+        .zip(written.iter_mut())
+        .filter_map(|(drawable, last)| Some((drawable?, last)))
         {
-            // Written for every drawable on this list regardless of whether a
+            // Called for every drawable on this list regardless of whether a
             // Zone race is running: it blanks the lookup with no spectrum or
             // no tint, and `scene.zone.enabled` already gates the glow off
-            // outside a Zone race, so this is cheap and never wrong to call.
-            drawable.write_zone_vis(queue, zone_spectrum, zone_tint);
+            // outside a Zone race. It writes only texels that changed, so a
+            // race with no Zone writes the blank lookup once.
+            drawable.write_zone_vis(queue, zone_spectrum, zone_tint, last);
         }
+        drop(written);
         // **The craft get the same scene with the Zone half switched off**,
         // because the disc says they are not in it. The twelve
         // `data/materials/ships/*.rcsmaterial` in `DATA03.PSARC` carry no Zone
@@ -512,7 +560,7 @@ impl Scene {
         // race. See `Scene::render_viewports` and `Scene::does_frame_work`.
         let first_view = self.does_frame_work();
         if first_view {
-            self.write_scenery_anims(queue, seconds);
+            self.write_scenery_anims(queue, seconds, race);
             self.frame_work.update(|w| super::FrameWork {
                 scenery_clocks: w.scenery_clocks + 1,
                 ..w
@@ -611,7 +659,12 @@ impl Scene {
         if let Some(sky) = &self.sky {
             sky.write_hull(
                 queue,
-                view_projection,
+                // The sky rides on the eye, behind the portal's near plane.
+                if portal.is_some() {
+                    section_view
+                } else {
+                    view_projection
+                },
                 Mat4::from_translation(race.camera_position()),
                 // The previous camera's *translation* cancels against the
                 // previous view-projection exactly as this frame's does
@@ -642,7 +695,19 @@ impl Scene {
         // time trial fields one craft.
         oag_gpu::perfprobe::mark("sky+track-write");
         let drawn = usize::from(race.ship_count());
-        self.write_hull_uniforms(queue, race, view_projection, prev_vp, &prev);
+        self.write_hull_uniforms(
+            queue,
+            race,
+            view_projection,
+            prev_vp,
+            &prev,
+            frustum.as_ref(),
+        );
+        // The blend of the hulls' environment probes those uniforms name, ahead of the scene
+        // pass like the shadow maps.
+        if let Some(probes) = &self.env_probes {
+            probes.flush(queue, encoder);
+        }
         let lod_eye = race.lod_eye(aspect, fov);
         self.select_lod(block, race, lod_eye);
         // The flaps move in *model* space, before the ship's own matrix, so
@@ -719,7 +784,21 @@ impl Scene {
             );
             sphere.tint(queue, state.colour(), recoloured);
         }
-        self.write_absorb_overlays(race, queue, view_projection, prev_vp, &prev, recoloured);
+        self.write_absorb_overlays(
+            race,
+            queue,
+            view_projection,
+            prev_vp,
+            &prev,
+            block,
+            crate::drawable::TrackCull {
+                sections: self.visibility.as_ref().map(|v| &v.sections),
+                set,
+                chunks,
+                frustum: frustum.as_ref(),
+            },
+            recoloured,
+        );
         self.write_absorb_shells(race, queue, view_projection, prev_vp, &prev, recoloured);
         self.write_ghost(race, queue, view_projection, prev_vp);
         oag_gpu::perfprobe::mark("ship+shield-write");
@@ -735,9 +814,13 @@ impl Scene {
             );
         let plasma_blast_active =
             self.write_plasma_blasts(race, queue, view_projection, &weapon_scene);
+        let disruptor_halo_active =
+            self.write_disruptor_halos(race, queue, view_projection, &weapon_scene);
+        let disruptor_craft_active =
+            self.write_disruptor_craft_fx(race, queue, view_projection, seconds, &weapon_scene);
         let blasts_active =
             self.write_bomb_blasts(race, queue, view_projection, seconds, &weapon_scene);
-        let leach_ball_active = self.write_leach_ball(race, queue, view_projection, &weapon_scene);
+        let leach_balls = self.write_leach_ball(race, queue, view_projection, &weapon_scene);
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
         // hidden rather than written and left undrawn, since there is nothing
@@ -747,7 +830,7 @@ impl Scene {
         // `TEXMAPMODE` 0 (settled live - mesh-draw.md, "The plume is replayed
         // under `TEXMAPMODE` 0"), sampling its authored coordinates through
         // the keyframed `TEXSCALE`/`TEXOFFSET` transform the file itself
-        // carries. This replaced `oag_render::texgen` here 2026-08-10;
+        // carries. Not `oag_render::texgen`:
         // texgen's environment mapping is real but belongs to the
         // transparent-pass bracket, which the plume is not inside.
         //
@@ -776,7 +859,7 @@ impl Scene {
             let Some(flare) = flare else {
                 continue;
             };
-            if !race.ship_active(slot) {
+            if !race.ship_drawn(slot) {
                 continue;
             }
             // HD breathes the flame with the craft: `EngineFlare_PlaceShapes`
@@ -798,7 +881,7 @@ impl Scene {
         // The five spikes, each on its own flicker scale: split out of the
         // groups above, so they get no part of those groups' length scale.
         for (slot, spikes) in self.flare_spikes.iter().enumerate().take(drawn) {
-            if !race.ship_active(slot) {
+            if !race.ship_drawn(slot) {
                 continue;
             }
             for spike in spikes {
@@ -938,6 +1021,27 @@ impl Scene {
         // which skips the *hull* because a hull drawn around the camera really
         // does put polygons across the middle of the screen.
         oag_gpu::perfprobe::mark("pre-exhaust");
+        // With the ribbons first the engine flares are queued among the circuit's blended list,
+        // by the depth of the nozzle (`ExhaustFlare_Submit`), and the pass draws them there;
+        // otherwise they stay in the sprite buffer and draw after it.
+        let ribbon_first = race.ribbons_first();
+        let blended_after_craft = race.blended_after_craft();
+        let plane = [
+            section_view.x_axis.w,
+            section_view.y_axis.w,
+            section_view.z_axis.w,
+            section_view.w_axis.w,
+        ];
+        // The list-B depth the circuit's meshes are keyed at is scaled by `fov / 65`; a flare's
+        // is not. `depth_plane` below carries the scale, `plane` here does not. The scale only
+        // matters to the picture where the flares are queued among the list-B meshes, so it is
+        // applied there alone.
+        let list_b_depth_scale = if ribbon_first {
+            race.camera_fov_degrees() / oag_mesh::mesh::REFERENCE_FOV_DEGREES
+        } else {
+            1.0
+        };
+        let mut flare_keys = Vec::new();
         for slot in 0..drawn {
             // Per craft, unlike the nozzle check below - an inactive slot is
             // out of the race regardless of what its model authors. `continue`
@@ -963,12 +1067,18 @@ impl Scene {
                 && !race.engine_flare_effect()
                 && !self.is_wrecked(race, slot)
             {
-                vertices.extend(exhaust.vertices(nozzle, right, up));
+                super::scratch::queue_flare(
+                    ribbon_first,
+                    &exhaust.vertices(nozzle, right, up),
+                    oag_mesh::mesh::flare_key(plane, nozzle.to_array()),
+                    vertices,
+                    (flares, &mut flare_keys),
+                );
             }
             // HD's sprite flare - Engine_Flare_Rich.gtf, enabled by the
             // disc's own tuning file - is the bright core the exhaust's
             // "solidity" comes from; the flare texture slot holds it on HD.
-            vertices.extend(race.hd_sprite_quad(slot, right, up));
+            vertices.extend_from_slice(&race.hd_sprite_quad(slot, right, up));
             // Wipeout HD draws its own measured tube - three fins over a
             // 54-sample ring, extruded in the craft's frame rather than the
             // camera's - and every other source the PSP preset's ribbon.
@@ -985,7 +1095,7 @@ impl Scene {
             }
         }
         // Only the billboard *fallback*, per kind: a body whose own model did
-        // not load, or a Missile or Plasma, which has none at all.
+        // not load, or a Missile whose title authors no head.
         vertices.extend(race.projectile_sprites(right, up, |kind| match kind {
             oag_tables::weapons::Weapon::Rocket => !self.rockets.is_empty(),
             oag_tables::weapons::Weapon::Mine => !self.mines.is_empty(),
@@ -993,6 +1103,7 @@ impl Scene {
             oag_tables::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
             oag_tables::weapons::Weapon::Plasma => !self.plasma_blast.ball.is_empty(),
             oag_tables::weapons::Weapon::Shuriken => !self.plasma_blast.shuriken.is_empty(),
+            oag_tables::weapons::Weapon::Missile => !self.plasma_blast.missile_head.is_empty(),
             _ => false,
         }));
         self.gather_cannon_quads(race, right, up, cannon_bolt, cannon_flash);
@@ -1000,9 +1111,14 @@ impl Scene {
         // Shared by every upload below - `to_cols_array_2d` is otherwise
         // recomputed once per pipeline for the same one matrix.
         let vp = view_projection.to_cols_array_2d();
-        self.exhaust
-            .borrow_mut()
-            .upload(queue, &vp, race.camera_position(), vertices, trail);
+        self.exhaust.borrow_mut().upload(
+            queue,
+            &vp,
+            race.camera_position(),
+            vertices,
+            flares,
+            trail,
+        );
         self.clouds.borrow_mut().upload(
             queue,
             &vp,
@@ -1016,6 +1132,9 @@ impl Scene {
         self.upload_cannon_quads(queue, &vp, cannon_bolt, cannon_flash);
         self.upload_beam(race, queue, &vp);
         self.upload_ribbons(race, queue, &vp);
+        if portal.is_none() {
+            self.upload_mod_shaders(race, queue, &vp);
+        }
 
         // Both shadow tiers' geometry - its own file, see `frame/shadow.rs`.
         self.upload_shadow_geometry(queue, &vp, race, shadows);
@@ -1025,7 +1144,10 @@ impl Scene {
         // Under the HD chain the whole scene draws into its linear float
         // target instead of the caller's view; the chain's own encode pass is
         // what reaches `view`, after the read bloom. See `Self::hd`.
-        let target = self.linear_scene_view().unwrap_or(view);
+        let target = match portal {
+            Some(_) => view,
+            None => self.linear_scene_view().unwrap_or(view),
+        };
         uploads.flush();
         // What the pass draws, in its order. The sky draws inside the track, between the
         // circuit's solid and blended lists - see `Recorder::draw_track` for why there.
@@ -1056,6 +1178,9 @@ impl Scene {
         // original's own draw-order key has no layer for a blob, because no
         // title in the lineage draws one. See `docs/rendering/draw-order.md`.
         draws.push(Draw::Shadow);
+        // A mod's backdrop: over the circuit and before the hulls, so the view's own craft is
+        // drawn in front of it. Nothing with no such fill.
+        draws.push(Draw::Backdrop);
         // Skipped outright in the cockpit view rather than moved or scaled away:
         // the original sets one flag on the craft and draws no hull, and a draw
         // call not issued is the only version of that with no chance of a stray
@@ -1064,7 +1189,7 @@ impl Scene {
         // in front are exactly what a cockpit view is for.
         draws.mark("craft, weapons, shields");
         for (index, drawable) in self.ships.iter().take(drawn).enumerate() {
-            if self.hull_skipped(race, index) {
+            if self.hull_skipped(race, index) || !race.ship_drawn(index) {
                 continue;
             }
             let (centre, radius) = drawable.bound();
@@ -1074,16 +1199,19 @@ impl Scene {
                 centre,
                 radius,
             ) {
-                draws.mesh(drawable);
+                draws.flown(race.ship_flown_in_view(index), |draws| draws.mesh(drawable));
             }
         }
-        // The ribbons, then the circuit's blended list over them: the original's queue order
-        // (`Recorder::draw_ribbons`). After the hulls, so their depth is in the buffer for the
+        // The circuit's blended list after the pads and the hulls: a list-B mesh (a tree) writes
+        // no depth, so what is drawn after it lies over it whatever the distance, and the
+        // original draws the pads and hulls first (`docs/rendering/draw-order.md`). With the
+        // ribbons first they go down before it: the original's queue order
+        // (`Recorder::draw_ribbons`), after the hulls so their depth is in the buffer for the
         // ribbon to be occluded by; the weapon bodies, wrecks and flares keep their place after
-        // the blended list, as before. HD's tube keeps the old order: its queue key is unread.
-        // `trail_order = "over-floors"` puts the PSP ribbons back there too (chosen, not measured).
-        let ribbon_first = race.ribbons_first();
-        draws.ribbons_then_blended(ribbon_first);
+        // the blended list, as before. `trail_order = "over-floors"` moves the ribbons alone, to
+        // the effects after the list (chosen, not measured). HD's tube keeps the circuit whole:
+        // its queue key is unread.
+        draws.blended_after_craft(ribbon_first, blended_after_craft);
         draws.mark("wrecks, weapon bodies");
         self.draw_wrecks(race, &mut draws);
         // Every weapon's own body: opaque painted models, bounded by how many
@@ -1104,9 +1232,12 @@ impl Scene {
             draws.mesh(drawable);
         }
         self.draw_shurikens(race.shuriken_model_matrices().len(), &mut draws);
+        self.draw_missile_heads(race.missile_head_model_matrices().len(), &mut draws);
         self.draw_plasma_blasts(&plasma_blast_active, &mut draws);
+        self.draw_disruptor_halos(&disruptor_halo_active, &mut draws);
+        self.draw_disruptor_craft_fx(&disruptor_craft_active, &mut draws);
         self.draw_bomb_blasts(&blasts_active, &mut draws);
-        self.draw_leach_ball(leach_ball_active, &mut draws);
+        self.draw_leach_balls(leach_balls, &mut draws);
         // After the ships, so the hulls' depth is already in the buffer: a
         // plume's own blend pipeline writes no depth, the same reasoning as
         // the flares below. One draw per boosting craft, gated on the same
@@ -1128,25 +1259,27 @@ impl Scene {
             let Some(flare) = flare else {
                 continue;
             };
-            if !race.ship_active(slot) {
+            if !race.ship_drawn(slot) {
                 continue;
             }
             // `draw`, not `draw_additive`: every batch of this model already
             // carries its material's own factor pair, so the ordinary path
             // routes it through the authored pipeline. The override the plume
             // needs is for a model that authors none.
-            draws.mesh(flare);
+            draws.flown(race.ship_flown_in_view(slot), |draws| draws.mesh(flare));
         }
         for (slot, spikes) in self.flare_spikes.iter().enumerate().take(drawn) {
-            if !race.ship_active(slot) {
+            if !race.ship_drawn(slot) {
                 continue;
             }
-            for spike in spikes {
-                if spike.boost && !spike_boost_visible(race, slot) {
-                    continue;
+            draws.flown(race.ship_flown_in_view(slot), |draws| {
+                for spike in spikes {
+                    if spike.boost && !spike_boost_visible(race, slot) {
+                        continue;
+                    }
+                    draws.mesh(&spike.drawable);
                 }
-                draws.mesh(&spike.drawable);
-            }
+            });
         }
         draws.mark("boost plumes");
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
@@ -1187,7 +1320,7 @@ impl Scene {
         {
             draws.mesh(sphere);
         }
-        self.draw_absorb_overlays(race, &mut draws);
+        self.draw_absorb_overlays(race, frustum.as_ref(), &mut draws);
         self.draw_absorb_shells(race, &mut draws);
         if let Some(collision) = &self.collision {
             draws.mesh(collision);
@@ -1198,19 +1331,17 @@ impl Scene {
         // depth-tested-not-written geometry, so they follow right after for the
         // same reason.
         draws.push(Draw::Effects);
-        let mut shadow_runs = Vec::new();
+        let lists = self.take_view_lists();
+        let mut shadow_runs = lists.shadow_runs;
         self.shadow_runs(&mut shadow_runs);
         ViewPass {
             layer: self.layer.get(),
             block,
             viewport,
             eye: race.camera_position(),
-            depth_plane: [
-                section_view.x_axis.w,
-                section_view.y_axis.w,
-                section_view.z_axis.w,
-                section_view.w_axis.w,
-            ],
+            depth_plane: plane.map(|row| row * list_b_depth_scale),
+            foliage_depth: race.writes_foliage_depth(),
+            flare_keys,
             frustum,
             visible_set,
             chunk_set,
@@ -1219,7 +1350,9 @@ impl Scene {
             draws,
             effects: self.effects_drawn(),
             ribbon_first,
+            blended_after_craft,
             shadow_runs,
+            opaque_order: std::cell::Cell::new(lists.opaque_order),
             ghost: self.ghost_draw(race, lod_eye),
             stats: behind_glass,
             blur_lens,
@@ -1237,3 +1370,4 @@ mod road;
 mod shadow;
 pub(super) use attachments::{depth_texture, msaa_color_texture};
 pub(super) use hull_cache::HullCache;
+pub(super) use shadow::{ShadowGathered, ShadowRank};

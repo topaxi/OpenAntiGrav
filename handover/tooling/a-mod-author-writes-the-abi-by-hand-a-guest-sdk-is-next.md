@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-30
-summary: "SDK, track module, Hillside rain, track props landed locally; open: Blender props run, check tool, C header, template, git dep, MODDED"
+summary: "SDK, track module, Hillside rain, track props, mod events landed locally; open: check tool, C header, template, MODDED, gate animation"
 categories: [gameplay]
 size: M (55)
 difficulty: medium (60)
@@ -20,6 +20,20 @@ The wire ABI itself (one I/O buffer, three exports, core wasm, no component mode
 settled by `docs/architecture/wasm-extensions/README.md` section 2 and
 `determinism-and-state.md` ("Web and iOS") and is **not** what this thread changes. The
 problem is that the buffer's bytes are the *only* interface a mod author has.
+
+## Landed since (2026-10-30, lane `ext-mod-events`, local `ext-mod-events` branch)
+
+Mods and tracks send each other events over declared channels: command 23 `emit`, event 10
+`mod` (events are 16 bytes now, ABI 1 edited in place, fold re-recorded), `[channels]` in
+`oag-mod.toml` and `.track.toml`, a trigger's `oag_emit` and an animation's `oag_on` (Blender
+fields, `roundtrip.py channels`), the MODS page's SENDS, HEARS and NO ONE SENDS lines. The README's
+"And events between mods" has the proof and the **Later** note on event urgency levels (next tick
+as built; immediate in the mod, async by a fixed tick delay, lazy latest-per-channel and a priority
+past the cap are notes only). Open: Checkpoint Circuit's gate animation (the example publishes the
+channel; its Blender builder has no animated gate yet), a track file's channel namespace is only
+shape-checked (a mod-shipped track is not required to publish under its mod's id), and `oag_render`'s
+shine pass (`render/src/shine.rs`) samples node motion without the channel clock
+(`Model::sample_anim_nodes`, not the `_started` form).
 
 ## Landed since (2026-10-30, lane `hillside-rain`, local `wasm-extensions` branch)
 
@@ -260,8 +274,10 @@ one generic record, and the documentation table names them per kind.
    the host and the guest compile against one definition and the gate covers both.
    `mod-examples` takes `oag-ext` as a **git dependency on the engine repository with a
    pinned `rev`** (the submodule layout would allow a `path`, but a stand-alone clone
-   must build). The pin is bumped with each ABI revision; the committed `.wasm` is
-   refused by name until it is.
+   must build). Landed 2026-10-30 as `branch = "main"`, not a `rev` (maintainer: a pin
+   bump on every SDK commit is too much friction while ABI 1 is edited in place; pin a
+   `rev` at the first release). Inside the engine `assets/mods/.cargo/config.toml`
+   patches it to `crates/ext`. Not on crates.io (maintainer: not ready to publish).
 2. **`blob!` as a `macro_rules!` first**, a `#[derive(Blob)]` proc macro only when a
    second need for a proc-macro crate shows up (the maintainer's two-enums rule for
    macros). The declarative form covers both examples.
@@ -312,11 +328,6 @@ one generic record, and the documentation table names them per kind.
   collect and import, the panel rows) are unexercised. Next: add a trigger and a few
   `mod_*` properties to `roundtrip.py loop`, run `just blender-fixtures --update`, and
   check `crates/trackfile/tests/blender.rs` reads them.
-- **The examples' SDK dependency is a `path`** into the engine checkout the
-  submodule sits in (`../../../../../crates/ext`, five levels from `guest/`). A
-  stand-alone clone of `mod-examples` does not build until it is a git dependency on
-  the engine with a pinned `rev`, which waits until the `wasm-extensions` branch is
-  public. Bump the pin with each `REVISION`.
 - **No `oag-ext check` / `run` tool** (layer 2): exports, revision, state length,
   memory, size and fuel for a built module, and a scripted run printing the typed
   commands. `tests::extension_examples` holds the fuel harness to start from.
@@ -337,5 +348,4 @@ one generic record, and the documentation table names them per kind.
    `oag_ext_abi`; then the C++ example in `mod-examples` from the header, with its size
    and fuel beside the Rust ones, checked by `oag-ext check`.
 3. The `mod-examples` template on `oag-ext`.
-4. When the branch is public: the examples' git dependency, pinned.
-5. Move what is left of this thread into the README and delete it.
+4. Move what is left of this thread into the README and delete it.

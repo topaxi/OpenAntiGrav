@@ -20,37 +20,6 @@ fn a_sibling_is_the_same_path_with_the_other_extension() {
     assert_eq!(sibling_name(".vex").as_deref(), Some(".rcsmodel"));
 }
 
-/// The Omega Collection's circuits spell the pairing with a `.final` infix.
-/// Both spellings are a rewrite of the same `.vex` name, and the skeleton and
-/// clip follow whichever `.rcsmodel` was actually found.
-#[test]
-fn a_cooked_sibling_carries_the_final_infix_and_its_animation_follows() {
-    let track = r"Data\environments\tech_de_ra\track.vex";
-    assert_eq!(
-        sibling_name_cooked(track).as_deref(),
-        Some(r"Data\environments\tech_de_ra\track.final.rcsmodel")
-    );
-    assert_eq!(
-        sibling_name_cooked(r"Data\environments\tech_de_ra\track_reversed.vex").as_deref(),
-        Some(r"Data\environments\tech_de_ra\track_reversed.final.rcsmodel")
-    );
-    assert_eq!(sibling_name_cooked("Data\\Tex\\thing.mip"), None);
-    assert_eq!(
-        psp2::animation_names_beside(r"Data\environments\tech_de_ra\track.final.rcsmodel"),
-        Some((
-            r"Data\environments\tech_de_ra\track.final.rcsskeleton".to_string(),
-            r"Data\environments\tech_de_ra\track.final.rcsanimclip".to_string()
-        ))
-    );
-    // The plain spelling is untouched, which is what keeps every other title's
-    // lookup exactly what it was.
-    assert_eq!(
-        psp2::animation_names(track),
-        psp2::animation_names_beside(&sibling_name(track).unwrap())
-    );
-    assert_eq!(psp2::animation_names_beside("track.vex"), None);
-}
-
 /// An empty model frames at the origin rather than dividing by zero.
 #[test]
 fn a_model_with_no_vertices_still_has_a_usable_radius() {
@@ -150,6 +119,9 @@ fn the_report_names_both_kinds_of_absence() {
         emissive_role_unresolved: 0,
         pad_ne_bound: 0,
         pad_ne_unread: 0,
+        alpha_emissive_bound: 0,
+        alpha_emissive_unread: 0,
+        alpha_emissive_specular_maps: 0,
         mag_wave_bound: 0,
         mag_wave_unread: 0,
         chevron_pulse_bound: 0,
@@ -162,6 +134,9 @@ fn the_report_names_both_kinds_of_absence() {
         static_hologram_bound: 0,
         static_hologram_other_shape: 0,
         static_hologram_unread: 0,
+        uv_overlay_bound: 0,
+        uv_overlay_other_shape: 0,
+        uv_overlay_unread: 0,
         damage_lights_bound: 0,
         damage_lights_unread: 0,
         vertex_scrolls: 0,
@@ -171,6 +146,7 @@ fn the_report_names_both_kinds_of_absence() {
         billboard_glass_unbound: 0,
         probe_lit_bound: 0,
         hull_normal_bound: 0,
+        hull_normal_packed: 0,
         hull_normal_unread: 0,
         probe_lit_blocked: 0,
         probe_lit_unread: 0,

@@ -145,3 +145,27 @@ macro_rules! prop {
         KEY
     }};
 }
+
+/// A channel's key, hashed at compile time: `channel!("oag.my-mod/boost")` is the key of
+/// the channel `oag.my-mod/boost` (`<mod id>/<name>`), for [`Reply::emit`](crate::Reply::emit)
+/// and for matching an [`Event::Mod`](crate::Event::Mod)'s `channel`. A `mod` event's
+/// `from` is the same hash of the sender's mod id (`channel!("oag.my-mod")`), or
+/// [`TRACK_SENDER`](crate::TRACK_SENDER) for a track's trigger.
+#[macro_export]
+macro_rules! channel {
+    ($name:literal) => {{
+        const KEY: u32 = $crate::channel_key($name);
+        KEY
+    }};
+}
+
+/// A title's key, hashed at compile time: `title!("wipeout-hd")` is what
+/// [`Observation::title`](crate::Observation::title) returns in a Wipeout HD race. The
+/// names are a manifest's `titles` slugs.
+#[macro_export]
+macro_rules! title {
+    ($name:literal) => {{
+        const KEY: u32 = $crate::channel_key($name);
+        KEY
+    }};
+}

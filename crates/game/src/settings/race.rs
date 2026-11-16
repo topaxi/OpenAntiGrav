@@ -1,8 +1,7 @@
-//! The `[race]` and `[remix]` sections: what the RACE and RACE REMIX pages
-//! last chose.
+//! The `[race]` section: what the RACE page last chose.
 //!
-//! Its own module rather than two more blocks in [`crate::settings`] for the
-//! same reason [`crate::settings::Controls`] has one: the pair is a
+//! Its own module rather than another block in [`crate::settings`] for the
+//! same reason [`crate::settings::Controls`] has one: it is a
 //! self-contained unit, here a menu-picked launch configuration rather than a
 //! pilot preference.
 
@@ -76,6 +75,11 @@ pub struct Race {
     /// Eliminator; see [`Self::eliminator_kill_target`].
     #[serde(default)]
     pub kill_target: String,
+    /// The Eliminator score target the `TARGET` row holds, as the disc's slider steps spell it
+    /// (`"200"` to `"600"` on HD), or empty for "untouched", which races the slider's minimum.
+    /// Read only in an Eliminator; see [`Self::eliminator_score_target`].
+    #[serde(default)]
+    pub score_target: String,
     /// The `WEAPONS` row's pick, as the disc's own `Weapons` list spells it
     /// (`"On"` or `"Off"`), or empty for "untouched", which is the list's
     /// authored default (`On`). Read only in a single race, the one mode whose
@@ -128,6 +132,7 @@ impl Default for Race {
             variant_chosen: false,
             skin: String::new(),
             kill_target: String::new(),
+            score_target: String::new(),
             weapons: String::new(),
             window_seats: String::new(),
             window_monitors: Vec::new(),
@@ -166,6 +171,16 @@ impl Race {
             .flatten()
     }
 
+    /// The score target a launch in `mode` carries: the `TARGET` row's pick in an Eliminator,
+    /// and `None` in every other mode or while the row is untouched, which leaves the
+    /// slider's minimum to `oag_raceplay::score_law`.
+    #[must_use]
+    pub fn eliminator_score_target(&self, mode: oag_race::Mode) -> Option<u32> {
+        (mode == oag_race::Mode::Eliminator)
+            .then(|| self.score_target.parse().ok())
+            .flatten()
+    }
+
     /// The model Ship Select opens on: the stored variant, or on Wipeout
     /// HD/Fury the fresh-profile default (`oag_hd::race::FRESH_PROFILE_VARIANT`)
     /// while the player has not picked one. A non-empty stored variant always
@@ -180,52 +195,22 @@ impl Race {
     }
 }
 
-/// What the RACE REMIX page last chose.
-///
-/// The same shape [`Race`] is, and stores the same *kind* of thing - archive
-/// path components, not display names - for the same reason. Separate fields
-/// rather than reusing [`Race::track`]/[`Race::team`]: a remix's TRACK/TEAM
-/// rows are scoped to whichever title `track_title`/`craft_title` currently
-/// name, which is not always the title this process booted from, so sharing
-/// a setting with the ordinary RACE page would let the two pages clobber
-/// each other's last pick.
-///
-/// `track_title`/`craft_title` store a title's own [`oag_title::Title::name`],
-/// there being no shorter machine id since a title package is chosen once at
-/// boot and never carries one. Two pressings of the same title (a US and an
-/// EU disc) are one row on the picker, so this cannot name *which* pressing;
-/// see [`crate::launcher::distinct_titles`].
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Remix {
-    /// Which title the track loads from.
-    ///
-    /// Empty only until the menus first open: `session::remix_menu::settle`
-    /// brings every field of this section into step with the list its row is
-    /// given, so what is stored here and what the row shows agree from the
-    /// first frame rather than after the player has nudged each one.
-    #[serde(default)]
-    pub track_title: String,
-    /// Which circuit, by the id `track_title`'s own plugin definition gives
-    /// it - [`Race::track`]'s rule, scoped to a different title.
-    #[serde(default)]
-    pub track: String,
-    /// Which title the craft, HUD and grid roster load from, settled on the
-    /// same terms as [`Self::track_title`].
-    #[serde(default)]
-    pub craft_title: String,
-    /// Which team, by the id `craft_title`'s own plugin definition gives it -
-    /// [`Race::team`]'s rule, scoped to a different title.
-    #[serde(default)]
-    pub team: String,
-    /// Which variant of `team`, as a plain digit or the raw suffix its own
-    /// directory uses (`"1"`, `"_c1"`), or empty when `team` offers none -
-    /// [`Race::variant`]'s rule, scoped to a different title.
-    ///
-    /// Empty is not "the first variant"; it is "this team has no second
-    /// directory at all", which is every team but Wipeout 2048's five and
-    /// Wipeout HD/Fury's twelve - the latter reachable here through
-    /// [`oag_title::RaceDefaults::guest_roster`] as well, since 2048 reships
-    /// them.
-    #[serde(default)]
-    pub variant: String,
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oag_race::Mode;
+
+    /// The TARGET row reaches a launch only in an Eliminator, and only once touched.
+    #[test]
+    fn the_target_pick_is_an_eliminator_launch_option_only() {
+        let untouched = Race::default();
+        assert_eq!(untouched.eliminator_score_target(Mode::Eliminator), None);
+        let picked = Race {
+            score_target: "400".to_string(),
+            ..Race::default()
+        };
+        assert_eq!(picked.eliminator_score_target(Mode::Eliminator), Some(400));
+        assert_eq!(picked.eliminator_score_target(Mode::SingleRace), None);
+        assert_eq!(picked.eliminator_kill_target(Mode::Eliminator), None);
+    }
 }

@@ -39,7 +39,7 @@ impl Art {
         let uv = |name: &str| {
             sheet
                 .get(name)
-                .map(|p: Placed| [p.x as f32, p.y as f32, p.width as f32, p.height as f32])
+                .map(|p: Placed| p.sheet_rect([0.0, 0.0, p.width as f32, p.height as f32]))
         };
         Some(Self {
             disc: uv(DISC)?,

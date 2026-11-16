@@ -32,6 +32,7 @@
 #![cfg_attr(not(any(test, feature = "test")), no_std)]
 
 mod blob;
+pub mod lap;
 mod line;
 mod look;
 mod reply;
@@ -44,9 +45,12 @@ pub use line::Line;
 pub use look::{colour, icon};
 pub use oag_ext_abi::track::{Kind, TRACK_LEN, prop_key};
 pub use oag_ext_abi::{
-    ABI_WORD, Anchor, Colour, Command, Cue, Effect, Event, HudElement, HudPlace, IO_LEN, Icon,
-    MAX_CRAFTS, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_HUD_TEXT, MAX_STATE_BYTES,
-    MAX_THRUST_FACTOR, ModIcon, Pickup, Rgba, Slot, Weapon, WeatherKind,
+    ABI_WORD, Aim, Anchor, Colour, Command, Cue, Distance, Effect, Event, HudElement, HudPlace,
+    IO_LEN, Icon, MAX_CRAFTS, MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE,
+    MAX_HUD_TEXT, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_STATE_BYTES, MAX_THRUST_FACTOR,
+    MAX_TRANSIT_TICKS, ModName, Pickup, RaceInfo, RaceMode, Rgba, SPEED_TO_KMH, Slot, SoundMode,
+    TICKS_PER_SECOND, TRACK_SENDER, ViewUpdate, Warning, WarningIcon, WarningSide, Weapon,
+    WeatherKind, channel_key,
 };
 pub use reply::{Refused, Reply};
 pub use track::{Entity, Track};
@@ -65,11 +69,24 @@ use oag_ext_abi::Sections;
 ///   tick it is called for.
 pub trait Extension {
     /// What survives between ticks: a [`blob!`] struct. Its length is the module's
-    /// `oag_state_len` and must equal the manifest's `state_bytes`.
+    /// `oag_state_len`; a manifest `state_bytes`, if written, must equal it.
     type State: Blob;
 
     /// One tick: read `obs`, update `state`, send commands through `reply`.
     fn tick(obs: &Observation<'_>, state: &mut Self::State, reply: &mut Reply<'_>);
+
+    /// Whether the module runs in `race`, asked once before the race is built. Answer `false`
+    /// and the module is not loaded for that race at all: no `tick`, no fuel, no state, no
+    /// pickup kind, none of its HUD, sounds, effects or shaders, and the race is not modded on
+    /// its account. The default runs in every race.
+    ///
+    /// Pure: it sees only `race`, in a fresh instance with the module's usual fuel; nothing it
+    /// does is kept. A call that traps or runs out of fuel leaves the module out of the race
+    /// too, so decide from the description alone.
+    fn wants_race(race: &RaceInfo) -> bool {
+        let _ = race;
+        true
+    }
 }
 
 /// One grid slot that holds a craft this tick. Only an [`Observation`] hands one out,
@@ -79,6 +96,9 @@ pub trait Extension {
 pub struct Craft<'a> {
     slot: Slot,
     record: &'a [u8; oag_ext_abi::CRAFT_LEN],
+    tracking: &'a [u8; oag_ext_abi::TRACKING_LEN],
+    /// The craft section from `CRAFTS_AT` on, where the aiming matrix is.
+    records: &'a [u8],
 }
 
 impl Craft<'_> {
@@ -116,6 +136,12 @@ impl Craft<'_> {
         self.read().shielded
     }
 
+    /// The craft is in a `transit`: out of the world until its `transit-end`.
+    #[must_use]
+    pub fn in_transit(&self) -> bool {
+        self.read().in_transit
+    }
+
     /// The lap being driven, 1-based, saturating at 255.
     #[must_use]
     pub fn lap(&self) -> u8 {
@@ -145,6 +171,38 @@ impl Craft<'_> {
     #[must_use]
     pub fn speed_kmh(&self) -> f32 {
         self.read().speed_kmh
+    }
+
+    /// The body's speed, track units a second: what a distance along the circuit
+    /// ([`Self::progress`], a [`Distance`](oag_ext_abi::Distance)) is flown at. Over
+    /// [`TICKS_PER_SECOND`](oag_ext_abi::TICKS_PER_SECOND) it is the units a tick.
+    #[must_use]
+    pub fn speed(&self) -> f32 {
+        self.speed_kmh() / oag_ext_abi::SPEED_TO_KMH
+    }
+
+    /// Its distance along the circuit from the start line, units, in `0..course_length`;
+    /// `None` before its first course fix. A craft on the grid behind the line reads just
+    /// under a lap, not a negative number ([`lap::gap`] gives the short way to a place).
+    /// Divide by [`Observation::course_length`] for a share of the lap.
+    #[must_use]
+    pub fn progress(&self) -> Option<f32> {
+        oag_ext_abi::Tracking::decode(self.tracking).progress
+    }
+
+    /// Its place in the field, 1-based, as the HUD shows it.
+    #[must_use]
+    pub fn place(&self) -> u8 {
+        oag_ext_abi::Tracking::decode(self.tracking).place
+    }
+
+    /// Where the craft in `target` sits in this craft's own frame: how far ahead, to the right
+    /// and above, quantised ([`Aim`]). Zero for itself and for a slot holding no craft (check
+    /// [`Observation::craft`] first) and for a slot past the eight the matrix covers. Use
+    /// [`Aim::in_cone`] for "in front within some range and roughly in sight".
+    #[must_use]
+    pub fn aim_at(&self, target: Slot) -> Aim {
+        oag_ext_abi::read_aim(self.records, self.slot.index(), target.index())
     }
 
     /// What it holds.
@@ -181,6 +239,30 @@ impl<'a> Observation<'a> {
         Track::new(self.track)
     }
 
+    /// The length of one lap, units; 0 when the race has no course.
+    #[must_use]
+    pub fn course_length(&self) -> f32 {
+        Sections::course_length(self.head)
+    }
+
+    /// The title raced, as `title!("wipeout-hd")`'s key (the lowercased hyphenated name a
+    /// manifest's `titles` uses); 0 when the host does not say.
+    #[must_use]
+    pub fn title(&self) -> u32 {
+        Sections::title(self.records)
+    }
+
+    /// The player's `n`-th pick among the mod's own choice rows, as the index in that
+    /// row's list (0 for the first value, for a row with none and past the fourth). What
+    /// it may steer is the row's `scope`: a `sim` row's pick (the default) is simulation
+    /// input, in the state hash and the LAN fingerprint; a `view` row's reads its default
+    /// in the simulation call and the device's own pick only in the call whose outputs are
+    /// drawn, so use a `view` row for what is drawn only.
+    #[must_use]
+    pub fn option(&self, n: usize) -> u8 {
+        Sections::option(self.records, n)
+    }
+
     /// The world tick.
     #[must_use]
     pub fn tick(&self) -> u64 {
@@ -194,7 +276,13 @@ impl<'a> Observation<'a> {
             return None;
         }
         let record = Sections::craft_record(self.records, slot)?;
-        Some(Craft { slot, record })
+        let tracking = Sections::tracking_record(self.records, slot)?;
+        Some(Craft {
+            slot,
+            record,
+            tracking,
+            records: self.records,
+        })
     }
 
     /// Every slot holding a craft, in slot order.
@@ -233,6 +321,17 @@ pub fn run<E: Extension>(io: &mut [u8; IO_LEN], track: &[u8]) -> u32 {
     0
 }
 
+/// `E`'s answer to the race a whole I/O buffer describes: what the `oag_wants_race` export
+/// returns. A buffer whose mode this SDK does not know is a race the module cannot judge, and
+/// skipped.
+#[doc(hidden)]
+pub fn ask<E: Extension>(io: &[u8; IO_LEN]) -> u32 {
+    match RaceInfo::read(io) {
+        Some(race) if E::wants_race(&race) => oag_ext_abi::RUN,
+        _ => oag_ext_abi::SKIP,
+    }
+}
+
 /// The I/O buffer and the exports' bodies on wasm32.
 #[cfg(target_arch = "wasm32")]
 #[doc(hidden)]
@@ -255,6 +354,13 @@ pub mod wasm {
         core::ptr::addr_of!(TRACK) as u32
     }
 
+    /// `oag_wants_race`.
+    pub fn wants_race<E: Extension>() -> u32 {
+        // SAFETY: as in `tick`: one thread, no other reference to `IO` during the call.
+        let io = unsafe { &*core::ptr::addr_of!(IO) };
+        super::ask::<E>(io)
+    }
+
     /// `tick`.
     pub fn tick<E: Extension>() -> u32 {
         // SAFETY: wasm32 has one thread and these are the only references to `IO` and
@@ -266,7 +372,7 @@ pub mod wasm {
 }
 
 /// Exports `E` as the module's extension: `oag_abi`, `oag_io`, `oag_track`, `oag_state_len`,
-/// `tick` and the panic handler (`unreachable`, which the host turns into a fault),
+/// `oag_wants_race`, `tick` and the panic handler (`unreachable`, which the host turns into a fault),
 /// all only on wasm32.
 #[macro_export]
 macro_rules! export {
@@ -293,6 +399,12 @@ macro_rules! export {
         #[unsafe(no_mangle)]
         pub extern "C" fn oag_state_len() -> u32 {
             <<$extension as $crate::Extension>::State as $crate::Blob>::BYTES as u32
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn oag_wants_race() -> u32 {
+            $crate::wasm::wants_race::<$extension>()
         }
 
         #[cfg(target_arch = "wasm32")]

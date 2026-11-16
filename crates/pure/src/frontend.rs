@@ -320,7 +320,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_y: 20.0,
     title_scale: 0.97,
     // **Now checked, both pressings**: `Skin.xml`'s own `Main Menu` screen
-    // (the same root screen `Race Campaign`/`Racebox`/`Remix`/... draws under)
+    // (the same root screen `Race Campaign`/`Racebox`/... draws under)
     // authors `idstring="Main Menu" font="Title" x="FEGlobals->TitleXOffset"
     // y="FEGlobals->TitleYOffset" scale="FEGlobals->TitleScale"
     // color="FEGlobals->TitleColor"` - the same role/offset/scale/color
@@ -338,6 +338,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // (see that function's own doc).
     title_font: Some("Title"),
     body_font: None,
+    stats_font: Some("Stats"),
     default_face_is_row_face: false,
     // **Authored, and measured across the whole GUI tree rather than off one
     // screen.** Pure has no `MainMenu_Definition.xml` to read a single number

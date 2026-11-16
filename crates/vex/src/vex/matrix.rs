@@ -3,7 +3,7 @@
 //! Split out of `vex.rs` for size alone. Everything here is row-major with
 //! the translation in row 3 - the row-vector convention, `v' = v * M`.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 use super::{Node, byte_order, classes_of};
 
@@ -28,6 +28,22 @@ pub fn class_world_transforms(data: &[u8], nodes: &[Node], class_id: u32) -> Vec
         .into_iter()
         .map(|(_, matrix)| matrix)
         .collect()
+}
+
+/// The `Ship Muzzle` locator's position in a hull's own model space: the first
+/// node of the version's class, or `None` where the version's id is unread
+/// or the hull authors none (HD). It is the weapon node a charging
+/// Plasma's head sits on and its bolt is released from, `(0, 0, 5.653)` on
+/// Assegai (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix
+/// and node").
+#[must_use]
+pub fn ship_muzzle(ship_blob: &[u8]) -> Option<[f32; 3]> {
+    let class = classes_of(ship_blob).ok()?.ship_muzzle?;
+    let nodes = super::nodes(ship_blob).ok()?;
+    let m = class_world_transforms(ship_blob, &nodes, class)
+        .into_iter()
+        .next()?;
+    Some([m[12], m[13], m[14]])
 }
 
 /// [`class_world_transforms`], each matrix beside its node's name, for a class

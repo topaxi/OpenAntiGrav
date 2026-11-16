@@ -507,3 +507,84 @@ fn a_banked_road_carries_the_axis_with_it() {
         assert!(on_ray, "{p:?} is not a corner cast along the tilted axis");
     }
 }
+
+#[test]
+fn a_refilled_batch_holds_only_the_new_upload_and_allocates_nothing() {
+    let mut batch = Batch::new();
+    let hulls = quad_of_two_triangles();
+    let two = [
+        placement(),
+        Placement {
+            silhouette: 1,
+            ..placement()
+        },
+    ];
+    batch.refill(2, &two, &hulls);
+    assert_eq!(batch.vertices.len(), 12 + 6);
+    assert_eq!(batch.runs, vec![(0, 0, 6), (1, 6, 6), (2, 12, 6)]);
+
+    // A smaller frame after a larger one: what a fresh batch would hold, not a tail of the
+    // last frame's quads behind it.
+    batch.refill(2, &[placement()], &[]);
+    let mut fresh = Batch::new();
+    fresh.refill(2, &[placement()], &[]);
+    assert_eq!(batch.runs, fresh.runs);
+    assert_eq!(
+        bytemuck::cast_slice::<_, u8>(&batch.vertices),
+        bytemuck::cast_slice::<_, u8>(&fresh.vertices)
+    );
+
+    // A full batch fits the reservation, and once the run list has grown no upload allocates.
+    let full = vec![quad_of_two_triangles()[0]; MAX_HULL_VERTICES];
+    let many = [placement(); MAX_QUADS];
+    let ((), allocations) = crate::alloc_count::allocations(|| {
+        batch.refill(1, &many, &full);
+        batch.refill(2, &two, &hulls);
+        batch.refill(1, &many, &full);
+    });
+    assert_eq!(batch.vertices.len(), MAX_VERTICES);
+    assert_eq!(allocations, 0);
+}
+
+/// One craft's shadow as the tick gathers it: cast, then laid on the ramp.
+fn cast_and_conform(cast: &Cast, out: &mut Vec<GpuVertex>, scratch: &mut HullScratch) {
+    out.clear();
+    hull_triangles_with(cast, out, scratch);
+    conform_to_floor_with(out, 0, ramp, scratch);
+}
+
+#[test]
+fn a_warm_hull_scratch_casts_what_a_fresh_one_does_without_allocating() {
+    let hull = hull();
+    let straight = cast_from(&hull, 5.0, 1.0);
+    let tilted = Cast {
+        axis: Vec3::new(-0.6, -1.0, 0.0),
+        ..straight
+    };
+    let fresh = |cast: &Cast| {
+        let mut out = Vec::new();
+        hull_triangles(cast, &mut out);
+        conform_to_floor(&mut out, 0, ramp);
+        out
+    };
+    let (want_straight, want_tilted) = (fresh(&straight), fresh(&tilted));
+    // Two silhouettes of different sizes, so a scratch that kept the last ring would show.
+    assert_ne!(want_straight.len(), want_tilted.len());
+
+    let mut scratch = HullScratch::default();
+    let mut out = Vec::new();
+    cast_and_conform(&tilted, &mut out, &mut scratch);
+    cast_and_conform(&straight, &mut out, &mut scratch);
+    assert_eq!(
+        bytemuck::cast_slice::<_, u8>(&out),
+        bytemuck::cast_slice::<_, u8>(&want_straight)
+    );
+    let ((), allocations) = crate::alloc_count::allocations(|| {
+        cast_and_conform(&tilted, &mut out, &mut scratch);
+    });
+    assert_eq!(
+        bytemuck::cast_slice::<_, u8>(&out),
+        bytemuck::cast_slice::<_, u8>(&want_tilted)
+    );
+    assert_eq!(allocations, 0);
+}

@@ -9,11 +9,12 @@ rust-version.workspace = true
 # One integration-test binary instead of one per `tests/*.rs`; see `tests/it.rs`.
 autotests = false
 
-# `oag-formats` for `ByteOrder`, the parser-coverage instrumentation and the GE
+# `oag-formats` for the parser-coverage instrumentation and the GE
 # block swizzle. Nothing from `oag-vex`: a `.pob` is a standalone file the
 # scene only names (class 0x3c4), so the edge runs from neither crate to the
 # other.
 [dependencies]
+oag-bytes.workspace = true
 oag-formats.workspace = true
 
 # Ground-truth tests read every `.pob` out of a disc image. Tests only: the

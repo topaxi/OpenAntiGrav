@@ -36,7 +36,10 @@ fn rows(definition: &Definition, id: &str) -> Vec<String> {
         .collect()
 }
 
-fn advanced(pulse_like: bool, weather: bool) -> Vec<&'static str> {
+fn advanced(pulse_like: bool, weather: bool, trail_hits: bool) -> Vec<&'static str> {
+    // WINGTIP CONTRAILS is on the titles with no `wingtip` class of their own: the PSP pair, as
+    // TRAIL ORDER and BOOST ZOOM are.
+    let wingtip = pulse_like;
     let mut rows = vec![
         "graphics.motion_blur",
         "graphics.motion_blur_resolution",
@@ -46,6 +49,8 @@ fn advanced(pulse_like: bool, weather: bool) -> Vec<&'static str> {
     ];
     if pulse_like {
         rows.push("graphics.trail_order");
+        rows.push("graphics.scenery_sort");
+        rows.push("graphics.trail_length");
     }
     if weather {
         rows.push("graphics.weather");
@@ -59,6 +64,16 @@ fn advanced(pulse_like: bool, weather: bool) -> Vec<&'static str> {
     if pulse_like {
         rows.push("graphics.boost_zoom");
     }
+    if trail_hits {
+        rows.push("graphics.trail_hits");
+    }
+    if wingtip {
+        rows.push("graphics.wingtip_contrails");
+        // OWN SHIELD is on the same pair: the titles whose shield is not HD's.
+        rows.push("graphics.own_shield");
+        // OWN ROCKETS too: the titles whose rocket is drawn from PSP-era effects.
+        rows.push("graphics.own_rockets");
+    }
     rows.extend(["graphics.cpu_governor", "graphics.perf_overlay", "back"]);
     rows
 }
@@ -68,7 +83,13 @@ fn the_graphics_page_keeps_the_original_and_performance_rows_and_opens_advanced(
     for title in [oag_pulse::TITLE, oag_pure::TITLE, oag_hd::TITLE] {
         let mut definition = built_in();
         definition.drop_unavailable_boost_zoom(title);
+        definition.drop_unavailable_trail_hits(title);
+        definition.drop_unavailable_wingtip_contrails(title);
+        definition.drop_unavailable_own_shield(title);
+        definition.drop_unavailable_own_rockets(title);
         definition.drop_unavailable_trail_order(title);
+        definition.drop_unavailable_scenery_sort(title);
+        definition.drop_unavailable_trail_length(title);
         definition.drop_unavailable_weather(title);
         assert_eq!(rows(&definition, "graphics"), TOP, "{}", title.name);
     }
@@ -76,20 +97,27 @@ fn the_graphics_page_keeps_the_original_and_performance_rows_and_opens_advanced(
 
 #[test]
 fn advanced_holds_the_look_extras_and_the_mixed_rows_in_order() {
-    for (title, pulse_like) in [
-        (oag_pulse::TITLE, true),
-        (oag_pure::TITLE, true),
-        (oag_hd::TITLE, false),
-        (oag_omega::TITLE, false),
-        (oag_2048::TITLE, false),
+    // TRAIL HITS stays on every title whose original never shows the burst: all but HD.
+    for (title, pulse_like, trail_hits) in [
+        (oag_pulse::TITLE, true, true),
+        (oag_pure::TITLE, true, true),
+        (oag_hd::TITLE, false, false),
+        (oag_omega::TITLE, false, true),
+        (oag_2048::TITLE, false, true),
     ] {
         let mut definition = built_in();
         definition.drop_unavailable_boost_zoom(title);
+        definition.drop_unavailable_trail_hits(title);
+        definition.drop_unavailable_wingtip_contrails(title);
+        definition.drop_unavailable_own_shield(title);
+        definition.drop_unavailable_own_rockets(title);
         definition.drop_unavailable_trail_order(title);
+        definition.drop_unavailable_scenery_sort(title);
+        definition.drop_unavailable_trail_length(title);
         definition.drop_unavailable_weather(title);
         assert_eq!(
             rows(&definition, "graphics_advanced"),
-            advanced(pulse_like, title.weather.is_played()),
+            advanced(pulse_like, title.weather.is_played(), trail_hits),
             "{}",
             title.name
         );
@@ -113,4 +141,60 @@ fn confirming_the_advanced_row_opens_the_page() {
     input.begin_frame(1 << Button::Cross.index());
     menu.update(&mut input);
     assert_eq!(menu.page().id, "graphics_advanced");
+}
+
+#[test]
+fn target_fps_offers_default_after_the_fixed_rates_and_shows_the_live_rate() {
+    let definition = built_in();
+    let page = definition.page("graphics").expect("graphics page");
+    let values: Vec<(String, String)> = page
+        .entries
+        .iter()
+        .find_map(|entry| match entry {
+            Entry::Choice {
+                setting, values, ..
+            } if setting == "graphics.target_fps" => Some(
+                values
+                    .iter()
+                    .map(|v| (v.value.clone(), v.label.clone()))
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .expect("a TARGET FPS row");
+    let names: Vec<&str> = values.iter().map(|(value, _)| value.as_str()).collect();
+    assert_eq!(
+        names,
+        ["off", "30", "60", "90", "100", "120", "144", "default"]
+    );
+    assert!(
+        values[7].1.eq_ignore_ascii_case("default"),
+        "{}",
+        values[7].1
+    );
+
+    let mut menu = Menu::new(definition);
+    menu.relabel_choice("graphics.target_fps", "default", "DEFAULT (144)");
+    let page = menu.definition().page("graphics").expect("graphics page");
+    let labelled = page.entries.iter().any(|entry| match entry {
+        Entry::Choice {
+            setting, values, ..
+        } if setting == "graphics.target_fps" => values
+            .iter()
+            .any(|v| v.value == "default" && v.label == "DEFAULT (144)"),
+        _ => false,
+    });
+    assert!(labelled);
+}
+
+#[test]
+fn frame_limit_ends_with_refresh_rate_and_shows_the_live_rate() {
+    let mut menu = Menu::new(built_in());
+    menu.relabel_choice("display.frame_limit", "refresh_rate", "REFRESH RATE (144)");
+    let found = menu.definition().pages.iter().flat_map(|page| &page.entries).any(|entry| {
+        matches!(entry, Entry::Choice { setting, values, .. }
+            if setting == "display.frame_limit"
+                && values.last().is_some_and(|v| v.value == "refresh_rate" && v.label == "REFRESH RATE (144)"))
+    });
+    assert!(found);
 }

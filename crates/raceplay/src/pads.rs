@@ -310,11 +310,22 @@ impl Race {
         if !self.sim.world.ships[slot].pickup.is_empty() {
             return;
         }
-        let Some(weapons) = self.sim.weapons.as_ref() else {
+        let Some(weapons) = self.sim.weapons.as_deref() else {
             return;
         };
-        let Some(table) = oag_weapons::pickup::table_for(weapons, &self.sim.class) else {
+        let Some(table) = weapons.pickups_for(&self.sim.class) else {
             return;
+        };
+        // A mod's own pickup, drawn beside the title's weapons at its `[[pickup.odds]]`.
+        let with_mod;
+        let mod_odds = self.sim.extensions.pickup_odds(&self.sim.class);
+        let table = if mod_odds.is_empty() {
+            table
+        } else {
+            let mut modded = table.clone();
+            modded.odds.extend(mod_odds);
+            with_mod = modded;
+            &with_mod
         };
         // **The `human` column for a person's craft and the `ai` column for the rest**, and
         // the player's is blended with `front`/`back` by their place - which is
@@ -340,16 +351,17 @@ impl Race {
         // pads, not about who crosses them - **chosen, not measured**, since
         // no consumer of this mask has been found in `eboot.elf` to read
         // otherwise.
-        let allowed =
-            (!self.sim.allowed_weapons.is_empty()).then_some(self.sim.allowed_weapons.as_slice());
+        let allowed = (!self.sim.allowed_weapons.is_empty()).then_some(&*self.sim.allowed_weapons);
         let drawn = oag_weapons::pickup::draw(&mut self.sim.world.rng, table, who, last, allowed);
         if let Some(weapon) = drawn {
             let pickup = &mut self.sim.world.ships[slot].pickup;
             pickup.grant(weapon);
+            self.xp_weapon_pad(slot);
+            let pickup = &mut self.sim.world.ships[slot].pickup;
             // A simulation mod's `pickup-roll`: this grant becomes the mod's own pickup,
             // with `last` still the drawn weapon, so the title's repeat rule is unchanged.
-            if self.sim.extensions.rolls(weapon) {
-                pickup.weapon = Some(oag_tables::weapons::Weapon::Extension);
+            if let Some(kind) = self.sim.extensions.rolls(slot, weapon) {
+                pickup.weapon = Some(oag_tables::weapons::Weapon::Extension(kind));
             }
         }
     }

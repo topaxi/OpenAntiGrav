@@ -32,9 +32,9 @@
 //! gaps of 13, 10, 14, 25, 26, 29 and 30_Track, so a craft cannot be put back
 //! over the hole it fell into.
 //!
-//! This project used to put the craft at rest on the racing line at the
-//! sample nearest where it fell (confidence 40, a placeholder), which on
-//! `13_Track` is over the gap: it fell straight back in, 389 times in 9,000
+//! Putting the craft at rest on the racing line at the
+//! sample nearest where it fell (confidence 40, a placeholder) is over the gap
+//! on `13_Track`: it fell straight back in, 389 times in 9,000
 //! ticks for the original driver's field with the player parked.
 //!
 //! Three departures, recorded rather than hidden: the locate is this
@@ -184,6 +184,18 @@ pub struct Relocation {
 /// `None` on a spline with no samples, which leaves the caller its fallback.
 #[must_use]
 pub fn relocate(spline: &Spline, crumb: Vec3, speed: f32) -> Option<Relocation> {
+    place(spline, crumb, speed, RESET_LIFT)
+}
+
+/// [`relocate`]'s placement at the height a craft flies at, without the reset's drop: what a
+/// craft moved along the circuit comes out with (`Race::move_to`), so it flies on from the
+/// first tick. Ours, not the original's: the reset is its only relocation.
+#[must_use]
+pub fn emerge(spline: &Spline, point: Vec3, speed: f32) -> Option<Relocation> {
+    place(spline, point, speed, 0.0)
+}
+
+fn place(spline: &Spline, crumb: Vec3, speed: f32, lift: f32) -> Option<Relocation> {
     let at = locate(spline, crumb + Vec3::new(0.0, RESET_LIFT, 0.0))?;
     let lateral = Vec3::from_array(at.lateral);
     let mid = lifted(at) + lateral * ((at.half_width_right - at.half_width_left) * 0.5);
@@ -195,7 +207,7 @@ pub fn relocate(spline: &Spline, crumb: Vec3, speed: f32) -> Option<Relocation> 
         )?;
     }
     let pose = Pose {
-        position: mid + Vec3::new(0.0, RESET_LIFT, 0.0),
+        position: mid + Vec3::new(0.0, lift, 0.0),
         orientation: orientation_on_sample(at),
     }
     .facing(lifted(aim) - mid);

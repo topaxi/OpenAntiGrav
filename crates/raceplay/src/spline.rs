@@ -7,6 +7,17 @@
 //! `race/tests/spline.rs`.
 
 use super::*;
+use crate::spline_table::Positions;
+
+/// The mask bit of an authored section, [`oag_vex::pvs::ALL_VISIBLE`] for one a mask cannot hold
+/// (an unnamed section included).
+pub(crate) fn section_bit(section: u8) -> u64 {
+    if usize::from(section) >= oag_vex::pvs::MAX_SECTIONS {
+        oag_vex::pvs::ALL_VISIBLE
+    } else {
+        1u64 << section
+    }
+}
 
 /// The authored racing line and the corridor around it, one entry per spline
 /// sample.
@@ -101,14 +112,16 @@ pub(super) fn racing_line(
         reach,
     );
     if moved > 0 {
-        log::info!("ai line: {moved} takeoff run-up sample(s) moved off a magstrip");
+        log::debug!("ai line: {moved} takeoff run-up sample(s) moved off a magstrip");
     }
     let unsupported = if moved > 0 {
         unsupported_under(&points)
     } else {
         unsupported
     };
-    oag_ai::Line::with_corridor(points, corridor).with_unsupported(unsupported)
+    oag_ai::Line::with_corridor(points, corridor)
+        .with_unsupported(unsupported)
+        .with_strides(oag_ai::Tuning::default().curvature_span)
 }
 
 /// Which spline samples the AI line is made of, in the order a lap drives them.
@@ -161,6 +174,8 @@ pub(super) fn ai_order(spline: &Spline, course: Option<&Course>) -> Vec<u32> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Spline {
     samples: Vec<Sample>,
+    /// Each sample's position, parallel to [`Self::samples`], for [`Self::nearest`].
+    positions: Positions,
     /// Which path each sample came from, parallel to [`Self::samples`].
     paths: Vec<u16>,
     /// The AI bytes of the control point each sample was evaluated from,
@@ -214,6 +229,7 @@ impl Spline {
             }
         }
         Self {
+            positions: Positions::new(samples.iter().map(|s| Vec3::from_array(s.pos)).collect()),
             samples,
             paths,
             point_ai,
@@ -282,15 +298,8 @@ impl Spline {
     /// The nearest sample to `position`: its index, itself, and its distance.
     #[must_use]
     pub fn nearest(&self, position: Vec3) -> Option<(usize, &Sample, f32)> {
-        let mut best: Option<(usize, f32)> = None;
-        for (index, sample) in self.samples.iter().enumerate() {
-            let distance = (Vec3::from_array(sample.pos) - position).length();
-            // Strictly nearer, so a tie keeps the earlier sample.
-            if best.is_none_or(|(_, previous)| distance < previous) {
-                best = Some((index, distance));
-            }
-        }
-        best.map(|(index, distance)| (index, &self.samples[index], distance))
+        let (index, distance) = self.positions.nearest(position)?;
+        Some((index, &self.samples[index], distance))
     }
 
     /// The nearest sample to `position` with its distance and path, skipping the
@@ -339,8 +348,8 @@ impl Spline {
         let from = around.saturating_sub(window);
         let to = around.saturating_add(window).min(last);
         let mut best: Option<(usize, f32)> = None;
-        for index in from..=to {
-            let distance = (Vec3::from_array(self.samples[index].pos) - position).length();
+        for (index, sample) in self.samples.iter().enumerate().take(to + 1).skip(from) {
+            let distance = (Vec3::from_array(sample.pos) - position).length();
             if best.is_none_or(|(_, previous)| distance < previous) {
                 best = Some((index, distance));
             }
@@ -383,6 +392,22 @@ impl Spline {
     #[must_use]
     pub fn distance_to(&self, position: Vec3) -> Option<f32> {
         self.nearest(position).map(|(_, _, distance)| distance)
+    }
+
+    /// The authored sections of the samples within `radius` of `centre`, one bit each, and
+    /// [`oag_vex::pvs::ALL_VISIBLE`] where one of them names none (or one a mask cannot hold):
+    /// the sections a sphere on the road reaches.
+    #[must_use]
+    pub fn sections_within(&self, centre: Vec3, radius: f32) -> u64 {
+        let reach = radius * radius;
+        let mut sections = 0u64;
+        for sample in &self.samples {
+            if (Vec3::from_array(sample.pos) - centre).length_squared() > reach {
+                continue;
+            }
+            sections |= section_bit(sample.section_id);
+        }
+        sections
     }
 
     /// The sample at `index`, in table order.

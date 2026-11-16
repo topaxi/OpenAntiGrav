@@ -162,3 +162,52 @@ fn only_the_choiceless_rows_are_hidden_and_a_disabled_row_stays() {
     let limit = index_of(&menu, "display.frame_limit").expect("frame limit is still listed");
     assert!(menu.is_disabled(&menu.page().entries[limit]));
 }
+
+fn photo_page() -> Menu {
+    let text = r#"
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
+root = "main"
+[[page]]
+id = "main"
+[[page.entry]]
+kind = "action"
+label = "ONE"
+action = "quit"
+[[page.entry]]
+kind = "action"
+label = "PHOTO MODE"
+action = "photo_mode"
+[[page.entry]]
+kind = "action"
+label = "THREE"
+action = "quit"
+"#;
+    Menu::new(Definition::parse(text, &crate::language::StringTable::default()).expect("parse"))
+}
+
+#[test]
+fn an_action_row_that_is_not_on_offer_leaves_the_page_and_comes_back_in_its_place() {
+    let mut menu = photo_page();
+    assert_eq!(
+        menu.page().entries.len(),
+        2,
+        "off the page until it is offered"
+    );
+    menu.offer(Action::PhotoMode, true);
+    let labels_of = |menu: &Menu| -> Vec<String> {
+        menu.page()
+            .entries
+            .iter()
+            .map(|e| e.label().to_string())
+            .collect()
+    };
+    assert_eq!(labels_of(&menu), ["ONE", "PHOTO MODE", "THREE"]);
+    menu.offer(Action::PhotoMode, false);
+    assert_eq!(labels_of(&menu), ["ONE", "THREE"]);
+    assert_eq!(menu.page().subtitles.len(), 2);
+    assert_eq!(menu.page().meta.len(), 2);
+    menu.offer(Action::PhotoMode, true);
+    assert_eq!(labels_of(&menu), ["ONE", "PHOTO MODE", "THREE"]);
+    menu.offer(Action::PhotoMode, true);
+    assert_eq!(menu.page().entries.len(), 3, "offering twice adds nothing");
+}

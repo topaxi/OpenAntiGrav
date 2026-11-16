@@ -12,13 +12,14 @@
 //! it is a regression. Split by class and direction so nextest runs eight
 //! slices side by side.
 //!
-//! **A layout's verdict is the majority of five builds** (2026-10-20, lane
-//! `ai-gate-robustness`), one per scale of `perturb::GATE`
-//! (`tests/perturb/mod.rs`: every craft's airborne gravity times `1 + eps`).
-//! A single build is a coin on the circuits whose verification turns on a
-//! landing: over the nine scales of `perturb::SCALES`, `06_Track` VENOM and
-//! RAPIER failed under 5 and 6 of the 8 non-zero scales while clean at `0`, and
-//! `14_Track` PHANTOM verified clean under 7 of 8 while not clean at `0`.
+//! **A layout's verdict is the majority of five builds**, one per scale of
+//! `perturb::GATE` (`tests/perturb/mod.rs`: every craft's airborne gravity
+//! times `1 + eps`). A single build is a coin on the circuits whose
+//! verification turns on a landing (`06_Track`'s gap at 1196-1200).
+//!
+//! All 96 verify, each under every offset of `perturb::BOUND_OFFSETS` and
+//! `perturb::HELD_OUT` but `01_Track` PHANTOM at `-3.5e-4` (`docs/gameplay/ai.md`,
+//! "Plans that do not verify" and "06_Track RAPIER with the body damping").
 
 use std::path::PathBuf;
 
@@ -28,25 +29,9 @@ use oag_raceplay::catalogue;
 use crate::perturb;
 
 /// `(layout, class)` pairs whose plan does not verify clean, and why each is
-/// believed to be so. Every one is named on `docs/gameplay/ai.md`'s speed-plan
-/// section.
-const NOT_CLEAN: &[(&str, &str)] = &[("29_Track", "PHANTOM")];
-
-/// `(layout, class)` pairs whose majority flips between offsets of
-/// `perturb::BOUND_OFFSETS`, so neither verdict is asserted; each with the
-/// share of offsets whose majority verified clean (2026-10-20). Printed, so a
-/// change that settles one is visible. `14_Track` PHANTOM, on [`NOT_CLEAN`]
-/// before 2026-10-20 on its single build, is clean under all nine.
-const UNSETTLED: &[(&str, &str)] = &[
-    // 3 of 9: the gap landing at 1233-1241 (walls at 1233-1239).
-    ("06_Track", "VENOM"),
-    // 8 of 9 (2026-10-20, lane `pulse-air-pitch`; 0 of 9 before, on `NOT_CLEAN`): the same
-    // gap landing, settled by the hover escape off a wall under a probe
-    // (the wall escape, `oag_physics::hover::Rig::mag_floor_escape`). Only offset `5e-5` failed its majority.
-    ("06_Track", "RAPIER"),
-    // 8 of 9: a rescue at 2402-2405.
-    ("29_Track", "RAPIER"),
-];
+/// believed to be so. A row that joins it is named on
+/// `docs/gameplay/ai.md`'s speed-plan section.
+const NOT_CLEAN: &[(&str, &str)] = &[];
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
@@ -109,9 +94,7 @@ fn slice(class: &str, reversed: bool) {
             plan.tight_samples(),
             plan.len()
         );
-        if UNSETTLED.contains(&(id.as_str(), class)) {
-            println!("{id} {class}: unsettled, not asserted");
-        } else if clean != expected {
+        if clean != expected {
             wrong.push(format!(
                 "{id} {class}: {} (builds clean {verdicts:?}; unperturbed: verify failures {}, \
                  respawns {}, unresolved {:?})",
@@ -147,3 +130,148 @@ slice_test!(speed_plan_rapier_forward, "RAPIER", false);
 slice_test!(speed_plan_rapier_reversed, "RAPIER", true);
 slice_test!(speed_plan_phantom_forward, "PHANTOM", false);
 slice_test!(speed_plan_phantom_reversed, "PHANTOM", true);
+
+/// Plans learned ahead on a thread (`Race::begin_speed_plans`, what the load
+/// screen starts) are the plans the first tick would have learned, and adopting
+/// them is not the cost of learning them. Outpost 7 (`07_Track`) has a fork, so
+/// its race learns plans even under the original driver; run to 120 ticks, the
+/// two races have the same state hash.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
+    use std::time::{Duration, Instant};
+
+    let Some(image) = image() else {
+        return;
+    };
+    let (_, entry) = layouts(false)
+        .into_iter()
+        .find(|(id, _)| id == "07_Track")
+        .expect("07_Track is on the disc");
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "RAPIER".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        track: Some(entry),
+        ..race::Options::default()
+    })
+    .expect("loading 07_Track");
+    let mut lazy = race::Race::start(loaded.setup.clone());
+    let mut ahead = race::Race::start(loaded.setup);
+    assert!(
+        lazy.use_original_ai(None, 1) && ahead.use_original_ai(None, 1),
+        "the original driver flies, so only the fork asks for plans"
+    );
+
+    let starting = Instant::now();
+    ahead.begin_speed_plans();
+    println!("starting the job took {:?}", starting.elapsed());
+    let waited = Instant::now();
+    while !ahead.speed_plans_ready() {
+        assert!(
+            waited.elapsed() < Duration::from_secs(300),
+            "the plans never landed"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let adopting = Instant::now();
+    ahead.ensure_speed_plans();
+    let adopted = adopting.elapsed();
+    let learning = Instant::now();
+    lazy.ensure_speed_plans();
+    let learned = learning.elapsed();
+    println!("adopting {adopted:?}, learning on the frame thread {learned:?}");
+    assert!(
+        adopted * 20 < learned,
+        "a first tick after the plans landed must not learn them: adopting {adopted:?}, learning {learned:?}"
+    );
+
+    assert_eq!(ahead.speed_plan().cloned(), lazy.speed_plan().cloned());
+    for slot in 0..8 {
+        assert_eq!(
+            ahead.plan_of(slot).cloned(),
+            lazy.plan_of(slot).cloned(),
+            "slot {slot}"
+        );
+    }
+    for tick in 0..120 {
+        ahead.tick_sim_only(&oag_gameplay::PlayerInputs::none());
+        lazy.tick_sim_only(&oag_gameplay::PlayerInputs::none());
+        assert_eq!(ahead.sim.state_hash(), lazy.sim.state_hash(), "tick {tick}");
+    }
+}
+
+/// Whether the ring plan of `track` on `source` verifies clean at `class`:
+/// the majority of the [`perturb::GATE`] builds, as [`slice`] judges a layout.
+fn ring_plan_verifies(source: &std::path::Path, track: &str, class: &str) -> bool {
+    let loaded = race::load(&race::Options {
+        source: source.display().to_string(),
+        class: class.to_string(),
+        mode: oag_race::Mode::SingleRace,
+        track: Some(track.to_string()),
+        // 2048 and Omega: no track art feeds the plan (a Pulse load without art loses its
+        // track statistics, so the Pulse loads above keep theirs).
+        ribbon: true,
+        ..race::Options::default()
+    })
+    .unwrap_or_else(|error| panic!("loading {track} at {class}: {error}"));
+    let verdicts: Vec<bool> = perturb::GATE
+        .iter()
+        .map(|&eps| {
+            let mut setup = loaded.setup.clone();
+            perturb::apply(&mut setup, eps);
+            let (_, report) = race::Race::start(setup).build_player_speed_plan();
+            println!(
+                "{track} {class} {eps}: failures {}, respawns {}, lap {:?}, unresolved {:?}",
+                report.verify_failures,
+                report.verify_respawns,
+                report.verify_lap_ticks,
+                report.unresolved
+            );
+            report.verify_failures == 0 && report.verify_respawns == 0
+        })
+        .collect();
+    verdicts.iter().filter(|&&clean| clean).count() * 2 > verdicts.len()
+}
+
+/// 2048's `square` has a corner (ring samples 577-641) a craft at full
+/// throttle runs wide of, off the edge and onto a level 20 units under the
+/// line, which it then drives for 900 samples to a wall. The plan counts that
+/// road as a failure and brakes for the corner (`docs/gameplay/ai.md`, "A road
+/// under the line is a failure"). PHANTOM is the class that takes off
+/// furthest from where it lands. `arena`'s line runs over a deck the craft
+/// drive 21 units under, inside its corridor, which is not one.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_2048_square_ring_plan_brakes_for_the_corner_it_ran_wide_of() {
+    let Some(source) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let track = |name: &str| format!(r"Data\art\published\environments\{name}\track.vex");
+    assert!(
+        ring_plan_verifies(&source, &track("square"), "PHANTOM"),
+        "square"
+    );
+    assert!(
+        ring_plan_verifies(&source, &track("arena"), "VENOM"),
+        "arena's line is over its own road"
+    );
+}
+
+/// Omega re-ships `square` at the same layout, and its plan fails and
+/// verifies at the same corner.
+#[test]
+#[ignore = "needs the extracted game under data/extracted/ps4/"]
+fn the_omega_square_ring_plan_brakes_for_the_corner_it_ran_wide_of() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    assert!(
+        ring_plan_verifies(
+            &source,
+            r"Data\environments2048\square\track.vex",
+            "PHANTOM"
+        ),
+        "square"
+    );
+}

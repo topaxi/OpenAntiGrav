@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [2048]
-updated: 2026-10-26
-summary: "2048 composite: vignette, screen tint, alphaTex, other texel programs"
+updated: 2026-11-11
+summary: "2048 composite: screen tint, alphaTex, other texel programs (the vignette is wired)"
 ---
 
 # 2048's race composite: what is still left out
@@ -19,11 +19,19 @@ the compare-side switch in
 Held at 1.15, ours' frame means are 54.9 / 61.4 / 36.7 against the original's
 60.2 / 83.1 / 48.1 (Queens Mall, Empire Climb, Vineta K): now a little darker.
 
+Omega's four-level bloom (`tonemap.md`, "The bloom chain") is **checked, differs** here: no such program in 2048's eboot and no `Bright-pass` key in its 50 `.envsettings`.
+
 ## Open
 
-- **The vignette**: `wo_composite_vp`'s third output and the `vignetteTint`
-  values `PostFx_RenderChain` packs (`local_348`/`local_344`); the composite is
-  drawn as a mesh whose `pos.w` carries it. Ours draws `v = 1`.
+- ~~**The vignette**~~: wired 2026-11-11 (`w2048-vignette`). The composite is the original's
+  mesh round clip-space `(0, -0.885)`, `v = 1 - (vignetteTint * w)^2`, tint `(1, 1, 0.97)`;
+  the top corners go black as the original's do, the bottom is untouched
+  (`exposure.md`, "The vignette"). Left: a Vita3K `--ram-read` of its constants (no profile on
+  the machine that read it), and the top edge's middle on Queens Mall and Empire Climb, which
+  ours draws darker than the original where the original has the sun's flare.
+  **Departure**: ours' photo mode shot keeps the vignette on; the original drops it while its
+  capture job runs (`FUN_81021ef6`, score 60; `exposure.md`, "The vignette"). Read that function's
+  callers before wiring a switch.
 - **The screen tint and `alphaTex`**: the tint's source (`FUN_813b1d28`) and
   what the second texture holds in a race. Ours draws tint 0 and `c = main`.
 - **Which other 2048 programs square their texel**: only the lightmapped track
@@ -31,8 +39,16 @@ Held at 1.15, ours' frame means are 54.9 / 61.4 / 36.7 against the original's
   (meshes, clouds, exhaust, beams, ghosts); `oag-fx`'s particles, mist, flash and
   weapon quads keep 2.2. Read the ship, sky and particle programs the same way
   (Vita3K's SPIR-V by the container's SHA-256).
-- **Empire Climb's track and walls draw flat** in ours; that, not exposure, is
-  most of its remaining gap.
+- **2048 track lighting, what is left after `2048-track-lighting` (2026-10-31)**: lightmaps are
+  now bound and decoded (two reader bugs), lightmapped and `NOVAColor` vertex-lit surfaces take
+  2048's own combine (`docs/formats/2048-material-params.md`, "Vertex-lit and lightmapped
+  combines"), and the baked roof shadow shows on Vineta K's wall. Ours is now **darker** than the
+  original (Vineta K floor 24/23/22 against 32/38/43, Empire Climb road 111/92/73 against
+  141/111/88). Next, in this order: (1) **wired 2026-10-31, `2048-emissive-wire`**: the floor panels are the plain `diffuse_normal_specular_emmissive` (`Texture2.a * Constant1` after the light), the `_alpha` twin draws the walls; Vineta K distance 20.64 -> 18.66; `fc06_lambert_emmissive_alpha`'s `Tint * D.a` still unwired, Omega's family differs (one diffuse map), see `docs/formats/2048-material-params.md`, "The emissive add of the `*_emmissive_alpha` family"; (2) the `occlusionMap`/`shadowMap` terms the 40-odd programs with both declare; (3) **(2026-11-09, `tone-2048-grid`: the frame is not uniformly dark; fog, bloom, exposure and lightmap scale each fail to close it, the bottom third is the craft: `2048-grid-dark-bias-is-the-craft-not-a-frame-term.md`)** why
+  the whole frame is dark once the constant ambient is gone (exposure keys reach the composite
+  only; check the sun colour feeding `liveLighting0diffuse`, the engine may not hand the
+  `Sun diffuse colour` key over unscaled). Omega's `NOVAColor` vertex variant is the same family,
+  not wired.
 - **The default 2048 race's near-white track at tick 1500 did not reproduce**
   (2026-10-26, `w2048-white-floor`, main `9c166f405`): `just play 2048 --race
   --no-audio --ticks 1500 --screenshot` on a clean profile and on a copy of the
@@ -50,7 +66,7 @@ Held at 1.15, ours' frame means are 54.9 / 61.4 / 36.7 against the original's
 
 ## Next Steps
 
-1. Re-render the DLC pair (Vineta K now lights from the pack's copy).
-2. Read `vignetteTint` and the composite's vertex program; wire `v`.
-3. Adopt the three re-rendered 2048 pairs (the lead's command in the lane
-   report) so the page shows "exposure held at 1.15".
+1. Re-render the three 2048 pairs after the merge (`just compare-rerender-ours --only 2048-vita`):
+   the stored ones (2026-11-09) already carry `--hold-exposure 1.15` and the DLC pack's lighting,
+   and lack the vignette.
+2. The screen tint's source (`FUN_813b1d28`) and `alphaTex`.

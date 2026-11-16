@@ -330,8 +330,8 @@ pub struct ShipState {
     /// Armed by [`crate::wall::apply_pending_impulse`] with
     /// [`crate::wall::STUN_PER_CONTACT`] (`craft+0x290 += 0.5` in
     /// `Ship_ApplyCollisionImpulse`), **added, not assigned**, so impacts accumulate.
-    /// Nothing posts a pending impulse yet (a track contact does not; see
-    /// [`crate::wall::STUN_PER_CONTACT`]), so it is armed correctly and never fires.
+    /// Only a weapon blast posts a pending impulse (a track contact does not, see
+    /// [`crate::wall::STUN_PER_CONTACT`]; a craft-to-craft hit does not either).
     ///
     /// Decremented in [`crate::forces::evaluate`] at the lateral-grip step, as the original
     /// does, so the engine sees the *pre*-decrement value in the same frame.
@@ -351,12 +351,8 @@ pub struct ShipState {
     /// [`Self::shield_pickup_timer`]). [`crate::wall::apply_pending_impulse`] is the port;
     /// see `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
     ///
-    /// **Nothing in this crate calls a producer yet, so it is always zero in practice.**
-    /// The original has two: `Weapon_PostBlastImpulse_q` (ported as
-    /// [`crate::wall::post_blast_impulse`], tested against supplied inputs, but its
-    /// original caller is found and unread and there is no weapon trigger to drive it)
-    /// and an unnamed second writer from what reads like a rival-contact path (no port).
-    /// So `apply_pending_impulse` is a correct no-op until a producer is wired.
+    /// Posted by every weapon blast ([`crate::wall::post_blast_impulse`], called from
+    /// `oag_weapons::projectile::blast`), drained here once a tick.
     pub pending_impulse: Vec3,
     /// The wall torque queued by this step's contacts for the **next** step's integration
     /// ([`crate::wall::steer_away_torque`], Wipeout HD's). The original adds it to the body's
@@ -496,6 +492,8 @@ pub struct ShipState {
     /// live (no Elimination state was captured). Written by the race every tick, not
     /// hashed, for [`Self::on_grid`]'s reason: it is a function of the pose and the mode.
     pub wrong_way_kill: bool,
+    /// The Eliminator flip, [`crate::flip`].
+    pub flip: crate::flip::Flip,
     /// The craft runs `Ship_HoverFourCorner` rather than `Ship_HoverTwoPoint`:
     /// `Ship_UpdateHover` (`0x0884870c`) picks it each frame on
     /// `g_game_mode == 6 && g_debug_mode_override == 0` (Zone). It selects the title's Zone
@@ -737,6 +735,7 @@ impl Default for ShipState {
             inertia_frame: InertiaFrame::World,
             released: true,
             wrong_way_kill: false,
+            flip: crate::flip::Flip::IDLE,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,
             mag_lock_blend: 0.0,

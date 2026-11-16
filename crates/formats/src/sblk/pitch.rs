@@ -48,7 +48,7 @@
 //! for [`NEGATIVE_CENTRE_SCALE`] and [`HD_SAMPLE_RATE`] (48,000) for
 //! [`SAS_SAMPLE_RATE`] (44,100), both read off PS3 disassembly immediates.
 //! [`Sound::pitch`](super::Sound::pitch) picks the pair off the bank's
-//! [`ByteOrder`](crate::byte_order::ByteOrder).
+//! [`ByteOrder`](oag_bytes::ByteOrder).
 //!
 //! See `docs/formats/psp-audio.md` and
 //! `docs/ghidra/functions/psp-pulse-usa/sound.md` for the PSP chain, and

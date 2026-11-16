@@ -131,19 +131,20 @@ pub(super) fn menu_page(
     ticker_tips: &[String],
 ) -> Result<(Vec<oag_ui::frontend::Draw>, TickerClip)> {
     // `page:ROW` puts the cursor on the row with that id once the page is open
-    // (`--menu-page main:remix`), which is how a revealing strip is looked at with
+    // (`--menu-page main:records`), which is how a revealing strip is looked at with
     // each of its rows in focus.
     let (page, focus) = match page.split_once(':') {
         Some((page, row)) => (page, Some(row)),
         None => (page, None),
     };
-    let loaded = crate::mods::Mods::load(&settings.mods.disabled)?;
+    let loaded = crate::mods::Mods::load(&settings.mods)?;
     let built = loaded
         .build_with_strings(
             oag_ui::menu::BUILT_IN,
             strings,
             Some(oag_ui::menu::For {
                 title,
+                platform,
                 updated: false,
             }),
         )
@@ -155,14 +156,24 @@ pub(super) fn menu_page(
     definition.drop_unavailable_race_variant(title);
     definition.drop_rows_picked_on_screen(title);
     definition.drop_unavailable_trail_order(title);
+    definition.drop_unavailable_scenery_sort(title);
+    definition.drop_unavailable_trail_length(title);
     definition.drop_unavailable_weather(title);
+    definition.drop_unavailable_rumble_original(title);
     definition.drop_unavailable_dynamic_hud(title);
+    definition.drop_unavailable_game_options(title);
     definition.rename_campaign_row(title, strings);
     definition.rename_multiplayer_row(title, strings);
+    definition.relabel_choice_from(
+        "audio.spatial_audio",
+        "auto",
+        strings,
+        "OAG_AUDIO_SPATIAL_AUTO",
+    );
     // A mod campaign's picker, as `crate::prepare` adds it; a cross-disc one
     // is kept here, since a still never races it.
     let installed = loaded.installed_for(title, &|_| true);
-    crate::campaign::custom::add_picker(&mut definition, &mut mods, &installed, strings);
+    crate::campaign::custom::add_picker(&mut definition, &mut mods, &installed, title, strings);
     if definition.page(page).is_none() {
         anyhow::bail!(
             "no menu page named {page:?}; this definition has {}",
@@ -175,6 +186,14 @@ pub(super) fn menu_page(
         );
     }
 
+    // The MUSIC page: a still waits for the survey and the other discs' scan, so it shows what
+    // a player would see once they have landed.
+    music_discs.wait_surveyed();
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while music_discs.pool().scanning_discs() && std::time::Instant::now() < until {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    crate::music_pool::expand(&mut definition, music_discs.pool(), strings);
     let mut model = oag_ui::menu::Menu::new(definition);
     race_sources::supply(
         &mut model,
@@ -185,9 +204,7 @@ pub(super) fn menu_page(
         strings,
         &settings.race.team,
     );
-    if page == "remix" {
-        remix_sources::supply(&mut model, title, tracks, teams, settings, strings);
-    }
+    query_sources::supply(&mut model, title, tracks, teams, settings, strings);
     model.supply(
         oag_ui::menu::ValueSource::Mods,
         &crate::mods::choices(&mods, strings),
@@ -290,6 +307,9 @@ pub(super) fn menu_page(
     // draw one frame with. Supplying the settings value would draw a note that
     // is silent by construction; supplying this capture's adapter would say a
     // player had changed something they have not touched.
+    for (key, value) in crate::settings::mod_settings::seeds(&settings.mod_settings) {
+        model.seed(&key, &value);
+    }
     for (key, value) in crate::settings::menu_seeds(settings, anisotropy, title, platform) {
         model.seed(key, &value);
     }
@@ -505,7 +525,14 @@ pub(super) fn menu_page(
         list.extend(nav_legend_draws);
         list.extend(ticker_draws);
         let clip = ticker_clip(&list);
-        list.extend(prompt_draws(kind, &name, strings, skin, source)?);
+        list.extend(prompt_draws(
+            kind,
+            &name,
+            &settings.player,
+            strings,
+            skin,
+            source,
+        )?);
         return Ok((list, clip));
     }
     let Some(phase) = phase else {
@@ -599,6 +626,8 @@ fn records_draws(
 fn prompt_draws(
     kind: &str,
     name: &str,
+    player: &crate::settings::Player,
+
     strings: &oag_ui::language::StringTable,
     skin: &oag_ui::menu::Skin,
     source: Option<&str>,
@@ -608,23 +637,9 @@ fn prompt_draws(
     match kind {
         "tag-entry" | "tag-entry-typed" => {
             let source = source.context("tag-entry needs a --race source open")?;
-            let mut archives = oag_pulse::open(source).context("this source is not Pulse's own")?;
-            let skin_raw = archives
-                .read_name(oag_pulse::names::FRONTEND_ROOT)
-                .context("no front-end root on this disc")?;
-            let skin_xml = oag_tables::fexml::text(&skin_raw).context("front-end root text")?;
-            let globals = oag_ui::screen::Screens::from_xml(&skin_xml).globals;
-            let entry_raw = archives
-                .read_hash(oag_pulse::hashes::TAG_INPUT_SCREENS)
-                .context("no TagInput screens entry on this disc")?;
-            let xml = oag_tables::fexml::text(&entry_raw).context("TagInput entry text")?;
-            let geometry = oag_ui_screens::tag_entry::geometry(&xml, &globals, "Name")
-                .context("the Name TagInput was not found in it")?;
-            let alphabet: String = oag_pulse::tag_input::ALPHABET
-                .chars()
-                .filter(|&c| oag_ui_screens::prompt::accepts(c))
-                .collect();
-            let mut tag_entry = oag_ui_screens::tag_entry::TagEntry::new(
+            let mut tag_entry = pulse_tag_entry(
+                source,
+                "Name",
                 oag_ui_screens::tag_entry::Labels {
                     title: say("OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
                     confirm: say("OAG_KEYBOARD_ACCEPT", "OK"),
@@ -633,10 +648,9 @@ fn prompt_draws(
                         "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
                     ),
                 },
-                geometry,
-                &alphabet,
+                oag_ui_screens::prompt::accepts,
                 name,
-            );
+            )?;
             if kind == "tag-entry-typed" {
                 // A few glyph changes past what `name` opened on, so a
                 // before/after pair actually differs - the same reason
@@ -651,6 +665,83 @@ fn prompt_draws(
                 }
             }
             Ok(tag_entry.draw(skin))
+        }
+        // The first-run name and tag entries and the OPTIONS rows' prompts
+        // (`session::player_name`): Pulse's own row where the source is Pulse, the grid
+        // otherwise (`player-name-grid`, the shape every other title gets).
+        "player-name" | "player-tag" => {
+            let source = source.context("player-name needs a --race source open")?;
+            let (widget, id, english, accepts): (_, _, _, fn(char) -> bool) =
+                if kind == "player-name" {
+                    (
+                        "Name",
+                        "OAG_PLAYER_NAME_TITLE",
+                        "ENTER YOUR NAME",
+                        crate::settings::player::allowed,
+                    )
+                } else {
+                    (
+                        "Tag",
+                        "OAG_PLAYER_TAG_TITLE",
+                        "ENTER YOUR TAG",
+                        crate::settings::player::allowed_in_tag,
+                    )
+                };
+            let tag_entry = pulse_tag_entry(
+                source,
+                widget,
+                oag_ui_screens::tag_entry::Labels {
+                    title: say(id, english),
+                    confirm: say("OAG_KEYBOARD_ACCEPT", "OK"),
+                    hint: say(
+                        "OAG_TAG_ENTRY_HINT",
+                        "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
+                    ),
+                },
+                accepts,
+                if kind == "player-name" {
+                    &player.name
+                } else {
+                    &player.tag
+                },
+            )?;
+            Ok(tag_entry.draw(skin))
+        }
+        "player-name-grid" | "player-tag-grid" => {
+            let (id, english, keys, limit) = if kind == "player-name-grid" {
+                (
+                    "OAG_PLAYER_NAME_TITLE",
+                    "ENTER YOUR NAME",
+                    crate::settings::player::NAME_KEYS,
+                    crate::settings::player::MAX_NAME,
+                )
+            } else {
+                (
+                    "OAG_PLAYER_TAG_TITLE",
+                    "ENTER YOUR TAG",
+                    crate::settings::player::TAG_KEYS,
+                    crate::settings::player::MAX_TAG,
+                )
+            };
+            Ok(oag_ui_screens::prompt::Keyboard::with_keys(
+                oag_ui_screens::prompt::Labels {
+                    title: say(id, english),
+                    delete: say("OAG_KEYBOARD_DELETE", "DEL"),
+                    accept: say("OAG_KEYBOARD_ACCEPT", "OK"),
+                    hint: say(
+                        "OAG_KEYBOARD_HINT",
+                        "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
+                    ),
+                },
+                if kind == "player-name-grid" {
+                    &player.name
+                } else {
+                    &player.tag
+                },
+                limit,
+                keys,
+            )
+            .draw(skin))
         }
         "rename" | "rename-note" => {
             let mut keyboard = oag_ui_screens::prompt::Keyboard::new(
@@ -715,9 +806,39 @@ fn prompt_draws(
         )),
         other => anyhow::bail!(
             "no prompt named {other:?}; this build has rename, rename-note, delete, \
-             delete-built-in, binding"
+             delete-built-in, binding, tag-entry, player-name, player-tag, \
+             player-name-grid, player-tag-grid"
         ),
     }
+}
+
+/// Pulse's own `<TagInput name="{widget}">` row, read live off `source`.
+fn pulse_tag_entry(
+    source: &str,
+    widget: &str,
+    labels: oag_ui_screens::tag_entry::Labels,
+    accepts: impl Fn(char) -> bool,
+    text: &str,
+) -> Result<oag_ui_screens::tag_entry::TagEntry> {
+    let mut archives = oag_pulse::open(source).context("this source is not Pulse's own")?;
+    let skin_raw = archives
+        .read_name(oag_pulse::names::FRONTEND_ROOT)
+        .context("no front-end root on this disc")?;
+    let skin_xml = oag_tables::fexml::text(&skin_raw).context("front-end root text")?;
+    let globals = oag_ui::screen::Screens::from_xml(&skin_xml).globals;
+    let entry_raw = archives
+        .read_hash(oag_pulse::hashes::TAG_INPUT_SCREENS)
+        .context("no TagInput screens entry on this disc")?;
+    let xml = oag_tables::fexml::text(&entry_raw).context("TagInput entry text")?;
+    let geometry = oag_ui_screens::tag_entry::geometry(&xml, &globals, widget)
+        .with_context(|| format!("the {widget} TagInput was not found in it"))?;
+    let alphabet: String = oag_pulse::tag_input::ALPHABET
+        .chars()
+        .filter(|&c| accepts(c))
+        .collect();
+    Ok(oag_ui_screens::tag_entry::TagEntry::new(
+        labels, geometry, &alphabet, text,
+    ))
 }
 
 /// Whether a `--menu-page` name asks for the shared two-person ship page
@@ -759,6 +880,7 @@ pub(super) fn picker_page(
     title: &'static oag_title::Title,
     tracks: &[oag_raceplay::catalogue::Track],
     teams: &[oag_raceplay::catalogue::Team],
+    model_gate: &crate::unlock::ModelGate,
     strings: &oag_ui::language::StringTable,
     backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
@@ -797,7 +919,7 @@ pub(super) fn picker_page(
         }
         Kind::Ship => {
             let gates = crate::unlock::gates_variants(title);
-            let shows_loyalty = gates || layout.hd.is_some();
+            let shows_loyalty = gates || model_gate.gates() || layout.hd.is_some();
             let saved = if shows_loyalty {
                 crate::records::load()
             } else {
@@ -813,6 +935,7 @@ pub(super) fn picker_page(
                         Some(team),
                         strings,
                         &saved,
+                        model_gate,
                         mode,
                     )
                     .variants;
@@ -901,6 +1024,60 @@ pub(super) fn picker_page(
         }
         _ => None,
     };
+    // The live screen's rule, `PickerStage::draw_preview`.
+    let (ship_fit, ship_scale) = title
+        .front_end
+        .and_then(|front_end| {
+            let frames_craft = front_end.ship_preview_fit.is_some();
+            front_end
+                .ship_preview_fit
+                .or(front_end.ship_preview_settle)
+                .map(|fit| (fit, frames_craft))
+        })
+        .filter(|_| kind == Kind::Ship)
+        .and_then(|(fit, frames_craft)| {
+            let box_of = |index: usize, length: Option<f32>| {
+                let zone_hull = teams.get(index).is_some_and(|team| {
+                    crate::preview::zone_race_hull_entry(title, &team.id, mode).is_some()
+                });
+                crate::preview::ship_model::box_z(&fit, zone_hull, length)
+            };
+            let aspect = skin.space().display_aspect;
+            let now = box_of(
+                picker.index(),
+                oag_ui_screens::picker::hd::selected_length(&picker),
+            )?;
+            let frames = step_seconds
+                .filter(|since| *since < seconds.unwrap_or(SETTLED_SECONDS))
+                .map(|since| (since / crate::preview::ship_model::FRAME_SECONDS).round());
+            let framing = match frames {
+                // The model before a step, which a right press arrives from: the
+                // entry above, wrapping. Which neighbour is chosen; the film's
+                // team order is not read.
+                Some(frames) => {
+                    let before =
+                        (picker.index() + picker.entries().len() - 1) % picker.entries().len();
+                    let from = box_of(
+                        before,
+                        oag_ui_screens::picker::hd::entry_length(&picker, before),
+                    )
+                    .unwrap_or(now);
+                    crate::preview::ship_model::FitMotion::stepped(
+                        &fit,
+                        aspect,
+                        from,
+                        now,
+                        frames as usize,
+                    )
+                    .framing()
+                }
+                None => crate::preview::ship_model::rest(&fit, aspect, now),
+            };
+            let (framing, scale) =
+                crate::preview::ship_model::placement(frames_craft, &fit, aspect, now, framing);
+            Some((framing.map(|framing| (fit, framing)), scale))
+        })
+        .unwrap_or((None, 1.0));
     let request = previews
         .get(picker.index())
         .and_then(Option::as_ref)
@@ -908,6 +1085,19 @@ pub(super) fn picker_page(
             entry: variant_entry.clone().unwrap_or_else(|| entry.clone()),
             fallback: variant_entry.is_some().then(|| entry.clone()),
             skin: skin_entry,
+            // The live screen's rule, `session::picker::ship_source`.
+            livery: match kind {
+                Kind::Ship => teams.get(picker.index()).and_then(|team| {
+                    crate::preview::variant::picked_folders(
+                        title,
+                        team,
+                        mode,
+                        picker.fixed_livery(),
+                        picker.variant().map_or("", |(id, _)| id.as_str()),
+                    )
+                }),
+                Kind::Track => None,
+            },
             race_hull: match kind {
                 Kind::Ship => teams
                     .get(picker.index())
@@ -921,12 +1111,16 @@ pub(super) fn picker_page(
             mode3d: None,
             hull_only: crate::preview::draws_hull(title, kind),
             ship_model: layout.hd.as_ref().and_then(|screen| screen.ship_model),
+            // The live screen's rule, `PickerStage::draw_preview`.
+            ship_fit,
+            ship_scale,
             track_model: layout.hd_track.as_ref().and_then(|screen| screen.model),
             seconds: seconds.unwrap_or(SETTLED_SECONDS),
             hull_clock: {
                 let open = seconds.unwrap_or(SETTLED_SECONDS);
                 (open, step_seconds.unwrap_or(open))
             },
+            fury: frame.blocks.as_ref().is_some_and(|blocks| blocks.fury),
         });
     let layers = oag_ui_screens::picker::draw_list(
         &picker,
@@ -1039,8 +1233,8 @@ pub(super) fn picker_stills(
 // the *file* - code plus inline tests together - one line over
 // `scripts/check-file-size.py`'s separate 1,000-line cap on the file
 // itself, and moving the tests out is the same fix either cap asks for.
+mod query_sources;
 mod race_sources;
-mod remix_sources;
 mod track_entries;
 
 #[cfg(test)]

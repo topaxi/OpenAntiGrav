@@ -54,10 +54,16 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // The directory three of the four titles spell identically; Wipeout 2048 is
     // the one that does not. See `oag_title::RaceDefaults::ship_dir`.
     ship_dir: oag_title::race::SHIP_DIR,
+    ship_hull: ships::HULL,
     // The same directory: this title keeps a team's tuning beside its models.
     handling_dir: oag_title::race::SHIP_DIR,
     effect_dir: oag_title::race::EFFECT_DIR,
     effect_dir_by_circuit: &[],
+    // The Classic league flies `%s\VR\Ship.vex`: `Ship_LoadModel`'s own hull path is built off a
+    // flag the `PI_Track` constructor sets from `Values type` (`Race` 1, `Classic` 2, `Zone` 4;
+    // `docs/ghidra/functions/psp-pure-usa/ship-models.md`, "What selects the VR hull").
+    hull_by_track_type: &[("Classic", ships::VR_HULL)],
+    circuit_lineages: &[],
     // `false`: Pure's own menu offers exactly its four `type="Zone"`
     // circuits and nothing else, checked directly against the disc in
     // `pure_declares_zone_circuits_of_its_own_and_no_prefixed_file`. Unlike
@@ -109,9 +115,12 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_transition: None,
     zoom_ring: None,
     borrows_zoom_ring: true,
+    game_options: oag_title::race::GameOptions::NONE,
     zone_stage_textures: None,
+    zone_fallback: None,
     // `None` for the same reason as Pulse's.
     zone_sky: None,
+    detonator: None,
     // Pure authors one roster and no numbered variant of anything in it.
     team_variants: None,
     guest_roster: None,
@@ -140,7 +149,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     fresh_variant: None,
     speed_classes: Some(oag_title::SpeedClasses {
         names: oag_title::SpeedClasses::PURE_LADDER,
-        remix_only: &[oag_title::SpeedClasses::VECTOR],
+        union_only: &[oag_title::SpeedClasses::VECTOR],
     }),
 };
 
@@ -281,13 +290,13 @@ pub mod ships {
     /// (`Data\Ships\<Team>\VR\Textures\vr_<team>_01_shinemap.tga`) sharing one
     /// environment map, `Data\Tex\vr_env.tga`.
     ///
-    /// **The name is recovered; what `VR` means is not.** The prefix recurs
-    /// across the disc - `Data\Weapons\vr_bomb.vex`, `vr_mine.vex`,
-    /// `vr_shield.vex`, `Data\Tex\EngineFlare\vr_engine_noise.mip` - so it names
-    /// a whole alternate presentation set rather than one model, but no code
-    /// path that selects it has been read. Pulse carries exactly one member of
-    /// that set (`%s\vr_shield_cockpit.vex`) and no `VR\` craft directory at
-    /// all. Recording the spelling is safe; guessing the mode is not.
+    /// **The Classic league flies it**: `Ship_LoadModel` builds this path when the circuit's
+    /// `PI_Track` `Values type` is `Classic`, for every craft on the grid
+    /// ([`super::DEFAULTS`]'s `hull_by_track_type`; `docs/ghidra/functions/psp-pure-usa/ship-models.md`,
+    /// "What selects the VR hull"). The `VR` prefix names the Classic presentation set across the
+    /// disc - `Data\Weapons\vr_bomb.vex`, `vr_mine.vex`, `vr_shield.vex`, `Data\Tex\vr_env.tga` -
+    /// but those other members are switched by a separate flag, the circuit's own
+    /// `TrackStartup.xml` `<VrFx>`, and are not wired here.
     pub const VR_HULL: &str = r"VR\Ship";
 
     /// `%s\VR\Phantom.vex` at `0x08a7cb64`.
@@ -342,6 +351,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
         origin: oag_title::Origin::Measured,
     },
     crossfade: None,
+    wwise: None,
 };
 
 /// The circuit a Zone race loads when the caller names none.
@@ -523,6 +533,7 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     tick: oag_title::SequenceTick::Unknown,
     hashed: false,
     event: None,
+    event_every_mode: false,
     beat: None,
 };
 
@@ -569,19 +580,20 @@ pub const START_BOOST: oag_title::craft_laws::CodeStartBoost =
 pub const SIDESHIFT: f32 = 200.0;
 
 /// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
-/// table existed; the in-air `weight_distribution` pitch torque is off: Pure authors no
-/// `<Misc weight_distribution>`.
+/// table existed; the in-air `weight_distribution` pitch torque is off: Pure's pitch
+/// has no such term and it authors no `<Misc weight_distribution>`.
 ///
-/// **Measured on Pure PSP (USA)**, 2026-10-20 (`docs/physics/pure-physics.md`): the engine does
+/// **Measured on Pure PSP (USA)** (`docs/physics/pure-physics.md`): the engine does
 /// not double its output (`Ship_UpdateEngine`, `0x0892f1f0`, live on 374 frames to `3e-6`), its
 /// grounded drag is `-0.0025`, half Pulse's (`0x0892cba0`, every grounded frame), and its
-/// two-point hover's bank-to-yaw gain is `50`, not `30` (`0x0892dea8`, 129 banked frames). The
-/// speed pair, the pitch, the sideshift and the launch are on; the bank-to-yaw gain is held at
-/// Pulse's until our AI flies it.
+/// two-point hover's bank-to-yaw gain is `50`, not `30` (`0x0892dea8`, 129 banked frames). Every
+/// measured law here is on.
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
-    air_pitch_bias: oag_title::pre_race::Sourced::chosen(false),
+    // Pure's `Ship_UpdatePitch` (`0x0892caf8`) has no `weight_distribution` term; read live
+    // (`docs/physics/pure-physics.md`, "Pitch is three code literals").
+    air_pitch_bias: oag_title::pre_race::Sourced::measured(false),
     // Pure's `Ship_UpdatePitch` (`0x0892caf8`) has no `Ship_TestPitchAlignment` call
     // (`docs/physics/pure-physics.md`).
     pitch_gate: oag_title::pre_race::Sourced::measured(false),
@@ -613,6 +625,11 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     wall_one_sided: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     wall_steer_away: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     wall_point_rate_body_local: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    // Pure's `Craft_Construct` passes `0.01`, `0.01` to a `Body_Integrate` that is Pulse's loop
+    // (`0x089345e8`, `docs/physics/pure-physics.md`): read off Pure's own executable, not
+    // measured live; the law is measured per frame on Pulse (`docs/physics/body-damping.md`).
+    body_linear_damping: oag_title::pre_race::Sourced::measured(0.01),
+    body_angular_damping: oag_title::pre_race::Sourced::measured(0.01),
     // Pure's binary is not read for the cage; its own headers clear the flag on all 16 tracks.
     cage_from_track_header: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     // The player camera update (`0x08849970`) copies the tripod matrix into the camera node and
@@ -620,6 +637,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // = the craft's own (`docs/ghidra/functions/psp-pure-usa/camera.md`, "The view matrix is a
     // shear"). Read live on PPSSPP at the grid.
     chase_view_sheared: oag_title::pre_race::Sourced::measured(true),
+    // No Pure team authors a slot beyond `shield`, so every rung reads the same pool; the
+    // executable's own read is not looked at (`docs/formats/handling-stats.md`, "Which
+    // difficulty picks the shield slot").
+    shield_by_skill: oag_title::pre_race::Sourced::chosen(false),
     // Measured (`CODE_PITCH`), in place of Pulse's `<pitch>` stand-in, with its grid damping
     // (`docs/physics/pure-physics.md`).
     code_pitch: Some(oag_title::pre_race::Sourced::measured(CODE_PITCH)),

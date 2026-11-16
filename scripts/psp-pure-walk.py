@@ -22,6 +22,8 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+PROFILE_PTR = 0x08B17794  # the loaded profile object's pointer (Definition_IsUnlocked, 0x088b43d4: lui 0x08b1, lw 0x7794)
+UNLOCK_BYTE = 0x381  # nonzero: every circuit, league and team passes the unlock gate
 sys.path.insert(0, str(HERE))
 from ppsspp_debugger import Debugger  # noqa: E402
 
@@ -31,6 +33,9 @@ def main():
     ap.add_argument("--port", type=int, default=int(os.environ.get("OAG_PPSSPP_PORT", 47810)))
     ap.add_argument("--home", default=os.environ.get("PP_HOME"))
     ap.add_argument("--track-index", type=int, required=True)
+    ap.add_argument("--league", type=int, default=0, help="downs on League Selection: 0 Alpha, 1 Beta, 2 Classic (the last two need --unlock)")
+    ap.add_argument("--unlock", action="store_true",
+                    help="write the dev-unlock byte (`*(*0x08b17794 + 0x381) = 1`) at the Main Menu so League Selection lists Beta and Classic")
     ap.add_argument("--from", dest="start", choices=("race", "menu"), default="race")
     ap.add_argument("--keep", required=True, help="copy the saved state here (under data/saves/pure-psp/)")
     ap.add_argument("--after", type=float, default=16.0, help="seconds to run after Track Selection's cross before saving")
@@ -49,7 +54,12 @@ def main():
     if args.start == "race":
         tap("start", "down", "down", "cross")
         time.sleep(3.0)
-    tap("cross", "down", "down", "cross", "cross", "cross")
+    if args.unlock:
+        profile = dbg.read_u32(PROFILE_PTR)
+        dbg.write(profile + UNLOCK_BYTE, b"\x01")
+        print("dev-unlock byte set (profile %#x)" % profile, file=sys.stderr)
+    tap("cross", "down", "down", "cross", "cross")
+    tap(*(["down"] * args.league + ["cross"]))
     tap(*(["down"] * args.track_index + ["cross"]))
     tap("cross")
     time.sleep(args.after)

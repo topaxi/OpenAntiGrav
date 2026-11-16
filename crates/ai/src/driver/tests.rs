@@ -8,6 +8,12 @@
 //! stem alone, and a fixture corner built with `cos` is only legal under such a
 //! stem.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use super::*;
 use crate::field::Rival;
 use crate::line::Frame;

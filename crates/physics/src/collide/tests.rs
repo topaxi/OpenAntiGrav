@@ -348,3 +348,58 @@ fn the_broadphase_answers_exactly_as_the_linear_scan_does() {
     }
     assert!(compared > 100, "only {compared} rays hit anything");
 }
+
+/// A batch's one walk answers each ray as its own walk would, on the same world, whether the
+/// output has room or runs out, and on a skipped collider.
+#[test]
+fn a_region_answers_each_ray_as_its_own_walk_does() {
+    let mut rng = oag_core::rng::Rng::new(11);
+    let mut at = |scale: f32| (rng.next_f32() - 0.5) * scale;
+    let mut world = CollisionWorld::new();
+    for collider in 0..3u32 {
+        let mut vertices = Vec::new();
+        let mut triangles = Vec::new();
+        for cell in 0..200u32 {
+            let base = [at(40.0), at(6.0), at(40.0)];
+            for _ in 0..3 {
+                vertices.push([base[0] + at(6.0), base[1] + at(2.0), base[2] + at(6.0)]);
+            }
+            triangles.push([cell * 3, cell * 3 + 1, cell * 3 + 2]);
+        }
+        world.push(TriangleSoup::new(
+            vertices,
+            triangles,
+            Vec::new(),
+            Surface::Wall,
+            collider,
+        ));
+    }
+
+    let mut compared = 0;
+    for batch in 0..500 {
+        let centre = Vec3::new(at(40.0), at(6.0), at(40.0));
+        let rays: Vec<Ray> = (0..10)
+            .map(|_| {
+                let direction = Vec3::new(at(2.0), at(2.0), at(2.0)).normalize_or_zero();
+                Ray::new(centre, direction, at(2.0).abs() * 4.0)
+            })
+            .collect();
+        let mut bounds = Aabb::EMPTY;
+        for ray in &rays {
+            bounds.expand(ray.origin);
+            bounds.expand(ray.end());
+        }
+        let region = world.region(&bounds);
+        let skip = (batch % 4 == 0).then_some(1);
+        for ray in rays {
+            for room in [1, 2, 64] {
+                let (mut own, mut batched) = (vec![None; room], vec![None; room]);
+                let want = world.raycast_all(ray, skip, false, &mut own);
+                let got = world.raycast_all_in(&region, ray, skip, false, &mut batched);
+                assert_eq!((got, &batched), (want, &own));
+                compared += want;
+            }
+        }
+    }
+    assert!(compared > 500, "only {compared} hits compared");
+}

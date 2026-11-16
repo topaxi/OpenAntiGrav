@@ -3,7 +3,7 @@
 //! describe alongside - see that file's own doc for why it moved out.
 
 use anyhow::Result;
-use log::{error, info, warn};
+use log::{debug, error, warn};
 
 use oag_display::display;
 use oag_display::space::Space;
@@ -109,15 +109,15 @@ impl Session {
             && matches!(&self.stage, Stage::Frontend(stage)
                 // `--measure-race-load` times the race path, not the boot
                 // sequence, and skips straight past it.
-                if stage.frontend.is_finished() || self.load_probe.is_some())
+                if stage.frontend.is_finished() || self.load_probe.is_some() || self.demo.cli.is_some())
         {
             self.launched = true;
-            info!("{}: opening the menus", frontend::states::LAUNCH_GAME);
+            debug!("{}: opening the menus", frontend::states::LAUNCH_GAME);
             // Wipeout 2048's own Team/Options screens, read the same "only
             // if the player actually touched it" way the language above is -
             // `None` on every title without a touch front end, and on this
             // one until `Home`'s own tiles are visited at all. Applied
-            // before `open_menus` below, which is what seeds the RACE/REMIX
+            // before `open_menus` below, which is what seeds the RACE and a mod's race
             // pages' own TEAM row and the Team screen's campaign-launch
             // team from `settings.race.team`/`variant` - after it, the row
             // would already be built off the untouched value. See
@@ -158,22 +158,27 @@ impl Session {
             // title: its `Launch 2048` carries a request where every other
             // title's `Launch Game` opens the menus and stops. See
             // `oag_ui::frontend::Launch`.
-            let launch = match &self.stage {
-                Stage::Frontend(stage) => stage.frontend.launch().cloned(),
-                _ => None,
+            let (launch, card) = match &self.stage {
+                Stage::Frontend(stage) => (
+                    stage.frontend.launch().cloned(),
+                    stage.frontend.launched_card(),
+                ),
+                _ => (None, None),
             };
             let opening = web_time::Instant::now();
             if let Err(e) = self.open_menus() {
                 error!("cannot open the menus: {e:#}");
             } else {
-                info!(
+                debug!(
                     "opened the menus in {:.0} ms (a stall on the main thread, drawn as the held backdrop)",
                     opening.elapsed().as_secs_f32() * 1000.0
                 );
                 println!("\n{}", hints::shell_keys(&hint_strings));
-                self.follow_launch(launch);
+                self.follow_launch(launch, card);
             }
         }
+
+        self.poll_hosted_map();
 
         // As soon as the circuit's own load lands, not only once the fade that
         // covers it has run out - see `Session::advance_race_build`, which is
@@ -193,7 +198,7 @@ impl Session {
         // wait counts toward this frame's `elapsed`, so the ticks below, the
         // input they sample (`player_snapshots` polls the pads) and the draw
         // alpha all describe the moment after it; taken in `Session::draw`, as
-        // it was until 2026-10-13, everything drawn was a wait older. After
+        // everything drawn would be a wait older. After
         // every stage change above, which may resize; `Session::draw` takes
         // the image, or draws nothing if there is none. See `Gpu::acquire`.
         let acquire_start = web_time::Instant::now();
@@ -264,11 +269,9 @@ impl Session {
             // **A stutter, named where it happened.** An audio underrun and a
             // frame that took 90 ms are the same event seen from two threads,
             // and the only way to tell that from an audio path that is late on
-            // its own is to have both lines in one terminal. 40 ms is two and a
-            // half frames at 60 Hz - past any ordinary jitter and well under
-            // the load stalls `self.stalled` already excludes.
-            if elapsed > std::time::Duration::from_millis(40) {
-                warn!("frame: {:.1} ms", elapsed.as_secs_f32() * 1000.0);
+            // its own is to have both lines in one terminal.
+            if let Some(line) = self.stutter.observe(now, elapsed) {
+                warn!("{line}");
             }
         }
         // `--drive` steps exactly one tick a frame, so a script counts ticks, not milliseconds.
@@ -313,8 +316,7 @@ impl Session {
             // snapshot is a value.
             // One snapshot per grid slot, from whichever device
             // `oag_input::pad::Assignment` says drives it - every device on
-            // slot 0 until something assigns one elsewhere, which is the single
-            // merged stream this was until 2026-09-16. The front end reads the
+            // slot 0 until something assigns one elsewhere (one merged stream). The front end reads the
             // button edges this same call computed, through `buttons_mut`, for
             // the one slot the keyboard drives; it has one menu and one cursor
             // however many people are racing.
@@ -324,6 +326,9 @@ impl Session {
                 self.controls.let_go_extra_seats();
             }
             let inputs = self.controls.player_snapshots();
+            // Taken every tick so a press made while paused or in a menu is spent there, and
+            // acted on only by the unpaused race arm below.
+            let music_input = self.controls.take_music();
             self.frame_timing.sampled(web_time::Instant::now());
             self.pad_dir = super::menu_sound::pad_direction(self.controls.buttons());
             // The pad spoke: the drawn cursor goes until the mouse moves
@@ -334,9 +339,31 @@ impl Session {
             if self.controls.pad_spoke() {
                 self.pointer.other_device();
             }
+            self.idle.update_window(
+                self.gpu.output.window.get(),
+                // An attract demo is not somebody playing: a menu left alone may still blank the
+                // screen. A wallpaper is meant to stay up.
+                self.race_running() && (!self.in_demo() || self.demo_is_wallpaper()),
+                self.controls.pad_spoke(),
+                web_time::Instant::now(),
+            );
             // And the pointer's, on the same latch terms: one take per tick,
             // in window pixels until a stage says which grid it draws in.
-            let pointer = self.pointer.take();
+            let mut pointer = self.pointer.take();
+            // A notice over the screen takes the press that dismisses it, so the screen under it
+            // does not also act on it.
+            self.tick_notice(&mut pointer);
+            // `--replay-png` opens its screenshot as soon as the main menu is up, ahead of an
+            // attract demo that would start on the same tick.
+            if self.tick_shot_cli() {
+                break;
+            }
+            // The attract demo: an untouched main menu starts one, input ends it. Before the
+            // stage's own tick so the press that ends a demo is not also read by the menu it
+            // returns to.
+            if self.tick_demo(&pointer) {
+                break;
+            }
             // The further windows' too, every tick, so a click made mid-race is spent and the end
             // screens (the finished arm below) see only what happened since the line.
             let seat_pointers = self.seat_pointers();
@@ -345,6 +372,7 @@ impl Session {
             if let Stage::Menu(stage) = &mut self.stage {
                 stage.skin.set_touch_rows(self.pointer.touch_spoke_last());
             }
+            self.poll_music_pool();
             // The audio's whole tick, and it is inside this loop rather than
             // beside it on purpose. Cue emission and mixer control are driven by
             // the tick count, exactly as the exhaust and the chase camera are
@@ -362,6 +390,7 @@ impl Session {
             // `frontend::Player::follow`.
             let movie_playhead = self.audio.movie_playhead();
             self.audio.tick();
+            self.audio.poll_route(&mut self.settings.audio);
             self.save_race_music_periodically();
             // The in-race camera cycle, read off the shared `Input` and consumed,
             // exactly as the front end and the menus consume their own presses -
@@ -376,34 +405,68 @@ impl Session {
             // which is what persists the choice across a restart. Before the tick
             // rather than after, so the frame this tick produces is already drawn
             // from the new view.
-            // **Not on `Race End Photo`**, where the legend names this button
-            // for photo mode, which this build does not have: the press is
-            // spent and the camera stays as the spectator director has it.
-            let in_photo = matches!(&self.stage, Stage::Race(stage)
+            // A recording being watched owns the devices and the race, and nothing the loop does
+            // for a race that is driven applies to it: not the pause, not the end screens, not
+            // a record or a ghost.
+            if self.viewer.is_some() && matches!(self.stage, Stage::Race(_)) {
+                // Photo mode over the viewer owns the devices, as it does over a race; the
+                // viewer carries on from where it leaves the playhead.
+                if self.photo.is_some() {
+                    self.tick_photo(&pointer, inputs.get(0));
+                } else {
+                    self.tick_viewer(&pointer);
+                }
+                continue;
+            }
+            // Photo mode first: while it is open it owns the devices and the race stands
+            // still, and what it leaves (a press it spent, a leave) is settled before the
+            // blocks below read the pad.
+            // **The tick that leaves it is still the mode's**: `inputs` was read from the
+            // devices before the mode spent its presses, so the race that takes the next tick
+            // reads them, whatever the mode does with the button that left (CIRCLE is the
+            // absorb).
+            let photo_tick = self.photo.is_some();
+            if photo_tick {
+                self.tick_photo(&pointer, inputs.get(0));
+            }
+            // SELECT on `Race End Photo` opens photo mode, once that screen takes input; on
+            // any other race tick it is the camera cycle.
+            let at_the_finish = matches!(&self.stage, Stage::Race(stage)
                 if stage.endrace.as_ref().is_some_and(
                     crate::race_stage::endrace_touch::EndRace::is_photo));
             if matches!(self.stage, Stage::Race(_))
+                && self.photo.is_none()
+                && !self.in_demo()
                 && self.controls.buttons().is_pressed(Button::Select)
             {
                 self.controls.buttons_mut().consume_press(Button::Select);
-                if !in_photo {
+                if !at_the_finish {
                     self.cycle_camera_view();
+                } else if matches!(&self.stage, Stage::Race(stage)
+                    if stage.endrace.as_ref().is_some_and(
+                        crate::race_stage::endrace_touch::EndRace::photo_takes_select))
+                {
+                    self.open_photo_at_the_finish();
                 }
             }
             // Pause, on the same button the original spends on "leave the
             // results table" - free during a still-running race because
-            // nothing else there reads `Start` yet. **No menu, no overlay**:
+            // nothing else there reads `Start` yet. **No menu, no overlay** (where the
+            // title has no pause screen of its own, see below):
             // this only decides whether `Race::tick` below runs, so the world
             // is exactly as the freezing tick left it, the way the finished
             // race arm below already leaves it under the results table.
             // **Any seated player's Start**, not the keyboard's slot alone: in a
             // split race each pad drives its own slot, and a Deck's own Start
-            // was otherwise never seen (reported from play, 2026-10-13). And
+            // would otherwise never be seen. And
             // only the player who paused resumes, and a resume in a race with more
             // than one person counts down first - see `session::pause`.
             // A click on a paused race is slot 0's Start, through the same owner
             // rule: a mouse cannot lift player 2's pause inside their timeout.
-            if matches!(&self.stage, Stage::Race(stage) if !stage.race.finished()) {
+            if self.photo.is_none()
+                && !self.in_demo()
+                && matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
+            {
                 let paused = matches!(self.pause, oag_game::pause::State::Paused { .. });
                 let click = pointer.clicked && paused;
                 // A click on a further window is its first seat's Start, the same way.
@@ -411,7 +474,18 @@ impl Session {
                 let presses = self.controls.take_presses(Button::Start)
                     | u8::from(click)
                     | if paused { seat_clicks } else { 0 };
-                self.step_pause(presses);
+                // The title's own pause screen takes START (the original's pause is a menu).
+                if presses != 0
+                    && let Stage::Race(stage) = &self.stage
+                    && !paused
+                    && self.pause_screen_applies(stage)
+                {
+                    // START plays `ACCEPT` on pausing, measured.
+                    self.play_navs([oag_ui::menu::nav::Nav::Accept]);
+                    self.escape();
+                } else {
+                    self.step_pause(presses);
+                }
             }
             // Circle is "back" everywhere else on screen - the menus, the
             // front end - and a paused race is the one place a still-running
@@ -422,6 +496,7 @@ impl Session {
             // menus, exactly as `escape` does from any race.
             // Only the player who paused leaves, as for Start above.
             if matches!(self.stage, Stage::Race(_))
+                && self.photo.is_none()
                 && self.paused()
                 && oag_game::pause::leaves(self.pause, self.controls.take_presses(Button::Circle))
             {
@@ -441,7 +516,8 @@ impl Session {
             //
             // **A rising edge**, so the thrust the player was holding as they
             // crossed the line cannot dismiss the board they have not read yet.
-            if matches!(&self.stage, Stage::Race(stage)
+            if self.photo.is_none()
+                && matches!(&self.stage, Stage::Race(stage)
             if crate::race_stage::endrace::results_table_takes_confirm(
                 stage.race.finished(),
                 stage.endrace.is_some(),
@@ -466,6 +542,16 @@ impl Session {
             }
             self.poll_online();
             match &mut self.stage {
+                // Photo mode: the race does not tick, whatever state it is in (running, or
+                // finished with the end screens behind). The audio is not simulation state, so
+                // it is stepped as under the pause, which is what lets the engine note spin down
+                // while `World` stands at the tick the mode caught it on.
+                Stage::Race(stage) if photo_tick || self.photo.is_some() => {
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, true, self.controls.pad_mut());
+                    }
+                    oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
+                }
                 // Stepped in the tick loop with everything else, so the wave's
                 // heartbeat runs at the simulation's fixed 60 Hz rather than at
                 // whatever the window is managing. The original's own loading
@@ -495,14 +581,39 @@ impl Session {
                     // The language picker takes the pointer itself; every
                     // other screen in the chain waits for a button and
                     // reads a click as one. See `session::pointer`.
-                    let grid = pointer::in_grid(pointer, stage.frontend.space(), rect, 1.0);
+                    let grid = pointer::in_grid(
+                        pointer,
+                        stage.frontend.space(),
+                        rect,
+                        stage.renderer.inset(),
+                    );
+                    stage
+                        .frontend
+                        .set_pad_driving(!self.pointer.pointer_spoke_last());
+                    stage.frontend.set_view_stick(self.controls.view().right);
+                    self.pointer.set_mouse_pans(stage.frontend.wants_mouse_pan());
                     if !stage.frontend.pointer(&grid) {
                         pointer::press_for_click(&mut self.controls, &grid);
                     }
+                    stage.frontend.set_music_levels(self.audio.music_levels());
                     let events =
                         stage
                             .frontend
                             .update(dt, self.controls.buttons_mut(), movie_playhead);
+                    // SCREEN SIZE on a touch front end: applied the tick it moves, and saved
+                    // like every other row.
+                    if let (Some(scale), Some(percent)) = (
+                        stage.frontend.screen_size_scale(),
+                        stage.frontend.screen_size_choice(),
+                    ) {
+                        stage.renderer.set_inset(scale);
+                        if self.settings.graphics.hud_safe_area != Some(percent) {
+                            self.settings.graphics.hud_safe_area = Some(percent);
+                            if let Err(e) = settings::save(&self.settings) {
+                                warn!("could not save the screen size: {e:#}");
+                            }
+                        }
+                    }
                     // One set of planes and one voice serve every movie the front
                     // end draws, so each is installed on the tick its own screen
                     // is entered - picture and sound together, which is what makes
@@ -521,6 +632,16 @@ impl Session {
                     report(&events, stage.trace);
                     oag_raceplay::loader_log::lines(stage.frontend.take_notes());
                     let boot_navs = stage.frontend.take_nav();
+                    // Hidden campaign events the player just found are kept in the
+                    // profile, off the render thread.
+                    let found = stage.frontend.take_found_events();
+                    if let (false, Some(shell)) = (found.is_empty(), self.shell.as_ref()) {
+                        let title = records::campaign_title(shell.title, shell.platform);
+                        for name in &found {
+                            self.records.record_found(&title, name);
+                        }
+                        records::save_in_background(&self.records);
+                    }
                     // The movie's sound outlives neither leg, and a skip leaves
                     // the state without finishing the player - see
                     // `Frontend::is_playing_movie`.
@@ -550,7 +671,7 @@ impl Session {
                     self.play_navs(boot_navs);
                 }
                 Stage::Menu(stage) => {
-                    stage.tick(dt);
+                    stage.tick(dt, &self.audio.output().spectrum().levels());
                     self.unseat_after_split_race();
                     self.sync_multiplayer();
                     self.sync_lan();
@@ -573,7 +694,7 @@ impl Session {
                     }
                     // The Race Campaign's own screens, same shape: they take
                     // the tick whole rather than sitting behind the rows.
-                    if stage.campaign.is_some() {
+                    if stage.campaign.is_some() && stage.prompt.is_none() {
                         self.tick_campaign(&grid);
                         continue;
                     }
@@ -713,9 +834,7 @@ impl Session {
                     // remaining catch-up steps would tick it with whatever
                     // closed the menu still held - Circle, say, read as the
                     // in-race absorb it also means. Bounded by the catch-up
-                    // cap, so usually zero or one step, which is exactly why
-                    // the `LaunchRace` shape of this went unnoticed the first
-                    // time: finding G1 of the 2026-08-18 review.
+                    // cap, so usually zero or one step, which is easy to miss.
                     if matches!(self.stage, Stage::Race(_)) {
                         break;
                     }
@@ -759,9 +878,10 @@ impl Session {
                     // opponents go on lapping and the player's craft is flown by
                     // the AI. Neutral input, because the panels consume the pad
                     // and a craft that is not the player's must not read it. The
-                    // standings and the board were frozen at the line, so
-                    // nothing the panels show moves. See
-                    // `Race::runs_on_after_the_line`.
+                    // player's standing was fixed at the line; the board keeps
+                    // up with the rest of the field finishing, and the tables
+                    // that list it are rebuilt from it. See
+                    // `Race::runs_on_after_the_line` and `Race::refresh_results`.
                     //
                     // A Single Race wreck steps the whole world too
                     // (`Race::runs_on_after_the_wreck`); any other ending (a Zone
@@ -774,7 +894,13 @@ impl Session {
                         Some(net) => {
                             net.step(&mut stage.race, oag_gameplay::InputSnapshot::EMPTY);
                         }
-                        None => stage.race.tick_finished(),
+                        None => {
+                            stage.race.tick_finished();
+                            stage.refresh_endrace_board();
+                        }
+                    }
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, false, self.controls.pad_mut());
                     }
                     oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                     // `stage`'s own last use - the reborrow inside
@@ -813,6 +939,9 @@ impl Session {
                     // reason: the audio is not simulation state, so ticking
                     // it is what keeps the engine note honest while `World`
                     // itself sits frozen at whatever tick `Start` caught it on.
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, true, self.controls.pad_mut());
+                    }
                     oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                 }
                 // **The pre-race flyby steps instead of the world**: the circuit's own
@@ -830,16 +959,20 @@ impl Session {
                         stage.race.skip_intro();
                     }
                     stage.race.tick_intro(&inputs);
+                    oag_game::sound::intro_cues(&mut self.audio, &mut stage.race);
+                    // The held craft's engines at idle sound under the flyby from the camera it
+                    // draws from, through the effects fade, on a title whose rule has one.
+                    // Output only: the world does not tick.
+                    oag_game::sound::flyby_tick(&mut self.audio, &mut stage.race);
                 }
                 Stage::Race(stage) => {
-                    // Outside `Race::tick`, so this cannot reach the hash: it
-                    // tops the slot up the way a pad grant would, and only when
-                    // the slot is already empty, so firing still spends it.
+                    // Tops the slot up the way a pad grant would, and only when
+                    // the slot is already empty, so firing still spends it. It
+                    // writes between ticks, so it is recorded as an event: a
+                    // replay or a rewind that did not hear of it would hold an
+                    // empty slot where the live race held the weapon.
                     if let Some(weapon) = self.give {
-                        let ship = &mut stage.race.sim.world.ships[0];
-                        if ship.pickup.weapon.is_none() {
-                            ship.pickup.weapon = Some(weapon);
-                        }
+                        stage.race.give_weapon(0, weapon);
                     }
                     // Every slot's snapshot, straight off the devices'
                     // assignment - see `oag_input::pad::Assignment`. Under its
@@ -854,13 +987,32 @@ impl Session {
                         // devices are all on slot 0 under the default assignment.
                         net.step(&mut stage.race, *inputs.get(0));
                     } else {
-                        oag_game::split_screen::follow_devices(
-                            &mut stage.race,
-                            self.controls.assignment(),
-                        );
+                        // The first keyframe is cut here, after every writer that ran at
+                        // the race's build and before the first tick's events, so a rewind
+                        // that pre-rolls from it flies the race that was flown.
+                        if let Some(keeper) = &mut stage.keeper {
+                            keeper.recut_first(&stage.race);
+                        }
+                        // A demo is nobody's: a seat left from an earlier race takes no slot.
+                        if stage.demo.is_none() {
+                            oag_game::split_screen::follow_devices(
+                                &mut stage.race,
+                                self.controls.assignment(),
+                            );
+                        }
                         stage.race.tick(&inputs);
+                        // Photo mode's rewind goes back through these (`session::photo_rewind`).
+                        if let Some(keeper) = &mut stage.keeper {
+                            keeper.keep(&stage.race);
+                        }
                     }
                     stage.tick_messages();
+                    oag_game::music_pad::drive(
+                        &mut self.audio,
+                        &mut stage.race,
+                        self.settings.audio.music_volume,
+                        music_input,
+                    );
                     // A server that ends a race nobody had finished (the host left, a link
                     // died) leaves a frozen world: after a second of it, back to the menus.
                     match self.net.as_ref().and_then(oag_game::net_play::NetPlay::over) {
@@ -880,7 +1032,10 @@ impl Session {
                     // Immediately after the tick and inside this loop, so a cue
                     // lands on the tick that raised it whether the frame
                     // stepped once, twice or not at all. See
-                    // `oag_sound::Audio::race_tick`.
+                    // `oag_sound::Audio::race_tick`. Rumble reads the same cues first.
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, false, self.controls.pad_mut());
+                    }
                     oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                     if self.log_every > 0
                         && stage.race.sim.world.tick % u64::from(self.log_every) == 0
@@ -910,8 +1065,10 @@ impl Session {
             // Neither a ghost nor a record comes out of a network race: its
             // inputs are predictions corrected by a server, under the server's
             // settings, not this player's run.
+            let unofficial = self.race_is_unofficial();
             if let Stage::Race(stage) = &mut self.stage
                 && self.net.is_none()
+                && !unofficial
             {
                 crate::race_stage::ghost::save(&mut stage.race, &stage.result_key);
             }
@@ -951,32 +1108,60 @@ impl Session {
                     .campaign_cell
                     .as_ref()
                     .filter(|cell| !oag_tables::pure_campaign::is_free_play(&cell.name))
+                    .filter(|_| !unofficial)
                 {
-                    self.records.record_campaign(
-                        stage
-                            .campaign_custom
-                            .as_ref()
-                            .map(|custom| custom.records_title.as_str())
-                            .or(campaign_title.as_deref())
-                            .unwrap_or(&key.title),
-                        &cell.name,
-                        observation.campaign_medal,
-                        observation.campaign_difficulty,
-                    );
+                    match stage.campaign_custom.as_ref() {
+                        Some(launch) => launch.record_result(
+                            &mut self.records,
+                            &cell.name,
+                            stage.campaign_tier_name().as_deref(),
+                            observation.campaign_difficulty,
+                        ),
+                        None => self.records.record_campaign(
+                            campaign_title.as_deref().unwrap_or(&key.title),
+                            &cell.name,
+                            observation.campaign_medal,
+                            observation.campaign_difficulty,
+                        ),
+                    }
                 }
-                if let Some(progress) = stage.campaign_2048_event.as_ref() {
+                if let Some(progress) = stage.campaign_2048_event.as_ref().filter(|_| !unofficial) {
+                    let title = campaign_title.as_deref().unwrap_or(&key.title);
+                    // The best before this race, which `record_campaign` below overwrites.
+                    let prior = self
+                        .records
+                        .campaign_medal(title, &progress.name)
+                        .and_then(|row| row.best_medal);
                     self.records.record_campaign(
-                        campaign_title.as_deref().unwrap_or(&key.title),
+                        title,
                         &progress.name,
                         observation.campaign_medal,
                         None,
                     );
+                    let banked = stage.race.xp_tally_mut().map(|tally| {
+                        let earned = self.records.bank_event_xp(
+                            tally,
+                            prior,
+                            observation.campaign_medal,
+                            observation.place,
+                        );
+                        // What the EndRace page shows: the completion award among it.
+                        (earned, tally.completion_xp())
+                    });
+                    let xp = banked.map_or(0, |(earned, _)| earned);
+                    log::debug!("xp: {} +{xp} (total {})", progress.name, self.records.xp());
+                    stage.xp_banked = banked.map(|(earned, bonus)| oag_game::endrace::touch::XpBanked {
+                        earned,
+                        bonus,
+                        total_after: self.records.xp(),
+                    });
                 }
                 // A title whose EndRace screens do not bank the award (Pure, 2048
                 // and Omega read none of Pulse's or HD's) is paid here, under the
                 // law its `Title::loyalty` names.
                 if let (Some(shell), Some(options)) =
                     (self.shell.as_ref(), self.race_options.as_ref())
+                    && !unofficial
                     && let Some(earning) = shell.title.loyalty.filter(|e| !e.banked_by_endrace)
                     && let Some(team) = options.team.as_deref()
                 {
@@ -1000,8 +1185,10 @@ impl Session {
                         .filter(|_| stage.campaign_custom.is_none()),
                     ..observation
                 };
-                self.records.record(key, observation);
-                records::save_in_background(&self.records);
+                if !unofficial {
+                    self.records.record(key, observation);
+                    records::save_in_background(&self.records);
+                }
             }
         }
 
@@ -1018,6 +1205,8 @@ impl Session {
         // reopened its disc image once a frame and warned once a frame.
         self.phases.mark(super::phases::Phase::Ticks);
         self.start_endrace_prefetch();
+        self.start_menu_source();
+        self.refresh_opening_reads();
         self.build_endrace();
 
         self.begin_scene_frame();

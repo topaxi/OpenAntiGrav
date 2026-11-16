@@ -47,8 +47,17 @@ replaces that component. 2048-era teams author no `zone` model: the hull keeps
 `Zoneship_Faisar`) is not wired - the entry's name field for such a craft was not
 read, so this port shows the default and says so. Confidence stays 75.
 
+**Ship Select preview (2026-11-16): ported.** Omega's picker draws the Zone hull in the picked team's
+livery through the same `zone_livery::swap` and `Reads` as the race
+(`omega_zone_preview_wears_the_livery_the_race_does`); see
+[`ps3-hdfury-eu/zone-craft.md`](../ps3-hdfury-eu/zone-craft.md), "Ship Select preview".
+
 ## 2048-era craft
 
 Resolved 2026-10-06: the craft list carries `modellocation` and
 `handlingstatslocation` per craft, so a 2048-era craft was a roster gap
 (`GuestRoster.handling_dir`), see `docs/formats/omega-status.md`.
+
+## HD/Fury
+
+Checked 2026-11-16: HD's loader has the same mechanism under 2048's key `zoneship_zone` ([`ps3-hdfury-eu/zone-craft.md`](../ps3-hdfury-eu/zone-craft.md), confidence 80). The key differs here (`zoneship_team`); the mechanism is the same.

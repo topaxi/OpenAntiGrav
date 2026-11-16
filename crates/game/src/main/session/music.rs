@@ -28,14 +28,17 @@ impl Session {
     /// Arms the race song for the title this session races, before a fresh race starts its music:
     /// a title whose original starts the song at the release holds it until the countdown ends.
     pub(super) fn hold_race_song(&mut self) {
-        if let Some(title) = self
-            .shell
+        if let Some(title) = self.title_raced() {
+            oag_game::sound::hold_race_song(&mut self.audio, title);
+        }
+    }
+
+    /// The title this session races.
+    pub(super) fn title_raced(&self) -> Option<&'static oag_title::Title> {
+        self.shell
             .as_ref()
             .map(|shell| shell.title)
             .or(self.race_title)
-        {
-            oag_game::sound::hold_race_song(&mut self.audio, title);
-        }
     }
 
     /// Writes the place now if it moved. Cheap when it did not.

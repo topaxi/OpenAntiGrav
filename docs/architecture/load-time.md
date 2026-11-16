@@ -152,6 +152,14 @@ and `race_load_read_memo_ground_truth` fails if the load stops asking for it
 (checked by removing the call). HD Fury 5.49 to 2.89 s, HD PSN 6.47 to 2.44 s.
 Peak RSS rose 40-50 MiB, the memo itself.
 
+The memo also keeps a neighbour read (`read_preceding`, `read_following`) up to
+16 MiB, under the same 64 MiB budget. A Pulse PS2 circuit's texture set is the entry
+before its model, and the load asks for it four times (`ps2_texture_set` in
+`load/track_inputs.rs`); the trackfile walk of all PS2 circuits asked nine times
+per circuit and read 1,091 MiB of disc for 152 MiB of distinct ranges, 46% of its
+CPU in LZMA hunk decoding. With the memo the walk is 62-64 s of CPU against
+90-114 s (`every_pulse_ps2_circuit_exports_and_reads_back_the_same`, load 20-42).
+
 A hit still copies the bytes, because `oag_mesh::mesh::rcs::Textures` returns
 an owned `Vec<u8>`; that copy is about 3% of the remaining HD load. Removing it
 means changing that signature at every caller.
@@ -218,8 +226,10 @@ by construction; nothing about the simulation can see the split.
   Interleaved A/B, five runs each: HD 1.943 to 1.762 s (**-9.3%**), 2048 1.701
   to 1.587 s (**-6.7%**), Omega unchanged (its archives store no deflated
   block). Under the 10% this lane set for a new dependency in a determinism
-  crate, so not taken; it is the next thing to take if a load-time budget ever
-  needs it.
+  crate, so not taken then. Taken later, see "Inflate unified on `flate2`"
+  in `docs/architecture/workspace-layout.md`, which measured it again with the
+  whole `Archive::read` path (including the Fury disc this entry used) and
+  found a larger gain: HD Fury 9.2 to 10.5 s down to 6.7 s.
 - **`perf record --call-graph dwarf`.** Every stack came back as its leaf
   frame alone on this binary, which made the first profile read as "inflate
   is 30%" with no caller. Use a frame-pointer build.
@@ -243,6 +253,38 @@ HD's race music start used to inflate all fifteen MP3 tracks whole to measure
 their lengths (`oag_music::measure`). It reads each track's first PSARC block
 since 2026-10-19 (`psarc::Archive::peek`): 305 ms became 23 ms on the Steam
 Deck, on the `race-music` thread ([music threads](music-threads.md)).
+
+## `memchr` and `CharSearcher` in a debug build
+
+A headless HD Fury race load (`--race --screenshot <png> --ticks 1`,
+`hdfury-ps3-eu-dec.iso`, default circuit, `target/debug/oag-game` built with
+`-Cforce-frame-pointers=yes`) spent 22.5% of its CPU samples in
+`core::slice::memchr::memchr_aligned` (15.3%) and `CharSearcher::next_match`
+(7.2%). Every one of those samples is under
+`naga::span::Span::location` called from `naga::back::spv::BlockContext::write_block`
+(1,051 of 1,051): naga's SPIR-V writer resolves a line and column for each
+statement by rescanning the shader source, when wgpu's `InstanceFlags::DEBUG`
+is set. `InstanceFlags::from_build_config` sets it in a debug build only, so
+the release build never paid it (0.18% of samples there). It is not string
+scanning in `oag-tables` or `oag-ui`.
+
+`oag_game::adapter::instance` now removes `DEBUG` and keeps `VALIDATION`.
+Same load, three interleaved runs each, `perf stat -e instructions:u`, load
+average 3.5 to 3.6:
+
+| | before | after |
+| --- | ---: | ---: |
+| instructions:u | 82.18 / 82.19 / 82.20 G | 44.24 / 44.17 / 44.18 G (**-46%**) |
+| user time | 4.72 / 4.68 / 4.73 s | 2.96 / 3.00 / 2.97 s (**-37%**) |
+| `memchr_aligned` + `CharSearcher` | 22.5% of samples | 0.07% |
+
+The captured PNG is byte-identical in all six runs. The cost left is inflate
+(17% of samples), music decode and the shader pipeline itself. The release
+build is untouched by the change.
+
+**To get the labels back:** `OAG_WGPU_DEBUG=1` keeps `InstanceFlags::DEBUG` in any build (`oag_game::adapter::DEBUG_LABELS_VAR`), for RenderDoc or a validation message read by label. It costs the load the quarter above and changes no picture.
+
+**To try a smaller device:** `OAG_MAX_TEXTURE_SIDE=<n>` makes the device with `max_texture_dimension_2d` at most `n` (`oag_mesh::mesh_render::required_limits`), so a Steam Deck's 16,384 or a phone's 8,192 is a desktop run away. Unset changes nothing.
 
 ## The player's path, and per-frame CPU
 

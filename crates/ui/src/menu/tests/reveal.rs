@@ -50,7 +50,7 @@ fn only_the_focused_rows_attached_rows_are_drawn_below_it() {
             "RECORDS"
         ]
     );
-    // On RACEBOX, REMIX shows under it.
+    // On RACEBOX, REPLAYS (the extras') and REMIX (the mod's) show under it.
     press(&mut menu, &[Button::Right]);
     assert_eq!(id(&menu), "racebox");
     assert_eq!(
@@ -58,6 +58,7 @@ fn only_the_focused_rows_attached_rows_are_drawn_below_it() {
         [
             "RACE CAMPAIGN",
             "RACEBOX",
+            "REPLAYS",
             "REMIX",
             "MULTIPLAYER",
             "OPTIONS",
@@ -65,7 +66,12 @@ fn only_the_focused_rows_attached_rows_are_drawn_below_it() {
         ]
     );
     assert_eq!(menu.tabs().last().map(|t| t.depth), Some(0));
-    assert_eq!(menu.tabs()[2].depth, 1, "REMIX hangs one tab below RACEBOX");
+    assert_eq!(
+        menu.tabs()[2].depth,
+        1,
+        "REPLAYS hangs one tab below RACEBOX"
+    );
+    assert_eq!(menu.tabs()[3].depth, 2, "and REMIX one more, below it");
     // On OPTIONS it is QUIT's turn.
     press(&mut menu, &[Button::Right]);
     press(&mut menu, &[Button::Right]);
@@ -87,6 +93,8 @@ fn only_the_focused_rows_attached_rows_are_drawn_below_it() {
 fn the_pad_steps_the_top_level_left_and_right_and_a_family_up_and_down() {
     let mut menu = revealing();
     press(&mut menu, &[Button::Right]);
+    press(&mut menu, &[Button::Down]);
+    assert_eq!(id(&menu), "replays");
     press(&mut menu, &[Button::Down]);
     assert_eq!(id(&menu), "remix");
     // The end of a family is an end: no wrap into the next row.
@@ -157,9 +165,10 @@ fn confirm_on_a_revealed_row_opens_it() {
     let mut menu = revealing();
     press(&mut menu, &[Button::Right]);
     press(&mut menu, &[Button::Down]);
+    press(&mut menu, &[Button::Down]);
     assert_eq!(id(&menu), "remix");
     press(&mut menu, &[Button::Cross]);
-    assert_eq!(menu.page().id, "remix");
+    assert_eq!(menu.page().id, "test.mod/remix");
 }
 
 #[test]
@@ -214,7 +223,7 @@ fn a_hidden_row_has_no_pointer_region_and_a_revealed_one_is_clickable() {
         ..crate::pointer::Pointer::default()
     };
     menu.pointer(&click, &regions);
-    assert_eq!(menu.page().id, "remix");
+    assert_eq!(menu.page().id, "test.mod/remix");
 }
 
 /// A finger has no hover: its tap is a move and a click in one tick. On a row whose
@@ -257,7 +266,7 @@ fn a_tap_on_a_row_with_hidden_attached_rows_reveals_them_first() {
     tap_on(&mut menu, remix);
     assert_eq!(
         menu.page().id,
-        "remix",
+        "test.mod/remix",
         "a revealed row activates on its first tap"
     );
 }
@@ -272,6 +281,7 @@ fn a_column_title_or_no_reveal_flag_draws_every_row_in_order() {
         [
             "RACE CAMPAIGN",
             "RACEBOX",
+            "REPLAYS",
             "REMIX",
             "MULTIPLAYER",
             "OPTIONS",

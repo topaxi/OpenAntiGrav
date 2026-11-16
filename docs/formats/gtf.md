@@ -296,7 +296,8 @@ decode, six faces each, through `Texture::face_to_rgba`.
 
 **All of one face's levels, then the next face's.** That is what
 `Texture::chain_len` already had to assume for the length invariant to close -
-`one_face * 6 + slack` - and it is now asserted rather than left implicit,
+`face_stride * 5 + one_face`, the stride being the next section's - and it is
+now asserted rather than left implicit,
 because the alternative reading is not caught by any arithmetic: **level-major
 storage has exactly the same total length** and produces a scrambled sky.
 
@@ -328,15 +329,94 @@ genuinely are alike. Both are data. A bar that called either a failure would be
 a bar picked to pass, so `gtf_ground_truth.rs` asserts the exact face means on
 the one sky whose picture was looked at and prints a census of the rest.
 
-### The 360 unexplained bytes are unchanged
+### Each face starts on a 128-byte boundary
 
-Six faces follow one another and the length invariant holds on all 23 - **with
-an unexplained 360 bytes** on the 20 that carry a mip chain. The same 360,
-whether the faces are 128x128 `DXT1` (`envlight.gtf`: 65,976 against six faces of
-10,936, and 65,976 - 65,616 = 360) or 2048x2048 (`12_sol_2/sky.gtf`: 16,777,656
-against 16,777,296). Sixty bytes a face, and sixty is not a multiple of any block
-size here. The three single-level cubemaps carry no slack at all - Talon's
-Junction's sky is one of them, which is why it is the one that was decoded first.
+**Confidence 85.** A face's whole mip chain is followed by padding up to the
+next 128-byte boundary before the next face begins; the last face is not
+padded. Measured 2026-11-16 (`sol2-sky`) on all 23 cubemaps of
+`hdfury-ps3-eu-dec.iso`:
+
+| Cubemaps | One face's chain | Mod 128 | Pad per face | Declared length |
+| --- | --- | --- | --- | --- |
+| 15 single-level (1024x1024, 2048x2048 and 64x64 `DXT1`) | a multiple of 128 | 0 | 0 | `6 * one_face` |
+| 8 multi-level (`12_sol_2/sky.gtf` 2048x2048 x12, `zone_3/sky.gtf` and three `env.gtf` probes 256x256 x9, three `envlight`/`envblur` 128x128 x8) | 2,796,216 / 43,704 / 10,936 | 56 | 72 | `5 * (one_face + 72) + one_face` |
+
+`5 * align128(one_face) + one_face` equals the declared length on **23 of 23**.
+This is what was recorded here as "an unexplained 360 bytes" (and as "sixty
+bytes a face"): it is 72 bytes after each of the first five faces. It looked
+constant because every full `DXT1` chain down to 1x1 from 8x8 or larger ends at
+56 mod 128 (the 8x8, 4x4, 2x2 and 1x1 levels are 32 + 8 + 8 + 8 bytes).
+
+**128, not 256, is chosen rather than read off the disc**: every multi-level
+face here also ends at 184 mod 256, so a 256-byte boundary pads the same 72
+bytes on every file. 128 is the RSX's texture address alignment, the boundary a
+face is bound at. Nothing on the disc tests a face under 128 bytes either; the
+reader pads one all the same.
+
+**What the unaligned reading drew.** Read without the padding, face `n` starts
+`72 * n` bytes early. On `DXT1`, 8 bytes a 4x4 block, that slides it sideways by
+`36 * n` texels, with the previous face's last columns showing at its left
+edge. Sol 2's sky is the only racing circuit's sky with a mip chain, and it drew
+a hard-edged vertical band of the wrong sky (about 60 px wide at 1440x816, from
+the top of the frame to the horizon) where face 1 or 4 met its neighbour; the
+glass reflections (`mesh::sky_paraboloid`, built from the same faces) carried it
+too.
+
+The picture-free check is the side seams, around the horizon ring `+Z, +X, -Z,
+-X` (faces 4, 0, 5, 1), each face's last column against the next face's first,
+as mean absolute difference a channel:
+
+| Sky | Unaligned (worst of four) | Aligned (four seams) |
+| --- | --- | --- |
+| `12_sol_2` | 39.21 (11.85, 39.21, 33.06, 25.35) | 2.62 (2.20, 2.62, 1.89, 1.92) |
+| the other eleven racing skies, `ZoneSky.gtf` | unchanged (single-level) | 0.70 (Amphiseum) to 6.76 (`02_track`); `ZoneSky` 3.44 |
+| `fe/rank/textures/env.gtf` (probe) | 45.39 | 1.57 to 2.43 on three seams; `-X` to `+Z` 32.07 |
+
+`gtf_ground_truth.rs` asserts the four seams at 8.0 or better on every sky a race
+draws (each circuit's `sky.gtf` but the Zone arenas', plus `ZoneSky.gtf`, named
+from `oag_hd`), that the last face's chain ends at the declared data's end on
+all 23, and that 8 carry a mip chain;
+`gtf::tests::a_mip_chained_cubemap_reads_each_face_from_its_aligned_start`
+pins the stride on an 8x8 four-level fixture, which the unaligned reading also
+accepted as `6 * 56 + 360` bytes. The zenith meets all four sides on Sol 2 at
+1.5 to 1.7.
+
+### Sol 2's nadir is stored flipped, and is drawn as stored
+
+Under the GL face table (`mesh::sky_cube`'s `FACES`) Sol 2's nadir meets none
+of the four sides (37 to 60); flipped top to bottom it meets all four (1.4 to
+1.7). It is the only sky that does: the tool-made probes close their nadir
+under the GL table (3.85, against 15.7 flipped), which confirms the table, and
+the other racing skies either have a blank nadir (0.0 either way) or a nadir
+that meets no side either way (`02_track` 65, `05_ubermall` 110). So this reads
+as how the art was authored, and the RSX samples the face as stored: nothing is
+changed. Below the horizon it is under the circuit; in a sky-only render it
+shows as a crease. **Not checked against a frame of the original.**
+
+### The Zone arenas' skies are another layout
+
+`zone_1`, `zone_2`, `zone_4` (byte-identical) and `zone_3` do not meet under the
+GL face table at all: the zenith misses its four sides by 205 (`zone_3`: 107)
+and the side ring by 66.54 (`zone_3`: 32.25). Their faces do meet, in another
+arrangement: on `zone_1` face 0's top row is face 3's bottom (0.12), face 1's
+top face 2's bottom (0.66), face 2's left column face 4's top (0.59), face 1's
+right face 5's left (1.34). Which convention that is has not been worked out,
+because a Zone race, which is what the arenas (`oag_hd::race::ZONE_TRACKS`)
+host, draws `Data/Tex/ZoneSky.gtf` **instead** of the arena's own
+([zone-sky.md](../ghidra/functions/ps3-hdfury-eu/zone-sky.md)). Whether any
+other mode can put an arena's own sky on screen has not been checked; if one
+does, this layout needs reading first, and our `sky_cube` would draw it with
+mismatched seams today.
+
+### 2048 and Omega: checked, differs
+
+Neither ships Sol 2's sky as one cubemap file. 2048 (DLC1 `environments/Sol_2/`)
+and Omega (`environments/12_sol_2/`) draw it as `skycube.rcsmodel` over six
+separate flat face textures, `SkyCube/SkyCube_Sol2_1..6` (`.gxt` and `.gnf`), so
+there is no face offset to get wrong and no band. Omega also ships a
+`skyCube.gnf` cubemap; the `.gnf` reader refuses cubemaps and nothing draws it
+([gnf.md](gnf.md)). Its chain is the `.gnf` micro-tile layout, not this RSX
+alignment.
 
 ## The mip chain is the disc's, and a box filter is not it
 
@@ -404,8 +484,6 @@ diverges. It is pinned in the test rather than tolerated.
   question this format layer says nothing about and nothing here does yet.
 - **A cubemap's mip levels.** `face_range` addresses one and nothing decodes one,
   the same gap the flat textures have.
-- **The 360 bytes** on the 20 multi-level cubemaps. Their face layout is read;
-  this tail is not.
 - **`remap`'s packing against the executable.** All three of the disc's words
   are read and acted on - see [the section above](#remap-is-a-per-channel-source-and-force-table-and-it-is-read-now)
   - but the bit layout is corroborated by what it predicts about the files,

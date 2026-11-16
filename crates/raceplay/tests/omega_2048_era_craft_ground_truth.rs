@@ -129,6 +129,7 @@ fn omegas_honeycomb_opens_the_variants_it_races_with_the_discs_own_ratings() {
             thrust,
             handling,
             shield,
+            length_milli: Some(3800),
         })
     };
     // `normal` 7/8/10/8, `concept1` and `nitro` 8/8.5/10/8.
@@ -232,6 +233,7 @@ fn the_2048_era_teams_open_their_four_numbered_craft_with_the_discs_own_ratings(
             thrust,
             handling,
             shield,
+            length_milli: Some(3800),
         })
     };
     assert_eq!(

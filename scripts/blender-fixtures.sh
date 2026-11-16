@@ -10,7 +10,7 @@
 #   oval.reexport.*         the committed oval, imported by the add-on and exported again
 #
 # It also runs `roundtrip.py line`, which asserts the racing-line paths and writes no fixture,
-# `props` (mod_* properties, trigger Empties, Make trigger from mesh) and `effect` (a mod effect
+# `channels` (a trigger's oag_emit, an animation's oag_on, the track's published channels), `props` (mod_* properties, trigger Empties, Make trigger from mesh) and `effect` (a mod effect
 # TOML previewed and exported again; needs the examples submodule).
 #
 # Needs Blender 4.2 or later on PATH (or $BLENDER). The gate does not run this (CI has
@@ -34,6 +34,7 @@ run() {
 run loop "$out"
 run line "$out"
 run props "$out"
+run channels "$out"
 run effect assets/mods/examples/energy-turbo/fx/discharge.toml "$out"
 run reexport "$out/blender_loop.track.toml" "$out"
 run motion "$out"

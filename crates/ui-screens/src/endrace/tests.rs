@@ -74,6 +74,7 @@ fn circle_backs_out() {
 fn the_no_medal_glyph_shows_only_on_a_medal_less_campaign_race() {
     assert!(
         Rewards {
+            tier: None,
             medal: None,
             campaign: true,
             loyalty: None,
@@ -82,6 +83,7 @@ fn the_no_medal_glyph_shows_only_on_a_medal_less_campaign_race() {
     );
     assert!(
         !Rewards {
+            tier: None,
             medal: None,
             campaign: false,
             loyalty: None,
@@ -90,6 +92,7 @@ fn the_no_medal_glyph_shows_only_on_a_medal_less_campaign_race() {
     );
     assert!(
         !Rewards {
+            tier: None,
             medal: Some(Medal::Gold),
             campaign: true,
             loyalty: None,

@@ -6,6 +6,33 @@
 //! so it lives with [`crate::Race`]. See that module for why a row names a grid
 //! slot and nothing else.
 
+/// What an Eliminator craft ended on: the points the race is won on and the two counts the
+/// results headline reads.
+///
+/// `points` is the truncated score (`oag_race::Standing::score`), the integer the HUD's rows and
+/// the original's results table both print.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Points {
+    /// Truncated points, [`oag_race::ScoreLaw`]'s.
+    pub points: u32,
+    /// Kills, `Standing::kills`.
+    pub kills: u32,
+    /// Destructions, `Standing::deaths`.
+    pub deaths: u32,
+}
+
+impl Points {
+    /// A craft's points off its standing (`Standing::whole_score`).
+    #[must_use]
+    pub fn of(standing: &oag_race::Standing) -> Self {
+        Self {
+            points: standing.whole_score(),
+            kills: standing.kills,
+            deaths: standing.deaths,
+        }
+    }
+}
+
 /// One craft, as the caller knows it before the board is ordered.
 ///
 /// Taken rather than a `&World` so that [`build`] is a pure function of the
@@ -26,6 +53,8 @@ pub struct Craft {
     pub finish_tick: Option<u64>,
     /// Its own quickest lap, in ticks, or `None` if it never completed one.
     pub best_lap_ticks: Option<u32>,
+    /// Its Eliminator points, `Some` for every craft of a scored race and for none other.
+    pub points: Option<Points>,
 }
 
 /// One line of the table.
@@ -50,8 +79,11 @@ pub struct Row {
     /// Whether this is a player's row: a person flew this craft. Every
     /// person-flown slot has one, so a two-person race marks two.
     pub player: bool,
-    /// The name the person raced under (a network race), `None` where the race knows none.
+    /// The name the person raced under (the lobby's, or seat 1's stored player name), `None`
+    /// where the race knows none.
     pub name: Option<String>,
+    /// Its Eliminator points, `Some` on every row of a scored race's board.
+    pub points: Option<Points>,
 }
 
 impl Row {
@@ -59,6 +91,21 @@ impl Row {
     #[must_use]
     pub fn finished(&self) -> bool {
         self.finish_tick.is_some()
+    }
+
+    /// Whether this craft is still in the race when the board is taken, which
+    /// is what a Tournament leg's points ask
+    /// (`oag_race::tournament::points_for_place`).
+    ///
+    /// A leg ends on a person's finish, so an opponent that has not crossed yet
+    /// is still in it and scores its running place. The one craft that ends a
+    /// leg without finishing is a person's, wrecked: the original's destroyed
+    /// guard (`Tournament_PointsForCraft`) zeroes it. An opponent wrecked at
+    /// that exact tick is not zeroed (this engine respawns it, and the row
+    /// carries no state): chosen, not measured.
+    #[must_use]
+    pub fn in_the_race(&self) -> bool {
+        !self.player || self.finished()
     }
 }
 
@@ -88,6 +135,12 @@ impl Board {
         self.rows.iter().filter(|row| row.player).count()
     }
 
+    /// Whether this board ranks on points (a scored Eliminator) rather than on race position.
+    #[must_use]
+    pub fn scored(&self) -> bool {
+        !self.rows.is_empty() && self.rows.iter().all(|row| row.points.is_some())
+    }
+
     /// Whether there is a *place* to show at all.
     ///
     /// **The HUD's own rule, deliberately the same one.** A place is a position
@@ -109,6 +162,15 @@ impl Board {
 /// the HUD's position readout cannot disagree. Two craft cannot share a place -
 /// that function breaks every tie, down to the slot index - so the sort is
 /// total.
+///
+/// **A scored race is ordered on its points instead**, by the end-of-race builder's own sort
+/// (`oag_race::score::final_places`, `0x0005ac00`,
+/// `docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`, confidence 72): highest first, on
+/// equal points fewer kills first, then a person above an opponent. `place` is then the row's
+/// 1-based index, the number `EndRaceResults`' headline reads (`0x00229bf0`,
+/// `docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`, "The results table") and the one a
+/// campaign cell's medal is read from; it is not `oag_race::places`, which an Eliminator's
+/// finish does not decide, and not the HUD's rows (`oag_race::score::ranked`, later slot on top).
 #[must_use]
 pub fn build(crafts: &[Craft], laps_target: Option<u32>, tick: u64) -> Board {
     let mut rows: Vec<Row> = crafts
@@ -126,12 +188,38 @@ pub fn build(crafts: &[Craft], laps_target: Option<u32>, tick: u64) -> Board {
             best_lap_ticks: craft.best_lap_ticks,
             player: craft.person,
             name: None,
+            points: craft.points,
         })
         .collect();
-    rows.sort_by_key(|row| (row.place, row.slot));
+    if rows.iter().all(|row| row.points.is_some()) && !rows.is_empty() {
+        let field: Vec<oag_race::score::Finisher> = rows
+            .iter()
+            .map(|row| {
+                let points = row.points.unwrap_or(Points {
+                    points: 0,
+                    kills: 0,
+                    deaths: 0,
+                });
+                oag_race::score::Finisher {
+                    points: points.points,
+                    kills: points.kills,
+                    person: row.player,
+                }
+            })
+            .collect();
+        for (row, place) in rows.iter_mut().zip(oag_race::score::final_places(&field)) {
+            row.place = place;
+        }
+        rows.sort_by_key(|row| (row.place, row.slot));
+    } else {
+        rows.sort_by_key(|row| (row.place, row.slot));
+    }
     Board {
         rows,
         laps_target,
         tick,
     }
 }
+
+#[cfg(test)]
+mod tests;

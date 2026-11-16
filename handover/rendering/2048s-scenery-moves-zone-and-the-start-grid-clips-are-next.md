@@ -30,7 +30,7 @@ the rig - vertices in node space, keys as HD's animation resampled, Maya's
 pivot composition, `local * parent_world` with a root's own static parent
 matrix, linear/nlerp interpolation wrapping to key 0 - was checked node by
 node against HD's world matrices at up to fourteen times
-(`crates/render/tests/psp2_scenery_animation_ground_truth.rs`, one test per
+(`crates/mesh/tests/psp2_scenery_animation_ground_truth.rs`, one test per
 circuit, floors set by running two deliberate breaks through the suite and
 recorded in the test). The pivot was the finding that would not have come
 from `altima` alone: the bare `S * R * T` puts a wind-turbine rotor 2,500

@@ -31,9 +31,9 @@
 //! reads, as HD's does. **The `2048_hud\` set is reached through virtual
 //! methods only** (`FUN_015ae4d0`, `FUN_015ac880`, no direct caller), which is
 //! this title's 2048-lineage managers; which race selects them is not read, so
-//! it is an open item and `Title::hud` stays one set per title, not per circuit
-//! (compare `oag_omega::race::DEFAULTS`' particle directory, chosen the same
-//! way). See `docs/ghidra/functions/ps4-omega-eu/race-hud-selection.md`.
+//! the circuit's directory chooses ([`LAYOUTS_2048`], `crate::race::LINEAGES`,
+//! as `DEFAULTS`' particle directory is chosen). See
+//! `docs/ghidra/functions/ps4-omega-eu/race-hud-selection.md`.
 //!
 //! # Art
 //!
@@ -106,16 +106,82 @@ pub const SKINS: &[oag_title::HudSkin] = &[
 /// skin's runtime shield and lap-arc readings, which the retro layouts do not author
 /// (`oag_title::HudSkin::art`).
 const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
+    incoming_warnings: false,
     runtime: None,
     lap_one_shift: None,
     lit_alpha: None,
     // Unmeasured on the retro skins (`hd-hud-leftovers` item 3 asks it): no shadow, authored quads.
     text_shadow: None,
+    text_outline_alpha: None,
     half_unit_glyph_quads: false,
     bar_tip: None,
     boost_smear: None,
+    absorb_glow: None,
     ..*ART
 };
+
+/// The `2048_hud\` set Omega ships beside HD's roots, read by a race on a 2048-era circuit
+/// ([`crate::race::LINEAGES`]).
+///
+/// The executable names `Data\XML\2048_hud\Arcade_HUD.xml` and `Zone_HUD.xml` in managers it
+/// reaches only through virtual dispatch (`docs/ghidra/functions/ps4-omega-eu/race-hud-selection.md`);
+/// the other three files are 2048's own roots at the same names (the Vita's race managers, same
+/// page). Which circuits select it is the Race Box's `GAME MODE`, which our one circuit list
+/// stands in for by the circuit's directory.
+pub const LAYOUTS_2048: &oag_title::HudLayouts = &oag_title::HudLayouts {
+    arcade: r"Data\XML\2048_hud\Arcade_HUD.xml",
+    time_trial: r"Data\XML\2048_hud\SpeedLap_TimeTrial_HUD.xml",
+    speed_lap: r"Data\XML\2048_hud\SpeedLap_HUD.xml",
+    zone: r"Data\XML\2048_hud\Zone_HUD.xml",
+    elimination: r"Data\XML\2048_hud\Elimination_HUD.xml",
+    split: None,
+    split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
+    player_tags: None,
+    skins: &[],
+};
+
+/// [`ART`] for the `2048_hud\` set: 2048's dialect (always-on sprites, `%` on the shield,
+/// hundredths on TOTAL, its own font role and no shield or lap arcs, which that set does not
+/// author) over Omega's own executable readings (the message drain, `lap_hud`, the sway).
+///
+/// **2048's values are inherited, checked against Omega's files** for every widget name they
+/// carry (`omega_2048_mode_hud_names_are_authored_by_its_layouts`); the dialect is selected by
+/// widget names, so Omega's copy of the set runs the same code. **Not carried**: 2048's
+/// `pickup_icon_uv` (the rectangles are in the Vita atlas's pixels; Omega's `.gnf` repaints it)
+/// and its `assist` icon, so a held weapon and Pilot Assist draw nothing yet. **Chosen, not
+/// measured**: `speed_full_kmh` stays at Omega's value.
+pub const ART_2048: &oag_title::HudArt = &oag_title::HudArt {
+    always_on: ALWAYS_ON_2048,
+    ink_aligned_text: false,
+    half_unit_glyph_quads: false,
+    lit_alpha: None,
+    text_shadow: None,
+    pickup_colours: None,
+    pickup_fade: None,
+    shield_percent: true,
+    sub_weapon_line: false,
+    hud_font_role: "2048HUD",
+    hud_small_font_role: None,
+    total_time_hundredths: true,
+    runtime: None,
+    assist: None,
+    ..*ART
+};
+
+/// The sprite widgets the Vita's 2048 HUD keeps up on every frame of every state captured
+/// (`oag_2048::hud::ALWAYS_ON`, `docs/formats/2048-hud.md`), duplicated here because Omega's
+/// copy of the set is checked against its own files.
+const ALWAYS_ON_2048: &[&str] = &[
+    "ThrustBarBG",
+    "EnergyBgFrame",
+    "EnergyBg",
+    "EnergyBar",
+    "EnergyBarDelay",
+    "ZoneCounterBG",
+    // `docs/ghidra/functions/ps4-omega-eu/hud-radar.md`.
+    "Radar",
+    "PlayerDot",
+];
 
 /// The default skin's roots with no skin list, what every other skin overrides.
 const BASE: oag_title::HudLayouts = oag_title::HudLayouts {
@@ -126,6 +192,7 @@ const BASE: oag_title::HudLayouts = oag_title::HudLayouts {
     elimination: r"Data\XML\Elimination_HUD.xml",
     split: Some(SPLIT),
     split_layout: None,
+    player_tags: None,
     skins: &[],
 };
 
@@ -225,13 +292,14 @@ pub const PICKUP_COLOURS: [Option<u32>; 14] = {
     ]
 };
 
-/// The pickup fade's timer rate. **Inherited from HD** (`1.5`): Omega's HUD update `FUN_0125e9b0` was not read for it, and Omega's front end and HUD are HD's lineage.
+/// The pickup fade's timer rate: `FUN_0125e9b0` steps the timer by `param_1 * 1.5`, as HD does
+/// (`docs/ghidra/functions/ps4-omega-eu/omega-pickup-table.md`, "The fade").
 pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 
 /// How Omega's HUD sprites reach the screen, [`oag_title::Title::hud_art`].
 ///
-/// **Measured**: `texture_extension` (every atlas of the five roots resolves
-/// as `.gnf`, none under its authored spelling) and the layouts themselves.
+/// **Measured**: the layouts themselves, and that every atlas of the five roots
+/// resolves as `.gnf`, none under its authored spelling (`oag_assets::Archives::read_texture`).
 /// **Chosen, not measured, inherited from HD's frame readings**: `always_on`,
 /// `sights` (the widget names are checked to exist in Omega's layouts),
 /// `runtime` and `shield_percent` - nobody has run Omega. `message_slots` and
@@ -239,8 +307,7 @@ pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 /// `zone_speed_classes` is `None`: Omega's class names are unmeasured, so the
 /// Zone ladder's class text draws nothing rather than HD's list.
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
-    texture_extension: Some(".gnf"),
-    always_on: ALWAYS_ON,
+    always_on: oag_hd::hud::ALWAYS_ON,
     raster: false,
     ink_aligned_text: true,
     half_unit_glyph_quads: true,
@@ -255,6 +322,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         oag_title::hud::TextShadow { dx: -1, dy: -1 },
         "hd",
     )),
+    text_outline_alpha: None,
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &[
             "MissileSightBG",
@@ -269,6 +337,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "LeachBeamSightMiddle",
             "LeachBeamSightInner",
         ]),
+        live: None,
     },
     pickup_backdrop_colour: None,
     pickup_colours: Some(PICKUP_COLOURS),
@@ -319,10 +388,12 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             table_crossings: 100,
         },
     }),
+    incoming_warnings: false,
     runtime: Some(RUNTIME),
     lap_one_shift: None,
     bar_tip: None,
     boost_smear: None,
+    absorb_glow: None,
     // Inherited from HD: Omega's race HUD is HD's own files, whose roots are `<Screen name="HUD">`
     // (read off `data00.psarc`, both the default and the `2048_hud` sets). The consumer in the
     // PS4 executable is not located, and no shadPS4 capture of the sway has been made.
@@ -330,8 +401,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         oag_title::hud::HudSway { x_per_lean: -15 },
         "hd",
     )),
-    // Checked 2026-10-21: the patch front end (`data09.psarc`) authors no `Safe Area Setting`.
-    safe_area: None,
+    // The disc authors no `Safe Area Setting` (`docs/formats/hd-hud.md`, "SCREEN SIZE on every
+    // title"), so the shared slider stands in, drawn 1:1 until the player moves it.
+    safe_area: Some(oag_title::pre_race::Sourced::chosen(
+        oag_title::hud::SafeArea::SHARED,
+    )),
     dynamic_hud: None,
     // The four widgets are Omega's own: `Data\XML\HUD_assist_indicator.xml`
     // (`HUD_Elim_assist_indicator.xml` in Elimination) is included by Arcade,
@@ -376,48 +450,3 @@ const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
         argb: 0x5aff_ffff,
     }),
 };
-
-/// Widgets drawn in every frame whatever the race state, HD's list. **Chosen,
-/// not measured**; see [`ART`].
-const ALWAYS_ON: &[&str] = &[
-    "LapPanel",
-    "PositionPanel",
-    "TotalTimeBG",
-    "PickupFarBackground",
-    "PickupAbsorbBG",
-    "PickupDamageBG",
-    "DamageBarBg",
-    "PickupBackground",
-    "TimeIcon",
-    "TimeIconVertBar",
-    "ClockIcon",
-    "BestLapImage",
-    "SpeedBarBG",
-    "ThrustBarBG",
-    "SpeedBar",
-    "ThrustBar",
-    "SpeedBarOverlay",
-    // The retro `HUD Style` skins' bars and their frames (`2097_hud`, `wo3_hud`); a name a
-    // layout does not author is simply not found, so the default skin is unchanged.
-    "speedbarbg",
-    "topdots",
-    "bottomdots",
-    "nrgbg",
-    "SpeedBarWo3",
-    "ThrustBarWo3",
-    "nrgBarWo3",
-    // Zone's ladder. Authored by the Zone roots alone; see the section above.
-    "ZoneBG",
-    "CurrentZonePanel",
-    "ZonePlusLight0",
-    "ZonePlusLight1",
-    "ZonePlusLight2",
-    "ZonePlusLight3",
-    "ZonePlusLight4",
-    "ZonePlusLight5",
-    "ZonePlusLight6",
-    "ZonePlusLight7",
-    "ZonePlusLight8",
-    "ZonePlusLight9",
-    "ZonePlusLight10",
-];

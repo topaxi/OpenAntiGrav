@@ -1,8 +1,8 @@
-# 2048 carries Pulse's pickup table and fade; what draws it is open
+# 2048 carries Pulse's pickup table and fade, and does not draw the coloured backdrop
 
 Static read of `eboot.elf` (2048 EU, patch v1.04, base `0x81000000`) on 2026-10-30, lane
-`pickup-fade-titles`; byte search of the base and patch ELFs for the three words. Not run live (no
-Vita3K capture; the brief allowed static). **A first draft of this page said 2048 has no per-weapon
+`pickup-fade-titles`; byte search of the base and patch ELFs for the three words. What draws it was
+settled live on 2026-11-04 (below). **A first draft of this page said 2048 has no per-weapon
 table. That was wrong**: it searched instruction immediates for the words, which cannot find a data
 table, and read only `Hud_UpdatePickupIcon`.
 
@@ -38,26 +38,50 @@ write `0x5AFFFFFF` over the backdrop (HD's idle word), `0xFFFFFFFF` while the he
 use. Static, confidence **70** that it is Pulse's law with a **different rate (1.5, not 1.2)**; the
 bump's centre/width constants are as Pulse's in the decompile but were not fitted.
 
-## What draws it is open
+## What draws it: not the coloured backdrop (live, 2026-11-04, `pickup-backdrop-closeout`)
 
-2048's layout `HUD_pickups.xml` authors `PickupBackground` with no `<Values>`
-(`crates/2048/src/hud.rs`), the held pickup is one `PickupIcon` image with a rewritten UV rect, and the
-visible arc is `PickupBgFrame`. `Hud_UpdatePickupIcon` ([pickup-icon-uv-table.md](pickup-icon-uv-table.md))
-writes only fixed colour words through `FUN_8109cfae(widget, word, flag)` (the four corners at `+0xb8`,
-`+0xbc`, `+0xc0`, `+0xc4`): `PickupBgFrame` `hud+0xa8` takes `0xFFA7A5A7` while the icon flies and an
-8 Hz blink to `0xFFFFFFFF` for a second afterwards; the slot widget `hud+0xf0` alpha-blinks
-`0x64`/`0xFF`; `DenyPickup` `hud+0xb0` blinks white. `Hud_SetPickupWidgetsVisible` is the show/hide of the
-six HD-style widgets at `hud+0x5a4..0x5b8` (`PickupBackground` is `+0x5b8`, the only `ldr` reader of
-`+0x5b8` besides stack locals, both `ldr` and `ldr.w` searched). So 2048 has the table and the update;
-whether `PickupBackground` is visibly drawn in the 2048 race HUD, as opposed to the layout's own
-`PickupBgFrame` arc, is **unverified** (a Vita3K frame with a weapon held would settle it).
+**Falsifier written before the capture**: if `PickupBackground` drew, the held weapon's table word
+(alpha `0x80`; pink `0x80BE1E69`, green `0x801CBC1C` or blue `0x802B1CBC`) would tint the slot behind
+the icon, and none of the three is the yellow of the icon disc. If it does not draw, the slot shows only
+the icon over `PickupBgFrame`'s fixed `0xFFA7A5A7` arc.
+
+- **Authored layout** (`data/xml/2048_hud/HUD_pickups.xml` in `data2.psarc`, 5,416 bytes):
+  `<Image name="PickupBackground" transition="0"></Image>`, no `<Values>`: no texture, no size, no
+  colour. The runtime write to its colour has no image to colour.
+- **Frame, boot 1** (Vita3K 0.2.1, EU v1.04, Queens Mall, Feisar; the
+  frames `36-w-5`, `36-w-15`, `35-w-2` of `vita3k-capture.md`'s earlier pass): a held Missile is the
+  yellow disc of `hud_2048.gxt`'s icon row with the grey arc around it. Read at 1:1: disc pixels
+  `(168,140,12)`, `(186,150,20)`, arc grey, nothing pink, green or blue.
+- **Frame, boot 2** (a private profile and a headless weston and Xwayland on `:93`, the walk of
+  `scripts/vita-2048-pair.py --walk` and R1 held through a lap): a Rocket is granted (icon at the top
+  centre with `ROCKETS`, then in the slot) and stays held for the next 90 s; the slot shows the same
+  disc `(176,144,7)`, `(164,133,8)` inside the same grey arc. No tint in 30 frames.
+- **Ours**, `oag-game <PCSF00007> --race --event "2048 - Event 2" --give rocket` at the same
+  settings (960x544, Feisar, Queens Mall): the same yellow disc with the rocket glyph inside the grey
+  arc, no tint, side by side with the Vita3K frame at the same place on screen.
+- **Verdict**: **`PickupBackground` is never drawn with a colour in 2048's race HUD; only
+  `PickupBgFrame` and the icon are** (confidence 85: two boots, a Missile and a Rocket, one layout; a
+  weapon of the green or blue rows was not held). `FUN_81154172` still steps the table's words (the code is
+  there, HD's lineage), but the widget it writes has no image. `oag_2048::hud::ART` keeps
+  `pickup_colours: None` and `pickup_fade: None`, now for this reason, and 2048 does not take
+  `oag_hud::pickup_fade`.
+
+`PickupBgFrame` (`hud+0xa8`) takes `0xFFA7A5A7` while the icon flies and an 8 Hz blink to
+`0xFFFFFFFF` for a second afterwards, the slot widget `hud+0xf0` alpha-blinks `0x64`/`0xFF`, and
+`DenyPickup` `hud+0xb0` blinks white (`Hud_UpdatePickupIcon`,
+[pickup-icon-uv-table.md](pickup-icon-uv-table.md)). `Hud_SetPickupWidgetsVisible` shows and hides the
+six HD-style widgets at `hud+0x5a4..0x5b8` (`PickupBackground` is `+0x5b8`).
 Front end: `FUN_811456f8` (`0x811456f8`, the 13-row weapon-toggle strip) uses the same three words in its
 own row order (3, 4, 6 green; 8, 9 blue; pink otherwise; grey `0x80808080` when off), hypothesis 60, not
 renamed.
 
 ## Cross-check
 
-- **Omega**: **ported by data**: the same table and an HD-lineage update on both; Omega's HUD update
-  `FUN_0125e9b0` was not read for its rate. 2048 and Omega agree on the table, 2048's rate differs from
-  Pulse's.
-- **Pulse**: **checked, applies, not wired**; rate `1.5` to confirm against Pulse's `1.2`.
+- **Omega**: **ported by data, rate read**: the same table and an HD-lineage update on both; Omega's
+  `FUN_0125e9b0` steps its timers by `param_1 * 1.5` too (static, confidence 80,
+  [omega-pickup-table.md](../ps4-omega-eu/omega-pickup-table.md), "The fade"). The one thing that does
+  not carry over is the drawing: 2048 draws no coloured backdrop, and Omega's own layout
+  (`Zone_HUD.xml`, HD's dialect) was not checked for an authored `PickupBackground` image: unread.
+- **Pulse**: **checked, differs** in the rate (`1.5` against Pulse's `1.2`; HD's is `1.5` as well,
+  [hd-pickup-table.md](../ps3-hdfury-eu/hd-pickup-table.md)).
+- **HD**: the same table; HD draws the backdrop (an authored image), 2048 does not.

@@ -18,7 +18,7 @@
 
 use super::*;
 use crate::screen::Redirect;
-use oag_2048::frontend::states as w2048;
+pub(super) use oag_2048::frontend::states as w2048;
 
 /// Every 2048 screen this build can enter and leave - the list `can_drive`
 /// and `Frontend::booting` both read. See `can_drive`'s own doc for what
@@ -64,6 +64,9 @@ const BUTTONS: [Button; 5] = [
     Button::Square,
 ];
 
+/// The d-pad, which no 2048 screen's `<Redirect>` names but every grid reads.
+const PAD_DIRECTIONS: [Button; 4] = [Button::Left, Button::Right, Button::Up, Button::Down];
+
 impl Frontend {
     /// Whether the current screen is one of [`STATES`].
     pub(super) fn in_wipeout2048(&self) -> bool {
@@ -77,6 +80,13 @@ impl Frontend {
         let Some(current) = self.machine.current().map(str::to_string) else {
             return;
         };
+        if BUTTONS
+            .iter()
+            .chain(&PAD_DIRECTIONS)
+            .any(|&button| input.is_pressed(button))
+        {
+            self.touch.pad_cursor = true;
+        }
         match current.as_str() {
             // `<UnityConBasic>`: a network check whose `MoveTo` goes to
             // `Boot Studio Logo` on success **and** on failure. This build
@@ -101,7 +111,7 @@ impl Frontend {
             | w2048::OPTIONS_AUDIO
             | w2048::OPTIONS_CONTROLS
             | w2048::OPTIONS_PILOT => self.update_options_panel(input, &current),
-            _ => self.update_touch(input),
+            _ => self.update_touch(dt, input),
         }
     }
 
@@ -232,7 +242,7 @@ impl Frontend {
                 out
             }
             w2048::BOOT_STUDIO_LOGO | w2048::TITLE_SCREEN => {
-                let mut out = self.draw_screen_at(current, self.on_screen_for);
+                let mut out = self.draw_screen_at(self.screen_for(current), self.on_screen_for);
                 out.insert(1, white);
                 if current == w2048::TITLE_SCREEN {
                     self.insert_lattice(&mut out);
@@ -266,7 +276,18 @@ impl Frontend {
             | w2048::OPTIONS_AUDIO
             | w2048::OPTIONS_CONTROLS
             | w2048::OPTIONS_PILOT => {
-                let mut out = vec![white];
+                let mut out = self.draw_screen_at(w2048::OPTIONS, self.on_screen_for);
+                out.insert(1, white);
+                // The hub's button of the open panel is marked, as on the original.
+                let open = [
+                    w2048::OPTIONS_CAMERA,
+                    w2048::OPTIONS_AUDIO,
+                    w2048::OPTIONS_CONTROLS,
+                    w2048::OPTIONS_PILOT,
+                ]
+                .iter()
+                .position(|panel| *panel == current);
+                self.draw_touch_marking(w2048::OPTIONS, open, &mut out);
                 self.draw_options_panel(current, &mut out);
                 out
             }

@@ -50,12 +50,16 @@ fn advance(projectiles: &mut Projectiles, world: &CollisionWorld) {
     projectiles.advance(
         DT,
         world,
+        None,
         &ships,
         None,
         None,
         None,
         TriggerRadii::default(),
         "VENOM",
+        crate::projectile::FloorArms::SteerToRidePoint,
+        crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+        crate::projectile::PlasmaRelease::DisplayScaled,
     );
 }
 
@@ -126,4 +130,25 @@ fn a_round_that_meets_a_floor_is_reflected_and_pushed_off_by_three() {
         }
     }
     assert!(bounced, "it should have turned off the floor");
+}
+
+/// `Cannon_Init` writes `round->row2 * (craft km/h + 500)` with the row 0.75
+/// long and no divide by 3.6 (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+/// "the Cannon checked on a bank"): the measured round left a craft at
+/// 139.111 units/s at 750.60 units/s, and a parked craft's is 375.0.
+#[test]
+fn a_round_leaves_at_the_displayed_scale_times_craft_kmh_plus_the_base() {
+    let dims = dimensions();
+    for (craft_speed, expected) in [(139.111_f32, 750.60_f32), (0.0, 375.0)] {
+        let mut state = ShipState::default();
+        state.body.linear_velocity = state.body.forward() * craft_speed;
+        for left in [false, true] {
+            let (_, velocity) = launch(&state, &dims, left);
+            assert!(
+                (velocity.length() - expected).abs() < 0.05,
+                "craft at {craft_speed} units/s: round at {} units/s, expected {expected}",
+                velocity.length()
+            );
+        }
+    }
 }

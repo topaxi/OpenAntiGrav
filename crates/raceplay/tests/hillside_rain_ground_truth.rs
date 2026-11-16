@@ -32,18 +32,29 @@ fn hillside_rain() -> Option<(race::extensions::Source, std::path::PathBuf)> {
     let file = module.local_path(&track.track).expect("a folder mod");
     let source = race::extensions::Source {
         mod_id: module.manifest.id.clone(),
+        version: module.manifest.version.to_string(),
         module: track.module,
         titles: module.manifest.titles.clone(),
         api: extension.api,
         memory_pages: extension.memory_pages,
         state_bytes: extension.state_bytes,
+        drives_ai_pickup: false,
         scope: race::extensions::Scope::Track(Some(file.clone())),
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
         effects: Vec::new(),
+        shaders: Vec::new(),
+        sounds: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: module.manifest.pickup.clone(),
+        pickup_titles: Vec::new(),
+        pickup_odds: module.manifest.pickup_odds.clone(),
+        options: Default::default(),
+        channels: race::extensions::Declared {
+            publishes: module.manifest.channels.publishes.clone(),
+            listens: module.manifest.channels.listens.clone(),
+        },
     };
     Some((source, file))
 }

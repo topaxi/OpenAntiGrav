@@ -241,11 +241,13 @@ pub fn oval() -> Track {
         speedup_pads: vec![pad_at(n / 4)],
         weapon_pads: vec![pad_at(n * 3 / 4)],
         props: crate::props::Props::new(),
+        channels: Vec::new(),
         speedup_pad_props: Vec::new(),
         weapon_pad_props: Vec::new(),
         path_props: Vec::new(),
         triggers: Vec::new(),
         art: None,
+        loading: None,
         notes: vec![
             "authored by this project: a rounded octagon, 40 units wide (chosen, not measured)"
                 .to_string(),

@@ -21,13 +21,20 @@ pub mod extras;
 mod manifest;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod pack;
+mod revision;
+pub mod rumble;
+pub mod texture_pack;
 
 pub use container::{Container, Origin};
-pub use discover::{EXAMPLES, Failed, Found, Loaded, SEARCH_ENV, load, mods_search_path, search};
-pub use manifest::{
-    Error as ManifestError, Extension, License, MANIFEST, Manifest, Rules, SCHEMA_KIND,
-    SCHEMA_MAJOR, Track,
+pub use discover::{
+    EXAMPLES, Failed, Found, Loaded, OFFICIAL, SEARCH_ENV, TEXTURE_PACKS, load, mods_search_path,
+    search, user_mods_dir,
 };
+pub use manifest::{
+    CampaignMedals, Channels, Error as ManifestError, Extension, License, MANIFEST, MAX_CHANNELS,
+    Manifest, MedalSource, Rules, SCHEMA_KIND, SCHEMA_MAJOR, TexturePack, Track,
+};
+pub use revision::checkout_head;
 
 /// Why a mod could not be opened or read.
 #[derive(Debug, thiserror::Error)]
@@ -94,12 +101,24 @@ impl Mod {
     /// No manifest, or a wrong one.
     pub fn from_container(container: Container) -> Result<Self, Error> {
         let origin = container.label();
-        let bytes = container
-            .read(MANIFEST)?
-            .ok_or_else(|| Error::NoManifest(origin.clone()))?;
+        let Some(bytes) = container.read(MANIFEST)? else {
+            return texture_pack::recognise(&container)
+                .map(|manifest| Self {
+                    manifest,
+                    container,
+                })
+                .ok_or(Error::NoManifest(origin));
+        };
         let text = String::from_utf8_lossy(&bytes);
-        let manifest = Manifest::parse(&text, &|name| container.contains(name))
+        let mut manifest = Manifest::parse(&text, &|name| container.contains(name))
             .map_err(|source| Error::Manifest { origin, source })?;
+        if let Some(pack) = manifest
+            .texture_pack
+            .as_mut()
+            .filter(|p| p.serials.is_empty())
+        {
+            pack.serials = texture_pack::serials(&container, &pack.ini);
+        }
         Ok(Self {
             manifest,
             container,
@@ -152,6 +171,36 @@ impl Mod {
         self.container.names()
     }
 
+    /// The event channels the mod's track files publish (`[channels] publishes` of each
+    /// `*.track.toml`), in file order: what a listener in another mod hears from a track
+    /// without a module. A file that does not read or parse publishes nothing here; loading
+    /// the track says why.
+    #[must_use]
+    pub fn track_channels(&self) -> Vec<String> {
+        #[derive(serde::Deserialize)]
+        struct Table {
+            #[serde(default)]
+            publishes: Vec<String>,
+        }
+        #[derive(serde::Deserialize)]
+        struct File {
+            channels: Option<Table>,
+        }
+        let mut out = Vec::new();
+        for name in self.names().iter().filter(|n| n.ends_with(".track.toml")) {
+            let Ok(Some(text)) = self.read_text(name) else {
+                continue;
+            };
+            if let Ok(File {
+                channels: Some(table),
+            }) = toml::from_str::<File>(&text)
+            {
+                out.extend(table.publishes);
+            }
+        }
+        out
+    }
+
     /// The mod's menu file, `menu.toml`, when it has one.
     ///
     /// # Errors
@@ -174,8 +223,13 @@ impl Mod {
     #[must_use]
     pub fn describe(&self) -> String {
         let m = &self.manifest;
+        // A folder in a git checkout names its commit: a submodule `git pull` left behind
+        // loads its old files with nothing else to tell.
+        let git = (self.local_path(""))
+            .and_then(|dir| checkout_head(&dir))
+            .map_or_else(String::new, |hash| format!(", git {hash}"));
         format!(
-            "{} {} ({}) license: {}",
+            "{} {} ({}{git}) license: {}",
             m.id,
             m.version,
             self.label(),

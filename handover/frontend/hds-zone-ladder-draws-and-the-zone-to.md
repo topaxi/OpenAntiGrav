@@ -1,7 +1,7 @@
 ---
 status: re-first
-titles: [hd]
-updated: 2026-09-15
+titles: [hd, omega]
+updated: 2026-11-15
 summary: "What sets the float Hud_UpdateZoneSpeedClass compares is untraced; zone 60 and beyond unproven"
 categories: [frontend, rendering]
 ---
@@ -78,6 +78,20 @@ asset file.
 
 ## Open
 
+- **2026-11-15: the class step plays `light_wipe` and the `MR_*` timeline from
+  the live banks** (`DATA00`'s `env0_zone.bnk` and `speech_zone.bnk`; the
+  earlier `ZONEBAR_TRANS` and `speech_class.bnk` reading is superseded:
+  `ZONEBAR_TRANS` is Zone Battle's). Open: the other two
+  `Environment_UpdateStageBlend` cue sites, zone steps past 2->3, and the 2 to
+  10 tick offset between line and wipe (both play at the edge here). See
+  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#the-class-step-cues-light_wipe-and-an-mr_-line-from-the-banks-a-zone-race-loads).
+- **Omega: checked, applies, not wired (2026-11-15).** Omega ships the same pair as
+  Wwise events - `light_wipe__env0_zone`, `MR_VEN__Speech_NGP` and the other
+  `MR_*` in `English(US)/Speech_NGP.bnk` - and sets `zone_class_announcer` to
+  `None`. Wiring needs Omega's own trigger read in `eboot.bin` (not read) and
+  its Wwise event names played through `oag_sound`'s Wwise path.
+  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#omega-and-2048-claudemd-lineage-rule).
+  2048 differs: its Zone banks carry neither cue.
 - **What sets the float `Hud_UpdateZoneSpeedClass` compares.** It arrives as
   `f1` from its single caller, which forwards its own argument; nothing traced
   it back to the zone counter's storage. The units rest on the two observations
@@ -129,7 +143,9 @@ reads `8  SUB-RAPIER` on the current row and `RAPIER` on row `12`, four down.
 The maintainer asked whether a class change's blend effect and sound could be
 reproduced. Investigated both; one is, one is written up instead.
 
-**The sound is wired.** `Data\Sound\speech_class.bnk` (`DATA01.PSARC`) is a
+**The sound is wired. (Superseded 2026-11-15: a Zone race loads
+`speech_zone.bnk`, not `speech_class.bnk`, and the tone is `light_wipe`, not
+`ZONEBAR_TRANS`; see the Open list.)** `Data\Sound\speech_class.bnk` (`DATA01.PSARC`) is a
 **dedicated** fifteen-cue bank - extracted and parsed directly with
 `oag_formats::sblk`, not assumed from a name list - naming `ZONEMALE` at cue
 `0` and fourteen consecutive cues at `1`-`14`: `MR_SVE`, `MR_VEN`, `MR_SFL`,
@@ -486,7 +502,7 @@ free:**
   specific to this call site: `Sound_QueueAnnouncerCue` is a scarce,
   priority-ranked voice-line queue, and `Sound_PlayNamedCue` is for anything
   that isn't competing for one of those slots - consistent with
-  `ZONEBAR_TRANS` being a tone layered under the spoken class name rather
+  `ZONEBAR_TRANS` (superseded 2026-11-15: Zone Battle's cue, the plain-Zone step plays `light_wipe`) being a tone layered under the spoken class name rather
   than another spoken line. Full census in
   [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#the-voice-line-vs-tone-split-is-a-general-scream-convention-and-fun_00310bd8-is-named).
   **A genuine side-find for this thread's Detonator Next Step below**: one

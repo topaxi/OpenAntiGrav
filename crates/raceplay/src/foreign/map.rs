@@ -88,7 +88,9 @@ pub(super) fn map(wtrk: &Wtrk, track: &Track) -> anyhow::Result<OagTrack> {
         weapon_pad_props: Vec::new(),
         path_props: Vec::new(),
         triggers: Vec::new(),
+        channels: Vec::new(),
         art: None,
+        loading: None,
         notes: report,
     })
 }

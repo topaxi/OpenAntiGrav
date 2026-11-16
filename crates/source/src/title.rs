@@ -114,7 +114,16 @@ fn open_unlayered(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Resu
 
     // **HD's refusal is kept for one case.** An encrypted PS3 image is HD's
     // to name; falling through to Pulse would report it as a missing `Data.wad`.
-    let hd_encrypted = match oag_hd::open(source) {
+    //
+    // A server extraction records the source's own bytes: an update folder is not
+    // on the image, and the chain changes no table a race reads
+    // (`docs/formats/hd-updates.md`).
+    let updates = if oag_assets::record::active() {
+        Vec::new()
+    } else {
+        crate::source::ps3_updates(source)
+    };
+    let hd_encrypted = match oag_hd::open_updated(source, &updates) {
         Ok(archives) => {
             let title = oag_hd::title_of(&archives);
             return Ok(Opened { archives, title });
@@ -194,6 +203,38 @@ pub const ALL: [&Title; 5] = [
     oag_2048::TITLE,
 ];
 
+/// The title a disc `serial` belongs to, in either spelling (`UCES00465`, `UCES-00465`), when
+/// this build knows it: a serial a title lists for its own releases (language manifests,
+/// pressings), or one a sibling's deny-list names as this title's
+/// ([`oag_title::ForeignSerial`]). `None` means unknown, not "no title": the lists are what
+/// was measured, not every pressing there is.
+#[must_use]
+pub fn by_serial(serial: &str) -> Option<&'static Title> {
+    let bare = |s: &str| s.replace('-', "").to_ascii_uppercase();
+    let wanted = bare(serial);
+    ALL.into_iter().find(|title| {
+        let own = title
+            .front_end
+            .iter()
+            .flat_map(|front_end| front_end.language_manifests)
+            .map(|manifest| manifest.serial)
+            .chain(
+                title
+                    .pressings
+                    .iter()
+                    .flat_map(|pressings| pressings.listed)
+                    .map(|pressing| pressing.serial),
+            );
+        let named_by_sibling = ALL
+            .into_iter()
+            .filter(|other| other.name != title.name)
+            .flat_map(|other| other.foreign_serials)
+            .filter(|foreign| foreign.title == title.name)
+            .map(|foreign| foreign.serial);
+        own.chain(named_by_sibling).any(|s| bare(s) == wanted)
+    })
+}
+
 /// The title whose [`crate::layers::slug`] is `slug` (`wipeout-pulse`), the
 /// spelling a track file's `track.host` and a mod's `titles` use.
 #[must_use]
@@ -233,9 +274,36 @@ pub fn borrowed_zoom_ring() -> &'static oag_title::ZoomRing {
     &oag_hd::race::ZOOM_RING
 }
 
+/// The medal atlas a mod's `[campaign-medals]` may borrow, Wipeout HD's `Hexmedal_HD.gtf`
+/// (`oag_hd::campaign::MEDAL_ATLAS`). Here for the reason [`borrowed_zoom_ring`] is.
+pub const MEDAL_ATLAS: &str = oag_hd::campaign::MEDAL_ATLAS;
+
+/// Whether `title` is the one a trail-hit burst is preferably lent from
+/// (`graphics.trail_hits`, `oag_raceplay::TrailHits`): Wipeout HD/Fury, whose
+/// `WO_TRAIL_HITSHIP` the burst is read from. Here for the reason
+/// [`borrowed_zoom_ring`] is: the one place a title package is named for another's data.
+#[must_use]
+pub fn is_preferred_trail_hit_lender(title: &Title) -> bool {
+    // By slug: a `const` title has no one address to compare.
+    title.slug() == oag_hd::TITLE.slug()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Pulse's and Pure's serials resolve in either spelling through the deny-lists, and one
+    /// no table lists is unknown rather than a guess.
+    #[test]
+    fn a_serial_resolves_to_its_title_in_either_spelling() {
+        let name = |serial| by_serial(serial).map(|title| title.name);
+        assert_eq!(name("UCES-00465"), Some(oag_pulse::TITLE.name));
+        assert_eq!(name("UCES00465"), Some(oag_pulse::TITLE.name));
+        assert_eq!(name("ucus98712"), Some(oag_pulse::TITLE.name));
+        assert_eq!(name("UCUS98612"), Some(oag_pure::TITLE.name));
+        assert_eq!(name("UCES-00001"), Some(oag_pure::TITLE.name));
+        assert_eq!(name("UCJS10007"), None);
+    }
 
     /// A source that will not open is `None` rather than a guess.
     #[test]

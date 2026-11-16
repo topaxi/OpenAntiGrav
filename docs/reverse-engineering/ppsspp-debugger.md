@@ -243,7 +243,7 @@ Four things this pass adds:
   other way in. `psp-drive.py` compared exactly and reported "the front end is in
   `'Main menu'`, not `'Main Menu'`", which reads like a changed menu tree. It now
   compares case-insensitively.
-- **The attract demo is a race by state name.** Idle ~120 s at the menus and the
+- **The attract demo is a race by state name.** Idle more than 60 s on the main menu (the demo itself runs 120 s) and the
   game starts driving itself, announcing `Demo InGame` - which contains `InGame`,
   so `psp-drive.py menu` read it as "already in a race" and returned success
   having done nothing. Any button leaves it and one press lands at the main menu;
@@ -674,6 +674,12 @@ walks a fresh profile to Platinum Rush White (`13_Track`, forward) in one run (1
 the craft at (-542.8, 2.9, -292.9), 5 units from `oag-trace track` row 1163, heading
 dot +0.95 with the spline; the Black entry is `29_Track`, the same circuit reversed, so
 check the heading).
+
+**Pure has the same byte (2026-11-11, `gallery-pure`).** `Definition_IsUnlocked` on the USA disc is `0x088b43d4`
+([campaign.md](../ghidra/functions/psp-pure-usa/campaign.md)); the profile object's pointer is at `0x08b17794` and the
+byte at `+0x381` of it (read `0x08e759a0`). Written `1` after the Main Menu, League Selection goes from ALPHA to ALPHA, BETA,
+CLASSIC (control on one boot: `0` lists ALPHA only), opening Beta's four and the Classic league's four circuits.
+`scripts/psp-pure-walk.py --unlock --league N` writes it. The GPI branch is the same devkit pin.
 
 **Zone was selectable on a used profile (2026-10-02, `zone-bloom`).** On a copy of
 a 70-run PPSSPP profile, `Racebox -> Custom Race -> RACE TYPE`, `right` x5, one
@@ -1705,6 +1711,11 @@ the decode does report clamp when it is set. Timing a countdown dump: `gpu.recor
 1-2 s of wall clock a call, and the `3` shows 6-9 s after the description is dismissed, so
 take screenshots first and one dump late (the board's prims are drawn through the dark phase
 too).
+
+**A dump of one chosen frame** (2026-11-07, `pulse-flyby-fix`): stop the CPU on a breakpoint in that
+frame, send `gpu.record.dump`, then resume with the breakpoint gone; the answer is the next whole
+frame. Two passes asked by wall clock during the flyby and landed on a UI frame and a later shot.
+`scripts/psp-flyby.py --frames N --dump-at K` does this and logs `view_section` per hit.
 
 Two traps:
 

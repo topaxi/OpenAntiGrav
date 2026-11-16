@@ -67,7 +67,8 @@ fn rgb_of(png: &[u8]) -> Vec<[u8; 3]> {
 }
 
 /// The scene at `ticks`: Talon's Junction, the player laying one Bomb, rival 1
-/// onto it after tick 420, seen from a fixed camera.
+/// onto it after tick 420, seen from a fixed camera. The Bomb goes down at tick 390: HD flies the
+/// launch boost, so the craft is further along the fixed camera's view at a given tick than it was.
 fn frame_of(ticks: u32) -> Option<Vec<[u8; 3]>> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
     let scratch =
@@ -75,7 +76,7 @@ fn frame_of(ticks: u32) -> Option<Vec<[u8; 3]>> {
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let out = scratch.join("frame.png");
     let script = scratch.join("lay.inputs");
-    std::fs::write(&script, "400 cross\n1 cross square\n400 cross\n").expect("the input script");
+    std::fs::write(&script, "390 cross\n1 cross square\n400 cross\n").expect("the input script");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
         .args(["--race", "--no-audio", "--size", "960x544", "--opponents"])

@@ -14,8 +14,9 @@
 //! `tests/<dir>/mod.rs` is not a test target of its own, which is why this
 //! is a directory.
 
+use oag_bytes::ByteOrder;
 use oag_disc::DiscImage;
-use oag_formats::{ByteOrder, lzss, sblk, wad};
+use oag_formats::{lzss, sblk, wad};
 
 /// Raw bytes read to sniff a compressed entry. Every LZSS token is at most
 /// 17 bits and yields at least one byte, so 64 bytes always yield the four

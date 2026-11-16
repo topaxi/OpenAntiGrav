@@ -48,7 +48,7 @@ impl Lensflare {
     pub fn parse(
         payload: &[u8],
         attributes: &[(String, f32)],
-        order: oag_formats::ByteOrder,
+        order: oag_bytes::ByteOrder,
     ) -> Option<Self> {
         if payload.len() != PAYLOAD_LEN {
             return None;
@@ -96,7 +96,7 @@ pub fn lensflares(data: &[u8], nodes: &[Node]) -> Vec<Lensflare> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oag_formats::ByteOrder;
+    use oag_bytes::ByteOrder;
 
     fn payload(row3: [f32; 3]) -> Vec<u8> {
         let mut out = vec![0_u8; PAYLOAD_LEN];

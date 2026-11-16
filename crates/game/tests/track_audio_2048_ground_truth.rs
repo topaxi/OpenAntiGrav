@@ -255,7 +255,10 @@ fn a_headless_lap_of_altima_hears_its_ambience_where_an_emitter_is_in_range() {
 }
 
 /// `(circuit, emitters, resolved, directory its bank is read from)` for the
-/// twelve downloadable circuits.
+/// twelve downloadable circuits. The `resolved` column rose on 2026-11-02 when
+/// the hashed lookup began returning the record's cue instead of its hash
+/// bucket (`docs/formats/2048-audio.md`): the old counts were emitters whose
+/// bucket happened to hold a sound.
 ///
 /// The executable's loader (`FUN_8121b688`, `docs/formats/2048-audio.md`)
 /// formats `data/audio/sound/%s` and, if that file does not exist,
@@ -265,18 +268,18 @@ fn a_headless_lap_of_altima_hears_its_ambience_where_an_emitter_is_in_range() {
 /// base copy wins; the other eight read `DLC1`. `Vineta_K` spells the
 /// Pulse-era labels `VINETTA` and `GENTRAK` and resolves none.
 const DLC: [(&str, usize, usize, &str); 12] = [
-    ("Metropia", 13, 4, "DLC1"),
-    ("Sebenco_Climb", 37, 9, "DLC1"),
-    ("Sol_2", 20, 10, "DLC1"),
+    ("Metropia", 13, 13, "DLC1"),
+    ("Sebenco_Climb", 37, 37, "DLC1"),
+    ("Sol_2", 20, 20, "DLC1"),
     ("Ubermall", 131, 29, "DLC1"),
-    ("amphiseum", 25, 23, "DLC1"),
-    ("modesto_heights", 23, 19, "DLC1"),
-    ("talons_junction", 57, 54, "DLC1"),
+    ("amphiseum", 25, 25, "DLC1"),
+    ("modesto_heights", 23, 23, "DLC1"),
+    ("talons_junction", 57, 57, "DLC1"),
     ("tech_de_ra", 32, 29, "DLC1"),
     ("Vineta_K", 48, 0, "sound"),
-    ("Anulpha_Pass", 52, 18, "sound"),
-    ("Chenghou_Project", 13, 12, "sound"),
-    ("Moa_Therma", 17, 5, "sound"),
+    ("Anulpha_Pass", 52, 45, "sound"),
+    ("Chenghou_Project", 13, 13, "sound"),
+    ("Moa_Therma", 17, 10, "sound"),
 ];
 
 #[test]

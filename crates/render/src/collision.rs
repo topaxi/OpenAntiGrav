@@ -275,49 +275,7 @@ pub fn build_model(
         // Synthetic: no batch, so no authored alpha-test reference.
         alpha_test_ref: None,
     }];
-    Model {
-        airbrakes: [None, None],
-        node_vertex_ranges: Vec::new(),
-        lod_groups: Default::default(),
-        label: label.to_string(),
-        vertices,
-        indices,
-        draws,
-        alpha_tested_draws: Vec::new(),
-        transparent_draws: Vec::new(),
-        textures: Vec::new(),
-        lightmaps: Vec::new(),
-        pad_masks: Vec::new(),
-        wave_maps: Vec::new(),
-        fifth_maps: Vec::new(),
-        sixth_maps: Vec::new(),
-        material_slots: Vec::new(),
-        material_specular_exponent: Vec::new(),
-        material_glow: Vec::new(),
-        material_colour_factor: Vec::new(),
-        material_quake: Vec::new(),
-        material_tangent: Vec::new(),
-        material_variants: Vec::new(),
-        material_anim: Vec::new(),
-        shine_draws: Vec::new(),
-
-        vertex_colour_is_light: false,
-        stamps_glow: false,
-        glow_by_texel: false,
-        glow_from_program: false,
-
-        flame: None,
-        absorb_shell: false,
-        material_lod_bias: 0.0,
-        material_state: Vec::new(),
-        alpha_test_ref: None,
-        centre,
-        radius,
-        mesh_count,
-        anim_tracks: Vec::new(),
-        anim_nodes: Vec::new(),
-        emissive: Vec::new(),
-    }
+    Model::from_draws(label, vertices, indices, draws, centre, radius, mesh_count)
 }
 
 /// Mean triangle edge length over every drawn triangle, or 1.0 if there are
@@ -407,6 +365,7 @@ fn vertex(position: [f32; 3], normal: [f32; 3], colour: [f32; 4], lit: f32) -> G
         glow: 0.0,
         texcoord2: [0.0, 0.0],
         tangent: 0,
+        depth_bias: 0.0,
     }
 }
 

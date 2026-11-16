@@ -70,7 +70,7 @@
 use oag_audio::{Bus, Play, VoiceId};
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_gameplay::cue::{Cue, CueEvent};
+use oag_gameplay::cue::{ContactCue, ContactSurface, Cue, CueEvent};
 
 use super::{Audio, TICK_HZ};
 
@@ -87,10 +87,13 @@ mod hd;
 mod layers;
 mod magstrip;
 mod menu;
+mod mod_sound;
 mod name_voice;
 mod repeating;
 mod track;
 mod travel;
+mod wwise_cues;
+mod wwise_start;
 mod xfade;
 pub use announcer::{Announcer, ClassAnnouncer};
 pub use bank_name::BankName;
@@ -100,6 +103,7 @@ pub use cue::CueTables;
 pub use engine::Engine;
 pub use layers::{CueVoice, Where as VoicePlace, start as start_voices};
 pub use menu::MenuSfx;
+pub use mod_sound::ModSounds;
 pub use name_voice::NameVoices;
 pub use repeating::Playing;
 pub use track::TrackEmitters;
@@ -182,13 +186,21 @@ pub(super) struct SfxVoices {
     quake_travel: TravelVoices,
     /// `~LEACHATTACH`'s held voice, while a **locked** beam instance exists
     /// ([`Cue::LeachAttach`]). `Option<VoiceId>` because the LeachBeam is the
-    /// race's single world-wide instance, not a slot in
+    /// race's world-wide pool, not a slot in
     /// [`oag_weapons::projectile::Projectiles`] (see
     /// `oag_weapons::projectile::leach_beam`); driven directly off
-    /// `race.sim.world.leach_beam` for this tick's position.
+    /// `race.sim.world.leach_beams` (the first locked beam) for this tick's position.
     leach_attach: Option<VoiceId>,
+    /// `~LEACHATTACH`'s voices when its event authors no loop (Omega's
+    /// `_NGP_LEACHATTACH`): held as the handle, played once, stopped on release.
+    leach_once: Vec<VoiceId>,
+    /// Whether this lock has been answered with a loopless start, so it is
+    /// not started again when the one-shot ends.
+    leach_latched: bool,
     /// The magstrip hum, per grid slot. See [`Cue::Magstrip`].
     magstrip: magstrip::Voices,
+    /// The mods' own sounds that are held, as loops.
+    mod_sounds: mod_sound::Voices,
     rng: Rng,
 }
 
@@ -221,11 +233,15 @@ impl Audio {
             announcer,
             class_announcer,
             cues,
+            mod_sounds,
+            mod_loops,
             announcements,
             class_announcements,
             listener,
             craft,
+            mod_craft,
             slot_teams,
+            player_slot,
             throttle,
             projectiles,
             running,
@@ -235,7 +251,7 @@ impl Audio {
             thrust_gated,
             sight,
             quake_point,
-            leach_beam,
+            leach_beams,
         } = frame;
         self.hd_race_mix(banks.mix.as_deref(), thrust_gated);
         // The step that voices `go` is the first the race is not gated: the held song starts on it.
@@ -243,6 +259,7 @@ impl Audio {
             self.release_race_song();
         }
         if banks.is_empty()
+            && banks.mod_sounds.is_empty()
             && announcer.is_empty()
             && class_announcer.is_empty()
             && emitters.omni.is_empty()
@@ -250,10 +267,12 @@ impl Audio {
         {
             return;
         }
+        let warm = std::mem::take(&mut self.engine_warm_ticks);
+        let wav_frame = self.dump_frames();
         let voices = self.sfx.get_or_insert_with(|| {
             let mut rng = Rng::new(SFX_SEED);
             SfxVoices {
-                engines: std::array::from_fn(|_| Engine::new(&mut rng)),
+                engines: std::array::from_fn(|_| Engine::new(&mut rng).running_for(warm)),
                 xfade: std::array::from_fn(|slot| {
                     slot_teams[slot]
                         .and_then(|team| banks.xfade_team(team))
@@ -275,7 +294,10 @@ impl Audio {
                 shuriken_travel: TravelVoices::new(),
                 quake_travel: TravelVoices::new(),
                 leach_attach: None,
+                leach_once: Vec::new(),
+                leach_latched: false,
                 magstrip: magstrip::Voices::default(),
+                mod_sounds: mod_sound::Voices::default(),
                 rng: Rng::new(SFX_SEED),
             }
         });
@@ -311,13 +333,27 @@ impl Audio {
                 if event.cue.held() {
                     continue;
                 }
-                let Some(pan) = place(event, &listener, &craft) else {
+                let Some(pan) = place(event, &listener, &craft, player_slot) else {
                     // Out of range: the original's `Sound_Play` refuses a voice on an
                     // emitter whose out-of-range bit is latched, so it is not started
                     // rather than started silent.
                     continue;
                 };
-                let Some(started) = banks.voices(event.cue, &mut voices.rng) else {
+                let player = event.point.is_none() && slot == player_slot;
+                // A contact cue plays the list the game hands those variables, at the
+                // request's volume; an event with none plays as every other cue does.
+                let (started, request_volume) = match event.contact {
+                    Some(contact) => (
+                        banks.contact_voices(
+                            event.cue,
+                            contact_variables(event.cue, contact, player),
+                            &mut voices.rng,
+                        ),
+                        contact.volume,
+                    ),
+                    None => (banks.voices_for(event.cue, player, &mut voices.rng), 1.0),
+                };
+                let Some(started) = started else {
                     continue;
                 };
                 // Handles dropped: a one-shot is fire-and-forget, and a refused
@@ -327,8 +363,9 @@ impl Audio {
                     &started,
                     event.cue.bus(),
                     VoicePlace {
-                        gain: pan.gain,
+                        gain: pan.gain * request_volume,
                         pan: pan.pan,
+                        front: pan.front,
                     },
                 );
             }
@@ -354,23 +391,24 @@ impl Audio {
                 });
             }
 
-            // The Zone speed-class announcer: one voice line per stage raised this
-            // tick (see `oag_raceplay::tick`). Unlike the milestone one, this trigger is
-            // not yet read from HD's executable (`oag_title::ZoneClassAnnouncer`).
+            // The Zone speed-class announcer: per stage raised this tick (see
+            // `oag_raceplay::tick`), the stage-blend tone and the class line.
+            // Both are timelines played dry, the line on its own authored
+            // lead-in (`oag_title::ZoneClassAnnouncer`).
             for stage in class_announcements {
-                let Some((sound, looping)) = class_announcer.pick(stage, &mut voices.rng) else {
-                    continue;
-                };
-                let play = if looping {
-                    Play::looping(sound, Bus::Speech)
-                } else {
-                    Play::once(sound, Bus::Speech)
-                };
-                let _ = mixer.play(Play {
-                    gain: 1.0,
-                    pan: None,
-                    ..play
-                });
+                let tone = class_announcer.tone_voices(&mut voices.rng);
+                let line = class_announcer.line_voices(stage, &mut voices.rng);
+                log::trace!(
+                    "sfx: class step to stage {stage} at wav frame {wav_frame:?}: tone {} voice(s), line {} voice(s)",
+                    tone.as_ref().map_or(0, Vec::len),
+                    line.as_ref().map_or(0, Vec::len)
+                );
+                if let Some(tone) = tone {
+                    let _ = layers::start(mixer, &tone, Bus::Sfx, layers::Where::DRY);
+                }
+                if let Some(line) = line {
+                    let _ = layers::start(mixer, &line, Bus::Speech, layers::Where::DRY);
+                }
             }
 
             // `Shield_Activate` opens `~SHIELD` with a handle and the shield's drop
@@ -385,13 +423,19 @@ impl Audio {
                     // The alternate's own loop flag decides, not the cue's: Pulse's
                     // `~SHIELD` is two waveforms and both loop, Pure's four of which
                     // two do, so forcing `Play::looping` would loop a one-shot.
-                    if let Some(started) = banks.voices(Cue::Shield, &mut voices.rng) {
+                    // The player's own shield: Omega posts `_SHIELD_PC`, another tree.
+                    if let Some(started) = banks.voices_for(Cue::Shield, true, &mut voices.rng) {
                         voices.shield =
                             layers::start(mixer, &started, Cue::Shield.bus(), VoicePlace::DRY);
+                        log::trace!("sfx: held Shield opened, {} voice(s)", voices.shield.len());
                     }
                 }
                 (false, true) => {
                     voices.shield_open = false;
+                    log::trace!(
+                        "sfx: held Shield released, {} voice(s)",
+                        voices.shield.len()
+                    );
                     for id in voices.shield.drain(..) {
                         mixer.stop(id);
                     }
@@ -467,9 +511,13 @@ impl Audio {
             match (autopilot_active, voices.autopilot_open) {
                 (true, false) => {
                     voices.autopilot_open = true;
-                    if let Some(started) = banks.voices(Cue::Autopilot, &mut voices.rng) {
+                    if let Some(started) = banks.voices_for(Cue::Autopilot, true, &mut voices.rng) {
                         voices.autopilot =
                             layers::start(mixer, &started, Cue::Autopilot.bus(), VoicePlace::DRY);
+                        log::trace!(
+                            "sfx: held Autopilot opened, {} voice(s)",
+                            voices.autopilot.len()
+                        );
                     }
                     if let Some(started) = banks.voices(Cue::Engaging, &mut voices.rng) {
                         let _ =
@@ -478,6 +526,10 @@ impl Audio {
                 }
                 (false, true) => {
                     voices.autopilot_open = false;
+                    log::trace!(
+                        "sfx: held Autopilot released, {} voice(s)",
+                        voices.autopilot.len()
+                    );
                     for id in voices.autopilot.drain(..) {
                         mixer.stop(id);
                     }
@@ -554,10 +606,17 @@ impl Audio {
             // outlives `Beam::connected` through the disconnect linger
             // ([`Cue::LeachAttach`]). Position is the chosen midpoint between the
             // two craft, updated every tick like the Plasma bolt above.
-            let leach_locked = leach_beam
-                .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked);
+            //
+            // **One held voice for the whole pool, on the first locked beam in pool
+            // order** (chosen, not measured: the pool of eight is a later-title
+            // law and the original's loop count per beam is unread).
+            let leach_locked = leach_beams
+                .iter()
+                .flatten()
+                .copied()
+                .find(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked);
             match (leach_locked, voices.leach_attach) {
-                (Some(beam), None) => {
+                (Some(beam), None) if !voices.leach_latched => {
                     if let Some(started) = banks.voices(Cue::LeachAttach, &mut voices.rng)
                         && let Some(at) = leach_attach_point(&craft, beam)
                     {
@@ -571,10 +630,20 @@ impl Audio {
                         // The cue keys a one-shot and a loop: the loop is the held
                         // voice this arm steers, the one-shot fires once where the
                         // beam attached.
-                        let place = VoicePlace { gain, pan };
+                        let place = VoicePlace {
+                            gain,
+                            pan,
+                            front: placed.map_or(1.0, |p| p.front),
+                        };
                         let (held, once): (Vec<_>, Vec<_>) =
                             started.into_iter().partition(|v| v.looping);
-                        let _ = layers::start(mixer, &once, Cue::LeachAttach.bus(), place);
+                        if held.is_empty() {
+                            voices.leach_once =
+                                layers::start(mixer, &once, Cue::LeachAttach.bus(), place);
+                            voices.leach_latched = true;
+                        } else {
+                            let _ = layers::start(mixer, &once, Cue::LeachAttach.bus(), place);
+                        }
                         voices.leach_attach = layers::start(
                             mixer,
                             &held[..held.len().min(1)],
@@ -596,14 +665,22 @@ impl Audio {
                         let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
                         mixer.set_gain(id, gain);
                         mixer.set_pan(id, pan);
+                        mixer.set_front(id, placed.map_or(1.0, |p| p.front));
                     }
                 }
                 (Some(_), Some(_)) => voices.leach_attach = None,
+                (Some(_), None) => {}
                 (None, Some(id)) => {
                     mixer.stop(id);
                     voices.leach_attach = None;
                 }
                 (None, None) => {}
+            }
+            if leach_locked.is_none() {
+                voices.leach_latched = false;
+                for id in voices.leach_once.drain(..) {
+                    mixer.stop(id);
+                }
             }
 
             // Every craft's engine, each off its own emitter. A craft with no pose
@@ -622,7 +699,7 @@ impl Audio {
                     running,
                     position.to_array(),
                     &listener,
-                    slot != 0,
+                    slot != player_slot,
                     doppler_enabled,
                     DT,
                 );
@@ -630,7 +707,9 @@ impl Audio {
 
             // HD's engine: same craft and ears, a table instead of a held pitch
             // law ([`xfade`]). Its layers stay resident, beyond the PSP's 32 voices.
-            if voices.xfade.iter().any(Option::is_some) {
+            // A Wwise title's held cues are layered events (a magstrip is six voices
+            // a craft): the PSP's pool would starve the grid, so it takes HD's.
+            if voices.xfade.iter().any(Option::is_some) || banks.has_wwise_cues() {
                 mixer.grow_pool(oag_audio::mixer::HD_VOICES);
             }
             for (slot, craft_xfade) in voices.xfade.iter_mut().enumerate() {
@@ -641,7 +720,7 @@ impl Audio {
                     xfade.stop(mixer);
                     continue;
                 };
-                let player = slot == 0;
+                let player = slot == player_slot;
                 xfade.tick(
                     mixer,
                     XfadeInputs {
@@ -659,6 +738,13 @@ impl Audio {
             }
 
             voices.magstrip.follow(mixer, &listener, &craft);
+            voices.mod_sounds.play(
+                (&mod_sounds, &mod_loops),
+                &banks.mod_sounds,
+                mixer,
+                (&listener, &mod_craft, player_slot),
+                running,
+            );
 
             // The circuit's ambience, same ears and law, after the craft so a
             // starved pool serves the race's cues first: the original's pool is
@@ -676,6 +762,29 @@ impl Audio {
         });
     }
 
+    /// How many loops of the mods' own sounds are running (`play-mod-sound`'s `Loop`).
+    #[must_use]
+    pub fn mod_sound_loops(&self) -> usize {
+        self.sfx
+            .as_ref()
+            .map_or(0, |voices| voices.mod_sounds.count())
+    }
+
+    /// How many craft engines are audible now: open with a gain above zero (a craft out of the
+    /// listener's range holds its voice at zero).
+    #[must_use]
+    pub fn audible_engines(&self) -> usize {
+        self.sfx.as_ref().map_or(0, |voices| {
+            self.output.with_mixer(|mixer| {
+                voices
+                    .engines
+                    .iter()
+                    .filter(|engine| engine.audible(mixer))
+                    .count()
+            })
+        })
+    }
+
     /// How many of the circuit's own emitters are sounding now ("is the circuit
     /// audible"), apart from `Mixer::active_voices`, which counts cues too; the
     /// claim of `crates/game/tests/track_audio_ground_truth.rs`.
@@ -687,11 +796,35 @@ impl Audio {
         })
     }
 
+    /// Puts the race's sound where `frame` says it stands `tick` ticks in, after a seek: every
+    /// effect voice is stopped and the continuous ones are rebuilt from the state, not from the
+    /// cues the skipped ticks raised (ADR-0087, decision 6).
+    ///
+    /// Rebuilt: the engine note of every slot (its pitch lag at the note the craft's speed
+    /// settles on, its volume as far up as `tick` ticks of running put it), the shield,
+    /// Autopilot and exploding loops, the lock-on beeps, the quake wave, the circuit's ambience,
+    /// every LeachBeam and every projectile's travel loop. Not replayed: a one-shot whose tick is
+    /// already past, which is the caller's to have dropped (`frame.cues` is what the target tick
+    /// itself raised, and plays). The engines' notes are the ones the first race tick drew
+    /// (`SFX_SEED`), so a rebuild is the engines the race had.
+    pub fn rebuild_race_sfx(&mut self, frame: RaceFrame<'_>, tick: u64) {
+        self.stop_race_sfx();
+        self.sfx = None;
+        self.engine_warm_ticks = tick;
+        self.race_tick(frame);
+        self.engine_warm_ticks = 0;
+    }
+
     /// Releases the held race voices, on leaving a race and on launching one: a
     /// relaunch replaces the `RaceStage` without the back-out path, and a
     /// carried-over [`SfxVoices`] would hold a `VoiceId` into a reused pool and
     /// an engine past its rising-edge snap.
     pub fn stop_race_sfx(&mut self) {
+        self.set_circuit_low_pass_off(false);
+        // The flyby's voice-over is a race voice too: quitting from the pause menu mid-flyby
+        // must not leave it over the front end.
+        self.stop_pre_race_voice();
+        self.release_sfx_fade();
         if let Some(voices) = &mut self.sfx {
             self.output.with_mixer(|mixer| {
                 for engine in &mut voices.engines {
@@ -721,7 +854,12 @@ impl Audio {
                 if let Some(id) = voices.leach_attach.take() {
                     mixer.stop(id);
                 }
+                for id in voices.leach_once.drain(..) {
+                    mixer.stop(id);
+                }
+                voices.leach_latched = false;
                 voices.magstrip.stop_all(mixer);
+                voices.mod_sounds.stop_all(mixer);
                 voices.ambience.stop(mixer);
             });
         }
@@ -745,6 +883,28 @@ fn leach_attach_point(
     Some((owner + target) * 0.5)
 }
 
+/// The four cue variables `Ship_UpdateCollisionCues` hands a contact cue's list:
+/// `[severity, surface, perspective, 0]`, the perspective being 0 for the grind pair, 1 for the
+/// player's craft and 2 for another's
+/// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "`Ship_UpdateCollisionCues`").
+fn contact_variables(cue: Cue, contact: ContactCue, player: bool) -> [i8; 4] {
+    let perspective = match (cue, player) {
+        (Cue::Grind | Cue::GrindShield, _) => 0,
+        (_, true) => 1,
+        (_, false) => 2,
+    };
+    let surface = match contact.surface {
+        ContactSurface::Craft => 0,
+        ContactSurface::Track => 1,
+    };
+    [
+        i8::try_from(contact.severity).unwrap_or(i8::MAX),
+        surface,
+        perspective,
+        0,
+    ]
+}
+
 /// Where one cue is heard from, or [`None`] if out of range entirely.
 ///
 /// The inner `Option<f32>` is the mixer's "no position" ([`oag_audio::mixer::Play::pan`]),
@@ -753,11 +913,8 @@ fn place(
     event: CueEvent,
     listener: &oag_audio::Listener,
     craft: &[Option<(Vec3, f32)>],
+    player_slot: usize,
 ) -> Option<Placed> {
-    let dry = Placed {
-        gain: 1.0,
-        pan: None,
-    };
     if event.cue.placement() == Placement::Point {
         // An arbitrary world point ([`Placement::Point`]). `None` means the event
         // was built wrong (no [`CueEvent::at_point`]), not out of range; that
@@ -774,23 +931,48 @@ fn place(
         return Some(Placed {
             gain: placed.gain,
             pan: Some(placed.pan),
+            front: placed.front,
         });
     }
-    let emitter = match event.cue.placement() {
+    place_on_craft(
+        event.cue.placement(),
+        usize::from(event.slot),
+        listener,
+        craft,
+        player_slot,
+    )
+}
+
+/// Where a sound on a craft's emitter is heard from: `placement` is one of the craft
+/// placements, never [`Placement::Point`].
+fn place_on_craft(
+    placement: Placement,
+    slot: usize,
+    listener: &oag_audio::Listener,
+    craft: &[Option<(Vec3, f32)>],
+    player_slot: usize,
+) -> Option<Placed> {
+    let dry = Placed {
+        gain: 1.0,
+        pan: None,
+        front: 1.0,
+    };
+    let emitter = match placement {
         Placement::Unplaced => return Some(dry),
         // The player's own branch, on a hypothesis the type documents.
-        Placement::CraftUnlessPlayer if event.is_player() => return Some(dry),
+        Placement::CraftUnlessPlayer if slot == player_slot => return Some(dry),
         Placement::Craft | Placement::CraftUnlessPlayer => oag_audio::Emitter::craft,
         Placement::Engine => oag_audio::Emitter::engine,
-        Placement::Point => unreachable!("handled above"),
+        Placement::Point => unreachable!("handled by the caller"),
     };
     // A cue from a slot with no craft is dropped, not played dry: a rival's
     // collision would arrive at full volume the moment a slot is emptied.
-    let (position, _) = (*craft.get(usize::from(event.slot))?)?;
+    let (position, _) = (*craft.get(slot)?)?;
     let placed = emitter(position.to_array()).place(listener, 1.0)?;
     Some(Placed {
         gain: placed.gain,
         pan: Some(placed.pan),
+        front: placed.front,
     })
 }
 
@@ -799,6 +981,7 @@ fn place(
 struct Placed {
     gain: f32,
     pan: Option<f32>,
+    front: f32,
 }
 
 /// Which emitter a cue is heard from.

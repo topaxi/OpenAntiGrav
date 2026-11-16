@@ -1,6 +1,9 @@
 use super::*;
 use oag_mod::campaign::Reveal;
 
+/// A mod campaign counts Elimination like Pulse.
+const PULSE: &[&str] = &["Zone", "Elimination"];
+
 /// The example mods: the `mod-examples` submodule, absent from a checkout that
 /// never fetched it (`git submodule update --init`), where these tests return
 /// early and say so. CI checks it out.
@@ -121,7 +124,7 @@ fn times_are_seconds_in_the_file_and_centiseconds_in_the_cell() {
         (cell.gold, cell.silver, cell.bronze),
         (15_000, 16_500, 18_000)
     );
-    assert_eq!(cell.evaluate_medal(15_999), Some(Medal::Silver));
+    assert_eq!(cell.evaluate_medal(15_999, PULSE), Some(Medal::Silver));
     assert_eq!(cell.locked, Some(false));
 }
 
@@ -134,11 +137,11 @@ fn per_rung_targets_fill_difficulty_targets() {
     assert_eq!(rungs.hard.silver, 1);
     use oag_tables::race_campaign::Difficulty;
     assert_eq!(
-        cell.evaluate_medal_for_difficulty(4, Difficulty::Easy),
+        cell.evaluate_medal_for_difficulty(4, Difficulty::Easy, PULSE),
         Some(Medal::Bronze)
     );
     assert_eq!(
-        cell.evaluate_medal_for_difficulty(4, Difficulty::Hard),
+        cell.evaluate_medal_for_difficulty(4, Difficulty::Hard, PULSE),
         None
     );
 }
@@ -149,23 +152,27 @@ fn an_absent_tier_is_never_awarded_on_either_direction() {
     // The duel names gold and bronze but no silver.
     let duel = &example().grids[0].cells[3];
     assert_eq!(duel.silver, 0);
-    assert_eq!(duel.evaluate_medal(1), Some(Medal::Gold));
-    assert_eq!(duel.evaluate_medal(2), Some(Medal::Bronze));
+    assert_eq!(duel.evaluate_medal(1, PULSE), Some(Medal::Gold));
+    assert_eq!(duel.evaluate_medal(2, PULSE), Some(Medal::Bronze));
     // A counting mode with no silver: no kill count reaches it.
     let custom = edited("gold = 10, silver = 6, bronze = 3", "gold = 10, bronze = 3").unwrap();
     let elimination = &custom.grids[1].cells[1];
     assert_eq!(elimination.silver, i64::MAX);
-    assert_eq!(elimination.evaluate_medal(7), Some(Medal::Bronze));
-    assert_eq!(elimination.evaluate_medal(12), Some(Medal::Gold));
+    assert_eq!(elimination.evaluate_medal(7, PULSE), Some(Medal::Bronze));
+    assert_eq!(elimination.evaluate_medal(12, PULSE), Some(Medal::Gold));
     assert!(elimination.nitro_elimination_targets.is_none());
 }
 
 #[test]
 fn an_event_with_no_medals_awards_none() {
     needs_examples!();
-    let custom = edited("medals = { gold = 10, silver = 6, bronze = 3 }\n", "").unwrap();
+    let custom = edited(
+        "medals = { gold = 10, silver = 6, bronze = 3, extra = [{ tier = \"platinum\", target = 14 }] }\n",
+        "",
+    )
+    .unwrap();
     let cell = &custom.grids[1].cells[1];
-    assert_eq!(cell.evaluate_medal(99), None);
+    assert_eq!(cell.evaluate_medal(99, PULSE), None);
 }
 
 #[test]
@@ -214,24 +221,25 @@ fn the_field_carries_ai_difficulty_pilot_and_teams() {
 fn requirements_name_cells_and_hold_on_the_least_medal() {
     needs_examples!();
     let custom = example();
+    let tier = |name: &str| custom.tiers.find(name);
     let none = |_: &str| None;
     assert_eq!(custom.fixed_lock("grid0_2_1", &none), Some(false));
     assert_eq!(custom.fixed_lock("grid0_2_2", &none), Some(true));
-    let bronze_first = |name: &str| (name == "grid0_2_1").then_some(Medal::Bronze);
+    let bronze_first = |name: &str| (name == "grid0_2_1").then_some(tier("bronze").unwrap());
     assert_eq!(custom.fixed_lock("grid0_2_2", &bronze_first), Some(false));
     // The duel wants silver on the gate.
-    let bronze_gate = |name: &str| (name == "grid0_2_2").then_some(Medal::Bronze);
+    let bronze_gate = |name: &str| (name == "grid0_2_2").then_some(tier("bronze").unwrap());
     assert_eq!(custom.fixed_lock("grid0_3_2", &bronze_gate), Some(true));
-    let gold_gate = |name: &str| (name == "grid0_2_2").then_some(Medal::Gold);
+    let gold_gate = |name: &str| (name == "grid0_2_2").then_some(tier("gold").unwrap());
     assert_eq!(custom.fixed_lock("grid0_3_2", &gold_gate), Some(false));
     // No unlock table: the title's neighbour rule decides.
     assert_eq!(custom.fixed_lock("grid0_3_1", &none), None);
     // Two requirements: both must hold.
-    let sprint_silver = |name: &str| (name == "grid0_1_1").then_some(Medal::Silver);
+    let sprint_silver = |name: &str| (name == "grid0_1_1").then_some(tier("silver").unwrap());
     assert_eq!(custom.fixed_lock("grid1_4_1", &sprint_silver), Some(true));
     let both = |name: &str| match name {
-        "grid0_1_1" => Some(Medal::Silver),
-        "grid1_3_2" => Some(Medal::Bronze),
+        "grid0_1_1" => Some(tier("silver").unwrap()),
+        "grid1_3_2" => Some(tier("bronze").unwrap()),
         _ => None,
     };
     assert_eq!(custom.fixed_lock("grid1_4_1", &both), Some(false));
@@ -400,12 +408,13 @@ fn scratch_mod(name: &str, campaign: &str, broken: bool) -> oag_mod::Mod {
     let source = examples().join("example-campaign");
     let dir = std::env::temp_dir().join(format!("oag-custom-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    for sub in ["campaigns", "pilots", "tracks"] {
+    for sub in ["campaigns", "pilots", "tracks", "ui"] {
         std::fs::create_dir_all(dir.join(sub)).unwrap();
     }
     for file in [
         "oag-mod.toml",
         "pilots/rival.toml",
+        "ui/medals.png",
         "tracks/practice-octagon.track.toml",
         "tracks/practice-octagon.glb",
     ] {
@@ -444,6 +453,14 @@ fn a_track_file_in_a_zipped_mod_is_refused_by_name() {
             read("example-campaign/oag-mod.toml").as_bytes(),
         ),
         ("campaigns/night-run.toml", example_text().as_bytes()),
+        (
+            "ui/medals.png",
+            Box::leak(
+                std::fs::read(examples().join("example-campaign/ui/medals.png"))
+                    .unwrap()
+                    .into_boxed_slice(),
+            ),
+        ),
     ]));
     let module = oag_mod::Mod::from_container(oag_mod::Container::memory("test", files)).unwrap();
     let installed = Installed::for_title([&module, &hillside()], &[], oag_pulse::TITLE, &|_| true);
@@ -485,7 +502,8 @@ fn mod_progress_and_disc_progress_never_meet() {
     let mut records = Store::default();
     records.record_campaign("Wipeout Pulse", "grid0_2_1", Some(Stored::Gold), None);
     {
-        let medal_of = crate::unlock::campaign_medal_of(&records, &custom.records_title);
+        let medal_of =
+            crate::unlock::campaign_medal_of(&records, &custom.records_title, &custom.tiers);
         assert_eq!(medal_of("grid0_2_1"), None);
         assert_eq!(custom.fixed_lock("grid0_2_2", &medal_of), Some(true));
     }
@@ -500,7 +518,7 @@ fn mod_progress_and_disc_progress_never_meet() {
         .campaign_medal("Wipeout Pulse", "grid0_2_1")
         .unwrap();
     assert_eq!(vanilla.best_medal, Some(Stored::Gold));
-    let medal_of = crate::unlock::campaign_medal_of(&records, &custom.records_title);
+    let medal_of = crate::unlock::campaign_medal_of(&records, &custom.records_title, &custom.tiers);
     assert_eq!(custom.fixed_lock("grid0_2_2", &medal_of), Some(false));
 }
 
@@ -523,4 +541,652 @@ fn a_campaign_racing_a_mod_turned_off_is_left_out_saying_so() {
         "{:?}",
         gone.failed
     );
+}
+
+/// `n` race events in one tier, every other one flown by our driver, under the
+/// given `[campaign]` lines and with `extra` appended to the third event.
+fn ladder_campaign(setting: &str, n: usize, extra: &str) -> Result<Custom, String> {
+    let mut text = format!(
+        "toml-schema = {{ location = \"https://oag.topaxi.com/mods/schemas/v1/campaign.tosd\", version = \"1.0.0\" }}\n\
+         [campaign]\nid = \"ladder\"\nname = \"Ladder\"\n{setting}\n[[grid]]\nid = \"g0\"\n"
+    );
+    for i in 0..n {
+        let ai = if i % 2 == 0 { "original" } else { "ours" };
+        let own = if i == 2 { extra } else { "" };
+        text.push_str(&format!(
+            "[[grid.event]]\nslot = [{}, {}]\nmode = \"race\"\ntrack = \"01_Track\"\nclass = \"venom\"\n\
+             unlock = {{ open = true }}\nfield = {{ ai = \"{ai}\"{own} }}\n",
+            i % 10,
+            i / 10
+        ));
+    }
+    let def = CampaignDef::parse(&text).map_err(|e| e.to_string())?;
+    compile(&def, "m", oag_pulse::TITLE, &pilots(), &files)
+}
+
+/// The original rung and our level of each event of a `ladder_campaign`, in order.
+fn rungs(custom: &Custom) -> Vec<(Option<usize>, Option<oag_ai::Difficulty>)> {
+    custom.grids[0]
+        .cells
+        .iter()
+        .map(|cell| {
+            let event = custom.event(&cell.name).unwrap();
+            (event.level, event.difficulty)
+        })
+        .collect()
+}
+
+#[test]
+fn a_flat_campaign_runs_every_cell_at_the_base_on_either_driver() {
+    use oag_ai::Difficulty::{Ace, Novice, Skilled};
+    let hard = ladder_campaign("difficulty = \"hard\"", 4, "").unwrap();
+    assert_eq!(
+        rungs(&hard),
+        [
+            (Some(2), None),
+            (None, Some(Ace)),
+            (Some(2), None),
+            (None, Some(Ace))
+        ]
+    );
+    let easy = ladder_campaign("difficulty = \"easy\"\nprogression = \"flat\"", 2, "").unwrap();
+    assert_eq!(rungs(&easy), [(Some(0), None), (None, Some(Novice))]);
+    // Named in our driver's words, the base keeps its place on the original's three rungs.
+    let skilled = ladder_campaign("difficulty = \"skilled\"", 2, "").unwrap();
+    assert_eq!(rungs(&skilled), [(Some(1), None), (None, Some(Skilled))]);
+}
+
+#[test]
+fn no_setting_leaves_the_screens_rung_alone() {
+    let custom = ladder_campaign("", 3, "").unwrap();
+    assert_eq!(rungs(&custom), [(None, None); 3]);
+}
+
+#[test]
+fn a_ramp_never_steps_down_and_reaches_the_top_of_the_ladder() {
+    for base in [
+        "easy", "medium", "hard", "novice", "skilled", "elite", "ace",
+    ] {
+        for n in [2, 3, 5, 12] {
+            let setting = format!("difficulty = \"{base}\"\nprogression = \"ramp\"");
+            let custom = ladder_campaign(&setting, n, "").unwrap();
+            let events = rungs(&custom);
+            let original: Vec<usize> = events.iter().filter_map(|e| e.0).collect();
+            let ours: Vec<u8> = events.iter().filter_map(|e| e.1).map(|d| d as u8).collect();
+            assert!(
+                original.windows(2).all(|w| w[0] <= w[1]),
+                "{base} {n}: {original:?}"
+            );
+            assert!(
+                ours.windows(2).all(|w| w[0] <= w[1]),
+                "{base} {n}: {ours:?}"
+            );
+            // The last cell is at the top of whichever ladder its driver climbs.
+            let last = events.last().unwrap();
+            assert!(
+                *last == (Some(2), None) || *last == (None, Some(oag_ai::Difficulty::Ace)),
+                "{base} {n}: the last cell is {last:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_ramp_with_no_base_starts_at_the_bottom() {
+    use oag_ai::Difficulty::{Ace, Skilled};
+    let custom = ladder_campaign("progression = \"ramp\"", 4, "").unwrap();
+    let events = rungs(&custom);
+    assert_eq!(events[0], (Some(0), None));
+    assert_eq!(events[1].1, Some(Skilled));
+    assert_eq!(events[3].1, Some(Ace));
+}
+
+#[test]
+fn a_ramp_steps_up_with_the_cell_order_across_tiers() {
+    let text = "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/campaign.tosd\", version = \"1.0.0\" }\n\
+        [campaign]\nid = \"t\"\nname = \"T\"\ndifficulty = \"easy\"\nprogression = \"ramp\"\n\
+        [[grid]]\nid = \"a\"\n[[grid.event]]\nslot = [0, 0]\nmode = \"race\"\ntrack = \"01_Track\"\nclass = \"venom\"\n\
+        [[grid.event]]\nslot = [1, 0]\nmode = \"race\"\ntrack = \"01_Track\"\nclass = \"venom\"\n\
+        [[grid]]\nid = \"b\"\n[[grid.event]]\nslot = [0, 0]\nmode = \"race\"\ntrack = \"01_Track\"\nclass = \"venom\"\n";
+    let custom = compile(
+        &CampaignDef::parse(text).unwrap(),
+        "m",
+        oag_pulse::TITLE,
+        &pilots(),
+        &files,
+    )
+    .unwrap();
+    let level = |cell: &str| custom.event(cell).unwrap().level;
+    assert_eq!(
+        [level("grid0_0_0"), level("grid0_1_0"), level("grid1_0_0")],
+        [Some(0), Some(1), Some(2)]
+    );
+}
+
+#[test]
+fn a_cells_own_difficulty_wins_over_the_ramp() {
+    // The third event (index 2, flown by the original driver) names `easy`: on a
+    // ramp it would be partway up.
+    let setting = "difficulty = \"easy\"\nprogression = \"ramp\"";
+    let ramped = ladder_campaign(setting, 5, "").unwrap();
+    assert_eq!(rungs(&ramped)[2].0, Some(1));
+    let own = ladder_campaign(setting, 5, ", difficulty = \"hard\"").unwrap();
+    assert_eq!(rungs(&own)[2].0, Some(2));
+    assert_eq!(
+        rungs(&own)[0].0,
+        Some(0),
+        "the cells beside it still follow the ramp"
+    );
+    assert_eq!(rungs(&own)[4].0, ramped.event("grid0_4_0").unwrap().level);
+}
+
+#[test]
+fn a_difficulty_neither_driver_knows_is_refused_by_name() {
+    let err = ladder_campaign("difficulty = \"brutal\"", 2, "").unwrap_err();
+    assert!(err.contains("mod m campaign ladder"), "{err}");
+    assert!(err.contains("brutal") && err.contains("novice"), "{err}");
+}
+
+#[test]
+fn the_example_starts_its_opponents_at_medium_and_a_cells_own_rung_wins() {
+    needs_examples!();
+    let custom = example();
+    let cells: Vec<&Cell> = custom.grids.iter().flat_map(|grid| &grid.cells).collect();
+    let rung = |cell: &Cell| custom.event(&cell.name).unwrap().level;
+    // Warm-up is the first event listed and names no field: the campaign's base, medium.
+    assert_eq!(rung(cells[0]), Some(1));
+    // Clean Race is the sixth listed, ramped to medium too, and names `hard` itself.
+    assert_eq!(custom.event("grid0_4_1").unwrap().level, Some(2));
+    // Every other event flown by the original driver follows the ramp: medium or above.
+    for cell in cells
+        .iter()
+        .filter(|cell| custom.event(&cell.name).unwrap().ai == Ai::Original)
+    {
+        assert!(rung(cell) >= Some(1), "{}: {:?}", cell.name, rung(cell));
+    }
+}
+
+fn medals_mod() -> oag_mod::Mod {
+    let manifest = r#"toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod.tosd", version = "1.0.0" }
+
+[mod]
+id = "test.hd-medals"
+name = "HD Medals"
+version = "1.0.0"
+authors = ["A"]
+description = "x"
+titles = ["wipeout-pulse"]
+needs-titles = ["wipeout-hd"]
+
+[campaign-medals]
+source = { title = "wipeout-hd" }
+per-difficulty = true
+"#;
+    let files: &'static [(&'static str, &'static [u8])] =
+        Box::leak(Box::new([("oag-mod.toml", manifest.as_bytes())]));
+    oag_mod::Mod::from_container(oag_mod::Container::memory("test", files)).unwrap()
+}
+
+#[test]
+fn a_medals_mod_is_asked_for_on_its_title_and_names_the_disc_it_lacks() {
+    let module = medals_mod();
+    let without = Installed::for_title([&module], &[], oag_pulse::TITLE, &|_| false);
+    let ask = without.medals_for(None).expect("asks for medal art");
+    assert_eq!(ask.mod_id, "test.hd-medals");
+    assert!(ask.medals.per_difficulty && !ask.own_campaigns);
+    assert_eq!(
+        without.needs_discs,
+        [("test.hd-medals".to_string(), "Wipeout HD".to_string())]
+    );
+    let with = Installed::for_title([&module], &[], oag_pulse::TITLE, &|slug| {
+        slug == "wipeout-hd"
+    });
+    assert!(with.medals_for(None).is_some() && with.needs_discs.is_empty());
+    let pure = Installed::for_title([&module], &[], oag_pure::TITLE, &|_| false);
+    assert!(pure.medals.is_empty() && pure.needs_discs.is_empty());
+}
+
+#[test]
+fn the_mods_page_says_which_disc_a_mod_needs() {
+    let module = medals_mod();
+    let installed = Installed::for_title([&module], &[], oag_pulse::TITLE, &|_| false);
+    let mut listing = vec![crate::mods::Listing {
+        id: "test.hd-medals".to_string(),
+        name: "HD Medals".to_string(),
+        version: "1.0.0".to_string(),
+        authors: Vec::new(),
+        license: None,
+        rows: Vec::new(),
+        builtin: false,
+        enabled: Some(true),
+        default_enabled: false,
+        texture_pack: false,
+        error: None,
+        problems: Vec::new(),
+        publishes: Vec::new(),
+        listens: Vec::new(),
+    }];
+    crate::mods::note_left_out(
+        &mut listing,
+        &installed,
+        &oag_ui::language::StringTable::default(),
+    );
+    assert_eq!(
+        listing[0].problems,
+        [("NEEDS".to_string(), "WIPEOUT HD DISC".to_string())]
+    );
+}
+
+const PLATINUM_TIERS: &str = r##"
+[[medal-tier]]
+name = "platinum"
+points = 4
+colour = "#e5e4e2"
+string_id = "PLATINUM_WORD"
+
+[[medal-tier]]
+name = "gold"
+points = 3
+colour = "#faeb38"
+
+[[medal-tier]]
+name = "silver"
+points = 2
+colour = "#dae3e4"
+
+[[medal-tier]]
+name = "bronze"
+points = 1
+colour = "#df942f"
+"##;
+
+/// Two timed events on one tier: `a` asks platinum 70 s, gold 80 s, silver 90 s, bronze 100 s,
+/// with a harder rung; `b` needs platinum on `a`.
+fn platinum_campaign(tiers: &str) -> Result<Custom, String> {
+    let text = format!(
+        "toml-schema = {{ location = \"https://oag.topaxi.com/mods/schemas/v1/campaign.tosd\", version = \"1.0.0\" }}\n\
+         {tiers}\n[campaign]\nid = \"plat\"\nname = \"Plat\"\n\n[[grid]]\nid = \"g0\"\n\n\
+         [[grid.event]]\nid = \"a\"\nslot = [1, 1]\nmode = \"time_trial\"\ntrack = \"01_Track\"\nclass = \"venom\"\n\
+         unlock = {{ open = true }}\n\
+         medals = {{ gold = 80.0, silver = 90.0, bronze = 100.0, extra = [{{ tier = \"platinum\", target = 70.0 }}], \
+         hard = {{ gold = 75.0, silver = 85.0, bronze = 95.0, extra = [{{ tier = \"platinum\", target = 65.0 }}] }} }}\n\n\
+         [[grid.event]]\nid = \"b\"\nslot = [2, 1]\nmode = \"time_trial\"\ntrack = \"02_Track\"\nclass = \"venom\"\n\
+         unlock = {{ requires = [{{ event = \"a\", medal = \"platinum\" }}] }}\n\
+         medals = {{ gold = 80.0 }}\n"
+    );
+    let def = CampaignDef::parse(&text).map_err(|e| e.to_string())?;
+    compile(&def, "m", oag_pulse::TITLE, &pilots(), &files)
+}
+
+#[test]
+fn a_campaign_with_no_tier_list_has_the_titles_own_three() {
+    let custom = ladder_campaign("", 3, "").unwrap();
+    assert!(custom.tiers.is_standard());
+}
+
+#[test]
+fn a_declared_tier_list_is_compiled_with_its_points_colours_and_words() {
+    let custom = platinum_campaign(PLATINUM_TIERS).unwrap();
+    let names: Vec<_> = custom.tiers.iter().map(|(_, t)| t.name.as_str()).collect();
+    assert_eq!(names, ["platinum", "gold", "silver", "bronze"]);
+    let platinum = custom.tiers.find("platinum").unwrap();
+    assert_eq!(custom.tiers.points(platinum), 4);
+    assert_eq!(custom.tiers.argb(platinum), 0xffe5_e4e2);
+    assert_eq!(
+        custom.tiers.get(platinum).unwrap().string_id.as_deref(),
+        Some("PLATINUM_WORD")
+    );
+    let gold = custom
+        .tiers
+        .get(custom.tiers.find("gold").unwrap())
+        .unwrap();
+    assert_eq!(
+        gold.string_id.as_deref(),
+        Some("IG_HUD_GOLD"),
+        "the title's word for gold"
+    );
+}
+
+#[test]
+fn a_result_earns_the_best_tier_whose_target_it_meets_on_the_rung_it_was_raced_at() {
+    let custom = platinum_campaign(PLATINUM_TIERS).unwrap();
+    let targets = &custom.events["grid0_1_1"].tier_targets;
+    let tier = |centis, rung| {
+        targets
+            .evaluate(&Mode::TimeTrial, centis, rung)
+            .map(|m| custom.tiers.get(m).unwrap().name.as_str())
+    };
+    assert_eq!(tier(6900, Difficulty::Medium), Some("platinum"));
+    assert_eq!(tier(7500, Difficulty::Medium), Some("gold"));
+    assert_eq!(tier(10100, Difficulty::Medium), None);
+    assert_eq!(tier(6500, Difficulty::Hard), Some("platinum"));
+    assert_eq!(
+        tier(6900, Difficulty::Hard),
+        Some("gold"),
+        "platinum asks 65 s on hard"
+    );
+    let cell = &custom.grids[0].cells[0];
+    assert_eq!(
+        (cell.gold, cell.silver, cell.bronze),
+        (8000, 9000, 10_000),
+        "gold, silver and bronze keep their own targets, whatever the list above them"
+    );
+}
+
+#[test]
+fn a_requirement_names_a_declared_tier_and_a_better_tier_satisfies_a_lesser_one() {
+    let custom = platinum_campaign(PLATINUM_TIERS).unwrap();
+    let platinum = custom.tiers.find("platinum").unwrap();
+    let gold = custom.tiers.find("gold").unwrap();
+    let held =
+        |tier: Option<Medal>| move |name: &str| (name == "grid0_1_1").then_some(tier).flatten();
+    assert_eq!(
+        custom.fixed_lock("grid0_2_1", &held(Some(platinum))),
+        Some(false)
+    );
+    assert_eq!(
+        custom.fixed_lock("grid0_2_1", &held(Some(gold))),
+        Some(true)
+    );
+    assert_eq!(custom.fixed_lock("grid0_2_1", &held(None)), Some(true));
+    let own_gold = platinum_campaign(PLATINUM_TIERS)
+        .unwrap()
+        .events
+        .get("grid0_2_1")
+        .unwrap()
+        .requires
+        .clone();
+    assert_eq!(own_gold, [("grid0_1_1".to_string(), Some(platinum))]);
+}
+
+#[test]
+fn a_tier_the_campaign_does_not_declare_is_refused_by_name() {
+    let error = platinum_campaign("").unwrap_err();
+    assert!(error.contains("platinum"), "{error}");
+}
+
+#[test]
+fn a_stored_tier_is_read_back_by_name_against_the_campaigns_list() {
+    use crate::records::{Medal as Stored, Store, TierEarned};
+    let custom = platinum_campaign(PLATINUM_TIERS).unwrap();
+    let order: Vec<&str> = custom.tiers.iter().map(|(_, t)| t.name.as_str()).collect();
+    let mut records = Store::default();
+    records.record_campaign_tier(
+        &custom.records_title,
+        "grid0_1_1",
+        Some(TierEarned {
+            name: "platinum",
+            class: Stored::Gold,
+            points: 4,
+            order: &order,
+        }),
+        None,
+    );
+    records.record_campaign(
+        &custom.records_title,
+        "grid0_2_1",
+        Some(Stored::Silver),
+        None,
+    );
+    let medal_of = crate::unlock::campaign_medal_of(&records, &custom.records_title, &custom.tiers);
+    assert_eq!(medal_of("grid0_1_1"), custom.tiers.find("platinum"));
+    assert_eq!(
+        medal_of("grid0_2_1"),
+        custom.tiers.find("silver"),
+        "a row written as a plain silver is the campaign's silver"
+    );
+    let standard = oag_tables::race_campaign::MedalTiers::standard();
+    let plain = crate::unlock::campaign_medal_of(&records, &custom.records_title, standard);
+    assert_eq!(
+        plain("grid0_1_1"),
+        None,
+        "a list without platinum has no such tier"
+    );
+}
+
+#[test]
+fn a_grids_maximum_is_what_its_events_can_award() {
+    let custom = platinum_campaign(PLATINUM_TIERS).unwrap();
+    // `a` awards platinum (4), `b` only gold (3).
+    assert_eq!(custom.max_points(&custom.grids[0]), 7);
+    let standard = ladder_campaign("", 3, "").unwrap();
+    assert_eq!(
+        standard.max_points(&standard.grids[0]),
+        0,
+        "no medals, no points"
+    );
+}
+
+#[test]
+fn a_launch_keeps_a_tier_by_name_and_names_the_tiers_the_title_has_no_phrase_for() {
+    let custom = platinum_campaign(PLATINUM_TIERS).unwrap();
+    let launch = Launch {
+        records_title: custom.records_title.clone(),
+        tiers: custom.tiers.clone(),
+        words: Words::default(),
+        tier_targets: custom.events["grid0_1_1"].tier_targets.clone(),
+        ai: Ai::Original,
+        level: None,
+        pilot: None,
+    };
+    let mut records = crate::records::Store::default();
+    launch.record_result(&mut records, "grid0_1_1", Some("platinum"), None);
+    launch.record_result(&mut records, "grid0_1_1", Some("silver"), None);
+    let row = records
+        .campaign_medal(&custom.records_title, "grid0_1_1")
+        .unwrap();
+    assert_eq!(
+        row.best_tier.as_deref(),
+        Some("platinum"),
+        "a later silver is no downgrade"
+    );
+    assert_eq!(
+        row.best_medal,
+        Some(crate::records::Medal::Gold),
+        "the class that stands in"
+    );
+    assert_eq!(row.best_points, Some(4));
+    assert!(launch.own_phrase_tier("platinum").is_some());
+    assert!(
+        launch.own_phrase_tier("gold").is_none(),
+        "the title's own phrase"
+    );
+}
+
+/// A mod with campaigns of its own and a 8x96 PNG atlas: four rows (platinum, gold, silver,
+/// bronze) in each of three difficulty blocks, `[campaign-medals] source = { mod = "atlas" }`.
+fn atlas_mod() -> oag_mod::Mod {
+    let manifest = r#"toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod.tosd", version = "1.0.0" }
+
+[mod]
+id = "test.medal-atlas"
+name = "Medal atlas"
+version = "1.0.0"
+authors = ["A"]
+description = "x"
+titles = ["wipeout-pulse"]
+
+[icons]
+atlas = "ui/medals.png"
+
+[campaign-medals]
+source = { mod = "atlas" }
+per-difficulty = true
+tiers = ["platinum", "gold", "silver", "bronze"]
+"#;
+    let pixels: Vec<u8> = (0..8 * 96).flat_map(|_| [200, 60, 60, 255]).collect();
+    let png: &'static [u8] = Box::leak(oag_texture::png::encode_rgba(8, 96, &pixels).into());
+    let files: &'static [(&'static str, &'static [u8])] = Box::leak(Box::new([
+        ("oag-mod.toml", manifest.as_bytes()),
+        ("ui/medals.png", png),
+        ("campaigns/placeholder.toml", b"[campaign]\n".as_slice()),
+    ]));
+    oag_mod::Mod::from_container(oag_mod::Container::memory("test", files)).unwrap()
+}
+
+fn blank_sheet() -> oag_hud::sprite::Sheet {
+    oag_hud::sprite::Sheet::build(&[], &mut Vec::new())
+}
+
+/// A mod's own atlas is read, cut into its tiers' rows, put on the sprite sheet under a key of
+/// the mod's own and handed to the mod's own campaign's screens. Dropping any of the reading,
+/// the cutting or the sheet entry fails this.
+#[test]
+fn a_mod_with_its_own_atlas_draws_it_on_its_own_campaigns_screens() {
+    needs_examples!();
+    let module = atlas_mod();
+    let installed = Installed::for_title([&module], &[], oag_pulse::TITLE, &|_| true);
+    let mut own = example();
+    own.mod_id = "test.medal-atlas".to_string();
+    let mut sheet = blank_sheet();
+    let art = crate::campaign::medal_art::apply(
+        &installed,
+        Some(&own),
+        || panic!("a mod's own atlas needs no disc"),
+        &mut sheet,
+    );
+    let oag_ui_screens::campaign::MedalArt::Atlas(atlas) = &art else {
+        panic!("the mod's atlas is not drawn: {art:?}");
+    };
+    assert_eq!(atlas.image, "mod:test.medal-atlas/atlas");
+    assert!(sheet.get(&atlas.image).is_some(), "not on the sprite sheet");
+    let tiers = oag_tables::race_campaign::MedalTiers::standard();
+    assert_eq!(
+        art.frame(
+            tiers,
+            oag_tables::race_campaign::Medal::Gold,
+            oag_tables::race_campaign::Difficulty::Hard
+        ),
+        Some([0.0, 2.0 * 32.0 + 8.0, 8.0, 8.0]),
+        "gold is the second of four 8 px rows, in the hard block"
+    );
+}
+
+/// The disc's own campaign, and another mod's, keep the title's swatches although a mod with an
+/// atlas of its own is installed.
+#[test]
+fn a_mods_atlas_is_not_drawn_on_the_discs_campaign_or_another_mods() {
+    needs_examples!();
+    let module = atlas_mod();
+    let installed = Installed::for_title([&module], &[], oag_pulse::TITLE, &|_| true);
+    let mut other = example();
+    other.mod_id = "test.somebody-else".to_string();
+    for open in [None, Some(&other)] {
+        let mut sheet = blank_sheet();
+        let art = crate::campaign::medal_art::apply(
+            &installed,
+            open,
+            || panic!("no disc is asked for"),
+            &mut sheet,
+        );
+        assert_eq!(art, oag_ui_screens::campaign::MedalArt::Swatch);
+        assert!(sheet.get("mod:test.medal-atlas/atlas").is_none());
+    }
+}
+
+/// A mod with no campaigns (HD's medals on Pulse) stays title-wide: the disc's campaign gets it.
+#[test]
+fn a_mod_with_no_campaigns_asks_for_its_art_on_every_campaign() {
+    let installed = Installed::for_title([&medals_mod()], &[], oag_pulse::TITLE, &|_| true);
+    assert!(installed.medals_for(None).is_some());
+}
+
+/// A title-wide medals mod that loads first does not take the art of a campaign that has its own.
+#[test]
+fn a_campaigns_own_mods_atlas_wins_over_a_title_wide_mods_whatever_the_load_order() {
+    needs_examples!();
+    let (wide, own) = (medals_mod(), atlas_mod());
+    let mut open = example();
+    open.mod_id = "test.medal-atlas".to_string();
+    for order in [[&wide, &own], [&own, &wide]] {
+        let installed = Installed::for_title(order, &[], oag_pulse::TITLE, &|_| true);
+        assert_eq!(
+            installed.medals_for(Some(&open)).unwrap().mod_id,
+            "test.medal-atlas"
+        );
+        assert_eq!(
+            installed.medals_for(None).unwrap().mod_id,
+            "test.hd-medals",
+            "the disc's campaign takes the title-wide art"
+        );
+    }
+}
+
+#[test]
+fn an_atlas_that_does_not_cut_into_its_rows_keeps_the_swatch() {
+    let ask = |height| MedalAsk {
+        mod_id: "t".to_string(),
+        medals: oag_mod::CampaignMedals {
+            source: oag_mod::MedalSource::Mod("atlas".to_string()),
+            per_difficulty: true,
+            tiers: vec!["gold".to_string(), "silver".to_string()],
+        },
+        atlas: Some(oag_texture::png::encode_rgba(
+            4,
+            height,
+            &vec![255; 4 * height as usize * 4],
+        )),
+        own_campaigns: true,
+    };
+    let error = crate::campaign::medal_art::resolve(&ask(10), &[]).unwrap_err();
+    assert!(error.contains("6 equal rows"), "{error}");
+    assert!(crate::campaign::medal_art::resolve(&ask(12), &[]).is_ok());
+    let svg = MedalAsk {
+        atlas: Some(b"<svg/>".to_vec()),
+        ..ask(12)
+    };
+    assert!(
+        crate::campaign::medal_art::resolve(&svg, &[])
+            .unwrap_err()
+            .contains("not a PNG")
+    );
+}
+
+const WORDS_ENGLISH: &str = "[strings]\nTIER_A = { text = \"PLATINUM\", human = true }\nTIER_B = { text = \"ONLY ENGLISH\", human = true }\n";
+const WORDS_FRENCH: &str = "[strings]\nTIER_A = { text = \"PLATINE\", human = true }\n";
+
+fn said(words: &Words, language: Option<&str>, id: &str) -> String {
+    let mut table = oag_ui::language::StringTable::default();
+    layer_words(&mut table, words, language);
+    table.get_or_id(id).to_string()
+}
+
+#[test]
+fn a_mods_tier_words_follow_the_active_language_and_fall_back_to_english() {
+    let words = Words::of([("english", WORDS_ENGLISH), ("french", WORDS_FRENCH)]);
+    assert_eq!(
+        said(&words, None, "TIER_A"),
+        "PLATINUM",
+        "no language is English"
+    );
+    assert_eq!(said(&words, Some("French"), "TIER_A"), "PLATINE");
+    assert_eq!(
+        said(&words, Some("French"), "TIER_B"),
+        "ONLY ENGLISH",
+        "a word the language leaves out stays English"
+    );
+    assert_eq!(
+        said(&words, Some("German"), "TIER_A"),
+        "PLATINUM",
+        "a language the mod has no file for reads English"
+    );
+}
+
+#[test]
+fn a_mod_folders_strings_files_are_read_by_language() {
+    let dir = std::env::temp_dir().join(format!("oag-words-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("strings")).unwrap();
+    std::fs::write(
+        dir.join("oag-mod.toml"),
+        "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/mod.tosd\", version = \"1.0.0\" }\n[mod]\nid = \"oag.words\"\nname = \"Words\"\nversion = \"1.0.0\"\nauthors = [\"t\"]\nlicense = \"MIT\"\ndescription = \"d\"\ntitles = [\"wipeout-pulse\"]\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("strings/english.toml"), WORDS_ENGLISH).unwrap();
+    std::fs::write(dir.join("strings/french.toml"), WORDS_FRENCH).unwrap();
+    let module = oag_mod::Mod::open(&dir).unwrap_or_else(|e| panic!("{e}"));
+    let words = Words::read(&module);
+    assert_eq!(said(&words, Some("french"), "TIER_A"), "PLATINE");
+    assert_eq!(said(&words, Some("french"), "TIER_B"), "ONLY ENGLISH");
+    let _ = std::fs::remove_dir_all(&dir);
 }

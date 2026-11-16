@@ -1187,7 +1187,12 @@ For each of the three models (index 0 = the halo, 1 = `hemisphere2`, 2 =
   `PlasmaBlast_Construct` builds once at spawn - the two coexist, and this one
   is recomputed from the camera every tick, so the model re-orients as the
   camera moves even though the group's anchor point does not.
-- **`Node_SetAnimTimeTree(age * rate[i], model)`** - already a named, shared
+- **`Node_SetAnimTimeTree(age * m[i], model)`** (corrected 2026-11-03, lane
+  `pure-weapons-wire`: the multiplier `m` is `DAT_08ab0f60`, `1.0` for all three, so the time is the age;
+  `0.1`, `0.07`, `0.07` below are the per-tick **scale-ease rates**, not anim-time rates, as the 2026-10-30
+  section "the blast scale is an ease" measures and Pure's own constructor confirms, `psp-pure-usa/plasma.md`,
+  "Animation time, life and basis". The paragraph below is the superseded first reading, kept for its
+  evidence) - already a named, shared
   engine function (not touched here), called with `0.0` once at spawn
   (`PlasmaBlast_Construct`'s own three-iteration loop, `FUN_08912890(0, ...)`
   before it carried this name) and with `age * rate[i]` every tick after. The
@@ -1208,7 +1213,9 @@ For each of the three models (index 0 = the halo, 1 = `hemisphere2`, 2 =
   than hardcoded here - the two mechanisms sit side by side in the same
   function and this page did not find the second one wired to anything.
 - **The `+0x90`..`+0x114` "three ramps" are a real keyframe-curve mechanism
-  that ships dead.** `PlasmaBlast_Construct` spends real effort precomputing
+  that ships dead.** **Corrected 2026-10-30: the GE stream shows three live tint ramps (linear,
+  end times 1.0, 1.0 and 1.5 s) as a grey AMBIENTCOLOR per model - see "the blast and the head read
+  off GE dumps" below; the dead-count reading and the constant `0.07 / 0.0` are wrong.** `PlasmaBlast_Construct` spends real effort precomputing
   per-keyframe reciprocal rates (`1.0f / (time[k+1] - time[k])`, stored at
   `+0xac`/`+0xb0` per ramp) for exactly the shape a multi-key ease would need,
   gated on each ramp's own keyframe count at `+0xb4`/`+0xe4`/`+0x114`. That
@@ -1427,11 +1434,1196 @@ struct nor `+0x60`'s exact meaning ("local player index", guessed) is
 corroborated anywhere else, so it is left as `FUN_0883e37c` rather than
 renamed on one reading.
 
-**Not ported.** The fix belongs in `oag_weapons::projectile::blast` /
-`Impact` and the visuals that consume it (`blast_direct_hit`, the render
-side) - both outside this pass's owned files (`crates/weapons/src/projectile/**`
-and `crates/raceplay/src/weapons/visuals.rs` are `plasma-speed-blend`'s and
-`blast_models`'s lanes respectively). This section is the read those lanes
-need to act on: a Plasma craft hit should spawn **two** `Impact`-triggered
-flash/blast instances, one at the struck craft's position and one at the
-bolt's, not one.
+**Ported 2026-10-30 (`pulse-plasma-craft-hit`).** `Race::plasma_craft_hit_blast_point`
+(`crates/raceplay/src/weapons/visuals.rs`) returns the struck craft's body position for a
+Plasma impact with `struck: Some(_)`, and `Race::tick` plays a second `note_blast` there on top
+of the bolt's own: each is a model blast plus its `WO_PLASMA_FLASH` and screen flash. A wall hit
+or a timeout stays one. Only the visual count changed; damage and push are untouched. Test:
+`tests::second_person::a_plasma_craft_hit_spawns_two_blasts_at_the_bolt_and_the_craft` (fails with
+the call dropped). Not captured on the original (no opponent in Time Trial), so the pair is
+unseen.
+
+**Cross-title check.**
+
+- **HD/Fury: checked, differs** (confidence 85). `Plasma_Update` runs `if (p->destroy)
+  Plasma_Detonate(p, &p->position)` once per bolt; a craft hit only sets the destroy state, so
+  `WeaponExplosions_Start` runs once, at the bolt. Not wired, gated off by `hd_plasma_blast`.
+- **Omega: checked, differs** (confidence 88). The craft-hit block sets `p->destroy`; the one
+  destroy path starts the bolt's own slot explosion. One explosion, at the bolt.
+- **Pure: not checked.** No Pure page reads the double call; Pure inherits Pulse's blast (I:Pulse),
+  so it gets the second blast until measured.
+
+## 2026-10-30: the Plasma matched against the original, and what differs (pulse-plasma-fidelity)
+
+The handover's "the Plasma was re-shot after the sprite templates and read right" (2026-09-30)
+was an eyeball. This is the per-frame, per-region version, and it does not hold for the bolt's
+head or the blast's shape and timing.
+
+**Method.** Same state both sides: Talon's Junction (`16_Track`), Time Trial, Venom, Assegai,
+`scripts/psp-weapon-pair.py plasma` on PPSSPP v1.20.4 software renderer (Pulse PSP USA), fire 120
+frames after GO at speed 106.2, x 124.5. Ours: `oag-game --race --mode time_trial --team Assegai
+--class venom --give plasma --input-script verification/scenarios/weapon-after-go-matched.inputs`
+at tick `391 + k` (two frames of display lag, as for the Rocket). A no-fire control on each side
+(ours: the same script without `square`, still `--give plasma`). Two fire restarts of the
+original plus one more for frames 86-98; scoring by `scripts/weapon-pair-score.py` (mean absolute
+grey difference, HUD boxes masked, 87,625 px). Pairs kept under `data/reference/pulse-plasma-pairs/`.
+Two new probes in `psp-weapon-pair.py`: `--probe plasma_launch` (`Plasma_Launch`, `0x0885bf84`) and
+`--probe plasma_det` (`PlasmaBlast_Construct`, `0x0885fd90`).
+
+**The state is matched, and the original is reproducible.** The craft's speed and x agree through
+fire+180 (121.9 against 122.7 u/s and x 259.8 against 256.9 at k70, 23.9 against 23.7 at k180;
+ours trails by about 3 units, 1.5 frames) and both craft slow identically after the blast
+(116 to 24 u/s), so every residual below is the effect, not the scene. Two restarts of the
+original agree to 1 count per channel in the flash frames (the `floor` column: 2-8 grey, against
+the gaps below). Confidence **60** on the timeline: one PPSSPP boot, three restarts (a second boot was not run), so the numbers are reported as seen once per boot.
+
+| Event | Original | Ours |
+| --- | --- | --- |
+| `Plasma_Launch` | fire+59.0 frames (two probe runs: 59.01, 58.96) | not probed (charge is 60 ticks) |
+| `PlasmaBlast_Construct` | fire+76.0 frames (two probe runs, 76.01 twice) | detonates about 3 ticks earlier |
+| first flash frame (mean R, HUD masked) | k78 (215), peak k80 (239,210,253) | k76 already at 241,214,253 |
+| second, white-out peak | ramps k86 (216,157,247) to k91-93 (254-255,250-253,255), **cuts to 215,157,247 at k94** | none: 199,142,246 at k92 |
+| purple tail, mean RGB | k100 199,150,243; k110 187,146,240; k120 190,160,238; k130 139,133,205; k140 120,124,182; base 103,118,128 at k160 | 154,120,217; 137,122,203; 125,122,188; 116,123,172; 110,122,152; base at k160 |
+
+Re-confirmed: the first flash peak matches within 3 counts per channel (239,210,253 against
+241,214,253), so the screen-flash colour stands. What does not stand is its envelope.
+
+### The ranked gaps
+
+| # | Region, frames | Area (px) | Grey error (fire - control) | Area x error | Driven by | Fix estimate |
+| ---: | --- | ---: | ---: | ---: | --- | --- |
+| 1 | (`PlasmaBlast_Update` `0x0885f680`; camera fields `DAT_08ab10b0 + 0x48/0x58/0x68`) Blast, whole frame, k76-92 (the 3.69 M includes gap 4's 3-frame shift: aligned by 3 frames, k80 drops from 26 to 10.6 grey): onset 2 frames early and instant (original ramps over 2), and **no white-out k89-93** (original G 211 to 253 over five frames, ours 142-193) | 87,625 | 42.2 | 3.69 M | The blast object's three models and their tint (`PlasmaBlast_Update`, this page: anim-time scrub at `age * rate`, constant tints 0.07/0/0, **camera basis conf 55, ours is a stand-in billboard**). The hard cut at k94 reads as a model hidden or a camera crossing a hemisphere: unread | re-first: conf 40 on cause; GE dumps at k88, k93 and k94 (`--ge-dump-k`) and diff the censuses: what stops drawing between 93 and 94 names the draw |
+| 2 | (`0x0885f680`) Blast tail, whole frame, k96-140: purple lingers longer (R at k120 190 against 125, B 238 against 188) | 87,625 | 22.2 | 1.95 M | The same three models; the scrubbed baked animation or the tint (0.07 on the halo only) decays faster in ours | re-first: conf 40 |
+| 3 | (`Plasma_Init` `0x0885bd18`, texture bind `FUN_08916610`) Bolt head and charge glow, head box (200,112,90,80), k36-72 (k64-72: 40.6): the original is a **growing purple orb with a dark core and swirling arcs, about 50 px at k44-72**; ours is a 6 px white-blue star and one thin arc | 7,200 | 32.8 | 0.24 M (box) | `WO_PLASMA_HEAD`: root emitter (2x2 atlas, 39 tick life) and `plasma_spikes` (4 per tick, 10 tick life, cap 256) plus three child sprites. The charge scale `(1 - remaining) * 0.75` is ported, yet ours does not grow. **The root emitter's texture is the open item** (`oag_pob::texture`: its slot names `shuriken_trail_anim.tga`, the positional texture is a dark arc pattern): the dark core and the arc ring are probably it | re-first: needs a GE dump of the head's prims at fire+36 (recipe below), conf 55 |
+| 4 | **Closed 2026-10-31, see "the detonation leg fixed" below.** (`Plasma_SpeedForClass` `0x0885c5a4`, `Plasma_Update` `0x0885c6cc`) Detonation timing: ours 3 ticks early (73 against 76 ticks after the press) | whole frame | 26 against 10.6 aligned | | The bolt's flight: original launches at +59 and detonates at +76 (17 frames), ours 12-13. The launch ramp and speed law are read (`Plasma_SpeedForClass`, this page); which one is short is not isolated | ready-to-wire after one probe on ours; conf 60 |
+| 5 | (`Plasma_SweepCraftHit` `0x0886afb8`, `Plasmas_Update` `0x0886b490`) Craft hit: **not captured** (Time Trial has no opponent, and the bolt is not aimed) | | | | Two `Plasma_SpawnDetonation` calls (the struck craft's body position, then the bolt's), read at conf 88 above; ours spawns **one** (`Race::blast_for` returns a single `(Trigger, Vec3)`, `ignite_blast` spawns one model blast) | ready-to-wire, about 1 h with a test; conf 85 |
+
+Not findings: the HUD weapon hexagon (ours keeps the held-pickup icon because `--give` refills
+the slot, as the Rocket's pair found); the "Running slow" toast on some original frames
+(PPSSPP's overlay); the k74 frame, where two restarts of the original disagree by 22 grey (one
+presented frame, excluded); the scene gap with no weapon (7 grey before the blast, 12-19 after:
+bloom and road detail, the `ctl` column).
+
+**Craft glow on the firing craft** is gap 3: the same instance, parented to the craft's weapon
+node until `Plasma_Launch`. Its time matches (the orb in the original is on the nose from about
+k20, ours a spark from k3); its size and look do not.
+
+**The recipe for gap 3's law** (not run): `psp-weapon-pair.py --ge-dump-k 36 --shots 36 plasma`
+and the same with `--no-fire`, then `psp-ge-dump.py census` on both and diff the prims. A
+first pass at fire+50 (this lane) listed 5 fire-only blended prims (vertex counts 4/58/4/238/4
+and a 44-vertex strip, blend `0x2a`/`0xa2`) among 40 noisy differences; the scene moves between
+the two runs, so the key must be the screen-space box of the head. The root emitter's texture
+bind is the answer `oag_pob::texture` leaves open.
+
+**Cross-title check.** HD and Omega draw their own blast (`WO_PLASMA_LIGHTNING_*`, ring, sphere
+and halo on eased scales) and hold the head back; none of this applies there (**checked, differs**,
+`ps3-hdfury-eu/plasma.md`). Pure's Plasma visual is unwired and 2048 authors none (`docs/gameplay/weapon-lineage.md`). Pulse PS2 inherits PSP's measured law and is unmeasured here
+(**not checkable** without a PCSX2 pair; `scripts/pcsx2-pulse-pair.py` exists).
+
+## 2026-10-30: the blast and the head read off GE dumps of the original (pulse-plasma-blast-law)
+
+The two largest gaps of the matched pair above (the blast's white-out and tail, the head's orb)
+read from `gpu.record.dump` frames of the original, the same Talon's Junction / Time Trial / Venom /
+Assegai fire at GO + 120 (speed 106.2), PPSSPP v1.20.4 software renderer. 26 dumps (k36-k140), five
+replays of edited dumps per question (`scripts/psp-ge-replay.py`), three probes. Ours was **not**
+dumped (no GE on our side): "ours" below is read from `crates/raceplay/src/blast_models.rs` and the
+pair PNGs.
+
+Reproducing: `scripts/psp-weapon-pair.py --ge-dump-k K --shots K plasma` (add `--timeout 300`; the
+default 60 s dies on a software-rendered frame), then `scripts/psp-ge-dump.py census`, then
+`scripts/psp-ge-replay.py` for an edit. Two probes added to the pair script:
+`--probe plasma_blast` (`PlasmaBlast_Update`, age at `+0x50`, `dt` in `f12`) and `--probe plasma_fly`
+(`Plasma_Update`: launch speed `+0x48`, age `+0x54`, position `+0xa0`, velocity `+0xf0`).
+
+### The dump's frame number is the blast's age, and the shot lags it by two
+
+`PlasmaBlast_Update` runs once per 1/60 s tick with `dt = 0.0167` and `age = 0.0, 0.0167, ...`
+(24 hits, `plasma_blast` probe, first hit at fire+76.96). A dump taken at stop frame `k` draws the
+blast at **age `(k - 77) / 60` s** (the A model's UV offset reads `0.4987 * age` to three digits in
+all 16 blast dumps, so the age is exact, not fitted). A screenshot at `k` is the frame two stops
+earlier, so **shot `k` = dump `k - 2`**: the white-out shots k89-93 are dumps k87-91 and the "cut at
+k94" is the cut between dumps k91 and k92 (replayed below). Confidence **85** (one boot for the
+probe, 16 dumps from 16 boots agree).
+
+### Which draw is which model
+
+Vertex counts of the three `.vex` files (`oag-view --mesh ... --draws`: 169, 215, 431) sum the
+census's per-model prims exactly, so the identity is by count:
+
+| Model (load order, `rate`) | `.vex` | GE prims (verts) | State read | Texture |
+| --- | --- | --- | --- | --- |
+| 1 `hemisphere2` (0.07) | `pulse_plasma_hemisphere2.vex`, 431 verts | 143 + 288, drawn first | cull **off**, lighting off to dump 94 and on from dump 96, stencil off | 64x64 CLUT4 `pulse_plasma_hemi1fade_ADD` |
+| 2 `hemisphere1` (0.07) | `pulse_plasma_hemisphere1.vex`, 215 verts | 72 + 143, drawn second | cull **on**, lighting on, stencil test on (zpass op 2) | 8x32 `pulse_plasma_core_ADD_GLOW` (a V ramp, white at the bottom three rows, lavender above) |
+| 0 `halo` (0.1) | `pulse_plasma_halo1.vex`, 169 verts | 78 + 91, drawn last | cull off, lighting off to dump 88 and on from dump 90 | 128x64 `pulse_plasma_halo1_ADD` |
+
+Every one of the six is **additive**: `BLENDMODE` `0xa2` (source factor source-alpha, destination
+fixed, equation add) with `FIXB = 0xffffff`, `ztest` 6, depth writes on, texture function 0 (modulate),
+vertex colours constant across all dumps (`0xffffffff` and `0xb70035`, the baked alpha ramp), material
+ambient, diffuse and alpha white and 255 (`0x55`, `0x56`, `0x58`; opcodes from PPSSPP's GE list, not
+`TEX_STATE_OPS`, whose `0x55 materialdiffuse` is the ambient). **What does change with age is the
+lighting state: each model gets a grey AMBIENTCOLOR (`0x5C`) with lighting on and no lights lit,
+which multiplies the texture: that is the per-model tint, and it is a live ramp, not the constant
+`0.07 / 0.0` the "dead ramps" reading above predicted.** The look over time is geometry scale,
+texture scroll and this tint.
+
+### The per-frame law (16 dumps, one boot each)
+
+| Quantity | Law | Fit |
+| --- | --- | --- |
+| `hemisphere2` UV offset (u = v) | `0.4987 * age` | linear, residual below 0.001 to age 1.05 |
+| `hemisphere1` UV offset v (u = 0) | `0.0202 - 1.2205 * age`, clamps at `-1.1992` from age about 0.98 | linear for age below 0.9 |
+| halo UV offset | `u = 0.503 * age - 0.0083`, `v = -1.008 * age + 0.0167` | linear to age 0.55 |
+| scale (norm of the world matrix's first row) | `hemisphere2` 9.5 (age 0.017), 26.5, 47.8, 59.6, 64.9 (0.183), 74.4 (0.217), 78.7 (0.25), 92.9 (0.32), 109.8 (0.55), 121.0, 128.4, 130.5 (1.05); `hemisphere1` = 0.8333 x that; halo about 2.95 x that | **not a function of age alone**: 74.4 at ages 0.217 and 0.267, 78.7 at 0.25 and 0.283, 92.9 at 0.317 and 0.383 (a step curve with the same age on different boots landing on neighbouring steps) |
+| halo lifetime | present at age 0.55 (one prim), gone at 0.717; the hemispheres stay to the 1.5 s retire | two dumps bracket it |
+| anchor | world `(292.1, -42.7, -194.4)` for `hemisphere2/1`, `(292.0, -39.3, -193.6)` for the halo, fixed for the life | |
+| model basis | `hemisphere1` keeps the same normalised row 0 `(0.9954, 0.0954, 0)` in every dump while the view turns about 1 degree: its basis is **world-fixed**; `hemisphere2` turns about 6 degrees in two frames | |
+
+**The tint ramps (AMBIENTCOLOR grey, 16 dumps, exact to the byte where tested):**
+`hemisphere1` `t = 1 - age` (lit at all ages: 0xfa at 0.017, 0x9d at 0.383, 0x72 at 0.55, 0x48 at
+0.717, 0x1d at 0.883, 0 from 1.0 s); the halo `t = min(1, 1.25 * (1 - age))` (lighting turns on
+the first dump with `t < 1`, dump 90, age 0.217: 0xf9, then 0xc4 at 0.383, 0x8f at 0.55);
+`hemisphere2` `t = min(1, (1.5 - age) / 1.2)` (lighting on from dump 96, age 0.317: 0xfb, 0xed at
+0.383, 0xc9 at 0.55, 0xa6 at 0.717, 0x82 at 0.883, 0x5f at 1.05, reaching 0 at the 1.5 s retire).
+Three linear ramps with their own end times (1.0, 1.0, 1.5 s) and clamps; confidence **85**. The
+ambient colour reads as the "tint" `FUN_089122b4` writes per submesh group, so **the ramps
+`PlasmaBlast_Construct` builds are not dead** (this page's earlier "ships dead" conclusion, from a
+fallback read of an uninitialised count, is contradicted by the GE stream; confidence **80** that
+the three curves above are those ramps, the address of their key table is unread).
+
+**Per-model spin (world-space basis over all 16 dumps):** `hemisphere1`'s world basis is
+**exactly constant** (max difference 0.000, while its view-space basis moves 11 degrees);
+`hemisphere2` turns about a world axis at a steady **182 degrees per second** (24 degrees at age
+0.15, 39 at 0.233, 48 at 0.283, 97 at 0.55: 181-182 degrees per second each time); the halo turns
+at 56-61 degrees per second. None of the three is camera-facing; the camera basis the update
+function reads (confidence 55) is not what orients any of them in the GE stream (the view-space
+change is the camera's own motion). Confidence **80**.
+
+The offsets match `Node_SetAnimTimeTree(age * rate)` playing each model's own authored UV track
+(the slopes in anim-time units are 5.0 / -17.4 / (7.1, -14.3) per unit, so the tracks are linear
+ramps). Confidence **80** for the offsets, **60** for the scale. The scale's non-monotone samples
+are one variable, not three: the halo / `hemisphere2` ratio falls smoothly from 3.38 to 2.66 as
+`hemisphere2` grows, so a single non-age quantity drives them; render-time interpolation against
+the update clock is the lead (the Bomb's `+0x194` cached clock reads), unread here. The recipe:
+a probe on `PlasmaBlast_Update`'s node-matrix writes on two boots, logging age and the matrix.
+
+### What "cuts at k94" is: hemisphere1 is back-face culled once the eye is inside it
+
+The white-out is **one model**, `hemisphere1`, and the cut is **not a draw ending**: all six prims
+are present in every dump k78-k100 (k93 and k94 carry the same list). Replays of the edited dumps
+(HUD rows masked, mean over y 50-200, same batch as its own baseline):
+
+| Replay | Mean RGB | Reading |
+| --- | --- | --- |
+| dump 90 | 255, 255, 255 | white |
+| dump 91 | 255, 254, 255 (three batches) | white |
+| dump 92 | 210, 149, 246 | cut |
+| dump 90, `hemisphere1` prims removed | 214, 154, 246 | equals dump 92: that model alone is the white-out |
+| dump 92, `hemisphere1` removed | 210, 149, 246 | no change after the cut |
+| dump 93 (211, 151, 246), cull off on both `hemisphere1` submeshes | 237, 225, 250 | most of the white returns |
+| dump 90, cull off on `hemisphere1` | 255, 255, 255 | no change before the cut |
+
+The eye (`-t * R^T` of the dump's view matrix) against `hemisphere1`'s world box: offset from the
+box centre over its half-width is **-1.42 (k88), -0.99 (k90), -1.04 (k91), -0.77 (k92)**, -0.62
+(k94), -0.16 (k100), +0.24 (k110): the eye enters the shell between dumps k91 and k92, the same
+two dumps the replay flips on. Inside a one-sided shell the culled faces are the ones the eye sees.
+The falsifier written down first was "setting `hemisphere1`'s V offset to the value of the cut frame
+removes the white at dump 91": it did not (the edit changes nothing, and a 0.5 sentinel on every
+model moves the mean by 4-13 only), so the cause is not the texture scroll or the ramp's alpha.
+Confidence **80** for the cause (the dump-93 cull-off replay recovers 237,225,250 of 255; the
+remainder is not attributed: the stencil `zpass` write of `hemisphere1`, or its tint falling from
+0xc3 to 0xb6 over the same frames, are the candidates). One caveat on the falsifier: a PRIM's
+state words sit in the *previous* PRIM's command chunk, and the V-offset edit that did nothing was
+applied to a chunk range that may have missed the first submesh's offset word; a wider edit moved
+the mean by 1-13 on every model, still not the cut.
+
+**What this means for a wire lane.** The blast is **world-fixed and one-sided**: `hemisphere1` must
+draw with the authored back-face cull (`cull_as_authored` already exists in `blast_models.rs`) and
+a world-fixed basis, at its construct anchor, growing with the scale curve, so that the craft's own
+travel carries the eye through its wall. A camera-facing billboard cannot produce a cut at all
+(a billboard keeps its face to the eye). The `PlasmaBlast_Update` camera-basis read (confidence 55
+above) is, on this evidence, **not what orients any of the three models**: see the spin rates
+above.
+
+### What the original shows over the blast's life (what a wire lane must reproduce)
+
+Shot k, HUD masked (mean RGB, from the pair above): first flash at shot k78 (215), peak k80
+(239,210,253). **That early flash is not the three models**: replaying dump 78 (shot 80) with all
+six model PRIMs removed gives 238,210,252 against 239,210,252 with them, and dump 80 (shot 82)
+238,196,252 against 238,200,252. What draws it, fire-only against a no-fire dump at k78: a
+**4-vertex additive quad `0xa2` of 125 x 67 units at craft-frame z -28.8** (texture bound at
+`0x15f8f0`, 64x64 CLUT4, the same 2:1 shape as the head's glow quad), a 192-vertex `0x32` prim
+62 x 35 x 57 units (texture `0x15e330`, 128x64, also present in every later dump), and the head's
+arcs (58 vertices) and spikes (166) enlarged to 11 units at z -30. `WO_PLASMA_FLASH.POB` carries
+two embedded textures (`plasma_particle.tga` and `plasma_glow_64x64x4.tga` slots, emitter
+`PLASMA_GLOW`); the byte match of the quad's and the 192-vertex prim's texels to it was **not
+completed** (their texels were recorded earlier in the frame than the cut chunk), so which
+emitter owns each is open, confidence 45. Shots k86 216,157,247 and k89-93 the white-out (the eye is inside the
+halo and `hemisphere2` throughout, which draw both sides, and outside `hemisphere1` until dump
+91, shot 93); from shot k94 the eye is inside all three and only the two double-sided models
+show; shots k100-k140 the purple tail. **The tail is `hemisphere2` alone**: dump 120 (shot 122)
+replayed with it removed reads 120,114,181 (the scene with no blast), with `hemisphere1` removed
+187,154,237 (unchanged from 187,154,237). It is lit with the tint ramp above (0xa6 at age 0.717,
+0x5f at 1.05), its scale grows 121 -> 130 and its UV offset runs 0.36 -> 0.52. Our tail is
+weaker (R at k120 125 against 190): either the tint ramp or the scale is not played as measured.
+
+### The head and the charge orb: five draws, each matched to a `.pob` embedded texture
+
+Dumps at k20, 36, 44, 56, 68, 74 against no-fire controls (k36, k50). The head's five prims, drawn
+in this order each frame, are in the craft's own frame at `(0, -1.4, -15.7)` while charging (the
+pickup box); after `Plasma_Launch` (frame 59) they ride the bolt (z -22.2 at k68, -29.0 at k74).
+**Every texture is one of the five embedded in `WO_PLASMA_HEAD.POB`**: the first 32 bytes of the
+dump's level-0 texel data of each draw were found verbatim in the file (5 of 5), at the offsets
+below, which is the open item `oag_pob::texture` named:
+
+| # | Prim | Texture (pob offset, size, look) | Blend | Extent (units): k20, 36, 44, 56, 68, 74 |
+| ---: | --- | --- | --- | --- |
+| 1 | 58-vertex strip (46 at k56), vt `0x11e` | `+0x3a80`, 64x64 CLUT8: a **2x2 atlas of four white crescent arcs** (the "swirling arcs"); first embedded texture, the root emitter's | `0xa2` additive | 2.4, 5.4, 7.5, 8.4, 9.9, 11.2 |
+| 2 | quad | `+0x6d90`, 64x64 CLUT8: a **dark disc with a purple halo ring** (the dark core) | `0x32` source-alpha, **not** additive | 1.0, 2.2, 2.4, 3.0, 3.3, 3.3 |
+| 3 | quad | `+0x54d0`, 64x64 CLUT8: a grey noisy ring (`WO_RING_BW`) | `0xa2` | 1.7, 2.8, 3.0, 3.8, 4.4, 5.1 |
+| 4 | 238-vertex strip (262 at k44), vt `0x11e` | `+0x84c0`, 128x64 CLUT4: two frames of a purple spike star, one dark-cored, one white-cored (`plasma_spikes`) | `0xa2` | 0.9, 1.6, 2.1, 2.5, 3.0, 3.4 |
+| 5 | quad, 2:1 in x | `+0x9c50`, 32x32 CLUT8: a soft white glow | `0xa2` | 7.0x3.5, 12.6x6.3, 15.4x7.7, 19.6x9.8, 21.0x10.5, 21.0x10.5 |
+
+So the "growing purple orb with a dark core" is draws 2, 1 and 3 stacked (a dark disc under
+bright arcs and a ring, with the glow behind). The earlier read of the root emitter as a 2x2
+atlas is draw 1's texture exactly. Whether ours draws each of the five was not checked against its
+psys loader report; the pair frame shows a 6 px star. The sizes grow about 2.3x between k20 and k36 and then slow;
+`(1 - remaining) * 0.75` (ported) reads as that growth only for the first and the fifth. Confidence
+**75** for the texture-to-draw map (byte match), **70** for the sizes (one boot per k).
+The pob slot names (`shuriken_trail_anim.tga`, `glow3`, `WO_RING_BW_64x64.tga`,
+`plasma_glow_64x64.tga`, `plasma_spikes`, `plasma_particle.tga`, `glow2`, `psysed_default_glow.tga`)
+do not name the bind: each emitter's own embedded texture is what the GE draws.
+
+### The detonation leg: the original, tick by tick
+
+`plasma_fly` probe (Plasma_Update, one boot): the bolt is released at fire+59 at `(241.76, -42.12,
+-196.82)` with `launch_kmh = 634.61` (`3.6 * |craft velocity| + launchspeed` at release; the craft was at 106.2
+u/s at the *fire* frame and a different speed 59 ticks later, so launchspeed is not backed out
+here); **for the first
+four flight ticks (age 0 to 0.050) it flies at 475.9 km/h = 0.75 x launch_kmh**, then from age
+0.0667 on its speed is pinned to the ramp `634.61 * (1 - age) + 850 * age` (649.0 km/h at age 0.0667,
+692.1 at 0.267: venom class speed 850), +3.6 km/h per tick; position x 288.6 at age 0.267 and the
+`PlasmaBlast_Construct` hit at fire+76.01 puts the blast at x 292.1, **50.4 units from the launch
+point in 17 ticks**. Ours launches at `launch_kmh / 3.6 = 176.3` u/s from the first tick
+(`flight.rs`'s charging branch), so it covers the first four ticks 33% faster: +2.9 units, about
+one tick of the three it is early. **The other two ticks are not isolated**: ours has no per-tick
+projectile log (the lead's note says 73 ticks; the launch tick of ours and the wall it hits were
+not read). **A bound**: ours counts the same 1.0 s at 1/60, so it releases near tick 60; thirteen
+flight ticks at about 3 units each cover roughly 38-40 units, not the original's 50.4, so unless
+ours releases at least three ticks early, the missing ticks are the **distance leg** (a nearer
+detonation point or a muzzle that starts farther forward), not the speed law. The 0.75 may be the
+launch matrix's forward row length (16 floats at `a1` of `Plasma_Launch`, unread). Confidence **85** for the original's timeline; **55** that the first-four-ticks speed is
+part of the gap. Not fixed here (no constant-sized fix isolated; the 0.75 is the measured
+initial speed, its cause - why the first ticks are unpinned - is the floor probe finding no floor
+for four ticks, plausibly the muzzle being above the surface).
+
+### Side check: the pickup backdrop at k036
+
+The original's green wide flat hexagon at top centre in `orig-k036.png` is the **held pickup's own
+hexagon in its release animation** (the no-fire control, `orig-ctl-k036.png`, shows the same green
+hexagon, tall, with its chevron icon: the pickup the original actually held), while ours holds the
+Plasma it was `--give`n and shows the Plasma's pink hexagon. A state mismatch (different held
+pickup), not the Plasma's backdrop colour or fade. Not fixed.
+
+### Cross-title
+
+HD and Omega draw their own blast (`WO_PLASMA_LIGHTNING_*`; **checked, differs**,
+`ps3-hdfury-eu/plasma.md`); Pure's Plasma visual is unwired and 2048 authors none. Pulse PS2 inherits
+PSP's law and is unmeasured here (**not checkable** without a PCSX2 dump of the same frames).
+
+## 2026-10-30: the blast wired from the dumps (pulse-plasma-blast-wire)
+
+What `PlasmaBlast_Update`'s dumps (section above) changed in `crates/raceplay/src/blast_models.rs`
+and what the wiring found that the dump read did not say. Tests: `blast_models/tests.rs` (unit) and
+`crates/raceplay/tests/plasma_blast_models_ground_truth.rs` (disc-backed).
+
+### The `age * rate` scrub was wrong; the rates are a scale ease
+
+Sampling each model's own node and texture tracks (`Model::sample_anim_nodes`, `AnimTrack::sample`)
+at **the blast's age** (rate 1) lands on every dump value: `hemisphere2` turns 127 degrees at 0.7167
+s (the dump's 182 deg/s over the age less one tick) with UV `(0.357, 0.357)`; `hemisphere1`'s V runs
+`0.0202 - 1.2205 age` and clamps at `-1.1992`; the halo is **two parts**, one turning +177 and one
+-59 deg/s, with UV `(0.352, -0.705)`. At `age * 0.07` the same tracks give 6 degrees and `0.025`. So
+`Node_SetAnimTimeTree` is handed the age (confidence 85), and the three small constants `0.1`, `0.07`,
+`0.07` (`DAT_08ab0f6c/70/74`) are something else: **the per-tick scale ease**, `cur += (target - cur) *
+rate` from `cur = 0`, the HD blast's own shape (`WeaponExplosions_Draw`). The first drawn tick is
+one step in, which is what the dumps' first scale is: `hemisphere2` 9.47 = 135.3 x 0.07, `hemisphere1`
+7.9 = 112.75 x 0.07, the halo 32.0 = 320 x 0.1; and three and six ticks on, 26.47 and 47.76
+(`135.3 (1 - 0.93^n)`); `hemisphere2` increments fall by 0.93 per tick (4.93, 4.58, 4.27), the halo's
+by 0.9 (12.4, 11.2, 10.0). The 135.3, 112.75 and 320 targets are **fitted** (confidence 70); the late
+samples sit below the ease on the boots whose frames stalled (130.5 at age 1.05 against 133.9), which
+is the "not a function of age alone" the dump table noted: the ease counts updates, not seconds.
+Where the rate constants are read in the executable is not re-read here.
+
+**The dump's matrix norm is not a world size on our decoded model.** The GE draws these models with
+positions near a quarter of a unit; our decoder returns the `.vex`'s extent (halo 10.0, `hemisphere2`
+8.65, `hemisphere1` 7.6). World bounding boxes against `norm x extent x 0.025`: `hemisphere2` 40.2
+against 40.2 (age 0.38), the halo 130.4 against 129.4, `hemisphere1` 29.4 against 31.3 (a rotated
+box reads wide). `PULSE_MODEL_UNIT = 0.025`, fitted, confidence 75. Without it the shells were 40x
+too large and, being behind every road pixel, drew nothing.
+
+### Placement
+
+- **`hemisphere1` and `hemisphere2` share one world-fixed frame** (both models' rows agree at the
+  first dump). The frame's axes are the track's at the detonation: heading `(0.995, 0.095, 0)`, up
+  `(-0.093, 0.968, 0.234)`, right `(0.022, -0.232, 0.972)`. Ours is read off the nearest spline
+  sample (`Race::track_frame_at`: tangent, the sample's up, `heading x up`); on the matched pair its
+  up is `(-0.063, 0.970, 0.233)` against the dumps' (the 0.233 z component agrees) and its heading is
+  11 degrees from the dump's, which our early detonation point (x 282 against 292) accounts for. That
+  the original's frame is the track fit `PlasmaBlast_Construct` builds is **inferred**.
+- **The halo takes the camera's orientation and none of its position**: its `z` is the way the camera
+  looks (`(0.998, -0.049, 0.044)` while the camera heads `+x`), `y` the camera's up, `x` the camera's
+  left; this is what the `PlasmaBlast_Update` read of the camera's three `+0x48/+0x58/+0x68` `z`
+  components fits, and it explains the 5 degree drift over 0.37 s while the eye passes through the
+  shell. Confidence 70 (one heading).
+- The halo stops drawing at 0.65 s, **chosen, not measured**: the dumps bracket it (drawn at 0.55,
+  gone at 0.717).
+- `hemisphere1` is single-sided in the `.vex` itself (`pass_mask`, every batch culled; the other two
+  none), and its winding shows nothing from inside its dome and the near side from outside
+  (`hemisphere1_shows_nothing_from_inside_its_shell_and_something_from_outside`). With a world-fixed
+  frame the craft's own travel carries the eye through it: the white-out's cut is wired, and it falls
+  earlier than the original's because our detonation is early and near (below).
+
+### Tint
+
+`pulse_tints`: `hemisphere1` `1 - age`, the halo `min(1, 1.25 (1 - age))`, `hemisphere2` `min(1, (1.5 -
+age) / 1.2)`, floored at 0, to the byte at the dumps' ages (the GE truncates). Applied through
+`Drawable::tint`, the shield's vertex-colour multiply. **Approximation, chosen**: the original lights
+these models (ambient only) once the ramp drops below 1, which ignores vertex colour, where ours
+multiplies it; the baked edge ramp (`0xb70035`) therefore stays in ours.
+
+### Measured, matched pair (same setup as the section above)
+
+Raw, regions of `scripts/weapon-pair-score.py`'s method, ours at tick `391 + k`, area x excess grey
+(fire minus the no-fire control):
+
+| Region | Before | After |
+| --- | ---: | ---: |
+| Blast onset and peak, k76-92 | 3.69 M | 4.02 M |
+| Blast tail, k96-140 | 1.95 M | 0.92 M |
+| Head box, k20-74 | 0.20 M | 0.20 M (unchanged: not wired) |
+
+Aligned by our detonation's 3 early ticks (ours frame `k - 3` against the original's `k`, controls
+likewise; **ours is still 10 units short of the original's detonation point**, so this is not a
+position match): onset 1.43 M before, 1.79 M after; tail 1.80 M before, 0.86 M after. The tail is the
+`hemisphere2` shell and reads as the original's at k100-140. **The onset got worse**: with the shells
+at their real size and the cut wired, ours' white-out starts and ends earlier (the eye is inside
+`hemisphere1` by shot 88, the original's at 94) because the bolt detonates 10 units short and 3 ticks
+early. That gap (the detonation distance leg and the first four flight ticks, thread item 3) is what
+the onset score now measures; it is not this lane's.
+
+### The head's loader census
+
+`WO_PLASMA_HEAD` already builds all five of the original's draws, each on its own embedded texture
+and the dump's blend (`the_plasma_heads_five_draws_load_with_their_own_textures_and_blends`): the
+root's 64x64 arc atlas and `plasma_spikes`' 128x64 star (additive emitters), and three **sprite
+templates** (`glow3`, 64x64 additive: the ring; `Glow`, 64x64 **alpha-over**: the dark disc; `glow2`,
+32x32 additive: the glow quad), none skipped. So the "root emitter's texture bind" the earlier read
+left open is not the gap. What was open is the templates' playback, closed in "the head's template playback" below.
+
+### The head's template playback (pulse-plasma-head)
+
+The age the templates are sampled at was never the gap. Played alone on `Stage` (`glow2` Constant
+size 7.0, `glow3` Random 2.5-3.5, `Glow` Keyframed 2.0-2.5; lives 60000/65535 ticks, so the
+normalised age stays 0 for the whole charge) the three already draw the original's extents at a given
+severity: width 7.0 and 21.0 for `glow2` at 0.25 and 0.75, 1.6 and 4.8 for `glow3` (a random draw
+between its bounds, the original read 1.7 and 5.1), 1.25 falling to 1.09 and 3.75 falling to 3.26 for
+`Glow` (the original 1.0 and 3.3, taken after the first ticks). What ours got wrong is **which severity
+multiplies them**: a particle kept the system's scale *at spawn*, and a template is born once, at the
+instance's first update, which for the Plasma's flare is the press, at charge zero and so severity 0
+(`plasma_flare_scale`). The three were born at size 0 and stayed there while the stage rescaled the
+instance to 0.75; only the star (an emitter spawning a new particle every tick) grew. The original's
+extents follow the severity frame by frame (x3.0-3.3 across 0.25 to 0.75), so a template reads its
+instance's **current** severity at draw time (`System::drawn_scale`); every other particle keeps the
+one it spawned with. Confidence **70** (the extents agree at two severities on three templates; the
+draw-time read is inferred from them, not from a probe of `ParticleSystem_DrawParticle`, which would
+move it to 85+). Test: `the_plasma_heads_templates_draw_at_the_severity_the_instance_is_rescaled_to`
+(red before: `glow2` drew nothing) and the disc-free `a_template_draws_at_the_instances_current_severity`.
+
+**Pair (Talon's Junction, Assegai Venom, fire at GO + 120, shots k20, 36, 44, 60, 72, head box
+`200,112,90,80`, `scripts/weapon-pair-score.py`, one original, so no floor):** area x excess 168,685
+before, 102,300 after (fire grey diff 30.98 to 21.76 against the 7.55 control). Seen at k36 and k60: the dark
+core with a purple halo ring and the soft glow now sit on the nose where before only a 6 px white star
+did. **Still different**: the original's white crescent arcs (draw 1, the root emitter's 2x2 atlas,
+2.4 to 11.2 units across the charge) are much larger and brighter than ours (a few small arcs), and the
+glow is brighter there; the root emitter's size channel (0.9-5.0 units, keyed 0 to 1 over a 39 tick
+life) is the next head gap. The onset flash is untouched.
+
+**Cross-title:** Pure: **checked, applies, not wired**. The rule is in the shared `Stage`, but sprite
+templates are played on Pulse PSP only (`Effect::without_pulse_psp_draw` mutes them for every other
+source) and Pure's Plasma has no wired head. HD, Omega and 2048 mute them too; no other `.pob` effect
+rescales an attached instance (the Quake's rescale drives emitter spawns, not templates), so no other
+effect moves.
+
+### Cross-title
+
+HD and Omega run `hd_plasma_blast` (`WO_PLASMA_LIGHTNING_*`, an HD-shaped ease, a camera-facing
+billboard, no tint ramp) and are untouched: the HD path keeps `facing_away(billboard_matrix)` and its
+`HD_BLAST_TARGETS`/`RATES`, now in the shared `ease`/`matrices` fields (`an_hd_blast_draws_with_its_age_as_the_model_clock_and_pulse_with_none`
+and the HD tests still pass). **Checked, differs**: HD's blast models carry their own cull bit per
+material (`cull_as_authored`) and no spin was read for them; the Pulse spin, tint ramps and
+world-fixed frame are not HD's. **Checked, applies, not wired**: HD's ease `cur += (target - cur) *
+rate` is the same shape Pulse's rates turn out to be, which supports reading them as an ease rather than
+an anim-time rate. Pure (unwired Plasma visual) and Pulse PS2 share this code path where they load
+`plasma_blast_pulse`: **inherited from PSP**, not separately measured (the PS2 hemisphere `.vex`
+extents were not compared with the PSP's, so a different unit there would show as a size error).
+
+## 2026-10-31: the detonation leg fixed (pulse-plasma-timing)
+
+Ours detonated at k72, three ticks before the original's k76 (k is ticks after the press, the
+press tick 0, as the original's frames after the fire). It now detonates at **k76**, and the
+bolt's distance from its release point agrees with the original's to 0.05 unit on all sixteen
+updates (46.96 against 47.01 after sixteen). Pinned by
+`crates/raceplay/tests/plasma_timing_ground_truth.rs` (release tick, distance per update,
+detonation tick; fails on `main` with "released on tick Some(60)") and four unit tests in
+`projectile/plasma/tests.rs`. Same matched setup as above (Talon's Junction, Time Trial, Venom,
+Assegai, fire at GO + 120, PPSSPP v1.20.4 software); `--probe plasma_fly` now also records the
+firing craft (`craft_pos`), three boots agree to 0.05. Original timeline: `Plasma_Launch` on
+frame 59, seventeen `Plasma_Update`s on frames 60 to 76, `PlasmaBlast_Construct` in the
+seventeenth (frame 76).
+
+Five faults, the first four in the flight, none of them the distance leg's wall:
+
+| # | Fault | Original (measured) | Ours before | Now | Confidence |
+| ---: | --- | --- | --- | --- | ---: |
+| 1 | The floor arm turned the velocity parallel to the floor; `Plasma_Update`'s `default:` arm (this page, "is `Rocket_Update`'s floor follower") steers to the ride point, `(next - prev) / dt`, and rescales | bolt z 0.8 unit further along the bank after sixteen updates, so it passed the wall edge ours hit at x 282 | the parallel turn (detonated k72 on a wall sweep at x 282.2) | `flight.rs` gives the Plasma the Rocket's steer arm | 85 (the decompile) |
+| 2 | Launch speed: the first updates fly at **0.75 x** the release speed (`launch_kmh` 634.61 gives 132.2 u/s; the matrix `Plasma_Launch` takes has rows of length 0.7500, words 28-39 of the entity read at the launch probe) | 132.2 u/s, 3 updates | full 176.3 u/s | `plasma::LAUNCH_SPEED_SCALE`, the Rocket's `LAUNCH_SPEED_SCALE` | 85 |
+| 3 | The first three updates do not ride: they fall (`velocity -= surface * dt * 50`, y drops 0.82 a tick) and keep the 0.75 speed; the fourth rides and pins. The Rocket does the same four updates at another place on the track, so it reads as age, not position | 3 slow steps of 2.2 units, then 3.0 | rode from the first update | `plasma::UNPINNED_SECONDS` 0.04, **chosen inside the bracket 0.0334 to 0.0501**; what gates it is unread (probe reach, collision kind, the bounds the query takes) | 60 for "age", the bracket measured |
+| 4 | Ride height `g_ride_height`: the bolt rides **4.04** above the floor along the normal, the Rocket's literal is 3.0. Its value was never sampled (this page, open list) | 4.04 to 4.05 over five records | 3.0 | `plasma::RIDE_HEIGHT` 4.0 | 80 (measured against our collision world's floor, not read from the global; HD's `Plasma_Update` reads a literal 4.0 at `0x008a9fd8`, Omega 4.0 too) |
+| 5 | Muzzle: the bolt leaves **2.23** ahead of the craft body (craft `(239.54, -42.22, -196.91)`, bolt `(241.77, -42.11, -196.86)` at release), not at the hull's far edge (4.87 on this craft) | 2.23 | 4.87 | `plasma::MUZZLE_FORWARD`; the charging head sits there too | 75, Assegai Venom only |
+
+Plus the release tick: sixty subtractions of f32 `1/60` from `1.0` leave `2.8e-7`, so the hold
+ended on the sixty-first update where the original's ends on the sixtieth (its `dt` is a little
+over `1/60`). The hold now ends when under half a tick is left (**chosen**, to reproduce the measured 60th-update release; no confidence score).
+
+**Correction (`plasma-muzzle-sim`, 2026-11-03): the 1.1 below pairs our craft at the release tick with the
+original's one frame later; on the release frame the lead is 3.1 units, see "the craft-start lead was one
+craft step too".** The whole flight sits **1.1 units
+ahead** of the original's in absolute x (289.69 against 288.61 after sixteen updates): our craft
+is 1.13 ahead of the original's at the release (240.67 against 239.54), a standing-start
+difference the Rocket lane found as well. It shows as a constant offset and does not move the
+detonation tick. A craft that leads by more than about 1.5 units would detonate a tick early.
+
+**Open.** The speed ramp uses the age before the update's increment (ours first ride pins at
+age 3/60); the original's age is incremented first, so its ramp is one update ahead (about 1 km/h
+on a 636 km/h bolt, 0.02 unit a tick). Not changed here; the Missile shares `speed_kmh`. The
+Rocket's own first-ride gate (four updates at 0.75 x) is the same unread condition and is **not**
+applied to the Rocket here (that lane found ours one tick late; this gate would move it later).
+Missile and Shuriken read the same `g_ride_height` and keep 3.0 until each is measured.
+The head's position during the hold moved 2.6 units toward the craft (4.87 to 2.23); the
+look wiring in `oag_fx`/`oag_raceplay` is `pulse-plasma-blast-wire`'s.
+
+**Seen as a player would (2026-10-31, headless, `--ticks 391 + k`, the pair PNGs in
+`data/reference/pulse-plasma-pairs/`).** Mean RGB of the whole frame: k44 original 101,115,120 and
+ours 100,114,119; k60 101,116,126 and 100,114,122; **k80 226,188,245 and 227,188,243** (the flash
+peak now matches to 2 counts). The flash begins at shot k79 in ours (228,189,244 at once; k78 is
+104,113,120) against the original's k78 (209) ramping to k80: one shot late and instant, where it
+used to start at k76, three early. The sim agrees to the tick (release 59, detonation 76), so the
+shot's one-tick lateness is the `391 + k` mapping's: ticks run include the press tick, so shot k is
+the state k-2 ticks after the press against the original's two frames of display lag, the same one
+tick the Rocket lane found for the Rocket. The head at k44 and k60 sits at the craft's nose (a small
+star and arc, not hidden by the hull); the orb's size is the head gap above, untouched here.
+
+**Side effects, seen in `just test-data-affected` and fixed in the tests, not the law.** (1) HD's
+plasma-explosion scene fixture (`hd_weapon_scene_ground_truth.rs`) fired its bolt on Talon's
+Junction and burst on a wall edge at (278.9, -40.6, -196.6); the steer and the 4.0 ride height carry
+it past, to (449.2, -27.5, -105.3) on tick 477, so the camera was re-aimed (violet pixels 14,583
+against 10,521). (2) HD fires at a crawl (the craft barely moves, `launch_kmh` small), and the
+ride-point steer then climbs at once toward a ride point metres above the bolt and overshoots for two
+updates before it settles; `projectile_tilt_ground_truth.rs` now judges a Plasma's height from the
+third update after the first ride and its angle from the fourth update. HD's real bolt is
+unmeasured, so whether it does this is open.
+
+**Cross-title.** HD and Omega share `flight.rs` and `plasma::launch` (no title gate), so they
+inherit every row above: **checked, applies, not measured there** (the Plasma flight law is
+I:Pulse in `weapon-lineage.md`). Their own bolt is a different object (`WO_PLASMA_LIGHTNING_*`).
+**Ride height: ported, agrees** - HD's `Plasma_Update` (`ps3-hdfury-eu/plasma.md`) rides at a
+literal 4.0 (`0x008a9fd8`, Omega 4.0), which is the 4.04 measured here. **Steer: HD's page reads
+"ride: surface = normal; next = hit + normal * 4.0; renormalise", the same follower, but its
+velocity line is not read at the `(next - prev) / dt` level (checked, not confirmed).** HD differs
+from Pulse in its probe (6.0 against 12.0) and its fall axis (world Y), which this engine still
+runs Pulse's way on HD. The launch scale, the no-ride window and the muzzle node are **not
+checkable** from
+this lane (no HD probe of the bolt's records). Pure: inherits Pulse (I:Pulse), unprobed.
+
+
+## 2026-11-03: the head's arcs ride the craft, and the onset flash is `WO_PLASMA_FLASH` (pulse-plasma-arcs-flash)
+
+### The arcs: the root emitter's particles live in the instance's frame (flag `0x2`)
+
+The head's root emitter `WO_PLASMA_HEAD` carries flag `0x2` (local space,
+`particle-system.md`, "Flag `0x2` is local space, not world space"): its particles are stored in the
+instance's frame and drawn through its **live** matrix, which `Plasma_Init` hands the firer's matrix
+and, after the release, the bolt's. Its parameters (read with the loader, `Effect::parse`): radial
+direction, speed 6.25 per tick, drag 0.5/0.4/0.5, 39 +/- 3 ticks of life, one particle every two
+ticks (cap 10), size channel 0.9 to 5.0, draw class 6 (`Streak { from_spawn }`, `Bar { aspect 1.0 }`)
+on the 2x2 crescent atlas. A streak runs from the spawn point to the particle.
+
+Ours kept those particles in **world** space (nothing but `WO_REPULSER_BLAST` opted into
+`System::set_rides_frame`), so while the craft flew at 106 units a second each streak was left behind and
+strung back toward the camera: one small arc where the original shows a ring of large loops. The same
+emitter played on a parked anchor (a scratch `Stage` at severity 0.75) already spans 13 units, the
+original's 10 to 11, so the size channel, speed and spawn rate were never the gap. `advance_one_flare`
+now rides the frame for `Trigger::PlasmaFlare`, **on Pulse's PSP file only** (`Effect::rides_owner_frame`,
+cleared by `without_pulse_psp_draw` like the template and streak laws).
+
+**The owner's matrix does move (decompiled, `/pulse/BOOT-psp-pulse-usa.BIN`).** `Plasma_Init`
+(`0x0885bd18`) calls `Psys_Spawn_q(node, "WO_PLASMA_HEAD", 'PLHE', 0, 0x10, craft->+0x60)`: matrix
+argument 0, flags `0x10` (bit 0 clear, so not by pointer), and the craft's weapon node as the sixth
+argument. `PsysNode_Start` (`0x08916200`) stores that sixth argument at node `+0xbc` under flag `0x10`
+and gives the node an identity local matrix; `PsysNode_Update` (`0x08915cdc`) then, for a node whose
+`+0xbc` is set, reads the **parent's** world matrix (`Vex_UpdateNodeWorldMatrix`, then `+0x30`) every
+frame before `ParticleSystem_SetMatrix`. So through the charge the head's matrix is the craft's live
+weapon node. Confidence **85**. After the release `Psys_Reparent_q(head, &bolt->matrix)` re-points it to
+the bolt's matrix; that this matrix keeps moving with the bolt (`Plasma_Update` rewriting `+0x70`)
+is inferred from the dumps (the head rides the bolt, z -22.2 to -29.0), not read: confidence **60**.
+The Plasma's own (`WO_PLASMA_HEAD`, `PLHE`) flag `0x2` meaning is `particle-system.md`'s (88).
+
+Test: `tests::weapons::visuals::the_plasma_heads_arcs_ride_the_anchor_they_were_born_on` (hand-laid
+flag-`0x2` effect moved 50 units: red before, "stayed behind at x 0", green after).
+
+**Pair** (same setup as "the head's template playback": Talon's Junction, Assegai Venom, fire at
+GO + 120, head box `200,112,90,80`, k20, 36, 44, 60, 72, native 480x272, one original). The
+per-pixel metric `weapon-pair-score.py` reads **102,648 before and 122,178 after (worse)**, and
+a hypothesis, not measured (no noise floor was taken): the arcs are placed by random draws, so a
+bright loop in the wrong place may cost twice, where before there was nothing to miss. Mean luminance inside the box
+(original / before / after): k36 106.9 / 102.5 / 104.9; k44 112.8 / 104.6 / 105.7; **k60 127.0 /
+110.7 / 126.3; k72 111.1 / 96.7 / 115.3**. The brightness gap is closed; at k72 ours is a little
+hazier than the original's clean ring around the dark disc. **Still different**: the loops'
+shapes (ours are straighter, flatter bars; the original's are curved crescents around the disc, and
+the strips are built in view space in the original but in world space here, `streak.rs`), the glow
+drawing dimmer, and the dark core being less visible at k72.
+
+### The onset flash is `WO_PLASMA_FLASH`, already played (item 1e closed)
+
+The two onset draws of the GE dumps (a 125 x 67 unit additive quad, and a 192-vertex `0x32` prim)
+were not byte-matched, but they need not be: `WO_PLASMA_FLASH` has two emitters, the root
+(128x64 sprite, **source-alpha**, 32 particles a burst, six vertices each = **192**) and the template
+`PLASMA_GLOW` (64x64 CLUT4, additive, one quad, half-size 15 to 36). Played at severity 1.0, two
+updates after the burst the glow quad is **125.2 x 66.8** units (the dump's 125 x 67) and the root
+is 192 alpha-over vertices (the dump's prim 62 x 35, ours 62.9 x 31.5). Confidence **85** (two
+sizes and a count agree, blend class and texture shapes agree; the texel bytes were not compared).
+The effect is the one `Race::blast_for` already spawns at the detonation, so nothing is left to wire:
+the whole-frame onset is the known one-shot lateness (ours k79 at 228,189,244 against the
+original's k78 ramping 209 to 239 at k80), which `pulse-plasma-timing` traced to the `391 + k`
+mapping. Race severity: `Race::ignite_blast` plays the effect at 1.0, the severity measured here. Test:
+`plasma_blast_models_ground_truth::the_onset_flash_of_the_original_is_the_plasma_flash_effect` (disc;
+it pins the effect's sizes and counts to the dump, and passes on `main` too: not a red-before test). The onset whole-frame metric (k78 and k80, `weapon-pair-score.py`): 1,002,886 before,
+982,035 after (the arcs' ride only).
+
+**Cross-title.** `WO_PLASMA_FLASH`: Pure **checked, applies** (the same effect, Pure's page "Effects at
+spawn"). The arcs' ride is scoped to Pulse PSP: Pure (`pure-weapons-wire` wires its head; its
+file carries the same flag, the original's call site is unread there), HD and Omega (Omega's
+`Plasma_Init` attaches `WO_PLASMA_HEAD` to `p + 0xf0`, ps4-omega-eu `plasma.md`, a matrix that
+may move; HD's site unread, `particle-triggers.md`), 2048 (Omega's lineage) and Pulse PS2
+(**inherits PSP's** law, but ships through the non-PSP loader path today, like its templates) all
+keep the arcs where they are born. **Checked, applies, not wired.** `pure-weapons-wire` turns
+the same switch for Pure by leaving `without_pulse_psp_draw` off the head or setting
+`rides_owner_frame`; the lead should sequence that lane with this one.
+
+## 2026-11-03: the hemisphere drop and the dark discs (plasma-dome-specks)
+
+### The hemisphere drop
+
+`PlasmaBlast_Construct` moves the basis position by `-3.5 x row1` (Pure's page, "Placement and basis"; the same
+constant and call on Pulse). The 16 GE dumps give the sign with no new capture: at k80 to k100 the halo's world
+translation is (291.87, -39.31, -193.59) (the impact point) and both hemispheres' (292.12, -42.70, -194.41), a
+difference of (0.25, -3.39, -0.82), length 3.5, direction (0.07, -0.968, -0.234). The hemispheres' basis row 1 is
+(-0.093, 0.968, 0.234), so the difference is **minus the frame's up times 3.5**: the hemispheres sit 3.5 units below
+the impact point along the track's down, the sign `Race::plasma_blast_draws` already used for Pure. Confidence **85**
+(16 dumps agree to 0.02 units; the "row 1 is the track's up" is read off the same dumps' basis).
+`PlasmaBlastLaw::hemisphere_drop` on Pulse's row is now `3.5` (it was `0.0`, the constant unapplied). PS2 shares the
+row (inherited from PSP). Test: `blast_models::tests::pulses_hemispheres_sit_three_and_a_half_below_the_halo_along_the_up`
+(red with a zero drop). **Pair**, whole frame with the HUD masked, Talon's Junction, Assegai Venom, fire at GO + 120,
+mean absolute grey difference against `orig-kNNN` (before, after): k80 6.8, 6.7; k88 51.0, 47.5; k92 79.4, 29.5; k96
+28.4, 24.2; k100 27.9, 24.7. At k92 the original is a white-out and ours now holds the eye inside the shell too.
+
+### The dark discs are `WO_PLASMA_FLASH`'s particles, not the shell's texture
+
+The hemispheres' and the halo's textures are fully opaque with no dark content (alpha 255 everywhere, a noise
+pattern). The dark discs with purple halos on a Pure or Pulse blast are the 32 alpha-over particles of
+`WO_PLASMA_FLASH`'s root emitter, and they stay with all three models zeroed. Two things made them read as arches and
+as a swarm: a pre-fix `.pob` atlas grid word (columns in the high half, fixed in `35fcc4d57`) cut each particle's
+cell, and `--give` with `--press square` re-fires every other tick so dozens of blasts overlap. A single blast on
+the matched Pulse pair draws a handful of small dots at k96 and k100, as the original does (`orig-k096`, `orig-k100`),
+so there is nothing to fix. Pure: a single bolt at the default circuit (tick 500, `weapon-after-go-matched.inputs`)
+shows three discs in a violet shell, no arches.
+
+## 2026-11-03: the arcs' size follows the charge, and the strips are built in view space (pulse-plasma-arc-shape)
+
+### The cause: pool particles drew at the severity they were born with
+
+`ParticleSystem_UpdateParticleFields` multiplies the size channel by the instance's severity (`+0x34`)
+on every update (`particle-system.md`, "Channel animation": "drawn size = size-channel * `instance+0x34`").
+Ours applied that live read to sprite templates only and kept every other particle at its spawn-time
+severity. The Plasma's severity is rewritten every charging tick (`(1 - remaining) * 0.75`), so the
+head's arcs, born while the charge was small, stayed small: a thin hazy loop where the original shows a
+ring of large crescents. Confidence **80** (the per-frame multiply is read; the match below is the
+measured side).
+
+Measured: the root emitter's strip extent (the largest bounding-box side of the strip's vertices, ours,
+at ticks `391 + k`) against the dump's draw 1 (2.4, 5.4, 7.5, 8.4, 9.9, 11.2 units at k20, 36, 44, 56, 68, 74):
+
+| k | 20 | 36 | 44 | 56 | 68 | 74 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| original | 2.4 | 5.4 | 7.5 | 8.4 | 9.9 | 11.2 |
+| spawn-time severity (before) | 2.3 | 3.1 | 3.6 | 9.1 | 10.8 | 11.7 |
+| live severity (after) | 2.5 | 5.4 | 7.2 | 9.7 | 12.5 | 13.6 |
+
+The live read matches through the charge (k20-44) where the spawn-time one lags by half. After the
+release (k56 on) both read larger than the original, the live one more so; the severity after the release
+is the open part (`plasma_flare_scale` freezes it at 0.75 by inference, and the arcs are 1.2 to 2.4
+units too big there). Particle counts agree (8 at k56 = the dump's 46 vertices, 10 elsewhere = 58).
+Wired for the Plasma head alone (`System::set_draws_live_severity`, turned on in `advance_one_flare` next to
+the ride, on Pulse's PSP file only): the Quake and the collision sparks also rescale or carry a severity, and
+their pool particles were not measured against it.
+Test: `tests::weapons::visuals::the_plasma_heads_arcs_follow_the_charge_they_are_drawn_at` (red before: a head
+rescaled 0.1 to 1.0 draws no taller than at its spawn size).
+
+Pair (head box `200,112,90,80`, k20, 36, 44, 60, 72, mean RGB in the box, original / before / after):
+k20 142.0 / 143.3 / 143.6, k36 106.9 / 105.5 / 116.6, k44 112.8 / 105.7 / 121.5, k60 127.0 / 126.3 / 132.5, k72 111.1 /
+115.3 / 123.4. The per-pixel metric (`weapon-pair-score.py`, area x excess) reads 122,340 before and **120,946**
+after (one original, no noise floor: not a measured improvement, the arcs are random draws). The frames
+are the evidence: at k36 and k44 ours now shows the original's ring of large pale-violet crescents around a
+dark disc, where before it showed a small bright blob and one stray bar. The luminance overshoots 9 to 12 at
+k36, k44 and k72, which is the next gap.
+
+### The strips are built at one depth when the camera is known
+
+`FUN_08917c7c` (pool bars) and `FUN_08916d00` (class 7) scale both ends onto the mean of their depths, the
+template wedge onto the farther, then build the strip in the view plane (`particle-system.md`).
+`streak.rs` now does the same (`at_one_depth`) when `extend_vertices` is given the camera
+(`GuardBand`, which the race passes on Pulse's PSP source for the stage only); the pools whose caller
+passes none (the collision sparks, the scenery stage) keep the world-space construction. The change is
+faithful and on its own barely moves the head (the bars point mostly across the screen), so it is not what
+closed the arcs. Test: `psys::tests::a_pool_bar_is_built_at_the_mean_depth_of_its_ends_when_the_eye_is_known`
+(red before: the corners sit at -10 and -20). Another streak user, the Repulser's ring, drawn after the change:
+still a ring of streaks around the craft (`--give repulser`, tick 410).
+
+### Draw order, found (wired in "the head's draw order" below)
+
+The dump draws the arcs (additive), then the **dark disc (source-alpha) over them**, then the ring, spikes and
+glow (additive). `Pipeline::draw` draws every alpha-over particle first and every additive one after, so
+ours puts the arcs over the disc: at k60 and k72 the original's dark core is clear and ours is washed white.
+Drawing additive first (a scratch test) shows the disc but as an opaque black disc (ours has no purple
+interior where the original's reads about 90/50/110), so the disc's own colour is a second gap. The order is
+global to every effect; a per-effect layer is the open lane (handover thread).
+
+### Cross-title
+
+Pure: **checked, not wired**. Pure's `Plasma_Init` is unread (`psp-pure-usa/plasma.md` has the blast only), so
+neither the ride (`rides_owner_frame`) nor the live severity is turned on for it; both need Pure's call site
+(confidence below 70 today). HD, Omega, 2048: the head differs (`HD_plasma_ball`), **checked, differs**. PS2
+**inherits** PSP's law when it loads through the PSP path, as with the ride.
+
+## 2026-11-03: the head's draw order (pulse-plasma-core-order)
+
+### The order, and the disc's colour was the order
+
+The dump's draw list for the head is arcs (additive), dark disc (source-alpha), ring, spikes, glow (additive).
+`Pipeline::draw` drew every alpha-over particle first and every additive one after, so the arcs washed the disc.
+An additive-first scratch run (last lane) put the ring, spikes and 21-unit glow **under** the disc too, which is
+why the disc read opaque black there: in the original those three add *over* it and carry the violet. Only the
+arcs need to land before the disc, and additive draws commute, so the fix is one layer, not a reorder:
+
+- `EmitterSpec::under_alpha` marks an emitter whose additive geometry goes in `System::extend_underlay_vertices`
+  (left out of `extend_vertices`), uploaded by `Pipeline::upload_underlay` and drawn **before** the alpha-over
+  layer (`Drawer::draw`: underlay, alpha-over, additive).
+- `Effect::draw_root_under_alpha` sets it on the root; `assets::particle_effect` calls it for `WO_PLASMA_HEAD`
+  on Pulse's PSP file only, and `without_pulse_psp_draw` clears it. Every other effect keeps the old order.
+- The disc's colour needed no change of its own: with the order right, the disc reads violet (the palette entry
+  times alpha over the ring, spikes and glow added on top), no vertex or blend edit.
+
+Confidence **75** (the order is the dump's, five draws, one boot per k; the layer is the minimum that
+reproduces it and the other effects' order inside the additive pass is unmeasured).
+
+Tests (red before): `psys_layer_order::the_underlay_is_drawn_before_the_alpha_over_layer` (GPU readback: an
+opaque black alpha-over quad over a white underlay reads black; red with the underlay drawn after, 255),
+`psys::tests::an_underlay_emitter_draws_in_its_own_layer_and_not_with_the_additive_ones`,
+`...a_source_without_pulse_psps_laws_keeps_every_emitter_in_the_additive_layer`, and the disc-backed
+`tests::weapons::visuals::the_loader_draws_the_pulse_psp_heads_arcs_under_the_alpha_over_layer` (red with the
+`assets.rs` call dropped).
+
+**Pair** (head box `200,112,90,80`, mean RGB, original / before / after): k20 142.0 / 143.6 / 143.2, k36
+106.9 / 116.6 / 115.3, k44 112.8 / 121.5 / 121.1, **k60 127.0 / 132.5 / 122.5, k72 111.1 / 123.4 / 115.1**. At k60
+and k72 ours now shows the original's violet core with the arcs around it, where before it was a washed white
+blob. The core is a little larger than the original's at k72 and the arcs are broader and whiter.
+
+### The arcs after the release (pulse-plasma-release-arcs)
+
+After `Plasma_Launch` the head's matrix is the bolt's, whose rows are 0.75 long (the launch-speed finding above), so
+the local-space (flag `0x2`) arcs are drawn at 0.75 of their offset from the anchor. The last lane's
+`set_frame_scale(0.75)` could change nothing by construction: `frame_scale` scales a spawn offset and velocity
+only for emitters **without** flag `0x2` (a local-space particle is born in local units and the matrix scales it
+at draw time). The scale is now a draw-time one: `System::set_ride_scale` puts a row length on the riding `Frame`,
+a change carries every live local-space particle's offset, streak origin and velocity from the old length to the
+new about the anchor, and newborns spawn at it (`plasma_ride_scale`: 0.75 once `charge <= 0`, else 1.0).
+
+Strip extent (the arcs' layer, largest bounding-box side, ours at ticks `391 + k`, one run each) against the dump:
+
+| k | 20 | 36 | 44 | 56 | 68 | 74 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| original | 2.4 | 5.4 | 7.5 | 8.4 | 9.9 | 11.2 |
+| before | 2.52 | 5.45 | 7.23 | 9.73 | 12.45 | 13.64 |
+| after | 2.52 | 5.45 | 7.23 | 9.73 | 10.82 | 12.01 |
+
+The overshoot after the release goes from 2.5 / 2.4 to 0.9 / 0.8 units (ratio 1.26 / 1.22 to 1.09 / 1.07).
+k56 is before the release (frame 59 in the original, tick 59 in ours) and is untouched: its 1.3 is a pre-release
+gap, and the same size as the residual after it, so the residual reads as that gap carried, not as a wrong
+scale. The strip's width is not scaled by the matrix, which is why a bare 0.75 does not give a ratio of 0.75.
+Single draws of ten random particles: the extent jitters by about 0.6 between neighbouring ticks (k58 10.23, k60
+10.75, k62 9.65 after), so the table is one sample, not a fit.
+
+Confidence **60**: the 0.75 rows are read off the entity at the launch probe (85), that the reparented head draws
+through that matrix, and keeps it as `Plasma_Update` rewrites it, is inferred from this extent table.
+
+**2026-11-03:** the 0.75 rows hold through the charge as well (read live on the head's node, 60 frames), so the
+step at the release is gone and the charging head is anchored on the craft's weapon node: "the head's matrix and
+node" below.
+
+Head box mean RGB (`200,112,90,80`, original / before / after): **k60 127.0 / 122.5 / 122.5, k72 111.1 / 115.1 /
+114.1**. k60 is the release frame, so nothing moves there; k72 moves 1.0. The frames (`orig`, before, after at k60
+and k72) differ more in shape than in size: the original's arcs are curved crescents looping round the disc, ours
+are still straighter bars and flares to the right (open: the shape, and the k36 to k72 luminance overshoot).
+
+Tests: `psys::playback::tests::a_riding_frame_scale_shrinks_local_space_offsets_from_the_anchor` (old particle at
+0.75 of its reach, newborn inside it; red before: the API did not exist, and with the carry dropped the old
+particle keeps its reach) and `tests::weapons::visuals::the_plasma_heads_matrix_is_scaled_from_the_release_on`.
+The wiring call in `advance_projectile_flares` has no test of its own (it needs a race); the extent table above is
+its evidence.
+
+### Cross-title
+
+Pure: **checked, not wired** (`Plasma_Init` unread, the flag is Pulse PSP's only). Pulse PS2: **inherits** when it
+loads through the PSP path (it does not today). HD, Omega, 2048: **checked, differs** (`HD_plasma_ball`).
+
+## 2026-11-03: the head's arcs against the dump, quad by quad (pulse-plasma-crescents)
+
+The k50 GE dump of the charging head (draw 1, the 58-vertex strip on the arc atlas: ten four-vertex quads with two
+degenerate vertices between each pair) decoded vertex by vertex against ours at the same charge. Result: **no
+construction difference found; the remaining shape gap is the random draws.** Confidence **70** (one dump, ten quads a side).
+
+| | original (k50 dump) | ours (tick 441) |
+| --- | --- | --- |
+| white quads (opaque, frames 0, 1, 3) width / length between the end-edge midpoints | 1.4-2.5 / 2.9-4.1 | 1.2-2.0 / 3.0-5.0 |
+| purple quads (low alpha, frame 2 and 1) width / length | 5.5-6.1 / 6.3-6.8 | 4.7-5.8 / 5.4-6.7 |
+| one depth per quad (screen-parallel, both ends) | yes (z -15.4 to -16.8) | yes |
+| strip build | `A - a -+ n`, `B + a -+ n`, `n = (d.y, -d.x) * size`, `u` 1 on the `-n` edge, `v` 0.5 or 0 at `A` | the same (`streak.rs`) |
+| vertex colour, white | `ffeffdff` (R, G, B, A bytes), purple `791e7e15` to `89378e6e` | `(1.0, 0.99, 1.0, 1.0)`; purple `(0.55, 0.24, 0.56)` at alpha 0.43 = the dump's `89378e6e` colour at its alpha 0.43 |
+
+The colour and alpha are one palette walked over the particle's life in both (an original purple at alpha 0.08 reads
+`(0.475, 0.118, 0.494)`, ours at 0.037 reads `(0.467, 0.110, 0.490)`), so the vertex colours match by age. What differs is the
+**age of the old cohort**: the original's five purples sit at ages about 0.875 to 0.99 (alphas 0.43, 0.24, 0.08, 0.075,
+0.004) and ours at 0.74 to 0.97 (0.92 to 0.115), so ours draws the purples brighter on this tick. That is the emission
+cohort timing (cap 10 with a 39 +- 3 tick life and a random life draw each), which depends on the random stream, not on a law
+read; it is not fitted. The head template draws were compared too: the glow's vertex colour is `(0x5a, 0x3d, 0x68, 0xff)`
+(0.353, 0.239, 0.408, 1.0) and ours is exactly that at k50 and k60, with the 2:1 extent (dump 17.5 x 8.7, ours 16.8 x 8.4 at
+the same tick); the ring's colour matches (`cac7ff`) and its alpha, a **random channel** (0 to 255, drawn once at the
+press), reads 0.518 in the dump and 0.364 ours. So "the glow reads dimmer" is not the glow: its colour, blend and
+size are the dump's. The box luminance gap at k60 (122.5 against 127.0) is arcs and the ring's random alpha.
+
+Box score (`weapon-pair-score.py`, head box `200,112,90,80`, k20-72, five shots, one deterministic run a side, no noise
+floor): **103,807** area x excess on this tree; mean luminance original / ours at k20, 36, 44, 60, 72: 142.0 / 143.2,
+106.9 / 115.3, 112.8 / 121.1, 127.0 / 122.5, 111.1 / 114.1. The 102,300 of the head lane was a different shot set; every
+later lane that scored the arcs read 120,000 or more, so none of the figures is a trend.
+
+The view-space build is not open: it landed with `pulse-plasma-arc-shape` (`at_one_depth`), and the dump confirms the
+quads are built at one depth in the screen plane exactly so. The frames at k36, 44, 50, 56, 60, 68 show a ring of
+violet crescents round the dark disc on both sides; where ours differs is the placement of a few long white
+strokes (random). To close the shape further the draw would need the original's random stream (not recoverable) or
+a count of how its particle cohort is timed (`ParticleSystem_Update`'s spawn gate against the cap, unread here).
+
+**The onset flash one shot late** was not re-measured in this pass (no new original frames were captured). Nothing
+on our side was found that shifts it: `WO_PLASMA_FLASH` is played at the dump's extent (above), and the `391 + k` mapping
+already carries a lag of about two presented frames (`psp-weapon-pair.py`), which is the named suspect. Left open, unfixed.
+
+Cross-title: Pure **checked, not wired** (`Plasma_Init` unread); HD, Omega, 2048 **checked, differs** (`HD_plasma_ball`).
+
+## 2026-11-03: the head's matrix and node (pulse-plasma-crescents-opus)
+
+Fresh PPSSPP captures of the matched state (Talon's Junction, Time Trial, Assegai Venom, fire at GO + 120, speed
+106.21, software renderer): GE dumps at k44, k56, k60 and k68 (`psp-weapon-pair.py --ge-dump-k K --shots K plasma`),
+and three live probes added to `psp-weapon-pair.py`: `--probe plasma_charge` (`Plasma_UpdateCharge`, `0x0885c170`),
+the head's node on both plasma probes, and `--probe pool` (`ParticleSystem_DrawEmitterPool`, `0x08918bf8`, walking
+`WO_PLASMA_HEAD`'s own pool only).
+
+### The head sits on the craft's weapon node, 4.24 ahead of the body
+
+`Plasma_Init` stores the head's psys node at entity `+0x12c`; `PsysNode_Start` (`0x08916200`) keeps the spawn's flag
+word at node `+0x60` (`0x10` here) and the parent (`craft+0x60`) at `+0xbc`. `PsysNode_Update` (`0x08915cdc`) copies
+the parent's world rows, adds node `+0xa0` to the translation (`vadd.q`), swaps rows 1 and 2 only under
+`node+0x60 & 2` (clear here) and hands the result to `ParticleSystem_SetMatrix` (`0x088f4498`, a straight copy into
+`instance+0xf0`). Read live on every one of the 60 charging frames (`plasma_charge`):
+
+| Quantity | Live |
+| --- | --- |
+| node `+0xa0` | `(0, 0, 0)` |
+| head node world rows, parent world rows | `0.7500` each, frames 0 to 59 |
+| parent translation minus craft body, in the parent's own rows | `(0, 0, 5.653)` model units, `4.24` units, constant while the speed rose from 106 to 120 u/s |
+| head translation at the hook | the parent's one frame earlier (the hook runs before this frame's node update) |
+
+The GE dumps agree from the other side: the head's dark disc centre is at view depth **15.71** (k44, k56) and
+**15.90** (k60), the craft's body draw (`ci 755`) at **11.49**, so the head is drawn 4.1 to 4.4 ahead of the craft.
+Ours anchored the charging head on the bolt's hold point (`MUZZLE_FORWARD`, 2.23): view depth **13.71**, the whole
+head 1.16x too large on screen. Confidence **90** for the node offset and the rows (live, 60 frames, two sites:
+the probe and the dumps' depth).
+
+**The node is the hull's authored `Ship Muzzle` locator** (class `0x3e2`): Assegai's `Ship.vex` places it at exactly
+`(0, 0, 5.653)`, the probed offset. It is per team (USA disc): Feisar `(0, 0, 6.544)`, Qirex `(0, 0, 4.732)`, Triakis
+`(0, -0.298, 4.183)`, Piranha `(0, -0.511, 7.158)`, EGX `(0, 0.279, 7.263)`, AG Systems `(0.009, -0.170, 7.057)`.
+Confidence **85** that the node is this locator (the probed value matches Assegai's to the digit; only Assegai was
+probed).
+
+So the 0.75 rows `the arcs after the release` inferred for the bolt hold through the charge too, which is also why
+the bolt's matrix carries them: `Plasma_Init` seeds it from this node. And the bolt's release point (2.23 ahead of
+the body on the next frame) is this node one frame earlier: 4.24 minus one craft step of about 2.0 at this speed.
+`MUZZLE_FORWARD` is therefore speed-dependent in the original; ours keeps the constant (sim, not touched here).
+
+Wired: `oag-vex`'s version 6 table names the class (`Classes::ship_muzzle`; Pure's version 4 id, `0x394`, was recovered afterwards),
+`oag-livery` reads the locator beside the engine flare (`Livery::muzzle`), and a charging Plasma's flare anchor is the
+slot's model matrix (0.75 rows, `MODEL_YAW`) times that locator (`Race::muzzle_of`), on the source whose head rides
+its owner's frame (Pulse's PSP file); a hull with none keeps the bolt's hold point. `plasma_ride_scale` is 0.75 for the
+whole life of the head. Tests: `a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node` (red with the anchor
+dropped: 2.23 against 4.24), `the_plasma_heads_matrix_carries_the_craft_scale_through_the_charge`, and
+`livery_ground_truth::every_hull_carries_its_own_nozzle_and_plume` (every team authors a muzzle; Assegai's is the
+probed value).
+
+After the release the head draws at the bolt's post-update position, the same convention as ours (k60 dump: head
+x 243.95 = the bolt after update 60; k68: 266.58 = after update 68, with the body draw at the same frame's body).
+
+**Correction (`plasma-release-step`, 2026-11-03): ours' bolt does not trail the original's.** An earlier version of this
+section tabled 4.42, 4.61, 4.80, ... for the original against ours' 2.23, 2.42, ... and read a constant 2.19 lag. Those
+original numbers paired the bolt of one `plasma_fly` record with the craft of the record before it (`vel` of the next
+record minus `craft_pos` of this one, 243.95 - 239.53 = 4.42). Within one record both are read at the same hook, one
+instant. Per record, from the release (3D distance, bolt to craft):
+
+| frame after release | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| original | 2.224 | 2.414 | 2.600 | 2.757 | 3.808 | 4.768 | 5.751 | 6.863 | 7.866 |
+| ours | 2.23 | 2.42 | 2.60 | 2.78 | 3.75 | 4.73 | 5.72 | 6.74 | 7.76 |
+
+Seven frames agree to 0.1 (`plasma_timing_ground_truth`); after that ours' ride pin is 0.07 short per frame (the
+original's jump at the first ride is 1.05, ours 0.97). The head therefore steps back about 2 at the release in the
+original too: the charging head sits on the node (4.24 ahead, translation current at draw time), and the bolt is placed
+from the head's translation of the frame before (the hook copies it before the node update; `head_world` at the hook
+reads 2.2 ahead of `craft_pos`, constant through the charge). So the release offset is `node - craft step`:
+**2.23 here because the craft covers 2.0 a frame at 120 u/s**. Ours holds 2.23 as a constant, exact at that speed; a
+second speed would show the original's offset growing as the craft slows. Unmeasured, so not wired (confidence 70 for
+the stale-translation reading: one speed). A node-sourced release with one move before the draw was built and put the
+bolt 6.4 ahead of the craft at frame 0, which is wrong for this data.
+
+Hull locator across titles (census, `Ship.vex` of each default team): Pulse PSP USA and Pulse PS2 EU author the same
+`Ship Muzzle` `(0, 0, 5.653)` on Assegai, version 6 (PS2: **ported**, the head's locator reaches PS2 through the same
+reader whenever its pob flag allows; the head laws stay gated on the PSP flag). HD's `assegai` hull (version 6) authors
+none: **checked, differs**; 2048 and Omega: **not checked** (their hulls are `.rcsmodel`, a different locator
+reader; no Pulse-style head is drawn there, HD uses `HD_plasma_ball`). Pure (version 4): the class id is unrecovered; of the unnamed classes on its hull `0x394` is a single
+node on the centre line at `(0, 0, 6.068)`, the only one ahead of the origin on the axis, a candidate at confidence 40,
+not wired.
+
+### The arcs' shape: the law matches, the rest is the draws
+
+Per-quad screen-space width and length (milliradians, the bar's along extent between its end-edge midpoints) of
+the arc strip against ours at the same shots, before and after the anchor and scale:
+
+| k | original (width / along, widest first) | ours before | ours after |
+| --- | --- | --- | --- |
+| 44 | 333/340 315/343 310/349 306/316 ... 64/103 | 370/385 362/405 362/386 321/383 ... 78/190 | 321/330 317/331 314/341 281/322 ... 69/140 |
+| 56 | 446/496 208/319 176/267 166/298 ... 93/224 | 473/532 471/521 233/453 220/426 ... 94/189 | 414/454 403/435 202/345 186/308 ... 83/148 |
+| 60 | 276/347 258/365 230/339 195/340 ... 84/172 | 553/602 297/517 286/490 221/480 ... 113/225 | 472/504 259/401 239/362 194/365 ... 96/168 |
+
+The strip build (one depth, `u`/`v`, cell, colour) was already the dump's (the section above). What still reads as
+"flatter" in ours is the spread: on screen the original's arcs measured `|dx| = |dy|` at k44 to k60 (mean 183 to
+193 against 156 to 208) and ours `|dx|` about twice `|dy|`. The cause is not a law:
+
+- The drag modifier (`0.5, 0.4, 0.5`) is applied lane for lane to the particle's local velocity: `ParticleSystem_Update`
+  precomputes `pow(k, dt)` per axis into `DAT_08b62090..98` (`0x088f5e20`-`0x088f5e58`), and `ParticleSystem_ApplyDrag`
+  (`0x088fa6fc`, called for modifier type 3 from `ParticleSystem_UpdateParticles` at `0x088f6668`) multiplies the
+  velocity at particle `+0x00` by it (`vmul.q` at `0x088fa720`) before `position += velocity * dt` (`0x088f6700`-`0x088f6710`).
+  With no row swap, local Y is the craft's up, as ours. Confidence **85**.
+- Live (`--probe pool`, 24 distinct at-rest particles in local space at frames 19, 38, 57): mean `|x| 0.62, |y| 0.46,
+  |z| 0.63`, so `|y|/|x| = 0.75` against the law's 0.67. The dumps' isotropy was sampling (about ten particles a dump).
+
+Particle counts agree dump by dump (10/9, 8/8, 9/9, 10/10 at k44, 56, 60, 68), so the spawn gate against the cap
+(`ParticleSystem_UpdateEmission`, `0x088f4f84`, not re-read) shows no gap. Which arcs are long or short in a given
+frame is the random stream, which also varies between boots of the original (below).
+
+### Measured, matched pair
+
+Head box `200,112,90,80`, k20-72, `weapon-pair-score.py`, area x excess (the reference pair set):
+
+| tree | area x excess |
+| --- | ---: |
+| before (reproduced) | 103,807 |
+| 0.75 rows alone | 100,059 |
+| 0.75 rows and the weapon-node anchor | **76,048** |
+
+Box mean RGB, original (reference boot / a fresh boot) against ours before and after:
+
+| k | 20 | 36 | 44 | 56 | 60 | 68 | 72 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| original, reference boot | 142.0 | 106.9 | 112.8 | | 127.0 | | 111.1 |
+| original, fresh boot | | | 108.9 | 111.6 | 121.1 | 121.3 | |
+| ours before | 143.2 | 115.3 | 121.1 | 122.0 | 122.5 | 131.9 | 114.1 |
+| ours after | 143.2 | 111.0 | 115.2 | 118.3 | 117.0 | 131.9 | 114.1 |
+
+The k36/k44 overshoot closes from 8 to 4 and 2. k60 reads 117.0 against 127.0 on the reference boot and 121.1 on a
+fresh one: the original itself moves 6 between boots there, so the ±3 band is inside its own spread. k68 (after the
+release) overshoots 10, the open placement above.
+
+### Cross-title
+
+Pure: **checked, not wired** (its `Plasma_Init` is unread; the anchor and the rows ride the flag `0x2` gate that only
+Pulse's PSP file sets). Pulse PS2: **inherits** when it loads through the PSP path. HD, Omega, 2048: **checked, differs**
+(`HD_plasma_ball`).
+
+## 2026-11-03: the head after the release, and the glow that was drawn too near (pulse-plasma-fable)
+
+Fresh PPSSPP captures of the matched state (Talon's Junction, Time Trial, Assegai Venom, fire at GO + 120, speed
+106.21, software renderer, `psp-weapon-pair.py --place-window`), five fire runs (a to e, race restarts on one boot
+plus one fresh boot), a no-fire control, an 82-frame `--probe pool` of `WO_PLASMA_HEAD`, and both EDRAM buffers at
+k56 and k68 (`--edram`). Head box `200,112,90,80`, mean RGB:
+
+| k | 20 | 36 | 44 | 56 | 60 | 68 | 72 | 76 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| original, five runs (min to max) | 140.8-143.5 | 105.1-109.0 | 107.6-110.6 | 108.4-115.5 | 108.4-127.7 | 117.3-122.1 | 107.5-114.6 | 107.4-112.0 |
+| ours before | 143.2 | 111.0 | 115.2 | 118.3 | 117.0 | 131.9 | 114.1 | 118.6 |
+| ours after | 143.2 | 111.0 | 115.2 | 118.3 | 117.0 | 126.7 | 109.9 | 114.6 |
+
+The original's own spread is 5 at k68 (117.3, 119.2, 119.8, 122.1, 118.8) and 19 at k60, the release frame. The
+k68 gap (+10 over the originals' highest) was not noise: the scene behind it matches (no-fire box 78.4 original,
+78.3 ours), and switching our head's emitters off one at a time at k68 attributes the box to the arcs (+25.5), the
+glow template (+23.6), the dark disc (-3.8), the spikes (+0.6) and the ring (0).
+
+### What is identical, checked
+
+- **The pool particles.** The live probe at frame 67.88 holds ten arcs at sizes 1.05-2.64 and vertex red 179-255,
+  all at alpha 255 (the first cohort is dead by frame 60); ours at the same shot holds ten at half 1.055-2.745 and
+  red 176-255, ages 0.12-0.67. The cohort-age hypothesis is closed: the ages match particle for particle.
+- **The template quads** (`ge68` dump, vertex layout `0x19f`, colour at `+8`): disc 3.27 units `ffffffff`
+  (alpha-over), ring 4.36 `cac7ff` at alpha `0x2a`, glow 21.0 x 10.5 `5a3d68ff`, all centred at view
+  `(0.72, -0.67, -22.36)`. Ours: disc 3.02, ring 4.66 at 0.364, glow 21.0 x 10.5 `(0.35, 0.24, 0.41)`. The ring's
+  alpha is a per-run random: `0x77`, `0xae`, `0x2a`, `0x84` over the four dumps, so 0.364 is inside the draw.
+- **The texels.** The dump records each draw's level-0 payload and CLUT before its PRIM. All four head textures
+  are byte-identical to `oag_pob`'s decode of the `.pob`'s embedded textures: the arc atlas (64x64 CLUT8, 1,024-byte
+  palette, 4,096 index bytes), the ring `glow3` (64x64), the disc `Glow` (64x64) and the glow `glow2` (32x32 CLUT8,
+  greyscale with alpha equal to grey). No swizzle (`texmode 0x20000`), `texformat 5`, filter `0x107`, level 0.
+- **The bloom.** EDRAM alpha (the stencil the bloom reads, `glow-mask.md`) is 4 to 5 across the head box in both
+  buffers at k56 and k68, the frame's floor; the presented k68 box (118.8) equals the colour buffer's (118.6). The
+  head draws feed no bloom on the original, and ours write-masks alpha off its particle pass.
+- **The glow's falloff.** Fitting our glow-only render and the original's fire-minus-control to
+  `colour x texel^n` over the box's right margin (dx 30-45, 45-60, 60-90 px from the head): the original is
+  `n = 2` (15.6, 6.7, 1.1 measured against 12.3, 4.7, 0.8; `n = 1` gives 28, 17, 6), the texel times its own
+  alpha under `TFX_MODULATE RGBA` and a `SRC_ALPHA` blend, and so is ours (a shader variant dropping the texel's
+  alpha reads 43, 33, 18). Our excess (24.8, 14.3, 4.8) was higher only because the quad was larger on screen.
+
+### The cause: the released head stepped back to the bolt's hold point
+
+Our glow spanned 117 px of half-width against the dump's 92.7 (21 units at `proj[0] = 0.8225`, depth 22.36),
+so our head drew at depth 17.2 at k68 (read off the race: 15.71 at k56, 17.18 at k68, 25.93 at k76). The pool probe
+reads the drawn head's distance from the craft, both at the draw hook, every frame:
+
+| frame after fire | 54.9-59.9 | 60.9 | 61.9 | 62.9 | 63.9 | 64.9 | 65.9 | 66.9 | 67.9 | 68.9 | 70.9 | 72.9 | 74.9 | 76.9 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| head ahead of `craft_pos` | 4.24 | 4.43 | 4.62 | 4.81 | 5.79 | 6.79 | 7.81 | 8.84 | 9.89 | 10.95 | 13.13 | 15.38 | 17.78 | 20.52 |
+
+The head sits on the node (4.24) through the charge and continues from it: no step back at the release. Ours
+anchored the released head on the sim bolt, which starts at the hold point (`MUZZLE_FORWARD`, 2.23) and makes the
+same relative steps (0.19, 0.18, 0.18, 0.97, 0.98, 0.99, 1.01, 1.03 per tick, read in the race), so every frame
+after the release drew the head 2.01 units nearer the camera than the original's.
+
+**Why the drawn head is the bolt's own matrix (decompiled, `/pulse/BOOT-psp-pulse-usa.BIN`).** `Plasma_Launch`
+(`0x0885bf84`) copies its release matrix into `+0x70..+0xac` (translation `+0xa0`), then calls `FUN_0885c360`
+and `FUN_089161f4(head_node, bolt + 0xb0)`: the head is reparented onto the bolt's **second** matrix at `+0xb0`.
+`FUN_0885c360` builds that matrix: outside the cockpit view (`craft+0x6d == 0`) it is a straight copy of
+`+0x70..+0xac` into `+0xb0..+0xec`; in the cockpit view it scales the translation by `+0x124` and the model by
+`DAT_08ab0f14 * +0x128`. It writes the head node's own `+0x70..+0xac` to a constant block (`DAT_08a907a0`,
+identity) so the node's world matrix is its parent's. `Plasma_Update` (`0x0885c6cc`) stores `+0xa0` to `+0x100`
+before the move, writes the new position to `+0xa0`, and calls `FUN_0885c360` at `0x0885cbf8` after it. Two
+call sites (`0x0885c100`, `0x0885cbf8`), one reading. Named **`Plasma_BuildDrawMatrices`** (`0x0885c360`), confidence **80**:
+the copy is unambiguous and the live head translation (the pool probe's matrix row 3) moves with the bolt.
+
+**So the bolt itself is launched at the node, not the hold point (confidence 85).** The drawn head is `+0xa0`,
+and `+0xa0` is 4.43 ahead of the drawn craft on the first frame after the release and 4.24 on the last charging
+one. The 2.22, 2.41, 2.60 series of `plasma-release-step` (and `plasma_timing_ground_truth`'s pin) pairs the bolt
+read at `Plasma_Update`'s entry, before its move, with a craft that has already moved this frame: one craft step
+(2.03 at this speed) short of the same instant. The "pairing artefact" was the other way round. Three sources
+agree: the pool probe (20 frames, one hook), the GE dumps' head depth (15.90 at k60 on the node, 22.36 at k68 =
+the craft's 11.49 plus 10.9), and the screen extent of the glow quad. The release offset is therefore the hull's
+`Ship Muzzle` locator through the craft scale (4.24 on Assegai), independent of speed; the "node minus one
+craft step" reading was the hook phase, and no second speed is needed.
+
+### Wired, view only
+
+`RaceView::plasma_lead` keeps, per projectile slot, the node's lead over the bolt measured while charging
+(`(muzzle - bolt) . heading`, 2.01 on Assegai), and `advance_projectile_flares` adds it along the bolt's heading
+once `charge <= 0`, on the source whose head rides its owner's frame (Pulse's PSP file); a hull with no locator
+and an unmeasured source keep the bolt. The sim's bolt still starts at `MUZZLE_FORWARD` (2.23): moving the
+release point to the locator is `oag-weapons` work (a per-craft muzzle in the `World`, the hash reference, and
+`plasma_timing_ground_truth`'s series re-pinned at the draw instant), left open. Test:
+`tests::weapons::visuals::a_released_plasma_head_keeps_the_weapon_nodes_lead_over_the_bolt` (red before: the
+head led the bolt by 0, not 2.01).
+
+Results (above): k68 131.9 to 126.7, k72 114.1 to 109.9, k76 118.6 to 114.6, k20-72 head box area x excess
+76,047 to 72,351 (`weapon-pair-score.py`, the reference pair set, our control the matched script without
+`square`). The residual at k68 is one frame of phase: ours drawn one tick later reads 120.9 (k69) and 117.2
+(k70), inside the originals' 117.3-122.1; through the release the original's PNG at `k` shows the state one
+frame later than ours at `391 + k` (its drawn head reads 4.43 at frame 60.9 where ours reaches 4.43 at the tick
+after the first `charge == 0`). The side-by-side at k56, k60, k68 and k76 shows the same head on both sides;
+ours at k68 still reads a little larger and brighter for that frame.
+
+Cross-title: Pure **checked, not wired** (`Plasma_Init` unread, the lead rides the PSP flag); Pulse PS2
+**inherits** when it loads through the PSP path; HD, Omega, 2048 **checked, differs** (`HD_plasma_ball`).
+
+## 2026-11-03: the bolt is released at the `Ship Muzzle` locator (plasma-muzzle-sim)
+
+The sim finding of the section above, wired, with the hook pairing checked on both probes rather than trusted.
+
+### The two series are one series, read at two instants
+
+The `plasma_fly` probe hooks the entry of `Plasma_Update` (`0x0885c6cc`), where the bolt's `+0xa0` has not
+moved this frame and `craft_pos` has (the craft updates before the weapon pool). The `pool` probe hooks
+`ParticleSystem_DrawEmitterPool` (`0x08918bf8`) at the draw, after every update of the frame; the head's matrix
+there is the bolt's own after its move (`Plasma_BuildDrawMatrices`, `0x0885c360`). Per record, 3D distance
+(`probe-plasma_fly` and `probe-fly` of 2026-11-03, 12 and 15 records; `probe-pool`, 82 frames):
+
+| frame after fire | 59 (release) | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `plasma_fly`: bolt `+0xa0` against this record's craft | | 2.224 | 2.414 | 2.600 | 2.757 | 3.808 | 4.768 | 5.751 | 6.863 | 7.866 |
+| `plasma_fly`: the same bolt against the **previous** record's craft | | 4.431 | 4.619 | 4.806 | 5.802 | 6.790 | 7.808 | 8.857 | 9.890 | 10.953 |
+| `pool`: drawn head against the drawn craft | 4.240 | 4.431 | 4.620 | 4.806 | 5.788 | 6.790 | 7.808 | 8.841 | 9.890 | 10.954 |
+
+The second row equals the third to 0.02 on every frame of both logs: the `plasma_fly` series is the draw
+series minus one craft step (2.0 to 2.03 a frame at 106 to 120 u/s), not a lag and not a release offset.
+At one instant the bolt sits on the node (4.24, every one of the 59 charging frames reads 4.240 at the draw)
+and leaves from it. Confidence **90** (two probes, three logs, the arithmetic closes). The 2.23 of
+`plasma-release-step` and the 2.22 of `plasma-timing` were this pairing; `plasma_timing_ground_truth` had
+pinned it, so it went red on the wired sim and is re-pinned on the draw series.
+
+### Wired, simulation
+
+- `oag_gameplay::world::Ship::muzzle`: the hull's `Ship Muzzle` locator in model space, set by the composition
+  root for every grid slot (`oag_raceplay::load::muzzle`, the same hull file the livery is built from, read
+  in both halves of the crate so the headless server releases the bolt where the drawing client does); not
+  hashed, as `handling` is not (loaded once, constant through the race). `oag_weapons::Craft::muzzle` hands it
+  to the weapons.
+- `oag_weapons::projectile::plasma::muzzle` carries it into the body's frame through `LAUNCH_SPEED_SCALE`
+  (the craft's 0.75 rows): model `+Z` is the body's forward, model `+X` its left (the hull is drawn half a
+  turn about its up axis), model `+Y` its up. Assegai: 4.24 ahead on the axis; Triakis `(0, -0.298, 4.183)`:
+  3.14 ahead, 0.22 below. A hull with no locator (HD's; Pure's version-4 id, `0x394`, is recovered and its hulls have one) keeps
+  `MUZZLE_FORWARD` 2.23, now documented as the hold point of a hull without a node.
+- `oag_vex::vex::ship_muzzle` is the one reader (the livery's private copy went); `oag_title::race::ShipPaths::
+  hull_entry_name` names the hull for both halves (moved from `oag_livery::entry::ship_entry_name`, the hull stem
+  now `Title` data, `RaceDefaults::ship_hull`, so no generic crate names a title package for it).
+- The view's `plasma_lead` and its copy of the locators went: a released head draws on the bolt, which is now
+  where the original's bolt matrix is. The charging head keeps the drawn hull's matrix (display roll and lean).
+
+Tests: `plasma::tests::the_muzzle_is_the_hulls_weapon_node_or_the_hold_point_without_one` (2.23 without a
+locator, 4.24 on Assegai's, 3.14 ahead and 0.22 below on Triakis's, under a yawed body),
+`tests::weapons::visuals::a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node` (the bolt held on the node
+too), `a_released_plasma_head_draws_on_the_bolt_that_left_from_the_weapon_node`, and
+`plasma_timing_ground_truth::the_plasma_releases_flies_and_detonates_on_the_originals_ticks` with
+`ORIGINAL_FROM_CRAFT` re-pinned to the draw series (4.240, 4.431, ... 10.954): red on the 2.23 release (two
+units short on every row), green after.
+
+### The craft-start lead was one craft step too, and the detonation tick moves by one
+
+The same pairing had put this engine's craft "1.13 ahead of the original's at the release" ("the detonation
+leg fixed"): ours at the release tick against the original's `craft_pos` of the frame after. On the release
+frame itself the original's craft is at x 237.5 (239.54 less one step) and ours at 240.66, so **ours leads by
+3.1 units**, one update's travel of the bolt (3.17 a tick on the ride). With the bolt two units short of the
+node that lead netted to 1.1 and the bolt still ended on frame 76; released on the node it reaches the wall one
+update sooner. The place is the wall's and matches: the last position before the blast is `(288.51, -39.46,
+-194.05)` in ours against `(288.60, -39.50, -193.86)` in the original (three boots agree to 0.02 on both the
+release point, 241.75 to 241.77, and the last position), 0.21 apart. `plasma_timing_ground_truth` now pins
+that place and the tick one before the original's frame 76, and says why; sixteen updates of flown distance
+stay pinned to 0.25. Bolt-to-craft, ours against the draw series: 4.240/4.240, 4.427/4.431, 4.611/4.620,
+4.793/4.806, 5.755/5.788, 6.738/6.790, 7.736/7.808, 8.749/8.841, 9.777/9.890, 10.820/10.954: within 0.1 for
+seven frames, 0.13 at the tenth (the ride pin's known shortfall per frame). The craft-start lead itself
+(3.1 units at GO + 120 under the same script) is not this lane's; it is a standing-start difference.
+
+### Measured, matched pair
+
+Head box `200,112,90,80`, mean RGB, the five original runs of the section above against ours before (the
+view-only lead) and after (the bolt itself on the node, the view's lead gone):
+
+| k | 56 | 60 | 68 | 69 | 72 | 76 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| original, five runs (min to max) | 108.4-115.5 | 108.4-127.7 | 117.3-122.1 | | 107.5-114.6 | 107.4-112.0 |
+| ours, view-only lead (`pulse-plasma-fable`) | 118.3 | 117.0 | 126.7 | 120.9 | 109.9 | 114.6 |
+| ours, bolt on the node | 118.2 | 116.9 | **126.5** | 120.8 | 109.8 | 114.5 |
+
+The picture is the view-only fix's to 0.2 on every frame, as it should be: the head draws where the lead
+had put it, now because the bolt is there. The 0.1 to 0.2 is the charging head's matrix (the drawn hull's,
+with roll and lean) against the released head's (the bolt's heading). The k68 residual over the originals'
+highest (+4.4) stays the one frame of phase that section explains (ours at k69 reads 120.8, inside the
+band). Side-by-side k68/k72/k76, original `a` and `b` against ours: the same head, the same arcs, the same
+blast onset at k76; nothing a player sees moved, and the sim's collision and detonation point moved two
+units forward to where the original's are.
+
+### The HUD's pickup hexagon in the pair frames
+
+Ours draws a full-strength pink hexagon at the top centre through the whole pair (k20 to k76) where the
+original shows a hexagon at k20, a fading wide shape at k36 and nothing from k56. Not a HUD law: the pair
+renders ours with `--give plasma`, which refills the empty pickup slot before every tick, so `held` is
+`Some(Plasma)` on every frame but the press and the measured after-use fade
+(`pickup-colour.md`, hold 17 updates then 24 of fade-out) never starts. Without `--give` ours fades on the
+same law (`tests::slot_hud`). The original's hexagon is green (a Turbo, Shield or Autopilot row) because
+`psp-weapon-pair.py` arms the Plasma through the fire-request word, not through the held id, so its frames
+say nothing about a Plasma's own icon. Whether a natural Plasma press clears the held id on the press frame
+or at the release is the question `pickup-colour.md` already leaves unread ("whether a real use clears the
+held id in one update or lingers"); nothing in `Hud_UpdatePickupWidgets` is weapon-specific. Not a fix in
+`oag-hud` or the readout; recorded.
+
+### Cross-title
+
+Pulse PS2: **ported by data** (its `Ship.vex` authors the same `Ship Muzzle` `(0, 0, 5.653)` on Assegai,
+version 6, read by the same reader; the release point follows). Pure: **checked, not wired** (version 4, the
+class id is unrecovered, the candidate `0x394` at `(0, 0, 6.068)` stays at confidence 40; the bolt keeps the
+hold point). HD: **checked, differs** (`assegai`'s hull authors no `Ship Muzzle`; the hold point). 2048 and
+Omega: **checked, not wired** (`.rcsmodel` hulls, no locator reader; both keep the hold point; their own
+`Plasma_Update` is read on `ps4-omega-eu/plasma.md`, the release point is not).
+
+
+## 2026-11-11: on a bank the bolt ends at the cage, and its unridden first updates are a craft's box (weapon-bank-follow)
+
+Maintainer report: on tilted track our Plasma falls off the track where the original's follows it.
+The whole account, the method and the law are on
+[rocket-visuals.md](rocket-visuals.md#2026-11-11-code-4-is-the-collision-cage-and-what-a-bank-does-to-every-flyer-weapon-bank-follow); this is the Plasma's part. Capture: Moa Therma White (`03_Track`), the
+85 degree banked helix, fired from the original's Autopilot-flown craft at spline sample 1330 so
+the release fell at sample 1424, `scripts/psp-projectile-sweeps.py`, PPSSPP v1.20.4 software, two
+loads of one state identical to the last update.
+
+| | Original | Ours, from the original's own states |
+| --- | --- | --- |
+| updates flown | 49 (0.80 s) | still flying at tick 600 |
+| update 1 | **probe returns `3` (mag floor): it rides at once**, speed re-pinned to 195.3 units/s by update 2 | no probe for the first 0.04 s (`plasma::UNPINNED_SECONDS`): 0.82 unit off after one update, 0.13 and 0.09 after the next two |
+| updates 4 to 48 | rides the mag floor, then the kerb's floor class from update 46 | within 0.012 unit and 0.70 units/s of the original's next state on all 45 |
+| update 49, from `(421.300, 153.036, -293.762)` | **probe returns `4`** (the probe's end `(421.33, 149.15, -281.38)` is 4.41 outside the cage), the sweep returns `4` (boundary `(424.66, 153.08, -292.16)`), flags `\|= 4`, detonation | probe miss: falls along its carried normal and leaves the circuit; at tick 600 it is at `(1786, -296, 2275)` |
+
+**The law that differs** is `Collision_SweepSegment`'s second query, the collision cage on the
+segment's end, which `Plasma_Update` takes as a wall (`0` or `4`, both arms, probe and sweep).
+Confidence **94** (1,187 live calls reproduced through this engine's own cage, the linked section).
+
+**Row 3 of the 2026-10-31 table ("the first three updates do not ride ... reads as age") is
+superseded.** The three misses are the firing craft's own box collider: on Outpost 7's ramp the
+bolt's first three probes each returned `0x7f` with the mesh raycast's nearest hit a **box**
+(kind `3`, collider 181, the player's), from starts 4.45, 4.64 and 4.80 units ahead of the body,
+and the fourth, from 4.93, found the floor. On the mag strip above the same bolt rides on its first
+update. So the gate is where the probe starts against the craft's box, not the bolt's age: confidence
+**88** for the Plasma (three records on one shot, plus 25 of the other weapons'); how far the box
+reaches ahead of the body is not one number, and why is settled 2026-11-12: the box is the body's, the
+raycast's gate sees it through the transposed rotation, and on the mag strip's 85 degree roll it rejects
+the start, so the bolt rides at once ([rocket-visuals.md](rocket-visuals.md#the-own-craft-box-is-a-rotated-frame-2026-11-12-pulse-own-craft-box),
+confidence 90, 2,302 probes replayed with no error; two Outpost 7 Plasma captures re-taken, the first
+probe on the box and the rest clear).
+
+**Two more reads of `Plasma_Update`'s decompile; both wired 2026-11-12** (the floor arm in `pulse-floor-arms` for Pulse and Pure, `FloorArms::SteerToRidePoint`, unit-tested on a flat floor; the launch normal in `launch-normal-wire`). Its travel-sweep floor arm only
+moves: `next = hit + normal * g_ride_height`, with no normal adopted and no velocity written
+(the Rocket's and the Shuriken's adopt and write); HD, 2048 and Omega (whose arms are unread) still
+adopt the normal and turn the velocity for the Plasma too. Confidence **84**, decompile only (no capture crossed a floor on the
+travel segment). And the carried normal `Plasma_Launch` stores is the track's own up at the
+craft's located point, not the craft's up (the linked section; 0.29 and 0.86 degrees from the
+nearest resampled spline sample's on the two Plasma captures).
+
+**Cross-title.** HD and Omega run no cage off the track header and Pure's tracks clear the flag
+(the linked section's "Cross-title"): a wire reads the cage off the race's own spline, so only
+Pulse gains it. **Checked, differs** for Pure; **not checkable** here for HD's own code `4`.

@@ -113,3 +113,26 @@ The display angle is composed at `0x0892718c`-`0x089271a4` in `FUN_08926ae4`:
 **Checked, same law**: `oag_pure::race::CRAFT_LAWS.tilt_steer_lean` is `None`, Pulse's gains
 (`oag_physics::SteerLean::PULSE`), and Pure's files author no `<Tilt>`. See
 [`../psp-pulse-usa/camera.md`, "The drawn lean"](../psp-pulse-usa/camera.md#the-drawn-lean-entity0x854-read-and-measured-2026-10-21).
+
+## The contact loop's shield branch (2026-11-11, `shield-craft-hit`)
+
+Pulse's `FUN_088418e0` contact loop ([`psp-pulse-usa/contact-response.md`](../psp-pulse-usa/contact-response.md),
+"A craft-to-craft contact bulges a running Shield's shell") has a Pure twin, `FUN_08926ae4`, reached by
+following `ShipCollisionFx_Trigger` (`0x0888e340`) up through `FUN_08923c04` (the dispatch). Decompiled:
+the ring (`body + 0x1b0`, stride `0x40`, count `body + 0x3b0`) is walked once per tick, and for a record
+whose friction (`+0x1e0`) is positive on a craft in state 1 the loop calls `FUN_08928274` (`Ship_Damage`'s
+twin, `|p| * 0.05 * 0.7`) when the entity's `+0xd0` object has no Shield byte (`+0x178`), and
+`FUN_08947030` when it has one and the shell object (`entity + 0x9fc`) exists. Same shape as Pulse's
+branch, in a different layout.
+
+- `0x08947030` (`FUN_08947030`) is `ShipShield_Hit`: four colour words from a constant block into `obj + 0x118..0x124` and
+  `0x3f8ccccd` (`1.1f`) into `obj + 0x130`, five stores, as Pulse's (`0x0885eb04`). Two callers: the
+  loop (`0x089274fc`) and `Ship_UpdateWeapons` (`0x08929750`), Pulse's two. Confidence 80.
+- `0x0893403c` is `Body_RecordPairContact`: appends a record (kind word `1` at `+0x1b0`, friction `f12`
+  at `+0x1e0`, quads at `+0x1c0` and `+0x1d0`) behind the `< 8` ring cap, as Pulse's `0x0884dc60`. Called
+  twice from the pair resolver `FUN_08935c8c` (`0x089364d8`, `0x089364ec`), once per body. Confidence 80.
+  `0x08933fb8` is the single-body `Body_RecordContact` twin. The *value* of the pair friction in Pure
+  (Pulse: collider `+0x64`, `0.02` for a racing craft) is not read; the port inherits Pulse's.
+
+So a Pure craft-to-craft bump bulges a running Shield's shell exactly as Pulse's does. Ported by the same
+`Race::resolve_craft_pairs` wiring. Static, one binary: 80.

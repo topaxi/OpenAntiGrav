@@ -69,7 +69,8 @@ its own rows **and** its league's.
 
 A gated event is not listed until it opens (the original lists none it has not opened);
 the Team Selection screen drops a gated team the same way. `--unlock-all` lifts every gate
-(ours).
+(ours). The original has a dev byte that lifts every gate too
+(`*(*0x08b17794 + 0x381)`, [campaign.md](../ghidra/functions/psp-pure-usa/campaign.md), "Definition_IsUnlocked"); it is how the Beta and Classic circuits were reached for the compare pairs.
 
 ## The chain
 

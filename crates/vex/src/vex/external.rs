@@ -37,7 +37,7 @@ pub fn geometry_is_external(data: &[u8]) -> bool {
     if !vex::has_magic(data) {
         return false;
     }
-    if vex::byte_order(data) == oag_formats::ByteOrder::Big {
+    if vex::byte_order(data) == oag_bytes::ByteOrder::Big {
         return true;
     }
     let Ok(nodes) = vex::nodes(data) else {
@@ -54,4 +54,46 @@ pub fn geometry_is_external(data: &[u8]) -> bool {
         .find(|node| node.class_id == mesh)
         .and_then(|node| vex::mesh_first_vertex_type(&data[node.payload()]))
         == Some(0)
+}
+
+/// Where an external-geometry mesh payload carries the hash its geometry is
+/// found by, and where its material array starts, four bytes past the
+/// in-file form's.
+const HASH_AT: usize = 0x30;
+const MATERIALS_AT: usize = 0x34;
+
+/// The hash a little-endian external-geometry mesh payload names its geometry
+/// by: the word a Vita or PS4 `.rcsmodel` mesh object repeats at its `+0x04`.
+///
+/// Omega's `Billboard_ConstructResource` (`0x016e53a0`) joins a `Mesh_Importer`
+/// node to a model mesh by exactly this pair
+/// (`docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys").
+#[must_use]
+pub fn external_mesh_hash(payload: &[u8]) -> Option<u32> {
+    if payload.len() < MATERIALS_AT {
+        return None;
+    }
+    oag_bytes::le::u32_at(payload, HASH_AT)
+}
+
+/// Every material's texture-transform block of a little-endian
+/// external-geometry mesh payload, in material order: Pulse's keyframe block
+/// ([`vex::mesh_tex_transforms`]) behind a material array that starts at
+/// `+0x34`.
+///
+/// Wipeout 2048 and the Omega Collection author their billboards' UV motion
+/// here, where Wipeout HD's `.rcsmodel` carries an Edge Animation curve. Read
+/// off Omega's `Mesh_Importer` loader and its per-frame update
+/// (`docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys").
+#[must_use]
+pub fn external_mesh_tex_transforms(payload: &[u8]) -> Vec<Option<vex::TexTransform>> {
+    if payload.len() < MATERIALS_AT {
+        return Vec::new();
+    }
+    let material_count = usize::from(
+        oag_bytes::le::u16_at(payload, 2).expect("the length check above covers the header"),
+    );
+    (0..material_count)
+        .map(|i| vex::mesh_tex_transform_at(payload, MATERIALS_AT, i))
+        .collect()
 }

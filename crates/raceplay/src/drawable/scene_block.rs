@@ -82,8 +82,9 @@ pub(crate) struct SceneBlocks {
 }
 
 impl SceneBlocks {
-    /// A view per craft slot, because a view is named by the craft it follows.
-    pub(crate) const VIEWS: usize = GRID_SLOTS as usize;
+    /// A view per craft slot, because a view is named by the craft it follows, and the
+    /// secondary view ([`Self::portal`]).
+    pub(crate) const VIEWS: usize = GRID_SLOTS as usize + 1;
 
     /// Every block holding [`mesh_render::Scene::off`], so a drawable drawn before its kind is
     /// first written reads what its own buffer held.
@@ -114,7 +115,16 @@ impl SceneBlocks {
 
     /// The first blocks of the view following craft `slot`.
     pub(crate) fn view(slot: usize) -> ViewBlock {
-        let view = slot.min(Self::VIEWS - 1) as u64;
+        Self::at(slot.min(GRID_SLOTS as usize - 1))
+    }
+
+    /// The blocks of the secondary view: no craft's.
+    pub(crate) fn portal() -> ViewBlock {
+        Self::at(Self::VIEWS - 1)
+    }
+
+    fn at(view: usize) -> ViewBlock {
+        let view = view as u64;
         ViewBlock {
             scene: (view * SceneKind::COUNT as u64 * mesh_render::SCENE_STRIDE) as u32,
             uniforms: (view * UniformBlocks::SLOTS as u64 * mesh_render::UNIFORMS_STRIDE) as u32,
@@ -137,10 +147,67 @@ impl SceneBlocks {
         let at = u64::from(view.scene) + kind.index() * mesh_render::SCENE_STRIDE;
         oag_gpu::perfprobe::write_buffer(queue, &self.buffer, at, bytemuck::bytes_of(scene));
     }
+
+    /// Writes the four blocks every view composes, `scenes` in [`Self::VIEW_KINDS`] order, as
+    /// one `queue.write_buffer` for each run of used kinds: the four sit back to back in the
+    /// view's region, so with all four used it is one write where [`Self::write`] made four.
+    /// The padding between two blocks of a run is written as the zeros [`Self::new`] left
+    /// there; an unused kind's block is still never written.
+    pub(crate) fn write_view(
+        &self,
+        queue: &dyn oag_gpu::writes::Writes,
+        view: ViewBlock,
+        scenes: [&mesh_render::Scene; 4],
+    ) {
+        const STRIDE: usize = mesh_render::SCENE_STRIDE as usize;
+        const SIZE: usize = mesh_render::SCENE_SIZE as usize;
+        let mut staged = [0u8; 4 * STRIDE];
+        let used = Self::VIEW_KINDS.map(|kind| self.used[kind as usize]);
+        let mut next = 0;
+        while next < used.len() {
+            if !used[next] {
+                next += 1;
+                continue;
+            }
+            let first = next;
+            while next < used.len() && used[next] {
+                let at = (next - first) * STRIDE;
+                staged[at..at + SIZE].copy_from_slice(bytemuck::bytes_of(scenes[next]));
+                next += 1;
+            }
+            let len = (next - 1 - first) * STRIDE + SIZE;
+            let at =
+                u64::from(view.scene) + Self::VIEW_KINDS[first].index() * mesh_render::SCENE_STRIDE;
+            oag_gpu::perfprobe::write_buffer(queue, &self.buffer, at, &staged[..len]);
+        }
+    }
+
+    /// The kinds [`Self::write_view`] writes, in buffer order: adjacent, the first four.
+    pub(crate) const VIEW_KINDS: [SceneKind; 4] = [
+        SceneKind::Circuit,
+        SceneKind::Ship,
+        SceneKind::Shine,
+        SceneKind::Flame,
+    ];
 }
+
+// `write_view` stages the four as one span from the first: they must be the first four kinds.
+const _: () = {
+    let kinds = SceneBlocks::VIEW_KINDS;
+    let mut i = 0;
+    while i < kinds.len() {
+        assert!(kinds[i] as usize == i);
+        i += 1;
+    }
+};
 
 #[cfg(test)]
 impl SceneBlocks {
+    /// Marks `kind` used, as [`Drawable::share_scene`] does, without a drawable.
+    pub(crate) fn mark_used(&mut self, kind: SceneKind) {
+        self.used[kind as usize] = true;
+    }
+
     /// `kind`'s block of the view following craft `slot`, read back.
     pub(crate) fn read(
         &self,
@@ -186,6 +253,18 @@ impl Drawable {
         self.fog_bind = mesh_render::zone::rebind_buffer(&blocks.buffer, device, &self.zone_rebind);
         self.fog = blocks.buffer.clone();
         self.scene_kind = Some(kind);
+    }
+
+    /// Puts this drawable back on a block of its own, for tests.
+    #[cfg(test)]
+    pub(crate) fn clear_scene_kind_for_tests(&mut self) {
+        self.scene_kind = None;
+    }
+
+    /// The kind of scene block this drawable reads, for tests.
+    #[cfg(test)]
+    pub(crate) fn scene_kind_for_tests(&self) -> Option<SceneKind> {
+        self.scene_kind
     }
 
     /// The dynamic offset of the block this drawable binds in `view`.
@@ -299,6 +378,9 @@ pub(crate) struct Uploads<'a> {
 pub(crate) struct Staging {
     blocks: Vec<(u32, Uniforms)>,
     packed: Vec<u8>,
+    /// `(slot, index into blocks)`, sorted: the order a stable sort of `blocks` by slot gives,
+    /// without the scratch buffer a stable sort allocates on every call.
+    order: Vec<(u32, u32)>,
 }
 
 impl<'a> Uploads<'a> {
@@ -374,16 +456,18 @@ impl<'a> Uploads<'a> {
         let Staging {
             blocks: staged,
             packed,
+            order,
         } = &mut *staging;
-        staged.sort_by_key(|&(slot, _)| slot);
+        staging_order(staged.iter().map(|&(slot, _)| slot), order);
         let stride = mesh_render::UNIFORMS_STRIDE as usize;
         let mut index = 0;
-        while index < staged.len() {
-            let first = staged[index].0;
+        while index < order.len() {
+            let first = order[index].0;
             packed.clear();
             let mut next = first;
-            while index < staged.len() && staged[index].0 <= next {
-                let (slot, uniforms) = &staged[index];
+            while index < order.len() && order[index].0 <= next {
+                let (slot, at) = order[index];
+                let uniforms = &staged[at as usize].1;
                 let at = (slot - first) as usize * stride;
                 packed.resize(at + stride, 0);
                 packed[at..at + std::mem::size_of::<Uniforms>()]
@@ -483,5 +567,27 @@ impl Drawable {
                 bytemuck::bytes_of(&uniforms),
             ),
         }
+    }
+}
+
+/// `(slot, index)` for each staged block, by slot and then by when it was staged: the order a
+/// stable sort by slot gives (so a slot staged twice is written by its last block), without the
+/// scratch buffer a stable sort allocates on every call.
+fn staging_order(slots: impl Iterator<Item = u32>, order: &mut Vec<(u32, u32)>) {
+    order.clear();
+    order.extend(slots.zip(0u32..));
+    order.sort_unstable();
+}
+
+#[cfg(test)]
+mod staging_order_tests {
+    #[test]
+    fn the_order_is_a_stable_sort_by_slot() {
+        let slots = [7, 3, 7, 0, 3, 3, 9, 0, 7, 1];
+        let mut stable: Vec<(u32, u32)> = slots.iter().copied().zip(0u32..).collect();
+        stable.sort_by_key(|&(slot, _)| slot);
+        let mut order = vec![(99, 99)];
+        super::staging_order(slots.iter().copied(), &mut order);
+        assert_eq!(order, stable);
     }
 }

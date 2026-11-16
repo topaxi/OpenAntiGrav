@@ -90,7 +90,7 @@ fn parse_key_line(line: &str) -> Option<DlcKey> {
     let mut bytes = [0u8; 16];
     for byte in &mut bytes {
         let token = fields.next()?;
-        *byte = u8::from_str_radix(token.strip_prefix("0x").unwrap_or(token), 16).ok()?;
+        *byte = u8::from_str_radix(token.trim_prefix("0x"), 16).ok()?;
     }
     let key = [
         u32::from_le_bytes(bytes[0..4].try_into().ok()?),

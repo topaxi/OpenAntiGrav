@@ -424,7 +424,8 @@ correction below the list, which replaces an earlier wrong reading of what
    just before the call) and a literal `1.1` into fields on the shield entity
    - a hit-position-and-duration arm for the separately-scoped, still
    unimplemented "Shield hit response" (`docs/overview/roadmap.md`, M5), not a
-   hull spark. Confidence **75**.
+   hull spark. Confidence **75**. A craft-to-craft record takes this branch too: see
+   [the 2026-11-11 section](#a-craft-to-craft-contact-bulges-a-running-shields-shell-2026-11-11-shield-craft-hit).
 
 Also written on this pass: the same loop arms flag bits `0x20` and
 `0x400020` on `craft + 0x860` right after reaction #2, whenever the damage
@@ -1735,6 +1736,16 @@ session confirms it against a weapon-select UI string or inventory label.
 
 ### A fuse-arming candidate, found by searching for the write directly - unconfirmed
 
+> **Corrected 2026-11-03: this candidate is refuted.** `FUN_0885bf84` is
+> `Plasma_Launch` ([plasma.md](plasma.md), confidence 90): the `+0x48` it writes is
+> the Plasma bolt's launch speed (`|craft velocity| * 3.6 + stats->launchspeed`,
+> `stats+0xbc`), not a fuse and not on a craft. `FUN_0886a920` is its pool's
+> allocator (`Plasma_SpawnRemote`). The `+0x164`/`+0x64` pool `MinePool_Update`
+> walks is the Mine's own, and its `+0x48` is `mine+0x48`, armed from
+> `stats+0xf4` (`timetodie`, [mine.md](mine.md)). No craft-side fuse exists. The
+> text below is kept as the record of how the wrong lead arose; the measurement
+> that closes the stun question is the last section of this page.
+
 **Read 2026-08-19**, after the register-provenance chase into `0x0885f188`
 (the previous section's own spawn-helper call) turned out too ambiguous to
 resolve statically - two callers jump directly into that address, past the
@@ -2274,7 +2285,7 @@ the last 0.6 s and tests each call's instance gate (`instance + 100`) against th
   test, `0x08842648`). Static; no live cage spark caught.
 - **Ported:** `oag_raceplay::Race::throw_contact_spark` (the locator nearest the contact, the locator's
   0.8 s gate shared with a weapon hit, severity `intensity * 2 + 0.4`, the `.COLLISIONS` cue inside the
-  gate, nothing for a shielded craft), called for both hulls of every `oag_physics::pair` contact (the
+  gate, nothing for a shielded craft, whose shell bulges instead, below), called for both hulls of every `oag_physics::pair` contact (the
   contact point is the box-centre midpoint, `PairContact::point`) and for every `oag_physics::cage`
   corner (`CageResponse::resolved`, `Trigger::CollisionSparkNoDamage`). Pulse only, where a hull's
   `Ship Collision Fx` locators are read (`hit_sparks::anchors`). Tests: `tests::hit_sparks` (pair, cage,
@@ -2284,3 +2295,345 @@ the last 0.6 s and tests each call's instance gate (`instance + 100`) against th
   and its pair and cage contact paths are unread ([ps3-hdfury-eu/ship-collision-fx.md](../ps3-hdfury-eu/ship-collision-fx.md));
   it runs no cage. Pure: the cage is off by its data and `Ship_Damage` is unread. 2048 and Omega: not
   wired, no locators read and no cage; not checkable from the PSP side.
+
+## A craft-to-craft contact bulges a running Shield's shell (2026-11-11, `shield-craft-hit`)
+
+**Claim tested:** a shielded craft that another craft bumps shows the shell reaction iff the original does.
+**Result: yes. Confidence 80** (static, decompiled twice plus one live leg on the record, below).
+
+`FUN_088418e0`'s contact loop (re-decompiled this pass) tests one record at a time, with no read of the
+kind word `record + 0x170`:
+
+```c
+if (0.0 < record->friction /* +0x1a0 */ && Ship_State(entity) == 1) {
+    if (entity->0x4c == 0 || (entity->0x4c->0x1b8 & 0x10) == 0) {   // no Shield running
+        Ship_Damage(|p| * 0.05 * 0.7, entity, record->kind != 0, 0, 0);
+        entity->0x860 |= 0x400020;
+    } else if (entity->0x8c8->active /* +0x74 */) {
+        ShipShield_Hit(entity->0x8c8);                              // 0x0885eb04
+    }
+}
+```
+
+`ShipShield_Hit` has two callers in the image (`get_xrefs_to`): this loop (`0x088426e0`) and
+`Ship_ApplyPendingWeaponDamage` (`0x0883f204`). So the loop is the only contact path to the shell, and a
+pair record takes it exactly as a wall record does:
+
+- `Body_ResolveContactPair` calls `Body_RecordPairContact` (`0x0884dc60`) for **both** bodies (`0x0884f6c8`,
+  `0x0884f6dc`), appending to the same ring (`body + 0x370`) with the pair contact's friction at `+0x1a0`
+  ([hud-message-triggers.md](hud-message-triggers.md): `0.02` for two racing craft).
+- Live leg: the 2026-11-03 diff below found the struck craft's ring holding a record with `+0x1a0 = 0.02`
+  (`0x3ca3d70a`) one tick after a staged rear-end hit, and the 2026-10-26 call log shows `damaged 1`
+  (`friction > 0`) sparks on both hulls of one pair contact.
+
+So a pair contact on a craft in state 1 with a running Shield **bulges the shell, on each of the two
+craft that run one, every tick the ring holds the record**, and charges nothing (the amount is
+discarded, as for a wall). The cage's record carries friction `0`, so a cage contact never does
+(`Cage` row above). Not read: `ShipShield(entity->0x8c8)->active` is the shell object's own byte; the port's
+`ShipShield::hit` has the same no-op guard.
+
+**Port:** `Race::resolve_craft_pairs` raises `Race::shield_hit` for each hull of a pair contact that is
+racing with `shield_pickup_timer > 0`, the complement of the lap-spoil bit it already sets for an
+unshielded one (`pair_spoil`). `oag_physics` is untouched (the shell is a view-side output), so no state
+hash moves. Tests: `tests::shield_hits` (both shells, one shell, a craft that is not racing). Drawn: a
+headless frame of the bump (a posed rival, `--give shield`) shows the shell turn from violet to bright
+cyan and swell on the next frame, then settle over about ten ticks.
+
+**Absorbed weapon hits.** The weapon leg already raised it: `Race::tick` calls `shield_hit` for every
+`WeaponHit::absorbed` that `oag_weapons::projectile::step` reports (rocket, missile, mine, plasma, bomb,
+the Cannon's direct hit), and `repulser.rs` and the LeachBeam do likewise. `tests::shield_hits::a_rocket_a_shield_swallows_bulges_the_shell`
+fires a real Rocket at a shielded craft through `Race::tick` and goes red if the call is removed. **Two
+weapons are the exception, read 2026-11-11** ([cannon-quake-leachbeam.md](cannon-quake-leachbeam.md#2026-11-11-a-shielded-targets-shell-under-a-quake-and-a-leachbeam-shield-weapon-reactions)):
+a Quake wave never posts to `craft + 0x120` and skips a running Shield, so the shell stays at rest (as ours);
+a LeachBeam link on a Shield-holding target posts through its break tick and 0.5 s linger, so the shell
+bulges (wired, view-only).
+
+**Closed 2026-11-11 (`pair-bump-damage`): the unshielded branch charges the pool for a pair record.** Measured
+live in [the section below](#measured-2026-11-11-an-unshielded-craft-to-craft-bump-charges-the-energy-pool);
+it is a simulation change and not wired here.
+
+**Against the other titles.** Pure: ported by the same wiring; its loop, `ShipShield_Hit` twin and
+pair-record writer are read ([`psp-pure-usa/craft-physics.md`](../psp-pure-usa/craft-physics.md),
+"The contact loop's shield branch"). HD: checked, applies, not wired as a measured law (its pair path is
+unread, [ps3-hdfury-eu/ship-collision-fx.md](../ps3-hdfury-eu/ship-collision-fx.md)); the wiring is
+title-generic and HD inherits Pulse's. 2048 and Omega: no shell is drawn, so nothing is seen; not checkable
+against a drawn original.
+
+## Measured 2026-11-11: an unshielded craft-to-craft bump charges the energy pool
+
+**Claim tested** (lane `pair-bump-damage`): an unshielded craft-to-craft bump does or does not charge the energy
+pool (`entity + 0x88`), and by how much per contact. **Result: it does, `Ship_Damage(0.035 * |p|)` per ring record on
+each of the two hulls, with `source = 1`; `Ship_Damage` then halves it when weapons are off.** Confidence **92**:
+a live breakpoint on every call, 1,358 contact-loop pair-record calls over 14 runs (two bit-identical replays of one window dropped; 661 distinct `|p|` values), the
+static read in the section above, and the same code path as the wall leg's `25 of 25` ([shield.md](shield.md),
+"Contact damage is `|p| * 0.035`"). Not 95: **one PPSSPP boot, one state, one circuit** (the repeats of the 40
+units/s run replay the same state bit-identically, so they are not independent runs), PSP USA only, no second binary
+read (Pure's twin is read statically, below).
+
+**Method.** PPSSPP v1.20.4, `pulse-psp-usa.chd` (the grid saves and every address on this page are USA builds),
+software renderer, `data/saves/pulse-psp/race-talons-venom-alongside.ppst` (Talon's Junction, Single Race, Venom,
+**weapons off, damage on**: `g_weapons_enabled = 0`, `g_damage_enabled = 1`, read at `0x08b30fa8`/`0x08b30fa9`).
+`scripts/psp-pair-bump-damage.py` restores the state, stops at the first `Ship_UpdateCraft`, and places the player's
+craft 20 units ahead of the first rival `Ship_UpdateCraft` visits (slot 6), facing as it does, at 0, 30, 40 or 50
+units/s (`psp-pair-capture.py`'s `stage_head_on`; the rival does 105 along its forward, and the pair closes and meets 2 to 3 s later; which hull struck which was not read). It then breaks on `Ship_Damage` (`0x088439ac`) with the condition `ra == 0x088426b4` (the contact loop's
+call at `0x088426ac`, plus its delay slot), so no weapon or other caller stops it, and reads at each stop `a0` (the
+entity), `a1` (source), `f12` (the amount), and the ring record the loop is on (`s0`: kind `+0x00`, point `+0x10`,
+impulse `+0x20`, friction `+0x30`). It swaps the breakpoint to the call's return address and reads the pool again,
+one breakpoint at a time (v1.20.4 fires only the most recently added one). `--probe-j` first stops at
+`Body_ResolveContactPair`'s impulse call for the staged pair (`0x0884f630`) and reads `j`, the normal and the
+relative normal velocity `vn`. Craft state 1 and no Shield (`entity + 0x4c` links a flag word `0x800`, no `0x10`)
+on every hull logged. No input was sent, and whether the loaded state's player craft was under the
+original's Autopilot was not read: no number here is a physics reference, because the law is a function of the
+recorded `|p|` and the craft state, not of how the craft is flown.
+
+**Result 1: the ring record is the resolver's impulse.** At the first contact of each probe run the ring's `|p|` is
+bit-equal to the `j` read at the resolver (`Body_RecordPairContact` copies the `+j*n` quad verbatim to body A's
+record and `-j*n` to B's):
+
+| placed speed | `vn` before | `j` at the resolver | first ring `|p|` | `f12` | pool, hull A (entry to return) | hull B |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | -12.08 | 6.57400 | 6.57400 | 0.23009 | 0.11505 | 0.11504 |
+| 30 | -35.43 | 22.78985 | 22.78985 | 0.79764 | 0.39882 | 0.39882 |
+| 40 | -51.65 | 30.72239 | 30.72239 | 1.07528 | 0.53764 | 0.53764 |
+| 50 | -66.16 | 36.95369 | 36.95369 | 1.29338 | 0.64668 | 0.64669 |
+
+(`vn` is the relative normal velocity of the two hulls at the contact point, recomputed from the bodies as
+`scripts/psp-pair-capture.py` does; the placed speed is only how the staging got there, the craft having been
+driven on for 2 to 3 s before they met.) Four closing speeds, `j` from 6.6 to 37.
+
+**Result 2: the amount is `0.035 * |p|`, on every call.** `f12 / |p|` over the 661 distinct pair-record
+values (`kind = 1`, `source = 1`, friction `0.02` = `0x3ca3d70a` on all 1,358 calls) ranges `0.03499999` to
+`0.03500000`, the float32 rounding of `0.05 * 0.7`. `|p|` itself ranged `5e-05` to `36.95` (median `0.23`). A wall
+record (`kind = 0`, `source = 0`, friction `0.035`; six seen when a placed craft met the wall first) gives the
+same ratio. Amount and `|p|` are therefore one law for walls and pairs: the contact loop does not read the kind
+word for the amount (only for the `source` argument and `ShipCollisionFx_Trigger`'s `kind`).
+
+**Result 3: the pool falls by the amount, halved with weapons off.** Over the 36 calls with an amount above
+`0.05` and weapons off, `(pool_entry - pool_return) / f12` is `0.49992` to `0.50010`; with `g_weapons_enabled`
+written to `1` before the stage (one run, 3 such calls) it is `0.99999` to `1.00000`, with `f12` unchanged at
+`0.035 * |p|`. So `Ship_Damage`'s `if (!g_weapons_enabled) amount *= 0.5` applies to a pair bump as to a wall
+(shield.md, "`Ship_Damage` is the single subtraction"), and the loop passes the same `f12` either way. Weapons
+on, a pair contact of `|p| = 33.13` cost `1.1595` energy per hull; weapons off, `|p| = 36.95` cost `0.6467`.
+
+**Result 4: both hulls pay, equally; nothing else does.** Each ring record is dispatched on both bodies
+(`Body_RecordPairContact` for A and B), and the two calls of one record read the same `f12` (`0.53764` and
+`0.53764` above). The pools of the four craft not in any contact (slots 0, 1, 4, 5) are unchanged to the last bit in
+every run, and the struck rival's pool (slot 6) equals the sum of its logged entry-to-return deltas exactly
+(`-0.7559` over 26 calls, `-0.9854` over 106), so nothing but the logged calls moves it (damage is on, so there is
+no regeneration).
+
+**Result 5: more than one record per tick; origin unread.** On 637 of the 693 (run, tick, hull) groups there are
+two records, 11 have three and 2 have four. Each is its own `Ship_Damage` call. The second record's `|p|` is not a
+fixed share of the first (`1.2374` then `0.5783` on a first-contact tick, `0.3461` then `0.0274` in a graze; over
+all groups from `0.015 %` to `214 %` of the first). Summed over all groups the energy is `1.061` times the first
+record's alone, so one charge per pair per tick undercounts by about 6 % over these ticks. **What makes the
+extra records is not read**: a second contact of the box pair's manifold, or a second pass of the resolver (or a
+physics substep) on the same pair, both fit (same point, parallel impulse). The resolver probe took only the first
+`0x0884f630` hit for the pair and stopped, so it counted nothing per tick. Recipe: count `0x0884f630` hits for
+one pair between two consecutive `Ship_UpdateCraft` stops of one craft.
+
+**Control.** A run with nothing staged over the same window: slots 0, 1, 4, 5 and 6 make no contact-loop call
+and keep their pool to the last bit; slots 2, 3 and the player have natural pair contacts in this state (129, 51
+and 169 calls, all `source = 1`) and lose `1.1804`, `0.5541` and `1.3705`, each equal to the sum of its logged
+entry-to-return deltas to four places. A natural contact, then, charges exactly as a staged one.
+
+**An unexplained placement cost, not the bump.** In every staged run the placed player's pool ends lower than its
+logged calls account for, by exactly `10.8` (`-11.5494` against `-0.7494` logged, `-11.7854` against `-0.9854`,
+`-11.9595` against `-1.1595` with weapons on) and by `5.0` in an earlier, shorter run; the control player has no such
+gap. The loss is already there at the player's first contact call (`134.467` at the load, `123.667` at the first call),
+and no `Ship_Damage` call of any caller arrived in between (the run with `--all-callers`), so it is not the bump and
+it is not a `Ship_Damage` call. One call from `0x0884049c` (`source = 0`, `f12 = 5.0`, `2.5` of pool with weapons off,
+no ring record) was caught once at race clock `41.44`, a different caller of `Ship_Damage` that is unread. Both are
+artefacts of moving the craft by writing its body, and are why the figures above come from each call's own
+entry and return reads and never a before/after pair on the player. Recipe if wanted: a write watchpoint on
+`entity + 0x88` from the placement.
+
+**What ours does (wired 2026-11-11).** `oag_raceplay::Race::resolve_craft_pairs` (`crates/raceplay/src/field.rs`)
+calls `oag_physics::damage::apply_pair` on both hulls of every touching pair with the returned
+`PairContact::impulse` (this `j`): `contact_damage(impulse, rules)` through the shared `subtract`, so the racing gate,
+the Shield refusal, the weapons-off halving, the clamp, the 20 % edge and the destroyed transition are the wall's.
+Once per pair per tick (Result 5's extra records stay open). The gate is read before the charge, so a bump that
+empties a pool still spoils the lap. It runs outside the drawing feature, so `oag-server` charges too. Pinned by
+`oag_raceplay`'s `tests::shield_hits` (unshielded both pay `0.035 * impulse` bit-exact, half with weapons off, a
+shielded hull and a destroyed hull pay nothing while the partner pays; red with the call removed) and
+`oag_physics`' `damage::tests::a_pair_contact_costs_the_wall_law_and_a_shield_refuses_it`. Not title-gated: Pure
+and HD inherit as below, 2048 and Omega inherit from HD by lineage (not checkable here). What it did to our AI
+field is on [ai.md](../../../gameplay/ai.md#craft-to-craft-bumps-cost-the-field-energy). A wall contact charges
+through `oag_physics::damage::apply_contact` from `integrate.rs`, with `CONTACT_DAMAGE_SCALE = 0.05 * 0.7` and
+`NO_WEAPONS_DAMAGE_SCALE = 0.5`, which are exactly the two constants measured here.
+
+**What the wire changed.** For each hull of a touched pair that is racing (state 1) and not holding a
+Shield, subtract `damage::contact_damage(contact.impulse, rules)` through the shared `subtract` path, once per ring
+record. `ShipState::shield` is part of the state hash, so every race with a craft-to-craft bump moves its hash
+and `race_ground_truth` moves with it: the wire lane quotes it before and after and regenerates references in a
+separate commit. Charging `contact.impulse` once per pair per tick undercounts the original by about 6 %
+(Result 5) until the origin of the extra records is read; that residual is the open item, small beside the bump's own
+cost. The AI hulls pay too, so a rival can be wrecked by a bump; the lead-in is the same shared path.
+
+**Against the other titles.** Pure: the loop's twin `FUN_08926ae4` calls `Ship_Damage`'s twin `FUN_08928274` with
+`|p| * 0.05 * 0.7` for a record of positive friction on an unshielded craft ([`psp-pure-usa/craft-physics.md`](../psp-pure-usa/craft-physics.md),
+"The contact loop's shield branch"): checked, applies, not measured live, and the pair friction value is still
+unread, so the port inherits Pulse's `0.02` (the gate is only "positive"). Pulse PS2: inherited from PSP, not
+captured. HD: checked, applies, not wired (its pair path is unread, [ps3-hdfury-eu/ship-collision-fx.md](../ps3-hdfury-eu/ship-collision-fx.md)).
+2048 and Omega: not checkable here; no PSP pool to compare.
+
+**Tool.** `scripts/psp-pair-bump-damage.py` (this section's reproduction, with `psp-state.py load --stop-at 0x08849618`
+before each run). It resumes the CPU on exit, which the next `psp-state.py load` needs
+([emulator-recipes.md](../../../reverse-engineering/emulator-recipes.md)); `psp-pair-capture.py`'s `stage_head_on`
+now clears the queued rebroadcast before each resume, as `Debugger.each_hit` does.
+
+## Measured 2026-11-03: a craft-to-craft hit arms nothing on the craft
+
+**Claim tested** (`pulse-craft-stun` lane): whether Pulse arms a stun, fuse, flag or
+timer on a craft that another craft hits. **Result: no. The effect of a pair
+contact on a craft is its velocity change plus one contact-ring record in its
+body. Confidence 80** (one staged rear-end, struck rival, placed craft and an
+untouched control; weapons off).
+
+**Method** (PPSSPP v1.20.4, `pulse-psp-usa.chd`, SINGLE RACE, eight-craft grid,
+weapons off, software renderer). Player craft `0x09b781e0` placed 20 units ahead
+of the first rival at 10 units/s (`psp-pair-capture.py`'s `stage_head_on`, same
+facing: the rival ran at 95 units/s, closing 105). Breakpoint on
+`Body_ResolveContactPair`'s first applier call (`0x0884f630`) until the staged pair
+arrived (first pair visited, 0 skipped). At that stop, and then at each of the
+struck craft's, the placed craft's and a control craft's next `Ship_UpdateCraft`
+entries (ticks 1, 3, 10, 30), the whole craft struct (`0x800` bytes from the craft
+pointer) and the whole body (`0x420` bytes from `*(craft+0x1cc)`) were dumped and
+diffed word for word. A snapshot diff reads memory directly, so it does not depend
+on a write watch's blind spot
+([ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#a-controlled-watch-can-still-miss-a-write---the-pool-slot-outlives-the-log-does-not)).
+
+**What changed from contact to tick 1 on the struck craft (58 craft words, 16 body
+words)**, split by whether the control craft changed the same word:
+
+- Pose following, changed on every craft: the basis rows, the node
+  transforms and position copies (`craft+0x80..0x258`, `0x3a0`, `body+0x30`).
+- **Velocity (`body+0x140`, mirrored at `craft+0x4b0`): rival `(37.86, -14.04,
+  -86.47)` (95.0) to `(17.57, -7.58, -44.95)` (48.9); the placed craft
+  `(4.6, -2.2, -9.2)` to `(24.9, -8.6, -50.7)`.** The control moved by
+  `0.13`. This is `Body_ResolveContactPair`'s impulse, the only effect.
+- **Rival-only, placed also, control never: `body+0x170..0x1e0`** (mirrored at
+  `craft+0x4e0..0x550`, same memory because the body sits at `craft+0x370`). At
+  contact it holds stale ASCII (an XML buffer's leftovers, in the control too, at
+  tick 30 still); at tick 1 it holds a record: word `+0x170 = 1`, `+0x180` the
+  contact point `(-625.5, -9.07, -222.0)` (track scale), `+0x190` the normal,
+  `+0x1a0 = 0.02` (`0x3ca3d70a`), and by tick 30 a second record at `+0x1b0..`. This is the
+  ring `Body_RecordContact` fills (sits with the contact-fx data in
+  `psp-contact-fx-read.py`). Its consumer is not read here.
+
+**Nothing else is rival-only.** At ticks 3, 10 and 30 the rival-only word set is
+that same ring region (`craft+0x4e0..0x550`) and nothing more; no counter, flag
+or timer steps at contact and decays afterwards, on the struck or the placed craft.
+So the craft-to-craft law is exactly what `Body_ResolveContactPair` reads: the
+`-1.1` restitution term (`e = 0.1`), no friction, a centred impulse (no spin).
+Shield damage is separately absent, as established above (only wall scrape and
+weapon blasts charge it). **Corrected 2026-11-11:** a pair record charges the pool too, see
+[the section above](#measured-2026-11-11-an-unshielded-craft-to-craft-bump-charges-the-energy-pool); this diff
+dumped the craft and the body, not the entity at `+0x88`, so it could not see it.
+
+**The pair-versus-wall elasticity gap stays as recorded** (`0.1` pair, `0.4`
+wall, same build): nothing found arms or scales anything else.
+
+**What this does not close**, by address: the ring record's consumer (what reads
+`body+0x170`), PS2 (not captured; corroboration only), and a hit with weapons on
+or from a heavier closing speed than `105`.
+
+### `Weapon_PostBlastImpulse`'s `T+0x50` is not `body+0x50`: `T` is a different object
+
+The tension recorded in rigid-body.md and in the 2026-08-19 section above
+("`body+0x50` as position against `body+0x40..0x70` as inverse inertia") came from
+treating `T` (the pointer `Weapon_PostBlastImpulse` loads at
+`0x088679c0`/`0x088679d8`: `lw a0,0x44(s0)`, `s0 = subsystem + targetIndex * 4`)
+as the rigid body. **It is not the rigid body.** Live, in a single-craft Time
+Trial state (`time-trial-talons-venom-grid`, stopped at `Ship_UpdateCraft`):
+
+| object | address | `+0x30` | `+0x50` | `+0x110` |
+| --- | --- | --- | --- | --- |
+| craft (`Ship_UpdateCraft`'s `a0`) | `0x09a0dea0` | not a vector | not a vector | a position-shaped value |
+| body (`*(craft+0x1cc)`) | `0x09a0e210` | position `(5.655, -50.083, -196.662, 1)` | tensor row 1: `(0, 0.046, 0, 0)` (the diagonal at `+0x54`, as rigid-body.md reads it) | `0` |
+| `T` (`*(*0x08b3bf88 + 0x44)`) | `0x09a4a880` | `(-0.004, 0.750, -0.014)` | **`(8.039, -50.151, -200.914, 1)`** | `(0, 0, 0, 1)` |
+
+`T` holds three 4x4 transforms at `+0x20`, `+0x60`, `+0xa0`, each with the same
+basis (the up row scaled `0.75`) and a translation at `+0x50`, `+0x90`, `+0xd0`.
+`T+0x90` is bit-for-bit the body's position; `T+0x50` is the body position plus
+`4.875 * forward`, and `T+0xd0` is the body position minus `4.875 * forward`
+(measured: length `4.875`, projection on the forward row `4.875` and `-4.875`, in
+both of two loads of single-craft states). So **`Weapon_PostBlastImpulse` measures its
+blast distance and direction from the craft's nose point, `4.875` units ahead of
+the body's position, not from the centre.** The blast direction (`T+0x50 - S`)
+therefore points at the nose. Confidence **75** on "`T` is a separate node object
+and `+0x50` is the nose point" (one craft, one pose, exact lengths, direct pointer
+inequality against the body). The sign of `4.875` as hull nose/tail hardpoints
+rather than something else is a reading (50), and the object is left unnamed.
+
+The rigid-body.md confidence-88 reading of `body+0x40..0x70` is untouched; the
+contradiction came from two different structs. **Not generalised to all eight
+craft**: the race-time pointer `0x08b3bf88` pointed at a different 0x1f0-stride
+pool in the eight-craft run and the pattern search for `T` per craft found nothing
+in that race, so the layout is read off the single-craft states only.
+
+## Wired: every blast posts its push through the pending impulse from the nose point
+
+2026-11-09. **Claim** (`pulse-blast-impulse` lane): on Pulse, a weapon blast pushes the struck craft
+through `ShipState::pending_impulse`, measured from the craft's nose point, as the
+original does, instead of changing velocity at once from the centre. **True, wired;
+the nose point itself stays at confidence 75** (see above) and the writers beyond the
+Mine's are an inference.
+
+**Which weapons reach `+0x110`, settled from the docs, no new breakpoint.** Every
+blast function the original has writes the slot with the identical
+`(1 - d / blastradius) * blastforce` and no clamp:
+
+| Function | Address | Weapon | Page | Conf. |
+| --- | --- | --- | --- | --- |
+| `Weapon_PostBlastImpulse` | `0x0886794c` | Mine trip (one caller, `Mine_SweepCraftTrigger`) | this page | 82 |
+| `Bomb_ApplyBlast` | `0x088643d0` | Bomb, tripper included | [mine.md](mine.md) | 85 |
+| `Plasma_ApplyBlastForce` | `0x0886ae08` | Plasma craft hit, all but the firer | [plasma.md](plasma.md) | 88 |
+| `Rocket_ApplyBlastForce` | `0x0886ee88` | Rocket craft hit, all but the firer | [rocket-visuals.md](rocket-visuals.md) | 90 |
+| `Missile_ApplyBlastForce` | `0x08868ea4` | Missile, all but the struck | [missile.md](missile.md) | 88 |
+
+**`FUN_08868ea4` is `Missile_ApplyBlastForce`** (confidence 88, `names.tsv`); the "under 50,
+unnamed" account of it above is superseded. Its callers `FUN_08868a10`
+(`MissilePool_DestroyRemote_q`) and `FUN_088690fc` are the missile's. The Wipeout
+Pure `Bomb_ApplyHit` is the same arithmetic ([weapons.md](../psp-pure-usa/weapons.md)).
+
+**What the port does.** `oag_physics::wall::post_blast_impulse` measures from
+`oag_physics::wall::nose_point` (position + `NOSE_OFFSET` = `4.875` x forward) and
+accumulates into `pending_impulse`; `oag_weapons::projectile::blast::post_impulse` is the one
+helper all of `blast`, `blast_mine_trip` and `blast_direct_hit` call (they carried
+three inline copies of a radial `apply_impulse`). `wall::apply_pending_impulse`, already
+ported, drains it on the craft's next physics step: a push along the craft's own
+forward axis (sign from the vector's side of it, magnitude its length), `+0.5 s` of
+stun (no thrust, no lateral grip), and **nothing at all under a running Shield**. That is
+the player-visible change: a hit craft loses its engine for half a second per blast, a
+shielded one is not shoved.
+
+**Departures, labelled.** (a) The reach: `Plasma_ApplyBlastForce` gates on `d <
+blastradius` off the nose point, so the push uses the nose distance for the gate as well
+as the falloff (never a negative falloff). Damage and slowdown keep their existing
+gate on the craft's position, which no page contradicts. (b) The three twins other
+than the Mine's and Plasma's are taken to read the same `T+0x50` (their pages say
+"position" without an offset); chosen, not measured. (c) The Shuriken's blast law is
+unread and keeps taking the Mine's through `blast`. (d) A blast centred exactly on a
+nose point posts nothing (the original's zero-guarded normalise), where ours used to
+push up.
+
+**Other titles: gated per title, `Weapons::blast_push`.** Pulse (PSP and PS2) is
+`Posted`, measured. Pure is `Posted`, inherited: its Bomb push is the same arithmetic
+([weapons.md](../psp-pure-usa/weapons.md)) and no Pure test moved. **HD, 2048 and Omega
+keep the previous immediate velocity change, chosen.** The first attempt inherited
+Pulse's law everywhere, and `hd_eliminator_hud_ground_truth::a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace`
+(a pace measured against HD's own original) stopped reaching 200 in 1,000 s, and HD's
+Bomb-laying ground truth lost its craft: the stun is unmeasured on HD (its blast loop
+`FUN_00146470` and its collision-impulse consumer are unread). The maintainer's
+"inherit Pulse's law where a title has none measured" rule and that measured test
+disagree; the axis keeps the test's evidence and lets a title flip by data once its
+consumer is read. Flipping HD is one line in `crates/hd/src/lib.rs` plus that test's
+bound. 2048 and Omega follow HD because their craft and weapon lineage is HD's; a
+2048/Omega census against their blast tables was not run (the delivery moves no number).
+
+**Open.** The nose offset is measured on one hull (`4.875 = 0.375 * 13`, may be
+hull-derived); whether the Missile, Rocket and Bomb twins read `T+0x50` (a Ghidra
+`program=` read of each position load settles it); the Shuriken. The collision stun
+is `+0.5 s` per hit and adds, so two blasts in a tick stun for a second: confirmed in
+the consumer's code, not watched in a race.

@@ -39,7 +39,7 @@ does not, and the page then says so instead of starting. `just web --serve`
 runs `scripts/serve-web.py`, which sends both; `npx wrangler pages dev
 target/web/dist` is the closer copy of the real host (it reads `_headers`).
 
-The published folder is `index.html`, `main.js`, `worker.js`, `style.css`,
+The published folder is `index.html`, `main.js`, `fault.js`, `worker.js`, `style.css`,
 `pkg/<hash>/oag_web.js` (the wasm-bindgen glue, 105 KB),
 `pkg/<hash>/oag_web_bg.wasm` (about 10 MB), the licence files and `_headers`
 (Cloudflare's, see "Hosting"). `<hash>` is the first
@@ -126,7 +126,7 @@ makes no request after loading itself.
   wasm, behind `cfg(target_arch = "wasm32")`: the race scene build
   (`race_build::BuildWorker`, which is GPU work and wgpu's web types belong to
   the page's thread), dropping a parked race (GPU resources again), and the
-  boot's media (`boot::MediaWorker`; a movie's open is a demux, and its decode
+  boot's media (`boot::worker::MediaWorker`; a movie's open is a demux, and its decode
   is the browser's own and asynchronous, so it has nothing slow to move). A CHD read is serial when `available_parallelism`
   fails, which it does here. The circuit-length worker uses `std::thread`, which
   this target refuses even with atomics, so it fails to spawn and logs it, as it
@@ -167,7 +167,7 @@ makes no request after loading itself.
   derivatives (`textureSample`, `dpdx`, `dpdy`) and is reached from `lit_texel`
   past its `holo` early return needs the attribute itself.**
   `just check-web-shaders` is what finds the next one; see "Verifying it".
-- **Logging.**- **Logging.** The console, through a small `log` sink in `web.rs`: `warn` and
+- **Logging.** The console, through a small `log` sink in `web.rs`: `warn` and
   above from everything, `info` from this project's own crates. `?log=debug` or
   `?log=trace` on the page's URL widens it, which is how the loader reports
   are read here. There is no log file.
@@ -196,6 +196,71 @@ makes no request after loading itself.
   every element carrying `hidden` with `display: none !important`: an author
   `display` rule otherwise outranks the browser's own, which once drew that
   button empty beside the other two with nothing to replay.
+
+### The page's stack
+
+The page's thread runs on the stack the linker lays out at the bottom of the
+module's memory, below its data, with `__stack_pointer` starting at its top. Its
+size is the link argument `-zstack-size`; without one it is 1 MiB, where a
+native main thread on Linux has 8 MiB. `build-web.sh` links **8 MiB**
+(`stack_size`), the native figure. A worker's stack is set in `web/worker.js`
+(below).
+
+**What happened when it was 1 MiB** (2026-11-10, the nightly of `1aacef762`,
+deployed as `pkg/616e98a94ed1f513`). Every Pulse PSP boot stopped right after
+`renderer: webgpu:` in Chromium and Firefox alike, on a hardware adapter or a
+CPU one: the boot's call chain needed about 1.35 MB of stack in the `dist`
+build, fat LTO having inlined `Stage::race` into `App::open_with`
+(`open_with` 813 KiB, `oag_web::run` 398 KiB, `resumed` 105 KiB, read off the
+modules' function prologues). The overflow ran below address 0, which traps as
+`memory access out of bounds` (Chromium) or `index out of bounds` (Firefox). A
+trap is not a panic, so the panic hook never saw it, and it left the stack
+pointer where it was: every later callback trapped too, the first of them
+wasm-bindgen-futures' task queue, whose closure shares code with a `GpuError`
+callback and so is named for one in the console. There was no GPU error. The
+`dev` build did not overflow and booted, which is why a `--dev` walk showed
+nothing.
+
+Three things now stand in its way:
+
+- **The stack and the frame.** 8 MiB, and `Stage::race` is `#[inline(never)]`
+  (the `RaceStage` it builds, about 350 KiB, sits on the stack before it is
+  boxed), which takes `open_with` out of the largest frames.
+- **The build fails on it, with no disc.** `scripts/check-wasm-stack.py` reads
+  the built module: the stack pointer must start at the linked size, and no
+  function's frame may be over an eighth of it (1 MiB). `build-web.sh` runs it
+  before `wasm-opt`, so the Pages job, which has no image, refuses to publish a
+  module that fails it. What each half catches: the stack-pointer check, a
+  build whose `-zstack-size` did not take (the module of `1aacef762` fails it);
+  the frame check, one frame growing past 1 MiB, about 30 % over today's
+  largest (766 KiB). The old 813 KiB `open_with` frame would pass the frame
+  check at this stack size. Neither measures a call chain's depth, so the walk
+  below is what proves a boot.
+- **A trap reaches the stopped page, and nothing enters the module again.**
+  `web/fault.js` wraps the instance's exports (`WebAssembly.instantiate` is
+  patched before the glue calls it), so a trap there stops the module: every
+  later frame, key press, resize or promise returns without running wasm, and
+  its workers and audio context are ended. The first trap is shown through the
+  page's one report ("Troubleshooting"), with its message and wasm offset,
+  instead of a frozen last frame. The old module behind the new page showed
+  "OpenAntiGrav stopped", `memory access out of bounds`, the offset.
+
+`web-screenshot.py` prints each uncaught error's stack (function names survive
+in an `OAG_WEB_NO_OPT=1` build) and **exits non-zero on any**; it used to print
+three traps under a zero exit. After the fix, the Pulse PSP EU boot to Language
+Selection and on to ENTER YOUR NAME ran clean in headless Chromium 154 and
+Playwright's Firefox (build 1572), `dist` build, no page error, and the walk in
+"Verifying it" raced at 60.2 fps in Chromium. **A worker's stack is not
+covered by a guard**: wasm-bindgen allocates it from the heap, so an overflow
+there corrupts memory instead of trapping. Measured with the `worker-stack` fault
+("Troubleshooting", "Reproducing every message") at wasm-bindgen's default size:
+64 KiB frames on a worker overran its stack into the audio mixer's worker, which
+then trapped on `memory access out of bounds` inside `Ahead::spawn`, so the page
+reported a trap in a thread that had done nothing wrong. `web/worker.js` now
+passes `thread_stack_size` of 8 MiB (`STACK_BYTES`), the page's own: more
+headroom, not a guard, and no worker's real depth was measured (the same hook
+still overruns 8 MiB at 128 such frames). A canary that detects an overflow
+needs a raw pointer write, which this workspace denies (`unsafe_code`); open.
 
 ### Disc keys
 
@@ -267,7 +332,7 @@ not turned on.
 The render target is held to **720 lines** on the web **by default**: only while
 render scale is at its default, 100 (a player cannot tell 100 picked from 100
 untouched, so 100 is the capped value; 125 and up go past 720, 50 and 75 below it, as on a desktop). The options row has no help line to say so, so this page does (`settings::web::render_target`, used by every
-`target_size` caller, width scaled by the same factor): a 1920x1080 surface logs
+`target_size` caller, width scaled by the same factor): a 1920x1080 surface logs (at `debug`)
 `render target 1271x720 for a 1920x1080 surface`, and the race held 60.4 fps in
 headless Chromium (2026-10-09). The surface is in CSS pixels, not physical ones: at
 `devicePixelRatio` 2 on a 960x544 page the canvas is 960x544 and the target is
@@ -357,11 +422,21 @@ section 9, by `crates/raceplay/tests/web_picker_table.rs`. WebGPU ships in Chrom
 Chromium on Linux still needs `--enable-unsafe-webgpu --enable-features=Vulkan`;
 Firefox on Linux needs `dom.webgpu.enabled` and `gfx.webgpu.ignore-blocklist`
 set in `about:config` (Firefox 155 then hands out a hardware adapter, headless
-included). The page says so when `navigator.gpu` is missing rather than
-failing later, and when the page is not cross-origin isolated (above), which
-every one of these browsers supports.
+included). The page says so, at load and before any disc is picked, when
+`navigator.gpu` is missing or when the page is not cross-origin isolated
+(above), which every one of these browsers supports; "Troubleshooting" lists
+every message.
 
 ## Verifying it
+
+`just check-web` (part of `just` and `just gate-affected`) type-checks the
+module with `scripts/build-web.sh --check`: the same nightly, `-Z build-std`,
+target features and link flags as `just web`, for both the `web` and the
+`web,fault-test` features, in `target/web-threads`. About 50 s cold and 10 s
+warm; it needs that nightly with `rust-src` and the wasm32 target, and fails
+with the install command when they are missing. It is a type check only (no
+`wasm-bindgen`, no `wasm-opt`), and it denies no warnings: the module still
+builds with 22.
 
 `scripts/web-screenshot.py` serves a built `dist` folder, opens it in headless
 Chromium with WebGPU on, hands an image to the file input, and writes
@@ -392,13 +467,15 @@ claims rest on, from Language Selection to a race on Moa Therma White:
 just web
 uv run --with playwright python3 scripts/web-screenshot.py \
     --image data/images/pulse-psp-eu.chd --out data/web-shots \
-    --at 32,64,72,80 --press Enter@8 --press Enter@11 --press Space@14 \
+    --at 80,86,95,110 --press Enter@8 --press Enter@11 --press Space@14 \
     --press Enter@18 --press Enter@22 --press Enter@26 --press Enter@30 \
-    --down x@52 --down ArrowLeft@74 --up ArrowLeft@76 --fps 5
+    --press Enter@74 --press Enter@78 --press Enter@82 --down x@88 --fps 5
 ```
 
 The first Enter skips the intro movie, which plays since 2026-10-09
-("Movies"); before that the walk was one press shorter.
+("Movies"). Since the name prompt (ENTER YOUR NAME) the walk reaches Ship
+Select at 72 s and needs the three later presses to race (2026-11-10, a race at
+60.2 fps in Chromium 154).
 
 The encrypted HD image takes its key from the same command with
 `--key data/images/hdfury-ps3-eu.dkey --key-mode drop` (or `pick`, `hex`,
@@ -475,6 +552,19 @@ constants are not module text and are not varied.
   Chrome stable and Chrome beta (`browser-actions/setup-chrome`), the second to
   catch the next Tint tightening before a player does. It could not be run from
   here, so the runner is unverified (HANDOVER.md lists what).
+- **CI** (`web-compile` in `.github/workflows/ci.yml`) runs `cargo check` of the
+  `oag_web` example for wasm32 with the pinned nightly on every push and pull
+  request (about 1.5 minutes cold on a loaded machine; no `-Z build-std`, no
+  link, so it does not need `rust-src`). Cargo builds an example's
+  dev-dependencies, so a dependency that is fine for tests but not for wasm32
+  fails there: `oag-game`'s `oag-schema` with `validate` (`toml-schema` calls
+  `url::Url::from_file_path`, absent on wasm32) broke the nightly's Pages job
+  four nights running while every other check was green. The dev-dependency is
+  now `cfg(not(target_arch = "wasm32"))`. Locally:
+  `cargo +nightly-2026-10-08 check --target wasm32-unknown-unknown -p oag-game
+  --no-default-features --example oag_web --features web` (and again with
+  `--features web,fault-test`, which the same job runs, so the fault hook of
+  "Reproducing every message" keeps compiling).
 
 `/usr/bin/chromium` (Chromium 153 for the walks above; 154 since 2026-10-12) is the browser it was run with: Playwright's
 own Chromium build has no WebGPU on Linux. Headless Chromium here reports a hardware
@@ -499,11 +589,39 @@ simulation code can observe on one thread.
 
 ## Troubleshooting
 
-**The page shows "OpenAntiGrav stopped".** A Rust panic, a lost GPU device or a
-GPU out-of-memory/internal error lands on the page instead of a white canvas
-(`web/main.js`, `window.oagFatal`, called from `gpu::web::fatal` and the panic
-hook). It prints the cause and, when the adapter is a CPU one, the flags below.
-The full text, with the stack, is in the browser console.
+**The page shows a message** ("OpenAntiGrav stopped", "This browser has no WebGPU",
+and the rest): "What the page says when something fails", below, lists each one.
+
+**Profiling the page, or a report with readable frames: add `?profile=1`** (or
+`?debug=1`) to the address. The page then loads `oag_web_bg.named.wasm`, the
+same build as `oag_web_bg.wasm` but with its function names kept (`wasm-opt -O -g`
+in `scripts/build-web.sh`; 19.4 MB against 18.0 MB, 2026-11-11), and hands that
+module to every worker, so a profiler's wasm frames and a report's stack read as
+Rust paths instead of `wasm-function[N]`. In Firefox: `about:profiling`, preset
+"Graphics" with "JavaScript" on, Start Recording, open the page with
+`?profile=1`, pick the image, reproduce, Capture (Ctrl+Shift+2), then save or
+upload the profile. Measured on a Pulse boot in Firefox 159: without the
+parameter 0 of 574 wasm frame names carry a Rust path; with it 260 of 572 do, on
+the page's thread and on the workers (the audio render loop, the menu music).
+
+**Firefox: the page froze right after the `renderer:` line**, "a page is slowing
+down Firefox", while a Private Window boots: a saved screen filter
+(`[render_profiles."Wipeout Pulse (PSP)"] screen_filter = "psp-3000"`) made the
+first frame wait on a wgpu error scope on the page's thread. Fixed on
+2026-11-11; "The page's thread may not wait" below has the cause, and every
+wait of that kind now ends in the page's report instead of a frozen tab. On an
+older deploy, setting SCREEN FILTER to off (or clearing the site's storage)
+boots again.
+
+**A bug that a deploy fixed is still there: hard-reload (Ctrl+Shift+R)**, or a
+browser may still run the previous deploy's module. The page's files revalidate
+on every load (`no-cache` in `_headers`, "Hosting" below), but a deploy from
+before that header could be cached for up to four hours. A live SCREEN FILTER
+change that froze Firefox after the fix above was this.
+`check-web-faults.py`'s `live-settings` case changes RENDER SCALE,
+RECONSTRUCTION, MSAA, MOTION BLUR, SHADOWS and SCREEN FILTER from the menus
+while the page runs, and requires each to reach the saved settings with no
+report.
 
 **The log says `renderer: webgpu:  (cpu)`.** The browser gave WebGPU a software
 adapter (the `web: adapter "" (Cpu)` line says the same); frames then take 40 to
@@ -531,6 +649,130 @@ can repair. `scripts/web-screenshot.py --software` runs the presenting CPU
 adapter and `--software bare` that mode; `--resize WxH@SECONDS` resizes the
 viewport mid-run.
 
+**Firefox on Linux: the game runs (the console logs `renderer: webgpu:` and
+frame lines) but the canvas stays black** (2026-11-11, Firefox 159 on a niri
+Wayland session, hybrid Intel Arc 130T/140T plus NVIDIA RTX PRO 2000 laptop, a
+fresh profile with `dom.webgpu.enabled` and `gfx.webgpu.ignore-blocklist` on).
+Firefox's own WebGPU sample (`webgpu.github.io/webgpu-samples`, rotatingCube)
+is black in the same profile too, and Firefox writes
+`[GFX1-]: dmabuf image neither requires nor prefers a dedicated allocation` to
+its standard error: 92 to 531 times in a 4 to 5 s run of the sample or of a
+page that only clears its canvas, but only 4 times in a 28 s run of the game,
+which is black all the same. That is Firefox's
+present path without a readback (a DMABuf shared with the compositor), not the
+game: with `dom.webgpu.allow-present-without-readback` set to `false` in
+`about:config` both draw, the game through its boot movie to the menus. The
+picker page's note names that pref. Both GPUs were tried through
+`VK_DRIVER_FILES` (the Intel or the NVIDIA ICD); the adapter reports no name,
+so which one served is inferred from the ICD changing the outcome (the cube
+sample lost its device on the NVIDIA ICD and not on the Intel one, black on
+both). The game sees no error and no lost device on that path, so the page
+cannot tell the player. Headless Firefox, Firefox under Xvfb and Firefox on a
+headless sway take the readback path and draw.
+
+A canvas configured `rgba8unorm` instead of Firefox's preferred `bgra8unorm`
+draws on that Wayland session with the pref at its default, but **crashes**
+Firefox 159 headless and under Xvfb (software WebRender), a 40-line page that
+only clears the canvas included; so the game keeps the preferred format.
+
+### What the page says when something fails
+
+Every way the web build can fail ends in one in-page message, never a frozen
+or white canvas and never a cascade of console errors. `web/fault.js` owns it:
+a dialog (`role="alertdialog"`, `#oag-fault`, its kind in `data-kind`) that
+names what happened in a sentence, says what the player can do, and has
+**Copy details** (clipboard, with a selectable text box under "Technical
+details" for a browser that refuses the clipboard) and either **Reload the
+page** (the game has stopped) or a button that dismisses it (the game runs
+on). The details text is the build hash (`pkg/<hash>/`), the page's address
+without its query, the browser, whether the page is cross-origin isolated,
+the adapter, the module's memory against its 4 GiB ceiling, the picked
+image's **file name** and the error with its stack; no path, no disc key, no
+storage. The console gets one `oag:` error line with the same text.
+
+A fatal report replaces a dialog that lets the game go on (a validation notice,
+then a lost device); anything else after the first report is hidden. A disc
+failure found before the game starts (the picker's check of the image) offers
+"Back to the picker"; one found after `start` has run the module's GPU set-up
+offers "Choose another image", which reloads the page, because a second `start`
+in one page is not supported ("Quitting").
+
+What makes it one report:
+
+- **A guard on the module** (above): once the module has trapped, panicked or
+  reported a fatal GPU error, nothing enters it, its workers are ended and the
+  sound stops, so no second trap can follow. Later page errors are hidden (the
+  `error` and `unhandledrejection` handlers cancel them) and counted in the
+  details.
+- **One path in.** Rust reaches the page through `oagFatal(kind, detail)` and
+  `oagNotice(kind, detail)` (`gpu::web::fatal`, `notice`; the panic hook), a
+  worker through a message `main.js` forwards. `oag_game::web_fault::Kind` is
+  the module's side of the vocabulary, with the classification (a wgpu error's
+  variant, a lost device's reason, an `oag-disc` or `oag-assets` error to
+  unreadable or unsupported) under unit tests, and a test fails when
+  `web/fault.js` lacks a row for a kind the module can send or has a row
+  nothing can send.
+
+| Message (title) | Kind | What happened | What to do |
+| --- | --- | --- | --- |
+| OpenAntiGrav stopped | `panic` | a Rust panic, on the page's thread or a worker | reload; report with the details |
+| OpenAntiGrav stopped | `trap` | a WebAssembly trap (`unreachable`, memory out of bounds, the engine's own stack limit) | reload; report |
+| OpenAntiGrav ran out of memory | `out-of-memory` | a trap with the module at 90 % of its 4 GiB, or an allocation failure in the stack | close tabs and programs, reload; a PSP disc needs less than HD |
+| The graphics card ran out of memory | `gpu-out-of-memory` | WebGPU's out-of-memory error | close what uses the card, reload |
+| The browser's graphics layer failed | `gpu-internal` | WebGPU's internal error | reload; update browser and driver |
+| The graphics card connection was lost | `gpu-lost` | the device was lost (not destroyed by the game) | reload; update driver |
+| The graphics card rejected a drawing command | `gpu-validation` | a validation error; **the game keeps running**, the dialog is shown once and dismisses | reload if the picture is wrong |
+| This browser has no WebGPU | `no-webgpu` | no `navigator.gpu` | the browser's own advice (below) |
+| The browser gave the game no graphics card | `no-adapter` | `requestAdapter()` resolved null | the browser's own advice; hardware acceleration on |
+| The graphics card refused the game | `device-request` | `requestDevice` failed | update browser and driver |
+| This page is missing its security headers | `no-isolation` | no COOP/COEP, so no shared memory | use the hosted page or `scripts/serve-web.py`; leave an in-app browser |
+| The game could not be downloaded | `module-load` | the glue or the wasm did not fetch | check the connection, reload |
+| This browser cannot run the game | `wasm-unsupported` | a `CompileError` or `LinkError` | update the browser |
+| The browser would not give the game memory | `wasm-memory` | the shared memory could not be allocated at start | close tabs; use a computer |
+| That file is not a disc image the game can play | `disc-unsupported` | a file that read and holds no game (not a disc, an empty ISO, another title) | pick a supported image |
+| The disc image could not be read | `disc-unreadable` | cut short or damaged, or the browser lost access mid-run (on a read in the game the page stops, so the dialog reloads) | check the file, pick it again |
+| The game could not start | `startup` | anything else before the first frame | reload; report |
+
+The advice for `no-webgpu` and `no-adapter` is the browser's own: Firefox on
+Linux, the two `about:config` prefs ("Browser support"); Chrome and Chromium on
+Linux, the flags in "The log says `renderer: webgpu:  (cpu)`" above; Safari,
+26 or newer. A fatal report while the adapter is a software one adds those flags.
+
+**The page stopped by itself with a blank canvas** is the class this replaces:
+if it still happens, no report was raised, which is a bug in `web/fault.js`'s
+coverage; open the console, whose `oag:` line would be absent.
+
+### Reproducing every message
+
+`OAG_WEB_FAULT_TEST=1 just web --dev` builds a module with the cargo feature
+`fault-test`, which adds `fault_test(what)` (`window.oagFaultTest`): `panic`,
+`trap` (an `unreachable`), `stack` (the page's own stack, 64 KiB frames, the
+boot's real failure: `memory access out of bounds`), `recursion` (the engine's
+stack), `memory` (the 4 GiB reserved, then one allocation more), `worker-panic`,
+`worker-trap`, `worker-stack`, `gpu-validation` (an invalid buffer on the live
+device: real), `gpu-out-of-memory`, `gpu-internal` and `gpu-lost` (the error
+handed to the callback the browser's would reach: synthetic). A build without the
+variable has no such export, and `pages.yml` does not set it.
+
+```sh
+OAG_WEB_FAULT_TEST=1 just web --dev
+uv run --with playwright python3 scripts/check-web-faults.py \
+    --pulse data/images/pulse-psp-eu.chd --out data/web-faults --browser both
+```
+
+`scripts/check-web-faults.py` drives `web-screenshot.py --expect-fault KIND` for
+each case: the run must end with exactly one report of that kind, one `oag:`
+console error and no uncaught page error, and it leaves `fault.png` and
+`fault-details.txt` under `<out>/<browser>-<case>/`. The browser-only classes are
+real where it can: Chromium started with no WebGPU switches (`--plain`) has
+`navigator.gpu` and no adapter, Firefox without its prefs has no `navigator.gpu`,
+`--no-isolation` serves without COOP/COEP (`serve-web.py --no-isolation`),
+`--block` fails the glue or the wasm, `--truncate` hands a cut-short image,
+`--lose-image` deletes the picked file under the page (a real failed read, on the worker's `FileReaderSync` or the page's request), and `--crash-gpu` crashes Chromium's GPU
+process (`Browser.crashGpuProcess`, a real lost device). A wasm out-of-memory at
+start and a compile error are synthetic (`--init-script`). It is not in `just`:
+it wants browsers and a disc image.
+
 ## Hosting
 
 Cloudflare Pages, project `openantigrav`, at https://oag.topaxi.com/, is the
@@ -542,9 +784,13 @@ Cloudflare reads `_headers` from the deployed folder: `Cross-Origin-Opener-Polic
 same-origin` and `Cross-Origin-Embedder-Policy: require-corp` on every path, which
 make `crossOriginIsolated` true (what `SharedArrayBuffer` and so the module's
 shared memory need), and `Cache-Control: public, max-age=31536000, immutable`
-on `pkg/*`, whose directory name is the content hash. The page itself keeps
-Cloudflare's default, `public, max-age=0, must-revalidate`, so a deploy is
-seen on the next load. The page loads nothing from another origin, so
+on `pkg/*`, whose directory name is the content hash. The page's own files
+(`main.js`, `worker.js`, `fault.js`, `audio.js`, `audio-worklet.js`, `movie.js`,
+`style.css`) carry `Cache-Control: no-cache`, so a deploy is seen on the next
+load: `main.js` names the `pkg/<hash>/` directory, and without the header
+Cloudflare served it with the zone's browser TTL, `public, max-age=14400,
+must-revalidate` (`curl -sI`, 2026-11-11), so a browser could run the previous
+deploy's module for four hours. `/` itself is served `max-age=0`. The page loads nothing from another origin, so
 `require-corp` blocks nothing it uses; `worker.js` and the module are
 same-origin. No `coi-serviceworker` and no second, single-threaded module.
 
@@ -579,10 +825,97 @@ a Pulse race run there (2026-10-09). `actionlint` passes on the workflow.
 
 ### Exit and GPU workers
 
-Natively, `oag_game::gpu_workers` is the one place the process waits for threads that hold the
-`wgpu` device (EndRace prefetch, race build, a parked race's drop) before `main` returns. The web
-build has nothing to wait for: the race build runs inline, the EndRace prefetch type is
-uninhabited, and closing the page ends every Web Worker with it.
+Natively, `oag_thread::gpu_workers` is the one place the process waits for threads that hold the
+`wgpu` device (the race load's texture sink, EndRace prefetch, race build, the menus' opened source,
+a parked race's drop) before `main` returns. The web build has nothing to wait for: the race build
+runs inline, the EndRace prefetch type is uninhabited, the race load has no sink there, and closing
+the page ends every Web Worker with it.
+
+**What it prevents, measured on NVIDIA 615.78.08, Linux, 2026-11-06.** The load opens a texture sink,
+so `race-load` is inside the driver for every texture and its result holds their views, and it was
+not registered. A run ending during a load then crashed: 3 of 8 runs of
+`campaign_cursor_ground_truth::the_2048_map_reopens_on_the_event_last_started` alone on an idle GPU,
+none of 7 on Intel's driver. All 15 `oag-game` cores `coredumpctl` still held have the same shape: a
+`SIGSEGV` on `race-load` in a `--drive` script ending at `stage=loading`. In the symbolised one the
+main thread is in libc `exit()`, running `libEGL_nvidia`'s exit handler down into
+`libnvidia-eglcore`, and `race-load` is in `texture_sink::offer` -> `wgpu_hal`'s
+`create_image_without_memory_with_tiling` -> `vkCreateImage`, which jumped from `libnvidia-eglcore`
+to a heap address (`SEGV_ACCERR`, mapped but not executable). That is consistent with an indirect
+call through driver state the exit handler had freed; the driver is closed, so it is not proved.
+Calling Vulkan while the process exits is our bug, not the driver's.
+
+**The `egl` in those names is NVIDIA's Vulkan driver, not a GL path of ours.** `nvidia_icd.json`
+names `libGLX_nvidia.so.0`, which loads `libEGL.so.1`, which loads `libEGL_nvidia.so.0`, which loads
+`libnvidia-eglcore` (`LD_DEBUG=files`). `oag_game::adapter::BACKENDS` never asks for wgpu's GL
+backend.
+
+**A player reaches this too, measured.** `--drive` runs the real session
+(`crates/game/src/main/drive.rs`), and closing the window on the loading screen takes the same route:
+`event_loop.exit()`, `Session::drop`, `main` returning. A real X11 window on Xvfb on the NVIDIA GPU,
+sent `WM_DELETE_WINDOW` once `race load reached` is logged (2048, first event), with `race-load` left
+out of the registry: 3 of 9 closes crashed (`SIGSEGV` on `race-load`, exit -11). With it registered:
+0 of 9, every run logged the wait and exited 0. In about one run in eight the close never took
+effect within 30 s, on both binaries; that is not this crash, and the harness is not the cause
+(see "A close that does not land", below).
+
+**The fix, in numbers.** The same test on the same machine with the registration removed: 6 of 8 runs
+crashed, 12 s when one passed. With it: 30 of 30 passed, no new core, about 16.5 s. Before the stop
+checks below, a close waited out the rest of the load: 0.5 s (Pulse), 3.7 s (2048), 3.9 s (HD) from
+a launch's first frame in a debug build.
+
+**The load and the scene build stop at their next checkpoint** (`oag_raceplay::stages::checkpoint`
+and `reach`, `oag_raceplay::stages::reader`, `mesh_render::build_with`, `rcs::build_with_options`,
+`Scene::new`, the warm-up draw in `race_build.rs`). `gpu_workers::finish` sets the stop, so a load
+nobody leaves never takes the new path, and the web build, which never calls it, reads a plain
+`false`. A stopped load returns an `Err` through the path a failed load already takes; the
+result is dropped unread and nothing above `trace` is logged (`RUST_LOG=oag_raceplay::stages=trace`
+prints each checkpoint with its time into the load). The model builders read their textures through
+`stages::reader`, which finds nothing once the stop is set, so a track model skips the rest of
+its textures instead of decoding them (2048's track model was 4.1 s of a 6 s load, nearly all of
+it textures).
+
+**Where the time goes, and what a close waits now.** A load is two stages with a GPU worker each:
+`race-load` (the circuit and the grid read from the disc, textures through the sink; HD 2 to 4 s,
+2048 2.5 to 6 s, Pulse 0.5 s in a debug build) and `race-build` (the scene: for HD 136 distinct
+pipelines and 735 textures, about 6 s; Pulse 3.2 s; 2048 2.2 s). Before the checks a close waited
+for the stage it landed in. The exit wait (from the `waiting for GPU workers before exit` line to
+the process ending) for a close at a random point of load and build, debug build, NVIDIA RTX PRO
+2000 (Blackwell), 20, 18 and 24 runs spread over the whole of each:
+
+| | before | after, worst run | after, next worst |
+| --- | --- | --- | --- |
+| Pulse | 1.6 s (load alone, one run) | 0.41 s | 0.28 s |
+| 2048 | 5.5 s (load alone, one run) | 0.36 s | 0.36 s |
+| HD | 4.2 s (load alone, one run); the build alone about 6 s | 1.13 s | 0.49 s |
+
+0.2 to 0.3 s of every figure is the process tearing down after the wait. The HD worst, 1.13 s, was
+one run of 24, at load average 3.4, that stopped inside the track's `Drawable` build
+(`mesh_render::build_with`: six pipeline sets of 0.15 to 0.45 s each, the check between them);
+ten repeats at the same position on a quieter machine read 0.26 to 0.44 s. Before the check in
+`rcs::build_with_options` an HD close read up to 1.66 s: that loop is 0.45 s of the track model.
+What is not cut: one pipeline set (up to 0.45 s on HD) and the grid's `oag_livery::load`
+(0.4 to 0.6 s, all slots in one call, no check of its own). Method: `--drive` as
+`docs/tools/oag-game.md` ("Driving the menus with no window") with a script that ends
+`until stage=loading; ticks N` for N from 0 to 3000, a scratch `XDG_*` profile, `RUST_LOG=info`.
+
+With the checks in, the same test ran 30 of 30 clean on the NVIDIA GPU (no `VK_ICD_FILENAMES`),
+about 12.5 s a run, no new core. Measured on Pulse, 2048 and HD; Pure and Omega are not measured
+(they share the same `load`, `Scene::new` and `build_with`, so the checks apply, but no close was
+timed). Not covered by a test that fails when it is dropped: `stages::reader`, the per-node check
+in `rcs::build_with_options`, the warm-up skip, and every `Scene::new` checkpoint after the first.
+
+**A close that does not land.** In 3 of 15 runs of a real X11 window on Xvfb, `WM_DELETE_WINDOW`
+sent to the window (the only one, carrying `WM_DELETE_WINDOW` in `WM_PROTOCOLS`) as the load began
+was ignored for 30 s while the event loop kept running (frame warnings). A second identical message
+from a fresh connection after the 30 s landed at once, 2 of 2. So the harness is not the cause, and
+neither are the stop checks (the same loss was seen before they existed): the first close is lost in the
+game or in winit's X11 backend, and the runs that lost it ran the whole load on to the race. The
+cause is not found; `app.rs`'s `window_event` drops an event while `suspended` is set or the session
+does not exist yet, and nothing ties the loss to that. Not fixed.
+
+**A guard lasts as long as the thread** (`Guard::hold_to_thread_end`) where the worker returns GPU
+objects. `std` stores a thread's result after the closure has returned and drops it on that thread
+if the handle has gone, so a guard local to the closure ends before the views do.
 
 The browser build is threaded since 2026-10-09, for one job: **the race load.**
 Before it, starting a Wipeout HD race froze the page for the whole load: the
@@ -612,7 +945,7 @@ The load's 5.9 s before, inclusive:
   text 1.0 s; a further 1.7 s of garbage collection over the run came mostly
   from those 1 MiB response strings. On a worker the same reads go through
   `FileReaderSync` and return an `ArrayBuffer`, with no text and no loop.
-- **Inflate**, 1.3 s (`miniz_oxide`); **parse and decode** the rest, about
+- **Inflate**, 1.3 s (measured with `miniz_oxide`; the build now uses `flate2`'s `zlib-rs`); **parse and decode** the rest, about
   0.7 s.
 - **GPU work**: only the texture sink's uploads, about 0.15 s.
 
@@ -690,6 +1023,53 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
    setup, and the sim suites pass built with the atomics flags ("Verifying
    it").
 
+### The page's thread may not wait
+
+Every std blocking primitive (a contended `Mutex`, a `OnceLock` or `LazyLock`
+another thread is initialising, a `Condvar`, `thread::park`, `thread::sleep`)
+ends in `memory.atomic.wait32/64`. On the page's thread **Chromium traps** on
+that instruction, but **Firefox 159 blocks**: the page stops drawing, nothing
+reaches the console, and after a while Firefox warns that "a page is slowing
+down Firefox". A Firefox Profiler capture of such a page (the maintainer's
+desktop, 2026-11-11, Pulse PSP EU on oag.topaxi.com) shows the page's main
+thread in `call to native i32.wait` under `pthread_cond_wait` for 18,680 of
+22,508 samples, from 3.84 s to the end, inside winit's animation-frame callback,
+8 unnamed wasm frames below it. The published module has no name section, so
+which lock was not recovered.
+
+So the build guards every wait (`scripts/web-page-wait-guard.py`, run by
+`scripts/build-web.sh` after `wasm-bindgen`): before each `memory.atomic.wait`
+the module checks whether it runs on the page's stack (the bottom
+`-zstack-size` bytes, the module being linked stack-first; a worker's stack is
+allocated above it) and, if so, calls `oag_thread::web::oag_page_would_block`,
+which panics into the page's one report: "the page's thread would wait on a
+lock another thread holds (function N in this build's page-waits.txt)". `N` is
+the waiting function's index in the module before `wasm-opt`;
+`pkg/<hash>/page-waits.txt` beside the module names it. Both browsers then end
+the same way, in a report a player can copy. `wasm-bindgen`'s own per-thread
+start-up and teardown (`__wbindgen_start`, `__wasm_init_memory`,
+`__wbindgen_thread_destroy`) are left alone. A `--dev` build guards two
+functions (`futex_wait`, `thread::sleep`); a `dist` build more, where
+`futex_wait` is inlined.
+
+`scripts/check-web-faults.py`'s `page-wait` case proves it: a worker takes a
+lock and keeps it, then the page's thread takes the same one. Without the
+guard Chromium shows a generic trap and Firefox freezes (the run's screenshot
+times out after 30 s); with it both show the panic above.
+
+What the page's thread shares with a worker it therefore reads with an atomic,
+`oag_thread::lock` (which spins there) or a `try_lock`, and it never
+`block_on`s a future: a wgpu error scope's answer is a browser promise the
+blocked page itself would have to resolve. That was the freeze the profile
+caught: a saved screen filter (`[render_profiles."Wipeout Pulse (PSP)"]
+screen_filter = "psp-3000"`) made the first frame build the filter inside an
+error scope and `pollster::block_on` its pop, so the page froze right after the
+`renderer:` line in Firefox (a Private Window, with no saved settings, booted).
+The filter is built through `oag_gpu::shader_file::scoped` now, which takes no
+scope on the web, and the FSR3 format probe returns its baseline there.
+`check-web-faults.py`'s `saved-screen-filter` case boots with that setting and
+requires the menus with no report.
+
 ### What is still on the page's thread
 
 - **The scene build's GPU half** no longer holds the page for its uploads
@@ -702,7 +1082,7 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
   2026-10-19, not re-measured in a browser), and the rest inflate and sprite
   sheets. The music survey stays inline in the browser
   (`MusicDiscs::survey_in_background` surveys in place there).
-- **Dropping a parked race**, and `boot::MediaWorker`, inline as before.
+- **Dropping a parked race**, and `boot::worker::MediaWorker`, inline as before.
 
 ### Freezes after the threads
 
@@ -1003,6 +1383,12 @@ the cache is made by `ffmpeg`, which a page cannot run.
 
 ## What is missing
 
+- **Mod shaders, with every mod module.** The web build has no `extensions` feature, so no
+  race there runs a module or lists a shader; `oag_fx::mod_shader` compiles in it unchanged
+  (`cargo check --target wasm32-unknown-unknown -p oag-game --no-default-features --features web
+  --lib`, 2026-11-04). WGSL is WebGPU's own language; run in a browser it is
+  untried, and there the device's refusals reach the browser's log and not the load report
+  ([`mod-shaders.md`](../architecture/wasm-extensions/mod-shaders.md)).
 - **Images over about 2 GB in a browser without synchronous slice reads.**
   The fallback copies the whole image into the module's memory, which wasm32
   caps at 4 GiB. Every browser tried reads slices (Chromium, Firefox, WebKit).

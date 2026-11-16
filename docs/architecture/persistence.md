@@ -4,14 +4,16 @@ This is a map of the files this project writes to a player's own
 machine, not inside the repository or the disc image. All of them live under
 `<config dir>/oag/` - `dirs::config_dir()`'s answer, which is
 `$XDG_CONFIG_HOME/oag` (or `~/.config/oag`) on Linux, `~/Library/Application
-Support/oag` on macOS, and `%APPDATA%\oag` on Windows.
+Support/oag` on macOS, and `%APPDATA%\oag` on Windows - except the replays row,
+which is under `<data dir>/oag/` (`dirs::data_dir()`, where `photos/` already is).
 
 | File | Owner module | What it holds |
 | --- | --- | --- |
-| `settings.toml` | `crates/game/src/settings.rs` | Display, graphics, audio, controls, and the last-picked race options - one row per key, rewritten canonically every run. |
+| `settings.toml` | `crates/game/src/settings.rs` | Display, graphics, audio, controls, and the last-picked race options - one row per key, rewritten canonically every run. Declares [`settings.tosd`](../../schemas/v1/settings.tosd) on its first line (`toml-schema = { ... }`, [TOML Schema](../formats/toml-schema.md)); a file without it loads and gets it on the next rewrite. |
 | `pilots/*.toml` | `crates/raceplay/src/pilots.rs` | Player-authored AI opponents - one file per pilot, hand-editable, never rewritten wholesale. |
 | `records.toml` | `crates/game/src/records.rs` | Best lap, best total time and the last result, per circuit/mode/class. This page. |
 | `ghosts/<title>/<mode>/<class>/<track>.oagr` | `crates/game/src/ghosts.rs` | The best lap raced as a ghost in Time Trial and Speed Lap, one replay file per `records.toml` key, written only when a lap beats it. See [ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). |
+| `<data dir>/oag/replays/{auto,saved}/oag-<title>-<unix seconds>-<n>.oagr` | not built | A whole race: its inputs, hashes and pose track, one `.oagr` per race. `auto/` is a ring (the last 20 races, 32 MiB), `saved/` is the player's own and never pruned. The `<data dir>` is `dirs::data_dir()`'s, where `photos/` already is. Designed, not written yet: [ADR-0087](adr/0087-a-replay-and-photo-mode-share-one-timeline.md), "Whole-race recording and saving". |
 
 Read `settings.rs`'s and `pilots.rs`'s own module docs first if you have not -
 `records.rs` follows the first's file shape and diverges from both on error
@@ -113,8 +115,8 @@ migration path for rows an earlier build kept per title.
 `[dev] unlock_everything` (bool) opens every gate like `--unlock-all`. **Absent means on in a
 debug build** (`cfg!(debug_assertions)`), ignored in release. The table is kept intact when a
 release build rewrites the file. A test or capture that checks locked state writes
-`unlock_everything = false` into its own settings. `settings.toml` has no TOML Schema under
-`schemas/v1/`, so there is none to update.
+`unlock_everything = false` into its own settings. The key is in
+[`settings.tosd`](../../schemas/v1/settings.tosd) with the rest of the file.
 
 ## Where a race's result is captured, and why there are two sites
 
@@ -300,6 +302,14 @@ touch front end within one process - see
 carries no dependency on this file's own schema at all; only the tier
 *earned* against a gate's own name comes from `[[campaign]]`.
 
+**A mod campaign's own medal tiers (`[[medal-tier]]`, `docs/formats/custom-campaign.md`)
+are kept by name** in the same `[[campaign]]` row: `best_tier`/`last_tier`, written only when the
+tier is not the word of `best_medal`/`last_medal` (`best_medal` keeps the gold, silver or bronze
+that stands in for it, `MedalTiers::class`, so the trophy and jingle code and every older reader
+keep working). A row written before the keys existed has none and reads as the tier its
+`best_medal` names; a disc campaign's row is the file it always was. The better of two results
+is decided by the campaign's own tier order (`Store::record_campaign_tier`).
+
 ## What is not built yet
 
 There is still no records **browser** - a circuit list plus every stored best
@@ -382,6 +392,16 @@ with it open, on a background thread (`records::save_in_background`). Absent
 rows, or a grid a mod removed, open on the defaults. Page:
 [`docs/ui/campaign-screens.md`](../ui/campaign-screens.md), "Where the
 campaign reopens".
+
+## The hidden events a player found (2026-11-12)
+
+A `[[campaign_found]]` table in `records.toml`: one row per hidden 2048
+campaign event the player has tapped (`title` is `campaign_title`, lower-cased;
+`event` the map's event name). Written the moment the tap lands, on a
+background thread (`records::save_in_background`); a file without the table is
+an empty set. Page:
+[`canvas-music-wave.md`](../ghidra/functions/vita-2048-eu-v104/canvas-music-wave.md),
+"Wired: the reveal".
 
 ## The browsed campaign difficulty (2026-10-26)
 

@@ -9,8 +9,9 @@ rust-version.workspace = true
 # One integration-test binary instead of one per `tests/*.rs`; see `tests/it.rs`.
 autotests = false
 
-# `oag-formats` for `ByteOrder` and the parser-coverage instrumentation.
+# `oag-formats` for the parser-coverage instrumentation.
 [dependencies]
+oag-bytes.workspace = true
 oag-formats.workspace = true
 
 # Ground-truth tests read real models out of a disc image. Tests only. The

@@ -151,3 +151,40 @@ fn a_flash_that_answers_one_kind_ignores_the_rest() {
     assert!(!flash.answers_every_kind());
     assert!(ScreenFlash::default().answers_every_kind());
 }
+
+/// A flash started late joins its ramp where one started on time is by now, frame for frame,
+/// and one whose detonation is older than the flash is long never draws.
+#[test]
+fn a_flash_started_late_is_as_old_as_its_detonation() {
+    let at = Vec3::new(51.0, 0.0, 0.0);
+    let mut on_time = ScreenFlash::default();
+    on_time.start(BLAST, at);
+    for _ in 0..12 {
+        on_time.advance(DT, Vec3::ZERO);
+    }
+    let mut late = ScreenFlash::default();
+    late.start_aged(BLAST, at, 12.0 * DT);
+    for frame in 0..25 {
+        on_time.advance(DT, Vec3::ZERO);
+        late.advance(DT, Vec3::ZERO);
+        assert_eq!(late.colour(), on_time.colour(), "frame {frame}");
+    }
+    assert!(late.colour().is_none(), "both ended together");
+
+    let mut fresh = ScreenFlash::default();
+    fresh.start(BLAST, at);
+    fresh.advance(DT, Vec3::ZERO);
+    let mut aged = ScreenFlash::default();
+    aged.start_aged(BLAST, at, 12.0 * DT);
+    aged.advance(DT, Vec3::ZERO);
+    assert_ne!(
+        aged.colour(),
+        fresh.colour(),
+        "the late flash started fresh"
+    );
+
+    let mut over = ScreenFlash::default();
+    over.start_aged(BLAST, at, BLAST.duration);
+    over.advance(DT, Vec3::ZERO);
+    assert!(over.colour().is_none());
+}

@@ -689,3 +689,54 @@ fn a_description_types_across_its_wrapped_lines_and_loops() {
         "typed again from the first line"
     );
 }
+
+/// Pure's `scroll` text (the description, the `Confirm` prompt) and its `Stats` text draw from the one
+/// glyph role the title loads in its third slot: both fonts resolve to `LTe50325.fnt`.
+#[test]
+fn scroll_and_stats_text_ask_for_the_stats_glyph_role() {
+    for font in ["scroll", "Scroll", "stats", "Stats"] {
+        assert_eq!(
+            face_role(font),
+            Some(oag_ui::language::roles::STATS),
+            "{font}"
+        );
+    }
+    assert_eq!(
+        face_role("menu"),
+        None,
+        "the menu face stays the primary atlas"
+    );
+}
+
+#[test]
+fn the_footer_draws_the_players_tag_at_the_authored_position_and_nothing_without_one() {
+    let root = parse(XML);
+    let strings = StringTable::from_xml(ENTRIES);
+    let legend = NavigationLegend::read(&root, &globals(), &strings).expect("a legend");
+    let faces = FaceScales::default();
+    let texts = |legend: &NavigationLegend| -> Vec<String> {
+        legend
+            .draw(&faces)
+            .iter()
+            .filter(|draw| !matches!(draw, Draw::GlowStamp { .. }))
+            .map(|draw| text_and_y(draw).0.to_string())
+            .collect()
+    };
+    assert_eq!(texts(&legend).len(), 4, "no tag, no tag text");
+
+    let tagged = legend.with_tag("AAA");
+    assert_eq!(texts(&tagged).len(), 5);
+    let drawn = tagged
+        .draw(&faces)
+        .into_iter()
+        .find(|draw| matches!(draw, Draw::FacedText { text, .. } if text == "AAA"))
+        .expect("the tag is drawn in the Default face");
+    let Draw::FacedText { x, y, .. } = drawn else {
+        unreachable!()
+    };
+    assert_eq!(
+        (x, y),
+        (30.0, 235.0),
+        "`<TextInfo type=\"tag\" x=\"30\" y=\"235\">`"
+    );
+}

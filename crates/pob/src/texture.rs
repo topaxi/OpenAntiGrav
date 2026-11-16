@@ -63,9 +63,9 @@
 //! Confidence **85** for the header layout and the positional-addressing
 //! rule (four independent corpus-wide checks agree: the root-emitter hit
 //! rate, the sibling-tree hit rate, the quakesmoke/orange_glow2 size and
-//! sharing match, and the PS2 zero-hit control); **40** for what, if
-//! anything, distinguishes the six root emitters with no positional texture
-//! from the twenty-nine that have one.
+//! sharing match, and the PS2 zero-hit control). The six root emitters once
+//! counted as having no positional texture were 4 bits per pixel (see below);
+//! no PSP emitter lacks one.
 //!
 //! # Four bits per pixel - 2026-10-01
 //!
@@ -151,7 +151,7 @@
 //! a live-trace question - `FUN_08916610`'s texture bind, per
 //! `docs/ghidra/functions/psp-pulse-usa/particle-system.md` - not a file-bytes one.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Bytes of the header this module reads.
 pub const TEXTURE_HEADER_LEN: usize = 0x20;
@@ -339,6 +339,13 @@ pub fn parse_template(
     )
 }
 
+/// Where a sprite template's record names its own texture on a source that ships
+/// its sprites beside the effect: a base-relative offset to the developer path,
+/// as an emitter's `+0x4c4` is. Read on Wipeout HD, where every template record
+/// on the disc resolves through it (`docs/formats/pob.md`, "An HD template names
+/// its sprite at `+0x87c`").
+pub const TEMPLATE_TEXTURE_PATH_FIELD: usize = 0x87c;
+
 impl super::ParticleSystem<'_> {
     /// The developer path of `emitter`'s own texture, as authored: the string
     /// its `+0x4c4` field points at, e.g.
@@ -352,10 +359,33 @@ impl super::ParticleSystem<'_> {
     /// have come from [`Self::emitters`] called on the same `data`.
     #[must_use]
     pub fn texture_path<'d>(&self, data: &'d [u8], emitter: &super::Emitter) -> Option<&'d str> {
+        self.path_field(data, emitter, 0x4c4)
+    }
+
+    /// The developer path of a sprite template's own texture: the string its
+    /// [`TEMPLATE_TEXTURE_PATH_FIELD`] points at. `template` is an entry of an
+    /// emitter's [`super::Emitter::initial_particles`]. `None` as
+    /// [`Self::texture_path`] is, and for a path that is not printable ASCII.
+    #[must_use]
+    pub fn template_texture_path<'d>(
+        &self,
+        data: &'d [u8],
+        template: &super::Emitter,
+    ) -> Option<&'d str> {
+        self.path_field(data, template, TEMPLATE_TEXTURE_PATH_FIELD)
+            .filter(|text| text.bytes().all(|b| b.is_ascii_graphic() || b == b' '))
+    }
+
+    fn path_field<'d>(
+        &self,
+        data: &'d [u8],
+        record: &super::Emitter,
+        field: usize,
+    ) -> Option<&'d str> {
         let base = self.resource_base();
         // Checked: `baked` is the file's own word, and on a 32-bit target
         // (the browser build) adding it to `base` can overflow `usize`.
-        let site = base.checked_add(emitter.offset)?.checked_add(0x4c4)?;
+        let site = base.checked_add(record.offset)?.checked_add(field)?;
         let baked = self.order.u32(data.get(site..site.checked_add(4)?)?, 0) as usize;
         if baked == 0 {
             return None;

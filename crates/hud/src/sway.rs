@@ -27,7 +27,7 @@ use oag_ui::frontend::Draw;
 
 use super::Readout;
 use super::draw::Frame;
-use super::placement::{Placement, place};
+use super::placement::{Placement, place_mut};
 
 /// How far the whole HUD slides this frame, in the layout's own grid: `[x, y]`.
 ///
@@ -55,12 +55,7 @@ pub(super) fn slide(frame: &mut Frame, offset: [f32; 2]) {
         offset,
         clip: [-1.0e9, -1.0e9, 2.0e9, 2.0e9],
     };
-    let slid = |list: &mut Vec<Draw>| {
-        *list = list
-            .iter()
-            .filter_map(|draw| place(draw, &placement))
-            .collect();
-    };
+    let slid = |list: &mut Vec<Draw>| list.retain_mut(|draw| place_mut(draw, &placement));
     slid(&mut frame.sprites);
     slid(&mut frame.hud_text);
     slid(&mut frame.small_text);

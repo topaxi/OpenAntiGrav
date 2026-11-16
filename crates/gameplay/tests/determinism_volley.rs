@@ -31,7 +31,7 @@ use determinism_support::{TICK, corridor, weapon_stats};
 /// every component a real product of the rotation, which is what a platform's
 /// libm can disagree about in the last bit.
 fn run_volley(ticks: u32) -> (u64, u64) {
-    use oag_core::math::{Quat, Vec3 as V};
+    use oag_core::math::{Vec3 as V, quat_from_axis_angle};
 
     let world_geometry = corridor();
     let stats = weapon_stats()
@@ -56,7 +56,7 @@ fn run_volley(ticks: u32) -> (u64, u64) {
     }
     // Yaw a little, roll a little: the fan's axis is the craft's own up.
     world.ships[0].physics.body.orientation =
-        Quat::from_rotation_y(0.11) * Quat::from_rotation_z(0.23);
+        quat_from_axis_angle(V::Y, 0.11) * quat_from_axis_angle(V::Z, 0.23);
 
     // The volley the front end fires, built the way `race::weapons` builds it.
     let fired = projectile::fire_rocket(
@@ -65,6 +65,8 @@ fn run_volley(ticks: u32) -> (u64, u64) {
         &stats,
         "VENOM",
         0,
+        projectile::ROCKET_SHOTS as u8,
+        world.ships[0].physics.body.up(),
     )
     .expect("Pulse's weapon table authors a Venom rocket speed");
     assert_eq!(
@@ -80,8 +82,13 @@ fn run_volley(ticks: u32) -> (u64, u64) {
             &mut world.ships[..world.ship_count as usize],
             TICK,
             &world_geometry,
+            None,
             Some(&weapon_stats()),
             "VENOM",
+            oag_weapons::projectile::FloorArms::SteerToRidePoint,
+            oag_weapons::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            oag_weapons::projectile::PlasmaRelease::DisplayScaled,
+            oag_weapons::projectile::BlastPush::Posted,
             DamageRules::default(),
             &mut [],
         );
@@ -326,7 +333,7 @@ fn the_fanned_volley_matches_the_committed_reference() {
 /// on one ray and the spread never enters the hash at all.
 #[test]
 fn the_volley_actually_fans() {
-    use oag_core::math::{Quat, Vec3 as V};
+    use oag_core::math::{Vec3 as V, quat_from_axis_angle};
 
     let stats = weapon_stats()
         .rocket()
@@ -341,10 +348,16 @@ fn the_volley_actually_fans() {
         height: 1.0,
         ..Dimensions::default()
     };
-    ship.physics.body.orientation = Quat::from_rotation_y(0.11) * Quat::from_rotation_z(0.23);
+    ship.physics.body.orientation =
+        quat_from_axis_angle(V::Y, 0.11) * quat_from_axis_angle(V::Z, 0.23);
 
-    let shots = projectile::launch(&ship.physics, &stats, "VENOM")
-        .expect("Pulse's weapon table authors a Venom rocket speed");
+    let shots = projectile::launch(
+        &ship.physics,
+        &stats,
+        "VENOM",
+        projectile::ROCKET_SHOTS as u8,
+    )
+    .expect("Pulse's weapon table authors a Venom rocket speed");
     let directions: Vec<V> = shots.iter().map(|&(_, velocity)| velocity).collect();
     assert!(
         directions[1].distance(directions[0]) > 1.0 && directions[2].distance(directions[0]) > 1.0,

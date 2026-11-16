@@ -1544,7 +1544,7 @@ accumulates, the second `.gtf` decoded, and it is not the baked atlas:
 
 On the built model that is **62,904 of Modesto Heights' 1,151,776 vertices**,
 24,296 of Talon's Junction's and 17,448 of Anulpha Pass's -
-`crates/render/tests/hd_emissive_glow_ground_truth.rs`, which also measures the
+`crates/mesh/tests/hd_emissive_glow_ground_truth.rs`, which also measures the
 glow's own pixel contribution by rendering the same model with the bit cleared.
 
 **One approximation is stated rather than hidden**: the program addresses unit
@@ -1639,7 +1639,7 @@ besides the lightmap. **76 materials across 12 circuits** (Tech de Ra 5,
 Amphiseum 15, Modesto Heights 7, Talon's Junction 2, Vineta K 7, `02_track` 1,
 `03_track` 7, Chenghou 2, Ubermall 11, Sebenco 1, Sol 2 1, Anulpha Pass 17; the
 four Zone circuits 0), pinned per circuit by
-`crates/render/tests/hd_vertex_scroll_ground_truth.rs`. They reach the renderer
+`crates/mesh/tests/hd_vertex_scroll_ground_truth.rs`. They reach the renderer
 as `mesh::AnimTrack::Scroll`, the track 2048's plain scroll already is, through
 `mesh::rcs::vertex_scroll`. A rate of zero authors no track.
 
@@ -1660,7 +1660,7 @@ as `mesh::AnimTrack::Scroll`, the track 2048's plain scroll already is, through
   by the vertex block but never added to a coordinate by a multiply-add this
   sweep matched (colour or intensity drive).
 - Fragment-only `time`: `nr_crowd_bustle` (33), `nr_billboardholographicscanlines`
-  (35; read and wired for Amphiseum's inline-literal shape, renderer.md "Amphiseum's holographic billboards are drawn by their own combine"), `scanlinebillboard*`, `uvdistortion_*`, `water`, `pipefx_v2`, the
+  (35; read and wired for Amphiseum's inline-literal shape, renderer.md "Amphiseum's holographic billboards are drawn by their own combine"), `scanlinebillboard*`, `uvdistortion_diff_vertexcol` (the `plusoverlay*` copies are read and wired, "Two surfaces the maintainer saw wrong"), `water`, `pipefx_v2`, the
   holograms: unread laws.
 - `weapon_pads` `W_Cycle` (231) is the pads' own thing; `scrollingalpha`
   `V_Offset` is on no circuit material (weapons and muzzle flash only).
@@ -2248,7 +2248,7 @@ taken on sRGB-decoded samples, the domain the existing glow uses, and encoded fo
 gamma path. `uv` stands for `f[TC3]`/`f[TC5].zw` on the same unproven-equality terms
 `skin::roles` already states.
 
-**Tests.** `crates/render/tests/hd_mag_wave_lit_path.rs` (no disc: the pixel swings
+**Tests.** `crates/mesh/tests/hd_mag_wave_lit_path.rs` (no disc: the pixel swings
 with `scene.time` and repeats at +1 s) and `hd_mag_wave_ground_truth.rs` (Talon's
 builds the bindings and classifies the loop). **Not done:** a reference capture of
 the moving strip from RPCS3 (the stills agree with `03.png` in layout only; the rate
@@ -2634,7 +2634,7 @@ This is the `Pick` collision of the glass-floor case (a), not a UV, decode or co
 
 **Fix.** `skin::lightmapped_albedo`: the first non-lookup entry **among those the resolved variant declares**, the old
 rule where no variant resolves. Before/after at the capture's own camera (`hd-frame-compare`'s comparison setting).
-Pinned by `crates/render/tests/hd_lightmapped_albedo_ground_truth.rs` (fails with the filter removed).
+Pinned by `crates/mesh/tests/hd_lightmapped_albedo_ground_truth.rs` (fails with the filter removed).
 
 **Disc-wide census** (`crates/render/examples/hd_lightmap_albedo_census.rs`, all 28 circuit models, 8,129 lightmapped
 materials with a resolved declaration): the albedo entry changes on **14** slots, three distinct materials:
@@ -2686,7 +2686,7 @@ off like every transparent draw: pass 1 `dst = dst * src` with shader output `f 
 output `C`. `MATERIAL_SHIFT` moves 20 -> 22 for the two new bits. **Chosen, not measured:** the normal map's offset of
 the grab coordinate is not drawn (the grab is read at the pixel's own position); transparent draws never write depth,
 so a blended draw submitted after the glass (the sea foam, slot 770) can land over it - it did not show at
-`vineta-floor/03`. Pinned by `crates/render/tests/hd_vineta_ceiling_ground_truth.rs`
+`vineta-floor/03`. Pinned by `crates/mesh/tests/hd_vineta_ceiling_ground_truth.rs`
 (`the_tunnel_glass_is_two_blended_passes_over_the_screen`, fails with the classifier removed).
 
 ### 2. `Program::accumulates` read a write to `H2.w` as taking `H2.xyz` away (confidence 90)
@@ -2745,7 +2745,7 @@ land colour (`glass_2nduv_reflect_glow` on 02/03/04/Sol 2/Vineta K, `2rocksandbl
 `nr_twinblend`, `nr_facinglcdstrips`). Blended materials are deliberately excluded from the fallback (glass has its own
 rules, not measured here). **Reference check:** Sol 2 pose 00 (the only pose of Sol 2 00/01 and Talon's 00/01 that moves,
 12k px) shows the right-hand building's window rows gaining colour with no visible regression; Talon's 00/01 are bit-identical. The other 66 slots have no reference.
-Pins: `crates/render/tests/hd_lightmapped_albedo_ground_truth.rs` (three new tests, each fails with its rule removed),
+Pins: `crates/mesh/tests/hd_lightmapped_albedo_ground_truth.rs` (three new tests, each fails with its rule removed),
 `a_unit_sampled_one_lane_wide_is_not_a_colour`.
 
 **2048 / Omega:** not checkable (PS3 microcode and sampler hashes; their shader containers are unread). Confidence 90
@@ -2847,8 +2847,9 @@ constant (`Constant1`, `ColourConstant`, `Watercolour`, named by the program) as
 picture, as HD's `constant_diffuse` does. The rule and its numbers are in
 [gxp.md](gxp.md#which-sampler-carries-the-colour-2026-10-19-normal-maps-as-colour);
 `oag_rcs::gxp::sampler_use`. **Not changed, and why:** `m_diffuse_normal_constantspecular`
-(and `New`) samples `Texture1`/`Norm` in its ambient-only program too, so its map feeds the
-colour somehow - open; the Altima water edge (`fc17_..._wateredge_vertexcol`) samples
+(and `New`) samples `Texture1`/`Norm` in its ambient-only program too: **wired 2026-10-31** as
+`Constant1` times the map's alpha (`mesh::rcs::psp2::alpha_product`; the law is in gxp.md, read on
+both titles' programs); the Altima water edge (`fc17_..._wateredge_vertexcol`) samples
 `NormalMap` in its ambient-only program (an opacity term, unread) - open; `temp_diffuse` on
 Square and Subway reads as a normal map by texel and has no program evidence.
 
@@ -3309,10 +3310,11 @@ number, not a material one, and is named in the thread.
 
 **Cross-title (CLAUDE.md, 2048 and Omega).** `ds_booth_glass`: **checked, already wired** - 2048's `lighting_only`
 table already names `Constant1` (`0x7611a2d8`, the same hash HD's block names) as its colour and Omega's instance is
-2048's record for record. `m_diffuse_normal_constantspecular`: **checked, applies, not wired** - 2048's ambient-only
-program samples `Texture1` and the instance carries `0x7611a2d8`, the shape HD's `MUL H.xyz, R.w, C` reads; 2048's
-programs are declared-interface only (no decoder), so the alpha product is unverified there and the family keeps what
-it drew. The `metallic` family and its siblings: not looked up in 2048's materials this lane (open). **The encode:**
+2048's record for record. `m_diffuse_normal_constantspecular`: **checked, applies** - 2048's ambient-only
+program samples `Texture1` and the instance carries `0x7611a2d8`, the shape HD's `MUL H.xyz, R.w, C` reads.
+**Verified 2026-10-31** on 2048's USSE program and Omega's GCN one (Omega fetches alpha alone, `dmask:0x8`):
+[gxp.md](gxp.md), "`m_diffuse_normal_constantspecular` colours by `Texture1`'s alpha". **Wired** on both, 2026-10-31
+(`mesh::rcs::psp2::alpha_product`). The `metallic` family and its siblings: not looked up in 2048's materials this lane (open). **The encode:**
 `psp2.rs` binds its constants as unorm bytes "the way `skin::constant_diffuse` binds HD's"; the reasoning (an
 sRGB-decoding binding against a raw multiply) is the renderer's, not HD's, but no 2048 frame was compared, so it is
 **checked, applies, not wired**.
@@ -3614,7 +3616,7 @@ abs RGB 8.27 to 7.30. Over six offsets of the 0.53 s wipe period (`--world-clock
 0.5) the bias is +0.20 to +2.69 and the error 0.079 to 0.124 M; the original's own two captures
 differ by 0.097 M there. The bars come through at the original's stripe density (5.3 repeats
 of the 32-texel strip over the banner). The other 12 HD pairs render byte-identical.
-Tests: `crates/render/tests/hd_twin_blend_lit_path.rs` (the shader's combine on a fixture),
+Tests: `crates/mesh/tests/hd_twin_blend_lit_path.rs` (the shader's combine on a fixture),
 `hd_twin_blend_ground_truth.rs` (Tech de Ra's slot and Chenghou's two),
 `oag-rcs vertex::tests::the_twinblend_mask_scroll_reads_its_literal_rate`.
 
@@ -3631,7 +3633,7 @@ const (`psp2::TWIN_BLEND_RATE`) pinned against HD's own `clock_rate` reading in
 `hd_twin_blend_ground_truth`; 2048's authored `time` (`19992.0`) is not a rate. The pair attribute
 is read through the record's **own** declaration pointer (`+0x28`: a `u32` on the Vita, 64 bits on
 the PS4): keyed by stride it is found on 1 of 28 Vita twin-blend submeshes, by pointer on all 28 and
-all 20 Omega ones. Census (`crates/render/tests/psp2_twin_blend_ground_truth.rs`, every model built):
+all 20 Omega ones. Census (`crates/mesh/tests/psp2_twin_blend_ground_truth.rs`, every model built):
 2048 `data.psarc` 6 materials (Anulpha Pass 1+1, Chenghou Project 2+2 forward and reversed),
 `dlc1.psarc` 12 (the same plus Metropia 1+1, Sebenco Climb 2+2), `dlc2.psarc` Tech de Ra 1+1; Omega
 Anulpha Pass 1+1, Chenghou Project 2+2, Metropia 1+1, Tech de Ra 1+1, Sebenco Climb 2+2; every one
@@ -3641,3 +3643,755 @@ with grey striped logo HD's matched original shows. No shadPS4 frame of Tech de 
 walk stayed on the main menu twice); the reference is HD's original crop, so the comparison is of
 character, not pixels. 2048's Vita DLC models are covered by the census only, no frame.
 
+
+## The picture's alpha times a colour: the `alpha_emissive` families (2026-11-11, `hd-worst-pairs`)
+
+**Report:** the buildings behind Metropia's start line (`hd-metropia`, compare box `180,0 1740x480`): the stadium's neon
+rings draw a dim cyan where the original's are near white with a halo. **Method:** one `OAG_SKIP_SLOT` render per
+material slot of the box's leading families (the mask is where the frame moves by more than 3 of 255 after a sigma-7
+blur, the error under it the same blurred mean absolute RGB difference against `theirs.png`), then the slot's resolved
+block read with `scripts/ps3-microcode.py fp-file`. `hd_material_probe_dump` prints the block, the samplers, the
+parameters and every alpha-gated constant per slot.
+
+**The law (confidence 90: thirteen resolved blocks read over six families and eight circuits, no live frame of the
+constants).** Every lit variant multiplies the picture by its light and then runs one instruction before the fog and the
+closing `/2`:
+
+```text
+dn_diffuse_specular_emiss, Metropia, lightmapped block #21 @0xbb60
+@0x2b  TEX H1, R2.zwzz unit0                       ; the picture, sampler alpha_emissive
+@0x2c  MUL H1.xyz, H1, H2                          ; times the light (atlas, sun, vertex term)
+@0x31  MAD H1.xyz, H1.wwww, {glowtinrt}, H1        ; + picture.a * colour
+@0x33  TEX H4.xyz, R2.zwzz unit1                   ; SpecularTexture
+@0x3b  MAD H1.xyz, H5, H4, H1                      ; + specular * map
+@0x3c  MAD /2 H0.xyz, R0.xxxx, H1, R1 END          ; fog, /2
+```
+
+`rgb = fog(light * picture.rgb + picture.a * glowtinrt [+ specular * map]) / 2`. The colour is neither lit nor
+shadowed. The picture's sampler is `alpha_emissive` (`0x6f9e6faf`) and the colour `glowtinrt` (`0x8f3d0540`, the disc's
+spelling). **Both names are preimages**: 2048's GXP copy of `dn_diffuse_specular_emiss` and Omega's GCN copy declare
+them in the clear, and `~crc32` of each is the HD hash (`names::KNOWN_PARAMETER_NAMES`, checked against the disc by
+`rcsmaterial_ground_truth`). Metropia's rings paint `mar_col_rim3.gtf`, a metal rim whose alpha is the neon strip, with
+`glowtinrt = (0.821, 0.856, 0.993)`.
+
+**Census** (`hd_material_probe_dump` over the 16 circuits; slots whose resolved block has the instruction):
+
+| Family | Slots |
+| --- | --- |
+| `diffuse_emissive_alpha_glow` | Vineta K 36, Ubermall 15, Metropia 13, Amphiseum 6, Moa Therma 2, Anulpha Pass 1 |
+| `diffuse_emissive_alpha` | Moa Therma 24, Anulpha Pass 20, Vineta K 6, Sebenco Climb 2 |
+| `dn_diffuse_specular_emiss` | Metropia 17, Ubermall 2 |
+| `diffuse_emissive_alpha_glow_v01` | Talon's Junction 9 |
+| `mr_diffuse_emissive_alpha_glow_specular`, `vertclr_diff_emissive_alpha_glow` | Vineta K 1 each |
+
+Nothing read the parameter before: 155 slots drew their picture lit and no more. **The `ZoneMode` and `ZoneTrans`
+variants do not declare `glowtinrt`** (`diffuse_emissive_alpha_glow` blocks `@0x4150`, `@0xaef0`, `@0x5e00`), so a Zone
+race draws none of it. Other programs gate other constants by a unit-0 alpha (`diffusetextureemissivealphascalar`,
+`diffuse_emissive`, `animhexlights`, `tracktexture_with_normal`); they are different blocks, not read, and not wired.
+
+**`Program::accumulates(1)` misread `dn_diffuse_specular_emiss`.** Its unit 1 is the specular map and `@0x3b` is the
+specular's own tint, but the shape matches the additive glow, so the vertex-lit slots (10 on the disc) added the
+specular map, gated by the picture's alpha, as a white layer. The new reading takes those slots and clears
+`ADD_SECOND`. The specular map is bound third ("The specular map of `dn_diffuse_specular_emiss`", below).
+
+**Wired:** `oag_mesh::mesh::rcs::alpha_emissive` admits a slot whose bound picture is `alpha_emissive` and whose
+resolved program gates `glowtinrt` by that unit's alpha (`Program::alpha_gated_parameter`), and writes the colour as a
+glow-table entry of `PROGRAM_PICTURE_ALPHA_EMISSIVE`; `shade.wesl` adds `first.a * colour` where the pads' light bars
+are added, off in a Zone race. `OAG_ALPHA_EMISSIVE_OFF=1` draws the frame before. Tests:
+`hd_pad_ne_lit_path::a_picture_alpha_emissive_entry_adds_the_pictures_alpha_times_its_colour` (no disc) and
+`hd_program_glow_ground_truth` (Metropia's nine ring slots carry the mode and the authored colour, 30 materials bound).
+
+**Measured** (sigma-7 mean absolute RGB against the stored originals, ours re-rendered from each pair's flags):
+
+| What | Before | After |
+| --- | ---: | ---: |
+| Metropia ring slots 93, 129, 116, 54 (err; bias of slot 93) | 15.4, 16.6, 10.2, 12.8; R -17 G -13 B -15 | 2.0, 2.7, 2.2, 1.4; R -2 G -1 B -1 |
+| Metropia box `180,0 1740x480` (this reading alone) | 8.97 | 7.03 |
+| Metropia whole frame (this reading alone) | 4.35 | 3.54 |
+| Anulpha Pass box `700,0 800x420` (ceiling light panels, dark green to the original's cyan) | 4.34 | 3.13 |
+| Anulpha Pass whole frame | 2.86 | 2.66 |
+
+The other eleven race pairs move by 0.01 or less (Vineta K 2.37 to 2.38 low-frequency, 2.81 to 2.80 raw): their
+slots of these families are out of view at the start line or author a black colour.
+
+**Open.** (1) ~~The specular map of `dn_diffuse_specular_emiss`~~ bound third (2026-11-12, `hd-specular-nl`; `mr_..._specular` has no such map). (2) No live frame: the magnitude rests on
+the pairs above.
+
+**2048 / Omega: ported (2026-11-11, `w2048-alpha-emissive`).** Both re-ship the families with HD's circuits (2048
+`data.psarc` 12 entries, `dlc1.psarc` 7; Omega `data00` to `data08`, e.g. `02_metropia/Materials/DN_DIFFUSE_SPECULAR_EMISS_2`),
+and their programs declare `alpha_emissive` and `glowtinrt`. Both read off their own pixel programs:
+
+- **2048** (`scripts/vita-usse.py disasm`, no Vita3K involved; confidence 90). Tower's `diffuse_emissive_alpha_glow`, all four lit
+  variants (flat ambient `#1`, ambient plus sun `#3`, vertex-lit `#12`, lightmapped `#14`):
+
+  ```text
+  #3 @6   mad.f16 pa4.xyzw, pa0.xyzw, sa4.xyzw, sa2.xyzw   ; light = max(0, N.L) * liveLighting0diffuse + constantAmbientColour
+  #3 @7   mul.f16 pa0.xyz, pa4.xyz, pa2.xyz                ; light * texel   (pa2 the sample, glowtinrt in sa0)
+  #3 @8   mul.f16 pa0.xyz, pa0.xyz, pa2.xyz                ; * texel again: light * texel^2
+  #3 @9   mad.f16 pa2.xyzw, pa2.wwww, sa0.xyzw, pa0.xyzw   ; + texel.a * glowtinrt
+  #3 @10  add.f16 / @11 mad.f16                            ; the fog mix
+  #3 @12  mul.f16 pa0.xyzw, pa0.xyz0, c15.yyyy             ; * 1.0, no HD /2
+  ```
+
+  `rgb = fog(light * D^2 + D.a * glowtinrt)`: the colour neither lit nor shadowed, the alpha unsquared (the 2048 texel is
+  squared, `2048-material-params.md`, "Vertex-lit and lightmapped combines"). **`scripts/vita-alpha-emissive-sweep.py` over
+  `data.psarc`, `dlc1.psarc` and `dlc2.psarc`: 171 of 171 fragment programs that declare both names carry the `mad`** with
+  `glowtinrt`'s own register: `diffuse_emissive_alpha` 45, `diffuse_emissive_alpha_glow` 99,
+  `mr_diffuse_emissive_alpha_glow_specular` 18, `dn_diffuse_specular_emiss` 9. 29 more programs declare
+  `alpha_emissive` without `glowtinrt` (`dn_diffuse_specular_emiss_glow` 17, `mr_..._specular` 12) and have no such `mad`:
+  Sol 2's `dn_diffuse_specular_emiss_glow` authors no `glowtinrt` either, so it gets no entry.
+- **Omega** (`gcn_dump`; confidence 85). The lit programs of the same families (ambient plus sun `@0x3fc4` of
+  `02_metropia/Materials/diffuse_emissive_alpha_glow`, 76 instructions) end `v_mul_f32 v3, s16, v8` (`glowtinrt.x * sample.w`),
+  `v_mac_f32 v3, v14, v5` (`+ light * sample.x`), then the fog `v_mad`. **250 pixel programs over 25 materials of
+  `data00`, `data01`, `data02` and `data04`: 249 carry the plain `glowtinrt * sample.w` multiply**
+  (`diffuse_emissive_alpha` 70, `diffuse_emissive_alpha_glow` 120, `_glow_v01` 10, `dn_diffuse_specular_emiss` 30,
+  `mr_..._specular` 9, `vertclr_diff_emissive_alpha_glow` 10). The 250th, `01_vineta_k/materials_dlc/mr_..._specular` `@0x8944`,
+  folds the colour into the alpha-weighted specular (`v13 = glowtinrt.x + Specular_Colour * ...`, `v1 += v8 * v13`): the term is
+  there, weighted by the alpha like the specular. Omega's lit programs are not squared (`light * sample`).
+
+**Wired:** `oag_mesh::mesh::rcs::psp2::alpha_emissive` admits a material that binds `alpha_emissive`, authors `glowtinrt` and
+**draws that sampler's texture as its picture** (the mask is the alpha of the texel the draw samples), and writes the same glow-table
+entry as HD's (`PROGRAM_PICTURE_ALPHA_EMISSIVE`, `shade.wesl` mode 12, shared constants `alpha_emissive::PICTURE`/`COLOUR`). It
+rides `emissive_add::Plan` with no third binding. `OAG_ALPHA_EMISSIVE_OFF=1` is the before. Tests
+(`crates/mesh/tests/psp2_alpha_emissive_ground_truth.rs`, red before, green after): Queens Mall's three authored colours and 8
+submesh users, a lightmapped submesh on Metro Park, Sol 2's negative, Omega Metropia (6 entries, 18 materials).
+
+**Omega's `dn_diffuse_specular_emiss` and 2048's: the picture and the specular map (confidence 90).** Both titles list
+`SpecularTexture` first in the instance, so "the first sampler listed" drew the specular map as the picture and read the
+neon mask off its alpha. Their programs say otherwise. Omega, `gcn_dump` on `02_metropia/Materials/dn_diffuse_specular_emiss`
+(the 9 lit permutations, e.g. `@0x3fc4`, 123 instructions; the ambient-only `@0x3244` samples `alpha_emissive` alone): texture
+slot 0 is `alpha_emissive` and slot 1 `SpecularTexture`, and the program ends
+
+```text
+rgb = fog(light * T.rgb + T.a * glowtinrt + specular * liveLighting0specular * S.rgb)   T = alpha_emissive, S = SpecularTexture
+@0x1bc v_mul_f32 v13, s16, v8                   ; glowtinrt.x * T.a
+@0x1d8 v_mad_f32 v2, v14, v12, v13              ; (liveLighting0specular.x * S.x) * pow + that
+@0x1e0 v_mac_f32 v2, v20, v5                    ; + (ambient + diffuse * N.L).x * T.x
+```
+
+`S` is only the specular's weight (no alpha of either gates it). 2048's lit permutations (`scripts/vita-usse.py disasm`, `dlc1.psarc`
+Metropia `dn_diffuse_specular_emiss` and Sol 2 `dn_diffuse_specular_emiss_glow`; `alpha_emissive` is resource 0 and `SpecularTexture`
+resource 1 in all of them) are the same shape in the Vita's squared texel domain: `mul r0.xyz, spec, S.rgb`, then
+`mad pa2, r0, S, pa2`.
+
+**The `_glow` twin** (Sol 2 on 2048, 16 materials in Omega's `data02`; none on Metropia) binds the same pair and weights the specular the
+same way (2048: `mul pa2, spec, S; mad pa4, pa2, S, pa4` in both lit permutations; Omega `@0x4504`: `v_mul_f32 v10, s5, v10` scales the
+second sample by `liveLighting0specular`), but its emissive term is not the plain family's: it declares no `glowtinrt`, and the 2048
+program adds the picture times its own alpha (`mad pa4, T^2, T.a, lit`), which is **not wired** (Omega's `_glow` emissive term is
+unread). It takes the picture and the specular weight here, with a zero-tint entry; no `_glow` surface is on a measured frame.
+
+**Wired** (`oag_rcs::rcsmodel::psp2::specular_picture`, keyed by the file stem and an instance that binds both samplers, so a family
+not read keeps the sampler order): the picture is `alpha_emissive`; the specular map rides the third binding
+(`emissive_add::Add::texture`, so `pad_masks`) and the mode 12 entry's second lane is `ALPHA_EMISSIVE_SPECULAR_MAP`, which
+`shade.wesl` reads as `specular_mask = 1`, `specular_tint = decode(third.rgb)` (the pb_glass window's path, with the map third
+because Metropia's lightmapped draws hold the second). The `_glow` twin gets an entry of zero tint for the map alone.
+`OAG_SPECULAR_PICTURE_OFF=1` is the before. Tests, red before: `psp2_alpha_emissive_ground_truth::
+omegas_metropia_specular_family_draws_its_diffuse_and_weights_by_its_specular_map` (6 picture/map pairs over 17 materials, every one
+the `alpha_emissive` file as the picture and the specular file third), `..._alpha_emissive_materials_add_their_authored_colour`
+(32 materials, 0 left to the generic reading), `..._adds_no_colour` (Sol 2), and `hd_pad_ne_lit_path::
+an_alpha_emissive_entry_with_a_specular_map_weights_the_specular_by_its_colour` (fails with the shader branch dropped).
+
+**Measured, Omega Metropia pair** (native port original, 1920x1080, tick 100, the pair's own argv; `OAG_SPECULAR_PICTURE_OFF=1`
+is the before; the pixels that change are 1,191 of 2.07 million, in six clusters, the boxes below, named by where on/off differ). Mean RGB over those boxes,
+theirs / before / after:
+
+| Box (`x,y WxH`) | Theirs | Before | After |
+| --- | --- | --- | --- |
+| `777,112 230x82` | 143/132/131 | 118/116/119 | 122/121/125 |
+| `1100,121 114x45` | 114/113/111 | 103/100/91 | 110/107/99 |
+| `1035,264 130x28` | 81/78/74 | 58/53/48 | 68/64/59 |
+| `689,116 53x63` | 117/95/76 | 115/96/75 | 118/100/80 |
+| `763,261 23x49` | 121/115/98 | 70/92/82 | 69/92/83 |
+| `1221,129 116x73` | 99/93/90 | 107/102/93 | 111/107/98 |
+
+Three of the six boxes move toward the original (`777,112` by 4 to 6 of a 12 to 26 gap, `1100,121` by 7 of 11 to 23, `1035,264` by
+10 of 23); `1221,129` moves **away** (+4, already 8 to 9 too bright), `689,116` was within 2 and ends 1 to 5 off, and `763,261` is
+unchanged and 51 red short, so that cluster's
+remaining error is another term. The `517,112 1000x300` crop's mean absolute error against the original goes from
+0.1943 to 0.1935: the family is a few surfaces of the frame, and its picture is now the diffuse map, not a measured match of the
+whole.
+
+**Omega: checked, differs, left alone.** Omega's specular is not our `N.H` power: `@0xf0` to `@0x14c` compute `R.L` (`R` the
+reflected view) to the power `32 - 24 * s6` (`s6` a `reflectiveBlurCoeffs` lane), scaled by a reciprocal of `s6` as well
+(`@0x10c` to `@0x16c`; read at the instruction level, not named). The weighting by `S.rgb` is the
+reading wired here; the shape of the lobe is the shared stand-in's.
+
+**Measured.** None of the three 2048 grid pairs has an `alpha_emissive` surface in frame: `OAG_ONLY_MATERIAL` and a magenta override
+of mode 12 draw nothing on Empire Climb (Tower: 6 materials, 12 submeshes) or Queens Mall (5 materials, 8 submeshes), and Vineta K's
+two submeshes change 0.08 px, so on/off is pixel-identical on all three (`magick compare -metric AE`). Ours at 2048's Anulpha
+Pass grid (`--track ...\DLC1\environments\Anulpha_Pass\track.vex`, 960x544, tick 179) changes 25 px, a strip light on the
+stand, from 12/17/18 to 21/24/19 over the 53x29 box at (531,133): it glows amber where it drew dark (no 2048 original of that
+frame exists). Omega's Anulpha Pass pair (native port original, 1920x1080, tick 100), mean RGB over the box (named by where on/off
+differ), theirs / before / after: orange stand panel `1065,268 100x35` 76/80/58, 78/73/55, 79/80/55 (G 73 to 80 against 80);
+`1015,203 152x42` 39/63/77, 35/58/72, 45/65/75; `1222,159 76x35` 15/82/114, 18/97/134, 18/100/137 (away, +3 on a box
+already 15 too bright).
+
+### The specular map of `dn_diffuse_specular_emiss` (2026-11-12, `hd-specular-nl`; confidence 90 for the program, 60 for the unit's gamma)
+
+**The law.** Every lit variant of `dn_diffuse_specular_emiss` ends `MAD H1.xyz, H5, H4, H1` (block `#21`, `@0x3b`, quoted above): `H4` is the
+`SpecularTexture` (`0x20c3e476`, `~crc32` of the name; unit 1) fetched at the picture's own coordinate (`TEX H4.xyz, R2.zwzz unit1`),
+`H5` the specular term. `rgb = fog(light * T.rgb + T.a * glowtinrt + specular * S.rgb) / 2`, no alpha of either texture gating the specular,
+the same combine Omega and 2048 read (`psp2::alpha_emissive`).
+
+**Wired:** `mesh::rcs::alpha_emissive` binds the map third (`Model::pad_masks`, merged after `mag_wave` and before `hull_normal` reads the
+table) for a slot whose resolved program declares `SpecularTexture` and fetches that unit's three lanes, and sets the mode 12 entry's second
+lane to `ALPHA_EMISSIVE_SPECULAR_MAP`, the flag 2048 and Omega use; `shade.wesl` reads it as `specular * decode(map.rgb)`. Its gamma
+is the decode every colour unit of this path takes: **chosen, not measured** for this unit (the sampler's address word was not read). The
+chunks of these materials carry no tangent, so the third binding is not read as a normal map (checked on all 17 slots). Switch:
+`OAG_SPECULAR_PICTURE_OFF=1`. Tests, red with the switch on: `hd_program_glow_ground_truth::metropia_carries_its_programs_glow_masks`
+(17 slots: entry `[12, 1]`, the third binding the material's own `SpecularTexture` file) and, in `rcsmaterial_ground_truth`, the census of which
+programs declare the sampler.
+
+**`mr_diffuse_emissive_alpha_glow_specular` has no specular map on HD (the brief's claim is false for it).** None of its blocks declares
+`SpecularTexture` (0 of its programs, Vineta K's `materials` and `materials_dlc`); its unit 1 and 2 are `TXP` fetches, the shadow maps, and its
+specular is `picture.a * 0xeca14ca6` (the picture's alpha weights it, which the generic gloss mask already does). Nothing to wire.
+
+**Census** (`every_fragment_program_on_the_disc_decodes_to_a_clean_end`, every fragment program on the disc): `SpecularTexture` is declared by 16 families:
+`dn_diffuse_specular_emiss` 120 programs, `dn_diffuse_specular_emiss_glow` 132, `pb_window` 156, `wes_diffuse_colourtint_specular` 24,
+`cf_diff_spec` 48, `base_diffusespecular` 48, `pb_diffspecemiss` 36, `mt_diffuse_glow_specular` 40, `tunnel_fx_noalpha` 30, `ab_diff_spec_facing` 26,
+`diffuse_colourtint_seperate_specular` 24, `j_diffuse_colour_tint_spec` 24, `tunnel_fx_noalpha_mult` 20, `diffuse_colourtint_diff_spec_facing` 20,
+`tunnel_fx_glass` 14, `bluemetal` 10. **Only the first is wired**; the others (and the `_glow` twin, which declares it too) were not read for
+how they use the unit and are left open.
+
+**Measured** (HD pairs, ours re-rendered from each pair's recorded flags; the switch off is the before; the boxes are named by where
+`OAG_ONLY_MATERIAL=dn_diffuse_specular_emiss` on and off differ, 3,554 px in 10 clusters; mean RGB over the box, theirs / before / after):
+
+| Box (`x,y WxH`) | Theirs | Before | After | Error before to after |
+| --- | --- | --- | --- | --- |
+| `568,203 39x72` | 114/94/75 | 120/97/77 | 117/96/77 | 4.1 to 2.6 |
+| `790,201 80x28` | 63/61/54 | 61/60/54 | 62/60/54 | 1.3 to 0.6 |
+| `773,159 83x28` | 64/63/57 | 62/61/57 | 62/62/57 | 1.5 to 1.1 |
+| `1096,101 102x29` | 83/86/81 | 77/82/79 | 77/82/79 | 4.4 to 3.9 |
+| `1023,160 73x55` | 101/112/127 | 95/106/119 | 95/106/119 | 6.7 to 6.3 |
+| `1089,36 102x30` | 83/85/77 | 72/76/71 | 72/76/72 | 8.7 to 8.2 |
+| `659,240 47x64` | 73/57/44 | 77/59/45 | 76/59/45 | 2.2 to 1.8 |
+
+Seven of ten boxes move toward the original by 0.4 to 1.5 of error and none moves away; the whole frame's mean grey is 3.12 before and after
+(the family is a few small surfaces: 3.5k px of 2.07 M). **Ubermall's two slots change no pixel** on the `hd-ubermall` pair (0 px differ, on and
+off, whole frame and with only the family drawn): they are out of view at that start line.
+
+**2048 / Omega: ported** (`psp2::alpha_emissive`, `psp2_alpha_emissive_ground_truth`): the same flag and the same third binding.
+
+### The sun's N.L: which lightmapped programs leave it unsaturated (2026-11-12, `hd-specular-nl`; reading confidence 90, **not wired**)
+
+**The reading.** The lightmapped block of Metropia's `dn_diffuse_specular_emiss` (`#21`, `@0x1f`..`@0x25`) and of Moa Therma's
+`diffuse_normal_specular` (`#7` `@0x9960`, `@0x29`..`@0x33`) dot the normal with the sun with **no `_SAT`** and multiply the result into the diffuse light:
+
+```text
+Metropia #21   @0x1f DP3 R0.y, R0, {sunDir}          ; N.L, unsaturated
+               @0x21 MUL H1.x, H4.w, R0.yyyy          ; * atlas alpha          (the diffuse term)
+               @0x23 MUL H2.xyz, H1.xxxx, {sunColour}
+               @0x25 MOV_SAT x8 R1.w, R0.yyyy         ; the same DP3, saturated, for the specular's facing term only
+Moa #7         @0x29 DP3 R1.w, R0, {sunDir}  /  @0x2b MOV_SAT x8 R1.x, R1.wwww  /  @0x2e MUL H0.w, H6, R1  /  @0x33 MUL H6.xyz, H0.wwww, {sunColour}
+```
+
+`Program::sun_diffuse_unsaturated` is that shape: an unsaturated `DP3` against `directionalLight0DirectionWorldSpace` that a later unsaturated
+`MUL`/`MAD`/`ADD` reads (the `MOV_SAT x8` reader every lit program carries is ignored). **Census** (`rcsmaterial_ground_truth`, all 37,461 fragment programs): 7,211 are
+lightmapped and **2,349 of them leave the sun's `N.L` unsaturated**. The plain diffuse families clamp (`diffuse`, `diffuse_emissive`, `diffuse_emissive_alpha`,
+`diffuse_emissive_alpha_glow`, `_v01`: 0 of 14, 12, 60, 54, 6); the specular families do not (`dn_diffuse_specular_emiss` 22 of 24, `_glow` 18 of 18,
+`dn_diffuse_specular` 36 of 36, `diffuse_normal_specular` 152 of 328, `diffuse_specular` 172 of 360, `track_surface` 24 of 56; the partial counts are the Zone, shadowed
+and no-sun variants). Both quoted blocks read unsaturated. The brief's per-program list is this census.
+
+**Wiring it makes the picture worse, so it is not wired (measured, not explained).** A branch in `shade.wesl` took the raw `N.L` on the 2,349 programs
+(a role bit, the light floored at zero before the albedo multiply; reverted). Sigma-7 mean absolute RGB against the stored originals, ours
+re-rendered from each pair's recorded flags:
+
+| Pair, box | Clamped (as drawn) | Unsaturated |
+| --- | ---: | ---: |
+| Moa Therma `0,540 840x540` | 1.40 | 1.54 |
+| Moa Therma `1020,720 660x360` | 1.17 | 2.63 |
+| Moa Therma whole frame | 1.86 | 2.11 |
+| Ubermall `1063,381 857x336` | 2.49 | 11.24 |
+| Ubermall whole frame (mean grey 3.80 to 5.36) | 2.02 | 3.43 |
+
+Ubermall's right-hand walls and the track's far edge draw a deep navy where the original is tan and grey: faces turned from the sun lose the
+sun's red and green and keep the blue of the lightmap. Restricting it to chunks with no tangent (no normal map) still reads worse on Ubermall
+(3.80 to 4.46), so the normal map is not the cause. The program is unsaturated and the original's pixel is not darkened.
+
+**What decided it (2026-11-12, `hd-ubermall-nl-dump`; RPCS3 draw dump of an Ubermall Time Trial start, camera `182.47 143.58 -231.47`, two frames of one boot; confidence 75 for the numbers, 45 for the mechanism).**
+Neither branch of the question held; a third did.
+
+| Quantity, Ubermall right wall (draw 98 of the frame, `d_s_n`-family program `0x01135e00`, lightmap unit 2) | Original (live) | Ours |
+| --- | --- | --- |
+| Patched `directionalLight0DirectionWorldSpace` | `(-0.842152, 0.336861, 0.421076)` in all 541 live programs | `track.envsettings` `Sun direction` `(-2, 0.8, 1)` normalised: the same triple |
+| Sun colour | `(4, 3.482353, 2.494118)` | the envsettings value, same |
+| Unit-2 texture | `0x076a8400`, DXT5 1024x1024, remap `0xaae4`, gamma nibble 0; mip 0 byte-identical to `lmaps/ile_mesh_combine22-lmap.gtf` | the same file |
+| `lm.a` at the draw's 1,513 pixels with vertex `N.L < -0.2` | mean 0.976 | same bytes |
+| `N.L` there | vertex normal mean -0.29; with the live normal map (unit 1, uv0 unflipped) 21 % of them still negative | the same vertex data |
+| Pixel RGB there (2,280 depth-visible pixels over draws 98, 102, 101, 76, `N.L<-0.2`, `lm.a>0.9`) | **103.6 113.4 119.5** | unsaturated term drawn **75.6 89.1 100.4**; clamped (as shipped) **103.2 113.6 119.1** |
+
+(a) is false (alpha 0.976 on identical bytes) and (b) is false in its stated form (identical sun, negative `N.L`). The live program multiplies `lm.a * N.L` with the dot unsaturated at the `DP3` but saturated at the reader by bit 24 (see "Bit 24 is a source saturate"; `@0x26 DP3 R0.y`, `@0x29 MUL H1.x, H6.w, R0.y`), and still the original draws the **clamped** picture, so **the negative product does not reach the pixel**. Binned by normal-mapped `N.L` over draw 98's 12,638 pixels with `lm.a>0.9`: for `N.L` in `[-0.6,-0.1)` original 79 to 81, clamped 80 to 85, unsaturated 48 to 53.
+
+**Bit 24 is a source saturate (confidence 90).** The `MUL` (`d0=02000282 d1=1c9dff18 d2=0100aa00`) has bit 24 of dword 2 set. Dword 2 is RPCS3's `SRC1` word (`rpcs3/Emu/RSX/Program/RSXFragmentProgram.h`, `union SRC1`): bits 19-21 `src0_prec_mod`, **22-24 `src1_prec_mod`**, 25-27 `src2_prec_mod`, 28-30 `scale`. Bit 24 alone is `src1_prec_mod = 4`, `RSX_FP_PRECISION_SATURATE` (`enum register_precision`), and `FragmentProgramDecompiler::GetSRC` / `ClampValue` (`FragmentProgramDecompiler.cpp`) emit `precision_clamp(src, 0., 1.)` for it, applied to the source after its swizzle and before `abs` and `neg`. So the `MUL` reads `saturate(R0.y)`: the unsaturated `DP3` is clamped by its consumer (Cg folds `saturate(N.L)` into the reader), and the original's `lm.a * N.L` term is clamped, which is the picture the dump measured. Chain: dword layout from RPCS3 (primary source, read in a sparse checkout), the measured `d2` of the live `MUL` (this section), and the dump result above (original equals the clamped picture); nouveau's `nvfx_shader.h` was not read (the layout is RPCS3's, tested there on hardware: "tested with fp_dynamic3 autotest sample, DS2" for the clamp). `scripts/ps3-microcode.py` now prints it as `sat(R0.yyyy)` (also `fx12(...)` for code 2 and `fx9(...)` for code 3; codes 1 half and 5 unknown print nothing); `scripts/ps3-microcode-selftest.py` checks that one instruction.
+
+**Census (`Program::sun_diffuse_unsaturated`, now reading `Instruction::source_precision`): of the 2,349 lightmapped programs with an unsaturated sun `DP3` and an unsaturated `MUL`/`MAD`/`ADD` reader, all 2,349 (100%) read it through a saturate source modifier, so 0 of 7,211 stay unsaturated.** Per family the `(programs, unsaturated before the modifier, after)` triples are `dn_diffuse_specular_emiss` (24, 22, 0), `dn_diffuse_specular_emiss_glow` (18, 18, 0), `dn_diffuse_specular` (36, 36, 0), `diffuse_normal_specular` (328, 152, 0) (`crates/rcs/tests/rcsmaterial_ground_truth.rs`, `SunCensus`). The "unsaturated N.L" reading above was therefore a decoder gap, not a different picture: HD clamps the sun term everywhere, and drawing it unclamped is wrong. Cross-title: 2048 (GXP) and Omega (GCN) are **not checked here**; Omega's `@0x228`/`@0x260` clamp modifiers are the lead and need that title's own census, the RSX bit says nothing about their encoding.
+
+Reproduce: state `scripts/emu-hd-timetrial-state.sh <lane> 6 0 0 <name>`, `cross` then `rpcs3-drive.py restart`, `HOOK_TGT=1920000 HOOK_NO_HEADS=1 HOOK_FP_LEN=0x800 scripts/hd-draw-dump.py`, textures with `scripts/hd-rsx-read.py` and `scripts/dxt5-decode.py`, vertices with `scripts/hd-draw-vertices.py` (layout `s16x3` position at `raw/128 + c467`, `CMP` normal, `u8x4` tangent, `f16x2` uv0 and uv1). Ours: `git revert --no-commit 2ddd3fa2f`, build, `OAG_UNSATURATED_SUN_OFF=1` for the clamped picture. Bit 24 read against RPCS3's decompiler (above); nouveau's `nv40_fragprog.h` not read.
+
+**2048 / Omega: not determined.** Omega's lightmapped Moa permutation (`03_moa_therma/Materials/Diffuse_Normal_Specular_1`, `gcn_dump --at 0x4124`)
+carries two `clamp` output modifiers in its lighting chain (`@0x228`, `@0x260`) and no `v_max_f32`; which instruction is the sun's `N.L` and whether
+either clamp is on it was not traced. 2048's GXP was not read. The reading is therefore **checked, applies, not wired** for both.
+
+### The window with a specular map: `pb_glass_2nduv_reflect_specular1_glow` (confidence 85)
+
+The tower behind the same start line is the disc's one slot of this family (Metropia slot 146), and it was the
+box's largest single error: ours R +18 G +20 B +22 over 84,670 px. Its vertex-lit block (`#5 @0x2c00`) is
+`glass_2nduv_reflect_glow`'s ([hd-track-tone.md](../rendering/hd-track-tone.md), "Chenghou's background windows")
+with two more instructions:
+
+```text
+rgb = fog(light * T.rgb + glow * (1 - G) + specular * S.rgb + (1 - T.a) * reflection) / 2
+T = texture1_alpha_for_reflect (0xc29b64e4, unit 1)   wes_windows_d: beige wall, dark panes, alpha 1 on the wall
+G = Texture2_alpha_for_glow (0x290a5adb, unit 0).a    wes_windows_d_strip at the second coordinate set: a few lit panes
+S = TextureSpecular (0xe69a79f6, unit 2)              pb_wes_windows_d_s
+glow = Glow_colour_strength2 (0xfc21467a)             (0.918, 0.921, 0.849)
+```
+
+The four names are preimages too, off Omega's GCN copy (`Texture2_alpha_for_glowSampler`,
+`texture1_alpha_for_reflectSampler`, `TextureSpecularSampler`, `Glow_colour_strength2`); they say what each binding
+is for. `Glow_colour_strength` (`0x98ce0669`, `glass_glow`) and `Glow_colour_strength1` (`0x652817c0`,
+`glass_2nduvfor_glow`) land the same way. The family had no row in `window_glass`, so the generic reading bound the
+white strip (entry 0) as the facade and added the specular map as a glow.
+
+**Wired:** a `window_glass` row (reflective, with the glow pair), and the specular map bound second where the variant
+has no atlas (`window_glass::specular_map`, the entry's `program[1]`), multiplying the specular in `shade.wesl`. The
+map's gamma nibble was not read live: decoded like every other colour unit, **chosen, not measured**. Tests:
+`hd_pad_ne_lit_path::a_windows_specular_map_tints_its_specular` and `hd_program_glow_ground_truth` (picture, mask, map
+and glow colour of the slot).
+
+**Measured:** slot 146 err 20.2 to 3.5 (bias R +2.8 G +3.1 B +3.5); with the row and no map 7.2 (the specular weighted
+by the picture's alpha, 1 on the wall where the map is about a quarter), with the specular removed 4.4. Metropia box
+`180,0 1740x480` 7.03 to 5.32, whole frame 3.54 to 2.84; from the start of this section 8.97 to 5.32 and 4.35 to 2.84,
+and the compare list's hot region there (blocks of 6 or more, merged) 6.58 M to 2.36 M of impact. No other pair
+moves (the family has one slot).
+
+**What was left in that box** after both: the three gantry cards R +15 to +22 G +18 to +24 B +8 to +11 over about
+115,000 px and the GO glyph R +32 G +29 B +15 (next section); `glass_2uv_rgb_reflect_glow` slot 31, the cream tower
+right of frame, R -9.5 G -9.9 B -9.9 over 78,406 px (the section after).
+
+**2048 / Omega: checked, applies, not wired.** Omega ships the material for Metropia (`data02`, `data05`) with the
+names above; 2048's `dlc1.psarc` copy declares `texture1_alpha_for_reflect`, `Texture2_alpha_for_glow`,
+`TextureSpecular` and `Glow_colour_strength2` in its GXP. Neither program's combine was read, and the `psp2` loader
+has no row for it.
+
+### The gantry boards on Metropia: `cf_vex_billboard` compiled without `k` (confidence 90)
+
+Metropia's two board slots (270, 281) and Chenghou Project's five resolve to block #3 `@0x1360` of their own copy of
+`cf_vex_billboard`, an older compile than Vineta K's `@0x1b40` ("Not drawn, named", above): the same two taps, the
+same `light = constantAmbientColour + sat(N.L) * sun`, and
+
+```text
+@0x17  MUL H2.xyz, H1, H5              ; picture * light
+@0x19  MUL H4.xyz, H4, H2              ; glow.rgb * picture * light
+@0x1c  MAD H1.xyz, H1, H4.wwww, H4     ; picture * glow.a + that
+@0x1d  MOV H0.w, {1}
+```
+
+`out = picture * (glow.a + glow.rgb * light)` with no `k` (`0x21db4cba` is not declared, and nothing multiplies the
+glow). Anulpha Pass's `cf_vex_billoard_glow` (sic, block #3 `@0x2230`, two slots) is the same program with the alpha
+`glow.a`. It is the combine RPCS3 showed on Metropia's draws 96, 101 and 106
+([hd-glow-mask.md](../rendering/hd-glow-mask.md), "The GO board"). `billboard_glass::classify` asked for `k` among the
+declared parameters, and the generic pass does not flag this compile's last `MAD` (its addend is not its destination),
+so all nine slots drew their card lit by the sun and nothing else: on Metropia the card read R +15 to +22, G +18 to
++24, bright enough for the bloom to close the `G` of the glyph. **Wired:** `k = 1` where the program declares none,
+and the slot takes `ADD_SECOND` there. Tests: `billboard_glass::tests` and `hd_program_glow_ground_truth` (both board
+slots carry the billboard entry).
+
+**Measured:** the cards' masks err 14.6, 19.4 and 9.0 to 6.6, 4.7 and 5.6; the glyph's 25.1 to 5.1 (it reads `GO`);
+Metropia box `180,0 1740x480` 5.32 to 4.19, whole frame 2.84 to 2.38. Anulpha Pass's side board (box `660,170
+140x110`) 23.6 to 20.5 and its frame 2.66 to 2.63: the board is brighter, as the original's, and still shows the
+placeholder where the original shows an advert. Chenghou's frame does not move (its boards are out of view).
+**Three more preimages**, off Omega's GCN copies: `aspect_ratio_U` (`0xb17204e5`) and `aspect_ratio_V` (`0x287b555f`),
+the glow tap's two scales, and `texture2overlaystrength` (`0x21db4cba`), the `k` above.
+
+**2048 / Omega: checked, applies, not wired.** Both re-ship the material per circuit (Omega `data02` 6 entries,
+`data05` 30; 2048 `dlc1.psarc` 4, `data.psarc` 3), and Omega keeps the split: its Metropia pixel programs declare
+`aspect_ratio_U`, `aspect_ratio_V` and `constantAmbientColour` and no `texture2overlaystrength`, its Vineta K ones
+declare all four (`gcn_dump --summary`). The combine was not read on either title, and their gantry boards are the
+native `321Go_2048` ones ([start-gantry.md](../rendering/start-gantry.md), "Omega and 2048"), so which quads still
+draw this material there is open.
+
+### The window whose mask's red gates the reflection: `glass_2uv_rgb_reflect_glow` (confidence 85)
+
+Thirteen slots, all on Metropia (the cream and green towers). Blocks #5 `@0x2f70` and the lightmapped `@0xaf10` are
+`glass_2nduv_reflect_glow`'s with the gate moved: the mask is fetched two lanes wide (`TEX H5.xw`), the picture three
+(`TEX H4.xyz`), and
+
+```text
+rgb = fog(light * T.rgb + glow * (1 - G.a) + (1 - G.r) * reflection) / 2
+@0x28  MAD H3.xyz, -H5.wwww, {Glow_colour_strength2}, {Glow_colour_strength2}
+@0x35  MAD H0.xyz, -H5.xxxx, H0, H0     ; H0 the tinted reflection
+```
+
+The family had no row in `window_glass`, so the mask drew as the facade with no glow and no sky: slot 31 R -9.5 G -9.9
+B -9.9 over 78,406 px. **Wired:** a row with a fourth reflection gate (`Mode::ReflectiveByMask`, `tint.z` 3). The red
+lane's gamma nibble was not read live: decoded like every colour lane read so far, **chosen, not measured**. Tests:
+`hd_shadowed_track_redraw::the_rgb_window_reflects_the_sky_by_one_minus_its_masks_red` and
+`hd_program_glow_ground_truth` (13 slots, picture and mask by sampler).
+
+**Measured:** slot 31 err 11.6 to 1.9, slots 76 and 30 5.6 and 4.0 to 0.8 and 1.1; Metropia box 4.19 to 3.18, whole
+frame 2.38 to 1.97. **From the start of these four readings: box `180,0 1740x480` 8.97 to 3.18 (impact 7.49 M to
+2.66 M), whole frame 4.35 to 1.97 (raw mean grey 5.65 to 3.09), and the compare list's hot region there 6.58 M of
+impact to pieces of 0.70 M and under.** Every other HD pair but Anulpha Pass (2.86 to 2.63) is unmoved or moves 0.01.
+`glass_2uv_rgb_reflect_normal_glow` (four slots: Metropia 2, Vineta K, Amphiseum) declares a normal map as well and is
+not read.
+
+**What is left in Metropia's box:** the cards' glyph pulse and the side cards' advert state (the largest hot region,
+61,200 px, 0.70 M); `dn_diffuse_specular` slot 78 (`j_concrete_wall2`) R +10 G +10 B +18 over 22,648 px; `pb_window`
+slot 450 R -17 G -10 B -2; `glass_reflect_normal` slot 80 (`ad_blue2`) R +15 G +16 B +34 over 9,300 px; the neon
+sign's halo (`cf_constantcolourglow` slot 275) +5 to +7. None is read.
+
+**2048 / Omega: checked, applies, not wired.** Omega ships `GLASS_2UV_RGB_REFLECT_GLOW` for Metropia (`data02`,
+`data05`); 2048's `dlc1.psarc` ships it too. Programs not read, no row in the `psp2` loader.
+
+## The two-lane normal map: Moa Therma's floor and garages (2026-11-11, `hd-worst-pairs`)
+
+**Report:** the floor and the left wall of `hd-moa-therma` (compare box `0,540 840x540`, err 7.46 on this method's
+whole box, 12.1 over its hot blocks): ours washed and flat where the original's panels are dark with hard seams.
+**Method:** the family ablation of the section above puts 99.7 % of the box on `diffuse_normal_specular`, and the
+per-slot one on two slots: 323 (`ds_garage_c`, the garage bays, 170,801 px, R +8.7 G +7.6 B +5.8) and 233
+(`ds_pit_cs`, the floor panels, 230,240 px, +3.2). On the bays the error is contrast, not level: where the original
+is under 40 it reads 27 and ours 46, where it is over 80 the two agree.
+
+**The program (confidence 90, block #7 `@0x9960` and its vertex block `@0x9780`).** Moa's compile fetches its `_n`
+file two lanes wide and rebuilds the third component, into the frame the hulls use:
+
+```text
+@0x00  TEX R0.yw, f[TC4] unit1                              ; green and alpha only
+@0x01  MAD R3.zw, R0.wywy, {2, -1}.xxxx, {2, -1}.yyyy       ; x = 2a - 1, y = 2g - 1
+@0x05..0x0d  1 - x^2 - y^2, RSQ                             ; z = sqrt(1 - x^2 - y^2)
+@0x07  MUL R0.xyz, R3.wwww, f[TC0]                          ; y * B
+@0x0a  MAD R1.xyz, f[TC3], R3.zzzz, R0                      ; + x * T
+@0x10  DIV R0.xyz, f[TC2], R3.zzzz                          ; + z * N0, then normalised
+vertex: T = 2 * tangent.xyz - 1, B = cross(N0, T) * tangent.w (raw), N0 = normal
+```
+
+The normalised `N` feeds the sun's `N.L` and the specular's `N.H`. The four original circuits' compile of the same
+family reads three lanes (`Program::samples_as_normal`), which `hull_normal` already bound; the two-lane fetch failed
+that test, so 63 Moa slots (`diffuse_normal_specular` 38, `dc_diffusenormalspecular` 25) drew with the vertex normal.
+`ds_garage_n` is a whole bay baked into one map (12 % of its texels have `z` under 0.7), so the flat normal was wrong
+by the bay's own relief.
+
+**Census** (`hd_material_probe_dump`, column `normal_units`): 130 slots on the disc decode a two-lane normal, 768 a
+three-lane one. Opaque and on unit 1 with no second normal map, the ones the reading takes: Moa Therma 63, Amphiseum
+14 (`dc_windowstest`, `windowsnormaldiffusespecular`), Modesto Heights 14 (the same and `_nonemissive_customr`),
+Metropia 9 and Ubermall 1 (`pb_window`). Every one of their resolved blocks was checked for the same four steps (the
+two-lane fetch, the `2x - 1` on alpha then green, the `RSQ`, the `DIV` of an interpolator by it). The sea planes
+(`reflectplane_dc_seawater`, `water`) decode two maps and are left out; the blended and unit-0 ones (`dc_windows_a`,
+`glassalpha`, `mt_tunnelrefraction`) are other programs.
+
+**Wired:** `Program::samples_as_packed_normal`, and `hull_normal` unpacks such a map once at load into the three-lane
+picture `shade.wesl` already reads (`x` from the alpha, `y` from the green, `z` rebuilt per texel, where the program
+rebuilds it after the filter: the two agree at a texel centre). The loader report counts them. Tests:
+`fragment::tests` (the fetch shape), `hull_normal::tests` (the unpacking) and
+`hd_sky_reflection_ground_truth::moas_window_glass_is_tagged_to_read_the_sky` (63 maps unpacked, the garage's bound
+third, its chunks carrying the tangent).
+
+**Measured** (sigma-7 mean absolute RGB, ours re-rendered from the pair's flags):
+
+| What | Before | After |
+| --- | ---: | ---: |
+| Moa Therma box `0,540 840x540` | 7.46 (impact 3.39 M) | 1.47 (0.67 M) |
+| its hot blocks, as the compare list counts them | 219,600 px, err 12.1, 2.65 M | none over 0.26 M |
+| slot 323, the garage bays | 10.8, R +8.7 G +7.6 B +5.8 | 2.0, R -0.3 G -0.4 B -0.7 |
+| slot 233, the floor panels | 6.3 | 1.2 |
+| box `1020,720 660x360` (the list's second Moa region) | 6.21 | 1.31 |
+| whole frame (raw mean grey) | 3.96 (6.85) | 1.92 (4.44) |
+
+Every other HD pair is unmoved (Metropia's raw mean grey 3.09 to 3.10): their two-lane slots are window panes away
+from the start line.
+
+**Open.** The block multiplies the sun by the **unsaturated** `N.L` (`DP3 R1.w` with no `_SAT`, then `MUL H0.w, H6,
+R1` against the atlas's alpha), where ours clamps at zero. With the map bound, the unsaturated form on every bumped
+lightmapped slot reads 1.60 on the box against 1.47 and moves the whole frame 1.92 to 2.18, so it is not wired:
+which programs leave it unsaturated was read per block ("The sun's N.L", above): Moa's own block is one of them, and wiring them still reads worse.
+
+**2048 / Omega: checked, differs.** Omega's `03_moa_therma/Materials/Diffuse_Normal_Specular_1` fetches its normal
+map three lanes wide (`image_sample ... dmask:0x7`, `gcn_dump --at 0x4124`): the `.gnf` maps are re-cooked, and the
+`psp2` loader already binds them (`omega_normal_map_ground_truth`). 2048's GXP operands are unread and a Vita build
+binds no normal map at all, so its packing is not checkable.
+
+## Two surfaces the maintainer saw wrong: Modesto Heights reversed's banner band and Metropia's lattice floor (2026-11-12, `hd-modesto-textures`)
+
+**Report (maintainer, from play):** Modesto Heights reversed at `[741.7, 61.9, -120.9]` (tick 1020, spline 14.71) and Metropia
+at `[-311.2, 101.1, -13.8]` (tick 900, spline 8.28) "probably wrong textures", Metropia's "floor". **Claim:** the two
+surfaces are named (slot, material, pictures) and each is measured against the original on a pair. **Came out true for
+both; neither is a fidelity match. Metropia needs no new reverse-engineering step; Modesto needs the distortion and overlay
+values pinned (below).**
+
+**Method.** The original: `scripts/rpcs3-drive.py place --pose X,Y,Z --speed S --settle T --camera-shots 3` on the EU
+disc (Racebox, Feisar concept hull because this profile's save has Assegai padlocked; the track is read off `TTY.log`'s
+`Loading World` line, not the press count: reverse is `down` on Track Select's `CIRCUIT DIRECTION` row after the circuit's
+`right`s). World coordinates are ours unchanged (`rpcs3-capture.md`, "Teleporting the craft in HD"). Ours: the `place`
+`render_with` line (the settled pose and `--ticks 30`), then `OAG_TINT_MATERIALS=1` for hue to slot ordinal,
+`OAG_SKIP_SLOT=<n>` to confirm by watching the surface vanish, `hd_material_probe_dump` for the slot's material and
+pictures, `scripts/ps3-microcode.py fp-file` for the program. Frames are 1760x990 (original, trimmed) against 1440x816
+(ours), so boxes are fractions of the frame. **Pairs** (reference frames, not committed, `data/reference/hd-capture/`):
+`metropia-lattice/` (`theirs.png` and `theirs.json` with the pushbuffer camera, `ours.png` from that camera, `ours-slot510-skipped.png`)
+and `modesto-reversed-banner/` (`theirs.png` boot 1, `theirs-boot3.png`, `ours.png`, `ours-slot550-skipped.png`, `theirs.json`).
+
+```sh
+# the original (one boot each; add `--oag-game target/release/oag-game --out DIR` as in rpcs3-capture.md)
+rpcs3-drive.py --image data/images/hdfury-ps3-eu-dec.iso place --track 'Data\Environments\Modesto_Heights\track_reversed.vex' \
+  --nav "Main Menu=right" --nav "Track Creation=right,right,right,right,right,right,right,right,right,right,down" \
+  --speed 0 --settle 8 --camera-shots 3 --camera-gap 3 --pose=741.7,61.9,-120.9
+rpcs3-drive.py --image data/images/hdfury-ps3-eu-dec.iso place --track 'Data\Environments\02_Track\track.vex' \
+  --nav "Main Menu=right" --nav "Track Creation=right,right,right,right" \
+  --speed 28 --settle 3 --camera-shots 3 --camera-gap 3 --pose=-311.2,101.1,-13.8 --pose=-311.2,101.1,-13.8
+# ours, from the settled pose each `NN.json` records (--ticks 30), and the confirmation by removal
+oag-game --race --track 'Data\Environments\Modesto_Heights\track_reversed.vex' --team feisar_c1 --variant concept1 \
+  --pose=729.72,58.95,-119.54 --ticks 30 --screenshot ours.png <image>
+OAG_SKIP_SLOT=550 oag-game <the same line> --screenshot ours-slot550-skipped.png
+oag-game --race --track 'Data\Environments\02_Track\track.vex' --team feisar_c1 --variant concept1 --pose=-354.28,110.69,-53.17 \
+  --camera-pose=-359.527,114.760,-57.758,-0.75248,0.04911,-0.65678,0.01272,0.99811,0.06007 --camera-fov 60.48 --ticks 30 --screenshot ours.png <image>
+OAG_SKIP_SLOT=510 oag-game <the same line> --screenshot ours-slot510-skipped.png
+```
+
+The `Track Creation` presses are the carousel index (Metropia 4, Modesto Heights 10) and, for the reversed circuit, a `down` for
+`CIRCUIT DIRECTION`; the race's track name is read back from `TTY.log`. A cold RPCS3 boot on a loaded machine needs
+`OAG_EMU_STALL=1200` and `emu-run.py --silence 1200`. Two RPCS3 boots at each spot (a third Modesto boot, speed 40, flew 225 units on during its
+three pushbuffer reads and is not used).
+
+### Metropia: the lattice floor is an opaque black sheet (slot 510)
+
+- **Surface.** Slot **510**, `mesh_colour_constant.rcsmaterial`, picture `hd_textures/dds2/ds_mesh_n.gtf` (DXT5, 512x256, a
+  normal map), lightmap `lmaps/ile_mesh_combine6-lmap.gtf`, constant `0x02ab9f07` = `(0, 0, 0)`, list **blended**. Tint
+  decodes the black pixels on both sides of the central beam to hue 0.197, slots 133 or 510; `OAG_SKIP_SLOT=510` removes the
+  black and shows the city below, `=133` changes nothing.
+- **What the original draws there.** A hex wire lattice (grey wires, lit) with the city and its lights seen through the holes.
+- **Number** (frame fractions, `floor-left` x .04-.22 y .58-.76, `floor-right` x .70-.88 y .52-.69, mean grey 0-255 /
+  pixels under grey 12): original boot 1 **102.6 / 7 %** and **81.3 / 2 %**, boot 2 **103.2 / 7 %** and **82.0 / 2 %**
+  (second placement **103.5 / 82.4**); ours **1.5 / 98 %** and **17.9 / 80 %**; ours with slot 510 skipped 87.6 / 4 % and
+  63.1 / 21 %. Whole lower 65 % of the frame, pixels under grey 12: original **2.8 %** (three frames), ours **41.2 %**,
+  ours skipped 5.2 %. With the original's own camera (boot 2, `--camera-pose`): ours 31.9 % black, skipped 3.9 %, original 2.8 %.
+- **Cause, confidence 75.** The block ours resolves (`0x5c80`, lit lightmap variant) writes **`MOV H0.w, R0`** (`@0x3e`):
+  the output alpha is the unit-0 texel's alpha, and the reflection term is multiplied by it too (`MUL H0.xyz, R0.www, H0`,
+  `@0x48`). `ds_mesh_n`'s alpha is a binary mask (decoded: 78 % of texels under 32, 22 % over 224), i.e. the wires.
+  `mesh_colour_constant` is in `skin::DIFFUSE_PARAMETER` (the picture becomes the black constant) and **not** in
+  `skin::ALPHA_DIFFUSE`, so the picture carries no alpha, the blend sees coverage 1 and the sheet paints solid black. The
+  fix shape is `("mesh_colour_constant", 0x02ab_9f07, AlphaUse::Gate)`, which keeps the map's alpha as the texel's own;
+  whether the lit specular term (`H4`) also reads the lightmap through that alpha is part of the wiring, not read here.
+  Not tried (no renderer change in this lane), so the 75 is the program read plus the alpha census, not a before and after.
+- **Wired (`hd-metropia-lattice`, 2026-11-12): the pair closes, cause now confidence 90.** The row is
+  `("mesh_colour_constant", 0x02ab_9f07, NORMAL_SAMPLER, AlphaUse::Gate)` in `skin::ALPHA_DIFFUSE`. One correction to the
+  fix shape above: the family names its map under sampler **`0xd9d6922d` (`Normal`)**, not `Texture1` (`0x3bdc0403`), the
+  hash the table's two older rows read, so the table gained a sampler column (a first build with only the row was
+  byte-identical to before: `alpha_diffuse` found no map). The blend then reads the map's alpha as coverage with no other
+  change. Same ship, track and camera as the pair (`oag-game ... --pose=-354.28,110.69,-53.17 --camera-pose=... --camera-fov
+  60.48 --ticks 30`); all numbers below are mean grey / share of pixels under grey 12, measured on the pair's stored frames
+  with the same script for every column:
+
+  | box (frame fractions) | original | ours before | ours after | ours slot 510 skipped |
+  | --- | --- | --- | --- | --- |
+  | x .04-.22, y .58-.76 | 100.0 / 7 % | 88.5 / 28 % | 94.1 / 13 % | 95.4 / 10 % |
+  | x .70-.88, y .52-.69 | 78.6 / 2 % | 80.2 / 7 % | 80.7 / 5 % | 80.8 / 5 % |
+  | x .04-.22, y .78-.96 | 104.3 / 2 % | 19.7 / 77 % | 80.7 / 10 % | 96.2 / 3 % |
+  | x .70-.88, y .78-.96 | 72.4 / 8 % | 23.8 / 78 % | 73.0 / 18 % | 86.7 / 7 % |
+  | lower 65 % under grey 12 | 3.2 % | 37.1 % | 7.7 % | 4.4 % |
+
+  **The "ours 1.5 and 17.9" above does not reproduce from the stored `ours.png`** with the boxes as written (the first two
+  rows give 88.5 and 80.2: those boxes fall on the rail wall and kerb, where the floor is not). The lattice sits lower in the
+  frame, so the last two rows are the boxes that see it; the original reads 100.0 and 78.6 in the first two, a little under
+  the 102.6 and 81.3 written above (boot 1 against the stored `theirs.png`). Read off the picture, the city, the lit towers
+  and the lights now show through the holes as in the original. **What was left:** the wires were darker than the original's
+  grey (left box 94 against 100, 13 % under grey 12 against 7 %). Read and closed below: `H4` is the light, not a
+  specular, and ours lacked the sky reflection (the guess here that ours drew a reflection was wrong).
+  Test: `hd_lightmapped_albedo_ground_truth::metropias_lattice_floor_keeps_its_maps_alpha_over_its_constant` (red before:
+  "slot 508 binds constant diffuse 02ab9f07"; green after).
+- **The wires' brightness: `H4` is the light, not a specular, and the wire is the sky (`hd-metropia-h4`, 2026-11-12;
+  formula confidence 88).** Block #7 (`@0x5c80`, `ps3-microcode.py fp-file mesh_colour_constant.rcsmaterial 7`, the
+  material out of `DATA02.PSARC` `/data/environments/02_track/materials/`). Units: 0 `Normal` (`0xd9d6922d`, `ds_mesh_n`,
+  at `TC4.xy`), 1 `lightmap` (`0x37b5db58`, at `TC4.zw`), 2 `paraboloidReflectionTex` (`0x9edd3243`, engine-bound).
+  Per instruction:
+
+  ```text
+  N     = normalize(TBN (2 n.rgb - 1))                       @0x00..@0x0c, @0x13
+  sun   = lm.a * sat(N.L) * 0x2dba643d                       @0x14 DP3_SAT, @0x17, @0x34
+  H4    = lm.rgb ^ 0x002c73e8 * 0x8670f0be + sun             @0x12..@0x3b (LG2/MUL/EX2), @0x3c
+  env   = paraboloid(reflect(-V, N))                         @0x1c..@0x38 TEX unit2
+  refl  = lerp(env * T.rgb, luma(env) * T.rgb, T.w)          @0x39, @0x3f, @0x42, @0x44 (T = 0x7480de6d)
+  alpha = n.a                                                @0x3e MOV H0.w, R0
+  rgb   = fog(H4 * C + n.a * refl) / 2                       @0x48 MUL R0.w, @0x49 MAD [C = 0x02ab9f07], @0x4b
+  ```
+
+  So **`H4` is the whole light sum (baked atlas plus the sun), and it multiplies the constant `C`, which is
+  `(0, 0, 0)` on Metropia: it contributes nothing.** There is no specular term in this block, and no specular-map
+  weight like `dn_diffuse_specular_emiss`'s (no specular parameter or sampler is declared). The lightmap does **not**
+  enter through the normal map's alpha: `R0.w` (the unit-0 texel's alpha, which no later instruction overwrites:
+  `R0.x`, `.z` and `.xy` are rewritten, `.w` never) gates only the reflection, and is also the output alpha. N.L is
+  clamped (the decoder prints `DP3_SAT` at `@0x14`), which is moot under a black `C`. **The wire is `n.a` times the tinted sky reflection, and nothing else before fog.**
+- **The same program as `ds_booth_glass`.** Sebenco Climb's `ds_booth_glass` block #7 (`@0x5ca0`) computes the same
+  sum: the same normal decode, atlas power and scale, sun, dual-paraboloid address (`-V.x > R.x` select, `0.25`/`0.5`
+  offsets), luma `{0.300049, 0.589844, 0.109985}`, `0x7480de6d` lerp, `R0.w` gate and `MAD /2` fog, scheduled
+  differently (a line diff of the two listings differs in register allocation and order only). Three differences: the
+  constant hash (`0x7611a2d8` there), the map's sampler (`Texture1` there) and the output alpha (`0` there, `n.a`
+  here). `mesh::rcs::window_glass` already draws the booth's reflection as `Mode::Gated` (`tint` `[1, 0, 2]`), so this
+  family is a second call site of a measured reading.
+- **Ours against the original, before this lane:** ours drew `fog(light * C)` with alpha `n.a` and **no reflection**
+  (`mesh_colour_constant` was in no `window_glass` row), so a wire was `0 * light`, black, plus whatever generic
+  specular the authored path adds (the before frame's wires are black, so that term is near zero on the pair; not
+  measured apart). **The differing term is `n.a * refl`, missing.** It is the darker-than-the-original's-grey wire.
+- **Wired: one `window_glass::FAMILIES` row,** `mesh_colour_constant`, `weight: None`, `Mode::Gated`, no picture, glow
+  or specular, the booth's row with the family's name. Same pair, camera and boxes as the table above, re-rendered from
+  the branch before and after (the before frame reproduces the table's "ours after" column exactly):
+
+  | box (frame fractions) | original | before | after | slot 510 skipped |
+  | --- | --- | --- | --- | --- |
+  | x .04-.22, y .58-.76 | 100.0 / 7 % | 94.1 / 13 % | 97.0 / 7 % | 95.4 / 10 % |
+  | x .70-.88, y .52-.69 | 78.6 / 2 % | 80.7 / 5 % | 81.8 / 3 % | 80.8 / 5 % |
+  | x .04-.22, y .78-.96 | 104.3 / 2 % | 80.7 / 10 % | 92.3 / 2 % | 96.2 / 3 % |
+  | x .70-.88, y .78-.96 | 72.4 / 8 % | 73.0 / 18 % | 86.8 / 5 % | 86.7 / 7 % |
+  | lower 65 % under grey 12 | 3.2 % | 7.7 % | 2.8 % | 4.3 % |
+
+  Grey is the mean of R, G and B; the share is of pixels under 12. Every under-12 share now meets or beats the
+  original's. The fourth box's mean rises past the original's (86.8 against 72.4): the two frames do not hold the same
+  content there (the original's craft and speed readout cover part of it; ours, rendered from the pushbuffer camera,
+  does not show the craft), and the before value's match was black wires over a brighter city. **Open:** that box now reads
+  86.8 against the original's 72.4 (73.0 before); the likely cause is the reflection angle, since ours reflects about
+  the unperturbed vertex normal where the program reflects about the normal-mapped `N`, so the wires there sample a
+  brighter part of the sky than the original's do. Read off the frames, the wires go from black to the original's brownish grey.
+  Confidence 88: a static read whose instruction listing agrees with a second family already drawn and measured
+  through the same reading, and the pair's black shares close. It is short of the 90s because `env_gain`/`env_desat`
+  (the `0x7480de6d` tint, engine-supplied) and the normal map's perturbation of `N` (not drawn: a track vertex carries
+  no tangent frame here) are shared approximations, not re-measured on this surface. Test:
+  `hd_sky_reflection_ground_truth::metropias_lattice_reflects_the_sky_through_its_normal_maps_alpha` (red before:
+  "slot 508 carries no glow-table entry"; green after).
+- **Other circuits (census, `psarc.py list` over the seven `DATA0n.PSARC`).** `mesh_colour_constant.rcsmaterial` exists
+  only under `02_track/materials/` and `02_track/materials_dlc/`: the one circuit, so a wired `ALPHA_DIFFUSE` entry moves
+  Metropia's slots and no other circuit's.
+- **Omega / 2048: checked, applies, not wired.** Omega's `data02.psarc` ships `Data/environments/02_metropia/Materials/
+  Mesh_Colour_Constant{,_1,_2}.rcsmaterial` (and `Materials_DLC/`), and 2048's `dlc1.psarc` ships
+  `DLC1/environments/Metropia/materials/mesh_colour_constant.rcsmaterial`: the same family, so the same lattice is authored
+  there. Their programs are PS4 GNM and Vita GXP, which `ps3-microcode.py` does not read, and ours was not rendered on either
+  title at the spot (the existing 2048 Metropia pair is a grid frame with no lattice in view; Omega's shadPS4 race shots are not
+  a reference). Whether their reading draws the lattice is open. **Not covered by the HD row:** the Vita and PS4 builds go through
+  `mesh::rcs::psp2`, which has no `mesh_colour_constant` reading (the family draws as the generic path there), so
+  `skin::ALPHA_DIFFUSE` does not reach them; the same fix there is a `psp2` family module like `alpha_product.rs`, after the
+  program's alpha use is read from the GXP and GCN compiles. Checked, applies, not wired (named in the
+  `omega-and-2048-draw-normal-maps-as-colour` thread). **The gated sky reflection (`hd-metropia-h4`) does not reach them either**: `window_glass` runs from
+  `rcs::setup`'s `material_setup`, which `psp2` never calls, and `psp2` binds no sky probe. Checked, applies, not wired:
+  a `psp2` reading would need both the coverage and the reflection, after the GXP and GCN programs are read.
+
+### Modesto Heights: the banner band is drawn white (slot 550 reversed, 551 forward)
+
+- **Surface.** Reversed slot **550**, `materials_reversed/uvdistortion_diff_vertexcolplusoverlay.rcsmaterial`, pictures
+  `and_ossego.gtf` (unit 2, DXT1, the Ossego logo on white), `and_tunnelscreens_small.gtf` (unit 1, a dark grille with
+  alpha) and `and_line_rgb_clouds_alpha.gtf` (unit 0, a cloud map whose alpha distorts its own UVs); four draws of 476 to
+  1,800 triangles tiled 29 to 143 times along the band (centres `(531, 45, -79)`, `(509, 40, -10)`, `(302, 19, 102)`,
+  `(284, 17, 165)`). Found by skipping slot groups until the band left the frame (group 6 of 16, then one slot);
+  `OAG_SKIP_SLOT=550` removes the white band and nothing else. Forward `track.vex` carries the same family as slot **551**
+  with the same pictures from `materials/`: **not a reversed-only fault**, nor one of the 8 chunk-less nodes (forward has the
+  same 8 and the same 21 unresolved materials, `396 of 404` against `326 of 334`). The family is 8 slots per direction on
+  Modesto (96 `...plusoverlaybloom`; 464, 467, 472, 486, 527, 539 `uvdistortion_diff_vertexcol`; 550/551), and the census over
+  the seven archives finds `uvdistortion_*` only in `modesto_heights` (3 files per direction) and `amphiseum`
+  (`...plusoverlay`, one per direction: not measured here, the same reading would move it).
+- **What the original draws.** The band dark navy with a teal screen pattern; in ours it is white with blue logos.
+- **Number** (top band of the frame, y .03-.32 and x .15-.85): pixels over grey 200 and blue-white pixels (b over r by 25,
+  grey over 150): original boot 1 **0.1 % / 0.0 %**, boot 3 (pose 731.4, 56.9, -112.7) **0.3 % / 0.5 %**; ours **8.5 % / 5.2 %**;
+  ours with slot 550 skipped **0.3 % / 0.9 %**. Mean grey 70.4 and 64.6 against ours 81.7 (61.4 skipped). Within a
+  matched pose, not a matched camera (both camera reads were null on this stationary craft).
+- **Cause, confidence 85 (was 70; the before and after below closed it).** Block `0x2ad0` (read with
+  `ps3-microcode.py fp-file`; its vertex block `@0x2880` with `vp-file`): the output is
+  `VertexColour1 x tunnelscreens.rgb x light + over` with, per instruction (`t` the engine clock `906b67ba`, `uv` the diffuse
+  pair `v[2].xy`, `D`, `A`, `S`, `B`, `R` the record's parameters):
+
+  ```text
+  warp = clouds(uv).a                                       @0x12 TEX R0.w, unit0
+  c    = clouds((uv + A t + D warp) S)                      @0x09, @0x13, @0x16, @0x19
+  a    = VertexColour1 x teal x c x tunnelscreens.a         @0x1a, @0x1d, @0x1f
+  b    = ossego((uv + B t) R)                               @0x0b, @0x0e, @0x24
+  over = 2ab (a < 0.5), 1 - 2(1-a)(1-b) (else)              @0x20 SLT, @0x22..@0x29 [NE]
+  ```
+
+  The white Ossego picture enters only through the overlay, so the frame stays dark. The parameters' roles, which this page
+  had partly wrong: `c0594d0e` (`A`) is **unit 0's scroll rate** and `2bdce348` (`S`) its coordinate scale, `d0989794` (`D`)
+  the distortion amount (times the cloud map's own alpha, tapped at the undistorted pair), while `fe619466` (`B`) and
+  `96e30da5` (`R`) are the **Ossego's** scroll rate and scale, not unit 0's; `VertexColour1` multiplies the teal too. Ours had
+  bound `and_ossego` as the diffuse picture (`roles no_ambient|add_second`) and added the second one on top, white where the
+  logo's ground is.
+- **Values read, from the model's own material record (`hd_material_probe_dump`, confidence 95 for the numbers, 85 for the
+  roles above).** Slot 550 (reversed) and 551 (forward): `D = 0.14348`, `A = 7.174`, `S = -0.05`, `B = 1`, `R = -0.25`,
+  `teal = (0.1438845, 0.52450675, 0.80834)`. Slot 96 (`...plusoverlaybloom`, `and_tunnelscreens`, `mr_blueglass_a`,
+  `and_ossego_alpha`): `D = 0.79324`, `A = 1.0936`, `S = 3.3002`, `B = 1`, `R = -0.9145`, `teal = (0.892, 0.950338, 1)`.
+  Nothing is typed: `mesh::rcs::uv_overlay` reads them, with the three sampler hashes `030fd39b` (clouds, unit 0), `515e298e`
+  (the grille, unit 1) and `fb3f2dac` (the logo, unit 2).
+- **Wired (2026-11-12, `hd-modesto-banner`).** `mesh::rcs::uv_overlay` binds the grille as the albedo (lit as every
+  `VertexColour1`-factor surface is), the clouds second and the logo third, writes the two values entries (mode 13,
+  `PROGRAM_UV_OVERLAY`) and clears the generic additive second texture; `shade.wesl` adds `over` after the light and before
+  the fog through `mag_glow`. Matched by the material's name prefix (`uvdistortion_diff_vertexcolplusoverlay`) and its program's shape (exactly the three samplers and an `SLT`): the
+  `uvdistortion_diff_vertexcol` family has no logo unit and keeps the generic reading (Modesto's 464, 467, 472, 486, 527, 538
+  carry no entry of the mode). Tests: `hd_uv_overlay_ground_truth` (slots 550 and 551 bind the grille, clouds and logo and carry
+  these values; red when the binding is dropped, as on main) and `hd_uv_overlay_lit_path` (the shader's `2ab` and screen
+  branches; red without the `mag_glow` term).
+- **After (same boxes, y .03-.32 x .15-.85, over grey 200 / blue-white).** Ours at the matched pose `729.72,58.95,-119.54`:
+  **0.26 % / 0.78 %** (was 8.5 % / 5.2 %; original 0.1 % / 0.0 % and 0.3 % / 0.5 %). At boot 3's pose `731.4,56.9,-112.7`:
+  0.25 % / 0.65 %; at the maintainer's spot `741.7,61.9,-120.9`: 0.27 % / 0.81 %. Mean grey 59.6, 60.3, 56.9 against the
+  original's 70.4 and 64.6 (ours 81.7 before, 61.4 with the slot skipped): the band is now dark where the original's is, a
+  little darker than it. Read as pictures: the grille with a dark-teal mottle, the original's teal blocks brighter and larger.
+  The forward circuit's slot 551 draws the same dark grille (skipping it removes it).
+- **Open: the units' gamma nibbles.** The three colour taps are decoded like every colour tap on this path (**chosen, not
+  measured**, the choice `nr_twinblend` and `dc_hologramwithstatic` make). Reading them raw instead lifts the band's mean grey
+  by about 2 and changes nothing else measurable; only a live `SET_TEXTURE_ADDRESS` read on this draw decides it. The bloom
+  copy also writes the logo's alpha as its output alpha (`@0x26 MOV H0.w, H0`), which is not wired.
+- **Omega / 2048: checked, applies, not wired.** Omega's `data02.psarc` ships `Data/environments/modesto_heights/materials/
+  uvdistortion_diff_vertexcolplusoverlay.rcsmaterial` (and `_1`, `_2`, `...Bloom{,_1,_2}`, `uvdistortion_diff_vertexcol{,_1,_2}`;
+  Amphiseum's `..._1`): the base file declares all three sampler hashes and all six parameter hashes (and `time`) ten times
+  each, one per program variant, so the same inputs feed the same law; its programs are GNM and 2048's are GXP, neither read,
+  and no render of ours exists on either title at the spot. 2048's `dlc2.psarc` ships only `...plusoverlaybloom` for Modesto
+  (the slot-96 shape). Open.
+- **Amphiseum: wired by the same reading, seen, not compared.** Its `...plusoverlay` (19,168 bytes, a different binary) resolves
+  to block `@0x1720`, which is Modesto's block #3 instruction for instruction (`fp-file`: the same five parameter roles, `@0x24`
+  logo tap, `@0x25` `SLT`, `@0x30` `2ab`), with `TC0 = v[3]` and the pair in `TC3.w`, `TC4` (`vp-file` `@0x1580`). Slots 355 and
+  445 forward, 357 and 447 reversed (teal `(0, 1, 1)` and `(0.126, 0.148, 0.194)`, grilles `mar_cellular_lamps_blue` and
+  `dc_gradient`, logos `feisar_square01` and `mr_line_rgb_clouds_alpha`). Rendered at `--pose=-524,46,-379` (inside the tower;
+  a bare `--camera-pose` ring around the draw bounds' centre showed no pixel of either slot, possibly because the craft stayed at the start): before, the
+  window panes carry big white Feisar logos on sky blue; after, a cyan cellular screen with no logo (the logo enters only
+  through `2ab`, weighted by the grille's alpha), and the ceiling's dot lamps glow cyan instead of dark. Reading the three taps
+  raw changes neither. No capture of the original at this spot exists, so whether the logos should be there is **unmeasured**.
+  Elsewhere the table and the report differ only by the new entries (`emissive` 54 to 58 on Modesto, 23 to 27 on Amphiseum,
+  both directions; the limit is 64) and the `uv_overlay_*` counters.
+
+**Falsifier.** Had RPCS3 drawn an opaque dark floor on Metropia, or a white Ossego band on
+Modesto, ours would have matched and the threads closed; the original draws neither. The 75 and 70 stay below 80 until a
+wired build shows the pair closing: the check is the same boxes after the fix. **Modesto's closed (0.26 % against 0.1 to
+0.3 %, "After" above); Metropia's is still open.**
+
+## Omega's constant diffuse families: the Amphiseum's white stands and pad strips (2026-11-16, `omega-amph-crowd`)
+
+**Report:** on the worst Omega pair (`omega/the-amphiseum`, whole-frame mean grey 56.0) ours drew the stands washed to white and the
+track's pad strips as hard white bars; the original draws neither.
+
+**Method.** `OAG_SKIP_SLOT` ranges, binary-searched on near-white pixels in two boxes of the 1920x1080 frame, named slot 199
+(`metallic`, 5 submeshes) under the stands and slot 493 (`diffuse_spec_constant`, 1 submesh, a lightmap and nothing else) under
+the strips. Neither material names a colour texture, so the loader left them unbound and the draw was white times light.
+
+**Reading (confidence 85).** `gcn_dump` on the two `.rcsmaterial` files (Omega `data02`): every pixel program of `metallic` and of
+Moa Therma's `dc_metallic` has the constant buffer `[constantAmbientColour, DiffuseColour, fogColour, fadeResCoeffs]` and no sampler
+(45 instructions each); `diffuse_spec_constant`'s lightmapped program (`@0x9b24`) samples only `lightmapSampler` and ends
+`v_mac_f32 v1, s41, v16` ... `v_mad_f32 v1, v7, v1, s4`: the `diffuse` constant times the light sum, plus the specular, then the fog. The same
+combine HD's microcode has (`DIFFUSE_PARAMETER`, "Scenery that is a constant"), with the same parameter hashes (`0x512f8e65`,
+`0x515e298e`) in Omega's records. **Wired:** `psp2::flat_constant::diffuse` binds that constant as a one-texel picture, encoded for
+Omega's sRGB texels (`SceneStore::SrgbTexels.texel_encode`, the reason HD's rows are encoded). The `emissive` family (919 spectator
+figures, 29 materials above are the diffuse ones) is `EmissiveColour` mixed with the fog: constant buffer `[EmissiveColour, fogColour,
+fadeResCoeffs]`, no sampler, no light, the vertex's texcoord never interpolated (`@0x30e4`, 43 instructions). Drawn unlit in that colour
+(`flat_constant::emissive_colour`), through the Zone colour path.
+
+**Result (ours, same flags, before to after, mean absolute error 0-255 against `theirs.png`).** Box A, the stands band `0,150 1920x180`:
+84.2 to 65.4. Box B, the strips `400,380 1100x150`: 46.7 to 34.7 (the brief's wider `0,380 1920x220`: 49.5 to 34.1). Whole frame mean grey 56.0
+to 50.1, rmse 0.328 to 0.295. Other Omega pairs, same procedure: Talon's Junction 31.9 to 28.9 (same two families), Moa Therma
+38.12 to 38.04 (`dc_metallic`), Modesto Heights, Sebenco Climb, Metropia, Sol 2, Vineta K, Anulpha Pass, Chenghou, Ubermall and Tech de Ra
+pixel-identical (no unbound constant family of these in frame).
+
+**Left.** (1) The 919 `emissive` figures are the front-row spectators and draw as flat grey silhouettes where the original shows coloured
+people: their colour comes from something the material does not carry (unread, Ghidra); hiding them scores 63.2 on box A against 65.4 drawn,
+so they are drawn, as the program says. (2) The upper stands stay lighter than the original's and the far crowd's cutouts read as white
+speckle (`nr_crowd_bustle`, not read on Omega). (3) The red banner under the HUD is the gantry board (pair caveat). (4) Moa Therma's
+`dc_constantglow` and `dc_glowlightband`, Sebenco's `cf_constantcolourglow`: constant-only programs of the same shape (`dc_constantglow`
+`[ColourConstant, fogColour, fadeResCoeffs]`), now routable through the `emissive` path, not wired because HD's glow strips there score worse
+without the glow mask.
+
+**Cross-title.** HD: **ported already** (`skin::DIFFUSE_PARAMETER` holds `metallic`, `dc_metallic`, `diffuse_spec_constant`; `hd/the-amphiseum` is
+4.6 grey): Omega's loader lacked it. HD's `emissive` has a vertex-colour term (`f[TC1]`), Omega's does not: **checked, differs**. 2048: **checked,
+differs** for the three diffuse families (no `metallic`, `dc_metallic` or `diffuse_spec_constant` file in `data.psarc`, `dlc1`, `data1`,
+`data2`); `emissive` ships in two files (base, patch) and `cf_constantcolourglow`: **checked, applies, not wired** (the loader gate is `ps4`; the
+2048 program is unread and its store is gamma-2, so the encode would differ).

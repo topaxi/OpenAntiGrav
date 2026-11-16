@@ -103,6 +103,10 @@ pub struct Listener {
     /// column. `docs/.../camera.md` measured that transposition independently
     /// from the rendering side.
     pub right: [f32; 3],
+    /// The camera's world-space **forward** axis (the way it looks), expected
+    /// normalised. Read by the front/back cue ([`SpatialMode`]) and the rear
+    /// low-pass of a title whose original has one; Pulse's pan never uses it.
+    pub forward: [f32; 3],
 }
 
 impl Listener {
@@ -114,7 +118,180 @@ impl Listener {
         Self {
             position: [0.0; 3],
             right: [1.0, 0.0, 0.0],
+            forward: [0.0, 0.0, -1.0],
         }
+    }
+}
+
+/// The open end of the original's rear low-pass, in hertz: a voice at this
+/// cutoff is not filtered.
+pub const OCCLUSION_OPEN_HZ: f32 = 23_999.0;
+
+/// The cutoff of the original's rear low-pass for a voice `front` of the
+/// listener (`cos` of its angle from forward), given the title's
+/// `RearOcclusion` `max_frequency` (`docs/ghidra/functions/ps4-omega-eu/audio-3d.md`,
+/// "The rear low-pass"):
+///
+/// ```text
+/// r    = clamp((angle - 90) * 0.05, 0, 1)      angle in degrees, 90..110 ramps
+/// rear = r * max + (1 - r) * 23999
+/// ```
+///
+/// The original's angle runs a full circle and ramps again over 250..270; folded
+/// onto `0..=180` from forward that is the same ramp.
+#[must_use]
+pub fn rear_occlusion_cutoff(front: f32, max_frequency: f32) -> f32 {
+    let angle = front.clamp(-1.0, 1.0).acos().to_degrees();
+    let r = ((angle - 90.0) * 0.05).clamp(0.0, 1.0);
+    (r * max_frequency + (1.0 - r) * OCCLUSION_OPEN_HZ).min(OCCLUSION_OPEN_HZ)
+}
+
+/// One update of the original's cutoff smoothing, `0.05 * target + 0.95 *
+/// previous`. The original runs it per emitter update; one update per
+/// simulation tick is **chosen, not measured** (the divisor behind the update
+/// counter is 1 in the file and unread at run time).
+#[must_use]
+pub fn smooth_occlusion(previous: f32, target: f32) -> f32 {
+    0.05 * target + 0.95 * previous
+}
+
+/// One-pole coefficient for a low-pass at `hz`: exactly `1.0` (a bit-exact
+/// pass) at the open end, within a hertz of it. The filter's order and shape
+/// are unread in the original, so a one-pole is **chosen, not measured**.
+#[must_use]
+pub fn low_pass_coefficient(hz: f32, sample_rate: u32) -> f32 {
+    if hz >= OCCLUSION_OPEN_HZ - 1.0 {
+        return 1.0;
+    }
+    1.0 - (-std::f32::consts::TAU * hz / sample_rate as f32).exp()
+}
+
+/// How a placed voice is rendered into the two ears.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpatialMode {
+    /// The original's law: equal-power pan, so on Pulse and Pure a source ahead
+    /// and a source behind sound the same. A title whose original low-passes a
+    /// voice behind the listener (HD) adds that through
+    /// [`crate::Mixer::set_rear_occlusion`].
+    Original,
+    /// A source behind the listener is low-passed and slightly lowered. Cheap,
+    /// safe on speakers and headphones.
+    #[default]
+    RearCue,
+    /// A head-related transfer function per voice. For headphones; on speakers
+    /// it colours the sound.
+    Headphones,
+}
+
+impl SpatialMode {
+    /// Every value, in menu order.
+    pub const ALL: [Self; 3] = [Self::Original, Self::RearCue, Self::Headphones];
+
+    /// The spelling used in a settings file and on a menu row.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Original => "original",
+            Self::RearCue => "rear_cue",
+            Self::Headphones => "headphones",
+        }
+    }
+}
+
+impl std::str::FromStr for SpatialMode {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|mode| mode.name().eq_ignore_ascii_case(text))
+            .ok_or_else(|| {
+                format!(
+                    "{text:?} is not a spatial audio mode; try original, rear_cue or headphones"
+                )
+            })
+    }
+}
+
+impl std::fmt::Display for SpatialMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// What the player picked on the SPATIAL AUDIO row: a [`SpatialMode`], or
+/// `auto`, which follows the output device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpatialChoice {
+    /// [`SpatialMode::Headphones`] on a headphone output, [`SpatialMode::RearCue`]
+    /// on anything else, including an output nothing is known about.
+    #[default]
+    Auto,
+    /// [`SpatialMode::Original`].
+    Original,
+    /// [`SpatialMode::RearCue`].
+    RearCue,
+    /// [`SpatialMode::Headphones`].
+    Headphones,
+}
+
+impl SpatialChoice {
+    /// Every value, in menu order.
+    pub const ALL: [Self; 4] = [Self::Auto, Self::Original, Self::RearCue, Self::Headphones];
+
+    /// The spelling used in a settings file and on a menu row.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Original => "original",
+            Self::RearCue => "rear_cue",
+            Self::Headphones => "headphones",
+        }
+    }
+
+    /// The mode the mixer runs for this choice on an output of kind `route`.
+    #[must_use]
+    pub fn resolve(self, route: crate::route::RouteKind) -> SpatialMode {
+        match self {
+            Self::Auto if route == crate::route::RouteKind::Headphones => SpatialMode::Headphones,
+            Self::Auto | Self::RearCue => SpatialMode::RearCue,
+            Self::Original => SpatialMode::Original,
+            Self::Headphones => SpatialMode::Headphones,
+        }
+    }
+}
+
+impl From<SpatialMode> for SpatialChoice {
+    fn from(mode: SpatialMode) -> Self {
+        match mode {
+            SpatialMode::Original => Self::Original,
+            SpatialMode::RearCue => Self::RearCue,
+            SpatialMode::Headphones => Self::Headphones,
+        }
+    }
+}
+
+impl std::str::FromStr for SpatialChoice {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|choice| choice.name().eq_ignore_ascii_case(text))
+            .ok_or_else(|| {
+                format!(
+                    "{text:?} is not a spatial audio choice; try auto, original, rear_cue or headphones"
+                )
+            })
+    }
+}
+
+impl std::fmt::Display for SpatialChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
     }
 }
 
@@ -218,6 +395,7 @@ impl Emitter {
         Some(Placed {
             gain: volume_curve(atten * volume),
             pan: pan_of(to_source, listener.right),
+            front: pan_of(to_source, listener.forward),
             distance,
         })
     }
@@ -231,6 +409,9 @@ pub struct Placed {
     pub gain: f32,
     /// `-1.0` hard left, `0.0` centred, `+1.0` hard right.
     pub pan: f32,
+    /// `+1.0` dead ahead of the listener, `-1.0` dead behind, `0.0` abeam. Not
+    /// part of the original's law (see [`SpatialMode`]).
+    pub front: f32,
     /// How far the ear is from the source, the input to [`Doppler`].
     pub distance: f32,
 }
@@ -387,7 +568,40 @@ pub fn pan_of_angle(degrees: i32) -> Option<f32> {
     (shifted <= 179).then(|| (wrapped as f32).to_radians().sin())
 }
 
-/// The rightward component of the direction to a source, in `-1..=1`.
+/// [`pan_of_angle`] with the first angle of the rear branch, `a' = 180`
+/// (an authored angle of 90 degrees), added.
+///
+/// There `Scream_PanVolumePair` reads table entry 0 with the pair swapped and one
+/// term negated: `(0, 1)` up to a sign, which is hard right, the same position
+/// `sin(90 degrees)` gives in the front half. The sign flip phase-inverts a lone
+/// voice, which is inaudible; it would matter only against a second voice in the
+/// same channel, and the callers that ask for this edge pan their voices to
+/// opposite sides. Every angle past the edge stays `None`.
+#[must_use]
+pub fn pan_of_angle_to_rear_edge(degrees: i32) -> Option<f32> {
+    if degrees.rem_euclid(360) == 90 {
+        return Some(1.0);
+    }
+    pan_of_angle(degrees)
+}
+
+/// [`pan_of_angle`] across the whole circle: `sin(angle)` for every angle.
+///
+/// The rear branch of `Scream_PanVolumePair` (`a' >= 180`) reads the table at
+/// `a' - 180` with the pair swapped and one term negated, so the two gains are
+/// `(sin((a' - 180) / 2), cos((a' - 180) / 2))`. Their squares are
+/// `(1 + cos a') / 2` and `(1 - cos a') / 2`, which is [`pan_gains`] at
+/// `pan = -cos(a') = sin(angle)` exactly: in stereo a rear voice sits where its
+/// mirror in the front half does. The negated term is a phase inversion for a
+/// surround decode; it is dropped here (**chosen**), as [`pan_of_angle_to_rear_edge`]
+/// drops it. That law is read on Pulse's executable; HD's own pan table is not.
+#[must_use]
+pub fn pan_of_angle_folded(degrees: i32) -> f32 {
+    (degrees.rem_euclid(360) as f32).to_radians().sin()
+}
+
+/// The component of the direction to a source along `axis`, in `-1..=1`.
+/// `right` gives the pan, `forward` the front/back cue.
 fn pan_of(to_source: [f32; 3], right: [f32; 3]) -> f32 {
     let length = dot(to_source, to_source).sqrt();
     if length <= 0.0 {

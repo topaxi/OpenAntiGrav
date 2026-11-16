@@ -85,11 +85,17 @@ full comparison.
   which copy answers a path the base and the patch both carry.
 - [hull-shake.md](hull-shake.md) - the drawn hull's random shake is HD's, constant for
   constant; where it is called, and what switching it off in Vita3K does.
+- [race-load.md](race-load.md) - what a race load draws (the event card, a game tip, the mode page) and the
+  percentage meter's law, measured on Vita3K; only the attract mode draws a still.
+- [engine-light.md](engine-light.md) - the engine light's producer and table on 2048, and the
+  vertex program's falloff.
 - [zone-craft.md](zone-craft.md) - Zone loads one shared `hdships\Zone` hull for
   every craft; the pick selects a livery.
 - [zone-environment-fallback.md](zone-environment-fallback.md) - a race's
   environment loader falls back to HD's own title-wide `effectSettings`, and
   the per-stage table it feeds runs every frame regardless.
+- [zone-speed-class-text.md](zone-speed-class-text.md) - the class name over `ZONE`: a second walker over HD's
+  fourteen-record table, not the seventeen-record `*_CLASS` ladder
 - [pickup-icon-uv-table.md](pickup-icon-uv-table.md) - the held pickup's one
   `PickupIcon` widget gets its per-weapon look from a 12-slot UV table, not
   thirteen named widgets; found alongside the shield fill's own update

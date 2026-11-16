@@ -378,7 +378,7 @@ impl Driver {
         // Every tick, saturated or not - see [`track_peak_curvature`]'s own doc.
         self.peak_curvature =
             track_peak_curvature(curvature, f32::from_bits(self.peak_curvature), tuning).to_bits();
-        self.blunder(tuning, speed, target);
+        self.blunder(tuning, speed, target, followed, index);
         let (thrust, brake) = if self.mistake > 0 {
             // Sailing through it. See [`Self::mistake`].
             (1.0, 0.0)
@@ -555,7 +555,22 @@ impl Driver {
     /// Rolled only where it would otherwise brake: a mistake on a straight
     /// shows nothing and would waste the rate. The rate is per tick *of
     /// braking*, roughly once a second spent slowing.
-    fn blunder(&mut self, tuning: &Tuning, speed: f32, target: f32) {
+    ///
+    /// **Never within [`planned::TIGHT_REACH`] of a sample the plan passed a wall
+    /// closely**, the same corners [`plan_slack`] holds to the plan's line:
+    /// there the line is the only one known to fit at the plan's speed, so a missed
+    /// braking point has no recovery short of the wall. Under a weaker brake (Wipeout
+    /// Pure's half drag) the craft cannot shed the overshoot in time, and those
+    /// mistakes were the whole of the Novice field's extra walls (`docs/gameplay/ai.md`,
+    /// "Mistakes are never into a tight corner").
+    fn blunder(
+        &mut self,
+        tuning: &Tuning,
+        speed: f32,
+        target: f32,
+        plan: Option<&crate::SpeedPlan>,
+        index: usize,
+    ) {
         if self.mistake > 0 {
             self.mistake -= 1;
             return;
@@ -564,6 +579,9 @@ impl Driver {
         // is what every exact assertion here and in `oag-trace` is written
         // against. See `Personality::from_seed`.
         if self.seed == 0 || tuning.mistake_rate <= 0.0 || speed <= target {
+            return;
+        }
+        if plan.is_some_and(|plan| plan.tight_within(index, planned::TIGHT_REACH)) {
             return;
         }
         if roll(self.seed, self.phase, MISTAKE_STREAM) < tuning.mistake_rate {

@@ -1,0 +1,65 @@
+---
+status: measure
+titles: [pulse, pure, hd, 2048, omega]
+updated: 2026-11-13
+summary: "HD burst wired, lilac gone; white nose glow needs a rival ahead, burst vs rival flare unseparated; HD-length trails blocked"
+---
+
+# HD-length trails (opt-in) for Pulse and Pure; trail hits landed
+
+Maintainer request, 2026-11-08. Two features, each behind its own setting, off by default:
+departures from the originals, enhancements in the sense of the opt-in flag for back-ported
+effects.
+
+## Open
+
+- **The burst's draw: wired; the HD pair is closer, not matched.** `StreakDraw::FarBar` (HD's
+  class-6 bar, farther depth) draws `WO_TRAIL_HITSHIP` on HD, 2048, Omega and the lent burst;
+  `kColourScale` (`+0xc84`) is applied, inherited from Omega; `psys_normal_vp`'s `pow(rgb, 2.2)`
+  was already applied (`engine-trail.md`, "The wire, and the pair re-shot"). HD authors both
+  emitters' sprites; ours had not listed them, and listing `WO_TRAIL_HITSHIP` is what moved the
+  picture: the lilac blobs are gone and thin blue rays appear, as on the original, but the compact
+  white nose glow is not reproduced (ours is blue and dim). The bar alone and the scale alone
+  changed nothing a player sees.
+- **The white nose glow is not a craft effect of its own (2026-11-09, `hd-nose-glow-control`).** The original shows
+  none in a Time Trial or a Zone run at race speed with nothing ahead (36 frames, two restores and two boots). It
+  needs a rival ahead, and whether it is the burst's `CORE_IMPACT` or the rival's engine flare and ribbon head
+  (just beyond the nose in every tuck) is **not separated**: do not wire a `CORE_IMPACT` frame to chase it before a
+  tuck with the burst names broken, keeping the frames where the rival's rear overlaps the player's nose
+  (`hd-wingtip-contrails.md`, `engine-trail.md`, "Is the original's white nose glow a separate effect?").
+- **The maintainer's white contrails at the Zone ship's wing tips are a different effect, now found:** HD's
+  `wingtip` locators drive two ribbons while a speed pad or turbo acts. Its own thread:
+  `hd-wingtip-vortices-are-recovered-and-not-drawn.md`.
+- **Still open on the burst:** `CORE_IMPACT`'s atlas frame (drawn on its spawn frame), the render
+  state `record+0xca4`, `WO_TRAIL_HITSHIP_RED`'s sprites (unlisted), and the placement (the
+  simulation's). A re-shot pair after any of them.
+- **Trail length.** Pulse and Pure get a setting that lengthens their engine trails to HD's
+  length (54 samples, `engine-trail.md`, "The tuning file is the parameter block"). It waits
+  until the burst matches the original. The Pulse and Pure hit test runs against their
+  10-sample ribbon through `Exhaust::trail_nearest`, so the length setting must lengthen that
+  ring, not add a second one.
+- **Trail hits: landed.** `graphics.trail_hits` is off by default.
+  - It lends HD's `WO_TRAIL_HITSHIP` to Pulse and Pure.
+  - Since 2026-11-09 it also gates 2048's and Omega's own copy: their originals never fire it
+    (`ps4-omega-eu/trail-hits.md`, `vita-2048-eu-v104/trail-hits.md`).
+  - HD alone plays it always (`oag_title::Effects::trail_hits_native`).
+
+  Remaining:
+  1. The Pulse/Pure hit test is chosen, not measured.
+  2. The burst's look mends with the draw above.
+  3. A Pulse or Pure race on a machine with no HD, 2048 or Omega source plays nothing, by
+     design.
+  4. The lent burst is the blue variant only, redrawn in the Pulse or Pure ribbon's hue
+     (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst colour"); the PSP change is small
+     (6 % of the burst's pixels) because HD's burst vertices already point that way; the PS2's
+     pink-white ribbon moves a third. Open: summed-layer violet or the outer layer's blue.
+  5. The stage holds 64 effects and a trail hit is expendable, so it no longer evicts a
+     detonation or an absorb burst; the lent burst fires every other tick
+     (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst budget"). Unmeasured: a rocket
+     volley from several craft at once, and Pure's own peak.
+
+## Next Steps
+
+1. Wire/RE lane: `CORE_IMPACT`'s frame and the render state `record+0xca4`
+   (`PartRender_FlushDraws`), then a re-shot pair against the original's white nose glow.
+2. Then the trail-length setting for Pulse and Pure, once the pair matches.

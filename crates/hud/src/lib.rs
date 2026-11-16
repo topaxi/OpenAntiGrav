@@ -55,19 +55,26 @@ mod dialect_2048;
 mod draw;
 pub mod ext_draws;
 mod head_to_head;
+pub mod incoming;
 pub mod kill_tags;
 mod lap_splits;
+pub mod loading_layout;
 pub mod messages;
 pub mod now_playing;
 mod pickup;
 pub mod pickup_fade;
 mod placement;
+pub mod player_tags;
+pub mod race_line;
 mod runtime;
+pub mod score_rows;
+pub mod screen_layout;
 mod shield_bar;
 mod sight_draw;
 pub mod split_hud;
 pub mod sprite;
 mod sub_weapon;
+pub mod svg;
 mod sway;
 pub mod time_gap;
 mod time_trial_pace;
@@ -75,11 +82,13 @@ mod widget;
 
 pub use assets::{Assets, SplitAssets, split_family};
 pub use compose::{Composed, compose};
-pub use draw::{Context, Frame, Span, draw_list, sprite_draw};
+pub use draw::{Context, Frame, Span, draw_list, draw_list_without_sight, sprite_draw};
 pub use head_to_head::HeadToHead;
 pub use kill_tags::KillTag;
-pub use pickup::pickup_icon_name;
+pub use pickup::{IconFrame, mod_icon_size, pickup_icon_name};
 pub use placement::{Placement, place};
+pub use player_tags::PlayerTag;
+pub use race_line::RaceLine;
 pub use sight_draw::sight_draws;
 pub use sub_weapon::SubWeapon;
 pub use time_trial_pace::{PaceTier, RecordTarget, TimeTrialPace, pace_for};
@@ -342,7 +351,8 @@ impl Layout {
         // `Centred="true"` makes x/y the middle of the rectangle rather than its
         // top-left corner. 54 widgets use it, all of them screen-centre pieces
         // like the pickup box at x=240 - half of 480.
-        if node.flag("Centred").unwrap_or(false) {
+        let centred = node.flag("Centred").unwrap_or(false);
+        if centred {
             x -= width / 2.0;
             y -= height / 2.0;
         }
@@ -373,6 +383,7 @@ impl Layout {
             // Zone layout ships.
             rotation: number(&self.constants, node.value("RotationTheta")).unwrap_or(0.0),
             gradient: None,
+            centred,
         })
     }
 
@@ -438,7 +449,14 @@ impl Layout {
                 .value("colour")
                 .and_then(|v| resolve(&self.constants, v))
                 .and_then(parse_argb)
-                .map(argb_to_rgba),
+                .map(|word| {
+                    // The engine hands a model's word to the GPU as a vertex
+                    // colour, which is ABGR in memory: `0xFF40ACFF` draws
+                    // orange (measured on PPSSPP, Pure's ten icons), unlike an
+                    // `<Image>`'s `color`, which is `0xAARRGGBB`.
+                    let [r, g, b, a] = argb_to_rgba(word);
+                    [b, g, r, a]
+                }),
             orthographic,
             origin,
         })
@@ -731,6 +749,22 @@ pub struct Readout {
     /// [`Self::blank`], and drawn only by a title whose art carries
     /// [`oag_title::HudArt::pickup_icon_uv`].
     pub pickup_announcing: bool,
+    /// How far 2048's grant has flown the icon from the top-centre rect toward the slot, in
+    /// layout pixels along y, once the announcement is over (`Hud_UpdatePickupIcon` adds
+    /// `dt * 1800.0` a frame). `PickupBgFrame`'s width follows the flight's progress. `None`
+    /// draws the icon at the slot, as does any distance past it; `Some(0.0)` while
+    /// [`Self::pickup_announcing`]. Ported by `SlotHud::advance`; drawn only by a title whose art
+    /// carries [`oag_title::HudArt::pickup_icon_uv`].
+    pub pickup_fly: Option<f32>,
+    /// 2048's pop-in of the grant icon: its width and height as multiples of the table's
+    /// `w x h` (`hud+0x220` falls `10 -> 1` at `70/s`, `hud+0x224` rises `0 -> 1` at `7/s`,
+    /// `Hud_UpdatePickupIcon`), so a fresh grant starts a wide flat bar. `None` draws the icon
+    /// at full size. Ported by `SlotHud::advance`; drawn only by a title whose art carries
+    /// [`oag_title::HudArt::pickup_icon_uv`].
+    pub pickup_pop: Option<[f32; 2]>,
+    /// The running XP of the race's event (the `"%d"` `Hud_UpdateXpLines` writes into `RaceXP`),
+    /// or `None` when no tally is armed: outside a campaign event the caption draws alone.
+    pub race_xp: Option<u32>,
     /// The held pickup's backdrop and icon fade, on a title whose art carries
     /// [`oag_title::HudArt::pickup_fade`]: advanced per rendered tick by
     /// `oag_raceplay`'s `SlotHud` and read by the draw. Its idle default draws
@@ -787,11 +821,24 @@ pub struct Readout {
     /// The Eliminator's kill target, resolved: the number in `KILLS (5)`.
     /// Zero in every other mode. See [`kill_tags::header`].
     pub kill_target: u32,
+    /// Whether [`Self::kill_tags`] count a score and [`Self::kill_target`] is a score target:
+    /// the race's own law, not the title's. See [`score_rows`].
+    pub score_rows: bool,
+    /// The Eliminator's race line: where each craft is round the lap and the counts at either end.
+    /// `None` outside an Eliminator. See [`race_line`].
+    pub race_line: Option<RaceLine>,
+    /// The multiplayer tags over the other people's craft, projected for this view and already
+    /// at the law's alpha; empty when there are none or the option is off. Drawn with the
+    /// reticle's placement, not the layout's. See [`player_tags`].
+    pub player_tags: Vec<PlayerTag>,
     /// The message slots this frame - `Info1` to `Info4`. See [`messages`].
     pub messages: messages::Lines,
     /// The lap-line time gap this frame - `TimeDiffText` and `TimeDiffIcon`.
     /// See [`time_gap`].
     pub time_gap: Option<time_gap::GapLine>,
+    /// The incoming-weapon warnings lit this frame - `ForwardWarningIcons` and
+    /// `RearWarningIcons`. See [`incoming`].
+    pub incoming: incoming::Shown,
     /// The ship's drawn lean, as its follower: `ship+0x6a58` on HD, the number
     /// `oag_physics`'s `steer_lean_follower` runs. A title with a measured
     /// [`oag_title::HudArt::sway`] slides its whole HUD by `x_per_lean` times this
@@ -1053,6 +1100,8 @@ mod curve_bar_tests;
 #[cfg(test)]
 mod ext_draw_tests;
 #[cfg(test)]
+mod outline_tests;
+#[cfg(test)]
 mod pickup_fade_tests;
 #[cfg(test)]
 mod pickup_look_tests;
@@ -1065,9 +1114,13 @@ mod reticle_tests;
 #[cfg(test)]
 mod shield_tests;
 #[cfg(test)]
+mod sprite_pack_tests;
+#[cfg(test)]
 mod state_2048_tests;
 #[cfg(test)]
 mod sub_weapon_tests;
+#[cfg(test)]
+mod svg_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

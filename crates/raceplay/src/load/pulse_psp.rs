@@ -32,7 +32,7 @@ pub(super) fn finish(
     psp_glow_mask: bool,
     track_shine: bool,
     track_blob: &[u8],
-    (archives, track): (&mut oag_assets::Archives, &str),
+    (archives, track, title): (&mut oag_assets::Archives, &str, &oag_title::Title),
 ) {
     let nodes = oag_vex::vex::nodes(track_blob).unwrap_or_default();
     if circuit_fx {
@@ -54,7 +54,8 @@ pub(super) fn finish(
     }
     // A foreign track has no blob; its file's own light is `foreign::art`'s.
     if hull_lights && !track_blob.is_empty() {
-        light_hulls(loaded, track_blob, &nodes);
+        let shine_lit = title.looks.hull_shine_lit.applies(archives.layout.platform);
+        light_hulls(loaded, track_blob, &nodes, shine_lit);
     }
     if track_shine {
         loaded
@@ -89,8 +90,14 @@ pub(super) fn finish(
 #[cfg(feature = "view")]
 /// Lights the hulls with the circuit's own light nodes, built at the bare
 /// colour bytes: the craft's own scale is applied in the shader. See
-/// `oag_mesh::mesh_render::HullLights`.
-fn light_hulls(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::vex::Node]) {
+/// `oag_mesh::mesh_render::HullLights`. With `shine_lit` the same nodes also
+/// colour the hull's extra pass (`oag_mesh::mesh_render::HullPassColour`).
+fn light_hulls(
+    loaded: &mut Loaded,
+    track_blob: &[u8],
+    nodes: &[oag_vex::vex::Node],
+    shine_lit: bool,
+) {
     match mesh_render::HullLights::from_track(track_blob, nodes, 256) {
         Some(hull) => {
             loaded.report.push(format!(
@@ -106,6 +113,13 @@ fn light_hulls(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::vex::No
                 4 - directionals.min(4),
             ));
             loaded.light.hull = hull;
+            if shine_lit {
+                loaded.setup.hull_points.pass =
+                    mesh_render::HullPassColour::from_track(track_blob, nodes);
+                loaded.report.push(
+                    "hull shine: drawn in the circuit's accumulated light colour, per craft".into(),
+                );
+            }
         }
         None => loaded
             .report
@@ -144,10 +158,8 @@ fn place_scenery_fx(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::ve
 ///
 /// Nothing in Zone: `TrackStartup_Parse` does not build the weather there.
 ///
-/// Outpost 7's `WO_SNOW` plays too. It was withheld until 2026-10-04 because
-/// ours drew no flakes past its first frames while the original kept 64: the
-/// emitter sets the immortal flag `0x800`, which `oag_fx::psys` did not
-/// honour. With it honoured, its faint speckle matches the original's A/B at
+/// Outpost 7's `WO_SNOW` plays too. The
+/// emitter sets the immortal flag `0x800`, which `oag_fx::psys` honours, so the original's 64 flakes persist; its faint speckle matches the original's A/B at
 /// the same spot. See `docs/ghidra/functions/psp-pulse-usa/weather.md`.
 fn place_weather(
     loaded: &mut Loaded,
@@ -271,11 +283,25 @@ fn mist_texture(
             return None;
         }
     };
-    let decoded = match oag_texture::texture::Texture::parse(&blob) {
-        Ok(texture) => Ok((texture.width, texture.height, texture.to_rgba())),
-        Err(error) => oag_texture::ps2_texture::parse(&blob)
-            .map(|texture| (texture.width, texture.height, texture.to_rgba()))
-            .map_err(|_| error),
+    let decoded = if let Some(image) = oag_texture::replacer::mip(&blob) {
+        Ok((image.width, image.height, image.rgba.clone()))
+    } else {
+        match oag_texture::texture::Texture::parse(&blob) {
+            Ok(texture) => Ok((
+                u32::from(texture.width),
+                u32::from(texture.height),
+                texture.to_rgba(),
+            )),
+            Err(error) => oag_texture::ps2_texture::parse(&blob)
+                .map(|texture| {
+                    (
+                        u32::from(texture.width),
+                        u32::from(texture.height),
+                        texture.to_rgba(),
+                    )
+                })
+                .map_err(|_| error),
+        }
     };
     match decoded {
         Ok((width, height, rgba)) => {
@@ -283,8 +309,8 @@ fn mist_texture(
                 "mist: {name}, {width}x{height}, two additive screen layers under the HUD"
             ));
             Some(oag_fx::exhaust::FlareTexture {
-                width: u32::from(width),
-                height: u32::from(height),
+                width,
+                height,
                 rgba,
             })
         }

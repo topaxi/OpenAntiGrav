@@ -1,11 +1,10 @@
 //! The original's own opponent (`oag_ai::original`), rubber banding included,
 //! flown on each craft's own team's physics (`Setup::opponent_handling`; the
 //! controller reads no handling, the step does): the AI every race with
-//! opponents flies by default (maintainer, 2026-10-13), until this project's
-//! own driver (`oag_ai::Driver`) is solid. It began as the campaign's third AI
-//! mode (2026-10-11), when only a campaign launch switched it on.
+//! opponents flies by default, until this project's
+//! own driver (`oag_ai::Driver`) is solid.
 //!
-//! **Still never a player setting** (the 2026-10-11 rule). What changed is who
+//! **Still never a player setting** (opponents race on this project's own driver). What changed is who
 //! asks: the composition root (`oag_game::ai_choice`) calls
 //! [`Race::use_original_ai`] for every race that fields opponents, and the only
 //! way back to this project's driver is the developer flag `oag-game --ai
@@ -16,7 +15,8 @@
 //! original's own projected sample is this engine's nearest spline sample
 //! interpolated onto the craft; its lap progress is the course distance over
 //! the course length; its lookahead walks the sample table; its contact list
-//! is the last step's wall response; its race time starts at the green light.
+//! is the last step's wall response plus the tick's resolved craft pairs; its
+//! race time starts at the green light.
 
 use super::*;
 use oag_ai::original::{Field, Output, Pose, Standings, Tick, TrackPoint};
@@ -25,26 +25,20 @@ use oag_ai::original::{Field, Output, Pose, Standings, Tick, TrackPoint};
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct OriginalAi {
     pub(super) field: Field,
-    /// Per slot, the last step's wall contacts: signed by side (`+` on the
-    /// craft's left) and whether the body touched anything.
+    /// Per slot, the last tick's craft-to-craft contacts signed by side (`+`
+    /// on the craft's left), and whether the body touched anything, a wall
+    /// included.
     contacts: [(i32, bool); MAX_SHIPS],
 }
 
-/// The contact summary `Ai_PlanLane` and `Ai_SnapToLane` read, off a step's
-/// wall response. The original walks the body's contact list (`body+0x170`,
-/// kind `1` for the push, any for the rail); this engine reports a count and
-/// one resolved normal, so every non-floor contact is put on the resolved
-/// one's side. A craft-to-craft contact is not in it.
-fn contact_summary(wall: &oag_physics::WallResponse, right: Vec3) -> (i32, bool) {
-    let walls = wall.contacts.saturating_sub(wall.floor_contacts) as i32;
-    let side = match wall.resolved {
-        // The normal points off the wall toward the craft: a wall on the
-        // craft's left pushes it right.
-        Some(contact) if contact.normal.dot(right) > 0.0 => 1,
-        Some(_) => -1,
-        None => 0,
-    };
-    (walls * side, wall.contacts > 0)
+/// The wall half of the contact summary `Ai_PlanLane` and `Ai_SnapToLane`
+/// read, off a step's wall response: a wall touches (the rail's
+/// `body+0x370 != 0` drops on any record) and never pushes (the planner's loop
+/// skips every record whose kind is not `1`, `0x08855238`). The craft-to-craft
+/// half, which does push, is [`Race::original_ai_pair_contact`]'s
+/// (`docs/gameplay/ai.md`, "The two rules").
+fn contact_summary(wall: &oag_physics::WallResponse) -> (i32, bool) {
+    (0, wall.contacts > 0)
 }
 
 impl Race {
@@ -53,14 +47,14 @@ impl Race {
     /// (`Session::resolve_campaign_ai_skill_scale`), `None` for a race with
     /// none, which reads the race's ambient value the load resolved; `level`
     /// the integer rung, `0` Easy to `2` Hard, which the pack shuffle reads: a
-    /// campaign cell's own, else the one `oag_game::ai_choice::free_level`
+    /// campaign cell's own, else the one `oag_ai::Difficulty::level`
     /// chooses from `[ai] difficulty` (chosen, not measured).
     ///
     /// `false`, with the reason logged, when the class's AI tables did not
     /// read or the track has no closed lap: the race keeps this project's
     /// driver, which is an honest fallback rather than a guessed table.
     pub fn use_original_ai(&mut self, skill: Option<f32>, level: usize) -> bool {
-        let Some(tables) = self.sim.original_tables else {
+        let Some(tables) = self.sim.original_tables.as_deref().copied() else {
             log::warn!(
                 "AI: this project's driver flies (no original tables for this title and class; \
                  see the loader report)"
@@ -253,7 +247,7 @@ impl Race {
     /// fraction, its fraction along its own segment and the lap's length,
     /// for the lookahead. `None` off a closed lap or off the track.
     fn original_tick(&self, slot: usize, contacts: (i32, bool)) -> Option<(Tick, f32, f32, f32)> {
-        let course = self.sim.course.as_ref()?;
+        let course = self.sim.course.as_deref()?;
         let lap_length = course.length();
         let ship = &self.sim.world.ships[slot];
         let progress = (ship.standing.progress.unwrap_or(0.0) / lap_length).rem_euclid(1.0);
@@ -305,7 +299,7 @@ impl Race {
     ) -> Option<Output> {
         let contacts = self.sim.original_ai.as_ref()?.contacts[slot];
         let (tick, progress, fraction, lap_length) = self.original_tick(slot, contacts)?;
-        let course = self.sim.course.as_ref()?;
+        let course = self.sim.course.as_deref()?;
         let count = self.sim.world.ship_count as usize;
         // Lap-length units: `Standing::distance`, laps included.
         let racers: [(f32, u8); MAX_SHIPS] = std::array::from_fn(|k| {
@@ -350,7 +344,7 @@ impl Race {
     /// driver instead. Its contact summary is empty: the player's planner
     /// zeroes what the push feeds, and the player's rail ignores contact.
     pub(super) fn drive_original_autopilot(&mut self, slot: usize) -> Option<Output> {
-        let tables = self.sim.original_tables?;
+        let tables = self.sim.original_tables.as_deref().copied()?;
         let (tick, progress, fraction, lap_length) = self.original_tick(slot, (0, false))?;
         let seat = self.sim.autopilots.get_mut(slot)?;
         let mut autopilot = seat.take().unwrap_or_else(|| {
@@ -378,7 +372,7 @@ impl Race {
     /// tick's step: Pure's zone multiplier and launch flag. Nothing without
     /// an original field or a closed lap.
     pub(super) fn original_ai_end_tick(&mut self, places: &[u8; MAX_SHIPS]) {
-        let Some(course) = self.sim.course.as_ref() else {
+        let Some(course) = self.sim.course.as_deref() else {
             return;
         };
         let count = self.sim.world.ship_count as usize;
@@ -401,9 +395,36 @@ impl Race {
     /// Notes what this tick's step said about slot `slot`'s contacts, for the
     /// next tick's planner and rail.
     pub(super) fn original_ai_contacts(&mut self, slot: usize, wall: &oag_physics::WallResponse) {
-        let right = self.sim.world.ships[slot].physics.body.right();
         if let Some(ai) = self.sim.original_ai.as_mut() {
-            ai.contacts[slot] = contact_summary(wall, right);
+            ai.contacts[slot] = contact_summary(wall);
+        }
+    }
+
+    /// Adds one resolved craft-to-craft contact at `point` to slot `slot`'s
+    /// summary, after [`Self::original_ai_contacts`] wrote this tick's walls:
+    /// a kind-`1` record, which pushes the lane away from the rival (`+1` when
+    /// `dot(left, point - position) >= 0`, `0x08855224..0x088552b8`) and drops
+    /// the rail. `point` is the two craft's midpoint, the record's `+0x10`.
+    ///
+    /// One count per pair a tick: the original appends about two kind-`1`
+    /// records per hull on a contact tick, and the second record's origin is
+    /// unread (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`,
+    /// Result 5). A person-flown slot is left alone: its planner zeroes the
+    /// push, its rail ignores contact, and [`Self::original_ai_contacts`]
+    /// never resets its entry.
+    pub(super) fn original_ai_pair_contact(&mut self, slot: usize, point: Vec3) {
+        if self.sim.world.person_flown(slot) {
+            return;
+        }
+        let body = self.sim.world.ships[slot].physics.body;
+        let side = if (-body.right()).dot(point - body.position) >= 0.0 {
+            1
+        } else {
+            -1
+        };
+        if let Some(ai) = self.sim.original_ai.as_mut() {
+            let (sides, _) = ai.contacts[slot];
+            ai.contacts[slot] = (sides + side, true);
         }
     }
 }

@@ -56,6 +56,19 @@ zip), `scripts/build-appimage.sh` and `scripts/build-apk.sh` build with
 `just build-dist` is a local dist build. `just build-cpu` stays `release`.
 Binary size is not a concern; load time and runtime speed are.
 
+### The `dev-cli` feature
+
+`--seed` and `--give` choose the world generator's seed and hand the player a weapon, so a
+shipped binary does not have them: they exist behind `oag-game`'s `dev-cli` feature, which is
+a default feature. Every packaging build (`release.yml`, `scripts/build-appimage.sh`,
+`just build-dist`, `just build-cpu`, `just mac-app`, `just ios-app`, `scripts/build-apk.sh`, the
+web build) passes `--no-default-features --features extensions` (or `android,extensions`) and
+so builds without it; clap then rejects both flags as unknown arguments. A perf-test APK that
+`scripts/android-race-phases.sh` drives (it passes `--seed 1`) is built with
+`OAG_APK_DEV_CLI=1 just apk`. `--pose` and the other capture flags stay in every build. A race
+run with `--seed`, `--give` or `--pose` is unofficial (`oag_game::official::unofficial`): it
+saves no record, medal, loyalty award or ghost.
+
 Measured 2026-10-09, AMD Ryzen 9 7900 (12 cores, 24 threads), Linux, rustc 1.99,
 `RUSTC_WRAPPER` unset (sccache would hide build times), the EU Pulse CHD and
 the EU HD/Fury ISO, `oag-game <image> --race --no-audio --screenshot out.png
@@ -703,6 +716,82 @@ MONITOR row offers `default` alone, dimmed with "GAMESCOPE SHOWS ONE DISPLAY" in
 gamescope). `--windows-fullscreen` has no per-monitor meaning there. Details:
 `docs/rendering/multi-window.md`, "Under gamescope".
 
+## Official mods
+
+The project's own mods (`OpenAntiGrav/official-mods`, the `assets/mods/official`
+submodule, ADR-0083) ship in every desktop build. Without them a release has no
+RACE REMIX at all, because `oag-extras` no longer carries it.
+`scripts/stage-official-mods.sh <dest>` copies each mod folder (`remix/`) into
+`<dest>` and fails when the submodule is not checked out. Each target puts the
+result in a `mods` folder that `oag_mod::mods_search_path` reaches by
+`current_exe` (the macOS app's is `Contents/Resources/mods`, see below):
+
+| Build | Where | Recipe |
+| --- | --- | --- |
+| Linux AppImage (both flavours, the Deck's included) | **inside the image**, `usr/bin/mods/remix` | `build-appimage.sh` |
+| Linux tarball | `mods/remix` beside `oag-game` | `release.yml`, "Cut the tarball" |
+| Windows zip | `mods/remix` beside `oag-game.exe` | `release.yml`, "Stage the zip" |
+| macOS app | `Contents/Resources/mods/remix`; `packaged_mods` adds it for a program at `<name>.app/Contents/MacOS/<program>` | `build-mac-app.sh` |
+| iOS app | `OpenAntiGrav.app/mods/remix`, beside the bundle's executable | `build-ios-app.sh` |
+| Android APK | `assets/official-mods/` plus `assets/official-mods.index`, unpacked on first launch to `<files dir>/assets/mods/official` | `build-apk.sh` |
+
+**AppImage: inside the image, with a second search entry, not an archive beside
+the file.** A player downloads one file and runs it; a `mods/` folder beside it
+would need an archive around the AppImage and would be lost the first time the
+file is moved. `current_exe` inside a mounted AppImage is `$APPDIR/usr/bin/oag-game`,
+so `mods_search_path` now adds both `mods` beside the `.AppImage` file (a
+player's own mods) and `mods` beside the program (the official ones); before, the
+`APPIMAGE` directory replaced the program's. `just deploy deck` goes through
+`build-appimage.sh` and so ships the mod too; it initialises the submodule in its
+detached worktree first.
+
+`release.yml` checks out with `submodules: true` for the Linux, Windows and
+macOS jobs (the checkout action cannot pick one submodule, so `assets/mods/examples`
+comes with it and is not packaged). `nightly.yml` calls `release.yml`, so it needs
+no change; the `android:` and `ios:` jobs check out with `submodules: true` too
+(the stage script fails without them). Not covered, named open in the Remix handover
+thread: the AUR PKGBUILDs and the web build.
+
+**macOS: `Contents/Resources`, not `Contents/MacOS`.** `codesign` treats everything under
+`Contents/MacOS` as code to seal; data belongs in `Contents/Resources`. The first
+nightly that staged the `slipstream` mod there (a nested tree with executable-bit
+files, `guest/.cargo`, a Cargo project and a wasm) failed `codesign --force --deep -s -`
+with "bundle format unrecognized, invalid, or unsuitable", and `macos` has failed every
+nightly since (publish is skipped when any build fails). The two mods before it
+(`remix`, `hd-medals`) signed there. Which of slipstream's traits trips `codesign` is
+not pinned (no macOS to run it on); the build now stages under `Resources/mods`, clears
+the executable bits on the staged copy (mod files are read, never run) and seals
+without `--deep` (the bundle's only code is `Contents/MacOS/oag-game`; the verify
+still runs `--deep --strict`). `packaged_mods` recognises `Contents/MacOS/<program>`
+by path shape and adds `Contents/Resources/mods`; the shape test runs on Linux
+(`a_program_in_a_macos_bundle_also_searches_the_resources_folder`). Unverified on
+macOS until a nightly signs.
+
+**Phones.** iOS is unchanged: the bundle's executable sits in `OpenAntiGrav.app/`, so
+`packaged_mods` already searches `OpenAntiGrav.app/mods`, and the build script stages
+there (not run on a Mac: the recipe is the macOS one, read only). The iOS job signs
+the same three mods with the same `codesign --force --deep -s -` at the bundle root
+and passed on the nightlies where macOS failed, so the failure is specific to
+`Contents/MacOS`. Android has no folder beside an executable and the mod loader
+(`Mod::open`, the wasm host, the shader and fx loaders) reads file paths, so reading
+through the NDK `AssetManager` would be a second `Container` backend. Instead
+`build-apk.sh` writes the staged mods into the APK's `assets/` and an index of
+`size sha256 path` lines beside them (the NDK lists an asset folder's files, never
+its subfolders, so the app cannot walk the tree). `android_main` calls
+`oag_mobile::android::install_official_mods(oag_mod::OFFICIAL)`: the working
+directory is already the app's files directory (`oag_mobile::android::prepare`), so
+`assets/mods/official` there is the path `mods_search_path` lists for a checkout's
+submodule, and nothing in `oag-mod` changed. The index is the stamp: a copy sits in
+the unpacked folder, equal bytes mean current, and any difference writes the new tree
+beside it and swaps it in whole (a mod a newer build dropped does not linger; an
+interrupted copy leaves `official.new`, cleared next launch). It runs on the activity's
+thread before the event loop and the window exist, so no frame waits on it; the 53
+files (3.5 MB) took 3 ms to write on a desktop disk. A failure is a `warn`, the
+game starts without the mods; success is a `debug` line. The logic is
+`oag_mobile::packaged` (host-tested, including that `oag_mod::search` opens what it
+wrote); `scripts/stage-official-mods.sh` is shared, so no mods staged is still a
+build error. The mods' screenshots ride along (the AppImage ships them too).
+
 ## AUR packages
 
 Two PKGBUILDs live in [`packaging/aur/`](../../packaging/aur/), each with its
@@ -715,9 +804,9 @@ content, and both `provide`/`conflict` with `openantigrav`.
 | `openantigrav-bin` | nothing: repackages `OpenAntiGrav-<pkgver>-linux-x86_64.tar.gz` from the GitHub Release ([releases](releases.md)) | `pkgver` is the tag without `v`. `sha256sums` is `SKIP` until a release exists: copy the tarball's line from the release's `SHA256SUMS` or run `updpkgsums`. |
 | `openantigrav-git` | `cargo build --frozen --release -p oag-game` from `main` | `pkgver()` is `git describe --long --tags --match 'v*'`, falling back to `r<count>.<hash>` while no tag exists. `.SRCINFO` carries a placeholder `pkgver`; regenerate it. |
 
-**Why distro `cargo`, not rustup.** `rust-toolchain.toml` pins 1.99.0 for CI
+**Why distro `cargo`, not rustup.** `rust-toolchain.toml` pins 1.100.0 for CI
 reproducibility, but a package builds with the packaged toolchain and Arch's
-`rust` is newer than the 1.97.1 MSRV (`Cargo.toml` `rust-version`). `rustup`
+`rust` is newer than the 1.100 MSRV (`Cargo.toml` `rust-version`). `rustup`
 conflicts with `rust` in a chroot, so `makedepends` names `cargo`;
 `RUSTUP_TOOLCHAIN=stable` keeps a build on a machine that has rustup working.
 `clang` is for `libspa-sys`' bindgen. `options=(!lto)` is required: with makepkg's default `-flto` the link fails with `undefined symbol: spa_format_parse_libspa_rs`, because `libspa-sys`'s C shim becomes LTO bitcode that `rust-lld` cannot link (observed 2026-10-07). `libpipewire` is a hard dependency (see [what is bundled](#what-is-bundled)); the

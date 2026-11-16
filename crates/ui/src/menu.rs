@@ -52,7 +52,6 @@
 //! is the composition root's business. Keeping that seam is what lets every test
 //! below run with no config directory, no disc and no window.
 
-use crate::frontend::Draw;
 use oag_core::buttons::{Button, Input};
 
 /// The menu tree this build ships with.
@@ -67,9 +66,13 @@ pub const CAMPAIGN_PICKER_PAGE: &str = "campaigns";
 pub const ORIGINAL_CAMPAIGN_ROW: &str = "campaign-original";
 /// The prefix of that page's row ids for a mod campaign; the key follows.
 pub const CUSTOM_CAMPAIGN_ROW: &str = "campaign-custom:";
+/// The id of that page's last row, which opens the campaign editor.
+pub const CAMPAIGN_EDITOR_ROW: &str = "campaign-editor";
 
 mod vocabulary;
-pub use vocabulary::{Action, ValueSource};
+pub use vocabulary::{Action, Query, QueryRef, ValueSource};
+mod launch;
+pub use launch::LaunchInputs;
 
 /// What a race mode's row shows, out of the disc's own string table.
 ///
@@ -98,13 +101,28 @@ pub fn mode_label(mode: oag_race::Mode, strings: &crate::language::StringTable) 
         .to_string()
 }
 
-/// Every race mode as a row, labelled from `strings`.
+/// Every race mode `title` offers as a row, labelled from `strings`.
 #[must_use]
-pub fn mode_choices(strings: &crate::language::StringTable) -> Vec<Choice> {
+pub fn mode_choices(
+    strings: &crate::language::StringTable,
+    title: &oag_title::Title,
+) -> Vec<Choice> {
     oag_race::Mode::ALL
         .iter()
+        .filter(|mode| mode_offered(**mode, title))
         .map(|mode| Choice::labelled(mode.name(), mode_label(*mode, strings)))
         .collect()
+}
+
+/// Whether `title` offers `mode` at all: a mode that loads data of its own beside the
+/// circuit is offered only where the title names that data. Detonator is the one today
+/// (`oag_title::RaceDefaults::detonator`); every other mode is offered everywhere.
+#[must_use]
+pub fn mode_offered(mode: oag_race::Mode, title: &oag_title::Title) -> bool {
+    match mode {
+        oag_race::Mode::Detonator => title.race.detonator.is_some(),
+        _ => true,
+    }
 }
 
 /// The `HUD Style` skins `title`'s disc lists, valued and shown by the disc's own entry strings.
@@ -124,9 +142,22 @@ pub fn hud_style_choices(
         .collect()
 }
 
+/// The values `title`'s SCREEN SIZE slider offers ([`oag_title::hud::SafeArea::values`]), as
+/// percent text. Empty where the title has no such option.
+#[must_use]
+pub fn safe_area_choices(title: &oag_title::Title) -> Vec<Choice> {
+    title
+        .hud_art
+        .safe_area
+        .into_iter()
+        .flat_map(|area| area.value.values())
+        .map(|percent| Choice::plain(percent.to_string()))
+        .collect()
+}
+
 /// `modes` with every mode that takes fewer than `people` people marked unusable, `reason`
 /// saying why from the cap. A mode is still offered and the row can step onto it: it draws
-/// dimmed with the reason under it ([`Menu::unavailable`]), the way an unusable remix option
+/// dimmed with the reason under it ([`Menu::unavailable`]), the way an unusable two-title race option
 /// does. A value that names no mode (a stored token from another build) is left alone.
 #[must_use]
 pub fn cap_modes(modes: &[Choice], people: usize, reason: impl Fn(usize) -> String) -> Vec<Choice> {
@@ -337,6 +368,9 @@ pub enum Entry {
         label: String,
         /// What to fire.
         action: Action,
+        /// The settings keys a `launch_race` row names its race's inputs by.
+        /// `None` is every other row, and an ordinary RACE launch.
+        inputs: Option<LaunchInputs>,
     },
     /// Cycles a setting through a fixed list of values.
     Choice {
@@ -353,6 +387,12 @@ pub enum Entry {
         values: Vec<Choice>,
         /// Where [`Self::Choice::values`] comes from, when not the definition.
         source: Option<ValueSource>,
+        /// A parameterised query this row asked for, which `source` cannot name. `None` for a
+        /// fixed name and for a query whose `of` is empty.
+        query: Option<QueryRef>,
+        /// The value a `mod.<id>.<key>` row takes while its mod has saved nothing for it, when
+        /// its list offers it (`default` in the definition file).
+        default: Option<String>,
         /// Which one is current. Seeded by [`Menu::seed`], never read off disk.
         current: usize,
         /// What makes this row inert. See [`Menu::is_disabled`].
@@ -400,6 +440,12 @@ pub enum Entry {
         /// Row label.
         label: String,
     },
+    /// A row the disc authors that this build has nothing behind: drawn greyed, skipped by the
+    /// cursor, and a click on it does nothing (the pause screen's `ONL_VIEW_INV`).
+    Inert {
+        /// Row label.
+        label: String,
+    },
 }
 
 impl Entry {
@@ -412,6 +458,7 @@ impl Entry {
             | Self::Choice { label, .. }
             | Self::Toggle { label, .. }
             | Self::Binding { label, .. }
+            | Self::Inert { label }
             | Self::Back { label } => label,
         }
     }
@@ -515,14 +562,20 @@ mod hide;
 mod page;
 pub use page::{Page, RowMeta};
 
+mod expand;
+pub use expand::RowItem;
 mod definition;
-pub use definition::{Added, Definition, Error, For, ModMenu};
+pub use definition::{
+    Added, Definition, Error, For, ModMenu, PAUSE_PAGE, PHOTO_ROW, Pause, pause_row_id,
+};
 
 /// What the menus did on a tick, for the composition root to act on.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MenuEvent {
     /// An `action` row was activated.
     Fired(Action),
+    /// A `launch_race` row that names its inputs by setting key was activated.
+    Launch(LaunchInputs),
     /// A setting was moved. Apply it and persist it.
     Changed {
         /// The settings key from the definition.
@@ -591,6 +644,12 @@ pub struct Menu {
     reset_rect: Option<[f32; 4]>,
     /// The title's stand-in codepoint for the reset button. See [`Self::set_reset_glyph`].
     reset_glyph: Option<char>,
+    /// Rows whose Square fires a second action, by the action the row fires: `(row's action,
+    /// Square's action, the prompt's words)`. See [`Self::set_square_action`].
+    square_actions: Vec<(Action, Action, String)>,
+    /// Whether this tree is a title's pause screen over a parked race. See
+    /// [`Self::set_pause_screen`].
+    pause_screen: bool,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -603,6 +662,14 @@ pub struct Menu {
 pub const DEFAULT_VISIBLE_ROWS: usize = 7;
 
 impl Menu {
+    /// Marks this tree as a pause screen over a parked race. On its root page START closes the
+    /// menus (the disc's `forward="start"` redirect resumes the race) instead of confirming a
+    /// row, and CIRCLE does nothing (`backward="none"`, a silent press, measured). ESCAPE, which
+    /// is not a button of the original, still backs out of it through [`Self::back`].
+    pub fn set_pause_screen(&mut self, pause: bool) {
+        self.pause_screen = pause;
+    }
+
     /// Opens a definition at its root page.
     #[must_use]
     pub fn new(definition: Definition) -> Self {
@@ -614,7 +681,7 @@ impl Menu {
             .iter()
             .map(|page| focus::snapped(page.entries.len(), 0))
             .collect();
-        Self {
+        let mut menu = Self {
             definition,
             stack: vec![root],
             cursor,
@@ -632,7 +699,13 @@ impl Menu {
             reset_label: String::new(),
             reset_rect: None,
             reset_glyph: None,
-        }
+            square_actions: Vec::new(),
+            pause_screen: false,
+        };
+        // A row that is on a page only while the host offers it starts off the page.
+        menu.offer(Action::PhotoMode, false);
+        menu.offer(Action::OpenModSettings, false);
+        menu
     }
 
     /// Seeds every row that edits `setting` with its current value.
@@ -765,6 +838,116 @@ impl Menu {
         filled
     }
 
+    /// Fills in every row whose `values_from` is the table form `query`, with the argument
+    /// `query.of` names. Keeps the value a row was on if the new list still has it, as
+    /// [`Self::supply`] does. Returns how many rows were filled.
+    pub fn supply_query(&mut self, query: &QueryRef, values: &[Choice]) -> usize {
+        let mut filled = 0;
+        for page in &mut self.definition.pages {
+            for entry in &mut page.entries {
+                if let Entry::Choice {
+                    values: list,
+                    query: Some(from),
+                    current,
+                    ..
+                } = entry
+                    && from == query
+                {
+                    let held = list.get(*current).map(|option| option.value.clone());
+                    values.clone_into(list);
+                    *current = held
+                        .and_then(|value| list.iter().position(|option| option.value == value))
+                        .unwrap_or(0);
+                    filled += 1;
+                }
+            }
+        }
+        filled
+    }
+
+    /// Every distinct table-form query a row carries, in page order. The caller answers each
+    /// from the value of the setting `of` names ([`Self::value_of`]).
+    #[must_use]
+    pub fn query_refs(&self) -> Vec<QueryRef> {
+        let mut refs: Vec<QueryRef> = Vec::new();
+        for page in &self.definition.pages {
+            for entry in &page.entries {
+                if let Entry::Choice {
+                    query: Some(query), ..
+                } = entry
+                    && !refs.contains(query)
+                {
+                    refs.push(query.clone());
+                }
+            }
+        }
+        refs
+    }
+
+    /// The value the first choice row editing `setting` is on, or `None` when no such row
+    /// exists or its list is empty.
+    #[must_use]
+    pub fn value_of(&self, setting: &str) -> Option<&str> {
+        self.definition
+            .pages
+            .iter()
+            .flat_map(|page| &page.entries)
+            .find_map(|entry| match entry {
+                Entry::Choice {
+                    setting: key,
+                    values,
+                    current,
+                    ..
+                } if key == setting => values.get(*current).map(|v| v.value.as_str()),
+                _ => None,
+            })
+    }
+
+    /// Every choice row's setting and its declared `default`, for the rows that have one.
+    #[must_use]
+    pub fn choice_defaults(&self) -> Vec<(&str, &str)> {
+        self.definition
+            .pages
+            .iter()
+            .flat_map(|page| &page.entries)
+            .filter_map(|entry| match entry {
+                Entry::Choice {
+                    setting,
+                    default: Some(default),
+                    ..
+                } => Some((setting.as_str(), default.as_str())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Every choice row's setting and the value it is on, first row per setting, leaving out
+    /// a row with an empty list.
+    #[must_use]
+    pub fn held_choices(&self) -> Vec<(&str, &str)> {
+        let mut held: Vec<(&str, &str)> = Vec::new();
+        for entry in self.definition.pages.iter().flat_map(|page| &page.entries) {
+            if let Entry::Choice {
+                setting,
+                values,
+                current,
+                ..
+            } = entry
+                && let Some(value) = values.get(*current)
+                && !held.iter().any(|(key, _)| key == setting)
+            {
+                held.push((setting.as_str(), value.value.as_str()));
+            }
+        }
+        held
+    }
+
+    /// [`Definition::relabel_choice`] on a menu already built: the words a row
+    /// draws for one of its options change, the stored value does not.
+    pub fn relabel_choice(&mut self, setting: &str, value: &str, label: &str) {
+        self.definition.relabel_choice(setting, value, label);
+    }
+
     /// The definition, for reporting and for drawing.
     #[must_use]
     pub fn definition(&self) -> &Definition {
@@ -866,11 +1049,11 @@ impl Menu {
         let page = self.current();
         let mut moved = None;
         if input.take(Button::Down) && rows > 0 {
-            self.cursor[page] = (self.cursor[page] + 1) % rows;
+            self.cursor[page] = self.next_row(page, true);
             moved = Some(nav::Dir::Down);
         }
         if input.take(Button::Up) && rows > 0 {
-            self.cursor[page] = (self.cursor[page] + rows - 1) % rows;
+            self.cursor[page] = self.next_row(page, false);
             moved = Some(nav::Dir::Up);
         }
         // The window follows the cursor and then **stays there**. Storing it is
@@ -917,13 +1100,19 @@ impl Menu {
             out.push(event);
         }
 
+        let pause_root = self.pause_screen && self.depth() == 1;
+        if pause_root && input.take(Button::Start) {
+            self.nav.push(nav::Nav::Accept);
+            out.push(MenuEvent::Closed);
+            return out;
+        }
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.extend(self.activate());
         }
         if input.take(Button::Square) {
             out.extend(self.reset());
         }
-        if input.take(Button::Circle) {
+        if input.take(Button::Circle) && !pause_root {
             out.extend(self.back());
         }
 
@@ -953,7 +1142,8 @@ impl Menu {
     /// that has silently vanished has no way to find out what took it away.
     #[must_use]
     pub fn is_disabled(&self, entry: &Entry) -> bool {
-        self.pin(entry).is_some()
+        matches!(entry, Entry::Inert { .. })
+            || self.pin(entry).is_some()
             || entry
                 .disabled_by()
                 .is_some_and(|condition| condition.matches(self.held(&condition.setting).as_ref()))
@@ -996,6 +1186,25 @@ impl Menu {
                     .iter()
                     .any(|running| Some(running) == chosen.as_ref())
         })
+    }
+
+    /// The row the cursor moves to from `page`'s current one, wrapping, past any
+    /// [`Entry::Inert`] row (a page of nothing but those stays put).
+    fn next_row(&self, page: usize, forward: bool) -> usize {
+        let entries = &self.definition.pages[page].entries;
+        let rows = entries.len();
+        let mut row = self.cursor[page];
+        for _ in 0..rows {
+            row = if forward {
+                (row + 1) % rows
+            } else {
+                (row + rows - 1) % rows
+            };
+            if !matches!(entries[row], Entry::Inert { .. }) {
+                return row;
+            }
+        }
+        self.cursor[page]
     }
 
     /// Whether the row the cursor is on is inert.
@@ -1080,7 +1289,7 @@ pub const WARNING: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
 
 /// What one page looks like, as plain data.
 ///
-/// The same [`Draw`] vocabulary the language picker emits, so `main.rs`
+/// The same [`Draw`](crate::frontend::Draw) vocabulary the language picker emits, so `main.rs`
 /// rasterises menus with the renderer it already has and there is one text
 /// path rather than two.
 ///
@@ -1125,29 +1334,11 @@ pub fn draw_list(
     race_behind: bool,
 ) -> Layers {
     let page = menu.page();
-    let (title_x, title_y, title_scale) = skin.title_at();
 
     // Frame::backdrops's own clear/picture/marks order - see its doc for why
     // a race behind the menus drops anything covering the whole screen.
-    let picture = backdrop.map(Picture::draw);
-    let backdrops = frame.backdrops(skin.space(), skin.background(), picture, race_behind);
-
-    let mut layers = Layers {
-        backdrop: backdrops,
-        ..Layers::default()
-    };
-    // The disc's own declared colour, the frame's own ink, or this build's
-    // substitute (`Skin::title_color`), in whichever face `skin.title_font()`
-    // names - `None` on both PSP titles today, which is the plain `Draw::Text`
-    // this build has always emitted; see `oag_title::MenuSkin::title_font`.
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        page.title.clone(),
-    ));
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    layers.push_title(skin, frame, page.title.clone());
 
     // Which idiom a page is drawn in is the *title's* answer first and this
     // page's second: a strip needs a disc that authors one, and a page with

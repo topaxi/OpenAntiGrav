@@ -96,7 +96,14 @@ pub(crate) fn load(
         .as_ref()
         .map(|global| global.special)
         .unwrap_or_default();
-    let handling = handling_for(&stats, class, pad_tunables, special).with_context(|| {
+    let handling = handling_for(
+        &stats,
+        class,
+        pad_tunables,
+        special,
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
+    )
+    .with_context(|| {
         format!(
             "{stats_name} authors no <Class name=\"{class}\"> - it carries {}",
             stats.ladder()

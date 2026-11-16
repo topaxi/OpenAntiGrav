@@ -65,7 +65,7 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
     slots.dedup();
     assert_eq!(slots.len(), first.len(), "two cues came from one slot");
     assert_eq!(
-        first.iter().filter(|e| e.is_player()).count(),
+        first.iter().filter(|e| e.slot == 0).count(),
         1,
         "the player raised it more than once, or not at all"
     );
@@ -128,7 +128,7 @@ fn every_cue_has_something_that_raises_it() {
     // join this for the same reason: each is read directly off the world's
     // own projectile array every tick in `Audio::race_tick`, never pushed as
     // a `CueEvent` - see `TravelVoices`. `LeachAttach` is the same shape
-    // again, read directly off `race.sim.world.leach_beam` instead of a
+    // again, read directly off `race.sim.world.leach_beams[0]` instead of a
     // projectile slot - see `SfxVoices::leach_attach`. `Autopilot` and
     // `Engaging` join `Blowup` for the same reason it is here: both are read
     // off `Race::autopilot_is_active` directly in `Audio::race_tick`'s own
@@ -908,7 +908,7 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
 #[test]
 fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(one_mine_table());
+    race.sim.weapons = Some(Arc::new(one_mine_table()));
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
     race.sim.world.ships[0]
         .pickup
@@ -939,7 +939,7 @@ fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
 #[test]
 fn dropping_a_bomb_raises_no_mine_launch_cue() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(
+    race.sim.weapons = Some(Arc::new(
         oag_tables::weapons::parse(
             r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
@@ -952,7 +952,7 @@ fn dropping_a_bomb_raises_no_mine_launch_cue() {
            </WeaponStats>"#,
         )
         .expect("the fixture table must parse"),
-    );
+    ));
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Bomb);
     race.sim.world.ships[0].pickup.begin_drop(1);
 

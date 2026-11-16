@@ -20,11 +20,15 @@ contents) is read with the wrapping directory stripped. A path that leaves the m
 (`..`, an absolute path) is refused.
 
 Searched, in this order: `$OAG_MODS` alone when set (a path list), else `data/mods/` (a
-checkout), `assets/mods/examples/` (the example mods, the [`mod-examples`](https://github.com/OpenAntiGrav/mod-examples) submodule,
-found when the game runs from a checkout), `mods/` beside the program (or the AppImage), and `<data dir>/oag/mods/`
-(`~/.local/share/oag/mods/` on Linux). Each directory is searched one level deep: a
-folder holding `oag-mod.toml`, or a `*.zip`, or a `*.oagmod`. `just mods-list` shows
-what the search finds and what it left out.
+checkout), `assets/mods/official/` (the official mods, the [`official-mods`](https://github.com/OpenAntiGrav/official-mods)
+submodule, `oag_mod::OFFICIAL`), `assets/mods/examples/` (the example mods, the [`mod-examples`](https://github.com/OpenAntiGrav/mod-examples) submodule;
+both found when the game runs from a checkout), `mods/` beside the program (or the AppImage), and `<data dir>/oag/mods/`
+(`~/.local/share/oag/mods/` on Linux), then the texture packs: `data/texture-packs/`,
+`<data dir>/oag/texture-packs/` and a PPSSPP memstick's `PSP/TEXTURES/` (under `~/.config/ppsspp` on
+Linux). Each directory is searched one level deep: a folder holding `oag-mod.toml`, or a
+`*.zip`, or a `*.oagmod`, or (a texture pack, below) a folder holding `textures.ini` or `textures.zip`.
+A path found twice (a memstick folder linked once per game serial) is one candidate.
+`just mods-list` shows what the search finds and what it left out.
 
 ## The manifest
 
@@ -42,15 +46,150 @@ license = "CC-BY-4.0"        # an SPDX expression ("MIT OR Apache-2.0"), or:
 # license-file = "LICENSE"   # a file in the mod (not both)
 description = "What it adds."
 repository = "https://example.org/example"   # optional
-# homepage, keywords = [...], titles = ["wipeout-pulse"], oag = ">=0.1"
+# homepage, keywords = [...], titles = ["wipeout-pulse"], needs-titles = ["wipeout-hd"], oag = ">=0.1", default-enabled = false (optional)
 ```
 
 A mod **with no licence loads**, and the mods list and the load report print `no license
 stated`. `oag` is a semver requirement against this build; a mod asking for another
 version is left out and named. `titles` names the titles the mod is for, by
 `oag_title::Title::slug` (`wipeout-pulse`, `wipeout-hd`, `wipeout-omega-collection`);
-a mod's campaigns are offered only on those (empty: any). `just mods-check <path>`
-opens a mod and checks its manifest.
+a mod whose `titles` leave out the running title is neither loaded nor offered on it: its
+menu rows, strings, MODS page entry, campaigns and (for a texture pack) the pack a load
+considers are all left out, and a `debug` line names the skip (empty `titles`: any title).
+`just mods-check <path>` opens a mod and checks its manifest. `needs-titles` names titles whose
+disc the mod draws from: the mod loads without one, and its MODS entry says `NEEDS  WIPEOUT HD DISC`
+while none is on the search path.
+
+## Campaign medals: `[campaign-medals]`
+
+A mod may replace the colour swatch Pulse's **Cell Selection** fills a medal hexagon with by
+frames of a medal atlas (Grid Selection's tier hexagons keep the swatch):
+
+```toml
+[campaign-medals]
+source = { title = "wipeout-hd" }   # or { mod = "<key of [icons]>" }
+per-difficulty = true               # one block of three tiers per difficulty
+# tiers = ["gold", "silver", "bronze"]   # a { mod } atlas: the tier of each row, top to bottom
+```
+
+- **`source`**: exactly one key. `title` is a title slug whose own disc ships the atlas. Only
+  `wipeout-hd` is read today (`Data\FE\Images\Hexmedal_HD.gtf`, DATA04's three-block copy); the
+  mod runs wherever its `titles` allow and shows the swatches when that disc is not on the search
+  path (the load log says why, and `needs-titles = ["wipeout-hd"]` puts a NEEDS line on the MODS
+  page). The frames are read off the player's disc at run time; the mod ships none of them. `mod`
+  names a key of `[icons]`: the mod's own atlas, a PNG (an SVG atlas is refused by name and the
+  swatches stay), cut into equal rows (below).
+- **`per-difficulty`**: a cell draws the block of the difficulty its best medal was earned on
+  (`best_difficulty`: easy, medium, hard from the top, 183 px apart); a medal with no saved
+  difficulty draws the middle block (`CellSelection::medal_block_at`, the rule HD's Cell Selection
+  shares; chosen, not measured). Grid Selection's tier hexagons keep the title's colour swatch:
+  HD's Grid Selection has no tier medal hexagons. Without it, the first block. Pulse's Cell
+  Selection target rows also keep the colour swatch in each tier's colour (the atlas fills the
+  hexagons only); on an HD-dialect title the target rows carry the medal widget, one per listed tier.
+- **`tiers`**: names the tier of each atlas row, top to bottom, by the names a campaign's tiers
+  carry (`gold`, `silver`, `bronze`, or a `[[medal-tier]]` of a campaign's own,
+  [custom-campaign.md](../formats/custom-campaign.md)), each once; absent, gold, silver, bronze. A
+  tier no row names draws its declared colour as a swatch. A `title` source uses the title's own
+  row order (`oag_title::Campaign::medal_rows`, gold, silver, bronze) and ignores it, so a campaign
+  tier other than those three draws its colour there.
+- **A `mod` atlas's layout**: one column of equal frames, no gaps. The image is `tiers` rows tall
+  (3 when absent) in each block, and three blocks (easy, medium, hard from the top) when
+  `per-difficulty`, so a frame is the image's width by its height divided by `rows x blocks`; any
+  resolution works, and an image that does not divide into whole rows is refused by name. The
+  frame is drawn scaled to the hexagon (Pulse's hexagons are flat-topped; the example's frames
+  are drawn to fit). A title's atlas is the one fixed layout above (60 px frames, 61 px pitch).
+- **Whose campaigns**: a mod that carries campaigns of its own (`campaigns/*.toml`) has its
+  `[campaign-medals]` drawn on those campaigns' screens only; the disc's own campaign and other
+  mods' campaigns keep the title's swatches. A mod with no campaigns (`official/hd-medals`) is
+  title-wide. A campaign's own mod wins over a title-wide one whatever order they load in, and a
+  campaign mod's art never repaints the disc's own campaign.
+- **Placement**: a 60 px atlas frame is drawn scaled to the hexagon's own rect (Pulse's
+  `Outline_x_y`, 32 x 32 layout units), untinted, the same rect the swatch fills. Frames are 60 px
+  tall at a 61 px row pitch.
+
+The schema stays `v1` (ADR-0064: a compatible addition goes into the same major; the header
+`version` is the TOML Schema language version, not ours).
+
+## Texture packs
+
+A PPSSPP texture pack is a mod that starts **off**
+([`docs/formats/ppsspp-texture-pack.md`](../formats/ppsspp-texture-pack.md) has the key and
+the evidence). It needs no `oag-mod.toml`: a folder or a zip with a `textures.ini` at its root,
+or a folder holding a `textures.zip`, is **recognised** and given a manifest: `id`
+`ppsspp.<name, lower-cased and slugged>` (a bare `textures.zip` takes its folder's name), `name`
+that name, version `0.0.0`, no authors, no licence (`no license stated` on the MODS page),
+the pack's `[games]` serials, and `titles` from them (below). A pack's author who wants a name, release
+and licence writes an `oag-mod.toml`, which wins, and so does the one `just fetch-texture-packs` writes
+into each checkout it makes (below):
+
+```toml
+[mod]
+id = "someone.pulse-hd"
+# ... the usual keys ...
+default-enabled = false      # optional; absent means false for a mod with [texture-pack], true otherwise
+
+[texture-pack]
+format = "ppsspp"            # the one format; anything else refuses the mod by name
+# ini = "textures.ini"       # where the ini is in the mod (default)
+# serials = ["UCES00465"]    # absent: read from the ini's [games]
+```
+
+- **Titles.** A pack's `[games]` serials name the title it is for: the game resolves each serial
+  (`UCES00465` or `UCES-00465`) through the titles' own tables (`oag_source::title::by_serial`: a
+  serial a title lists for its releases, or one a sibling's deny-list names as that title's) and
+  gives a pack whose manifest names no `titles` the slugs of the titles that resolved, each
+  once. A Pure pack is a `wipeout-pure` mod, so it is not loaded, offered or reported on a
+  Pulse race (the old `texture pack not used: ... its [games] does not name UCES-00465` warning
+  was that pack being tried and refused). A serial no title lists adds nothing, and a pack none
+  of whose serials resolve is for every title. An author's own `titles` win. A pack for the
+  right title but another pressing (an EU pack on a US disc) still reaches the load and still
+  warns, since the serial check there is the PSP's.
+- **PSP only.** A PPSSPP pack's keys are the PSP's guest memory, so a pack is offered and opened on
+  a PSP source alone, whatever its `titles` say (`oag_game::mods::is_for_platform`). Pulse PS2 is
+  the same title as Pulse PSP, so `titles` cannot tell them apart; the source's platform
+  (`oag_ui::menu::For::platform`, `Finder`'s second argument) does. On a PS2, PS3, PS4 or Vita
+  source the pack is not on the MODS page, not in the menu tree or the strings, and not opened by
+  the race load or the front end's boot; a `debug` line names the skip, not a `warn`. The
+  platform rule covers every pack, including one with no resolvable `[games]` serial.
+
+- **Generated manifest.** `just fetch-texture-packs` runs `oag-mod init-pack` on each checkout,
+  which writes the manifest `oag_mod::texture_pack::recognise` would have made (same id, name,
+  version `0.0.0`, no licence, `default-enabled = false`, `format = "ppsspp"`) from the same
+  function, so the two cannot drift, plus the `titles` the serials resolve to (the caller hands
+  `oag-mod` the serial-to-title answer, as it knows no title); the pin's URL becomes `repository` and its owner the author
+  (the schema wants one; `unknown` when the URL names none). It names **no `serials`**, so they
+  keep following the ini when the pin moves; its `titles` is written once, so a pack that gains
+  a serial of another title later needs the file regenerated or edited. **An `oag-mod.toml` that is already there is never
+  rewritten**, edited or not, which is safe because nothing in the file goes stale (id and name
+  follow the folder name). The file is added to the checkout's `.git/info/exclude`, so the script's
+  clean-tree check and `--update` still pass. A pack in a PPSSPP install's `PSP/TEXTURES/<serial>/`
+  that the script did not fetch is still recognised without one (`--install-ppsspp --copy` copies
+  the manifest along with the rest). `oag-mod init-pack <folder>... [--repository URL]` is the
+  command; a folder with only a `textures.zip` is refused, since a folder manifest would shadow
+  the zip PPSSPP prefers.
+- **`default-enabled`** is the one mod key that changes the settings file: a mod that starts
+  off is switched on through `[mods] enabled = ["ppsspp.my-pack"]`, beside `disabled` for a mod
+  that starts on; an id is in at most one. The MODS page's ENABLED row writes the right one.
+  The page's ADDS line for a pack that is on reads **TEXTURES**.
+- **What it does.** A race load opens the packs that are on and made for the running title, takes the first whose `[games]`
+  names the disc's serial (a PSP disc only: the keys are the PSP's), and the decoders ask it as
+  they build a picture (the pack is switched off again when the load ends, so a menu preview draws
+  the disc's own): a `.vex` texture (hulls, tracks) by its key, and the whole-image `.mip`
+  textures the load reads for flares, clouds and mist, the race HUD's sprite sheet and the HUD
+  the fonts it draws with, each at the picture's own size (a pack picture is a PNG or a PPSSPP `.zim`);
+  the PNG is read the first time its
+  texture is decoded, under a 192 MiB cache cap. The front end's faces (menu rows, ticker, loading
+  line) and its art (the menu frame, footer, arrows, the logo) draw from it too; a switch on the
+  MODS page applies at once, without a restart. Off, a frame is byte-identical to
+  the game without the mod. Rendering only: nothing reaches `World`, a snapshot or the LAN
+  content fingerprint.
+- **The load** says `texture pack <name>: N key(s)` in the load report and, when it ends, `N texture(s)
+  replaced` in the log, both at `debug`, and `texture pack not used: <name>: <why>` at `warn` (the pack's
+  `[games]` does not name this PSP disc, its `textures.ini` hashes another
+  way, or it will not open). A source that is not a PSP's never reaches that line ("PSP only", above).
+- `.zip` and folder alike are read in place; PPSSPP prefers `textures.zip` to a loose tree, so
+  does the search. ZIM images (a later pack's format) are read, raw, zlib or zstd, RGBA8888,
+  RGBA4444 and RGB565 (`docs/formats/ppsspp-texture-pack.md`, "ZIM images").
 
 ## Campaigns, pilots and tracks: `campaigns/`, `pilots/`, `tracks/`
 
@@ -103,12 +242,12 @@ subtitle = "..."              # optional, with subtitle_string_id
 Rules:
 
 - **`parent` is a row id; there is no `children` key.** Ids of the rows a title's own
-  menu can have: `campaign`, `racebox`, `options`, `records`; and the extras': `remix`,
-  `multiplayer`, `quit`. A row attaches to a **top-level** row only. A parent the tree knows but this
+  menu can have: `campaign`, `racebox`, `options`, `records`; and the extras':
+  `multiplayer`, `mods`, `quit`. A row attaches to a **top-level** row only. A parent the tree knows but this
   title's menu lacks places the row at the top level (the load report says so); an id
   nobody knows is an error.
 - **Only existing things.** A row is a `submenu` to a page of `assets/ui/menu.toml` or an
-  `action` of the closed set (`oag_ui::menu::Action::all()` in `crates/ui/src/menu/vocabulary.rs` is the source of truth; today `launch_race`, `launch_remix`, `quit`, `save_pilot`,
+  `action` of the closed set (`oag_ui::menu::Action::all()` in `crates/ui/src/menu/vocabulary.rs` is the source of truth; today `launch_race`, `quit`, `save_pilot`,
   `new_pilot`, `rename_pilot`, `delete_pilot`, `open_campaign`, `multiplayer_local`). An unknown action, page,
   parent, `after` or string id is an error naming the mod and the key. Such a mod is left
   out of the build and named in the load report; the game starts without it.
@@ -121,30 +260,160 @@ Rules:
   parent. On HD and Omega it is revealed below the parent tab while the parent or one of
   its attached rows has focus, with the pad (left and right step the top level, up and down
   step inside the family) and the pointer.
-- **No behaviour of its own.** A mod cannot add a page, a setting, a mode or an action.
+- **Settings live on the MODS page.** A top-level `settings = "<page id>"` names one of the
+  mod's own pages as its settings page. The MODS page's SETTINGS row opens it for the mod the
+  MOD row is on (`oag_game::mods::settings_page`), BACK returns there, and it needs no `[[entry]]`
+  to be reached; ADDS lists it. A mod's options go there, not on the main menu
+  (`oag.slipstream`'s PORTAL VIEW does). A `settings` that names no page of the mod is a load
+  error naming the key (`a_settings_key_naming_no_page_of_the_mod_is_refused`).
+- **A page of its own.** A `[[page]]` (`id`, `title`/`title_string_id`, `[[page.entry]]` rows in the grammar of `assets/ui/menu.toml`) is added to the tree as `<mod id>/<id>`. An `entry` or a page row of the same mod names it by the short `id` (`target = "picker"`); a mod cannot name another mod's page, and a short id wins over a title page of the same name only for its own mod's rows. A page id is non-empty with no `/`. A page no row of the mod reaches, a `target`, `action` or string id that does not resolve, or a colliding page id is a load error naming the mod and the key (`page "picker" entry 0 target`). A template `choice` row (`values_from`, no values) on a mod page expands like any other (`a_template_choice_row_on_a_mod_page_expands_like_one_on_an_engine_page`). A `choice` row's list may be a closed query instead: `values_from = { query = "tracks_of", of = "<setting key>" }`. The queries are `titles_available`, `tracks_of`, `teams_of`, `variants_of`, `speed_classes_union`, `ai_difficulties` and `custom_tracks`; `of` (only the `*_of` queries take one) names the setting whose value is the argument, empty meaning the booted title, and it must be the `setting` of a choice row on the mod's own pages or the mod is refused naming the row. `tracks_of`, `teams_of` and `variants_of` with an `of` list the title that setting's value names (a title from `titles_available` or `craft_titles`) and are re-listed when the setting changes; with the title not openable here a row keeps its list. Each may name one more setting, its **companion**, which must also be a choice row's setting on the mod's pages and re-lists the row when it changes: `tracks_of` takes `craft_title` (under the CUSTOM title it lists the custom tracks, each greyed with the reason when its host disc is missing or that craft title cannot race it), `teams_of` takes `class` (the roster narrowed to the teams that author it; the title resolves as a craft title, so "Wipeout HD" with only 2048 here lists 2048's reshipped HD teams, ADR-0035) and `variants_of` takes `team` (that team's variants; without it, the title's first team's). A companion on another query, or without an `of`, is a load error. The fixed name `craft_titles` (every title plus a craft title a guest roster stands for) and `race_modes` are also open to a mod row. A choice row may carry `default = "<value>"`: the value a `mod.<id>.<key>` row takes while nothing is saved for it, when its list offers it (with literal `values` it must be one of them). A mod cannot define a query. A mod with a bad page is left out alone, listed with its error, and the game keeps running (`crates/game/tests/mods_pages.rs`). `just check-strings` holds a repository mod (`assets/mods/examples/*`, `assets/mods/official/*`) to its strings: every page title, row label and subtitle names a `string_id` whose English text is in the mod's `strings/english.toml` or, for a word an engine page shares (`OAG_RACE_MODE`, `OAG_MENU_BACK`), in the project's `english.toml` (`scripts/check-strings.py --mod DIR` checks one more folder). [ADR-0082](../architecture/adr/0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md) supersedes ADR-0066 decision 4 for this.
+- **Launching a race.** An `action = "launch_race"` row with a `launch = { ... }` table names where each input of the race is read from, by setting key: `track_title`, `track`, `craft_title`, `team`, `variant`, `mode`, `class`, `difficulty`. A key is an engine setting (`race.mode`, `race.class`, `ai.difficulty`) or a `mod.<id>.<key>` of the mod's own settings; a key nothing stores aborts the launch with its name in the log. An input left out is the booted title's own (no `track_title` races the booted disc's circuit). The engine keeps the rules for combining them: a CUSTOM track's host disc, the craft falling back to the track's title, a class no team authors, a class no controller drives. A `launch_race` row without `launch` is the ordinary RACE page's own launch, and only a `launch_race` row may carry `launch`. RACE REMIX's START row (the official mod `oag.remix`) is this action with its `mod.oag.remix.*` keys. A mod's attached `[[entry]]` rows cannot carry `launch` yet, only `[[page.entry]]` rows can. `crates/game/src/main/session/launch_keys/tests.rs` reads those keys off the mod's page and builds a Pulse craft on a Pure track and an HD craft on a Pulse track from them.
+- **Not yet.** A mod cannot add a race mode.
 
-`assets/mods/oag-extras/` is the worked example: this project's own REMIX, RECORDS and
-QUIT, built into the program, in the same format, carrying the project's own licence.
+```toml
+[[page]]
+id = "picker"
+title = "PICKER"
+
+[[page.entry]]
+kind = "toggle"
+label = "BLOOM"
+setting = "mod.topaxi.example.bloom"
+
+[[entry]]
+id = "picker_row"
+parent = "racebox"
+kind = "submenu"
+label = "PICKER"
+target = "picker"
+```
+
+`assets/mods/oag-extras/` is the built-in example: this project's own RECORDS, MODS and
+QUIT (and RACEBOX, OPTIONS and MULTIPLAYER where a title's menu has none), built into the
+program, in the same format, carrying the project's own licence. A page with title-scoped
+pickers and a launch is the official mod `oag.remix` below.
+
+## Official mods: `assets/mods/official`
+
+The project's own features that the game runs without
+([ADR-0083](../architecture/adr/0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md))
+live in the public [`OpenAntiGrav/official-mods`](https://github.com/OpenAntiGrav/official-mods)
+repository, one folder per mod, mounted as the submodule `assets/mods/official`
+(`git submodule update --init assets/mods/official`) and on the default search path. An
+official mod is a mod: on unless `[mods] disabled` names it, switched on the MODS page, and
+the engine names none of them.
+
+- **`remix/` (`oag.remix`): RACE REMIX.** A REMIX row under RACEBOX (and so a tile on 2048's
+  grid, `oag_game::boot::campaign2048::tiles_of`) opening the page `oag.remix/remix`: MODE,
+  SPEED CLASS (`speed_classes_union`, default VENOM), AI DIFFICULTY (`ai_difficulties`,
+  default ELITE, pinned to "no opponents" for a class no driver covers), TRACK TITLE
+  (`titles_available`, with CUSTOM when the custom-track scan found a file), TRACK
+  (`tracks_of`), CRAFT TITLE (`craft_titles`), TEAM (`teams_of` with the class), VARIANT
+  (`variants_of` with the team) and START (`launch_race`). Every pick is saved under
+  `[mod_settings."oag.remix"]`, its own and not the RACE page's. Turned off or absent: no
+  REMIX row, no page, no 2048 tile and no CUSTOM title; campaign events and
+  `--ballisticng-track` still race custom tracks. It changes no race, so the LAN fingerprint
+  leaves it out. `crates/game/tests/official_remix.rs` builds every title's tree with it on
+  and off.
+- **`hd-medals/` (`oag.hd-medals`): HD Medals.** Off until turned on. Wipeout Pulse's Cell
+  Selection draws each earned medal as Wipeout HD's own `Hexmedal_HD` frame
+  (`[campaign-medals]` above) from a Wipeout HD disc on the search path; without one the
+  swatches stay and the MODS page names the missing disc. Art only: it changes no rule, so the LAN
+  fingerprint leaves it out.
+- **Delivery** (ADR-0083 decision 5): a checkout finds the submodule; packaged builds
+  (AppImage, AUR, Windows, macOS) copy the folder beside the executable, which the release
+  recipes do not do yet. Web and phone builds have no official mods.
+
+## Saved picks: `mod_settings`
+
+A mod page row names `setting = "mod.<id>.<key>"`.
+The pick is saved to `settings.toml` as a string:
+
+```toml
+[mod_settings."oag.example"]
+track = "Vostok"
+```
+
+- **Own id only.** A row of mod `oag.example` may name `mod.oag.example.<key>` and nothing
+  else (another mod's key, an engine setting such as `race.track`): the load refuses it,
+  naming the mod and the key (`Definition::check_mod_setting`, called for every `[[page.entry]]` row as the page is added). The mod is left out alone and the game keeps running (`crates/game/tests/mods_pages.rs`). A mod id carries dots and a
+  key never does, so the key is what follows the last dot.
+- **Kept while off.** Turning a mod off on the MODS page deletes nothing; turning it on
+  restores its picks. There is no cleanup and no size cap.
+- **Restart.** The table seeds the menu's rows when the menu opens, so a pick survives a restart.
+- **Settled.** When the menu opens and when a pick changes, a row's saved value that its list
+  no longer offers becomes the value the row shows (its `default` while nothing is saved), and
+  a changed pick re-lists the queries that read it, down the chain (`oag_game::title_lists::settle_queries`,
+  `crates/game/tests/query_resolve_ground_truth.rs`). A row with an empty list keeps its saved
+  value. So what a launch reads is what the page shows.
+
+## Which files a checkout loads
+
+A checkout's mods are read from disk at launch (`assets/mods/official`, `assets/mods/examples`,
+both submodules), not built in, so a menu or manifest change needs no rebuild; only
+`oag-extras` is compiled in. `git pull` moves no submodule: after a pull the game loads the old
+mod files until `git submodule update`. Two lines make that visible:
+
+- Each mod's load-report line names the commit of the checkout its folder is in,
+  `oag.slipstream 1.0.0 (assets/mods/official/slipstream, git 0d2c1da)`
+  (`oag_mod::checkout_head`, read from git's files, no `git` binary).
+- At the first mod load the game warns for each submodule that is at another commit than the
+  build's own commit pins (`oag_net::SUBMODULE_PINS`, from `git ls-tree` at build time; empty
+  when the build was given its hash, an AppImage or `just test-data`):
+  `assets/mods/official is at c6cd38a, this build's commit pins 0d2c1da: ...`.
 
 ## The MODS page
 
 Every title's main menu has a **MODS** row under OPTIONS (added by `oag-extras` like any mod row,
 after RECORDS and before QUIT). It opens a page with a **MOD** row that steps through the list,
 built-in first, then each mod in search order, then what was left out; an **ENABLED** row that
-turns the mod MOD is on on or off; and under them the lines for that mod: id, version (marked BUILT
+turns the mod MOD is on on or off; a **SETTINGS** row that opens that mod's settings page, there
+only while the mod is on and its `menu.toml` names one (`settings`, below); and under them the lines for that mod: id, version (marked BUILT
 IN for `oag-extras`), authors, licence (**NO LICENSE STATED** when the manifest has neither
 `license` nor `license-file`; `see <file>` for a `license-file`) and what it added. Values over 22
 characters are cut with `...`. Where the page has no room for every line (Pulse: four under the
 three rows), AUTHORS goes first, then VERSION, then LICENSE (`Listing::table_within`).
 
+**The LAN content fingerprint** ([ADR-0083](../architecture/adr/0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md))
+counts only the mods that are on and change a race: a simulation module (`[extension] simulation = true`),
+a `tracks/*.track.toml` or a `campaigns/*.toml`. A mod of only pages, rows, strings or pilots is left
+out, so two machines that differ in one still match and can race. The filter is
+`oag_game::mods::Mods::content_fingerprint`; `oag_net::discovery::content_fingerprint` takes strings and knows no mods.
+
 **Turning a mod off** ([ADR-0078](../architecture/adr/0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md)):
 
 - It is stored by id as `[mods] disabled = ["oag.hillside"]` in the settings file. A mod
-  installed later is on; an id no installed mod has is kept.
-- An off mod adds nothing: no menu rows, no strings, no campaigns, no pilots, no tracks on RACE
-  REMIX's CUSTOM title, and it is left out of the LAN content fingerprint. It stays on the MODS
+  installed later follows its manifest's `default-enabled` (default `true`; `false` ships it
+  off); an id no installed mod has is kept. A mod that ships off and is turned on is stored
+  as `[mods] enabled = [...]`. `oag_game::mods::switch` writes it, and a switch that equals the default is not stored.
+- An off mod adds nothing: no menu rows, no strings, no campaigns, no pilots, no tracks on a
+  CUSTOM title, and it is left out of the LAN content fingerprint (as is any mod that changes no race, below). It stays on the MODS
   page, its ADDS line reading **NOTHING, TURNED OFF**, so it can be turned back on. The gate is
   one place, `oag_game::mods::Mods` (`player()` and `build()`).
+- **A live LANGUAGE pick rebuilds the tree through the same call** (`oag_game::menu_tree::rebuilt`,
+  shared by the switch and `Session::resupply_language`), so a mod row and the MODS page
+  read the new language's `strings/<language>.toml` at once and the menus reopen on the
+  same page and row, **and the same mod on the MOD row**: that row is stored nowhere, so
+  `Session::model_where_stood` (behind `reopened_menu` and the MUSIC pool's rebuild
+  `poll_music_pool`, which runs when a music scan lands, and under load that is after the
+  player has picked a mod) reads it off the old model (`oag_game::mods::selection`) and puts it
+  back on the new one (`mods::reseat`). A rebuild that forgot it moved the row to the first mod,
+  and the next switch pressed acted on the wrong mod. Helpers:
+  `crates/game/tests/mods_page.rs`, `a_menu_built_again_keeps_the_mod_the_row_was_on`. The call
+  sites only show under load: eight copies of the `--drive` script of the drive test
+  `the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow_live` run at
+  once over `stress-ng --cpu 40` failed 2, 4 and 5 times in 8 before the fix (the last two on a
+  build logging the rebuild) and 0 times in 16 after; the drive test alone passes in about 5 to
+  13 s, and the first rebuild always finds the MOD row on `oag.extras`, which is why only the
+  late one hurts.
+  A language the mod ships no file for reads its English, as at boot.
+  `crates/game/tests/mods_menu.rs` runs the rebuild for two languages and with a mod on and off;
+  the `Session` wiring itself has no test surface (it needs a GPU), see "Switching language
+  without relaunching" in `docs/architecture/menus.md`.
+- **Wasm extensions follow the switch at the next race load**, not at once: a race looks for
+  its rules modules through `Mods::player()` as it loads (`oag_game::mod_extensions::attach`,
+  called from `Session::launch_race` with the saved set), so an off mod's module is not found,
+  and a race already parked keeps the modules it started with.
 - **It applies at once.** The menus are rebuilt as a boot builds them and reopen on the MODS page
   with BACK leading where it led. A race parked under the menus keeps what it started with.
 - **`oag-extras` cannot be turned off**: it carries OPTIONS, this page's row and QUIT. Its
@@ -165,6 +434,29 @@ below OPTIONS with the pad or pointer. `--menu-page mods` draws the page headles
 profile's switches, and `--menu-page mods:<mod id>` puts the MOD row on that mod. `just mods-list`
 (`oag-mod`) does not read the game's settings and lists every mod it finds.
 
+## Event channels: `[channels]`
+
+A mod's modules and a track's triggers send each other events over named channels
+([hooks.md](../architecture/wasm-extensions/hooks.md#events-between-mods-emit-and-mod)):
+
+```toml
+[channels]
+publishes = ["oag.checkpoint-circuit/checkpoint"]   # what its modules may `emit` on
+listens = ["oag.other/open"]                        # what it hears (for the MODS page)
+```
+
+Names are `<mod id>/<name>` (lowercase letters, digits, `-`, `_`; the id may also carry `.`; at
+most 64 bytes). A published name starts with this mod's own id; a malformed, repeated or foreign
+one, or more than 32 of a list, refuses the mod at load naming the key
+(`channels.publishes`, `channels.listens`). A mod whose id hashes to the track's sender key (0) is
+refused too. `schemas/v1/mod.tosd` has the table. A module's `emit` on a channel its mod does not
+publish, or more than 4 `emit`s a tick, faults it for the race, naming the rule.
+
+The MODS page shows a **SENDS** line (the mod's published channels and those of its track files'
+`[channels] publishes`) and a **HEARS** line, and a **NO ONE SENDS** line naming each channel the mod
+listens to that no mod that is on (or track file of one) sends. A warning, never a refusal: the
+sender may simply be turned off. Turned-off mods show neither line.
+
 ## Simulation modules: `[extension]`
 
 A mod may carry one WebAssembly rules module that runs in every race it is on for
@@ -175,7 +467,7 @@ A mod may carry one WebAssembly rules module that runs in every race it is on fo
 simulation = true        # required with a rules module
 api = 1                  # the ABI the module was built against
 memory_pages = 2         # its maximum memory, 64 KiB pages (1 to 256; default 16)
-state_bytes = 16         # its state blob, at most 1,024 bytes
+state_bytes = 16         # optional: its state blob, at most 1,024 bytes; the module's `oag_state_len` is the default
 
 [extension.rules]
 module = "ext/wall_penalty.wasm"
@@ -194,9 +486,13 @@ and may send the same commands as a rules module, including the race-wide `set-w
 `set-sun` and `grade-sky` outputs. Hillside's rain is one.
 
 A mod may ship text and images for its module's HUD: its own `strings/<language>.toml`
-(the same files its menu rows use, English the fallback) and `[icons]` (`name = "path/in/the/mod.png"`). A module's
-`hud_string` and `hud_mod_icon` name them; a PNG that is missing or unreadable draws
-nothing and the load report says so.
+(the same files its menu rows use, English the fallback) and `[icons]` (`name = "path/in/the/mod.png"` or `.svg`). A module's
+`hud_string` and `hud_mod_icon` name them, and `raise_mod_warning` names one to show in the incoming-weapon warning slot (Pulse; it faults the module for a name the mod does not declare); an icon that is missing or unreadable draws
+nothing and the load report names the file and the error. An SVG is rasterised at load, on the
+load thread, and again on a worker when the window size or Safe Area changes, at the
+pixel size the pickup slot is drawn at, and the warning slots on a title that draws them (`oag_hud::svg`); nothing is drawn as a vector per
+frame. `<text>` draws nothing (the text stack is not built in; convert it to paths) and an
+`<image>` is never read. Pixel-art icons stay PNGs: a PNG is drawn as authored.
 
 A simulation module can also change the title's HUD through outputs that are never
 hashed: `hud-tint`, `hud-shake` and `hud-bar-extra` on a HUD element (`Speed`, `Thrust`,
@@ -209,7 +505,9 @@ thrust bar, and `Thrust` draws nothing there) and shakes the energy bar while it
 [docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md).
 
 A mod that hands out a pickup of its own (`give-pickup`, `pickup-roll`) declares its look in
-`oag-mod.toml`, and is faulted for the race at the first such command without it:
+`oag-mod.toml`, and is faulted for the race at the first such command without it. Each mod
+with a `[pickup]` has its own pickup kind (at most 32 a race), so two such mods run side by
+side:
 
 ```toml
 [pickup]
@@ -240,13 +538,18 @@ throws the fork's coin and the AI drives the route with the player's physics; th
 picks the way. See
 [wasm-extensions](../architecture/wasm-extensions/README.md#and-checkpoint-circuit-2026-10-30).
 
-The game must be built with the `extensions` feature. `just play` builds with it by
-default (`OAG_NO_EXTENSIONS=1 just play` builds without); by hand it is
-`cargo run --release -p oag-game --features extensions`. A build without it runs no
-module, and its boot log says so for each mod that ships one.
+The game runs modules through its `extensions` feature, on by default on Linux,
+Windows, macOS and Android (`cargo run --release -p oag-game`, `just play`, `just apk`).
+`OAG_NO_EXTENSIONS=1 just play` or `--no-default-features` builds without it; the web
+build and iOS always do (the browser's own engine and a Pulley build for iOS are not
+built yet). `just play --interpreter` (or `OAG_PLAY_FEATURES=wasm-interpreter`) runs the
+mods on wasmtime's Pulley interpreter instead of Cranelift, to compare the two; it
+implies `extensions`, and the load logs the engine at `debug`. A build without it runs no module, and its boot log says so for
+each mod that ships one.
 The manifest is read with the others; the `.wasm` is opened only by the race that
 runs it. No module runs in an original campaign or a network race. A race running a
-module is MODDED and records no replay. The ABI, the event and the command are in
+module is MODDED: it records its inputs, and the replay header names each module with its
+SHA-256, but sets no ghost. The ABI, the event and the command are in
 [docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md)
 ("What is built").
 
@@ -256,7 +559,7 @@ whole interface a Rust mod needs: implement `oag_ext::Extension` (a `tick` readi
 state with `oag_ext::blob!`, and name the type in `oag_ext::export!`. No offsets, no
 codes, no `unsafe`; a command for an empty slot does not compile, and the common
 mistakes the host would fault on come back as `Err(Refused)`. The state's length is
-exported as `oag_state_len` and must equal `state_bytes` above. With the SDK's
+exported as `oag_state_len`: it is the length when `state_bytes` is left out, and must equal it when written. With the SDK's
 `test` feature as a dev-dependency, `oag_ext::test::Race` runs the mod's `tick`
 natively under `cargo test`, with no wasm toolchain. Build with
 `cargo build --release --target wasm32-unknown-unknown`, a 16 KiB stack

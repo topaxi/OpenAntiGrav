@@ -136,3 +136,49 @@ fn the_middle_button_resets_the_row_under_the_pointer() {
         }]
     );
 }
+
+/// The menu on its main page with the RACE CAMPAIGN row selected.
+fn on_campaign_row() -> Menu {
+    let mut menu = Menu::new(built_in());
+    let rows = menu.page().entries.len();
+    for _ in 0..rows {
+        if matches!(
+            menu.page().entries[menu.selected()],
+            Entry::Run {
+                action: Action::OpenCampaign,
+                ..
+            }
+        ) {
+            return menu;
+        }
+        press(&mut menu, &[Button::Down]);
+    }
+    panic!("the main page has a RACE CAMPAIGN row");
+}
+
+#[test]
+fn a_rows_square_action_fires_and_names_itself_in_the_prompt_only_on_that_row() {
+    let mut menu = on_campaign_row();
+    assert_eq!(menu.reset_offered(), None);
+    menu.set_reset_label("RESET TO DEFAULT");
+    menu.set_square_action(
+        Action::OpenCampaign,
+        Action::OpenCampaignEditor,
+        "NEW CAMPAIGN",
+    );
+    assert_eq!(menu.reset_offered(), Some("NEW CAMPAIGN"));
+    assert_eq!(
+        press(&mut menu, &[Button::Square]),
+        vec![MenuEvent::Fired(Action::OpenCampaignEditor)]
+    );
+    press(&mut menu, &[Button::Down]);
+    assert_eq!(
+        menu.reset_offered(),
+        None,
+        "another row has no Square action"
+    );
+    assert!(press(&mut menu, &[Button::Square]).is_empty());
+    press(&mut menu, &[Button::Up]);
+    menu.set_square_action(Action::OpenCampaign, Action::OpenCampaignEditor, "");
+    assert_eq!(menu.reset_offered(), None, "empty words take it away");
+}

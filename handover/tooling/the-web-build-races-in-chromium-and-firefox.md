@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [all]
-updated: 2026-10-19
-summary: "No gate builds the wasm target; run the Pages workflow and check crossOriginIsolated in Chrome; Firefox fps"
+updated: 2026-11-11
+summary: "just check-web gates the wasm build; page-thread waits report; open: worker stack overflow undetected, Firefox fps"
 ---
 
 # The web build races in Chromium and Firefox
@@ -27,11 +27,36 @@ Architecture, measurements, hosting and limits:
 
 ## Open
 
-- **No gate or CI job builds the browser target** (found 2026-10-14). `net-local`'s `--connect`
-  code reached `oag_web` (which `include!`s `main_body.rs`) and broke the web build for a day
-  unnoticed; fixed in place by native-only `cfg`s. A `cargo check` of the `oag_web` example for
-  `wasm32-unknown-unknown` (the flags in `scripts/build-web.sh`) in `just` or CI would catch the
-  next one.
+- **Every failure class ends in one in-page report** (2026-11-10, lane `web-error-reporting`;
+  `web/fault.js`, docs/tools/web.md "What the page says when something fails"), checked by
+  `scripts/check-web-faults.py` on a `OAG_WEB_FAULT_TEST=1` build. Open: (1) an overflow on a
+  **worker's** stack still corrupts memory without trapping (8 MiB now, `web/worker.js`; a canary
+  needs a raw pointer write, which `unsafe_code = "deny"` forbids) and surfaced as a trap in
+  another worker; (2) a GPU out-of-memory, an internal error, a wasm out-of-memory at start and a
+  compile error are checked by injection, not by a real one; (3) Safari, a phone browser and
+  the headed browsers were not tried; (4) a JS exception that escapes a wasm export and is not
+  a trap (a failing import without `catch`) does not stop the module, as before.
+- ~~**No gate or CI job builds the browser target**~~ (2026-11-11, lane `web-firefox`):
+  `just check-web` (`scripts/build-web.sh --check`) type-checks the `oag_web` example with the
+  web build's own flags, `web` and `web,fault-test`, in `just` and `just gate-affected`. CI still
+  does not (its runners have no pinned nightly step outside `pages.yml`).
+- **Firefox 159 on Linux, headed (2026-11-11, lane `web-firefox`)**: (1) in a fresh profile on a
+  niri Wayland session the canvas stays black while the game runs: Firefox's readback-free
+  DMABuf present, which blacks out its own WebGPU samples too; `dom.webgpu.allow-present-without-readback
+  = false` fixes it and the picker note names it. An `rgba8unorm` canvas avoids it but crashes
+  Firefox headless and under Xvfb, so it was reverted (docs/tools/web.md, "Troubleshooting").
+  ~~(2) The maintainer's desktop Firefox 159 froze the page~~ (2026-11-11): a saved screen
+  filter made the first frame `block_on` a wgpu error-scope promise on the page's thread
+  (docs/tools/web.md, "The page's thread may not wait"); fixed, `check-web-faults.py`'s
+  `saved-screen-filter` case boots with it. Every page-thread wait now reports instead of
+  freezing. Open: keeping the name section in the published module (2.0 MB raw, about 320 KB
+  deflated) would name every frame of a report; the maintainer's call.
+- **Chromium with a CPU-only WebGPU shows a white page, no report** (maintainer's machine,
+  2026-11-11, where the cube sample loses its device): headless Chromium's `--software bare` mode
+  shows the same symptom on oag.topaxi.com, though without a lost device (adapter
+  `(Cpu)`, the game runs, the canvas never presents, no device loss and no error), the case
+  docs/tools/web.md "Troubleshooting" already names. The page could not tell; a notice on any CPU
+  adapter would be a guess, not a fault, and was left out.
 - **The web build carries the desktop CLI** (maintainer, 2026-10-14: "cli shouldn't even be in
   the wasm build"). `web.rs` runs `run(Cli::parse_from(["oag-game", path]))`, so clap and every
   desktop-only flag (`--connect`, `--screenshot`, ...) compile into the module. Split `run` from

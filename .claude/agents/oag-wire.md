@@ -21,16 +21,9 @@ is established; do not re-derive it.
   the pattern you need, for example a mesh drawn inside a menu, a per-title
   table, or a loader report line. Reuse or generalise it; a second parallel
   mechanism is a finding against you at merge. Search before you write.
-- Respect the architecture: the simulation never knows a renderer exists, no
-  gameplay crate depends on `oag-render`/`oag-audio`/`oag-input`/`winit`/
-  `wgpu`, and nothing depends on `oag-game`. `just check-deps` enforces this.
-- Determinism binds `oag-core`, `oag-physics`, `oag-gameplay`, `oag-ai`,
-  `oag-race` and `oag-formats`: `f32` only, no `mul_add`, no SIMD, no
-  `HashMap` iteration feeding state, no wall clock, and randomness only
-  through the seeded `Rng`. `oag-render` is exempt.
-- Size ratchets: no Rust file over 1,500 lines, and no inline
-  `#[cfg(test)]` module over 500 lines (move it to `<module>/tests.rs`).
-  Check a move with `cargo nextest list -p <crate>` on both sides of it.
+- Respect the architecture, the determinism rules and the size ratchets in
+  CLAUDE.md (`just check-deps`, `check-determinism`, `check-size` enforce them).
+  Check a test-module move with `cargo nextest list -p <crate>` on both sides.
 - A test must fail if the thing you wired is dropped. Prefer a disc-backed
   ground-truth test (`crates/*/tests/*ground_truth*.rs`, `#[ignore]`d, run by
   `just test-data`) over an invented fixture.

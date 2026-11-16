@@ -23,7 +23,7 @@ use oag_ui_screens::picker::{self, Picker};
 use crate::gpu::Gpu;
 
 /// Where an entry's preview mesh is on the disc.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PreviewSource {
     /// The circuit's outline preview: `<location>\FE\forward.vex` /
     /// `\reverse.vex`, which is what `Track Creation`'s info panel shows.
@@ -57,6 +57,12 @@ pub(crate) enum PreviewSource {
         /// The race hull this front-end hull's flaps are seated from
         /// (`oag_game::preview::race_hull_entry`); `None` where the title draws the race hull.
         race_hull: Option<String>,
+        /// Each variant id the row offers that paints the hull from another livery folder, with
+        /// its folders (`oag_game::preview::variant::livery_folders`).
+        liveries: Vec<(String, oag_game::preview::variant::Folders)>,
+        /// The team's livery on a Zone race's shared hull, whatever the variant row holds
+        /// (`oag_game::preview::variant::zone_folders`).
+        zone_livery: Option<oag_game::preview::variant::Folders>,
     },
 }
 
@@ -110,6 +116,227 @@ impl PreviewSource {
     }
 }
 
+type Key = (usize, Option<String>);
+
+/// What decides a selection's read: two reads with equal facts on one title and language read
+/// the same bytes, which is what lets a screen adopt a read started before it opened.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReadFacts {
+    key: Key,
+    kind: picker::Kind,
+    axis: LiveryAxis,
+    source: Option<PreviewSource>,
+    slideshow: bool,
+    mesh: bool,
+}
+
+impl ReadFacts {
+    /// The read of `key` on a screen of `model` and `layout`.
+    fn of(
+        key: Key,
+        model: &Picker,
+        layout: &picker::Layout,
+        axis: LiveryAxis,
+        sources: &[PreviewSource],
+        previews: &Previews,
+        entry_changed: bool,
+    ) -> Self {
+        let kind = model.kind();
+        let hull_only = kind == picker::Kind::Ship && previews.ship_hull.is_some();
+        let circuit_model = oag_game::preview::draws_circuit_model(previews.front_end, kind);
+        let source = sources.get(key.0).cloned();
+        Self {
+            key,
+            kind,
+            axis,
+            source,
+            slideshow: entry_changed && layout.hd_track.is_none(),
+            mesh: previews.meshes || hull_only || circuit_model,
+        }
+    }
+}
+
+/// What one selection's read needs, owned.
+struct ReadJob {
+    facts: ReadFacts,
+    previews: Previews,
+    archives: SharedArchives,
+    /// The sheet to extend with the entry's stills, when [`ReadFacts::slideshow`] asks for them.
+    base: Option<Sheet>,
+}
+
+enum ShowRead {
+    /// The entry did not change, or the title draws no stills.
+    Unchanged,
+    Loaded(Box<Slideshow>, Box<Sheet>),
+    Failed,
+}
+
+/// What a worker read for one selection.
+struct Read {
+    key: Key,
+    show: ShowRead,
+    preview: Option<Result<PreviewData>>,
+}
+
+impl ReadJob {
+    /// The disc half of a selection: its stills (on a sheet) and its mesh, parsed.
+    fn run(self) -> Read {
+        let ReadJob { facts, previews, archives, base } = self;
+        let ReadFacts { key, kind, axis, source, mesh, .. } = facts;
+        let Some(source) = source else {
+            warn!("entry {} has no preview source", key.0);
+            return Read { key, show: ShowRead::Unchanged, preview: None };
+        };
+        let Ok(mut archives) = oag_thread::lock(&archives) else {
+            warn!("the menu archives' lock is poisoned - the preview draws nothing");
+            return Read { key, show: ShowRead::Failed, preview: None };
+        };
+        let show = match base {
+            Some(base) => read_slideshow(&mut archives, &previews, &source, &base),
+            None => ShowRead::Unchanged,
+        };
+        let preview = mesh.then(|| {
+            read_preview(&mut archives, &previews, kind, &source, key.1.as_deref(), axis)
+                .with_context(|| format!("entry {}", key.0))
+        });
+        Read { key, show, preview }
+    }
+}
+
+/// Reads the entry's stills and puts them on a sheet of the screen's own - see
+/// [`PickerStage::refresh_preview`].
+///
+/// **A craft entry as much as a circuit one**: Pure's craft preview is its team's own
+/// `screen.xml` chain, and Pulse's and HD's craft files author no stills, so asking costs
+/// an already-open archive read and returns an empty list there.
+fn read_slideshow(
+    archives: &mut oag_assets::Archives,
+    previews: &Previews,
+    source: &PreviewSource,
+    base: &Sheet,
+) -> ShowRead {
+    let (location, zone) = match source {
+        PreviewSource::Track { location, zone, .. } => (location.clone(), *zone),
+        PreviewSource::Ship { location, .. } => (location.clone(), false),
+    };
+    let mut report = Vec::new();
+    let globals: Vec<(&str, &str)> = previews
+        .globals
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let loaded = oag_game::preview::slideshow(
+        archives,
+        &location,
+        zone,
+        &globals,
+        &previews.strings,
+        &mut report,
+    );
+    for line in report {
+        warn!("{line}");
+    }
+    match loaded {
+        Ok((show, blobs)) => {
+            let mut report = Vec::new();
+            let sheet = base.extended(&blobs, &mut report);
+            for line in report {
+                debug!("slideshow {line}");
+            }
+            debug!(
+                "slideshow {location}: {} state(s), {} still(s) on a {}x{} sheet",
+                show.states().len(),
+                blobs.len(),
+                sheet.width,
+                sheet.height
+            );
+            ShowRead::Loaded(Box::new(show), Box::new(sheet))
+        }
+        Err(error) => {
+            warn!("{error:#} - the hexagonal window draws nothing");
+            ShowRead::Failed
+        }
+    }
+}
+
+/// A selection's read, on a worker where there is one.
+enum Pending {
+    #[cfg(not(target_arch = "wasm32"))]
+    Task(oag_thread::Task<Read>),
+    #[cfg(target_arch = "wasm32")]
+    Done(Box<Read>),
+}
+
+impl Pending {
+    fn start(job: ReadJob) -> Self {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            Self::Task(oag_thread::Task::spawn("preview-read", move || job.run()))
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Self::Done(Box::new(job.run()))
+        }
+    }
+
+    fn finished(&self) -> bool {
+        match self {
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::Task(task) => task.is_finished(),
+            #[cfg(target_arch = "wasm32")]
+            Self::Done(_) => true,
+        }
+    }
+
+    fn join(self) -> Option<Read> {
+        match self {
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::Task(mut task) => task.join().and_then(Result::ok),
+            #[cfg(target_arch = "wasm32")]
+            Self::Done(read) => Some(*read),
+        }
+    }
+}
+
+/// A screen's opening read, started on a worker before the screen opens, so that the frame that
+/// opens the screen has nothing to wait for - see `session::opening_reads`. The screen adopts it
+/// when it asks for the same read ([`ReadFacts`]) and reads for itself otherwise.
+pub(crate) struct OpeningRead {
+    facts: ReadFacts,
+    archives: SharedArchives,
+    pending: Pending,
+}
+
+impl OpeningRead {
+    /// Starts the read of what a screen of `model` and `layout` opens on.
+    pub(crate) fn start(
+        model: &Picker,
+        layout: &picker::Layout,
+        axis: LiveryAxis,
+        sources: &[PreviewSource],
+        previews: &Previews,
+        archives: &SharedArchives,
+        base: &Sheet,
+    ) -> Self {
+        let key = (model.index(), model.variant().map(|(id, _)| id.clone()));
+        let facts = ReadFacts::of(key, model, layout, axis, sources, previews, true);
+        let job = ReadJob {
+            base: facts.slideshow.then(|| base.clone()),
+            facts: facts.clone(),
+            previews: previews.clone(),
+            archives: Arc::clone(archives),
+        };
+        Self { facts, archives: Arc::clone(archives), pending: Pending::start(job) }
+    }
+
+    /// Whether the worker has finished.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn landed(&self) -> bool {
+        self.pending.finished()
+    }
+}
+
 /// What a title's front end says about how its selection screens preview an
 /// entry - the two facts [`PickerStage`] cannot read off the entry itself.
 #[derive(Debug, Clone, Default)]
@@ -126,6 +353,11 @@ pub(crate) struct Previews {
     /// The title's front end, for the per-circuit model table - see
     /// [`oag_title::FrontEnd::circuit_models`].
     pub(crate) front_end: Option<&'static oag_title::FrontEnd>,
+    /// The title, for the light its front end's models are drawn in - see
+    /// [`oag_game::preview::model_light`].
+    pub(crate) title: Option<&'static oag_title::Title>,
+    /// Whether the served front end is the Fury style, which picks that light's file.
+    pub(crate) fury: bool,
     /// The front end's own `FEGlobals` table. A per-entity `screen.xml`
     /// declares no globals and still names them for its stills' colour, so
     /// without this Pure's stills tint white - invisible on its white front
@@ -146,6 +378,9 @@ pub(crate) enum LiveryAxis {
     Variant,
 }
 
+/// One opened source the menus' screens share - see `session::menu_source`.
+pub(crate) type SharedArchives = Arc<Mutex<oag_assets::Archives>>;
+
 /// Lap lengths measured off the disc on a worker, by track id, filling in as
 /// each circuit is read. See [`PickerStage::refresh_info`].
 pub(crate) type Distances = Arc<Mutex<HashMap<String, f32>>>;
@@ -157,10 +392,10 @@ pub(crate) struct PickerStage {
     pub(crate) livery_axis: LiveryAxis,
     /// Parallel to the model's entries: where each one's preview comes from.
     sources: Vec<PreviewSource>,
-    /// The archives the previews are read out of, opened once when the
-    /// screen does and kept for its life - a selection change is one archive
-    /// read, not a disc reopen.
-    archives: oag_assets::Archives,
+    /// The archives the previews are read out of: the menus' own, opened on a worker while
+    /// they were up (`session::menu_source`), so neither this screen's opening nor a
+    /// selection change opens the disc.
+    archives: SharedArchives,
     /// The selected entry's preview, or `None` when its mesh did not load -
     /// which draws nothing there and says so in the log, per this project's
     /// rule for an asset that will not play.
@@ -168,6 +403,12 @@ pub(crate) struct PickerStage {
     /// Which entry and livery `preview` was built for, so a tick that
     /// changed nothing rebuilds nothing.
     built_for: Option<(usize, Option<String>)>,
+    /// The latest entry and livery asked for; `built_for` catches up when the read lands.
+    requested: Option<(usize, Option<String>)>,
+    /// The worker reading `requested` (or the request before it) off the disc.
+    pending: Option<Pending>,
+    /// A read started before this screen opened, for its first request to adopt.
+    opening: Option<OpeningRead>,
     /// The worker's measurements, on a track picker; `None` on a ship one.
     distances: Option<Distances>,
     anisotropy: Anisotropy,
@@ -187,14 +428,19 @@ pub(crate) struct PickerStage {
     /// anything - and whether the renderer has been handed it yet.
     sheet: Option<Sheet>,
     sheet_uploaded: bool,
-    /// The race's lap count, for HD's `RACE DISTANCE` row - the length
-    /// times this. Set by the caller after [`Self::new`]; `None` when the
-    /// race has no lap target, which is the row's `Infinity` glyph.
-    pub(crate) laps: Option<u32>,
+    /// The race's lap count on each circuit, in entry order, for HD's `RACE
+    /// DISTANCE` row - the length times this. Set by the caller after
+    /// [`Self::new`]; `None` when the race has no lap target, which is the
+    /// row's `Infinity` glyph.
+    pub(crate) laps: Vec<Option<u32>>,
     /// `(seat, seated)` when this is one seat's Ship Select on a split-screen
     /// race box, which reads that seat's device alone - see
     /// `crate::session::picker`'s `seat` module. `None` is every ordinary screen.
     pub(crate) seat: Option<(usize, usize)>,
+    /// The title's depth fit as it plays across frames, where it has one: ticked
+    /// every frame with whatever model is selected, so a step carries the last
+    /// model's depth into the next - see [`oag_game::preview::ship_model::FitPlayer`].
+    fit_motion: Option<oag_game::preview::ship_model::FitPlayer>,
 }
 
 impl PickerStage {
@@ -202,18 +448,20 @@ impl PickerStage {
         clippy::too_many_arguments,
         reason = "one call site, and each is a separate fact of the screen: the \
                   model, its layout, its axis, its sources, the disc, the worker, \
-                  the filter, the sheet and the title's own preview rules"
+                  the filter, the sheet, the title's own preview rules and the read \
+                  already under way"
     )]
     pub(crate) fn new(
         model: Picker,
         layout: picker::Layout,
         livery_axis: LiveryAxis,
         sources: Vec<PreviewSource>,
-        archives: oag_assets::Archives,
+        archives: SharedArchives,
         distances: Option<Distances>,
         anisotropy: Anisotropy,
         base: Sheet,
         previews: Previews,
+        opening: Option<OpeningRead>,
     ) -> Self {
         Self {
             model,
@@ -223,6 +471,9 @@ impl PickerStage {
             archives,
             preview: None,
             built_for: None,
+            requested: None,
+            pending: None,
+            opening,
             distances,
             anisotropy,
             previews,
@@ -230,8 +481,9 @@ impl PickerStage {
             base,
             sheet: None,
             sheet_uploaded: false,
-            laps: None,
+            laps: Vec::new(),
             seat: None,
+            fit_motion: None,
         }
     }
 
@@ -280,205 +532,125 @@ impl PickerStage {
         self.slideshow.as_ref()?.model.as_ref()
     }
 
-    /// Loads the selected entry's preview, in the selected livery, if it is
-    /// not the one already built.
+    /// Asks for the selected entry's stills and preview mesh, in the selected livery, if they
+    /// are not the ones already built or being read. The disc is read and parsed on a worker
+    /// ([`Self::poll_preview`] lands the result), and the previous entry's picture stays up
+    /// until then.
     pub(crate) fn refresh_preview(&mut self, gpu: &Gpu) {
         let index = self.model.index();
-        let livery = match self.livery_axis {
-            LiveryAxis::Skin => self.model.variant().map(|(id, _)| id.clone()),
-            LiveryAxis::Variant => self.model.variant().map(|(id, _)| id.clone()),
-        };
+        let livery = self.model.variant().map(|(id, _)| id.clone());
         let key = (index, livery);
+        if self.requested.as_ref() == Some(&key) {
+            return;
+        }
+        self.requested = Some(key);
+        self.poll_preview(gpu);
+        // The screen's first picture has no earlier one to stay up: a screen that opens on
+        // nothing where the original shows its stills is a hole, so the opening frame takes the
+        // first read whole. `session::opening_reads` has it landed by then; a read it did not
+        // foresee, or that is still running, is waited for here.
+        if self.built_for.is_none()
+            && let Some(pending) = self.pending.take()
+        {
+            if pending.finished() {
+                debug!("{:?} opens on a read that has landed", self.model.kind());
+            } else {
+                debug!("{:?} opens waiting for its read", self.model.kind());
+            }
+            self.finish(gpu, pending);
+        }
+    }
+
+    fn finish(&mut self, gpu: &Gpu, pending: Pending) {
+        match pending.join() {
+            Some(read) => self.land(gpu, read),
+            None => {
+                warn!("the preview worker panicked - the preview keeps its last picture");
+                self.built_for = self.requested.clone();
+            }
+        }
+    }
+
+    /// Lands a finished read and starts the one for the latest request, if it differs.
+    /// Called every tick and by [`Self::refresh_preview`].
+    pub(crate) fn poll_preview(&mut self, gpu: &Gpu) {
+        if let Some(pending) = &mut self.pending {
+            if !pending.finished() {
+                return;
+            }
+            let Some(pending) = self.pending.take() else {
+                return;
+            };
+            self.finish(gpu, pending);
+        }
+        let Some(key) = self.requested.clone() else {
+            return;
+        };
         if self.built_for.as_ref() == Some(&key) {
             return;
         }
         let entry_changed = self
             .built_for
             .as_ref()
-            .is_none_or(|(built, _)| *built != index);
-        self.built_for = Some(key.clone());
-        if entry_changed {
-            self.load_slideshow(index);
-        }
-        // A title that previews with stills alone has no mesh to fail to
-        // load, so there is nothing here to report as missing.
-        let hull_only = self.model.kind() == picker::Kind::Ship && self.previews.ship_hull.is_some();
-        let circuit_model =
-            oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
-        self.preview = if self.previews.meshes || hull_only || circuit_model {
-            match self.load_preview(gpu, index, key.1.as_deref(), self.livery_axis) {
-                Ok(preview) => Some(preview),
-                Err(error) => {
-                    warn!("{error:#} - the preview draws nothing");
-                    None
-                }
+            .is_none_or(|(built, _)| *built != key.0);
+        let facts = ReadFacts::of(
+            key,
+            &self.model,
+            &self.layout,
+            self.livery_axis,
+            &self.sources,
+            &self.previews,
+            entry_changed,
+        );
+        self.pending = Some(match self.opening.take() {
+            Some(opening)
+                if opening.facts == facts && Arc::ptr_eq(&opening.archives, &self.archives) =>
+            {
+                opening.pending
             }
-        } else {
-            None
-        };
+            _ => Pending::start(ReadJob {
+                base: facts.slideshow.then(|| self.base.clone()),
+                facts,
+                previews: self.previews.clone(),
+                archives: Arc::clone(&self.archives),
+            }),
+        });
     }
 
-    /// Reads the selected entry's stills and puts them on a sheet of this
-    /// screen's own, for the renderer to pick up on its next frame.
-    ///
-    /// **A craft entry as much as a circuit one**: Pure's craft preview is
-    /// its team's own `screen.xml` chain, and Pulse's and HD's craft files
-    /// author no stills, so asking costs an already-open archive read and
-    /// returns an empty list there.
-    fn load_slideshow(&mut self, index: usize) {
-        // HD's track screen authors no hexagonal window: its `Emblem` and
-        // `FlyByMovie` are the widgets that show a circuit.
-        if self.layout.hd_track.is_some() {
-            return;
-        }
-        let (location, zone) = match self.sources.get(index).cloned() {
-            Some(PreviewSource::Track { location, zone, .. }) => (location, zone),
-            Some(PreviewSource::Ship { location, .. }) => (location, false),
-            None => return,
-        };
-        let mut report = Vec::new();
-        let globals: Vec<(&str, &str)> = self
-            .previews
-            .globals
-            .iter()
-            .map(|(key, value)| (key.as_str(), value.as_str()))
-            .collect();
-        let loaded = oag_game::preview::slideshow(
-            &mut self.archives,
-            &location,
-            zone,
-            &globals,
-            &self.previews.strings,
-            &mut report,
-        );
-        for line in report {
-            warn!("{line}");
-        }
-        match loaded {
-            Ok((show, blobs)) => {
-                let mut report = Vec::new();
-                let sheet = self.base.extended(&blobs, &mut report);
-                for line in report {
-                    debug!("slideshow {line}");
-                }
-                debug!(
-                    "slideshow {location}: {} state(s), {} still(s) on a {}x{} sheet",
-                    show.states().len(),
-                    blobs.len(),
-                    sheet.width,
-                    sheet.height
-                );
-                self.slideshow = Some(show);
-                self.sheet = Some(sheet);
+    fn land(&mut self, gpu: &Gpu, read: Read) {
+        let Read { key, show, preview } = read;
+        self.built_for = Some(key);
+        match show {
+            ShowRead::Unchanged => {}
+            ShowRead::Loaded(show, sheet) => {
+                self.slideshow = Some(*show);
+                self.sheet = Some(*sheet);
                 self.sheet_uploaded = false;
             }
-            Err(error) => {
-                warn!("{error:#} - the hexagonal window draws nothing");
-                self.slideshow = None;
-            }
+            ShowRead::Failed => self.slideshow = None,
         }
-    }
-
-    fn load_preview(
-        &mut self,
-        gpu: &Gpu,
-        index: usize,
-        livery: Option<&str>,
-        axis: LiveryAxis,
-    ) -> Result<Preview> {
-        let source = self
-            .sources
-            .get(index)
-            .with_context(|| format!("entry {index} has no preview source"))?
-            .clone();
-        let name = source
-            .entry_name(self.previews.ship_hull, self.previews.front_end)
-            .with_context(|| format!("entry {index} has no circuit model on the disc"))?;
-        let circuit_model =
-            oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
-        // The variant row picks the directory the hull is read from; the
-        // skin row picks a paint over it.
-        let (skin, variant) = match axis {
-            LiveryAxis::Skin => (livery, None),
-            LiveryAxis::Variant => (None, livery.filter(|id| !id.is_empty())),
-        };
-        let variant_name = match (&source, variant) {
-            (PreviewSource::Ship { location, join, .. }, Some(variant))
-                if self.previews.ship_hull.is_some() =>
-            {
-                let located = oag_game::preview::variant::variant_location(*join, location, variant);
-                PreviewSource::Ship {
-                    location: located,
-                    skins: Vec::new(),
-                    join: None,
-                    hull_file: None,
-                    zone_entry: None,
-                    race_hull: None,
+        self.preview = match preview {
+            None => None,
+            Some(Err(error)) => {
+                warn!("{error:#} - the preview draws nothing");
+                None
+            }
+            Some(Ok(data)) => {
+                let target = PreviewTarget {
+                    device: &gpu.device,
+                    queue: &gpu.queue,
+                    format: gpu.output.config.format,
+                    anisotropy: self.anisotropy,
+                };
+                match finish_preview(data, &target, &mut gpu.preview_pipelines.borrow_mut()) {
+                    Ok(preview) => Some(preview),
+                    Err(error) => {
+                        warn!("{error:#} - the preview draws nothing");
+                        None
+                    }
                 }
-                .entry_name(self.previews.ship_hull, self.previews.front_end)
             }
-            _ => None,
         };
-        let mut model = if circuit_model {
-            oag_game::preview::psp2_scene::model(&mut self.archives, &name)
-                .with_context(|| format!("{name} did not resolve as a preview mesh"))?
-        } else {
-            let entry = variant_name.as_deref().unwrap_or(&name);
-            let race_hull = match &source {
-                PreviewSource::Ship { race_hull, .. } => race_hull.as_deref(),
-                PreviewSource::Track { .. } => None,
-            };
-            oag_game::preview::variant::model_or_default(
-                &mut self.archives,
-                entry,
-                Some(&name),
-                race_hull,
-            )
-                .with_context(|| format!("{entry} did not resolve as a preview mesh"))?
-                .0
-        };
-        // The chosen paint over the hull's own texture slots - the same
-        // swap a race makes (`oag_livery::ship_skin`), and the same
-        // rule when it fails: the hull keeps its own paint, and the log
-        // says so.
-        if let (PreviewSource::Ship { skins, .. }, Some(skin)) =
-            (&source, skin.filter(|s| !s.is_empty()))
-            && let Some((_, entry)) = skins.iter().find(|(id, _)| id == skin)
-        {
-            for line in oag_game::preview::paint(&mut self.archives, entry, &name, &mut model) {
-                debug!("preview {name}: {line}");
-            }
-        }
-        if self.previews.ship_hull.is_some() && matches!(source, PreviewSource::Ship { .. }) {
-            oag_game::preview::frame_hull(&mut model);
-        }
-        // The circuit model's own material: the ramp comes out of the model
-        // and the preview recolours its vertices every frame.
-        let ramp = if circuit_model {
-            Some(
-                oag_game::preview::track_model::Ramp::of(&mut self.archives, &name, &mut model)
-                    .with_context(|| format!("{name}: reading its material"))?,
-            )
-        } else {
-            None
-        };
-        debug!(
-            "preview {name}: {} vertices, {} triangles",
-            model.vertices.len(),
-            model.indices.len() / 3
-        );
-        let preview = Preview::new(
-            &gpu.device,
-            &gpu.queue,
-            gpu.output.config.format,
-            self.anisotropy,
-            model,
-        )
-        .with_context(|| format!("building the preview for {name}"))?;
-        Ok(match ramp {
-            Some(ramp) => preview.with_ramp(ramp),
-            None => preview,
-        })
     }
 
     /// Copies whatever the distance worker has measured so far onto the
@@ -501,7 +673,7 @@ impl PickerStage {
         drop(measured);
         for (index, length) in known {
             if self.layout.hd_track.is_some() {
-                let [track, race] = picker::hd::track::length_rows(length, self.laps);
+                let [track, race] = picker::hd::track::length_rows(length, self.laps.get(index).copied().flatten());
                 self.model.set_track_info(index, 0, track);
                 self.model.set_track_info(index, 1, race);
             } else {
@@ -519,7 +691,7 @@ impl PickerStage {
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
-        space: oag_display::space::Space,
+        (space, safe_area): (oag_display::space::Space, f32),
     ) {
         let (orbit, seconds, rect) = (self.orbit(), self.model.seconds(), self.layout.preview);
         let hull_swap = self.previews.ship_hull.is_some()
@@ -539,7 +711,25 @@ impl PickerStage {
             .as_ref()
             .and_then(|screen| screen.ship_model)
             .filter(|_| self.previews.ship_hull.is_some() && self.model.kind() == picker::Kind::Ship);
-        let swap_scale = self.hull_phase().scale;
+        // The screen's own fit of the craft's depth, where the title has one and the
+        // selected model's box is known.
+        let frames_craft = self
+            .previews
+            .front_end
+            .is_some_and(|front_end| front_end.ship_preview_fit.is_some());
+        let (ship_fit, scale) = match self.ship_fit().zip(self.fit_motion) {
+            Some(((fit, box_z), player)) => {
+                let (framing, scale) = oag_game::preview::ship_model::placement(
+                    frames_craft,
+                    fit,
+                    space.display_aspect,
+                    box_z,
+                    player.framing(),
+                );
+                (framing.map(|framing| (*fit, framing)), scale)
+            }
+            None => (None, 1.0),
+        };
         let Some(preview) = self.preview.as_mut() else {
             return;
         };
@@ -557,7 +747,13 @@ impl PickerStage {
             );
         } else if let Some(widget) = ship_model {
             let (view_projection, model) =
-                oag_game::preview::ship_model::matrices(&widget, space, swap_scale);
+                oag_game::preview::ship_model::framed(
+                    &widget,
+                    ship_fit.as_ref().map(|(fit, framing)| (fit, *framing)),
+                    space,
+                    scale,
+                    safe_area,
+                );
             preview.draw_matrices(
                 &gpu.device,
                 &gpu.queue,
@@ -587,6 +783,40 @@ impl PickerStage {
         }
     }
 
+    /// The title's depth fit and the box of the selected model, where the title
+    /// has a fit and the box is known.
+    fn ship_fit(&self) -> Option<(&oag_title::ShipFit, [f32; 2])> {
+        if self.model.kind() != picker::Kind::Ship {
+            return None;
+        }
+        let front_end = self.previews.front_end?;
+        let fit = front_end
+            .ship_preview_fit
+            .as_ref()
+            .or(front_end.ship_preview_settle.as_ref())?;
+        let zone_hull = matches!(
+            self.sources.get(self.model.index()),
+            Some(PreviewSource::Ship {
+                zone_entry: Some(_),
+                ..
+            })
+        );
+        let length = picker::hd::selected_length(&self.model);
+        oag_game::preview::ship_model::box_z(fit, zone_hull, length).map(|box_z| (fit, box_z))
+    }
+
+    /// Advances the depth fit by the fixed ticks `dt` seconds make, one frame of
+    /// the original's update each. Runs while the craft is hidden and on every
+    /// step, as the original's does. `aspect` is the screen's own.
+    pub(crate) fn tick_fit(&mut self, aspect: f32, dt: f32) {
+        let Some((fit, box_z)) = self.ship_fit().map(|(fit, box_z)| (*fit, box_z)) else {
+            return;
+        };
+        self.fit_motion
+            .get_or_insert_with(|| oag_game::preview::ship_model::FitPlayer::open(&fit))
+            .tick(&fit, aspect, box_z, dt);
+    }
+
     /// The craft's swap state this tick on a title that draws the race hull -
     /// see [`oag_game::preview::hull_swap`].
     fn hull_phase(&self) -> oag_game::preview::hull_swap::Phase {
@@ -596,17 +826,221 @@ impl PickerStage {
     /// How the preview is framed this tick - see [`oag_game::preview::orbit_for`].
     pub(crate) fn orbit(&self) -> Orbit {
         if self.previews.ship_hull.is_some() && self.model.kind() == picker::Kind::Ship {
-            let mut orbit = oag_game::preview::hull_orbit();
-            orbit.zoom /= self.hull_phase().scale;
-            return orbit;
+            return oag_game::preview::hull_orbit();
         }
         oag_game::preview::orbit_for(self.model.kind(), self.model.seconds())
     }
 }
 
+
+/// Where [`build_preview`] builds: the device, the target the pass draws into, and the
+/// sampling the menus use.
+pub(crate) struct PreviewTarget<'a> {
+    pub(crate) device: &'a wgpu::Device,
+    pub(crate) queue: &'a wgpu::Queue,
+    pub(crate) format: wgpu::TextureFormat,
+    pub(crate) anisotropy: Anisotropy,
+}
+
+/// Reads `source`'s preview mesh in `livery` and builds it, with `pipelines` kept for the next.
+///
+/// The picker calls it on the frame thread for each selection; the menus' prefetch
+/// (`session::menu_source`) calls it on a worker for the entries a picker opens on, so the
+/// first one compiles nothing on the frame thread.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the screen's facts (archives, rules, kind), the entry's (source, livery, axis), \
+              and where it is built"
+)]
+pub(crate) fn build_preview(
+    archives: &mut oag_assets::Archives,
+    previews: &Previews,
+    kind: picker::Kind,
+    source: &PreviewSource,
+    livery: Option<&str>,
+    axis: LiveryAxis,
+    target: &PreviewTarget<'_>,
+    pipelines: &mut oag_mesh::mesh_render::KeptBuildCache,
+) -> Result<Preview> {
+    let data = read_preview(archives, previews, kind, source, livery, axis)?;
+    finish_preview(data, target, pipelines)
+}
+
+/// The livery folders a ship source paints its hull from: the selected variant's where it names
+/// one, else a Zone race's (whose fixed row holds no variant id).
+fn livery_of<'a>(
+    source: &'a PreviewSource,
+    variant: Option<&str>,
+) -> Option<oag_livery::LiveryFolder<'a>> {
+    let PreviewSource::Ship {
+        liveries,
+        zone_livery,
+        ..
+    } = source
+    else {
+        return None;
+    };
+    variant
+        .and_then(|variant| liveries.iter().find(|(id, _)| id == variant))
+        .map(|(_, folders)| folders)
+        .or(zone_livery.as_ref())
+        .map(oag_game::preview::variant::Folders::folder)
+}
+
+/// A preview mesh read and parsed off the disc, not yet on the GPU: everything
+/// [`build_preview`] does that is not the upload, so it can run on a worker.
+pub(crate) struct PreviewData {
+    name: String,
+    model: oag_mesh::mesh::Model,
+    ramp: Option<oag_game::preview::track_model::Ramp>,
+    /// The front end's light for a craft, see [`oag_game::preview::model_light`].
+    light: Option<oag_mesh::mesh_render::Light>,
+}
+
+/// The disc half of [`build_preview`].
+pub(crate) fn read_preview(
+    archives: &mut oag_assets::Archives,
+    previews: &Previews,
+    kind: picker::Kind,
+    source: &PreviewSource,
+    livery: Option<&str>,
+    axis: LiveryAxis,
+) -> Result<PreviewData> {
+    let source = source.clone();
+    let name = source
+        .entry_name(previews.ship_hull, previews.front_end)
+        .context("no circuit model on the disc")?;
+    let circuit_model =
+        oag_game::preview::draws_circuit_model(previews.front_end, kind);
+    // The variant row picks the directory the hull is read from; the
+    // skin row picks a paint over it.
+    let (skin, variant) = match axis {
+        LiveryAxis::Skin => (livery, None),
+        LiveryAxis::Variant => (None, livery.filter(|id| !id.is_empty())),
+    };
+    let variant_name = match (&source, variant) {
+        (PreviewSource::Ship { location, join, .. }, Some(variant))
+            if previews.ship_hull.is_some() =>
+        {
+            let located = oag_game::preview::variant::variant_location(*join, location, variant);
+            PreviewSource::Ship {
+                location: located,
+                skins: Vec::new(),
+                join: None,
+                hull_file: None,
+                zone_entry: None,
+                race_hull: None,
+                liveries: Vec::new(),
+                zone_livery: None,
+            }
+            .entry_name(previews.ship_hull, previews.front_end)
+        }
+        _ => None,
+    };
+    let mut model = if circuit_model {
+        oag_game::preview::psp2_scene::model(archives, &name)
+            .with_context(|| format!("{name} did not resolve as a preview mesh"))?
+    } else {
+        let entry = variant_name.as_deref().unwrap_or(&name);
+        let race_hull = match &source {
+            PreviewSource::Ship { race_hull, .. } => race_hull.as_deref(),
+            PreviewSource::Track { .. } => None,
+        };
+        let livery = livery_of(&source, variant);
+        oag_game::preview::variant::model_or_default(
+            archives,
+            entry,
+            Some(&name),
+            race_hull,
+            livery,
+        )
+            .with_context(|| format!("{entry} did not resolve as a preview mesh"))?
+            .0
+    };
+    // The chosen paint over the hull's own texture slots - the same
+    // swap a race makes (`oag_livery::ship_skin`), and the same
+    // rule when it fails: the hull keeps its own paint, and the log
+    // says so.
+    if let (PreviewSource::Ship { skins, .. }, Some(skin)) =
+        (&source, skin.filter(|s| !s.is_empty()))
+        && let Some((_, entry)) = skins.iter().find(|(id, _)| id == skin)
+    {
+        for line in oag_game::preview::paint(archives, entry, &name, &mut model) {
+            debug!("preview {name}: {line}");
+        }
+    }
+    if previews.ship_hull.is_some() && matches!(source, PreviewSource::Ship { .. }) {
+        oag_game::preview::frame_hull(&mut model);
+    }
+    // The circuit model's own material: the ramp comes out of the model
+    // and the preview recolours its vertices every frame.
+    let ramp = if circuit_model {
+        Some(
+            oag_game::preview::track_model::Ramp::of(archives, &name, &mut model)
+                .with_context(|| format!("{name}: reading its material"))?,
+        )
+    } else {
+        None
+    };
+    debug!(
+        "preview {name}: {} vertices, {} triangles",
+        model.vertices.len(),
+        model.indices.len() / 3
+    );
+    let light = match (previews.title, previews.ship_hull, &source) {
+        (Some(title), Some(_), PreviewSource::Ship { .. }) => {
+            let mut report = Vec::new();
+            let light = oag_game::preview::model_light(archives, title, previews.fury, &mut report);
+            for line in report {
+                debug!("preview {name}: {line}");
+            }
+            light
+        }
+        _ => None,
+    };
+    Ok(PreviewData {
+        name,
+        model,
+        ramp,
+        light,
+    })
+}
+
+/// The GPU half of [`build_preview`], on the thread that owns `pipelines`.
+pub(crate) fn finish_preview(
+    data: PreviewData,
+    target: &PreviewTarget<'_>,
+    pipelines: &mut oag_mesh::mesh_render::KeptBuildCache,
+) -> Result<Preview> {
+    let PreviewData {
+        name,
+        model,
+        ramp,
+        light,
+    } = data;
+    let preview = pipelines.build(|| {
+        Preview::new(
+            target.device,
+            target.queue,
+            target.format,
+            target.anisotropy,
+            model,
+        )
+    })
+    .with_context(|| format!("building the preview for {name}"))?;
+    let preview = match light {
+        Some(light) => preview.lit_by(target.queue, light),
+        None => preview,
+    };
+    Ok(match ramp {
+        Some(ramp) => preview.with_ramp(ramp),
+        None => preview,
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::PreviewSource;
+    use super::{PreviewSource, livery_of};
 
     /// Pulse's name, and no fallthrough to Pure's - Pure's `Team Selection`
     /// draws a `FEData.wad` sprite, not this hull. See [`PreviewSource::entry_name`].
@@ -619,6 +1053,8 @@ mod tests {
             hull_file: None,
             zone_entry: None,
             race_hull: None,
+            liveries: Vec::new(),
+            zone_livery: None,
         };
         assert_eq!(source.entry_name(None, None).as_deref(),
             Some(r"Data\Ships\Feisar\ship_FE.vex"));
@@ -635,6 +1071,8 @@ mod tests {
             hull_file: zone,
             zone_entry: None,
             race_hull: None,
+            liveries: Vec::new(),
+            zone_livery: None,
         };
         assert_eq!(
             source.entry_name(None, None).as_deref(),
@@ -651,6 +1089,34 @@ mod tests {
         );
     }
 
+    /// A Zone race's hull reads through the team's Zone livery, though its row holds no variant
+    /// id; a variant's own livery wins where the row names one.
+    #[test]
+    fn a_zone_source_paints_the_hull_when_the_row_names_no_variant() {
+        use oag_game::preview::variant::Folders;
+        let folders = |own: &str, worn: &str, fall_back| Folders {
+            own: own.into(),
+            worn: worn.into(),
+            fall_back,
+        };
+        let source = PreviewSource::Ship {
+            location: r"Data\Ships\Qirex".to_string(),
+            skins: Vec::new(),
+            join: None,
+            hull_file: None,
+            zone_entry: None,
+            race_hull: None,
+            liveries: vec![("@livery2".into(), folders("livery1", "livery2", false))],
+            zone_livery: Some(folders("zoneship_zone", "zoneship_quirex", true)),
+        };
+        for variant in [None, Some("")] {
+            let folder = livery_of(&source, variant).expect("the Zone livery");
+            assert_eq!((folder.worn, folder.fall_back), ("zoneship_quirex", true));
+        }
+        let folder = livery_of(&source, Some("@livery2")).expect("the variant's own");
+        assert_eq!((folder.worn, folder.fall_back), ("livery2", false));
+    }
+
     /// HD names its race hull, not a `ship_FE.vex` that no HD archive carries.
     #[test]
     fn ship_names_the_titles_hull_file() {
@@ -661,6 +1127,8 @@ mod tests {
             hull_file: None,
             zone_entry: None,
             race_hull: None,
+            liveries: Vec::new(),
+            zone_livery: None,
         };
         assert_eq!(
             source.entry_name(Some("ship.vex"), None).as_deref(),
@@ -685,6 +1153,8 @@ mod tests {
                 hull_file: None,
                 zone_entry: Some(zone.clone()),
                 race_hull: None,
+                liveries: Vec::new(),
+                zone_livery: None,
             };
             assert_eq!(
                 source.entry_name(Some("ship.vex"), None).as_deref(),

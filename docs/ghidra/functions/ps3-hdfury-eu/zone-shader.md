@@ -69,7 +69,7 @@ test, the rim exponents - is unaffected and was read in both forms.
 
 ```text
 zoneUV    = zoneColourTint.xy * (1 - meshUV)
-rim       = 1 - dot(N, -V)
+rim       = 1 - |dot(N, -V)|
 band      = zoneTex<I|O>Nearest(zoneUV).a
 zoneCol   = zoneTex<I|O>(zoneUV).rgb * E.rgb
             + 2 * zoneAnisoPalette<|Outer>[ pow(rim, zoneAnisoPower.<x|y>) ]
@@ -78,7 +78,7 @@ blackMask = saturate((albedo.r + albedo.g + albedo.b) * 100000)   ; 1 unless bla
 surface   = albedo + zoneCol * (1 - blackMask)
 glow      = max( saturate(N.y - 0.5) * (1 - windowDepth) * E.w
                  * zoneTexVis[band].rgb , 0 )
-            + 5.0 * saturate(1 - 0.1 * (distance - zoneColourTint.w))
+            + 5.0 * saturate(1 - 0.1 * |distance - zoneColourTint.w|)
 light     = vpConstant + constantAmbientColour
             + saturate(dot(N, dirLight0Dir)) * dirLight0Colour
 colour    = light * surface + glow
@@ -159,7 +159,7 @@ twice with *opposite* compiler polarity in the two materials - the same rule
 both times, which is the check that separates a real read from a sign slip.
 
 `zoneAnisoPower` is a **float2**: `.x` and `.y` are the inner and outer
-exponents of `pow(1 - dot(N,-V), p)`, which indexes `zoneAnisoPalette` and
+exponents of `pow(1 - |dot(N,-V)|, p)`, which indexes `zoneAnisoPalette` and
 `zoneAnisoPaletteOuter` respectively. Confidence 82.
 
 **A second, independent confirmation that `zoneColourTint.w` is the radius -
@@ -185,6 +185,51 @@ tables* and so shares no step with the `vsel` lane-3 result in
 [zone-effectsettings-loader.md](zone-effectsettings-loader.md)'s twenty-fourth
 pass, which reached the same conclusion from the per-frame blend in the
 executable.
+
+### The wavefront ring
+
+2026-11-15, re-read from `02_track/materials/diffuse.rcsmaterial` block 11
+(DATA02) with the decoder's source-`abs` printing. The glow's second term is
+**a band ten units either side of the sphere's surface**, not a fill of its
+interior:
+
+```text
+@0x0b  MOV R2.w, f[TC2]                                   ; distance to zoneOrigin
+@0x0e  SLT R63.w, R2, zoneColourTint.w        [writes cc] ; the inside test
+@0x26  ADD R2.w, R2, -zoneColourTint.w                    ; distance - radius
+@0x28  MAD_SAT R2.w, |-R2|, {0.1}.x, {1}.x                ; saturate(1 - 0.1 * |d - r|)
+@0x40  MAD H4.xyz, R2.wwww, {5}.x, R2                     ; glow = 5 * ring + visualiser
+@0x4b  MAD H1.xyz, H2, H3, H4                             ; colour = light * surface + glow
+```
+
+`@0x28`'s source carries both the negate and the `abs` bit. RPCS3's
+`FragmentProgramDecompiler::GetSRC` applies `abs` and then the negate, so the
+operand is `-|d - r|`; `ps3-microcode.py` prints it as `|-R2|`, which read
+literally would be `saturate(1 + 0.1 |x|) = 1` everywhere. The first reading of
+this page predates the tool printing `abs` at all (it was added for
+`hd_rockettrail`), so it came out as `saturate(1 - 0.1 (d - r))`, which fills
+the whole sphere with `5.0` and contradicted the RPCS3 frame at radius `799`.
+With the `abs` the term is a white edge that rides the wavefront outward: the
+"white terminator" a stage change shows. It is added before the fog lerp, so a
+far ring fogs like the surface under it.
+
+Confidence **80**: three instructions, one register, both constants inline.
+No original frame shows the band yet: the RPCS3 `burst-1` frame (radius
+`799`) has no visible white edge, its boundary being past most of the visible
+road. What supports it is the maintainer's report of a white terminator on a
+stage change and this engine's headless sweep.
+
+### The rim is two-sided
+
+`@0x12` is `ADD R3.w, |-R0|, 1` on the `DP3` of `N` against `-V`, so by the
+same abs-then-negate rule the rim is `1 - |dot(N, -V)|`. Every Zone block of
+`01_vineta_k/materials/cf_constantcolourglow.rcsmaterial` (the arena shape,
+blocks 7-19) computes its rim the same way (block 9: `@0x04 DP3 R0.w, R0,
+-R1`, `@0x05 ADD R0.w, |-R0|, 1`). A face turned away from the eye rims as
+one turned towards it. Confidence 82. Ported in `shade.wesl` (`zone_rim`);
+headless it changes 133 pixels of a Talon's Junction frame and 21 of a
+`zone_1` one (ImageMagick AE at 2 % fuzz), so few Zone faces turn away.
+Ported in `crates/mesh/shaders/zone.wesl` (`zone_glow`).
 
 ## Two findings that change what the artists were doing
 

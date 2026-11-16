@@ -203,4 +203,28 @@ mod tests {
         assert_eq!(slack(&tight, 0), 0.0);
         assert_eq!(slack(&tight, 151), slack(&open, 151));
     }
+
+    /// A driver over its target misses the braking point every time at rate one, except
+    /// within `TIGHT_REACH` of a sample the plan passed a wall closely.
+    #[test]
+    fn a_driver_never_misses_a_braking_point_into_a_tight_sample() {
+        let line = straight(400);
+        let tuning = Tuning {
+            mistake_rate: 1.0,
+            ..Tuning::default()
+        };
+        let open = SpeedPlan::unlimited(&line);
+        let tight = SpeedPlan::unlimited(&line).with_tight(150);
+        let mistake = |plan: &SpeedPlan, index: usize| {
+            let mut driver = super::super::Driver {
+                seed: 1,
+                ..Default::default()
+            };
+            driver.blunder(&tuning, 100.0, 50.0, Some(plan), index);
+            driver.mistake
+        };
+        assert_eq!(mistake(&open, 0), super::super::MISTAKE_TICKS);
+        assert_eq!(mistake(&tight, 0), 0);
+        assert_eq!(mistake(&tight, 151), super::super::MISTAKE_TICKS);
+    }
 }

@@ -10,6 +10,7 @@
 
 use oag_gameplay::PlayerInputs;
 
+use crate::event::Event;
 use crate::file::Replay;
 
 /// Where a replay stopped reproducing.
@@ -56,6 +57,13 @@ impl<'a> Verifier<'a> {
         (self.tick < self.replay.ticks()).then(|| self.replay.inputs_at(self.tick))
     }
 
+    /// The changes to apply before the next tick runs, the ones recorded between the previous
+    /// tick and it.
+    #[must_use]
+    pub fn events_due(&self) -> &'a [Event] {
+        self.replay.events_at(self.tick)
+    }
+
     /// Whether the tick about to be reported has a stored hash to check.
     #[must_use]
     pub fn hash_due(&self) -> bool {
@@ -99,8 +107,8 @@ impl<'a> Verifier<'a> {
         self.tick
     }
 
-    /// Plays the whole recording through `step`, which runs one tick with the
-    /// inputs it is handed and returns the race's state hash after it.
+    /// Plays the whole recording through `step`, which applies the events due before a tick,
+    /// runs the tick with the inputs it is handed and returns the race's state hash after it.
     ///
     /// The convenience form, for a caller that can afford a hash every tick;
     /// [`Self::next_inputs`] and [`Self::after_tick`] are the incremental one.
@@ -111,11 +119,11 @@ impl<'a> Verifier<'a> {
     pub fn run(
         replay: &Replay,
         initial_hash: u64,
-        mut step: impl FnMut(&PlayerInputs) -> u64,
+        mut step: impl FnMut(&[Event], &PlayerInputs) -> u64,
     ) -> Result<u64, Desync> {
         let mut verifier = Verifier::new(replay, initial_hash)?;
         while let Some(inputs) = verifier.next_inputs() {
-            let hash = step(&inputs);
+            let hash = step(verifier.events_due(), &inputs);
             verifier.after_tick(|| hash)?;
         }
         Ok(verifier.tick())

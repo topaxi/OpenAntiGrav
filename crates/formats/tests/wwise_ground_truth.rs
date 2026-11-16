@@ -16,8 +16,9 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use oag_formats::wwise::hirc::{Action, Codec, Event, MusicTrack, Sound, StreamType};
-use oag_formats::wwise::{BANK_VERSION, Bank, Kind, Library};
+use oag_formats::wwise::container::{ContainerError, RanSeq, Switch};
+use oag_formats::wwise::hirc::{self, Action, Codec, Event, MusicTrack, Sound, StreamType};
+use oag_formats::wwise::{BANK_VERSION, Bank, Kind, Library, name_hash};
 
 fn archive_path(dir: &str, name: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -84,9 +85,105 @@ struct Census {
     /// Events that resolve to at least one media, and to none.
     events_resolving: usize,
     events_empty: usize,
+    containers: Containers,
 }
 
-fn census(name_of_archive: (&str, &str), banks_expected: usize) -> Option<Census> {
+/// What the sound containers (random/sequence, switch) read as.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Containers {
+    ranseq: usize,
+    ranseq_random: usize,
+    ranseq_sequence: usize,
+    /// Random containers that weight their picks / forbid a repeat.
+    ranseq_weighted: usize,
+    ranseq_avoid_repeat: usize,
+    ranseq_playlist_items: usize,
+    switch: usize,
+    switch_state_group: usize,
+    switch_cases: usize,
+    /// Child ids the cases list; of them, direct children of the switch / objects
+    /// of the library.
+    switch_case_children: usize,
+    switch_case_direct: usize,
+    switch_case_resolving: usize,
+    /// Refused by name (`ContainerError::BaseParams`): a 3D block that opens a path.
+    ranseq_refused: usize,
+    switch_refused: usize,
+    /// Any other refusal; asserted zero.
+    refused_other: usize,
+    /// Child ids over both kinds, how many resolve to an object of the
+    /// library, and how many of those name the container as their parent.
+    children: usize,
+    children_resolving: usize,
+    children_parented: usize,
+}
+
+fn tally_container(
+    t: &mut Containers,
+    library: &Library<'_>,
+    bank: &Bank<'_>,
+    object: &oag_formats::wwise::Object,
+) {
+    let body = bank.body(object);
+    let (children, refused) = match object.kind {
+        Kind::RanSeqContainer => match RanSeq::parse(object.kind, body) {
+            Ok(r) => {
+                t.ranseq += 1;
+                if r.is_sequence() {
+                    t.ranseq_sequence += 1;
+                } else {
+                    t.ranseq_random += 1;
+                }
+                t.ranseq_weighted += usize::from(r.uses_weights());
+                t.ranseq_avoid_repeat += usize::from(r.avoid_repeat > 0);
+                t.ranseq_playlist_items += r.playlist.len();
+                (r.children, None)
+            }
+            Err(e) => (Vec::new(), Some(e)),
+        },
+        Kind::SwitchContainer => match Switch::parse(object.kind, body) {
+            Ok(s) => {
+                t.switch += 1;
+                t.switch_state_group += usize::from(s.group_type == 1);
+                t.switch_cases += s.cases.len();
+                for id in s.cases.iter().flat_map(|c| &c.children) {
+                    t.switch_case_children += 1;
+                    t.switch_case_direct += usize::from(s.children.contains(id));
+                    t.switch_case_resolving += usize::from(library_has(library, *id));
+                }
+                (s.children, None)
+            }
+            Err(e) => (Vec::new(), Some(e)),
+        },
+        _ => return,
+    };
+    match refused {
+        Some(ContainerError::BaseParams { .. }) if object.kind == Kind::RanSeqContainer => {
+            t.ranseq_refused += 1;
+        }
+        Some(ContainerError::BaseParams { .. }) => t.switch_refused += 1,
+        Some(_) => t.refused_other += 1,
+        None => {}
+    }
+    for child in children {
+        t.children += 1;
+        let resolved = library.banks().iter().find_map(|b| {
+            b.objects_with_id(child)
+                .next()
+                .map(|o| hirc::parent(o.kind, b.body(o)))
+        });
+        if let Some(parent) = resolved {
+            t.children_resolving += 1;
+            t.children_parented += usize::from(parent == Some(object.id));
+        }
+    }
+}
+
+fn census(
+    name_of_archive: (&str, &str),
+    banks_expected: usize,
+    check: fn(&[String], &Library<'_>),
+) -> Option<Census> {
     let path = archive_path(name_of_archive.0, name_of_archive.1)?;
     let mut archive = oag_assets::psarc::Archive::open_file(&path).expect("the archive opens");
     let bank_paths: Vec<String> = archive
@@ -171,6 +268,7 @@ fn census(name_of_archive: (&str, &str), banks_expected: usize) -> Option<Census
         let own_id = bank.header().id;
         for object in bank.objects() {
             let body = bank.body(object);
+            tally_container(&mut c.containers, &library, bank, object);
             match object.kind {
                 Kind::Event => {
                     let event = Event::parse(body)
@@ -272,7 +370,164 @@ fn census(name_of_archive: (&str, &str), banks_expected: usize) -> Option<Census
     }
     let named_ids: BTreeSet<(bool, u32)> = named.clone();
     c.loose_orphans = loose.iter().filter(|k| !named_ids.contains(k)).count();
+    check(&bank_paths, &library);
+    println!("{}: {:?}", name_of_archive.1, c.containers);
     Some(c)
+}
+
+/// The executable posts `<event>[_PC]__<bank>`, hashed whole
+/// (`docs/ghidra/functions/ps4-omega-eu/wwise-sound.md`, "The event name"):
+/// the bare `_321_NGP` is no event, the suffixed one is, in the bank the
+/// sound manager loads into the `Weapons_NGP` slot. The `_PC` twin is one
+/// action that plays the other event, so the player and NPC variants reach the
+/// same media. The countdown's media ids are the "In Memory Audio" rows of the
+/// bank's own `Weapons_NGP.txt` listing; the missile's legacy event relays to
+/// the newer `WPN_MISSILE_Fire`.
+fn posted_events_resolve(paths: &[String], library: &Library<'_>) {
+    let weapons = paths
+        .iter()
+        .position(|p| p.eq_ignore_ascii_case("data/audio/sound/english(us)/weapons_ngp.bnk"))
+        .expect("English(US)/Weapons_NGP.bnk ships");
+    let bank = &library.banks()[weapons];
+    for (event, listed_media) in [
+        ("_321_NGP", Some(47_216_879u32)),
+        ("Go_NGP", Some(605_868_029)),
+        ("NGP_MissileFire", None),
+    ] {
+        assert!(
+            library.play_targets(name_hash(event)).is_none(),
+            "{event} is an event by its bare name"
+        );
+        let npc = name_hash(&format!("{event}__Weapons_NGP"));
+        let defined_in: Vec<usize> = library
+            .banks()
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.objects_with_id(npc).any(|o| o.kind == Kind::Event))
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(defined_in, [weapons], "{event}__Weapons_NGP's bank");
+        let media = reached_media(library, npc);
+        assert!(!media.is_empty(), "{event} reaches media");
+        if let Some(id) = listed_media {
+            assert!(media.contains(&id), "{event}: media {id} in {media:?}");
+        }
+
+        let player = name_hash(&format!("{event}_PC__Weapons_NGP"));
+        let relays = relays_of(bank, player);
+        assert_eq!(relays.len(), 1, "{event}_PC is one relay");
+        assert_eq!(reached_media(library, player), media, "{event}_PC");
+    }
+    assert_eq!(
+        relays_of(bank, name_hash("NGP_MissileFire__Weapons_NGP")),
+        [name_hash("WPN_MISSILE_Fire")]
+    );
+
+    // The relay's target plays one layer container of five layers: four
+    // random containers (a child each per post, every child a sound; 275399150
+    // has one item, the other three six) and one sound.
+    let fire = name_hash("WPN_MISSILE_Fire");
+    let targets = library.play_targets(fire).expect("the relayed event");
+    assert_eq!(targets, [117_129_590]);
+    let layers = &library.banks()[weapons];
+    let layer = layers.object(targets[0]).expect("the layer container");
+    assert_eq!(layer.kind, Kind::LayerContainer);
+    let mut shape = (0, 0, 0);
+    for object in layers.objects() {
+        if hirc::parent(object.kind, layers.body(object)) != Some(targets[0]) {
+            continue;
+        }
+        match object.kind {
+            Kind::RanSeqContainer => {
+                shape.0 += 1;
+                let r =
+                    RanSeq::parse(object.kind, layers.body(object)).expect("a random container");
+                assert!(
+                    !r.is_sequence() && !r.playlist.is_empty(),
+                    "{:?}",
+                    r.playlist
+                );
+                for item in &r.playlist {
+                    let child = layers.object(item.id).expect("a child of the bank");
+                    assert_eq!(child.kind, Kind::Sound, "container {}'s child", object.id);
+                }
+                shape.2 += r.playlist.len();
+            }
+            Kind::Sound => shape.1 += 1,
+            other => panic!("a {other:?} under the missile's layers"),
+        }
+    }
+    assert_eq!(
+        shape,
+        (4, 1, 19),
+        "(random containers, sounds, their children)"
+    );
+
+    // The node property bundle `oag_sound`'s event timeline reads: present on
+    // every node, a volume in dB and an initial delay in seconds when set.
+    use oag_formats::wwise::hirc::{node_props, prop};
+    for bank in library.banks() {
+        for object in bank.objects().iter().filter(|o| o.kind.has_parent()) {
+            // A generator source (silence, tone) carries its plugin's
+            // parameters after the source, which the fitted head does not skip.
+            if object.kind == Kind::Sound
+                && Sound::parse(bank.body(object)).is_some_and(|s| s.source.plugin.class() != 1)
+            {
+                continue;
+            }
+            let props = node_props(object.kind, bank.body(object))
+                .unwrap_or_else(|| panic!("node {}'s property bundle", object.id));
+            if let Some(db) = props.float(prop::VOLUME) {
+                assert!(
+                    (-96.0..=24.0).contains(&db),
+                    "node {}: volume {db}",
+                    object.id
+                );
+            }
+            if let Some(s) = props.float(prop::INITIAL_DELAY) {
+                assert!((0.0..=60.0).contains(&s), "node {}: delay {s}", object.id);
+            }
+        }
+    }
+}
+
+/// Kind `0x2103`: an action whose target is another event, played in turn.
+const PLAY_EVENT: u16 = 0x2103;
+
+fn relays_of(bank: &Bank<'_>, event: u32) -> Vec<u32> {
+    let object = bank
+        .objects_with_id(event)
+        .find(|o| o.kind == Kind::Event)
+        .unwrap_or_else(|| panic!("event {event} in the bank"));
+    Event::parse(bank.body(object))
+        .expect("an event")
+        .actions
+        .into_iter()
+        .filter_map(|id| Action::parse(bank.body(bank.object(id)?)))
+        .filter(|a| a.kind == PLAY_EVENT)
+        .map(|a| a.target)
+        .collect()
+}
+
+/// The media an event's `Play` actions reach, following its relays.
+fn reached_media(library: &Library<'_>, event: u32) -> BTreeSet<u32> {
+    let mut media = BTreeSet::new();
+    let mut queue = vec![event];
+    let mut seen = BTreeSet::new();
+    while let Some(id) = queue.pop() {
+        if !seen.insert(id) {
+            continue;
+        }
+        let plan = library.resolve_event(id).expect("a relay names an event");
+        assert!(plan.unresolved.is_empty(), "event {id}: {plan:?}");
+        media.extend(plan.media.iter().map(|m| m.source.media_id));
+        for bank in library.banks() {
+            if bank.objects_with_id(id).any(|o| o.kind == Kind::Event) {
+                queue.extend(relays_of(bank, id));
+            }
+        }
+    }
+    media
 }
 
 fn library_has(library: &Library<'_>, id: u32) -> bool {
@@ -298,7 +553,7 @@ fn tally_parent(
 #[test]
 #[ignore = "needs data/extracted/ps4/omega-eu"]
 fn base_data00_banks() {
-    let Some(c) = census(("omega-eu", "data00.psarc"), 53) else {
+    let Some(c) = census(("omega-eu", "data00.psarc"), 53, posted_events_resolve) else {
         return;
     };
     assert_eq!(
@@ -331,7 +586,27 @@ fn base_data00_banks() {
             embedded_elsewhere: 140,
             embedded_nowhere: 0,
             events_resolving: 1337,
-            events_empty: 2369
+            events_empty: 2369,
+            containers: Containers {
+                ranseq: 462,
+                ranseq_random: 453,
+                ranseq_sequence: 9,
+                ranseq_weighted: 0,
+                ranseq_avoid_repeat: 458,
+                ranseq_playlist_items: 2116,
+                switch: 525,
+                switch_state_group: 340,
+                switch_cases: 4097,
+                switch_case_children: 4393,
+                switch_case_direct: 3771,
+                switch_case_resolving: 4391,
+                ranseq_refused: 1,
+                switch_refused: 0,
+                refused_other: 0,
+                children: 5460,
+                children_resolving: 5460,
+                children_parented: 5455,
+            },
         }
     );
 }
@@ -366,7 +641,7 @@ fn data02_banks_are_the_old_container_and_wwise_refuses_them() {
         );
         let order = oag_formats::sblk::byte_order_of(&blob)
             .unwrap_or_else(|| panic!("{path}: an SBlk container in one of its two byte orders"));
-        orders[usize::from(order == oag_formats::ByteOrder::Big)] += 1;
+        orders[usize::from(order == oag_bytes::ByteOrder::Big)] += 1;
         oag_formats::sblk::Bank::parse_as(&blob, order)
             .unwrap_or_else(|e| panic!("{path}: the existing reader reads it: {e}"));
     }
@@ -376,7 +651,7 @@ fn data02_banks_are_the_old_container_and_wwise_refuses_them() {
 #[test]
 #[ignore = "needs data/extracted/ps4/omega-eu-patch"]
 fn patch_data05_banks() {
-    let Some(c) = census(("omega-eu-patch", "data05.psarc"), 1) else {
+    let Some(c) = census(("omega-eu-patch", "data05.psarc"), 1, |_, _| {}) else {
         return;
     };
     assert_eq!(
@@ -409,7 +684,27 @@ fn patch_data05_banks() {
             embedded_elsewhere: 0,
             embedded_nowhere: 0,
             events_resolving: 484,
-            events_empty: 268
+            events_empty: 268,
+            containers: Containers {
+                ranseq: 19,
+                ranseq_random: 18,
+                ranseq_sequence: 1,
+                ranseq_weighted: 0,
+                ranseq_avoid_repeat: 19,
+                ranseq_playlist_items: 111,
+                switch: 39,
+                switch_state_group: 17,
+                switch_cases: 328,
+                switch_case_children: 309,
+                switch_case_direct: 239,
+                switch_case_resolving: 239,
+                ranseq_refused: 0,
+                switch_refused: 0,
+                refused_other: 0,
+                children: 243,
+                children_resolving: 243,
+                children_parented: 243,
+            },
         }
     );
 }
@@ -417,7 +712,11 @@ fn patch_data05_banks() {
 #[test]
 #[ignore = "needs data/extracted/ps4/omega-eu-patch"]
 fn patch_data08_banks() {
-    let Some(c) = census(("omega-eu-patch", "data08.psarc"), 53) else {
+    let Some(c) = census(
+        ("omega-eu-patch", "data08.psarc"),
+        53,
+        posted_events_resolve,
+    ) else {
         return;
     };
     assert_eq!(
@@ -450,7 +749,27 @@ fn patch_data08_banks() {
             embedded_elsewhere: 140,
             embedded_nowhere: 0,
             events_resolving: 1367,
-            events_empty: 2463
+            events_empty: 2463,
+            containers: Containers {
+                ranseq: 551,
+                ranseq_random: 538,
+                ranseq_sequence: 13,
+                ranseq_weighted: 0,
+                ranseq_avoid_repeat: 547,
+                ranseq_playlist_items: 2449,
+                switch: 626,
+                switch_state_group: 400,
+                switch_cases: 4517,
+                switch_case_children: 4746,
+                switch_case_direct: 4122,
+                switch_case_resolving: 4742,
+                ranseq_refused: 1,
+                switch_refused: 0,
+                refused_other: 0,
+                children: 6015,
+                children_resolving: 6015,
+                children_parented: 6008,
+            },
         }
     );
 }

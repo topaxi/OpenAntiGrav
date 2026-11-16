@@ -388,7 +388,7 @@ fn every_model_on_the_disc_parses_in_one_of_two_chunk_layouts() {
         for path in paths {
             let bytes = open.read_path(&path).expect("the entry reads");
             total += 1;
-            let big = oag_formats::ByteOrder::Big;
+            let big = oag_bytes::ByteOrder::Big;
             versioned += usize::from(big.u32(&bytes, 0) == rcsmodel::VERSION);
             let count = big.u32(&bytes, 0x1c) as usize;
             let table = big.u32(&bytes, 0x20) as usize;
@@ -537,6 +537,48 @@ fn a_quarter_of_talons_junction_is_track_surface_by_its_own_render_flags() {
             );
         }
     }
+}
+
+/// Bits 9 to 11 of the render-block flags ([`rcsmodel::RENDER_ZONE_PLAIN`]) are the chunks a
+/// Zone race keeps on their plain program, and on Moa Therma they are exactly the pads and the
+/// signs: 12 `speedup_material` chunks at `0x0201` (bit 9), 8 `weapon_pads` at `0x0401` (bit 10)
+/// and 22 at bit 11 (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "Which chunks
+/// carry the bits"). Per chunk, so the count is over chunks and not over materials.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn moa_therma_zone_plain_chunks_are_its_pads_and_signs() {
+    let Some(image) = image() else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+    let blob = open
+        .read_path("/data/environments/03_track/track.rcsmodel")
+        .expect("Moa Therma's model");
+    let model = rcsmodel::Model::parse(&blob).expect("the model parses");
+    let leaf = |mesh: &rcsmodel::Mesh| -> String {
+        let name = model.material_of(mesh).map_or("", |m| m.name.as_str());
+        name.rsplit(['/', '\\'])
+            .next()
+            .unwrap_or(name)
+            .to_ascii_lowercase()
+    };
+    let (mut speed, mut weapon, mut other) = (0, 0, 0);
+    for mesh in model.meshes.iter().filter(|mesh| mesh.zone_plain()) {
+        let flags = mesh.render_flags;
+        match (flags & 0x0e00, leaf(mesh).as_str()) {
+            (0x0200, "speedup_material.rcsmaterial") => speed += 1,
+            (0x0400, "weapon_pads.rcsmaterial") => weapon += 1,
+            (0x0800, _) => other += 1,
+            (bits, name) => panic!("a zone-plain chunk of {name} carries {bits:#06x}"),
+        }
+    }
+    println!("Moa Therma: {speed} speed pads, {weapon} weapon pads, {other} bit-11 chunks");
+    assert_eq!((speed, weapon, other), (12, 8, 22));
+    assert!(
+        model.meshes.iter().filter(|m| m.is_track()).count() > speed + weapon,
+        "the road is track surface and not zone-plain"
+    );
 }
 
 /// Claim 10: the unresolved-`Mesh`-node phenomenon claim 8 measured on

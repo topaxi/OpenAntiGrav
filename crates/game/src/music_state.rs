@@ -19,7 +19,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use log::{info, warn};
+use log::{debug, warn};
 use oag_sound::{Audio, MusicDiscs, RaceMusicState};
 use serde::{Deserialize, Serialize};
 
@@ -143,11 +143,11 @@ pub fn resume_from(path: &Path, audio: &mut Audio, discs: &MusicDiscs, title: &s
     };
     match audio.restore_race_music(discs, &saved) {
         // Checked by the race's music fetch, which logs the outcome.
-        Ok(oag_sound::Restored::WhenListed) => info!(
+        Ok(oag_sound::Restored::WhenListed) => debug!(
             "audio: race music saved at track {} and {} s, checked when the race starts",
             saved.index, saved.second
         ),
-        Ok(oag_sound::Restored::Now) => info!(
+        Ok(oag_sound::Restored::Now) => debug!(
             "audio: race music resumes at track {} and {} s, as saved",
             saved.index, saved.second
         ),

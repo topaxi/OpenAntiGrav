@@ -18,11 +18,18 @@ pub(super) fn hud_roots(
     title: &'static oag_title::Title,
     style: Option<&str>,
     add_on_campaign: Option<&str>,
+    lineage: Option<&oag_title::race::CircuitLineage>,
     report: &mut Vec<String>,
 ) -> (
     &'static oag_title::HudLayouts,
     Option<&'static oag_title::HudSkin>,
 ) {
+    // A circuit family raced under another game's rules draws that game's HUD, whatever the
+    // `HUD Style` list says: the executable's 2048-lineage managers name their set outright.
+    if let Some(lineage) = lineage {
+        report.push(format!("HUD: the {} circuits' own layouts", lineage.prefix));
+        return (lineage.layouts, None);
+    }
     // A downloadable campaign's own race managers load their own files, ahead of any skin.
     if let Some(campaign) = add_on_campaign {
         match title
@@ -67,11 +74,10 @@ pub(super) fn hud_roots(
 /// this function's, for the reason `oag_pulse::race` states about the Zone
 /// hull: `Mode` is the engine's type and a title package must not grow one.
 ///
-/// Until 2026-08-18 this returned `oag_pulse`'s names for every title, and HD
-/// worked only because PSARC path normalisation folds
-/// `Data\XML\Arcade_HUD.xml` onto the `/data/xml/arcade_hud.xml` its manifest
-/// stores - so HD's own tables had no reader at all. Finding S2 of that day's
-/// review. The row where the luck ran out is **speed lap**: neither PSP disc
+/// `oag_pulse`'s names would work for HD only because PSARC path
+/// normalisation folds `Data\XML\Arcade_HUD.xml` onto the
+/// `/data/xml/arcade_hud.xml` its manifest stores, leaving HD's own tables
+/// unread. The row where that breaks is **speed lap**: neither PSP disc
 /// ships a `SpeedLap_HUD.xml`, so both draw the time trial's, while HD ships a
 /// separate one that nothing here could ask for.
 ///
@@ -82,7 +88,7 @@ pub(super) fn hud_roots(
 /// See `docs/gameplay/pickups.md`.
 ///
 /// Layouts no mode here reaches - HD's Detonator, Duel and MPTag - stay in
-/// their own title crate waiting for the mode that uses them.
+/// their own title crate waiting for the readouts or the mode that uses them.
 #[must_use]
 pub const fn hud_layout(hud: &oag_title::HudLayouts, mode: Mode) -> &'static str {
     match mode {
@@ -100,6 +106,11 @@ pub const fn hud_layout(hud: &oag_title::HudLayouts, mode: Mode) -> &'static str
         // `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
         Mode::SingleRace | Mode::Tournament | Mode::Head2Head => hud.arcade,
         Mode::Eliminator => hud.elimination,
+        // HD's own `detonator_hud.xml` is a stage, score and EMP readout this build
+        // has none of (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`), so a
+        // Detonator race draws the time trial's: its lap counter is the stage.
+        // **Chosen, not measured.**
+        Mode::Detonator => hud.time_trial,
     }
 }
 
@@ -135,6 +146,16 @@ pub(super) struct SplitViews {
     pub(super) people: usize,
 }
 
+impl SplitViews {
+    /// The views and people a launch asks for.
+    pub(super) fn of(options: &Options) -> Self {
+        Self {
+            count: options.views,
+            people: usize::from(options.people_flying()),
+        }
+    }
+}
+
 /// Reads the HUD's layout, atlas, fonts and strings.
 ///
 /// Every piece degrades on its own and says so. The report matters more here than
@@ -146,8 +167,8 @@ pub(super) struct SplitViews {
 /// nothing has been chosen yet, resolved the same way everywhere else a
 /// chosen language is resolved, through [`oag_ui::language::load::chosen_language`].
 ///
-/// `style` is `race::Options::hud_style` and `add_on_campaign` is
-/// `race::Options::add_on_campaign`, both resolved by [`hud_roots`].
+/// `options.hud_style` and `options.add_on_campaign` are resolved by [`hud_roots`]. `track` is the
+/// circuit's path, which picks a [`oag_title::race::CircuitLineage`].
 #[expect(clippy::too_many_arguments, reason = "one load's worth of context")]
 pub(super) fn load_hud(
     archives: &mut oag_assets::Archives,
@@ -155,13 +176,22 @@ pub(super) fn load_hud(
     mode: Mode,
     language_plugins: &[&str],
     preferred_language: Option<&str>,
-    style: Option<&str>,
-    add_on_campaign: Option<&str>,
+    options: &Options,
+    track: &str,
     views: SplitViews,
-    mod_icons: &[oag_hud::sprite::DecodedImage],
+    mod_icons: &crate::extensions::ModIcons,
     report: &mut Vec<String>,
 ) -> oag_hud::Assets {
-    let (hud, skin) = hud_roots(title, style, add_on_campaign, report);
+    let lineage = title.race.circuit_lineage(track);
+    let (style, add_on_campaign) = (
+        options.hud_style.as_deref(),
+        options.add_on_campaign.as_deref(),
+    );
+    let (hud, skin) = hud_roots(title, style, add_on_campaign, lineage, report);
+    let art = lineage
+        .map(|lineage| lineage.art)
+        .or_else(|| skin.and_then(|skin| skin.art))
+        .unwrap_or(title.hud_art);
     let entry = hud_layout_for(hud, mode, views.people);
     // **Through `compose`, on every title.** A Pulse or Pure layout includes
     // nothing and composes to itself, so this is the same read it always was
@@ -205,7 +235,11 @@ pub(super) fn load_hud(
         }
     };
 
-    let space = oag_display::space::Space::of(archives.layout.platform);
+    let space = oag_display::space::Space::of(
+        lineage
+            .and_then(|lineage| lineage.grid)
+            .unwrap_or(archives.layout.platform),
+    );
     let layout = layout.map(|layout| splice_assist_indicator(archives, title, layout, space, mode));
 
     let (split, split_columns) = split_assets(archives, hud, mode, views, space, report);
@@ -221,9 +255,23 @@ pub(super) fn load_hud(
                 every.sprites.extend(authored.sprites.iter().cloned());
                 every.models.extend(authored.models.iter().cloned());
             }
-            load_atlases(archives, title, Some(&every), entry, mod_icons, report)
+            load_atlases(
+                archives,
+                title,
+                Some(&every),
+                entry,
+                &mod_icons.raster,
+                report,
+            )
         }
-        _ => load_atlases(archives, title, layout.as_ref(), entry, mod_icons, report),
+        _ => load_atlases(
+            archives,
+            title,
+            layout.as_ref(),
+            entry,
+            &mod_icons.raster,
+            report,
+        ),
     };
 
     // The HUD's captions are `idstring` keys - `IG_HUD_LAP` on Pulse,
@@ -253,28 +301,22 @@ pub(super) fn load_hud(
 
     // The role names are this *title's* own, through `oag_title::HudArt` -
     // not the shared `oag_ui::language::roles::HUD`/`HUD_SMALL` literals
-    // every source used to be asked for regardless of what its own plugins
-    // actually name. That literal ask is what drew 2048's HUD in the 5x7
+    // asked of every source regardless of what its own plugins
+    // actually name. That literal ask draws 2048's HUD in the 5x7
     // fallback: none of its plugins fill `"HUD"`, they fill `"2048HUD"`
     // instead, and two of its seventeen plugins (`korean`,
     // `traditionalchinese`) carry a *leftover* `"HUD"`/`"HUDSmall"` role
-    // pointing at files 2048 does not ship - which the old literal ask could
+    // pointing at files 2048 does not ship - which the literal ask could
     // pick up ahead of the plugin the player actually chose. See
     // `oag_title::HudArt::hud_font_role`.
-    let font = hud_font(
-        archives,
-        &languages,
-        chosen,
-        title.hud_art.hud_font_role,
-        report,
-    );
+    let font = hud_font(archives, &languages, chosen, art.hud_font_role, report);
     // `None` is a real gap on 2048's own plugins - see
     // `oag_title::HudArt::hud_small_font_role` - and the caption face falls
     // back to the value face's own atlas rather than to 5x7, chosen rather
     // than measured: a Vita3K race frame shows two on-screen sizes, but the
     // layout's own per-widget `scale` is what draws the difference, not a
     // second `.fnt` file this pass located.
-    let small_font = match title.hud_art.hud_small_font_role {
+    let small_font = match art.hud_small_font_role {
         Some(role) => hud_font(archives, &languages, chosen, role, report),
         None => {
             // Named as "reuse", not "draw in the {role} face": `font` above
@@ -341,7 +383,10 @@ pub(super) fn load_hud(
         report,
     );
 
-    oag_hud::Assets {
+    let tag_label = load_tag_label(archives, hud, views.people, report);
+
+    let mut assets = oag_hud::Assets {
+        tag_label,
         layout,
         sheet,
         font,
@@ -355,11 +400,43 @@ pub(super) fn load_hud(
         // quarter of the way into the picture. Same call `boot::load_shell`
         // makes for the front end.
         space,
-        art: skin.and_then(|skin| skin.art).unwrap_or(title.hud_art),
+        art,
         split,
         split_columns,
         split_hud,
+        vector_icons: mod_icons.vector.clone(),
+        vector_base: None,
+    };
+    // One pixel per layout unit until the host knows the size it draws at and rasterises
+    // again (`oag_hud::Assets::rasterise_vector_icons`).
+    assets.rasterise_vector_icons(1.0, report);
+    assets
+}
+
+/// `PlrTag0` of the title's player-tag layout, for a race with more than one person. The eight
+/// labels share a face, so the first stands for them. Reported when the layout is named and does
+/// not read, in which case no tag draws.
+fn load_tag_label(
+    archives: &mut oag_assets::Archives,
+    hud: &oag_title::HudLayouts,
+    people: usize,
+    report: &mut Vec<String>,
+) -> Option<oag_hud::Label> {
+    let entry = hud.player_tags.filter(|_| people > 1)?;
+    let composed = oag_hud::compose(entry, |path| archives.read_name(path).ok());
+    let label = composed.and_then(|composed| {
+        composed
+            .layout
+            .labels
+            .into_iter()
+            .find(|label| label.name == "PlrTag0")
+    });
+    if label.is_none() {
+        report.push(format!(
+            "HUD {entry}: no PlrTag0; multiplayer tags draw nothing"
+        ));
     }
+    label
 }
 
 /// This project's split-screen layout file for a race of `views` views, cut for
@@ -479,7 +556,7 @@ fn split_assets(
             Mode::Eliminator => Some(elimination),
             // The Multiplayer Time Trial draws the arcade HUD, so its split is the arcade one.
             Mode::TimeTrial if mode.is_multiplayer_time_trial(people) => Some(arcade),
-            Mode::TimeTrial | Mode::SpeedLap | Mode::Zone => None,
+            Mode::TimeTrial | Mode::SpeedLap | Mode::Zone | Mode::Detonator => None,
         }
     };
     let rows = pick((authored.arcade, authored.elimination)).and_then(|roots| {
@@ -588,16 +665,14 @@ pub fn splice_assist_indicator(
 /// and still pinned by `the_layouts_name_at_most_one_texture` - so on those this
 /// builds the same one-image sheet it always did. HD's eighteen name twelve
 /// between them, up to six in one layout: 45 of the arcade HUD's 138 sprites
-/// name something other than `HUD_Components.gtf`, and until 2026-08-25 all 45
-/// were offset by `HUD_Components`'s placement and sampled it at coordinates
-/// meant for a different texture.
+/// name something other than `HUD_Components.gtf`, and each must be placed by
+/// its own texture, not `HUD_Components`'s.
 ///
 /// Keyed by the reference the layout spells, which is what
 /// [`oag_hud::sprite_draw`] looks up. Which entry that reference resolves to
-/// is this function's business: the declared name first, then the title's own
-/// rewrite of it - `oag_title::HudArt::texture_extension`, which is `None` on
-/// both PSP titles and `.gtf` on HD, where a `src` names the exporter's input
-/// rather than the shipped file.
+/// is [`oag_assets::Archives::read_texture`]'s business: the declared name
+/// first, then the platform's own spelling of it, which is `.gtf` on HD, where a
+/// `src` names the exporter's input rather than the shipped file.
 ///
 /// A texture that will not resolve or will not decode costs its own sprites and
 /// nothing else: they are reported here and skipped at draw time rather than
@@ -635,8 +710,8 @@ fn load_atlases(
 
     let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
     for reference in &references {
-        match read_hud_texture(archives, title, reference) {
-            Ok(blob) => blobs.push(((*reference).to_string(), blob)),
+        match archives.read_texture(reference) {
+            Ok((_, blob)) => blobs.push(((*reference).to_string(), blob)),
             Err(why) => report.push(format!("HUD atlas {reference} unavailable ({why})")),
         }
     }
@@ -644,7 +719,7 @@ fn load_atlases(
     let mut notes = Vec::new();
     let mut extra = vex_model_art(archives, title, layout, report);
     extra.extend(mod_icons.iter().cloned());
-    let sheet = oag_hud::sprite::Sheet::build_with(&blobs, extra, &mut notes);
+    let sheet = oag_hud::sprite::Sheet::build_replaced(&blobs, extra, &mut notes);
     report.extend(notes);
     report.push(format!(
         "HUD {entry}: {} of {} texture(s) in a {}x{} sheet",
@@ -734,11 +809,20 @@ fn vex_model_art(
     let bars = title.hud_art.bar_models;
     let bar_names = bars.map_or(Vec::new(), |b| vec![b.speed, b.shield, b.outline]);
     let mut bar_srcs: Vec<&str> = Vec::new();
+    let mut icon_srcs: Vec<&str> = Vec::new();
     let mut wanted: Vec<&str> = Vec::new();
     for model in &layout.models {
         let is_bar = bar_names.contains(&model.name.as_str());
         if is_bar && !model.src.is_empty() {
             bar_srcs.push(model.src.as_str());
+        }
+        if !model.src.is_empty()
+            && (title.hud_art.pickup_icon_backdrop_model == Some(model.name.as_str())
+                || title.hud_art.pickup_icon_models.is_some_and(|names| {
+                    names.into_iter().flatten().any(|name| name == model.name)
+                }))
+        {
+            icon_srcs.push(model.src.as_str());
         }
         let is_wanted = is_bar
             || oag_race::sight::is_sight_widget(&model.name)
@@ -770,9 +854,18 @@ fn vex_model_art(
             }
         };
         // A gauge model is a polygon strip, not a quad: rasterised flat, in the state of a full
-        // bar (the model's own texture track at its end) so the draw can crop it.
-        if bar_srcs.contains(&src) {
-            match model_raster::raster(&model, model_raster::end_of_tracks(&model)) {
+        // bar (the model's own texture track at its end) so the draw can crop it. A weapon icon
+        // is a shaped mesh over a strip of several glyphs (Pure's are 128x16 sheets), so it is
+        // rasterised too, at the state its offset track holds the glyph in (`held_at`), rather than stretching the whole texture over its
+        // bounding box.
+        let is_icon = icon_srcs.contains(&src);
+        if bar_srcs.contains(&src) || is_icon {
+            let seconds = if is_icon {
+                model_raster::held_at(&model)
+            } else {
+                model_raster::end_of_tracks(&model)
+            };
+            match model_raster::raster(&model, seconds) {
                 Some(flat) => {
                     report.push(format!(
                         "HUD model {src}: drawn flat, {}x{} at {:?} from its origin",
@@ -785,7 +878,11 @@ fn vex_model_art(
                         rgba: flat.rgba,
                         quad_extent: Some([flat.width as f32, flat.height as f32]),
                         quad_centre: Some(flat.centre),
-                        blend: None,
+                        blend: if is_icon {
+                            quad_blend(src, &model, report)
+                        } else {
+                            None
+                        },
                     });
                 }
                 None => report.push(format!(
@@ -906,42 +1003,6 @@ fn quad_extent(model: &oag_mesh::mesh::Model) -> Option<[f32; 2]> {
     Some([max[0] - min[0], max[1] - min[1]])
 }
 
-/// Reads one HUD texture, by the name the layout declares and then by the name
-/// this title rewrites it to.
-///
-/// Two rewrites stack here and they answer different questions.
-/// [`oag_pulse::read_image`] answers "which *pressing* keeps this where" - the
-/// PS2 build's `.pct` - and every source goes through it.
-/// `HudArt::texture_extension` answers "does this title's XML name the shipped
-/// file at all", which is HD's `.gtf`. The declared name is tried first in both,
-/// so a title needing neither takes exactly the path it took before.
-///
-/// # Errors
-///
-/// The error naming the entry the layout asked for, never the rewritten one: a
-/// message about `hdhud.gtf` sends a reader looking for a name their XML does
-/// not contain.
-fn read_hud_texture(
-    archives: &mut oag_assets::Archives,
-    title: &'static oag_title::Title,
-    reference: &str,
-) -> oag_assets::Result<Vec<u8>> {
-    let declared = oag_pulse::read_image(archives, reference);
-    let Some(extension) = title.hud_art.texture_extension else {
-        return declared;
-    };
-    match declared {
-        Ok(blob) => Ok(blob),
-        Err(original) => {
-            let rewritten = oag_title::hud::replace_extension(reference, extension);
-            if rewritten == reference {
-                return Err(original);
-            }
-            oag_pulse::read_image(archives, &rewritten).map_err(|_| original)
-        }
-    }
-}
-
 /// Reads the `.fnt` this source's language plugins fill `role` in with.
 ///
 /// The same shape as `crate::boot::load_font`, which reads the front end's
@@ -954,11 +1015,10 @@ fn read_hud_texture(
 ///
 /// `preferred` is the chosen language - the same one [`load_hud`] resolved
 /// `strings` from - asked for `role` first; `role_font`'s own fallback across
-/// every plugin only fires when the chosen one names nothing for it. **This
-/// used to scan every plugin in source order with no preference at all**,
-/// which is the same bug `load_hud`'s old `None` was: a HUD asking for the
-/// caption face got whichever plugin happened to be first, not the one the
-/// player picked.
+/// every plugin only fires when the chosen one names nothing for it. **Scanning
+/// every plugin in source order with no preference** would give a HUD asking
+/// for the caption face whichever plugin was first, not the one the player
+/// picked.
 ///
 /// A source whose plugins fill in no such slot draws in 5x7 and says which role
 /// went unanswered - see `oag_ui::language::roles` for what each disc fills in.
@@ -993,13 +1053,14 @@ pub(super) fn hud_font(
             // author HD's numbers; the front end already lays its text out through
             // this scale (`1.0` on every other source), see
             // `oag_display::space::Space::font_texel_scale`.
-            oag_ui::font::Atlas::from_font(&font)
-                .with_border_extend(oag_ui::language::load::role_border(
-                    languages, preferred, role,
-                ))
-                .with_texel_scale(oag_display::space::Space::font_texel_scale(
-                    archives.layout.platform,
-                ))
+            let border = oag_ui::language::load::role_border(languages, preferred, role);
+            let (atlas, border) = oag_ui::font::Atlas::from_pack(
+                archives, &name, &font, border, "HUD font", None, report,
+            )
+            .unwrap_or_else(|| (oag_ui::font::Atlas::from_font(&font), border));
+            atlas.with_border_extend(border).with_texel_scale(
+                oag_display::space::Space::font_texel_scale(archives.layout.platform),
+            )
         }
         Err(why) => {
             report.push(format!(

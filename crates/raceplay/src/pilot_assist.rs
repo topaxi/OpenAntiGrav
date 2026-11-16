@@ -1,8 +1,7 @@
 //! Pilot Assist for the player's craft: what `oag_physics::pilot_assist` needs
 //! each tick, located on this race's spline, and the switch the settings flip.
 //!
-//! AI craft never get it (`field.rs` passes no input): the maintainer's rule is
-//! that opponents fly the player's physics and drive better rather than cheat.
+//! AI craft never get it (`field.rs` passes no input): opponents fly the player's physics and drive better rather than cheat.
 //! See `docs/physics/pilot-assist.md`.
 
 use oag_core::math::Vec3;

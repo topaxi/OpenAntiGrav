@@ -178,6 +178,19 @@ fn craft(line: &Line) -> Craft {
     }
 }
 
+thread_local! {
+    /// [`Course::drive_again`] for every course this thread's tests make.
+    static DRIVE_AGAIN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// `f` with every run from the grid driven in full.
+fn driving_again<T>(f: impl FnOnce() -> T) -> T {
+    DRIVE_AGAIN.set(true);
+    let out = f();
+    DRIVE_AGAIN.set(false);
+    out
+}
+
 /// Builds the plan for a stadium.
 fn build_on(line: &Line) -> (SpeedPlan, Report) {
     let respawn = |index: usize| placed(line, index);
@@ -191,7 +204,10 @@ fn build_on(line: &Line) -> (SpeedPlan, Report) {
         respawn: &respawn,
         reset: &|_, _, _| false,
         max_airborne: f32::INFINITY,
+        beneath: f32::INFINITY,
+        beneath_ticks: 0,
         pad: &|_, _| None,
+        drive_again: DRIVE_AGAIN.get(),
     };
     SpeedPlan::build(&course, &craft(line), &tuning())
 }
@@ -209,13 +225,23 @@ fn verify(line: &Line, plan: &SpeedPlan) -> Report {
         respawn: &respawn,
         reset: &|_, _, _| false,
         max_airborne: f32::INFINITY,
+        beneath: f32::INFINITY,
+        beneath_ticks: 0,
         pad: &|_, _| None,
+        drive_again: DRIVE_AGAIN.get(),
     };
     let craft = craft(line);
     let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
     let mut report = Report::default();
-    plan.clone()
-        .verify(&course, &craft, &tuning(), yaw, &mut report, 1.0);
+    plan.clone().verify(
+        &course,
+        &craft,
+        &tuning(),
+        yaw,
+        &mut report,
+        1.0,
+        &mut driven::Driven::default(),
+    );
     report
 }
 
@@ -343,6 +369,70 @@ fn a_build_is_bit_identical_twice() {
     };
     assert_eq!(bits(&a), bits(&b));
     assert_eq!(ra, rb);
+}
+
+/// A run that reads back what the run before it drove (`driven`) learns the
+/// plan and the report, step counts included, that driving every run in full
+/// does: a build on three stadiums, and the plan adapted to a slower hull.
+#[test]
+fn reading_a_run_back_learns_the_plan_driving_it_again_does() {
+    for line in [tight(), stadium(30.0, 600.0), stadium(120.0, 900.0)] {
+        let read_back = build_on(&line);
+        let driven = driving_again(|| build_on(&line));
+        assert_eq!(read_back, driven);
+        let slow = slower_turning(&line, 0.6);
+        let adapt = || {
+            on_course(&line, |course| {
+                read_back.0.adapt(course, &slow, &tuning(), STEP_BUDGET)
+            })
+        };
+        assert_eq!(adapt(), driving_again(adapt));
+    }
+}
+
+/// A rescued tick on a multiple of `CHECK_EVERY` leaves two marks, the run as
+/// the tick left it and the run as put back. A verification reads the record
+/// back through the rescue, a learning pass only up to the failure, and once a
+/// rewind has landed on the first mark the tick is no longer one a
+/// verification would repeat: it would put the craft back, the record did not.
+#[test]
+fn a_rewind_onto_the_mark_before_a_rescue_is_not_read_back_as_rescued() {
+    let line = tight();
+    on_course(&line, |course| {
+        let craft = craft(&line);
+        let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
+        let plan = SpeedPlan::unlimited(&line);
+        let mut run = SpeedPlan::start_run(&craft);
+        let mut known = driven::Driven::default();
+        known.begin(run);
+        for tick in 1..=CHECK_EVERY {
+            let (_, mut lived) = course.lived(&mut run, &craft, &tuning(), yaw, |_| (1.0, 0.0));
+            if tick == CHECK_EVERY {
+                lived.failure = Some(Failure::Stalled);
+            }
+            known.push(lived, &run);
+        }
+        let left = run;
+        let mut put_back = run;
+        put_back.progress += RESPAWN_SKIP as i64;
+        known.respawn(put_back);
+        let keep = |known: &driven::Driven, reader| {
+            let run = known
+                .clone()
+                .keep_for(&plan, course, 1.0, NEVER_STUCK, u64::MAX, reader)
+                .expect("a record from the grid");
+            (run.tick, run.progress)
+        };
+        assert_eq!(
+            keep(&known, driven::Reader::Verify),
+            (CHECK_EVERY, put_back.progress)
+        );
+        assert_eq!(keep(&known, driven::Reader::Learn).0, 0);
+
+        let back = known.rewind(left.progress);
+        assert_eq!((back.tick, back.progress), (CHECK_EVERY, left.progress));
+        assert_eq!(keep(&known, driven::Reader::Verify).0, 0);
+    });
 }
 
 #[test]
@@ -506,7 +596,10 @@ fn on_course<T>(line: &Line, f: impl FnOnce(&Course<'_, Plane>) -> T) -> T {
         respawn: &respawn,
         reset: &|_, _, _| false,
         max_airborne: f32::INFINITY,
+        beneath: f32::INFINITY,
+        beneath_ticks: 0,
         pad: &|_, _| None,
+        drive_again: DRIVE_AGAIN.get(),
     };
     f(&course)
 }
@@ -539,8 +632,15 @@ fn a_slower_turning_hull_adapts_the_plan_to_a_clean_lap() {
     // The premise: the plan as learned puts the slower hull off its line.
     let as_learned = on_course(&line, |course| {
         let mut report = Report::default();
-        plan.clone()
-            .verify(course, &slow, &tuning(), yaw, &mut report, 1.0);
+        plan.clone().verify(
+            course,
+            &slow,
+            &tuning(),
+            yaw,
+            &mut report,
+            1.0,
+            &mut driven::Driven::default(),
+        );
         report
     });
     assert!(as_learned.verify_failures > 0, "{as_learned:?}");
@@ -585,4 +685,181 @@ fn a_plan_followed_at_a_lower_share_multiplies_the_yaw_ratio() {
         0.5,
         "the original is untouched"
     );
+}
+
+fn trace(index: u32, airborne: bool, beneath: bool, full: bool) -> Trace {
+    Trace {
+        tick: 0,
+        index,
+        speed: 100.0,
+        airborne,
+        beneath,
+        full,
+    }
+}
+
+#[test]
+fn the_trace_keeps_the_road_a_craft_left_through_a_long_fall() {
+    let mut recent = Vec::new();
+    for index in 0..400 {
+        push_trace(&mut recent, trace(index, false, false, true));
+    }
+    assert!(
+        recent.len() <= LOOKBACK_TICKS * 6,
+        "on the road it is bounded"
+    );
+    // Four seconds in the air, then a road under the line: neither is the
+    // road the craft left.
+    for _ in 0..240 {
+        push_trace(&mut recent, trace(400, true, false, true));
+    }
+    for _ in 0..400 {
+        push_trace(&mut recent, trace(400, false, true, true));
+    }
+    let on_the_road = recent.iter().filter(|t| !t.airborne && !t.beneath).count();
+    assert!(
+        on_the_road >= LOOKBACK_TICKS,
+        "{on_the_road} ticks of the road it left are still in the trace"
+    );
+}
+
+#[test]
+fn a_craft_on_a_road_under_its_line_left_the_road_where_it_took_off() {
+    let line = stadium(30.0, 200.0);
+    let mut recent: Vec<Trace> = (0..60).map(|i| trace(i, false, false, i < 30)).collect();
+    recent.extend((0..10).map(|_| trace(60, true, false, true)));
+    recent.extend((0..90).map(|_| trace(61, false, true, true)));
+    // The plan braked on the way there and the line crosses no gap: it ran
+    // wide, and holding the run-up would lift what the failure should lower.
+    assert_eq!(
+        Cause::of(Failure::Beneath, 0.0, &recent, &line, &[]),
+        Cause::LeftTheRoad(60)
+    );
+    // Where the line itself leaves the road in that flight, it fell short of
+    // a jump: hold the run-up the plan braked on.
+    let mut unsupported = vec![false; line.len()];
+    unsupported[60] = true;
+    let gapped = stadium(30.0, 200.0).with_unsupported(unsupported);
+    assert_eq!(
+        Cause::of(Failure::Beneath, 0.0, &recent, &gapped, &[]),
+        Cause::ShortOfTheLip(60)
+    );
+    // With no flight in the trace it drove down: lower what led there.
+    let driven: Vec<Trace> = recent.iter().filter(|t| !t.airborne).copied().collect();
+    assert_eq!(
+        Cause::of(Failure::Beneath, 0.0, &driven, &line, &[]),
+        Cause::LeftTheRoad(60)
+    );
+}
+
+/// Ticks a craft on the floor 30 units under a straight line with a corridor
+/// 5 units either side, after one tick up at the line's level `offset` units
+/// across it, and returns the first failure in 30 ticks.
+fn under_the_line_from(offset: f32) -> Option<Failure> {
+    let points: Vec<Vec3> = (0..200)
+        .map(|i| Vec3::new(0.0, 30.0, -(i as f32) * 2.0))
+        .collect();
+    let frames = vec![
+        crate::Frame {
+            lateral: Vec3::X,
+            left: -5.0,
+            right: 5.0,
+        };
+        points.len()
+    ];
+    let line = Line::with_corridor(points, frames);
+    let samples = vec![
+        Some(oag_physics::TrackSample {
+            position: Vec3::ZERO,
+            down: Vec3::NEG_Y,
+        });
+        line.len()
+    ];
+    let respawn = |index: usize| placed(&line, index);
+    let course = Course {
+        line: &line,
+        samples: &samples,
+        raycaster: &Plane,
+        env: Environment::default(),
+        dt: 1.0 / 60.0,
+        off_line: 1_000.0,
+        respawn: &respawn,
+        reset: &|_, _, _| false,
+        max_airborne: f32::INFINITY,
+        beneath: 15.0,
+        beneath_ticks: 10,
+        pad: &|_, _| None,
+        drive_again: false,
+    };
+    let craft = craft(&line);
+    let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
+    let mut run = SpeedPlan::start_run(&craft);
+    run.state.body.position = line.point(0) + Vec3::X * offset;
+    let coast = |_: &Run, _: &ShipControls| (0.0, 0.0);
+    let first = course.tick(&mut run, &craft, &tuning(), yaw, coast);
+    assert_eq!(first.failure, None, "in the air at the line's level");
+    run.state.body.position.y = craft.handling.antigrav.ride_height * 0.5;
+    run.state.body.linear_velocity = Vec3::ZERO;
+    (0..30).find_map(|_| course.tick(&mut run, &craft, &tuning(), yaw, coast).failure)
+}
+
+#[test]
+fn a_road_under_the_line_is_a_failure_for_a_craft_that_left_its_corridor() {
+    assert_eq!(under_the_line_from(12.0), Some(Failure::Beneath));
+    assert_eq!(
+        under_the_line_from(2.0),
+        None,
+        "inside its corridor the craft is where the line's road is"
+    );
+}
+
+#[test]
+fn a_wall_after_landing_from_a_held_run_up_over_a_gap_landed_long() {
+    let line = stadium(30.0, 200.0);
+    let mut unsupported = vec![false; line.len()];
+    unsupported[60] = true;
+    let gapped = stadium(30.0, 200.0).with_unsupported(unsupported);
+    let mut recent: Vec<Trace> = (0..60).map(|i| trace(i, false, false, true)).collect();
+    recent.extend((0..10).map(|_| trace(60, true, false, true)));
+    recent.extend((61..75).map(|i| trace(i, false, false, true)));
+    let mut hold = vec![false; line.len()];
+    for held in &mut hold[30..60] {
+        *held = true;
+    }
+    assert_eq!(
+        Cause::of(Failure::Wall, 0.0, &recent, &gapped, &hold),
+        Cause::LandedLong(60)
+    );
+    // A run-up the plan never held, or a flight over no gap, is a corner
+    // taken too fast as before.
+    assert_eq!(
+        Cause::of(Failure::Wall, 0.0, &recent, &gapped, &[]),
+        Cause::TooFast
+    );
+    assert_eq!(
+        Cause::of(Failure::Wall, 0.0, &recent, &line, &hold),
+        Cause::TooFast
+    );
+}
+
+#[test]
+fn a_long_landing_lowers_the_lip_one_step_and_a_short_one_raises_it_back() {
+    let line = stadium(30.0, 200.0);
+    let mut plan = SpeedPlan::unlimited(&line);
+    plan.hold[50] = true;
+    // The lip: the craft sits on one sample for many ticks.
+    let run_up: Vec<Trace> = (0..20)
+        .map(|_| Trace {
+            speed: 50.0,
+            ..trace(50, false, false, true)
+        })
+        .collect();
+    assert_eq!(plan.slow_held_run_up(&run_up), 1);
+    assert_eq!(plan.ceiling(50), 50.0 * 0.96, "one step, not one per tick");
+    assert!(
+        plan.holds(50),
+        "a corner past the landing still does not brake through it"
+    );
+    assert_eq!(plan.hold_run_up(&run_up), 1);
+    assert_eq!(plan.ceiling(50), 50.0 * 0.96 / 0.96);
 }

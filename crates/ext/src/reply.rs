@@ -1,9 +1,11 @@
 //! The reply: one typed method per command, refusing what the host would fault on.
 
 use oag_ext_abi::{
-    Colour, Command, Cue, Effect, HudElement, HudPlace, HudStr, Icon, MAX_COMMANDS, MAX_HUD_EXTRA,
-    MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_PAD_FACTOR, MAX_THRUST_FACTOR, POOL_AT, POOL_LEN, Pickup,
-    REPLY_AT, Rgba, Sections, Weapon, WeatherKind,
+    Colour, Command, Cue, Distance, Effect, HudElement, HudPlace, HudStr, Icon, MAX_COMMANDS,
+    MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_PAD_FACTOR,
+    MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_THRUST_FACTOR, MAX_TRANSIT_TICKS, ModName, POOL_AT,
+    POOL_LEN, Pickup, REPLY_AT, Rgba, Sections, SoundMode, Warning, WarningIcon, WarningSide,
+    Weapon, WeatherKind,
 };
 
 use crate::Craft;
@@ -22,14 +24,25 @@ pub enum Refused {
     /// `[0, MAX_PAD_FACTOR]`, a pad or route the track does not have, a shield
     /// change past the craft's maximum, a non-finite number, a roll period of 0.
     Range,
-    /// More than `MAX_HUD_ITEMS` `hud_text` and `hud_icon` items for one craft this
-    /// tick, or a string pool already full.
+    /// More than `MAX_HUD_ITEMS` `hud_text` and `hud_icon` items for one craft this tick.
     HudItems,
+    /// The reply's string pool cannot hold one more string. A name already in the pool
+    /// (a shader, effect, sound or icon sent before this tick) takes no more room.
+    Pool,
     /// `give_pickup` to a craft holding something, or `clear_pickup` from one not
     /// holding the mod's own pickup.
     Pickup,
     /// `hud_tint` of the pickup element: a mod pickup's colour is `pickup_look`'s.
     PickupTint,
+    /// More than `MAX_EMITS_PER_TICK` `emit`s this tick: the host faults the module on the
+    /// next one.
+    Emits,
+    /// More than `MAX_FIRE_EFFECTS_PER_TICK` `fire_effect` and `fire_mod_effect` commands
+    /// this tick: the host faults the module on the next one.
+    Effects,
+    /// More than `MAX_BEAMS_PER_TICK` `draw_beam` commands this tick: the host faults the
+    /// module on the next one.
+    Beams,
 }
 
 /// This tick's commands. The count is written when the tick returns.
@@ -47,6 +60,11 @@ pub struct Reply<'a> {
     route_cmd: u32,
     pool_used: usize,
     items: [u8; oag_ext_abi::MAX_CRAFTS],
+    emits: usize,
+    effects: usize,
+    beams: usize,
+    /// `transit`, `scale-speed`, `probe-clearance` sent, one bit a slot each.
+    motion: [u32; 3],
 }
 
 impl<'a> Reply<'a> {
@@ -64,6 +82,10 @@ impl<'a> Reply<'a> {
             route_cmd: 0,
             pool_used: 0,
             items: [0; oag_ext_abi::MAX_CRAFTS],
+            emits: 0,
+            effects: 0,
+            beams: 0,
+            motion: [0; 3],
         }
     }
 
@@ -135,6 +157,353 @@ impl<'a> Reply<'a> {
         })?;
         self.shield |= bit;
         Ok(())
+    }
+
+    /// One motion command (`which`: 0 transit, 1 scale-speed, 2 probe) per craft a tick.
+    fn motion(&mut self, which: usize, craft: &Craft<'_>, command: Command) -> Result<(), Refused> {
+        let bit = craft.slot().bit();
+        if self.motion[which] & bit != 0 {
+            return Err(Refused::Repeated);
+        }
+        self.push(&command)?;
+        self.motion[which] |= bit;
+        Ok(())
+    }
+
+    /// `transit`: take the craft out of the world for `ticks` ticks (frozen, not drawn,
+    /// not collided with, not hit, its controls ignored), then put it at `distance` on
+    /// (forward, under a lap) at `exit_factor` times the speed it has now. Laps count
+    /// through the jump; a finish in it is timed at the exit tick. A `transit-end` event
+    /// comes on the exit tick's call. The host faults the module if the distance does not
+    /// resolve on this track (no course, a lap or more, a trigger it does not have).
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Repeated`]; [`Refused::Range`] for a craft not
+    /// racing or already in a transit, `ticks` outside `1..=MAX_TRANSIT_TICKS`,
+    /// `exit_factor` outside `[0, MAX_SPEED_FACTOR]`, or a distance that cannot be sent.
+    pub fn transit(
+        &mut self,
+        craft: &Craft<'_>,
+        ticks: u16,
+        distance: Distance,
+        exit_factor: f32,
+    ) -> Result<(), Refused> {
+        let (kind, amount) = distance.split();
+        if !craft.is_racing()
+            || craft.in_transit()
+            || ticks == 0
+            || ticks > MAX_TRANSIT_TICKS
+            || !(0.0..=MAX_SPEED_FACTOR).contains(&exit_factor)
+            || Distance::join(kind, amount) != Some(distance)
+        {
+            return Err(Refused::Range);
+        }
+        let command = Command::Transit {
+            slot: craft.slot(),
+            ticks,
+            distance,
+            exit_factor,
+        };
+        self.motion(0, craft, command)
+    }
+
+    /// `scale-speed`: multiply the craft's velocity by `factor`, in
+    /// `[0, MAX_SPEED_FACTOR]`, once, at this call. Once per craft per tick.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Repeated`], [`Refused::Range`].
+    pub fn scale_speed(&mut self, craft: &Craft<'_>, factor: f32) -> Result<(), Refused> {
+        if !(0.0..=MAX_SPEED_FACTOR).contains(&factor) {
+            return Err(Refused::Range);
+        }
+        let command = Command::ScaleSpeed {
+            slot: craft.slot(),
+            factor,
+        };
+        self.motion(1, craft, command)
+    }
+
+    /// `probe-clearance`: ask whether a half disc of `radius` (`(0, MAX_PROBE_RADIUS]`)
+    /// standing across the track at `distance` on fits without touching its geometry.
+    /// The answer is a `clearance` event at the next call (fits, and how far on it
+    /// probed); a distance that does not resolve answers "does not fit". Once per craft
+    /// per tick.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Repeated`], [`Refused::Range`].
+    pub fn probe_clearance(
+        &mut self,
+        craft: &Craft<'_>,
+        distance: Distance,
+        radius: f32,
+    ) -> Result<(), Refused> {
+        let (kind, amount) = distance.split();
+        if !(radius > 0.0 && radius <= MAX_PROBE_RADIUS)
+            || Distance::join(kind, amount) != Some(distance)
+        {
+            return Err(Refused::Range);
+        }
+        let command = Command::ProbeClearance {
+            slot: craft.slot(),
+            distance,
+            radius,
+        };
+        self.motion(2, craft, command)
+    }
+
+    /// `fire-mod-effect-ahead`: the mod's own effect `effect`, its key in `[effects]`,
+    /// played at the course point `distance` ahead of the craft and left there for the
+    /// effect's own lifetime: a sprite of the mod's texture standing in the world. Counts
+    /// toward `MAX_FIRE_EFFECTS_PER_TICK`. Drawn, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Effects`], [`Refused::Pool`], [`Refused::Range`] for
+    /// a distance that is not one the host accepts or a name over `MAX_HUD_TEXT` bytes.
+    pub fn fire_mod_effect_ahead(
+        &mut self,
+        craft: &Craft<'_>,
+        effect: &str,
+        distance: Distance,
+    ) -> Result<(), Refused> {
+        let (kind, amount) = distance.split();
+        if Distance::join(kind, amount) != Some(distance) {
+            return Err(Refused::Range);
+        }
+        let effect = ModName::new(effect).ok_or(Refused::Range)?;
+        self.room_for_effect()?;
+        self.push_string(
+            &Command::FireModEffectAhead {
+                slot: craft.slot(),
+                effect,
+                distance,
+            },
+            effect.as_str(),
+        )?;
+        self.effects += 1;
+        Ok(())
+    }
+
+    /// `screen-fill`: wash the craft's view with `rgba` this tick; re-send it each tick
+    /// it should hold. The slot's own view, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`].
+    pub fn screen_fill(&mut self, craft: &Craft<'_>, rgba: Rgba) -> Result<(), Refused> {
+        self.push(&Command::ScreenFill {
+            slot: craft.slot(),
+            rgba,
+            shader: None,
+        })
+    }
+
+    /// `screen-fill` through the shader `shader`, its key in the mod's `[shaders]`, `rgba`
+    /// being the colour it is handed. One that did not load draws nothing; one the manifest
+    /// lacks faults the module, naming it.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Pool`], [`Refused::Range`] for a name over
+    /// `MAX_HUD_TEXT` bytes.
+    pub fn screen_fill_shaded(
+        &mut self,
+        craft: &Craft<'_>,
+        rgba: Rgba,
+        shader: &str,
+    ) -> Result<(), Refused> {
+        let shader = ModName::new(shader).ok_or(Refused::Range)?;
+        self.push_string(
+            &Command::ScreenFill {
+                slot: craft.slot(),
+                rgba,
+                shader: Some(shader),
+            },
+            shader.as_str(),
+        )
+    }
+
+    /// `draw-beam`: a ribbon from `craft` to the craft in `to` this tick, flat `rgba` or
+    /// through the shader `shader`, a key of the mod's `[shaders]`; re-send it each tick it
+    /// should hold. Draws nothing while either craft is out of the world. Never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Beams`], [`Refused::Pool`], [`Refused::Range`] for a
+    /// beam to `craft` itself, a `half_width` outside `(0, MAX_BEAM_HALF_WIDTH]`, or a
+    /// shader name over `MAX_HUD_TEXT` bytes.
+    pub fn draw_beam(
+        &mut self,
+        craft: &Craft<'_>,
+        to: oag_ext_abi::Slot,
+        rgba: Rgba,
+        half_width: f32,
+        shader: Option<&str>,
+    ) -> Result<(), Refused> {
+        let width = half_width > 0.0 && half_width <= oag_ext_abi::MAX_BEAM_HALF_WIDTH;
+        let shader = match shader.map(ModName::new) {
+            Some(None) => return Err(Refused::Range),
+            Some(name) => name,
+            None => None,
+        };
+        if to == craft.slot() || !width {
+            return Err(Refused::Range);
+        }
+        if self.beams >= oag_ext_abi::MAX_BEAMS_PER_TICK {
+            return Err(Refused::Beams);
+        }
+        let command = Command::DrawBeam {
+            slot: craft.slot(),
+            to,
+            rgba,
+            half_width,
+            shader,
+        };
+        match shader {
+            Some(name) => self.push_string(&command, name.as_str())?,
+            None => self.push(&command)?,
+        }
+        self.beams += 1;
+        Ok(())
+    }
+
+    /// `set-shader-param`: scalar `index` (its place in the shader's header) of the shader
+    /// `shader`, its key in the mod's `[shaders]`, in `craft`'s view, this tick; unset, the
+    /// header's default. Never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Pool`], [`Refused::Range`] for a value that is not
+    /// finite, an `index` from `MAX_SHADER_PARAMS` up or a name over `MAX_HUD_TEXT` bytes.
+    pub fn set_shader_param(
+        &mut self,
+        craft: &Craft<'_>,
+        shader: &str,
+        index: u8,
+        value: f32,
+    ) -> Result<(), Refused> {
+        if !value.is_finite() || index >= oag_ext_abi::MAX_SHADER_PARAMS {
+            return Err(Refused::Range);
+        }
+        let shader = ModName::new(shader).ok_or(Refused::Range)?;
+        self.push_string(
+            &Command::SetShaderParam {
+                slot: craft.slot(),
+                shader,
+                index,
+                value,
+            },
+            shader.as_str(),
+        )
+    }
+
+    /// `portal-view`: `craft`'s view wants what its camera would see through the pair of
+    /// portals at lap progress `entrance` and `exit` (track units), in the texture a mod
+    /// shader reads as `engine_texture`; re-send it each tick it should hold. `radius`, whole
+    /// world units from 1, is how far the surface reaches from the entrance's centre.
+    /// [`oag_ext_abi::ViewUpdate::Once`] draws one snapshot, and another when `generation`
+    /// changes; [`oag_ext_abi::ViewUpdate::Continuous`] draws every frame the portal is in the
+    /// view, at the cost of one more scene a frame. Never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`] for a progress that is not a number or is below
+    /// zero, a `radius` of 0, a `generation` from `MAX_VIEW_GENERATION` up.
+    pub fn portal_view(
+        &mut self,
+        craft: &Craft<'_>,
+        (entrance, exit): (f32, f32),
+        radius: u8,
+        update: oag_ext_abi::ViewUpdate,
+        generation: u8,
+    ) -> Result<(), Refused> {
+        if exit.is_sign_negative() {
+            return Err(Refused::Range);
+        }
+        self.portal_view_to(
+            craft,
+            (entrance, oag_ext_abi::Distance::Progress(exit)),
+            radius,
+            update,
+            generation,
+        )
+    }
+
+    /// [`Self::portal_view`] with the exit where the track file's trigger volume `trigger` stands
+    /// (the numbering of `trigger-enter`): the point a `transit` to
+    /// [`oag_ext_abi::Distance::Trigger`] comes out at, on a fork's route when the trigger stands
+    /// on one, so the view shows what the craft lands on. A trigger the track lacks, or one off
+    /// the course, asks for nothing.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::portal_view`].
+    pub fn portal_view_to_trigger(
+        &mut self,
+        craft: &Craft<'_>,
+        (entrance, trigger): (f32, u16),
+        radius: u8,
+        update: oag_ext_abi::ViewUpdate,
+        generation: u8,
+    ) -> Result<(), Refused> {
+        self.portal_view_to(
+            craft,
+            (entrance, oag_ext_abi::Distance::Trigger(trigger)),
+            radius,
+            update,
+            generation,
+        )
+    }
+
+    fn portal_view_to(
+        &mut self,
+        craft: &Craft<'_>,
+        (entrance, exit): (f32, oag_ext_abi::Distance),
+        radius: u8,
+        update: oag_ext_abi::ViewUpdate,
+        generation: u8,
+    ) -> Result<(), Refused> {
+        let on_a_lap = |progress: f32| progress.is_finite() && progress >= 0.0;
+        let exit_ok = match exit {
+            oag_ext_abi::Distance::Progress(progress) => on_a_lap(progress),
+            _ => true,
+        };
+        if !on_a_lap(entrance)
+            || !exit_ok
+            || radius == 0
+            || generation >= oag_ext_abi::MAX_VIEW_GENERATION
+        {
+            return Err(Refused::Range);
+        }
+        self.push(&Command::PortalView {
+            slot: craft.slot(),
+            entrance,
+            exit,
+            radius,
+            update,
+            generation,
+        })
+    }
+
+    /// `fov-offset`: widen (positive) or narrow the craft's view by `degrees`, within
+    /// `MAX_FOV_OFFSET_DEG` either way, this tick; re-send it each tick it should hold.
+    /// Never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`].
+    pub fn fov_offset(&mut self, craft: &Craft<'_>, degrees: f32) -> Result<(), Refused> {
+        if !(-oag_ext_abi::MAX_FOV_OFFSET_DEG..=oag_ext_abi::MAX_FOV_OFFSET_DEG).contains(&degrees)
+        {
+            return Err(Refused::Range);
+        }
+        self.push(&Command::FovOffset {
+            slot: craft.slot(),
+            degrees,
+        })
     }
 
     /// `give-pickup`: the mod's own pickup to a craft holding nothing.
@@ -277,6 +646,31 @@ impl<'a> Reply<'a> {
         Ok(())
     }
 
+    /// `emit`: send `value` on `channel` ([`channel!`](crate::channel)) about the craft.
+    /// Every module, this one included, receives an [`Event::Mod`](crate::Event::Mod) for
+    /// it on the next tick. The channel must be one the mod's `oag-mod.toml` publishes
+    /// (the host faults the module for an undeclared one, which the SDK cannot see), at
+    /// most [`MAX_EMITS_PER_TICK`] a tick.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Emits`], [`Refused::Range`] for a non-finite value.
+    pub fn emit(&mut self, craft: &Craft<'_>, channel: u32, value: f32) -> Result<(), Refused> {
+        if !value.is_finite() {
+            return Err(Refused::Range);
+        }
+        if self.emits >= MAX_EMITS_PER_TICK {
+            return Err(Refused::Emits);
+        }
+        self.push(&Command::Emit {
+            slot: craft.slot(),
+            channel,
+            value,
+        })?;
+        self.emits += 1;
+        Ok(())
+    }
+
     fn shield_command(&mut self, craft: &Craft<'_>, command: Command) -> Result<(), Refused> {
         let bit = craft.slot().bit();
         if self.shield_cmd & bit != 0 {
@@ -299,35 +693,139 @@ impl<'a> Reply<'a> {
         })
     }
 
+    /// `raise-warning`: lights `icon`'s group of the incoming-warning HUD of the craft's
+    /// person, as a weapon fired behind (or a mine laid ahead) does, for 2.0 s at a 4 Hz
+    /// blink. Send it once, on the tick the cause happens: a raise restarts the group's
+    /// timer, and one sent every tick keeps it from ever lighting. Drawn only where the title
+    /// draws the warnings and the craft is the one person's; dropped elsewhere. Never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`].
+    pub fn raise_warning(&mut self, craft: &Craft<'_>, icon: WarningIcon) -> Result<(), Refused> {
+        self.push(&Command::RaiseWarning {
+            slot: craft.slot(),
+            warning: Warning::Title(icon),
+        })
+    }
+
+    /// `raise-warning` with the icon named by `name` in the mod's own `[icons]` (a PNG or SVG
+    /// the manifest declares), lighting the `side` group. The art is fitted, aspect kept, to
+    /// the title's warning icon box and drawn on the group's own backdrop; everything else is
+    /// [`Self::raise_warning`]. A name the mod's `[icons]` lacks faults the module, naming it;
+    /// one the host could not read draws no warning, and the load report says so.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`] for a name over `MAX_HUD_TEXT` bytes,
+    /// [`Refused::Pool`] when the string pool is full.
+    pub fn raise_mod_warning(
+        &mut self,
+        craft: &Craft<'_>,
+        side: WarningSide,
+        name: &str,
+    ) -> Result<(), Refused> {
+        let icon = ModName::new(name).ok_or(Refused::Range)?;
+        self.push_string(
+            &Command::RaiseWarning {
+                slot: craft.slot(),
+                warning: Warning::Mod { side, icon },
+            },
+            name,
+        )
+    }
+
+    /// `play-mod-sound`: the mod's own sound `sound`, its key in `[sounds]`, from the
+    /// craft, once, as a loop to start, or as a loop to stop ([`SoundMode`]). One the
+    /// manifest lacks faults the module, naming it; one that did not load plays nothing,
+    /// and the load report says so. Heard, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Pool`], [`Refused::Range`] for a name over
+    /// `MAX_HUD_TEXT` bytes.
+    pub fn play_mod_sound(
+        &mut self,
+        craft: &Craft<'_>,
+        sound: &str,
+        mode: SoundMode,
+    ) -> Result<(), Refused> {
+        let sound = ModName::new(sound).ok_or(Refused::Range)?;
+        self.push_string(
+            &Command::PlayModSound {
+                slot: craft.slot(),
+                sound,
+                mode,
+            },
+            sound.as_str(),
+        )
+    }
+
     /// `fire-effect`: one of the title's own particle effects at the craft's nozzle.
     /// Drawn, never hashed.
     ///
     /// # Errors
     ///
-    /// [`Refused::Full`].
+    /// [`Refused::Full`], [`Refused::Effects`] past `MAX_FIRE_EFFECTS_PER_TICK` a tick.
     pub fn fire_effect(&mut self, craft: &Craft<'_>, effect: Effect) -> Result<(), Refused> {
+        self.room_for_effect()?;
         self.push(&Command::FireEffect {
             slot: craft.slot(),
             effect,
-        })
+        })?;
+        self.effects += 1;
+        Ok(())
     }
 
-    /// `fire-effect` with the effect at place `index` of the mod's own `[effects]`
-    /// (name order): a parametric TOML the manifest declares, played at the craft's
-    /// nozzle. One the mod lacks or that did not load draws nothing, and the load
-    /// report says so. Drawn, never hashed.
+    fn room_for_effect(&self) -> Result<(), Refused> {
+        if self.effects >= oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK {
+            return Err(Refused::Effects);
+        }
+        Ok(())
+    }
+
+    /// `stop-mod-effect`: ends the surfaces of the mod's own effect `effect` (its key in
+    /// `[effects]`) that it placed for `craft` with [`Self::fire_mod_effect_ahead`] before this
+    /// tick, at once, particles and all: a portal that closes. None standing is not a fault; a
+    /// key the manifest lacks faults the module. Drawn, never hashed.
     ///
     /// # Errors
     ///
-    /// [`Refused::Full`], or [`Refused::Range`] for an index past 15 bits.
-    pub fn fire_mod_effect(&mut self, craft: &Craft<'_>, index: u16) -> Result<(), Refused> {
-        if index >= 1 << 15 {
-            return Err(Refused::Range);
-        }
-        self.push(&Command::FireModEffect {
-            slot: craft.slot(),
-            index,
-        })
+    /// [`Refused::Full`], [`Refused::Pool`], [`Refused::Range`] for a name over
+    /// `MAX_HUD_TEXT` bytes.
+    pub fn stop_mod_effect(&mut self, craft: &Craft<'_>, effect: &str) -> Result<(), Refused> {
+        let effect = ModName::new(effect).ok_or(Refused::Range)?;
+        self.push_string(
+            &Command::StopModEffect {
+                slot: craft.slot(),
+                effect,
+            },
+            effect.as_str(),
+        )
+    }
+
+    /// `fire-effect` with the effect `effect`, its key in the mod's own `[effects]`: a
+    /// parametric TOML the manifest declares, played at the craft's nozzle. One the
+    /// manifest lacks faults the module, naming it; one that did not load draws nothing,
+    /// and the load report says so. Drawn, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Effects`] past `MAX_FIRE_EFFECTS_PER_TICK` a tick
+    /// (counting [`Self::fire_effect`] too), [`Refused::Pool`], or [`Refused::Range`] for
+    /// a name over `MAX_HUD_TEXT` bytes.
+    pub fn fire_mod_effect(&mut self, craft: &Craft<'_>, effect: &str) -> Result<(), Refused> {
+        let effect = ModName::new(effect).ok_or(Refused::Range)?;
+        self.room_for_effect()?;
+        self.push_string(
+            &Command::FireModEffect {
+                slot: craft.slot(),
+                effect,
+            },
+            effect.as_str(),
+        )?;
+        self.effects += 1;
+        Ok(())
     }
 
     /// `hud-tint`: this tick, recolour the craft's HUD `element`. Drawn, never hashed;
@@ -536,29 +1034,52 @@ impl<'a> Reply<'a> {
         Ok(())
     }
 
-    /// A command whose record names `text` in the reply's pool.
+    /// A command whose record names `text` in the reply's pool. A string the pool already
+    /// holds is named again, not stored twice.
     fn push_string(&mut self, command: &Command, text: &str) -> Result<(), Refused> {
         let bytes = text.as_bytes();
-        let at = self.pool_used;
-        if at + 1 + bytes.len() > POOL_LEN {
-            return Err(Refused::HudItems);
-        }
         if self.count >= MAX_COMMANDS {
             return Err(Refused::Full);
         }
-        let base = POOL_AT - REPLY_AT + at;
-        if let Some(entry) = self.reply.get_mut(base..base + 1 + bytes.len()) {
-            entry[0] = bytes.len() as u8;
-            entry[1..].copy_from_slice(bytes);
-        }
+        let base = POOL_AT - REPLY_AT;
+        let at = match self.pooled(bytes) {
+            Some(at) => at,
+            None => {
+                let at = self.pool_used;
+                if at + 1 + bytes.len() > POOL_LEN {
+                    return Err(Refused::Pool);
+                }
+                if let Some(entry) = self.reply.get_mut(base + at..base + at + 1 + bytes.len()) {
+                    entry[0] = bytes.len() as u8;
+                    entry[1..].copy_from_slice(bytes);
+                }
+                self.pool_used += 1 + bytes.len();
+                at
+            }
+        };
         let record = command.encode_pooled(at as u16);
         let start = 4 + self.count * oag_ext_abi::COMMAND_LEN;
         if let Some(out) = self.reply.get_mut(start..start + oag_ext_abi::COMMAND_LEN) {
             out.copy_from_slice(&record);
         }
         self.count += 1;
-        self.pool_used += 1 + bytes.len();
         Ok(())
+    }
+
+    /// Where the pool already holds `bytes`.
+    fn pooled(&self, bytes: &[u8]) -> Option<usize> {
+        let pool = self
+            .reply
+            .get(POOL_AT - REPLY_AT..POOL_AT - REPLY_AT + self.pool_used)?;
+        let mut at = 0;
+        while at < pool.len() {
+            let len = usize::from(pool[at]);
+            if pool.get(at + 1..at + 1 + len)? == bytes {
+                return Some(at);
+            }
+            at += 1 + len;
+        }
+        None
     }
 
     /// `pickup-look`: this tick, the look of the craft's held mod pickup: the `icon`

@@ -82,6 +82,63 @@ fn every_route_reads_progress_on_the_ring(id: &str, course: &Course) -> usize {
             }
             last = Some(located.progress);
         }
+        // A transit's exit on this route (`Course::route_point`) stands where the ring point
+        // it was asked for does on the route: the same share of the way, to within the
+        // sample spacing. Read off the route's own samples, as routes that share their
+        // first path claim the same samples under `locate_on_route`.
+        let ring_span = step(
+            course.progress_at(route.split).unwrap_or(0.0),
+            course.progress_at(route.merge).unwrap_or(0.0),
+            length,
+        )
+        .rem_euclid(length);
+        for tenth in 1..10 {
+            let share = tenth as f32 / 10.0;
+            let ring_index = course.advance(route.split, ring_span * share);
+            let at = course
+                .route_point(k, ring_index)
+                .unwrap_or_else(|| panic!("{id} route {k}: no point at tenth {tenth}"));
+            let nearest = (0..route.len())
+                .min_by(|&a, &b| {
+                    let (da, db) = (
+                        route.positions[a].distance(at),
+                        route.positions[b].distance(at),
+                    );
+                    da.total_cmp(&db)
+                })
+                .expect("a route has samples");
+            let off = (route.fraction(nearest) - share) * ring_span;
+            assert!(
+                off.abs() <= 60.0 && route.positions[nearest].distance(at) <= 25.0,
+                "{id} route {k} (paths {:?}): the exit at tenth {tenth} stands {off:.1} units \
+                 of the ring span from its share of the route",
+                route.paths,
+            );
+        }
+        // A trigger standing on this route's deck names the route, and one on the ring in the
+        // same span names none (`Course::locate_exit`, which a transit's `Trigger` exit asks).
+        // Routes that share their first path share samples, so the route named is any that has
+        // the sample.
+        let mid = route.positions[route.len() / 2];
+        let (_, named) = course
+            .locate_exit(mid)
+            .unwrap_or_else(|| panic!("{id} route {k}: its middle is not on the course"));
+        let named = named.unwrap_or_else(|| panic!("{id} route {k}: its middle names no route"));
+        assert!(
+            course.routes()[named]
+                .positions
+                .iter()
+                .any(|p| p.distance(mid) < 0.01),
+            "{id} route {k}: the middle names route {named}, which does not stand there"
+        );
+        let on_ring = course
+            .position(course.advance(route.split, ring_span * 0.5))
+            .expect("a ring point");
+        assert_eq!(
+            course.locate_exit(on_ring).map(|(_, route)| route),
+            Some(None),
+            "{id} route {k}: a ring point in its span names a route"
+        );
         // The whole drive covers the ring's own split-to-merge span plus the
         // eighty ring samples either side, within a generous margin.
         let span = step(

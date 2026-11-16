@@ -325,3 +325,19 @@ bits `0xd` for the whole twelve rows after. The race had finished (`ship+0x7002`
 the release, and on a forced early expiry it is crossed on the first dispatch after the
 write. No RPCS3 breakpoint was set (the stub fires them only under the interpreter), so the
 cue's position against the hand-back is read, not watched; Pulse's is watched. Confidence 80.
+
+## Who hears the disengaging call
+
+HD's `Autopilot_Update` has no seat test, and the play helper's flags are unread, so
+which seat hears a dry line is **chosen, not measured**. The port's rule is one seat per
+speaker set: `oag_raceplay::Race::heard_here` admits the seat a network client names
+(`set_seat`) and, with no seat, every person flown on this machine (split screen, one window
+per seat: every local person hears every call, confirmed by the maintainer 2026-10-21).
+Three things follow the listening seat (`Race::player_slot`) and not slot 0:
+
+- `Cue::Message` is raised only for a board whose slot `heard_here`, once per tick, carrying the listening seat's slot.
+- The dry branch of `Placement::CraftUnlessPlayer` cues, the engine's "quieter" flag and HD's crossfade throttle compare the event's or craft's slot with `RaceFrame::player_slot`; `CueEvent::is_player` (`slot == 0`) is gone.
+- `Cue::Disengaging` and the held `~AUTOPILOT` were already routed this way.
+
+Tests: `tests/message_cue.rs` (`a_clients_message_cue_follows_its_seat`), `tests/autopilot.rs`,
+`oag-sound` `the_dry_branch_follows_the_listening_seat`.

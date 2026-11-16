@@ -17,8 +17,10 @@
 # `modes` all fit the view answers it, so a screen of three or five views, whose views
 # differ in shape, uses a different layout for each.
 
+screen = "split-hud"
+
 [toml-schema]
-location = "https://oag.topaxi.com/mods/schemas/v1/split-hud.tosd"
+location = "https://oag.topaxi.com/mods/schemas/v1/screen-layout.tosd"
 version = "1.0.0"
 
 # Two views cut left and right: each one a tall column, about 0.9:1 at 16:9. Its own rule so

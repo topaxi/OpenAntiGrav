@@ -14,13 +14,13 @@ what the fix was. Implemented in
 | Piece | Status | Confidence |
 | --- | --- | --- |
 | Probe `6.0` (Rocket) / `12.0` (Missile, Plasma, Shuriken) along the ridden normal, ride `3.0` above a hit, fall `50.0` units/s^2 on a miss | **recovered** | 82-92 |
-| **The branch is on the surface class of the hit**: wall or craft ends the flight, floor or mag floor is ridden, nothing means fall | **recovered 2026-09-13**, `Collision_SweepSegment` (`0x0883198c`) read at decompiler level | 85 |
+| **The branch is on the surface class of the hit**: wall (`0`) or outside the collision cage (`4`, wired 2026-11-11, "Wired" at the end of the cage section; not a craft) ends the flight, floor or mag floor is ridden, nothing means fall | **recovered 2026-09-13**, `Collision_SweepSegment` (`0x0883198c`) read at decompiler level | 85 |
 | A floor met across the travel segment is *landed on* (`hit + normal * 3.0`), for all four weapons | **recovered 2026-09-13**, `Rocket_Update` and `Missile_Update` decompiles | 85 |
 | On that landing the Missile moves and nothing else - no normal adopted, no velocity written - where the Rocket and Shuriken adopt the normal and recompute velocity | **recovered 2026-09-13**, the same two decompiles | 85 |
 | A wall found by the *probe* detonates a Rocket or a Plasma and does nothing to a Missile or a Shuriken | **recovered 2026-09-13** | 80 |
-| Keeping the speed when the Rocket, Plasma or Shuriken's velocity is turned onto a floor met across the segment | **ours** - the original writes `(next - prev) / dt` and rescales on the next probe | - |
+| Keeping the speed when the Rocket, Plasma or Shuriken's velocity is turned onto a floor met across the segment | **ours on HD, 2048 and Omega** (`FloorArms::ParallelToFloor`); **Pulse and Pure write the original's law** (`FloorArms::SteerToRidePoint`, wired 2026-11-12, `floor-arms` below): `(next - prev) / dt` raw on the Rocket's and Shuriken's sweep arm and the Shuriken's probe arm, nothing on the Plasma's and Missile's | - |
 | The fall is along world `-Y` for the Rocket, Missile and Shuriken, along the carried normal for the Plasma, and absent for the Cannon | Rocket and Shuriken **recovered** (`velocity.y -= dt * 50`); the Plasma **recovered** as `velocity -= surface * (dt * 50)` (`plasma.md`) and **wired 2026-10-08** - it fell along world `-Y` before, a different direction on any bank. The Missile's fall axis is not separately read | 85 |
-| The normal a projectile is born riding: the firing craft's up for the Rocket, Missile, Shuriken and Plasma (`Rocket_Init`, `Missile_Init` `+0xd0`, `Shuriken_Init` `+0x150`, `Plasma_Launch` `+0x110` all store `-(craft+0xb10)`) | **recovered 2026-10-07**, `Missile_Init`/`Shuriken_Init` decompiled; wired through `spawn_riding`, `spawn_guided` and `throw`. A seed of world up (`Vec3::Y`) remains only for tests | - |
+| The normal a projectile is born riding: the firing craft's up for the Rocket, Missile, Shuriken and Plasma (`Rocket_Init`, `Missile_Init` `+0xd0`, `Shuriken_Init` `+0x150`, `Plasma_Launch` `+0x110` all store `-(craft+0xb10)`) | **recovered 2026-10-07**, `Missile_Init`/`Shuriken_Init` decompiled; **the located track's up, not the craft's up (2026-11-11, confidence 88), wired 2026-11-12 on every title** (HD, 2048 and Omega read in [projectile-launch-normal.md](../ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md)): `Craft::launch_normal` through `spawn_riding`, `spawn_guided`, `throw` and the Plasma's reseat; the Cannon and Disruptor keep the craft's up ([rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md#wired-the-launch-normal-2026-11-12-launch-normal-wire)). A seed of world up (`Vec3::Y`) remains only for tests | - |
 
 ## The Cannon is not in this table at all
 
@@ -140,8 +140,9 @@ returns; this engine's raycaster has no such code, so the test is geometric."
 The raycaster has always returned `RaycastHit::surface`, and
 `Collision_SweepSegment` (`0x0883198c`) returns exactly that: the struck
 collider's `+0x6c` surface type, `0` wall, `1` floor, `3` mag floor, `0x7f`
-for nothing, `4` for the craft test. `Rocket_Update`'s switch is on that
-number, not on any angle.
+for nothing, `4` for a segment end outside the collision cage (read as a
+craft test until 2026-11-11, see "On a tilted track ours fall off and the
+original's do not: the cage" below). `Rocket_Update`'s switch is on that number, not on any angle.
 
 ## The fix
 
@@ -149,13 +150,15 @@ number, not on any angle.
 `Projectiles::advance` branches on it:
 
 - **probe** - nothing: fall; floor/mag floor: ride (adopt the normal, sit
-  `3.0` above, turn the velocity parallel); wall: Rocket and Plasma detonate,
+  `3.0` above; the velocity is steered to the ride point, written raw for the
+  Shuriken, or turned parallel, per title, "Wired: the floor arms" below); wall: Rocket and Plasma detonate,
   Missile and Shuriken do nothing this tick;
 - **travel segment** - craft: detonate; wall: Rocket and Plasma detonate, the
   Missile mirrors up to its budget, the Shuriken mirrors without one;
-  floor/mag floor: **land on it** - sit `3.0` above; the Rocket, Plasma and
-  Shuriken also adopt the normal and turn their velocity parallel with its
-  speed kept, the Missile only moves.
+  floor/mag floor: **land on it** - sit `3.0` above; where the title has not
+  measured its arms (HD, 2048, Omega) the Rocket, Plasma and Shuriken also adopt
+  the normal and turn their velocity parallel with its speed kept, the Missile
+  only moves; Pulse and Pure write the original's arms, below.
 
 `WALL_FACING` and `RIDEABLE_COS` are gone. The Pulse-measured `6.0`, `3.0` and
 `50.0` are untouched, and nothing here is on the title axis: HD needed no
@@ -181,9 +184,10 @@ which both models resolve identically.
   probe along `-Y` missed the near-vertical road for 24 ticks before the
   rocket landed at the bottom. One tick on a flat grid, a second of free
   flight on a drop.
-- **The speed after a segment landing** is kept here and recomputed as
-  `(next - prev) / dt` in the original. A rocket that lands hard loses speed
-  for one tick there and is rescaled by the next probe; here it never slows.
+- **The speed after a segment landing** is kept on HD, 2048 and Omega and
+  recomputed as `(next - prev) / dt` in the original (Pulse and Pure write that,
+  "Wired: the floor arms"). A rocket that lands hard loses speed for one tick
+  there and is rescaled by the next probe.
 - **Jump lips**, as above: a play-test of the original on Pulse's 07 ramp
   would say whether its rockets sail the same way.
 - **HD's own projectile update** has not been read. Everything above is
@@ -291,3 +295,176 @@ Pure shares the code and authors the Rocket, Missile, Plasma and Shuriken:
 **checked, applies, not wired** (no circuit with a bank chosen, no Pure test).
 2048 and Omega: **checked, applies, not wired** - the shared code reaches them,
 no weapon is raced on either (`docs/overview/status.md`).
+
+## HD Plasma, launch boost on: the 2.37 is the ride's own ripple, not a ride-law error (2026-11-04)
+
+`projectile_tilt_ground_truth` pins `start_boost = None`. With HD's inherited launch
+boost left on, the HD Plasma test's worst height error reads 2.37 against 2.0 (off:
+1.21; same 294 shots, 4,487 against 4,480 judged ticks, worst angle 4.9 both ways).
+Per-tick log of every judged Plasma tick, one run each (the sim is deterministic):
+
+- The 2.37 is tick 5090, `01_Vineta_K` at (768.5, -130.5, 370.7), craft up.y 0.997 (flat,
+  not a bank), 116 speed. The bolt reattaches there after a miss (probe distance 9.30, a
+  dip in the road of about 3 units) and rides 6.37, 3.42, 6.01, 3.60, 4.25, 4.00: a
+  period-2 overshoot that decays in five updates, the ride law's own shape.
+- The unboosted craft crosses the same dip: tick 5780 at (770.3, -131.0, 369.3) reads
+  5.87, 3.20, 4.85, 3.88, 4.01, 4.00 (errors 1.87, -0.80, 0.85, -0.12). Its ripple is
+  the same; it is mostly hidden because the bolt reaches the dip at update 5, inside the
+  test's "settling" window (updates 5 and 6), so only 0.85 is judged. The boosted bolt
+  reaches it at update 8 to 12, outside the window.
+- Unboosted worst, 1.21, is the same kind: (-629.9, -141.3, 397.9), tick 440. Boosted
+  errors above 1.0: 9 ticks, all at the two dips (x ~770..785, y -131; x ~-640, y -139);
+  unboosted: 1.
+- Bolt and craft speed at the worst ticks match the unboosted line (116 against 117);
+  the boost moves the firing point by a few metres, not the speed at the bolt.
+
+**Verdict (a), firing point.** The error follows the dip, not the boost speed. The
+test's settling window covers the first ride after the release, not a reattach
+after a dip, so a shifted firing point can put the dip's ripple inside or outside it.
+The pin stays. Not measured: whether the original's Plasma shows the same ripple over
+that dip (needs an HD capture at that stretch, not taken; confidence the ripple is the
+original's own: 55, from the ride law matching on flat road, 0.00 error in 16-tick
+runs). Ran on two of two HD runs only (one seed each; the sim is deterministic).
+
+**2026-11-10 (`hd-late-speed`): the ripple is left out of the height.** HD's body damping
+(`docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`) slowed the craft by under a percent and
+the same dip came up again with the boost off: tick 2420, reattach at 9.09 and then 6.16 (2.16
+off) on update 10, outside the settling window. The test now skips the height for the reattach
+update and the four after it on a Plasma (`PLASMA_REATTACH_RIPPLE_UPDATES`), the five updates
+the ripple takes to decay; HD's worst is then 1.17, at the other dip (-644, -139, 390). The
+angle is still judged on every one of those ticks.
+
+## On a tilted track ours fall off and the original's do not: the cage (2026-11-11, `weapon-bank-follow`)
+
+Maintainer report: "on tilted track our weapons (plasma and others) fall off the track along
+gravity, instead of following the track as in the originals." Measured on Moa Therma White's
+85 degree banked helix and on Outpost 7's first ramp against PPSSPP; evidence, numbers and the
+recovered law are on
+[rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md#2026-11-11-code-4-is-the-collision-cage-and-what-a-bank-does-to-every-flyer-weapon-bank-follow).
+**Wired 2026-11-11** (lane `projectile-cage-wire`, Pulse only): see the end of this section.
+
+**The ride laws are not at fault.** From the original's own states, one update of ours lands on
+the original's next position to 0.000 unit for the Rocket (48 updates), the Cannon (24) and the
+Shuriken (57), and within 0.012 for the Plasma once it rides.
+
+**What differs is the ending.** Code `4` of the query (the "craft test" of the first table on this
+page) is the **collision cage** tested on the segment's end. On the bank the original's Plasma
+reaches the kerb at the top edge, its probe ends outside the tube, and it detonates there (update
+49); the Shuriken is destroyed the same way (update 58), a Cannon round sparks on it (update 25),
+and three rockets fired up Outpost 7's ramp die 21 to 28 units up within 0.37 s. Ours has no cage
+test for projectiles, so the same shots pass the last floor triangle, take the fall arm and fly
+out their lifetime: the Plasma and the Shuriken ten seconds and two to three kilometres, two of
+the three rockets five seconds, the Cannon round 440 units. "Along gravity" is the `50.0` fall on
+world `-Y` (the Plasma's along its carried normal).
+
+**Corrections to this page.**
+
+- First table, "wall or craft ends the flight": the query has no craft arm. `0` is a wall, `4` is
+  the cage; a craft is met by each pool's own craft sweep.
+- "Jump lips" under "Still open" and "What is left is jumps, and it is the recovered model doing
+  what it says": the recovered model was missing the cage. The original's rockets do not sail.
+- First table, last row: the normal a projectile is born riding is the track's up at the craft's
+  located point (`craft+0xb10` is the located track point's down), not the craft's up. They agree
+  within 0.3 degrees on a craft held to the track and differ by 5.24 on a craft pitching onto a ramp.
+- "The Missile's fall axis is not separately read": read, world `-Y` (`missile.md`).
+
+**Two smaller things the same captures showed**, both on the linked page: the probe misses of a
+projectile's first updates are the firing craft's own box collider (the query answers "nothing"
+when a craft box is nearer than the floor), which replaces the Plasma's 0.04 s age gate; and the
+Cannon's round flies 2.7 times faster in the original than here
+([cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md#2026-11-11-the-cannon-checked-on-a-bank-the-flight-is-exact-the-speed-is-not-and-the-cage-ends-a-round-weapon-bank-follow)).
+
+**Lineage.** Pulse PSP measured; Pulse PS2 inherits it. Pure, HD, 2048 and Omega run no cage off
+the track header, so a wire that reads `Spline::cage()` changes nothing for them: **checked,
+differs** (Pure, by the header census), **not checkable** here for HD's own code `4`.
+
+**Wired (2026-11-11, lane `projectile-cage-wire`), Pulse PSP and PS2 only** (the loader reports `collision cage: on, 862 control point(s)` on both images' default circuit). `Projectiles::advance`
+asks the race's cage (`Spline::cage()`, through `oag_physics::cage::Containment` on
+`oag_gameplay::cage::CageTrack`) about the probe's end and the travel sweep's end, after the mesh
+query and before the surface class, with no craft limits (`MAX_POINT_DISTANCE`, `MAX_DEPTH` are
+`Cage_ResolveCraft`'s):
+
+| | Probe's end outside | Travel sweep's end outside |
+| --- | --- | --- |
+| Rocket, Plasma | ends at the boundary point, `blast: false` | the same |
+| Missile, Shuriken | nothing: neither rides nor falls | ends at the boundary, no bounce, `blast: false` (chosen: the `flags \|= 0x14` teardown reaches the explosion and no damage, `missile.md`, `shuriken.md`) |
+| Cannon | no probe | ends at the boundary with its sparks, `blast` as on a wall |
+
+The point tested is the mesh hit's point when there is one (any surface class: a floor past the tube
+is a wall to a projectile), else the segment's end (probe: `to - surface * probe_length`). A hull hit
+stays what it is. A probe the firing craft's own box hides (Pulse, see "Own-craft box" below) or a Plasma
+within the chosen window of a title without the box law still asks the cage about the probe's
+end. Acceptance
+(`crates/raceplay/tests/projectile_cage_ground_truth.rs`, each red without the cage): Plasma from
+update 45 ends on update 49 within 0.5 unit of the original's boundary point, Shuriken (re-seeded each
+update until the floor arms were wired, 2026-11-12; chained since) on
+update 58, the Cannon round on update 25, the Outpost 7 rocket on update 21, and all 17 recorded
+code-4 queries are outside at the original's boundary point and normal. `rocket_floor_trace` on
+Pulse `07` and `10`: rockets that "expired" at their five seconds went from 14 and 7 to 0, and the
+longest flight from 299 ticks to 107 and 156.
+
+**Still different, not wired here:** the Missile's MAX_BOUNCES wall end (`blast: true`, while its
+cage end spends none), an opponent's box, and the travel sweep's own box meeting.
+
+### Wired: the floor arms (2026-11-12, lane `pulse-floor-arms`)
+
+`Weapons::floor_arms_steer_to_ride_point` (Pulse measured `true`, Pure inherited from Pulse, HD,
+2048 and Omega chosen `false`) selects `projectile::FloorArms` for `Projectiles::advance`:
+
+| Arm | `SteerToRidePoint` (Pulse, Pure) | `ParallelToFloor` (HD, 2048, Omega) |
+| --- | --- | --- |
+| Rocket, Plasma probe | steer: velocity `(ride point - start) / dt`, rescaled to the class speed | the same |
+| **Missile probe** | the same steer (`missile.md`, 84) | velocity turned parallel to the floor |
+| **Shuriken probe** | velocity `(ride point - start) / dt`, no rescale: the speed drifts (`shuriken.md`, 88) | parallel, speed kept |
+| **Rocket, Shuriken sweep** | normal adopted, velocity `(hit + normal * 3.0 - start) / dt` raw (`rocket-visuals.md`, 84) | parallel, speed kept |
+| **Plasma sweep** | moves to `hit + normal * ride`, nothing else (`plasma.md`, 84) | normal adopted, parallel |
+| Missile sweep | moves only | moves only |
+
+Acceptance: `moa_therma_white_shuriken_ends_at_the_cage` now chains the nine recorded states from
+update 50 with no re-seed, holds the blade's velocity to within 2 units/s of the original's at each
+next update (278 against 299 units/s at update 52 without the law) and ends it on the cage at update 58;
+`crates/weapons/src/projectile/tests/floor_arms.rs` pins each arm's formula on a flat floor, both
+ways. The Missile's per-update errors and the Rocket's ramp-face exit (`(-65.0, 155.6, -7.1)`) were not
+kept as recorded states, so those two arms are unit-tested only, not disc-backed.
+
+### Wired: the own-craft box (2026-11-13, lane `pulse-own-craft-box`)
+
+`Weapons::own_craft_box_hides_track` (Pulse measured `true`; Pure, HD, 2048 and Omega chosen `false`)
+selects `projectile::OwnCraftProbe` for `Projectiles::advance`. On Pulse every flyer that probes
+(Rocket, Missile, Plasma, Shuriken; not the Cannon, which has no probe) asks the firing craft's box
+before the mesh: centre on the body, rows `(-right, up, forward)`, half dimensions `(width, height,
+length) * 0.75 * 0.5` from `<Misc>`, the segment gated through the transposed rotation
+(`Collision_RaycastBox`) and then the nearest face of the true box. A box face nearer than the mesh
+hit makes the probe code `0x7f`: the bolt falls this update, and the cage is still asked about the
+full segment's end. The reach ahead of a Venom is 4.875 axis-aligned and 2.06 at 45 degrees of yaw; on
+the mag strip's 85 degree roll the gate rejects the start and the bolt rides at once. The Plasma's
+chosen 0.04 s window is gone on Pulse; a title without the law keeps it (chosen,
+`UNMEASURED_PLASMA_PROBE_WINDOW` in `oag_raceplay`'s `access.rs`).
+
+Acceptance: `crates/weapons/src/projectile/tests/craft_box.rs` (the seven records the page prints:
+red on the rows' own frame; reach 4.875 and 2.06; a Rocket falling inside the reach and riding
+outside it; the mag-strip roll) and `projectile_cage_ground_truth::
+the_grid_craft_hides_the_floor_from_its_own_first_probes_on_pulse` (the grid craft's row 0 is
+`(-1, 0, 0)`, a Rocket 3 ahead falls, 6 ahead rides). **Not ported:** the 2,302-probe replay of 56
+captures (`scripts/psp-craft-box-replay.py`): the capture files were scratch and are gone, so only
+the page's records are a Rust test. Open: an opponent's box (75), the travel sweep's own box meeting
+(65), Pure by inheritance.
+
+### The other titles (2026-11-13, lane `own-craft-box-other-titles`)
+
+`Weapons::own_craft_box_hides_track` is now an `OwnCraftBox`, one value per title, each read on the
+title's own executable:
+
+| Title | Value | Confidence | What the executable does | Page |
+| --- | --- | ---: | --- | --- |
+| Pulse | `Falls` | 90 | the box hit is `0x7f`, the fall arm (live) | [rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md) |
+| Pure | `Holds` | 84 | Pulse's raycast, gate and box, but the weapons branch on `kind == 1` themselves: a box hit runs neither the fall nor the ride, the bolt keeps its velocity | [own-craft-box.md](../ghidra/functions/psp-pure-usa/own-craft-box.md) |
+| HD | `PlasmaWindow`, chosen | 65 | a box branch with Pulse's consequence, but the box's surface filter and row sign are open | [own-craft-box.md](../ghidra/functions/ps3-hdfury-eu/own-craft-box.md) |
+| 2048 | `Absent` | 84 | the projectile query walks track meshes only | [own-craft-box.md](../ghidra/functions/vita-2048-eu-v104/own-craft-box.md) |
+| Omega | `Absent` | 84 | the same walk, read on its own binary | [own-craft-box.md](../ghidra/functions/ps4-omega-eu/own-craft-box.md) |
+
+`OwnCraftProbe::CraftBoxHolds` (Pure) skips the probe's arms and its cage question on an update the
+box blocks; `OwnCraftProbe::NoBox` (2048, Omega) lets every flyer, the Plasma included, probe from its
+first update, so the chosen 0.04 s window is left only on HD. Pure's probe lengths (Rocket `12.0`) and
+HD's (Plasma `6.0`) differ from the Pulse lengths `oag_weapons` uses for every title; written down on
+the pages, not wired.

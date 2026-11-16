@@ -25,6 +25,9 @@ fn options(image: &std::path::Path, team: &str) -> race::Options {
         mode: oag_race::Mode::SingleRace,
         track: Some(TRACK.to_string()),
         team: Some(team.to_string()),
+        // Handling and the roster do not read the track's art; the derived
+        // ribbon skips the `.rcsmodel` decode that is most of an HD load.
+        ribbon: true,
         ..race::Options::default()
     }
 }

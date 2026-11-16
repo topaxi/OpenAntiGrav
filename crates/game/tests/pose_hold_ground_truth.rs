@@ -82,3 +82,56 @@ fn a_held_pose_is_the_start_pose_after_the_clock_has_run() {
     assert_eq!(held_end, held_start, "the held pose at tick {TICKS}");
     assert_eq!(held_start, start, "the hold does not move the start");
 }
+
+/// Platinum Rush's ribbon follows the hull when the pose is put back (Pulse PS2's pair, a streak
+/// at the angle the resting craft had turned to).
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn a_held_pose_takes_the_engine_ribbon_with_the_hull() {
+    use oag_core::math::Quat;
+
+    let Some(image) = oag_testdata::image("data/images/pulse-ps2-eu.chd") else {
+        return;
+    };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        track: Some(r"Data\Environments\13_Track\track.vex".to_string()),
+        seed: Some(1),
+        opponents: false,
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let held = oag_game::race_capture::pose_hold::StartPose::of(&race);
+    let input = oag_gameplay::PlayerInputs::none();
+    for _ in 0..120 {
+        race.tick(&input);
+    }
+    // The resting craft turns under the clock (bank-to-yaw): put it a third of a turn round,
+    // then let the ribbon lay samples along the turned hull.
+    race.place_player(
+        race.ship().physics.body.position,
+        Quat::from_rotation_y(0.6) * race.ship().physics.body.orientation,
+    );
+    for _ in 0..20 {
+        race.tick(&input);
+    }
+    let (_, back_turned) = race.exhaust().newest_trail_sample().expect("a trail");
+    assert!(
+        back_turned.dot(-race.ship().physics.body.forward()) > 0.999,
+        "the ribbon is laid along the hull as it is flown"
+    );
+
+    held.restore(&mut race);
+    let (head, back) = race.exhaust().newest_trail_sample().expect("a trail");
+    let hull_back = -race.ship().physics.body.forward();
+    assert!(
+        back.dot(hull_back) > 0.999,
+        "the ribbon points back along the restored hull: {back:?} against {hull_back:?}"
+    );
+    let nozzle = race.nozzle().expect("an engine flare");
+    assert!(
+        (head - nozzle).length() < 0.05,
+        "the ribbon's head is at the restored nozzle: {head:?} against {nozzle:?}"
+    );
+}

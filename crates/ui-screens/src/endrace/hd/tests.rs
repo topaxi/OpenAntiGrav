@@ -6,6 +6,7 @@ use oag_ui::menu::Frame;
 use oag_ui::screen::Screens;
 
 mod cursor;
+mod scored;
 
 /// `Data\Plugins\Frontend\Gui\EndRace_Definition.xml` in miniature - the
 /// same container shape the real file authors (`<Block>` headers/options,
@@ -120,18 +121,22 @@ fn grid_cell_text_reads_place_and_time_and_nothing_past_column_one() {
         headline: Headline::TimeTrial,
         rows: vec![
             FieldRow {
+                score: None,
                 place: 1,
                 time_ticks: Some(180),
                 player: true,
                 seat: None,
                 name: None,
+                team: None,
             },
             FieldRow {
+                score: None,
                 place: 2,
                 time_ticks: None,
                 player: false,
                 seat: None,
                 name: None,
+                team: None,
             },
         ],
     };
@@ -162,11 +167,13 @@ fn results_draws_only_the_two_captioned_columns_and_the_resolved_headline() {
         loyalty: None,
         headline: Headline::TimeTrial,
         rows: vec![FieldRow {
+            score: None,
             place: 1,
             time_ticks: Some(180),
             player: true,
             seat: None,
             name: None,
+            team: None,
         }],
     };
     let strings = strings();
@@ -213,18 +220,22 @@ fn results_repositions_the_highlight_onto_the_player_s_row() {
         headline: Headline::TimeTrial,
         rows: vec![
             FieldRow {
+                score: None,
                 place: 1,
                 time_ticks: Some(60),
                 player: false,
                 seat: None,
                 name: None,
+                team: None,
             },
             FieldRow {
+                score: None,
                 place: 2,
                 time_ticks: Some(90),
                 player: true,
                 seat: None,
                 name: None,
+                team: None,
             },
         ],
     };
@@ -288,11 +299,13 @@ fn results_uses_hds_own_place_idstring_and_never_leaks_the_target_or_loyalty_pla
         loyalty: None,
         headline: Headline::Position(1),
         rows: vec![FieldRow {
+            score: None,
             place: 1,
             time_ticks: Some(60),
             player: true,
             seat: None,
             name: None,
+            team: None,
         }],
     };
     let strings = strings();
@@ -405,6 +418,7 @@ fn has_fill_at(layers: &oag_ui::menu::Layers, x: f32, y: f32) -> bool {
 #[test]
 fn rewards_draws_the_place_and_tier_and_no_loyalty_placeholder() {
     let layers = rewards_layers(&HdRewards {
+        tier: None,
         place: Some(3),
         medal: Some(oag_tables::race_campaign::Medal::Gold),
         campaign: true,
@@ -443,6 +457,7 @@ fn rewards_draws_the_place_and_tier_and_no_loyalty_placeholder() {
 #[test]
 fn rewards_without_a_place_or_a_campaign_draws_only_the_authored_labels() {
     let layers = rewards_layers(&HdRewards {
+        tier: None,
         place: None,
         medal: None,
         campaign: false,
@@ -455,6 +470,7 @@ fn rewards_without_a_place_or_a_campaign_draws_only_the_authored_labels() {
 #[test]
 fn rewards_on_a_campaign_race_with_no_medal_says_so() {
     let layers = rewards_layers(&HdRewards {
+        tier: None,
         place: Some(8),
         medal: None,
         campaign: true,
@@ -568,11 +584,13 @@ fn unnamed_loyalty_blocks_draw_as_blocks_with_their_label_inset() {
 #[test]
 fn a_two_person_race_names_and_highlights_each_person() {
     let row = |place, seat: Option<u8>| FieldRow {
+        score: None,
         place,
         time_ticks: Some(u64::from(place) * 600),
         player: seat.is_some(),
         seat,
         name: None,
+        team: None,
     };
     let model = FieldResults {
         loyalty: None,
@@ -616,11 +634,13 @@ fn a_two_person_race_names_and_highlights_each_person() {
 #[test]
 fn a_named_person_is_drawn_by_name() {
     let row = |place, seat: u8, name: Option<&str>| FieldRow {
+        score: None,
         place,
         time_ticks: Some(u64::from(place) * 600),
         player: true,
         seat: Some(seat),
         name: name.map(str::to_string),
+        team: None,
     };
     let model = FieldResults {
         loyalty: None,

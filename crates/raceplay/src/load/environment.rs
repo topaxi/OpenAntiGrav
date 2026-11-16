@@ -18,6 +18,30 @@ fn sky_gtf_name(vex_name: &str) -> Option<String> {
     Some(format!("{}{}sky.gtf", &vex_name[..at], &vex_name[at..=at]))
 }
 
+/// The sky of a PS3-path circuit. Two containers wear the `.rcsmodel` extension, and their skies are
+/// unrelated formats (see `geometry::track_model`'s dispatch on the same check). Wipeout HD authors
+/// no `Skycube` node: its sky is the `sky.gtf` cubemap beside the track, drawn through the same
+/// camera-centred sky path, and a Zone race swaps that file out (see `mesh::sky_cube` and
+/// `oag_hd::race::ZONE_SKY`). Wipeout 2048's is `skycube.rcsmodel`, an authored dome in the
+/// container the track and craft already read ([`psp2_sky_model`]).
+pub(super) fn ps3_sky_model(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    geometry: &[u8],
+    (title, mode, store): (
+        &'static oag_title::Title,
+        oag_race::Mode,
+        oag_gpu::formats::SceneStore,
+    ),
+    report: &mut Vec<String>,
+) -> Option<mesh::Model> {
+    if mesh::rcs::psp2::is_psp2(geometry) {
+        psp2_sky_model(archives, track, report)
+    } else {
+        hd_sky_model(archives, track, title.race, mode, store, report)
+    }
+}
+
 /// Wipeout HD's sky, or `None` with the reason in the report.
 ///
 /// The rotation applied is the circuit's own `Lighting.Sky rotation`, read as
@@ -39,6 +63,7 @@ pub(super) fn hd_sky_model(
     track: &str,
     race: &'static oag_title::RaceDefaults,
     mode: oag_race::Mode,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Option<mesh::Model> {
     let zone_sky = (mode == oag_race::Mode::Zone)
@@ -80,7 +105,7 @@ pub(super) fn hd_sky_model(
             .map_or(0.0, |c| f32::from(c[3]) / mesh::sky_cube::SKY_COLOUR_FULL),
         _ => 0.0,
     };
-    match mesh::sky_cube::build(&name, &blob, rotation, tint, mask) {
+    match mesh::sky_cube::build(&name, &blob, rotation, tint, mask, store) {
         Ok(sky) => {
             let (width, height) = sky
                 .textures
@@ -189,15 +214,14 @@ pub(super) fn psp2_sky_model(
         ));
         return None;
     }
-    let (mut model, built) = match mesh::rcs::psp2::build(&name, &blob, None, &mut |path| {
-        archives.read_name(path).ok()
-    }) {
-        Ok(built) => built,
-        Err(error) => {
-            report.push(format!("{name}: {error:#} - the sky stays black"));
-            return None;
-        }
-    };
+    let (mut model, built) =
+        match mesh::rcs::psp2::build(&name, &blob, None, &mut crate::stages::reader(archives)) {
+            Ok(built) => built,
+            Err(error) => {
+                report.push(format!("{name}: {error:#} - the sky stays black"));
+                return None;
+            }
+        };
     if model.indices.is_empty() {
         report.push(format!(
             "{name}: decoded to no triangles - the sky stays black"
@@ -344,7 +368,7 @@ pub(super) fn read_envsettings(
 ///
 /// **This is the registrar's own persistence, read live rather than
 /// invented.** `renderer.md`'s "The resolve's Fury circuits carry the front
-/// end's own Tone triple" section (2026-09-13) found Sol 2's race running its
+/// end's own Tone triple" section found Sol 2's race running its
 /// exposure resolve at `(20, 3, 4)` although Sol 2's own file authors only the
 /// first of the three - because the front end's file loads first and a
 /// circuit's own file only overwrites the keys it declares, never resetting
@@ -574,10 +598,43 @@ mod bloom;
 mod exposure;
 mod light;
 mod probes;
-pub(super) use bloom::envsettings_bloom;
+mod sh_probes;
+pub use bloom::hd_bloom_params;
+pub(super) use bloom::{envsettings_bloom, scene_store};
 use exposure::envsettings_exposure;
+pub use light::authored_light;
 pub(super) use light::{envsettings_light, envsettings_tonemap};
 pub(super) use probes::read_probes;
+pub(super) use sh_probes::read_sh_probes;
+
+/// Writes the circuit's fog colour into the track vertices that carry `fc01_dummy`'s placeholder
+/// pixel, and says how many.
+#[cfg(feature = "view")]
+pub(super) fn fill_flat_fog(
+    track_model: &mut mesh::Model,
+    authored_fog: Option<mesh_render::Fog>,
+    output_scale: f32,
+    report: &mut Vec<String>,
+) {
+    let flat = authored_fog.map_or([0.0; 3], |fog| fog.colour.map(|c| c * output_scale));
+    let mut filled = 0usize;
+    for v in &mut track_model.vertices {
+        if v.colour == mesh::rcs::psp2::FOG_FLAT {
+            v.colour = [flat[0], flat[1], flat[2], 1.0];
+            filled += 1;
+        }
+    }
+    if filled > 0 {
+        report.push(format!(
+            "fc01_dummy: {filled} vertices drawn as fogColour {flat:?} ({})",
+            if authored_fog.is_some() {
+                "the circuit's authored fog colour, fixed at load and not moved by the Zone grade; which value the engine binds is chosen, not measured"
+            } else {
+                "the circuit authors no fog, so black"
+            }
+        ));
+    }
+}
 
 /// Everything the four environment readers found, in one value.
 ///
@@ -627,7 +684,7 @@ pub(super) enum GeometryKind {
     /// pixel shaders are not 2048's**: Omega's lightmapped surfaces are lit by
     /// the `Lighting.Nova prelit scale bias power` triple - see
     /// [`mesh_render::Light::with_nova_prelit`] - which the Vita files author
-    /// (as `1 0 1 0`) and whose Vita shader is unread.
+    /// too (2048's shader reads the scale and the bias, never the power).
     Ps4,
 }
 
@@ -722,18 +779,14 @@ pub(super) fn staging(
     let hd_bloom = (ps3_geometry && !wo_title)
         .then(|| envsettings_bloom(archives, track, report))
         .flatten()
-        .map(|params| oag_post::hd_bloom::Params {
-            zoom: title.race.zoom_ring.map(crate::zoom::tuning),
-            store: if title.looks.blends_encoded.applies_everywhere() {
-                oag_gpu::formats::SceneStore::Encoded
-            } else {
-                oag_gpu::formats::SceneStore::Computed
-            },
-            ..params
-        });
+        .map(|params| bloom::for_title(params, title));
     let omega_tonemap = (geometry == GeometryKind::Ps4)
         .then(|| envsettings_tonemap(archives, track, report))
-        .flatten();
+        .flatten()
+        .map(|params| oag_post::omega_tonemap::Params {
+            store: bloom::store_of(title, true),
+            ..params
+        });
     Staging {
         light,
         authored_fog,
@@ -768,7 +821,7 @@ fn zone_stage_art(
             let slot = archives
                 .read_name(&name)
                 .ok()
-                .and_then(|blob| oag_mesh::mesh::ModelTexture::from_gtf(&name, &blob))
+                .and_then(|blob| oag_mesh::mesh::ModelTexture::from_container(&name, &blob))
                 .map(std::sync::Arc::new);
             if slot.is_some() {
                 decoded += 1;
@@ -791,7 +844,26 @@ fn zone_stage_art(
         art
     };
     let track = load("track", &|stage| textures.track_entry(stage));
-    let general = load("general", &|stage| textures.general_entry(stage));
+    let general = if textures.general.is_empty() {
+        // The title ships no general set. HD's fifteen are byte-identical flat whites
+        // ([`oag_title::ZoneStageTextures`]), so a scene chunk's surface is its `Scene.Texture
+        // Colour` flat: inherited from HD, not measured on this title.
+        report.push(
+            "no per-stage Zone general set on this title: scene chunks bind a flat white, as \
+             HD's own set measures (inherited)"
+                .to_string(),
+        );
+        let white = std::sync::Arc::new(oag_mesh::mesh::ModelTexture::rgba8(
+            "zone general (flat white)".to_string(),
+            1,
+            1,
+            vec![255; 4],
+            None,
+        ));
+        textures.stages().map(|_| Some(white.clone())).collect()
+    } else {
+        load("general", &|stage| textures.general_entry(stage))
+    };
     (track, general)
 }
 
@@ -800,6 +872,15 @@ fn zone_stage_art(
 /// **Inferred, not measured** - see [`zone_grade`] for the three sources that
 /// converge on it. A recovered trigger would replace this, not adjust it.
 const ZONE_OPENING_STAGE: u32 = 1;
+
+/// The table a circuit with none of its own takes: [`oag_title::ZoneFallback`], or Detonator's.
+#[derive(Clone, Copy)]
+struct Fallback {
+    palette: oag_title::ZonePalette,
+    textures: Option<&'static oag_title::ZoneStageTextures>,
+    stages: Option<&'static oag_title::ZoneStages>,
+    held_back: bool,
+}
 
 pub(super) fn zone_grade(
     archives: &mut oag_assets::Archives,
@@ -811,15 +892,81 @@ pub(super) fn zone_grade(
 ) -> Option<crate::zone_grade::ZoneGrade> {
     use oag_tables::effectsettings::EffectSettings;
 
-    if mode != oag_race::Mode::Zone {
-        return None;
-    }
-    let name = race.zone_palette?.entry_for(track)?;
-    let Ok(blob) = archives.read_name(&name) else {
-        report.push(format!(
-            "{name}: not in the archive set - the Zone race keeps the circuit's own colours"
-        ));
-        return None;
+    // Zone's table and ladder, or Detonator's own table and texture sets, which the
+    // original picks against Zone's on the same mode test; a Detonator stage is its lap
+    // counter, so it carries no zone ladder (`crate::Scene::sync_zone_grade`).
+    let (palette, fallback, stage_textures, zone_stages) = match mode {
+        oag_race::Mode::Zone => (
+            race.zone_palette,
+            race.zone_fallback.map(|f| Fallback {
+                palette: f.palette,
+                textures: Some(f.stage_textures),
+                stages: Some(f.stages),
+                held_back: f.holds_back(track),
+            }),
+            race.zone_stage_textures,
+            race.zone_stages,
+        ),
+        oag_race::Mode::Detonator => {
+            let detonator = race.detonator?;
+            if detonator.palette.is_none() {
+                report.push(
+                    "detonator: this title's stage grade is not drawn; the circuit keeps its own \
+                     colours"
+                        .to_string(),
+                );
+            }
+            (
+                detonator.palette,
+                detonator.fallback_palette.map(|palette| Fallback {
+                    palette,
+                    textures: detonator.stage_textures,
+                    stages: None,
+                    held_back: false,
+                }),
+                detonator.stage_textures,
+                None,
+            )
+        }
+        _ => return None,
+    };
+    let mut stage_textures = stage_textures;
+    let mut zone_stages = zone_stages;
+    let own = palette.and_then(|p| Some((p, p.entry_for(track)?)));
+    let own_blob = own
+        .as_ref()
+        .and_then(|(_, name)| archives.read_name(name).ok());
+    let (name, in_play, blob) = match (own, own_blob) {
+        (Some((palette, name)), Some(blob)) => (name, palette, blob),
+        (own, _) => {
+            let missing = own.map_or_else(|| "no table of its own".to_string(), |(_, n)| n);
+            let Some(f) = fallback.filter(|f| !f.held_back) else {
+                report.push(format!(
+                    "{missing}: not in the archive set - the {} race keeps the circuit's own \
+                     colours",
+                    mode.fallback_label().to_lowercase()
+                ));
+                return None;
+            };
+            let Some((entry, blob)) = f
+                .palette
+                .entry_for(track)
+                .and_then(|entry| Some((entry.clone(), archives.read_name(&entry).ok()?)))
+            else {
+                report.push(format!(
+                    "{missing}: not in the archive set - the {} race keeps the circuit's own \
+                     colours",
+                    mode.fallback_label().to_lowercase()
+                ));
+                return None;
+            };
+            report.push(format!(
+                "{missing}: not in the archive set; the title-wide {entry} grades this circuit"
+            ));
+            stage_textures = f.textures;
+            zone_stages = f.stages.or(zone_stages);
+            (entry, f.palette, blob)
+        }
     };
     let text = match String::from_utf8(blob) {
         Ok(text) => text,
@@ -835,16 +982,24 @@ pub(super) fn zone_grade(
             return None;
         }
     };
-    let (art, scene_art) = match race.zone_stage_textures {
+    let (art, scene_art) = match stage_textures {
         Some(textures) => zone_stage_art(archives, textures, report),
         None => (Vec::new(), Vec::new()),
     };
     let mut grade =
-        crate::zone_grade::ZoneGrade::new(name.clone(), table, race.zone_stages, art, scene_art)
+        crate::zone_grade::ZoneGrade::new(name.clone(), table, zone_stages, art, scene_art)
             // How a stage step sweeps the world, where the title's own law is read -
             // HD/Fury's sphere out of the craft; `None` on 2048, whose rate is
             // unread. See `oag_title::ZoneTransition`.
-            .map(|grade| grade.with_transition(race.zone_transition));
+            .map(|grade| grade.with_transition(race.zone_transition))
+            .map(|grade| grade.with_arena(in_play.on_zone_circuit(track)))
+            .map(|grade| {
+                if mode == oag_race::Mode::Detonator {
+                    grade.with_lap_stages()
+                } else {
+                    grade
+                }
+            });
     // The stage a race *starts* on, which is not stage `0`: **`Start` is the
     // pre-race state, not the opening lap's.** Three converging sources, one of
     // them a direct observation of the original:
@@ -855,8 +1010,7 @@ pub(super) fn zone_grade(
     // - The original, played: a Zone race on Moa Therma is already showing
     //   `Sub Venom`'s cyan at the start line. That stage authors
     //   `Track.Base Colour` = `0.003922 0.847059 1.000000`; `Start` authors a
-    //   flat black, which is what this port drew before this and what the
-    //   maintainer reported as wrong.
+    //   flat black, which draws wrong.
     //
     // `show_zone` does this on a title whose ladder is recovered, and **is a
     // no-op on one whose is not** - which is every title but 2048, HD
@@ -881,7 +1035,7 @@ pub(super) fn zone_grade(
     }
     // **The development override, applied after the title's own ladder and
     // pinned rather than merely committed once.** Both titles with a
-    // recovered ladder (2048, and HD/Fury since 2026-08-31) drive
+    // recovered ladder (2048, and HD/Fury) drive
     // `show_zone` from the scene every frame, so a plain commit here would be
     // overwritten on the very next call - see
     // `crate::zone_grade::ZoneGrade::pin_stage` and
@@ -933,6 +1087,22 @@ pub(super) fn cloud_layer(
             return None;
         }
     };
+    if let Some(image) = oag_texture::replacer::mip(&blob) {
+        report.push(format!(
+            "{CLOUD_TEXTURE}: {}x{} from the texture pack - drawing {} cloud sprite(s)",
+            image.width,
+            image.height,
+            layer.len()
+        ));
+        return Some((
+            layer,
+            FlareTexture {
+                width: image.width,
+                height: image.height,
+                rgba: image.rgba.clone(),
+            },
+        ));
+    }
     match oag_texture::texture::Texture::parse(&blob) {
         Ok(texture) => {
             report.push(format!(

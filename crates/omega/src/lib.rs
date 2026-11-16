@@ -51,7 +51,10 @@ use oag_title::{ArchiveCandidates, Platform, Title};
 pub mod campaign;
 pub mod frontend;
 pub mod hud;
+pub mod loading;
 pub mod main_menu;
+pub mod pause_menu;
+pub mod prompts;
 pub mod race;
 pub mod weapons;
 
@@ -79,6 +82,13 @@ pub const TITLE: &Title = &Title {
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
+    eliminator: oag_title::pre_race::Sourced::inherited(
+        oag_title::eliminator::EliminatorRule::Kills,
+        "Wipeout Pulse",
+    ),
+    // The executable has it, off `<Misc eliminator_flip_time>` per craft and class; not wired
+    // (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Per title").
+    eliminator_flip: oag_title::pre_race::Sourced::chosen(None),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,
@@ -93,6 +103,10 @@ pub const TITLE: &Title = &Title {
     exhaust: &oag_title::exhaust::Exhaust::Authored(
         "/data/ribboneffects/enginetrail_bluered_triangle.rcsmodel",
     ),
+    wingtip: Some(&oag_title::wingtip::Wingtip::hd_lineage(
+        "/data/tex/smoke_trails_frame1_alpha.gnf",
+        oag_title::Origin::InheritedFrom("Wipeout HD"),
+    )),
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     // **Per team, on 2048's shape**: an `EngineFlare.vex` + `.rcsmodel`
     // beside each hull with `EF_Main`/`EF_Boost` groups. The sprite is the
@@ -111,7 +125,28 @@ pub const TITLE: &Title = &Title {
         ],
         sprite: "/data/tex/engineflare/engine_flare_rich.gnf",
         // **Off, chosen, not measured**, as on 2048.
-        engine_light: false,
+        // `EngineFlare_SubmitVertexLight`, `0x0173e350` on the 1.07 eboot
+        // (`docs/ghidra/functions/ps4-omega-eu/engine-light.md`, confidence 85; the falloff
+        // 60, read on 2048's program). The wander is 0.2 in position and 1.0 in range
+        // (confidence 75).
+        engine_light: Some(&oag_title::flare::EngineLightLaw {
+            classic: oag_title::flare::Tint::HD_CLASSIC,
+            fury: oag_title::flare::Tint::HD_FURY,
+            era_2048: Some(oag_title::flare::Era2048 {
+                tint: oag_title::flare::Tint::ERA_2048,
+                roster_dir: race::ERA_2048_SHIP_DIR,
+            }),
+            mag_strip: Some(oag_title::flare::MagStrip {
+                colour: [1.5, 0.1, 3.0],
+                gain_scale: 0.2,
+                gate: oag_title::flare::StripGate::LineageCircuit,
+            }),
+            wander: oag_title::flare::Wander {
+                position: 0.2,
+                range: 1.0,
+                calmed_by_boost: true,
+            },
+        }),
         front_faces_only: false,
     }),
     // **Split into three files, like 2048's, not combined like HD's or
@@ -122,18 +157,49 @@ pub const TITLE: &Title = &Title {
     // `Data\Plugins\Frontend\Definition.xml`. `plugin_definition` names the
     // team one, the same reasoning `oag_2048::names::TEAM_PLUGIN_DEFINITION`
     // states: a race needs a roster before it needs a circuit list.
-    // No prompt glyph of this title's has been read; the disc's own draw unchanged.
-    prompts: &oag_title::prompts::Prompts::UNREAD,
+    // Measured: the six glyphs of `PS_BUTTONS.fnt` - see `prompts`.
+    prompts: prompts::PROMPTS,
+    profile: oag_title::profile::Profile::NEITHER,
+    photo: oag_title::photo::Strings::HD,
+    photo_shot: None,
+    // Omega's own recovery is unread; HD's, which runs Pulse's.
+    reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout HD"),
+    // Its executable carries HD's impulse law (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`,
+    // "Lineage"); not switched on, because its race cues are a flat pick.
+    contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
+    // Omega's authored mix owns the buses.
+    effects_volume_law: oag_title::pre_race::Sourced::chosen(
+        oag_title::group_volume::GroupVolumeLaw::Linear,
+    ),
+    speech_volume_law: oag_title::pre_race::Sourced::chosen(
+        oag_title::group_volume::GroupVolumeLaw::Linear,
+    ),
+    speech_follows_effects: oag_title::pre_race::Sourced::chosen(false),
+    master_trim_db: oag_title::pre_race::Sourced::chosen(0.0),
+    rear_occlusion: None,
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
-    // Not read: the loading-screen plugin XML was not opened. `None` is a gap,
-    // not a measurement, on Pure's own terms.
-    loading: None,
+    // HD's screen re-spelt for `.gnf`, off the executable's own string run (`loading`).
+    loading: Some(&loading::LOADING),
     music: Some(MUSIC),
     cursor: include_str!("../../../assets/cursors/omega.svg"),
     // Not tried on Omega: its sun and craft carry-over from HD are unmeasured.
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
+    // Measured, confidence 80: the small bytes are summed (`docs/gameplay/rumble.md`).
+    rumble: oag_title::rumble::Rumble::Patterns(
+        oag_title::rumble::SmallMotor::Sum,
+        oag_title::rumble::Triggers::Omega,
+    ),
+    // Inherited by lineage, but the disc authors the timeouts and the circuit: `DemoConfig.xml`,
+    // read at boot over these (`docs/ui/attract-demo.md`).
+    demo: oag_title::demo::Demo {
+        config: Some("Data/xml/DemoConfig.xml"),
+        ..oag_title::demo::Demo::inheriting(
+            "HD",
+            oag_title::pre_race::Sourced::inherited(oag_title::demo::Exit::AnyInput, "HD"),
+        )
+    },
     // Unread, on `oag_2048::TITLE`'s own terms: this crate never opened
     // either weapon-stats table this lane, so nothing here can say which of
     // Omega's copies (HD's own two, or a fourth `_2048`-suffixed pair the way
@@ -148,6 +214,9 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // HD's law, inherited: Omega's own executable is not checkable here.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
+        blast_push: oag_title::pre_race::Sourced::chosen(oag_title::weapons::BlastPush::Immediate),
+        // Measured: eight entries in `LeachBeamManager_Update`'s pool (`weapon-instance-limits.md`).
+        leach_beams: oag_title::pre_race::Sourced::measured(8),
         // HD's law, inherited: Omega's own executable is not checkable here.
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
@@ -155,6 +224,27 @@ pub const TITLE: &Title = &Title {
         // HD's law, inherited: Omega's own Autopilot update and cancel are unread.
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
+        // Read in `WeaponPads_TestCraft`: the Eliminator family skips the stamp
+        // (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title").
+        pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(false),
+        // Read statically off this title's own `Plasma_Init`, confidence 80; its Rocket, Missile
+        // and Shuriken inits are not located and take HD's (`ps3-hdfury-eu/projectile-launch-normal.md`).
+        launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
+        // Pulse's arms are measured; this title's own are unread.
+        floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
+        // HD's law, inherited: Omega's `Plasma_Launch` (`0x0135d5d0`) takes the node matrix as
+        // HD's does; whether the walker orthonormalises it is unread (`ps4-omega-eu/plasma.md`).
+        plasma_release_at_display_scale: oag_title::pre_race::Sourced::inherited(
+            false,
+            "Wipeout HD",
+        ),
+        // The projectile query walks track meshes only (`ps4-omega-eu/own-craft-box.md`).
+        own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::OwnCraftBox::Absent,
+        ),
+        opponent_fire: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::OpponentFire::OMEGA,
+        ),
     },
     weapon_models: weapons::WEAPON_MODELS,
     // Omega's executable carries HD's weapon-spark, damage-smoke, absorb and bomb-ray
@@ -162,19 +252,45 @@ pub const TITLE: &Title = &Title {
     // but what raises each is unread, so those triggers draw nothing (ADR-0058: `None`
     // is the visible absence). The engine's own names are tried as Pulse's, by the
     // rule that an unmeasured title runs Pulse's, and the loader reports each
-    // its disc lacks. The shield tint likewise. `wo_composite` stays off: the
+    // its disc lacks. `wo_composite` stays off: the
     // executable registers 2048's `wo_*` programs and binds none, running its
     // `Tonemap` chain instead (checked, differs: exposure.md, "Omega").
     effects: &EFFECTS,
-    looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
-        ps2: oag_title::ShieldPalette::Ps2Pulse,
-        elsewhere: oag_title::ShieldPalette::Pulse,
-        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
-    }),
+    looks: &oag_title::Looks {
+        // The launch boost: the title authors `<StartBoost>`; the grading law is HD's, which is
+        // Pulse PSP's, unmeasured on 2048 and Omega alike (`docs/physics/launch-boost.md`).
+        // Whichever of the two is measured first supplies the other.
+        start_boost: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::InheritedFrom("Wipeout HD (itself Wipeout Pulse PSP's)"),
+        },
+        // State bit 4 (back-face culling) of the PS4 header's `+0x22` word, **inherited from
+        // HD**: 4,751 of 4,918 to 13,568 of 13,722 materials per base archive carry it
+        // (`docs/ghidra/functions/ps3-hdfury-eu/chunk-cull.md`, "2048 / Omega"). Only the cull
+        // bit is honoured (`Model::honour_cull`).
+        material_render_state: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
+        },
+        // The texture unit decodes Omega's sRGB-typed circuit pictures with the sRGB curve
+        // (`docs/rendering/hd-track-tone.md`, "Omega's texels decode with the sRGB curve").
+        texels_srgb: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::Measured,
+        },
+        // HD's shield law with the cockpit-floored target alpha; the colour is each team's own
+        // `ShieldColour` (`docs/ghidra/functions/ps4-omega-eu/shield.md`).
+        ..oag_title::Looks::unread(oag_title::ShieldPalettes {
+            ps2: oag_title::ShieldPalette::Omega,
+            elsewhere: oag_title::ShieldPalette::Omega,
+            origin: oag_title::Origin::Measured,
+        })
+    },
     // HD's `PI001` front end carried forward (`docs/formats/omega-frontend.md`),
-    // read through its own `load_omega`; no grids file is read on its own and no
-    // unlock row is wired.
+    // read through its own `load_omega`; its grids are read on their own for the model rows
+    // (`model_unlocks`) only.
     main_menu: main_menu::MAIN_MENU,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Omega,
         definition_entry: None,
@@ -184,7 +300,8 @@ pub const TITLE: &Title = &Title {
         main_row: None,
         circuit_unlocks: false,
         loyalty_unlocks: false,
-        // Not wired, not measured absent: Omega's unlock rows are unread here.
+        model_unlocks: Some(campaign::DEFINITION_ENTRY),
+        // The `PI_TeamModel` rows are read (`model_unlocks`); the circuit and team rows are not.
         unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: false,
         screen_archive: None,
@@ -197,21 +314,65 @@ pub const TITLE: &Title = &Title {
             yaw: -0.25,
             offset: [29.0, 13.3, -129.0],
         }),
+        selection_card_scale: Some(0.903),
+        // Bronze, silver, gold from the top of each block of the `.gnf`, read off its texels and
+        // the shadPS4 `cell-select` frame (`docs/formats/omega-status.md`, "The medal atlas").
+        medal_tier_rows: Some([2, 1, 0]),
+        // HD's evaluator, same flip set (`docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`, "Omega").
+        counting_modes: &["Zone", "Detonator"],
         frontend_glow: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         custom_campaigns: true,
+        event_track_dir: Some(r"Data\Environments2048"),
     },
     pressings: None,
     pre_race: None,
-    // **Off, and why** (2026-10-26, `docs/rendering/start-gantry.md`, "Omega"):
-    // `gantry::build` now reads Omega's `321Go` files through the Vita/PS4
-    // container, but with the pass on, a start-grid still against the shadPS4
-    // pair does not match. Placement does (same quads, same sizes); the look
-    // does not: the countdown board shows a static red face where the original
-    // shows its blank teal one and then counts down, because the PS4 materials'
-    // texture curves are unread, and the unlit side cards lose their logo. The
-    // fields to set when it does are HD's, inherited, not re-measured on PS4.
-    adverts: None,
+    adverts: Some(&oag_title::adverts::Adverts {
+        // HD's pass, inherited: the same engine draws a slot's model through its own camera
+        // into a target the track's `billboard8` quad samples (`ps4-omega-eu/billboards.md`
+        // for Omega; 2048 ships the same circuits and boards). The target and planes are
+        // HD's RPCS3 reads, not re-measured on this title's own hardware.
+        target: (512, 256),
+        near: 0.5,
+        far: 5500.0,
+        colour_pool: false,
+        flip_v: false,
+        wrap: true,
+        zone_shares_one_texture: true,
+        gantry_card: true,
+        adverts_unlit: true,
+        card_store: oag_title::adverts::CardStore::R5G6B5Linear,
+        card_unlit: true,
+        // `321Go_2048.vex` counts down by moving nodes. Any other board
+        // (`321Go_StartFinish.vex`) plays HD's clock on the UV keys its `.vex`
+        // authors (`docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys").
+        gantry_boards: Some(&[oag_title::adverts::GantryBoard {
+            entry: "/Data/Billboards/HD_Adverts/321Go/321Go_2048.vex",
+            assembly_ticks: 200,
+        }]),
+        // Each mode's board is this title's own substitution
+        // (`TrackStartup_Load`, `docs/ghidra/functions/ps4-omega-eu/billboards.md`); the
+        // assembly ticks are HD's Zone figure, inherited, and chosen, not measured, for
+        // the boards of the modes this engine does not run yet.
+        mode_gantries: &[
+            oag_title::adverts::ModeGantry {
+                mode: oag_title::adverts::GantryMode::Zone,
+                entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
+                assembly_ticks: 210,
+            },
+            oag_title::adverts::ModeGantry {
+                mode: oag_title::adverts::GantryMode::ZoneBattle,
+                entry: "/Data/Billboards/HD_Adverts/321Go/321Go_HD_Zone_Battle.vex",
+                assembly_ticks: 210,
+            },
+            oag_title::adverts::ModeGantry {
+                mode: oag_title::adverts::GantryMode::Detonator,
+                entry: "/Data/Billboards/HD_Adverts/321Go/321go_hd_detonator.vex",
+                assembly_ticks: 210,
+            },
+        ],
+        origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
+    }),
 };
 
 /// The effects Omega plays: the engine's own names, tried as Pulse's, minus
@@ -231,13 +392,37 @@ pub const TITLE: &Title = &Title {
 /// `magstrip_pob`; the arc wake, HD's mechanism, is [`weapons::WEAPON_MODELS`]'s
 /// `magstrip_wake`). Unread, not absent.
 const EFFECTS: oag_title::Effects = {
-    use oag_title::Trigger;
+    use oag_title::{Burst, EffectSpec, Origin, Trigger, engine_effects};
     let mut effects = oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
+        // The original never spawns its own `WO_TRAIL_HITSHIP`
+        // (`docs/ghidra/functions/ps4-omega-eu/trail-hits.md`).
+        .trail_hits_on_setting()
         .without(Trigger::PlasmaBlast)
         .without(Trigger::EngineFlare)
         .without(Trigger::LeachbeamEnergy)
         .without(Trigger::MagstripSparks)
-        .without(Trigger::MagstripZone);
+        .without(Trigger::MagstripZone)
+        // The absorb burst and the Cannon's craft-hit spark are Wipeout HD's measured laws
+        // (`Trigger::ShieldAbsorb`, `Trigger::WeaponSpark` in `oag_hd::effects`), taken by
+        // inheritance: this title ships HD's `absorb` locators and `Ship Collision Fx`
+        // locators on every hull and authors both effect files, and its executable carries
+        // the same strings. The trigger sites are unread here
+        // (`docs/gameplay/weapon-lineage.md`).
+        .with(
+            Trigger::ShieldAbsorb,
+            EffectSpec::new(
+                engine_effects::ABSORB_EFFECT,
+                Origin::InheritedFrom("Wipeout HD"),
+            )
+            .with_burst(Burst::HD),
+        )
+        .with(
+            Trigger::WeaponSpark,
+            EffectSpec::new(
+                engine_effects::WEAPON_SPARK_EFFECT,
+                Origin::InheritedFrom("Wipeout HD"),
+            ),
+        );
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
     effects
 };
@@ -269,6 +454,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
     now_playing: Some(NOW_PLAYING),
     // Omega's executable has not been read for this; it runs HD's rule (its front end and race
     // flow are HD's). Inherited, not measured.
+    spectrum_extension: None,
     race_song_start: oag_title::pre_race::Sourced::inherited(
         oag_title::race_song::RaceSongStart::AtGo,
         "Wipeout HD",

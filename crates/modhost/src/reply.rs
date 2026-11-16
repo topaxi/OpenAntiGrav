@@ -18,6 +18,10 @@ pub(crate) fn read(
     let mut shield_cmd_seen = 0_u32;
     let mut pads_seen: Vec<u16> = Vec::new();
     let mut route_seen = 0_u32;
+    // One of each motion command a slot a tick (`transit`, `scale-speed`, `probe-clearance`).
+    let mut motion_seen = [0_u32; 3];
+    let mut beams_seen = 0;
+    let mut effects_seen = 0_usize;
     let mut hud_items = [0_usize; oag_ext_abi::MAX_CRAFTS];
     let mut commands = Vec::with_capacity(count);
     for i in 0..count {
@@ -136,17 +140,69 @@ pub(crate) fn read(
                     )));
                 }
             }
+            Command::FireEffect { .. }
+            | Command::FireModEffect { .. }
+            | Command::FireModEffectAhead { .. } => {
+                effects_seen += 1;
+                if effects_seen > oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK {
+                    return Err(Fault::Reply(format!(
+                        "more than {} fire-effect commands in one tick",
+                        oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK
+                    )));
+                }
+            }
+            Command::DrawBeam { .. } => {
+                beams_seen += 1;
+                if beams_seen > oag_ext_abi::MAX_BEAMS_PER_TICK {
+                    return Err(Fault::Reply(format!(
+                        "more than {} draw-beam commands in one tick",
+                        oag_ext_abi::MAX_BEAMS_PER_TICK
+                    )));
+                }
+            }
+            Command::Transit { slot, .. }
+            | Command::ScaleSpeed { slot, .. }
+            | Command::ProbeClearance { slot, .. } => {
+                let which = match command {
+                    Command::Transit { .. } => 0,
+                    Command::ScaleSpeed { .. } => 1,
+                    _ => 2,
+                };
+                if motion_seen[which] & slot.bit() != 0 {
+                    return Err(Fault::Reply(format!(
+                        "two {} commands for slot {}",
+                        command.kind().name(),
+                        slot.index()
+                    )));
+                }
+                motion_seen[which] |= slot.bit();
+                if let Command::Transit { .. } = command {
+                    let craft = craft(slot).copied().unwrap_or_default();
+                    if !craft.racing || craft.in_transit {
+                        return Err(Fault::Reply(format!(
+                            "transit for slot {}, whose craft is not racing or is already in one",
+                            slot.index()
+                        )));
+                    }
+                }
+            }
             Command::PickupRoll { .. }
             | Command::PlayCue { .. }
-            | Command::FireEffect { .. }
-            | Command::FireModEffect { .. }
+            | Command::PlayModSound { .. }
             | Command::HudTint { .. }
+            | Command::RaiseWarning { .. }
+            | Command::StopModEffect { .. }
             | Command::PickupLook { .. }
             | Command::HudShake { .. }
             | Command::HudBarExtra { .. }
             | Command::SetWeather { .. }
             | Command::SetSun { .. }
-            | Command::GradeSky { .. } => {}
+            | Command::GradeSky { .. }
+            | Command::ScreenFill { .. }
+            | Command::FovOffset { .. }
+            | Command::SetShaderParam { .. }
+            | Command::PortalView { .. }
+            | Command::Emit { .. } => {}
         }
         commands.push(command);
     }

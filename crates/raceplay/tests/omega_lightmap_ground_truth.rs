@@ -11,14 +11,15 @@
 //! ```
 //!
 //! The law itself (`pow(lightmap, power) * scale + bias`, no constant ambient)
-//! is checked through the mesh pipeline in `oag-render`'s `omega_nova_prelit`;
+//! is checked through the mesh pipeline in `oag-mesh`'s `omega_nova_prelit`;
 //! what is checked here is that Omega's real file reaches it, that the
 //! `Tonemap` block reads, and that 2048, which shares the container family and
 //! authors the key too, does not.
 
 use oag_raceplay as race;
 use oag_tables::envsettings::{
-    EnvSettings, NOVA_PRELIT, OMEGA_SUN_DIFFUSE_INTENSITY, PSP2_SUN_DIFFUSE_COLOUR,
+    EnvSettings, NOVA_PRELIT, OMEGA_SUN_DIFFUSE_INTENSITY, OMEGA_SUN_SPECULAR_COLOUR,
+    OMEGA_SUN_SPECULAR_INTENSITY, PSP2_SUN_DIFFUSE_COLOUR,
 };
 
 fn source() -> Option<String> {
@@ -27,6 +28,122 @@ fn source() -> Option<String> {
         None => oag_testdata::exact("data/extracted/ps4")?,
     };
     Some(path.display().to_string())
+}
+
+/// The 38 circuit `.envsettings` names the censuses below walk: Omega's 14 HD-lineage
+/// circuits, the 12 with a reversed twin, the two extra Zone files and the ten 2048-lineage ones.
+fn every_circuit_envsettings() -> Vec<String> {
+    const HD_LINEAGE: [&str; 14] = [
+        "01_vineta_k",
+        "02_metropia",
+        "03_moa_therma",
+        "04_chenghou_project",
+        "05_ubermall",
+        "10_sebenco_climb",
+        "12_sol_2",
+        "15_anulpha_pass",
+        "amphiseum",
+        "modesto_heights",
+        "talons_junction",
+        "tech_de_ra",
+        "zone_1",
+        "zone_2",
+    ];
+    const LINEAGE_2048: [&str; 10] = [
+        "altima",
+        "arena",
+        "bridge",
+        "cathedral",
+        "mall",
+        "park",
+        "sol",
+        "square",
+        "subway",
+        "tower",
+    ];
+    let mut names: Vec<String> = HD_LINEAGE
+        .iter()
+        .map(|c| format!(r"Data\environments\{c}\track.envsettings"))
+        .collect();
+    names.extend(
+        HD_LINEAGE[..12]
+            .iter()
+            .map(|c| format!(r"Data\environments\{c}\track_reversed.envsettings")),
+    );
+    names.extend(["zone_3", "zone_4"].map(|c| format!(r"Data\environments\{c}\track.envsettings")));
+    names.extend(
+        LINEAGE_2048
+            .iter()
+            .map(|c| format!(r"Data\environments2048\{c}\track.envsettings")),
+    );
+    assert_eq!(names.len(), 38);
+    names
+}
+
+/// Every circuit's own file, through the reader the race uses so the patch's copy wins,
+/// carries the five bright-pass scalars and four blend factors (a census of 38 files;
+/// `tonemap.md`, "The bloom chain"). The Bloom keys differ by circuit, and one circuit's
+/// threshold sits above the curve's `1.0`, so its frame term never fires.
+fn every_circuit_authors_a_whole_bloom_block(archives: &mut oag_assets::Archives) {
+    let names = every_circuit_envsettings();
+    let mut thresholds = Vec::new();
+    for name in &names {
+        let bytes = archives
+            .read_name(name)
+            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        let text = String::from_utf8(bytes).expect("text");
+        let env = EnvSettings::parse(&text).expect("parses");
+        let block = env
+            .bright_pass("Bloom")
+            .unwrap_or_else(|| panic!("{name} lacks a whole Bloom block"));
+        assert!(block.blend_factors.iter().all(|f| *f > 0.0), "{name}");
+        thresholds.push(block.threshold);
+    }
+    assert!(thresholds.contains(&1.252), "Sol 2's own number");
+    assert!(thresholds.contains(&0.784), "Vineta K's own number");
+}
+
+/// Every circuit that is not a Zone ships a `track.shprobes` beside its settings (34 of the 38:
+/// 12 forward, 12 reversed, the ten 2048-lineage), each closing the layout exactly with at least
+/// one triple, and authors `Ship diffuse brightness` and its `(shadow)` twin, which agree. The Zone
+/// circuits ship neither a probe file nor the twin, so their hulls keep the constant ambient.
+fn every_circuit_ships_the_hull_ambient_inputs(archives: &mut oag_assets::Archives) {
+    use oag_tables::envsettings::{OMEGA_SHIP_DIFFUSE_BRIGHTNESS, OMEGA_SHIP_DIFFUSE_SHADOW};
+    let (mut with, mut without) = (0, 0);
+    for name in every_circuit_envsettings() {
+        let sh = name.replace(".envsettings", ".shprobes");
+        let text = String::from_utf8(archives.read_name(&name).expect("reads")).expect("text");
+        let env = EnvSettings::parse(&text).expect("parses");
+        let k = env.scalar(OMEGA_SHIP_DIFFUSE_BRIGHTNESS);
+        assert!(k.is_some_and(|k| k > 0.0), "{name}: {k:?}");
+        let Ok(bytes) = archives.read_name(&sh) else {
+            assert!(name.contains("zone_"), "{sh}: only a Zone ships none");
+            assert_eq!(env.scalar(OMEGA_SHIP_DIFFUSE_SHADOW), None, "{name}");
+            without += 1;
+            continue;
+        };
+        with += 1;
+        let probes =
+            oag_vex::shprobes::ShProbes::parse(&bytes).unwrap_or_else(|e| panic!("{sh}: {e}"));
+        assert!(probes.len() >= 3, "{sh}");
+        assert_eq!(
+            bytes.len(),
+            8 + probes.len() * 120,
+            "{sh}: the layout closes exactly"
+        );
+        assert_eq!(env.scalar(OMEGA_SHIP_DIFFUSE_SHADOW), k, "{name}");
+        for i in (0..probes.len()).step_by(97) {
+            assert!(
+                probes.position(i).iter().all(|c| c.is_finite()),
+                "{sh}: {i}"
+            );
+            assert!(
+                probes.coefficients(i).iter().all(|c| c.is_finite()),
+                "{sh}: {i}"
+            );
+        }
+    }
+    assert_eq!((with, without), (34, 4));
 }
 
 #[test]
@@ -41,6 +158,8 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
     )
     .expect("text");
     let env = EnvSettings::parse(&text).expect("parses");
+    every_circuit_authors_a_whole_bloom_block(&mut archives);
+    every_circuit_ships_the_hull_ambient_inputs(&mut archives);
     assert_eq!(
         env.vec3(NOVA_PRELIT),
         Some([2.5, 0.2, 2.0]),
@@ -72,6 +191,20 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
     for (i, c) in colour.iter().enumerate() {
         assert_eq!(light.sun[i], c * intensity, "channel {i}");
     }
+    // The panel-map road's sun lobe is the authored specular colour times its intensity;
+    // dropping the loader call leaves the zero a rig is built with.
+    let specular = env
+        .vec3(OMEGA_SUN_SPECULAR_COLOUR)
+        .expect("and a specular colour");
+    let specular_intensity = env.scalar(OMEGA_SUN_SPECULAR_INTENSITY).unwrap_or(1.0);
+    assert!(specular.iter().any(|c| *c > 0.0), "a lobe that is not off");
+    for (i, c) in specular.iter().enumerate() {
+        assert_eq!(
+            light.sun_specular[i],
+            c * specular_intensity,
+            "specular channel {i}"
+        );
+    }
     assert_eq!(light.nova, 1.0, "the Omega rig is flagged");
     assert_eq!(light.prelit_scale, [2.5; 3]);
     assert_eq!(light.prelit_power, [2.0; 3]);
@@ -95,6 +228,40 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
         .omega_tonemap
         .expect("Tech De Ra's Tonemap block is applied");
     assert!(tonemap.exposure_maximum >= tonemap.exposure_minimum);
+    // The circuit's own `Vignette` keys reach the composite, and the rest values
+    // of the other two terms (`colorscale.md`) are what it draws with them.
+    let composite = tonemap.composite;
+    assert_eq!(
+        env.scalar("Vignette.Inner radius"),
+        Some(composite.vignette_inner_radius)
+    );
+    assert_eq!(
+        env.scalar("Vignette.Outer radius intensity"),
+        Some(composite.vignette_outer_intensity)
+    );
+    assert!(
+        (0.0..1.0).contains(&composite.vignette_outer_intensity),
+        "a vignette darkens: {composite:?}"
+    );
+    assert_eq!(composite.color_scale, [1.0; 3]);
+    assert_eq!(composite.screen_tint, [0.0; 3]);
+    // The circuit's `Bloom` keys reach the composite; dropping them draws no bloom.
+    let bloom = composite.bloom.expect("Tech De Ra's Bloom block");
+    let authored = env.bright_pass("Bloom").expect("the block reads whole");
+    assert_eq!(bloom.threshold, authored.threshold);
+    assert_eq!(bloom.offset, authored.offset);
+    assert_eq!(bloom.scale, authored.scale);
+    assert_eq!(bloom.power, authored.power);
+    assert_eq!(bloom.alpha_scale, authored.alpha_scale);
+    assert_eq!(bloom.blend_factors, authored.blend_factors);
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|l| l.contains("composite vignette inner radius")),
+        "{:#?}",
+        loaded.report
+    );
     // Omega registers 2048's `wo_*` programs and binds none: it ends in
     // `Tonemap`, so it never builds 2048's composite (checked, differs).
     assert!(loaded.wo_composite.is_none());

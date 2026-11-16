@@ -172,7 +172,7 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
     let mut respawns = vec![0u32; n];
     let mut contacts = vec![0u32; n];
     for tick in 0..TICKS {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         let mut live = false;
         for (k, &slot) in slots.iter().enumerate() {
             // A copy: `plan_of` below borrows the race mutably.

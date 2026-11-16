@@ -9,6 +9,7 @@
 use super::*;
 use oag_ai::weapon_ai::{Decision, Mover, Odds, Situation, target_in_path};
 use oag_tables::weapons::Weapon;
+use oag_title::weapons::{MissingEliminatorRow, OpponentFire};
 
 /// Which rule decides when an opponent fires a forward weapon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,11 +76,6 @@ impl Race {
                 Decision::Hold
             };
         }
-        // **Chosen, not measured**: a craft that is not racing does not fire.
-        // The original's own guard is `entity+0xae4`, which is not read.
-        if self.sim.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing {
-            return Decision::Hold;
-        }
         let Some(situation) = self.fire_situation(slot, weapon, aimed) else {
             return Decision::Hold;
         };
@@ -114,8 +110,8 @@ impl Race {
         weapon: Weapon,
         aimed: bool,
     ) -> Option<Situation> {
-        let odds = self.sim.weapon_ai.as_ref()?.get(weapon)?;
-        let course = self.sim.course.as_ref()?;
+        let odds = self.sim.weapon_ai.as_deref()?.get(weapon)?;
+        let course = self.sim.course.as_deref()?;
         let length = course.length();
         let count = self.sim.world.ship_count as usize;
         let ships = &self.sim.world.ships[..count];
@@ -124,7 +120,7 @@ impl Race {
         let (mut gap_ahead, mut gap_behind, mut player_gap) = (None::<f32>, None::<f32>, None);
         // Every other craft, whatever its state, as the scan's own loop is.
         for (other, them) in ships.iter().enumerate() {
-            if other == slot || !them.active {
+            if other == slot || !them.in_world() {
                 continue;
             }
             let gap = fold(them.standing.distance(course) - my_distance, length);
@@ -149,7 +145,7 @@ impl Race {
                 speed,
                 ships.iter().enumerate().filter_map(|(other, them)| {
                     (other != slot
-                        && them.active
+                        && them.in_world()
                         && them.physics.craft_state == oag_physics::CraftState::Racing)
                         .then_some(Mover {
                             position: them.physics.body.position,
@@ -171,6 +167,7 @@ impl Race {
                 use_against_ai: odds.use_against_ai,
                 absorb: odds.absorb,
             },
+            law: self.sim.fire_terms,
         })
     }
 
@@ -179,7 +176,7 @@ impl Race {
     /// for the Plasma (`Plasma_ClassSpeed`) and the Rocket's for everything
     /// else (`0x0885d22c`) - as authored, with no `/ 3.6`.
     fn shot_speed(&self, weapon: Weapon) -> Option<f32> {
-        let weapons = self.sim.weapons.as_ref()?;
+        let weapons = self.sim.weapons.as_deref()?;
         let class = &self.sim.class;
         match weapon {
             Weapon::Missile => weapons.missile()?.speed_for_named(class),
@@ -187,6 +184,60 @@ impl Race {
             _ => weapons.rocket()?.speed_for_named(class),
         }
     }
+}
+
+/// The decision's terms for a race: the title's [`OpponentFire`] resolved
+/// against its `WeaponAIstats.xml` rows and the race's difficulty tier.
+///
+/// A title whose terms ask for `<AllWeapons>` and whose file lacks the row
+/// takes Pulse's term for it. A missing `<EliminatorAIStats>` row follows
+/// [`OpponentFire::eliminator_without_row`]: Omega's scales default to `1.0`;
+/// HD's would read the loader's zero and never fire, so HD takes Pulse's
+/// `use *= 5` (`weapon-ai-fire.md`, "Ready to wire" 3; chosen, not measured).
+pub(crate) fn fire_terms(
+    terms: OpponentFire,
+    stats: Option<&oag_tables::weapons::ai::WeaponAiStats>,
+    difficulty: oag_ai::Difficulty,
+) -> oag_ai::weapon_ai::Law {
+    use oag_ai::weapon_ai::{EliminatorTerms, Law};
+    use oag_tables::race_campaign::Difficulty;
+    let mut law = Law::PULSE;
+    law.step_scale = terms.step_scale;
+    let Some(stats) = stats else {
+        return law;
+    };
+    if terms.all_weapons
+        && let Some(all) = stats.all_weapons()
+    {
+        law.all_weapons = Odds {
+            use_against_player: all.use_against_player,
+            use_against_ai: all.use_against_ai,
+            absorb: all.absorb,
+        };
+    }
+    if terms.authored_eliminator {
+        let tier = match super::super::finished_thrust::rung(difficulty) {
+            Difficulty::Easy => 0,
+            Difficulty::Medium => 1,
+            Difficulty::Hard => 2,
+        };
+        match (stats.eliminator(), terms.eliminator_without_row) {
+            (Some(row), _) => {
+                law.eliminator = EliminatorTerms::Authored {
+                    use_scale: row.use_scale[tier],
+                    absorb_scale: row.absorb_scale[tier],
+                };
+            }
+            (None, MissingEliminatorRow::Unscaled) => {
+                law.eliminator = EliminatorTerms::Authored {
+                    use_scale: 1.0,
+                    absorb_scale: 1.0,
+                };
+            }
+            (None, MissingEliminatorRow::PulseScale) => {}
+        }
+    }
+    law
 }
 
 /// A signed along-track gap folded into half a lap either way, as
@@ -218,5 +269,32 @@ fn nearer_person(held: Option<f32>, gap: f32) -> Option<f32> {
         None => Some(gap),
         Some(held) if gap > 0.0 && (held <= 0.0 || gap < held) => Some(gap),
         kept => kept,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oag_ai::weapon_ai::EliminatorTerms;
+
+    fn no_row(terms: OpponentFire) -> oag_ai::weapon_ai::Law {
+        let stats = oag_tables::weapons::ai::WeaponAiStats::default();
+        fire_terms(terms, Some(&stats), oag_ai::Difficulty::default())
+    }
+
+    #[test]
+    fn omega_without_an_eliminator_row_runs_its_loaders_unit_scales() {
+        assert_eq!(
+            no_row(OpponentFire::OMEGA).eliminator,
+            EliminatorTerms::Authored {
+                use_scale: 1.0,
+                absorb_scale: 1.0
+            }
+        );
+    }
+
+    #[test]
+    fn hd_without_an_eliminator_row_keeps_pulses_scale() {
+        assert_eq!(no_row(OpponentFire::HD).eliminator, EliminatorTerms::Pulse);
     }
 }

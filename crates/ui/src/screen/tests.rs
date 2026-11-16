@@ -98,7 +98,7 @@ fn values_children_carry_their_parents_attributes() {
     let screens = Screens::from_xml(SAMPLE);
     let movie = screens.by_name("LogoFMV").unwrap().movies[0].clone();
     assert_eq!(movie.src, r"Data\Movies\Intro");
-    assert!(movie.sound);
+    assert_eq!(movie.sound, Some(true));
     assert!(movie.autostart);
     assert!(movie.autoredirect);
     assert!(!movie.repeat);
@@ -142,9 +142,10 @@ fn a_screen_keeps_every_movie_widget_it_declares() {
         .iter()
         .find(|m| m.entry_name("EU") == r"Data\Movies\WoFMVNew_EU.PMF")
         .expect("the second boot movie's widget");
-    assert!(found.sound);
-    assert!(
-        !screen.movies[2].sound,
+    assert_eq!(found.sound, Some(true));
+    assert_eq!(
+        screen.movies[2].sound,
+        Some(false),
         "a sound=\"false\" widget behind others still mutes its own movie"
     );
     assert_eq!(screens.with_movies().count(), 1);
@@ -386,6 +387,141 @@ fn an_image_with_u_v_captures_its_own_sub_rect() {
     assert_eq!(image.v, Some(0.0));
     assert_eq!(image.texture_width, Some(6.0));
     assert_eq!(image.texture_height, Some(11.0));
+}
+
+#[test]
+fn sprite_draw_samples_a_sub_rect_and_tiles_past_the_placed_rect() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Image name="Patch">
+      <Values x="4" y="5" width="12" height="9" U="3" V="2" TxtrWidth="6" TxtrHeight="8" Color="0xFF804020" src="a.mip"></Values>
+    </Image>
+    <Image name="Wide">
+      <Values x="1" y="2" width="90" height="10" TxtrWidth="32" TxtrHeight="16" Color="0xFFFFFFFF" src="b.mip"></Values>
+    </Image>
+  </Screen>
+</Screen>
+"#,
+    );
+    let images = &screens.by_name("Loose").unwrap().images;
+    let placed = crate::frontend::Placed {
+        x: 100,
+        y: 200,
+        width: 16,
+        height: 16,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+        scale: [1.0, 1.0],
+    };
+    assert_eq!(
+        images[0].sprite_draw(placed, 7.0, 8.0, 0xff80_4020),
+        crate::frontend::Draw::Sprite {
+            rect: [7.0, 8.0, 12.0, 9.0],
+            uv: [103.0, 202.0, 6.0, 8.0],
+            color: argb_to_rgba(0xff80_4020),
+        }
+    );
+    // The sampled 32x16 is wider than the placed 16x16: tiled, twice across.
+    assert_eq!(
+        images[1].sprite_draw(placed, 1.0, 2.0, 0xffff_ffff),
+        crate::frontend::Draw::TiledSprite {
+            rect: [1.0, 2.0, 90.0, 10.0],
+            uv: [100.0, 200.0, 16.0, 16.0],
+            repeat: [2.0, 1.0],
+            color: [1.0; 4],
+        }
+    );
+}
+
+/// A texture pack's picture is larger than the disc's: the sampled rect grows with it and the
+/// drawn rect, in the layout's own pixels, does not.
+#[test]
+fn a_picture_a_pack_drew_larger_is_sampled_at_its_size_and_drawn_at_the_layouts() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Image name="Patch">
+      <Values x="4" y="5" width="12" height="9" U="3" V="2" TxtrWidth="6" TxtrHeight="8" Color="0xFF804020" src="a.mip"></Values>
+    </Image>
+    <Image name="Wide">
+      <Values x="1" y="2" width="90" height="10" TxtrWidth="32" TxtrHeight="16" Color="0xFFFFFFFF" src="b.mip"></Values>
+    </Image>
+  </Screen>
+</Screen>
+"#,
+    );
+    let images = &screens.by_name("Loose").unwrap().images;
+    let placed = crate::frontend::Placed {
+        x: 100,
+        y: 200,
+        width: 16,
+        height: 16,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+        scale: [4.0, 2.0],
+    };
+    assert_eq!(
+        images[0].sprite_draw(placed, 7.0, 8.0, 0xff80_4020),
+        crate::frontend::Draw::Sprite {
+            rect: [7.0, 8.0, 12.0, 9.0],
+            uv: [112.0, 204.0, 24.0, 16.0],
+            color: argb_to_rgba(0xff80_4020),
+        }
+    );
+    // Still tiled twice across: the repeat is the ratio of the disc's own sizes.
+    assert_eq!(
+        images[1].sprite_draw(placed, 1.0, 2.0, 0xffff_ffff),
+        crate::frontend::Draw::TiledSprite {
+            rect: [1.0, 2.0, 90.0, 10.0],
+            uv: [100.0, 200.0, 64.0, 32.0],
+            repeat: [2.0, 1.0],
+            color: [1.0; 4],
+        }
+    );
+}
+
+#[test]
+fn plain_draws_are_the_fills_then_the_placed_images() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Image name="Unplaced">
+      <Values x="0" y="0" width="4" height="4" Color="0xFFFFFFFF" src="missing.mip"></Values>
+    </Image>
+    <Image name="Placed">
+      <Values x="9" y="8" Color="0xFFFFFFFF" src="a.mip"></Values>
+    </Image>
+    <Image name="Bar">
+      <Values x="1" y="2" width="30" height="5" Color="0xFF102030"></Values>
+    </Image>
+  </Screen>
+</Screen>
+"#,
+    );
+    let screen = screens.by_name("Loose").unwrap();
+    let placed = crate::frontend::Placed {
+        x: 0,
+        y: 0,
+        width: 8,
+        height: 8,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+        scale: [1.0, 1.0],
+    };
+    let draws = screen.plain_draws(&|src| (src == "a.mip").then_some(placed));
+    assert_eq!(draws.len(), screen.fills.len() + 1);
+    assert_eq!(draws[0], screen.fills[0].draw());
+    assert_eq!(
+        draws[screen.fills.len()],
+        screen.images[1].sprite_draw(placed, 9.0, 8.0, 0xffff_ffff)
+    );
 }
 
 #[test]
@@ -1080,4 +1216,52 @@ fn a_fills_authored_real_glow_is_its_stamp_as_written() {
         })
     );
     assert_eq!(find("plain").glow_stamp(), None, "no RealGlow, no stamp");
+}
+
+/// A `<Block>` keeps its own `TextColor`, which the track records' rows
+/// author as grey against the header's white.
+#[test]
+fn a_block_keeps_its_text_colour() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen type="Pick" name="Pick">
+    <Block name="Header"><Values width="10" textcolor="0xffffffff"></Values></Block>
+    <Block name="Row"><Values width="10" textcolor="0xFF646464"></Values></Block>
+    <Block name="Plain"><Values width="10"></Values></Block>
+  </Screen>
+</Screen>
+"#,
+    );
+    let screen = screens.by_name("Pick").unwrap();
+    let colours: Vec<Option<u32>> = screen.blocks.iter().map(|b| b.text_color).collect();
+    assert_eq!(colours, vec![Some(0xffff_ffff), Some(0xff64_6464), None]);
+}
+
+/// HD's `<List>` is a row of its own: where it sits, the entries by `idstring` in the order the
+/// file lists them, the inks its `Values` name and its label, which is the widget's and not one
+/// of the screen's texts (a screen drawn from its texts gains nothing from its lists).
+#[test]
+fn a_list_widget_lands_in_lists_and_adds_no_text_to_the_screen() {
+    let screens = Screens::from_xml_with_fallback_globals(
+        r#"<Screen name="Pause">
+<List name="Pilot Assist" global="Pilot Assist" default="FE_OFF">
+<Values idstring="FE_PILOT_ASSIST" font="small" x="480" y="360" ActiveColor="FEGlobals->HD_Blue" InactiveColor="0xff646464" arrowcolor="0xffffffff"></Values>
+<Entry idstring="FE_ON"></Entry>
+<Entry idstring="FE_OFF"></Entry>
+</List>
+</Screen>"#,
+        &[("HD_Blue", "0xff8ac0ca")],
+    );
+    let screen = screens.by_name("Pause").expect("the screen");
+    let [list] = screen.lists.as_slice() else {
+        panic!("one list: {:?}", screen.lists);
+    };
+    assert_eq!((list.x, list.y), (480.0, 360.0));
+    assert_eq!(list.entries, ["FE_ON", "FE_OFF"]);
+    assert_eq!(list.default.as_deref(), Some("FE_OFF"));
+    assert_eq!(list.active_color, Some(0xff8a_c0ca));
+    assert_eq!(list.inactive_color, Some(0xff64_6464));
+    assert_eq!(list.label.idstring.as_deref(), Some("FE_PILOT_ASSIST"));
+    assert!(screen.texts.is_empty(), "{:?}", screen.texts);
 }

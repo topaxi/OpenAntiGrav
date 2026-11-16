@@ -63,6 +63,9 @@ pub struct Style {
     /// Whether the fragment is HD's LeachBeam strip program: two textures
     /// and the engine clock - see [`Style::leach_strip`].
     pub leach: bool,
+    /// Whether the fragment is HD's `FatLine_fp`: `tex * (rgb, alpha)` unweighted,
+    /// for the draw's own `SRC_ALPHA, ONE` - see [`Style::fat_line`].
+    pub fat: bool,
 }
 
 impl Style {
@@ -78,6 +81,7 @@ impl Style {
         capacity: MAX_VERTICES,
         smoke: false,
         leach: false,
+        fat: false,
     };
 
     /// The magstrip arc wake, `capacity` vertices of triangle list.
@@ -118,6 +122,7 @@ impl Style {
             capacity,
             smoke: false,
             leach: false,
+            fat: false,
         }
     }
 
@@ -130,10 +135,11 @@ impl Style {
     /// pair's argument order read off the call, confidence 60) - so the smoke
     /// dims the glow mask behind it rather than stamping one. The fragment is
     /// `hd_rockettrail`'s own program, the `smoke` override in `beam.wesl`.
-    /// The texture is **not** decoded on a linear target: the program carries
-    /// no transfer function, the precedent the HD engine tube and the magstrip
-    /// wake already follow, and against the film the decoded smoke read grey
-    /// where the original's is white. **Chosen, not measured**: depth test on
+    /// `decodes_source` stays off: the program carries no transfer function of
+    /// its own. The texel is decoded on fetch instead, in the shader's smoke
+    /// branch on HD's encoded store, because both units read gamma nibble 7
+    /// (`docs/rendering/hd-unlit-programs.md`, "The weapon units, read live").
+    /// **Chosen, not measured**: depth test on
     /// and depth write off and cull off - the state the original's
     /// `0x00677ff8` calls in that function were not decoded to.
     #[must_use]
@@ -160,6 +166,7 @@ impl Style {
             capacity,
             smoke: true,
             leach: false,
+            fat: false,
         }
     }
 
@@ -192,6 +199,55 @@ impl Style {
         };
         style.smoke = false;
         style.leach = true;
+        style
+    }
+}
+
+impl Style {
+    /// Wipeout HD's `FatLine` ribbon (the Missile's stub and helix), `capacity`
+    /// vertices of triangle list.
+    ///
+    /// **Measured** (`docs/ghidra/functions/ps3-hdfury-eu/missile-ribbon.md`):
+    /// `FatLine_fp` is two instructions, `TEX R0, f[TC0]` then `MUL H0, f[COL0],
+    /// R0`, and `RibbonEffects_Render` draws the element's pools under
+    /// `blend(SRC_ALPHA, ONE)` (rocket-trail.md, "The manager"), the colour half of
+    /// which this takes from [`Self::leach_strip`]. No transfer function in the
+    /// program, so the texture is not decoded on a linear target.
+    ///
+    /// **Chosen against the film, not measured**: the alpha channel (the glow mask
+    /// the bloom reads) is left as it is, `ZERO, ONE`. Adding the fragment's alpha
+    /// into it, as the wrapper's single factor would, bloomed the ribbons white
+    /// where the original's are red (frame 3 of the pinned pair: 406 red pixels
+    /// against the original's 2,350; with the alpha untouched 1,652). Also chosen:
+    /// depth test on, depth write off, cull off.
+    #[must_use]
+    pub const fn fat_line(capacity: usize) -> Self {
+        let mut style = Self::leach_strip(capacity);
+        style.label = "fat line";
+        style.leach = false;
+        style.fat = true;
+        style.blend.alpha = wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::Zero,
+            dst_factor: wgpu::BlendFactor::One,
+            operation: wgpu::BlendOperation::Add,
+        };
+        style
+    }
+}
+
+impl Style {
+    /// Wipeout HD's wingtip contrail, `capacity` vertices of triangle list: `FatLine_fp` (the
+    /// same fragment as [`Self::fat_line`]) under the blend `RibbonEffects_Render` switches to
+    /// before pool `+0x74` (`0x00678248(0x302, 0x303, 0, 0x303)` at `0x002a6980`), which is the
+    /// Rocket smoke's: `SRC_ALPHA, ONE_MINUS_SRC_ALPHA` for colour and `ZERO, ONE_MINUS_SRC_ALPHA`
+    /// for alpha, so the contrail is drawn over the frame rather than added to it
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md`, "The draw state").
+    #[must_use]
+    pub const fn vortex_line(capacity: usize) -> Self {
+        let mut style = Self::rocket_smoke(capacity);
+        style.label = "vortex line";
+        style.smoke = false;
+        style.fat = true;
         style
     }
 }
@@ -366,6 +422,7 @@ impl Pipeline {
                 ),
                 ("smoke", f64::from(u8::from(style.smoke))),
                 ("leach", f64::from(u8::from(style.leach))),
+                ("fat", f64::from(u8::from(style.fat))),
             ])
             .collect();
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -624,39 +681,6 @@ fn upload_view(
     queue: &wgpu::Queue,
     texture: &FlareTexture,
 ) -> wgpu::TextureView {
-    let (width, height) = (texture.width.max(1), texture.height.max(1));
-    let gpu_texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("beam texture"),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-    queue.write_texture(
-        wgpu::TexelCopyTextureInfo {
-            texture: &gpu_texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        &texture.rgba,
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(width * 4),
-            rows_per_image: Some(height),
-        },
-        wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-    );
+    let gpu_texture = texture.upload(device, queue, "beam texture");
     gpu_texture.create_view(&wgpu::TextureViewDescriptor::default())
 }

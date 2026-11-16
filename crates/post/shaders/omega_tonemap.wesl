@@ -7,6 +7,7 @@
 // per-channel cubic the MSAA resolve applies (blob 0x0196aa70). `law.rs` is
 // the same arithmetic in Rust; its tests hold this file to it.
 
+import oag_shaders::colour::srgb_encode;
 import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
 
 struct Params {
@@ -33,6 +34,23 @@ struct Params {
     // Where the drawn rectangle starts in the scene target: a split view's rectangle
     // need not be at the corner. Zero for a whole picture.
     uv_offset: vec2<f32>,
+    // The composite's vignette `(a, b)` in `sat(a + b * |uv - 0.5|^2)`.
+    vignette: vec2<f32>,
+    _pad: vec2<f32>,
+    // `ColorScale.rgb` and `ScreenTint.rgb` (w unused).
+    color_scale: vec4<f32>,
+    screen_tint: vec4<f32>,
+    // `Threshold_Offset_Scale_Power`.
+    bright: vec4<f32>,
+    // A quarter of a level 0 texel, in this view's `uv`.
+    bloom_tap: vec2<f32>,
+    // The share of level 0 this view fills.
+    bloom_uv: vec2<f32>,
+    // Level 0's `Blend factors` entry: the composite's `BloomScale`.
+    bloom_scale: f32,
+    _pad_bloom: f32,
+    // The rectangle's first texel centre: a split view's taps stop at its edge.
+    uv_min: vec2<f32>,
 }
 
 struct State {
@@ -141,9 +159,44 @@ fn cs_coefficients() {
 
 @group(1) @binding(0) var<storage, read> curve: State;
 @group(2) @binding(0) var distortion_tex: texture_2d<f32>;
+@group(3) @binding(0) var bloom_tex: texture_2d<f32>;
+
+// One channel-wise curve.
+fn curved(c: vec3<f32>) -> vec3<f32> {
+    let w = curve.window;
+    let x = clamp(c * w.z, vec3<f32>(w.x), vec3<f32>(w.y));
+    let k = curve.abcd;
+    return k.x + x * (k.y + x * (k.z + k.w * x));
+}
+
+// The bright pass (`Shdr` 0x95fe54, 0x95f444) on the frame the composite reads, which is
+// past the curve. The four taps are the block a level 0 texel covers: at twice level 0's
+// size their centres are the pixels the one-tap program's bilinear read averages, at four
+// times they are that program's four-tap variant's (+-1, +-1). The curve runs per tap,
+// because the original's frame is curved before anything reads it.
+// `w = Scale * p / (Offset + p) + AlphaScale * mask`; the mask is the scene's `m_Alpha`,
+// which no draw writes here, so its term is absent.
+@fragment
+fn fs_bright(in: VertexOutput) -> @location(0) vec4<f32> {
+    let t = params.bloom_tap;
+    var c = vec3<f32>(0.0);
+    for (var i = 0; i < 4; i = i + 1) {
+        let s = vec2<f32>(f32(i & 1) * 2.0 - 1.0, f32(i >> 1) * 2.0 - 1.0);
+        let uv = max(drawn(in.uv + s * t), params.uv_min);
+        c = c + curved(textureSampleLevel(source_tex, source_sampler, uv, 0.0).rgb);
+    }
+    c = c * 0.25;
+    let excess = max((c.r + c.g + c.b) / 3.0 - params.bright.x, 0.0);
+    var weight = 0.0;
+    if excess > 0.0 {
+        let p = pow(excess, params.bright.w);
+        weight = params.bright.z * p / (params.bright.y + p);
+    }
+    return vec4<f32>(c * weight, 1.0);
+}
 
 // The curve resolve, per channel, then the video out's encode of its linear
-// [0, 1] (`scanout_encode` below).
+// [0, 1] (the encode at the end of `fs_apply`).
 @fragment
 fn fs_apply(in: VertexOutput) -> @location(0) vec4<f32> {
     // wo_composite*: `uv' = uv + 0.0100021 * (Aspect * d.x, d.y)` with `d` the
@@ -155,22 +208,20 @@ fn fs_apply(in: VertexOutput) -> @location(0) vec4<f32> {
         vec2<f32>(-1.0),
         vec2<f32>(1.0),
     );
-    let c = textureSampleLevel(source_tex, source_sampler, drawn(in.uv + params.distortion * d), 0.0).rgb;
-    let w = curve.window;
-    let x = clamp(c * w.z, vec3<f32>(w.x), vec3<f32>(w.y));
-    let k = curve.abcd;
-    let y = k.x + x * (k.y + x * (k.z + k.w * x));
-    return vec4<f32>(scanout_encode(clamp(y, vec3<f32>(0.0), vec3<f32>(1.0))), 1.0);
-}
-
-// The video-out encode of the curve's linear [0, 1]: the scanout buffer is
-// `A2R10G10B10` UNORM (`0x88060000`, `sceVideoOutSetBufferAttribute` in
-// `FUN_016134d0`, gamma 1.0), written by a plain copy, so the encode is the
-// display's: the piecewise sRGB curve - tonemap.md, "The output encode".
-fn scanout_encode(c: vec3<f32>) -> vec3<f32> {
-    return select(
-        1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - vec3<f32>(0.055),
-        c * 12.92,
-        c <= vec3<f32>(0.0031308),
-    );
+    let uv = in.uv + params.distortion * d;
+    let y = curved(textureSampleLevel(source_tex, source_sampler, drawn(uv), 0.0).rgb);
+    // The race composite after the curve (patch 1.07):
+    // `ColorScale * vignette * (curved + LowResAdditive + BloomScale * Bloom) + ScreenTint`,
+    // Bloom read at the distorted coordinate like the frame. LowResAdditive is not drawn;
+    // the tint sits outside the vignette.
+    let bloom = textureSampleLevel(bloom_tex, source_sampler, uv * params.bloom_uv, 0.0).rgb;
+    let d_uv = in.uv - vec2<f32>(0.5);
+    let vignette = clamp(params.vignette.x + params.vignette.y * dot(d_uv, d_uv), 0.0, 1.0);
+    let composed = params.color_scale.rgb * vignette * (y + params.bloom_scale * bloom)
+        + params.screen_tint.rgb;
+    // The video-out encode of the curve's linear [0, 1]: the scanout buffer is
+    // `A2R10G10B10` UNORM (`0x88060000`, `sceVideoOutSetBufferAttribute` in
+    // `FUN_016134d0`, gamma 1.0), written by a plain copy, so the encode is the
+    // display's: the piecewise sRGB curve - tonemap.md, "The output encode".
+    return vec4<f32>(srgb_encode(clamp(composed, vec3<f32>(0.0), vec3<f32>(1.0))), 1.0);
 }

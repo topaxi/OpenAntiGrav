@@ -89,6 +89,7 @@ fn options(source: &Path) -> boot::Options {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     }
 }
 
@@ -223,6 +224,64 @@ fn the_usa_package_ships_the_hd_pack_alone_so_only_its_tile_opens() {
     assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
     assert_eq!(frontend.campaign_tile(), None);
     assert_eq!(frontend.chosen_mode(), Some("FE_MP_CAMPAIGN"));
+}
+
+/// The circuits a menu lists on the USA package read their names where the
+/// disc authors one: the ten of 2048's own off the campaign file's
+/// `TrackDefinition` (`M_TRACKNAME` is the `PI_Track` id, `M_DISPLAYNAME` the
+/// name), and the sixteen HD-lineage ones, which no authored link reaches a key
+/// of the string table by, keep their ids. No copy of `entries.xml` names any
+/// of the 26 by its bare id (`docs/formats/omega-status.md`, "2048 Vita's
+/// circuit names").
+#[test]
+#[ignore = "needs data/extracted/vita/PCSA00015"]
+fn the_ten_circuits_of_2048_show_their_names_and_the_rest_keep_their_ids() {
+    let Some(usa) = package("PCSA00015") else {
+        return;
+    };
+    let (shell, ..) = boot::load_shell(&options(&usa)).expect("the shell");
+    assert_eq!(shell.tracks.len(), 26, "ten of 2048 and sixteen of HD");
+    let label = |id: &str| {
+        let track = shell
+            .tracks
+            .iter()
+            .find(|track| track.id == id)
+            .unwrap_or_else(|| panic!("{id} is not offered"));
+        oag_raceplay::catalogue::label(track, &shell.circuit_names, &shell.strings, &shell.tracks)
+    };
+    for (id, name) in [
+        ("square", "UNITY SQUARE"),
+        ("mall", "QUEENS MALL"),
+        ("park", "METRO PARK"),
+        ("bridge", "CAPITAL REACH"),
+        ("tower", "EMPIRE CLIMB"),
+        ("arena", "ROCKWAY STADIUM"),
+        ("subway", "SUBWAY"),
+        ("cathedral", "DOWNTOWN"),
+        ("sol", "SOL"),
+        ("altima", "ALTIMA"),
+    ] {
+        assert_eq!(label(id), name, "{id}");
+    }
+    assert_eq!(shell.circuit_names.len(), 10, "only the ten are named");
+    for track in shell.tracks.iter().skip(10) {
+        assert_eq!(
+            label(&track.id),
+            track.id,
+            "no table links {} to a name",
+            track.id
+        );
+    }
+    println!(
+        "ids kept: {}",
+        shell
+            .tracks
+            .iter()
+            .skip(10)
+            .map(|t| t.id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 }
 
 /// Without either package the original hides both campaign tiles and the
@@ -468,7 +527,11 @@ fn medals_earned_on_one_grid_open_the_next() {
         .map(|(_, _, cell)| *cell)
         .expect("a Time Trial cell");
     assert_eq!(
-        timed.evaluate_medal_for_difficulty(1, oag_tables::race_campaign::Difficulty::Medium),
+        timed.evaluate_medal_for_difficulty(
+            1,
+            oag_tables::race_campaign::Difficulty::Medium,
+            oag_2048::TITLE.campaign.counting_modes
+        ),
         Some(oag_tables::race_campaign::Medal::Gold),
         "{} authors its targets per rung and is judged at Medium",
         timed.name
@@ -573,4 +636,109 @@ fn group_labels(xml: &str) -> Vec<(String, u32, u32, u32, u32)> {
         }
     }
     labels
+}
+
+/// An HD or Fury event's card titles its circuit through the executable's
+/// track alias table, one key per direction: `VINETA K` for `Vineta_K` (not the
+/// id the card drew before), the reverse through its own `09_Track`, and
+/// `THE AMPHISEUM` for `Amphiseum` (`docs/ghidra/functions/vita-2048-eu-v104/
+/// circuit-name-key.md`, "The card's key: the track alias table"). The ten of
+/// 2048's own keep their `SP.xml` names, which this table does not touch.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn an_hd_event_card_titles_its_circuit_by_the_alias_key_per_direction() {
+    let Some(eu) = package("PCSF00007") else {
+        return;
+    };
+    let campaigns = Campaigns::open(&eu);
+    let aliases = campaigns
+        .title
+        .front_end
+        .expect("a front end")
+        .card_track_aliases;
+    assert_eq!(aliases.len(), 28, "the DLC rows of the alias table");
+    let events: Vec<&frontend::MapEvent> = campaigns
+        .shell
+        .tiers
+        .iter()
+        .flat_map(|tier| &tier.events)
+        .collect();
+    assert_eq!(events.len(), 87 + 80, "an event per cell");
+    let title_of = |cell: &Cell| {
+        let event = events
+            .iter()
+            .find(|event| event.name == cell.name)
+            .unwrap_or_else(|| panic!("{} has no event", cell.name));
+        event.card.title.as_str()
+    };
+    for (circuit, key, name) in [
+        ("Vineta_K", "01_Track", "VINETA K"),
+        ("Anulpha_Pass", "08_Track", "ANULPHA PASS"),
+        ("Amphiseum", "19_Track", "THE AMPHISEUM"),
+        ("Amphiseum_R", "20_Track", "THE AMPHISEUM"),
+        ("Talons_Junction_R", "18_Track", "TALON'S JUNCTION"),
+    ] {
+        assert_eq!(
+            oag_title::track_alias::key_for(aliases, circuit),
+            Some(key),
+            "{circuit}'s own key"
+        );
+        let cell = campaigns
+            .cells()
+            .into_iter()
+            .map(|(_, _, cell)| cell)
+            .find(|cell| cell.track.as_deref() == Some(circuit))
+            .unwrap_or_else(|| panic!("no cell races {circuit}"));
+        assert_eq!(title_of(cell), name, "{circuit}'s card, cell {}", cell.name);
+    }
+    // No cell races the first eight circuits reversed, so a reverse is read
+    // through the same function on a copy of a cell turned round: its own row
+    // and key, and no `FE_REVERSE` word after the name.
+    let (_, _, forward) = campaigns
+        .cells()
+        .into_iter()
+        .find(|(_, _, cell)| cell.track.as_deref() == Some("Vineta_K"))
+        .expect("a Vineta K cell");
+    let mut turned = forward.clone();
+    turned.track = Some("Vineta_K_R".to_string());
+    assert_eq!(
+        oag_title::track_alias::key_for(aliases, "Vineta_K_R"),
+        Some("09_Track")
+    );
+    assert_eq!(
+        boot::tiers2048::card_title(&turned, "ignored", aliases, &campaigns.shell.strings),
+        "VINETA K"
+    );
+    // The game list asks the same table by circuit id, and leaves 2048's own ten
+    // to their picker names rather than answering for them.
+    let strings = &campaigns.shell.strings;
+    assert_eq!(
+        boot::tiers2048::alias_title(aliases, "Metropia_R", strings).as_deref(),
+        Some("METROPIA")
+    );
+    assert_eq!(
+        boot::tiers2048::alias_title(aliases, "Tech_De_Ra", strings).as_deref(),
+        Some("TECH DE RA")
+    );
+    assert_eq!(
+        boot::tiers2048::alias_title(aliases, "square", strings),
+        None
+    );
+    let mut keyed = 0;
+    for (_, _, cell) in campaigns.cells() {
+        let Some(id) = cell.track.as_deref() else {
+            continue;
+        };
+        if oag_title::track_alias::key_for(aliases, id).is_some() {
+            keyed += 1;
+            assert_ne!(title_of(cell), id, "{} still draws the id", cell.name);
+            assert!(
+                !title_of(cell).contains("_Track") && !title_of(cell).contains('_'),
+                "{} draws {:?}",
+                cell.name,
+                title_of(cell)
+            );
+        }
+    }
+    assert!(keyed > 100, "{keyed} cells race an HD-lineage circuit");
 }

@@ -5,7 +5,7 @@
 
 use log::warn;
 
-use oag_game::endrace::touch::{Facts, load, summary};
+use oag_game::endrace::touch::{Facts, load, summary, xp_result};
 use oag_gameplay::input::Button;
 use oag_ui_screens::endrace::touch::Hit;
 
@@ -39,7 +39,7 @@ impl Session {
                 .results()
                 .is_some_and(|board| board.persons() > 1);
         if stage.race.viewport_count() > 1 || several_over_the_network {
-            log::info!(
+            log::debug!(
                 "several people: keeping the built-in results table over the touch pages"
             );
             self.mark_endrace_unavailable();
@@ -58,7 +58,16 @@ impl Session {
                 .and_then(|progress| progress.objectives),
         );
         let strings = shell.strings.clone();
-        let model = summary(&facts, &strings);
+        let xp = stage
+            .xp_banked
+            .zip(
+                stage
+                    .campaign_2048_event
+                    .as_ref()
+                    .and_then(|progress| progress.xp_ranks.as_ref()),
+            )
+            .and_then(|(banked, ranks)| xp_result(banked, ranks, &strings));
+        let model = summary(&facts, &strings, xp);
         let faces = oag_ui_screens::picker::FaceScales::default();
         let grid = [shell.space.size.0, shell.space.size.1];
         let globals: Vec<(String, String)> = shell
@@ -175,7 +184,7 @@ impl Session {
     /// Races the same 2048 event again, the way the map's own tap did: the
     /// event's name is handed to the loader and the race is launched through
     /// the one path every launch uses. A race that was not an event (the RACE
-    /// page, REMIX) relaunches on the options it ran with.
+    /// page, a mod's race page) relaunches on the options it ran with.
     fn restart_event(&mut self) {
         if let Stage::Race(stage) = &self.stage {
             self.pending_event = stage.campaign_2048_event.as_ref().map(|p| p.name.clone());

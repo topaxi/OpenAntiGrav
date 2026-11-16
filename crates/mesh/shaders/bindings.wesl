@@ -96,12 +96,12 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 
 // The Zone stage's `zoneMode<n>.gtf`, sampled through `zone_sampler` on the
 // same coordinate as `zone_tex`, for a chunk without `ZONE_TRACK` - see
-// `zone_set`. Numbered past the shadow map because it was bound later.
+// `zone_set`.
 @group(2) @binding(10) var zone_scene_tex: texture_2d_array<f32>;
 
-// Bindings 11 and 12 held the stage-transition sphere's Outer half of the two textures above;
-// it is now layer 1 of `zone_tex` and `zone_scene_tex` (`mesh_render::zone::layered`), which frees
-// two of the fragment stage's sampled textures for the material group's six.
+// Bindings 11 and 12 are free: the stage-transition sphere's Outer half is layer 1 of `zone_tex`
+// and `zone_scene_tex` (`mesh_render::zone::layered`), which leaves two of the fragment stage's
+// sampled textures for the material group's six.
 
 // The per-craft sun-occlusion maps, one layer per craft, read through the
 // coverage map's own clamped filtering sampler - see `sun_occlusion` and
@@ -129,11 +129,39 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 // - see `mesh::sky_paraboloid` and `sky_probe`. A black placeholder where there is none.
 @group(2) @binding(17) var sky_probe_tex: texture_2d<f32>;
 
+// The per-craft spherical-harmonic ambient: Omega's `shCoeffs`, the blend of the circuit's
+// `track.shprobes` at the craft. Ten `vec4`s a row, one row per craft (`uniforms.env_layer - 1`):
+// nine rgb coefficients and then `(K, Ks, 1, 0)`; see `sh_hull_ambient`. A buffer rather than a
+// texture because the scene group's sixteen sampled textures are the WebGPU default limit. Zero
+// (no row flagged) where there is none.
+@group(2) @binding(18) var<uniform> sh_probe_table: array<vec4<f32>, 80>;
+
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 @group(3) @binding(1) var<uniform> node_anims: NodeAnims;
 
 @group(3) @binding(2) var<uniform> emissives: Emissives;
+
+// **Whether any draw of this pipeline names a row of `emissives`**
+// (`mesh_render::emissive_rows`). Row 0 is all zeros (`Emissives::of`), so where no vertex
+// carries a material index a read is that zero, and spelling it out lets the driver drop every
+// test on the table: a read through a uniform buffer is a value it cannot fold, whatever the
+// index folds to. Every `emissive_*` read goes through these two.
+override emissive_rows: u32 = 1u;
+
+fn emissive_scale(entry: u32) -> vec4<f32> {
+    if emissive_rows == 0u {
+        return vec4<f32>(0.0);
+    }
+    return emissives.scale[entry];
+}
+
+fn emissive_tint(entry: u32) -> vec4<f32> {
+    if emissive_rows == 0u {
+        return vec4<f32>(0.0);
+    }
+    return emissives.tint_offset[entry];
+}
 
 // What the sun added to the colour `lit_texel` last returned, in that colour's
 // own space: the amount the track's shadowed redraw takes back out. Written by

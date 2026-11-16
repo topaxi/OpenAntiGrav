@@ -1,11 +1,10 @@
 //! Which AI flies a race's opponents: the recovered original driver
 //! (`oag_ai::original`) or this project's own (`oag_ai::Driver`).
 //!
-//! **The original by default, in every race that has opponents** (maintainer,
-//! 2026-10-13), until this project's own driver is solid. It is a run flag,
-//! `--ai original|ours`, and never a player setting or a menu row: the AI is
-//! chosen by the build and the game mode, which keeps the 2026-10-11 rule
-//! recorded in `oag_raceplay`'s `original_ai.rs`. `--ai ours` is a developer's
+//! **The original by default, in every race that has opponents**, until this
+//! project's own driver is solid. It is a run flag, `--ai original|ours`, and
+//! never a player setting or a menu row: the AI is chosen by the build and the
+//! game mode, the rule recorded in `oag_raceplay`'s `original_ai.rs`. `--ai ours` is a developer's
 //! switch for testing our driver and overrides every race, the campaign's
 //! included.
 //!
@@ -41,7 +40,7 @@ pub enum Source {
     /// A 2048 campaign event and its authored AI, `None` for one with no `ai`
     /// block (Elimination), which keeps this project's driver.
     Event2048(Option<EventAi>),
-    /// Anything else with opponents: race box, remix, a direct `--race`. The
+    /// Anything else with opponents: race box, a two-title race, a direct `--race`. The
     /// race's `[ai] difficulty` stands in for the rung.
     Free(oag_ai::Difficulty),
 }
@@ -92,23 +91,6 @@ impl Reason {
     }
 }
 
-/// The pack-shuffle level (`0` Easy, `1` Medium, `2` Hard) a race with no
-/// campaign rung flies at, from the `[ai] difficulty` the race box carries.
-///
-/// **Chosen, not measured.** The original's level exists only as the
-/// campaign's three rungs; this project's four named difficulties have no
-/// original counterpart, so Novice is the easy rung, Ace the hard one, and
-/// the default (Elite) and Skilled sit on Medium so an untouched race box
-/// flies the rung a campaign cell with none authored does.
-#[must_use]
-pub const fn free_level(difficulty: oag_ai::Difficulty) -> usize {
-    match difficulty {
-        oag_ai::Difficulty::Novice => 0,
-        oag_ai::Difficulty::Skilled | oag_ai::Difficulty::Elite => 1,
-        oag_ai::Difficulty::Ace => 2,
-    }
-}
-
 /// The rules: `opponents` is whether the grid holds any, `humans` how many
 /// slots a person drives.
 #[must_use]
@@ -136,7 +118,7 @@ pub fn decide(choice: AiChoice, opponents: bool, humans: usize, source: Source) 
         Source::Event2048(None) => Decision::Ours(Reason::EventWithoutAi),
         Source::Free(difficulty) => Decision::Original {
             skill: None,
-            level: free_level(difficulty),
+            level: difficulty.level(),
             event: None,
         },
     }
@@ -146,12 +128,23 @@ pub fn decide(choice: AiChoice, opponents: bool, humans: usize, source: Source) 
 /// whether the original driver flies (`false` for the reasons in [`Reason`]
 /// and for [`Race::use_original_ai`]'s own fallbacks, which it logs itself).
 pub fn apply(race: &mut Race, choice: AiChoice, source: Source) -> bool {
+    apply_noting(race, choice, source).0
+}
+
+/// [`apply`], and what a recording must carry to rebuild it: the original driver's request,
+/// `None` when this project's flies or when a 2048 event's own skills went with it (those are
+/// not in a replay's header, so a rebuild of that race is refused at tick zero by name).
+pub fn apply_noting(
+    race: &mut Race,
+    choice: AiChoice,
+    source: Source,
+) -> (bool, Option<oag_raceplay::OriginalAi>) {
     let opponents = race.sim.world.ship_count > 1;
     let humans = race.sim.world.human_slots().count();
     match decide(choice, opponents, humans, source) {
         Decision::Ours(reason) => {
             log::info!("AI: this project's driver flies ({})", reason.text());
-            false
+            (false, None)
         }
         Decision::Original {
             skill,
@@ -162,7 +155,9 @@ pub fn apply(race: &mut Race, choice: AiChoice, source: Source) -> bool {
             if flies && let Some((pad_tracking, weapon_avoidance)) = event {
                 race.set_original_event_ai_skills(pad_tracking, weapon_avoidance);
             }
-            flies
+            let note =
+                (flies && event.is_none()).then_some(oag_raceplay::OriginalAi { skill, level });
+            (flies, note)
         }
     }
 }

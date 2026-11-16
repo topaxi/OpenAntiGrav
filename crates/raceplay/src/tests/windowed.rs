@@ -437,3 +437,64 @@ fn each_window_keeps_the_history_of_its_own_camera() {
         );
     }
 }
+
+/// A wallpaper's windows: a demo dealt across three windows gives three views of three craft from
+/// the one simulation, seats nobody and moves no hash. Fails if the windows are seated as people,
+/// share a craft, or the dealing reaches the simulation.
+#[test]
+fn a_demo_watched_in_three_windows_follows_three_craft_and_moves_no_hash() {
+    let mut plain = race_with_a_grid();
+    plain.fly_as_demo(&oag_title::demo::Demo::PULSE);
+    let mut watched = race_with_a_grid();
+    watched.fly_as_demo(&oag_title::demo::Demo::PULSE);
+    watched.watch_in_windows(3);
+    assert_eq!(
+        watched.sim.world.human_slots().count(),
+        0,
+        "a wallpaper seats nobody"
+    );
+    let drawn: Vec<Vec<usize>> = (0..3).map(|window| watched.window_drawn(window)).collect();
+    assert_eq!(
+        drawn[0],
+        vec![watched.player_slot()],
+        "window 1 keeps the demo's own camera"
+    );
+    let mut slots: Vec<usize> = drawn.iter().map(|seats| seats[0]).collect();
+    assert!(drawn.iter().all(|seats| seats.len() == 1), "{drawn:?}");
+    slots.dedup();
+    assert_eq!(slots.len(), 3, "three windows, three craft: {drawn:?}");
+    for tick in 0..90 {
+        plain.tick(&oag_gameplay::PlayerInputs::default());
+        watched.tick(&oag_gameplay::PlayerInputs::default());
+        assert_eq!(
+            plain.sim.state_hash(),
+            watched.sim.state_hash(),
+            "diverged at tick {tick}"
+        );
+    }
+    let views: Vec<_> = drawn
+        .iter()
+        .map(|seats| {
+            watched.set_viewpoint(seats[0]);
+            let view = watched.view();
+            watched.reset_viewpoint();
+            view
+        })
+        .collect();
+    assert_ne!(views[0], views[1]);
+    assert_ne!(views[1], views[2]);
+    assert_ne!(views[0], views[2]);
+
+    watched.watch_in_windows(9);
+    let ten: Vec<usize> = (0..9)
+        .map(|window| watched.window_drawn(window)[0])
+        .collect();
+    assert_eq!(
+        ten[0],
+        ten[watched.viewport_count()],
+        "more windows than cameras cycle the craft"
+    );
+    watched.watch_in_windows(1);
+    assert!(!watched.windowed());
+    assert_eq!(watched.viewport_count(), 1);
+}

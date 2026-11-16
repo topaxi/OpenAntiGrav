@@ -118,8 +118,12 @@ use serde::{Deserialize, Serialize};
 
 mod cursor;
 mod difficulty;
+mod found;
 mod loyalty;
+
 mod medal;
+/// The profile's XP total - see `xp.rs`.
+mod xp;
 pub use cursor::CampaignCursor;
 pub use medal::{Difficulty, Medal};
 
@@ -145,16 +149,10 @@ pub struct Key {
     /// drive.
     ///
     /// **Never left as the caller's own "nothing was named" value.**
-    /// `race::Options::track` is `None` on the ordinary `--race` invocation
-    /// with no `--track` flag, because `race::load` resolves its own
-    /// default track *internally* and never hands the resolved name back -
-    /// confirmed live, the first version of this fallback wrote every such
-    /// race under one shared `"(no circuit)"` bucket regardless of which
-    /// circuit was actually driven. `Stage::build_race_stage` now falls back
-    /// to `title.race.track` (`oag_title::race::RaceDefaults::track`) first,
-    /// itself the disc's own stated default and the same value `race::load`
-    /// falls back to - so `"(no circuit)"` is reached only when a source
-    /// offers no circuit at all. See [`Key::new`].
+    /// A run with no `--track` files under the circuit `race::load` resolved
+    /// ([`oag_raceplay::Loaded::circuit`]), through [`Key::raced`], so
+    /// `"(no circuit)"` is reached only when a source offers no circuit at all.
+    /// See [`Key::new`].
     pub track: String,
     /// [`oag_race::Mode::name`] - already lower-cased with underscores, so
     /// this is carried through unchanged.
@@ -167,9 +165,7 @@ pub struct Key {
 /// Named for [`Key::track`]'s last-resort fallback: a race whose source
 /// offered no circuit at all still has to record *something* rather than
 /// fail the capture. See `Session::handle_menu`'s own "this source offers no
-/// circuit at all" warning, which is the only place this can be reached
-/// from now that `Stage::build_race_stage` falls back to `title.race.track`
-/// first - see [`Key::track`]'s own doc.
+/// circuit at all" warning.
 const NO_CIRCUIT: &str = "(no circuit)";
 
 impl Key {
@@ -183,6 +179,20 @@ impl Key {
             mode: mode.trim().to_ascii_lowercase(),
             class: class.trim().to_ascii_lowercase(),
         }
+    }
+
+    /// The key of a race that was asked for `requested` (`None` when the run named no circuit)
+    /// and built on `circuit` ([`oag_raceplay::Loaded::circuit`]). A run that named none files
+    /// under the circuit it raced, which is the title's default only when the source ships it.
+    #[must_use]
+    pub fn raced(
+        title: &str,
+        requested: Option<&str>,
+        circuit: &str,
+        mode: &str,
+        class: &str,
+    ) -> Self {
+        Self::new(title, requested.or(Some(circuit)), mode, class)
     }
 }
 
@@ -223,12 +233,12 @@ pub struct Observation {
     /// campaign cell at all, and when the cell's own law says the value
     /// scored met no medal.
     ///
-    /// **Fed by a real race since 2026-09-14.** `RaceStage::observation`
+    /// **Fed by a real race.** `RaceStage::observation`
     /// (`crates/game/src/main/race_stage.rs`) calls `RaceStage::campaign_medal`,
     /// which evaluates a real `oag_tables::race_campaign::Cell` once one is
     /// selected - see that method's own doc for the per-mode law. Still
     /// `None` for a race launched any other way (the ordinary RACE page,
-    /// RACE REMIX, `--race`), since none of those set `RaceStage::campaign_cell`
+    /// a two-title race page, `--race`), since none of those set `RaceStage::campaign_cell`
     /// at all. See the module doc's "where a career system attaches" section.
     pub campaign_medal: Option<Medal>,
     /// **Wipeout HD/Fury only.** The rung [`Self::campaign_medal`] was
@@ -419,6 +429,23 @@ impl PersonalBest {
     }
 }
 
+/// The tier names of a campaign that has no list of its own, best first.
+const STANDARD_ORDER: [&str; 3] = ["gold", "silver", "bronze"];
+
+/// What a campaign race earned: the tier's name, the gold, silver or bronze it stands in for
+/// (`MedalTiers::class`), its points, and every tier name of its campaign, best first.
+#[derive(Debug, Clone, Copy)]
+pub struct TierEarned<'a> {
+    /// The tier's name.
+    pub name: &'a str,
+    /// The class kept in [`CampaignRecord::best_medal`].
+    pub class: Medal,
+    /// The tier's points, kept in [`CampaignRecord::best_points`].
+    pub points: u32,
+    /// The campaign's tier names, best first.
+    pub order: &'a [&'a str],
+}
+
 /// One campaign cell's whole history, keyed on the cell's own `name` rather
 /// than on [`Key`].
 ///
@@ -453,7 +480,7 @@ pub struct CampaignRecord {
     pub best_points: Option<u32>,
     /// **Wipeout HD/Fury only.** The rung [`Self::best_medal`] was earned
     /// at - `#[serde(default)]`, so a file [`Self::best_medal`] already
-    /// existed in before this field did (every pre-2026-09-28 row, and
+    /// existed in before this field did (every row written before the field, and
     /// every Pulse row forever) loads as `None` rather than refusing to
     /// parse. `oag_ui_screens::campaign::hd::hd_medal_frame`'s own doc names the
     /// default it falls back to when a saved medal carries no difficulty at
@@ -471,9 +498,27 @@ pub struct CampaignRecord {
     /// whenever [`Self::last_medal`] itself is `None`.
     #[serde(default)]
     pub last_difficulty: Option<Difficulty>,
+    /// The tier a mod campaign's own list awarded, by name, when it is not the word of
+    /// [`Self::best_medal`] (a `platinum`, whose `best_medal` is the class gold stands in for it:
+    /// `MedalTiers::class`). Absent on every disc campaign's row, and on a row written before
+    /// tiers had names: such a row reads as the tier [`Self::best_medal`] names.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub best_tier: Option<String>,
+    /// [`Self::last_medal`]'s tier, as [`Self::best_tier`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_tier: Option<String>,
 }
 
 impl CampaignRecord {
+    /// The name of the tier [`Self::best_medal`] stands for: [`Self::best_tier`], else the word of
+    /// [`Self::best_medal`].
+    #[must_use]
+    pub fn best_tier_name(&self) -> Option<&str> {
+        self.best_tier
+            .as_deref()
+            .or_else(|| self.best_medal.map(Medal::word))
+    }
+
     fn matches(&self, title: &str, cell: &str) -> bool {
         self.title == title && self.cell == cell
     }
@@ -513,6 +558,15 @@ pub struct CampaignDifficultyRecord {
     pub difficulty: Difficulty,
 }
 
+/// A hidden campaign event the player found - see `found.rs`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CampaignFoundRecord {
+    /// [`campaign_title`]'s string, lower-cased.
+    pub title: String,
+    /// The event's name on the campaign map.
+    pub event: String,
+}
+
 /// Where a campaign's screens last stood - see `cursor.rs`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CampaignCursorRecord {
@@ -537,6 +591,10 @@ pub struct CampaignCursorRecord {
 /// the identical rule through [`Store::record_campaign`].
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Store {
+    /// The profile's experience total, one for the player across Wipeout 2048 and Omega's 2048
+    /// mode (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`). A scalar, so it is written
+    /// before the tables; a file without it reads `0`. See [`Store::xp`].
+    xp: u32,
     records: Vec<Record>,
     /// One row per campaign cell ever raced - see [`CampaignRecord`]'s own
     /// doc for why this is a sibling table rather than a fourth part of
@@ -553,6 +611,9 @@ pub struct Store {
     /// One row per campaign whose screens the player has left. Absent in every
     /// file written before it existed.
     campaign_cursor: Vec<CampaignCursorRecord>,
+    /// One row per hidden campaign event found. Absent in every file written
+    /// before it existed.
+    campaign_found: Vec<CampaignFoundRecord>,
 }
 
 impl Store {
@@ -652,8 +713,7 @@ impl Store {
     /// [`Record::best_medal`].
     ///
     /// **`difficulty`'s own write rule is measured, not chosen** -
-    /// `Race_RecordResult`'s own `record+8`/`record+9` tail, decompiled in
-    /// full 2026-09-28
+    /// `Race_RecordResult`'s own `record+8`/`record+9` tail, decompiled in full
     /// (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
     /// `record+8`/`record+9` write" section, confidence 88): a **strict**
     /// medal improvement overwrites the stored difficulty unconditionally,
@@ -661,8 +721,7 @@ impl Store {
     /// at `Easy` replaces a stored `Gold`'s own difficulty if the run
     /// improves the medal - silver would, bronze would not, since neither
     /// beats a stored `Gold`); an **exact tie** in medal tier only ever
-    /// *raises* the stored rung, never lowers it. `None` on the pre-2026-09-28
-    /// Pulse call sites, and on 2048's own campaign progress, which has no
+    /// *raises* the stored rung, never lowers it. `None` on the Pulse call sites, and on 2048's own campaign progress, which has no
     /// difficulty concept to record - falls straight through to comparing
     /// `medal` alone, the same as before this field existed. Previously
     /// implemented as "the harder rung always wins outright, whatever either
@@ -688,6 +747,24 @@ impl Store {
         medal: Option<Medal>,
         difficulty: Option<Difficulty>,
     ) {
+        let earned = medal.map(|medal| TierEarned {
+            name: medal.word(),
+            class: medal,
+            points: medal.points(),
+            order: &STANDARD_ORDER,
+        });
+        self.record_campaign_tier(title, cell, earned, difficulty);
+    }
+
+    /// [`Self::record_campaign`] for a campaign with its own tiers: what the race earned,
+    /// compared with the stored best by [`TierEarned::order`].
+    pub fn record_campaign_tier(
+        &mut self,
+        title: &str,
+        cell: &str,
+        earned: Option<TierEarned<'_>>,
+        difficulty: Option<Difficulty>,
+    ) {
         let title = title.trim().to_ascii_lowercase();
         let cell = cell.trim().to_ascii_lowercase();
         let row = match self
@@ -707,29 +784,46 @@ impl Store {
                     .expect("just pushed onto this exact vec")
             }
         };
-        if let Some(medal) = medal {
+        let medal = earned.as_ref().map(|e| e.class);
+        if let Some(earned) = &earned {
             // `Race_RecordResult`'s own gate: no stored medal yet, or the new
-            // one is same-or-better - never downgrade `best_medal`.
-            let applies = row.best_medal.is_none_or(|stored| medal <= stored);
+            // one is same-or-better - never downgrade `best_medal`. A stored tier the list
+            // no longer names ranks below every tier it does.
+            let rank = |name: &str| {
+                earned
+                    .order
+                    .iter()
+                    .position(|n| n.eq_ignore_ascii_case(name))
+                    .unwrap_or(usize::MAX)
+            };
+            let new_rank = rank(earned.name);
+            let stored_rank = row.best_tier_name().map(rank);
+            let applies = stored_rank.is_none_or(|stored| new_rank <= stored);
             if applies {
                 if let Some(new_difficulty) = difficulty {
-                    let overwrite_difficulty = match (row.best_medal, row.best_difficulty) {
+                    let overwrite_difficulty = match (stored_rank, row.best_difficulty) {
                         // No stored medal, or a stored medal with no rung
-                        // recorded yet (a pre-2026-09-28 row): unconditional.
+                        // recorded yet (a row from before the field): unconditional.
                         (None, _) | (_, None) => true,
-                        (Some(stored_medal), Some(stored_difficulty)) => {
-                            medal < stored_medal || new_difficulty > stored_difficulty
+                        (Some(stored), Some(stored_difficulty)) => {
+                            new_rank < stored || new_difficulty > stored_difficulty
                         }
                     };
                     if overwrite_difficulty {
                         row.best_difficulty = Some(new_difficulty);
                     }
                 }
-                row.best_medal = Some(medal);
-                row.best_points = row.best_medal.map(Medal::points);
+                row.best_medal = Some(earned.class);
+                row.best_tier =
+                    (earned.name != earned.class.word()).then(|| earned.name.to_string());
+                row.best_points = Some(earned.points);
             }
         }
         row.last_medal = medal;
+        row.last_tier = earned
+            .as_ref()
+            .filter(|e| e.name != e.class.word())
+            .map(|e| e.name.to_string());
         row.last_difficulty = difficulty;
 
         // Stable, for the same reason `Self::record` sorts `self.records`.
@@ -893,13 +987,37 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
     }
     campaign_cursor.sort_by(|a, b| a.title.cmp(&b.title));
 
+    let mut campaign_found = Vec::new();
+    match table.get("campaign_found") {
+        Some(toml::Value::Array(rows)) => {
+            for (index, row) in rows.iter().enumerate() {
+                match row.clone().try_into::<CampaignFoundRecord>() {
+                    Ok(record) => campaign_found.push(record),
+                    Err(e) => notes.push(format!("campaign_found[{index}] dropped: {e}")),
+                }
+            }
+        }
+        Some(_) => {
+            notes.push("`campaign_found` is not an array of tables; ignoring it".to_string())
+        }
+        None => {}
+    }
+    campaign_found.sort_by(|a, b| (&a.title, &a.event).cmp(&(&b.title, &b.event)));
+
+    let xp = table
+        .get("xp")
+        .and_then(toml::Value::as_integer)
+        .map_or(0, |v| u32::try_from(v.max(0)).unwrap_or(u32::MAX));
+
     Ok((
         Store {
+            xp,
             records,
             campaign,
             loyalty,
             campaign_difficulty,
             campaign_cursor,
+            campaign_found,
         },
         notes,
     ))

@@ -36,6 +36,7 @@ form, and Ghidra's string search will return all three.
 | [Anim Transform](anim-transform.md) | The scene-graph node the boost plume's anchors ride: one shared per-race clock, not a per-object timer, matching PSP's class field for field |
 | [Grid positions of local players](grid-local-players.md) | Two local players take slots 8 and 7, the AI slots 1 to 6; the grid spawn and placement routines |
 | [Hull lights](hull-lights.md) | The PS2 builds the PSP's `wopoint` vector and colour per craft, in craft space, with a rig of its own; our PS2 hull ignores the whole rig because its vertices carry a colour |
+| [Definition_IsUnlocked](definition-unlock.md) | The PSP's unlock test on PS2, its dev-unlock word `g_settings+0x46c` (one write and Track Select lists 32 circuits, not 3), and Track Select's cursor word |
 
 ## Renames
 

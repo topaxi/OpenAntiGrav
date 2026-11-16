@@ -42,15 +42,17 @@ mod motion_blur;
 mod msaa;
 pub mod presets;
 mod reconstruction;
+mod scenery_sort;
 mod screen_filter;
 mod shadows;
+mod trail_length;
 mod trail_order;
 mod weather;
 
 pub use {
     aspect::Aspect, dynamic_hud::DynamicHud, hud_scale::*, motion_blur::*, msaa::Msaa,
-    reconstruction::Reconstruction, screen_filter::FilterStrength, shadows::Shadows,
-    trail_order::TrailOrder, weather::Weather,
+    reconstruction::Reconstruction, scenery_sort::ScenerySort, screen_filter::FilterStrength,
+    shadows::Shadows, trail_length::TrailLength, trail_order::TrailOrder, weather::Weather,
 };
 
 /// What kind of window the game asks the compositor for.

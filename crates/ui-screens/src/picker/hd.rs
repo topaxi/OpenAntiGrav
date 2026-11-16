@@ -50,8 +50,8 @@
 //!   `ShipModel` values ([`ShipModel`]) by `oag_game::preview::ship_model`.
 //! - **The `middle="true"` marks** of the `SHIP MODEL` bracket (art not
 //!   found), the `Padlock` and the `Unlockcondition` text (this build keeps
-//!   no unlock state), the `UnlockNobble0..4` hearts (their thresholds are
-//!   unscaled onto the bar) and the `Squares` page dots (an empty item
+//!   no unlock state), the `UnlockNobble0..4` hearts (the thresholds' source
+//!   is unread, `docs/ghidra/functions/ps3-hdfury-eu/team-selection-loyalty.md`) and the `Squares` page dots (an empty item
 //!   `the screen cpp` fills). `LiveryString` is authored empty and filled by code this
 //!   build has not read; the honeycomb's cursor row shows the chosen model
 //!   instead, so nothing stands in for it.
@@ -83,6 +83,11 @@ pub struct Stats {
     pub thrust: u8,
     pub handling: u8,
     pub shield: u8,
+    /// The same `<FE>` element's `length`, in thousandths (`length="3.8"` is
+    /// `3800`): half the model's fore and aft size as the screen's depth fit
+    /// takes it ([`selected_length`]), shown nowhere. `None` where the element
+    /// authors none.
+    pub length_milli: Option<u16>,
 }
 
 impl Stats {
@@ -123,6 +128,9 @@ pub struct ShipModel {
     pub z: f32,
     pub rot_x: f32,
     pub rot_y: f32,
+    /// `ObeySafeZone`: the craft and its origin are drawn inside the title's
+    /// `Safe Area Setting`, as the widgets around it are.
+    pub obey_safe_zone: bool,
 }
 
 /// Everything [`oag_ui::screen::Screens::collect`] does not reach on this
@@ -217,6 +225,7 @@ pub fn read(
         hd_track: None,
         ready: String::new(),
         name_scale: 1.0,
+        entry_pitch: None,
     })
 }
 
@@ -285,6 +294,7 @@ fn walk(
                     z: number(child, "z").unwrap_or(0.0),
                     rot_x: number(child, "RotX").unwrap_or(0.0),
                     rot_y: number(child, "RotY").unwrap_or(0.0),
+                    obey_safe_zone: child.flag("ObeySafeZone").unwrap_or(false),
                 });
             }
             "hexselection" => {
@@ -343,6 +353,15 @@ const MINI_TEXT_INSET: f32 = 20.0;
 /// and the loyalty block beside them.
 const STAT_BLOCKS: [&str; 4] = ["Slide_0", "Slide_1", "Slide_2", "Slide_3"];
 const LOYALTY_BLOCK: &str = "Slide_4";
+
+/// The total at which the loyalty bar is full: the cap a banked total is held to
+/// and the `max` the screen's update passes the stat-bar setter.
+const LOYALTY_MAX: f32 = 100_000.0;
+
+/// A 0..100 rating as the fraction of its bar.
+fn rating_fraction(rating: u8) -> f32 {
+    f32::from(rating) / 100.0
+}
 /// The palette entry a variant's added rating is drawn in, see
 /// [`TeamScreen::bonus`].
 const BONUS_GLOBAL: &str = "FEGlobals->HD_Blue";
@@ -379,7 +398,7 @@ pub(crate) fn block_arrow(
             width,
             height,
         ],
-        uv: [placed.x as f32, placed.y as f32, width, height],
+        uv: placed.sheet_rect([0.0, 0.0, width, height]),
         color: argb_to_rgba(tint),
     });
 }
@@ -418,12 +437,7 @@ pub(super) fn body(
     {
         out.push(Draw::Sprite {
             rect,
-            uv: [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
+            uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
             color: [1.0, 1.0, 1.0, 1.0],
         });
     }
@@ -446,7 +460,11 @@ pub(super) fn body(
         let base = base.map(|base| base.values()[index]);
         stat_bar(
             block,
-            (value, base),
+            (
+                value.map(rating_fraction),
+                base.map(rating_fraction),
+                value.map(|value| format!("{value:03}")),
+            ),
             layout,
             extra,
             frame,
@@ -455,20 +473,25 @@ pub(super) fn body(
         );
     }
     if let Some(block) = find_block(screen, LOYALTY_BLOCK) {
-        // The running loyalty total on the stat bars' own 0..100 scale.
-        // **Only the empty total is measured** (`000` on a fresh profile,
-        // the nobble at the bar's left end); how a larger total scales
-        // onto the bar and its three digits is chosen, not measured.
-        let loyalty = match &entry.details {
+        // `TeamSelectionScreen_Update` hands the team's banked total
+        // (`Loyalty_FindTeamRecord`, `record + 8`) and the cap 100000.0 to the
+        // stat-bar setter, which scales the bar by `total / max` and prints the
+        // total through `%03d` (`docs/ghidra/functions/ps3-hdfury-eu/
+        // team-selection-loyalty.md`).
+        let total = match &entry.details {
             Details::Ship {
                 loyalty: Some(total),
                 ..
-            } => Some((*total).min(100) as u8),
+            } => Some(*total),
             _ => None,
         };
         stat_bar(
             block,
-            (loyalty, None),
+            (
+                total.map(|total| total as f32 / LOYALTY_MAX),
+                None,
+                total.map(|total| format!("{total:03}")),
+            ),
             layout,
             extra,
             frame,
@@ -502,8 +525,13 @@ pub(crate) fn draw_labels(labels: &[MiniText], out: &mut Vec<Draw>) {
 
 /// The selected livery's own ratings, where the entry carries them.
 fn selected_stats(picker: &Picker) -> Option<Stats> {
-    match picker.selected().map(|entry| &entry.details) {
-        Some(Details::Ship { stats, .. }) => {
+    stats_of(picker, picker.selected()?)
+}
+
+/// `entry`'s ratings for the livery the picker has chosen, where it carries them.
+fn stats_of(picker: &Picker, entry: &super::Entry) -> Option<Stats> {
+    match &entry.details {
+        Details::Ship { stats, .. } => {
             let variant = picker
                 .variant()
                 .and_then(|chosen| picker.variants().iter().position(|v| v == chosen))
@@ -512,6 +540,24 @@ fn selected_stats(picker: &Picker) -> Option<Stats> {
         }
         _ => None,
     }
+}
+
+/// The selected livery's authored `<FE length>`, model units, for the depth
+/// fit `oag_game::preview::ship_model` frames the craft with.
+#[must_use]
+pub fn selected_length(picker: &Picker) -> Option<f32> {
+    length_milli(selected_stats(picker)?)
+}
+
+/// The `<FE length>` entry `index` would have under the livery now chosen: the
+/// model the screen was on before a step to it.
+#[must_use]
+pub fn entry_length(picker: &Picker, index: usize) -> Option<f32> {
+    length_milli(stats_of(picker, picker.entries().get(index)?)?)
+}
+
+fn length_milli(stats: Stats) -> Option<f32> {
+    stats.length_milli.map(|milli| f32::from(milli) / 1000.0)
 }
 
 /// The ratings of the team's classic hull - the livery row's empty id, which
@@ -558,7 +604,7 @@ pub fn logo_src(location: &str) -> String {
 /// loyalty block) the block draws in its own colour, as any block does.
 fn stat_bar(
     block: &BlockWidget,
-    (value, base): (Option<u8>, Option<u8>),
+    (value, base, text): (Option<f32>, Option<f32>, Option<String>),
     layout: &Layout,
     extra: &TeamScreen,
     frame: &Frame,
@@ -571,7 +617,7 @@ fn stat_bar(
         .iter()
         .find(|(n, _)| n == name)
         .map(|(_, solid)| *solid);
-    let split = value.map(|value| block.x + block.width * (f32::from(value) / 100.0).min(1.0));
+    let split = value.map(|value| block.x + block.width * value.min(1.0));
     if let Some(art) = frame.blocks {
         let whole = oag_ui::menu::block::Block {
             x: block.x,
@@ -589,8 +635,7 @@ fn stat_bar(
                 if let (Some(value), Some(base), Some(bonus)) = (value, base, extra.bonus)
                     && value > base
                 {
-                    let at =
-                        |rating: u8| block.x + block.width * (f32::from(rating) / 100.0).min(1.0);
+                    let at = |fraction: f32| block.x + block.width * fraction.min(1.0);
                     oag_ui::menu::block::draw_span(
                         &whole,
                         at(base),
@@ -613,7 +658,7 @@ fn stat_bar(
         positioned.scale = block.text_scale;
         out.push(text_draw(&positioned, &content, layout));
     }
-    let (Some(value), Some(split)) = (value, split) else {
+    let (Some(readout), Some(split)) = (text, split) else {
         return;
     };
     let index = name.trim_start_matches("Slide_");
@@ -633,7 +678,7 @@ fn stat_bar(
         let mut moved = text.clone();
         let nobble_width = 16.0;
         moved.x = split - nobble_width - 2.0;
-        out.push(text_draw(&moved, &format!("{value:03}"), layout));
+        out.push(text_draw(&moved, &readout, layout));
     }
 }
 

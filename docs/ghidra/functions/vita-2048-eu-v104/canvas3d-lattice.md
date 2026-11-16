@@ -36,7 +36,8 @@ model"; this answers it: it renders a procedural triangle-cell mesh, and the cam
 ### Mesh law (read, confidence 75; rewritten 2026-10-27 after the shaders were decoded)
 
 - Grid of 90 columns (`< 0x5a`) by 32 rows (`< 0x20`) of cells; each cell is 6 vertices of 36
-  bytes and 18 indices, `bVar6` alternating per column and per row. Vertex layout, 9 floats: `position`
+  bytes and 21 indices (7 triangles: the top and three walls, 2026-11-12,
+  [campaign-map-projection.md](campaign-map-projection.md), "The prism"), `bVar6` alternating per column and per row. Vertex layout, 9 floats: `position`
   xyz at `+0`, `texCoord` (atlas uv) at `+0x0c`, `texCoord2` (the cell's texel in the cell textures)
   at `+0x14`, `offsetIndices` at `+0x1c`.
 - Cell centre: `x = col * 0.5`, `y = row * 0.8660254` (`DAT_81732ab4`, `DAT_81732ab8`). Adjacent cells
@@ -347,7 +348,11 @@ were read, not executed); the TouchScroll chain 80.
 | `0x813cff48` | `TouchScroll_Create` | 80 |
 | `0x811035a8` | `TouchScroll_ParseValues` | 85 |
 | `0x81103b46` | `TouchScroll_Update` | 70 |
-| `0x811042ae` | `TouchScroll_SetScroll` | 65 |
+| `0x811042ae` | `TouchScroll_SetScroll` | 85 |
+
+`TouchScroll_SetScroll` rose from 65 to 85 on 2026-11-10: its stored difference was read live at the
+campaign map's open ([campaign-map-projection.md](campaign-map-projection.md), "The scroll"), which also pins the
+scroll writers this section and the next left at confidence 55.
 
 Omega: **checked, applies, not wired.** `eboot.bin` carries `TouchScroll_Item.cpp`, `FeShellTouchScroll`,
 `MaxScrollY` and `autoScrollSpeed`: the same scroll item and the same shell parent ship; the GCN draw and
@@ -559,3 +564,38 @@ Omega: **checked, applies, not wired.** `canvasTexture.gnf` ships and the reset 
 (`0x018086ec`); Omega's front end is HD's and its composite is `ps4-omega-eu/tonemap.md`'s, so
 whether its pages draw a `Canvas3D` and through which encode was not read (shadPS4 has no memory
 readout; a RenderDoc pass table of an Omega frame is the way). HD: **checked, differs** (no `Canvas3D`).
+
+## Wired: the music wave on the campaign map (lane `w2048-lattice-wave`)
+
+The law is [canvas-music-wave.md](canvas-music-wave.md), "The wave"; this is what draws it.
+
+- **Data**: the track's `*_stereo.fft` sidecar is parsed by `oag_music::spectrum` (`AFEX`, version 1,
+  12 bands, `16 + 4 * 12 * frames` bytes, rows 30 a second, blended linearly between rows, silent
+  outside the track). `oag_title::Music::spectrum_extension` is 2048's `fft` and `None` on every other
+  title. The front end's loop is the only music the map plays over, so only its sidecar is read; the
+  music path exposes the row at the voice's own position each tick (`oag_sound::Audio::music_levels`,
+  an output, never `World` state) and `Frontend::set_music_levels` takes band 1.
+  `crates/game/tests/vita_2048_music_ground_truth.rs` parses the front end's sidecar and all eleven
+  race tracks' (rows cover the track to within 1.5 s).
+- **Law**: `oag_ui::frontend::canvas_wave`: a 30-step band-1 history, per cell
+  `int(600 f (h[k] - h[k+1]))` added and clamped to 0 to 255, 230 alpha a second off every cell, the
+  shown height easing 15 % a step; steps are the original's 60 Hz frames. Cells of priority 5 or more
+  (tiles) never move; ring cells (priority 1 to 4) do. Centre and radius: the first open event's
+  top-face centre and 7.0.
+- **Draw**: `oag_ui::frontend::canvas_mesh` runs the vertex program on the CPU (lift `h = z + alpha/255`,
+  occlusion `1/6 sum max(h_k - h, 0)` over the six cells that share a vertex) and emits
+  `Draw::Triangles`, a generic textured triangle list (`oag_game::render`, `ui.wesl` mode 7). The top
+  face is the picture the cell shows on the ground, moved by the lift (the lattice picture's own pixels
+  for plain ground, the baked ring picture for a ring cell). Walls are drawn only where the cell
+  across the edge is lower, down to that cell's top or one unit, shaded linearly toward the original's
+  foot shade; far-to-near order stands in for the depth buffer. A frame with no triangle list draws
+  as before.
+- **Not ported**: the analyser's automatic gain (`MusicAnalysis_Update`, confidence 60, peak-hold
+  unread), so quiet passages move the cells less than in the original; the hidden-event averaging is
+  `Wave::flatten` (measured live, confidence 80, `canvas-music-wave.md` section 5; any cell set, a hidden
+  event's button has 4 cells; the map passes it the cells of every revealable hidden event, see
+  [canvas-music-wave.md](canvas-music-wave.md), "Wired: the reveal"); the music time of a headless capture is the dump clock, not a
+  Vita's.
+- **Omega**: **checked, differs, unchanged**: no `.fft` ships (Wipeout music is Wwise), so
+  `spectrum_extension` is `None` and the map is the static picture; the loader says nothing because the
+  title declares no sidecar. A missing or unparsable sidecar on a title that declares one is a `warn`.

@@ -13,30 +13,37 @@ fn locked_race(owner_at: Vec3, target_at: Vec3, elapsed: f32) -> Race {
     let stats = one_leach_beam_table()
         .leach_beam()
         .expect("the fixture authors a LeachBeam");
-    race.sim.world.leach_beam = Some(Beam::locked(0, 1, &stats));
+    race.sim.world.leach_beams[0] = Some(Beam::locked(0, 1, &stats));
     race.sim.world.ships[0].physics.body.position = owner_at;
     race.sim.world.ships[1].physics.body.position = target_at;
-    race.view.leach_ball_elapsed = elapsed;
+    race.view.leach_ball_elapsed[0] = elapsed;
     race
 }
 
-/// The matrix's own translation is exactly `hd_ball::position`'s own answer
-/// for the same inputs - the composition root reads owner/target off the
-/// live ships and elapsed off `RaceView::leach_ball_elapsed` rather than
-/// re-deriving either.
-#[test]
-fn the_matrix_sits_where_hd_ball_position_says_it_should() {
-    let (owner, target) = (Vec3::new(30.0, 0.0, 0.0), Vec3::ZERO);
-    let elapsed = 0.2;
-    let race = locked_race(owner, target, elapsed);
-    let length = (target - owner).length();
-    let expected = oag_fx::beam::hd_ball::position(
-        elapsed / oag_weapons::projectile::leach_beam::trip::period(length),
-        owner,
-        target,
+/// The fraction a ball `elapsed` seconds into its trip has reached in `race`,
+/// read the way the original does: the period from the two craft's gap along
+/// the course, not their distance in space.
+fn fraction(race: &Race, elapsed: f32) -> f32 {
+    let ships = &race.sim.world.ships;
+    let gap = oag_weapons::projectile::leach_beam::trip::gap(
+        ships[0].standing.progress,
+        ships[1].standing.progress,
+        race.leach_course_length(),
     );
+    (elapsed / oag_weapons::projectile::leach_beam::trip::period(gap)).clamp(0.0, 1.0)
+}
+
+/// With no strip (a title that draws none), the ball falls back to the
+/// straight line between the bodies at the fraction the track gap gives.
+#[test]
+fn without_a_strip_the_ball_sits_on_the_chord_at_the_track_gaps_fraction() {
+    let (owner, target) = (Vec3::new(30.0, 0.0, 0.0), Vec3::ZERO);
+    let mut race = locked_race(owner, target, 0.2);
+    race.sim.world.ships[0].standing.progress = Some(50.0);
+    race.sim.world.ships[1].standing.progress = Some(110.0);
+    let expected = oag_fx::beam::hd_ball::position(fraction(&race, 0.2), owner, target);
     let matrix = race
-        .leach_ball_model_matrix()
+        .leach_ball_model_matrix(0)
         .expect("a locked beam must place the ball");
     assert!(
         matrix.w_axis.truncate().distance(expected) < 1e-4,
@@ -50,13 +57,56 @@ fn the_matrix_sits_where_hd_ball_position_says_it_should() {
     assert_eq!(matrix.z_axis, oag_core::math::Vec4::new(0.0, 0.0, 1.0, 0.0));
 }
 
+/// **The ball rides the drawn strip, not the chord** (`BeamPath_PointAt`,
+/// `0x00116308`): on an L-shaped strip from the target round to the shooter,
+/// the ball halfway through its trip sits on the corner, and a quarter of the
+/// way it sits on the first leg, far from the straight line between the ends.
+#[test]
+fn the_ball_follows_the_strip_from_the_target_to_the_shooter() {
+    let (target, corner, shooter) = (
+        Vec3::ZERO,
+        Vec3::new(20.0, 0.0, 0.0),
+        Vec3::new(20.0, 20.0, 0.0),
+    );
+    let mut race = locked_race(shooter, target, 0.0);
+    race.view.leach_strip = Some(crate::leach_strip::Strip::new(
+        [None; oag_gameplay::MAX_SHIPS],
+    ));
+    assert!(race.force_leach_path(vec![target, corner, shooter]));
+    // The target ahead: the walked end, sample 0, is the target's.
+    race.sim.world.ships[0].standing.progress = Some(50.0);
+    race.sim.world.ships[1].standing.progress = Some(110.0);
+    let period = 0.2 / fraction(&race, 0.2);
+    let at = |race: &mut Race, part: f32| {
+        race.view.leach_ball_elapsed[0] = part * period;
+        race.leach_ball_model_matrix(0)
+            .expect("a locked beam must place the ball")
+            .w_axis
+            .truncate()
+    };
+    let half = at(&mut race, 0.5);
+    assert!(half.distance(corner) < 1e-3, "halfway {half} is the corner");
+    let quarter = at(&mut race, 0.25);
+    assert!(
+        quarter.distance(Vec3::new(10.0, 0.0, 0.0)) < 1e-3,
+        "a quarter in {quarter} is on the first leg"
+    );
+    let chord = target.lerp(shooter, 0.25);
+    assert!(quarter.distance(chord) > 5.0, "not on the chord at {chord}");
+    let start = at(&mut race, 0.0);
+    assert!(
+        start.distance(target) < 1e-3,
+        "the trip starts at the target"
+    );
+}
+
 /// No beam at all draws no ball - the gate [`Race::advance_leach_beam_ribbon`]
 /// takes for the ribbon and the burst alike.
 #[test]
 fn nothing_locked_draws_no_ball() {
     let race = Race::start(setup(hulled_handling()));
-    assert!(race.sim.world.leach_beam.is_none());
-    assert!(race.leach_ball_model_matrix().is_none());
+    assert!(race.sim.world.leach_beams[0].is_none());
+    assert!(race.leach_ball_model_matrix(0).is_none());
 }
 
 /// Fired with no lock: a real `Beam` exists (see `leach_beam.rs`'s own
@@ -69,8 +119,8 @@ fn an_unlocked_beam_draws_no_ball_either() {
         .leach_beam()
         .expect("the fixture authors a LeachBeam");
     let mut race = Race::start(setup(hulled_handling()));
-    race.sim.world.leach_beam = Some(Beam::unlocked(0, &stats));
-    assert!(race.leach_ball_model_matrix().is_none());
+    race.sim.world.leach_beams[0] = Some(Beam::unlocked(0, &stats));
+    assert!(race.leach_ball_model_matrix(0).is_none());
 }
 
 /// **Only Wipeout HD authors this model.** `Race::leach_ball_model_matrix`

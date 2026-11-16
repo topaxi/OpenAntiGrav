@@ -405,7 +405,7 @@ fn the_autopilot_engine_bits_follow_the_titles_law() {
 /// Two people on one grid, the Autopilot running out under slot 1 alone.
 ///
 /// `seat` is the network client's seat (`None` for a machine that flies both).
-fn two_people(seat: Option<usize>, remote: bool) -> Race {
+pub(super) fn two_people(seat: Option<usize>, remote: bool) -> Race {
     let mut setup = setup(Handling::default());
     setup.mode = Mode::SingleRace;
     setup.start_position = Some(oag_vex::track::StartPosition {

@@ -890,7 +890,7 @@ pub fn decode_pcm16(data: &[u8]) -> Vec<i16> {
         .collect()
 }
 
-use crate::byte_order::ByteOrder;
+use oag_bytes::ByteOrder;
 
 pub mod child;
 pub mod cue;

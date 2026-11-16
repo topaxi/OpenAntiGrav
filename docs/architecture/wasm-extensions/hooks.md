@@ -3,7 +3,7 @@
 **Status: proposal (2026-10-29), nothing is built.** The overview, the capability
 surface and the interface sketch (the `sim` and `hud` worlds, their events and
 commands) are in [README.md](README.md); the determinism rules, the state model and
-the spike's measurements in [determinism-and-state.md](determinism-and-state.md).
+the measurements in [determinism-and-state.md](determinism-and-state.md).
 This page is the engine half: **where in today's code each event is raised, where
 each command lands, and where the one guest call per tick sits**, with what the
 host refuses at each.
@@ -40,7 +40,7 @@ client's rollback replays one call per module per tick.
 - **Failure has one answer.** A trap (out of fuel, `unreachable`, out-of-bounds
   memory, stack overflow) or a refused command turns the module off for the rest of
   the race; the tick it happened on is state, so every machine running the same
-  module switches it off on the same tick (the spike measured the trap point
+  module switches it off on the same tick (measured: the trap point
   identical on Cranelift and Pulley). Its commands from that call are discarded and
   its state blob keeps its value from before the call.
 
@@ -214,7 +214,16 @@ returns `Err(Refused)` where the host would fault:
 | `scale-pad{pad, factor}` | `ScalePad` | `scale_pad(pad, factor)` | a factor outside `[0, 2]` or not finite; a pad the track does not have; a second for the pad this tick |
 | `scale-pad{slot, factor}` | `ScaleSlotPads` | `scale_slot_pads(&craft, factor)` | a factor outside `[0, 2]` or not finite; a second for the craft this tick |
 | `play-cue{slot, cue}` | `PlayCue` | `play_cue(&craft, cue)` | |
-| `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)` | |
+| `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)`; `fire_mod_effect(&craft, key)` for the mod's own, a key of `[effects]` (a key the manifest lacks faults) | a 17th `fire-effect` or `fire-mod-effect` in one tick (`Refused::Effects`; the host faults the module) |
+| `screen-fill{slot, rgba, shader?}` (30) | `ScreenFill` | `screen_fill(&craft, rgba)`, `screen_fill_shaded(&craft, rgba, shader)` (`shader` is a key of the mod's `[shaders]`, in the pool) | a key the manifest lacks (faults the module, naming it and the keys it declares; a key sent only from the view call is dropped with that call's outputs, as `raise-warning`'s is); a name over 48 bytes (`Refused::Range`); the pool full (`Refused::Pool`) |
+| `fov-offset{slot, degrees}` (31) | `FovOffset` | `fov_offset(&craft, degrees)` | `degrees` outside `[-30, 30]` or not finite |
+| `fire-mod-effect-ahead{slot, effect, distance}` (32) | `FireModEffectAhead` | `fire_mod_effect_ahead(&craft, effect, distance)` (`effect` is a key of `[effects]`) | a distance the host would not accept; a key the manifest lacks (faults); counts toward the 16 effects a tick |
+| `stop-mod-effect{slot, effect}` (38) | `StopModEffect` | `stop_mod_effect(&craft, effect)` | a key the manifest lacks (faults). Ends at once, particles and all, the surfaces the mod placed for that slot with `fire-mod-effect-ahead` before this tick; none standing is not a fault |
+| `draw-beam{slot, to, rgba, half_width, shader?}` (34) | `DrawBeam` | `draw_beam(&craft, to, rgba, half_width, shader)` | a beam to its own slot, a width outside `(0, 32]`, past 16 a tick |
+| `set-shader-param{slot, shader, index, value}` (35) | `SetShaderParam` | `set_shader_param(&craft, shader, index, value)` (`shader` is a key of `[shaders]`) | an `index` from 4 up, a value that is not finite, a key the manifest lacks (faults). **Holds** until sent again, until the fill through its shader stops (`on.rs`, end of the tick: `filled`) or its module faults (`release`); one command a scalar, four values do not fit a 12-byte record |
+| `portal-view{slot, entrance, exit, radius, update, generation}` (36) | `PortalView` | `portal_view(&craft, (entrance, exit), radius, update, generation)` | a progress not a number or below zero (`portal_view_to_trigger` names the exit by a trigger index instead), a `radius` of 0, an unknown `update` |
+| `play-mod-sound{slot, sound, mode}` (33) | `PlayModSound` | `play_mod_sound(&craft, sound, mode)` (`sound` is a key of `[sounds]`) | a key the manifest lacks (faults) |
+| `raise-warning{slot, icon \| (side, own icon)}` (37) | `RaiseWarning` | `raise_warning(&craft, icon)`, `raise_mod_warning(&craft, side, name)` | an icon code past the ten or a group past the two (the host decodes one as malformed); a name the mod's `[icons]` lacks (faults, naming it); send it once, not every tick |
 | `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | the `Pickup` element (`Refused::PickupTint`; use `pickup_look`); the host decodes one as malformed |
 | `pickup-look{slot, icon, colour}` (22) | `PickupLook` | `pickup_look(&craft, icon, colour)` | |
 | `hud-shake{slot, element, amplitude}` | `HudShake` | `hud_shake(&craft, element, amplitude)` | `amplitude` outside `[0, 16]` or not finite |
@@ -226,6 +235,7 @@ returns `Err(Refused)` where the host would fault:
 | `grade-sky{grey}` | `GradeSky` | `grade_sky(grey)` | outside `[0, 1]` or not finite |
 | `give-shield{slot}`, `hold-shield{slot}`, `clear-shield{slot}` | `GiveShield`, `HoldShield`, `ClearShield` | `give_shield(&craft)`, `hold_shield(&craft)`, `clear_shield(&craft)` | a second Shield command for the craft this tick |
 | `prefer-route{slot, route}` | `PreferRoute` | `prefer_route(&craft, route)` | a route at or past the region's route count; a second for the craft this tick |
+| `emit{slot, channel, value}` (23) | `Emit` | `emit(&craft, channel!("<mod id>/<name>"), value)` | a non-finite value (`Refused::Range`); a fifth in one tick (`Refused::Emits`; the host faults the module); a channel the sending mod's `[channels] publishes` does not name (the host faults it) |
 
 ### `pickup-look{slot, icon, colour}`
 
@@ -241,7 +251,7 @@ colour = { rgba = "E0202080" }      # RRGGBBAA, or { title = "shield" }
 
 `pickup-look` overrides it for one tick and slot (record: `arg` the icon's weapon code, or
 bit 15 and a pool offset for a mod icon; `value` 0 for an rgba or the colour weapon's code;
-`word` the rgba). The SDK's `Icon::{Title(Weapon), Mod(ModIcon)}` and
+`word` the rgba). The SDK's `Icon::{Title(Weapon), Mod(ModName)}` and
 `Colour::{Title(Weapon), Rgba(Rgba)}` name the sources, with the per-weapon constants
 `icon::title::TURBO`, `colour::title::SHIELD` and so on for all fourteen weapons. A bad
 weapon in a record is malformed by name. An output, never hashed; `hud-shake` of the
@@ -250,11 +260,13 @@ weapon in a record is malformed by name. An output, never hashed; `hud-shake` of
 Every method also refuses a 97th command (`Refused::Full`). The host's checks stay
 the backstop for a guest written without the SDK.
 
-### `scale-thrust{slot, factor, ticks}`
+### `scale-thrust{slot, factor}`
 
-- **Built without `ticks` (Wall Penalty, 2026-10-29)**: `factor` in `[0, 1]` only (`[0, 2]` since Energy Turbo, below), sent
-  each tick it should hold, multiplied into `pending_thrust_scale` at phase C. The
-  timer and factors above 1.0 below are still the Feisar walk's engine change.
+- **As built**: `factor` in `[0, MAX_THRUST_FACTOR]` (`[0, 2]`), sent each tick it should
+  hold, no `ticks` field and no host timer. At or below 1.0 it is multiplied into
+  `pending_thrust_scale` at phase C; above 1.0 it is the mod's own engine scale,
+  multiplied across modules and capped. The timer and the true top-speed scale below
+  are the Feisar walk's engine change, not built.
 
 - **Lands in** `Ship::pending_thrust_scale` (`crates/gameplay/src/world.rs:204`),
   which the step consumes and resets to 1.0 (`player_step.rs:231`, and the same for
@@ -324,7 +336,8 @@ the backstop for a guest written without the SDK.
 - **`pickup-fire{slot}` / `pickup-absorbed{slot}`**: raised in `Race::spend_pickup`
   (`crates/raceplay/src/weapons.rs`, a person's fire or absorb press) and
   `Race::spend_opponent_pickup` (`crates/raceplay/src/field/opponent_weapons.rs`, the
-  driver's fire wherever the Turbo's gate passes; it never absorbs) for a slot holding
+  driver's fire wherever the Turbo's gate passes; it never absorbs, and raises nothing
+  when the mod's `[extension] drives_ai_pickup` is set) for a slot holding
   the mod's own pickup (`Weapon::Extension`). Delivered at the same tick's call (phase
   2 is before C).
 - **`speed-pad{slot, pad}`** / **`weapon-pad{slot, pad}`**: raised at the entry edge
@@ -342,12 +355,14 @@ the backstop for a guest written without the SDK.
 - **`shield-delta`** lands at C: a loss through `oag_physics::damage::apply_weapon`, a
   gain through `damage::add`.
 - **`give-pickup` / `clear-pickup`** write the slot's pickup at C. **`pickup-roll`**
-  is host state (`RaceSim::extensions`: the rule, its count and the owning module),
+  is host state (`RaceSim::extensions`: each module's rule and its count),
   hashed, and is read at the weapon pad's grant in `Race::test_weapon_pads`
   (`crates/raceplay/src/pads.rs`).
 - **`scale-thrust` above 1.0** lands in `Environment::extension_thrust`, taken by the
   step (`player_step.rs`, `field.rs`).
-- **`play-cue`** pushes onto `RaceSim::cues`. **`fire-effect`** queues for
+- **`play-mod-sound`** pushes a `ModSoundEvent` onto `RaceSim::mod_sounds`, drained by the
+  host beside the cues; a loop's stop is queued when its module faults
+  (`docs/formats/mod-sound.md`). **`play-cue`** pushes onto `RaceSim::cues`. **`fire-effect`** queues for
   `Race::draw_extension_effects` (`tick.rs`'s drawn-tick block, beside the hit sparks).
   The five **`hud-*`** commands are collected per tick in `Extensions` and become one
   `oag_hud::ext_draws::Outputs` per slot in `Race::readout_for`
@@ -377,6 +392,43 @@ the backstop for a guest written without the SDK.
 - **One tick, not one fork.** Sent at C, read in phase 6 of the same tick; a guest re-sends it
   every tick until the switch. A person steering is not moved by it.
 
+### Events between mods: `emit` and `mod`
+
+- **Command** `emit{slot, channel, value}` (23, `Command::Emit`; record: `slot` byte, `value` at 4,
+  the channel key at 8). `channel` is `channel_key("<mod id>/<name>")`, the FNV-1a 32 hash a property's
+  name has (SDK `channel!`). The slot must hold a craft, like any slot-bearing command.
+- **Event** `mod{slot, from, channel, value}` (kind 10, `Event::Mod`): `from` is `channel_key` of the
+  sending mod's id, or `TRACK_SENDER` (0) when a track's trigger sent it. Events grew to **16 bytes**
+  for it: kind `u8`, slot `u8`, index `u16`, `value` `f32` at 4, channel `u32` at 8, sender `u32` at 12
+  (zero in every other kind).
+- **Lands in** `Extensions` (`crates/raceplay/src/extensions/channel.rs`, `on.rs`): the queue
+  `mail`, filled by the modules' emits (applied after every module has run, so each saw the same
+  observation) and by `Extensions::test_triggers` for a trigger that sends a channel. At the
+  **next** call it is taken, **sorted** by channel, slot, sender and value, held to
+  `MAX_MOD_EVENTS` (16) for the modules' and `MAX_TRACK_EVENTS` (8) for the track's triggers, each class
+  in its own cap so neither starves the other, and written **ahead of** the engine's own events, so a
+  crowd of wall contacts cannot push one out of `MAX_EVENTS`. A drop past a cap (and past `MAX_EVENTS`)
+  is deterministic (the later in sorted order) and counted in `Extensions::drops()`, with one `warn!`
+  in the race log the first time each kind drops; the counters are outputs, never hashed. Every module hears every `mod` event, whoever sent it: the
+  order modules run in (id order) changes nothing any of them sees. Module ids still differ in
+  `from`, so a pair of mods that swap ids hear different senders, not different events.
+- **Hashed.** The queue is race state, sorted and written in `On::hash_into` with the modules'
+  state, so it is in the hash from the end of the tick that raised it (before any module has seen
+  it); `a_race_with_no_module_hashes_as_before` and `the_queue_is_in_the_hash_before_anyone_has_heard_it`
+  (`tests/extension_channels.rs`) hold both ends. The beacons' inside masks are hashed when a module
+  runs and never otherwise.
+- **Faults, each by name.** The module's mod must publish the channel (`oag-mod.toml` `[channels]`:
+  `emit on channel 0x..., which its oag-mod.toml [channels] publishes does not name (it publishes
+  [...])`), and a module may send at most `MAX_EMITS_PER_TICK` = **4** a tick (`emit past the cap
+  of 4 a tick`). The module is off for the rest of the race and **none** of that reply lands (README section 4.2). Caps are **chosen, not measured**: 4 a module a tick, 16 module
+  events and 8 track events a tick.
+- **A track needs no module.** `Beacons` (always built, with or without the `extensions` feature)
+  tests the track's emitting triggers against every craft's sweep each tick, notes when each channel
+  last fired (`Extensions::fired`, an output, never hashed) and, when a module runs, queues a
+  `mod` event from `TRACK_SENDER` (value `1.0`). `Race::channel_started(channel)` turns that tick
+  into the scenery's clock for the view's `oag_on` animations (`Keyed::on`,
+  `Model::sample_anim_nodes_started`): render only, collision never moves.
+
 ### `message{slot, string-id}` and `publish{key, value}`: outputs, not state
 
 - Both are **outputs of the simulation**, like cues
@@ -397,6 +449,25 @@ lands there, for person slots, before the step, carrying what
 `pilot_assist_input` computes today. The README's command list must carry it, or
 the phase 2 proof has no sink.
 
+### Built for a portal weapon: `transit`, `scale-speed`, `probe-clearance` (2026-11-03)
+
+The engine pieces a portal-teleport pickup needs (a mod's, `oag.slipstream`; the engine
+names no mod). All three are per slot, from a rules or a track module.
+
+| What | Where | Notes |
+| --- | --- | --- |
+| The primitive: a forward move to a course point under a lap | `Race::move_to`, `crates/raceplay/src/transit.rs` | Pose by the reset's placement without its drop (`breadcrumbs::emerge`: the width midpoint at the hover height, facing down the track) at the ring point or the fork route's point for it; cursors reset through `Race::reseat` (`respawn.rs`), shared with `put_back`, then an exit on a route seats the driver on that route's line (`Race::seat_on_route`). No respawn counted, nothing charged. View-side, the craft's chase camera is seated behind it on that tick (`RaceView::camera_jumps`); through the transit before it the camera flies on along the exit's framing carried back, a `portal-view` of that slot is seen from that seat, and under a backdrop fill the craft is drawn for its own view (`transit_camera`; `mod-shaders.md`, "A craft's own transit") |
+| A crossing of the line in the move | `Standing::jumped`, `crates/race/src/standing.rs:278`; `RaceState::jumped`, `crates/race/src/state.rs:511` | The standing credits it at once (lap, spawn crossing, deficit, finish), unless the lap's half-way gate is still shut (`Standing::gate`), when it is no lap and no finish as for a driven crossing, and a move that lands past half-way has driven both halves of the lap it lands on; the person's clock seeds its previous reading so that tick's `update` reads one forward wrap, and its `Outcome` flows as for a driven crossing |
+| Resolving a distance | `Race::exit_ahead` (`Race::point_ahead` without the route), `transit.rs` | Units, seconds at the current speed, lap share, a place on the lap (`Course::index_at_progress`), or a track trigger's centre located on the course; a trigger nearer a fork route's sample than the ring's names that route (`Exit::route`, kept in `Transit::route`), the others are ring points |
+| `transit{slot, ticks, distance, exit_factor}` lands | `Race::run_motion`, `crates/raceplay/src/extensions.rs:891`, after the call | `Race::begin_transit` (`transit.rs`); a refusal faults the module. The host refuses earlier a craft not racing or already out (`modhost/src/reply.rs`) |
+| Out of the world | `Ship::in_world`, `crates/gameplay/src/world.rs:259` | `Craft::active` (weapons), `resolve_craft_pairs`, `fire_law` targeting, the draw (`Race::ship_active`, model matrices, shadow, exhaust), `step_opponents` skip; `step_player` returns an idle step (`player_step.rs:144`); pickup presses unheard (`tick.rs:165`) |
+| Reset triggers held | `Race::reset_held`, `transit.rs`, read by `Race::armed` (`respawn.rs:116`) and `rescue_player` | Independent of each trigger's gates, so cage and airborne are held too; no dwell banks |
+| Exit | `Race::advance_transits`, `transit.rs`, called at `tick.rs:191` before the call | Moved and stepped the same tick; `transit-end{slot}` is in that very call's events |
+| `scale-speed{slot, factor}` | `apply`, `crates/raceplay/src/extensions/on.rs:902` | Velocity times `factor`, once, at the call; before any `transit` of the same tick, so a transit's exit speed is taken after it |
+| A frozen craft's progress | `tracking` in `extensions/on.rs`, `Standing::progress` | `Craft::progress()` is last tick's, and a craft in transit keeps reporting the progress it went in at on every tick of the flight (its standing is frozen); a guest asks for a portal's pair from where the craft stands and may rely on it (`tests::transit::a_craft_in_transit_keeps_reporting_the_progress_it_went_in_at`) |
+| `probe-clearance{slot, distance, radius}` | `Race::clearance`, `transit.rs` | Half disc standing across the track at the width midpoint: width at least `2r`, nine rays centre to rim (`Raycaster::raycast`, Reset volumes skipped). The answer is `clearance{slot, fits, ahead}` at the next call (hashed while pending) |
+| Pad odds for the mod's pickup | `[[pickup.odds]]`, read at `crates/raceplay/src/pads.rs:321` | Every declaring module has its own kind from the start; `oag_weapons::pickup::draw` walks each `Weapon::Extension(kind)` row after the title's weapons, in kind order, so a table without the row draws as ever; an event's weapon set does not reach it; a fault ends it |
+
 ## `race-start`: the grid
 
 `race-start` runs once after the grid is placed: `Race::start`
@@ -406,6 +477,81 @@ or the spline's start sample) and `grid_poses` (`spawn.rs:274`). It sees the gri
 it cannot move it (README: no grid changes). An arena's authored spawn points, and a
 respawn at a point rather than a spline sample (`Race::respawn` places a craft on a
 sample), are engine changes in the track file and `respawn.rs` first.
+
+## Choosing its races: `oag_wants_race` (ABI 1 revision 6)
+
+Before anything of a module is loaded for a race, the race load asks it whether it runs in
+that race. A guest may export `oag_wants_race() -> u32`; one that does not runs in every race
+its mod is on for (title, scope), as before, so no guest built earlier needs the export.
+
+| Piece | Where | What it is |
+| --- | --- | --- |
+| The question | `oag_ext_abi::RaceInfo` (`crates/ext-abi/src/race.rs`) | Written at the start of the I/O buffer of a fresh instance, its own 20-byte layout (the call happens before a race has a tick, a craft or a track, so the tick observation is not used): the ABI major, the title key (`channel_key` of its slug), the class key (`channel_key` of its lowercased name, 0 for none), the mode (`RaceMode`, the engine's `Mode` order from 1), a flags byte (`RACE_WEAPONS`, `RACE_CAMPAIGN`), the people flying, the craft on the grid and the module's four `sim` option picks (`Source::options.sim`, as a tick would read them) |
+| The answer | `RUN` (1) or `SKIP` (0) | Any other value, a trap or running out of fuel leaves the module out of the race by name (`mod <id>: <module> left out: its race check <fault>`), because a broken check must not run a module its guest meant to withhold |
+| The cost | `Module::wants_race`, `crates/modhost/src/lib.rs` | One fresh instance and one call under the module's own fuel budget (`FUEL_PER_TICK`), at race load. A load cost: not a tick's fuel, never in the overlay's per-tick figures. A module that exports no check is not instantiated for it |
+| The choke point | `oag_raceplay::extensions::admit`, `crates/raceplay/src/extensions/admit.rs`, which `sources_for_race` (the load's one call) runs on what `gather` found | Filters the sources to those for the race's title and scope whose module does not decline. Every later consumer (shaders, effects, sounds and icons of the mod, `[[pickup.odds]]`, the pickup kind it would take, `MAX_SIM_MODS`, `prepare`'s compile, the MODDED line, the state blob and the hash) sees only the accepted sources, so a module that declines has no presence in that race: no `tick`, no fuel, no state, no pickup, no HUD or sound or effect of its own, and `Race::is_modded` stays false on its account (a race with only decliners records a replay). The decline is one `debug` line in the load report |
+| What the race is | `describe`, same file | From the load's `Options`: the mode through an exhaustive `match` on `oag_race::Mode` (a new mode does not compile until it has a code), `Options::weapons_on` (the override over the mode), `Options::campaign` (the launch sites set it for a campaign cell or a 2048 event), `Options::people_flying`, and the craft count from `spawn::field_opponents` plus one, the function `Race::start` grids with, so the two cannot disagree |
+
+A module that does not compile is not dropped by `admit`: `prepare` compiles it again and
+names why it is left out, once. An accepted module is therefore compiled twice at load (unmeasured; the
+official guest is 11 KB); passing the compiled module on would change `prepare`'s
+signature for no player-visible gain and is left.
+
+In the guest SDK, `Extension::wants_race(&RaceInfo) -> bool` (default `true`); `export!`
+always exports `oag_wants_race`. The test harness `oag_ext::test::wants_race::<E>(&info)` runs
+the answer through the host's writer. The check must decide from the description alone: it sees
+no state, no craft and no track.
+
+**Slipstream** (`assets/mods/official/slipstream`) answers yes for a Single Race or a
+Tournament leg with weapons on, and no for everything else (weapons off, Eliminator, Zone,
+Time Trial, Speed Lap, Head to Head, Detonator), on every title. The "in races with weapons"
+its manifest comment used to promise was never checked: with weapons off no pad hands the
+pickup out, so the module was merely idle, but it was ticked, held its state and marked the race
+modded, and in Eliminator, Tournament, Head to Head and Detonator (weapons on) it ran. The
+Tournament leg's inclusion is the maintainer's instruction.
+Proof: `oag_raceplay`'s `tests::extension_admit` (a decliner is never loaded, hashes as a race
+with no mod, is not modded; an accepter and a guest with no check run as before; a check that
+traps or answers neither is left out by name; every field of the description reaches the
+guest), `tests::extension_slipstream` (the real module over mode x weapons x title), the
+disc-backed `slipstream_ground_truth` (`race::load` on Pulse PSP EU's `16_Track`: MODDED only
+for a Single Race or a Tournament with weapons) and the guest's own tests.
+
+## Picks: sim and view
+
+A `choice` row of a mod's `menu.toml` declares `scope = "sim"` (the default) or `scope = "view"`
+(`oag_ui::menu` refuses another value, or a `scope` on a row that is not a `choice`;
+`schemas/v1/mod-menu.tosd`). The guest reads either with `Observation::option(n)`, `n` the row's place
+among the mod's own choice rows in file order, so adding a scope renumbers nothing.
+
+| | `sim` row | `view` row |
+| --- | --- | --- |
+| Reaches | the simulation tick | only the call whose outputs are drawn |
+| State hash | yes (`On::hash_into`: row and pick, only a pick off index 0, nothing for a mod with none) | never |
+| LAN and lobby fingerprint | yes (`Mods::content_fingerprint`: `id@version#row=pick`) | never: a Deck on Low and a desktop on High still race together |
+| Replay | in the state hash, so a replay run on another pick desyncs at tick 0; the header's `mods` entry records the `sim` picks and a rebuild is handed them (ADR-0091) | stays per device |
+| Server's or host's guest | the host's or lobby's pick (owner: whoever builds the race; none is carried yet, see below) | the row's default: no device draws there |
+
+How a `view` row cannot steer the race (`crates/raceplay/src/extensions/view_pass.rs`):
+
+- The **simulation call** (every tick, every device) reads a `view` row's **default**, so what it
+  returns is the same on every device.
+- When a device's view picks differ from the defaults (`Picks::differs`) the host makes a **second
+  call** with the real picks, on a copy of the blob the first call started from, and keeps only its
+  **outputs** (`view_pass::is_output`: `fire-effect`, `fire-mod-effect`, `screen-fill`, `fov-offset`,
+  `draw-beam`, `set-shader-param`, `portal-view`, `raise-warning` and the `hud-*` and `pickup-look` commands). Its blob,
+  its other commands, its fuel and its faults are dropped: a trap in the view call draws nothing and
+  never faults the module. The first call's own outputs are replaced by the view call's.
+- `is_output` is an exhaustive `match`: a new command cannot compile until it is classed. A command is
+  an output if it writes a field cleared every tick that no simulated state, hash or reply reads.
+- Cost: one more wasm call a tick while a view pick is off its default (none on the default).
+- A guest cannot tell which call it is in; a view pick only ever shows in the call whose commands are
+  filtered.
+
+**Online.** No network race runs a guest today (`oag_net::race::load` opens none, a client races
+vanilla, the lobby advertises `NO_MODS`), so no server has a pick to receive. When one does, the owner
+of a `sim` pick is the host (LAN) or the lobby (online): carried in `RaceParams` beside the mode and
+seed, applied by `oag_net::race::options` on every end, so the tick-0 state hash already refuses a
+mismatch; a `view` pick is never sent.
 
 ## Render side: the `hud` world
 
@@ -457,7 +603,7 @@ The README walks each end to end; this is what each needs from the engine.
 
 | Example | Events and commands | Works on today's engine? |
 | --- | --- | --- |
-| **A craft that gets faster on each speed pad** (2048's prototype craft as the inspiration) | `pad-crossed` counted in the state blob; `scale-thrust` from the count | **Nearly**: `pending_thrust_scale` exists, but needs the per-slot timer and a factor above 1.0 (above). A true top-speed scale is one new `Environment` field. See the note on 2048 below. |
+| **A craft that gets faster on each speed pad** (2048's prototype craft as the inspiration) | `pad-crossed` counted in the state blob; `scale-thrust` from the count | **Yes for thrust**: `scale-thrust` above 1.0 is the mod's engine scale, re-sent each tick (no host timer). A true top-speed scale is one new `Environment` field, not built. See the note on 2048 below. |
 | **Spring jumps** on a custom track | `volume-entered`, `impulse` | **No**: needs the volume node kind and the velocity write point. |
 | **A gravity switch** (drive from the top of the track to the bottom) | `volume-entered`, a gravity command (README open question 3) | **No**: gravity acts on world `y` only (`oag_physics::passive::gravity`, `crates/physics/src/passive.rs:309`; `forces.rs:221` says so). Needs a gravity direction in `Environment` (default `-Y`, bit-identical for every race that does not set it) and per-craft gravity state in `World`'s `Ship` (`world.rs:82`). The hover already casts along the craft's own `-up` (`crates/physics/src/hover.rs:610`) and the magstrip hold slaves attitude to the track (`oag_physics::maglock`), so the craft side follows; the camera and the AI's line need their own check. |
 | **A-to-B instead of a circuit** | `set-finished` from progress | **Partly.** A sprint over part of a closed circuit needs only `set-finished` when progress passes a sample. A truly open track does not work: the lap is a wrap of distance along a closed `Course` (`crates/race/src/course.rs:61`; `wrapped_forward`, `state.rs:35`), and the spawner, the respawn, the AI speed plan (a ring) and the flyby assume a loop. Rules as data in `oag-race` first (finish by laps or by distance); a drag race then needs no code. |

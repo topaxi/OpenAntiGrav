@@ -269,6 +269,7 @@ pub fn read(
         hd_track: Some(Box::new(extra)),
         ready: String::new(),
         name_scale: 1.0,
+        entry_pitch: None,
     })
 }
 
@@ -426,12 +427,7 @@ pub(in crate::picker) fn body(
     {
         out.push(Draw::Sprite {
             rect,
-            uv: [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
+            uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
             color: [1.0, 1.0, 1.0, 1.0],
         });
     }
@@ -515,7 +511,7 @@ fn records(
                 x: block.x + 40.0,
                 y: block.y + 3.0,
                 scale: block.text_scale * layout.faces.default,
-                color: [1.0, 1.0, 1.0, 1.0],
+                color: block.text_color.map_or([1.0, 1.0, 1.0, 1.0], argb_to_rgba),
                 border: None,
                 align: Align::Left,
                 text: label,

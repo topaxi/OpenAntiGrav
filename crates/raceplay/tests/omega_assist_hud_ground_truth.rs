@@ -59,14 +59,9 @@ fn the_roots_author_the_indicator_and_its_textures_resolve() {
             let sprite = composed.layout.sprite(name);
             assert_eq!(sprite.is_some(), expect, "{root}: {name}");
             if let Some(sprite) = sprite {
-                let texture = format!(
-                    "{}{}",
-                    sprite.src.rsplit_once('.').map_or(&*sprite.src, |s| s.0),
-                    oag_omega::hud::ART.texture_extension.expect("gnf"),
-                );
                 archives
-                    .read_name(&texture)
-                    .unwrap_or_else(|e| panic!("{root}: {name} texture {texture}: {e}"));
+                    .read_texture(&sprite.src)
+                    .unwrap_or_else(|e| panic!("{root}: {name} texture {}: {e}", sprite.src));
             }
         }
     }

@@ -93,10 +93,18 @@ screenshot.
 **The `_fury` half is a styling, not different content.** `OPT_FE_STYLE` offers
 exactly `HD` and `FURY`, and the disc ships every illustration twice -
 white-and-blue and black-and-red - with the same strings behind both. That is
-the axis `settings.display.front_end_style` offers, defaulting to the base
-game's. Asserted in
+the axis `settings.display.front_end_style` offers. **Unpicked, the styling is the one the menus are drawn in**,
+not the first entry: the menus follow the ground of the archive the source serves (Fury's black and red on
+`DATA00`, which the EU disc serves), so `oag_title::FeatureStyle::dark_ground` names that match, and an empty
+setting resolves to the style whose ground it is (`oag_game::loading::Assets::style` records the choice; the
+OPTIONS row reads the same). A saved name wins. The whole screen follows it: pictures, mode icon's clip and the
+four globals. A change made in OPTIONS reaches the next load without a restart (`apply_setting` re-reads the
+assets from the new setting). The first entry used to be taken, which put HD's white art on Fury's black
+page for every player who never opened OPTIONS. Asserted in
 `every_feature_illustration_is_on_the_disc_in_both_stylings`, which checks all
-ten resolve and that the Fury name is the base name plus a suffix.
+ten resolve and that the Fury name is the base name plus a suffix, and
+`an_unpicked_style_is_the_one_the_menus_are_drawn_in`, which checks the deck, the mode icons and the globals
+against the menus' own ground.
 
 ### The feature is a random draw, and the deck is the race mode's
 
@@ -233,55 +241,67 @@ count, a pair of misses, and the game's own complaint.
 other end: a loading still named by the executable, absent from retail, named
 for the demo build.
 
-## What this build draws, and where it departs
+## What this build draws
 
-The arrangement is the original's, read off the screenshot as *fractions* of its
-frame and multiplied into this build's 480x272 grid: a marked title over a rule,
-the illustration in a bracketed panel on the left, the feature's name and
-paragraph in another on the right, a wide bar low down, and a closing rule. The
-marks are the disc's own - `Title_Arrow_HD`, `Subtitle_Arrow_HD`, `line`,
-`corner`, `dot`, all five in `DATA02` and all five named in the same run of the
-executable as the illustrations.
+**The screen is a file**, since 2026-11-01: `assets/fallback/Data/XML/LoadingScreen_HD.toml`
+([screen-layout.md](screen-layout.md), [ADR-0081](../architecture/adr/0081-screen-layouts-are-files-and-a-track-may-carry-its-loading-screen.md)),
+named by `oag_title::Loading::layout`, with no layout number left in code. Its numbers are read off
+`LoadingScreen_Draw` (`0x002b61c8`) and its drawing helpers, with their addresses and confidences in the
+file's comments and in
+[loading-screen.md](../ghidra/functions/ps3-hdfury-eu/loading-screen.md), section "2026-11-01: the race load's
+layout". They are **the original's own 1920x1080 grid, drawn in it**: the renderer is given that grid, fonts
+are the front end's roles at the scale the code stores (`Title` 1.0 for the caption, `Default` 1.0 for the
+paragraph, 0.8 for the feature's name row, 0.45 for the labels), and the player's Safe Area scales the grid
+about its centre. The earlier build drew this screen in the PSP's 480x272 with every face divided down to a
+13 px line height, which is what made its text larger and its rule sit at y 209 against 133 of 1080.
 
-Three departures, each deliberate:
+What is drawn, in the file's order: two rules (`line.gtf`, 1600x8 at y 110 and 975), the caption arrow and
+`LOADING... <circuit>` in the `Title` face, five labels behind `square.gtf` bullets, bracket corners round the
+four panels, the feature's picture (a 1024x512 texture's rows 0 to 480, 1:1 at (180, 190)), the feature's name
+and its heading each behind an arrow, the paragraph (wrap 780, pitch 40), the 166 x 30 dot bar and the mode
+icon's clip in a 250 px square. Every one of those is the original's number.
 
-- **The mode icon is not drawn.** The original puts an animated Bink clip
-  chosen by the mode in that panel; this build draws the panel's label and
-  brackets and no icon, rather than a stand-in.
-- **The bar has 21 rows, not 30.** It is 166 columns of `dot.gtf` tiled by
-  `Draw::TiledSprite`, as the original is (measured, see below), and the lit
-  columns are whole columns in `HD_Blue` over `HD_LightGrey` ones. The row count
-  is chosen to fit this layout's flatter bar, not measured.
-- **The bar's fill is driven by the race load's stages**, since 2026-10-06:
-  a first target of 0.2, then 0.4, 0.5, 0.75 and 0.95 as `race::load` reaches
-  `TrackRead`, `TrackBuilt`, `WorldBuilt` and `CraftsBuilt`
-  (`oag_hd::loading::PROGRESSION`), eased at 0.1 column a frame with the rate
-  doubled by each milestone that lands while the bar is behind - the original's
-  own law, measured, see
-  [loading-screen.md](../ghidra/functions/ps3-hdfury-eu/loading-screen.md).
-  **Chosen, not measured**: the inner two stages' places in this build's load
-  order, and the whole bar the moment the work is over (this build's load ends
-  long before the ease catches up). A title with no `progression` keeps the
-  time estimate (`loading::wording::estimated_fraction`). `oag-game
-  --loading-screen 0/1 --loading-step race --loading-live --track <entry>
-  --ticks N --screenshot out.png` runs a real load, paced at 60 Hz, and draws
-  the frame at tick N.
+Departures, each deliberate:
 
-**The five labels are drawn** since 2026-10-05: `WIPEOUT® HD`, `FEATURE IMAGE`,
-`FEATURE DESCRIPTION`, `PROGRESSION BAR` and `MODE ICON`, each behind a
-`square.gtf` bullet. This page called them the game's debug overlay; they are
-not - four are string ids `LoadingScreen_BuildText` resolves and the fifth is a
-literal in the executable, all placed by `LoadingScreen_DrawLabel`.
+- **The picture is cut to its panel when its ground would show outside it.** The window is 896x480 at
+  (180, 190), which reaches x 1076 and y 670 against the panel's 160 to 950 by 155 to 655. Both stylings' pictures
+  are opaque to the edge: Fury's ground is the screen's own black, so the overhang shows nothing and the picture
+  is drawn as the layout places it, to the bit; HD's ground is white, and drawn whole it fills the padding and
+  covers the description beside it, at every screen size (the grid is one 1920x1080 drawn under the Safe Area, so
+  the shape of the screen only letterboxes it). `Frame::fit_to_panel` cuts the quad and its texels at the panel's
+  edge when anything that differs from the ground lies outside. **Chosen, not measured**: how the original treats
+  the overhang in the HD styling is unread (no RPCS3 frame of the HD styling's loading screen). Tests:
+  `a_picture_with_a_showing_ground_lies_inside_its_panel_on_every_screen_shape` (1280x800, 1920x1080, 2560x1080
+  and a phone's 20:9) and, on the disc's art, `an_unpicked_style_is_the_one_the_menus_are_drawn_in`. Still open:
+  in the HD styling the white ground also covers the lower half of the feature's name row (y about 190 to 220).
+- **The mode icon plays for one mode only.** The panel plays a Bink clip, and an RPCS3 frame of a
+  `GetMode()==3` race matches `single_race_icon_fury.bik` (see "The pair"). Only that mode is mapped
+  (`oag_hd::loading::MODE_ICONS_FURY`); every other mode id draws the panel's label and brackets and no icon,
+  rather than a clip guessed from a file name. The base styling's `single_race_icon.bik` is the same name
+  without `_fury` and **chosen, not measured** (a different file, 250 px square against the Fury clip's 400,
+  so it is stretched to the same 250 quad).
+- **The bar's fill is driven by the race load's stages**, since 2026-10-06: a first target of 0.2, then 0.4,
+  0.5, 0.75 and 0.95 as `race::load` reaches `TrackRead`, `TrackBuilt`, `WorldBuilt` and `CraftsBuilt`
+  (`oag_hd::loading::PROGRESSION`), eased at 0.1 column a frame with the rate doubled by each milestone that
+  lands while the bar is behind, see loading-screen.md. **Chosen, not measured**: the inner two stages'
+  places in this build's load order, and the whole bar the moment the work is over (this build's load ends
+  long before the ease catches up). A title with no `progression` keeps the time estimate
+  (`loading::wording::estimated_fraction`).
+- **Four rows under the bar** (`counts`, `percentage`, `current`, `step`) are this build's own waits (a
+  transcode, a prefetch, the boot's movie loads), which the original has no counterpart for: **chosen, not
+  measured**, and drawn only while something is counted, so a race load draws none.
+- **A paragraph breaks a word when the line and the space after it would pass the width.** Not in the
+  executable: read off the Barrel Roll frame, where "with" would end 5 px inside the edge and the original
+  breaks before it while "cost" stays (inferred from two lines of one frame).
+- **Unread, so not drawn:** the second `Title` pass at the caption's point (a border or shadow), the
+  tournament screen (type 1) and kind 8 (`+4 == 8`), whose blocks are `0x002b778c` and `0x002b6a64`.
 
-Since 2026-10-04 the feature's **name sits over the illustration and its
-heading (`INSTRUCTIONS` or `DESCRIPTION`) over the prose, in one row**, as in
-the original; before that the name was drawn alone over the prose and no
-heading was drawn, because its id was unread.
+A **mod overrides the file by path**, and a **mod track supplies its own** (layout, caption, picture, feature
+texts) from its manifest's `[loading]` table; the rules are in [screen-layout.md](screen-layout.md).
 
-And the panels are two columns of this build's proportions rather than the
-original's exact halves: our grid is 480 wide where HD's is 1920, and prose in
-the right-hand half of a 480-wide screen wraps to a column three words across.
-The *relationship* is kept - picture left, prose right of it, bar under both.
+The **five labels** are `WIPEOUT® HD` (a literal of the executable's, now `text` in the file) and four string
+ids `LoadingScreen_BuildText` resolves (`string_id` in the file), all placed by `LoadingScreen_DrawLabel`.
+This page used to call them the game's debug overlay; they are not.
 
 ## What the emulator settled
 
@@ -313,6 +333,84 @@ ad slot, and nothing draws them. The lesson is worth keeping with them: a run of
 strings in an executable is a *neighbourhood*, and taking the part of it you
 recognise for the whole is how a well-evidenced reading lands on the wrong
 object.
+
+## The pair (2026-11-01, `hd-loading-screen`)
+
+The original: RPCS3 cold boot, the Racebox path to Team Selection (Feisar) then
+Cross, grabbing the window at 1920x1080 about 1 s apart (`TTY.log`:
+`Team Launch Transition`, `Launch Game`, `InGame`, `GetMode()==3`, Vineta K,
+`Feature type` Barrel Roll). HD's log names no loading screen, so the screen
+name of this pair is declared. Ours: `oag-game ... --loading-screen 0/1
+--loading-step race --ticks 325 --mode single_race --track
+"Data\Environments\01_Vineta_K\track.vex" --size 1920x1080`, `front_end_style
+= FURY`, `aspect = wide`.
+
+Measured off those frames (1080 px tall): the dot rows run y 703 to 929 and the
+closing rule is at y 960; the mode clip (400 px) is drawn at 0.6, 240 px square
+with its top left at (1488, 694); the clip loops (two grabs 2 s apart are on
+different beats) and builds the ring logo up, then shows a grey ship at its
+corner.
+
+Share of pixels differing by more than 40 grey (luma, 1920x1080), original
+frame 3 and frame 6 against ours:
+
+| ours | vs frame 3 | vs frame 6 |
+| --- | ---: | ---: |
+| before (21 rows, no icon) | 11.91 % | 12.41 % |
+| 30 rows and the bar and rule placed as measured | 10.33 % | 10.55 % |
+| plus the mode icon clip | 10.45 % | 10.56 % |
+
+Noise: original frame 2 against 3 is 0.05 %, 3 against 6 0.15 %, ours against
+itself 0.08 %. So the 30 rows and their placement are worth about 1.5 points,
+and **the icon is inside the noise**: a 240 px square of mostly black is under
+0.3 % of the frame, and our clip phase and bar fill are not locked to the
+original's. The remaining 10 % is the heading, feature and prose layout: ours
+draws the heading and prose larger and the illustration about half the
+original's size, the title rule at y 209 against 133. That was this build's
+code layout, and is what 2026-11-01's `hd-loading-layout` replaced:
+
+| ours | share > 40 grey vs the promoted pair `hd-loading` |
+| --- | ---: |
+| the code layout (480x272, PSP line height) | 10.52 % |
+| `LoadingScreen_HD.toml`, the measured layout in its own grid | 0.76 % |
+
+(The pair is a Racebox single race on Vineta K, Feisar, Barrel Roll, photographed 4 s after the load starts,
+`scripts/rpcs3-hd-menu-pair.py --walk loading`, 96 % Safe Area; ours is `--ticks 325` with
+`--loading-draw` picking the original's feature (the bar: next section). What remains is glyph rasterisation and the clip's and the
+bar's phase, which are not locked between the two.)
+
+### The bar's stated state (2026-11-12)
+
+The original's frame shows **32 lit columns of 166** (19.3 %; counted as the runs of `HD_Blue` dots between x 193 and the
+mode icon, the last lit dot ending at x 443 of 1920). `LoadingScreen_Draw` lights `(int)obj+0x104` columns, and ours lights
+`floor(Fill::shown)` (`loading::fill`), so the counts compare directly. 32 is below the first target (33.2, `0x002b9a28`),
+so the bar had only eased at 0.1 column a frame and no load stage had landed: a state ours reaches without a load.
+
+**`--loading-screen DONE/TOTAL` does not state it.** On `--loading-step race` the counts are zeroed (`main/headless.rs`),
+so the stated state is the tick: `lit = floor(0.1 t)`, capped at 33. `t = 10 n + 5` lights `n` columns with half a column of
+margin either side of the f32 sum's edge at `10 n` (ticks 320 to 330 all light 32; 319 lights 31, 331 lights 33). A
+`--loading-live` capture instead runs a real load, whose stage timing and finish vary run to run (two consecutive
+re-renders gave different `ours.png`); the pair is at `--ticks 325` and two re-renders are byte-identical.
+`scripts/rpcs3-hd-menu-pair.py --walk loading` counts the columns off every frame it photographs and refuses a bar past
+the first target, since a stated race screen cannot show one. Open: the mode icon's clip phase is the tick's, and the original's is not
+locked to anything we can read, so the ship at the icon's corner differs.
+
+**2048: checked, differs** ([2048-loading.md](2048-loading.md)): the same class, strings, deck and layout operands in a kind
+the retail executable never starts (it starts its kind 4 for a race load), so nothing is wired.
+
+**The white ground over the name row, fixed 2026-11-06.** The draw order was not the cause: the picture is drawn before
+the name and heading rows in 2048's `LoadingScreen_Draw` (the same order as ours; HD's heading row, `0x002b7738`, follows
+its picture, `0x002b76d8`, the name row's call site was not located) and the rows draw over it. What showed was the HD
+styling's white pictures on the served archive's black ground: the four globals came from the served front end's `Skin.xml`
+(the dark `DATA00`), whichever style was chosen, so the white picture met a black ground mid-row (y about 190 to 220). The
+loader now takes the globals from the copy of the front-end file whose `HD_BG` matches the chosen style's ground
+(`DATA06` for HD, white; `Assets::load`, `loading screen: HD style takes its colours from ...`). Fury, which matches the served
+copy, is unchanged. Test: `a_style_takes_the_ground_its_own_pictures_were_drawn_for`. A style with no matching copy keeps the
+served colours and says so in the loader report.
+
+**Omega: ported.** Omega's loading screen is this one with `.gnf` files, a still for the mode icon and a string-id brand
+([omega-loading.md](omega-loading.md)); the unpicked-style rule and the panel cut are title data and a layout rule, and
+carry over (Omega has one styling).
 
 ## Looking at it
 

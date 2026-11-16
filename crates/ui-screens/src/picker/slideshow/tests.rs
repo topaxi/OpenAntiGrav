@@ -101,6 +101,7 @@ fn a_card_draws_at_its_authored_place_and_the_shadow_scales_its_sub_rect() {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         })
     };
     let draws = show.draws(3.0, &placed);
@@ -197,7 +198,10 @@ fn the_panel_bars_and_labels_are_read_above_any_named_screen() {
                 rect: [247.0, 180.0, 100.0, 4.0],
                 color: argb_to_rgba(0xFF20_81A1),
             },
-            Draw::Text {
+            // `font="Stats"` asks for the `Stats` glyph role: a title that loads that face draws
+            // from it, every other falls back to the primary atlas.
+            Draw::FacedText {
+                role: oag_ui::language::roles::STATS,
                 x: 249.0,
                 y: 164.0,
                 scale: 1.0,
@@ -207,7 +211,8 @@ fn the_panel_bars_and_labels_are_read_above_any_named_screen() {
                 text: "GESCHWINDIGKEIT".to_string(),
                 wrap_width: None,
             },
-            Draw::Text {
+            Draw::FacedText {
+                role: oag_ui::language::roles::STATS,
                 x: 329.0,
                 y: 164.0,
                 scale: 1.0,
@@ -271,6 +276,7 @@ fn flat(_: &str) -> Option<Placed> {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     })
 }
 

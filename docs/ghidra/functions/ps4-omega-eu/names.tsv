@@ -135,3 +135,116 @@
 0x016544a0	function	Race_ComputeLoyaltyAward	80	endrace-loyalty.md
 0x012f7200	function	HullShake_Update	80	hull-shake.md
 0x0193f750	data	g_hud_pickup_widget_table	90	omega-pickup-table.md
+
+# 2026-10-31 hd-quake-leach-instances (weapon-instance-limits.md)
+0x013674e0	function	QuakeManager_Fire	80	weapon-instance-limits.md
+0x01366150	function	Quake_Init	70	weapon-instance-limits.md
+0x01366760	function	QuakeManager_Update	65	weapon-instance-limits.md
+0x01372ee0	function	WeaponManager_DispatchFire	75	weapon-instance-limits.md
+# 2026-11-01 omega-glass-re (refraction-pass.md)
+0x015fb4c0	function	Environment_Load	78	refraction-pass.md
+0x01605760	function	TrackPass_FilterSubmesh	80	refraction-pass.md
+0x01789300	function	DrawList_BuildForTarget	72	refraction-pass.md
+0x01f8f6a0	data	g_track_mesh_instances	80	refraction-pass.md
+0x01f8f310	data	g_refraction_draw_list	65	refraction-pass.md
+0x01779800	function	SoundManager_PostEventByName	92	wwise-sound.md
+0x017361e0	function	SoundManager_LoadBank	88	wwise-sound.md
+0x01095430	function	Wwise_PostEventByName	85	wwise-sound.md
+0x01097d20	function	Wwise_LoadBankByName	80	wwise-sound.md
+0x01731480	function	SoundGroup_PlayCue	80	wwise-sound.md
+0x01736840	function	SoundGroup_Create	80	wwise-sound.md
+0x0173ac30	function	SpeechManager_PlayCue	75	wwise-sound.md
+0x01733e50	function	SoundBankAliases_Init	75	wwise-sound.md
+0x01736430	function	SoundBankAliases_Lookup	80	wwise-sound.md
+# 2026-11-03 omega-eliminator-fire-reader: Omega's opponent weapon decision and loader (weapon-ai-fire.md)
+0x01321000	function	WeaponAi_Update	80	weapon-ai-fire.md
+0x01322f10	function	WeaponAiStats_Load	85	weapon-ai-fire.md
+0x012c8d60	function	WeaponAi_Construct	80	weapon-ai-fire.md
+0x0183d950	data	g_weapon_ai_rate_eliminator	85	weapon-ai-fire.md
+0x0183d970	data	g_weapon_ai_rate	85	weapon-ai-fire.md
+0x0136f5f0	function	ShipShield_Construct	82	shield.md
+0x0136fda0	function	ShipShield_BindColourParam	85	shield.md
+0x0136fed0	function	ShipShield_Activate	85	shield.md
+0x0136e880	function	ShipShield_Update	85	shield.md
+0x0136ef30	function	ShipShield_DrawCockpit	65	shield.md
+0x01a15700	data	g_shipshield_activation_colour	85	shield.md
+0x01a15710	data	g_shipshield_hit_colour	85	shield.md
+0x012d8e30	function	HandlingStats_ParseXml	75	weapon-counts.md
+0x01777a10	function	SoundMastering_ApplyPreset	82	audio-3d.md
+0x01779510	function	Sound_SyncSurroundState	82	audio-3d.md
+0x017783e0	function	Sound_PostSetState	75	audio-3d.md
+0x01731b50	function	SoundManager_Update	80	audio-3d.md
+0x01738090	function	AudioConfig_Load	84	audio-3d.md
+0x011f3130	function	SceAudio3dSink_Init	82	audio-3d.md
+0x011f1a80	function	SceAudio3dMixer_Execute	75	audio-3d.md
+0x010976a0	function	Wwise_RegisterGameObj	80	audio-3d.md
+0x01092890	function	Wwise_SetListenerPosition	80	audio-3d.md
+0x01092460	function	Wwise_SetPosition	78	audio-3d.md
+0x0177fbc0	function	Bloom_RunChain	80	tonemap.md
+0x016247c0	function	Bloom_CreateTargets	76	tonemap.md
+0x0177e870	function	Bloom_CreateLevels	80	tonemap.md
+0x0177f510	function	Bloom_CreatePrograms	80	tonemap.md
+0x01784570	function	Bloom_CreateBlurPrograms	82	tonemap.md
+0x01785290	function	Bloom_BlurHorizontal	80	tonemap.md
+0x017856f0	function	Bloom_BlurVertical	80	tonemap.md
+0x0177e1e0	function	Bloom_AddLevel	76	tonemap.md
+0x01625490	function	Environment_ApplyBloomVignette	82	tonemap.md
+0x0174b8d0	function	Rumble_LoadLibrary	84	rumble.md
+0x0174abf0	function	Rumble_ParsePatternXml	84	rumble.md
+0x0174a880	function	Rumble_QueueOnPad	84	rumble.md
+0x0174a4f0	function	Rumble_PlayOnLocalPads	80	rumble.md
+0x012f8370	function	Ship_UpdateContactRumble	82	rumble.md
+0x012fb780	function	Ship_ReportWeaponHit	75	rumble.md
+0x01561110	function	PhotoMode_ScreenEnter	80	photo-mode.md
+0x01304c50	function	WeaponPads_TestCraft	85	weapon-pads.md
+0x01a10f30	data	g_weapon_pad_refresh_time	80	weapon-pads.md
+0x01a10f50	data	g_weapon_pad_elimination_refresh_time	80	weapon-pads.md
+0x0155dc00	function	PauseMenu_BindRedirectForMode	80	pause-menu.md
+0x01714de0	function	Particle_PushBatchByMode	75	trail-hits.md
+0x01724f50	function	TrailHit_Spawn	80	trail-hits.md
+0x016f60e0	function	Trail_SpawnHitBursts	80	trail-hits.md
+0x016f6e00	function	Trail_UpdateRing	70	trail-hits.md
+0x016f6320	function	Trail_UpdateAll	65	trail-hits.md
+0x0172ba00	function	TexAnim_UpdateTransform	88	billboards.md
+0x0172bb00	function	TexAnim_EvalKeyframes	88	billboards.md
+0x0170c8b0	function	Mesh_Update	72	billboards.md
+0x0170cce0	function	Mesh_Load	72	billboards.md
+0x0131fe60	function	Body_ResolveContact	84	craft-laws.md
+0x012f3360	function	Ship_SetShield	84	craft-laws.md
+0x012fa370	function	Ship_RestoreShield	72	craft-laws.md
+0x0193fc54	data	g_ShipWallCofR	84	craft-laws.md
+0x01f999e0	data	g_skill_level	82	craft-laws.md
+0x01257f00	function	Collision_SweepSegment	84	own-craft-box.md
+0x014df620	function	TouchCampaign_Update	78	campaign-map-pad.md
+0x013de330	function	Canvas_FindButtonInDirection	84	campaign-map-pad.md
+0x014e32c0	function	TouchCampaign_BuildEventButtons	76	campaign-map-pad.md
+0x014e1b10	function	TouchCampaign_UpdateEvent	74	campaign-map-pad.md
+0x014e4de0	function	TouchCampaign_OnEventFocused	72	campaign-map-pad.md
+0x014e5220	function	TouchCampaign_SetActive	62	campaign-map-pad.md
+0x014e0f50	function	TouchCampaign_FindStartEvent	72	campaign-map-pad.md
+0x014e0be0	function	TouchCampaign_SetScrollLimits	76	campaign-map-pad.md
+0x013da000	function	Canvas3D_Update	72	campaign-map-pad.md
+0x013d7ec0	function	CanvasButton_Activate	76	campaign-map-pad.md
+0x013d8160	function	CanvasButton_GetSeason	72	campaign-map-pad.md
+0x01749330	function	Pad_ActionPressed	84	campaign-map-pad.md
+0x01749310	function	Pad_ActionHeld	84	campaign-map-pad.md
+0x017494d0	function	Pad_ActionByName	84	campaign-map-pad.md
+0x0151d530	function	Campaign2048Screen_Update	72	campaign-map-pad.md
+0x014e5c70	function	TouchCampaign_CommitEvent	55	campaign-map-pad.md
+# 2026-11-16 engine-glow-re: the engine light is a vertex light (engine-light.md); base address, the body was read on 1.07
+0x016f5a00	function	EngineFlare_SubmitVertexLight	82	engine-light.md
+# 2026-11-16 engine-light-re: the flare update that draws the light's jitter, forced live on 1.07 (engine-light.md)
+0x016eeb10	function	EngineFlare_Update	85	engine-light.md
+# 2026-11-16 panelmap-re: the panel-map road's blur constants and reflection cube (panel-displacement.md); base addresses by byte search, bodies read on 1.07
+0x0202f080	data	g_reflective_blur_coeffs	94	panel-displacement.md
+0x01f8f688	data	g_cube_reflection_tex	85	panel-displacement.md
+# 2026-11-16 vita-race-load-re: the loading screen starter and the census of its kinds (loading-screen-start.md)
+0x01708fe0	function	LoadingScreen_Start	88	loading-screen-start.md
+
+# 2026-11-16 hull-tone-re: the SH probe manager the hull's ambient is read from (hull-tone.md); 1.07 address
+0x020084e8	data	g_sh_probes	80	hull-tone.md
+
+# 2026-11-16 hull-albedo-re: the vertex attribute fetch formats, by declaration type and component count (hull-tone.md); 1.07 addresses
+0x017f3ae0	function	VertexDecl_InitAttributeFormats	75	hull-tone.md
+0x022129c0	data	g_vertex_attribute_formats	80	hull-tone.md
+

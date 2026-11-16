@@ -370,6 +370,7 @@ def _trigger(obj):
         tuple(f32.r(v) for v in obj.oag_min),
         tuple(f32.r(v) for v in obj.oag_max),
         mod_props(obj, obj.name),
+        obj.oag_emit.strip() or None,
     )
 
 
@@ -521,6 +522,7 @@ def collect(context):
         art,
         mod_props(scene, "scene"),
         [_trigger(o) for o in sorted(by(("trigger",)), key=lambda o: _natural(o.name))],
+        [n.strip() for n in scene.oag_track_channels.split(",") if n.strip()],
     )
 
 
@@ -674,6 +676,7 @@ def make_trigger_object(context, trigger):
     obj["oag_kind"] = "trigger"
     obj["oag_name"] = trigger.name
     obj.oag_min, obj.oag_max = trigger.min, trigger.max
+    obj.oag_emit = trigger.emits or ""
     for key, value in trigger.props.items():
         obj[MOD_PREFIX + key] = value
     _link(context.scene, obj)
@@ -742,6 +745,7 @@ def populate(context, track, manifest_dir="."):
             raise TrackFileError(f"{name!r} is not a title this add-on knows: {', '.join(HOSTS)}")
     scene.oag_track_host = track.host or "none"
     scene.oag_track_titles = ", ".join(track.titles)
+    scene.oag_track_channels = ", ".join(track.channels)
     scene.oag_track_notes = "\n".join(track.notes)
     scene["oag_point_version"] = track.point_version
     scene["oag_junctions"] = json.dumps(

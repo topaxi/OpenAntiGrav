@@ -7,6 +7,10 @@
 //! captures that check its timing are
 //! [`race-finish.md`](../../../../docs/ghidra/functions/psp-pulse-usa/race-finish.md).
 //!
+//! The attract demo watches its race through the same director, from the first tick
+//! ([`Race::fly_as_demo`]; `docs/ghidra/functions/psp-pulse-usa/attract-demo.md`, "The demo camera
+//! is the spectator director").
+//!
 //! # What is ported
 //!
 //! | Rule | Source |
@@ -41,7 +45,7 @@ pub const START_TICKS: u64 = 61;
 /// Ticks after a Single Race wreck's `race ended` tick on which the director takes the camera
 /// from the destroy camera: the wreck's state-6 timer (`entity + 0x874`, `2.0` s from the
 /// explosion) crosses zero, `Camera_UpdateSpectator` clears its subject and picks another craft.
-/// **Measured** (PPSSPP, 2026-10-02, two runs): the timer crossed zero on `k+240` after the
+/// **Measured** (PPSSPP, two runs): the timer crossed zero on `k+240` after the
 /// injected `Ship_SetState(4)` (`0.5 + 1.5 + 2.0` s), the same frame the subject changed, and the
 /// mode state went to 3 on `k+31`; this port's race ends on the tick state 5 begins, `k+30`, so
 /// the hand-off is `210` ticks on (pinned to the call by `the_director_starts_240_ticks_after_the_wreck_call`). The picture changes *later*, at the first cut: see
@@ -200,6 +204,11 @@ impl FinishCamera {
         }
     }
 
+    /// The same director on a stream seeded from `seed`, so each race cuts differently.
+    pub(super) fn reseed(&mut self, seed: u64) {
+        self.rng = Rng::new(seed ^ SPECTATOR_SEED);
+    }
+
     /// Whether the director has any node to sit on. A circuit that authors none (or a title
     /// this was not read for) never overrides the chase camera.
     #[must_use]
@@ -218,6 +227,12 @@ impl FinishCamera {
     #[must_use]
     pub fn drawn_slot(&self) -> Option<usize> {
         self.running.then(|| self.previous.unwrap_or(self.subject))
+    }
+
+    /// The eye of the circuit's camera node nearest `position`, `None` where there is none.
+    #[must_use]
+    pub fn node_eye_near(&self, position: Vec3) -> Option<Vec3> {
+        self.nearest_node(position).map(|node| self.nodes[node].eye)
     }
 
     /// Whether the camera override in force is this director's.
@@ -505,7 +520,7 @@ fn position_of(live: &[Subject], slot: usize) -> Vec3 {
 
 impl Race {
     /// Every craft still in the race, as the director sees it.
-    fn spectator_subjects(&self) -> Vec<Subject> {
+    pub(super) fn spectator_subjects(&self) -> Vec<Subject> {
         (0..usize::from(self.sim.world.ship_count))
             .filter(|&slot| {
                 let ship = &self.sim.world.ships[slot];
@@ -557,7 +572,14 @@ impl Race {
 
     /// Steps the post-race camera one tick and imposes its pose, once the player's craft
     /// has crossed the line and the world is running on behind the panels.
+    ///
+    /// An attract demo's director runs from the first tick, on the player's craft, with no
+    /// finish to wait for ([`Race::fly_as_demo`]).
     pub(super) fn advance_finish_camera(&mut self) {
+        if self.view.spectates_from_start {
+            self.step_director(START_TICKS, None);
+            return;
+        }
         if self.view.finish_camera.is_none() || !self.runs_on_after_the_end() {
             return;
         }
@@ -586,13 +608,19 @@ impl Race {
                     fov: destroyed.fov,
                 }
             });
-        let live = self.spectator_subjects();
         let since = self
             .sim
             .world
             .tick
             .saturating_sub(finish)
             .saturating_sub(delay);
+        self.step_director(since, wreck);
+    }
+
+    /// One tick of the director, `since` ticks into its life, imposing its pose.
+    fn step_director(&mut self, since: u64, wreck: Option<Wreck>) {
+        let player = self.player_slot();
+        let live = self.spectator_subjects();
         let Some(director) = self.view.finish_camera.as_mut() else {
             return;
         };

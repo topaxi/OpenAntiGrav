@@ -54,8 +54,8 @@ fn main() {
     // Three people and five drivers. Written here rather than by `Race::start`
     // because the front end is what decides how many people are racing, and
     // there is no front end in this process - which is the point.
-    for slot in 0..HUMANS {
-        race.sim.world.controllers[slot] = Controller::Local;
+    for controller in race.sim.world.controllers.iter_mut().take(HUMANS) {
+        *controller = Controller::Local;
     }
     let humans: Vec<usize> = race.sim.world.human_slots().collect();
     // One craft, not eight: `opponents` asks for a grid and a grid is spawned
@@ -93,6 +93,7 @@ fn main() {
         // The cues a tick emits are an output, never state (ADR-0018). With no
         // audio attached they would otherwise grow without bound.
         race.drain_cues();
+        race.drain_mod_sounds();
     }
 
     let after = race.sim.state_hash();

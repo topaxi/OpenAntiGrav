@@ -26,7 +26,7 @@ fragment microcode (82) and reproduced in `crates/mesh/src/mesh.wgsl`:
 
 ```text
 zoneUV  = zoneColourTint.xy * (1 - meshUV)
-rim     = 1 - dot(N, toEye)
+rim     = 1 - |dot(N, toEye)|
 inside  = distance(worldPos, zoneOrigin) < zoneColourTint.w
 surface = zoneTex(zoneUV).rgb * zoneEffect<I|O>.rgb
         + zoneBase<I|O>.rgb    * rim^10
@@ -140,7 +140,7 @@ line, which is what settling gives.
   **Confirmed wired, not confirmed visible.** A live log at the rebind call
   site shows the exact right pair bound at Talon's Junction zone 2's step
   (`track=zonemodetrack2.gtf track_outer=zonemodetrack1.gtf`), and
-  `crates/render/tests/zone_recolour.rs`'s
+  `crates/mesh/tests/zone_recolour.rs`'s
   `the_transition_sphere_samples_the_inner_texture_inside_and_the_outer_outside`
   proves the shader selection on a real adapter with two solid-colour
   textures. But `hd_zone_wavefront_zone2_k150.png` and `..._k300.png`,
@@ -158,11 +158,19 @@ line, which is what settling gives.
   with a smaller one, or a `zonemodetrack*` pair viewed head-on rather than
   at the grazing angle a chase camera puts a road surface at, where the
   `rim^5`/`rim^10` colour summands already dominate over the texture term.
-- **The glow's sphere term is read but not drawn.** `5.0 * saturate(1 -
-  0.1 * (distance - zoneColourTint.w))` now has both inputs bound, and as
-  read it adds `5.0` to every fragment *inside* the sphere rather than at its
-  edge - the RPCS3 frame at radius `799` shows no such flood. The reading is
-  what is in doubt; it stays out until re-read.
+- ~~**The glow's sphere term is read but not drawn.**~~ **Drawn 2026-11-15.**
+  The term is `5.0 * saturate(1 - 0.1 * |distance - zoneColourTint.w|)`: the
+  first reading lost the source `abs`, which made it a fill of the sphere's
+  interior. With it the term is a white band ten units either side of the
+  wavefront, the edge that sweeps out with the new stage's colours.
+  Evidence: [zone-shader.md](../ghidra/functions/ps3-hdfury-eu/zone-shader.md#the-wavefront-ring).
+  Headless on Talon's Junction (`--ticks 1500` to `1640`) the band is first a
+  circle on the road round the craft, a radius of a few tens of units, and
+  then moves out past the near track with the lime following it. That puts
+  the zone 2 step just before `--ticks 1500`, not at 1200 as the table below
+  has it; why the two disagree is not measured. Drawn only while the radius
+  is positive, so a title with no transition law (radius `0`) draws no ring
+  round the craft.
 - **Which live frame confirms the polarity.** `burst-2.png` at radius
   `3288` does: the near road green and the near walls lime (`Venom`'s
   `Track.Texture Colour` and `Scene.Texture Colour`), the far scenery still
@@ -199,3 +207,37 @@ Track multiplier through, per the struck Open item above): both frames came
 back byte-identical to the ones this table already names, which is the
 finding, not a broken repro - see that item for the saturation reading and
 what would tell the two apart.
+
+## Chunks a Zone race does not recolour (2026-11-16, `zone-pad-re`)
+
+**Not every chunk takes the Zone surface.** Every draw consumer of the
+executable drops the `ZoneMode` bit of the material permutation word for a
+chunk whose render-block flags have any of bits 9, 10 or 11
+(`Mesh::render_flags & 0x0e00`), so that chunk runs its material's plain lit
+program with its own albedo (confidence 90: the instruction at `0x00401760`
+and its six siblings, and three RSX frames of a Zone race on Moa Therma in
+which the speed pads and the bit-11 signs are the only plain draws). The bits
+are the speed pads (418 chunks), the weapon pads (208) and 315 authored
+signs, billboards and screens.
+
+What such a chunk shows is its own picture under the Zone stage's rig, with no
+lightmap term (a Zone frame switches the lightmap and baked-vertex sources off
+for every draw):
+
+```text
+light  = stage Constant Ambient Colour + saturate(N.L) * stage Sun colour
+colour = albedo * light + the material's own glow and specular
+fog    = the stage's Track fog on a track-flagged chunk, else its Fog (or Alt Fog on bit 5)
+out    = 0.5 * fogged colour
+```
+
+At Sub Venom (`Constant Ambient Colour` 1.5, `Sun colour` 0, `Track Fog
+density` 0) a speed pad is `0.75 * albedo + 0.5 * ne.a * Colour`: the
+light-grey plate with a dark outline and cyan tiles the original shows.
+Evidence, the per-material census and the 2048/Omega check:
+[zone-plain-chunks.md](../ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md).
+
+**Not wired.** This port still sends flagged chunks through the Zone surface
+(the pad draws as road, with a white bar), and its stand-in for the start
+gantry's card (`oag_mesh::mesh::ZONE_EXEMPT_RATE`, chosen) is probably this
+same flag, unchecked.

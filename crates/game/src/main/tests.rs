@@ -83,6 +83,19 @@ fn a_field_row_is_an_exact_pose_and_names_its_team() {
 }
 
 #[test]
+fn a_field_rows_lean_and_roll_phase_are_read_when_both_columns_exist() {
+    let text = format!("{},steer_lean,roll_phase\n1,Feisar,1,0,0,0,1,0,0,0,1,10,2.5,-30,0.5,-0.25\n2,Qirex,0,0,-1,0,1,0,1,0,0,-5,3,8,-0.1,0.0\n", FIELD.lines().nth(1).map(|_| "slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z").unwrap());
+    let path = fixture_file("field-lean", &text);
+    let leans = pose::field_from_csv(&path).expect("a field with lean columns").leans();
+    assert_eq!(leans.len(), 2);
+    let first = leans[0].expect("slot 1 carries its lean");
+    assert_eq!((first.steer_lean, first.roll_phase), (0.5, -0.25));
+    assert_eq!(leans[1].expect("slot 2").steer_lean, -0.1);
+    let plain = pose::field_from_csv(&fixture_file("field-nolean", FIELD)).expect("an old field");
+    assert_eq!(plain.leans(), vec![None, None], "an old file has no lean, not a zero one");
+}
+
+#[test]
 fn a_slot_zero_row_is_the_players_exact_pose() {
     let text = FIELD.replace("\n1,Feisar", "\n0,Player,0,0,-1,0,1,0,1,0,0,7,8,9\n1,Feisar");
     let path = fixture_file("field-player", &text);
@@ -429,4 +442,57 @@ slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_
             oag_core::math::Vec3::new(4.0, 5.0, 6.0)
         ]
     );
+}
+
+#[cfg(feature = "dev-cli")]
+#[test]
+fn a_development_build_accepts_seed_and_give() {
+    let cli = Cli::try_parse_from(["oag-game", "--race", "--seed", "7", "--give", "rocket"])
+        .expect("dev-cli builds take --seed and --give");
+    assert_eq!(cli.seed(), Some(7));
+    assert_eq!(cli.give(), Some("rocket"));
+}
+
+#[cfg(not(feature = "dev-cli"))]
+#[test]
+fn a_release_build_rejects_seed_and_give() {
+    for flag in [["--seed", "7"], ["--give", "rocket"]] {
+        let error = Cli::try_parse_from(["oag-game", "--race", flag[0], flag[1]])
+            .expect_err("a build without dev-cli has no such flag");
+        assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument, "{flag:?}");
+    }
+}
+
+#[test]
+fn pose_parses_in_every_build() {
+    Cli::try_parse_from(["oag-game", "--race", "--pose", "0,0,0"]).expect("--pose is a capture flag");
+}
+
+#[test]
+fn a_run_with_no_window_opens_no_gamepad() {
+    assert!(!app::controls_for(true).pad().is_available());
+}
+
+/// The first-run name prompt opens only for a person at a plain launch: every capture, script,
+/// trace, comparison or race flag is automation and never gets it.
+#[test]
+fn only_a_plain_launch_is_interactive() {
+    assert!(Cli::try_parse_from(["oag-game"]).expect("parses").is_interactive());
+    for flags in [
+        &["--screenshot", "x.png"][..],
+        &["--original-menu"],
+        &["--race"],
+        &["--dry-run"],
+        &["--trace"],
+        &["--script", "1:down"],
+        &["--preseat"],
+        &["--prefetch"],
+        &["--probe-pad"],
+        &["--until", "Home"],
+    ] {
+        let mut args = vec!["oag-game"];
+        args.extend_from_slice(flags);
+        let cli = Cli::try_parse_from(&args).expect("parses");
+        assert!(!cli.is_interactive(), "{flags:?} is automation");
+    }
 }

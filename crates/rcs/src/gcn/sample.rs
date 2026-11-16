@@ -70,12 +70,7 @@ pub fn signed_samplers(file: &[u8]) -> SignedSamplers {
                     .iter()
                     .find(|r| r.size == 0 && r.slot == u32::from(slot))
             })
-            .map(|r| {
-                r.name
-                    .strip_suffix("Texture")
-                    .unwrap_or(&r.name)
-                    .to_string()
-            })
+            .map(|r| r.name.trim_suffix("Texture").to_string())
             .filter(|n| n != SHADOW_MAP)
             .collect();
         if names.is_empty() {
@@ -90,7 +85,7 @@ pub fn signed_samplers(file: &[u8]) -> SignedSamplers {
     found
 }
 
-fn overlaps(operand: &Operand, first: u8, count: u8) -> bool {
+pub(super) fn overlaps(operand: &Operand, first: u8, count: u8) -> bool {
     matches!(*operand, Operand::Vgpr { first: f, count: c }
         if f < first + count && first < f + c)
 }
@@ -144,8 +139,25 @@ impl Program<'_> {
         found
     }
 
+    /// Every `image_sample` as (byte offset in the code, API slot of its texture), in code
+    /// order. A slot no usage record placed is `None`, never guessed at.
+    #[must_use]
+    pub fn sampled_slots(&self) -> Vec<(usize, Option<u8>)> {
+        self.instructions
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| {
+                i.encoding == Encoding::Mimg && i.name.is_some_and(|n| n.contains("sample"))
+            })
+            .filter_map(|(k, i)| match i.src[1] {
+                Some(Operand::Sgpr { first, .. }) => Some((i.at, self.texture_slot(k, first))),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The API slot of the texture whose T# starts at SGPR `t` when instruction `k` samples it.
-    fn texture_slot(&self, k: usize, t: u8) -> Option<u8> {
+    pub(super) fn texture_slot(&self, k: usize, t: u8) -> Option<u8> {
         let record = |kind: u8, register: u32| {
             self.usage
                 .iter()

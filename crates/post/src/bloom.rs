@@ -128,11 +128,14 @@ struct Constants {
     uv_scale: [f32; 2],
     uv_max: [f32; 2],
     /// [`Bloom::stamp_glow`]'s rectangles, as fractions of the drawn rectangle: `x, y, width,
-    /// height`. Only the stamp pass reads these three fields; every other pass is handed zeros.
+    /// height`. Only the stamp pass reads these four fields; every other pass is handed zeros.
     stamps: [[f32; 4]; stamps::MAX],
-    /// The stamped colour, `rgb` in `0..=1`.
-    stamp_colour: [f32; 4],
-    /// `count, value, opacity` of the stamps and a pad.
+    /// Where the stamp pass reads the target: the drawn rectangle's `x, y, width, height` in
+    /// target pixels. Zero for every other pass.
+    stamp_view: [f32; 4],
+    /// Each rectangle's mask byte in `x`.
+    stamp_values: [[f32; 4]; stamps::MAX],
+    /// `count` of the stamps and three pads.
     stamp_meta: [f32; 4],
 }
 
@@ -228,7 +231,8 @@ impl Lane {
             uv_scale: [1.0, 1.0],
             uv_max: [1.0, 1.0],
             stamps: [[0.0; 4]; stamps::MAX],
-            stamp_colour: [0.0; 4],
+            stamp_view: [0.0; 4],
+            stamp_values: [[0.0; 4]; stamps::MAX],
             stamp_meta: [0.0; 4],
         };
         // The one buffer here that is not a compile-time constant: the bright
@@ -262,24 +266,7 @@ impl Lane {
         );
 
         let group = |label: &str, view: &wgpu::TextureView, constants: &wgpu::Buffer| {
-            device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(label),
-                layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: constants.as_entire_binding(),
-                    },
-                ],
-            })
+            lane_group(device, layout, sampler, label, view, constants)
         };
         let blur_x = group("bloom blur-x", &a.view, &constants_x);
         let blur_y = group("bloom blur-y", &b.view, &constants_y);
@@ -343,6 +330,125 @@ pub fn lane_extent(base: (u32, u32), scale: (f32, f32)) -> (u32, u32) {
     (axis(base.0, scale.0), axis(base.1, scale.1))
 }
 
+/// Makes `views[view]` a lane of `extent`: the lanes below it are built if missing, and a
+/// lane of another extent is built again. A build that fails leaves what was built.
+///
+/// # Errors
+///
+/// Propagates a scratch buffer that will not allocate.
+pub(super) fn ensure_view_lane<L>(
+    views: &std::cell::RefCell<Vec<L>>,
+    view: usize,
+    extent: (u32, u32),
+    extent_of: impl Fn(&L) -> (u32, u32),
+    build: impl Fn() -> Result<L>,
+) -> Result<()> {
+    let mut views = views.borrow_mut();
+    while views.len() <= view {
+        views.push(build()?);
+    }
+    if extent_of(&views[view]) != extent {
+        views[view] = build()?;
+    }
+    Ok(())
+}
+
+/// One of a lane's three passes into its scratch buffers: they clear and fill the whole
+/// buffer, `extent`, at the buffer's own origin.
+pub(super) fn scratch_pass(
+    encoder: &mut wgpu::CommandEncoder,
+    extent: (u32, u32),
+    label: &'static str,
+    pipeline: &wgpu::RenderPipeline,
+    group: &wgpu::BindGroup,
+    target: &wgpu::TextureView,
+) {
+    crate::pass::draw_with(
+        encoder,
+        label,
+        pipeline,
+        &[group],
+        target,
+        wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+        (0.0, 0.0),
+        (extent.0.max(1), extent.1.max(1)),
+        3,
+    );
+}
+
+/// A lane's bind group: the texture `view` it reads through the clamp `sampler`, and the
+/// pass's `constants`.
+pub(super) fn lane_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    sampler: &wgpu::Sampler,
+    label: &str,
+    view: &wgpu::TextureView,
+    constants: &wgpu::Buffer,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some(label),
+        layout,
+        entries: &sampled_entries(view, sampler, constants),
+    })
+}
+
+/// [`lane_group`] for the pass that reads the scene, built per frame and so counted
+/// (`oag_gpu::perfprobe`).
+pub(super) fn scene_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    sampler: &wgpu::Sampler,
+    label: &str,
+    scene: &wgpu::TextureView,
+    constants: &wgpu::Buffer,
+) -> wgpu::BindGroup {
+    oag_gpu::perfprobe::bind_group(
+        device,
+        &wgpu::BindGroupDescriptor {
+            label: Some(label),
+            layout,
+            entries: &sampled_entries(scene, sampler, constants),
+        },
+    )
+}
+
+fn sampled_entries<'a>(
+    view: &'a wgpu::TextureView,
+    sampler: &'a wgpu::Sampler,
+    constants: &'a wgpu::Buffer,
+) -> [wgpu::BindGroupEntry<'a>; 3] {
+    [
+        wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::TextureView(view),
+        },
+        wgpu::BindGroupEntry {
+            binding: 1,
+            resource: wgpu::BindingResource::Sampler(sampler),
+        },
+        wgpu::BindGroupEntry {
+            binding: 2,
+            resource: constants.as_entire_binding(),
+        },
+    ]
+}
+
+impl Frame<'_> {
+    /// The rectangle's place in the scene as a pass samples it: UV offset, scale and
+    /// clamp ([`super::sub_rectangle_at`]).
+    pub(super) fn uv(&self) -> ([f32; 2], [f32; 2], [f32; 2]) {
+        super::sub_rectangle_at(
+            (
+                self.origin.0.round().max(0.0) as u32,
+                self.origin.1.round().max(0.0) as u32,
+            ),
+            self.viewport,
+            self.size,
+        )
+    }
+}
+
 impl Bloom {
     /// Builds the pipelines and the whole picture's scratch buffers.
     ///
@@ -385,31 +491,18 @@ impl Bloom {
         });
 
         let pipeline = |label: &str, entry: &str, blend: Option<wgpu::BlendState>, mask| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[],
-                    compilation_options: Default::default(),
+            crate::pass::fullscreen_pipeline(
+                device,
+                &shader,
+                &pipeline_layout,
+                label,
+                entry,
+                wgpu::ColorTargetState {
+                    format,
+                    blend,
+                    write_mask: mask,
                 },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some(entry),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend,
-                        write_mask: mask,
-                    })],
-                    compilation_options: Default::default(),
-                }),
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview_mask: None,
-                cache: None,
-            })
+            )
         };
 
         // The bright pass and the blur both replace their whole target: the
@@ -477,7 +570,7 @@ impl Bloom {
     pub fn render(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: Frame<'_>,
     ) {
@@ -502,7 +595,7 @@ impl Bloom {
     pub fn prepare(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: Frame<'_>,
     ) {
@@ -523,21 +616,20 @@ impl Bloom {
     pub fn prepare_view(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: usize,
         extent: (u32, u32),
         frame: Frame<'_>,
     ) -> Result<()> {
-        let mut views = self.views.borrow_mut();
-        let build = || Lane::new(device, self.format, &self.layout, &self.sampler, extent);
-        while views.len() <= view {
-            views.push(build()?);
-        }
-        if views[view].extent != extent {
-            views[view] = build()?;
-        }
-        self.prepare_in(&views[view], device, queue, encoder, frame);
+        ensure_view_lane(
+            &self.views,
+            view,
+            extent,
+            |lane| lane.extent,
+            || Lane::new(device, self.format, &self.layout, &self.sampler, extent),
+        )?;
+        self.prepare_in(&self.views.borrow()[view], device, queue, encoder, frame);
         Ok(())
     }
 
@@ -545,25 +637,12 @@ impl Bloom {
         &self,
         lane: &Lane,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: Frame<'_>,
     ) {
-        let Frame {
-            scene,
-            size,
-            origin,
-            viewport,
-        } = frame;
-
-        let (uv_offset, uv_scale, uv_max) = super::sub_rectangle_at(
-            (
-                origin.0.round().max(0.0) as u32,
-                origin.1.round().max(0.0) as u32,
-            ),
-            viewport,
-            size,
-        );
+        let scene = frame.scene;
+        let (uv_offset, uv_scale, uv_max) = frame.uv();
         let wanted = Constants {
             texel: [1.0 / lane.extent.0 as f32, 1.0 / lane.extent.1 as f32],
             direction: [0.0, 0.0],
@@ -573,7 +652,8 @@ impl Bloom {
             uv_scale,
             uv_max,
             stamps: [[0.0; 4]; stamps::MAX],
-            stamp_colour: [0.0; 4],
+            stamp_view: [0.0; 4],
+            stamp_values: [[0.0; 4]; stamps::MAX],
             stamp_meta: [0.0; 4],
         };
         if lane.written.get() != Some(wanted) {
@@ -582,63 +662,24 @@ impl Bloom {
         }
 
         let bright_group = lane.bright_group.get(scene, || {
-            oag_gpu::perfprobe::bind_group(
+            scene_group(
                 device,
-                &wgpu::BindGroupDescriptor {
-                    label: Some("bloom bright"),
-                    layout: &self.layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(scene),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&self.sampler),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: lane.constants_bright.as_entire_binding(),
-                        },
-                    ],
-                },
+                &self.layout,
+                &self.sampler,
+                "bloom bright",
+                scene,
+                &lane.constants_bright,
             )
         });
 
         // The three scratch passes fill their whole buffer, which is the lane's own
         // size - the fixed 240x136 for a whole picture - always at that buffer's own
         // origin, whatever `origin` says about the scene's placement.
-        let mut pass = |label: &str,
+        let mut pass = |label: &'static str,
                         pipeline: &wgpu::RenderPipeline,
                         group: &wgpu::BindGroup,
                         target: &wgpu::TextureView| {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some(label),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: target,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            pass.set_pipeline(pipeline);
-            pass.set_viewport(
-                0.0,
-                0.0,
-                lane.extent.0.max(1) as f32,
-                lane.extent.1.max(1) as f32,
-                0.0,
-                1.0,
-            );
-            pass.set_bind_group(0, group, &[]);
-            pass.draw(0..3, 0..1);
+            scratch_pass(encoder, lane.extent, label, pipeline, group, target);
         };
 
         pass("bloom bright", &self.bright, &bright_group, &lane.a.view);
@@ -687,38 +728,20 @@ impl Bloom {
         origin: (f32, f32),
         viewport: (u32, u32),
     ) {
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("bloom composite"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: target,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-        pass.set_pipeline(&self.composite);
-        pass.set_viewport(
-            origin.0,
-            origin.1,
-            viewport.0.max(1) as f32,
-            viewport.1.max(1) as f32,
-            0.0,
-            1.0,
+        crate::pass::draw(
+            encoder,
+            "bloom composite",
+            &self.composite,
+            &[&lane.composite_group],
+            target,
+            origin,
+            (viewport.0.max(1), viewport.1.max(1)),
         );
-        pass.set_bind_group(0, &lane.composite_group, &[]);
-        pass.draw(0..3, 0..1);
     }
 }
 
 mod stamps;
-pub use stamps::{MAX as MAX_STAMPS, Stamps};
+pub use stamps::{MAX as MAX_STAMPS, Stamp};
 
 #[cfg(test)]
 mod tests;

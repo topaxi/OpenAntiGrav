@@ -55,6 +55,12 @@ impl Cli {
         if let Some(order) = self.trail_order {
             profile.trail_order = order;
         }
+        if let Some(sort) = self.scenery_sort {
+            profile.scenery_sort = sort;
+        }
+        if let Some(length) = self.trail_length {
+            profile.trail_length = length;
+        }
         if let Some(weather) = self.weather {
             profile.weather = weather;
         }

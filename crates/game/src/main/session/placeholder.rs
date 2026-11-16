@@ -1,7 +1,7 @@
 //! Booting a title with no front end this build can walk straight into this
 //! build's own menus instead of refusing.
 //!
-//! **Wipeout 2048 no longer lands here** (2026-09-21): its front end is
+//! **Wipeout 2048 does not land here**: its front end is
 //! `Some` since [ADR-0054], and `oag_game::boot::load_shell` walks its
 //! declared boot chain and draws its touch grids off
 //! `oag_title::FrontEnd::touch`, with `oag_ui::placeholder::MENU_SKIN`
@@ -108,7 +108,7 @@ impl Session {
             title.name
         );
         for problem in &problems {
-            warn!("dlc: {problem}");
+            warn!("{}", oag_raceplay::loader_log::dlc_problem(problem));
         }
         let mut archives = opened.archives;
         let strings = language::StringTable::default();
@@ -175,7 +175,7 @@ impl Session {
         self.music_discs = pending.music_discs(source);
         self.loading_assets = loading::Assets::load(source, &strings, None, None);
         let (definition, mods, custom_campaigns) =
-            pending.menu_for(title, false).unwrap_or_else(|e| {
+            pending.menu_for(title, archives.layout.platform, false).unwrap_or_else(|e| {
                 log::warn!("menu: {e:#}");
                 (pending.definition.clone(), Vec::new(), Default::default())
             });
@@ -189,17 +189,20 @@ impl Session {
             menu_sfx: None,
             title,
             platform: archives.layout.platform,
+            serial: archives.layout.serial.clone(),
             // 2048 is `oag_title::ZoneCircuit::SameCircuit` - a Zone race
             // runs whichever circuit is already picked, so the CIRCUIT row
             // offers the same list under either mode. See
             // `oag_2048::race::DEFAULTS.zone` and
             // `crate::main::session::Shell::tracks_for`.
+            demo_config: None,
             zone_tracks: tracks.clone(),
             tracks,
             teams: team_choices,
             languages: Vec::new(),
-            modes: menu::mode_choices(&strings),
+            modes: menu::mode_choices(&strings, title),
             kill_targets: Vec::new(),
+            score_targets: Vec::new(),
             weapons: Vec::new(),
             entries: None,
             front_end_styles: Vec::new(),
@@ -220,12 +223,15 @@ impl Session {
             nav_legend: None,
             ticker: None,
             fury_backdrop: None,
+            pause_screens: Default::default(),
             // 2048's front end is unread, so its race launches from the
             // RACE page the way every title's did before the pickers.
             track_select: None,
             ship_select: None,
             ship_select_split: None,
             team_details: Vec::new(),
+            model_gate: oag_game::unlock::ModelGate::none(),
+            map: None,
             strings,
         });
         self.prefetch_pending = None;
@@ -284,7 +290,7 @@ fn raceable_teams(
         .filter(|team| team.location.starts_with(oag_2048::race::SHIP_DIR))
         .filter_map(|team| {
             let id = format!("{}\\{CRAFT}", team.id);
-            let ship = oag_pulse::race::ships::entry_name_in(
+            let ship = oag_title::race::entry_name_in(
                 oag_2048::race::SHIP_DIR,
                 &id,
                 oag_pulse::race::ships::HULL,

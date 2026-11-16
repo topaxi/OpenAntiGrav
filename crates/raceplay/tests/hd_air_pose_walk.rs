@@ -22,7 +22,9 @@
 //! airborne one. `OAG_HD_TEAM` (default `Feisar`, HD's default team) picks the handling. `OAG_HD_BIAS=0` steps with the in-air `weight_distribution` torque off, `1` with it on
 //! (default: the title's own craft law). `OAG_HD_MODE=tt` loads a Time Trial, `OAG_HD_CLASS` the
 //! class (default `PHANTOM`), `OAG_HD_AUTOPILOT=1` admits Autopilot rows, `OAG_HD_SUM=0` takes the
-//! largest hover escape alone, `OAG_HD_GATE=0` leaves the pitch gate open.
+//! largest hover escape alone, `OAG_HD_GATE=0` leaves the pitch gate open. `OAG_HD_DAMP=0`
+//! steps without the body's velocity damping, `OAG_HD_FWD=1` prints the forward speed before and
+//! after each step at full precision.
 
 use oag_core::math::{Mat3, Quat, Vec3};
 use oag_physics::engine::EngineFlags;
@@ -122,6 +124,12 @@ fn the_original_hd_capture_stepped_once_per_row() {
     if let Ok(k) = std::env::var("OAG_HD_DRAG") {
         laws.drag_ground = k.parse().expect("OAG_HD_DRAG");
     }
+    // `OAG_HD_DAMP=<c>` steps with another body damping (both terms) than HD's `0.01`.
+    let damp = std::env::var("OAG_HD_DAMP").map_or(0.01, |c| c.parse().expect("OAG_HD_DAMP"));
+    laws.body_damping = oag_physics::laws::BodyDamping {
+        linear: damp,
+        angular: damp,
+    };
     let base_env = Environment {
         class_gravity_scale: gravity,
         class_gravity_term: term,
@@ -285,7 +293,7 @@ fn the_original_hd_capture_stepped_once_per_row() {
         let dw = (state.body.angular_velocity - omega_next) / dt;
         let right = -left;
         println!(
-            "{i:>4} {grounded:.0} {dt:.4} | {:7.2} {:7.2} {:6.2} | {:6.2} {:6.2} | {:7.3} {:7.3} {:7.3} | {:6.3} | {:6.3} {:7.4}",
+            "{i:>4} {grounded:.0} {dt:.4} | {:7.2} {:7.2} {:6.2} | {:6.2} {:8.4} | {:7.3} {:7.3} {:7.3} | {:6.3} | {:6.3} {:7.4}",
             v_next.y,
             state.body.linear_velocity.y,
             dv.y,
@@ -300,5 +308,15 @@ fn the_original_hd_capture_stepped_once_per_row() {
             dv.dot(left),
             (state.body.position - p1).dot(left),
         );
+        // `OAG_HD_FWD=1`: the forward speed before and after, measured and ours, at full
+        // precision, for reading a speed-dependent forward residual.
+        if std::env::var_os("OAG_HD_FWD").is_some() {
+            println!(
+                "fwd {i} {dt:.6} {:.5} {:.5} {:.5}",
+                v.dot(fw),
+                v_next.dot(fw),
+                state.body.linear_velocity.dot(fw),
+            );
+        }
     }
 }

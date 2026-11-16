@@ -64,6 +64,7 @@ use oag_mesh::mesh_render::Anisotropy;
 mod controls;
 mod online;
 pub mod platform;
+pub mod player;
 mod race;
 mod render_profile;
 mod rescue;
@@ -71,7 +72,9 @@ pub mod web;
 
 pub use controls::{Controls, TriggerSensitivity};
 pub use online::Online;
-pub use race::{Race, Remix};
+pub use player::Player;
+pub use race::Race;
+pub mod mod_settings;
 pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key};
 use render_profile::{
     ensure_known_titles, migrate_platform_split, migrate_reconstruction_keys,
@@ -124,11 +127,12 @@ pub struct Settings {
     pub source: Source,
     #[serde(default)]
     pub race: Race,
-    #[serde(default)]
-    pub remix: Remix,
     /// The online lobby last connected to (`session::online`).
     #[serde(default)]
     pub online: Online,
+    /// The name and tag shared by every title (`session::player_name`).
+    #[serde(default)]
+    pub player: Player,
     #[serde(default)]
     pub controls: Controls,
     #[serde(default)]
@@ -138,6 +142,13 @@ pub struct Settings {
     /// Which mods are turned off on the MODS page.
     #[serde(default)]
     pub mods: Mods,
+    /// Whether races are recorded (`crate::replays`).
+    #[serde(default)]
+    pub replay: Replay,
+    /// What each mod's own menu rows saved, by mod id then key (`mod_settings`).
+    /// Kept whether or not the mod is turned on.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub mod_settings: mod_settings::ModSettings,
     /// Developer switches, read in debug builds only (see [`Dev`]).
     #[serde(default, skip_serializing_if = "Dev::is_empty")]
     pub dev: Dev,
@@ -200,12 +211,38 @@ pub struct Log {
 /// The MODS page's switches, by mod id (`oag_mod::Manifest::id`).
 ///
 /// A set of the mods turned **off**, so a mod installed later is on until the player
-/// says otherwise. An id no installed mod has is kept: a mod moved out of the search
+/// says otherwise (a mod that starts off is on only while it is in [`Mods::enabled`]). An id no installed mod has is kept: a mod moved out of the search
 /// path and back stays off. A `BTreeSet` so the rewrite [`load`] makes is stable.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Mods {
     #[serde(default)]
     pub disabled: std::collections::BTreeSet<String>,
+    /// The mods that start off (`oag_mod::Manifest::default_enabled`, a texture pack) the
+    /// player turned on. Kept apart from [`Self::disabled`] so that a mod installed later
+    /// takes its own default; an id is in at most one of the two.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub enabled: std::collections::BTreeSet<String>,
+}
+
+/// `[replay]`: whether a race that can be recorded is, and written to `auto/` when it ends
+/// (ADR-0087, decision 1). On unless the player turns it off.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Replay {
+    /// Record races for the REPLAYS page.
+    #[serde(default = "default_record")]
+    pub record: bool,
+}
+
+impl Default for Replay {
+    fn default() -> Self {
+        Self {
+            record: default_record(),
+        }
+    }
+}
+
+fn default_record() -> bool {
+    true
 }
 
 /// What the opponents are like.
@@ -367,6 +404,27 @@ pub struct Display {
     /// always pause, whatever this says.
     #[serde(default = "default_pause_on_focus_loss")]
     pub pause_on_focus_loss: bool,
+    /// Whether a race draws the ghost ship (Pulse's `Ghost Ship Visible`). **Read only by a title
+    /// whose own options list it** (`oag_title::race::GameOptions::ship_visible`); the row is
+    /// dropped on every other title and a saved `false` there is ignored. Hiding it hides the
+    /// drawing alone: the ghost is still raced, recorded and replaced. Applies live.
+    #[serde(default = "default_true")]
+    pub ghost_ship_visible: bool,
+    /// Whether a race starts with the stored ghost loaded (Pulse's `Auto Load Ghost`). **Read
+    /// only by a title whose own options list it** (`GameOptions::auto_load`). Off, a Time
+    /// Trial or Speed Lap races no ghost but still records the run and saves a lap that
+    /// beats the stored one. Read when a race loads.
+    #[serde(default = "default_true")]
+    pub auto_load_ghost: bool,
+    /// Whether a multiplayer race draws each other person's name over their craft (Pulse's
+    /// `Multiplayer Tags`, default on as in the original). **Read only by a title whose own
+    /// options list it** (`GameOptions::multiplayer_tags`). Off, no tag draws. Applies live.
+    #[serde(default = "default_true")]
+    pub multiplayer_tags: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_canvas_size() -> String {
@@ -378,6 +436,27 @@ fn default_pause_on_focus_loss() -> bool {
 }
 
 impl Display {
+    /// Whether `title`'s races draw the ghost ship: the player's `Ghost Ship Visible` where the
+    /// title's options list it, always elsewhere.
+    #[must_use]
+    pub fn ghost_ship_shown(&self, title: &oag_title::Title) -> bool {
+        !title.race.game_options.ship_visible || self.ghost_ship_visible
+    }
+
+    /// Whether `title`'s races load the stored ghost: the player's `Auto Load Ghost` where the
+    /// title's options list it, always elsewhere.
+    #[must_use]
+    pub fn ghost_auto_loads(&self, title: &oag_title::Title) -> bool {
+        !title.race.game_options.auto_load || self.auto_load_ghost
+    }
+
+    /// Whether `title`'s multiplayer races draw player tags: the player's `Multiplayer Tags` where
+    /// the title's options list it, never elsewhere (no other title's tags are wired).
+    #[must_use]
+    pub fn multiplayer_tags_shown(&self, title: &oag_title::Title) -> bool {
+        title.race.game_options.multiplayer_tags && self.multiplayer_tags
+    }
+
     /// The saved `HUD Style` as a name for `race::Options::hud_style`, `None` while empty.
     #[must_use]
     pub fn hud_style_choice(&self) -> Option<String> {
@@ -403,6 +482,9 @@ impl Default for Display {
             brightness: Default::default(),
             gamma: Default::default(),
             pause_on_focus_loss: default_pause_on_focus_loss(),
+            ghost_ship_visible: true,
+            auto_load_ghost: true,
+            multiplayer_tags: true,
         }
     }
 }
@@ -473,13 +555,13 @@ pub struct Graphics {
     #[serde(default)]
     pub hud_scale: oag_display::display::HudScale,
     /// How much of the screen the HUD and the front-end pages use, in percent: the title's own
-    /// `Safe Area Setting`. One value for both (maintainer, 2026-10-27).
+    /// `Safe Area Setting`. One value for both, and for every title; the SCREEN SIZE row writes it.
     ///
-    /// **Read only by a title that has the option** (`oag_title::HudArt::safe_area`, HD alone);
-    /// the HUD is drawn at `percent / 100` about the centre of the screen, the value held to the
-    /// title's slider (HD: 80 to 100 in steps of 2). Absent means the title's own default (HD:
-    /// 90). Taken when a race loads or the menus open. No menu row: a one-line settings-file choice, the way
-    /// [`Self::hud_scale`] is. See `docs/formats/hd-hud.md`.
+    /// The HUD and the front end are drawn at `percent / 100` about the centre of the screen, the
+    /// value held to the title's slider (`oag_title::HudArt::safe_area`: HD's 80 to 100 in steps
+    /// of 2, the same range on a title whose disc authors none). Absent means the title's own
+    /// default (HD: 90, the disc's; the others: 100, drawn 1:1). Applies live. See
+    /// `docs/formats/hd-hud.md`.
     #[serde(default)]
     pub hud_safe_area: Option<u8>,
     /// Whether the track's draw calls are tested against the camera's view
@@ -566,6 +648,51 @@ pub struct Graphics {
     #[serde(default)]
     pub boost_zoom: bool,
 
+    /// Play the trail-hit burst for a craft flying in a rival's engine trail on a title whose
+    /// original never shows it: Pulse and Pure, which author none and borrow Wipeout HD's, and
+    /// 2048 and Omega, which author it but never fire it and play their own
+    /// (`oag_title::Effects::trail_hits_native`). **Off by default**, and ignored on Wipeout HD,
+    /// which always plays it.
+    ///
+    /// **An enhancement of this project's, not the original's.** A borrowed effect is read off
+    /// another source that authors it, and drawn with nothing substituted when this machine has
+    /// none. Baked into the race at load, so a change applies from the next race. See
+    /// `oag_raceplay::TrailHits`.
+    #[serde(default)]
+    pub trail_hits: bool,
+
+    /// Lay HD's wingtip contrails after a speed pad on a title whose original has none: Pulse and
+    /// Pure. **Off by default**, and ignored on Wipeout HD, 2048 and Omega, which carry them.
+    ///
+    /// **An enhancement of this project's, not the original's.** The config and the ribbon's
+    /// texture are read off another source that carries them (HD's, else 2048's or Omega's), and
+    /// nothing is drawn, with the loader report saying why, when this machine has none; the
+    /// craft's wing-tip collision locators stand in for the `wingtip` ones it does not author.
+    /// Baked into the race at load, so a change applies from the next race. See
+    /// `oag_raceplay::WingtipContrails`.
+    #[serde(default)]
+    pub wingtip_contrails: bool,
+
+    /// Draw our own HD/Fury-style shield in place of the disc's, on Pulse and Pure. **Off by
+    /// default**, and the row is dropped on Wipeout HD, 2048 and Omega, which draw their own.
+    ///
+    /// **An enhancement of this project's, not the original's.** The shell is procedural, built off
+    /// the craft's own hull, and reads nothing from any other disc. Baked into the race at load, so
+    /// a change applies from the next race. See `oag_raceplay::Options::own_shield` and
+    /// `docs/rendering/own-shield.md`.
+    #[serde(default)]
+    pub own_shield: bool,
+
+    /// Draw our own rocket effect on Pulse and Pure: an exhaust flame, a smoke trail, a launch
+    /// flash and an impact burst, in place of the disc's rocket flare and blasts. Off by default.
+    ///
+    /// **An enhancement of this project's, not the original's.** The effect is authored here
+    /// (`assets/fx/own-rocket/`) and reads nothing from any disc. Baked into the race at load,
+    /// so a change applies from the next race. See `oag_raceplay::Options::own_rockets` and
+    /// `docs/rendering/own-rockets.md`.
+    #[serde(default)]
+    pub own_rockets: bool,
+
     /// Let the CPU governor turn this project's own CPU-heavy extras down at runtime while the
     /// frame thread is over its frame budget and the GPU is not (`oag_present::governor`).
     /// It overrides in memory only: this value and every render-profile value are never
@@ -597,7 +724,7 @@ fn default_boost_fov_kick() -> oag_display::display::BoostFovKick {
 }
 
 /// See [`Graphics::camera_view`]: the nearer chase view, which is what a fresh
-/// profile of the original starts on (measured 2026-10-01) - see
+/// profile of the original starts on (measured) - see
 /// [`oag_display::display::CameraView`].
 fn default_camera_view() -> oag_display::display::CameraView {
     oag_display::display::CameraView::default()
@@ -616,6 +743,10 @@ impl Default for Graphics {
             pvs_culling: default_pvs_culling(),
             boost_fov_kick: default_boost_fov_kick(),
             boost_zoom: false,
+            trail_hits: false,
+            wingtip_contrails: false,
+            own_shield: false,
+            own_rockets: false,
             cpu_governor: default_cpu_governor(),
             camera_view: default_camera_view(),
         }
@@ -640,6 +771,46 @@ const HEADER: &str = "\
 # not preserved across a rewrite.
 
 ";
+
+/// The schema kind this file is written as (`schemas/v1/settings.tosd`).
+pub const SCHEMA_KIND: &str = "settings";
+
+/// The file as it is written: [`HEADER`], the schema declaration, then the settings.
+///
+/// The declaration is the one-line form, which parses to the `[toml-schema]` table and,
+/// being a top-level key, is not swallowed by the tables that follow.
+///
+/// # Errors
+///
+/// If the settings do not serialise.
+pub fn render(settings: &Settings) -> Result<String> {
+    Ok(format!(
+        "{HEADER}{}\n\n{}",
+        oag_schema::inline(SCHEMA_KIND, 1),
+        toml::to_string_pretty(settings).context("serialising settings")?
+    ))
+}
+
+/// Warns when a file's `[toml-schema]` table names another kind or major. A file without one
+/// is an older write and loads; the next rewrite adds it.
+fn check_header(path: &std::path::Path, table: &toml::Table) {
+    let Some(value) = table.get(oag_schema::TABLE) else {
+        return;
+    };
+    let checked = value
+        .clone()
+        .try_into::<oag_schema::Header>()
+        .map_err(|e| e.to_string())
+        .and_then(|header| {
+            oag_schema::check(Some(&header), SCHEMA_KIND, 1).map_err(|e| e.to_string())
+        });
+    if let Err(e) = checked {
+        warn!(
+            "{}: {e}; reading it as a settings file anyway",
+            path.display()
+        );
+    }
+}
 
 /// The keys that used to live in `[graphics]` and now live in `[display]`.
 ///
@@ -780,6 +951,7 @@ pub fn supply_reset(
             .map(|&(stand_in, _)| stand_in),
     );
     model.set_reset_label(strings.get_or_fallback("OAG_MENU_RESET_TO_DEFAULT", "RESET TO DEFAULT"));
+    crate::campaign::custom::editor_on_square(model, title, strings);
 }
 
 /// Loads settings from [`path`], creating the file - or filling in whatever
@@ -825,6 +997,7 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
                 }
             };
 
+            check_header(path, &table);
             migrate(&mut table);
             migrate_render_profiles(&mut table);
             // After it, not before - see `migrate_reconstruction_keys`.
@@ -856,11 +1029,10 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
         None => fresh(),
     };
     ensure_known_titles(&mut settings);
+    // A hand-edited name cannot hold what a title's font cannot draw.
+    settings.player = settings.player.cleaned();
 
-    let canonical = format!(
-        "{HEADER}{}",
-        toml::to_string_pretty(&settings).context("serialising settings")?
-    );
+    let canonical = render(&settings)?;
     if !keep_file && on_disk.as_deref() != Some(canonical.as_str()) {
         let written = path
             .parent()
@@ -927,6 +1099,7 @@ pub fn menu_seeds(
         ),
         ("controls.scheme", text(&settings.controls.scheme)),
         ("controls.triggers", text(&settings.controls.triggers)),
+        ("controls.rumble", text(&settings.controls.rumble)),
         (
             "controls.touch_go_zones",
             text(if settings.controls.touch_go_zones {
@@ -1033,6 +1206,38 @@ pub fn menu_seeds(
             }),
         ),
         (
+            "graphics.trail_hits",
+            text(if settings.graphics.trail_hits {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
+            "graphics.wingtip_contrails",
+            text(if settings.graphics.wingtip_contrails {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
+            "graphics.own_shield",
+            text(if settings.graphics.own_shield {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
+            "graphics.own_rockets",
+            text(if settings.graphics.own_rockets {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
             "graphics.cpu_governor",
             text(if settings.graphics.cpu_governor {
                 "on"
@@ -1048,9 +1253,12 @@ pub fn menu_seeds(
             "audio.music_volume",
             text(&settings.audio.music_volume.to_string()),
         ),
-        // The second of the original's two volumes, and it was missing here
-        // until 2026-08-24 while its row sat on the AUDIO page: an unseeded
-        // `choice` opens on its list's *first* option, so SFX VOLUME read `0`
+        (
+            "audio.music_order",
+            text(&settings.audio.music_order.to_string()),
+        ),
+        // The second of the original's two volumes, and it must be seeded:
+        // an unseeded `choice` opens on its list's *first* option, so SFX VOLUME read `0`
         // whatever the file said, and the first press moved a player at 100
         // straight to 25. `every_settings_row_is_one_the_game_seeds` only swept
         // the `display` and `graphics` pages, which is why nothing caught it;
@@ -1072,6 +1280,10 @@ pub fn menu_seeds(
             text(&settings.audio.music_source.to_string()),
         ),
         (
+            "audio.spatial_audio",
+            text(&settings.audio.spatial_audio.to_string()),
+        ),
+        (
             "display.front_end_style",
             text(&settings.display.front_end_style),
         ),
@@ -1082,20 +1294,25 @@ pub fn menu_seeds(
         ("race.track", text(&settings.race.track)),
         ("race.variant", text(&settings.race.variant)),
         ("race.kill_target", text(&settings.race.kill_target)),
+        ("race.score_target", text(&settings.race.score_target)),
         ("race.weapons", text(&settings.race.weapons)),
         ("ai.difficulty", text(&settings.ai.difficulty)),
-        ("remix.track_title", text(&settings.remix.track_title)),
-        ("remix.track", text(&settings.remix.track)),
-        ("remix.craft_title", text(&settings.remix.craft_title)),
-        ("remix.team", text(&settings.remix.team)),
-        ("remix.variant", text(&settings.remix.variant)),
     ];
     // Offered only where the ribbon is the PSP preset; elsewhere the row is
-    // dropped (`Definition::drop_unavailable_trail_order`) and nothing seeds it.
+    // dropped (`Definition::drop_unavailable_trail_order`, `drop_unavailable_trail_length`)
+    // and nothing seeds it.
     if title.exhaust.is_psp_preset() {
         out.push((
             "graphics.trail_order",
             text(&profile.trail_order.to_string()),
+        ));
+        out.push((
+            "graphics.scenery_sort",
+            text(&profile.scenery_sort.to_string()),
+        ));
+        out.push((
+            "graphics.trail_length",
+            text(&profile.trail_length.to_string()),
         ));
     }
     // Offered only where the weather is played; elsewhere the row is dropped
@@ -1103,12 +1320,44 @@ pub fn menu_seeds(
     if title.weather.is_played() {
         out.push(("graphics.weather", text(&profile.weather.to_string())));
     }
+    // The SCREEN SIZE row shows the value the title draws at: the saved one, or the title's own
+    // default while none is saved.
+    out.push((
+        "graphics.hud_safe_area",
+        text(
+            &title
+                .hud_art
+                .safe_area_percent(settings.graphics.hud_safe_area)
+                .to_string(),
+        ),
+    ));
     // Offered only where the title's options list it; elsewhere the row is dropped
     // (`Definition::drop_unavailable_dynamic_hud`) and nothing seeds it.
     if title.hud_art.dynamic_hud.is_some() {
         out.push((
             "display.dynamic_hud",
             text(&settings.display.dynamic_hud.to_string()),
+        ));
+    }
+    // Offered only where the title's options list them; elsewhere the rows are dropped
+    // (`Definition::drop_unavailable_game_options`) and nothing seeds them.
+    let on_off = |on: bool| text(if on { "on" } else { "off" });
+    if title.race.game_options.ship_visible {
+        out.push((
+            "display.ghost_ship_visible",
+            on_off(settings.display.ghost_ship_visible),
+        ));
+    }
+    if title.race.game_options.auto_load {
+        out.push((
+            "display.auto_load_ghost",
+            on_off(settings.display.auto_load_ghost),
+        ));
+    }
+    if title.race.game_options.multiplayer_tags {
+        out.push((
+            "display.multiplayer_tags",
+            on_off(settings.display.multiplayer_tags),
         ));
     }
     // The web's own row; a desktop file has no such key (see `web::not_on_the_web`).
@@ -1137,10 +1386,7 @@ pub fn save(settings: &Settings) -> Result<()> {
     let Some(path) = path() else {
         return Ok(());
     };
-    let text = format!(
-        "{HEADER}{}",
-        toml::to_string_pretty(settings).context("serialising settings")?
-    );
+    let text = render(settings)?;
     if let Some(parent) = path.parent() {
         crate::profile::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
@@ -1150,3 +1396,12 @@ pub fn save(settings: &Settings) -> Result<()> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod ghost_tests;
+
+#[cfg(test)]
+mod mods_tests;
+
+#[cfg(test)]
+mod trail_length_tests;

@@ -7,6 +7,9 @@
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game hud_boost_glow_ground_truth:: --run-ignored all
 //! ```
 //!
+//! A pickup absorb on the same HUD: the shield bar's fill stamps the glow mask for the whole
+//! window, so the bar blooms in both halves of the 8 Hz blink.
+//!
 //! # What only real data can say here
 //!
 //! A PPSSPP frame at a boost's middle (`n = 7` of the 0.8 s timer) has the speed bar's fill washed
@@ -140,4 +143,96 @@ fn a_boost_washes_the_speed_bar_and_rest_leaves_the_hud_plain() {
         corner(&rest),
         corner(&boost)
     );
+}
+
+/// A Pulse race frame at `ticks` with the held pickup absorbed at tick 100 (`--give mine`, circle),
+/// or the same frame with no pickup and no press.
+fn absorb_frame(image: &Path, scratch: &Path, name: &str, ticks: u32, absorb: bool) -> Vec<u8> {
+    let out = scratch.join(format!("{name}.png"));
+    let script = scratch.join("press.inputs");
+    std::fs::write(&script, "100 none\n1 circle\n600 none\n").expect("the input script");
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
+    command
+        .arg(image)
+        .args(["--race", "--no-audio", "--size", "480x272"])
+        .args([
+            "--render-scale",
+            "100",
+            "--msaa",
+            "off",
+            "--screen-filter",
+            "off",
+        ])
+        .args(["--anisotropy", "off", "--motion-blur", "off"])
+        .args([
+            "--mode",
+            "single_race",
+            "--class",
+            "venom",
+            "--team",
+            "Assegai",
+        ])
+        .args(["--track", r"Data\Environments\13_Track\track.vex"])
+        .args(["--ticks", &ticks.to_string()])
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"));
+    if absorb {
+        command
+            .args(["--give", "mine", "--input-script"])
+            .arg(&script);
+    }
+    assert!(command.status().expect("running oag-game").success());
+    rgba_of(&std::fs::read(&out).expect("the frame"), 480, 272)
+}
+
+/// The mean Rec. 709 luma over the rectangle `[x0, x1) x [y0, y1)`.
+fn luma(rgba: &[u8], x: (usize, usize), y: (usize, usize)) -> f32 {
+    let channel = |c: usize| mean(rgba, c, x, y);
+    0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2)
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU adapter"]
+fn an_absorb_lights_the_shield_bar_and_its_halo_in_both_blink_phases() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let scratch = scratch();
+    let control = absorb_frame(&image, &scratch, "control", 108, false);
+    let on = absorb_frame(&image, &scratch, "on", 104, true);
+    let off = absorb_frame(&image, &scratch, "off", 108, true);
+    std::fs::remove_dir_all(&scratch).ok();
+
+    // The fill (rows 248 to 258, x 315 to 440) and the band under it, which only a bloom of the
+    // bar reaches. PPSSPP: the fill reads 164 at rest, 207 in the blink's on half and 238 in its
+    // off half, where the fill's alpha is zero and the stamped mask blooms the pale backdrop
+    // (`docs/ghidra/functions/psp-pulse-usa/shield.md`, "The absorb flash at the draw call").
+    let bar = |frame: &[u8]| luma(frame, (315, 440), (248, 258));
+    let band = |frame: &[u8]| luma(frame, (330, 420), (259, 265));
+    assert!(
+        (bar(&control) - 164.0).abs() < 4.0,
+        "the bar at rest: {}",
+        bar(&control)
+    );
+    assert!(
+        (190.0..215.0).contains(&bar(&on)),
+        "the on half is bright cyan, not the unlit 164 or white: {}",
+        bar(&on)
+    );
+    assert!(
+        (232.0..250.0).contains(&bar(&off)),
+        "the off half washes to the original's 237 to 242, which needs the scene under the backdrop in the bright pass: {}",
+        bar(&off)
+    );
+    for (name, frame) in [("on", &on), ("off", &off)] {
+        assert!(
+            band(frame) > band(&control) + 25.0,
+            "{name}: the halo under the bar, {} against {}",
+            band(frame),
+            band(&control)
+        );
+    }
 }

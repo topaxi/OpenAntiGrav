@@ -12,12 +12,19 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 mod pad_join_end_to_end;
+mod pause_menu_ground_truth;
 mod pause_resume_ground_truth;
+mod photo_mode_ground_truth;
 mod picker_flaps_ground_truth;
 mod picker_glyphs_ground_truth;
 mod picker_pitch_ground_truth;
 mod plasma_cues_audio_ground_truth;
+mod player_rows;
+mod player_tags_ground_truth;
 mod pose_hold_ground_truth;
 mod pose_lean_ground_truth;
 mod ps2_glow_mask_ground_truth;
@@ -32,13 +39,20 @@ mod pure_menu_art_ground_truth;
 mod pure_music_ground_truth;
 mod pure_original_ai_ground_truth;
 mod pure_sign_glow_ground_truth;
+mod query_resolve_ground_truth;
 mod race_end_photo_load_ground_truth;
+mod race_field_ground_truth;
+mod race_grid_ground_truth;
 mod race_ground_truth;
-mod race_remix_ground_truth;
+mod race_two_title_ground_truth;
+mod race_weapons_ground_truth;
 mod record_readout_ground_truth;
 mod render_bench_ground_truth;
+mod replay_audio_ground_truth;
+mod replay_viewer_ground_truth;
 mod resume_countdown_ground_truth;
 mod roster_declared_ground_truth;
+mod rumble_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

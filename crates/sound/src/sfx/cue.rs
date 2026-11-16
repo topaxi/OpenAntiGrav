@@ -76,6 +76,31 @@ pub trait CueTables: Copy {
     #[must_use]
     fn repeats(self) -> bool;
 
+    /// Whether an HD walk of this cue's list is wired: a one-shot of the hud,
+    /// ship or weapons bank. Held and repeating cues keep one waveform (their
+    /// lists loop and re-key, which only a runner plays), and `~ENGINE` is one
+    /// voice driven per tick.
+    #[must_use]
+    fn walks_variables(self) -> bool;
+
+    /// The four cue variables the original's caller hands this cue's list
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`, "Where the four
+    /// variables come from"): `[severity, surface, perspective, 0]`, of which
+    /// this port supplies the perspective, `player` being whether the cue rides
+    /// the player's craft.
+    ///
+    /// Perspective is 0 for a cue the original plays unplaced from the player's
+    /// seat (the pad and the perfect start) and for a projectile's own emitter
+    /// (the rocket, missile and plasma and everything they hit, measured live
+    /// as `[0,0,0,0]`), 2 for another craft's emitter, and for the player's
+    /// own craft 1, the chase view. The cockpit view makes it 0 in the original;
+    /// this port does not read the camera there, so the chase reading is
+    /// **chosen**. `ABSORB`, `SHURIKEN` and the player's own `CANNON` follow the
+    /// same placement rule without a live capture of their own (**chosen**).
+    /// Severity and surface stay 0: what computes them is unread.
+    #[must_use]
+    fn variables(self, player: bool) -> [i8; 4];
+
     /// How far this cue's voice can be heard, for a cue carrying its own emitter
     /// rather than riding a craft's.
     ///
@@ -120,7 +145,13 @@ impl CueTables for Cue {
             Self::SpeedupPad | Self::Message | Self::Blowup | Self::LockOn | Self::Autopilot => {
                 BankName::Hud
             }
-            Self::Collision | Self::Engine | Self::Magstrip | Self::MagstripStop => BankName::Ship,
+            Self::Collision
+            | Self::Grind
+            | Self::CollisionShield
+            | Self::GrindShield
+            | Self::Engine
+            | Self::Magstrip
+            | Self::MagstripStop => BankName::Ship,
             Self::Absorb
             | Self::Shield
             | Self::MineLaunch
@@ -196,6 +227,9 @@ impl CueTables for Cue {
             Self::Message => "MESSAGE",
             Self::Turbo => "TURBO",
             Self::Collision => ".COLLISIONS",
+            Self::Grind => ".GRIND",
+            Self::CollisionShield => ".COLLSHIELD",
+            Self::GrindShield => ".GRINDSHIELD",
             Self::Absorb => "ABSORB",
             Self::Engine => "~ENGINE",
             Self::Shield => "~SHIELD",
@@ -281,6 +315,25 @@ impl CueTables for Cue {
         matches!(self, Self::Blowup | Self::LockOn)
     }
 
+    fn walks_variables(self) -> bool {
+        matches!(
+            self.bank(),
+            BankName::Hud | BankName::Ship | BankName::Weapons
+        ) && !self.held()
+            && self != Self::Engine
+    }
+
+    fn variables(self, player: bool) -> [i8; 4] {
+        let perspective = match (self, self.placement(), player) {
+            (Self::Plasma | Self::Rocket | Self::Missile, _, _) => 0,
+            (_, Placement::CraftUnlessPlayer, true) => 0,
+            (_, Placement::Craft, true) => 1,
+            (_, Placement::Craft | Placement::CraftUnlessPlayer, false) => 2,
+            _ => 0,
+        };
+        [0, 0, perspective, 0]
+    }
+
     fn radius(self) -> f32 {
         match self {
             Self::RocketTravel
@@ -311,6 +364,8 @@ impl CueTables for Cue {
             // `lw a0, 0x50(a0)` at `0x08924844` in `ShipCollisionFx_Trigger`: the
             // craft's emitter, unbranched, so the player's hull is positional too.
             Self::Collision => Placement::Craft,
+            // The three HD-only contact cues ride the craft as `Collision` does.
+            Self::Grind | Self::CollisionShield | Self::GrindShield => Placement::Craft,
             // `FUN_08840640`'s emitter argument was not disassembled, so this
             // rides `Collision`'s reading of the contact path.
             Self::Absorb => Placement::Craft,

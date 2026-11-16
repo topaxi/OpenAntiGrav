@@ -69,12 +69,13 @@ impl Session {
         self.cli_foreign_track = prepared.race_options.foreign_track.clone();
         self.race_options = Some(prepared.race_options);
         self.music_discs = prepared.music_discs;
-        // The mods' tracks join RACE REMIX's CUSTOM list (`docs/tools/mods.md`).
+        // The mods' tracks join a two-title race page's CUSTOM list (`docs/tools/mods.md`).
         self.custom_tracks
             .set_mod_files(&prepared.shell.custom_campaigns.tracks);
         self.shell = Some(prepared.shell);
         self.prefetch_pending = prepared.prefetch;
         let assets = prepared.loading_assets;
+        self.controls.silence_motors();
         self.stage = Stage::loading(
             &self.gpu,
             prepared.boot_shell,
@@ -82,6 +83,7 @@ impl Session {
             &assets,
             self.trace,
             self.settings.language.as_deref(),
+            self.settings.graphics.hud_safe_area,
         )?;
         // Kept rather than dropped with the stage: the same screen goes up
         // again for every race this run launches. See `Session::loading_assets`.
@@ -216,7 +218,7 @@ impl Session {
         };
         let media = media
             .as_mut()
-            .map(boot::MediaWorker::join)
+            .map(boot::worker::MediaWorker::join)
             .unwrap_or_default();
         oag_raceplay::loader_log::lines(&media.report);
         let mut loaded = boot::assemble(shell, media);
@@ -249,6 +251,12 @@ impl Session {
             loaded.frontend.select_campaign_event(&name);
         }
         if let Some(race_options) = &self.race_options {
+            boot::reveals2048::refresh(
+                &mut loaded.frontend,
+                &race_options.source,
+                &self.records,
+                &title_name,
+            );
             boot::tiers2048::refresh_locks(
                 &mut loaded.frontend,
                 loaded.title,
@@ -355,17 +363,32 @@ impl Session {
         // Building the front end spawns the intro's decode thread and uploads a
         // sprite sheet; that is a load, and a load is not a frame time.
         self.stalled = true;
-        let hull = self.race_options.as_ref().zip(touch).map(|(options, touch)| {
-            oag_game::team_hull::TeamHull::new(
-                options.source.clone(),
-                options.dlc.clone(),
-                ship_dir,
-                touch.team_model_origin,
-            )
-        });
+        let hull = self
+            .race_options
+            .as_ref()
+            .zip(touch.and_then(|touch| touch.team_model_origin))
+            .map(|(options, origin)| {
+                oag_game::team_hull::TeamHull::new(
+                    options.source.clone(),
+                    options.dlc.clone(),
+                    ship_dir,
+                    origin,
+                )
+            });
+        self.controls.silence_motors();
+        let touch_front_end = loaded.title.front_end.is_some_and(|front_end| front_end.touch_shell().is_some());
+        let hud_art = loaded.title.hud_art;
         self.stage = Stage::frontend(&self.gpu, loaded, video_format, trace, &mut self.audio)?;
         if let Stage::Frontend(stage) = &mut self.stage {
             stage.team_hull = hull;
+            // A touch front end (2048's) is the player's whole front end, so it takes the
+            // SCREEN SIZE control and the inset itself; every other title's boot screens are
+            // unmeasured at a safe area and its menus are `MenuStage`'s.
+            if touch_front_end && let Some(area) = hud_art.safe_area {
+                let saved = self.settings.graphics.hud_safe_area;
+                stage.frontend.set_screen_size(area.value, saved);
+                stage.renderer.set_inset(area.value.scale(saved));
+            }
         }
         Ok(())
     }
@@ -449,9 +472,21 @@ impl Session {
             .race_options
             .clone()
             .ok_or_else(|| anyhow::anyhow!("no disc image has been chosen yet"))?;
+        // A fresh seed per race; `--seed` (already in the options) and a network race's server
+        // seed (`NetPlay::race_options`, below) replace it.
+        options.seed = Some(oag_game::race_seed::for_launch(options.seed));
+        // A campaign cell races at its own rung, which the shield pool follows as the original
+        // driver's pack shuffle does (`advance_race_build`); any other launch takes `[ai]
+        // difficulty`.
+        options.skill_level = campaign_skill_level(
+            self.campaign_cell.is_some(),
+            self.campaign_custom.as_ref().and_then(|launch| launch.level),
+            self.campaign_difficulty,
+        );
         let options_mode = options.mode;
+        let options_track = options.foreign_track.clone();
         // **Refreshed here, not trusted from whenever `race_options` was last
-        // built or mutated** (boot, RACE REMIX, a campaign cell launch): the
+        // built or mutated** (boot, a two-title race page, a campaign cell launch): the
         // OPTIONS page's LANGUAGE row writes `self.settings.language` without
         // touching `race_options` at all, and every launch path funnels
         // through this one function, so this is the one place a launch
@@ -459,7 +494,7 @@ impl Session {
         // See `race::Options::language`'s own doc.
         options.language = self.settings.language.clone();
         options.hud_style = self.settings.display.hud_style_choice();
-        // A track file that borrows from another title's disc races as a remix
+        // A track file that borrows from another title's disc races as a two-title race
         // with that disc as the track source (ADR-0076 decision 13); RACE, a
         // campaign event and RACE AGAIN all launch here.
         let titles = &self.titles;
@@ -493,6 +528,16 @@ impl Session {
             .graphics
             .boost_zoom
             .then(oag_source::title::borrowed_zoom_ring);
+        options.trail_hits = oag_game::launcher::trail_hits_from(
+            self.settings.graphics.trail_hits,
+            &self.titles,
+        );
+        options.wingtip_contrails = oag_game::launcher::wingtip_contrails_from(
+            self.settings.graphics.wingtip_contrails,
+            &self.titles,
+        );
+        options.own_shield = self.settings.graphics.own_shield;
+        options.own_rockets = self.settings.graphics.own_rockets;
         // The join screen's seats, or the seats a restart kept: the load reads a
         // title's authored two-player split HUD, so it needs the view count
         // before `split_screen::seat_for_launch` cuts the screen. See `race::Options::views`.
@@ -500,14 +545,23 @@ impl Session {
         // (manifests and `.wasm` alike, off this thread) so a MODS page switch counts.
         // None in an original campaign's race (README 1.2; a mod campaign's runs them) or
         // a network race (the host's race runs vanilla).
+        options.campaign = self.campaign_cell.is_some() || self.pending_event.is_some();
         #[cfg(feature = "extensions")]
         {
             let vanilla = (self.campaign_cell.is_some() && self.campaign_custom.is_none())
                 || self.pending_event.is_some()
                 || self.net.is_some();
-            oag_game::mod_extensions::attach(&mut options, &self.settings.mods.disabled, vanilla);
+            oag_game::mod_extensions::attach(
+                &mut options,
+                &self.settings.mods,
+                &self.settings.mod_settings,
+                vanilla,
+            );
         }
-        self.seat_the_windows(&mut options);
+        oag_game::texture_pack::attach(&mut options, &self.settings.mods);
+        if !options.demo {
+            self.seat_the_windows(&mut options);
+        }
         options.people = 0;
         if let Some(seats) = self
             .split_lobby
@@ -541,6 +595,28 @@ impl Session {
                 stored.track.clone_from(&options.track);
             }
         }
+        // The speed plans start learning on the load thread, beside the scene build, unless
+        // something will change who flies which craft: a network host's race
+        // (`NetPlay::begin_join`) or split seating (`split_screen::seat_for_launch`).
+        // `Race::begin_speed_plans` at the hand-over keeps the job when the race still fits it.
+        let plan_ahead = self.net.is_none()
+            && self.split_lobby.is_none()
+            && self.controls.assignment().humans().is_none();
+        self.start_race_loading(options, options_mode, options_track, plan_ahead)
+    }
+
+    /// The loading screen for `options` and the worker that reads the circuit: the half of a
+    /// launch that is the same for a race a player set up and a recording being watched.
+    ///
+    /// `options_track` is the track file the launch was asked for, before a two-title race routed it
+    /// anywhere; the loading screen is its own.
+    pub(crate) fn start_race_loading(
+        &mut self,
+        options: oag_raceplay::Options,
+        options_mode: oag_race::Mode,
+        options_track: Option<std::path::PathBuf>,
+        plan_ahead: bool,
+    ) -> Result<()> {
         // The RACE page's own row for this circuit, which is the disc's
         // localised name rather than the `PI_Track` id - see
         // `oag_raceplay::catalogue::label`. `None` on a run whose source offered
@@ -582,9 +658,14 @@ impl Session {
         #[cfg(target_arch = "wasm32")]
         let sink = None;
         // A campaign event the front end asked for, or the menus' own race.
+        // The speed plans start learning on the load thread, beside the scene
+        // build, when `plan_ahead` (nothing will change who flies which craft: not a
+        // network host's race, not split seating): `Race::begin_speed_plans` at the
+        // hand-over keeps the job when the race still fits it.
+        let card = self.pending_card.take();
         let worker = match self.pending_event.take() {
-            Some(event) => race::LoadWorker::spawn_event(options, event, label, sink),
-            None => race::LoadWorker::spawn(options, label, sink),
+            Some(event) => race::LoadWorker::spawn_event(options, event, label, sink, plan_ahead),
+            None => race::LoadWorker::spawn(options, label, sink, plan_ahead),
         };
         // Spawned alongside the circuit read, for the same reason: fetching
         // this synchronously at the hand-off used to decode a full track on
@@ -596,17 +677,32 @@ impl Session {
         // applies what the worker chose. See `LoadingStage::music` and
         // `oag_sound::MusicFetchWorker`.
         self.resume_race_music();
-        let music_pick = self.audio.race_music_pick();
-        let music = oag_sound::MusicFetchWorker::spawn(
-            self.music_discs.clone(),
+        let music = self.audio.race_music_fetch(
+            &self.music_discs,
             self.settings.audio.music_source,
-            oag_source::cache::default_audio_cache_dir(),
-            music_pick,
-            "race-music",
+            &oag_source::cache::default_audio_cache_dir(),
         );
         let shell = self.shell.clone().ok_or_else(|| {
             anyhow::anyhow!("this run has no menus, so it has no font to draw with")
         })?;
+        // A track file's own loading screen: its manifest's `[loading]` table, read now because
+        // the screen goes up before the track is built.
+        let track_loading = options_track
+            .as_deref()
+            .filter(|path| oag_raceplay::foreign::is_track_file(path))
+            .and_then(|path| match oag_trackfile::read_loading(path) {
+                Ok(loading) => loading.map(|loading| {
+                    crate::loading::TrackLoading::read(
+                        path.parent().unwrap_or_else(|| std::path::Path::new("")),
+                        &loading,
+                    )
+                }),
+                Err(why) => {
+                    log::warn!("{}: its [loading] table: {why}", path.display());
+                    None
+                }
+            });
+        self.controls.silence_motors();
         self.stage = Stage::race_loading(
             &self.gpu,
             worker,
@@ -618,6 +714,13 @@ impl Session {
             crate::loading::executable_mode(options_mode),
             self.trace,
             self.settings.language.as_deref(),
+            shell.title_font.as_ref(),
+            shell
+                .title
+                .hud_art
+                .safe_area_scale(self.settings.graphics.hud_safe_area),
+            track_loading.as_ref(),
+            card,
         )?;
         Ok(())
     }
@@ -692,6 +795,42 @@ impl Session {
                     if let Err(e) = net.begin_join(&mut race_stage.race, title) {
                         join_error = Some(e);
                     }
+                } else if let Some(run) = self.demo.loading.take() {
+                    // An attract demo: the race a player would have, with nobody in it. The
+                    // opponents' driver is chosen while a person is still seated, then the
+                    // person's slot goes to the AI too.
+                    oag_game::ai_choice::apply(
+                        &mut race_stage.race,
+                        ai_choice,
+                        oag_game::ai_choice::Source::Free(ai_difficulty),
+                    );
+                    // Several windows (a wallpaper on several monitors): a camera each, on
+                    // craft of its own, and nobody seated.
+                    if let Some(shell) = &self.shell {
+                        oag_game::demo::hand_over(&mut race_stage.race, &shell.title.demo, open_windows);
+                    }
+                    race_stage.race.begin_speed_plans();
+                    race_stage.demo = Some(run);
+                    // Never the player's best-lap ghost.
+                    race_stage.race.set_ghost_visible(false);
+                    // Nothing a demo does is a result.
+                    race_stage.result_saved = true;
+                } else if let Some(watching) = self.watching.take() {
+                    // A recording: the viewer seats the race from the header and moves it; the
+                    // lobby, the windows and the AI choice of a launch are not its.
+                    match super::replays::open_viewer(
+                        &mut self.replay_refused,
+                        self.settings.language.as_deref(),
+                        race_stage,
+                        watching,
+                    ) {
+                        Ok(active) => {
+                            self.viewer = Some(active);
+                            self.return_to_replays = false;
+                            self.shot_pending = false;
+                        }
+                        Err(e) => join_error = Some(e),
+                    }
                 } else {
                     // The join screen's players: the views, the local slots and the
                     // devices on them. Drained here, with the cell, for the same
@@ -731,16 +870,10 @@ impl Session {
                     // position rather than adding to it, the same "replaces,
                     // not adds" shape `AI_ResolveSkillScale`'s own campaign
                     // branch has.
+                    // The finished player's thrust reads the same scale:
+                    // `AI_ResolveSkillScale` is its one source too.
                     if let Some(scale) = race_stage.campaign_ai_skill_scale {
-                        race_stage
-                            .race
-                            .set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
-                                scale,
-                                &oag_ai::Tuning::default(),
-                            ));
-                        // The finished player's thrust reads the same scale:
-                        // `AI_ResolveSkillScale` is its one source too.
-                        race_stage.race.set_finished_thrust_skill(scale);
+                        race_stage.race.apply_campaign_skill(scale);
                     }
                     // **Whose driver flies the opponents** (`oag_game::ai_choice`):
                     // the original's, in every race with opponents, unless
@@ -755,6 +888,13 @@ impl Session {
                     // A mod campaign event's own AI (ADR-0077): its pilot for
                     // every opponent, and whose driver flies.
                     let custom = race_stage.campaign_custom.clone();
+                    // The rung the load took for the shield pools, recorded so a rebuild
+                    // repeats it.
+                    let shield_rung = campaign_skill_level(
+                        race_stage.campaign_cell.is_some(),
+                        custom.as_ref().and_then(|c| c.level),
+                        race_stage.campaign_difficulty,
+                    );
                     if let Some(pilot) = custom.as_ref().and_then(|c| c.pilot.as_ref()) {
                         race_stage.race.set_opponent_pilot(pilot, ai_difficulty);
                     }
@@ -765,9 +905,10 @@ impl Session {
                     } else if race_stage.campaign_cell.is_some() {
                         Some(oag_game::ai_choice::Source::Campaign {
                             skill: race_stage.campaign_ai_skill_scale,
-                            level: custom.as_ref().and_then(|c| c.level).unwrap_or_else(|| {
-                                race_stage.campaign_difficulty.map_or(1, rung_level)
-                            }),
+                            level: campaign_level(
+                                custom.as_ref().and_then(|c| c.level),
+                                race_stage.campaign_difficulty,
+                            ),
                         })
                     } else if let Some(event) = race_stage.campaign_2048_event.as_ref() {
                         Some(oag_game::ai_choice::Source::Event2048(event.ai))
@@ -776,11 +917,33 @@ impl Session {
                     };
                     match source {
                         Some(source) => {
-                            oag_game::ai_choice::apply(&mut race_stage.race, ai_choice, source);
+                            // What the original driver was asked goes into the header, so a
+                            // rebuild of the race flies the same opponents.
+                            let (_, original) = oag_game::ai_choice::apply_noting(
+                                &mut race_stage.race,
+                                ai_choice,
+                                source,
+                            );
+                            race_stage.note_ai(original, shield_rung);
                         }
-                        None => log::info!(
-                            "AI: this project's driver flies (the campaign event asks for it)"
-                        ),
+                        None => {
+                            race_stage.note_ai(None, shield_rung);
+                            log::info!(
+                                "AI: this project's driver flies (the campaign event asks for it)"
+                            );
+                        }
+                    }
+                    // Last, once nothing else will change the race before its first
+                    // tick: the speed plans are learned on a thread while the loading
+                    // screen runs out, and the hand-over below waits for them, so the
+                    // first tick does not (a fork's route plans cost 1.6 s on the Deck).
+                    // A fork's job started on the load thread already
+                    // (`plan_ahead` in `launch_race`) and is kept if it still fits.
+                    race_stage.race.begin_speed_plans();
+                    // After everything above that writes to the race, so the recording's
+                    // tick-zero hash is the one a rebuild from its header must reproduce.
+                    if self.settings.replay.record && oag_game::replays::SAVES {
+                        race_stage.arm_auto_replay();
                     }
                 }
             }
@@ -810,6 +973,10 @@ impl Session {
         match loaded {
             Ok(loaded) => {
                 oag_raceplay::loader_log::lines(&loaded.report);
+                // The viewer's timeline starts its own race from the same setup.
+                if let Some(watching) = self.watching.as_mut() {
+                    watching.setup = Some(loaded.setup.clone());
+                }
                 let request = crate::race_build::Request {
                     gpu: self.gpu.handles(),
                     allocation: self.framebuffer.allocation(),
@@ -884,10 +1051,19 @@ impl Session {
             }
         }
         let Some((built, music)) = (match &mut self.stage {
-            Stage::Loading(stage) if stage.screen.is_done() => stage
+            Stage::Loading(stage)
+                if stage.screen.is_done()
+                    && stage
+                        .built_race
+                        .as_ref()
+                        .and_then(|built| built.as_ref().ok())
+                        .is_none_or(|ready| ready.race.speed_plans_ready()) =>
+            {
+                stage
                 .built_race
                 .take()
-                .map(|built| (built, stage.music.take())),
+                .map(|built| (built, stage.music.take()))
+            }
             _ => None,
         }) else {
             return Ok(());
@@ -897,13 +1073,35 @@ impl Session {
                 // Begun here, at the hand-over, so no frame is drawn with the chase camera and
                 // the HUD before the flyby's first tick. A race resumed from the menus
                 // (`escape.rs`) is not a new one and does not come through here.
-                if !self.no_intro && self.net.is_none() {
-                    race_stage.race.begin_intro();
+                // A recording being watched has no flyby: the viewer owns the camera from tick 0.
+                if !self.no_intro
+                    && self.net.is_none()
+                    && self.viewer.is_none()
+                    && (race_stage.demo.is_none() || self.demo_plays_intro())
+                    && race_stage.race.begin_intro()
+                {
+                    oag_game::sound::prepare_intro_voice(
+                        &mut self.audio,
+                        &self.music_discs,
+                        &race_stage.race,
+                    );
                 }
                 race_stage
             }
             Err(RaceBuildError::Load(e)) => {
                 error!("cannot start a race: {e:#}");
+                // A demo that would not load ends a `--demo` chain rather than retrying it.
+                if self.demo.loading.take().is_some() {
+                    self.demo.cli = None;
+                    self.restore_race_options();
+                }
+                // A recording that would not load is listed dimmed with why.
+                if self.shot_pending {
+                    self.shot_failed(&format!("{e:#}"));
+                    self.watching = None;
+                } else if let Some(watching) = self.watching.take() {
+                    self.replay_refused.insert(watching.path, format!("{e:#}"));
+                }
                 return self.open_menus();
             }
             Err(RaceBuildError::Gpu(e)) => return Err(e),
@@ -921,6 +1119,7 @@ impl Session {
         // Never inherited from whatever race was on screen before this one -
         // see `Session::paused`.
         self.pause = oag_game::pause::State::Running;
+        self.photo = None;
         // The outgoing race's held voices, if this is a relaunch rather than a
         // first start. The back-out path does this too, but a race launched
         // straight from a race never passes through it - and a carried-over
@@ -938,6 +1137,14 @@ impl Session {
         // so this should now read near-instant rather than the 2.83s a cold
         // PS2 track measured before the worker existed.
         self.hold_race_song();
+        if let (Stage::Race(stage), Some(title)) = (&self.stage, self.title_raced()) {
+            oag_game::sound::arm_rear_low_pass(
+                &mut self.audio,
+                title,
+                stage.race.track_emitters(),
+            );
+        }
+        self.arm_rumble();
         let music_start = web_time::Instant::now();
         match music {
             Some(worker) => self.audio.finish_race_music(
@@ -946,11 +1153,10 @@ impl Session {
                 self.settings.audio.music_source,
                 &oag_source::cache::default_audio_cache_dir(),
             ),
-            // Defensive rather than load-bearing: `Session::launch_race`
-            // always spawns one for the path this function only runs on
-            // (`Stage::race_loading`). Falls back to the old synchronous
-            // fetch rather than silently leaving the race without music if
-            // that invariant is ever violated.
+            // No fetch was spawned: `Audio::race_music_fetch` found the track
+            // already decoded in `race_cache`, which `start_race_music` applies
+            // without reading anything. Should the cache have changed since, it
+            // spawns the fetch itself, still off this thread.
             None => self.audio.start_race_music(
                 &self.music_discs,
                 self.settings.audio.music_source,
@@ -966,6 +1172,25 @@ impl Session {
             )));
         Ok(())
     }
+}
+
+/// The integer rung a campaign cell races at: a mod event's own, else the cell's rung, else
+/// Medium (**chosen, not measured**: a cell that authors none).
+fn campaign_level(
+    custom: Option<usize>,
+    rung: Option<oag_tables::race_campaign::Difficulty>,
+) -> usize {
+    custom.unwrap_or_else(|| rung.map_or(1, rung_level))
+}
+
+/// The rung a launch names for the shield pools: a campaign cell's, `None` for any other
+/// launch (which takes `[ai] difficulty`).
+fn campaign_skill_level(
+    campaign: bool,
+    custom: Option<usize>,
+    rung: Option<oag_tables::race_campaign::Difficulty>,
+) -> Option<u8> {
+    campaign.then(|| u8::try_from(campaign_level(custom, rung)).unwrap_or(u8::MAX))
 }
 
 /// A campaign rung as the original's integer `g_skill_level`: Easy `0`,

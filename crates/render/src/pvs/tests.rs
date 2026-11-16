@@ -125,8 +125,12 @@ fn model_of(draws: Vec<DrawCall>) -> Model {
 
         flame: None,
         absorb_shell: false,
+        shield_shell: false,
+        own_shield: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
+        per_batch_cull: false,
+        sky_reflection: None,
         alpha_test_ref: None,
         centre: [0.0; 3],
         radius: 1.0,
@@ -311,6 +315,7 @@ fn swap_fixture() -> (TrackPvs, SwapConflicts) {
         glow: 0.0,
         texcoord2: [0.0, 0.0],
         tangent: 0,
+        depth_bias: 0.0,
     };
     model.indices.clear();
     for (draw, base_x) in [(0usize, 100.0f32), (1, 0.0), (2, 0.0), (3, 0.0)] {

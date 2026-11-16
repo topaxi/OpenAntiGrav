@@ -68,11 +68,11 @@ pub struct Drop {
 }
 
 impl Drop {
-    /// The Mine's drop.
+    /// The Mine's drop, laying `count` charges ([`CLUSTER`] on a craft that authors no count).
     #[must_use]
-    pub const fn mine(stats: &MineStats) -> Self {
+    pub const fn mine(stats: &MineStats, count: u8) -> Self {
         Self {
-            count: CLUSTER,
+            count,
             fuse: stats.timetodie,
             trigger_radius: stats.trigger_radius,
         }
@@ -100,9 +100,16 @@ impl Drop {
     /// `every_rear_weapon_can_be_laid_and_tripped` in `pickup::tests` fails them
     /// together.
     #[must_use]
-    pub fn for_weapon(weapon: Weapon, weapons: &oag_tables::weapons::WeaponStats) -> Option<Self> {
+    pub fn for_weapon(
+        weapon: Weapon,
+        weapons: &oag_tables::weapons::WeaponStats,
+        counts: crate::counts::WeaponCounts,
+    ) -> Option<Self> {
         match weapon {
-            Weapon::Mine => weapons.mine().as_ref().map(Self::mine),
+            Weapon::Mine => weapons
+                .mine()
+                .as_ref()
+                .map(|stats| Self::mine(stats, counts.mines)),
             Weapon::Bomb => weapons.bomb().as_ref().map(Self::bomb),
             _ => None,
         }
@@ -143,7 +150,7 @@ pub const DROP_INTERVAL: f32 = 0.1;
 /// `<Stats>` authors no count; it is a code literal like [`DROP_INTERVAL`].
 ///
 /// Simulation state: in the determinism reference, so changing it is a hash move.
-pub const CLUSTER: u8 = 5;
+pub const CLUSTER: u8 = crate::counts::MAX_MINES;
 
 /// Where a craft lays its mines and its bomb: **the craft's own position.**
 ///

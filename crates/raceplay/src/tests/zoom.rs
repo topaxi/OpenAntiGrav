@@ -120,3 +120,40 @@ fn only_pulse_and_pure_offer_the_borrowed_ring() {
         "HD has a ring of its own"
     );
 }
+
+/// Photo mode's speed blur is the ring held at the row's value, whatever the title's own ring:
+/// the frame is the mode's (the boost only), HD's chain and the scene's host both read it, and a
+/// title with no ring and no setting borrows HD's for the length of the mode.
+#[test]
+fn the_photo_modes_speed_blur_holds_the_ring_at_the_rows_value_on_any_title() {
+    use crate::photo::effects::Row;
+    for (ring, borrowed) in [(true, false), (true, true), (false, false)] {
+        let mut race = grid_on_a_pad_with(ring, borrowed);
+        assert!(race.photo_begin(false, false, Some(&oag_hd::race::ZOOM_RING)));
+        let own = race.hd_zoom_frame().map(|frame| frame.boost);
+        assert!(
+            own.is_none_or(|boost| boost == 0.0),
+            "no speed blur, no streak"
+        );
+        race.photo_effects(|effects| {
+            effects.select(Row::SpeedBlur);
+            effects.adjust(10);
+        });
+        let frame = race.hd_zoom_frame().expect("the mode's frame");
+        assert!(
+            (frame.boost - 0.5).abs() < 1e-6 && frame.damage == 0.0,
+            "{frame:?}"
+        );
+        assert!(
+            race.borrowed_zoom_tuning().is_some(),
+            "the scene's host draws it unless HD's own chain does (ring {ring}, borrowed {borrowed})"
+        );
+        race.photo_end();
+        assert_ne!(
+            race.hd_zoom_frame().map(|frame| frame.boost),
+            Some(0.5),
+            "leaving takes the streak with it"
+        );
+        assert_eq!(race.borrowed_zoom_tuning().is_some(), ring && borrowed);
+    }
+}

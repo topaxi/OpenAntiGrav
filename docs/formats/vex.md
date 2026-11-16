@@ -93,7 +93,8 @@ specification of what a track contains, which makes it the most valuable single
 find so far for M1 and M4.
 
 The IDs below were read out of the table in 2026-07, and the decode is
-**self-validating at confidence 95**: ten of them were already in
+**self-validating at confidence 94** (data agreement caps
+there, per the [rubric](../reverse-engineering/confidence-rubric.md)): ten of them were already in
 `crates/vex/src/vex.rs` from unrelated evidence, and every one agrees -
 including the two most easily confused, `Mag Floor Collision 0x3e6` and
 `Cage Collision 0x3e7`. Mirrored in that file's `CLASS_NAMES`.
@@ -484,7 +485,7 @@ chosen, since only the PSP function was read. No group anywhere is nested
 under another (confidence 90, asserted on every file above).
 
 **HD and 2048 have nothing to switch** (confidence 90 for both counts,
-`crates/render/tests/hd_lod_ground_truth.rs` for HD's). HD's 64 groups are in
+`crates/mesh/tests/hd_lod_ground_truth.rs` for HD's). HD's 64 groups are in
 six files. The four `talons_junction/start_grid*.vex` carry eight each: four
 that declare two children but hold one, at the positions and distances
 Pulse's `16_Track` groups use, one that declares and holds one, and three
@@ -971,9 +972,21 @@ does not exist, not that it starts at the mesh header, and reading it as the
 latter would misclaim header and material bytes as a batch on any mesh whose
 header word happens to satisfy the terminator test.
 
-`+0x28`, `+0x29` and `+0x2c` are written at load and are **not file data**. An
+`+0x28` and `+0x2c` are written at load and are **not file data**. An
 earlier note describing `+0x2c` as a pre-compiled display list was describing a
-runtime allocation.
+runtime allocation. **`+0x29` is file data (corrected 2026-11-07, confidence 90):**
+`Mesh_InitBatch` writes it only when `pass_mask & 0x4000` is set (then to `1`) and
+otherwise leaves the authored byte, which is the batch's depth bias,
+`0..=9` on PSP Pulse (62,033 of 67,638 batches carry `0`; census in
+`crates/vex/tests/alpha_test_reference_ground_truth.rs`) and read as
+[`Batch::depth_bias`](../../crates/vex/src/vex.rs). A live GE list confirms the use:
+`DEPTHRANGE` `minz` reads `1001 + 6 * bias` (1007, 1019, 1025, 1049, 1055 seen).
+Which batches carry it: glow, additive and tree batches (`greenfade`, `newtree2`,
+`*_GLOW`, `*_ADD`), not window panes or walls. The renderer applies it ([depth-bias.md](../rendering/depth-bias.md)); see
+[mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md#the-per-batch-depth-bias-is-file-data-2026-11-07).
+PS2: a VIF batch holds a float bound at that offset and reads `0`; a non-VIF PS2
+batch's byte is read the same way and its meaning is not established (the PS2
+executable is unread).
 
 **Two of those three are pinned more precisely as of 2026-08-09**, from
 `psp-pulse-usa/BOOT.BIN` - see

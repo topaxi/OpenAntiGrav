@@ -87,7 +87,7 @@ fn convert(medal: oag_tables::race_campaign::Medal) -> Medal {
     match medal {
         oag_tables::race_campaign::Medal::Gold => Medal::Gold,
         oag_tables::race_campaign::Medal::Silver => Medal::Silver,
-        oag_tables::race_campaign::Medal::Bronze => Medal::Bronze,
+        _ => Medal::Bronze,
     }
 }
 
@@ -158,7 +158,9 @@ fn a_time_trial_flown_to_the_line_is_judged_recorded_and_shown() {
         .expect("a finished race has a finish tick");
     let centiseconds =
         oag_game::medal_watch::ticks_to_centiseconds(oag_race::race_clock_ticks(tick));
-    let medal = event.cell.evaluate_medal(centiseconds);
+    let medal = event
+        .cell
+        .evaluate_medal(centiseconds, oag_pure::TITLE.campaign.counting_modes);
     println!(
         "time trial Vineta K Venom: {:.2}s ({centiseconds} cs) against {} / {} / {} -> {medal:?}",
         centiseconds as f32 / 100.0,
@@ -167,7 +169,11 @@ fn a_time_trial_flown_to_the_line_is_judged_recorded_and_shown() {
         event.cell.bronze
     );
     store.record_campaign(TITLE, &event.name, medal.map(convert), None);
-    let held = oag_game::unlock::campaign_medal_of(&store, TITLE);
+    let held = oag_game::unlock::campaign_medal_of(
+        &store,
+        TITLE,
+        oag_tables::race_campaign::MedalTiers::standard(),
+    );
     // The race ended: the chain comes back on the screen that picked it.
     let mut chain = chain_of(&source);
     chain.return_to(&event);
@@ -221,7 +227,9 @@ fn a_tournament_flown_by_the_autopilot_earns_a_rank_and_opens_the_next() {
         progress.advance();
     }
     let rank = i64::from(progress.rank(0));
-    let medal = event.cell.evaluate_medal(rank);
+    let medal = event
+        .cell
+        .evaluate_medal(rank, oag_pure::TITLE.campaign.counting_modes);
     println!("tournament Alpha Venom: rank {rank} -> {medal:?}");
     store.record_campaign(TITLE, &event.name, medal.map(convert), None);
     let status_of = |class: PureClass, name: &str| {

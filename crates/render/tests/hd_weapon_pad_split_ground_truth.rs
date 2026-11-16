@@ -88,18 +88,24 @@ fn weapon_pad_chunks_leave_the_circuit_model_and_land_in_their_own() {
          count hd_pads.rs reports"
     );
 
-    let (track_model, report) =
-        mesh::rcs::build_scene(TRACK, &vex_data, &model_blob, &mut |path| {
-            archive_cache::read(&spec, path)
-        })
-        .expect("build_scene decodes talons_junction");
+    let (track_model, report) = mesh::rcs::build_scene(
+        TRACK,
+        &vex_data,
+        &model_blob,
+        &mut |path| archive_cache::read(&spec, path),
+        oag_gpu::formats::SceneStore::default(),
+    )
+    .expect("build_scene decodes talons_junction");
     println!("{}", report.describe());
 
-    let (weapon_pad_model, pad_report) =
-        mesh::rcs::build_weapon_pads(TRACK, &vex_data, &model_blob, &mut |path| {
-            archive_cache::read(&spec, path)
-        })
-        .expect("build_weapon_pads decodes talons_junction");
+    let (weapon_pad_model, pad_report) = mesh::rcs::build_weapon_pads(
+        TRACK,
+        &vex_data,
+        &model_blob,
+        &mut |path| archive_cache::read(&spec, path),
+        oag_gpu::formats::SceneStore::default(),
+    )
+    .expect("build_weapon_pads decodes talons_junction");
     println!("{}", pad_report.describe());
 
     assert_eq!(
@@ -169,9 +175,13 @@ fn speedup_pads_with_no_addressed_chunk_report_the_world_pass_chunks() {
         "a speedup node now resolves: the world-pass reading below needs revisiting"
     );
 
-    let (pads, report) = mesh::rcs::build_pads(TRACK, &vex_data, &model_blob, &mut |path| {
-        archive_cache::read(&spec, path)
-    })
+    let (pads, report) = mesh::rcs::build_pads(
+        TRACK,
+        &vex_data,
+        &model_blob,
+        &mut |path| archive_cache::read(&spec, path),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("build_pads decodes talons_junction");
     println!("{}", report.describe());
     assert!(pads.indices.is_empty(), "the node pass draws no pad");
@@ -184,9 +194,13 @@ fn speedup_pads_with_no_addressed_chunk_report_the_world_pass_chunks() {
     // **The report must be about what is drawn.** Every chunk on a pad
     // material that no pad node names has a draw call in the circuit's own
     // model, and the count of them is the report's.
-    let (track_model, _) = mesh::rcs::build_scene(TRACK, &vex_data, &model_blob, &mut |path| {
-        archive_cache::read(&spec, path)
-    })
+    let (track_model, _) = mesh::rcs::build_scene(
+        TRACK,
+        &vex_data,
+        &model_blob,
+        &mut |path| archive_cache::read(&spec, path),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("build_scene decodes talons_junction");
     let drawn: std::collections::BTreeSet<u32> = [
         &track_model.draws,

@@ -3,7 +3,9 @@
 //! model-level tests the same way `draw.rs` itself was, under the
 //! 1,000-line rule (`scripts/check-file-size.py`).
 
+mod medal_art;
 mod tier_medal;
+mod tiers;
 mod tint;
 
 use super::*;
@@ -273,6 +275,7 @@ fn placed32() -> Option<oag_ui::frontend::Placed> {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     })
 }
 
@@ -689,6 +692,7 @@ fn race_draws_no_target_swatch_even_though_the_sprite_resolves() {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     let layers = cell_draw_list(
         &race,
@@ -884,8 +888,8 @@ fn a_cells_saved_medal_reaches_line6_and_line7() {
     assert!(
         texts.contains(&&format!(
             "{}/{}",
-            Medal::Silver.points(),
-            Medal::Gold.points()
+            Medal::Silver.points(MedalTiers::standard()),
+            Medal::Gold.points(MedalTiers::standard())
         )),
         "{texts:?}"
     );

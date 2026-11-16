@@ -148,6 +148,9 @@ def main():
                          "pose but draws the pre-countdown board): see the docs")
     ap.add_argument("--size", default=None, help="default: the profile's output size")
     ap.add_argument("--load", type=float, default=0)
+    ap.add_argument("--interval", type=float, default=0.12,
+                    help="seconds the game runs between the two shots the camera pick compares; a slow emulator "
+                         "that draws no new frame in that time answers `camera null (no frame-unique value ...)`")
     ap.add_argument("--field", action="store_true",
                     help="a race shot: the state is a mid-race frame of a Single Race, weapons off. Ours takes all eight "
                          "craft (pose, team), the player's pose and camera and the HUD's place, lap, clock, speed and "
@@ -157,6 +160,11 @@ def main():
     ap.add_argument("--pack-near", type=float, default=45.0,
                     help="with --field: how close to the player a craft in view must be (units); the pair is "
                          "refused when the frame is not a pack")
+    ap.add_argument("--keep-autopilot", action="store_true",
+                    help="with --field: leave the Autopilot armed for good (the HUD then prints its thousands of seconds) "
+                         "instead of writing the authored 5 s back, for a loop that captures again from the same flight")
+    ap.add_argument("--pack-min-in-view", type=int, default=2,
+                    help="with --field: how many other craft the camera must see; 1 for a craft tucked behind one rival")
     ap.add_argument("--pack-max-dist", type=float, default=160.0, help="with --field: craft this far from the camera count as in view")
     ap.add_argument("--pack-half-fov", type=float, default=45.0,
                     help="with --field: half the angle of the cone around the look direction that counts as in view "
@@ -196,11 +204,12 @@ def main():
     else:
         set_window(*plat["output"])
         cap = [sys.executable, HERE / "rpcs3-drive.py", "capture", "--out", out / "capture",
-               "--shots", 2, "--interval", 0.12, "--load", args.load, "--team", args.team,
+               "--shots", 2, "--interval", args.interval, "--load", args.load, "--team", args.team,
                "--press", args.press]
         if args.field:
-            cap += ["--field", "--in-race", "--settle", "0", "--first-at-pause",
-                    "--autopilot-timer", AUTOPILOT_AUTHORED_S]
+            cap += ["--field", "--in-race", "--settle", "0", "--first-at-pause"]
+            if not args.keep_autopilot:
+                cap += ["--autopilot-timer", AUTOPILOT_AUTHORED_S]
         run(cap)
         record_path = out / "capture" / "00.json"
     record = json.loads(record_path.read_text())
@@ -222,10 +231,13 @@ def main():
         args.ours_ticks = GO_TICK + round(clock * 60) - HUD_LAG_TICKS
     pair.rec["original"]["race_clock_s"] = clock
     pair.rec["original"]["capture_path"] = os.environ.get("OAG_HD_CAPTURE_PATH", "restored savestate (RPCS3 paints garbage on the glass of a restored state)")
-    pair.rec["original"]["presented_lag"] = {"hud_clock_ticks": HUD_LAG_TICKS, "picture": "no correction to the picture: the RSX had presented the paused frame "
-                                              "(hull check on hd-race/talons-pack), not measured per tick; ours' ticks and gantry pin take the lag"}
+    pair.rec["original"]["presented_lag"] = {"hud_clock_ticks": HUD_LAG_TICKS, "picture": "no correction to the picture; on a moving craft the presented frame was measured 0 to 3 ticks older than the RAM read "
+                                              "(`hd-pair-lag-scan.py`, docs/tools/compare-page.md, \"A moving HD craft\"); ours' ticks and gantry pin take the HUD lag"}
     note = ship.get("autopilot_timer")
-    if args.field:
+    if args.field and args.keep_autopilot:
+        pair.caveat("the player's Autopilot is armed for good (--keep-autopilot): the HUD's pickup row prints its "
+                    "thousands of seconds; writing the authored 5 s back froze this game at 1.12 s left, twice")
+    elif args.field:
         pair.rec["original"]["autopilot_timer"] = note
         pair.check("no armed-forever Autopilot timer at the stop (the HUD prints it)",
                    note is not None and note["after_s"] <= AUTOPILOT_TIMER_SANE_S,
@@ -238,7 +250,7 @@ def main():
     capture_kind = os.environ.get("OAG_HD_CAPTURE_KIND", "unknown")  # cold_boot | savestate_restore, set by compare-rerender-all
     cp.build(pair, args, "zone" if args.zone else "race" if args.field else "scenery", capture_kind, args.state,
              {"value": HUD_LAG_TICKS, "unit": "ticks", "basis": "measured",
-              "what": "HUD clock text vs RAM; the picture is not corrected (the RSX presented the paused frame), per-tick picture lag not measured"})
+              "what": "HUD clock text vs RAM; the picture is not corrected; on a moving craft it was measured 0 to 3 ticks older than the RAM read (hd-pair-lag-scan.py)"})
     gantry = ship.get("gantry_seconds")
     pair.rec["original"]["gantry_seconds"] = gantry
     world = ship.get("scenery_clock")
@@ -262,6 +274,12 @@ def main():
                    % (clock, (args.ours_ticks - GO_TICK) / 60, args.ours_ticks, GO_TICK))
     shutil_copy(record["screenshot"], out / "theirs.png")
     pair.check_size("original", out / "theirs.png")
+    # The width the frame's scene was drawn at (1300 to 1920 on the 1080p path), read off the frame, with the
+    # level the game held in the capture's pause beside it (`hd_scene_width`).
+    import hd_scene_width
+    pair.rec["original"]["scene_width"] = hd_scene_width.measure(out / "theirs.png")
+    if ship.get("scene_width"):
+        pair.rec["original"]["scene_width"]["at_pause"] = ship["scene_width"]
     if args.field:
         # the player goes in as slot 0 of the field file, an exact pose: no yaw solve, no tilt left uncarried
         yaw, agree, our_up = 0.0, 1.0, ship["rows"][1]
@@ -316,10 +334,13 @@ def main():
             pair.finish()
         ce.pack_check(pair, hud["place"], camera["eye"], camera["forward"], player_row["pos"],
                       [r["pos"] for r in ship["field"] if not r["player"]], near=args.pack_near,
-                      max_dist=args.pack_max_dist, half_fov=args.pack_half_fov)
+                      max_dist=args.pack_max_dist, half_fov=args.pack_half_fov, min_in_view=args.pack_min_in_view)
         if pair.failed():
             pair.finish()
         pair.check("every craft has a team name", all(teams) and bool(player_row["team"]), ", ".join(teams))
+        # The state decides the hull (`<team>` or classic `<team>_c1`); ours is told which with `--team`, and a
+        # sidecar or a copied command line can name the other one.
+        pair.check_equal("the player's craft (RAM) is the craft ours draws", player_row["team"].lower(), args.team.lower())
         field_flags = ["--field-from", out / "field.csv", "--field-warmup", "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f" % (
             hud["place"], hud["lap"], player_row["clock"] - HUD_LAG_TICKS / 60, player_row["clock"] - HUD_LAG_TICKS / 60, hud["speed"],
             100.0 * hud["shield"] / hud["shield_max"])]

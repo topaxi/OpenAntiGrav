@@ -1,8 +1,8 @@
 ---
 status: re-first
-titles: [omega]
-updated: 2026-10-09
-summary: "Omega front end: circuit names show ids, load order unresolved, campaign pages open"
+titles: [omega, 2048]
+updated: 2026-11-13
+summary: "Omega front end: load order and campaign pages open, emblem and Team Select undrawn; 2048 card titles wired, load card and no-event branch open"
 ---
 
 # Omega's front end is HD's `PI001` plugin, carried forward - and load order is unresolved
@@ -35,15 +35,49 @@ content against `hd-frontend.md`.
 
 ## Open
 
+- **Omega's 2048 map opens from the chooser (2026-11-13, `omega-2048-map-host`, wired);
+  what is left:** Omega's `Cell Selection 2048` authors HD's `CellSelection` frame around
+  the canvas (`Flyer`, season logos, rank shield, `GridNum`, brackets: all
+  `Campaign2048`-type code in `eboot.bin`) and none of it is drawn; its authored
+  `Cell Mode Redirect Team` goes to HD's `Team Selection`, so Change craft is off on the
+  hosted map until that is routed; the event cards' track pictures
+  (`NewImages\trackscreens`) are in no Omega archive; how the original enters the map from
+  its chooser is untraced (confidence 40). Detail:
+  [`omega-frontend.md`](../../docs/formats/omega-frontend.md), "The 2048 map opens from the chooser".
+
+- **Thirteen textures Omega's front-end XML names and the package holds under no
+  spelling** (2026-11-11, now a `debug` line from `Archives::read_texture`; list and
+  census in [`docs/formats/texture-names.md`](../../docs/formats/texture-names.md)):
+  ten `TrackSelectEmblem_Fury` (one per `environments2048` circuit) and the three
+  `Data\FE\NewImages\Demo\` images. They draw nothing; whether the original draws
+  them from a place this reader does not look is unchecked.
+
 - **Omega's Track Select draws its circuit models (`omega-track-model`,
   2026-10-09)**: 26 scenes, a fresnel material read off the PS4 shader, the
   widget's own `orthoScale` placement; `docs/formats/omega-status.md`, "The
-  circuit model on Track Select". Still open there: circuit names show ids
-  (`CircuitNames::choose` finds no copy naming all 38 circuits, 2048's ten
-  included - a per-circuit fallback would name the 28 the table has), a 2048
+  circuit model on Track Select". Circuit names closed 2026-11-05 (all 38 named, see the same page; re-checked
+  2026-11-12: `--menu-page track-select` reads `ANULPHA PASS`, and
+  `omega_track_model_ground_truth::every_circuit_a_menu_reaches_has_a_name_not_an_id`
+  passes). Still open there: a 2048
   circuit's emblem is missing, `constantAmbientColour` and the field of view
   are **chosen, not measured**, the page's white backdrop hides the rim, and
   Team Select (`team_select: None`) is still undrawn.
+
+- **2048's circuits: ten named, sixteen show ids (2026-11-12, `vita-2048-circuit-names`; the original shows the names, see below)**: no copy of `entries.xml` names any of the 26 by id and no `PI_Track` authors a key, so a per-circuit fallback names none; the ten of 2048's own are named off `SP.xml`'s `TrackDefinition` (`M_DISPLAYNAME`, `vita_2048_dlc_menus_ground_truth::the_ten_circuits_of_2048_show_their_names_and_the_rest_keep_their_ids`). The sixteen HD-lineage circuits (`Vineta_K` ... `Sol_2_R`): ~~read which value feeds `%02d_Track`~~ **read 2026-11-12 (`vita-2048-track-key`, `docs/ghidra/functions/vita-2048-eu-v104/circuit-name-key.md`):**
+  - **Nothing feeds it as a name.** `%02d_Track` only builds HD track ids.
+  - **The original's rule** is a string-table lookup of the case-folded `PI_Track` `name`, falling back to the name. Eleven track sites agree; confidence 80; v1.04 and v1.00 agree.
+  - `soundregister` and `FEModelLocation` are never read for a name.
+  - No `stringtable.xml`, `<StringTable>` or `VINETA_K`-style key ships, so those sites would print `Vineta_K`, and `square` for the ten too.
+  - **What a player sees, measured 2026-11-12 (`vita-2048-trackname-still`, Vita3K, EU patch 1.04 + DLC1): `VINETA K` and `ANULPHA PASS` as text** on the HD Campaign event card, the mode card over the load and the pause card (never the id; the ten read `METRO PARK`, `UNITY SQUARE` in the same font). So the sixteen are named through a path the `PI_Track` sites do not describe: **re-first**, and ours (which draws `Vineta_K`) does **not** match. Stills `data/reference/2048-circuit-names/`; `docs/formats/omega-status.md`, "2048 Vita's circuit names".
+  - **WIRED 2026-11-12 (`vita-2048-card-names-wire`) on the HD/Fury event card and the online game list; open below.** `oag_2048::frontend::CARD_TRACK_ALIASES` (28 DLC rows, `oag_title::FrontEnd::card_track_aliases`), `oag_game::boot::tiers2048::{card_title, alias_title}`; ours draws `VINETA K`, `ANULPHA PASS`, `TALON'S JUNCTION` (reverse, no `FE_REVERSE`); test `vita_2048_dlc_menus_ground_truth::an_hd_event_card_titles_its_circuit_by_the_alias_key_per_direction`. **Still open:** the mode card over the load and `Callout_Item` (ours draws no circuit name on 2048 there); the no-event `DrawPanel` branch (prediction `30_Track` not wired); the table's other 74 rows (2048's own ten, `WV_`) unlisted; the Russian per-direction difference rides on the per-direction rows already; Omega's card site unread (its field stays empty).
+  - ~~**Not ready**~~ **READY TO WIRE: the card's key is read (2026-11-12, `vita-2048-card-title-key`, `docs/ghidra/functions/vita-2048-eu-v104/circuit-name-key.md`, "The card's key: the track alias table", confidence 85).** The event card, the HD and Fury grid cell screens, the mode card over the load and the `Callout_Item` all title a circuit through a static table in `eboot.elf`, `g_track_alias_table` at `0x814b1578` (102 rows `{name, reversed, key}`), not through the `PI_Track` name.
+    - **Rule to wire:** `title = strings[fold(alias(track))]`, where `alias(n)` is the row whose `name` or `key` equals `n` (byte-exact, CRC-32 in the original) and gives its `key`; no row gives `99_Track`; a string-table miss prints the key.
+    - **Per direction, not per circuit:** `Vineta_K` `01`, `Anulpha_Pass` `08`, `Moa_Therma` `03`, `Chenghou_Project` `04`, `Metropia` `02`, `Sebenco_Climb` `06`, `Ubermall` `05`, `Sol_2` `07`; their `_R` `09`, `16`, `11`, `12`, `10`, `14`, `13`, `15`; `Talons_Junction` `17`/`_R` `18`, `Amphiseum` `19`/`20`, `Modesto_Heights` `21`/`22`, `Tech_De_Ra` `23`/`24`; `Zone_1`..`4` `25`..`28` (all `NN_Track`). Russian v1.04 gives `03_TRACK` and `11_TRACK` different strings, so never strip `_R` and reuse the forward key.
+    - **Do not derive it from `soundregister`:** `soundregister + 8 * reversed` matches DLC1's sixteen only; DLC2 breaks it (`Amphiseum` is `10`, key `19`).
+    - **Wiring:** an `oag-2048` table citing `0x814b1578` (the 28 DLC rows, or all 102), applied only on the title sites read: the HD and Fury grid cell screens, the event card, the mode card over the load and `Callout_Item` (the no-event `DrawPanel` branch too, but its output for a 2048 circuit, `30_Track`, is a prediction no still checks). Track Select and the other `PI_Track`-name sites keep the case-fold(`name`) rule; what the original shows there is unmeasured. Keep 2048's own ten on `M_DISPLAYNAME` (their events draw `m_displayName`, not the alias). Best with a ground-truth test that re-reads the rows from the decrypted `eboot.elf` when present, so the table stays re-derivable. Acceptance: ours draws `VINETA K`, `ANULPHA PASS`, `THE AMPHISEUM` on the stills' screens.
+    - Omega: the same table is at `0x01990120` (row heads read); its card site is not read. For Omega's 28 `NN_Track` ids the alias is the identity, so `name_key` gives the same strings; its ten 2048 circuits stay on `StringTableId` (the line below, **checked, differs**, still holds for that path).
+  - Omega: **checked, differs**. It applies the same rule with an authored `StringTableId` override (`FUN_014b1330` stores it at `+0x278`).
+  - Evidence: `docs/formats/omega-status.md`, "2048 Vita's circuit names".
 
 - **Maintainer observation, 2026-10-06 (authoritative): the Omega front end
   is in a state HD/Fury's was in earlier** ("the menu items do not render
@@ -56,7 +90,8 @@ content against `hd-frontend.md`.
   reference is HD on this engine, no PS4 emulator. What is still different
   from HD, drawn from `--menu-page grid-select`/`cell-select` side by side: no flyer card, five hexagons
   where HD draws six (a different authored cluster, unchecked), circuit
-  names as ids, the three medal icons in the wrong order and no `TARGET
+  names as ids, the three medal icons in the wrong order (since fixed,
+  `docs/formats/omega-status.md` "The medal atlas") and no `TARGET
   (NOVICE)` line. Also unverified: the strip's pointer hit regions on the
   new geometry, the `EndRace Menu` option blocks (the old "draws no blocks"
   cause may be this one; `--menu-page endrace-menu` still says the source has

@@ -21,7 +21,12 @@ const BLOCK: usize = 0x1000;
 fn pfsc(data_len: u64) -> Vec<u8> {
     let stored: Vec<u8> = (0..BLOCK).map(|i| i as u8).collect();
     let plain = vec![7u8; BLOCK];
-    let deflated = miniz_oxide::deflate::compress_to_vec(&plain, 6);
+    let deflated = {
+        use std::io::Write;
+        let mut e = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::new(6));
+        e.write_all(&plain).unwrap();
+        e.finish().unwrap()
+    };
     let mut packed = vec![0x78, 0x9c];
     packed.extend_from_slice(&deflated);
     packed.extend_from_slice(&[0, 0, 0, 0]);

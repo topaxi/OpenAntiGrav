@@ -143,7 +143,7 @@ the page never shows a directory name. `manifest` no longer rewrites `pair.json`
 
 **Ours is the same on every platform** (`[ours_defaults]`): every render setting with an `original` value is set
 to it (shadows `original`, model and texture detail `original`, trail order `original`), upscaler, FSR, SMAA, MSAA, motion blur and screen
-filter off, render scale 100, anisotropic filtering off (no original forces it), the boost fov kick off (our own
+filter off, render scale 100, anisotropic filtering off (no original forces it; Omega's does, 16x on its mipmapped colour samplers, so the `omega` profile is `16x`: [omega-status.md](../formats/omega-status.md#the-ports-anisotropy-2026-11-16-port-aniso)), the boost fov kick off (our own
 effect), fov 100 %, an ungraded capture at exactly `--size` (no `--presented`), the HUD on (the original cannot
 switch it off), and the camera is the original's own pose and fov. The profile is written into the pair's private
 `settings.toml` **and** passed as flags where a flag exists, and the file the run rewrites is **read back** and
@@ -211,7 +211,7 @@ contains the 4.6 s countdown, so the pair passes `--world-clock-offset` = offset
 The flag shifts the world meshes' clock only; unlike `--anim-seconds` the GO board and the HUD keep their own. Mean grey
 difference over the 24 pairs **9.24 to 6.67** (every pair lower, Fort Gale Black 23.8 to 21.7 and the sign text now reads the
 original's; table in the handover thread). Pulse PS2: the camera is now the original's own (2026-10-21, `ps2-widescreen-pairs`: eye, axes and fov
-read from the camera object in the state's EE RAM, fed as `cam_*` columns and `--camera-fov`); `pcsx2-pulse-pair.py` still reads no world clock; the one PS2 pair is a chase view.
+read from the camera object in the state's EE RAM, fed as `cam_*` columns and `--camera-fov`); `pcsx2-pulse-pair.py` still reads no world clock; every PS2 pair is a chase view (the camera rig's eye 11.64 units from the craft).
 
 ## A deterministic stop, and the posed craft's lean and boost (Pulse PSP, 2026-10-21, `pose-lean-boost`)
 
@@ -266,12 +266,182 @@ A screenshot is the last PRESENTED frame, which is a little older than the RAM r
   the grab's offset from it is not (it moved with the machine's load).
   The profile's PS2 aspect was `ps2` (4:3), which fits the picture inside a 16:9 window with black bars: ours came out pillarboxed against an original that fills the 1280x720 frame (mean grey difference 13.4 to 27.6 on that alone);
   it is `wide` now.
-- **HD: the picture needs no correction after the wait for the RSX, the HUD clock text lags RAM by 3 ticks.** `rpcs3-drive.py capture` reads the pose in the pause and `OAG_CAPTURE_FLUSH=3` lets the RSX present what it was handed: the
-  existing `hd-race/talons-pack` hull check (holding the player back by one tick, 2.4 units, already makes the hull far too large) says frame and pose are one instant. The HUD lap-clock text is not: on the 13 refreshed grid pairs the tenths digit the
+- **HD: the HUD clock text lags RAM by 3 ticks; on a still craft the picture needs no correction, on a moving one it can (2026-11-10, `hd-talons-pack-align`).** `rpcs3-drive.py capture` reads the pose in the pause and `OAG_CAPTURE_FLUSH=3` lets the RSX present what it was handed. The 13 grid pairs are at 0 km/h, where an older frame looks the same, so they never tested "frame and pose are one instant"; the `hd-race/talons-pack` hull check that stood here was not evidence for it (see "A moving HD craft: the frame is not always the RAM instant" below). The HUD lap-clock text is not one instant either: on the 13 refreshed grid pairs the tenths digit the
   frame shows is one tenth below `trunc(RAM clock * 10)` on **9 of 13** (chenghou 14.149 shows 14.0, metropia 13.417 shows 13.3, talons 13.134 shows 13.0, ...) and equals it on 4, and the fractional tenths of the two sets bracket the lag between
   **0.054 s** (modesto-heights, 13.354 shows 13.2) and **0.055 s** (anulpha-pass, 13.955 shows 13.9): 3.3 ticks, so `rpcs3-hd-pair.py` runs ours `HUD_LAG_TICKS = 3` ticks short of the RAM clock (and the race pair's imposed clock),
   recorded in `pair.json` `original.presented_lag`. The set in `data/reference` made before this carries the uncorrected clock. Per-tick picture lag on RPCS3 is not measured (no per-tick stepping).
   HD's window opens at x = 240 on the 2000-pixel Xvfb, so a 1920-wide frame was clipped to 1760 and every pair refused ("original image size 1760x1080"); `rpcs3-hd-pair.py` waits for the resize to land and moves the window to the origin.
+- **HD: a pair names the width its original's scene was drawn at** (2026-11-10). The 1080p path draws the scene 1300 to 1920 px wide in 20 px levels and stretches it, and the level moves a step a frame on wall-clock timing
+  ([scene-width-throttle.md](../ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md)). `pair.json` `original.scene_width` is `px`, `level`, `method`, and for a race frame the `score`, the `peak` it had to reach and the
+  `runner_up`; a new pair also carries `at_pause` (the level and the enable byte read in the capture's pause, up to two steps from the frame's while the level moves). The stored set, measured off each `theirs.png` by
+  `scripts/hd_scene_width.py --record`: **1300** on chenghou-project, metropia, moa-therma, modesto-heights, sebenco-climb, talons, talons-assegai-c1, tech-de-ra and ubermall (scores 15.0 to 38.3), **1400** on sol-2 (12.6),
+  **1920** on anulpha-pass, the-amphiseum and vineta-k (no peak: 4.3, 3.4, 2.9 against the 5.5 bar; the weakest stretched frame of known width scored 6.7), and 1920 on the five menu pairs and the loading pair from how the
+  front end is drawn (their scores are kept as `frame_score_unused`: the loading screen's dot grid reads 1840 at 9.1). So nine of thirteen race originals are 68 percent of full width horizontally, which bears on edge sharpness and
+  fine texture, not on tone ([hd-track-tone.md](../rendering/hd-track-tone.md)).
+
+## A moving HD craft: the frame is not always the RAM instant (2026-11-10, `hd-talons-pack-align`)
+
+**Claim tested:** `hd-race/talons-pack` shows the same instant on both sides, so its remaining difference is rendering. **False for the pair as stored; partly false for the re-made pairs** (below).
+
+**The stored pair (state of 2026-10-20, classic Feisar, 1280x720 at scale 150, captured 2026-10-21).** Edge correlation 0.014, RMSE 0.270, mean grey 47.6, against 0.39 to 0.45 on every other HD pair. The original's own HUD says its frame is older than the RAM it was paired with, with two independent clocks: the lap clock reads `0.14.3` where RAM 14.531 less the 3-tick text lag reads 14.48 (text 14.4), and the Autopilot readout `4.95` against RAM 4.817 (0.13 s, 8 ticks, 5 if it shares the text's 3-tick lag). At 502 km/h that is 18 units or more, a different stretch of road under the craft (ours showed green pad strips the original's road does not). The original's frame also carried a weapon-like purple lightning, a `+4.8` pickup readout, the DAMAGE and Absorb strips, a `0.46.64` BEST and RPCS3's own pause banner. Ours projected its own recorded state correctly: the recorded player and opponent positions through the recorded `view_proj` land where ours draws them (player (972, 571), Icaras (834, 380), EGX (1072, 243)); it is the original's picture that did not match its metadata. Confidence 90.
+
+**The state file could not be reused.** RPCS3 0.0.43-20574 refuses the 2026-10-20 file (`No savestate file found or savestate not compatible`, in `serve/loaded.SAVESTAT.zst`'s log), so the pair could not be re-made from it. The state was regenerated (`scripts/emu-hd-race-walk.sh <lane> 8 0 0`, then `scripts/rpcs3-hd-race-hunt.py --place 3-6 --pin-scene-width`, a flag added here: it clears `0x00c81da4` after the race loads and again at the match, so the state draws its scene 1920 px wide). It is not the old file's circuit moment: lap 2 on Talon's Junction, 6th of 8. **Its player is `Feisar` (the Fury hull) where the old state's was `Feisar_c1` (classic).** The sidecar (`.zst.json`) says `Feisar` now; the old one said `Feisar_c1`, and a pair command line copied from the old pair drew the wrong hull. `scripts/rpcs3-hd-pair.py --field` now refuses a `--team` that is not the player's team name read from RAM.
+
+**A restore with `--pause` does not land on the state's own tick.** Three restores of the one file stopped at race clocks 11.21, 7.31 and a third pose (590, -10, 79): the pause lands a variable game time after the load (about 4 s apart here). Two captures of one state are therefore two samples of two moments, not a twin pair.
+
+**Presented lag on a moving craft, two samples, the same boot recipe.** `scripts/hd-pair-lag-scan.py <pair>` renders ours with the camera eye moved back along the player's recorded velocity and every craft back along its own, by whole or fractional 60 Hz ticks, and scores each against `theirs.png`:
+
+| capture | race clock | best camera : craft rewind | opponent (green craft, colour mask) centroid, original / ours at that rewind | edge correlation 0:0 -> best |
+| --- | --- | --- | --- | --- |
+| `run1` | 11.206 s | **2.0 : 3.0 ticks** (camera 1.75, 2.0, 2.25 and craft 2.5 to 3.25 tried; the scenery peaks at camera 2.0, the opponent at craft 2.75 to 3.0) | (1299.8, 567.3) / (1300.1, 567.3); at 0:0 ours (1285.2, 560.4), 14.6 px off | 0.107 -> 0.189 |
+| `run2` | 7.313 s | **0 : 0** for the scenery and the opponent (rewinds of 1 to 3 ticks put the opponent 8 to 17 px away); the hull wants about 0:1 | (1176.9, 534.1) / (1181.3, 533.8) | 0.091 at 0:0 |
+
+So the frame is **2 ticks (camera) and 3 ticks (craft) older than the RAM read on one pause and, for the camera and the opponent, not older on the other**: the presented lag is not a constant, and RAM read in the pause is not the picture's instant on a moving craft without a check. Three ticks is the HUD text's own lag (3.3), which fits the craft term; the camera's 2 is not explained (the push-buffer matrix is built a tick after the craft update, not read). Confidence 60: two pauses, one state, one boot recipe; the metric is a whole-frame edge score (0.107 at 0:0, 0.185 at 2:2, 0.189 at 2:3, 0.127 at 3:3) and the opponent centroid agrees to 0.3 px. The per-frame pick: a pair whose opponent centroid is within 8 px at 0:0 is one instant (`run2`, 4.4 px for the near craft; the far one, 126 units from the camera, a speck about 12 px wide, reads (980, 484) against ours (982, 480) off a 4x crop, by eye); it is not `run1`. `rpcs3-hd-pair.py` does not yet record this (open: a recorded `presented_lag` per pair, now best read off the push buffer's hull matrix, below).
+
+**What is left after the lag is accounted for.**
+
+- **The player's hull is about 1.3 times larger and lower in the original than ours draws it at the recorded state, and it is a timing offset, not a hull-only view** (read off 1:1 crops of the original against `hd-pair-lag-scan.py` renders; width read by eye, +-10 px, not measured to the brief's 4 px). `run1` at its fitted rewind (camera 2, craft 3 ticks): the hull is 375 px wide against the original's 370 and sits where the original's does, where at 2:1 and 2:0 it is 270 px wide and high; the unrewound `ours.png` is 285 px against 383. `run2`: the hull is 270 px at 0:0 against 370 and matches at about **0:1** (380 px, same position) while its opponent is 4.4 px off at 0:0 and about 17 px off at 0:1 (centroid (1192.2, 541.1) against (1176.9, 534.1)). So the player's hull wants to be about **1 tick older than the camera on both samples**; the opponents want 1 tick older than the camera on `run1` and the same tick on `run2`. One tick is 2.3 units at 138 u/s, a sixth of the 13.9-unit eye to body distance, which is the whole size difference. The drawn node matrix is not the cause: `ship+0x40` (copy `+0x80`) of the player at 132.6 u/s holds the body's position to the printed digit (590.024, -9.925, 78.729), rows scaled 0.743, shake object zero. The eye to body distance reads 13.9 units on both (the grid pairs 12.7). Settled 2026-11-11: RAM is a whole tick or two ahead of the push buffer's frame for the craft and the camera alike, see "The skew is the pause, not the original's draw order" below.
+- **State differences** (not ours to import): the RPCS3 pause banner, the Autopilot readout (the state's own, 9949.49 s and 9953.36 s, because the timer is armed for good rather than the authored 5 s written back, so the pause lands on the state's tick with nothing run after it), the DAMAGE and Absorb strips, the BEST row `0.44.24` against ours' `0.00.00` (the HUD record `--hud-state` does not carry), the pickup row and sight, the original's own speed blur on the road edges.
+- **Render differences:** edge correlation stays near 0.1 with the picture aligned (run2): the original's radial speed blur on a 495 km/h frame (ours is off in the profile), hue and bloom. The 0.30 acceptance bound is **not reached and not reachable by alignment**: 0.19 is the best seen, and the grid pairs that score 0.4 are still frames.
+
+### The skew is the pause, not the original's draw order (2026-11-11, `hd-worst-pairs-2`)
+
+**Question:** the player's hull is about one tick older than the camera on both re-made samples. Is that how the original draws (the hull's pose from the previous tick), or the capture? **The capture.** At an RPCS3 pause the game's RAM is **1 or 2 whole ticks ahead of the frame in the push buffer, for every craft and for the camera alike**; in the frame itself the hull and the camera are one tick. Confidence 90.
+
+`scripts/hd-frame-skew.py probe` pauses once and reads, in that pause, every craft's body (`+0x200`, velocity `+0x190`), the player's ship and the three push-buffer regions `capture` reads; `read` then compares. Two things in the push buffer can be set against RAM without a picture:
+
+- **The hull's own world matrix.** Each craft's draws load a plain row-layout world matrix, rotation rows scaled 0.75 (the craft scale), 7 to 15 times a frame; its translation is where the frame draws the hull.
+- **The camera's eye**, off the register-256 view-projection, against the craft's rig eye in RAM, `ship+0x69a0` (11.6 to 11.8 units from the body on every sample, 0.13 units from the push-buffer eye once the tick is taken out).
+
+Eight pauses of `hd-race-talons-venom-pack` over two restores, 109 to 170 units a second (a tick is 1.8 to 2.8 units); offsets in ticks along the craft's own velocity, off-axis residue in units:
+
+| Pause | Push-buffer hull minus RAM body, player | An opponent | RAM rig eye minus push-buffer eye |
+| --- | --- | --- | --- |
+| `p1` | (regions held no hull) | | +1.0 (0.13 off) |
+| `q2` | -1.003 (0.04) | | (trackside camera) |
+| `q3` | -1.043 (0.26) | | (trackside camera) |
+| `r1` | (not held) | -1.998 (0.05), -1.999 (0.01) | +1.997 (0.01) |
+| `r2` | -0.998 (0.01) | -0.998 (0.02) | +1.004 (0.04) |
+| `r3` | -1.007 (0.04) | | +0.992 (0.14) |
+| `r4` | -2.004 (0.07) | | +1.915 (0.52, in a turn) |
+| `r5` | -2.041 (0.16) | | +1.920 (0.67, in a turn) |
+
+The node matrix at `ship+0x40` equals the body on all eight craft on every pause, so RAM is self-consistent and simply newer. With the tick taken out, the eye is 11.6 units from the hull at speed (the 13.9 above was a tick-N camera against a tick-N+1 body; the grid pairs' 12.7 is a craft at rest).
+
+**So a pair that takes the camera from the push buffer and the craft from RAM draws every craft 1 or 2 ticks ahead of its camera**: smaller, higher and farther up the road. On the stored `hd-race/talons-pack`, ours re-rendered with every craft moved back along its own velocity (sigma 7, mean absolute RGB): frame **18.82 at 0 ticks, 17.98 at 1, 21.80 at 2**; the hull's box (`640,330 640x420`) **17.29, 13.34, 17.47**; at one tick the hull is the original's size and sits where the original's does. That pair's skew is one tick. The earlier note that `run2`'s opponent wanted no rewind is not borne out by the push buffer (`r1`, `r2`: opponents skewed with the player).
+
+**Open, ready to wire (tooling, no engine change):** `rpcs3-hd-pair.py --field` should read the player's hull matrix from the push-buffer regions it already dumps, record the whole-tick skew in `pair.json` (`original.presented_lag.craft_ticks`), refuse a pause where it is not within 0.1 of a whole number, and write the field with every craft moved back that many ticks of its own velocity (or take each hull's translation from the push buffer outright). The HUD clock's 3-tick text lag is a separate thing and stays. Until then a moving HD pair is checked with `hd-pair-lag-scan.py`.
+
+## Pulse PS2: a race pair for every circuit (2026-11-11, `gallery-pulse-ps2`)
+
+**Claim:** the page carries a Pulse PS2 race pair for every circuit ours can race on the PS2 disc (about 14), up from 1. **True:**
+ours races all 16 `NN_Track` directories on `pulse-ps2-eu.chd` in both layouts (`oag-game --race --track ...\NN_Track\track.vex
+--ticks 1 --trace-out`, 32 of 32 start; `17_Track` and `18_Track` do not start), and a pair exists for each: 15 new and the Moa Therma
+White one made again from nothing. Each passes all 14 parity checks (`pair.json` `refused` false). Original: PCSX2 v2.7, OpenGL
+hardware renderer, 2x upscale, `AspectRatio 16:9`, one Lanczos resize to 1280x720, the game's own `Aspect Ratio` option on `16:9`; the
+craft rests on grid slot 8 of 8, no input, the HUD clock 22 to 24 s after GO, the camera the original's own. Ours: `--size 1280x720`,
+aspect `wide`, the profile's settings.
+
+**The route (from a memory card holding a profile, no state to start from).** Racebox, Single Race, Track Select lists 3 circuits
+until the dev-unlock word is set (`g_settings + 0x46c`, `FUN_0017fa68`, evidence in
+[definition-unlock](../ghidra/functions/ps2-pulse-eu/definition-unlock.md)); one write puts 32 entries on the list. A menu savestate
+on Track Select (slot 6) is the start of every walk: `scripts/pcsx2-pulse-walk.py race --entry N --name X --circuit ...` loads it,
+presses `down` until Track Select's cursor word reads the entry (a PINE read: a key press is lost on a loaded machine and doubled on an
+idle one, so counting presses did not land), confirms track and ship (Assegai), presses `cross` through the circuit's description page
+until the race HUD's hexagon is drawn, finds the race clock, waits for RAM clock 24.5 s, sets `DAT_00284fe8 = 1`, advances four frames
+and saves. About 2.5 minutes a circuit on a loaded machine, 1.5 on an idle one.
+
+**Three things that cost runs, each fixed in the scripts.**
+
+- **The race clock is not at `0x70EE9C`.** That is the Moa Therma White state's. It moves with the heap layout of each boot (`0x70DB7C`
+  in the next one) but stays **`0x12084` to `0x120a4` below the player's craft struct** on all 16 saved states (`0x12084` on 7,
+  `0x12094` on 2, `0x120a4` on 7): `pcsx2_state.race_clock_address` searches that window for the float whose partner `0x100` after it,
+  the HUD's own clock, is 3.9 to 4.45 s below it, and it agrees with the address each sidecar recorded on all 16. Five states first
+  failed that search only because the craft came from the table-row bug below. `race_clock_between` finds the same word from two
+  savestates a few seconds apart (the float that ran on by the frame counter's difference) with no craft needed, and is what the walk
+  uses; it gave the same five addresses. The word `0x100` after the clock reads 4.09 s below it in these boots (192.439 and 188.351 with
+  the HUD at `3:08.3`), where the Moa Therma White grabs gave 4.2 to 4.29: the pair keeps 4.25, and ours' HUD clock is within 0.1 s of
+  the frame's on all 16 pairs read (`0.22.1` against `0.22.0` on Talon's Junction and `0.24.1` against `0.24.0` on Tech de Ra are the
+  worst).
+- **`player_craft` picked table rows.** Where the craft heap sits low (`0x6xxxxx`) a body-shaped pointer with a position like
+  `(16.6, 0, 0)` passed the camera-rig test; a position with two zero components is now refused. The cached basis also trails the body
+  by 2e-4 on a craft left resting for minutes (it was 1e-5): `CACHE_TOLERANCE`. The five states first saved with the wrong craft were
+  identified from the camera object, their sidecars rewritten, and every position checked against our own start (below).
+- **`frames 4` leaves the VM paused**, so the next `loadstate` came up paused and every menu press did nothing; the walk now runs the VM
+  before and after the menu load.
+
+**Circuit and layout, identified, not assumed.** The state's craft position (read from its EE RAM) against ours' start on every
+`NN_Track` forward and reversed: 0.0 to 1.2 units on 12 states, 2.8 to 3.0 on Vertica and The Amphiseum, and 34.9 (de Konstruct) and
+41.6 (Platinum Rush) where the grid bends and slot 8 is not ours' start; the nearest wrong candidate is 25.3 units from Arc Prime's state (`15` reversed) and 64 or more from every other. The pair
+script then checks the layout by heading (`--layout-tolerance-deg`, default 5 degrees; Vertica needed 10 and Platinum Rush 25, recorded in
+`ours.layout_tolerance_deg`, the other layout being 150 degrees or more worse). The Track Select order is Talon's Junction (`16`),
+Moa Therma (`03`), Metropia (`02`), Arc Prime (`10`), **Orcus (`15`)**, de Konstruct (`05`), Tech de Ra (`04`), **Vostok Reef (`08`)**,
+The Amphiseum (`09`), Fort Gale (`14`), Basilico (`01`), **Edgewinter (`11`)**, Platinum Rush (`13`), Vertica (`06`),
+**Gemini Dam (`12`)**, Outpost 7 (`07`), each a White then a Black entry; the four in bold are not on the PSP disc (the four DLC packs ship them: [dlc-pack.md](../formats/dlc-pack.md)). The forward entry is the
+White one on Talon's Junction, Moa Therma, Arc Prime, Tech de Ra, Platinum Rush, Vertica and Outpost 7 and the Black one on
+Metropia, de Konstruct, The Amphiseum, Fort Gale and Basilico, as on the PSP ([track.md](../formats/track.md#white-and-black)); on the
+new four, Orcus White and Edgewinter White are forward, and **Vostok Reef White and Gemini Dam White are the reversed layouts** (ours
+`08` and `12` `track_reversed.vex`: start heading within 4 degrees and 1.2 units). Orcus Black, Edgewinter Black and the other
+Black or White entries were not walked.
+
+| Pair id (`pulse-ps2-...`) | Circuit, layout | RMSE | Edge corr. | Mean grey | Second grab | Theirs, grab 1 against 2 (RMSE) | HUD clock |
+| --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| `talons-junction-white` | `16` forward | 0.178 | 0.062 | 19.99 | 0.181 / 0.074 / 20.54 | 0.025 | 0:22.0 |
+| `metropia-black` | `02` forward | 0.146 | 0.101 | 13.13 | 0.148 / 0.101 / 13.23 | 0.029 | 0:23.8 |
+| `arc-prime-white` | `10` forward | 0.134 | 0.091 | 11.20 | 0.134 / 0.091 / 11.21 | 0.020 | 0:23.8 |
+| `de-konstruct-black` | `05` forward | 0.162 | 0.094 | 16.65 | 0.162 / 0.095 / 16.59 | 0.025 | 0:23.4 |
+| `tech-de-ra-white` | `04` forward | 0.174 | 0.072 | 15.47 | 0.174 / 0.072 / 15.46 | 0 | 0:22.8 |
+| `amphiseum-black` | `09` forward | 0.134 | 0.093 | 11.13 | 0.135 / 0.092 / 11.13 | 0.017 | 0:24.0 |
+| `platinum-rush-white` | `13` forward | 0.159 | 0.070 | 13.64 | 0.159 / 0.070 / 13.64 | 0 | 0:22.3 |
+| `vertica-white` | `06` forward | 0.155 | 0.053 | 14.18 | 0.154 / 0.052 / 14.07 | 0.030 | 0:23.6 |
+| `outpost-7-white` | `07` forward | 0.151 | 0.087 | 12.89 | 0.151 / 0.087 / 12.89 | 0.019 | 0:23.7 |
+| `vostok-reef-white` | `08` reversed | 0.162 | 0.071 | 13.50 | 0.160 / 0.071 / 13.30 | 0.025 | 0:22.0 |
+| `fort-gale-black` | `14` forward | 0.133 | 0.082 | 11.45 | 0.127 / 0.088 / 11.01 | 0.025 | 0:23.6 |
+| `basilico-black` | `01` forward | 0.160 | 0.060 | 14.99 | 0.160 / 0.059 / 14.99 | 0 | 0:23.7 |
+| `orcus-white` | `15` forward | 0.161 | 0.080 | 13.14 | 0.158 / 0.083 / 12.96 | 0.017 | 0:23.4 |
+| `edgewinter-white` | `11` forward | 0.162 | 0.091 | 14.38 | 0.162 / 0.091 / 14.38 | 0 | 0:23.7 |
+| `gemini-dam-white` | `12` reversed | 0.161 | 0.127 | 13.83 | 0.160 / 0.128 / 13.81 | 0.040 | 0:23.6 |
+| `moa-therma-white-r2` (the stored pair, made again) | `03` forward | 0.158 | 0.098 | 13.36 | | | 0:21.1 |
+
+The stored Moa Therma White pair reads 0.154 / 0.109 / 13.12; this boot's reading of the same circuit and slot, 0.158 / 0.098 / 13.36.
+Five of the fifteen second grabs of the original are bit-identical to the first (RMSE 0); the rest differ by 0.017 to 0.040, the
+animated surfaces of a grab a few tenths of a second after the load. The metrics repeat within 0.006 RMSE and 0.012 edge correlation
+(Talon's Junction, 0.062 to 0.074). Confidence 85: two grabs of one state per pair, one boot of the walk per circuit.
+
+**What the pictures show (all 16 pairs read as half-scale contact sheets; Edgewinter, Orcus and Platinum Rush also at native 1280x720).** Circuit, grid slot, camera, GO board, HUD and its clock agree on all
+sixteen. Differences that are ours, for a lane that owns them: the original's GO board has not yet turned on at Talon's Junction
+(a flat green bar where ours draws `GO`, and on Vostok Reef too); the neon strips on Orcus were yellow in the original and
+magenta in ours, which was ours' clock and not a rendering defect (below); a pink streak beside the hull on Platinum Rush (the ribbon `--pose-hold` left behind, below); ours draws no `pos 8/8` readout at the top right on any pair; a faint caption at the bottom left of the original on Talon's Junction,
+Platinum Rush and Vostok Reef that ours does not draw. The
+mean grey difference is 11 to 20, the edge correlation 0.05 to 0.13, near the stored pair's 13.1 and 0.11.
+
+**The Orcus neon strips are the world animation clock (2026-11-12, `ps2-orcus-neon`).** The strips draw `lob_gradient_glow.tga`, a rainbow gradient,
+under an authored texture scroll with a 600 s loop (`crates/render/tests/ps2_neon_clock_ground_truth.rs`), so their colour is the clock they are drawn
+at: ours' own tick count (28.05 s at the pair's 1683 ticks) reads magenta, the original's clock reads yellow. The original feeds every world mesh
+`*(g_ingame + 0x40)` (`g_ingame` at `0x27DDBC`, `docs/ghidra/functions/ps2-pulse-eu/anim-transform.md`), 33.53 s in the Orcus White state against the
+RAM race clock's 26.38 s; `pcsx2_state.world_clock` reads it and `pcsx2-pulse-pair.py` records `original.world_clock_s` and passes ours
+`--world-clock-offset` = that clock, run on by the race clock's advance from the state to the grab, less ours' `ticks / 60` (6.88 s on Orcus White).
+`compare-rerender-ours.py` puts the flag back on a pair recorded without it, from the state file and the grab bracket. Ours' left strip, box
+`330x120+0+130` of the 1280x720 frame, mean RGB: before 99,39,111, after 100,114,35, the original's 108,122,33; a sweep of the offset on the same frame
+reads magenta at 0 s and 12 s, cyan at 3 s and 15 s, yellow from 5 s to 9 s and at 20 s (a period near 13 s to 14 s). **Confidence 75** that the texture animation's clock is `*(g_ingame + 0x40)`: the shared per-race clock is the PSP finding carried over (`docs/ghidra/functions/ps2-pulse-eu/anim-transform.md`,
+read for `Anim Transform` nodes, not live-broken on the PS2 texture updater), and two things measure it here. The Orcus strip's yellow window
+(offsets 5 to 9 s) holds the computed 6.88 s, a chance of about one in three alone. And on the short-loop surfaces, which are phase-sensitive to 0.1 s,
+the offset sweep's whole-frame rmse against the original bottoms out beside the computed offset on both pairs swept finely: Fort Gale Black computed 3.81 s,
+rmse 0.141 / 0.135 / 0.130 / 0.132 at 3.5 / 3.7 / 3.9 / 4.1 s; Gemini Dam White computed 7.77 s, rmse 0.161 / 0.166 / 0.160 / 0.162 at 7.3 / 7.6 / 7.9 / 8.2 s. Across the 15
+race pairs (a re-render with the original's clock against ours' tick clock, rmse): better on Orcus (0.159 to 0.138), Metropia and Vostok Reef (each by 0.007), Talon's
+Junction and Tech de Ra (0.003), Amphiseum (0.002), Arc Prime, Basilico and de Konstruct (0.001); flat on Edgewinter and Outpost 7; worse by 0.001 to 0.004 on Vertica, Fort Gale and Gemini Dam, where
+a 0.2 s step in the offset moves the rmse by more than that (a tick-clock phase can land beside the original's by chance on a 1.7 s loop). The three menu pairs gain no flag (no grab bracket).
+Platinum Rush's pink streak beside the hull is not on this clock: its crop (`300x180+290+540`) is pixel-identical at offsets 0, 3, 7.43 and 12 s (mean 66,65,66).
+It was the engine ribbon, left behind by `--pose-hold`: the pair runs 1,617 ticks of the clock, the resting craft on the banked slot yaws about 18 degrees
+(bank-to-yaw, `docs/physics/grid-state.md`) and laid its trail along the turned hull, and the hold then put the hull back and left the ribbon where it was.
+Ours at tick 120 (before the turn) and the original both hang the ribbon straight back. `Race::place_player` now carries the ribbon rigidly with the hull
+(`Exhaust::move_rigidly`); the box `300x180+290+540` reads 66,66,66 before, 58,61,58 after, original 55,58,55, and the nozzle box `90x140+590+580` 70,70,75, 98,86,100, original 79,71,83
+(ours' nozzle glow is brighter than the PS2 original's, a separate difference). Test: `pose_hold_ground_truth::a_held_pose_takes_the_engine_ribbon_with_the_hull`.
+Pulse PSP's pair takes the same path (its craft turned 9 degrees over 1,646 ticks) and moves by 19 pixels below a 2 % difference.
+
+**Open.** The other 16 Track Select entries (the second layout of each circuit, Black or White) were not walked: a pair is one
+`--entry` away. The states and sidecars are in `data/saves/pulse-ps2/` (a sidecar records the circuit, the craft, the grid position
+and the clock's address); `pcsx2-pulse-walk.py` needs a Track Select savestate with the unlock word set, taken by hand on one boot.
 
 ## Re-rendering ours only (2026-10-21)
 
@@ -343,10 +513,58 @@ its `pair.json` has no failed check.
 | --- | --- | --- | --- |
 | Pulse PSP | **works**, about 1.5 min per circuit (a mid-race **race shot** with the whole field: see "Race shots" below) | everything in the checks above | `PPSSPP_EXTRA_INI=<file from compare_env.py ppsspp-ini pulse-psp> scripts/ppsspp-start.sh <lane> <display> <port> <image>`, then `scripts/psp-pulse-pair.py --port P --home $PP_HOME --out D --track NN_Track --state <ppst>` (it resizes the SDL window to 960x544 for `psp-state.py`'s pause-menu clicks, loads the state, stops the CPU, resizes the window to the native 480x272 and crops the Xvfb root at the window origin: nothing is scaled), or `scripts/compare-pulse-psp-batch.py --out D` for all 24 kept states. No state yet: `psp-drive.py menu --unlock --track-down N --any-track` (about 105 s from a fresh profile, N from [the table](../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29)), then `psp-state.py save 1 --keep`. Full pipeline: [frame comparison](frame-compare.md) |
 | HD (PS3) | **works**, about 1.5 min per circuit | pose, camera, fov, clock | `export OAG_COMPARE_PLATFORM=hd-fury` before `scripts/emu-restore-state.sh` (so `rpcs3-drive.py` writes the profile's video settings into the private config **and** the game's custom config), restore the state with `--restart`, then `OAG_RPCS3_ATTACH=1 scripts/rpcs3-hd-pair.py --out D --team harimau --state <state>`: it resizes RPCS3's window to 1920x1080 (the default 1760x1072 window carries black bars), captures, and checks the frame is exactly 1920x1080. One state per circuit: `scripts/emu-hd-timetrial-state.sh <lane> <circuit-index> <team-rights> <classic 0\|1> <name>` (Track Select index 0 is Vineta K, 8 Talon's Junction; Harimau classic is 9 `right`s and a `down`). The state only names the circuit and craft: **the pair is taken after `Restart Race`, a few seconds into a fresh Time Trial**, so the clock is small and the double-counted resting turn small. `--team` carries HD's variant (`Assegai_c1` is the Fury Concept craft). |
-| Pulse PS2 | **works for Moa Therma White, camera matched** (widescreen) | pose, clock, circuit, layout, the state's `Aspect Ratio 16:9` (read back from the projection), the camera's look direction at the craft, PCSX2's `AspectRatio` | PCSX2 booted by `pcsx2-drive.py boot` with `OAG_COMPARE_PLATFORM=pulse-ps2` in the environment (its ini carries the profile's upscale, screenshot size and `AspectRatio 16:9`), then `scripts/pcsx2-pulse-pair.py --slot S --state <p2s with DAT_00284fe8 = 1> --track 03_Track --out D`. Pose, craft, clock and **camera** (`pcsx2_state.camera`: eye, axes and fov of the object `Camera_SubmitScene` runs on, [camera.md](../ghidra/functions/ps2-pulse-eu/camera.md)) are read out of the state file's own EE RAM, the frame is PCSX2's GS screenshot of the loaded state taken while the VM runs on (the race clock is read before and after the grab and ours is rendered at its mean). A widescreen state is made from a 4:3 one by writing `1` to `0x00284fe8` over PINE, advancing four frames and saving. **What is left is the original's `40/21` projection shown at `16:9`: ours draws everything 7.1 % wider** (ours at aspect `wide`, true 16:9, since 2026-10-21; the sentence assumed that and holds), edge correlation 0.11 against 0.59 with ours squeezed to match (camera.md). Only Moa Therma White has a state; more need a menu route for `pcsx2-drive.py` |
-| Pure (PSP) | **works** (2026-10-22, `pure-pairs`), about 30 s per pair once a state exists; four Alpha-league circuits, Feisar, Vector | pose, circuit, camera (the original's Close eye read at `(0, 3.000, -11.250)` in the body frame; ours' own chase rig is checked by the hull's px offset, 0 to 1 px), fov 60, race clock (read at the state's own first stop, the HUD tenth equal on 4 of 4) | **USA disc** (`data/images/pure-psp-usa.chd`, `UCUS98612` 2.00): every live Pure address is recovered on it; the EU image is not read. `PPSSPP_EXTRA_INI=<file from compare_env.py ppsspp-ini pure-psp> scripts/ppsspp-start.sh <lane> <display> <port> <usa image>`, then `scripts/psp-pure-pair.py --port P --home $PP_HOME --out D --track 01_Vineta_K --state <ppst> --class vector --team Feisar --autopilot off --meta <json>` (`OAG_SHOT_DISPLAY`, `DISPLAY`, `HOME`, `XDG_CONFIG_HOME` as for Pulse). States: `scripts/psp-pure-walk.py --port P --track-index N --keep data/saves/pure-psp/<name>.ppst` walks pad presses from a running race (`start`, Quit) or the Main Menu to Time Trial, Vector, Alpha, circuit N, Feisar, and saves a state 16 s after Track Selection (a fresh profile has only Vector and Venom and the Alpha league: Vineta K, Modesto Heights, Chenghou Project, Blue Ridge, directories `01_Vineta_K`, `03_Modesto_Heights`, `04_Chenghou_Project`, `07_Blue_Ridge`). **Not matched: the shaded hull (ours darker), and the HUD (ours has no speed gauge and prints `TOTAL` where the original prints `BRONZE TIME`).** Details: "Pure (PSP) pairs" below |
-| 2048 (Vita) | **works for a grid before GO** (2026-10-22, `pairs-2048`), about 1 min per pair once Vita3K's shaders are cached; three circuits (Empire Climb, Queens Mall and, from the DLC's HD Campaign, Vineta K), Feisar, 8th on the grid | circuit, craft, grid slot (8/8 on both HUDs, by eye), window size 960x544, ours' settings; **no pose, camera or clock is read** (Vita3K has no state channel, and the race clock reads zero for the whole countdown) | Vita3K on its own weston and Xwayland (`vita3k-drive.py display`), a private `HOME`, `pref-path` and config, `SDL_AUDIODRIVER=dummy`, then `scripts/vita-2048-pair.py --out D --walk --event "2048 - Event 2" --node X Y --autopilot off --meta <json>` (`OAG_VITA3K_CACHE`, `OAG_VITA3K_CONFIG`, `OAG_VITA3K_DISPLAY`, `XDG_CONFIG_HOME` as for the others). It boots, waits on each screen by the frame's mean luma and the HUD's white text rather than a fixed sleep, taps the campaign event, pauses, Retries and grabs frames every 0.16 s through the countdown; the grid frame is the one 3 s after the HUD's first frame, ours renders tick `round(60 * 3.0)`. **Not matched: the lighting (the original is darker, mean grey 45 to 57; since 2026-10-26 ours runs 2048's own composite with the exposure held at the original's 1.15, mean grey 23 to 39, "Exposure" below), the grid pose (heading, and Queens Mall's pitch: ours rests 1.15 degrees nose-down of the original, which is the whole of its floor sitting 8 px high; the "hull 30 px up and left" reading of 2026-10-22 was the yellow-centroid metric catching other yellow, the nose tips agree to 2 px), and, on the DLC pair, the texture detail, shadows and hull shading (the lighting itself matches, 48.3 against 45.1 mean luminance, re-measured 2026-10-29).** The original's drawn-hull shake is patched out in its memory by the pair script (`--walk`), and its grid pose is read out of that memory with `--read-pose`. Details: "2048 (Vita) pairs" and "The hull shake and the grid pose" below |
-| Omega (PS4) | **works** (2026-10-22, `pairs-omega`), about 85 s per pair on a warm shader cache (136 s cold); two circuits, Vineta K and Anulpha Pass, Feisar, Venom | circuit, craft, mode, camera mode (the grid is a still; there is no pose readout on shadPS4) | `scripts/shadps4-omega-pair.py`: its own headless `sway` on the render node, its own `HOME`, one uinput pad, muted. Walks MAIN MENU > RACEBOX > Track Select (Right steps the circuit) > Ship Select (two Downs reach the first Feisar craft on a fresh profile) > loading > START RACE and grabs the first frames after the HUD shows, before the countdown board's red 3. **Two shadPS4 settings carry the picture**: `readback_linear_images_enabled = true` with `readbacks_mode = 1` makes the world draw (off: black scene, HUD and lens flare only); `copy_gpu_buffers = true` crashes the emulator at the race load, `direct_memory_access_enabled` alone leaves it black. Recipe: [online lobby, part 3](../networking/online-lobby.md). Profile row `omega`: 1920x1080. **Known gaps in ours**: the gantry board shows the grid position 8 where the original's is blank and counts 3, 2, 1, GO; scenery lighting is not read, so the original's sun, shadows and sky differ (Anulpha's road reads white); the original idles an exhaust flame and ours draws none. The craft offset is read by eye off the nose tip: (-2, +5) px on Vineta K, (0, 0) on Anulpha Pass (the camera follows the craft, so the nose does not move). **Since 2026-10-26 (`omega-grid-height`) ours holds HD's grid hover, which Omega's craft update carries ([hover-target](../ghidra/functions/ps4-omega-eu/hover-target.md)): before, ours floated high and the floor sat a pad's length too low on screen. Mean grey 56.2 to 46.7 (Vineta K) and 75.9 to 61.5 (Anulpha Pass), edge correlation 0.08 to 0.18 and 0.07 to 0.23.** The manifests were not regenerated here; `just compare-rerender-ours --only omega` adopts it. Whether the original's hull shake is visible on the grid is not determined (consecutive grid frames differ by 0.10 to 0.27 normalised RMSE over the hull region, which also holds the animated exhaust) |
+| Pulse PS2 | **works for all 16 circuits** (2026-11-11, `gallery-pulse-ps2`; section below): one grid pair each, forward layout where the original's entry has one, widescreen, camera matched | pose, clock, circuit, layout, the state's `Aspect Ratio 16:9` (read back from the projection), the camera's look direction at the craft, PCSX2's `AspectRatio` | PCSX2 booted by `pcsx2-drive.py boot` with `OAG_COMPARE_PLATFORM=pulse-ps2` in the environment (its ini carries the profile's upscale, screenshot size and `AspectRatio 16:9`). States: `scripts/pcsx2-pulse-walk.py` (below) saves one per Track Select entry into `data/saves/pulse-ps2/`. Pair: `scripts/pcsx2-pulse-pair.py --slot S --state <p2s> --track NN_Track [--reversed] --out D --autopilot off --meta <json>`. Pose, craft, clock and **camera** (`pcsx2_state.camera`: eye, axes and fov of the object `Camera_SubmitScene` runs on, [camera.md](../ghidra/functions/ps2-pulse-eu/camera.md)) are read out of the state file's own EE RAM, the frame is PCSX2's GS screenshot of the loaded state taken while the VM runs on (the race clock is read before and after the grab and ours is rendered at its mean). **What is left is the original's `40/21` projection shown at `16:9`: ours draws everything 7.1 % wider** (camera.md) |
+| Pure (PSP) | **works** (2026-10-22, `pure-pairs`), about 30 s per pair once a state exists; twelve circuits (the Alpha, Beta and Classic leagues; 2026-11-11 `gallery-pure`), Feisar, Vector | pose, circuit, camera (the original's Close eye read at `(0, 3.000, -11.250)` in the body frame; ours' own chase rig is checked by the hull's px offset, 0 to 1 px), fov 60, race clock (read at the state's own first stop, the HUD tenth equal on 4 of 4) | **USA disc** (`data/images/pure-psp-usa.chd`, `UCUS98612` 2.00): every live Pure address is recovered on it; the EU image is not read. `PPSSPP_EXTRA_INI=<file from compare_env.py ppsspp-ini pure-psp> scripts/ppsspp-start.sh <lane> <display> <port> <usa image>`, then `scripts/psp-pure-pair.py --port P --home $PP_HOME --out D --track 01_Vineta_K --state <ppst> --class vector --team Feisar --autopilot off --meta <json>` (`OAG_SHOT_DISPLAY`, `DISPLAY`, `HOME`, `XDG_CONFIG_HOME` as for Pulse). States: `scripts/psp-pure-walk.py --port P --track-index N --keep data/saves/pure-psp/<name>.ppst` walks pad presses from a running race (`start`, Quit) or the Main Menu to Time Trial, Vector, Alpha, circuit N, Feisar, and saves a state 16 s after Track Selection (a fresh profile has only Vector and Venom and the Alpha league: Vineta K, Modesto Heights, Chenghou Project, Blue Ridge, directories `01_Vineta_K`, `03_Modesto_Heights`, `04_Chenghou_Project`, `07_Blue_Ridge`; **`--unlock --league N` writes Pure's dev-unlock byte and picks Beta (1: `08_Sinucit`, `09_Citta_Nuova_V`, `10_Sebenco_Climb`, `12_Sol_2`) or Classic (2: `ClassicsNS/01_Karbonis`, `02_Sagarmartha`, `03_Manor_Top`, `04_Mandrashee`, which `psp-pure-pair.py --track` takes as a `Data`-relative path and `--hull-differs` for the Classic hull)**). **Not matched: the shaded hull (ours darker), and the HUD (ours has no speed gauge and prints `TOTAL` where the original prints `BRONZE TIME`).** Details: "Pure (PSP) pairs" below |
+| 2048 (Vita) | **works for a grid before GO** (2026-10-22, `pairs-2048`), about 1 min per pair once Vita3K's shaders are cached; fourteen circuits (Empire Climb, Queens Mall and, from the DLC's HD Campaign node, Vineta K plus eleven more DLC circuits by "Eleven pairs through a renamed grid cell" below), Feisar, 8th on the grid | circuit, craft, grid slot (8/8 on both HUDs, by eye), window size 960x544, ours' settings; **no pose, camera or clock is read** (Vita3K has no state channel, and the race clock reads zero for the whole countdown) | Vita3K on its own weston and Xwayland (`vita3k-drive.py display`), a private `HOME`, `pref-path` and config, `SDL_AUDIODRIVER=dummy`, then `scripts/vita-2048-pair.py --out D --walk --event "2048 - Event 2" --node X Y --autopilot off --meta <json>` (`OAG_VITA3K_CACHE`, `OAG_VITA3K_CONFIG`, `OAG_VITA3K_DISPLAY`, `XDG_CONFIG_HOME` as for the others). It boots, waits on each screen by the frame's mean luma and the HUD's white text rather than a fixed sleep, taps the campaign event, pauses, Retries and grabs frames every 0.16 s through the countdown; the grid frame is the one 3 s after the HUD's first frame, ours renders tick `round(60 * 3.0)`. **Not matched: the lighting (the original is darker, mean grey 45 to 57; since 2026-10-26 ours runs 2048's own composite with the exposure held at the original's 1.15, mean grey 23 to 39, "Exposure" below), the grid pose (heading, and Queens Mall's pitch: ours rests 1.15 degrees nose-down of the original, which is the whole of its floor sitting 8 px high; the "hull 30 px up and left" reading of 2026-10-22 was the yellow-centroid metric catching other yellow, the nose tips agree to 2 px), and, on the DLC pair, the texture detail, shadows and hull shading (the lighting itself matches, 48.3 against 45.1 mean luminance, re-measured 2026-10-29).** The original's drawn-hull shake is patched out in its memory by the pair script (`--walk`), and its grid pose is read out of that memory with `--read-pose`. Details: "2048 (Vita) pairs" and "The hull shake and the grid pose" below |
+| Omega (PS4) | **works** (2026-10-22, `pairs-omega`), about 85 s per pair on a warm shader cache (136 s cold); two circuits, Vineta K and Anulpha Pass, Feisar, Venom | circuit, craft, mode, camera mode (the grid is a still; there is no pose readout on shadPS4) | `scripts/shadps4-omega-pair.py`: its own headless `sway` on the render node, its own `HOME`, one uinput pad, muted. Walks MAIN MENU > RACEBOX > Track Select (Right steps the circuit) > Ship Select (two Downs reach the first Feisar craft on a fresh profile) > loading > START RACE and grabs the first frames after the HUD shows, before the countdown board's red 3. **Two shadPS4 settings carry the picture**: `readback_linear_images_enabled = true` with `readbacks_mode = 1` makes the world draw (off: black scene, HUD and lens flare only); `copy_gpu_buffers = true` crashes the emulator at the race load, `direct_memory_access_enabled` alone leaves it black. Recipe: [online lobby, part 3](../networking/online-lobby.md). Profile row `omega`: 1920x1080. **Known gaps in ours**: the gantry board shows the grid position 8 where the original's is blank and counts 3, 2, 1, GO; scenery lighting is not read, so the original's sun, shadows and sky differ (Anulpha's road reads white); the original idles an exhaust flame and ours draws none. The craft offset is read by eye off the nose tip: (-2, +5) px on Vineta K, (0, 0) on Anulpha Pass (the camera follows the craft, so the nose does not move). **Since 2026-10-26 (`omega-grid-height`) ours holds HD's grid hover, which Omega's craft update carries ([hover-target](../ghidra/functions/ps4-omega-eu/hover-target.md)): before, ours floated high and the floor sat a pad's length too low on screen. Mean grey 56.2 to 46.7 (Vineta K) and 75.9 to 61.5 (Anulpha Pass), edge correlation 0.08 to 0.18 and 0.07 to 0.23.** The manifests were not regenerated here; `just compare-rerender-ours --only omega` adopts it. Whether the original's hull shake is visible on the grid is not determined (consecutive grid frames differ by 0.10 to 0.27 normalised RMSE over the hull region, which also holds the animated exhaust). **Second original, 2026-11-01: the `wipeout_pc` native port** (PS4 code run natively, replacement runtime, shadPS4 `b4e7ae776071` video core with `gow3:` changes; built and run headless on Linux with a muted SDL driver; capture driver: `scripts/wipeout-pc-omega-pair.py`, below). Its Vineta K grid has the track floor and near walls lit with shadow streaks in 3 of 3 boots (whole-frame MAE between boots 0.022), where the shadPS4 0.20 pair above draws them near black (floor MAE against ours 0.098 against 0.280 on the first boot): confidence 80 that the black floor is a shadPS4 readback artefact, not the game. The port edits the eboot (212 writes: native 4K, startup hang, zone and effects fixes above 60 FPS, model slots, Eliminator slider limit), none touching a physics value and none changing a 1080p/60 frame by reading; two render hacks (start-gantry mip chain, per-sample livery shading) are unconfirmed (confidence 40) and not visible at the grid. **Since 2026-11-01 (`omega-native-pairs`, maintainer decision) the native port is the original of both Omega race pairs**, replacing shadPS4 0.20: `theirs.png` is the port's frame, the shadPS4 frame is kept as `theirs-shadps4.png` and cited in each note, and `vineta-k-native-port` is folded into `vineta-k`. Same pose (Feisar, grid before GO, HUD up plus 2 frames), walked by `--track-steps` (Anulpha Pass is one Right on Track Select). Metrics, rmse / edge correlation / mean grey, shadPS4 then native: Vineta K 0.268 / 0.18 / 48.16 to 0.196 / 0.21 / 30.74; Anulpha Pass 0.249 / 0.26 / 40.85 to 0.221 / 0.28 / 34.03 (both read off `side.png`). Vineta K: 3 boots, whole-frame MAE 0.022 between them. Anulpha Pass: one clean boot (confidence 55, seen once); a second boot ran at the same time on the machine-wide uinput pad, took a different craft (a locked one, other livery) and was discarded, so a concurrent port run is never a repeat. Hull livery varies from boot to boot on both circuits. Live memory reads through `/proc/<pid>/mem` of the launching process (`gdb -p` is blocked by Yama `ptrace_scope` 1): image base `0x800000000`, class-name table and HUD strings read at per-segment deltas; the race state, mode and class name tables and racer table were then found at the patch eboot's addresses ([patch-v107-addresses](../ghidra/functions/ps4-omega-eu/patch-v107-addresses.md): our Ghidra docs are the base eboot, confidence 98), the tone map object is a heap pointer and not yet read. **Twelve circuits, 2026-11-11 (`gallery-omega`): every circuit Track Select lists in WipEout HD mode, up from two.** `scripts/wipeout-pc-omega-pair.py pair` (own headless `sway` on the render node, the port started through its `run.py`, one uinput pad; `emu-run.py` watchdog, about 90 s a boot) walks the same route as `shadps4-omega-pair.py` (whose helpers it imports) and records the port commit (`84690ed`), its patch list and ours. What it adds over the shadPS4 walker: (1) **`SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1`**, without which the window never sees the pad; (2) a `for_window` rule making the window full screen, without which the frame carries the port's title bar and a 2 px border; (3) **a fresh save every boot** (`GOW3_USER_DIR` deleted first) so Track Select opens on Vineta K and Ship Select on its first craft, with the GPU caches in one persistent directory; (4) refusal while another Xbox-360-shaped pad exists (the pad is system-wide); (5) **proof of the state in the pair directory**: `track-select.png`'s name crop and `ship-select.png`'s Feisar logo are compared with reference crops made once from the original (a wrong circuit's name reads 0.15 or more against the right one's 0.00 to 0.04; limit 0.08), the countdown board must not have risen 0.08 above its reading at the first HUD frame (the board sits over scenery, so its absolute reading is 0.19 below to 0.05 above zero depending on the circuit), and the frame must show no window bar. The reference crops (`refs/` beside the pairs: the twelve name crops `NN.png` by Track Select step and `feisar.png`) were made once from a Track Select and Ship Select walk of the original, cropped at `700x60+70+360` and `420x140+220+170` of the 1920x1080 frame; the driver is re-run with `--name-ref refs/NN.png --ship-ref refs/feisar.png`. Track Select order on a fresh save, step 0 to 11: Vineta K, Anulpha Pass, Moa Therma, Chenghou Project, Metropia, Sebenco Climb, Ubermall, Sol 2, Modesto Heights, The Amphiseum, Talon's Junction, Tech De Ra (all selectable on a fresh save; Right wraps after 12). Ours races all twelve (`Data\Environments\<folder>\track.vex`, folders `01_vineta_k`, `15_anulpha_pass`, `03_moa_therma`, `04_chenghou_project`, `02_metropia`, `10_sebenco_climb`, `05_ubermall`, `12_sol_2`, `modesto_heights`, `amphiseum`, `talons_junction`, `tech_de_ra`). Metrics, rmse / edge correlation / mean grey, adopted boot then a second cold boot, then the whole-frame normalised RMSE between the two boots of the original (frame pick, camera settling and hull livery all move it): Vineta K 0.188 / 0.21 / 29.2, 0.190 / 0.21 / 29.1, 0.098; Anulpha Pass 0.206 / 0.30 / 30.3, 0.217 / 0.27 / 32.3, 0.111; Moa Therma 0.230 / 0.16 / 38.5, 0.231 / 0.14 / 38.8, 0.119; Chenghou Project 0.193 / 0.15 / 30.1, 0.184 / 0.16 / 28.0, 0.116; Metropia 0.200 / 0.28 / 35.4, 0.206 / 0.26 / 36.7, 0.108; Sebenco Climb 0.224 / 0.14 / 40.2, 0.229 / 0.16 / 41.4, 0.120 (the second boot's grab shows the timer at 0.00.1, just past GO); Ubermall 0.149 / 0.29 / 21.1, 0.150 / 0.28 / 21.6, 0.088; Sol 2 0.214 / 0.14 / 33.2, 0.212 / 0.16 / 32.5, 0.141; Modesto Heights 0.238 / 0.09 / 40.7, 0.236 / 0.09 / 40.4, 0.138; The Amphiseum 0.330 / 0.10 / 56.5, 0.324 / 0.13 / 55.0, 0.120 (the original is much brighter than ours); Talon's Junction 0.203 / 0.17 / 32.4, 0.200 / 0.18 / 31.9, 0.081; Tech De Ra 0.198 / 0.29 / 32.7, 0.195 / 0.30 / 32.1, 0.089. A boot-to-boot spread of 0.08 to 0.14 against a pair's 0.15 to 0.33 means the metrics are good to about 0.01 to 0.02, not to the third digit (confidence 70, two boots each). The re-captured Vineta K differs from the 2026-11-01 frame (port commit `e56904d27a1e`) by whole-frame MAE 0.049 (upper half, no hull: 0.046), the same size as boot to boot; the port's later commit is not separated from that noise. **The port runs the Omega profile's `GOW3_ENGINE_FPS=240`** (`scripts/game_profiles.py`; the engine steps by the time between frames), so the "60 FPS" the 2026-11-01 record carried is the ini's patch choice (no frame-rate patch), not the engine rate (the profile already set 240 at `e56904d`); the driver records `engine_fps_ini` and the log line from this revision on (checked on a Vineta K run of the committed script), while the twelve adopted pairs carry only `engine_fps: 60`, the ini value. **WipEout 2048 mode, 2026-11-12 (`gallery-omega-2048`): eight of its ten circuits paired, on top of the twelve.** `wipeout-pc-omega-pair.py pair --game-mode 2048` (`--class-steps N`, `--hud-labels-ref`, `--hud-timer-ref`). The walk: Race Box, GAME MODE one Right (WipEout HD to WipEout 2048); SPEED CLASS is C, B, A, A+ (Down twice from GAME MODE reaches it, Right steps it; a fresh save opens on C CLASS; Sol, "speed class A or A+ only", is raced at A CLASS, `--class-steps 2`); confirm on that row goes straight to Track Select, whose order on a fresh save, step 0 to 9, is Altima, Rockway Stadium, Capital Reach, Downtown, Queens Mall, Metro Park, Sol, Unity Square, Subway, Empire Climb (the `environments2048` folders `altima`, `arena`, `bridge`, `cathedral`, `mall`, `park`, `sol`, `square`, `subway`, `tower`; the ten name crops are 0.148 or more apart, the limit being 0.08). Ship Select opens on the yellow Feisar2048 (no Downs). **The race load ends in an intro that loops** a fly-over of the circuit and, after one tap of cross, a craft presentation, under a START RACE prompt, and returns to the fly-over: a second tap about 2.5 s after the first starts the race, so the driver taps every 2.5 s until the HUD shows and stops then (no tap, and the single tap HD mode uses, both ended in the loop). **The 2048 HUD** (LAP 1/4, POS 8/8, TOTAL, CURRENT, a temperature gauge) is white text at full strength on the grid, TOTAL reading 0.00.00 for at least 2.5 s and then running before GO is seen on the board. Telling it from the fly-over needed a reference: a white-pixel fraction (1.0 on a fade, 0.39 on a bright sky, about 0.10 on the HUD) and a bottom-bar line both failed. What holds is the normalised RMSE of the frame's crop, thresholded to a white mask (gray over 97 %), against a reference mask made once from a HUD frame of the original: the label block (`270x230+0+0` of 1920x1080) reads 0.00 to 0.07 on HUD frames (0.15 with white scenery behind it) and 0.34 or more on every fly-over, presentation, fade and menu frame of six exploratory boots (about 180 frames), limit 0.20; the TOTAL reading (`200x50+280+138`) reads 0.00 and 0.04 on two frames showing 0.00.00 (0.05 to 0.11 in the pair runs) and 0.35 on 0.02.16, limit 0.15, and is the before-GO check that replaces HD's countdown-board check (both are recorded in `pair.json`'s checks). **What it has been shown to separate is 0.00.00 from 0.02.16; a reading a few hundredths past GO was never seen**, so a late HUD detection (the thinnest label margin is Sol's 0.146 against 0.20) could pass a frame just after GO, which is how the HD route let one Sebenco Climb boot through; every `side.png` of all eleven 2048 boots was read by eye and shows 0.00.00. The grab is the first HUD frame plus 2, as in HD mode; the HD yellow-ring detector is not run. The reference masks are made from a game frame and so live beside the pairs (`omega/refs2048/`: `00.png` to `09.png` name crops by Track Select step, `feisar2048.png`, `hud-labels.png`, `hud-timer.png`). A false negative stalls the run, so every threshold was set against the worst false positive. **Metrics**, rmse / edge correlation / mean grey (the page's own scores), adopted boot then a second cold boot where one was taken, then the whole-frame normalised RMSE between the two boots of the original: Altima 0.236 / 0.05 / 39.66, 0.234 / 0.06 / 38.92, 0.109; Capital Reach 0.296 / -0.01 / 55.30, 0.296 / -0.01 / 55.53, 0.071; Sol (A CLASS) 0.258 / -0.02 / 48.31, 0.259 / -0.02 / 48.53, 0.074; Subway 0.240 / 0.16 / 41.07, 0.237 / 0.18 / 40.49, 0.086; Downtown 0.243 / 0.00 / 40.54; Queens Mall 0.296 / -0.02 / 52.56; Metro Park 0.273 / 0.02 / 47.23; Empire Climb 0.306 / 0.02 / 58.67 (one boot each, confidence 55 for those four; confidence 70 for the four with two boots, the metrics repeating to 0.003 rmse and 0.8 mean grey). The geometry lines up (read by eye on all eight `side.png`: the same arches, stands, banners and kerbs) and the pair's difference is the HUD and the light; **the edge correlations near 0 (HD pairs 0.09 to 0.30) are the two HUDs not overlapping at all and the light, not a pose mismatch** (`craft_offset_px` is recorded in each `pair.json`, informational). **Not matched, recorded as caveats in each pair:** (1) ours drew HD's HUD in Omega's 2048 mode (lap hexagon, position disc, BEST and time bar, speed readout) where the original draws 2048's: checked, differs (visible in every `side.png` made before 2026-11-12; since `omega-2048-hud-laps` ours draws 2048's, `docs/formats/omega-status.md`, "2048 mode: HUD and laps"); (2) the original's Feisar2048 hull is lit and graded by the scene (orange at the sunset circuits, yellow and white on a grey one; identical across two boots) and stands in a white start ring, ours lights it flatter and draws no ring; (3) **the class mapping is assumed and its lap counts disagree**: the original races 4 laps at C CLASS (all seven C circuits) and 5 at A CLASS on Sol, ours on Sol shows venom 3, flash 4, rapier 4, phantom 5 laps (and 3 on Altima at venom), so the pairs use venom for C and rapier for A (the ladder's order) and the lap count differs; matching laps would read C as flash or rapier and A as phantom, which a physics measurement, not a grid still, would have to decide. **Two circuits not paired: Rockway Stadium (`arena`) and Unity Square (`square`)**, because ours cannot race them: the load panics with wgpu "Buffer size 308016200 (arena) / 310295700 (square) is greater than the maximum buffer size (268435456)" on the circuit's one `vertices` buffer (`oag_mesh::mesh_render::device_descriptor` raises the texture-resolution and binding-array limits, not `max_buffer_size`, so wgpu's 256 MiB default stands). The other eight load and race. **2048 cross-check: checked, differs.** 2048's own `arena` and `square` (`oag-game <PCSF00007> --race --track 'Data\art\published\environments\arena\track.vex' --mode single_race`, same for `square`) load and render (192,202 and 195,172 triangles in the frame, Altima 201,323), because Omega's re-cooked meshes are about 3.5 times heavier (Altima 726,699 triangles in the frame, so the two largest circuits' one vertex buffer passes 256 MiB). **Fixed 2026-11-12 (`big-vertex-buffer`): ours now loads and draws both, its vertex buffer cut in two ([`vertex-buffers.md`](../rendering/vertex-buffers.md)); the pairs need only the original's capture.** The fix was an engine change, outside a capture lane; the two original frames were not captured because the pair is one atomic run. The four Zone circuits (`zone_1` to `zone_4`) were not paired: Zone is a different race type (a `zone` pair kind with its own walk), and ours decodes `zone_3` to no triangles on a single-race load. **2048 and Omega cross-check:** checked, differs (Omega's 2048-era race draws HD's HUD where the original draws 2048's). Open: the class mapping (A+ CLASS's lap count), `arena` and `square`. |
+
+## Pad seats: two agents' emulators at once (2026-11-16, `seat-pads`)
+
+A uinput pad is a system-wide device: every emulator on the machine sees every pad, so the pair drivers used to refuse to start
+while any Xbox-360-shaped pad existed, and two agents could not drive emulators at the same time. A **seat** gives one agent's pads
+their own identity and tells that agent's emulators to look at nothing else (`scripts/pad_seat.py` holds all of it).
+
+| | Seat `N` (`OAG_PAD_SEAT=N`, 1..255) | No seat (the default) |
+|---|---|---|
+| Pad names (`scripts/uinput-pads.py`) | `OAG seat N pad A`, `B`, ... | `OAG test pad A (Microsoft X-Box 360 pad)` |
+| USB ids | vendor `045E`, product `4F00 + N` (`4F01`..`4FFF`) | `045E:028E` (what `oag-game`'s split-screen walk reads through gilrs) |
+| SDL emulator (the port, shadPS4) | `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=0x045e/0x4f0N` plus `SDL_GAMECONTROLLERCONFIG` with an Xbox-360 layout for that id (`pad_seat.sdl_env`) | `...EXCEPT=0x045e/0x028e` (the original pads only: a seated agent's pad, and RPCS3's DualShock-3 ones, stay invisible) |
+| RPCS3 (evdev handler, by name) | `OAG seat N pad rpcs3`, DualShock-3 ids; `OAG_RPCS3_PAD_NAME` still wins; `scripts/emu-env.sh` writes the name into the private input profile | `OpenAntiGrav Virtual Pad` |
+| PCSX2, Vita3K (X key events, no pad) | `pad_seat.sdl_blind_env`: `...IGNORE_DEVICES_EXCEPT=0x0000/0x0000`, so they see no pad of any seat | same (always applied) |
+| A driver refuses to start when | its own seat's pad already exists | an original-id pad exists (as before) |
+| Sway runtime dir of a `Rig` | `/tmp/oag-omega[-port]-<lane>-sN` | `/tmp/oag-omega[-port]-<lane>` |
+
+Run each agent's drivers with its own `OAG_PAD_SEAT` (the lead hands out the numbers), and give each its own scratch directory
+and display. A driver started without a seat behaves as before and is not disturbed by another agent's seat pad: it still refuses
+when an original-id pad exists, and its SDL emulator sees only the original ids.
+
+**Re-checking an emulator's SDL** (after an update, or for one not yet probed): make pads on two seats and ask the library
+what a program with each seat's environment sees. `--lib` takes any `libSDL3.so.0`, such as the ones RPCS3 and PCSX2 bundle.
+
+```sh
+mkfifo a b; (sleep 300 > a &); (sleep 300 > b &)
+OAG_PADS=1 OAG_PAD_SEAT=1 setsid uv run --with evdev python3 scripts/uinput-pads.py < a &
+OAG_PADS=1 OAG_PAD_SEAT=2 setsid uv run --with evdev python3 scripts/uinput-pads.py < b &
+python3 -I scripts/pad_seat.py probe --all            # no hint: every pad
+python3 -I scripts/pad_seat.py probe --seat 1 --lib /opt/rpcs3/usr/lib/libSDL3.so.0   # only "OAG seat 1 pad"
+echo quit > a; echo quit > b                          # the pads vanish
+```
+
+**What was measured (2026-11-16, confidence 90 for SDL3, the system's 3.4.20 and the copies bundled with RPCS3 and PCSX2).**
+`SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` filters both the gamepad and the joystick lists (a ctypes probe with seat 1's and seat 2's
+pads: no hint lists both, EXCEPT seat 1 lists seat 1, EXCEPT `0x0000/0x0000` lists none). SDL3 maps the new product id from the
+pad's evdev capabilities by itself, to the same layout `XBOX360_LAYOUT` supplies; the supplied mapping is insurance for an SDL
+without that guess (the GUID's name-CRC field is left zero, which SDL matches against any name). The wipeout_pc port reads the
+gamepad API (`SDL_GetGamepads`, `SDL_OpenGamepad`), so the hint reaches it: two ports on seats 1 and 2 at once each logged
+`gamepad connected: OAG seat N pad` and no other. Vita3K's binary carries the hint string (statically linked SDL, not probed).
+**shadPS4 is not verified**: `/usr/lib/shadps4` is `drwx------ root` on this machine, so it cannot be started or inspected
+(`chmod -R a+rX /usr/lib/shadps4` fixes that); `shadps4-omega-pair.py` passes it the same environment as the port.
+
+**The proof, two seats at once** (two `wipeout_pc` ports, each in its own headless `sway`, started 2026-11-16 on seats 1 and 2;
+both were on the "PRESS ANY BUTTON TO START" title): one press on seat 1's pad took only the seat-1 port to MAIN MENU, a second
+moved only its highlight from CAMPAIGN to RACEBOX; a press on seat 2's pad then took only the seat-2 port to MAIN MENU, and two more
+moved only its highlight to ONLINE while seat 1 stayed on RACEBOX. Judged on the full frames, since the title and menu
+backgrounds animate. The seated runs used a scratch harness that calls the pair driver's `Rig` (sway, port, pad), not its `main()`. A single-seat run of `wipeout-pc-omega-pair.py` (no seat) still reached the grid and passed its seven parity checks.
 
 ## 2048 (Vita) pairs (2026-10-22, `pairs-2048`)
 
@@ -375,6 +593,218 @@ screen, which is light (mean luma 0.9), is waited out until a dark frame; the sh
 (`(750, 480)`, `(402, 312)`) restarts the grid and the burst starts at the confirm. **The node coordinates are this save's campaign map** (a save that has finished
 Event 1: Empire Climb `(190, 25)`, Queens Mall `(270, 68)`); another save needs its own `--node`. **Metro Park's Time Trial hangs Vita3K at 56 % on the loading bar**
 (three boots, two configs, a bar that sat at 56 % for 3 to 5 minutes each time); the two races above load in 20 to 30 s.
+
+### A fresh Vita3K profile and the circuits a fresh save reaches (2026-11-11, `gallery-2048`)
+
+**Claim: the page carries a 2048 pair for every circuit ours can race (about 14, up from 3). Not met that day: no pair was added.** The profile was
+installed, the game booted, and the walk stopped at the Game Mode grid because a tap did not register without the Vita firmware (confirmed by
+the next lane: [vita3k-capture.md](../reverse-engineering/vita3k-capture.md), "A fresh profile on a new machine"; the pairs are in "Eleven pairs through a
+renamed grid cell" below).
+
+- **Pref-path (persistent, reused by later lanes):** `data/saves/2048/vita3k/` (`ux0/app/PCSF00007` base 1.04 with the patch merged,
+  `ux0/addcont/PCSF00007/DLC1W2048PACKAGE` and `DLC2W2048PACKAGE`; 2.3 GiB). Installed with `vita3k -c <config> -w --pkg <pkg> --zrif <zRIF>`
+  under a private `HOME` and `env -u XDG_CONFIG_HOME -u XDG_DATA_HOME`: `data/images/2048-vita-eu.pkg`, `2048-vita-eu-patch.pkg`, then
+  `data/dlc/WipEout 2048 - DLC1 (Europe) (DLC).pkg` and `DLC2`. **The DLCs need their own zRIF** (the base one gives `header signature is
+  invalid`; `data/keys/vita-zrif.tsv` carries only the base row); it comes from the pkgi pair list's rows `EP9000-PCSF00007_00-DLC1W2048PACKAGE`
+  and `DLC2W2048PACKAGE`. Config keys that keep the boot unattended: `show-welcome: false`, `warn-missing-firmware: false`.
+- **What a fresh save opens** (read off `data.psarc`'s `data/plugins/grids/grid_00..15.xml`, `PI_Grid`/`PI_Cell`): the base campaign opens
+  `2048 - Event 1` and 15 side events with no gate (`2048-campaign.md`); the HD Campaign opens `grid0` (Uplift) and the Fury Campaign `grid8`
+  (Blitzed, `Unlock Grid="None"`), and in each grid only the two cells that author `Locked="false"` (HD: `grid0_3_1` Vineta K Race and
+  `grid0_3_2` Anulpha Pass Speed Lap; Fury: `grid8_3_1` `17_Track` Race and `grid8_3_2` `19_Track` Elimination). Every other grid needs the
+  previous grid's earned points (`RequiredPoints` 10, 13, 16, 19, 22, 25, 30, 40 for HD) and every other cell its neighbours' medals.
+  The track keys map `01..08_Track` to Vineta K, Metropia (`02`), Moa Therma (`03`), Chenghou Project (`04`), Ubermall (`05`), Sebenco Climb
+  (`06`), Sol 2 (`07`), Anulpha Pass (`08`) (the `FEModelLocation` `track0N` in `dlc1.psarc`'s `plugins/tracks/Definition.xml`);
+  Fury's `17..20` are Talons Junction, Amphiseum, Modesto Heights and Tech De Ra, `21..24` their reverses, `25..28` `Zone_1..4`.
+  Metropia first appears in `grid2` (needs `grid1`'s 13 points), so **an unlock route is needed for Metropia and for most circuits**.
+- **Unlock route, a hypothesis not yet tried (the emulator was not reachable past the Game Mode grid):** the grid record parsed by
+  `FUN_810bd2a4` (EU v1.04) keeps `Locked` as a byte at `+0xac`, `RequiredPoints` at `+0xb0`, `FlyerName` inline at `+0xcc`; the cell record
+  parsed by `FUN_810bbfce` keeps `Locked` at `+0xe9` and the track name inline at `+0xea` (0x18 bytes, `01_Track`). A scan of the
+  guest's heap for those inline strings, then writing the two flag bytes through `/proc/<pid>/mem` (the channel the hull-shake patch
+  uses), may open the map. Confidence 40: the map colours off the progress word `event+0x2d8` and the vtable's lock query
+  (`campaign-map-projection.md`), which may not read these bytes.
+- **`CameraP1`:** not readable off the save. `DATA.BIN` has no readable strings, so the `strings -a` route returns nothing; the options
+  screen is the way, and was not reached.
+
+### Eleven pairs through a renamed grid cell (2026-11-12, `gallery-2048b`)
+
+**Claim: the page carries a 2048 race pair for every circuit ours can race (about 14), up from 3. Partly true: 14 circuits, not every one.** Eleven pairs
+were added (the HD pack's Metropia, Anulpha Pass, Moa Therma, Chenghou Project, Ubermall, Sebenco Climb and Sol 2, and the Fury pack's Talons Junction,
+Amphiseum, Modesto Heights and Tech De Ra), which with Empire Climb, Queens Mall and Vineta K makes 14. **Not paired: the other eight base circuits
+(Altima, Arena, Bridge, Cathedral, Park, Sol, Square, Subway) and the four Zone circuits**, and the reversed circuits (below).
+
+- **Vita3K and its firmware.** `PSP2UPDAT-firmware.PUP` (128 MB, firmware 3.74, build 571880) installs **nothing** with `vita3k --firmware` (it logs
+  "100 %" in 0.9 s and leaves `vs0/` and `os0/` empty, no error line even at `log-level: 0`); `PSP2UPDAT-fonts.PUP` installs the fonts (`sa0/`, `pd0/`).
+  What worked is an `os0/` (13 MB) and `vs0/` (159 MB, with `vs0/sys/external/libsystemgesture.suprx`) copied from another machine's working Vita3K into
+  `data/saves/2048/vita3k/`. With it `libsystemgesture` loads and a tap registers.
+- **A tap needs the pointer there first.** `xdotool mousemove x y mousedown 1` in one command is ignored on the Game Mode grid and the map; a move, 0.3 s,
+  then the press opens them (`vita3k-drive.py tap`, fixed). The Game Mode tile is then selected (orange) by the first tap and opened by the second; the pair
+  script looks at the tile's colour and taps again.
+- **The guest hangs about every second boot** (a frame frozen on "Sony Computer Entertainment presents" or on the Game Mode grid, the process at 0 to 60 %
+  CPU, no log line; `sceKernelTryLockLwMutex returned ... FAILED_TO_OWN` is the last error), at a load average of 3 as well as of 40; every attempt that
+  did not hang took about 2 minutes. The walk now looks at the frame instead of counting key presses and stops with `STALLED` after 90 s, and the batch
+  runs a failed attempt again (of the eleven pairs below five needed a second attempt and Sol 2 five).
+- **The unlock route that worked is not an unlock.** Every grid cell of every campaign is a record in the guest's memory from the boot on
+  (`FUN_810bbfce`, EU v1.04: `Locked` byte at `+0xe9`, the track name NUL padded in 0x18 bytes at `+0xea`, another string at `+0x102`; confidence 85,
+  from 10 records per HD circuit name on each boot and the cards below). Clearing the `Locked` byte of all of them did open a node the map drew dark
+  (Vineta K, 10 zones; confidence 60, the node was not shown untappable before the write). Writing **another circuit's name over the track name** of the
+  HD Campaign's first node (Vineta K, Race) makes that node's card show the new circuit's name and picture ("METROPIA", its photo) and the race load that
+  circuit, in that event's own mode: Race, Venom, 3 laps, Feisar HD, 8th on the grid. That needs no map navigation and no unlock, so it reaches every
+  circuit of both packs from one node. The pair's `original.track_rename` records the write; the pair is a **substituted event**, not an authored one
+  (`scripts/vita3k-mem.py rename-track OLD NEW`, `unlock`, `find`; `vita-2048-pair.py --rename-track OLD NEW`).
+- **Retry now shows the mode card again** on the HD Campaign and holds the countdown until the check mark is tapped (7 s of card on every grab otherwise, the
+  burst's HUD never came up); the burst taps `(882, 480)` every 2 s until the HUD is up. The first HUD frame is still tick 0.
+- **Same recipe as the Vineta K pair**: Retry and a 44-frame burst, the frame 3 s after the first HUD frame (2.9 to 3.1 s measured) against ours' tick
+  174 to 187, hull shake patched out, `--skip-craft-offset` (no yellow livery to find, no nose read), exposure held at 1.15, Pilot Assist on in both (below).
+
+| Circuit | Pack | RMSE | Edge correlation | Mean grey difference |
+| --- | --- | --- | --- | --- |
+| Metropia | HD | 0.138 | 0.17 | 17.8 |
+| Anulpha Pass | HD | 0.129 | 0.15 | 14.8 |
+| Moa Therma | HD | 0.196 | 0.17 | 33.7 |
+| Chenghou Project | HD | 0.139 | 0.13 | 16.5 |
+| Ubermall | HD | 0.188 | 0.25 | 24.6 |
+| Sebenco Climb | HD | 0.140 | 0.15 | 21.3 |
+| Sol 2 | HD | 0.163 | 0.14 | 23.6 |
+| Talons Junction | Fury | 0.182 | 0.13 | 23.2 |
+| Amphiseum | Fury | 0.167 | 0.12 | 28.0 |
+| Modesto Heights | Fury | 0.176 | 0.09 | 30.8 |
+| Tech De Ra | Fury | 0.187 | 0.18 | 26.8 |
+
+- **Seen once or twice.** A second cold boot of Anulpha Pass gave RMSE 0.127 against 0.129 and its original differs from the first boot's by 0.047 RMSE
+  (the animated sign boards, the rivals' craft), so the RMSE column is good to about 0.02. A first set of the same eleven pairs, taken before the Pilot Assist
+  setting below was fixed, had second boots of Anulpha Pass, Metropia and Tech De Ra at 0.144, 0.139 and 0.189 (first boots 0.126, 0.139, 0.194; the
+  originals 0.079, 0.037 and 0.055 apart): the same agreement. The other ten pairs are seen once (four second boots hung out of their four attempts).
+  Circuit, craft and the HUD place (8/8) were read off both frames of every pair; the **mode** is Race on both sides, so no Speed Lap or Elimination is in this set.
+- **Pilot Assist had to be set in the original.** The compare profile pins `pilot_assist = "on"` and ours draws the indicator; this profile's original
+  started on **Normal**, which draws none, so the first eleven pairs showed the icon on one side only (no parity check reads the original's options). Home,
+  Options, Pilot Assist `(297, 325)`, the right arrow `(910, 243)` once to **Extreme**, the check mark (saved to `DATA.BIN`) puts it up; the pairs here were
+  recaptured after that and the icon is drawn on both sides in all eleven (crops of the box `575,494,130x44`, read side by side).
+- **What the frames show.** Same circuit and slot everywhere; ours is darker on the hull (black where the original is lit blue and green) and brighter on
+  some floors, the sign boards sit at another phase, the rivals are other craft. Anulpha Pass shows a defect of ours: wide cyan glow quads on the floor and
+  a flat blue block of sky where the original is dark (box `0,280,300,60`, mean grey 74.1 ours against 40.1 original). **It is not the `alpha_emissive` family**
+  (a render with `OAG_ALPHA_EMISSIVE_OFF=1` is pixel-identical in that box), so it is another material and open.
+- **`alpha_emissive` glow, one box per pair** (the pixels that change with `OAG_ALPHA_EMISSIVE_OFF=1`; 23 on Anulpha Pass, 206 on Metropia): Anulpha Pass
+  box `172x73+535+77` mean grey 25.8 original, 20.8 ours, 19.9 ours with the family off; Metropia box `409x102+254+57` 73.4 original, 80.3 ours, 78.2 ours
+  with it off. The family adds 0.8 and 2.0 grey in those boxes and is not what separates the frames; ours' lit pixels there are a speckle (isolated cyan or
+  yellow pixels on the sign boards) where the original is smooth.
+- **The chase camera:** the options screen (Home, Options, Camera) reads **CLOSE** on this profile (the pairs above were taken on it; the earlier three
+  were not, "The chase camera and the craft's size" below).
+- **Not reached.** The base circuits: the Single Player Campaign's events are gated by rank (25 to 34 for the ten Phantom Challenges) and its nodes name a
+  `TrackDefinition` by instance id, not by a string in a cell. Overwriting the three `tower` strings that stand alone in the guest's memory with `mall`
+  left Event 1 on Empire Climb (card and race), so the field that picks the circuit is another one (open). The Zone circuits and the reversed circuits
+  (`track_reversed.vex`, 11 of them in `dlc1.psarc` and `dlc2.psarc`) have cell records (`Zone_1` to `Zone_4`, `Talons_Junction_R` ...) that the same rename
+  reaches, but no pair was made of them (not attempted, the Zone circuits race in the Zone mode and a Race cell would not be that mode); open.
+- **Omega:** the rename route is **checked, differs**: Omega's front end is HD's `PI001` (`omega-status.md`), not 2048's grid map, so there is no 2048 cell
+  record to rewrite, and Omega's original runs on shadPS4 with its own pair script. Anulpha Pass's floor is **checked, applies, not isolated**: Omega's
+  Anulpha pair has the original flat grey-teal where ours draws the chevron family (`omega-status.md`, "Anulpha Pass's chevron floor", 2026-10-27), and
+  that page's "2048: checked, applies, not wired visually; no 2048 pair shows them" is now answered by this pair, which shows ours' bright cyan bars against
+  the original's flat dark floor on 2048 as well. That the bars are the `cf_chevron_pulse` materials was not isolated here (no render with them off); no Omega
+  frame was rendered in this lane.
+- **Adopting it:** copy the eleven pair directories (`theirs.png`, `ours.png`, `side.png`, `pair.json` each) to
+  `data/reference/compare-page/2048-vita/<id>/` (ids as in the table, lower case with hyphens) and regenerate with `python3 scripts/compare_env.py manifest
+  data/reference/compare-page/2048.toml data/reference/compare-page/2048-vita/{empire-climb,mall,dlc-vineta-k,metropia,anulpha-pass,moa-therma,chenghou-project,ubermall,sebenco-climb,sol-2,talons-junction,amphiseum,modesto-heights,tech-de-ra}`,
+  then `just compare-page`.
+
+### Real events for the substituted 2048 pairs (2026-11-12, `vita-2048-race-pairs`)
+
+**Claim: every 2048 race pair compares the original's frame against ours on the same event, craft and circuit, or its `caveats` say what differs.
+Partly true: 5 of the 11 substituted pairs are re-captured from authored events, 6 are kept with a caveat, and the substitution is shown to render the
+same as the authored event (confidence 80 on the five circuits tried, 65 on the other six, read off the cells' own values).** `dlc-vineta-k` was never
+substituted: it is the authored `grid0_3_1` node, so the brief's twelve are eleven.
+
+- **Every substituted circuit has an authored Race, Venom, 3-lap, seven-rival cell** in the HD or Fury grids (`data2.psarc`'s `data/plugins/grids/grid_00..15.xml`):
+  Anulpha Pass `grid0_5_1`, Moa Therma `grid1_3_1`, Metropia `grid2_3_1`, Ubermall `grid3_3_1`, Sol 2 `grid4_3_1`, Chenghou Project `grid5_2_3`, Sebenco Climb
+  `grid6_3_1`, Talons Junction `grid8_3_1`, Modesto Heights `grid8_4_1`, Tech De Ra `grid9_3_1`, Amphiseum `grid10_2_1`. Against `grid0_3_1` (the node the rename
+  rewrites) their `<Values>` differ only in `skillEasy`, `skillMedium`, `skillHard` (the rivals' skill, 0.3 to 0.9 and so on; Moa Therma's cell is identical) and
+  `Locked`; mode, class, `Weapons`, `damage`, laps, `AICount` and `ShipChoice` are equal. The grid's `FlyerName`, `BillboardName` and colours are the grid's own.
+  The craft is Feisar HD on both routes: Select Team opens on it on the Fury Campaign as on the HD one (read off the Select Team screen on a Fury node).
+  Ours draws the `hdships` Feisar on a DLC track (`oag_2048::race::GUEST_ROSTER`), the hull shape matches in every side image, so the hull-luma sign flip between
+  circuits that the scout read as two crafts is the circuits' lighting.
+- **Authored against substituted, one boot each.** RMSE of the new original against the old (substituted) original of the same circuit, and ours (this tree,
+  `4d76ba866`) against each:
+
+  | Pair | Authored cell | Original vs substituted original | Ours vs original, substituted | Ours vs original, authored |
+  | --- | --- | --- | --- | --- |
+  | `talons-junction` | `grid8_3_1` | 0.0566 | 0.1804 | 0.1759 |
+  | `modesto-heights` | `grid8_4_1` | 0.0577 | 0.1735 | 0.1689 |
+  | `anulpha-pass` | `grid0_5_1` | 0.0550 | 0.1284 | 0.1320 |
+  | `tech-de-ra` | `grid9_3_1` | 0.0633 | 0.1405 | 0.1477 |
+  | `amphiseum` | `grid10_2_1` | 0.0652 | 0.1666 | 0.1727 |
+  | `dlc-vineta-k` (control, same node, not renamed) | `grid0_3_1` | 0.0632 | 0.1364 | 0.1403 |
+
+  The edge correlation of the original pairs is 0.86 to 0.95, the circuit, craft, 8/8 slot and HUD agree, and the sign boards, rivals' craft and a few lamps are at another
+  phase. The spread between two boots of the same node (the control, 0.063) is as large as the substituted-to-authored gap, so the rename changes nothing that
+  a frame shows. Each ours-against-original number is one boot; the old and new ours numbers move by 0.004 to 0.008 either way, the size of the original's own spread.
+- **Vita3K 4285 against the pinned 4095.** This machine's Vita3K is `v0.2.1 4285-885f9168`; the 2048 profile pins `v0.2.1 4095-84184a36`
+  (`scripts/compare-environment.toml`), and `environment_text` writes the pin, so a re-render writes 4095 into the five new pairs again. The control (Vineta K, unchanged
+  recipe, 4285) is 0.063 from the stored 4095 frame, inside the spread, so the version is not a confounder here. The pin moved to `v0.2.1 4285-885f9168` on 2026-11-12 (maintainer); pairs captured on 4095 keep 4095 in their own `pair.json`.
+- **The map route.**
+  - **The tiles:** the Fury Campaign tile is at `(659, 162)` on the Game Mode grid (the HD one at `(477, 162)`); a first tap highlights it (orange) and the pair
+    script taps again.
+  - **The map re-centres** on the node last opened each time its card closes (the cross, `(752, 480)`), (the Fury Race icon: `(602, 352)` on the map as it opens, `(518, 264)` after two cards were closed, `(533, 335)` after Select Team). A node's tap
+    point read once is wrong after Select Team: the first run of `talons-junction` tapped `(600, 352)` twice and raced the Speed Lap `grid8_2_2` ("LAP 1/7, GOLD 0.47.5"), a
+    Speed Lap card where the Race card had been. `vita-2048-pair.py --node-template` finds the node's icon in a fresh frame (`scripts/vita-2048-map-node.py`, zero-mean
+    normalised cross-correlation, scores 0.96 to 1.0 on the right icon, 0.6 on the nearest wrong one) and `--node-pick N` takes the N-th match from the left; after
+    Select Team the match nearest `(533, 333)` is the opened node (Talons Junction, Modesto Heights `(533, 335)`, Anulpha Pass `(532, 330)`).
+  - **The Race icon template** is a crop of a frame of the Fury map, `magick <frame> -crop 90x64+473+232 +repage race-icon.png`, taken with the map centred on `grid8`
+    after one card was opened and closed (the template's frame is not stored in the repository).
+  - **Locked nodes tap open.** An unplayed Race node in an open grid (Modesto Heights `grid8_4_1`, Anulpha Pass `grid0_5_1`) opens its card and loads without `vita3k-mem.py unlock`.
+  - **Later grids by hops (Fury).** `--hop X Y` opens the card at a point and closes it, so the map re-centres and the next grid shows. From the cold map: `(693, 303)`
+    then `(928, 455)` reaches `grid9` (Impact: Tech De Ra, pick 1); then `(800, 345)` and `(800, 190)` reach `grid10` (Voltage: Amphiseum, pick 1). The points worked
+    unchanged over four boots.
+  - **The HD blocker.** On the HD map the next grid (Warped, `grid1`) shows only as a sliver under the two bottom-right buttons (`(846..944, 482..528)`); a drag
+    (`xdotool` press, move, release) and the d-pad do not pan the map, and a tap on the sliver at `(805, 515)` and `(872, 538)` opened nothing. Chenghou Project,
+    Metropia, Moa Therma, Sebenco Climb, Sol 2 and Ubermall were not reached in this effort (about 20 minutes of exploration), and their six pairs carry a caveat saying so.
+    Next: tap the Warped hex through a first hop from a node on `grid0` that sits further right, or unlock and open the grids with `vita3k-mem.py unlock`.
+  - **Load time.** At a load average of 25 to 50 the HD-campaign load took more than the pair script's 20 s wait twice (98 % on the loading bar): `--load-wait 45` to `75`
+    fixed it. About every second boot hung on "Sony Computer Entertainment presents" or on the Game Mode grid and were relaunched; `--boot-timeout 220` and the watchdog's
+    `--silence 280` were needed at that load.
+- **Fury's default craft** is Feisar HD (Select Team on a Fury node opens on it), where `2048-dlc.md` said it was unmeasured.
+- **Omega:** checked, differs. Omega reaches HD's and Fury's campaigns through HD's own `PI001` front end, with no 2048 map to tap or hop and no cell record to rewrite
+  (`omega-status.md`), so none of this ports; Omega's pairs run on shadPS4 with their own script.
+
+### The chase camera and the craft's size (2026-11-11, `c2048-chase-camera`)
+
+**Question:** is the original's craft drawn 1.3 times larger than ours on the three 2048 grid pairs because the two sides flew different chase views
+(`OPT_CLOSE` or `OPT_FAR`)? **No: the sizes agree on the nearer view, and the recorded 1.31 x 1.35 was the yellow mask.** Confidence 75 for "the
+original is on `OPT_CLOSE`, as inferred from the frame"; the original's stored `pair.json` records no camera setting, and each original is one capture.
+
+- **Ours' setting.** `CameraView::default()` is `Close`: `crates/raceplay/src/start.rs` builds a race with it, `chase_block_for` picks the
+  `<ExternalCameraClose>` block, `[graphics] camera_view` defaults to it (`crates/game/src/settings.rs`), and the compare profile and the pair flags
+  pin nothing. A render with no flag and one with `--camera-view close` are byte-identical on all three pairs. Load report on the 2048 Feisar:
+  Close eye 2.775 up and 8.25 back, Far 3 up and 11.25 back (both fov 60). So ours is the nearer of the two views the original offers, and moving
+  it to Far can only make the craft smaller.
+- **The original's setting is not recorded.** `original` in the three `pair.json` carries the emulator, the shake patch, the grab timing and the pose
+  read, no camera view; the Vita3K save that held `CameraP1` is not stored (the grid pairs read no camera, "What is not measured" above). Its authored
+  default is `OPT_CLOSE` (`CameraP1 default="OPT_CLOSE"`, `docs/ui/menus-original.md`), which is what a fresh profile starts on. A profile that
+  has cycled to `OPT_FAR` is the HD trap ([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md), "the shared profile flies the Far camera").
+  So the setting is **inferred from the frame**, below.
+- **Landmark boxes** (source px at 960x544, read by eye on 2x and 5x crops with a 10 and 50 px grid, +-4 px, nose and tail +-8: the nose tip, the
+  outermost left and right wing tips, the rearmost wing tip row; the same landmarks on every frame; the 5x re-read of Empire Climb's tips moved no
+  edge by more than 3 px). Width x height, ours at the pair's own flags, ticks and profile, build `c1b14f0d4`:
+
+  | Pair | Original | Ours on Close (the default) | Ours on Far | Original over Close, wide x high | Far over Close, wide |
+  | --- | --- | --- | --- | --- | --- |
+  | Empire Climb | 343 x 248 (nose (477, 262), x 304 to 647, tail y 510) | 345 x 248 (nose (477, 264), x 305 to 650, tail y 512) | 235 x 143 (nose y 307) | 0.99 x 1.00 | 0.68 |
+  | Queens Mall | 341 x 255 (nose (477, 262), tail y 517) | 342 x 256 (nose (477, 264), tail y 520) | 232 x 143 (nose y 306) | 1.00 x 1.00 | 0.68 |
+  | Vineta K (DLC) | 368 x 263 (nose (477, 257), x 297 to 665) | 368 x 263 (nose (477, 257)) | 237 x 149 (nose y 301) | 1.00 x 1.00 | 0.64 |
+
+  Ours on Far is 0.64 to 0.68 times Close's width (the eye 11.25 back against 8.25), where the recorded difference was 31 % the other way. The
+  original's hull matches Close within 2 % on all three pairs and sits 32 to 36 % from Far, so it flew `OPT_CLOSE`.
+- **Why the recorded 1.31 x 1.35 and 1.27 x 1.01 were wrong.** `craft_offset`'s bounding box is that of the pixels `r > 178, g > 140, b < 102` in the
+  lower 60 % of the frame, columns 150 to 750, and it is not a hull box: the original's Empire Climb mask box is `x 316..741, y 236..541` against
+  landmarks at `x 304..647`, tail y 510, with 5,015 mask pixels outside the landmark box (4,129 below row 515, 1,029 right of column 655; what they
+  are was not read further); on Queens Mall the same rig's `ours.png` and `ours-original-pose.png` read 420 and 319 px wide; Vineta K's Feisar has
+  no yellow at all. The Queens Mall paragraph below already said the centroid is not a hull measure; the box has the same fault.
+  `scripts/vita-2048-pair.py` still writes the ratio into each caveat; open, not changed here.
+- **What is left.** Not the camera setting. The pose offset (`pose_delta`), the white ring under the original's craft and the light on the
+  paint stay open, in that order, as the thread's steps 1 and 2.
+- **To decide the original's setting outright:** read `CameraP1` from the Vita3K save of the profile the pairs were taken on. In its pref-path:
+  `strings -a ux0/user/00/savedata/PCSF00007/* | rg -A1 CameraP1`; expected value `OPT_CLOSE`, `OPT_FAR` or `OPT_INT` (HD's `DATA.BIN` stores
+  it as a plain string; 2048's save is not confirmed to). If `strings` finds no `CameraP1`, the save is binary or encrypted, and a re-capture
+  that reads the rig's eye out of guest memory decides it instead. Run it on the machine that holds that profile; this one has none.
+- **Omega:** checked, applies, not wired. The Omega pairs' `pair.json` record only ours (`ours.camera`: "the title's default chase view; the grid
+  is at rest, no pose is fed", the same `CameraView::default()`), nothing for the original, so the same inference is open for them; not read here.
 
 ### The DLC pair (2026-10-26, `2048-dlc-pair`)
 
@@ -516,7 +946,7 @@ such pair, read from the flags the pair recorded. No other profile holds anythin
 | Vineta K | 48.1 | 80.1 | 36.7 | 80.3 | 41.4 / 23.4 |
 
 Held, ours is now a little darker than the original: Empire Climb's track and walls still draw in flat colours, and Vineta K's sky is darker than
-the original's. The vignette, the screen tint and `alphaTex` are unread and left out.
+the original's. **The vignette is drawn since 2026-11-11 (`w2048-vignette`)**: the composite is the original's fan-and-ring mesh round clip-space `(0, -0.885)`, so the top corners go black and the bottom corners are untouched, as in the original (outermost 8x8 luma at the top corners 0.9 to 1.8 original, ours 7 to 67 before and 0.4 to 4.8 after; exposure.md, "The vignette"). The screen tint and `alphaTex` are unread and left out.
 
 Three flags of `scripts/vita-2048-pair.py` read and write the guest's memory through the countdown burst, with `--walk` only (Vita3K must be the
 script's own child; Yama's `ptrace_scope` 1 refuses `/proc/<pid>/mem` to anything else):
@@ -557,7 +987,51 @@ The circuit is checked by ours' own spawn: 0.2 to 8.8 units and under 3.5 degree
 **Known, not fixed here.** Ours draws the hull darker and less lit than the original on all four, and its Pure HUD has no speed gauge and shows `TOTAL`
 where the original shows `BRONZE TIME` (the `edge_ncc` of 0.26 to 0.36 is these, not the geometry). A first state taken 595 s into an idle race (the maintainer's
 `time-trial-vineta-feisar-grid-fresh`) also loads and pairs (eye and fov equal) but runs 36,000 ticks of ours for the clock; the restart states are the ones
-kept. Only the Alpha league is on a fresh profile; further circuits need the dev unlock Pulse has (`psp-drive.py menu --unlock` writes Pulse's byte); a Pure equivalent was not looked for.
+kept. Only the Alpha league is on a fresh profile; the other eight circuits are opened by Pure's own dev-unlock byte (next section).
+
+### Pure: eight more circuits through the dev-unlock byte (2026-11-11, `gallery-pure`)
+
+**Claim: the page carries a Pure race pair for every circuit the USA disc ships that ours races and a Time Trial can start.** Twelve pairs, up from four: the
+eight `PI_Track` rows of type `Race` and the four of type `Classic` of `Definition.xml`. The four `Zone` circuits and Pure's twelve DLC circuits are not paired (below).
+
+**The unlock route.** `Definition_IsUnlocked` (`0x088b43d4`, [campaign.md](../ghidra/functions/psp-pure-usa/campaign.md), "Definition_IsUnlocked") is Pulse's function
+([race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md)) at another address: a hidden byte at `+0xa1` fails the row, then `sceKernelGetGPI() & 1` or a byte of
+the profile object passes everything, then the `<Unlock>` list at `+0xa4` is walked. Disassembled and read back relocated out of the running game: `lui a0, 0x08b1; lw a0, 0x7794(a0); lbu a0, 0x381(a0)`,
+so the profile object's pointer is at **`0x08b17794`** (it read `0x08e759a0` on both boots) and the byte is **`*(*0x08b17794 + 0x381)`**. **Control, same boot, same profile:** with the byte `0`, League
+Selection lists ALPHA only; with it written `1` and the screen rebuilt (back out, in again) it lists ALPHA, BETA and CLASSIC, and Track Selection lists Sinucit,
+Citta Nuova, Sebenco Climb, Sol 2 and Karbonis, Sagarmartha, Manor Top, Mandrashee. A plain `memory.write` works with the CPU running; the byte is in the loaded profile, so a boot or a profile load clears it,
+and it has to be written before League Selection is built. `scripts/psp-pure-walk.py --unlock --league N --track-index K` writes it at the Main Menu and walks; `--league` counts downs on League Selection.
+(The USA disc's profile `PROFILE.BIN` was taken from another lane's memory stick: a cold boot's Profile > Load listed no data, and the Set Name screen was not walked.)
+
+**Pairs added** (`pure-psp-<id>`, each Time Trial, Feisar, Vector, a few seconds after GO, craft untouched; metrics as the page computes them, `overlap` in `pair.json`):
+
+| Id | Circuit | League | rmse | edge correlation | mean grey | spawn check (units, deg) | race clock |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: |
+| `sinucit` | `08_Sinucit` | Beta | 0.132 | 0.358 | 26.99 | 1.2, 1.7 | 2.10 s |
+| `citta-nuova` | `09_Citta_Nuova_V` | Beta | 0.097 | 0.370 | 8.95 | 0.6, 1.0 | 2.87 s |
+| `sebenco-climb` | `10_Sebenco_Climb` | Beta | 0.127 | 0.410 | 25.91 | 2.1, 1.5 | 0.80 s |
+| `sol-2` | `12_Sol_2` | Beta | 0.103 | 0.360 | 10.43 | 0.5, 0.5 | 1.80 s |
+| `karbonis` | `ClassicsNS/01_Karbonis` | Classic | 0.183 | 0.308 | 19.28 | 0.5, 0.4 | 1.47 s |
+| `sagarmartha` | `ClassicsNS/02_Sagarmartha` | Classic | 0.192 | 0.300 | 27.33 | 2.1, 0.8 | 5.10 s |
+| `manor-top` | `ClassicsNS/03_Manor_Top` | Classic | 0.256 | 0.327 | 40.93 | 1.0, 0.0 | 4.03 s |
+| `mandrashee` | `ClassicsNS/04_Mandrashee` | Classic | 0.225 | 0.331 | 25.44 | 0.8, 0.1 | 3.90 s |
+
+Every pair passes the same 14 checks as the Alpha four (13 for a Classic pair, see below): eye 11.643 from the body, fov 60 against 60, pose 0.000 units apart, ours' own spawn
+within 25 units of the original's grid pose (the circuit check, which also **names** a state's circuit: the four Classic states were first identified by the HUD's bronze time and then by this check), and
+a Beta pair's hull on the original's within 3 px (offset (0, 0) on all four, edge correlation 0.43 to 0.52 on the hull region).
+**Repeats:** all eight were made twice on one PPSSPP boot and `theirs.png`, `ours.png` and every number were identical; three of them (Sinucit, Karbonis, Sol 2) again on a second boot, identical to the byte.
+That shows the state load and the reads are deterministic, not that two different states agree.
+
+**The Classic hull is `VR\Ship.vex`, and ours flies it.** In the Classic league the original draws a differently shaped, differently coloured Feisar than `Data\Ships\Feisar\Ship.vex`: it is `Data\Ships\Feisar\VR\Ship.vex`, which `Ship_LoadModel` builds for every craft when the circuit's `PI_Track` `type` is `Classic` ([ship-models.md](../ghidra/functions/psp-pure-usa/ship-models.md), "What selects the VR hull"). Before it was wired, the four Classic frames read an edge correlation of 0.09 to 0.11 on the hull region (best shift +7, -4, 0 and 0 px, noise from two unlike shapes). With `oag_title::RaceDefaults::hull_by_track_type` wired, a fixed hull box (`x 188..300, y 172..272`) reads, per pair, edge correlation 0.29 -> 0.86 (Manor Top), 0.34 -> 0.89 (Mandrashee), 0.29 -> 0.28 and 0.78 at a 4 px shift (Sagarmartha), 0.16 -> 0.63 (Karbonis), and mean absolute difference 46.7 -> 20.4, 38.7 -> 12.5, 39.4 -> 29.4, 39.1 -> 15.2. Sagarmartha's best correlation sits at a 4 px horizontal shift; whether that is the pose or the hull's origin is not measured. The hull-offset gate is still skipped for Classic pairs by `psp-pure-pair.py --hull-differs "<caveat>"` until those pairs are re-made with the new caveat; the eye and fov checks still hold the camera. **Still different:** ours' Classic worlds render darker than the original's (whole-frame mean grey difference 17 to 39 against 9 to 27 on Beta) and the ground shadow's shape is not the original's; lighting and the shadow hull, not the craft model.
+**Pairs taken as a state's clock reads 0.8 to 5.1 s** because PPSSPP's software renderer runs the race slower than real time; `retime` is a load, a wait and a save over the same file (scratch script, not kept).
+
+**Not paired.** The four **Zone** circuits (`Data\Zone\01_Zone`..`04_Zone`): the pair script is Time Trial only (no Zone HUD state, no `g_game_mode` check, the craft flies under its own speed), and Pulse's Zone pair needed its own walk and HUD-state flags.
+Pure's twelve **DLC** circuits are not on the disc image and cannot be paired from the USA disc: Delta (Iridia, Anulpha Pass, Koltiwa, Khara Descent, `Environments\BrandedTracks\Puma_*`), Gamma 1 (Staten Park, Exostra Run, Ubermall,
+Sebenco Peak, `06_`, `02_`, `05_`, `11_`) and Omega (JonBurgerman, MarkJames, NeilMcFarland, 123Klan, `18_` to `21_`) declare them in their manifests (read through `oag_source::dlc::pure_packs`); the packs in `data/dlc/` are EU packs, and the original
+checks a pack with a region key from its own executable ([dlc-pack.md](../formats/dlc-pack.md)), so they would need the EU disc and the EU pressing's live addresses (not recovered; `psp-pure-pair.py` reads the USA ones). Not attempted here.
+
+**Adopting.** Copy the eight pair directories from the lane's `pairs/` to `data/reference/compare-page/pure-psp/<id>` (each `pair.json` `argv` `--out` already names that final path), then
+`python3 scripts/compare_env.py manifest data/reference/compare-page/pure.toml data/reference/compare-page/pure-psp` (12 entries) and `just compare-rerender-ours --only pure-psp`.
 
 **No hull shake on either side (2026-10-22, `hd-hull-shake`).** HD turns and moves every drawn hull a little each frame
 by a random curve ([hull-shake.md](../ghidra/functions/ps3-hdfury-eu/hull-shake.md)). A still pair cannot match that frame
@@ -650,6 +1124,18 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
      a corner leans where ours is straight) and full thrust for every craft (the player's throttle reads 100; an opponent's is not
      read from RAM, nor any craft's flare block, `boost_timer` or `plume_timer`: all left at the engine's own values for a craft at that
      speed). The pair scripts pass it by default, so `just compare-rerender` picks it up from the stored `argv`.
+   - **Opponent lean (2026-11-02, `opponent-tilt`).** The field file also carries `steer_lean` and `roll_phase` per row (`entity+0x854`
+     and `+0x87c` read at the same stop by `psp-race-field.py`; every slot is the player's entity struct), and `--field-from` puts
+     them on each opponent's ship after the warm-up, as `--pose-lean` does for the player (`PoseLean::apply_to`). Without the
+     columns (an older `field.csv`, the RPCS3 path) an opponent is drawn flat, as before. `talons-alongside`: slot values
+     0.038, -0.008, 0.769, 0.786, 0.374, 0.869, -0.194 (roll phase 0 on all seven). Nearest opponent's hull box (x 210, y 112,
+     40x36 px, 480x272 frame): grey mean absolute difference against the original 0.0382 before, 0.0239 after; the fin tilt now
+     agrees with the original's. **Stored pair re-made 2026-11-02 (`talons-recapture`)**: `pulse-psp-race/talons-alongside` was re-captured with
+     `psp-pulse-pair.py` at `--target-clock 38.4082` (24 parity checks passed, twice; `theirs.png` pixel-identical to the old one, `field.csv`
+     identical across both boots) so its `field.csv` now carries the lean columns. Old stored `ours.png` against new, same `theirs.png`: nearest
+     opponent's box grey MAD 0.0381 -> 0.0242; whole frame grey MAD 0.0094 -> 0.0092, RMSE 0.0293 -> 0.0283. **HD: checked, applies, not wired**: the drawn lean is documented at `ship+0x6a54`
+     ([ship-lean](../ghidra/functions/ps3-hdfury-eu/ship-lean.md)) and `scripts/rpcs3_hd_field.py` reads other fields at the same
+     ship, but HD's roll-phase offset is not recorded, and a lean with a guessed zero roll would be a half-read pair; both are needed.
    - `--hud-state` (`race::CaptureHud`) imposes the original's place, lap, lap time, race clock, speed, shield (as a percentage
      of the pool: PSP's maximum is `*(*(craft+0x6c) + g_skill_level*4 + 0x84)`, 135 here, so the 134.5 pool reads 99 %, and
      HD's is 140; ours is the handling file's) and best lap on the primary readout: all read from RAM, none
@@ -721,9 +1207,8 @@ counter (the pickup row), HD's `Absorb` and `DAMAGE` strips and its best-lap lin
 that animate (the billboards).
 
 **The player's hull in a race shot.** Checked 2026-10-20 (`race-shot-trails`), the hull's size against the camera read at the same stop:
-on **HD** (`hd-race/talons-pack`) ours matches: the hull is 170 px wide in a 560 x 420 crop of the 1920 x 1080 frame on both sides and starts at the same
-row; holding the player back by one tick (2.4 units at 141 u/s) already makes it far too large, so there is no body/camera instant skew
-there, and the "lower and larger" look was the original's bright plume and bloom around it. On **Pulse PSP** the original hull is
+on **HD** (`hd-race/talons-pack`) this was read as "ours matches" (the hull 170 px wide in a 560 x 420 crop on both sides) **and is withdrawn** (2026-11-10): on the pair as it stood the
+original's frame was not the recorded instant, and on the re-made pairs the original's hull is about 1.3 times larger and lower than ours (see "A moving HD craft: the frame is not always the RAM instant" below). On **Pulse PSP** the original hull is
 larger and lower than ours (about 1.5x across): holding the body back one tick of its velocity (1.8 units at 106 u/s) lands close to the original's size
 and two ticks is already far too large, so on PSP the drawn hull matches a body about a tick older than the one read at the stop (or a camera a tick
 ahead). The display matrix (`entity+0x8b0`, two hops) is not the cause of a position offset: its translation equals the body's to the
@@ -829,6 +1314,7 @@ lag (`compare_provenance.refusals`); an HD menu pair still needs a cold boot, wh
 | Title | Script | How |
 | --- | --- | --- |
 | HD/Fury (RPCS3) | `scripts/rpcs3-hd-menu-pair.py` | a cold-booted `rpcs3-drive.py serve` (`OAG_COMPARE_PLATFORM=hd-fury`) on `Main Menu`, then `OAG_RPCS3_ATTACH=1 python3 scripts/rpcs3-hd-menu-pair.py --out D --oag-game target/release/oag-game --autopilot off`. It walks `WALK` (about 110 s), the window at 1920x1080 at the origin, 3 s settle before each grab. The screen name is HD's own `Switching Screen` line in `TTY.log`. `scripts/rpcs3-hd-menu-walk.py --plan "shot:a,cross,..."` photographs any plan for exploring |
+| HD/Fury loading (RPCS3) | `scripts/rpcs3-hd-menu-pair.py --walk loading` | the same cold-booted `serve`, then `OAG_RPCS3_ATTACH=1 ... rpcs3-hd-menu-pair.py --walk loading --out D --oag-game <main checkout's binary> --settle 1`: Racebox single race, Vineta K, Feisar (`LOADING_WALK`), CROSS on Team Selection, one photograph 4 s later (`kind = "loading"`; the original's bar stood at 32 of its 166 columns, 19 %). **The walk ends in a race**, so a second attempt is a fresh cold boot. The screen name is declared (`TTY.log` names no loading screen, its last line reads `InGame`). **The feature is the original's random draw** (`Libc_Rand` in `LoadingScreen_Construct`): the pair reads the constructor's `Feature type == N` TTY line, and ours runs `--loading-draw` for the first seed in 0..16 whose logged feature slot equals it, so no cold-boot re-roll is needed; the pair is refused when none does. **The bar is stated, not live:** `compare_menu.lit_bar_columns` counts the lit columns off `theirs.png` (32), ours runs `--loading-step race --ticks 10 n + 5` (325) with no `--loading-live` (its real load made the fill, and so the pair, vary run to run), and the pair is refused when ours' recount differs, or when the original's bar is past the first target (33 columns) that only a load stage can pass. `--loading-screen`'s `DONE/TOTAL` is ignored on a race load, so the tick is the stated state ([hd-loading.md](../formats/hd-loading.md), "The bar's stated state"). Ours is drawn from `LoadingScreen_HD.toml` ([screen-layout.md](../formats/screen-layout.md)). Share of pixels differing by more than 40 grey: 10.52 % with the old code layout, 0.76 % with the file (2026-11-01) |
 | Omega (shadPS4) | `scripts/shadps4-omega-menu-pair.py pairs` | the `Rig` of `shadps4-omega-pair.py` (own headless `sway`, uinput pad, muted), cold boot to MAIN MENU in about 20 s, `WALK` in about 95 s. **The pad input reaches the game** (the 2026-10-26 worry that it did not was not reproduced: all four walks of this lane reached Ship Select). shadPS4 has no `TTY.log`: the screen is read by eye from the frame's SCREEN TITLE and declared in `WALK`, and `original.screen_basis` says so |
 
 **What ours draws from XML and what from `menu.toml`** (read off `crates/game/src/capture/menu_page.rs`, `campaign_page.rs`,
@@ -837,7 +1323,7 @@ screens, `Main Menu`, `Team Selection` and the rest are not among its names):
 
 | Screen (HD name) | Ours | Pair |
 | --- | --- | --- |
-| `Campaign Selection` | XML (DATA06 copy), HD only; Omega refuses (`this source has no Campaign Selection screen`) | HD yes, Omega **gap** |
+| `Campaign Selection` | XML (HD's DATA06 copy, Omega's own); both read by the one `Chooser::read` | HD yes, Omega yes since 2026-11-05 (below) |
 | `Grid Selection Fury`, `Cell Selection` | XML (`grid_00.xml`, `CellMode_Definition.xml`); on Omega both `grid-select` and `grid-select-hd` draw Omega's own first grid (18 points, `01_TRACK`, no flyer card), which is none of the three campaigns the original offers | HD yes, Omega pair with the state caveat |
 | `Track Creation` (Track Select) | XML (`Track_Selection_Definition.xml`) | both |
 | `Team Selection` (Ship Select) | XML (`Team_Selection_Definition.xml`) | both |
@@ -877,13 +1363,14 @@ the page shows the same numbers per pair). The most visible difference is read o
 | HD Campaign cell | `CellMode_Definition.xml` | 0.189 / 0.10 / 16.7 | closest pair; the selected hex has the white outline in the original, ours is flat grey; the original has a red particle haze right of the card |
 | HD Track Select (Vineta K) | `Track_Selection_Definition.xml` | 0.184 / 0.02 / 21.6 | no circuit photo, no length or distance values (`4.4KM`, `13.2KM` read `-`), the circuit model is smaller and turned differently, the original's red backdrop cloud is much fainter in ours |
 | HD Ship Select (Feisar) | `Team_Selection_Definition.xml` | 0.196 / 0.08 / 22.0 | the hull is drawn at a different pose and size, the red particle backdrop is much fainter, the statistic bars carry red markers the original lacks |
+| Omega Campaign Select (2048 card) | `CellMode_Definition.xml`, `Campaign Selection` | 0.369 / 0.15 / 53.1 | (`omega-chooser`, 2026-11-05, the original frame being the one kept as `gap-campaign-select`) mean grey 52.7 over the whole frame, **78.4 over the chooser's bracket** (x 160-1755, y 170-950; 61.6 over its left part, 99.1 over the right where the unselected cards stand); both images read: the title, `CAMPAIGN MODES`, `RANK` block and footer are where the original has them to within 6 px, the 2048 card's centre is about 26 px left of the original's and its art is wrong (its navy banner and wordmark do not draw), and the HD and Fury cards stand 45 and about 190 px left of the original's |
 | Omega Campaign grid | Omega's own first grid | 0.397 / 0.27 / 55.0 | state not matched: no flyer card at all (a white page with the ghosted backdrop tower), 18 points against the original's 21 |
 | Omega Campaign cell | Omega's own first grid | 0.658 / 0.10 / 129.0 | the original's dark-red panel fills about 80 % of the frame and ours is white, the largest difference of the set; `01_TRACK` against `TALON'S JUNCTION` |
 | Omega Track Select (Vineta K) | `Track_Selection_Definition.xml` | 0.204 / 0.27 / 19.7 | circuit name `01_Track` (the unresolved name of Omega's entry: the load line names `Data\Environments\01_Vineta_K\screen.xml`, so the circuit is Vineta K) and no photo (the original names it and shows the stills), no length values, the model is turned differently |
 | Omega Ship Select (Feisar) | `Team_Selection_Definition.xml` | 0.283 / 0.26 / 34.0 | hull about twice the original's size in a different livery (dark teal and yellow against pale blue and yellow), a ringed Feisar logo against the flat one, the cursor on the top hex against the third row |
 
 Gaps (no pair, the original's frame kept in `gap-*` beside the pairs with `gap.json`): HD Main Menu, Racebox setup and Options+
-(`Additional`); Omega Campaign Select, Main Menu, Racebox setup and Options. The ranked list of differences is in the
+(`Additional`); Omega Main Menu, Racebox setup and Options (Omega Campaign Select was a gap until 2026-11-05: `scripts/shadps4-omega-menu-pair.py`'s `WALK` row is now an XML page, so a re-run of `pairs` makes it a pair; adopting the pair made without the emulator from the kept frame: replace `omega/gap-campaign-select` with `omega/menu-campaign-select`, then add it to the `manifest` command below, 10 entries). The ranked list of differences is in the
 `menu-pairs-hd-omega` handover thread. Adopt: the pair directories are under `data/reference/compare-page/{hd,omega}/menu-*`;
 the manifest is built from the main checkout with `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus.toml data/reference/compare-page/hd/menu-* data/reference/compare-page/omega/menu-*`
@@ -969,7 +1456,7 @@ the evidence.
 
 | Screen (the original's name) | Ours | Pulse | Pure |
 | --- | --- | --- | --- |
-| title, `Show Logo` / `Title Screen` | Pulse `--until "Show Logo" --press cross --ticks 200` (the sequence draws the ray backdrop; `--screen "Show Logo"` leaves it out: 14.9 mean grey, 6.0 % against 4.7, 2.6 %), Pure `--screen "Intro Screen->Title Screen"` | pair | pair |
+| title, `Show Logo` / `Title Screen` | Pulse `--until "Show Logo" --press cross --press-until-reached --ticks 200` (the sequence draws the ray backdrop; `--screen "Show Logo"` leaves it out: 14.9 mean grey, 6.0 % against 4.7, 2.6 %), Pure `--screen "Intro Screen->Title Screen"` | pair | pair |
 | `Grid Selection`, `Cell Selection` (the Race Campaign) | `--menu-page grid-select`, `cell-select` (`CellMode_Definition.xml`, `grid_00.xml`) | pair, pair | none: Pure draws a list (`this source has no Race Campaign to show`) |
 | Pure's Single Player chain: `Single Player`, `Class Selection`, `League Selection`, `Tournament Selection`, `Track Selection` | `--menu-page pure-chain[:MODE[:ROW...]]` | none | pair x6 |
 | `Track Creation` (Track Select), `Team Selection` | `--menu-page track-select`, `ship-select` | pair, pair | `Team Selection` pair; Pure's circuit list is `Track Selection` above |
@@ -995,8 +1482,8 @@ read side by side):
 | Pulse title | 0.069 / 0.30 / 4.7 | 2.6 % | the type: the original's wide `PRESS START BUTTON` and legal line against ours' small mixed-case `Press START button`; the rays are at another phase (animated) |
 | Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % | the cursor hex glows in the original, plain in ours; the footer ticker scrolls in the original and is empty in ours at tick 0 |
 | Pulse Cell Selection | 0.077 / 0.39 / 4.3 | 1.8 % | closest of all Pulse: the same glow and ticker only |
-| Pure Team Selection | 0.101 / 0.29 / 6.9 | 8.6 % (7.5 % re-made 2026-10-29, eight teams, Feisar to Harimau, as the original) | ours listed 17 teams in small type (the 7 DLC teams plus the disc's two gated ones, `Zone` and `Medievil`, which the still did not drop; the live screen did), the hull outline from another angle, the stat labels run into their values |
-| Pure Track Selection (single race) | 0.092 / 0.40 / 5.0 | 5.5 % (5.6 % re-made 2026-10-29 with the type-in) | ours adds the `SINGLE RACE - VENOM - ALPHA` context line under the heading (chosen, not measured, `docs/architecture/menus.md`), the records read `0.00.00` against `0'00"00`, lower-case unit `m` (the description line types in since 2026-10-29) |
+| Pure Team Selection | 0.101 / 0.29 / 6.9 | 8.6 % (7.5 % re-made 2026-10-29, eight teams, Feisar to Harimau, as the original; 3.2 % on 2026-11-01 with the list in the menu face at the chain's 18-line pitch, the stat labels in the `Stats` face and the hull at the original's slideshow seconds (7.57 % the same fresh capture before)) | closed 2026-10-29: 17 teams listed (DLC and gated). Closed 2026-11-01: the list type (the `<Menu>` names no `font`, so it draws in the menu face at the chain's 18-line pitch, where it was the `default` role's 13/22 scale), the hull's angle (the three stills `Info`/`Side`/`Top` change every 2 s, the pair now at the original's seconds since entry), the stat labels (`font="Stats"` is Pure's `LTe50325.fnt`). Left: the description line the original types along the bottom, the two frame rules, the cursor arrow |
+| Pure Track Selection (single race) | 0.092 / 0.40 / 5.0 | 5.5 % (5.6 % re-made 2026-10-29 with the type-in; 4.2 % on 2026-11-01 with no context line in the still and the `Stats` face for the labels, cells and the description (5.63 % the same fresh capture before)) | what is left: the record separators (the original's are small mid-height dots with wide gaps, no `'` or `"` at 8x, and no Latin-1 character as the separator matches), the frame's dashed rule at y 217 and solid rule at y 251, the picker's scroll arrows against the original's pink cursor arrow. Closed 2026-11-01: the context line (the original draws none; the live screen keeps ours), the `m` case and the label type (the `Stats` face) |
 | Pure Single Player (mode) | 0.074 / 0.40 / 3.0 | 3.4 % | no context line here; the hint line and the `BACK` prompt differ (below) |
 | Pure Tournament Selection (campaign) | 0.069 / 0.44 / 2.7 | 3.1 % (3.0 % re-made 2026-10-29 with the type-in) | the context line `TOURNAMENT - VECTOR` (chosen), the description line (typed in since 2026-10-29, at the original's seconds), the footer prompt |
 | Pure League Selection, Class Selection (x2) | 0.066-0.067 / 0.44 / 2.4 | 2.8-2.9 % (League 2.8 %, Class 2.6 % re-made 2026-10-29) | the same three: context line, description line (typed in since 2026-10-29), footer |
@@ -1044,6 +1531,27 @@ scripts/psp-menu-pair.py pairs --title pulse|pure --out D --autopilot off --diff
 separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
 then `just compare-page`.
+
+### The backdrop movie's phase (2026-11-05, `pulse-track-select-streaks`)
+
+Pulse's menus play a nine-second looping movie that never restarts, so a reference still catches
+whatever frame the walk's length landed on, and a craft's fly-by is bright. `--menu-page` draws
+frame zero unless `--menu-movie-frame N` says otherwise. To line a pair up:
+
+```sh
+python3 scripts/compare-menu-movie-phase.py <pair-dir>...   # records --menu-movie-frame in pair.json
+```
+
+Then re-render that pair with `scripts/compare-rerender-ours.py`. The script scores every frame of
+the movie against `theirs.png` on the pixels of `ours.png` that are bare movie, and keeps frame zero
+unless the best frame beats it by a grey level (`--min-gain`): a dark stretch names no frame. It
+runs no emulator and reads the transcoded movie from `~/.cache/oag/movies/`. A re-capture of a pair
+changes the phase, so run it again after one. `pulse-psp/menu-track` needs 38: mean grey 13.89 -> 4.46
+(`docs/ui/selection-screens.md`, "The teal streaks behind the panel are the backdrop movie").
+
+`compare-rerender-ours.py` now gives a menu or loading pair an empty `$OAG_DLC`, as the pair scripts
+always have: without it a re-render counted the maintainer's DLC packs (Track Select `1 / 11`, not
+`1 / 3`; Ship Select `1 / 12`, not `1 / 8`).
 
 ## Menu pairs: Wipeout Pulse (PS2) front-end screens (2026-10-29, `pulse-ps2-hex-align`)
 
@@ -1134,7 +1642,7 @@ be an accepted exception, a pair script never makes one silently). `check-docs` 
 cites a disposable `data/` directory; it also refuses one that names another lane's worktree. A re-made
 `argv` that names `{scratch}` is refused by `compare-rerender` until that flag is remapped.
 
-## Publishing is locked
+## Publishing
 
 `just publish-compare` uploads the built `data/compare/` with `wrangler pages deploy`
 to a **separate** Cloudflare Pages project (`openantigrav-compare`, never the main
@@ -1146,10 +1654,35 @@ It **refuses to run** unless the screenshot-policy ADR,
 has a `## Status` line that **starts with** `Accepted` (markdown emphasis ignored). Its number is one
 constant, `POLICY_ADR` in `scripts/compare-page.py`. A missing or non-Accepted ADR prints the reason and
 exits 2. The lock is checked before `wrangler` is looked up, so the refusal is what you see.
-`just publish-compare <dir>` rebuilds the page strictly from the curated manifest directory it is
-given first, so a missing `platform` refuses it before anything uploads. The directory is required:
-the seed and live manifests are developer material, ADR-0074 wants every published image picked by
-a person, and a default would publish them. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
+`just publish-compare` rebuilds the page strictly from the curated manifest directory first, so a
+missing `platform` refuses it before anything uploads. With no argument it publishes
+`data/reference/curated/`, the maintainer's curated set; `just publish-compare <dir>` publishes another.
+The default is never the seed or live manifests (`data/reference/compare-page/`): they are developer
+material, and ADR-0074 wants every published image picked by a person. A missing
+`data/reference/curated/` refuses by name.
+
+**The curated set is manifests only, in the private repository** (2026-11-12). Its `*.toml` files sit in
+`data/reference/curated/` and each `[page]` carries `images = "../compare-page"`, so its image paths
+resolve into the reference pairs: both workstations pull one list, and no image is copied. Before this
+the set was a 1.7 GB directory, `data/compare-curated/`, copied between hosts by hand, and the two
+copies drifted (one host published pairs the other lacked). `[page] images` works in any manifest: a
+path relative to the manifest's directory, `.` when absent.
+
+The curated set picks the pairs and may reword them; `just compare-rerender-all` writes only into
+`data/reference/compare-page/`. So with no argument, publishing first carries newer re-renders across.
+For each curated entry whose id has a later `rendered_at` in the reference set, with the same `ours`
+and `original` paths and a byte-identical original image, it copies `ours.png`, `side.png` and
+`pair.json` and the entry's `rmse`, `edge_ncc`, `mean_grey`, `build`, `binary` and `rendered_at`
+lines. Every other curated line (title, note, setting) stays as curated, and each carried entry is
+printed. A directory named on the command line is published as it is.
+
+**In one go: `just compare-publish`.** It pulls `data/reference` (the private repository,
+[ADR-0085](../architecture/adr/0085-comparison-originals-live-in-a-private-repository.md)) fast-forward
+only, re-renders our side of every pair at this tree (`compare-rerender-ours`), commits and pushes that
+re-render there (`Comparison pairs: ours re-rendered at <sha>`), then runs `publish-compare`. It refuses
+when `data/reference` has uncommitted changes, so one host's re-render is never mixed into another's;
+commit or discard them first. Originals are untouched; a pair that needs a new original is still
+`compare-rerender` or `compare-rerender-all`. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
 ADR-0074 Accepted it reads `unlocked`. The maintainer runs the command.
 
 A curated page should carry only frames the policy covers; the seed and live

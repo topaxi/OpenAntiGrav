@@ -5,7 +5,7 @@
 //!
 //! **Local use only**: the output is content from the disc, so write it under
 //! `data/` and never commit it. `just audit-leakage` does not catch a `.glb`
-//! named innocently; the rule is the maintainer's, not the script's.
+//! named innocently; the rule is not enforced by the script.
 
 use oag_raceplay as race;
 

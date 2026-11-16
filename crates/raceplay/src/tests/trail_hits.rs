@@ -215,7 +215,7 @@ fn the_trail_hit_burst_inherits_half_the_intruders_velocity() {
     // Out of the ribbon, so nothing re-fires while the first burst is watched.
     place_and_step(&mut race, Vec3::new(-40.0, 50.0, 0.0));
     let mut rng = oag_core::Rng::new(5);
-    let dt = 1.0 / 60.0;
+    let dt = 1.0 / oag_fx::psys::TICK_HZ;
     race.view.stage.advance(dt, &mut rng);
     let start = particles_mean_x(&race).expect("the burst spawned");
     for _ in 0..6 {
@@ -226,4 +226,389 @@ fn the_trail_hit_burst_inherits_half_the_intruders_velocity() {
         (2.5..=3.5).contains(&drift),
         "drifted {drift} units in six ticks"
     );
+}
+
+/// **A posed field frame carries the burst a racing frame would.** `--field-warmup` puts a craft
+/// the original caught inside a rival's ribbon on its pose with a replayed exhaust; the original
+/// re-raises the hit every frame it stays inside, so its frame has a live burst on the nose. The
+/// warm-up runs the trigger and the stage per replayed tick: without them a matched pair compares
+/// the original's burst against an empty frame of ours.
+#[test]
+fn a_field_warm_up_leaves_a_live_burst_on_a_craft_tucked_in_a_ribbon() {
+    let mut race = race_with_only_the_red_burst();
+    // Slot 0 owns the ribbon and flies along +X; slot 1 sits eight units behind it, in its wake.
+    race.view.nozzles = vec![Some(Vec3::ZERO); oag_gameplay::MAX_SHIPS];
+    race.sim.world.ships[0].physics.body.position = Vec3::new(0.0, 0.0, 0.0);
+    race.sim.world.ships[1].physics.body.position = Vec3::new(-8.0, 0.0, 0.0);
+    let velocities = [Vec3::new(60.0, 0.0, 0.0); 2];
+    race.warm_up_field(&velocities, 120, None);
+    assert_ne!(
+        race.view.trail_inside[0] & 0b10,
+        0,
+        "the tucked craft is inside"
+    );
+    let mean = particles_mean_x(&race).expect("the warm-up left no live burst");
+    // Carried at half the craft's speed, a burst's older particles trail the craft that left
+    // them: behind -8, by a fraction of a second's slip, and nowhere near the owner at 0.
+    assert!(
+        (-16.0..=-7.0).contains(&mean),
+        "the burst is at {mean}, not on the tucked craft at -8"
+    );
+}
+
+/// The burst `WO_TRAIL_HITSHIP` is, reduced to a one-shot emitter with the record's `+0x4d0`.
+pub(super) fn a_one_shot_burst(name: &str) -> oag_fx::psys::Effect {
+    let mut blob = super::respawn::one_emitter_pob(name, 0);
+    let record = blob.len() - oag_pob::EMITTER_LEN;
+    blob[record + 0x24..record + 0x28].copy_from_slice(&1.0f32.to_bits().to_le_bytes());
+    blob[record + 0x4d0..record + 0x4d4].copy_from_slice(&0.5f32.to_bits().to_le_bytes());
+    for entry in blob[record + 0xc4..]
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .take(256)
+    {
+        *entry = BURST_BLUE;
+    }
+    oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+        .expect("the hand-laid effect parses")
+}
+
+/// The palette the hand-laid burst is painted in: a saturated blue, as HD's own is.
+const BURST_BLUE: [u8; 4] = [26, 64, 255, 255];
+
+/// A Pulse-shaped grid: the PSP ribbon, no HD tube, slot 0's ribbon laid along -X (ten samples,
+/// the ring the title's own trail holds), and `burst` lent to the trigger when given.
+fn a_pulse_race_with_a_ribbon(burst: bool) -> Race {
+    let mut race = race_with_a_grid();
+    assert!(!race.view.hd_trail_active, "a Pulse race draws no HD tube");
+    race.view.hull_reach = [2.0; oag_gameplay::MAX_SHIPS];
+    for k in 0..oag_fx::exhaust::TRAIL_SAMPLES {
+        race.view.exhaust[0].push_trail(Vec3::new(k as f32 * -4.0, 0.0, 0.0), Vec3::X);
+    }
+    if burst {
+        let effect = a_one_shot_burst(oag_title::engine_effects::TRAIL_HITSHIP_EFFECT);
+        race.view.handles = std::mem::take(&mut race.view.handles)
+            .lending(Trigger::TrailHitship, Some(std::sync::Arc::new(effect)));
+    }
+    race
+}
+
+/// **The lent burst, red to green.** A Pulse race has no HD tube; with the burst lent, a craft
+/// inside the title's own ribbon raises it on the tick it enters and then every other tick.
+#[test]
+fn a_lent_burst_plays_for_a_craft_flying_in_a_pulse_ribbon_every_other_tick() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    let mut played = Vec::new();
+    for _ in 0..5 {
+        place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+        assert_ne!(race.view.trail_inside[0] & 0b10, 0, "inside the ribbon");
+        played.push(race.view.stage.playing_count());
+    }
+    assert_eq!(
+        played,
+        [1, 1, 2, 2, 3],
+        "one burst, then one every second tick"
+    );
+}
+
+/// Leaving the ribbon resets the rhythm: the first tick back inside fires.
+#[test]
+fn a_lent_burst_fires_on_every_entry() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    let inside = Vec3::new(-18.0, 0.0, 0.0);
+    place_and_step(&mut race, inside);
+    place_and_step(&mut race, inside);
+    place_and_step(&mut race, Vec3::new(-18.0, 50.0, 0.0));
+    assert_eq!(race.view.stage.playing_count(), 1);
+    place_and_step(&mut race, inside);
+    assert_eq!(race.view.stage.playing_count(), 2, "re-entry fires at once");
+}
+
+/// A title that plays its own burst keeps the measured every-tick rate: only a lent one is thinned.
+#[test]
+fn a_burst_the_title_authors_fires_every_tick() {
+    let mut race = race_with_a_trail();
+    race.view.handles.insert(
+        Trigger::TrailHitship,
+        a_one_shot_burst(oag_title::engine_effects::TRAIL_HITSHIP_EFFECT),
+    );
+    assert!(!race.view.handles.is_lent(Trigger::TrailHitship));
+    for tick in 1..=4 {
+        place_and_step(&mut race, Vec3::new(-40.0, 0.0, 0.0));
+        assert_eq!(race.view.stage.playing_count(), tick);
+    }
+}
+
+/// **Off is inert.** The same ribbon and the same craft, nothing lent: no latch, no burst.
+#[test]
+fn without_a_lent_burst_a_pulse_race_tests_and_plays_nothing() {
+    let mut race = a_pulse_race_with_a_ribbon(false);
+    place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+    assert_eq!(race.view.trail_inside[0], 0);
+    assert_eq!(race.view.stage.playing_count(), 0);
+}
+
+/// The test is the title's own ribbon: the sphere fallback's reach plus the ribbon's width, and
+/// no more. A craft a few units off the line is clear, as it is on HD.
+#[test]
+fn a_craft_beside_a_pulse_ribbon_is_clear_of_it() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    place_and_step(&mut race, Vec3::new(-18.0, 6.0, 0.0));
+    assert_eq!(race.view.trail_inside[0] & 0b10, 0);
+    assert_eq!(race.view.stage.playing_count(), 0);
+    // Just inside the reach: the hull reach plus the ribbon's head width at zero intensity.
+    let reach = 2.0 + race.view.exhaust[0].trail_half_width();
+    place_and_step(&mut race, Vec3::new(-18.0, reach - 0.01, 0.0));
+    assert_ne!(race.view.trail_inside[0] & 0b10, 0, "just inside");
+    place_and_step(&mut race, Vec3::new(-18.0, reach + 0.01, 0.0));
+    assert_eq!(race.view.trail_inside[0] & 0b10, 0, "just outside");
+}
+
+/// **A lent burst fires only where the ribbon is lit.** Slot 0's ribbon runs along -X from its
+/// head at x = -36 (the newest sample) back to x = 0, four units a sample; the drawn fade passes
+/// 10 % of the head's a little before sample 5, x = -16. A craft at the head fires; one on the
+/// ribbon's dark back half, still dead on its line, fires nothing.
+#[test]
+fn a_lent_burst_does_not_fire_in_the_faded_tail_of_a_pulse_ribbon() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    place_and_step(&mut race, Vec3::new(-4.0, 0.0, 0.0));
+    assert_eq!(race.view.trail_inside[0] & 0b10, 0, "age 8 is under 2 %");
+    assert_eq!(race.view.stage.playing_count(), 0);
+    place_and_step(&mut race, Vec3::new(-28.0, 0.0, 0.0));
+    assert_ne!(race.view.trail_inside[0] & 0b10, 0, "age 2, near the head");
+    assert_eq!(race.view.stage.playing_count(), 1);
+}
+
+/// The two ends of the cut, each side of x = -16: the cut itself is the fade law's, not a sample.
+#[test]
+fn the_lit_edge_of_a_pulse_ribbon_is_where_the_fade_reaches_the_floor() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    let lit_end = -36.0 + 4.0 * race.view.exhaust[0].trail_lit_age();
+    let reach = 2.0 + race.view.exhaust[0].trail_half_width();
+    place_and_step(&mut race, Vec3::new(lit_end - 0.5, 0.0, 0.0));
+    assert_ne!(
+        race.view.trail_inside[0] & 0b10,
+        0,
+        "just inside the lit part"
+    );
+    // Along the line, just past the end, and farther than the reach from it.
+    place_and_step(&mut race, Vec3::new(lit_end + reach + 0.5, 0.0, 0.0));
+    assert_eq!(race.view.trail_inside[0] & 0b10, 0, "past the lit end");
+}
+
+/// Leaving the lit part is leaving: the latch and the lent burst's rate state clear in the tail,
+/// and re-entering fires at once, as it does after any other exit.
+#[test]
+fn leaving_the_lit_part_clears_the_latch_and_the_burst_fires_again_on_return() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    let bit = 0b10;
+    place_and_step(&mut race, Vec3::new(-34.0, 0.0, 0.0));
+    assert_ne!(race.view.trail_inside[0] & bit, 0);
+    assert_ne!(race.view.trail_hit_rest[0] & bit, 0, "fired, so resting");
+    assert_eq!(race.view.stage.playing_count(), 1);
+    place_and_step(&mut race, Vec3::new(-4.0, 0.0, 0.0));
+    assert_eq!(race.view.trail_inside[0] & bit, 0, "in the tail");
+    assert_eq!(race.view.trail_hit_rest[0] & bit, 0, "so not resting");
+    assert_eq!(
+        race.view.stage.playing_count(),
+        1,
+        "and nothing fired there"
+    );
+    place_and_step(&mut race, Vec3::new(-34.0, 0.0, 0.0));
+    assert_ne!(race.view.trail_inside[0] & bit, 0);
+    assert_eq!(race.view.stage.playing_count(), 2, "fired on re-entry");
+}
+
+/// **HD keeps its whole tube.** A craft deep in the back of HD's 54-sample tube, where the
+/// Pulse ribbon would be dark, is inside it and fires every tick, as before.
+#[test]
+fn an_hd_craft_in_the_back_of_the_tube_still_hits_it() {
+    let mut race = race_with_a_trail();
+    // The tube runs from its head at x = -212 to x = 0; this is its oldest fifth.
+    place_and_step(&mut race, Vec3::new(-8.0, 0.0, 0.0));
+    assert_ne!(race.view.trail_inside[0] & 0b10, 0);
+}
+
+/// A ribbon whose ring is not full is not drawn and is not tested - the grid's opening ticks
+/// latch nothing.
+#[test]
+fn a_ribbon_that_is_not_full_is_not_tested() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    race.view.exhaust[0].clear_trail();
+    for k in 0..oag_fx::exhaust::TRAIL_SAMPLES - 1 {
+        race.view.exhaust[0].push_trail(Vec3::new(k as f32 * -4.0, 0.0, 0.0), Vec3::X);
+    }
+    place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+    assert_eq!(race.view.trail_inside[0], 0);
+    assert_eq!(race.view.stage.playing_count(), 0);
+}
+
+/// **A craft flying along a Pulse ribbon is in it.** The hull's authored anchors are its edges
+/// (a wing tip each side, a point at the nose), so the HD test - an anchor within the ribbon's
+/// width - never fires for a craft with the line through its middle. The ribbon test is the line
+/// passing inside the hull's own cross-section.
+#[test]
+fn a_craft_with_a_pulse_ribbon_through_its_middle_is_inside_and_one_beside_it_is_not() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    race.view.spark_anchors = vec![Vec::new(); oag_gameplay::MAX_SHIPS];
+    race.view.spark_anchors[1] = vec![
+        Vec3::new(2.6, -1.0, 0.0),
+        Vec3::new(-2.6, -1.0, 0.0),
+        Vec3::new(0.0, -0.5, 6.0),
+    ];
+    place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+    assert_ne!(
+        race.view.trail_inside[0] & 0b10,
+        0,
+        "the line is through the hull"
+    );
+    place_and_step(&mut race, Vec3::new(-18.0, 4.0, 0.0));
+    assert_eq!(
+        race.view.trail_inside[0] & 0b10,
+        0,
+        "the line is clear of the hull"
+    );
+}
+
+/// Every craft lays a ribbon and sits in every other craft's: the most pairs a grid can fire.
+fn all_craft_in_each_others_ribbons(race: &mut Race) {
+    let count = race.sim.world.ship_count as usize;
+    for owner in 1..count {
+        for k in 0..oag_fx::exhaust::TRAIL_SAMPLES {
+            race.view.exhaust[owner].push_trail(Vec3::new(k as f32 * -4.0, 0.0, 0.0), Vec3::X);
+        }
+    }
+    for slot in 0..count {
+        race.sim.world.ships[slot].physics.body.position = Vec3::new(-18.0, 0.0, 0.0);
+    }
+}
+
+/// **A detonation started while trail hits stream plays to completion.** Every craft flies
+/// in every other's ribbon, so the bursts of one grid fill the stage; the detonation
+/// is the thinnest instance on it (a few long-lived particles), which is the one an ordinary
+/// recycle picks. Dropping the expendable play from `advance_trail_hits` evicts it within a tick.
+#[test]
+fn a_detonation_started_while_trail_hits_stream_still_plays_to_completion() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    all_craft_in_each_others_ribbons(&mut race);
+    let mut detonation = a_one_shot_burst("WO_ROCKET_EXPLO");
+    detonation.emitters[0].lifetime_ticks = (40.0, 0.0);
+    let detonation = std::sync::Arc::new(detonation);
+    let mut rng = oag_core::Rng::new(3);
+    let dt = 1.0 / oag_fx::psys::TICK_HZ;
+    let mut step = |race: &mut Race| {
+        race.advance_trail_hits();
+        race.view.stage.advance(dt, &mut rng);
+    };
+
+    let mut peak = 0;
+    for _ in 0..60 {
+        step(&mut race);
+        peak = peak.max(race.view.stage.playing_count());
+    }
+    assert_eq!(
+        peak,
+        oag_fx::psys::MAX_INSTANCES,
+        "the trail hits never filled the stage, so the test proves nothing"
+    );
+
+    race.view
+        .stage
+        .play(&detonation, Vec3::new(-18.0, 5.0, 0.0), 1.0)
+        .expect("a detonation finds a slot on a stage full of trail hits");
+    for tick in 0..30 {
+        step(&mut race);
+        assert!(
+            race.view.stage.alive_count_of(&detonation) > 0 || tick == 0,
+            "the detonation was cut short at tick {tick}"
+        );
+    }
+    assert!(race.view.stage.alive_count_of(&detonation) > 0);
+}
+
+/// The rgb of every vertex the stage draws once its burst has spawned (a play spawns on the
+/// stage's next step).
+fn burst_colours(race: &mut Race) -> Vec<[f32; 3]> {
+    race.view
+        .stage
+        .advance(1.0 / oag_fx::psys::TICK_HZ, &mut oag_core::Rng::new(3));
+    let (additive, alpha) = race.view.stage.vertices(Vec3::Z, Vec3::Y);
+    additive
+        .iter()
+        .chain(alpha.iter())
+        .map(|v| [v.colour[0], v.colour[1], v.colour[2]])
+        .collect()
+}
+
+/// The burst as its effect draws it, played in a stage of its own with no tint.
+fn untinted_burst_colours() -> Vec<[f32; 3]> {
+    let effect = std::sync::Arc::new(a_one_shot_burst(
+        oag_title::engine_effects::TRAIL_HITSHIP_EFFECT,
+    ));
+    let mut stage = oag_fx::psys::Stage::new();
+    stage.play_carried_expendable(&effect, Vec3::ZERO, 1.0, Vec3::ZERO, None);
+    stage.advance(1.0 / oag_fx::psys::TICK_HZ, &mut oag_core::Rng::new(3));
+    let (additive, alpha) = stage.vertices(Vec3::Z, Vec3::Y);
+    additive
+        .iter()
+        .chain(alpha.iter())
+        .map(|v| [v.colour[0], v.colour[1], v.colour[2]])
+        .collect()
+}
+
+fn luma(rgb: [f32; 3]) -> f32 {
+    rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722
+}
+
+/// **A lent burst is drawn in the colour of the ribbon it was struck in, at its own brightness.**
+/// HD's burst is blue; a Pulse ribbon is violet (deep blue, magenta and near-white layers
+/// summed). Red to green: with the tint dropped the colours are HD's blue again.
+#[test]
+fn a_lent_burst_takes_the_ribbon_hue_and_keeps_its_brightness() {
+    let blue = untinted_burst_colours();
+    assert!(!blue.is_empty());
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+    let drawn = burst_colours(&mut race);
+    assert_eq!(drawn.len(), blue.len());
+    let tint = oag_fx::psys::Tint::towards(oag_fx::exhaust::TrailLaw::Ramped.ribbon_colour());
+    for (drawn, authored) in drawn.iter().zip(&blue) {
+        assert!(
+            (luma(*drawn) - luma(*authored)).abs() < 1e-4,
+            "{drawn:?} is not as bright as {authored:?}"
+        );
+        assert_ne!(drawn, authored, "the burst kept HD's blue");
+        assert_eq!(*drawn, tint.apply(*authored));
+        assert!(drawn[0] > authored[0], "violet has more red than HD's blue");
+    }
+}
+
+/// The PS2's ribbon leaves its outer blue layer out, so its burst is another hue than the PSP's.
+#[test]
+fn a_lent_burst_follows_the_platforms_ribbon_law() {
+    let mut psp = a_pulse_race_with_a_ribbon(true);
+    place_and_step(&mut psp, Vec3::new(-18.0, 0.0, 0.0));
+    let mut ps2 = a_pulse_race_with_a_ribbon(true);
+    ps2.view.ps2_trail = true;
+    place_and_step(&mut ps2, Vec3::new(-18.0, 0.0, 0.0));
+    let (psp, ps2) = (burst_colours(&mut psp), burst_colours(&mut ps2));
+    assert!(!psp.is_empty() && psp.len() == ps2.len());
+    assert_ne!(psp, ps2);
+}
+
+/// **A burst the title authors is never tinted** (Wipeout HD, and 2048 and Omega with the setting
+/// on): drawn exactly as its effect draws it, whatever the ribbon.
+#[test]
+fn a_burst_the_title_authors_keeps_its_own_colours() {
+    let mut race = race_with_a_trail();
+    race.view.handles.insert(
+        Trigger::TrailHitship,
+        a_one_shot_burst(oag_title::engine_effects::TRAIL_HITSHIP_EFFECT),
+    );
+    assert!(!race.view.handles.is_lent(Trigger::TrailHitship));
+    place_and_step(&mut race, Vec3::new(-40.0, 0.0, 0.0));
+    let drawn = burst_colours(&mut race);
+    assert!(!drawn.is_empty());
+    assert_eq!(drawn, untinted_burst_colours());
 }

@@ -48,6 +48,56 @@ pub(crate) struct Output {
     /// The queue depth and fullscreen state the last configure logged, so the decision is said
     /// once per change rather than on every resize.
     logged: Option<(wgpu::PresentMode, u32, bool)>,
+    /// How many times the surface has been configured, so a reader that holds state about the
+    /// swapchain (`oag_present::refresh`) can tell it was rebuilt without every call site saying so.
+    pub(crate) configures: u64,
+    /// What a frame waits for besides a swapchain image: a desktop-background surface's
+    /// compositor frame callback ([`Pace`]). `None` for a window.
+    pace: Option<Box<dyn Pace>>,
+    /// What the surface was made over, when the surface does not own it: a raw target's
+    /// platform objects ([`RawTarget::keep`]). **Declared after [`Self::surface`]**, so it
+    /// outlives it.
+    keep: Option<Box<dyn std::any::Any>>,
+}
+
+/// Whether an output may draw a frame now, beyond having a swapchain image: a background
+/// surface the compositor stopped asking frames of (hidden, or on an output that is off) is
+/// left alone.
+pub(crate) trait Pace {
+    /// Whether to draw now; a yes is a frame the output then expects to present.
+    fn ready(&mut self) -> bool;
+}
+
+/// A surface made over raw platform handles rather than a winit window: a desktop-background
+/// layer surface (`crate::wallpaper`).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub(crate) struct RawTarget {
+    pub(crate) display: winit::raw_window_handle::RawDisplayHandle,
+    pub(crate) window: winit::raw_window_handle::RawWindowHandle,
+    /// The surface's size in pixels.
+    pub(crate) size: winit::dpi::PhysicalSize<u32>,
+    /// Owns what both handles point at, kept until the wgpu surface is gone.
+    pub(crate) keep: Box<dyn std::any::Any>,
+    pub(crate) pace: Box<dyn Pace>,
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+impl RawTarget {
+    /// A surface over the raw handles, on `instance`.
+    fn surface(&self, instance: &wgpu::Instance) -> Result<wgpu::Surface<'static>> {
+        // SAFETY: `keep` owns the objects both handles point at (the display connection and
+        // the platform surface), and the `Output` this surface goes into drops its `surface`
+        // before its `keep`. The one unsafe of a raw target: wgpu makes no surface over
+        // objects winit did not create without it.
+        #[allow(unsafe_code)]
+        let surface = unsafe {
+            instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                raw_display_handle: Some(self.display),
+                raw_window_handle: self.window,
+            })
+        };
+        surface.context("creating a surface over raw handles")
+    }
 }
 
 /// The window of an [`Output`], or nothing in a headless session.
@@ -60,21 +110,83 @@ pub(crate) struct Output {
 /// which is the loud failure for a path nobody has taught to run headless.
 pub(crate) struct Host {
     window: Option<Arc<Window>>,
-    /// A headless session's size, which no window reports.
+    /// The X server's own answer for the window's output, where winit's monitor report goes
+    /// stale after window creation.
+    #[cfg(target_os = "linux")]
+    live: Option<crate::x11_refresh::LiveRefresh>,
+    /// A headless session's size, which no window reports; a background surface's, which
+    /// the compositor configures.
     size: winit::dpi::PhysicalSize<u32>,
+    /// A surface that covers its whole output (a desktop background): fullscreen to every
+    /// reader, with no window to ask.
+    fills_output: bool,
 }
 
 impl Host {
     pub(crate) fn window(window: Arc<Window>) -> Self {
         Self {
+            #[cfg(target_os = "linux")]
+            live: crate::x11_refresh::LiveRefresh::start(&window),
             window: Some(window),
             size: winit::dpi::PhysicalSize::new(0, 0),
+            fills_output: false,
+        }
+    }
+
+    /// The refresh rate of the window's output in millihertz, as live as the platform lets it
+    /// be: on X11 the server's answer through RandR, elsewhere (and before its first answer)
+    /// winit's monitor report.
+    pub(crate) fn refresh_millihertz(&self) -> Option<u32> {
+        #[cfg(target_os = "linux")]
+        if let Some(mhz) = self.live.as_ref().and_then(|live| live.millihertz()) {
+            return Some(mhz);
+        }
+        self.current_monitor()
+            .and_then(|monitor| monitor.refresh_rate_millihertz())
+    }
+
+    /// A seat's extra window: nothing reads its refresh, so it starts no X reader.
+    fn seat_window(window: Arc<Window>) -> Self {
+        Self {
+            #[cfg(target_os = "linux")]
+            live: None,
+            window: Some(window),
+            size: winit::dpi::PhysicalSize::new(0, 0),
+            fills_output: false,
         }
     }
 
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     fn headless(size: winit::dpi::PhysicalSize<u32>) -> Self {
-        Self { window: None, size }
+        Self {
+            window: None,
+            #[cfg(target_os = "linux")]
+            live: None,
+            size,
+            fills_output: false,
+        }
+    }
+
+    /// A desktop-background surface of `size` pixels, covering its output.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    fn background(size: winit::dpi::PhysicalSize<u32>) -> Self {
+        Self {
+            window: None,
+            #[cfg(target_os = "linux")]
+            live: None,
+            size,
+            fills_output: true,
+        }
+    }
+
+    /// Whether this covers its whole output with no window (a desktop background).
+    pub(crate) fn fills_output(&self) -> bool {
+        self.fills_output
+    }
+
+    /// A background surface's new size, from its compositor.
+    pub(crate) fn set_size(&mut self, size: winit::dpi::PhysicalSize<u32>) {
+        self.size = size;
     }
 
     pub(crate) fn current_monitor(&self) -> Option<winit::monitor::MonitorHandle> {
@@ -175,6 +287,9 @@ pub(crate) struct Gpu {
         allow(dead_code)
     )]
     adapter: wgpu::Adapter,
+    /// Reclaims finished submissions off the frame thread, where this machine gains from it.
+    /// Holds a clone of the device; dropped with this struct, it stops its thread.
+    pub(crate) reaper: Option<oag_gpu::reaper::Reaper>,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     /// What the RENDERER row offers. See [`adapter::Chosen::offered`].
@@ -195,6 +310,23 @@ pub(crate) struct Gpu {
     /// re-requesting an adapter to ask it a second time, which is the same
     /// argument `offered` above already makes.
     pub(crate) temporal: bool,
+    /// The menu previews' shader and pipelines, kept between one selection and the next so a
+    /// step in a picker compiles nothing it compiled before - see
+    /// `oag_mesh::mesh_render::KeptBuildCache`. Built for [`Self::device`] and gone with it.
+    pub(crate) preview_pipelines: std::cell::RefCell<oag_mesh::mesh_render::KeptBuildCache>,
+}
+
+impl Gpu {
+    /// The adapter this session draws with, as a screenshot's text names it.
+    pub(crate) fn describe(&self) -> oag_game::shot_meta::Gpu {
+        let info = self.adapter.get_info();
+        oag_game::shot_meta::Gpu {
+            adapter: info.name,
+            backend: format!("{:?}", info.backend),
+            driver: info.driver,
+            driver_info: info.driver_info,
+        }
+    }
 }
 
 /// What one adapter has to hand over before it can be drawn with.
@@ -216,6 +348,14 @@ pub(crate) struct BroughtUp {
 }
 
 impl Gpu {
+    /// Whether this device has no window or surface: a `--drive` run. Such a run
+    /// is non-interactive, so it must not open the host's gamepad
+    /// (`crate::app::controls_for`).
+    pub(crate) fn is_headless(&self) -> bool {
+        self.output.surface.is_none()
+    }
+
+
     /// Everything downstream of picking an adapter, so it can be *re*-run.
     ///
     /// Split out because `apply_setting` saves on every keypress: the moment a
@@ -382,7 +522,50 @@ impl Gpu {
             .create_surface(window.clone())
             .context("creating the surface")?;
         let size = crate::window::surface_size(&window);
+        let mut gpu = Self::assemble(instance, surface, size, renderer, Host::window(window))?;
+        gpu.output.apply_vsync(settings.vsync);
+        gpu.output.configure(&gpu.device);
+        Ok(gpu)
+    }
 
+    /// The device on a desktop-background surface over raw handles (`crate::wallpaper`): window
+    /// 1 of a wallpaper. Its present mode is a further window's, one that does not block
+    /// ([`crate::window::seat_present_modes`]): the compositor's frame callbacks pace it
+    /// ([`Pace`]), and a blocking mode on a surface the compositor stopped showing would hold
+    /// every output's frame.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn on_raw(target: RawTarget, renderer: &display::Renderer) -> Result<Self> {
+        let instance = adapter::instance();
+        let surface = target.surface(&instance)?;
+        let mut gpu = Self::assemble(instance, surface, target.size, renderer, Host::background(target.size))?;
+        gpu.output.pace = Some(target.pace);
+        gpu.output.keep = Some(target.keep);
+        gpu.output.apply_modes(crate::window::seat_present_modes(), 1);
+        gpu.output.configure(&gpu.device);
+        Ok(gpu)
+    }
+
+    /// A further desktop-background surface on this device: a wallpaper's next output.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn open_raw_output(&self, target: RawTarget) -> Result<Output> {
+        let surface = target.surface(&self.instance)?;
+        let mut output = self.output_on(surface, target.size, Host::background(target.size))?;
+        output.pace = Some(target.pace);
+        output.keep = Some(target.keep);
+        output.apply_modes(crate::window::seat_present_modes(), 1);
+        output.configure(&self.device);
+        Ok(output)
+    }
+
+    /// Brings the device up on `surface` (falling back to the default renderer when a named one
+    /// will not serve) and puts the surface, unconfigured, in window 1's [`Output`].
+    fn assemble(
+        instance: wgpu::Instance,
+        surface: wgpu::Surface<'static>,
+        size: winit::dpi::PhysicalSize<u32>,
+        renderer: &display::Renderer,
+        host: Host,
+    ) -> Result<Self> {
         let brought = match Self::bring_up(&instance, Some(&surface), size, renderer) {
             Ok(brought) => brought,
             // A *named* adapter that will not serve is recoverable, and the
@@ -416,10 +599,12 @@ impl Gpu {
             temporal,
         } = brought;
 
-        let mut gpu = Self {
+        Ok(Self {
             temporal,
+            preview_pipelines: std::cell::RefCell::default(),
+            reaper: oag_gpu::reaper::Reaper::begin(&device),
             output: Output {
-                window: Host::window(window),
+                window: host,
                 held: None,
                 surface: Some(surface),
                 offscreen: None,
@@ -428,6 +613,9 @@ impl Gpu {
                 offered,
                 latency: 1,
                 logged: None,
+                configures: 0,
+                pace: None,
+                keep: None,
             },
             instance,
             adapter,
@@ -435,10 +623,7 @@ impl Gpu {
             queue,
             adapters,
             in_use,
-        };
-        gpu.output.apply_vsync(settings.vsync);
-        gpu.output.configure(&gpu.device);
-        Ok(gpu)
+        })
     }
 
     /// The device and queue with no window, no surface and no event loop: what a
@@ -467,6 +652,8 @@ impl Gpu {
         } = Self::bring_up(&instance, None, size, renderer)?;
         let mut gpu = Self {
             temporal,
+            preview_pipelines: std::cell::RefCell::default(),
+            reaper: oag_gpu::reaper::Reaper::begin(&device),
             output: Output {
                 window: Host::headless(size),
                 held: None,
@@ -477,6 +664,9 @@ impl Gpu {
                 offered,
                 latency: 1,
                 logged: None,
+                configures: 0,
+                pace: None,
+                keep: None,
             },
             instance,
             adapter,
@@ -545,15 +735,30 @@ impl Gpu {
             .create_surface(window.clone())
             .context("creating a further surface")?;
         let inner = crate::window::surface_size(&window);
+        let mut output = self.output_on(surface, inner, Host::seat_window(window))?;
+        output.apply_modes(modes, 1);
+        output.configure(&self.device);
+        Ok(output)
+    }
+
+    /// A further [`Output`] over `surface` of `size` pixels, configured against this adapter's
+    /// defaults with window 1's format rule, its present mode not yet chosen.
+    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+    fn output_on(
+        &self,
+        surface: wgpu::Surface<'static>,
+        size: winit::dpi::PhysicalSize<u32>,
+        host: Host,
+    ) -> Result<Output> {
         let mut config = surface
-            .get_default_config(&self.adapter, inner.width.max(1), inner.height.max(1))
+            .get_default_config(&self.adapter, size.width.max(1), size.height.max(1))
             .context("the surface is not supported by this adapter")?;
         // The same format rule as window 1's: see `Gpu::bring_up`.
         config.format = config.format.remove_srgb_suffix();
         config.view_formats = vec![config.format];
         let offered = surface.get_capabilities(&self.adapter).present_modes;
-        let mut output = Output {
-            window: Host::window(window),
+        Ok(Output {
+            window: host,
             held: None,
             surface: Some(surface),
             offscreen: None,
@@ -562,10 +767,10 @@ impl Gpu {
             offered,
             latency: 1,
             logged: None,
-        };
-        output.apply_modes(modes, 1);
-        output.configure(&self.device);
-        Ok(output)
+            configures: 0,
+            pace: None,
+            keep: None,
+        })
     }
 }
 
@@ -595,6 +800,11 @@ impl Output {
             }
             return false;
         };
+        if let Some(pace) = &mut self.pace
+            && !pace.ready()
+        {
+            return false;
+        }
         match surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
@@ -612,6 +822,15 @@ impl Output {
         }
     }
 
+    /// The platform surface under this output is gone (its monitor was unplugged): the
+    /// swapchain goes first, then what it was made over, and the output draws nothing.
+    pub(crate) fn lose(&mut self) {
+        self.held = None;
+        self.surface = None;
+        self.pace = None;
+        self.keep = None;
+    }
+
     /// The image [`Self::acquire`] took for this frame, `None` when it got
     /// none or a reconfigure since let it go.
     pub(crate) fn take_acquired(&mut self) -> Option<Frame> {
@@ -625,6 +844,7 @@ impl Output {
     /// draw, which the caller already counts as a stall.
     pub(crate) fn configure(&mut self, device: &wgpu::Device) {
         self.held = None;
+        self.configures += 1;
         let max = device.limits().max_texture_dimension_2d;
         let (width, height) = clamp_extent(self.config.width, self.config.height, max);
         if (width, height) != (self.config.width, self.config.height) {
@@ -663,7 +883,7 @@ impl Output {
         );
         if self.logged != Some(decision) {
             self.logged = Some(decision);
-            info!(
+            debug!(
                 "surface: present mode {:?} (offered {:?}), {} frame(s) queued, {}",
                 decision.0,
                 self.offered,
@@ -798,6 +1018,7 @@ pub(crate) mod web {
 
     use anyhow::{Context, Result};
     use oag_game::adapter;
+    use oag_game::web_fault::{self, Failure, Kind};
 
     /// The id of the `<canvas>` the page draws into.
     pub(crate) const CANVAS_ID: &str = "oag-canvas";
@@ -809,25 +1030,32 @@ pub(crate) mod web {
         queue: wgpu::Queue,
     }
 
+    #[cfg(feature = "fault-test")]
     thread_local! {
-        static PREPARED: RefCell<Option<Prepared>> = const { RefCell::new(None) };
-        /// Whether the browser handed out a CPU adapter, which is what the page's
-        /// message names the Chrome flags for.
-        static SOFTWARE: Cell<bool> = const { Cell::new(false) };
+        /// The device the fault hook (`fault_test`) aims a real validation
+        /// error at; `PREPARED` is emptied once the renderer takes it.
+        pub(crate) static TEST_DEVICE: RefCell<Option<wgpu::Device>> = const { RefCell::new(None) };
     }
 
-    /// Shows `cause` on the page, through the `oagFatal` function `web/main.js`
-    /// defines, instead of leaving a white canvas. A missing function (a page
-    /// that is not ours) is ignored: the console already has the line.
-    pub(crate) fn fatal(cause: &str) {
-        use wasm_bindgen::JsCast;
-        let global = js_sys::global();
-        let Ok(show) = js_sys::Reflect::get(&global, &"oagFatal".into()) else {
-            return;
-        };
-        if let Ok(show) = show.dyn_into::<js_sys::Function>() {
-            let _ = show.call2(&global, &cause.into(), &SOFTWARE.with(Cell::get).into());
-        }
+    thread_local! {
+        static PREPARED: RefCell<Option<Prepared>> = const { RefCell::new(None) };
+        /// Validation errors seen so far: the first is logged as an error, the
+        /// rest at debug, because one bad pipeline repeats every frame.
+        static VALIDATION_ERRORS: Cell<u32> = const { Cell::new(0) };
+    }
+
+    /// Stops the page and shows `kind` on it, through the `oagFatal` function
+    /// `web/fault.js` defines, instead of leaving a white canvas. A missing
+    /// function (a page that is not ours) is ignored and reported as `false`,
+    /// for a caller that must still put the line on the console.
+    pub(crate) fn fatal(kind: Kind, detail: &str) -> bool {
+        call("oagFatal", &[kind.tag().into(), detail.into()]).is_some()
+    }
+
+    /// Tells the page about a failure the game survives (a validation error),
+    /// through `oagNotice`: shown once, dismissable, nothing stopped.
+    pub(crate) fn notice(kind: Kind, detail: &str) {
+        call("oagNotice", &[kind.tag().into(), detail.into()]);
     }
 
     /// Tells the page the player quit, through the `oagQuit` function
@@ -891,31 +1119,40 @@ pub(crate) mod web {
                 ..Default::default()
             })
             .await
-            .context("no WebGPU adapter (does this browser have WebGPU enabled?)")?;
+            .context(Failure::new(
+                Kind::NoAdapter,
+                "no WebGPU adapter (does this browser have WebGPU enabled?)",
+            ))?;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 ..oag_mesh::mesh_render::device_descriptor("oag-game", &adapter)
             })
             .await
-            .context("requesting the device")?;
+            .context(Failure::new(
+                Kind::DeviceRequest,
+                "the adapter would not give the device the game asks for",
+            ))?;
         oag_gpu::init_buffer::set_web_queue(queue.clone());
         let info = adapter.get_info();
         log::info!("web: adapter {:?} ({:?})", info.name, info.device_type);
-        SOFTWARE.with(|cell| cell.set(info.device_type == wgpu::DeviceType::Cpu));
-        device.set_device_lost_callback(|reason, message| {
-            log::error!("web: the WebGPU device was lost ({reason:?}): {message}");
-            if reason != wgpu::DeviceLostReason::Destroyed {
-                fatal(&format!("The GPU device was lost ({reason:?}): {message}"));
-            }
-        });
-        device.on_uncaptured_error(std::sync::Arc::new(|error: wgpu::Error| match error {
-            wgpu::Error::Validation { .. } => log::error!("web: WebGPU validation: {error}"),
-            _ => {
-                log::error!("web: WebGPU error: {error}");
-                fatal(&format!("The GPU reported an error: {error}"));
-            }
+        call(
+            "oagAdapter",
+            &[
+                format!(
+                    "{:?} ({:?}, {:?}, driver {:?})",
+                    info.name, info.device_type, info.backend, info.driver
+                )
+                .into(),
+                (info.device_type == wgpu::DeviceType::Cpu).into(),
+            ],
+        );
+        device.set_device_lost_callback(|reason, message| device_lost(reason, &message));
+        device.on_uncaptured_error(std::sync::Arc::new(|error: wgpu::Error| {
+            uncaptured_error(&error);
         }));
+        #[cfg(feature = "fault-test")]
+        TEST_DEVICE.with(|cell| *cell.borrow_mut() = Some(device.clone()));
         PREPARED.with(|cell| {
             *cell.borrow_mut() = Some(Prepared {
                 instance,
@@ -925,6 +1162,38 @@ pub(crate) mod web {
             });
         });
         Ok(())
+    }
+
+    /// What the device-lost callback does: the page shows it, unless the game
+    /// destroyed the device itself.
+    pub(crate) fn device_lost(reason: wgpu::DeviceLostReason, message: &str) {
+        log::debug!("web: the WebGPU device was lost ({reason:?}): {message}");
+        if let Some(kind) = web_fault::device_lost(reason) {
+            fatal(kind, &format!("device lost ({reason:?}): {message}"));
+        }
+    }
+
+    /// What the uncaptured-error callback does. A validation error is shown
+    /// once and the game runs on, and only the first is logged above debug (one
+    /// bad pipeline repeats every frame); any other kind stops the page. The
+    /// page's report is the console's one error line.
+    pub(crate) fn uncaptured_error(error: &wgpu::Error) {
+        let kind = web_fault::gpu_error(error);
+        if kind == Kind::GpuValidation {
+            let seen = VALIDATION_ERRORS.with(|count| {
+                count.set(count.get().saturating_add(1));
+                count.get()
+            });
+            if seen == 1 {
+                log::warn!("web: WebGPU validation: {error}");
+            } else {
+                log::debug!("web: WebGPU validation (#{seen}): {error}");
+            }
+            notice(kind, &format!("{error}"));
+        } else {
+            log::debug!("web: WebGPU error: {error}");
+            fatal(kind, &format!("{error}"));
+        }
     }
 
     /// The instance [`prepare`] made the adapter from: a surface must come

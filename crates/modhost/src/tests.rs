@@ -42,6 +42,7 @@ fn observe(tick: u64) -> Observation<'static> {
         active: 0b11,
         events: &[],
         crafts: &[],
+        course: Default::default(),
         track: &[],
         speed_pads: 0,
         routes: 0,
@@ -112,6 +113,60 @@ fn a_loop_runs_out_of_fuel_at_the_same_point_every_time() {
     assert_eq!(costs[0].fuel_used, 5_000);
 }
 
+/// A guest with one page that grows by `pages` more during its tick, room for eight.
+fn grower(pages: u32) -> Vec<u8> {
+    module(&format!(
+        r#"(module
+            (memory (export "memory") 1 8)
+            (func (export "oag_abi") (result i32) i32.const {{ABI_WORD}})
+            (func (export "oag_io") (result i32) i32.const 1024)
+            (func (export "tick") (result i32)
+              (drop (memory.grow (i32.const {pages})))
+              i32.const 0))"#
+    ))
+}
+
+#[test]
+fn a_cost_carries_the_guests_memory_after_its_tick_growth_included() {
+    let limits = Limits {
+        memory_pages: 8,
+        ..Limits::default()
+    };
+    let bytes = |wasm: &[u8]| {
+        Module::compile(wasm, limits)
+            .unwrap()
+            .tick(&observe(0), &mut [0; 4], &mut Vec::new())
+            .unwrap()
+            .memory_bytes
+    };
+    assert_eq!(bytes(&grower(0)), 65_536);
+    assert_eq!(bytes(&grower(2)), 3 * 65_536);
+    assert_eq!(bytes(&grower(7)), 8 * 65_536);
+}
+
+#[test]
+fn a_faulting_call_still_reports_the_memory_it_reached() {
+    let wasm = module(
+        r#"(module
+            (memory (export "memory") 1 8)
+            (func (export "oag_abi") (result i32) i32.const {ABI_WORD})
+            (func (export "oag_io") (result i32) i32.const 1024)
+            (func (export "tick") (result i32)
+              (drop (memory.grow (i32.const 3)))
+              unreachable))"#,
+    );
+    let limits = Limits {
+        memory_pages: 8,
+        ..Limits::default()
+    };
+    let (fault, cost) = Module::compile(&wasm, limits)
+        .unwrap()
+        .tick(&observe(0), &mut [0; 4], &mut Vec::new())
+        .unwrap_err();
+    assert!(matches!(fault, Fault::Trap(_)));
+    assert_eq!(cost.memory_bytes, 4 * 65_536);
+}
+
 #[test]
 fn an_instance_is_fresh_every_tick() {
     // A counter in the guest's own memory, not the blob: it must read 1 every tick.
@@ -177,6 +232,7 @@ fn a_slot_with_no_craft_is_refused() {
         active: 0b1,
         events: &[],
         crafts: &[],
+        course: Default::default(),
         track: &[],
         speed_pads: 0,
         routes: 0,
@@ -215,6 +271,7 @@ fn events_reach_the_guest() {
                 active: 0xff,
                 events: &events,
                 crafts: &[],
+                course: Default::default(),
                 track: &[],
                 speed_pads: 0,
                 routes: 0,
@@ -286,6 +343,24 @@ fn a_state_length_export_must_agree_with_the_manifest() {
         }
     );
     assert!(error.to_string().contains("state_bytes = 96"), "{error}");
+}
+
+/// A manifest that declares no `state_bytes` (0) takes the length the module exports, so the
+/// number is written once, in the guest.
+#[test]
+fn a_manifest_without_a_state_length_takes_the_modules() {
+    let says_16 = r#"(func (export "oag_state_len") (result i32) i32.const 16)"#;
+    let undeclared = Limits {
+        state_bytes: 0,
+        ..Limits::default()
+    };
+    let module = Module::compile(&answering(ABI_WORD, says_16), undeclared).unwrap();
+    assert_eq!(module.limits().state_bytes, 16);
+    let huge = r#"(func (export "oag_state_len") (result i32) i32.const 4096)"#;
+    let error = Module::compile(&answering(ABI_WORD, huge), undeclared).unwrap_err();
+    assert!(matches!(error, LoadError::Limits(_)), "{error}");
+    let silent = Module::compile(&answering(ABI_WORD, ""), undeclared).unwrap();
+    assert_eq!(silent.limits().state_bytes, 0, "no export, no state");
 }
 
 /// A guest whose track buffer is at 8192: copies the region's first property value
@@ -445,3 +520,154 @@ fn two_shield_commands_for_one_slot_in_a_tick_are_refused() {
         );
     }
 }
+
+/// A guest whose exports are the ABI's, each with the signature in `signatures` that
+/// names it, and no body that matters.
+fn with_signature(export: &str, wrong: &str) -> Vec<u8> {
+    let func = |name: &str, body: &str| {
+        if name == export {
+            format!(r#"(func (export "{name}") {wrong})"#)
+        } else {
+            format!(r#"(func (export "{name}") (result i32) {body})"#)
+        }
+    };
+    wat::parse_str(format!(
+        r#"(module
+            (memory (export "memory") 1)
+            {abi}
+            {io}
+            {tick}
+            {track}
+            {len})"#,
+        abi = func("oag_abi", &format!("i32.const {ABI_WORD}")),
+        io = func("oag_io", "i32.const 1024"),
+        tick = func("tick", "i32.const 0"),
+        track = func("oag_track", "i32.const 8192"),
+        len = func("oag_state_len", "i32.const 8"),
+    ))
+    .unwrap()
+}
+
+#[test]
+fn an_export_with_the_wrong_signature_is_refused_at_load_by_name() {
+    let limits = Limits {
+        state_bytes: 8,
+        ..Limits::default()
+    };
+    assert!(
+        Module::compile(&with_signature("none", "(result i32) i32.const 0"), limits).is_ok(),
+        "the fixture with every signature right loads"
+    );
+    for (name, wrong) in [
+        ("tick", "(param i32) (result i32) i32.const 0"),
+        ("tick", "(result i64) i64.const 0"),
+        ("tick", "nop"),
+        ("oag_io", "(result i64) i64.const 1024"),
+        ("oag_io", "(param i32) (result i32) i32.const 1024"),
+        ("oag_track", "(result i64) i64.const 8192"),
+        ("oag_state_len", "(result i64) i64.const 8"),
+        ("oag_abi", "(result i64) i64.const 0"),
+    ] {
+        let error = Module::compile(&with_signature(name, wrong), limits).unwrap_err();
+        assert!(
+            matches!(&error, LoadError::Export(e) if e.contains(&format!("`{name}`")) && e.contains("() -> i32")),
+            "{name} {wrong}: {error}"
+        );
+    }
+}
+
+#[test]
+fn a_reply_past_the_fire_effect_cap_is_a_fault_and_the_cap_itself_is_fine() {
+    let fire = |count: usize| {
+        let body: String = (0..count)
+            .map(|i| {
+                format!(
+                    "(i32.store8 (i32.const {kind}) (i32.const 6)) (i32.store8 (i32.const {slot}) (i32.const 1))
+                     (i32.store16 (i32.const {arg}) (i32.const {effect}))",
+                    kind = REPLY + 4 + i as i32 * oag_ext_abi::COMMAND_LEN as i32,
+                    slot = REPLY + 5 + i as i32 * oag_ext_abi::COMMAND_LEN as i32,
+                    arg = REPLY + 6 + i as i32 * oag_ext_abi::COMMAND_LEN as i32,
+                    effect = i % 2,
+                )
+            })
+            .collect();
+        let wasm = guest(&format!(
+            "(i32.store (i32.const {REPLY}) (i32.const {count})) {body} i32.const 0"
+        ));
+        let module = Module::compile(&wasm, Limits::default()).unwrap();
+        let mut commands = Vec::new();
+        module
+            .tick(&observe(0), &mut [0; 8], &mut commands)
+            .map(|_| commands.len())
+    };
+    assert_eq!(
+        fire(oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK),
+        Ok(oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK)
+    );
+    let (fault, _) = fire(oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK + 1).unwrap_err();
+    assert!(
+        matches!(&fault, Fault::Reply(e) if e.contains("fire-effect")),
+        "{fault}"
+    );
+}
+
+/// A guest that sends one raw command record every tick.
+fn sender(kind: u8, slot: u8, arg: u16, value: u32, word: u32) -> Vec<u8> {
+    guest(&format!(
+        "(i32.store (i32.const {REPLY}) (i32.const 1))
+         (i32.store8 (i32.const {cmd}) (i32.const {kind}))
+         (i32.store8 (i32.const {s}) (i32.const {slot}))
+         (i32.store16 (i32.const {a}) (i32.const {arg}))
+         (i32.store (i32.const {v}) (i32.const {value}))
+         (i32.store (i32.const {w}) (i32.const {word}))
+         i32.const 0",
+        cmd = REPLY + 4,
+        s = REPLY + 5,
+        a = REPLY + 6,
+        v = REPLY + 8,
+        w = REPLY + 12,
+    ))
+}
+
+fn sends(wasm: &[u8]) -> Result<Vec<Command>, Fault> {
+    let module = Module::compile(wasm, Limits::default()).unwrap();
+    let mut commands = Vec::new();
+    module
+        .tick(&observe(0), &mut [0; 8], &mut commands)
+        .map(|_| commands)
+        .map_err(|(fault, _)| fault)
+}
+
+#[test]
+fn the_view_commands_for_a_craft_land_and_for_an_empty_slot_or_out_of_range_are_faults() {
+    let fov = |slot, degrees: f32| sender(31, slot, 0, degrees.to_bits(), 0);
+    assert_eq!(
+        sends(&fov(1, 12.0)),
+        Ok(vec![Command::FovOffset {
+            slot: Slot::new(1).unwrap(),
+            degrees: 12.0
+        }])
+    );
+    for bad in [
+        fov(5, 12.0),
+        fov(1, oag_ext_abi::MAX_FOV_OFFSET_DEG * 2.0),
+        fov(1, f32::NAN),
+        sender(30, 5, 0, 0, 0x80ff_0000),
+        sender(32, 1, 0, 0.0_f32.to_bits(), 0),
+        sender(32, 5, 0, 20.0_f32.to_bits(), 0),
+    ] {
+        assert!(matches!(sends(&bad), Err(Fault::Reply(_))));
+    }
+    assert!(matches!(
+        sends(&sender(30, 1, 0, 0, 0x80ff_0000)),
+        Ok(commands) if commands.len() == 1
+    ));
+    assert!(matches!(
+        sends(&sender(32, 1, 3, 20.0_f32.to_bits(), 0)),
+        Ok(commands) if commands.len() == 1
+    ));
+}
+
+mod engines;
+
+mod race;

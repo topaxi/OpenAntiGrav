@@ -30,7 +30,7 @@
 //! - [`every_layout_composes_with_nothing_missing_and_nothing_skipped`] - every
 //!   include resolves and every widget element is modelled, on all eighteen.
 //! - [`every_texture_a_layout_names_is_on_the_disc`] - the extension rule
-//!   [`oag_hd::hud::texture_entry`] states, checked against the manifests.
+//!   [`oag_assets::Archives::resolve_texture`] applies, checked against the manifests.
 //!
 //! Both fail loudly the day a reading drifts, and neither can be satisfied by a
 //! parser that quietly drops what it does not understand.
@@ -239,7 +239,9 @@ fn every_texture_a_layout_names_is_on_the_disc_once_the_extension_is_replaced() 
     );
 
     for (reference, count) in &uses {
-        let entry = oag_hd::hud::texture_entry(reference);
+        let entry = archives
+            .resolve_texture(reference)
+            .unwrap_or_else(|| (reference).to_string());
         assert!(
             archives.locate(&entry).is_some(),
             "{reference} ({count} sprites) resolves to {entry}, which is not on the disc"
@@ -352,7 +354,7 @@ fn a_race_hands_the_hud_hds_own_grid_rather_than_the_psps() {
 /// really do fit. 1,029 sprites over 12 textures, and every one lands.
 ///
 /// It is also the check that would catch the extension rule
-/// [`oag_hd::hud::texture_entry`] states being wrong in the one way that would
+/// [`oag_assets::Archives::resolve_texture`] applies being wrong in the one way that would
 /// otherwise be invisible: resolving to *some* texture that happens to exist.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -369,7 +371,9 @@ fn every_sprite_s_source_rectangle_fits_inside_the_texture_it_names() {
             let size = match sizes.get(&sprite.src) {
                 Some(size) => *size,
                 None => {
-                    let entry = oag_hd::hud::texture_entry(&sprite.src);
+                    let entry = archives
+                        .resolve_texture(&sprite.src)
+                        .unwrap_or_else(|| sprite.src.to_string());
                     let blob = archives
                         .read_name(&entry)
                         .unwrap_or_else(|e| panic!("{} -> {entry}: {e}", sprite.src));
@@ -454,7 +458,9 @@ fn a_drawn_sprite_lands_inside_the_texture_its_own_layout_names() {
         let blobs: Vec<(String, Vec<u8>)> = references
             .iter()
             .map(|reference| {
-                let entry = oag_hd::hud::texture_entry(reference);
+                let entry = archives
+                    .resolve_texture(reference)
+                    .unwrap_or_else(|| (reference).to_string());
                 let blob = archives
                     .read_name(&entry)
                     .unwrap_or_else(|e| panic!("{root}: {reference} -> {entry}: {e}"));
@@ -728,7 +734,9 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
         .textures()
         .iter()
         .map(|reference| {
-            let entry = oag_hd::hud::texture_entry(reference);
+            let entry = archives
+                .resolve_texture(reference)
+                .unwrap_or_else(|| (reference).to_string());
             (
                 (*reference).to_string(),
                 archives.read_name(&entry).expect("a HUD texture"),
@@ -748,6 +756,7 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
         default_line_height: 34.0,
         skin_line_height: 34.0,
         default_border: layout.default_border(),
+        tag_label: None,
     };
 
     // Zone 1 on rung 1, which is the state the reference frame is in.
@@ -850,6 +859,7 @@ fn the_zone_eight_frame_is_reproduced_row_for_row() {
         default_line_height: 34.0,
         skin_line_height: 34.0,
         default_border: layout.default_border(),
+        tag_label: None,
     };
 
     // Zone 8: rung 5 (`5 Sub Rapier`), next bump four rows down at zone 12.
@@ -926,6 +936,7 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
     // The ladder is under test, not HD's drop shadow, which draws every string twice.
     let art = oag_title::HudArt {
         text_shadow: None,
+        text_outline_alpha: None,
         ..*oag_hd::hud::ART
     };
     let cx = hud::Context {
@@ -938,6 +949,7 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
         default_line_height: 34.0,
         skin_line_height: 34.0,
         default_border: layout.default_border(),
+        tag_label: None,
     };
     let frame = hud::draw_list(&cx, &oag_hud::Readout::default());
     // A bare digit string is no longer unique to the `ZonePlus*` ladder:
@@ -1109,7 +1121,9 @@ fn a_leaning_hd_frame_is_the_still_frame_slid_along_x() {
         .textures()
         .iter()
         .map(|reference| {
-            let entry = oag_hd::hud::texture_entry(reference);
+            let entry = archives
+                .resolve_texture(reference)
+                .unwrap_or_else(|| (reference).to_string());
             (
                 (*reference).to_string(),
                 archives.read_name(&entry).expect("a HUD texture"),
@@ -1128,6 +1142,7 @@ fn a_leaning_hd_frame_is_the_still_frame_slid_along_x() {
         default_line_height: 34.0,
         skin_line_height: 34.0,
         default_border: layout.default_border(),
+        tag_label: None,
     };
 
     const FOLLOWER: f32 = 1.39815;
@@ -1253,7 +1268,9 @@ fn lit_hud_quads_carry_the_captured_alpha_byte_and_the_outline_and_bars_do_not()
         .textures()
         .iter()
         .map(|reference| {
-            let entry = oag_hd::hud::texture_entry(reference);
+            let entry = archives
+                .resolve_texture(reference)
+                .unwrap_or_else(|| (reference).to_string());
             (
                 (*reference).to_string(),
                 archives.read_name(&entry).expect("a HUD texture"),
@@ -1281,6 +1298,7 @@ fn lit_hud_quads_carry_the_captured_alpha_byte_and_the_outline_and_bars_do_not()
             default_line_height: 34.0,
             skin_line_height: 34.0,
             default_border: layout.default_border(),
+            tag_label: None,
         };
         hud::draw_list(&cx, &readout)
     };
@@ -1375,7 +1393,9 @@ fn every_lit_text_string_has_a_black_twin_one_unit_up_and_left_drawn_first() {
         .textures()
         .iter()
         .map(|reference| {
-            let entry = oag_hd::hud::texture_entry(reference);
+            let entry = archives
+                .resolve_texture(reference)
+                .unwrap_or_else(|| (reference).to_string());
             (
                 (*reference).to_string(),
                 archives.read_name(&entry).expect("a HUD texture"),
@@ -1403,12 +1423,14 @@ fn every_lit_text_string_has_a_black_twin_one_unit_up_and_left_drawn_first() {
             default_line_height: 34.0,
             skin_line_height: 34.0,
             default_border: layout.default_border(),
+            tag_label: None,
         };
         hud::draw_list(&cx, &readout)
     };
     let with = draw(oag_hd::hud::ART);
     let without = draw(&oag_title::HudArt {
         text_shadow: None,
+        text_outline_alpha: None,
         ..*oag_hd::hud::ART
     });
 

@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-10-27
-summary: "HD gaps by tile: gantry card panels read R+11 to +6 (card is 5-6-5 linear, wired); booth glass wired 2026-10-27, glass_reflect next"
+updated: 2026-11-11
+summary: "HD gaps by tile; 2026-11-05: 16-19% of grid score is the original being softer (unclosable), named closable items under 6 points"
 ---
 
 # HD/Fury render gaps ranked by pixel impact
@@ -13,9 +13,10 @@ original by pixels a player sees, so the next HD lane aims at the biggest gap.
 ## Open
 
 **Set.** 13 HD pairs under `compare-page/hd/` (Harimau classic, Time Trial start,
-1920x1080, chase cam). `talons-pack` (`hd-race/`) is excluded: its frame is a
-different moment with an imposed HUD and a warm-up exhaust path, so a per-pixel
-diff ranks nothing there.
+1920x1080, chase cam). `talons-pack` (`hd-race/`) is excluded: its stored frame was a
+different moment (confirmed 2026-11-10, `hd-talons-pack-align`; a re-made pair
+at one instant exists in `docs/tools/compare-page.md`, "A moving HD craft"), with an imposed HUD and a warm-up exhaust path, so a per-pixel
+diff ranks nothing there until it is adopted.
 
 **Method (reproducible).** For each pair, per pixel: mean abs RGB difference
 (0-255) between `theirs.png` and `ours.png`; signed luma `ours - theirs`. Tile
@@ -251,12 +252,11 @@ geometry. **Guess, not measured:** the no-LG2 stand-in specular in
 
 1. **Gantry card panels: DONE 2026-10-26 (`hd-card-panels`), partly.** The cause was the card's format, not the
    board's program: the original's card is `R5G6B5` holding linear light, so the dark red rounds to 0
-   (`oag_title::adverts::Adverts::card_565`, `SceneStore::Packed565`; `docs/rendering/start-gantry.md`, "The card is 5-6-5
+   (`oag_title::adverts::Adverts::card_store`, `CardStore::R5G6B5Linear`, `SceneStore::Packed565`; `docs/rendering/start-gantry.md`, "The card is 5-6-5
    in linear light"). Panel (teal pixels of the card mask) red bias +11.1 to +6.3 and panel error 7.34 to 6.14 on the 13
    pairs, no pair worse; card-mask error 9.77 to 9.06 (the glyph's phase is the rest). Acceptance **not met**: the panel red
    is not within +2 of the scenery's on any of the four named pairs (Chenghou +7.7, Sebenco +9.4, Vineta K +7.6, Metropia
-   +14.4) and the card-mask error fell 8 to 13 %, not a third. Open: (a) ours' card red level mean 0.294 against the original's 0.267 (cause unread; on Chenghou's strip red is +12.6 before, +6.1 now, +3.0 with the original's own card); (b) **Metropia green +14 and red +14 whatever the card holds**, its `cf_vex_billboard` lit
-   combine; (c) the gantry phase pinning on `modesto-heights`, `sebenco-climb` and `anulpha-pass`, untouched.
+   +14.4) and the card-mask error fell 8 to 13 %, not a third. Open: (a) ours' card red level mean 0.294 against the original's 0.267 (cause unread; on Chenghou's strip red is +12.6 before, +6.1 now, +3.0 with the original's own card); (b) ~~Metropia green +14 and red +14 whatever the card holds~~ closed 2026-11-11 (`hd-worst-pairs`): the `cf_vex_billboard` compile without `k` was refused by the classifier and lit by the sun; cards 14.6-19.4 to 4.7-6.6 (`docs/formats/rcsmaterial.md`); (c) the gantry phase pinning on `modesto-heights`, `sebenco-climb` and `anulpha-pass`, untouched.
 2. **~~`ds_booth_glass`~~ (wired 2026-10-27, `hd-tech-de-ra-2`: modesto-heights booth 34.5 to 4.2, sebenco-climb 31.3 to 6.2, no
    pair worse by more than 0.01 whole; hd-track-tone.md, "`ds_booth_glass` reflects the sky through its normal map's alpha") and
    `glass_reflect`: measure then wire, one family per commit.** Claim: these two
@@ -316,6 +316,61 @@ dump for the cone's sampler words.
 **Note (lead, at merge):** the band lane above landed `Program::has_dot_power` (no specular where a
 program has no dot-product power). That is lane claim 3's guessed cause for Vineta K's ledge strips, so
 re-measure claim 3 on the merged main before drawing it.
+
+## Grid-family read, 2026-11-05 (lane `hd-grid-family`)
+
+Claim tested: the largest closable cause shared across the HD grid pairs lowers their combined score by at least 8
+with no pair worse by 0.5. **False: the named closable items total under 6 points if every one were closed
+perfectly, about 2 to 3 in practice, and the biggest share is not closable without tuning to the pair.**
+
+Score: the compare page's `mean_grey` (`compare_env.overlap_score`, ImageMagick), 13 race pairs 85.3 summed
+(4.63 chenghou to 9.37 moa-therma), 87.0 with `loading-loading` (1.72). The brief's 88.0 and 5.75 floor do not
+reproduce on the page's own numbers; a plain luma mean abs difference agrees with the page to 0.1 per pair.
+One point of the summed score is 2.07 M of the per-pixel error used above.
+
+**Frequency split (13 race pairs, sigma 7).** Low frequency 3.13 of 6.63 per pair (47%), high frequency the rest.
+Half the family's error is high frequency: edges and fine detail.
+
+**The unclosable share: the original is softer, in both axes.** Ours is 1.17 to 1.50 times sharper by mean luma
+gradient on every pair (x 1.17-1.50, y 1.20-1.45). Crops (moa-therma crowd and hull edge, 6x) show the original's
+silhouettes smeared 1.5 to 2 px, horizontally in stair steps about 1.5 px wide, ours hard-edged and aliased.
+Fitted to the stored frames (sum over 13, 86.1 raw):
+
+| What is applied to ours | Summed grey | Gain |
+| --- | ---: | ---: |
+| Gaussian sigma 0.8 both axes | 76.4 | -9.8 |
+| horizontal round trip through 1300 px, bilinear (best 1200 flat to 1500) | 79.5 | -6.6 |
+| best of 49 shifts of +-3 px per 128 px tile, no blur (optimistic, picks noise) | -7.4 of 88.6 | |
+| blur 0.8 plus the per-tile shift together | 71.9 of 88.6 | -16.7 |
+
+The shift and the blur overlap, so the unclosable total is about 14 to 17 (16 to 19% of the score), not their sum.
+Why it cannot be a lane: the original's scene width is load driven and changes within one boot
+([hd-track-tone.md](../../docs/rendering/hd-track-tone.md), 1300 to 1920, controller unlocated), the fit is flat
+between 1200 and 1500 so no width is identifiable per pair, and the vertical softness is no horizontal upscale at all:
+it is the original's soft silhouettes, uninvestigated since "Texture crispness" (the Laplacian note there).
+Any blur we pick is a chosen value fitted to these frames. The maintainer's `-1.5` texture bias is not revisited.
+**Conflict on that page, not resolved here:** its item (f), "the original is not upscaled", disagrees with the
+2026-11-05 width scan above it and with the x gradient ratios here.
+Open question for a later lane: what makes the original's silhouettes soft in y (RPCS3 final stage, the game's own
+resolve, or a texture or alpha-edge rule).
+
+**Closable items, in score points (M / 2.07, summed over the family).**
+
+| Item | Impact | Points, whole region | Realistic |
+| --- | ---: | ---: | ---: |
+| Gantry cards (panel red, glyph; phase and the original's own pulse are not closable) | 14.0 M | 6.8 | 1 to 3 |
+| `glass_reflect` (unwired) | about 3.0 M | 1.4 | 1 |
+| Amphiseum cone band (+5.7 left) | about 0.6 M | 0.3 | 0.3 |
+| moa-therma pad strip beside the hull (opaque and unlit-independent, marbled texture present in both, patterns differ: a scroll phase) | 1.0 M of its box | 0.5 on Moa only (0.95 for the whole box) | 0 |
+| Opaque scenery elsewhere | 18.8 M | 9.1 | fails the falsifier: many draws |
+
+**2026-11-11 (`hd-worst-pairs`): Moa's floor is fixed, re-measure the row above.** The box `0,540 840x540` went 7.46 to 1.47 once Moa's `diffuse_normal_specular` read its two-lane normal map (`docs/formats/rcsmaterial.md`, "The two-lane normal map"); what the strip still holds was not re-measured.
+
+Ablated for the pad: `OAG_OPAQUE_ONLY=1` moves Moa 9.37 to 16.13 and leaves the strip, so it is opaque geometry;
+the white block under the hull is flat white in ours and striped grey in the original (a reflective or env-mapped
+texture), likely the world clock's phase; not a family item.
+
+Not repeated: HUD digits and the booth glass (landed).
 
 ## Later
 

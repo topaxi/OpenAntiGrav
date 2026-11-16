@@ -107,6 +107,10 @@ FORBIDDEN = (
 # decision about determinism**, not a formality - it says this call cannot reach
 # a state hash, or that it is the wrapper everything else goes through.
 ALLOWED = {
+    "crates/ui-screens/src/endrace/touch/xp.rs": (
+        "the rank badge's flip width is a `cos` of the seconds on a page; it "
+        "reaches a pixel and no simulation crate depends on `oag-ui-screens`"
+    ),
     "crates/core/src/math.rs": (
         "the wrappers themselves - `acos` here is our own libm, which is what "
         "every simulation caller is required to use instead of the platform's"
@@ -198,6 +202,32 @@ FORBIDDEN_ROTATIONS = (
     "angle_to",
     "rotate_towards",
 )
+
+# The determinism-bound crates that also carry a `clippy.toml`, so Clippy refuses the same
+# calls (plus `mul_add`, `powi`, the wall clock and `HashMap`/`HashSet`) through `just lint`,
+# in test code too. Clippy reads the `clippy.toml` nearest each crate's manifest, so the list
+# lives in one identical copy per crate; `check_clippy_copies` keeps them identical. See
+# docs/architecture/determinism.md, "How this is enforced".
+CLIPPY_CRATES = ("core", "physics", "gameplay", "ai", "race", "formats")
+
+
+def check_clippy_copies() -> list[str]:
+    """Every `CLIPPY_CRATES` member has a `clippy.toml`, and all of them are byte-identical."""
+    problems: list[str] = []
+    reference: tuple[str, bytes] | None = None
+    for crate in CLIPPY_CRATES:
+        path = ROOT / "crates" / crate / "clippy.toml"
+        relative = path.relative_to(ROOT).as_posix()
+        if not path.is_file():
+            problems.append(f"{relative}: missing")
+            continue
+        content = path.read_bytes()
+        if reference is None:
+            reference = (relative, content)
+        elif content != reference[1]:
+            problems.append(f"{relative}: differs from {reference[0]}")
+    return problems
+
 
 METHOD_CALL = re.compile(r"\.\s*(" + "|".join(FORBIDDEN) + r")\s*\(")
 PATH_CALL = re.compile(r"\bf(?:32|64)::\s*(" + "|".join(FORBIDDEN) + r")\s*\(")
@@ -310,6 +340,13 @@ def declared_test_files(root: Path) -> set[Path]:
 
 
 def main() -> int:
+    copies = check_clippy_copies()
+    if copies:
+        print("the simulation crates' clippy.toml copies must exist and be identical:\n")
+        for problem in copies:
+            print(f"  {problem}")
+        return 1
+
     findings: list[str] = []
     scanned = 0
     test_files = 0

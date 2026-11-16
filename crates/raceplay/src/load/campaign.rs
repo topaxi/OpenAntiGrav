@@ -74,20 +74,27 @@ use super::*;
 ///
 /// # Errors
 ///
-/// - `options.source` does not open as Wipeout 2048 - this campaign is
-///   2048's own, not shared with any other title.
+/// - `options.source` does not open, or its title ships no `SP.xml` event campaign
+///   (`oag_title::Campaign::event_track_dir`: 2048 and Omega do).
 /// - `event_name` does not match any `SP.xml` instance.
 /// - The event's own `M_TRACKDEF`/`M_SPEEDCLASS` reference does not resolve
 ///   inside the same document (a dangling reference, not observed on the
 ///   real file but not assumed away either).
 /// - Everything [`load`] itself can return, once the override is applied.
 pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
-    let mut archives = oag_2048::open(&options.source).with_context(|| {
-        format!(
-            "opening {:?} as Wipeout 2048 - --event only resolves against this title's own campaign",
-            options.source
-        )
-    })?;
+    let (packs, pure_packs, _) = oag_source::dlc::packs_from_defaults(
+        &options.dlc,
+        &oag_source::cache::default_dlc_cache_dir(),
+    );
+    let opened = oag_source::title::open_source(&options.source, packs, pure_packs)
+        .with_context(|| format!("opening {:?} for --event", options.source))?;
+    let mut archives = opened.archives;
+    let Some(track_dir) = opened.title.campaign.event_track_dir else {
+        anyhow::bail!(
+            "{} ships no SP.xml event campaign - --event only resolves against one that does",
+            opened.title.name
+        );
+    };
 
     let bytes = archives
         .read_name(oag_2048::campaign::SP_XML)
@@ -132,7 +139,7 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
                 oag_2048::campaign::SP_XML
             )
         })?;
-        resolved.track = Some(oag_2048::campaign::track_vex_entry(&track));
+        resolved.track = Some(oag_2048::campaign::track_vex_entry(track_dir, &track));
     }
 
     if let Some(class) = event
@@ -165,6 +172,11 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     // fewer than all seven still gets the rest filled in rather than left
     // empty.
     resolved.grid_teams = oag_2048::campaign::craft::grid_craft(&doc, instance);
+
+    // `GameModeBase_Apply` copies the event's level to the global `Ship_SetShield` indexes the
+    // three shield slots with, whatever the event's kind
+    // (`docs/ghidra/functions/vita-2048-eu-v104/craft-laws.md`, "The shield slot").
+    resolved.skill_level = Some(oag_tables::mjolnir::campaign::Event::LEVEL);
 
     let restriction = oag_2048::campaign::craft::restriction(instance);
     let restricted: Vec<&str> = ["combat", "agility", "speed", "prototype"]
@@ -262,10 +274,19 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     {
         loaded.setup.campaign_event = true;
     }
+    let (objectives, xp_tables, xp_column) =
+        oag_2048::campaign::event_progress(&mut archives, &doc, &event);
+    let (xp_awards, xp_ranks) = match xp_tables {
+        Some((awards, ranks)) => (Some(awards), Some(ranks)),
+        None => (None, None),
+    };
     loaded.campaign_2048_event = Some(Campaign2048Progress {
         name: event.name.clone(),
-        objectives: oag_2048::campaign::event_objectives(&doc, &event),
+        objectives,
         ai,
+        xp_awards,
+        xp_ranks,
+        xp_column,
     });
     Ok(loaded)
 }

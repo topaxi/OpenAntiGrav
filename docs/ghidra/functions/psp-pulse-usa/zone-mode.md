@@ -65,7 +65,7 @@ flies one shared hull regardless of team - the per-team folder only supplies tha
 elsewhere in the format. Not checked against the PS2 disc (a different WAD
 layout, `WADS2.WAD` rather than `Data.wad`), so this is PSP-only for now.
 
-Implemented in [`oag_livery::entry::ship_entry_name`](../../../../crates/livery/src/entry.rs).
+Implemented in [`oag_title::race::ShipPaths::hull_entry_name`](../../../../crates/title/src/race.rs).
 
 ### The team's paint is in the file, so mode 6 needs no skin to show it (2026-10-26)
 

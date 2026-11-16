@@ -5,14 +5,16 @@
 //! `CellSelection`, `Layout`, `GridSummary`) stay in the parent module;
 //! this file only turns one into a [`oag_ui::menu::Layers`].
 
-use oag_tables::race_campaign::{Cell, Difficulty, Medal, Mode};
+use oag_tables::race_campaign::{Cell, Difficulty, Medal, MedalTiers, Mode};
 
 use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
 use oag_ui::screen::{Fill, Image, Text, argb_to_rgba};
 
-use super::{CellSelection, GRIDS_PER_PAGE, GridSelection, GridSummary, Layout, hex_rect};
+use super::{
+    CellSelection, GRIDS_PER_PAGE, GridSelection, GridSummary, Layout, MedalArt, hex_rect,
+};
 
 #[cfg(test)]
 mod tests;
@@ -41,25 +43,9 @@ pub fn grid_draw_list(
     sprites: &dyn Fn(&str) -> Option<Placed>,
     footer_overlay: &[Draw],
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    let (title_x, title_y, title_scale) = skin.title_at();
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let title = strings.get_or_id("FE_RACE_CAM").to_string();
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        title,
-    ));
+    layers.push_title(skin, frame, title);
     layers.chrome.extend_from_slice(footer_overlay);
 
     let screen = &layout.screen;
@@ -126,7 +112,12 @@ pub fn grid_draw_list(
                     .as_deref()
                     .and_then(|n| hex_slot_xy(n, "Medal_"))
                     .and_then(|(x, y)| hex_rect(screen, x as usize, y as usize, sprites));
-                out.push(tinted_medal_draw(image, placed, hex, medal_argb(medal)));
+                out.push(tinted_medal_draw(
+                    image,
+                    placed,
+                    hex,
+                    model.tiers().argb(medal),
+                ));
             }
             continue;
         }
@@ -135,13 +126,7 @@ pub fn grid_draw_list(
             .as_deref()
             .is_some_and(|n| n.starts_with("Outline_"))
         {
-            out.push(sprite_draw(
-                image,
-                placed,
-                image.x,
-                image.y,
-                TIER_OUTLINE_TINT,
-            ));
+            out.push(image.sprite_draw(placed, image.x, image.y, TIER_OUTLINE_TINT));
             continue;
         }
         if image.name.as_deref() == Some("up arrow") {
@@ -150,7 +135,7 @@ pub fn grid_draw_list(
             } else {
                 0xffff_ffff
             };
-            out.push(sprite_draw(image, placed, image.x, image.y, argb));
+            out.push(image.sprite_draw(placed, image.x, image.y, argb));
             continue;
         }
         if image.name.as_deref() == Some("down arrow") {
@@ -160,7 +145,7 @@ pub fn grid_draw_list(
             } else {
                 0xffff_ffff
             };
-            out.push(sprite_draw(image, placed, image.x, image.y, argb));
+            out.push(image.sprite_draw(placed, image.x, image.y, argb));
             continue;
         }
         out.push(image_draw(image, placed));
@@ -216,25 +201,9 @@ pub fn cell_draw_list(
     sprites: &dyn Fn(&str) -> Option<Placed>,
     footer_overlay: &[Draw],
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    let (title_x, title_y, title_scale) = skin.title_at();
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let title = strings.get_or_id("FE_RACE_CAM").to_string();
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        title,
-    ));
+    layers.push_title(skin, frame, title);
     layers.chrome.extend_from_slice(footer_overlay);
 
     let screen = &layout.screen;
@@ -294,12 +263,18 @@ pub fn cell_draw_list(
             continue;
         }
         if let Some((x, y)) = image.name.as_deref().and_then(|n| hex_slot_xy(n, "Medal_")) {
-            out.push(tinted_medal_draw(
-                image,
-                placed,
-                hex_rect(screen, x as usize, y as usize, sprites),
-                model.medal_at(x, y).map_or(0xffff_ffff, medal_argb),
-            ));
+            let hex = hex_rect(screen, x as usize, y as usize, sprites);
+            out.push(match model.medal_at(x, y) {
+                Some(medal) => medal_hex_draw(
+                    image,
+                    placed,
+                    hex,
+                    (medal, model.medal_block_at(x, y)),
+                    (model.medal_art(), model.tiers()),
+                    sprites,
+                ),
+                None => tinted_medal_draw(image, placed, hex, 0xffff_ffff),
+            });
             continue;
         }
         out.push(image_draw(image, placed));
@@ -309,6 +284,7 @@ pub fn cell_draw_list(
         return layers;
     };
 
+    let rows = model.target_rows();
     let counting = matches!(cell.mode, Mode::Zone | Mode::Elimination);
     let targets_visible = matches!(
         cell.mode,
@@ -359,12 +335,18 @@ pub fn cell_draw_list(
             "Line4" | "Line8" => None,
             "Line6" => Some(format!(
                 "{}/{}",
-                model.selected_medal().map_or(0, Medal::points),
-                Medal::Gold.points()
+                model
+                    .selected_medal()
+                    .map_or(0, |m| model.tiers().points(m)),
+                rows.as_ref().and_then(|rows| rows.first()).map_or_else(
+                    || model.tiers().best_points(),
+                    |(best, _)| model.tiers().points(*best),
+                )
             )),
             "Line7" if !targets_visible => Some(medal_line(
                 model.selected_medal(),
                 model.selected_difficulty(),
+                model.tiers(),
                 strings,
             )),
             "Line7" => None,
@@ -373,11 +355,22 @@ pub fn cell_draw_list(
             // see `difficulty_button_line`'s own doc.
             "DifficultyButton" => Some(difficulty_button_line(model.difficulty(), strings)),
             "Target0 Title" | "Target1 Title" | "Target2 Title" if targets_visible => {
-                Some(strings.get_or_id("IG_HUD_TARGET").to_string())
+                let row = usize::from(name.as_bytes()[6] - b'0');
+                (rows.as_ref().is_none_or(|rows| row < rows.len()))
+                    .then(|| strings.get_or_id("IG_HUD_TARGET").to_string())
             }
-            "Target0" if targets_visible => Some(target_value(cell.gold, &cell.mode)),
-            "Target1" if targets_visible => Some(target_value(cell.silver, &cell.mode)),
-            "Target2" if targets_visible => Some(target_value(cell.bronze, &cell.mode)),
+            "Target0" | "Target1" | "Target2" if targets_visible => {
+                let row = usize::from(name.as_bytes()[6] - b'0');
+                match &rows {
+                    Some(rows) => rows
+                        .get(row)
+                        .map(|(_, target)| target_value(*target, &cell.mode)),
+                    None => Some(target_value(
+                        [cell.gold, cell.silver, cell.bronze][row],
+                        &cell.mode,
+                    )),
+                }
+            }
             "Target0 Title" | "Target1 Title" | "Target2 Title" | "Target0" | "Target1"
             | "Target2" => None,
             _ => text.string.clone(),
@@ -394,7 +387,20 @@ pub fn cell_draw_list(
             let Some(placed) = sprites(&image.src) else {
                 continue;
             };
-            out.push(image_draw(image, placed));
+            let row = usize::from(name.as_bytes()[6] - b'0');
+            match &rows {
+                Some(rows) => {
+                    if let Some((medal, _)) = rows.get(row) {
+                        out.push(image.sprite_draw(
+                            placed,
+                            image.x,
+                            image.y,
+                            model.tiers().argb(*medal),
+                        ));
+                    }
+                }
+                None => out.push(image_draw(image, placed)),
+            }
         }
     }
     let _ = counting; // direction is `Cell::evaluate_medal`'s own concern, not this draw's
@@ -528,22 +534,25 @@ fn track_line(cell: &Cell, strings: &StringTable) -> String {
 pub(super) fn medal_line(
     medal: Option<Medal>,
     difficulty: Option<Difficulty>,
+    tiers: &MedalTiers,
     strings: &StringTable,
 ) -> String {
-    let id = match medal {
-        Some(Medal::Gold) => "IG_HUD_GOLD",
-        Some(Medal::Silver) => "IG_HUD_SILVER",
-        Some(Medal::Bronze) => "IG_HUD_BRONZE",
-        None => "MSC_NONE",
+    let name = match medal {
+        Some(medal) => match tiers.get(medal).and_then(|tier| tier.string_id.as_deref()) {
+            Some(id) => strings.get_or_id(id).to_string(),
+            None => tiers
+                .get(medal)
+                .map_or_else(String::new, |tier| tier.name.to_ascii_uppercase()),
+        },
+        None => strings.get_or_id("MSC_NONE").to_string(),
     };
     if let (Some(_), Some(difficulty)) = (medal, difficulty) {
         return format!(
-            "{} ({})",
-            strings.get_or_id(id),
+            "{name} ({})",
             strings.get_or_id(difficulty_rung_id(difficulty))
         );
     }
-    strings.get_or_id(id).to_string()
+    name
 }
 
 /// The bare idstring `Cell_SavedDifficulty`/`CellSelection_Update` both key
@@ -629,28 +638,42 @@ pub(super) fn hex_slot_xy(name: &str, prefix: &str) -> Option<(u32, u32)> {
     Some((x, y))
 }
 
-pub(super) fn fill_draw(fill: &Fill) -> Draw {
+pub(crate) fn fill_draw(fill: &Fill) -> Draw {
     fill.draw()
 }
 
 /// An ordinary image widget, at its own authored position.
-pub(super) fn image_draw(image: &Image, placed: Placed) -> Draw {
-    sprite_draw(image, placed, image.x, image.y, image.color)
+pub(crate) fn image_draw(image: &Image, placed: Placed) -> Draw {
+    image.sprite_draw(placed, image.x, image.y, image.color)
 }
 
-/// The medal-colour swatch's own ARGB: gold, silver, bronze. Both
-/// `CellSelection_PopulateGrid` (`0x088d5f50..64`) and
-/// `GridSelection_PopulateTiles` (`0x088de8f4..908`) build this three-entry
-/// table from immediates and index it by medal ordinal; PS2 reads the same
-/// twelve bytes from `.data` (`0x2b34c8`, `0x2b48f8`). The alpha byte is
-/// replaced by the screen's fade at draw time. The panel's `Target0..2
-/// Image` swatches author the same three values.
-pub(super) fn medal_argb(medal: Medal) -> u32 {
-    match medal {
-        Medal::Gold => 0xfffa_eb38,
-        Medal::Silver => 0xffda_e3e4,
-        Medal::Bronze => 0xffdf_942f,
+/// A medal's hex: `art`'s atlas frame for the medal and the difficulty it was earned on when
+/// the atlas is in the sprite sheet, the title's tinted swatch otherwise.
+pub(super) fn medal_hex_draw(
+    image: &Image,
+    placed: Placed,
+    hex: Option<[f32; 4]>,
+    (medal, difficulty): (Medal, Difficulty),
+    (art, tiers): (&MedalArt, &MedalTiers),
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+) -> Draw {
+    if let Some(frame) = art.frame(tiers, medal, difficulty)
+        && let Some(atlas) = art.image().and_then(sprites)
+    {
+        let [x, y, width, height] = hex.unwrap_or([image.x, image.y, 32.0, 32.0]);
+        let [u, v, frame_width, frame_height] = frame;
+        let cropped = Image {
+            width: Some(width),
+            height: Some(height),
+            u: Some(u),
+            v: Some(v),
+            texture_width: Some(frame_width),
+            texture_height: Some(frame_height),
+            ..image.clone()
+        };
+        return cropped.sprite_draw(atlas, x, y, 0xffff_ffff);
     }
+    tinted_medal_draw(image, placed, hex, tiers.argb(medal))
 }
 
 /// A `Medal_x_y` swatch, tinted `argb` in place of the image's own authored
@@ -671,7 +694,7 @@ pub(super) fn tinted_medal_draw(
     argb: u32,
 ) -> Draw {
     let [x, y] = hex.map_or([image.x, image.y], |h| [h[0], h[1]]);
-    sprite_draw(image, placed, x, y, argb)
+    image.sprite_draw(placed, x, y, argb)
 }
 
 /// `Selector`'s own draw, centred on `hex` - the selected hex's own rect
@@ -687,7 +710,7 @@ pub(super) fn centred_selector_draw(image: &Image, placed: Placed, hex: [f32; 4]
     let height = image.height.unwrap_or(placed.height as f32);
     let x = hex[0] + (hex[2] - width) * 0.5;
     let y = hex[1] + (hex[3] - height) * 0.5;
-    sprite_draw(image, placed, x, y, image.color)
+    image.sprite_draw(placed, x, y, image.color)
 }
 
 /// [`centred_selector_draw`], but with the tint overridden rather than taken
@@ -705,7 +728,7 @@ pub(super) fn selector_tinted_draw(
     origin: Option<(f32, f32)>,
 ) -> Draw {
     let [dx, dy] = origin.map_or(SELECTOR_ORIGIN, |(x, y)| [x, y]);
-    sprite_draw(image, placed, hex[0] + dx, hex[1] + dy, argb)
+    image.sprite_draw(placed, hex[0] + dx, hex[1] + dy, argb)
 }
 
 /// `text`'s draw and, after it, what `Text_Draw` stamps into the glow mask for it
@@ -728,7 +751,7 @@ pub(super) fn push_text(
 /// transparent texels included (alpha test off at the original's draw), at
 /// [`super::pulse::SelectorPulse::stamp`]. The title gates whether the frame blooms; see
 /// `oag_title::Campaign::frontend_glow`.
-fn push_selector(
+pub(super) fn push_selector(
     out: &mut Vec<Draw>,
     image: &Image,
     placed: Placed,
@@ -774,44 +797,6 @@ const TIER_OUTLINE_TINT: u32 = 0x7f34_acc2;
 /// (`down arrow`), full white otherwise. Measured, confidence 85.
 const ARROW_DISABLED_TINT: u32 = 0xff50_5050;
 
-/// An image widget's draw, with its position and colour overridden - what
-/// [`centred_selector_draw`]/[`tinted_medal_draw`] feed.
-pub(crate) fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw {
-    let width = image.width.unwrap_or(placed.width as f32);
-    let height = image.height.unwrap_or(placed.height as f32);
-    let sampled = [
-        image.texture_width.unwrap_or(placed.width as f32),
-        image.texture_height.unwrap_or(placed.height as f32),
-    ];
-    let color = argb_to_rgba(argb);
-    if sampled[0] > placed.width as f32 + 0.5 || sampled[1] > placed.height as f32 + 0.5 {
-        return Draw::TiledSprite {
-            rect: [x, y, width, height],
-            uv: [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
-            repeat: [
-                sampled[0] / placed.width.max(1) as f32,
-                sampled[1] / placed.height.max(1) as f32,
-            ],
-            color,
-        };
-    }
-    Draw::Sprite {
-        rect: [x, y, width, height],
-        uv: [
-            placed.x as f32 + image.u.unwrap_or(0.0),
-            placed.y as f32 + image.v.unwrap_or(0.0),
-            sampled[0],
-            sampled[1],
-        ],
-        color,
-    }
-}
-
 /// `Cell Help`'s own overlay, drawn as a **static** panel - every widget on
 /// that screen at its own authored position, with no animation at all. The
 /// disc's own copy scrolls a `Viewport`/`Animation` timeline
@@ -830,16 +815,7 @@ pub(crate) fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u
 #[must_use]
 pub fn cell_help_draw(layout: &Layout, sprites: &dyn Fn(&str) -> Option<Placed>) -> Vec<Draw> {
     let screen = &layout.screen;
-    let mut out = Vec::new();
-    for fill in &screen.fills {
-        out.push(fill_draw(fill));
-    }
-    for image in &screen.images {
-        let Some(placed) = sprites(&image.src) else {
-            continue;
-        };
-        out.push(image_draw(image, placed));
-    }
+    let mut out = screen.plain_draws(sprites);
     for text in &screen.texts {
         let Some(content) = text.string.as_deref() else {
             continue;
@@ -861,7 +837,7 @@ pub fn cell_help_draw(layout: &Layout, sprites: &dyn Fn(&str) -> Option<Placed>)
 /// `wrap_width: None`, which would silently drop the wrap width a
 /// `widthlimited="true"` text (`Required`/`Required Previous` on HD) still
 /// needs - this preserves `text.wrap_width` on either face instead.
-pub(super) fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
+pub(crate) fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
     let x = text.x;
     let y = text.y;
     let scale = text.scale * layout.face_scale(&text.font);

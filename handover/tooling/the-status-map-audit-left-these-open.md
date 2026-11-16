@@ -42,7 +42,7 @@ built and checked against the original") picks the lower level unless noted:
   PSP's similar small gaps are scored).
 - **2048 Boot movies** 🟨 (`BOOT_PROFILE` is still `Provenance::Declared`,
   no attract-mode race). **2048 Loading** 📖 rather than 🟨: nothing
-  2048-specific is built (`loading: None`).
+  2048-specific is built (`loading: None`); the screen a race load starts (kind 4) is read, `docs/formats/2048-loading.md`.
 - **HD Track geometry**: ✅ is available if an RPCS3 matched-camera overlay
   counts as the screenshot diff (`docs/reverse-engineering/rpcs3-capture.md`,
   "The pick is fixed, and a rendered overlay confirms it"). The overlay is
@@ -51,7 +51,7 @@ built and checked against the original") picks the lower level unless noted:
   "Captures" matches the original's frames digit for digit, except one
   documented last-centisecond artefact.
 - **2048 Ships**: 22 submeshes and all 6 materials
-  (`crates/rcs/tests/psp2_rcsmodel_material_ground_truth.rs`), not the
+  (`crates/rcs/tests/psp2_rcsmodel_ground_truth.rs`), not the
   16/5-of-6 some pages still say.
 - Section 3 has no Omega column, although `oag-omega` boots to Language
   Selection and draws its main menu and campaign grid.

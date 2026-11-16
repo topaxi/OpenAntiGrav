@@ -75,7 +75,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
     // The flare is one quad. **It used to be the whole buffer**, and this
     // assertion read `== MAX_VERTICES` until `exhaust::sprite` gave it company -
     // see that function and `exhaust::MAX_SPRITES`.
-    let mut vertices = state.vertices(Vec3::ZERO, Vec3::X, Vec3::Y);
+    let mut vertices = state.vertices(Vec3::ZERO, Vec3::X, Vec3::Y).to_vec();
     assert_eq!(vertices.len(), 6, "the flare is one quad");
 
     // Fill the rest of the budget with caller sprites, so this exercises a
@@ -122,7 +122,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
         .take(exhaust::MAX_TRAIL_VERTICES)
         .collect();
     assert_eq!(trail.len(), exhaust::MAX_TRAIL_VERTICES);
-    pipeline.upload(&queue, &identity, Vec3::ZERO, &vertices, &trail);
+    pipeline.upload(&queue, &identity, Vec3::ZERO, &vertices, &[], &trail);
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("exhaust target"),
@@ -200,6 +200,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
         &identity,
         Vec3::ZERO,
         &cold.vertices(Vec3::ZERO, Vec3::X, Vec3::Y),
+        &[],
         &cold.trail_vertices(Vec3::X, Vec3::Y, oag_fx::exhaust::TrailLaw::Ramped),
     );
     device

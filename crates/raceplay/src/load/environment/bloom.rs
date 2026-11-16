@@ -1,5 +1,11 @@
 //! HD's `HDR and Bloom` block, read for [`oag_post::hd_bloom::Params`].
 
+use oag_tables::envsettings::{
+    BLOOM_ADAPTION_BOOST, BLOOM_ADAPTION_RATE, BLOOM_ALPHA_CONTRIBUTION, BLOOM_FRAME_CONTRIBUTION,
+    BLOOM_FRAME_EXPONENT, BLOOM_HORIZONTAL_SIZE, BLOOM_VERTICAL_SIZE, TONE_ADAPTION_BOOST,
+    TONE_DARKENING_CLAMP, TONE_MAXIMUM_BRIGHTNESS,
+};
+
 use super::*;
 
 /// The `HDR and Bloom` values a Wipeout HD circuit authors, or `None` with
@@ -27,57 +33,17 @@ pub(in crate::load) fn envsettings_bloom(
     track: &str,
     report: &mut Vec<String>,
 ) -> Option<oag_post::hd_bloom::Params> {
-    use oag_tables::envsettings::{
-        BLOOM_ADAPTION_BOOST, BLOOM_ADAPTION_RATE, BLOOM_ALPHA_CONTRIBUTION,
-        BLOOM_FRAME_CONTRIBUTION, BLOOM_FRAME_EXPONENT, BLOOM_HORIZONTAL_SIZE, BLOOM_VERTICAL_SIZE,
-        TONE_ADAPTION_BOOST, TONE_DARKENING_CLAMP, TONE_MAXIMUM_BRIGHTNESS,
-    };
-    const KEYS: [&str; 10] = [
-        BLOOM_ALPHA_CONTRIBUTION,
-        BLOOM_FRAME_CONTRIBUTION,
-        BLOOM_FRAME_EXPONENT,
-        BLOOM_HORIZONTAL_SIZE,
-        BLOOM_VERTICAL_SIZE,
-        BLOOM_ADAPTION_RATE,
-        BLOOM_ADAPTION_BOOST,
-        TONE_ADAPTION_BOOST,
-        TONE_DARKENING_CLAMP,
-        TONE_MAXIMUM_BRIGHTNESS,
-    ];
     let staged = staged_envsettings(archives, track, report)?;
     let env = &staged.merged;
     let name = staged.label();
-    let (
-        Some(alpha_contribution),
-        Some(frame_contribution),
-        Some(frame_exponent),
-        Some(horizontal_size),
-        Some(vertical_size),
-        Some(adaption_rate),
-        Some(adaption_boost),
-        Some(tone_adaption_boost),
-        Some(tone_darkening_clamp),
-        Some(tone_maximum_brightness),
-    ) = (
-        env.scalar(BLOOM_ALPHA_CONTRIBUTION),
-        env.scalar(BLOOM_FRAME_CONTRIBUTION),
-        env.scalar(BLOOM_FRAME_EXPONENT),
-        env.scalar(BLOOM_HORIZONTAL_SIZE),
-        env.scalar(BLOOM_VERTICAL_SIZE),
-        env.scalar(BLOOM_ADAPTION_RATE),
-        env.scalar(BLOOM_ADAPTION_BOOST),
-        env.scalar(TONE_ADAPTION_BOOST),
-        env.scalar(TONE_DARKENING_CLAMP),
-        env.scalar(TONE_MAXIMUM_BRIGHTNESS),
-    )
-    else {
+    let Some(params) = hd_bloom_params(env) else {
         report.push(format!(
             "{name}: no complete HDR and Bloom block even carrying the front end's own; the \
              race draws without the read bloom chain"
         ));
         return None;
     };
-    let carried = staged.carried(&KEYS);
+    let carried = staged.carried(&BLOOM_KEYS);
     let provenance = if carried.is_empty() {
         String::new()
     } else {
@@ -87,25 +53,147 @@ pub(in crate::load) fn envsettings_bloom(
         )
     };
     report.push(format!(
-        "{name}: bloom gate alpha x{alpha_contribution}, lum^{frame_exponent} \
-         x{frame_contribution} faded by adaptation (rate {adaption_rate}, boost \
-         {adaption_boost}), blur steps {horizontal_size}/{vertical_size}, exposure \
-         {tone_maximum_brightness} - min(adapted x{tone_adaption_boost}, \
-         {tone_darkening_clamp}) - formulas read from the executable's own \
-         FunkLayerBloom microcode and its PPU chain runner{provenance}"
+        "{name}: bloom gate alpha x{}, lum^{} \
+         x{} faded by adaptation (rate {}, boost \
+         {}), blur steps {}/{}, exposure \
+         {} - min(adapted x{}, \
+         {}) - formulas read from the executable's own \
+         FunkLayerBloom microcode and its PPU chain runner{provenance}",
+        params.alpha_contribution,
+        params.frame_exponent,
+        params.frame_contribution,
+        params.adaption_rate,
+        params.adaption_boost,
+        params.horizontal_size,
+        params.vertical_size,
+        params.tone_maximum_brightness,
+        params.tone_adaption_boost,
+        params.tone_darkening_clamp,
     ));
+    Some(params)
+}
+
+/// The `HDR and Bloom` keys [`hd_bloom_params`] needs, for naming what a circuit
+/// carried from the front end.
+const BLOOM_KEYS: [&str; 10] = [
+    BLOOM_ALPHA_CONTRIBUTION,
+    BLOOM_FRAME_CONTRIBUTION,
+    BLOOM_FRAME_EXPONENT,
+    BLOOM_HORIZONTAL_SIZE,
+    BLOOM_VERTICAL_SIZE,
+    BLOOM_ADAPTION_RATE,
+    BLOOM_ADAPTION_BOOST,
+    TONE_ADAPTION_BOOST,
+    TONE_DARKENING_CLAMP,
+    TONE_MAXIMUM_BRIGHTNESS,
+];
+
+/// A table's `HDR and Bloom` block as the chain's parameters, or `None` if a key
+/// is missing. A front-end backdrop reads the same block as a race.
+pub fn hd_bloom_params(
+    env: &oag_tables::envsettings::EnvSettings,
+) -> Option<oag_post::hd_bloom::Params> {
     Some(oag_post::hd_bloom::Params {
-        alpha_contribution,
-        frame_contribution,
-        frame_exponent,
-        horizontal_size,
-        vertical_size,
-        adaption_rate,
-        adaption_boost,
-        tone_adaption_boost,
-        tone_darkening_clamp,
-        tone_maximum_brightness,
+        alpha_contribution: env.scalar(BLOOM_ALPHA_CONTRIBUTION)?,
+        frame_contribution: env.scalar(BLOOM_FRAME_CONTRIBUTION)?,
+        frame_exponent: env.scalar(BLOOM_FRAME_EXPONENT)?,
+        horizontal_size: env.scalar(BLOOM_HORIZONTAL_SIZE)?,
+        vertical_size: env.scalar(BLOOM_VERTICAL_SIZE)?,
+        adaption_rate: env.scalar(BLOOM_ADAPTION_RATE)?,
+        adaption_boost: env.scalar(BLOOM_ADAPTION_BOOST)?,
+        tone_adaption_boost: env.scalar(TONE_ADAPTION_BOOST)?,
+        tone_darkening_clamp: env.scalar(TONE_DARKENING_CLAMP)?,
+        tone_maximum_brightness: env.scalar(TONE_MAXIMUM_BRIGHTNESS)?,
+        final_half_texel: false,
         zoom: None,
         store: oag_gpu::formats::SceneStore::Computed,
     })
+}
+
+/// What the race's scene target stores for `title`, told before the circuit's staging is read
+/// (a model's baked colours depend on it): HD's chain stores encoded values where the title
+/// blends them so and the circuit has a `.rcsmodel` to feed it, 2048's `wo_*` chain its
+/// gamma-2 space, and anything else the value as computed. The same answer
+/// `scene::hd_chain::store` gives once the chains are built.
+pub(in crate::load) fn scene_store(
+    title: &oag_title::Title,
+    track_blob: &[u8],
+    ribbon: bool,
+) -> oag_gpu::formats::SceneStore {
+    store_of(
+        title,
+        oag_vex::vex::geometry_is_external(track_blob) && !ribbon,
+    )
+}
+
+pub(super) fn store_of(
+    title: &oag_title::Title,
+    has_rcsmodel: bool,
+) -> oag_gpu::formats::SceneStore {
+    use oag_gpu::formats::SceneStore;
+    if title.looks.wo_composite.applies_everywhere() {
+        SceneStore::Squared
+    } else if has_rcsmodel && title.looks.blends_encoded.applies_everywhere() {
+        SceneStore::Encoded
+    } else if has_rcsmodel && title.looks.texels_srgb.applies_everywhere() {
+        SceneStore::SrgbTexels
+    } else {
+        SceneStore::Computed
+    }
+}
+
+/// `params` with what the title decides: its zoom ring, what its scene target stores and
+/// whether its final composite reads half a texel off.
+pub(in crate::load) fn for_title(
+    params: oag_post::hd_bloom::Params,
+    title: &oag_title::Title,
+) -> oag_post::hd_bloom::Params {
+    oag_post::hd_bloom::Params {
+        zoom: title.race.zoom_ring.map(crate::zoom::tuning),
+        final_half_texel: title.looks.final_composite_half_texel.applies_everywhere(),
+        store: store_of(title, true),
+        ..params
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn authored() -> oag_post::hd_bloom::Params {
+        oag_post::hd_bloom::Params {
+            alpha_contribution: 1.0,
+            frame_contribution: 1.0,
+            frame_exponent: 1.0,
+            horizontal_size: 1.0,
+            vertical_size: 1.0,
+            adaption_rate: 0.1,
+            adaption_boost: 1.0,
+            tone_adaption_boost: 1.0,
+            tone_darkening_clamp: 1.0,
+            tone_maximum_brightness: 1.0,
+            final_half_texel: false,
+            zoom: None,
+            store: oag_gpu::formats::SceneStore::Computed,
+        }
+    }
+
+    /// HD's race chain reads the final composite half a texel off, and a title whose
+    /// rule is unread does not.
+    #[test]
+    fn the_half_texel_follows_the_titles_rule() {
+        assert!(for_title(authored(), oag_hd::TITLE).final_half_texel);
+        assert!(!for_title(authored(), oag_pulse::TITLE).final_half_texel);
+    }
+
+    /// Each title's scene store: HD's encoded, 2048's squared, Omega's sRGB-decoded texels over
+    /// the value as computed, Pulse's the value as computed.
+    #[test]
+    fn the_scene_store_follows_the_titles_rules() {
+        use oag_gpu::formats::SceneStore;
+        assert_eq!(store_of(oag_hd::TITLE, true), SceneStore::Encoded);
+        assert_eq!(store_of(oag_2048::TITLE, true), SceneStore::Squared);
+        assert_eq!(store_of(oag_omega::TITLE, true), SceneStore::SrgbTexels);
+        assert_eq!(store_of(oag_pulse::TITLE, false), SceneStore::Computed);
+    }
 }

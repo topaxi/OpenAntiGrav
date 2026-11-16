@@ -2,6 +2,9 @@
 //! already applies to every bar: the forced-red override, the shared blink,
 //! and the absorb flash layer underneath both.
 //!
+//! The measured form of the absorb flash, where a title has an [`oag_title::hud::AbsorbGlow`], is
+//! the glow mask under the fill (recorded in `super::draw::draw_list`), not a white layer.
+//!
 //! Split out of [`super::draw`] under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change, along the
 //! seam [`super::lap_splits`] and [`super::sight_draw`] already used.
@@ -13,7 +16,7 @@
 //! [`crate::Readout::shield_forced_red`]'s neighbour
 //! [`crate::Readout::shield_blinking`] for what each field measures.
 
-use super::{Draw, Readout, Sprite, sprite_draw};
+use super::{Draw, Readout, Sprite};
 
 /// Applies `ShieldBar`'s forced-red and blink to `cropped` in place, and
 /// returns the absorb flash layer's own draw, if this tick is absorbing.
@@ -25,14 +28,13 @@ use super::{Draw, Readout, Sprite, sprite_draw};
 ///
 /// - **The absorb flash.** The original writes a flat `0xff`/`0x00` onto a
 ///   second field of the same widget (`+0xf4`) in lock-step with
-///   [`Readout::shield_absorbing`], with no blink applied to it. *Which*
-///   texture or quad that field actually gates was not chased past the
-///   write this pass - the widget's own draw method, through its vtable,
-///   was not decompiled - so this substitutes a flat white copy of the
-///   bar's own asset, not a new texture, painted separately from `cropped`.
-///   Confidence 82 for the write's own timing (hard on for the window, hard
-///   off outside it); confidence 60 for the geometry and blend standing in
-///   for it, which are chosen rather than measured.
+///   [`Readout::shield_absorbing`], with no blink applied to it. It is the
+///   stencil reference of the fill's draw: the fill stamps the bloom's glow
+///   mask, which `draw_list` records where the title's art has an
+///   [`oag_title::hud::AbsorbGlow`], and no white layer is drawn. Where it
+///   has none (the draw is unmeasured), this substitutes a flat white copy
+///   of the bar's own asset painted separately from `cropped`, **chosen, not
+///   measured**.
 /// - **Forced red.** `iVar1` - identified as [`Readout::shield_absorbing`] -
 ///   suppresses this branch entirely rather than merely being ignored, so a
 ///   pool at or under the critical floor still reads the bar's own authored
@@ -44,14 +46,16 @@ use super::{Draw, Readout, Sprite, sprite_draw};
 ///   approximated - see `crate::race::Race::advance_shield_blink`.
 pub(super) fn tint(
     cropped: &mut Sprite,
+    src: &str,
     readout: &Readout,
+    art: &oag_title::HudArt,
     sheet: &crate::sprite::Sheet,
 ) -> Option<Draw> {
     let mut flash = None;
-    if readout.shield_absorbing {
+    if readout.shield_absorbing && art.absorb_glow.is_none() {
         let mut white = cropped.clone();
         white.color = [1.0, 1.0, 1.0, 1.0];
-        flash = sprite_draw(&white, sheet);
+        flash = super::draw::sprite_draw_from(src, &white, sheet);
     }
     if readout.shield_forced_red() {
         cropped.color = [1.0, 0.0, 0.0, cropped.color[3]];

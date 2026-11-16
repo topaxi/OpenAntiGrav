@@ -14,7 +14,7 @@ impl Race {
             .handles
             .get(Trigger::LeachbeamEnergy)
             .map_or(0, |effect| self.view.stage.alive_of_effect(effect));
-        (self.view.leach_beam_effect, alive)
+        (self.view.leach_beam_effect[0], alive)
     }
 
     /// Puts a locked LeachBeam from `owner` on `target` into the world, off the
@@ -29,13 +29,13 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::leach_beam)
         else {
             return false;
         };
-        self.sim.world.leach_beam = Some(self.locked_leach_beam(owner, target, &stats));
-        true
+        let beam = self.locked_leach_beam(owner, target, &stats);
+        self.arm_leach_beam(beam)
     }
 
     /// Puts craft `slot` on the first laid Bomb another craft owns, for
@@ -76,7 +76,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::quake)
         else {
             return false;

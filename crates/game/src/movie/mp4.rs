@@ -113,8 +113,7 @@ pub(super) fn open(
         height,
         frame_rate,
         // Square pixels: `intro.mp4`'s `tkhd` declares a 960x544 track
-        // presentation size identical to its `avc1` coded picture (measured
-        // 2026-09-21), so there is no anamorphic scaling to carry - the same
+        // presentation size identical to its `avc1` coded picture (measured), so there is no anamorphic scaling to carry - the same
         // reading `.bik`'s own `display_aspect` comment describes.
         display_aspect: (width, height),
         frames,

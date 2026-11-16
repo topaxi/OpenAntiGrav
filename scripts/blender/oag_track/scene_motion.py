@@ -153,18 +153,36 @@ def anim_name(obj):
     return obj.get("oag_anim") or obj.name
 
 
+def on_value(obj):
+    """The object's `oag_on_value` as a float, None when empty; ValueError when not a finite number."""
+    text = obj.oag_on_value.strip()
+    if not text:
+        return None
+    try:
+        value = float(text)
+    except ValueError:
+        value = float("nan")
+    if not math.isfinite(value):
+        raise ValueError(f"{obj.name!r}: oag_on_value {text!r} is not a finite number")
+    return value
+
+
 def build(groups):
-    """Animations from [(name, repeat, [Channel])] in first-seen order, merged by name."""
+    """Animations from [(name, repeat, [Channel], on, on_value)] in first-seen order, merged by name."""
     out, by_name = [], {}
-    for name, repeat, chans in groups:
+    for name, repeat, chans, on, on_value in groups:
         if not chans:
             continue
         anim = by_name.get(name)
         if anim is None:
-            anim = by_name[name] = Animation(name, [], repeat)
+            anim = by_name[name] = Animation(name, [], repeat, on, on_value)
             out.append(anim)
         elif anim.repeat != repeat:
             raise ValueError(f"animation {name!r}: objects disagree on oag_loop")
+        elif anim.on != on:
+            raise ValueError(f"animation {name!r}: objects disagree on oag_on")
+        elif anim.on_value != on_value:
+            raise ValueError(f"animation {name!r}: objects disagree on oag_on_value")
         anim.channels += chans
     return out
 
@@ -214,6 +232,8 @@ def apply(context, art, objs, sun_obj):
                 continue
             o["oag_anim"] = anim.name
             o.oag_loop = anim.repeat
+            o.oag_on = anim.on or ""
+            o.oag_on_value = "" if anim.on_value is None else repr(anim.on_value)
             o.rotation_mode = "QUATERNION"
             prop = {"translation": "location", "rotation": "rotation_quaternion", "scale": "scale"}[ch.path]
             for t, v in zip(ch.times, ch.values):

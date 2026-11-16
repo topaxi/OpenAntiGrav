@@ -7,8 +7,8 @@
 //! name when it does not parse; an `f32` crosses as its exact bits, so the value a
 //! server applies is the value the client predicted with.
 //!
-//! **The server sends inputs, not state.** A `RaceSim` snapshot is about 1.7 MiB
-//! and a datagram about 1,400 bytes. The simulation is deterministic
+//! **The server sends inputs, not state.** A `RaceSim` snapshot is about 28 KiB over a
+//! shared track of 1.3 to 5.1 MiB, and a datagram about 1,400 bytes. The simulation is deterministic
 //! (ADR-0002), so a client that starts from the same content and seed and applies
 //! the same inputs arrives at the same state; the server sends, per tick, the
 //! inputs it *applied* to every person's craft (its choice, after its own buffering

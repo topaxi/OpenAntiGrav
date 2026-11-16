@@ -1,5 +1,8 @@
 //! Which teams the grid may fly, when the caller named none itself.
 
+#[cfg(feature = "view")]
+mod model_livery;
+
 /// The team the player races as, resolved to `craft_title`'s own default
 /// when the caller named none - the first point the title is known, and
 /// craft content, so it follows `craft_title` rather than the track's own
@@ -41,7 +44,7 @@ pub(super) fn resolve_team(
 /// regardless of title is one of the two ways this same grid went uniform on
 /// an HD source: HD names its game plugin where the PSP titles number it, so
 /// the read missed. See [`oag_title::Title::plugin_definition`]. This is
-/// craft content - a Race Remix passes `craft_title`'s archives here, not the
+/// craft content - a two-title race passes `craft_title`'s archives here, not the
 /// track's.
 ///
 /// **The other way was `fexml::expand` rather than `fexml::text`**, and it is
@@ -208,19 +211,80 @@ pub(super) struct Grid {
 }
 
 #[cfg(feature = "view")]
+/// Whether this race draws our own shield: the player's `graphics.own_shield`, on a craft title
+/// that offers it (`oag_title::Looks::own_shield`).
+pub(super) fn own_shield(options: &crate::Options, craft_title: &oag_title::Title) -> bool {
+    options.own_shield && craft_title.looks.own_shield.applies_everywhere()
+}
+
+#[cfg(feature = "view")]
+/// The cockpit sphere `oag_livery::cockpit_shield` loaded, under our own shader when this race
+/// draws our own shield.
+pub(super) fn own_cockpit(
+    mut sphere: Option<oag_mesh::mesh::Model>,
+    options: &crate::Options,
+    craft_title: &oag_title::Title,
+) -> Option<oag_mesh::mesh::Model> {
+    if own_shield(options, craft_title)
+        && let Some(sphere) = &mut sphere
+    {
+        oag_livery::own_shield::cockpit(sphere);
+    }
+    sphere
+}
+
+#[cfg(feature = "view")]
 /// The shell tint a craft of `craft_title`, loaded from a disc of `platform`,
 /// takes. The craft's source, not the track's: the shell is loaded from the
-/// craft's archives (`livery::shield::shell`), so a Race Remix with a PSP craft
+/// craft's archives (`livery::shield::shell`), so a two-title race with a PSP craft
 /// on a PS2 circuit must still tint.
 pub(super) fn shield_palette(
+    options: &crate::Options,
     craft_title: &oag_title::Title,
     platform: oag_assets::Platform,
 ) -> oag_render::shield::Palette {
+    if own_shield(options, craft_title) {
+        return oag_render::shield::OWN_PALETTE;
+    }
     match craft_title.looks.shield_palette.on(platform) {
         oag_title::ShieldPalette::Hd => oag_render::shield::HD_PALETTE,
+        oag_title::ShieldPalette::Omega => oag_render::shield::OMEGA_PALETTE,
         oag_title::ShieldPalette::Ps2Pulse => oag_render::shield::PS2_PULSE_PALETTE,
         oag_title::ShieldPalette::Pulse => oag_render::shield::PULSE_PALETTE,
     }
+}
+
+#[cfg(feature = "view")]
+/// Every slot's [`shield_target`] under the palette this race's craft title takes.
+pub(super) fn shield_targets(
+    options: &crate::Options,
+    craft_title: &oag_title::Title,
+    platform: oag_assets::Platform,
+    (liveries, cockpit_alpha): (&[oag_livery::Livery], f32),
+) -> Vec<Option<[f32; 4]>> {
+    let palette = shield_palette(options, craft_title, platform);
+    liveries
+        .iter()
+        .map(|l| shield_target(l.shield_colour, cockpit_alpha, &palette))
+        .collect()
+}
+
+#[cfg(feature = "view")]
+/// A slot's settled shield colour, with the alpha Omega's and 2048's
+/// constructor settles on: the larger of the shell's and the cockpit sphere's
+/// (`Palette::target_alpha_from_cockpit`). The other palettes take the shell's
+/// colour as authored.
+pub(super) fn shield_target(
+    shell: Option<[f32; 4]>,
+    cockpit_alpha: f32,
+    palette: &oag_render::shield::Palette,
+) -> Option<[f32; 4]> {
+    shell.map(|mut colour| {
+        if palette.target_alpha_from_cockpit {
+            colour[3] = colour[3].max(cockpit_alpha);
+        }
+        colour
+    })
 }
 
 /// Fills the grid: slot teams out of `available`, then a [`oag_livery`] per
@@ -279,7 +343,11 @@ pub(super) fn grid(
     options: &crate::Options,
     team: &str,
     available: &[String],
-    hull_variant: Option<&str>,
+    (hull_variant, circuit_hull, store): (
+        Option<&str>,
+        Option<&'static str>,
+        oag_gpu::formats::SceneStore,
+    ),
     report: &mut Vec<String>,
 ) -> anyhow::Result<Grid> {
     let skin = super::skin::resolve(
@@ -291,6 +359,14 @@ pub(super) fn grid(
         report,
     );
     let zone_liveries = super::zone_livery::resolve(archives, craft_title, options.mode, report);
+    let player_livery = model_livery::resolve(
+        archives,
+        craft_title,
+        team,
+        options.livery.as_deref(),
+        options.mode,
+        report,
+    );
     let forced_skins = super::skin::forced(archives, craft_title, options.mode, report);
     let seed = options.seed.unwrap_or(crate::SEED);
     let slot_teams = teams(craft_title, options, team, available, report);
@@ -321,11 +397,15 @@ pub(super) fn grid(
         archives,
         &slot_teams,
         &oag_livery::LoadContext {
+            store,
             race: craft_title.race,
             mode: options.mode,
             flare: craft_title.flare,
             hull_overlay: oag_fx::hull_overlay::DRAWN
                 && craft_title.looks.hull_overlay.applies_everywhere(),
+            leach_overlay: craft_title
+                .effect_on(oag_title::Trigger::LeachbeamEnergy)
+                .is_some(),
             hull_shine: oag_render::shine::DRAWN
                 && options.hull_shine
                 && craft_title
@@ -338,14 +418,33 @@ pub(super) fn grid(
                     .hull_wreck
                     .applies(archives.layout.platform),
             absorb_shell: craft_title.looks.absorb_shell.applies_everywhere(),
+            own_shield: own_shield(options, craft_title),
             zone_liveries: &zone_liveries,
             forced_skins: &forced_skins,
+            circuit_hull,
+            player_livery: player_livery
+                .as_ref()
+                .map(|(own, worn)| oag_livery::LiveryFolder {
+                    own,
+                    worn,
+                    fall_back: false,
+                }),
         },
         hull_variant,
         skin.as_deref(),
         &seat_paints,
         report,
     )?;
+    if craft_title
+        .effect_on(oag_title::Trigger::WreckNode)
+        .is_none()
+    {
+        report.push(format!(
+            "{}: no wreck effect is read for this title (no node blast, death sparks or big blast) \
+             - a wrecked craft draws none",
+            craft_title.name
+        ));
+    }
     report.push(format!(
         "grid liveries: {} - Pulse's roster draw (RaceSession_DrawAiRoster, grid.md) off the race \
          seed {seed:#x}; the original seeds it from the wall clock",
@@ -360,6 +459,21 @@ pub(super) fn grid(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "view")]
+    #[test]
+    fn omega_target_alpha_is_the_larger_of_shell_and_cockpit() {
+        use super::shield_target;
+        use oag_render::shield::{HD_PALETTE, OMEGA_PALETTE};
+        let magnetic = Some([0.0, 4.59, 4.59, 0.0]);
+        assert_eq!(
+            shield_target(magnetic, 1.0, &OMEGA_PALETTE),
+            Some([0.0, 4.59, 4.59, 1.0])
+        );
+        assert_eq!(shield_target(magnetic, 0.0, &OMEGA_PALETTE), magnetic);
+        assert_eq!(shield_target(magnetic, 1.0, &HD_PALETTE), magnetic);
+        assert_eq!(shield_target(None, 1.0, &OMEGA_PALETTE), None);
+    }
+
     use super::{apply_grid_teams, apply_seat_picks};
     use crate::SeatPick;
 

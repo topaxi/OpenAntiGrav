@@ -10,8 +10,9 @@
 //! `every_test_file_is_listed` below fails until it is.
 
 mod eliminator_ai_stats_ground_truth;
+mod hd_update_source_ground_truth;
 mod psn_source_ground_truth;
-mod remix_2048_sources_ground_truth;
+mod two_title_2048_sources_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

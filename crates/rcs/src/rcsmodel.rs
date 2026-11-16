@@ -92,7 +92,7 @@
 //! Full evidence, with confidence scores, on
 //! [`rcsmodel.md`](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/rcsmodel.md).
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 mod coverage;
 mod inline_uv;
@@ -104,7 +104,9 @@ mod surface;
 mod tangent;
 
 pub use coverage::coverage;
-pub use render_block::{RENDER_ALTERNATE_FOG, RENDER_BEHIND_GLASS, RENDER_BLOCK_LEN, RENDER_TRACK};
+pub use render_block::{
+    RENDER_ALTERNATE_FOG, RENDER_BEHIND_GLASS, RENDER_BLOCK_LEN, RENDER_TRACK, RENDER_ZONE_PLAIN,
+};
 pub use surface::Space;
 pub mod vertex_decl;
 

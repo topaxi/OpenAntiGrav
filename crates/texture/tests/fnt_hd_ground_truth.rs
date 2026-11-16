@@ -37,7 +37,7 @@
 
 use std::path::PathBuf;
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 use oag_texture::fnt::{self, Font};
 
 /// The decrypted PS3 image.

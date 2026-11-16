@@ -21,7 +21,10 @@ use oag_weapons::projectile::leach_beam::Kind;
 use crate::Race;
 
 /// Vertices the strip's buffer holds: a full 299-sample path, three fins.
-pub const VERTICES: usize = (law::RING - 2) * oag_fx::rocket_smoke::FINS * 6;
+pub const VERTICES: usize = (law::RING - 2)
+    * oag_fx::rocket_smoke::FINS
+    * 6
+    * oag_weapons::projectile::leach_beam::POOL_SIZE;
 
 /// What the strip draws with: unit 1's glow and unit 0's noise.
 #[derive(Debug, Clone)]
@@ -134,13 +137,6 @@ impl Race {
             + standing.progress.unwrap_or(0.0)
     }
 
-    fn leach_course_length(&self) -> f32 {
-        self.sim
-            .course
-            .as_ref()
-            .map_or(0.0, |course| course.length())
-    }
-
     /// The craft's trail record as of now: anchor, progress and the body's
     /// rows 0 and 1 (`+0x1d0`, `+0x1e0`), here the physics body's own axes.
     fn leach_record(&self, anchors: &[Option<Mat4>; MAX_SHIPS], slot: usize) -> law::Record {
@@ -153,17 +149,18 @@ impl Race {
         }
     }
 
-    /// Whether a beam the strip draws is alive: locked and not broken.
-    fn leach_beam_live(&self) -> Option<oag_weapons::projectile::leach_beam::Beam> {
+    /// The beams the strip draws: locked and not broken, in pool order.
+    fn leach_beams_live(&self) -> impl Iterator<Item = oag_weapons::projectile::leach_beam::Beam> {
         self.sim
             .world
-            .leach_beam
+            .leach_beams_iter()
+            .copied()
             .filter(|beam| beam.kind == Kind::Locked && beam.disconnected_at.is_none())
     }
 
     /// `LeachTrail_RecordAnchor`, every tick, every craft; and the wobble's
     /// phases, which step once a tick while a beam lives and **carry over to the
-    /// next beam**: read live (2026-10-12, `hd-leach-2`), the original's phases
+    /// next beam**: read live: the original's phases
     /// start at 0 with the race, stand still between beams and go on from where
     /// the last beam left them (0.133 at one fire, then 0.15, 0.583, 0.917
     /// through states 2, 3 and 4), never reset at a fire.
@@ -178,7 +175,9 @@ impl Race {
             let record = self.leach_record(&strip.anchors, slot);
             strip.trails[slot].record(record);
         }
-        if self.leach_beam_live().is_some() {
+        // One set of phases for the whole race, stepped once a tick while any beam
+        // lives (chosen: the original has one beam to read them off).
+        if self.leach_beams_live().next().is_some() {
             law::advance_wobble(&mut strip.phases);
         }
         self.view.leach_strip = Some(strip);
@@ -193,19 +192,20 @@ impl Race {
     /// difference), back to the other's progress.
     #[must_use]
     pub(crate) fn leach_strip_vertices(&self) -> Vec<GpuVertex> {
-        let (Some(strip), Some(beam)) = (&self.view.leach_strip, self.leach_beam_live()) else {
+        let Some(strip) = &self.view.leach_strip else {
             return Vec::new();
         };
-        let Some((reveal, window)) = Phase::at(beam.age).reveal() else {
-            return Vec::new();
-        };
-        let nodes = match &strip.path {
-            Some(path) => law::nodes(&Self::path_records(path), reveal, window),
-            None => self.walked_nodes(strip, beam, reveal, window),
-        };
-        let mut out =
-            Vec::with_capacity(nodes.len().saturating_sub(1) * oag_fx::rocket_smoke::FINS * 6);
-        law::extend_vertices(&mut out, &nodes);
+        let mut out = Vec::new();
+        for beam in self.leach_beams_live() {
+            let Some((reveal, window)) = Phase::at(beam.age).reveal() else {
+                continue;
+            };
+            let nodes = match &strip.path {
+                Some(path) => law::nodes(&Self::path_records(path), reveal, window),
+                None => self.walked_nodes(strip, beam, reveal, window),
+            };
+            law::extend_vertices(&mut out, &nodes);
+        }
         out
     }
 
@@ -229,17 +229,27 @@ impl Race {
         reveal: f32,
         window: f32,
     ) -> Vec<law::Node> {
+        law::nodes(&self.walked_path(strip, beam).samples, reveal, window)
+    }
+
+    /// `BeamPath_Rebuild`: the walk on the trail of whichever craft is ahead,
+    /// the bend, the length table the bend leaves, then the wobble.
+    fn walked_path(
+        &self,
+        strip: &Strip,
+        beam: oag_weapons::projectile::leach_beam::Beam,
+    ) -> WalkedPath {
         let (shooter, target) = (usize::from(beam.owner), usize::from(beam.target));
         let (shooter_record, target_record) = (
             self.leach_record(&strip.anchors, shooter),
             self.leach_record(&strip.anchors, target),
         );
-        let (leader, leader_record, trailer_record) =
-            if target_record.progress >= shooter_record.progress {
-                (target, target_record, shooter_record)
-            } else {
-                (shooter, shooter_record, target_record)
-            };
+        let shooter_walked = target_record.progress < shooter_record.progress;
+        let (leader, leader_record, trailer_record) = if shooter_walked {
+            (shooter, shooter_record, target_record)
+        } else {
+            (target, target_record, shooter_record)
+        };
         let mut samples = law::walk(
             &strip.trails[leader],
             leader_record,
@@ -247,9 +257,54 @@ impl Race {
             trailer_record.progress,
         );
         law::bend(&mut samples, trailer_record.anchor);
+        let cumulative = law::cumulative(&samples);
         law::wobble(&mut samples, &strip.phases, self.leach_course_length());
-        law::nodes(&samples, reveal, window)
+        WalkedPath {
+            samples,
+            cumulative,
+            shooter_walked,
+        }
     }
+
+    /// Where the LeachBall is `fraction` of the way through its trip on this
+    /// beam's drawn strip: `BeamPath_PointAt` (`0x00116308`) on the same path
+    /// the strip is drawn along, 0 at the target and 1 at the shooter. `None`
+    /// when the title has no strip.
+    #[must_use]
+    pub(crate) fn leach_ball_on_strip(
+        &self,
+        beam: oag_weapons::projectile::leach_beam::Beam,
+        fraction: f32,
+    ) -> Option<Vec3> {
+        let strip = self.view.leach_strip.as_ref()?;
+        let path = match &strip.path {
+            Some(forced) => {
+                let samples = Self::path_records(forced);
+                WalkedPath {
+                    cumulative: law::cumulative(&samples),
+                    samples,
+                    shooter_walked: self.leach_progress(usize::from(beam.owner))
+                        > self.leach_progress(usize::from(beam.target)),
+                }
+            }
+            None => self.walked_path(strip, beam),
+        };
+        law::point_at(
+            &path.samples,
+            &path.cumulative,
+            fraction,
+            path.shooter_walked,
+        )
+    }
+}
+
+/// A beam's path as `BeamPath_Rebuild` leaves it: the wobbled samples, walked
+/// end first, the length table taken before the wobble, and whether the walked
+/// craft is the shooter.
+struct WalkedPath {
+    samples: Vec<law::Record>,
+    cumulative: Vec<f32>,
+    shooter_walked: bool,
 }
 
 #[cfg(test)]

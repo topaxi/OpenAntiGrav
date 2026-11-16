@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pure, 2048, omega]
-updated: 2026-10-04
-summary: "Wreck effects, hit sparks and absorb burst are Pulse-only; each title's locator names first; Pure VECTOR laps"
+updated: 2026-11-03
+summary: "Hit sparks, absorb, wreck nodes and Pure's own big blast wired per title; open: 2048/Omega other hit triggers; Pure VECTOR laps"
 difficulty: medium (30)
 ---
 
@@ -16,10 +16,16 @@ the survey is below; none was trivial enough to fix in that lane.
 
 ## Open
 
-- **Wreck effects, hit sparks, absorb burst** (`wreck_fx.rs`, `hit_sparks.rs`, `absorb.rs`):
-  Pulse-only. Pure and 2048/Omega draw nothing; HD has its own mechanisms. An honest absence,
-  not a chosen rule, but under the maintainer's rule an unmeasured title would play Pulse's
-  emitters on its own locators. Needs each title's locator names first.
+- ~~**Wreck effects, hit sparks, absorb burst**~~ wired 2026-11-02 (`inherit-hit-effects`), each
+  title on its own disc data and locators, `Title` data with `InheritedFrom` provenance
+  (`docs/rendering/hull-sparks.md`, "Other titles"): Pure takes Pulse's hit sparks and wreck node
+  blast and death sparks (its absorb was already its own, measured); 2048 and Omega take HD's
+  absorb burst and Cannon craft-hit spark. **Still open from it:** (a) ~~Pure's big wreck blast~~ wired (`pure-wreck-big-blast`): measured on Pure (`psp-pure-usa/wreck-big-blast.md`), `WreckBigNode`/`WreckDebris`/`WreckSmoke`; left open: Pure's 0xa0 object at `0x0885a7d8` (Pulse's shockwave counterpart, unread), its sound, and the blast's scale at the spawn call (the draws' extents are in the page).
+  **Pure's wreck blast look closed (`pure-debris-blocks`, 2026-11-03):** the debris blocks were the `.pob` atlas grid word read with columns in the wrong half (`docs/formats/pob.md`, "The atlas grid word"); the smoke was never broken (`psp-pure-usa/wreck-big-blast.md`, "The debris blocks"). Left: scale at the spawn call and the unidentified 103-vertex additive mesh. (b) 2048
+  and Omega draw no wreck effect (HD names none; their `WO_DEBRIS_SPARKS`/`WO_DEBRIS_FIRE` preload
+  is unread), and the non-Cannon weapon hit trigger and HD's `WO_DAMAGE_*` smoke are unwired there
+  (checked, applies, not wired). (c) Pure's weapon-hit `.COLLISIONS` cue now plays with the spark
+  (Pulse's gate, inherited).
 - **Pure's `VECTOR` lap count** falls back to Venom's `3` with a load warning (`race-modes.md`,
   campaign rungs): chosen, not measured. Pulse's rung table is the known rule.
 - **Zone ship handling on Pure and HD** is unread; Pulse's rule (the player's own team numbers)
@@ -27,12 +33,14 @@ the survey is below; none was trivial enough to fix in that lane.
 - **The absorb half and Mine/Bomb/Turbo/Cannon fire policy** of the opponent weapon AI are this
   project's own on every title, Pulse included: a Pulse gap, not a title one.
 - **HD's `EliminatorAIStats` row** is parsed since 2026-10-03 (`weapons::ai`, every copy
-  ground-truthed) and **not consumed**: no mapping to Pulse's mode-8 terms reaches 70 (use
-  scales 10.5/12.5/15.5 against a flat x5; absorb scale falling with difficulty against one
-  `0.001`), so HD stays on Pulse's terms. HD's loader is pinned (`weapon-ai-stats.md`,
-  RaceManager `+6240`, fields `+176..+228`); its **reader is not found** - next is a Ghidra
-  xref on that field or an RPCS3 watchpoint. Omega's named file has no row, its
-  `WeaponAIStats2048.xml` does: pick the file by evidence before wiring.
+  ground-truthed) and **not consumed**. Its **reader is found (2026-11-03, `hd-fire-law`)**:
+  `WeaponAi_DecideFireOrAbsorb` (`0x000f9a18`, 80), see `ps3-hdfury-eu/weapon-ai-fire.md`. HD
+  replaces Pulse's `use *= 5` with `use *= useScale[difficulty]` and the forced absorb index with
+  `absorb *= absorbScale[difficulty]` (only while `craft + 0x6ad8 == 0`), and adds a flip block
+  (flip x scale >= 131, so the roll always passes; its meaning is a hypothesis, 40) that stays
+  unwired. The score scales are not read by that function. **Ready to wire** (item list on the
+  page). Omega's named file has no row, its `WeaponAIStats2048.xml` does: pick the file by
+  evidence before wiring, and read Omega's own reader first (not checked).
 
 - ~~**HD's gantry `GO` pulse phase**~~ closed 2026-10-04 (`hd-go-pulse`): HD's race manager
   holds the gantry's time in `[3.83, 5.25)` s from the release, so `GO` is lit on the step and
@@ -59,4 +67,4 @@ the survey is below; none was trivial enough to fix in that lane.
 
 ## Next Steps
 
-1. Wreck effects, hit sparks and the absorb burst: each title's locator names first. (The gantry clock landed 2026-10-03: HD runs Pulse's rule on its own `GO` edge, frame 203 / tick 70; 2048 and Omega place no gantry - `docs/rendering/start-gantry.md`.)
+1. 2048/Omega's non-Cannon hit trigger and `WO_DAMAGE_*` smoke. (The gantry clock landed 2026-10-03: HD runs Pulse's rule on its own `GO` edge, frame 203 / tick 70; 2048 and Omega place no gantry - `docs/rendering/start-gantry.md`.)

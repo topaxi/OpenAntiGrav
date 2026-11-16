@@ -17,6 +17,7 @@
 //! downstream tells the two apart.
 
 use anyhow::{Context, Result, bail};
+use oag_gpu::formats::SceneStore;
 use oag_texture::gtf;
 use oag_vex::vex;
 
@@ -148,6 +149,9 @@ const GRADIENT_STEPS: u32 = 8;
 ///
 /// # The glow mask
 ///
+/// `store` is what the race's scene target stores: the tint is encoded with the
+/// curve its shader decodes with.
+///
 /// `mask` is what the sky writes into the scene target's alpha: **Metropia's
 /// `Sky colour` is `255 255 255 122` and the original's sky pixels read alpha
 /// 122** (live, RPCS3, the half-resolution scene target), so the fourth byte
@@ -165,6 +169,7 @@ pub fn build(
     rotation_degrees: f32,
     tint: [f32; 3],
     mask: f32,
+    store: SceneStore,
 ) -> Result<Model> {
     let parsed = gtf::Gtf::parse(blob).with_context(|| format!("{label}: parsing"))?;
     let Some(texture) = parsed.only() else {
@@ -194,7 +199,7 @@ pub fn build(
     Ok(cube(
         label,
         textures,
-        tint_in_texel_domain(tint),
+        tint_in_texel_domain(tint, store),
         None,
         rotation_degrees,
         mask,
@@ -290,6 +295,7 @@ fn cube(
                     glow: mask,
                     texcoord2: [0.0, 0.0],
                     tangent: 0,
+                    depth_bias: 0.0,
                 });
             }
         }
@@ -330,55 +336,26 @@ fn cube(
     let mut textures = textures;
     textures.resize(FACES.len(), None);
     let lightmaps = vec![None; textures.len()];
-    Model {
-        label: label.to_string(),
+    let mut model = Model::from_draws(
+        label,
         vertices,
         indices,
         draws,
-        alpha_tested_draws: Vec::new(),
-        transparent_draws: Vec::new(),
-        textures,
-        lightmaps,
-        pad_masks: Vec::new(),
-        wave_maps: Vec::new(),
-        fifth_maps: Vec::new(),
-        sixth_maps: Vec::new(),
-        material_slots: Vec::new(),
-        material_specular_exponent: Vec::new(),
-        material_glow: Vec::new(),
-        material_colour_factor: Vec::new(),
-        material_quake: Vec::new(),
-        material_tangent: Vec::new(),
-        material_variants: Vec::new(),
-        material_anim: Vec::new(),
-        shine_draws: Vec::new(),
-
-        vertex_colour_is_light: false,
-        stamps_glow: false,
-        glow_by_texel: false,
-        glow_from_program: true,
-
-        flame: None,
-        absorb_shell: false,
-        material_lod_bias: 0.0,
-        material_state: Vec::new(),
-        alpha_test_ref: None,
-        centre: [0.0; 3],
-        radius: HALF_EXTENT * 3.0f32.sqrt(),
-        mesh_count: 6,
-        airbrakes: [None, None],
-        anim_tracks: Vec::new(),
-        node_vertex_ranges: Vec::new(),
-        lod_groups: Default::default(),
-        anim_nodes: Vec::new(),
-        emissive: Vec::new(),
-    }
+        [0.0; 3],
+        HALF_EXTENT * 3.0f32.sqrt(),
+        6,
+    );
+    model.textures = textures;
+    model.lightmaps = lightmaps;
+    model.glow_from_program = true;
+    model
 }
 
 /// The sky's linear-light `tint` as the vertex colour its shading path reads.
 ///
 /// **The colour multiplies the encoded texel, so it is the displayed factor,
-/// `tint ^ (1 / 2.2)`** (2026-10-22, `hd-tone-vineta`). The sky's textures
+/// the tint encoded with the scene's curve** (HD: sRGB; a `2.2` power measured
+/// the same to 0.6 %, which is why it stood in first). The sky's textures
 /// upload raw (`Rgba8Unorm`) and `lit` 0.0 sends it down `shade.wesl`'s
 /// stand-in path, `texel * colour` in the gamma domain, decoded to light only
 /// afterwards. Handed `byte / 255` itself, that path displayed
@@ -386,8 +363,8 @@ fn cube(
 /// draw shows 0.746, and its sky 63 grey under the original's. Measured on
 /// this tree with the glow off, tinted over untinted sky: 0.5255 on R, 0.525
 /// on G, against `134 / 255 = 0.5255`.
-fn tint_in_texel_domain(tint: [f32; 3]) -> [f32; 3] {
-    tint.map(|t| t.max(0.0).powf(1.0 / 2.2))
+fn tint_in_texel_domain(tint: [f32; 3], store: SceneStore) -> [f32; 3] {
+    tint.map(|t| store.texel_encode(t.max(0.0)))
 }
 
 #[cfg(test)]
@@ -479,14 +456,15 @@ mod tests {
     /// live draws"): 0.736 at 128 (Talon's Junction) and 0.765 at 140 (The
     /// Amphiseum), 1.00 at 255. The vertex colour multiplies the encoded
     /// texel, so it must be that factor, not `byte / 255`; dropping the
-    /// conversion puts 128 at 0.502 and fails here.
+    /// conversion puts 128 at 0.502 and fails here, and so does the `2.2` power
+    /// (0.731 at 128, 0.761 at 140) now that HD's decode is the sRGB curve.
     #[test]
     fn the_vertex_colour_is_the_displayed_factor_the_live_draw_shows() {
         for (byte, displayed) in [(128.0f32, 0.736f32), (140.0, 0.765), (255.0, 1.0)] {
-            let colour = tint_in_texel_domain([byte / SKY_COLOUR_FULL; 3]);
+            let colour = tint_in_texel_domain([byte / SKY_COLOUR_FULL; 3], SceneStore::Encoded);
             for c in colour {
                 assert!(
-                    (c - displayed).abs() < 0.01,
+                    (c - displayed).abs() < 0.002,
                     "byte {byte}: {c} against {displayed}"
                 );
             }

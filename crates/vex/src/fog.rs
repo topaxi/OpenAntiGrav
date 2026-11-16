@@ -31,7 +31,7 @@
 //! the ramp would be the wrong fix.
 
 use crate::vex::{self, Node, transform_point};
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Length of a `fogCube` payload.
 ///

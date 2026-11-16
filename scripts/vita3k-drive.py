@@ -89,10 +89,14 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pad_seat  # noqa: E402
 
 #: `OAG_VITA3K_CACHE` moves every file this tool writes (config, pid file,
 #: frames, pipeline marker) to a directory of its own, so two members' Vita3K
@@ -151,11 +155,21 @@ def _is_process(pid, name_substring):
 
 
 def display_up(display_num):
-    """Whether an X server already answers on `:{display_num}`."""
-    probe = subprocess.run(
-        ["xdpyinfo", "-display", ":%d" % display_num],
-        capture_output=True,
-    )
+    """Whether an X server already answers on `:{display_num}`.
+
+    `xdpyinfo` where it is installed, else `xdotool` (which every other step
+    here needs anyway) asked for the display's geometry.
+    """
+    if shutil.which("xdpyinfo"):
+        probe = subprocess.run(
+            ["xdpyinfo", "-display", ":%d" % display_num],
+            capture_output=True,
+        )
+    else:
+        env = os.environ.copy()
+        env.pop("WAYLAND_DISPLAY", None)
+        env["DISPLAY"] = ":%d" % display_num
+        probe = subprocess.run(["xdotool", "getdisplaygeometry"], capture_output=True, env=env)
     return probe.returncode == 0
 
 
@@ -308,6 +322,7 @@ def launch_vita3k(title_id, display_num):
     env["DISPLAY"] = ":%d" % display_num
     env["SDL_VIDEODRIVER"] = "x11"
     env["SDL_VIDEO_DRIVER"] = "x11"
+    env.update(pad_seat.sdl_blind_env())  # driven by xdotool: sees no pad, so no other seat's presses reach it
     CACHE.mkdir(parents=True, exist_ok=True)
     proc = subprocess.Popen(
         ["vita3k", "-c", str(config), "-w", "-r", title_id],
@@ -365,7 +380,11 @@ def tap(display_num, x, y, hold_seconds=0.3):
     sits at the display's own origin.
     """
     env = {**os.environ, "DISPLAY": ":%d" % display_num}
-    subprocess.run(["xdotool", "mousemove", str(x), str(y), "mousedown", "1"], env=env, check=True)
+    # The pointer must already be at the spot when the button goes down: a `mousemove x y mousedown 1` in one command lands on
+    # the old position under load (measured 2026-11-12, `gallery-2048b`: the Game Mode tile ignored it, a move, 0.3 s, then the press opened it).
+    subprocess.run(["xdotool", "mousemove", str(x), str(y)], env=env, check=True)
+    time.sleep(0.3)
+    subprocess.run(["xdotool", "mousedown", "1"], env=env, check=True)
     time.sleep(hold_seconds)
     subprocess.run(["xdotool", "mouseup", "1"], env=env, check=True)
 

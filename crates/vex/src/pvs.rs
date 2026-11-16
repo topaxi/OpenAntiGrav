@@ -55,7 +55,7 @@
 //! `oag_render::pvs`'s business.
 
 use crate::vex::{self, Node};
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 use std::fmt;
 
 /// The hard cap on sections, from the 64-bit mask width.
@@ -210,6 +210,18 @@ impl TrackPvs {
             bounds: [None; MAX_SECTIONS],
             declared: 0,
         }
+    }
+
+    /// A set that declares exactly `sections`, as if one `section` node had been read for each.
+    pub fn from_sections(sections: impl IntoIterator<Item = Section>) -> Self {
+        let mut pvs = Self::empty();
+        for section in sections {
+            let id = usize::from(section.index);
+            pvs.declared |= 1u64 << id;
+            pvs.masks[id] = section.visible;
+            pvs.bounds[id] = section.bounds;
+        }
+        pvs
     }
 
     /// Reads every `section` node in an already-walked scene tree.

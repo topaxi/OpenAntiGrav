@@ -71,39 +71,7 @@ impl FlareTexture {
         wrap_v: bool,
         shape: Option<&Self>,
     ) -> wgpu::BindGroup {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(label),
-            size: wgpu::Extent3d {
-                width: self.width.max(1),
-                height: self.height.max(1),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &self.rgba,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(self.width.max(1) * 4),
-                rows_per_image: Some(self.height.max(1)),
-            },
-            wgpu::Extent3d {
-                width: self.width.max(1),
-                height: self.height.max(1),
-                depth_or_array_layers: 1,
-            },
-        );
+        let texture = self.upload(device, queue, label);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         // The ribbon's state list sets `sceGuTexWrap(GU_REPEAT, GU_REPEAT)`, and
         // it needs both: `u` tiles `LAYER_TEX_SCALE_U` times along the trail
@@ -152,43 +120,7 @@ impl FlareTexture {
     }
 
     /// This image as a texture on the device, with its pixels written.
-    ///
-    /// Split out of [`Self::bind`] when the ribbon needed a second one; the
-    /// body is that function's own upload, unchanged.
-    fn upload(&self, device: &wgpu::Device, queue: &wgpu::Queue, label: &str) -> wgpu::Texture {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(label),
-            size: wgpu::Extent3d {
-                width: self.width.max(1),
-                height: self.height.max(1),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &self.rgba,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(self.width.max(1) * 4),
-                rows_per_image: Some(self.height.max(1)),
-            },
-            wgpu::Extent3d {
-                width: self.width.max(1),
-                height: self.height.max(1),
-                depth_or_array_layers: 1,
-            },
-        );
-        texture
+    pub fn upload(&self, device: &wgpu::Device, queue: &wgpu::Queue, label: &str) -> wgpu::Texture {
+        oag_gpu::texture::upload_rgba8(device, queue, label, (self.width, self.height), &self.rgba)
     }
 }

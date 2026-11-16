@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: parked
 titles: [all]
-updated: 2026-10-05
-summary: "Split oag-raceplay load and scene, a profile crate and a boot cluster from oag-game; measure Race coupling first"
+updated: 2026-11-11
+summary: "Measured 2026-11-11: raceplay load and game profile/boot splits save 0 percent in the moved code, 6-10 percent outside it; parked"
 size: M (35)
 difficulty: medium (30)
 ---
@@ -20,16 +20,58 @@ job is not finished, only the cheap seams are cut. Method for each: a member in
 its own worktree, no re-exports, test count identical before and after, gate plus
 the ground-truth tests that touch moved code.
 
+## Measured: the three splits do not pay (2026-11-11)
+
+`cargo build -p oag-game` (dev profile: `oag-raceplay` and `oag-game` at opt-level 2,
+`incremental = false`, kache as rustc wrapper, `jobs = 8`), one unique function-body
+edit per run, three runs each, under the gate lock, load 6-17:
+
+| edit in | wall (s), 3 runs | critical path |
+| --- | --- | --- |
+| `raceplay/src/load/` | 43.6, 42.2, 36.4 | raceplay 13.6-15.7, game lib 12-17, game bin 12-16 |
+| `raceplay/src/zoom.rs` (outside load/scene) | 45.2, 43.9, 44.7 | raceplay 17.9-20.7, game lib 14-17.5, game bin 13-14 |
+| `game/src/boot/` | 29.3, 37.6, 37.5 | game lib 13.4-22.4, game bin 14.7-17.8 |
+| `game/src/cursor.rs` (outside the cluster) | 29.1, 34.3, 39.3 | game lib 14-20, game bin 14.6-18.4 |
+
+Why a split cannot cut the first and third rows: cargo has no early cutoff, so an edit
+in a crate rebuilds every crate above it, and with `incremental = false` each is a full
+recompile. After a split an edit in `load` rebuilds the new crate, then all of raceplay,
+then all of game: the same work plus a crate boundary. A split only saves the moved
+code's compile time for an edit *outside* it. By non-test code lines, `load` is 12.2 %
+of raceplay's 51k (about 2 s of a 44 s rebuild, 5 %). The game lib is 38k lines and the
+binary (`main/`, `main_body.rs`) 27k: boot, movie and loading are 21 % of the lib (about
+3.4 s of 34 s, 10 %), the profile set (records, unlock, ghosts, campaign, settings,
+profile) 16 % (7.5 %), all of them 37 % (about 6 s, 17 % best case, about 11 % weighted
+by where edits land). The binary unit (12-18 s, half the wall) does not move. Line share
+is the only proxy (`cargo llvm-lines` is not installed here), and the best case needs all
+three cuts and an edit outside them.
+
+To re-measure: edit one non-generic function body with a fresh `black_box(N)` literal each
+run (a repeated edit hits kache), do one discarded rebuild of the unedited file first, then
+three runs of `cargo build --timings -p oag-game` under `flock -o ~/.cache/oag/gate.lock`;
+read the wall time and the unit rows of `target/cargo-timings/cargo-timing.html`.
+
+Coupling, which is the other reason to stop: `load` is `use super::*` over lib.rs,
+reaches about 30 sibling raceplay modules (`foreign`, `stages`, `gantry`, `zone_grade`,
+`scenery_fx`, `extensions`, `catalogue`, `hud`, ...), and 40 files outside it name
+`load::` or `Loaded`; it is not plain data below the tick. In `oag-game`, `records`,
+`campaign` and `settings` are named by 44, 45 and 61 other files and reach `flyer`,
+`mods`, `preview`, `capture` and `main`.
+
+Reopen only if the dev profile gains incremental compilation (then a crate boundary
+changes what is reused) or a concrete need other than build time appears (a profile
+crate for persistence).
+
 ## Open
 
-- **Split `oag-raceplay`'s `load` and `scene`** (4.2k and 4.8k lines, plus
+- **Measured, not worth it (see above): split `oag-raceplay`'s `load` and `scene`** (4.2k and 4.8k lines, plus
   `weapons` visuals 2.4k, `gantry`, `field`, `scenery_fx`). Unmeasured: how many
   `Race` fields each reads. If `load` only produces plain data the tick consumes,
   it can sit below the tick; if it needs `Race`, leave it.
-- **A profile/progress crate** from `oag-game`: `records` (1k lines), `unlock`,
+- **Measured, not worth it for build time (see above): a profile/progress crate** from `oag-game`: `records` (1k lines), `unlock`,
   `ghosts`, campaign state, probably `settings` (1.7k). This is where "modern
   saves" persistence lives. Check what `main/` reads out of them first.
-- **The boot and media cluster** in `oag-game`: `movie` (2.5k), `loading` (2.6k),
+- **Measured, not worth it (see above): the boot and media cluster** in `oag-game`: `movie` (2.5k), `loading` (2.6k),
   `boot` (3.6k). `capture` and `race_capture` composite the front end's overlays
   and probably stay.
 - **`oag-ui` core** (24k: `frontend` 9k, `menu` 7k) could be cut again, but the
@@ -54,7 +96,5 @@ the ground-truth tests that touch moved code.
 
 1. `just docs 2>&1 | rg -c warning` on `main` for a baseline, then fix the broken
    cross-crate links in the new crates (about an hour).
-2. Measure the `load`/`scene` coupling: `rg -c 'race\.|&Race|&mut Race'
-   crates/raceplay/src/load crates/raceplay/src/scene` decides the first split.
-3. Draw the profile crate as one member lane (an afternoon), brief: no re-exports,
-   host trait only where `main/` needs it.
+2. The `load`/`scene` coupling is measured (above): leave `oag-raceplay` whole.
+3. A profile crate only for a reason other than build time (modern-saves persistence).

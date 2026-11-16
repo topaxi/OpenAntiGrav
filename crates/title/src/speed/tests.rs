@@ -7,19 +7,19 @@ use super::*;
 /// The four rungs every title measured so far shares.
 const FOUR: SpeedClasses = SpeedClasses {
     names: SpeedClasses::PULSE_LADDER,
-    remix_only: &[],
+    union_only: &[],
 };
 
 /// Wipeout Pure's shape: the same four with `VECTOR` ahead of them.
 const FIVE: SpeedClasses = SpeedClasses {
     names: SpeedClasses::PURE_LADDER,
-    remix_only: &[SpeedClasses::VECTOR],
+    union_only: &[SpeedClasses::VECTOR],
 };
 
 /// Wipeout 2048's native shape: the four with `SUPERPHANTOM` above.
 const FIVE_ABOVE: SpeedClasses = SpeedClasses {
     names: SpeedClasses::WIPEOUT_2048_LADDER,
-    remix_only: &[SpeedClasses::SUPER_PHANTOM],
+    union_only: &[SpeedClasses::SUPER_PHANTOM],
 };
 
 /// The axis exists because the two disagree in **cardinality**, so that is
@@ -83,11 +83,8 @@ fn a_union_of_no_ladders_is_empty() {
     assert!(SpeedClasses::union([]).is_empty());
 }
 
-/// `VECTOR` is authored by Pure **and is offered**, since 2026-09-05.
-///
-/// The filter that used to remove it is gone because the reason for it is:
-/// a race carries the rung's name and resolves it against the file that
-/// authored it, so there is no longer a measured-but-unnameable rung. Nothing
+/// `VECTOR` is authored by Pure and is offered: a race resolves a rung by name
+/// against the file that authored it, so nothing on a measured ladder is filtered.
 /// on any measured ladder is filtered now.
 #[test]
 fn every_name_a_measured_ladder_carries_is_selectable() {
@@ -128,21 +125,21 @@ fn selectable_agrees_with_the_predicate() {
     assert!(FIVE.selectable().all(SpeedClasses::is_selectable));
 }
 
-/// `is_offered_outside_remix` confines what the ladder's `remix_only` names to
-/// RACE REMIX without touching `is_selectable` - the ordinary RACE page's
+/// `is_offered_on_race_page` confines what the ladder's `union_only` names to
+/// a two-title race page without touching `is_selectable` - the ordinary RACE page's
 /// narrower question, layered on top of the engine's own answer.
 #[test]
-fn is_offered_outside_remix_confines_the_ladders_remix_only_rungs_and_nothing_else() {
-    assert!(!FIVE.is_offered_outside_remix(SpeedClasses::VECTOR));
-    assert!(!FIVE.is_offered_outside_remix("vector"));
-    assert!(!FIVE_ABOVE.is_offered_outside_remix(SpeedClasses::SUPER_PHANTOM));
+fn is_offered_on_race_page_confines_the_ladders_union_only_rungs_and_nothing_else() {
+    assert!(!FIVE.is_offered_on_race_page(SpeedClasses::VECTOR));
+    assert!(!FIVE.is_offered_on_race_page("vector"));
+    assert!(!FIVE_ABOVE.is_offered_on_race_page(SpeedClasses::SUPER_PHANTOM));
     for name in SpeedClasses::PULSE_LADDER {
-        assert!(FIVE.is_offered_outside_remix(name), "{name}");
-        assert!(FIVE_ABOVE.is_offered_outside_remix(name), "{name}");
-        assert!(FOUR.is_offered_outside_remix(name), "{name}");
+        assert!(FIVE.is_offered_on_race_page(name), "{name}");
+        assert!(FIVE_ABOVE.is_offered_on_race_page(name), "{name}");
+        assert!(FOUR.is_offered_on_race_page(name), "{name}");
     }
     // A rung the ladder does not carry is not offered by it at all.
-    assert!(!FOUR.is_offered_outside_remix(SpeedClasses::VECTOR));
+    assert!(!FOUR.is_offered_on_race_page(SpeedClasses::VECTOR));
 
     // Every measured rung stays selectable - the confinement is a menu-page
     // rule on top of engine capability, not a narrower version of it.
@@ -160,7 +157,7 @@ fn a_five_rung_ladders_race_page_row_is_four() {
     }
 }
 
-/// RACE REMIX unions every mounted ladder: Pure's `VECTOR` first, 2048's
+/// A two-title race page unions every mounted ladder: Pure's `VECTOR` first, 2048's
 /// `SUPERPHANTOM` last, whichever order the titles arrive in.
 #[test]
 fn the_union_spans_vector_below_and_super_phantom_above() {

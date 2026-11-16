@@ -1,10 +1,10 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-06
-summary: "Wire prompts into the HUD and pause overlay; Pure and Omega glyph tables; live Steam Deck check"
-size: S (50)
-difficulty: easy (35)
+updated: 2026-11-04
+summary: "Wide-key footer layout; the live Steam Deck check; HD arrow marks and unnamed wide variants"
+size: S (30)
+difficulty: easy (25)
 ---
 
 # Button prompts: what is left after the first landing
@@ -32,13 +32,6 @@ open.
   is where `SteamVirtualGamepadInfo` points; on 2026-10-06 that file was
   empty because no controller was attached. The game's own log is under that
   home's `~/.local/state/oag/logs/` for a Steam launch.
-- **Prompts outside the front end's renderer** draw the disc's glyphs
-  whatever the pad: the in-race HUD's own text, a race's pause overlay, and
-  the race-start prompts. They go through other renderers; each needs
-  `set_prompt_substitution` from `session::prompts::refresh_prompts`.
-- **Pure and Omega tables.** Pure's glyphs were not read (`Prompts::UNREAD`).
-  Omega's `PS_BUTTONS.fnt` is HD's at 2x but its PS4 art was not rendered; render
-  it and read the cells before filling a table.
 - **HD's `Δ Γ Β Α`** (four arrow-like marks in `PS_BUTTONS.fnt`) stay the
   disc's: which direction each is was not established.
 - **A wide key on a small face.** The keyboard's backspace is fitted into the
@@ -53,8 +46,7 @@ open.
 
 ## Next Steps
 
-1. Wire the HUD and pause overlay renderers (30 minutes: the call is one line
-   per renderer, the work is finding where each is built).
-2. Probe Pure's and Omega's faces and fill their tables (an hour each with the
-   probe).
-3. Decide the wide-key layout (see above) with a screenshot of the footer.
+1. Decide the wide-key layout (see above) with a screenshot of the footer.
+2. If a HUD or race-start string ever carries a stand-in, give `hud_font` the
+   `with_prompts` call and `hud_overlay::Overlay` a fan-out; today none does
+   (`docs/ui/button-prompts.md`, "Where it applies").

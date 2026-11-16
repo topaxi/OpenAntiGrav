@@ -92,6 +92,7 @@ fn the_boot_reads_wohd_and_the_ship_select_bar_has_two_colours() {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let shell = boot::load_shell(&options).expect("the shell loads").0;
     let resolve = |name: &str| {

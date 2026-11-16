@@ -20,7 +20,7 @@
 //! textures and renders them - but composing this title's rectangles against
 //! decoded `.gxt` dimensions is not written here yet. This file stops at
 //! "every reference resolves to a shipped entry", which is as far as
-//! [`oag_2048::hud::texture_entry`]'s own evidence goes.
+//! [`oag_assets::Archives::read_texture`]'s own evidence goes.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -136,10 +136,9 @@ fn every_texture_reference_resolves_once_the_extension_rule_applies() {
     assert_eq!(uses.len(), 19, "distinct texture references: {uses:?}");
 
     for (reference, count) in &uses {
-        let entry = oag_2048::hud::texture_entry(reference);
         assert!(
-            archives.locate(&entry).is_some(),
-            "{reference} ({count} sprites) resolves to {entry}, which is not on the disc"
+            archives.resolve_texture(reference).is_some(),
+            "{reference} ({count} sprites) resolves to no entry on the disc"
         );
     }
 }
@@ -390,5 +389,72 @@ fn only_the_unplayed_bare_root_authors_curve_bars() {
         } else if !graded.is_empty() {
             assert_eq!(graded, ["SpeedBar", "ThrustBar"], "{root}");
         }
+    }
+}
+
+/// **2048's played Eliminator draws no lap hexagon, so `LapPanel2` is not on
+/// `oag_2048::hud::ALWAYS_ON`** (HD's and Omega's lists carry it). The skin 2048 plays
+/// (`2048_hud`, native and the campaign `_HD` root alike) includes its own 507-byte
+/// `HUD_lap_counters.xml`, which authors neither `LapPanel` nor `LapPanel2`; the HD-lineage
+/// `HUD_Elim_lap_counters.xml` that does author `LapPanel2` ships in the package but only the
+/// bare-root `Data\XML\Elimination_HUD.xml` includes it, and that root is the attract-mode
+/// demo's (`oag_2048::hud::skins::DEMO`), never a race a player starts. Listing the name would
+/// draw nothing in any played race, so it is left off until a layout a race reads authors it.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_eliminator_lap_hexagon_is_authored_only_by_the_unplayed_bare_root() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let mut authors: Vec<&str> = Vec::new();
+    for &root in oag_2048::hud::ROOTS {
+        if composed(&mut archives, root)
+            .layout
+            .sprite("LapPanel2")
+            .is_some()
+        {
+            authors.push(root);
+        }
+    }
+    assert_eq!(authors, [r"Data\XML\Elimination_HUD.xml"]);
+
+    let played = archives
+        .read_name(r"Data\XML\2048_hud\HUD_lap_counters.xml")
+        .expect("the played skin's own lap counters ship");
+    let played = String::from_utf8_lossy(&played);
+    assert!(
+        !played.contains("LapPanel"),
+        "the played skin authors no lap panel"
+    );
+    assert!(
+        !oag_2048::hud::ALWAYS_ON.contains(&"LapPanel2"),
+        "a name no played layout authors draws nothing"
+    );
+}
+
+/// **The radar under the craft is always on** (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`):
+/// the played single race includes `HUD_half_radar.xml`, whose `Radar` (the white arc and the split
+/// bowl, 263 x 72 off `hud_2048.gxt`) and `PlayerDot` (the ringed dot at its centre) sit at
+/// `(480, 439)` in the 544-line space, round the craft's tail (Omega's copy of the file draws the
+/// same at 197.25 x 54 off its `.2x` atlas), and `Hud_BindWidgets` (`0x81192cd0`) never hides either. Dropping either
+/// name from `oag_2048::hud::ALWAYS_ON`, or the layout moving them, fails this.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_played_single_race_draws_the_half_radar_round_the_craft() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let layout = composed(&mut archives, oag_2048::hud::skins::played::ARCADE).layout;
+    let radar = layout
+        .sprite("Radar")
+        .expect("the single race authors Radar");
+    assert_eq!(radar.rect, [349.0, 439.0, 263.0, 72.0]);
+    assert_eq!(radar.uv, [2.0, 419.0, 188.0, 52.0]);
+    let dot = layout
+        .sprite("PlayerDot")
+        .expect("the single race authors PlayerDot");
+    assert_eq!(dot.rect, [459.0, 431.0, 42.0, 16.0]);
+    for name in ["Radar", "PlayerDot"] {
+        assert!(oag_2048::hud::ALWAYS_ON.contains(&name), "{name}");
     }
 }

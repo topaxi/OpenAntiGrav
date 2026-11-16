@@ -51,6 +51,7 @@ pub(super) const XML: &str = r#"
       </Screen>
       <Screen name="Home" type="Home">
         <TouchButton name="HomeTeamButton"><Values idstring="ER_TEAM" redirect="team" x="86" y="190" width="140" height="140" Src="Data\FE\NewImages\Icon_Team_HomeBut.gtf"></Values></TouchButton>
+        <TouchButton name="HomeLowerButton"><Values idstring="FE_PROFILE" redirect="GameModeChoice" x="86" y="360" width="140" height="140" Src="Data\FE\NewImages\Icon_Team_HomeBut.gtf"></Values></TouchButton>
         <TouchButton><Values redirect="newFEshell" x="822" y="432" width="122" height="96" Src="Data\FE\NewImages\Icon_Tick.gtf"></Values></TouchButton>
       </Screen>
     </Screen>
@@ -452,24 +453,30 @@ fn a_click_on_a_tile_is_the_tap_and_a_click_elsewhere_is_nothing() {
     assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
 }
 
-/// Whether a ring (four fills outset 4 units) is drawn round the tile at `(x, y)`.
-fn ringed(frontend: &Frontend, x: f32, y: f32) -> bool {
+/// Whether the tile at `(x, y)` is filled in `Orange2048`, the tile's own pressed colour.
+pub(super) fn focused(frontend: &Frontend, x: f32, y: f32) -> bool {
     frontend.draw_list().iter().any(|draw| {
         matches!(
             draw,
-            Draw::Fill { rect, .. } if (rect[0] - (x - 4.0)).abs() < 0.01 && (rect[1] - (y - 4.0)).abs() < 0.01
+            Draw::Fill { rect, color }
+                if (rect[0] - x).abs() < 0.01
+                    && (rect[1] - y).abs() < 0.01
+                    && *color == [221.0 / 255.0, 88.0 / 255.0, 11.0 / 255.0, 1.0]
         )
     })
 }
 
-/// The original's grids draw no focus on entry and none under a finger: the ring
-/// is this build's own, for a pad, and shows only once the pad has moved.
+/// The original's grids draw no focus under a finger; the pad's focus is the tile's pressed
+/// colour, there from the first frame once the pad is the device in use.
 #[test]
-fn a_hover_moves_the_cursor_without_choosing_and_the_ring_waits_for_the_pad() {
+fn a_hover_moves_the_cursor_without_choosing_and_the_focus_follows_the_pad() {
     let mut frontend = boot(0);
     let mut input = Input::new();
     reach_the_grid(&mut frontend, &mut input);
-    assert!(!ringed(&frontend, 167.0, 190.0), "no ring on entry");
+    assert!(
+        focused(&frontend, 167.0, 190.0),
+        "the pad's focus is on entry"
+    );
     let hover = Pointer {
         at: Some((400.0, 250.0)),
         moved: true,
@@ -477,10 +484,11 @@ fn a_hover_moves_the_cursor_without_choosing_and_the_ring_waits_for_the_pad() {
     };
     assert!(frontend.pointer(&hover));
     assert_eq!(frontend.chosen_mode(), None);
-    assert!(!ringed(&frontend, 329.0, 190.0), "a hover draws no ring");
+    assert!(!focused(&frontend, 167.0, 190.0), "a hover draws no focus");
+    assert!(!focused(&frontend, 329.0, 190.0), "nor under the pointer");
     // The cursor is on the second tile; a pad step back lands on the first.
     press(&mut frontend, &mut input, Button::Left);
-    assert!(ringed(&frontend, 167.0, 190.0));
+    assert!(focused(&frontend, 167.0, 190.0));
 }
 
 #[test]
@@ -509,6 +517,7 @@ fn a_centred_image_draws_from_its_middle() {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         },
     )];
     let mut input = Input::new();
@@ -554,23 +563,32 @@ pub(super) fn reach_the_shell(frontend: &mut Frontend, input: &mut Input) {
 
 pub(super) fn three_events() -> Vec<MapEvent> {
     [
-        ("2048 - Event 2", 3.0, 5.0),
-        ("2048 - Event 1", 1.0, 5.0),
-        ("2049 - Event 1", 11.0, 9.0),
+        ("2048 - Event 2", 3.0, 5.0, Some("2048 - Event 1")),
+        ("2048 - Event 1", 1.0, 5.0, None),
+        ("2049 - Event 1", 11.0, 9.0, Some("2048 - Event 1")),
     ]
     .into_iter()
-    .map(|(name, x, y)| MapEvent {
+    .map(|(name, x, y, requires)| MapEvent {
         name: name.to_string(),
-        x,
-        y,
+        // The base map's cell for a step: 55 + 4 x, 25 + 2 y.
+        x: 55.0 + 4.0 * x,
+        y: 25.0 + 2.0 * y,
         detail: "circuit / mode".to_string(),
-        requires: None,
+        requires: requires.map(str::to_string),
         kind: EventIcon::Race,
         forced_craft: None,
         refused_craft: Vec::new(),
         card: crate::frontend::EventCard::default(),
+        role: oag_title::MapRole::default(),
+        rank_gated: false,
+        rank_required: None,
     })
     .collect()
+}
+
+pub(super) fn pass_event_one(frontend: &mut Frontend) {
+    frontend
+        .refresh_campaign_progress(|name| (name == "2048 - Event 1").then_some(EarnedTier::Pass));
 }
 
 /// Two chained events - `"2048 - Event 2"` gated on `"2048 - Event 1"` -
@@ -581,25 +599,31 @@ fn a_gated_event() -> Vec<MapEvent> {
     vec![
         MapEvent {
             name: "2048 - Event 1".to_string(),
-            x: 1.0,
-            y: 5.0,
+            x: 59.0,
+            y: 35.0,
             detail: "circuit / mode".to_string(),
             requires: None,
             kind: EventIcon::Race,
             forced_craft: None,
             refused_craft: Vec::new(),
             card: crate::frontend::EventCard::default(),
+            role: oag_title::MapRole::default(),
+            rank_gated: false,
+            rank_required: None,
         },
         MapEvent {
             name: "2048 - Event 2".to_string(),
-            x: 3.0,
-            y: 5.0,
+            x: 67.0,
+            y: 35.0,
             detail: "circuit / mode".to_string(),
             requires: Some("2048 - Event 1".to_string()),
             kind: EventIcon::Race,
             forced_craft: None,
             refused_craft: Vec::new(),
             card: crate::frontend::EventCard::default(),
+            role: oag_title::MapRole::default(),
+            rank_gated: false,
+            rank_required: None,
         },
     ]
 }
@@ -610,11 +634,11 @@ fn the_extra_tiles_come_after_the_authored_ones_and_launch_this_builds_pages() {
     frontend.set_extra_tiles(vec![
         ExtraTile {
             label: "RACEBOX".to_string(),
-            launch: Launch::RaceBox,
+            launch: Launch::Page("race".to_string()),
         },
         ExtraTile {
             label: "REMIX".to_string(),
-            launch: Launch::Remix,
+            launch: Launch::Page("oag.remix/remix".to_string()),
         },
     ]);
     let mut input = Input::new();
@@ -631,23 +655,26 @@ fn the_extra_tiles_come_after_the_authored_ones_and_launch_this_builds_pages() {
     )));
     press(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.is_finished());
-    assert_eq!(frontend.launch(), Some(&Launch::Remix));
+    assert_eq!(
+        frontend.launch(),
+        Some(&Launch::Page("oag.remix/remix".to_string()))
+    );
 }
 
-/// MULTIPLAYER is the third tile of this build's, below RACEBOX and REMIX: the grid's pad steps
+/// MULTIPLAYER is the third tile of this build's, below RACEBOX and a mod's REMIX: the grid's pad steps
 /// reach it after the other two and confirming it asks for the MULTIPLAYER page.
 #[test]
 fn the_multiplayer_tile_is_the_third_extra_and_launches_its_page() {
     let mut frontend = boot(0);
     frontend.set_extra_tiles(
         [
-            ("RACEBOX", Launch::RaceBox),
-            ("REMIX", Launch::Remix),
-            ("MULTIPLAYER", Launch::Multiplayer),
+            ("RACEBOX", "race"),
+            ("REMIX", "oag.remix/remix"),
+            ("MULTIPLAYER", "multiplayer"),
         ]
-        .map(|(label, launch)| ExtraTile {
+        .map(|(label, page)| ExtraTile {
             label: label.to_string(),
-            launch,
+            launch: Launch::Page(page.to_string()),
         })
         .to_vec(),
     );
@@ -675,7 +702,10 @@ fn the_multiplayer_tile_is_the_third_extra_and_launches_its_page() {
     );
     press(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.is_finished());
-    assert_eq!(frontend.launch(), Some(&Launch::Multiplayer));
+    assert_eq!(
+        frontend.launch(),
+        Some(&Launch::Page("multiplayer".to_string()))
+    );
 }
 
 #[test]
@@ -683,7 +713,7 @@ fn a_click_on_the_race_box_tile_asks_for_the_race_box() {
     let mut frontend = boot(0);
     frontend.set_extra_tiles(vec![ExtraTile {
         label: "RACEBOX".to_string(),
-        launch: Launch::RaceBox,
+        launch: Launch::Page("race".to_string()),
     }]);
     let mut input = Input::new();
     reach_the_grid(&mut frontend, &mut input);
@@ -696,13 +726,32 @@ fn a_click_on_the_race_box_tile_asks_for_the_race_box() {
     };
     assert!(frontend.pointer(&click));
     tick(&mut frontend, &mut input, 0);
-    assert_eq!(frontend.launch(), Some(&Launch::RaceBox));
+    assert_eq!(frontend.launch(), Some(&Launch::Page("race".to_string())));
+}
+
+#[test]
+fn a_campaign_opens_on_its_first_ungated_event_whatever_it_is_called() {
+    let mut events = three_events();
+    // "Side" is open from the start and listed first but gates nothing.
+    for (event, name) in events.iter_mut().zip(["Side", "Start", "Gate C"]) {
+        event.name = name.to_string();
+        event.requires = (name == "Gate C").then(|| "Start".to_string());
+    }
+    let mut frontend = boot(0);
+    frontend.set_campaign(events);
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some("Start")
+    );
 }
 
 #[test]
 fn the_map_opens_on_the_first_seasons_first_event_and_the_pad_walks_it() {
     let mut frontend = boot(0);
     frontend.set_campaign(three_events());
+    pass_event_one(&mut frontend);
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
     assert_eq!(
@@ -735,6 +784,56 @@ fn the_map_opens_on_the_first_seasons_first_event_and_the_pad_walks_it() {
     );
 }
 
+#[test]
+fn a_tile_is_the_baked_prism_in_its_states_colour_and_a_flat_face_without_one() {
+    use crate::frontend::canvas_prism;
+    let tinted = |frontend: &Frontend, colour: [f32; 3]| {
+        let size = canvas_prism::layout().size;
+        frontend
+            .draw_list()
+            .iter()
+            .filter(|draw| {
+                matches!(draw, Draw::Sprite { uv, color, .. }
+                    if (uv[2], uv[3]) == (size.0 as f32 - 2.0, size.1 as f32 - 2.0)
+                        && *color == canvas_prism::tint(colour))
+            })
+            .count()
+    };
+    let mut frontend = boot(0);
+    frontend.set_campaign(three_events());
+    pass_event_one(&mut frontend);
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    assert_eq!(
+        tinted(&frontend, canvas_prism::colours::PASSED),
+        0,
+        "no baked prism in the sheet: nothing draws it"
+    );
+    let size = canvas_prism::layout().size;
+    frontend.placements.push((
+        canvas_prism::TILE.to_string(),
+        Placed {
+            x: 0,
+            y: 0,
+            width: size.0,
+            height: size.1,
+            quad_extent: None,
+            quad_centre: None,
+            blend: None,
+            scale: [1.0, 1.0],
+        },
+    ));
+    assert_eq!(
+        tinted(&frontend, canvas_prism::colours::PASSED),
+        1,
+        "the passed event is one green prism"
+    );
+    assert!(
+        tinted(&frontend, canvas_prism::colours::OPEN) >= 1,
+        "an open event is a grey one"
+    );
+}
+
 /// A tap on the event card's Launch button - the centre of its hit rect.
 pub(super) fn launch_button_tap() -> Pointer {
     Pointer {
@@ -749,16 +848,18 @@ pub(super) fn launch_button_tap() -> Pointer {
 fn a_click_on_an_unselected_marker_selects_and_a_second_click_launches() {
     let mut frontend = boot(0);
     frontend.set_campaign(three_events());
+    pass_event_one(&mut frontend);
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
-    // The markers of the first two events are in view: cell (3, 5) is at
-    // 65 + 2 * 146 = 357, 63 + 4 * 111 = 507, before scrolling. The view
-    // follows the selection, so read the marker's rect off the draw list.
+    // The markers of the first two events are in view. The view follows the
+    // selection, so read the marker's rect off the draw list.
     let marker_of = |frontend: &Frontend, at: usize| {
         let list = frontend.draw_list();
         list.iter()
             .filter_map(|draw| match draw {
-                Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(*rect),
+                Draw::Fill { rect, color } if (rect[2] - 119.4).abs() < 0.1 && color[3] == 1.0 => {
+                    Some(*rect)
+                }
                 _ => None,
             })
             .nth(at)
@@ -797,11 +898,13 @@ fn a_gated_event_with_nothing_earned_yet_refuses_a_launch() {
     frontend.set_campaign(a_gated_event());
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
+    // The d-pad never lands on a locked event (`map_focus`), a pointer does.
     press(&mut frontend, &mut input, Button::Right);
     assert_eq!(
         frontend.selected_event().map(|e| e.name.as_str()),
-        Some("2048 - Event 2")
+        Some("2048 - Event 1")
     );
+    frontend.campaign.selected = 1;
     press(&mut frontend, &mut input, Button::Cross);
     assert!(
         !frontend.is_finished(),
@@ -820,14 +923,17 @@ fn a_gated_event_with_nothing_earned_yet_refuses_a_launch() {
 pub(super) fn a_restricted_event() -> Vec<MapEvent> {
     vec![MapEvent {
         name: "2048 - Event 1".to_string(),
-        x: 1.0,
-        y: 5.0,
+        x: 59.0,
+        y: 35.0,
         detail: "circuit / mode".to_string(),
         requires: None,
         kind: EventIcon::Race,
         forced_craft: None,
         refused_craft: vec!["Feisar2048\\3".to_string()],
         card: crate::frontend::EventCard::default(),
+        role: oag_title::MapRole::default(),
+        rank_gated: false,
+        rank_required: None,
     }]
 }
 
@@ -839,14 +945,17 @@ pub(super) fn a_restricted_event() -> Vec<MapEvent> {
 pub(super) fn a_forced_event() -> Vec<MapEvent> {
     vec![MapEvent {
         name: "2048 - Event 1".to_string(),
-        x: 1.0,
-        y: 5.0,
+        x: 59.0,
+        y: 35.0,
         detail: "circuit / mode".to_string(),
         requires: None,
         kind: EventIcon::Race,
         forced_craft: Some("Qirex2048\\1".to_string()),
         refused_craft: vec!["Feisar2048\\3".to_string()],
         card: crate::frontend::EventCard::default(),
+        role: oag_title::MapRole::default(),
+        rank_gated: false,
+        rank_required: None,
     }]
 }
 
@@ -943,7 +1052,9 @@ fn a_click_on_a_restricted_events_marker_refuses_the_same_way_the_pad_does() {
         let list = frontend.draw_list();
         list.iter()
             .filter_map(|draw| match draw {
-                Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(*rect),
+                Draw::Fill { rect, color } if (rect[2] - 119.4).abs() < 0.1 && color[3] == 1.0 => {
+                    Some(*rect)
+                }
                 _ => None,
             })
             .next()
@@ -993,21 +1104,230 @@ fn refresh_campaign_progress_opens_a_gated_event_once_its_own_gate_is_passed() {
 }
 
 #[test]
-fn refresh_campaign_progress_colours_a_passed_marker_with_the_discs_own_green() {
+fn refresh_campaign_progress_colours_a_marker_in_the_canvases_own_state_colour() {
     let mut frontend = boot(0);
     frontend.set_campaign(a_gated_event());
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
     frontend
         .refresh_campaign_progress(|name| (name == "2048 - Event 1").then_some(EarnedTier::Elite));
-    let pass_green = frontend.global_colour("Pass2048");
-    let elite_yellow = frontend.global_colour("ElitePass2048");
-    assert_ne!(pass_green, elite_yellow, "the fixture must tell them apart");
+    let elite = crate::frontend::canvas_prism::tint(crate::frontend::canvas_prism::colours::ELITE);
     let list = frontend.draw_list();
     assert!(
         list.iter()
-            .any(|draw| matches!(draw, Draw::Fill { color, .. } if *color == elite_yellow)),
-        "Event 1's own marker should draw in ElitePass2048"
+            .any(|draw| matches!(draw, Draw::Fill { color, .. } if *color == elite)),
+        "Event 1's own marker should draw in the elite state's colour"
+    );
+}
+
+/// What the canvas paints for an event that is not reached yet
+/// (`TouchCampaign_ApplyEventStates` `0x810ef78c`): state 1, the cells flat in the
+/// state's tint, no prism and no glyph; and the ring cells of the walk that reaches
+/// it, light stripes on the main chain before it is reached, dark stripes after.
+/// Every cell picture sits at its own x in the sheet, so a sprite's `uv` names its
+/// fill.
+#[test]
+fn an_unreached_event_is_a_flat_tint_with_a_light_ring_and_the_reached_one_a_prism_with_a_dark_ring()
+ {
+    use crate::frontend::{canvas_cells, canvas_prism};
+    let mut frontend = boot(0);
+    let mut events = a_gated_event();
+    for event in &mut events {
+        event.role = oag_title::MapRole::Chain;
+    }
+    frontend.set_campaign(events);
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    let prism = canvas_prism::layout().size;
+    let mut put = |name: &str, x: u32, size: (u32, u32)| {
+        frontend.placements.push((
+            name.to_string(),
+            Placed {
+                x,
+                y: 0,
+                width: size.0,
+                height: size.1,
+                quad_extent: None,
+                quad_centre: None,
+                blend: None,
+                scale: [1.0, 1.0],
+            },
+        ));
+    };
+    put(canvas_prism::TILE, 0, prism);
+    for fill in 0..=4_u8 {
+        for up in [true, false] {
+            put(
+                canvas_cells::name(fill, up),
+                1000 + u32::from(fill) * 200 + if up { 0 } else { 100 },
+                canvas_cells::layout(up).size,
+            );
+        }
+    }
+    let list = frontend.draw_list();
+    // The colours of the sprites of one fill, by the x its pictures start at in
+    // the sheet (one texel in from the picture's edge).
+    let of_fill = |fill: u32| -> Vec<[f32; 4]> {
+        list.iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { uv, color, .. }
+                    if [0, 100]
+                        .iter()
+                        .any(|up_down| uv[0] == (1000 + fill * 200 + up_down) as f32 + 1.0) =>
+                {
+                    Some(*color)
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let prisms = list
+        .iter()
+        .filter(|draw| {
+            matches!(draw, Draw::Sprite { uv, .. }
+                if (uv[0], uv[2], uv[3]) == (1.0, prism.0 as f32 - 2.0, prism.1 as f32 - 2.0))
+        })
+        .count();
+    assert_eq!(
+        prisms, 1,
+        "Event 1 is open and raised; Event 2 is not reached"
+    );
+    let flat = of_fill(0);
+    assert_eq!(flat.len(), 6, "Event 2's six cells, flat: {flat:?}");
+    assert!(
+        flat.iter()
+            .all(|colour| *colour == canvas_prism::tint(canvas_prism::colours::UNREACHED)),
+        "in the chain's state 1 tint"
+    );
+    assert!(!of_fill(4).is_empty(), "the reached event's dark stripes");
+    assert!(
+        !of_fill(3).is_empty(),
+        "the unreached event's light stripes"
+    );
+    assert!(
+        of_fill(1).is_empty() && of_fill(2).is_empty(),
+        "no branch here"
+    );
+}
+
+/// A branch's events take the branch tints and dots: `0x810ef536` paints an
+/// unreached one flat in `0x817327c8` with light dots (fill 1), and a reached one
+/// raised with dark dots (fill 2).
+#[test]
+fn a_branch_is_flat_in_its_own_tint_with_light_dots_until_reached_then_dark_dots() {
+    use crate::frontend::{canvas_cells, canvas_prism};
+    let event = |name: &str, x: f32, requires: Option<&str>, role: oag_title::MapRole| MapEvent {
+        name: name.to_string(),
+        x,
+        y: 35.0,
+        detail: "circuit / mode".to_string(),
+        requires: requires.map(str::to_string),
+        kind: EventIcon::Race,
+        forced_craft: None,
+        refused_craft: Vec::new(),
+        card: crate::frontend::EventCard::default(),
+        role,
+        rank_gated: false,
+        rank_required: None,
+    };
+    let mut frontend = boot(0);
+    frontend.set_campaign(vec![
+        event("start", 59.0, None, oag_title::MapRole::Chain),
+        event("branch", 67.0, Some("start"), oag_title::MapRole::Branch),
+    ]);
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    for fill in 0..=4_u8 {
+        for up in [true, false] {
+            frontend.placements.push((
+                canvas_cells::name(fill, up).to_string(),
+                Placed {
+                    x: 1000 + u32::from(fill) * 200 + if up { 0 } else { 100 },
+                    y: 0,
+                    width: canvas_cells::layout(up).size.0,
+                    height: canvas_cells::layout(up).size.1,
+                    quad_extent: None,
+                    quad_centre: None,
+                    blend: None,
+                    scale: [1.0, 1.0],
+                },
+            ));
+        }
+    }
+    let colours_of = |frontend: &Frontend, fill: u32| -> Vec<[f32; 4]> {
+        frontend
+            .draw_list()
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { uv, color, .. }
+                    if [0, 100]
+                        .iter()
+                        .any(|up_down| uv[0] == (1000 + fill * 200 + up_down) as f32 + 1.0) =>
+                {
+                    Some(*color)
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let flat = colours_of(&frontend, 0);
+    assert_eq!(flat.len(), 6, "the unreached branch event, flat: {flat:?}");
+    assert!(
+        flat.iter()
+            .all(|c| *c == canvas_prism::tint(canvas_prism::colours::UNREACHED_BRANCH)),
+        "a branch's own state 1 tint, not the chain's"
+    );
+    assert!(!colours_of(&frontend, 1).is_empty(), "light dots");
+    assert!(colours_of(&frontend, 2).is_empty());
+    frontend.refresh_campaign_progress(|name| (name == "start").then_some(EarnedTier::Pass));
+    assert!(colours_of(&frontend, 0).is_empty(), "no flat cell left");
+    assert!(
+        !colours_of(&frontend, 2).is_empty(),
+        "dark dots once reached"
+    );
+    assert!(colours_of(&frontend, 1).is_empty());
+}
+
+/// An event that authors the original's "locked" option (a rank-gated side
+/// challenge) has no tile, no ring and no cursor until a pass is earned on it.
+#[test]
+fn a_rank_gated_event_is_hidden_from_the_map_and_the_pad_until_it_is_passed() {
+    let mut events = a_gated_event();
+    events[1].requires = None;
+    events[1].rank_gated = true;
+    let mut frontend = boot(0);
+    frontend.set_campaign(events);
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    let tiles = |frontend: &Frontend| {
+        use crate::frontend::canvas_prism::{colours, tint};
+        frontend
+            .draw_list()
+            .iter()
+            .filter(|draw| {
+                matches!(draw, Draw::Fill { color, .. }
+                    if *color == tint(colours::OPEN) || *color == tint(colours::PASSED))
+            })
+            .count()
+    };
+    assert_eq!(
+        tiles(&frontend),
+        1,
+        "Event 1 only; the gated event draws nothing"
+    );
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some("2048 - Event 1"),
+        "the pad does not land on a hidden event"
+    );
+    frontend
+        .refresh_campaign_progress(|name| (name == "2048 - Event 2").then_some(EarnedTier::Pass));
+    assert_eq!(tiles(&frontend), 2, "a pass earned on it shows it");
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some("2048 - Event 2")
     );
 }
 
@@ -1063,37 +1383,50 @@ fn a_drag_or_a_wheel_pans_the_campaign_map_and_selects_nothing() {
             .draw_list()
             .iter()
             .find_map(|draw| match draw {
-                Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(*rect),
+                Draw::Fill { rect, color } if (rect[2] - 119.4).abs() < 0.1 && color[3] == 1.0 => {
+                    Some(*rect)
+                }
                 _ => None,
             })
             .expect("a marker in view")
     };
     let selected = frontend.selected_event().map(|e| e.name.clone());
     let before = first_marker(&frontend);
-    // The canvas follows the finger: up and left reveals what is below and
-    // to the right, so the marker moves up and left by the same distance.
+    // The scroll follows the finger: up and left reveals what is below and
+    // to the right. The picture moves with the canvas camera's shear: 2.7 %
+    // further across than the finger, and 4.7 % of the way down, across.
     let drag = |dx: f32, dy: f32| Pointer {
         drag: (dx, dy),
         ..Pointer::default()
     };
     assert!(frontend.pointer(&drag(-20.0, -30.0)));
     let after = first_marker(&frontend);
-    assert_eq!((after[0] - before[0], after[1] - before[1]), (-20.0, -30.0));
-    // A wheel detent is one marker row down the canvas.
+    let moved = (after[0] - before[0], after[1] - before[1]);
+    assert!((moved.0 + 19.118).abs() < 0.01, "{moved:?}");
+    assert!((moved.1 + 30.0).abs() < 0.01, "{moved:?}");
+    // A wheel detent is one tile row down the canvas.
     let wheel = Pointer {
         scroll: 1,
         ..Pointer::default()
     };
     assert!(frontend.pointer(&wheel));
-    assert_eq!(first_marker(&frontend)[1] - after[1], -111.0);
-    // Dragged back far past the top-left corner it gives only against the
+    let row = first_marker(&frontend)[1] - after[1];
+    assert!((row + 95.45).abs() < 0.05, "{row}");
+    // Dragged back far past the top-left limit it gives only against the
     // rubber band - never more than half a view - and let go, it springs
-    // back onto the corner.
+    // back onto the limit.
     let view = frontend.space().size;
+    let corner = (frontend.campaign.limits(0).0, frontend.campaign.limits(1).0);
     assert!(frontend.pointer(&drag(1e6, 1e6)));
     let banded = frontend.campaign.scroll();
-    assert!(banded.0 < 0.0 && banded.0 > -view.0 * 0.5, "{banded:?}");
-    assert!(banded.1 < 0.0 && banded.1 > -view.1 * 0.5, "{banded:?}");
+    assert!(
+        banded.0 < corner.0 && banded.0 > corner.0 - view.0 * 0.5,
+        "{banded:?}"
+    );
+    assert!(
+        banded.1 < corner.1 && banded.1 > corner.1 - view.1 * 0.5,
+        "{banded:?}"
+    );
     assert_eq!(frontend.selected_event().map(|e| e.name.clone()), selected);
     assert!(frontend.pointer(&Pointer {
         released: true,
@@ -1102,10 +1435,10 @@ fn a_drag_or_a_wheel_pans_the_campaign_map_and_selects_nothing() {
     for _ in 0..120 {
         frontend.update(1.0 / 60.0, &mut input, None);
     }
-    assert_eq!(
-        frontend.campaign.scroll(),
-        (0.0, 0.0),
-        "rests on the corner"
+    let rest = frontend.campaign.scroll();
+    assert!(
+        (rest.0 - corner.0).abs() < 0.01 && (rest.1 - corner.1).abs() < 0.01,
+        "rests on the limit: {rest:?} against {corner:?}"
     );
 }
 
@@ -1120,7 +1453,9 @@ fn a_flick_coasts_the_campaign_map_on_after_the_finger_lifts() {
             .draw_list()
             .iter()
             .find_map(|draw| match draw {
-                Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(rect[0]),
+                Draw::Fill { rect, color } if (rect[2] - 119.4).abs() < 0.1 && color[3] == 1.0 => {
+                    Some(rect[0])
+                }
                 _ => None,
             })
             .expect("a marker in view")
@@ -1137,7 +1472,12 @@ fn a_flick_coasts_the_campaign_map_on_after_the_finger_lifts() {
         drag.pressed = false;
     }
     let lifted = first_x(&frontend);
-    assert_eq!(lifted, start - 40.0, "followed the finger one to one");
+    // 40 px of finger is 40 px of scroll, which the canvas camera's shear
+    // turns into 41.07 px of picture.
+    assert!(
+        (lifted - (start - 41.074)).abs() < 0.01,
+        "followed the finger: {lifted} from {start}"
+    );
     assert!(frontend.pointer(&Pointer {
         released: true,
         ..Pointer::default()

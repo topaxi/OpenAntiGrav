@@ -17,7 +17,7 @@
 //! whose chunk walk misses the payload's alignment boundary, so every node it
 //! returns claims completely; see [`collision_coverage`].
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 use oag_formats::coverage::Coverage;
 
 use crate::{collision, track};

@@ -45,18 +45,34 @@ fn energy_turbo() -> Option<race::extensions::Source> {
         .expect("the committed module");
     Some(race::extensions::Source {
         mod_id: module.manifest.id.clone(),
+        version: module.manifest.version.to_string(),
         module: rules.module,
         titles: module.manifest.titles.clone(),
         api: extension.api,
         memory_pages: extension.memory_pages,
         state_bytes: extension.state_bytes,
+        drives_ai_pickup: false,
         scope: race::extensions::Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
-        effects: Vec::new(),
+        effects: module
+            .manifest
+            .effects
+            .iter()
+            .map(|(name, path)| (name.clone(), path.clone()))
+            .collect(),
+        shaders: Vec::new(),
+        sounds: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: module.manifest.pickup.clone(),
+        pickup_titles: Vec::new(),
+        pickup_odds: module.manifest.pickup_odds.clone(),
+        options: Default::default(),
+        channels: race::extensions::Declared {
+            publishes: module.manifest.channels.publishes.clone(),
+            listens: module.manifest.channels.listens.clone(),
+        },
     })
 }
 
@@ -85,7 +101,7 @@ fn race_on(
     let ship = &mut race.sim.world.ships[0];
     ship.physics.shield = ship.handling.dimensions.shield * 0.5;
     if turbo {
-        ship.pickup.weapon = Some(Weapon::Extension);
+        ship.pickup.weapon = Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
     }
     Some(race)
 }
@@ -170,7 +186,7 @@ fn holding_fire_boosts_on_shield_and_an_absorb_pays_back_at_most_half() {
     assert!(a[479].shield < b[479].shield, "and paid for in shield");
     assert_eq!(
         boosted.sim.world.ships[0].pickup.weapon,
-        Some(Weapon::Extension),
+        Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)),
         "firing keeps it"
     );
 
@@ -289,7 +305,7 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
             player.push(weapon);
             match weapon {
                 Weapon::Turbo => turbos += 1,
-                Weapon::Extension => energy += 1,
+                Weapon::Extension(oag_tables::weapons::ModKind::FIRST) => energy += 1,
                 _ => {}
             }
         }
@@ -299,7 +315,7 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
             if carried[slot].is_none() {
                 match now {
                     Some(Weapon::Turbo) => turbos += 1,
-                    Some(Weapon::Extension) => energy += 1,
+                    Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)) => energy += 1,
                     _ => {}
                 }
             }
@@ -307,7 +323,9 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
             // the pool on most ticks: a drop of that size while carrying it is a boost.
             let drop = prior[slot] - ship.physics.shield;
             let drain = ship.handling.dimensions.shield * DRAIN_SHARE;
-            if now == Some(Weapon::Extension) && (drop - drain).abs() < 1e-4 {
+            if now == Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
+                && (drop - drain).abs() < 1e-4
+            {
                 boost_ticks += 1;
             }
             carried[slot] = now;
@@ -349,16 +367,20 @@ fn the_discharge_finds_the_discs_energy_glow_by_name() {
     let mut archives =
         oag_assets::Archives::open(&image.to_string_lossy(), oag_pulse::TITLE).expect("archives");
     let mut asked = Vec::new();
-    let parsed = oag_fx::psys::parametric::parse(&text, &mut |wanted| match *wanted {
-        oag_fx::psys::parametric::TextureRef::Host { entry, name } => {
-            asked.push(name.to_string());
-            race::foreign::art::host_texture(&mut archives, entry, name)
-                .and_then(|texture| race::extension_effects::sprite_of(&texture))
-        }
-        oag_fx::psys::parametric::TextureRef::Mod(path) => {
-            Err(format!("{path}: no mod files here"))
-        }
-    })
+    let parsed = oag_fx::psys::parametric::parse(
+        &text,
+        &mut |wanted| match *wanted {
+            oag_fx::psys::parametric::TextureRef::Host { entry, name } => {
+                asked.push(name.to_string());
+                race::foreign::art::host_texture(&mut archives, entry, name)
+                    .and_then(|texture| race::extension_effects::sprite_of(&texture))
+            }
+            oag_fx::psys::parametric::TextureRef::Mod(path) => {
+                Err(format!("{path}: no mod files here"))
+            }
+        },
+        &mut |name| Err(format!("{name}: no shaders here")),
+    )
     .expect("the example's effect parses with its disc texture");
     assert_eq!(asked, ["energy_GLOW.tga"]);
     let sprite = parsed
@@ -375,4 +397,144 @@ fn the_discharge_finds_the_discs_energy_glow_by_name() {
     )
     .unwrap_err();
     assert!(missing.contains("no_such_texture.tga"), "{missing}");
+}
+
+/// A module's bytes with a custom section appended: still a valid module that behaves the same
+/// and hashes differently, which is what another build of a mod looks like.
+fn another_build_of(wasm: &[u8]) -> Vec<u8> {
+    let name = b"build";
+    let note = b"another build";
+    let mut section = vec![u8::try_from(1 + name.len() + note.len()).unwrap()];
+    section.push(u8::try_from(name.len()).unwrap());
+    section.extend_from_slice(name);
+    section.extend_from_slice(note);
+    let mut out = wasm.to_vec();
+    out.push(0);
+    out.extend_from_slice(&section);
+    out
+}
+
+/// A modded race records its inputs and names the module; a screenshot of it rebuilds with the
+/// same module to the hash it was taken at, and without the module, or with another build of it,
+/// is refused by the module's name before a tick runs.
+#[test]
+#[ignore = "needs a Pulse disc image, the mod examples and --features extensions"]
+fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
+    const SHOT_AT: u32 = 600;
+    let Some(source) = energy_turbo() else { return };
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let image = image.display().to_string();
+    let wasm = (source.read)().expect("the module reads");
+    let options = race::Options {
+        source: image.clone(),
+        track: Some(TRACK.to_string()),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        no_driver_for_class: true,
+        extensions: vec![source.clone()],
+        ..race::Options::default()
+    };
+    let loaded = race::load(&options).expect("loading the race");
+    let seed = loaded.setup.seed;
+    let mut modded = race::Race::start(loaded.setup);
+    assert!(modded.is_modded());
+    modded.start_recording(oag_replay::Header::new(
+        "pulse",
+        TRACK,
+        "single_race",
+        "venom",
+        "default",
+        seed,
+    ));
+    assert!(modded.recording(), "a modded race records");
+    assert!(modded.give_weapon(0, Weapon::Extension(oag_tables::weapons::ModKind::FIRST)));
+    let pool = modded.sim.world.ships[0].physics.shield;
+    for t in 0..SHOT_AT {
+        let firing = (360..480).contains(&t);
+        let buttons: &[Button] = if firing {
+            &[Button::Cross, Button::Square]
+        } else {
+            &[Button::Cross]
+        };
+        let pressed: &[Button] = if t == 360 { &[Button::Square] } else { &[] };
+        modded.tick(&held(buttons, pressed));
+    }
+    assert!(
+        modded.sim.world.ships[0].physics.shield < pool,
+        "the module boosted on the shield, so it is in the hash the shot carries"
+    );
+    let shot = modded
+        .shot_record(None)
+        .expect("a modded race yields a shot record");
+    assert_eq!(shot.tick, u64::from(SHOT_AT));
+    assert!(
+        modded.take_new_best_ghost().is_none(),
+        "a modded race offers no ghost"
+    );
+    assert!(shot.replay.ghost.is_none());
+
+    let header = &shot.replay.header;
+    assert_eq!(header.mods.len(), 1, "{:?}", header.mods);
+    let used = &header.mods[0];
+    assert_eq!(used.id, "oag.energy-turbo");
+    assert_eq!(used.module, source.module);
+    assert_eq!(used.version, source.version);
+    assert_eq!(
+        used.sha256,
+        oag_disc::ps4_pkg::crypto::sha256(&wasm)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>(),
+        "the SHA-256 of the module's bytes"
+    );
+    assert_eq!(
+        (used.abi, used.revision),
+        (oag_ext_abi::ABI, oag_ext_abi::REVISION)
+    );
+
+    let bytes = shot.to_bytes();
+    let read = oag_replay::ShotRecord::from_bytes(&bytes).expect("reads");
+    assert_eq!(
+        read.replay.header.mods, shot.replay.header.mods,
+        "the entry survives the file"
+    );
+
+    let again = race::replay::resimulate(&read, &image, &[], std::slice::from_ref(&source))
+        .expect("re-simulates with the module");
+    println!(
+        "modded shot at tick {}: hash {:#018x} found {:#018x}",
+        read.tick, again.expected, again.found
+    );
+    assert!(again.matches(), "{:?}", again.desync);
+
+    let none = race::replay::resimulate(&read, &image, &[], &[]).expect_err("refused without it");
+    let none = format!("{none:#}");
+    println!("without the module: {none}");
+    assert!(
+        none.contains("oag.energy-turbo") && none.contains("does not load it"),
+        "{none}"
+    );
+
+    let mut other = source.clone();
+    let rebuilt = another_build_of(&wasm);
+    other.read = Arc::new(move || Ok(rebuilt.clone()));
+    let other = race::replay::resimulate(&read, &image, &[], &[other]).expect_err("another build");
+    let other = format!("{other:#}");
+    println!("another build: {other}");
+    assert!(
+        other.contains("oag.energy-turbo") && other.contains("another build"),
+        "{other}"
+    );
+
+    // A machine that offers a module the recording did not have runs without it.
+    let mut vanilla = shot.clone();
+    vanilla.replay.header.mods.clear();
+    let ran = race::replay::resimulate(&vanilla, &image, &[], std::slice::from_ref(&source))
+        .expect("builds");
+    assert!(
+        !ran.race.is_modded(),
+        "the recording named no module, so none runs"
+    );
 }

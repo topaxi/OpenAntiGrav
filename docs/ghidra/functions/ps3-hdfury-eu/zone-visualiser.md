@@ -116,12 +116,9 @@ nothing in it collapses to no span and reads zero rather than reading its own
 noise floor. A fixed dB floor, which is what this project had invented, pins
 a quiet band at the bottom of its bar for a whole race.
 
-**One step further back is still unrecovered.** `raw` is read at
-`(b & 7) * 48 + *(int *)(puVar10 + (b >> 3) * 4 + 0x614)` - two pointers, each
-to eight 48-byte records, the band magnitude at offset `0`. What updates
-those filter states was not traced. So *how a band is measured* - its centre
-frequency, its filter, its window - remains unread, and this project supplies
-its own and says so.
+**One step further back is now read**: see ["What a band measures"](#what-a-band-measures-2026-11-05).
+`raw` is read at `(b & 7) * 48 + *(int *)(puVar10 + (b >> 3) * 4 + 0x614)`, two
+pointers to eight 48-byte records each, the band magnitude at offset `0`.
 
 **The 32-band array is filled in the same function's second loop**, from a
 triple-buffered block at `+0x494 + ring * 0x80` (32 floats each,
@@ -131,6 +128,73 @@ whatever produces the analysis. It is normalised by a whole-block gain rather
 than per band. Nothing in this project reads it; recorded because it is the
 same data at a second resolution and would be the thing to port if the front
 end's `waveTexture` turns out to want it.
+
+## What a band measures (2026-11-05)
+
+**A band is a sum of bins of a 1024-point spectrum of the music, read before the music
+slider.** Measured on RPCS3 0.0.42-19980 (02.00), Main Menu, muted to a private null sink with
+`Dump to file` on; band records, `+0x24`, the widget's copies and the dump's byte offset read
+together at 8 ms for 100 s.
+
+The records say so themselves. Live, `(+4, +8)` of each record is a first and last bin, and they
+tile `0..511`:
+
+| band | bins | Hz at 48 kHz | band | bins | Hz at 48 kHz |
+| ---: | --- | --- | ---: | --- | --- |
+| 0 | 0 | 0 | 8 | 50-70 | 2344-3281 |
+| 1 | 1 | 47 | 9 | 71-96 | 3328-4500 |
+| 2 | 2 | 94 | 10 | 97-128 | 4547-6000 |
+| 3 | 3-5 | 141-234 | 11 | 129-167 | 6047-7828 |
+| 4 | 6-11 | 281-516 | 12 | 168-213 | 7875-9984 |
+| 5 | 12-20 | 563-938 | 13 | 214-266 | 10031-12469 |
+| 6 | 21-32 | 984-1500 | 14 | 267-328 | 12516-15375 |
+| 7 | 33-49 | 1547-2297 | 15 | 329-511 | 15422-23953 |
+
+Every record also holds `+0xc = 1.0`, `+0x14 = 0.005`, `+0x18 = 0.075`, `+0x1c..+0x24 = 1.0`, which
+the data below shows do not smooth `+0`; what they do is unread.
+
+`SoundSystem_InitBandAnalysis` (`0x00305c20`) builds them: `0x003062c8` computes the bounds on a
+cubic of the band index, `0x003063d0`..`0x00306560` writes the records through a pointer
+(`addi r21,r30,1556`, `stw r0,0(r25)`) and `0x00306878` writes a third block at `+0x61c`, one record
+over `0..511`. That is why the sweeps below never found the store: it is not displacement-addressed.
+Each block goes to a MultiStream call on bus `0x00080003` (`0x006798f8`, target `0x006186a0`). Name 72.
+The `+0` magnitudes have no PPU store, so the spectrum is presumably computed on an SPU. Confidence 70.
+
+Against RPCS3's own dump of the same audio, `+0` of bands 10, 11, 12 correlates `0.970`, `0.973`,
+`0.969` with the sum of magnitudes over the record's bins, 1024-point, no smoothing, one lag for all
+bands; `0.91`, `0.88`, `0.88` with a 5 ms attack and 75 ms release applied; `0.62` at best against any
+other band's bins. Sum and root-sum-square tie, Hann and sine windows tie (`0.970`, `0.973`), mid and
+single channels tie, so **those are chosen, not measured**: the port takes a sum, a Hann window and
+the mid. The update cadence reads at least 85 Hz through an 8 ms sample, which fits a hop of 512
+(94 Hz) and rejects a frame-rate update; **the hop is inferred**, confidence 70. Confidence 90 on the
+bin table, 85 on the sum of bins.
+
+**Before the slider.** With `cfg+0x1c` poked to `0`, the dump goes to digital silence (peak
+`5e-34`, 37 s) and the bands run on undisturbed: mean `0.23` against `0.26`, peaks still `1.0`,
+`SoundSystem_UpdateBandLevels` unchanged. So a player with Music Volume at zero still sees the pulse.
+Confidence 90. **That it is the music alone is not measured**: pressing left and right on Main Menu
+every 1.5 s for 46 s plays no sound at all (the dump against one loop earlier differs by `1.6e-7` rms),
+so no effect was heard to test against. What else is routed to `0x00080003` is unread.
+
+**Silence reads zero.** The Main Menu music is a 44.064 s loop with a gap at its seam. Band sources
+reach `0.0` there and before the music first starts, and the bands read `0`, measured on 2,321 samples
+of a run. **No output device is not silence**: RPCS3 with `Audio: Renderer: Null` went on reading live
+bands (2,786 samples, band mean reaching `0` and `1`), because the game mixes and analyses regardless.
+`Output::null` reading zero is therefore **chosen, not measured**: a headless run stays reproducible.
+
+**The normaliser's cadence differs and is left.** `+0x24` changes at the frame rate here (58 Hz), the records
+at 85 Hz or more; `Range` runs per spectrum. Stepping it per 60 Hz tick instead, offline, moves bands
+10-12's means to `0.202, 0.230, 0.222` from `0.198, 0.223, 0.207` (original `0.198, 0.254, 0.229`) and costs
+correlation, `0.897` from `0.933`, so it was not taken. The reader-side step stays open.
+
+`Mixer::music_tap` is `Bus::Music`, which here also carries a movie's sound and the pre-race voice.
+
+Replaying the same dump through `oag_audio::spectrum`, over 137 s: `r = 0.93, 0.92, 0.91` on bands
+10, 11, 12 and `0.74` to `0.91` elsewhere, means within `0.03` on those three.
+
+**Omega:** checked, differs: no `cellMS` string, a CRI `ACX Spectrum Meter` beside the same `FFT MUTEX` name, so
+its source is another library's and its bins are unread. **2048:** not checkable by census: NGS audio, its band source is
+untraced. `Spectrum` carries HD's table for every title until those are read; nothing but Zone reads it there.
 
 ## The layout: bars at 1-160, a smooth slot each at 161-176
 
@@ -271,6 +335,7 @@ original carries all of it or none.
 | `0x00307620` | function | `SoundSystem_OpenAudioPort` | 86 |
 | `0x0030a668` | function | `SoundSystem_StartMultiStream` | 80 |
 | `0x00b6cc90` | data | `g_sound_system` | 80 |
+| `0x00305c20` | function | `SoundSystem_InitBandAnalysis` | 72 |
 
 `g_sound_system` is named from `FUN_00304be8`'s `"Stereo"`/`"Surround"`
 branch on `+0xe8` and nothing else, which is why it sits at 80 rather than
@@ -313,9 +378,10 @@ in this executable at all**. Confidence **60** on that explanation - it is
 inference from four absences, not a positive trace - but confidence **85**
 that no PPU code here writes them, which is the part that bounds the work.
 
-The practical consequence: `oag_audio::spectrum::band_frequencies` is this
-project's own choice **permanently**, not a placeholder waiting on a read, and
-should stay labelled that way.
+**Refuted in part, 2026-11-05:** the frequencies are in this executable, computed by
+`SoundSystem_InitBandAnalysis` and visible in the live records; see "What a band measures". The
+sweeps missed the store because it goes through a pointer, and nobody read the records live. That no
+PPU code writes the magnitudes still stands.
 
 ## The init chain, mapped - and the buffers are not allocated in it
 
@@ -387,16 +453,11 @@ one speaker driven would settle it in one reading.
 
 ## Still open
 
-- **Where `+0x614`/`+0x618` are allocated and to whom they are handed.**
-  `SoundSystem_Shutdown` frees them, so something allocates them; neither
-  field context nor a displacement search finds it, and it is not in the
-  thread-creating init (`0x0030ac48`, 285 instructions, no `0x61x`
-  displacement anywhere). It is reached through a register chain. Finding
-  the call it is passed to would settle the middleware reading above one way
-  or the other.
+- **Where `SoundSystem_UpdateBandLevels` steps**, per frame or per spectrum: above.
+- **What `0x006186a0` is and what else reaches bus `0x00080003`**: the DSP behind the records, and
+  so whether anything but the music feeds the bands.
 - **What fills the triple-buffered 32-float block** at `+0x494`, behind the
-  mutex - the producer side of the cross-thread handoff, and the same
-  question in its second form.
+  mutex. It read all zero on Main Menu.
 - **What `lfs f0,0x4(r4)` is**, the fixed per-frame gain applied to every
   band before the hold.
 - **Which authored colour `r17` carries.** Assembled at `0x003db8f8` from

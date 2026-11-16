@@ -9,6 +9,7 @@
 //! they are drawn - kept out of `frame.rs` under the 1,000-line rule.
 
 use super::*;
+use crate::drawable::TrackCull;
 
 /// Which overlay a pass is over.
 #[derive(Clone, Copy)]
@@ -50,6 +51,7 @@ impl Scene {
     /// matrix, [`oag_fx::hull_overlay::tint`] of
     /// [`oag_fx::hull_overlay::alpha`], and
     /// the texture coordinates slid by [`oag_fx::hull_overlay::scroll`].
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn write_absorb_overlays(
         &self,
         race: &Race,
@@ -57,9 +59,20 @@ impl Scene {
         view_projection: Mat4,
         prev_vp: Mat4,
         prev: &motion::Snapshot,
+        block: ViewBlock,
+        cull: TrackCull<'_>,
         scratch: &mut Vec<mesh::GpuVertex>,
     ) {
-        self.write_shine(race, queue, view_projection, prev_vp, prev, scratch);
+        self.write_shine(
+            race,
+            queue,
+            view_projection,
+            prev_vp,
+            prev,
+            block,
+            cull,
+            scratch,
+        );
         for which in [Overlay::Absorb, Overlay::LeachBeam] {
             for (slot, overlay, pulse) in self.hull_overlays(race, which) {
                 overlay.write(
@@ -84,9 +97,10 @@ impl Scene {
     pub(super) fn draw_absorb_overlays<'a>(
         &'a self,
         race: &'a Race,
+        frustum: Option<&Frustum>,
         list: &mut super::record::DrawList<'a>,
     ) {
-        self.draw_shine(race, list);
+        self.draw_shine(race, frustum, list);
         for which in [Overlay::Absorb, Overlay::LeachBeam] {
             for (_, overlay, _) in self.hull_overlays(race, which) {
                 list.overlay(overlay);

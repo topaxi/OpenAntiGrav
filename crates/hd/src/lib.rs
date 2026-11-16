@@ -40,7 +40,7 @@
 //!   textures the HUD layouts sample - ten of them `.gtf`. Those are not a list
 //!   this crate composed either: they are read off the eighteen layouts, and all
 //!   twelve resolve to a shipped entry under the extension rule
-//!   [`hud::texture_entry`] states. No texture path outside the HUD's own set is
+//!   [`oag_assets::Archives::read_texture`] applies. No texture path outside the HUD's own set is
 //!   named.
 //!
 //! [`bik.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/bik.md
@@ -62,6 +62,7 @@ pub mod hud;
 pub mod loading;
 pub mod loyalty;
 pub mod main_menu;
+pub mod pause_menu;
 pub mod pre_race;
 pub mod prompts;
 pub mod psn;
@@ -71,7 +72,7 @@ pub mod race;
 pub const TITLE: &Title = &Title {
     name: "Wipeout HD",
     archives: ArchiveCandidates {
-        patch: &[],
+        patch: PATCH_CANDIDATES,
         data: DATA_CANDIDATES,
         fe: FE_CANDIDATES,
         extra: EXTRA_CANDIDATES,
@@ -85,6 +86,20 @@ pub const TITLE: &Title = &Title {
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
+    // `docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`.
+    eliminator: oag_title::pre_race::Sourced::measured(
+        oag_title::eliminator::EliminatorRule::Score(oag_title::eliminator::ScoreRule {
+            damage: 0.1,
+            kill: 20.0,
+            lap: 5.0,
+            death: 5.0,
+            race_setup: r"Data\Plugins\Frontend\Gui\racebox_definition.xml",
+        }),
+    ),
+    // `docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`: `5 pi` rad/s, read live.
+    eliminator_flip: oag_title::pre_race::Sourced::measured(Some(
+        oag_title::eliminator::FlipRule { seconds: 0.2 },
+    )),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,
@@ -123,6 +138,10 @@ pub const TITLE: &Title = &Title {
     // `{1.166, 0.033, 0, 1}` and `{1.656, 0.041, 0, 1}` on two pads of
     // `01_vineta_k`, whose material authors cyan. Every number below is read
     // out of the executable (`docs/rendering/pads.md`, "The red is a cycle").
+    wingtip: Some(&oag_title::wingtip::Wingtip::hd_lineage(
+        "/data/tex/smoke_trails_frame1_alpha.gtf",
+        oag_title::Origin::Measured,
+    )),
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Cycle(oag_title::weapon_pad::Cycle {
         // The 6 keyframes at `0x008c26a0`, 12 bytes each.
         keyframes: &[
@@ -155,7 +174,21 @@ pub const TITLE: &Title = &Title {
         ],
         // The literal at `0x0079bdd8` in `EBOOT.elf`.
         sprite: "/data/tex/engineflare/engine_flare_rich.gtf",
-        engine_light: true,
+        // Measured live: 40 records, all `(40, 10, 4) * (1 + 10 * blend)` on the Fury
+        // skin, `D` = `Radius` +- 0.1 (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`).
+        // HD has no 2048-era craft and no mag-strip branch; whether it calms its jitter
+        // by `1 - blend` is unread, so it does not.
+        engine_light: Some(&oag_title::flare::EngineLightLaw {
+            classic: oag_title::flare::Tint::HD_CLASSIC,
+            fury: oag_title::flare::Tint::HD_FURY,
+            era_2048: None,
+            mag_strip: None,
+            wander: oag_title::flare::Wander {
+                position: 0.1,
+                range: 0.1,
+                calmed_by_boost: false,
+            },
+        }),
         front_faces_only: true,
     }),
     // **The same file the soundtrack is declared in**, because on this title the
@@ -164,6 +197,24 @@ pub const TITLE: &Title = &Title {
     // [`names::FRONT_END_PLUGIN_DEFINITION`].
     // Measured: `PS_BUTTONS.fnt`'s three face-button glyphs - see `prompts`.
     prompts: prompts::PROMPTS,
+    profile: oag_title::profile::Profile::NAME_ONLY,
+    photo: oag_title::photo::Strings::HD,
+    photo_shot: Some(oag_title::photo::Accumulation::HD),
+    // HD's own recovery is unread; Pulse's law.
+    reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
+    contact_cues: oag_title::contact_cue::ContactCues::Impulse(
+        oag_title::pre_race::Sourced::measured(HD_IMPULSE_LAW),
+    ),
+    // HD's authored mix owns the buses.
+    effects_volume_law: oag_title::pre_race::Sourced::chosen(
+        oag_title::group_volume::GroupVolumeLaw::Linear,
+    ),
+    speech_volume_law: oag_title::pre_race::Sourced::chosen(
+        oag_title::group_volume::GroupVolumeLaw::Linear,
+    ),
+    speech_follows_effects: oag_title::pre_race::Sourced::chosen(false),
+    master_trim_db: oag_title::pre_race::Sourced::chosen(0.0),
+    rear_occlusion: Some(oag_title::pre_race::Sourced::measured("Stereo")),
     plugin_definition: names::FRONT_END_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),
@@ -172,6 +223,16 @@ pub const TITLE: &Title = &Title {
     // Built 2026-09-04: the craft render into a coverage map the track samples.
     original_shadows: oag_title::shadow::OriginalShadows::Built,
     weather: oag_title::weather::Weather::Unplayed,
+    // Measured, confidence 84: any non-zero small byte is full on (`docs/gameplay/rumble.md`).
+    rumble: oag_title::rumble::Rumble::Patterns(
+        oag_title::rumble::SmallMotor::OnOff,
+        oag_title::rumble::Triggers::Hd,
+    ),
+    // `demo_definition.xml` authors the any-press exit and no timer: the durations are Pulse's. `docs/ui/attract-demo.md`.
+    demo: oag_title::demo::Demo::inheriting(
+        "Pulse",
+        oag_title::pre_race::Sourced::measured(oag_title::demo::Exit::AnyInput),
+    ),
     // **Pulse's two names, and HD answers them.** `Data\XML\WeaponStats_Race.xml`
     // resolves in `DATA00.PSARC` through the same path normalisation every other
     // HD entry goes through, and parses with thirteen weapons and four pickup
@@ -184,13 +245,15 @@ pub const TITLE: &Title = &Title {
         // `Data\XML\WeaponAIstats.xml` is in `DATA00.PSARC` (searched
         // 2026-10-03) and carries Pulse's thirteen element names (with its
         // own values) plus an `AllWeapons` row and an `EliminatorAIStats` row,
-        // both parsed and neither consumed; `DATA02`'s base-game copy has
-        // neither. The
-        // opponents run Pulse's fire law on these odds: the law is **inherited
-        // from Pulse, unmeasured on HD** - HD's own decision code is unread.
+        // both consumed by `opponent_fire`; `DATA02`'s base-game copy has
+        // neither.
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Read off HD's own EBOOT: one transfer per ball trip.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
+        blast_push: oag_title::pre_race::Sourced::chosen(oag_title::weapons::BlastPush::Immediate),
+        // **Chosen, not measured**: HD measures one (`LeachBeamManager_Fire`, `weapon-instance-limits.md`);
+        // it takes 2048's and Omega's eight as an intended divergence (maintainer, 2026-10-31).
+        leach_beams: oag_title::pre_race::Sourced::chosen(8),
         // Pulse's law, inherited: HD's `Quake_UpdateSpan` uses Pulse's span record and constants; its gate is unread.
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
@@ -200,6 +263,24 @@ pub const TITLE: &Title = &Title {
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::measured(true),
         // Pulse's law, inherited: HD's pad grant is unread.
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout Pulse"),
+        // Run on RPCS3: no stamp in five Eliminator runs, `0.75` in a Single Race on the same
+        // instrument (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title"). Fury is
+        // the same disc and file.
+        pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(false),
+        // Read statically off HD's `Rocket_Init` (`0x00124d90`) and its siblings, confidence 86:
+        // `ps3-hdfury-eu/projectile-launch-normal.md`.
+        launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
+        // Pulse's arms are measured; this title's own are unread.
+        floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
+        // Read statically off `Plasma_Launch` (`0x0011f810`) and measured live on RPCS3:
+        // `ps3-hdfury-eu/plasma.md`, "Measured live".
+        plasma_release_at_display_scale: oag_title::pre_race::Sourced::measured(false),
+        // A box branch is read, but its surface filter and row sign are open, 65
+        // (`ps3-hdfury-eu/own-craft-box.md`).
+        own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::OwnCraftBox::PlasmaWindow,
+        ),
+        opponent_fire: oag_title::pre_race::Sourced::measured(oag_title::weapons::OpponentFire::HD),
     },
     weapon_models: race::WEAPON_MODELS,
     effects: effects::EFFECTS,
@@ -207,6 +288,7 @@ pub const TITLE: &Title = &Title {
     // Measured: `docs/ui/campaign-screens.md`'s HD section. The
     // `Campaign Selection` ids are in `DATA06`'s entries copy alone.
     main_menu: main_menu::MAIN_MENU,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Hd,
         definition_entry: Some(campaign::DEFINITION_ENTRY),
@@ -216,16 +298,22 @@ pub const TITLE: &Title = &Title {
         main_row: None,
         circuit_unlocks: false,
         loyalty_unlocks: false,
-        // Not wired, not measured absent: HD's unlock rows are unread here.
+        model_unlocks: Some(campaign::DEFINITION_ENTRY),
+        // The `PI_TeamModel` rows are read (`model_unlocks`); the circuit and team rows are not.
         unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: true,
         screen_archive: Some(campaign::SELECTION_SCREEN_ARCHIVE),
         grid_archive: Some(campaign::GRID_ARCHIVE),
         fury_card_gain: None,
         grid_card_pose: None,
+        selection_card_scale: None,
+        medal_tier_rows: None,
+        // `PI_Cell_EvaluateMedalForValue` (`0x001e1028`) flips modes 6 and 14 only; Elimination is a place.
+        counting_modes: &["Zone", "Detonator"],
         frontend_glow: None,
         origin: oag_title::Origin::Measured,
         custom_campaigns: true,
+        event_track_dir: None,
     },
     pressings: None,
     pre_race: Some(&pre_race::PRE_RACE),
@@ -247,14 +335,52 @@ pub const TITLE: &Title = &Title {
         zone_shares_one_texture: true,
         gantry_card: true,
         adverts_unlit: true,
-        card_565: true,
+        card_store: oag_title::adverts::CardStore::R5G6B5Linear,
         card_unlit: true,
-        zone_gantry: Some(oag_title::adverts::ZoneGantry {
-            entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
-            assembly_ticks: 210,
-        }),
+        gantry_boards: None,
+        // Detonator's board is the one copy `DATA00` ships, Omega's mode-`0xe` name
+        // (`docs/ghidra/functions/ps4-omega-eu/billboards.md`); its assembly ticks are
+        // Zone's, chosen, not measured.
+        mode_gantries: &[
+            oag_title::adverts::ModeGantry {
+                mode: oag_title::adverts::GantryMode::Zone,
+                entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
+                assembly_ticks: 210,
+            },
+            oag_title::adverts::ModeGantry {
+                mode: oag_title::adverts::GantryMode::Detonator,
+                entry: "/Data/Billboards/HD_Adverts/321Go/321go_hd_detonator.vex",
+                assembly_ticks: 210,
+            },
+        ],
         origin: oag_title::Origin::Measured,
     }),
+};
+
+/// HD's collision and grind cue law: the floors, steps, re-arms and volumes
+/// `Ship_UpdateCollisionCues` (`0x000d8bd0`) reads
+/// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "`Ship_UpdateCollisionCues`").
+pub const HD_IMPULSE_LAW: oag_title::contact_cue::ImpulseLaw = oag_title::contact_cue::ImpulseLaw {
+    // The original compares `acosf(|dot|) < 0.7` rad. `acos` is decreasing, so that is
+    // `|dot| > cos(0.7)`, and `cos(0.7) = 0.7648421872844885`.
+    nose_on_dot: 0.764_842_2,
+    hit_floor: 3.0,
+    hit_floor_side: 18.0,
+    hit_medium: 25.0,
+    hit_large: 50.0,
+    hit_wait: 6,
+    // The TOC float `0x3d124925`.
+    hit_volume_per_impulse: 1.0 / 28.0,
+    hit_volume_base: 0.2,
+    grind_floor: 0.5,
+    grind_medium: 4.0,
+    grind_large: 8.0,
+    grind_wait: 1,
+    grind_volume_per_impulse: 0.125,
+    grind_volume_base: 0.25,
+    // Held back until the wall contact's dwell and chatter are the original's (collision-cues.md,
+    // "Grind held back").
+    grind_played: false,
 };
 
 /// Where Wipeout HD keeps its music.
@@ -297,6 +423,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
     // `RaceManager_UpdateCountdown` ends in `MusicManager_ClearHold`, and the authored mix's
     // `PreRace` and `Countdown` rows have music at 0.0: the song sounds from the release
     // (`docs/ghidra/functions/ps3-hdfury-eu/now-playing.md`, "When the song starts").
+    spectrum_extension: None,
     race_song_start: oag_title::pre_race::Sourced::measured(
         oag_title::race_song::RaceSongStart::AtGo,
     ),
@@ -583,6 +710,18 @@ const DATA_CANDIDATES: &[(&str, Platform)] = &[
 /// [`EXTRA_CANDIDATES`] and all of them mount.
 const FE_CANDIDATES: &[(&str, Platform)] = &[("USRDIR/DATA02.PSARC", Platform::Ps3)];
 
+/// Sony's update chain, on neither pressing's base: `data07` from 02.10 and
+/// `data08` from 02.30 on. Listed `data08` first, ahead of every base archive.
+///
+/// Read off 02.51's loader: everything but `data00`, `data07` and `data08` in
+/// sorted order, then `data00` and `data07`, then `data08` alone, later loads
+/// winning. So `data08` beats `data07` and both beat `DATA00`.
+/// `docs/ghidra/functions/ps3-hdfury-eu/update-0251.md`, "Archive load order".
+const PATCH_CANDIDATES: &[(&str, Platform)] = &[
+    ("USRDIR/DATA08.PSARC", Platform::Ps3),
+    ("USRDIR/DATA07.PSARC", Platform::Ps3),
+];
+
 /// The remaining archives, all mounted.
 ///
 /// `DATA03` is here for the disc and is also [`DATA_CANDIDATES`]' fallback for a
@@ -639,6 +778,17 @@ const FOREIGN_SERIALS: &[ForeignSerial] = &[
 /// Propagates [`Archives::open`].
 pub fn open(source: &str) -> Result<Archives> {
     Archives::open(source, TITLE)
+}
+
+/// As [`open`], with the update folder among `updates` that belongs to `source`
+/// mounted over a disc. A PSN install carries its updates in place and [`open`]
+/// finds them there.
+///
+/// # Errors
+///
+/// As [`open`].
+pub fn open_updated(source: &str, updates: &[oag_assets::UpdateFolder]) -> Result<Archives> {
+    Archives::open_updated(source, TITLE, updates)
 }
 
 /// Which of the two HD [`Title`]s `archives` is: [`psn::PSN`] when the bulk

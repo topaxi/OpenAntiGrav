@@ -118,6 +118,14 @@ driver and the weapon AIs. HD's and 2048's pre-increment. The once-a-race shuffl
 
 ## `AI_UpdateCraft` (`0x012c0480`)
 
+**The contact push's kind test is inherited, not read** (2026-11-11). Pulse, HD and 2048
+push a lane only off kind-`1` (craft-to-craft) records; here the loop is inlined in this
+function, and in the v107 import `0x012c0480` falls inside `FUN_012bfce0` (other function
+boundaries than the ones this page was read against), so the loop was not located. Wired with
+2048's and HD's law (`docs/gameplay/ai.md`, "The two rules"). Recipe: find the walk over the
+body's contact records (stride and count as 2048's, 8-byte pointers aside) and its compare
+against `1`.
+
 About 3,400 lines of decompile: 2048's `AI_UpdateCraft` with `Ai_PlanLane`,
 `AI_ComputeControls`, the rail and the pitch inlined (HD's `FUN_012c0480` reading, made on
 the HD page, is this function). The lineage byte is read at nine sites:

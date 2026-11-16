@@ -58,6 +58,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // color="FEGlobals->HD_Grey">`.
     title_font: Some("Title"),
     body_font: None,
+    stats_font: None,
     default_face_is_row_face: true,
     // Not authored, on HD's own terms: Omega's main menu is the same
     // `<HorizMenu>` idiom HD's is (see `strip` below), so there is no
@@ -206,6 +207,34 @@ const CIRCUIT_MODELS: [oag_title::CircuitModel; 26] = {
     ]
 };
 
+/// The touch vocabulary Omega keeps: 2048's campaign map and nothing else of
+/// the Vita shell (no `GameModeChoice`, `Home` or `team` screen ships).
+///
+/// The map screen is `Cell Selection 2048` in `Campaign2048_Definition.xml`,
+/// read by its own entry because `Skin.xml` does not include it
+/// (`docs/formats/omega-frontend.md`, "The campaign-map content"). Its canvas
+/// labels equal 2048's name for name and cell for cell
+/// (`omega_2048_map_ground_truth`).
+pub const TOUCH: &oag_title::TouchFrontEnd = &oag_title::TouchFrontEnd {
+    game_mode_choice: &[],
+    home: &[],
+    team_screen: None,
+    team_model_origin: None,
+    canvas_screen: "Cell Selection 2048",
+    canvas_definition: Some(r"Data\Plugins\Frontend\Gui\Campaign2048_Definition.xml"),
+    // The same atlas name 2048 ships, as `.gnf`; the case is the archive's.
+    canvas_texture: r"Data\FE\NewImages\canvasTexture.gnf",
+    // **Chosen, not measured:** 2048's projection (`oag_2048::campaign::tier::MAP`,
+    // read off the Vita executable), used on Omega because Omega's `SP.xml`
+    // events and canvas labels carry 2048's cells (`omega_2048_map_ground_truth`);
+    // no Omega executable readout of the quad exists.
+    map_nodes: oag_title::NodeMap {
+        scale: (4, 2),
+        bias: (55, 25),
+        group_offsets: &[(0, 0)],
+    },
+};
+
 /// Omega's front end: the layout it authors and the boot order it takes.
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
@@ -215,9 +244,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     assumed_release: Some("CUSA-05670"),
     menu: Some(MENU_SKIN),
     menu_ps2: None,
-    // Omega authors HD's `FEGlobals`/`<HorizMenu>` vocabulary, not 2048's
-    // touch-icon idiom.
-    touch: None,
+    // HD's `FEGlobals`/`<HorizMenu>` vocabulary is the front end; `touch` is
+    // only the 2048 campaign map the chooser hands off to.
+    touch: Some(TOUCH),
     boot: BOOT,
     menu_frame: Some(states::FE_SCREEN),
     // The eight `.gnf` that are HD's `.gtf` bytes in HD's own row order,
@@ -234,6 +263,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         "line",
         "unlocked_corner",
     ],
+    runtime_palette_faces: false,
     // See this module's own "What is not here" section.
     race_box: None,
     // Omega's own `Team Selection`, `Team Selection Player 1` and `Player 2` (`data09`), HD's
@@ -244,6 +274,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
     track_label_overrides: &[],
+    card_track_aliases: &[],
     track_record_empty: "-",
     track_distance_authored: false,
     preview_meshes: false,
@@ -259,6 +290,16 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         z: -24.0,
         from: "Wipeout HD",
     }),
+    // Omega's own screen update keeps HD's depth fit and poses the craft on other
+    // rest angles and a blended position this build has not followed
+    // (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "Omega"), so
+    // HD's camera is not borrowed and the pose above stays.
+    ship_preview_fit: None,
+    // **Inherited from HD.** Omega's update eases the same depth targets without resetting
+    // them on a step (`FUN_015a3b80`), so a step plays HD's law on the borrowed pose; its own
+    // rates and the fit's constants are not read there, and are HD's
+    // (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "Omega").
+    ship_preview_settle: Some(oag_hd::frontend::SHIP_FIT),
     circuit_models: &CIRCUIT_MODELS,
     // `EndRace_Definition.xml` is in `data09.psarc` at HD's own path, and
     // dispatching Omega through HD's reader (`oag_game::endrace::load_hd`)
@@ -269,7 +310,20 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     endrace_entry: None,
     endrace_style: None,
     borrows_ps2_split_screens: false,
+    model_lighting: Some(oag_title::ModelLighting {
+        fury_file: OMEGA_MODEL_LIGHT,
+        hd_file: OMEGA_MODEL_LIGHT,
+        ps4: true,
+        tone: None,
+    }),
 };
+
+/// The file Omega's front end lights its models with. Omega always runs the HD style, so the
+/// one file serves both; its path and its keys are read from the package, **the loader that
+/// picks it is not traced** (`docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`,
+/// "Omega"). No tone stage: Omega's is its own `Tonemap` and its front end's adaptation is
+/// unread.
+pub const OMEGA_MODEL_LIGHT: &str = "data/fe/fe.EnvSettings";
 
 /// Screen names, spelled exactly as `data09.psarc`'s `skin.xml` spells them -
 /// confirmed identical to HD's own spellings for every one of these eight,

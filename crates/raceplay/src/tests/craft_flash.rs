@@ -20,6 +20,24 @@ fn drawn(race: &mut Race) -> Option<[f32; 4]> {
     flash.colour()
 }
 
+/// The view through a portal pair is the world at the exit: the viewer's wash is drawn
+/// over the view the portal is in, once, and never into the portal's own picture.
+#[test]
+fn the_view_through_a_portal_wears_no_wash() {
+    let mut race = with_flash();
+    race.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
+    race.advance_craft_flashes();
+    race.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
+    race.advance_craft_flashes();
+    let at = race.sim.world.ships[0].physics.body.position;
+    race.view.screen_flash.as_mut().unwrap().advance(DT, at);
+    assert!(race.screen_wash().is_some(), "the player's own view");
+    race.set_portal_camera(Some(oag_core::math::Mat4::IDENTITY));
+    assert_eq!(race.screen_wash(), None, "through the portal");
+    race.set_portal_camera(None);
+    assert!(race.screen_wash().is_some(), "and back");
+}
+
 /// The explosion ending starts the yellow kind-0 wash, and only then - for
 /// the player as for an opponent, now that the destroy camera is the active
 /// camera the wash's falloff is measured from.

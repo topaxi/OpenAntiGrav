@@ -30,7 +30,7 @@ use endrace_page::endrace_kind;
 pub use loading::{LoadingOptions, draw_wave, loading};
 use menu_page::{is_split_ship, menu_page, picker_kind, picker_page, picker_stills};
 use offscreen::{offscreen, touch_preview};
-pub use offscreen::{read_back, write_png};
+pub use offscreen::{read_back, write_png, write_png_with};
 use preview_pass::{PreviewRequest, draw_preview, open_for_previews};
 
 /// What to capture.
@@ -82,6 +82,8 @@ pub struct Options {
     pub pressed: u32,
     /// `--press-until-reached`: `pressed` stops once the `--until` state is current.
     pub press_until_reached: bool,
+    /// `--map-presses`: one entry per press, as a button mask.
+    pub map_presses: Vec<u32>,
     /// Which control scheme the race this hands off to is driven with.
     pub scheme: oag_gameplay::ControlScheme,
     /// Print exits as well as entries.
@@ -152,6 +154,10 @@ pub struct Options {
     /// own animation time - see the CLI flag's own docs. `None` takes
     /// `menu_picker_seconds`.
     pub menu_model_seconds: Option<f32>,
+    /// With `--menu-page`, the frame of the menu backdrop movie to draw, wrapped
+    /// to the movie's length - see the CLI flag's own docs. `None` draws frame
+    /// zero.
+    pub menu_movie_frame: Option<usize>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
     ///
@@ -238,6 +244,8 @@ pub fn run(
         face_scales,
         ..
     } = loaded;
+    let nav_legend = nav_legend
+        .map(|legend| legend.with_tag(options.settings.player.footer_tag(&loaded.title.profile)));
 
     // Checked before anything is printed or stepped: a name that matches
     // nothing would otherwise draw the backdrop and nothing else, which looks
@@ -304,7 +312,7 @@ pub fn run(
     // `--screen` and `--menu-page` both draw one thing and nothing else, so the
     // sequence is not run at all: stepping it would only move the state machine
     // somewhere the capture then ignores.
-    let mut card = card::CardTarget::parse(options.until.as_deref());
+    let mut card = card::CardTarget::parse(options.until.as_deref(), &options.map_presses);
     while options.screen.is_none() && options.menu_page.is_none() {
         // `Launch Game` ends the front end's leg whatever `until` and `ticks` say,
         // so the ticks they asked for are spent on the race rather than on a state
@@ -347,6 +355,7 @@ pub fn run(
         // the sound had got to at the end of the previous tick - the last
         // moment it is a measurement rather than a prediction. See
         // `movie::Player::follow`.
+        frontend.set_music_levels(audio.music_levels());
         let events = frontend.update(dt, &mut input, audio.movie_playhead());
         // Every entered screen offered its own movie's track, the same handover
         // `App::tick` does.
@@ -446,12 +455,10 @@ pub fn run(
         // Read-only, off whatever `<config dir>/oag/records.toml` already holds - see
         // `crate::race_capture::CaptureOptions::previous_best`'s own doc for why.
         let previous_best = crate::records::load()
-            .get(&crate::records::Key::new(
+            .get(&crate::records::Key::raced(
                 loaded.title.name,
-                race_options
-                    .track
-                    .as_deref()
-                    .or(Some(loaded.title.race.track)),
+                race_options.track.as_deref(),
+                &loaded.circuit,
                 loaded.setup.mode.name(),
                 &loaded.setup.class,
             ))
@@ -459,6 +466,7 @@ pub fn run(
         return crate::race_capture::capture(
             loaded,
             &crate::race_capture::CaptureOptions {
+                shot: crate::shot_meta::Context::default(),
                 gpu: None,
                 aspect: options.settings.display.aspect,
                 path: options.path.clone(),
@@ -467,6 +475,8 @@ pub fn run(
                 pressed: options.pressed,
                 input_script: None,
                 autopilot: options.autopilot,
+                demo: false,
+                wallpaper: false,
                 pilot_assist: options.pilot_assist,
                 autopilot_pilot: options.autopilot_pilot,
                 autopilot_skill: options.autopilot_skill,
@@ -477,6 +487,7 @@ pub fn run(
                 force_shake: None,
                 force_boost_kick: None,
                 intro_ticks: 0,
+                music_discs: options.music_discs.clone(),
                 force_wreck: None,
                 force_hit: None,
                 force_wall_slide: None,
@@ -511,10 +522,16 @@ pub fn run(
                 hud_scale: options.settings.graphics.hud_scale,
                 hud_safe_area: options.settings.graphics.hud_safe_area,
                 dynamic_hud: options.settings.display.dynamic_hud,
+                // The front-end capture path races nothing.
+                ghost_visible: true,
+                player_tags: false,
+                player: crate::settings::Player::default(),
                 shadows: render_profile.shadows,
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,
                 trail_order: render_profile.trail_order,
+                scenery_sort: render_profile.scenery_sort,
+                trail_length: render_profile.trail_length,
                 weather: render_profile.weather,
                 hull_shake: true,
                 // The front-end capture path never poses a ship, so there is
@@ -522,8 +539,9 @@ pub fn run(
                 pose_boost: None,
                 pose_intensity: None,
                 pose_speed: None,
-                pose_hold: false,
+                pose_hold: crate::race_capture::pose_hold::Hold::Off,
                 pose_lean: None,
+                field_lean: Vec::new(),
                 field_warmup: None,
                 pose_sparks: Vec::new(),
                 presented: options.presented.then_some(crate::race_capture::Presented {
@@ -561,8 +579,9 @@ pub fn run(
     // showing what a player would see - which is exactly what this module exists
     // not to do.
     //
-    // Frame zero and not a moving one: a capture is one picture, and there is
-    // nothing here for a playhead to be advanced by.
+    // One frame and not a moving one, `--menu-movie-frame`'s or else the first: a
+    // capture is one picture, and there is nothing here for a playhead to be
+    // advanced by.
     // The grid the chosen list's rects are in - the source's, on all three
     // paths. `--menu-page` used to pin `Space::PSP` here on the grounds that
     // this project's menu layout is authored at 480x272; that is still where the
@@ -594,10 +613,12 @@ pub fn run(
             let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
             let frame = showing.map(|movie| oag_ui::menu::Backdrop {
                 rect: oag_display::space::pillarbox_in(space, movie.display_aspect),
-                frame: 0,
-                // Position zero with the frame, there being no playhead here to
-                // have got anywhere: a capture reads the frame straight out of
-                // the `FrameStore` rather than off a `Feed`.
+                frame: movie.frames.as_ref().map_or(0, |frames| {
+                    video::still_frame(options.menu_movie_frame, frames.len)
+                }),
+                // Position zero whatever the frame, there being no playhead here
+                // to have got anywhere: a capture reads the frame straight out
+                // of the `FrameStore` rather than off a `Feed`.
                 position: 0,
             });
             let format = showing.and_then(VideoFormat::of);
@@ -670,6 +691,12 @@ pub fn run(
                     }
                     _ => None,
                 };
+                // The live screen's model gate, off the same source (`unlock::ModelGate`).
+                let model_gate = archives
+                    .as_mut()
+                    .map_or_else(crate::unlock::ModelGate::none, |archives| {
+                        crate::unlock::ModelGate::read(title, archives)
+                    });
                 let (stills, mode3d_model) = picker_stills(
                     kind,
                     &options.settings,
@@ -692,6 +719,7 @@ pub fn run(
                     title,
                     &tracks,
                     &teams,
+                    &model_gate,
                     &strings,
                     frame,
                     &skin,
@@ -722,6 +750,7 @@ pub fn run(
                         title,
                         &tracks,
                         &teams,
+                        &model_gate,
                         &strings,
                         None,
                         &skin,
@@ -741,6 +770,7 @@ pub fn run(
                         title,
                         &tracks,
                         &teams,
+                        &model_gate,
                         &strings,
                         None,
                         &skin,
@@ -1112,6 +1142,15 @@ pub fn run(
     }
     if let Some(assets) = &fury_backdrop {
         assets.install(&mut renderer, &device, &queue);
+        if let Some(page) = &options.menu_page {
+            assets.settle(
+                &mut renderer,
+                (&device, &queue),
+                page,
+                oag_display::display::viewport((width, height), options.settings.display.aspect),
+                (options.anim_seconds, options.fury_path),
+            );
+        }
     }
     // Both glyph slots, as the live window loads them (`boot::fonts::install_faces`),
     // whether or not this run's draw list ever reaches a menu: a menu-page
@@ -1186,21 +1225,26 @@ pub fn run(
             oag_display::display::viewport((width, height), options.settings.display.aspect),
             (width, height),
             space,
+            title,
             race,
             &request,
             options.anisotropy,
+            renderer.inset(),
         );
     }
-    if let (Some(race), Some(craft), Some(touch)) = (
+    if let (Some(race), Some(craft), Some(origin)) = (
         &options.race,
         frontend.team_hull(),
-        title.front_end.and_then(|front_end| front_end.touch),
+        title
+            .front_end
+            .and_then(|front_end| front_end.touch)
+            .and_then(|touch| touch.team_model_origin),
     ) {
         crate::team_hull::TeamHull::new(
             race.source.clone(),
             race.dlc.clone(),
             title.race.ship_dir,
-            touch.team_model_origin,
+            origin,
         )
         .draw(
             &device,

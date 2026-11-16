@@ -398,3 +398,41 @@ fn the_ubermall_prelit_lines_lightmap_prelit_printed() {
         ],
     );
 }
+
+/// `2048_shipshield_old`'s Lightning layer is three literals of its pixel program (`A = 3`,
+/// `B = 0.8`, `C = 0.16`, `docs/ghidra/functions/ps4-omega-eu/shield.md`, "The Lightning
+/// layer"), found by data flow in every one of its seven Lightning pixel variants whatever order
+/// the compiler scheduled them in, and the packed coordinate attribute's hash is the name the
+/// vertex program declares.
+#[test]
+#[ignore = "needs the Omega extraction"]
+fn the_shipshield_programs_carry_the_lightning_rates_in_every_variant() {
+    let Some(path) = path("omega-eu/uroot/data00.psarc") else {
+        return;
+    };
+    let mut archive = oag_assets::psarc::Archive::open_file(&path).expect("the archive opens");
+    let bytes = archive
+        .read_path("data/art/published/ships/materials/2048_shipshield_old.rcsmaterial")
+        .expect("the material reads");
+    let expected = gcn::LightningRates {
+        diffuse_scroll: 3.0,
+        noise_scale: 0.8,
+        noise_rate: f32::from_bits(0x3e23_d70b),
+    };
+    assert_eq!(gcn::lightning_rates(&bytes), Some(expected));
+    let variants: Vec<_> = gcn::scan(&bytes)
+        .into_iter()
+        .filter_map(|(_, p)| p.ok())
+        .filter(|p| p.lightning_rates().is_some())
+        .collect();
+    assert_eq!(variants.len(), 7, "the seven Lightning pixel variants");
+    assert!(
+        variants
+            .iter()
+            .all(|p| p.lightning_rates() == Some(expected))
+    );
+    assert_eq!(
+        oag_rcs::rcsmaterial::name_hash("Uv1_Uv2"),
+        oag_rcs::rcsmodel::psp2::vertex_decl::UV1_UV2_HASH
+    );
+}

@@ -430,6 +430,27 @@ impl Output {
         f(&mut mixer)
     }
 
+    /// Starts building the HRTF convolver on its own thread if the mixer has
+    /// none and nobody is building one; it is installed when ready, and until
+    /// then `headphones` sounds as the rear cue. See
+    /// [`SpatialMode::Headphones`](crate::SpatialMode::Headphones).
+    pub fn ensure_binaural(&self) {
+        let rate = self.sample_rate;
+        if !self.with_mixer(Mixer::request_binaural) {
+            return;
+        }
+        let mixer = Arc::clone(&self.mixer);
+        // Detached: the result lands in the mixer, nobody polls for it.
+        let _ = oag_thread::Task::spawn("oag-binaural", move || {
+            let built = crate::binaural::Binaural::new(rate)
+                .inspect_err(|why| log::error!("headphones: {why:#}"))
+                .ok();
+            if let Ok(mut mixer) = oag_thread::lock(&mixer) {
+                mixer.set_binaural(built);
+            }
+        });
+    }
+
     /// Renders one tick's audio into `out`, for the offline dump.
     ///
     /// Only meaningful on a null backend: with a device attached the callback

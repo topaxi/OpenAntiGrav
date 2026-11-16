@@ -468,6 +468,101 @@ fn wipeout_hd_s_speed_class_announcer_decodes_all_fourteen_cues() {
         says("MR_SUZ (stage 11) -> 2 waveform(s)"),
         "the once-silent class stopped decoding both its waveforms"
     );
+
+    // The banks are the copies a Zone race has loaded (Fury's DATA00): the env
+    // bank is the 67-cue one that names `light_wipe` and not `ZONEBAR_TRANS`,
+    // the speech bank the 43-cue one the `MR_*` lines sit in.
+    let tone = opened.title.race.zone_class_announcer.and_then(|t| t.tone);
+    let tone = tone.expect("HD names a class-step tone");
+    assert_eq!(tone.cue, "light_wipe", "plain Zone's step tone");
+    let env = archives.read_name(tone.bank).expect("env0_zone.bnk reads");
+    let env = oag_formats::sblk::Bank::parse(&env).expect("env0_zone.bnk decodes");
+    assert!(env.cue_named("light_wipe").is_some(), "the live env bank");
+    assert!(
+        env.cue_named("ZONEBAR_TRANS").is_none(),
+        "the live env bank is not the DATA01 copy"
+    );
+
+    let table = opened
+        .title
+        .race
+        .zone_class_announcer
+        .expect("HD names a class announcer");
+    let speech = archives
+        .read_name(table.bank)
+        .expect("speech_zone.bnk reads");
+    let speech = oag_formats::sblk::Bank::parse(&speech).expect("speech_zone.bnk decodes");
+    assert_eq!(
+        speech.cue_count, 43,
+        "DATA00's speech_zone.bnk, not DATA01's 42"
+    );
+
+    // `light_wipe` through its timeline: the `0x24` goto skips the first six
+    // key-ons, six voices are left (cmds 117-122), five on tick 0 and one 10
+    // ticks (1/24 s) later, none of them one of the skipped six.
+    let tone = announcer.tone_voices(&mut rng).expect("light_wipe builds");
+    assert_eq!(tone.len(), 6, "light_wipe's live voice set: {tone:?}");
+    let delays: Vec<f64> = tone.iter().map(|v| v.delay).collect();
+    assert_eq!(delays[..5], [0.0; 5], "five voices on the first tick");
+    assert!((delays[5] - 10.0 / 240.0).abs() < 1e-9, "{delays:?}");
+    let mut angles: Vec<i32> = tone.iter().map(|v| v.angle).collect();
+    angles.sort_unstable();
+    assert_eq!(angles, [30, 30, 140, 150, 210, 220]);
+
+    // The class line is `speech_zone`'s timeline, not a flat waveform: a
+    // 200 tick lead-in (a delay word and a `0x1a` 0), then two voices on one
+    // tick at +30 and +330 degrees.
+    for stage in 1..=14 {
+        let line = announcer.line_voices(stage, &mut rng).expect("a line");
+        // Each pair (a clip at +30 and again at +330) is one stereo voice; the
+        // three last classes layer two clips.
+        assert_eq!(line.len(), if stage <= 11 { 2 } else { 4 }, "stage {stage}");
+        assert!(
+            line.iter()
+                .all(|v| (v.delay - 200.0 / 240.0).abs() < 1e-9 && matches!(v.angle, 30 | 330)),
+            "stage {stage}: {line:?}"
+        );
+    }
+    let line = announcer.line_voices(2, &mut rng).expect("MR_VEN builds");
+    assert_eq!(line.len(), 2, "MR_VEN's two voices: {line:?}");
+    for voice in &line {
+        assert!((voice.delay - 200.0 / 240.0).abs() < 1e-9, "{line:?}");
+    }
+    let mut angles: Vec<i32> = line.iter().map(|v| v.angle).collect();
+    angles.sort_unstable();
+    assert_eq!(angles, [30, 330]);
+}
+
+/// Plain Wipeout HD (the PSN install) ships one copy of each bank, `DATA01`'s,
+/// and the resolver reaches it by the same name: its `env0_zone.bnk` names
+/// `light_wipe` (and `ZONEBAR_TRANS`), so the class step plays the same tone
+/// and the same fourteen lines there. Whether plain HD's executable keys them
+/// at a plain-Zone step was not run.
+#[test]
+#[ignore = "needs the installed PSN download in data/extracted/ps3/"]
+fn plain_hd_s_class_step_resolves_light_wipe_and_the_fourteen_lines_from_its_one_copy() {
+    let Some(dir) = oag_testdata::exact("data/extracted/ps3/hd-psn-eu") else {
+        return;
+    };
+    let mut archives = oag_hd::open(&dir.display().to_string()).expect("HD PSN opens");
+    let announcer = oag_sound::sfx::ClassAnnouncer::load(
+        &mut archives,
+        oag_hd::TITLE.race.zone_class_announcer,
+    );
+    for line in &announcer.report {
+        println!("{line}");
+    }
+    let mut rng = oag_core::Rng::new(3);
+    assert!(
+        announcer.tone_voices(&mut rng).is_some(),
+        "light_wipe did not build from plain HD's one env0_zone.bnk"
+    );
+    for stage in 1..=14 {
+        assert!(
+            announcer.line_voices(stage, &mut rng).is_some(),
+            "stage {stage}"
+        );
+    }
 }
 
 #[test]
@@ -559,6 +654,37 @@ fn the_decoded_cues_are_audio_and_not_silence() {
             "{} rendered at {peak:.3}, above full scale",
             cue.name()
         );
+    }
+    slipstream_is_no_louder_than_the_turbo_cue(&banks);
+}
+
+/// The official mod Slipstream's three sounds, through the same mixer, peak below the
+/// quietest of the Turbo cue's alternates and not clipping: a mod's placeholder must not
+/// be the loudest thing in a race. Skipped without the official-mods submodule.
+fn slipstream_is_no_louder_than_the_turbo_cue(banks: &Banks) {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/mods/official/slipstream");
+    if !root.join("oag-mod.toml").is_file() {
+        eprintln!("slipstream: the official-mods submodule is not checked out; skipped");
+        return;
+    }
+    let module = oag_mod::Mod::open(&root).expect("the mod opens");
+    let mut rng = oag_core::Rng::new(3);
+    let turbo = (0..16)
+        .map(|_| render(banks.pick(Cue::Turbo, &mut rng).expect("turbo").0).0)
+        .fold(f32::MAX, f32::min);
+    for (name, path) in &module.manifest.sounds {
+        let bytes = module.read(path).unwrap().expect("in the mod");
+        let sound = std::sync::Arc::new(oag_audio::wav::decode(&bytes).expect("decodes"));
+        let (peak, rms) = render(sound);
+        println!(
+            "slipstream {name:<12} peak {peak:.3}  rms {rms:.4}  (Turbo's quietest peak {turbo:.3})"
+        );
+        assert!(peak > 0.01, "{name} rendered silence");
+        assert!(
+            peak < turbo,
+            "{name} peaks at {peak:.3}, over the Turbo cue's {turbo:.3}"
+        );
+        assert!(peak < 1.0, "{name} clips");
     }
 }
 
@@ -790,6 +916,10 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
         oag_audio::MIN_BUFFER,
         false,
     );
+    // The limiter's gain is stereo linked, so it cannot move a pan. It is off
+    // here because the ambience is subtracted between two renders below, and
+    // two renders do not share a limiter gain.
+    audio.output().with_mixer(|mixer| mixer.set_limiting(false));
     for _ in 0..120 {
         race.tick(&PlayerInputs::none());
         oag_game::sound::race_tick(&mut audio, &mut race);
@@ -996,4 +1126,170 @@ fn a_loaded_race_reports_what_its_banks_did() {
         !loaded.setup.sounds.is_empty(),
         "a real disc loaded no cues"
     );
+}
+
+/// Slipstream (`assets/mods/official/slipstream`) heard through the whole pipeline: the
+/// real mod loaded with a real Pulse race (its three sounds in the race's banks and named
+/// in the loader report), the player's press, the composition root's `race_tick` into a
+/// real `Audio` on the null backend. The entry opens voices (the whoosh and the transit
+/// hum), the exit ends the hum, and nothing clips or limits.
+#[cfg(feature = "extensions")]
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and the official mods"]
+fn slipstream_is_heard_when_a_craft_goes_through_the_portal() {
+    let Some(path) = image("pulse-psp-eu.chd") else {
+        return;
+    };
+    let Some((_, with)) = slipstream_pass(&path, true) else {
+        return;
+    };
+    let (_, without) = slipstream_pass(&path, false).expect("the same race without the fire");
+    // Not a like-for-like bound: the fired run has the craft out of the world for a
+    // second (its engine silent), so the two trajectories differ. Printed for the record;
+    // the loudness evidence is the peak comparison against the Turbo cue and no clipping.
+    println!(
+        "limiter frames: {} with the portal, {} without",
+        with.1, without.1
+    );
+    assert_eq!(with.0, 0, "nothing clips");
+}
+
+/// One drive of `16_Track` with Slipstream on: the same ticks whether or not the player
+/// fires. Returns the loops running during the transit and `(clipped, limited)` frames.
+#[cfg(feature = "extensions")]
+fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
+    use oag_gameplay::input::Button;
+    use oag_tables::weapons::Weapon;
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/mods/official/slipstream");
+    if !root.join("oag-mod.toml").is_file() {
+        eprintln!("slipstream: the official-mods submodule is not checked out; skipped");
+        return None;
+    }
+    let module = oag_mod::Mod::open(&root).expect("the mod opens");
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        track: Some("Data\\Environments\\16_Track\\track.vex".to_string()),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        no_driver_for_class: true,
+        extensions: oag_game::mod_extensions::sources([&module]),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let report = loaded.report.join("\n");
+    for name in ["portal-exit", "portal-open", "transit"] {
+        assert!(
+            report.contains(&format!("sound {name}: ")) && report.contains("loaded"),
+            "{name} is in the loader report:\n{report}"
+        );
+    }
+    let mut race = race::Race::start(loaded.setup);
+    assert!(
+        !race.sounds().mod_sounds.is_empty(),
+        "the mod's sounds reached the race's banks"
+    );
+    race.set_autopilot(true);
+
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
+        // `OAG_SLIPSTREAM_DUMP=<file.wav>` keeps the fired run for listening to.
+        Some(
+            std::env::var_os("OAG_SLIPSTREAM_DUMP")
+                .filter(|_| fire)
+                .map_or_else(|| std::path::PathBuf::from("/dev/null"), Into::into),
+        ),
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+    let held = |buttons: &[Button], pressed: &[Button]| {
+        let mut input = oag_gameplay::input::Input::new();
+        let held = buttons.iter().fold(0, |bits, b| bits | b.bit());
+        let pressed_bits = pressed.iter().fold(0, |bits, b| bits | b.bit());
+        input.begin_frame(held & !pressed_bits);
+        input.begin_frame(held);
+        PlayerInputs::single(oag_gameplay::InputSnapshot {
+            buttons: input,
+            ..oag_gameplay::InputSnapshot::new()
+        })
+    };
+    let voices =
+        |audio: &oag_sound::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
+    fn step(audio: &mut oag_sound::Audio, race: &mut race::Race, inputs: &PlayerInputs) {
+        race.tick(inputs);
+        oag_game::sound::race_tick(audio, race);
+        audio.tick();
+    }
+
+    let throttle = held(&[Button::Cross], &[]);
+    for _ in 0..3000 {
+        if race.sim.world.ships[0].standing.lap_start_tick.is_some() {
+            break;
+        }
+        step(&mut audio, &mut race, &throttle);
+    }
+    for _ in 0..400 {
+        step(&mut audio, &mut race, &throttle);
+    }
+    if fire {
+        race.sim.world.ships[0].pickup.weapon =
+            Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
+    }
+    for _ in 0..4 {
+        step(&mut audio, &mut race, &throttle);
+    }
+    let before = voices(&audio);
+    let before_loops = audio.mod_sound_loops();
+    step(
+        &mut audio,
+        &mut race,
+        &held(&[Button::Cross, Button::Square], &[Button::Square]),
+    );
+    for _ in 0..3 {
+        step(&mut audio, &mut race, &throttle);
+    }
+    // The craft flies to the portal first and goes through at the entrance.
+    for _ in 0..40 {
+        if !fire || race.sim.world.ships[0].transit.is_some() {
+            break;
+        }
+        step(&mut audio, &mut race, &throttle);
+    }
+    if !fire {
+        for _ in 0..70 {
+            step(&mut audio, &mut race, &throttle);
+        }
+        return Some((0, stats(&audio)));
+    }
+    assert!(
+        race.sim.world.ships[0].transit.is_some(),
+        "the fire went through"
+    );
+    let during = voices(&audio);
+    println!(
+        "voices: {before} before the fire, {during} during the transit; mod loops {}",
+        audio.mod_sound_loops()
+    );
+    assert_eq!(audio.mod_sound_loops(), 1, "the transit hum is running");
+    assert_eq!(before_loops, 0, "none before the fire");
+    for _ in 0..70 {
+        step(&mut audio, &mut race, &throttle);
+    }
+    assert!(
+        race.sim.world.ships[0].transit.is_none(),
+        "back in the world"
+    );
+    assert_eq!(audio.mod_sound_loops(), 0, "the hum ended with the transit");
+    println!("voices: {} after the exit", voices(&audio));
+    let result = Some((1, stats(&audio)));
+    let _ = audio.finish();
+    result
+}
+
+#[cfg(feature = "extensions")]
+fn stats(audio: &oag_sound::Audio) -> (u64, u64) {
+    audio
+        .output()
+        .with_mixer(|mixer| (mixer.clipped(), mixer.limited()))
 }

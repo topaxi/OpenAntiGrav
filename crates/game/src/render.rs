@@ -29,13 +29,35 @@ mod scene;
 mod text;
 mod video;
 
-use face::{face_atlas_size, face_sampler, upload_face};
+use face::{face_atlas_size, face_sampler, fit_to_device, upload_face};
 use resources::{
     sampler_entry, sampler_kind, texture_entry, ui_bind_group, uniform_entry, upload_rg8,
     upload_rgba,
 };
 
 use hud_scale::HudStretch;
+
+/// Screen pixels per unit of `space`'s grid once it is letterboxed into `viewport`, as the
+/// renderer measures it for the HUD stretch.
+#[must_use]
+pub fn hud_pixels_per_grid(space: Space, viewport: (f32, f32, f32, f32)) -> f32 {
+    HudStretch::measure(space, viewport)
+}
+
+/// The mods' vector icons, rasterised at the pixels `hud` is drawn at in `viewport` (the
+/// window rasterises them on another thread, as it is resized); a refusal is warned.
+pub fn rasterise_hud_icons(
+    hud: &mut oag_hud::Assets,
+    viewport: (f32, f32, f32, f32),
+    safe_area: Option<u8>,
+) {
+    let mut notes = Vec::new();
+    let pixels = hud_pixels_per_grid(hud.space, viewport) * hud.art.safe_area_scale(safe_area);
+    hud.rasterise_vector_icons(pixels, &mut notes);
+    for note in notes {
+        log::warn!("{note}");
+    }
+}
 use quad::{
     MODE_ATLAS, MODE_BUTTONS_ATLAS, MODE_FACE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE,
     MODE_SPRITE_GRADIENT, Quad, Uniforms,
@@ -261,6 +283,7 @@ impl Renderer {
             ..Default::default()
         });
 
+        let atlas = fit_to_device(device, "glyph atlas", atlas);
         let atlas_texture = upload_rg8(
             device,
             queue,
@@ -763,6 +786,20 @@ impl Renderer {
                     chamfer: [0.0, 0.0],
                     tile: [0.0, 0.0],
                 }),
+                Draw::Triangles(triangles) => {
+                    self.quads.extend(triangles.iter().map(Quad::triangle));
+                }
+                Draw::SolidTriangles { triangles, color } => {
+                    let solid = [
+                        self.atlas.solid.x as f32 + 0.5,
+                        self.atlas.solid.y as f32 + 0.5,
+                    ];
+                    self.quads.extend(
+                        triangles
+                            .iter()
+                            .map(|corners| Quad::solid_triangle(corners, *color, solid)),
+                    );
+                }
                 Draw::TiledSprite {
                     rect,
                     uv,
@@ -1169,6 +1206,21 @@ pub fn to_grid(space: Space, viewport: (f32, f32, f32, f32), window: (f32, f32))
     (normalised_x * space.size.0, normalised_y * space.size.1)
 }
 
+/// A point of `space`'s grid as the window pixel it is drawn at: [`to_grid`] run the other way.
+#[must_use]
+pub fn from_grid(space: Space, viewport: (f32, f32, f32, f32), grid: (f32, f32)) -> (f32, f32) {
+    let (left, top, width, height) = viewport;
+    let [scale_x, scale_y] = letterbox_in((width as u32, height as u32), space.display_aspect);
+    let clip_x = (grid.0 / space.size.0 * 2.0 - 1.0) * scale_x;
+    let clip_y = (1.0 - grid.1 / space.size.1 * 2.0) * scale_y;
+    (
+        left + (clip_x + 1.0) * 0.5 * width,
+        top + (1.0 - clip_y) * 0.5 * height,
+    )
+}
+
+#[cfg(test)]
+mod atlas_limit_tests;
 #[cfg(test)]
 mod glow_tests;
 #[cfg(test)]

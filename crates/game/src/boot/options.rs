@@ -53,6 +53,9 @@ pub struct Options {
     /// Take the AV1 cache path even where a platform decoder is available. See
     /// [`crate::movie::Decode::prefer_cache`].
     pub prefer_av1_cache: bool,
+    /// Finds the texture packs that are on, so the front end's faces draw from the one that
+    /// names this disc ([`oag_raceplay::texture_pack`]); `None` draws the disc's own.
+    pub find_texture_packs: Option<oag_raceplay::texture_pack::Finder>,
 }
 
 impl Options {

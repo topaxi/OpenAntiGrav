@@ -67,7 +67,7 @@ starts it, and what `0x08abf45c` selects are on
 | `0x08890ce4` | `StateMachine_FindState` | 75 |
 | `0x08812d58` / `0x088130e4` | `InGame_Construct` / `InGame_Destruct` | 85 |
 | `0x08813244` | `InGame_UpdatePauseInput` | 85 |
-| `0x08818fd8` | `Demo_UpdateAttractMode` | 80 |
+| `0x08818fd8` | `Demo_UpdateAttractMode` | 92, [attract-demo.md](attract-demo.md) |
 
 `0x08b31784` holds a **pointer to** the machine, not the machine itself - the
 static reading said the machine was at that address, and running the game

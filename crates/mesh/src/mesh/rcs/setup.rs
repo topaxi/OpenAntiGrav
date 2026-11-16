@@ -4,6 +4,7 @@
 //! Split out of `mesh/rcs.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
+use oag_gpu::formats::SceneStore;
 use oag_rcs::rcsmodel;
 
 use super::skin::{self, flips, picks, roles, skin, variants};
@@ -83,6 +84,7 @@ pub(super) fn material_setup(
     model: &rcsmodel::Model,
     model_blob: &[u8],
     textures: Textures<'_>,
+    store: SceneStore,
     report: &mut Report,
 ) -> MaterialSetup {
     // **The variant first**, because which sampler entry each of this
@@ -91,7 +93,7 @@ pub(super) fn material_setup(
     // `skin::picks`.
     let (material_variants, material_quake) = variants(model, textures, report);
     let picks = picks(model, &material_variants, textures);
-    let (mut skins, mut seconds) = skin(model, &picks, textures, report);
+    let (mut skins, mut seconds) = skin(model, &picks, textures, store, report);
     // After the variants, because the roles are read off the resolved one.
     let skin::Roles {
         packed: mut material_slots,
@@ -134,6 +136,17 @@ pub(super) fn material_setup(
     // After the glow table, because it clears a slot's `ADD_SECOND` and
     // writes its own entry into the same table.
     let mut emissive = emissive;
+    // The emissive-in-alpha families take their slot before any other program
+    // reading looks at the table: none of those reads the same sampler.
+    let specular_maps = super::alpha_emissive::alpha_emissive(
+        model,
+        &material_variants,
+        &picks,
+        textures,
+        &mut material_slots,
+        &mut emissive,
+        report,
+    );
     // The billboard and the stand glass keep `ADD_SECOND` and swap the shared
     // additive entry for their program's own.
     super::billboard_glass::billboard_glass(
@@ -163,6 +176,7 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    super::mag_wave::merge(&mut mag_emissive, specular_maps);
     super::mag_wave::merge(&mut mag_emissive, cell_blues);
     super::mag_wave::merge(&mut wave_maps, cell_masks);
     // The light cone's own combine claims its slots after the glow table is
@@ -253,6 +267,17 @@ pub(super) fn material_setup(
         report,
     );
     super::mag_wave::merge(&mut mag_emissive, statics);
+    // The UV-distortion banner binds its logo third and writes two consecutive entries.
+    let overlays = super::uv_overlay::uv_overlay(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        (&mut skins, &mut seconds),
+        &mut emissive,
+        report,
+    );
+    super::mag_wave::merge(&mut mag_emissive, overlays);
     // A hull's normal map rides the same third binding, and its materials are
     // none of the families above.
     let (hull_maps, mut material_tangent) =

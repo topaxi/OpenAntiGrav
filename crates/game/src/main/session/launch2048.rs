@@ -4,8 +4,8 @@
 //! Every other title's boot ends on `Launch Game`, which opens this build's
 //! menus at their root and stops. 2048's ends on the disc's own
 //! `Launch 2048`, and it carries where the player was going: a campaign
-//! event tapped on the map, or one of this build's three own tiles (RACE BOX,
-//! REMIX, SPLIT SCREEN - `oag_ui::frontend::touch`'s module docs). The menus are opened
+//! event tapped on the map, or one of this build's own tiles (a page of its menu
+//! tree - `oag_ui::frontend::touch`'s module docs). The menus are opened
 //! first either way, so a race that fails to load has the same place to
 //! fall back to as one started from the menus themselves.
 
@@ -21,7 +21,11 @@ use super::menus::combine_variant;
 
 impl Session {
     /// Acts on the front end's request, with the menus already open.
-    pub(crate) fn follow_launch(&mut self, launch: Option<Launch>) {
+    pub(crate) fn follow_launch(
+        &mut self,
+        launch: Option<Launch>,
+        card: Option<oag_ui::frontend::LaunchedCard>,
+    ) {
         match launch {
             None => {}
             Some(Launch::Event(name)) => {
@@ -29,6 +33,7 @@ impl Session {
                 debug!("Launch 2048: starting campaign event {name:?}");
                 self.keep_event_cursor(&name);
                 self.pending_event = Some(name);
+                self.pending_card = card;
                 if let Err(e) = self.launch_race() {
                     log::error!("cannot start the campaign event: {e:#}");
                 }
@@ -40,9 +45,7 @@ impl Session {
             // Walked into rather than jumped to, so BACK from either page
             // lands on the menu root the way it does from the root's own
             // row - `oag_ui::menu::Menu::push`.
-            Some(Launch::RaceBox) => self.push_page("race"),
-            Some(Launch::Remix) => self.push_page("remix"),
-            Some(Launch::Multiplayer) => self.push_page("multiplayer"),
+            Some(Launch::Page(id)) => self.push_page(&id),
         }
     }
 
@@ -50,10 +53,11 @@ impl Session {
     /// then launched the way every other title's campaign cell is, flying the
     /// campaign's own craft (`oag_title::AddOn::default_team`).
     fn launch_tier_cell(&mut self, name: &str) {
-        let Some(mut archives) = self.open_title_archives("a downloadable campaign's cell") else {
+        let Some(tiers) = self.with_menu_archives("a downloadable campaign's cell", |archives| {
+            boot::tiers2048::read(archives, &mut Vec::new())
+        }) else {
             return;
         };
-        let tiers = boot::tiers2048::read(&mut archives, &mut Vec::new());
         let Some((tier, _, cell)) = boot::tiers2048::find(&tiers, name) else {
             warn!("no cell named {name:?} in the campaigns this source mounts");
             return;
@@ -70,7 +74,7 @@ impl Session {
         if let Stage::Menu(stage) = &mut self.stage
             && !stage.menu.push(id)
         {
-            log::warn!("assets/ui/menu.toml has no page {id:?}; staying on the root");
+            log::warn!("the menu tree has no page {id:?}; staying on the root");
         }
     }
 

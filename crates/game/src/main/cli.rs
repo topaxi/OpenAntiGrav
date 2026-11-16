@@ -205,6 +205,26 @@ pub(crate) struct Cli {
     #[arg(long, requires = "loading_screen")]
     pub(crate) loading_live: bool,
 
+    /// With `--loading-screen` on Wipeout 2048, draw the race load of a campaign event
+    /// launched from its card: `EVENT` or `EVENT:PAGE` (the card's page when Launch was
+    /// pressed, 0 the first), e.g. `2048 - Event 2`. `--ticks` is the load's age at 60 Hz and
+    /// `--loading-stage` how far the loader has got.
+    #[arg(long, value_name = "EVENT[:PAGE]", requires = "loading_screen")]
+    pub(crate) loading_card: Option<String>,
+
+    /// With `--loading-screen`, the load stage reported to the bar from the first tick (0 to 4):
+    /// the stated counterpart of `--loading-live`'s real stages.
+    #[arg(long, default_value_t = 0, requires = "loading_screen")]
+    pub(crate) loading_stage: u8,
+
+    /// With `--loading-screen`, the seed the feature is drawn with (default 0). The
+    /// original draws a feature at random each time the screen goes up
+    /// (`LoadingScreen_Construct`, `Libc_Rand`), so a capture that sits beside one of its frames
+    /// names the draw the frame showed: the position in the mode's deck, modulo what the deck
+    /// holds, of this seed's first number. Prints the feature it drew.
+    #[arg(long, default_value_t = 0, requires = "loading_screen")]
+    pub(crate) loading_draw: u64,
+
     /// Write everything the mixer produced to a WAV instead of to a device.
     ///
     /// The audio counterpart of `--screenshot`, and for the same reason: this
@@ -271,7 +291,7 @@ pub(crate) struct Cli {
     ///
     /// Three mechanisms run off one clock, which a race takes from the tick:
     /// the two trackside ones - the per-material texture transform and the
-    /// `Anim Transform` node motion - and, since 2026-08-24, Wipeout HD's
+    /// `Anim Transform` node motion - and Wipeout HD's
     /// engine-flame surface scroll, which the original drives from the same
     /// kind of global clock (`time`, engine shader parameter slot 0). This
     /// overrides it, for a comparison harness that needs our phase matched to a
@@ -395,6 +415,12 @@ pub(crate) struct Cli {
     #[arg(long, requires_all = ["until", "press"])]
     pub(crate) press_until_reached: bool,
 
+    /// With `--until map:EVENT`, press these buttons one after another on the
+    /// map once it is up, one press every 30 ticks, e.g. `right,right,down`;
+    /// `--ticks` then picks the frame after the last of them.
+    #[arg(long, requires = "until")]
+    pub(crate) map_presses: Option<String>,
+
     /// Control scheme: `veteran` or `novice`.
     ///
     /// Overrides `[controls] scheme` for this run without writing it back. The
@@ -413,8 +439,8 @@ pub(crate) struct Cli {
     pub(crate) overlay: bool,
 
     /// With `--screenshot`: leave out what this build adds to the disc's own front end
-    /// (2048's RACEBOX, REMIX and MULTIPLAYER tiles on `GameModeChoice`), so a frame can be
-    /// compared against a capture of the original's menu definition. A player always has them.
+    /// (2048's RACEBOX, a mod's race page and MULTIPLAYER tiles on `GameModeChoice`, and the pad focus
+    /// on its touch grids), so a frame can be compared against a capture of the original's menu definition. A player always has them.
     #[arg(long)]
     pub(crate) original_menu: bool,
 
@@ -422,6 +448,10 @@ pub(crate) struct Cli {
     /// and `--menu-prompt` - see [`extra::MenuArgs`].
     #[command(flatten)]
     pub(crate) menu_args: extra::MenuArgs,
+
+    /// `--demo`, `--wallpaper` - see [`extra::DemoArgs`].
+    #[command(flatten)]
+    pub(crate) demo: extra::DemoArgs,
 
     /// Show the language picker even when a language is already chosen.
     ///
@@ -439,6 +469,12 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) dry_run: bool,
 
+    /// Print each connected pad's button presses with the value `[controls.music]` takes for them
+    /// (a button name, or `raw:CODE`), until stopped with Ctrl-C. Opens no window and no audio.
+    /// See docs/tools/oag-game.md, "Music controls in a race".
+    #[arg(long, conflicts_with_all = ["race", "screenshot", "dry_run", "trace_out", "launcher", "drive", "drive_file"])]
+    pub(crate) probe_pad: bool,
+
     /// Skip the front end and go straight to a ship on a track.
     ///
     /// Arrow keys steer, X or Return thrusts, Q and E are the airbrakes. The
@@ -447,9 +483,9 @@ pub(crate) struct Cli {
     pub(crate) race: bool,
 
     /// A second disc image or extracted directory the craft, HUD and grid
-    /// roster load from instead of `source` - a Race Remix from the command
+    /// roster load from instead of `source` - a two-title race from the command
     /// line. Left out, the craft comes from `source` like every other race.
-    /// See `oag_source::remix::Remix`.
+    /// See `oag_source::pair::SourcePair`.
     #[arg(long)]
     pub(crate) craft_source: Option<String>,
 
@@ -527,6 +563,14 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) skin: Option<String>,
 
+    /// The livery folder the player's craft is painted from on Wipeout HD/Fury and Omega: a
+    /// `PI_TeamModel` `texturelocation` other than its directory's own (`livery2` is Feisar's
+    /// `SKIN1`, with `--team Feisar`). What Ship Select's model row writes after the `@` of a
+    /// variant id. A folder that lacks a texture the hull names draws that part untextured and
+    /// says so in the load report.
+    #[arg(long)]
+    pub(crate) livery: Option<String>,
+
     /// What a split-screen race's second and later people fly, one per flag in
     /// seat order: `TEAM` or `TEAM:SKIN` (a `PI_ModelSkin` name). The headless
     /// counterpart of picking on each seat's own Ship Select; with `--players N`,
@@ -573,8 +617,8 @@ pub(crate) struct Cli {
     /// Development override: pin the Zone colour grade to a stage for the
     /// whole run.
     ///
-    /// **Both titles' ladders are recovered now** - 2048's own zone-number
-    /// table and, since 2026-08-31, HD/Fury's (`crates/hd/src/race.rs`'s
+    /// **Both titles' ladders are recovered** - 2048's own zone-number
+    /// table and HD/Fury's (`crates/hd/src/race.rs`'s
     /// `ZONE_STAGES`) - so a race normally escalates the grade on its own,
     /// re-deriving the stage from the zone counter every frame
     /// (`Scene::sync_zone_grade`). This flag exists for a **capture** rather
@@ -689,11 +733,13 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "TICK:OPEN", requires = "race")]
     pub(crate) force_boost_kick: Option<String>,
 
-    /// Seed the world generator, instead of `race::SEED`.
+    /// Seed the world generator, instead of `race::SEED` (`--race`, headless) or a fresh
+    /// seed per race (the front end).
     ///
     /// A verification aid - see `race::Options::seed`. The one thing in a race
     /// that draws from the generator today is which pickup a weapon pad hands
     /// over, so this is how a capture is made to show a chosen weapon.
+    #[cfg(feature = "dev-cli")]
     #[arg(long)]
     pub(crate) seed: Option<u64>,
 
@@ -724,6 +770,7 @@ pub(crate) struct Cli {
     /// cargo run -p oag-game -- --race --mode single_race --give rocket \
     ///     --hold cross --press square --ticks 900 --screenshot /tmp/shot.png
     /// ```
+    #[cfg(feature = "dev-cli")]
     #[arg(long, value_name = "WEAPON")]
     pub(crate) give: Option<String>,
 
@@ -755,6 +802,18 @@ pub(crate) struct Cli {
     /// `oag_display::display::TrailOrder`.
     #[arg(long)]
     pub(crate) trail_order: Option<oag_display::display::TrailOrder>,
+
+    /// How the circuit's blended list (trees, translucent floor patches, glass) is sorted:
+    /// `original` or `depth`, overriding `[render_profiles.<title>] scenery_sort` for this
+    /// run only. See `oag_display::display::ScenerySort`.
+    #[arg(long)]
+    pub(crate) scenery_sort: Option<oag_display::display::ScenerySort>,
+
+    /// How long the PSP engine ribbons are: `original` or `hd`, overriding
+    /// `[render_profiles.<title>] trail_length` for this run only. See
+    /// `oag_display::display::TrailLength`.
+    #[arg(long)]
+    pub(crate) trail_length: Option<oag_display::display::TrailLength>,
 
     /// What a played weather adds: `original` or `enhanced`, overriding
     /// `[render_profiles.<title>] weather` for this run only. See
@@ -982,7 +1041,7 @@ pub(crate) struct Cli {
 
     /// With `--pose-from`: render the recorded camera at this fov instead of
     /// the disc's authored value, in **vertical degrees** - the authored
-    /// value's own unit, settled at confidence 94 on 2026-08-09.
+    /// value's own unit (confidence 94).
     ///
     /// It was the calibration knob for settling that unit. It is now a
     /// *measurement instrument* rather than a leftover: `place_at` resets the
@@ -1072,6 +1131,15 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) pose_hold: bool,
 
+    /// With `--pose-hold` and `--screenshot`: also put the craft back on that pose, at rest,
+    /// after every tick.
+    ///
+    /// For a weapon fired from a resting craft: the shot then leaves along the pose's own
+    /// heading, where `--pose-hold` alone fires it from wherever the craft has turned to and
+    /// only draws the hull back on the pose.
+    #[arg(long, requires = "pose_hold")]
+    pub(crate) pose_hold_ticks: bool,
+
     /// With `--pose-from`: also draw the craft with the lean and barrel-roll phase the pose's own trace row recorded
     /// (`steer_lean`, `roll_phase`), put on after the ticks.
     ///
@@ -1088,10 +1156,9 @@ pub(crate) struct Cli {
     /// input produces both sides of a visual or CSV comparison. Ticks past
     /// the script's end hold its last state.
     ///
-    /// **`--trace-out` did not read this at all before 2026-09-10** - a run
-    /// combining the two produced a plausible-looking CSV of a craft that
-    /// never moved, with no error. `HeldButtons::advance` is where both legs
-    /// now make the same choice, so they cannot diverge on it again.
+    /// `--trace-out` reads it too: `HeldButtons::advance` is where both legs
+    /// make the same choice, so they cannot diverge (a trace that ignored it
+    /// would be a plausible CSV of a craft that never moved).
     #[arg(long, value_name = "FILE.inputs", requires = "race")]
     pub(crate) input_script: Option<std::path::PathBuf>,
 
@@ -1138,6 +1205,10 @@ pub(crate) struct Cli {
     #[command(flatten)]
     pub(crate) icon: extra::IconArgs,
 
+    /// `--png-info` and `--from-png` - see [`extra::ShotArgs`].
+    #[command(flatten)]
+    pub(crate) shot: extra::ShotArgs,
+
     /// `--ghost` and `--record-ghost` - see [`extra::GhostArgs`].
     #[command(flatten)]
     pub(crate) ghost: extra::GhostArgs,
@@ -1159,4 +1230,50 @@ pub(crate) struct Cli {
     pub(crate) net: extra::NetArgs,
     #[command(flatten)]
     pub(crate) log: oag_log::tool::LogArgs,
+}
+
+impl Cli {
+    /// Whether a person is at this launch, as opposed to a capture, a script, a trace or a
+    /// comparison: only then may the first-run name prompt open. An allowlist, so a flag added
+    /// later is automation until it is listed here.
+    pub(crate) fn is_interactive(&self) -> bool {
+        let scripted = self.dev.preseat
+            || self.dev.script.is_some()
+            || self.dev.drive.is_some()
+            || self.dev.drive_file.is_some();
+        let captured = self.screenshot.is_some()
+            || self.dump_audio.is_some()
+            || self.tap_audio.is_some()
+            || self.until.is_some()
+            || self.screen.is_some()
+            || self.press.is_some()
+            || self.hold.is_some()
+            || self.loading_screen.is_some();
+        !(scripted
+            || captured
+            || self.original_menu
+            || self.race
+            || self.dry_run
+            || self.trace
+            || self.probe_pad
+            || self.prefetch
+            || self.net.connect.is_some()
+            || self.net.online.is_some())
+    }
+
+    /// `--seed`; always `None` in a build without `dev-cli`.
+    pub(crate) fn seed(&self) -> Option<u64> {
+        #[cfg(feature = "dev-cli")]
+        return self.seed;
+        #[cfg(not(feature = "dev-cli"))]
+        None
+    }
+
+    /// `--give`; always `None` in a build without `dev-cli`.
+    pub(crate) fn give(&self) -> Option<&str> {
+        #[cfg(feature = "dev-cli")]
+        return self.give.as_deref();
+        #[cfg(not(feature = "dev-cli"))]
+        None
+    }
 }

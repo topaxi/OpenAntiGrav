@@ -242,6 +242,7 @@ fn the_front_ends_own_backdrop_name_resolves_to_the_60hz_cut() {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
 
     let loaded = oag_game::boot::load(&options).expect("booting the PS2 front end");

@@ -7,6 +7,10 @@
 
 use super::*;
 
+/// The near plane every race projection uses, in world units.
+#[cfg(feature = "view")]
+pub const NEAR_PLANE: f32 = 1.0;
+
 /// Converts the disc's `pos_length` into the one
 /// [`ChaseParams::pos_length`] documents.
 ///
@@ -33,6 +37,30 @@ use super::*;
 #[must_use]
 pub(super) fn chase_pos_length(from_disc: f32) -> f32 {
     -from_disc
+}
+
+/// [`chase_params`] with the craft scale a `mode` race on `title` flies ([`craft_scale`]).
+#[must_use]
+pub fn chase_params_for(
+    block: handling::ExternalCamera,
+    title: &oag_title::Title,
+    mode: oag_race::Mode,
+) -> ChaseParams {
+    ChaseParams {
+        craft_scale: craft_scale(title, mode),
+        ..chase_params(block)
+    }
+}
+
+/// The chase rig's craft scale for a `mode` race on `title`: the title's Detonator
+/// scale in that mode, the `0.75` every racing title writes otherwise (see
+/// [`chase_params`]).
+#[must_use]
+pub fn craft_scale(title: &oag_title::Title, mode: oag_race::Mode) -> f32 {
+    match (mode, title.race.detonator) {
+        (oag_race::Mode::Detonator, Some(detonator)) => detonator.camera_scale,
+        _ => oag_physics::hover::TARGET_GLOBAL_SCALE,
+    }
 }
 
 /// One `<ExternalCamera*>` block as the renderer's [`ChaseParams`].
@@ -80,8 +108,8 @@ pub(super) fn chase_pos_length(from_disc: f32) -> f32 {
 /// # Every racing title scales its external eye by the same `0.75`
 ///
 /// The value is not Pulse PSP's alone, so [`oag_physics::hover::TARGET_GLOBAL_SCALE`]
-/// is the right number for every title this crate races. Read statically,
-/// 2026-10-01, from each binary's own rig and craft constructor (nothing but
+/// is the right number for every title this crate races. Read statically
+/// from each binary's own rig and craft constructor (nothing but
 /// Pulse PSP and Pulse PS2 were observed running, so the rest are readings, not measurements):
 ///
 /// | Title | Where the `0.75` is written | The rig that scales by it | Confidence |
@@ -97,9 +125,9 @@ pub(super) fn chase_pos_length(from_disc: f32) -> f32 {
 /// Pulse's, run at `1.0`: their authored distance is *also* what the scale shrinks,
 /// so their eye sits 8.3 to 9.6 units back, as it does here.
 ///
-/// **One difference is not implemented.** HD's and 2048's constructors write `0.7`
-/// instead of `0.75` when the game mode is `14` (Detonator), and this crate has no
-/// Detonator mode to read it from. The Pulse and Pure scale does not vary by mode.
+/// **One mode differs.** HD's and 2048's constructors write `0.7` instead of `0.75` when
+/// the game mode is `14` (Detonator); [`craft_scale`] applies it from the title's
+/// `oag_title::Detonator::camera_scale`. The Pulse and Pure scale does not vary by mode.
 ///
 /// **`<InternalCamera>` is deliberately *not* scaled** - see
 /// `oag_render::camera::internal`. The original's internal rig reads this global
@@ -145,12 +173,10 @@ impl Race {
     /// The craft the chase camera follows, at the pose it is drawn at: the simulation's plus
     /// the correction glide ([`crate::correction`]), so the hull and the camera that frames it
     /// move together. The camera follows this machine's seat ([`Self::player_slot`]), not
-    /// slot 0.
+    /// slot 0. A craft in a transit is followed onto its seat and on from there
+    /// ([`crate::transit_camera`]).
     pub(super) fn camera_target(&self) -> Target {
-        let slot = self.player_slot();
-        let mut target = target_of(&self.sim.world.ships[slot]);
-        target.position = self.drawn_position(slot);
-        target
+        self.followed(self.player_slot())
     }
 
     /// Where the camera is and what it is aimed at, as a view matrix.
@@ -180,7 +206,21 @@ impl Race {
         if let Some(view) = self.extra_view() {
             return view;
         }
-        self.view_between(self.tick_view(), |previous| previous.view)
+        self.lens_sampled(self.view_between(self.tick_view(), |previous| previous.view))
+    }
+
+    /// `view` through the lens sample an accumulated depth of field frame is drawn with
+    /// ([`crate::photo::LensShift`]), or `view` itself with none.
+    fn lens_sampled(&self, view: Mat4) -> Mat4 {
+        match self
+            .view
+            .photo
+            .as_ref()
+            .and_then(crate::photo::Photo::shift)
+        {
+            Some(shift) => shift.apply(view),
+            None => view,
+        }
     }
 
     /// [`Self::view`] as this tick leaves it, never blended.
@@ -206,7 +246,9 @@ impl Race {
         if let Some(view) = self.extra_view_unshaken() {
             return view;
         }
-        self.view_between(self.tick_view_unshaken(), |previous| previous.unshaken)
+        self.lens_sampled(
+            self.view_between(self.tick_view_unshaken(), |previous| previous.unshaken),
+        )
     }
 
     /// [`Self::view_unshaken`] as this tick leaves it, never blended.
@@ -353,6 +395,7 @@ impl Race {
             .map_or(0.0, |fade| f32::from(fade.rate_percent) * 0.01);
         for slot_hud in &mut self.view.huds {
             slot_hud.pickup_fade_rate = fade_rate;
+            slot_hud.incoming_enabled = hud.art.incoming_warnings;
         }
         for hud in &mut self.view.huds {
             hud.lap_watch = None;
@@ -504,15 +547,25 @@ impl Race {
         (craft, camera)
     }
 
-    /// What may be drawn this frame: the one row of the section a station camera is placed by
-    /// ([`Self::station_camera_section`]), or the craft's and the camera's own sections with
+    /// What may be drawn this frame. **Everything while photo mode is open**, on every title
+    /// and over the director's camera too: a shot must not lose scenery to a visibility set
+    /// that was authored for a craft in a race (the draws still go through the frustum test).
+    /// Otherwise the one row of the section a station camera is placed by
+    /// ([`Self::station_camera_section`]) or the pre-race flyby's camera stands in
+    /// ([`Self::flyby_camera_section`]), or the craft's and the camera's own sections with
     /// padding for every other camera ([`Self::visibility_sections`]), narrowed to the view.
     pub(super) fn visible_set(
         &self,
         visibility: &super::visibility::TrackVisibility,
         view_projection: &Mat4,
     ) -> VisibleSet {
-        match self.station_camera_section() {
+        if self.view.photo.is_some() {
+            return VisibleSet::everything();
+        }
+        match self
+            .station_camera_section()
+            .or_else(|| self.flyby_camera_section())
+        {
             Some(section) => visibility.set_exact(section, view_projection),
             None => {
                 let (craft, camera) = self.visibility_sections();
@@ -533,11 +586,30 @@ impl Race {
     /// inside a tube whose inside the original's mask leaves out.
     #[must_use]
     pub fn station_camera_section(&self) -> Option<u8> {
-        if self.extra_viewpoint().is_some() {
+        if self.extra_viewpoint().is_some() || self.view.photo.is_some() {
             return None;
         }
         self.drawn_craft_of_a_station_camera()
             .map(|slot| self.section_of_slot(slot))
+    }
+
+    /// The section the draws are masked with during the pre-race flyby: that of the spline
+    /// sample nearest the camera, wherever on the circuit that is, `None` outside the flyby.
+    ///
+    /// The render-view publisher (`FUN_08882cbc`) locates the camera itself on the AI track
+    /// with no cursor and publishes the located section, the row the draws are masked with.
+    /// The camera flies far from the craft and the racing line, so the craft's window and
+    /// half-width test of [`Self::visibility_sections`] read [`UNPLACED`], which drew every
+    /// section: Platinum Rush's building then shows the coplanar panes of a group the
+    /// original's row leaves out (`docs/gameplay/race-intro.md`, "The flyby is masked by the
+    /// section under its camera").
+    #[must_use]
+    pub fn flyby_camera_section(&self) -> Option<u8> {
+        if !self.in_intro() {
+            return None;
+        }
+        let (_, sample, _) = self.sim.spline.nearest(self.camera_position())?;
+        Some(sample.section_id)
     }
 
     /// The craft the camera draws when it stands on an authored station: the destroy camera's
@@ -573,7 +645,33 @@ impl Race {
     /// stretch that crosses itself, and a global scan could take it to the wrong stretch (the bridge above the
     /// road): that stays *draw everything*, as [`Self::visibility_sections`] documents.
     fn located_sample(&self, ship: &oag_gameplay::Ship) -> Option<usize> {
-        let index = usize::from(ship.segment);
+        self.located_from(ship, usize::from(ship.segment))
+    }
+
+    /// The section of the craft the picture frames ([`Self::framed_slot`]), [`UNPLACED`] where
+    /// it cannot be told. A person's craft is located by the tick in `Ship::segment`; an
+    /// opponent's `segment` is never written, and its driver's index on its own line, mapped
+    /// to the sample table, is where the simulation has it (photo mode's subject is usually
+    /// one).
+    pub(super) fn section_of_framed(&self) -> u8 {
+        let slot = self.framed_slot();
+        let ship = &self.sim.world.ships[slot];
+        let index = if self.sim.world.person_flown(slot) {
+            self.located_sample(ship)
+        } else {
+            let line = usize::try_from(ship.driver.index).unwrap_or(usize::MAX);
+            self.located_from(
+                ship,
+                self.sample_index_for(slot, line).unwrap_or(usize::MAX),
+            )
+        };
+        index.map_or(UNPLACED, |index| {
+            self.section_of(index, ship.physics.body.position)
+        })
+    }
+
+    /// [`Self::located_sample`] from `index`, where the simulation last had the craft.
+    fn located_from(&self, ship: &oag_gameplay::Ship, index: usize) -> Option<usize> {
         if index < self.sim.spline.len()
             && self.section_of(index, ship.physics.body.position) != UNPLACED
         {
@@ -604,7 +702,7 @@ impl Race {
     /// player's field-of-view setting applied.
     ///
     /// **`<ExternalCameraFar fov>`'s unit is vertical degrees**, settled
-    /// 2026-08-09 at confidence 94 against `g_camera_fov_degrees`
+    /// at confidence 94 against `g_camera_fov_degrees`
     /// (`0x08b34310`) on the running game, and read here as such.
     /// `oag_render::camera::projection` still names its parameter
     /// `fov_radians` precisely so that the conversion has to be written at a call
@@ -648,12 +746,11 @@ impl Race {
     /// [`oag_gameplay::spawn::Ship::place_at`] resets the body, so a posed craft
     /// has zero velocity and this term contributes exactly `0` - the posed frame
     /// renders at the authored field whatever the captured tick's speed was.
-    /// Pass the fov computed from that tick's own forward velocity. Any
-    /// comparison taken before 2026-08-09 is misregistered by 1.12-1.26x
-    /// depending on the tick's speed and has to be re-taken.
+    /// Pass the fov computed from that tick's own forward velocity. A
+    /// fixed fov instead misregisters by 1.12-1.26x depending on the tick's speed.
     #[must_use]
     pub fn projection(&self, aspect: f32, far: f32, setting: oag_display::display::Fov) -> Mat4 {
-        oag_render::camera::projection(self.vertical_fov(aspect, setting), aspect, 1.0, far)
+        oag_render::camera::projection(self.vertical_fov(aspect, setting), aspect, NEAR_PLANE, far)
     }
 
     /// The camera the per-frame `LodGroup` switch runs from this frame: the
@@ -670,6 +767,16 @@ impl Race {
             fov_degrees: self.vertical_fov(aspect, setting).to_degrees(),
             detail: self.view.model_detail,
         }
+    }
+
+    /// The original's `g_camera_fov_degrees` for this view: the authored field plus the speed
+    /// widen, before the player's setting and the window's fit. `ViewCull_ViewDepth` multiplies
+    /// every list-B depth by this over 65 (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`,
+    /// "The list-B queue key").
+    #[must_use]
+    pub fn camera_fov_degrees(&self) -> f32 {
+        self.vertical_fov(AUTHORED_ASPECT, oag_display::display::Fov::AUTHORED)
+            .to_degrees()
     }
 
     /// The vertical field of view, in radians, that [`Self::projection`] is
@@ -733,17 +840,63 @@ impl Race {
         }
         .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
         let authored = setting.apply(widened_deg.to_radians());
-        // Composed *after* the setting, so a player who has widened the field
-        // gets the same proportional kick rather than a fixed number of degrees.
-        // The zero case returns the input untouched rather than through
-        // `atan(tan(x))`, for the reason `Fov::apply` gives: every capture taken
-        // before this effect existed has to stay bit-identical.
-        let kicked = if boost_kick == 0.0 {
-            authored
-        } else {
-            let widen = 1.0 + boost_kick * self.view.boost_fov_kick.gain();
-            2.0 * ((authored * 0.5).tan() * widen).atan()
-        };
-        oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect)
+        // At the draw alpha with the speed terms, so a module's ramp does not step at the tick.
+        let offset = self
+            .camera_scalar_between(self.extension_fov_offset(self.player_slot()), |previous| {
+                previous.fov_offset
+            });
+        finish_vertical_fov(
+            authored,
+            offset,
+            boost_kick,
+            self.view.boost_fov_kick.gain(),
+            aspect,
+        )
+    }
+}
+
+/// The last two steps of every view's vertical field of view: the boost kick, then the fit to
+/// the window's aspect. `authored` has already passed the player's setting.
+///
+/// The kick is composed *after* the setting, so a player who has widened the field gets the
+/// same proportional kick rather than a fixed number of degrees. The zero case returns the
+/// input untouched rather than through `atan(tan(x))`, for the reason `Fov::apply` gives:
+/// every capture taken before this effect existed has to stay bit-identical.
+#[cfg(feature = "view")]
+pub(super) fn finish_vertical_fov(
+    authored: f32,
+    offset_deg: f32,
+    kick: f32,
+    gain: f32,
+    aspect: f32,
+) -> f32 {
+    // A module's `fov-offset`: zero skips the arithmetic, so a race with none is bit-identical.
+    let authored = if offset_deg == 0.0 {
+        authored
+    } else {
+        (authored + offset_deg.to_radians())
+            .clamp(FOV_GUARD_DEG.0.to_radians(), FOV_GUARD_DEG.1.to_radians())
+    };
+    let kicked = if kick == 0.0 {
+        authored
+    } else {
+        let widen = 1.0 + kick * gain;
+        2.0 * ((authored * 0.5).tan() * widen).atan()
+    };
+    oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::craft_scale;
+    use oag_race::Mode;
+
+    /// `0.7` in a Detonator race on a title that offers one, `0.75` in every other race.
+    #[test]
+    fn detonator_pulls_the_chase_rig_in_where_the_title_has_it() {
+        assert_eq!(craft_scale(oag_hd::TITLE, Mode::Detonator), 0.7);
+        assert_eq!(craft_scale(oag_2048::TITLE, Mode::Detonator), 0.7);
+        assert_eq!(craft_scale(oag_hd::TITLE, Mode::TimeTrial), 0.75);
+        assert_eq!(craft_scale(oag_pulse::TITLE, Mode::Detonator), 0.75);
     }
 }

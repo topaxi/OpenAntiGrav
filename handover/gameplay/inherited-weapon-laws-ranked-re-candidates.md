@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [pure, hd, 2048, omega]
-updated: 2026-10-19
-summary: "Ranked list of weapon laws inherited from Pulse or HD: the fire law on four titles first, then 2048 LeachBeam"
+updated: 2026-11-03
+summary: "Ranked list of weapon laws inherited from Pulse or HD: the fire law (Pure read: same as Pulse) on the other titles first, then 2048 LeachBeam"
 ---
 
 # Weapon laws this engine inherits from Pulse or HD, ranked for reading
@@ -22,13 +22,16 @@ not in the numbers, it is in what spends them.
 
 Ranked, most play impact first. Each names what would settle it.
 
-1. **The fire law on Pure, HD, 2048 and Omega.** Inherited from Pulse on four
-   titles and run in every race with weapons on, 38 to 288 opponent projectiles
-   per 240 s race (`docs/gameplay/ai.md`, "An original opponent never fired").
-   Only HD's table loader is read (`ps3-hdfury-eu/weapon-ai-stats.md`, 85);
-   its consumer (`RaceManager + 6240`) is not. Settles it: HD's decision
-   function, then a Pulse-vs-HD diff of the roll gates. Also open from the same
-   page: the absorb half's decision cadence (every tick or four a second).
+1. **The fire law on Pure, HD, 2048 and Omega.** **HD read 2026-11-03** (`hd-fire-law`,
+   `ps3-hdfury-eu/weapon-ai-fire.md`, `WeaponAi_DecideFireOrAbsorb` at `0x000f9a18`, 80): same
+   gates and rate tables as Pulse, **differs** in a per-step time scale `dt * 30` (0.5 at 1/60: HD
+   fires at half Pulse's per-step chance), the `AllWeapons` multiplier (`0.9 / 0.9 / 1.0`),
+   Eliminator `use * useScale[difficulty]` instead of `* 5`, and an unread Eliminator flip block.
+   **Wired 2026-11-03** (`hd-fire-law-wire`, items 1 to 3; HD, 2048 and Omega by inheritance labelled so; the flip block is not). HD's projectile count rose in the seed-1 ground truth (110 to 157; 12 seeds 1149 to 1037, 0.90): spend is pickup-limited, the per-decision chance is 0.45. Omega's unsuffixed table has no `EliminatorAIStats` row; **read 2026-11-03** (`omega-eliminator-fire-reader`, `ps4-omega-eu/weapon-ai-fire.md`): Omega's loader defaults scales to `1.0` and flips to `0`, so its Eliminator fires unscaled, not silent and not Pulse's `x5` (**wired 2026-11-03**, `omega-eliminator-fire-wire`: `OpponentFire::OMEGA`, Omega Eliminator seed-1 projectiles 108 to 86; 2048 inherited). Open: the game-mode object's `+0x290 / +0x294 / +0x550` and the PS4 `rand()` width. Still open: a live
+   breakpoint count on `0x000fb928` / `0x000f9a18` (cadence and `dt`; the static read says every
+   step, `dt * 30`), which `weaponaistats.xml` copy HD loads (`DATA00` has the Eliminator row,
+   `DATA02` not: item 3 of the page's wiring list depends on it), ~~2048's own decision code~~ **read 2026-11-03** (`2048-fire-law`, `vita-2048-eu-v104/weapon-ai-fire.md`, `0x811d59b0`, 80): same as Omega term by term, nothing to wire (open: what writes the game-mode object's `+0x1e0 / +0x1e4 / +0x43c`, the Vita `rand()` width). **Pure read 2026-11-03** (`pure-fire-law`, `psp-pure-usa/weapon-ai-fire.md`, `WeaponAi_DecideFireOrAbsorb` `0x08931964`, 85): same as Pulse (gates, rate table, cadence, no `dt` scale, no `AllWeapons`), and no Eliminator branch, so `Weapons::elimination` is not read by it; nothing to wire, `OpponentFire::PULSE` is right. The absorb half's cadence is
+   every step on both (read).
 2. **LeachBeam on 2048 and Omega.** 2048's own table authors `repair="30.0"`,
    fifteen times HD's 2.0 (HD and Omega's HD-named copy: 2.0). The per-trip law
    is HD's, carried by inheritance, and `energy_multiplier` is applied on the

@@ -57,6 +57,12 @@ unnamed rather than forced.
 
 ## Pages
 
+- [loading-screen-start.md](loading-screen-start.md) - the loading screen's starter and every kind a call
+  site passes: the race load is 8 (10 on 1.07), `0x01252b86` passes 7, and state 5 has no caller.
+- [engine-light.md](engine-light.md) - `EngineLightData.xml` feeds one vertex light per craft:
+  its colour by era, Fury skin and mag strip, the 32-slot table, six lights a draw.
+- [hull-tone.md](hull-tone.md) - the unlit hull's 1.6x: live knockouts of the lighting object on the port;
+  sun constant equal, the diffuse combination left.
 - [zone-craft.md](zone-craft.md) - Zone loads one shared `hdships\Zone` hull for
   every craft; the pick selects a livery.
 - [particle-paths.md](particle-paths.md) - the `Data/Particles` versus
@@ -64,6 +70,12 @@ unnamed rather than forced.
 - [ships-effects.md](ships-effects.md) - `MagstripWake_Construct`, the first
   name recovered here, transferred from and to `vita-2048-eu-v104` in the
   same pass.
+- [audio-3d.md](audio-3d.md) - the patch's 3D audio: a 7.1 bed for everyone, audio objects for VR alone, authored pass-by front/back, `RearOcclusion` dead here and live on HD and 2048, and how SPATIAL AUDIO compares.
+- [wwise-sound.md](wwise-sound.md) - the sound path: banks loaded per mode and track,
+  the `<cue>[_PC]__<bank>` event name, the legacy bank alias table, the countdown
+  and the missile launch followed to their media.
+- [wwise-cues.md](wwise-cues.md) - the per-cue table: which cue string and bank slot the
+  1.07 executable posts for each of this port's 43 race cues, the slot globals, and which load.
 - [ship-collision-fx.md](ship-collision-fx.md) - `ShipCollisionFx_Trigger`/
   `Ship_DispatchCollisionFx`, found independently of `ps3-hdfury-eu`'s own
   reading and agreeing with it - the finding that promoted this binary to an
@@ -74,6 +86,9 @@ unnamed rather than forced.
   `MusicManager_Construct` directly into `Game_Main` rather than keeping them
   as separate functions the way `vita-2048-eu-v104` and `ps3-hdfury-eu` both
   do.
+- [patch-v107-addresses.md](patch-v107-addresses.md) - **every address here is the base
+  (v1.00) eboot's**; the 1.07 patch eboot that actually runs is a different build. Base -> patch
+  table for 83 of 117 named functions and 15 data anchors, the data anchors checked live.
 - [colorscale.md](colorscale.md) - the 1.07 composite's `ColorScale`: handle, source global, rests at (1,1,1); gate unread.
 - [endrace-loyalty.md](endrace-loyalty.md) - 1 function: the loyalty award, HD's law repeated.
 - [weapons.md](weapons.md) - 30 functions: nine weapon-manager constructors
@@ -136,6 +151,23 @@ unnamed rather than forced.
   (`0x019404b4`, default 1.0) is multiplied into the diffuse sun colour where the
   light is built, at two consumers. Authored 0.3 to 20 over Omega's circuits;
   2048's files carry none.
+
+- [panel-displacement.md](panel-displacement.md) - the panel-map road
+  (`road_alphaspec_normal_emissive_panelmap1`): a pixel-space sphere trace into
+  an `R16F` signed distance field, then nova lighting, a sun lobe and a fresnel
+  reflection of the circuit's baked `skyCube.gnf` cube array
+  (`g_cube_reflection_tex`, `g_reflective_blur_coeffs`). Read, not wired.
+
+- [refraction-pass.md](refraction-pass.md) - `TrackPass_FilterSubmesh`
+  (`0x01605760`): the main view's pass leaves out a track mesh named
+  `wohdmeshrefract` (flag `0x20`), as 2048 does. It is wired: 212 meshes on
+  Vineta K and 1 on Sebenco Climb.
+
+- [campaign-map-pad.md](campaign-map-pad.md) - the 2048 campaign map under a
+  pad: d-pad focus over per-event canvas buttons (`Canvas_FindButtonInDirection`,
+  130-degree cones, nearest by distance, never across seasons), the view
+  scrolling to the focused event, a 1.26 s brightness pulse and a 2.5 s lattice
+  ripple as the focus look; Triangle opens records; Cross's launch path is open.
 
 - [collision.md](collision.md) - a tag-located candidate for
   `ps3-hdfury-eu/collision.md`'s own `Collision_Construct`, not named: the

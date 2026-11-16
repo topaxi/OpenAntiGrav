@@ -19,13 +19,16 @@
 //!
 //! # Two mechanisms share this module, and do not unify
 //!
-//! **Pulse** scrubs a baked anim-time track per model - `PlasmaBlast_Update`'s
-//! own `age * rate` passed to `Node_SetAnimTimeTree`, played back through
-//! [`Drawable::write_node_anims`] below. **Wipeout HD** eases a per-model
-//! *scale* instead - `WeaponExplosions_Draw`'s own `cur += (target - cur) *
-//! rate`, read off `ps3-hdfury-eu/plasma.md` - and hides all three at 1.3 s
+//! **Pulse** plays each model's authored node and texture tracks at the
+//! blast's age itself (`PlasmaBlast_Update`'s `Node_SetAnimTimeTree`,
+//! [`Drawable::write_node_anims`] below; the GE dumps match the tracks at rate 1)
+//! and eases each model's *scale* the way HD does, `cur +=
+//! (target - cur) * rate`, with its own targets and the three small constants
+//! (`PlasmaBlastLaw::ease_rates`), and a grey tint ramp per model. **Wipeout HD** eases a per-model scale too -
+//! `WeaponExplosions_Draw`'s own `cur += (target - cur) * rate`, read off
+//! `ps3-hdfury-eu/plasma.md` - and hides all three at 1.3 s
 //! (`WeaponExplosions_Collapse`, confidence 85, independently corroborated
-//! 2026-09-17 by decompiling both `0x00127770` and its Draw counterpart:
+//! by decompiling both `0x00127770` and its Draw counterpart:
 //! Draw's own per-model window gate (1.7/1.3/1.3 s) is a *different*
 //! mechanism than Collapse's node-flag clear, so the ring's own ease
 //! technically keeps computing to 1.7 s, but nothing after 1.3 s is visible
@@ -33,7 +36,9 @@
 //! different questions). Nothing here derives one title's numbers from the
 //! other's: [`Race::advance_plasma_blast_models`] and
 //! [`Race::plasma_blast_draws`] both branch on `RaceView::hd_plasma_blast`
-//! and run one body or the other, never a blend.
+//! and run one body or the other, never a blend. **Placement differs too**:
+//! Pulse's hemispheres sit in a world-fixed track frame and its halo takes
+//! the camera's orientation; HD's trio is a camera-facing billboard.
 //!
 //! `PlasmaBlastModels`'s own field names - `halo`, `hemisphere2`,
 //! `hemisphere1` - stay Pulse's on **both** titles; see that struct's own
@@ -51,35 +56,69 @@ use super::*;
 /// `Plasma_SpawnDetonation`, with no fixed pool this project has found).
 pub(super) const PLASMA_BLAST_SLOTS: usize = oag_weapons::projectile::MAX_PROJECTILES;
 
-/// `PlasmaBlast_Update`'s own hardcoded retire time.
+/// `PlasmaBlast_Update`'s hardcoded retire time, per title: `1.5` s on Pulse
+/// (confidence 88, a `lui a0,0x3fc0` immediate two instructions before the age
+/// comparison; plasma.md, "The bolt's own detonation lasts a hardcoded 1.5
+/// seconds"), `2.0` s on Pure. Both are
+/// [`oag_title::weapons::PlasmaBlastLaw::life`].
 ///
-/// **Recovered, confidence 88** - see plasma.md's "The bolt's own detonation
-/// lasts a hardcoded 1.5 seconds": a `lui a0,0x3fc0` immediate two
-/// instructions before the age comparison, not a shared `DAT_` constant.
-pub(super) const PLASMA_BLAST_LIFETIME_SECONDS: f32 = 1.5;
+/// Pulse's per-model scale ease is `cur += (target - cur) * rate` once per
+/// tick from `cur = 0`, in [`PlasmaBlastModels`]'s ordinal order: the halo,
+/// then `hemisphere2`, then `hemisphere1`.
+///
+/// **The rates are `PlasmaBlast_Update`'s three small constants** (`DAT_08ab0f6c`
+/// `0.1`, `DAT_08ab0f70` and `DAT_08ab0f74` `0.07`), not anim-time rates: the GE dumps show the node
+/// animations and UV tracks play at the blast's age itself (rate 1), and the
+/// rates are this ease. **Pulse's targets are fitted, not read from the
+/// executable** (`320`, `135.3`, `112.75`): the first ease step puts the model matrix's first-row norm at
+/// `target * rate` (9.47, 7.9 and 32.0 at the first drawn tick), and the
+/// ticks after follow `target * (1 - (1 - rate)^n)` (26.5 at n = 3, 47.8 at
+/// n = 6 on `hemisphere2`; increments of `0.93` of the one before). See
+/// plasma.md, "the blast scale is an ease". Confidence 70: the early ticks fit
+/// to the dump's precision; the late scale (`hemisphere2` 130.5 at age 1.05
+/// against 133.9 here) sits below the ease on the boots whose frames stalled.
+/// Pure's are read (`15`, `8`, `7.8`), stored divided by [`PULSE_MODEL_UNIT`].
+///
+/// What the eased scale multiplies: the GE draws these three models with
+/// positions normalised to about a quarter of a unit, where our decoder
+/// returns the `.vex`'s own extent (`hemisphere2` 8.65, the halo 10.0,
+/// `hemisphere1` 7.6), so the world size is `ease * 0.025 * extent`.
+/// Measured on the dumps' world bounding boxes: `hemisphere2` 40.2 predicted
+/// against 40.2 at age 0.38, the halo 130.4 against 129.4, `hemisphere1` 29.4
+/// against 31.3 (a rotated box reads wide). **Fitted, not read**, confidence
+/// 75; one constant for the three models because the three fits agree within
+/// 6 %.
+pub(super) const PULSE_MODEL_UNIT: f32 = 0.025;
 
-/// Per-model anim-time rate `PlasmaBlast_Update` scrubs
-/// `Node_SetAnimTimeTree` with every tick, as `age * rate`.
+/// The tint a model carries at `age`, the grey `AMBIENTCOLOR` the GE stream
+/// shows (`0x5C`), in [`PlasmaBlastModels`]'s ordinal order.
 ///
-/// **Recovered, confidence 75** - see plasma.md's own reading. In
-/// `PlasmaBlast_Construct`'s own load order: the halo first, then
-/// `hemisphere2`, then `hemisphere1` - matching [`Scene`]'s own field order
-/// for the three drawable pools.
-pub(super) const PLASMA_BLAST_HALO_ANIM_RATE: f32 = 0.1;
-/// See [`PLASMA_BLAST_HALO_ANIM_RATE`].
-pub(super) const PLASMA_BLAST_HEMISPHERE2_ANIM_RATE: f32 = 0.07;
-/// See [`PLASMA_BLAST_HALO_ANIM_RATE`].
-pub(super) const PLASMA_BLAST_HEMISPHERE1_ANIM_RATE: f32 = 0.07;
+/// Three linear ramps, each a three-key table `255, 255, 0` at `0, hold, end`
+/// (`law.tint`), floored at 0: Pulse's halo `min(1, 1.25 (1 - age))`,
+/// `hemisphere2` `min(1, (1.5 - age) / 1.2)` and `hemisphere1` `1 - age`, read
+/// to the byte in 16 dumps (confidence 85 for the curves, 80 that they are the
+/// ramps `PlasmaBlast_Construct` builds); Pure's tables are read from its
+/// constructor (`psp-pure-usa/plasma.md`).
+#[must_use]
+pub(super) fn plasma_tints(law: &oag_title::weapons::PlasmaBlastLaw, age: f32) -> [f32; 3] {
+    law.tint.map(|(hold, end)| {
+        if age <= hold {
+            1.0
+        } else {
+            (1.0 - (age - hold) / (end - hold)).clamp(0.0, 1.0)
+        }
+    })
+}
 
 /// Wipeout HD/Fury's own object lifetime for a Plasma detonation -
 /// `WeaponExplosions_Update`'s own `age >= 3.5f` reap. **Not the same
-/// constant as [`PLASMA_BLAST_LIFETIME_SECONDS`]**; the two titles' objects
+/// constant as `PlasmaBlastLaw::life`**; the two titles' objects
 /// are unrelated code, read off unrelated executables, and only happen to
 /// share a name in this engine's own type. See plasma.md.
 pub(super) const HD_BLAST_LIFETIME_SECONDS: f32 = 3.5;
 
 /// When `WeaponExplosions_Collapse` fires and hides all three models -
-/// confidence 85 in plasma.md, independently re-derived 2026-09-17 by
+/// confidence 85 in plasma.md, independently re-derived by
 /// decompiling `0x00127770` itself. See this module's own doc comment for
 /// why the ring's own ease keeps running past this point with nothing to
 /// show for it.
@@ -97,10 +136,10 @@ pub(super) const HD_BLAST_HIDE_AT_SECONDS: f32 = 1.3;
 /// that big.** The ring and halo are discs of radius 8.8 and 9.0, the sphere
 /// a ball of radius 4.1, so at 60 Hz the sphere is a 29-metre bubble within
 /// a quarter of a second and the ring a disc of several hundred metres by
-/// 1.3 s. The scale was not what made the 2026-09-17 picture wrong; the
-/// trio now also culls as its materials say (each shell is authored twice,
+/// 1.3 s. The scale alone did not fix the picture; the
+/// trio also culls as its materials say (each shell is authored twice,
 /// once each way) and the discs take HD's own right-handed basis. See
-/// plasma.md's 2026-09-23 section and `load::weapon_models::cull_as_authored`.
+/// plasma.md and `load::weapon_models::cull_as_authored`.
 pub(super) const HD_BLAST_TARGETS: [f32; 3] = [100.0, 7.1, 7.0];
 /// See [`HD_BLAST_TARGETS`].
 pub(super) const HD_BLAST_RATES: [f32; 3] = [0.01, 0.3, 0.2];
@@ -140,6 +179,12 @@ pub struct PlasmaBlastModels {
     pub ball: Option<Model>,
     /// The Shuriken's blade, which rides here for the same reason.
     pub shuriken: Option<Model>,
+    /// The flying Missile's head, which rides here for the same reason.
+    pub missile_head: Option<Model>,
+    /// Pure's Disruptor explosion halo, which rides here for the same reason.
+    pub disruptor_halo: Option<Model>,
+    /// Pure's on-craft Disruptor effect, which rides here for the same reason.
+    pub disruptor_craft: Option<Model>,
 }
 
 /// The drawable pools [`Scene`] builds from a [`PlasmaBlastModels`] -
@@ -154,6 +199,12 @@ pub(crate) struct PlasmaBlastDrawables {
     pub(crate) ball: Vec<Drawable>,
     /// The Shuriken's blade, one per projectile slot.
     pub(crate) shuriken: Vec<Drawable>,
+    /// The flying Missile's head, one per projectile slot.
+    pub(crate) missile_head: Vec<Drawable>,
+    /// The Disruptor's explosion halo, one per [`PLASMA_BLAST_SLOTS`] slot.
+    pub(crate) disruptor_halo: Vec<Drawable>,
+    /// The on-craft Disruptor effect, one per ship slot.
+    pub(crate) disruptor_craft: Vec<Drawable>,
 }
 
 impl PlasmaBlastDrawables {
@@ -171,6 +222,9 @@ impl PlasmaBlastDrawables {
             hemisphere1: build_one(models.hemisphere1)?,
             ball: build_one(models.ball)?,
             shuriken: build_one(models.shuriken)?,
+            missile_head: build_one(models.missile_head)?,
+            disruptor_halo: build_one(models.disruptor_halo)?,
+            disruptor_craft: build_one(models.disruptor_craft)?,
         })
     }
 }
@@ -182,53 +236,67 @@ impl PlasmaBlastDrawables {
 pub(super) struct PlasmaBlast {
     pub(super) position: Vec3,
     pub(super) age: f32,
-    /// Wipeout HD's own per-model scale ease, `cur` in
-    /// [`HD_BLAST_TARGETS`]/[`HD_BLAST_RATES`]'s own ordinal order. Unused
-    /// and left at zero on Pulse, where [`PLASMA_BLAST_HALO_ANIM_RATE`] and
-    /// its two siblings drive the picture instead - see this module's own
-    /// doc comment.
+    /// The track's frame at the detonation, `(heading, up, right)`: what
+    /// Pulse's two hemispheres keep for their whole life (world-fixed, not
+    /// facing the camera) - see [`pulse_frame`]. Unused on HD.
+    pub(super) frame: [Vec3; 3],
+    /// Each model's own scale ease, `cur` in
+    /// `PlasmaBlastLaw::ease_targets`/`ease_rates` (or, on HD,
+    /// [`HD_BLAST_TARGETS`]/[`HD_BLAST_RATES`]'s) own ordinal order.
     ///
-    /// **Starts at `0.0`, read.** `WeaponExplosions_Reset` seeds each `cur`
-    /// from `0x00994070 + 4n`, which sits in `.bss` with no static writer -
-    /// the only other reference to it is a read. Confidence 80: a runtime
-    /// write through a computed pointer is not ruled out. See plasma.md's
-    /// 2026-09-23 section.
-    pub(super) hd_ease: [f32; 3],
+    /// **Starts at `0.0`, read on HD.** `WeaponExplosions_Reset` seeds each
+    /// `cur` from `0x00994070 + 4n`, which sits in `.bss` with no static
+    /// writer - the only other reference to it is a read. Confidence 80: a
+    /// runtime write through a computed pointer is not ruled out. See
+    /// plasma.md. Pulse's first drawn tick is one ease
+    /// step in, matching the first dump (`target * rate`).
+    pub(super) ease: [f32; 3],
 }
 
-/// One blast's own transform and per-model anim-time scrub, for one frame.
+/// One live Disruptor explosion halo: where the bolt ended, how long ago, and
+/// the eased scale so far (`DisruptorExplo_Update`, `0x0885a5bc`).
 ///
-/// **One `matrix` serves all three models.** `PlasmaBlast_Update`'s own
-/// per-model scale/offset nudge - the first float of each of the three
-/// `DAT_08ab0f34`/`f44`/`f54` triples `PlasmaBlast_Construct` reads - is
-/// `0.0` for every model (see plasma.md), so the halo and both hemispheres
-/// sit at the identical transform in this engine too and differ only in
-/// which `.vex` they are and which anim-time value plays their own baked
-/// motion, if any. **True on Pulse; on HD the same shared `matrix` is
-/// additionally scaled per model** - see [`Self::hd_scale`].
+/// **View state, not `World` state**, like [`PlasmaBlast`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct DisruptorHaloBlast {
+    pub(super) position: Vec3,
+    pub(super) age: f32,
+    pub(super) ease: f32,
+}
+
+/// One craft's live on-craft Disruptor effect: the eased value `DisruptorFx`'s update keeps at
+/// `+0x1a4` and the target it eases towards (`+0x1a0`).
+///
+/// **View state, not `World` state**, like [`PlasmaBlast`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct DisruptorCraftBlast {
+    pub(super) cur: f32,
+    pub(super) target: f32,
+}
+
+/// One blast's own transforms, tints and animation clock, for one frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct PlasmaBlastDraw {
-    pub(super) matrix: Mat4,
-    /// Pulse only - `None` on HD, where [`Self::hd_scale`] plays the
-    /// mechanism instead. See this module's own doc comment for why the two
-    /// do not unify.
-    pub(super) halo_seconds: f32,
-    /// See [`Self::halo_seconds`].
-    pub(super) hemisphere2_seconds: f32,
-    /// See [`Self::halo_seconds`].
-    pub(super) hemisphere1_seconds: f32,
-    /// HD only: each of the three models' own uniform scale this tick, in
-    /// [`PlasmaBlastModels`]'s own ordinal order (ring, sphere, halo).
-    /// `[0.0; 3]` past [`HD_BLAST_HIDE_AT_SECONDS`], matching
-    /// `WeaponExplosions_Collapse`'s own node-hide - see this module's own
-    /// doc comment. `None` on Pulse.
-    pub(super) hd_scale: Option<[f32; 3]>,
-    /// HD only: the blast's age in seconds, which `WeaponExplosions_Draw`
-    /// hands every model as its animation time
-    /// (`AnimNode_UpdateTransformTree` -> `MeshImporter_SetTime`) and which
-    /// each material's `UV_offset` is bound to by pointer. `0.0` on Pulse.
-    /// See plasma.md, 2026-10-05.
-    pub(super) hd_clock: f32,
+    /// Each model's own placement with its ease scale folded in, in
+    /// [`PlasmaBlastModels`]'s ordinal order (halo, `hemisphere2`,
+    /// `hemisphere1`). On HD all three share one basis; on Pulse the halo
+    /// takes the camera's orientation and the hemispheres the bolt's frame.
+    /// A model that is hidden carries a zero scale.
+    pub(super) matrices: [Mat4; 3],
+    /// The grey ambient each model draws with, `1.0` on HD (which has no such
+    /// ramp read) - see [`plasma_tints`].
+    pub(super) tints: [f32; 3],
+    /// The blast's age in seconds. On HD every model's animation time
+    /// (`WeaponExplosions_Draw` -> `AnimNode_UpdateTransformTree` ->
+    /// `MeshImporter_SetTime`) and what each material's `UV_offset` is bound
+    /// to; on Pulse the `Node_SetAnimTimeTree` argument of all three models
+    /// (`PlasmaBlast_Update` passes the age, not `age * rate`: the node spins
+    /// and UV scrolls measured in the dumps are the authored tracks at rate
+    /// 1). See plasma.md.
+    pub(super) clock: f32,
+    /// Which title's mechanism drew it: HD binds the clock to its materials
+    /// (`Drawable::write_clocked`), Pulse scrubs node and texture tracks.
+    pub(super) hd: bool,
 }
 
 impl Race {
@@ -236,29 +304,154 @@ impl Race {
     /// dropped silently if all [`PLASMA_BLAST_SLOTS`] are already live, the
     /// same "no evicting a running effect" rule
     /// [`weapons::visuals::advance_one_flare`]'s own flare-stage fallback
-    /// takes.
+    /// takes. The hemispheres' frame is read off the track here, see
+    /// [`Race::track_frame_at`].
     ///
     /// Called from [`Race::ignite_blast`] for every Plasma detonation - a
     /// wall hit and a 10 s timeout alike, since `Plasmas_Update`'s own
     /// teardown pass does not branch on which ended the bolt.
     pub(crate) fn spawn_plasma_blast_model(&mut self, position: Vec3) {
+        // A title with neither mechanism has no blast to play.
+        if !self.view.hd_plasma_blast && self.view.plasma_blast_law.is_none() {
+            return;
+        }
+        let frame = self.track_frame_at(position);
         if let Some(slot) = self.view.plasma_blasts.iter().position(Option::is_none) {
             self.view.plasma_blasts[slot] = Some(PlasmaBlast {
                 position,
                 age: 0.0,
-                hd_ease: [0.0; 3],
+                frame,
+                ease: [0.0; 3],
             });
         }
     }
 
-    /// Ages every live blast one tick and retires whichever just crossed its
-    /// title's own lifetime - [`PLASMA_BLAST_LIFETIME_SECONDS`] on Pulse,
-    /// [`HD_BLAST_LIFETIME_SECONDS`] on HD, branched on
-    /// `RaceView::hd_plasma_blast`. On HD this also advances the three-model
-    /// scale ease and, the tick a blast first crosses
-    /// [`HD_BLAST_HIDE_AT_SECONDS`], plays `WO_PLASMA_LIGHTNING_COLLAPSE` at
-    /// its position - `WeaponExplosions_Collapse`'s own trigger, read
-    /// 2026-09-17.
+    /// Starts a Disruptor explosion halo at `position`, in the first free slot,
+    /// when the title authors one; dropped when the pool is full.
+    pub(crate) fn spawn_disruptor_halo(&mut self, position: Vec3) {
+        if self.view.disruptor_halo_law.is_none() {
+            return;
+        }
+        if let Some(slot) = self.view.disruptor_halos.iter().position(Option::is_none) {
+            self.view.disruptor_halos[slot] = Some(DisruptorHaloBlast {
+                position,
+                age: 0.0,
+                ease: 0.0,
+            });
+        }
+    }
+
+    /// Ages every live Disruptor halo one tick, steps its scale ease and
+    /// retires it at its law's life.
+    fn advance_disruptor_halos(&mut self, dt: f32) {
+        let Some(law) = self.view.disruptor_halo_law else {
+            return;
+        };
+        for slot in &mut self.view.disruptor_halos {
+            let Some(halo) = slot else { continue };
+            halo.age += dt;
+            halo.ease += (law.target - halo.ease) * law.rate;
+            if halo.age >= law.life {
+                *slot = None;
+            }
+        }
+    }
+
+    /// Runs the on-craft Disruptor effect's lifecycle one tick: built (`cur` `0`, target `target`)
+    /// when a craft becomes disrupted, eased towards its target every tick, its target dropped
+    /// to `0` when the disruption ends and freed once `cur` is under the law's floor
+    /// (`Disruptor_ApplyEffect` builds it, `Ship_UpdateWeapons` ends it, `0x0885a010` eases
+    /// it; `docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor").
+    pub(crate) fn advance_disruptor_craft_fx(&mut self) {
+        let Some(law) = self.view.disruptor_craft_law else {
+            return;
+        };
+        for slot in 0..MAX_SHIPS {
+            let disrupted = self.sim.world.ships[slot].disruption.active();
+            let fx = &mut self.view.disruptor_craft[slot];
+            if disrupted && fx.is_none() {
+                *fx = Some(DisruptorCraftBlast {
+                    cur: 0.0,
+                    target: law.target,
+                });
+            }
+            let Some(live) = fx else { continue };
+            if !disrupted {
+                live.target = 0.0;
+            }
+            live.cur += (live.target - live.cur) * law.rate;
+            if !disrupted && live.cur < law.retire_below {
+                *fx = None;
+            }
+        }
+    }
+
+    /// Each live on-craft Disruptor effect's matrix (the craft's own drawn matrix) and the grey
+    /// tint the eased value gives, by ship slot.
+    ///
+    /// The player's own craft draws none while its camera is inside the hull: the original
+    /// shows `disruptor_cockpit.vex` there (`*(craft+0xe5)`), which is not read.
+    #[must_use]
+    pub(crate) fn disruptor_craft_draws(&self) -> [Option<(Mat4, f32)>; MAX_SHIPS] {
+        std::array::from_fn(|slot| {
+            let live = self.view.disruptor_craft[slot]?;
+            if slot == 0 && !self.draws_own_ship() {
+                return None;
+            }
+            Some((self.ship_model_matrix_of(slot), live.cur.clamp(0.0, 1.0)))
+        })
+    }
+
+    /// Each live Disruptor halo's matrix (the camera-facing frame the Plasma
+    /// halo takes, at the bolt's end, scaled by the ease) and grey tint
+    /// `1 - age / life`, and the age its textures play at, in slot order.
+    #[must_use]
+    pub(crate) fn disruptor_halo_draws(
+        &self,
+        camera: Mat4,
+    ) -> [Option<(Mat4, f32, f32)>; PLASMA_BLAST_SLOTS] {
+        let law = self.view.disruptor_halo_law;
+        std::array::from_fn(|slot| {
+            let (halo, law) = (self.view.disruptor_halos[slot]?, law?);
+            let matrix =
+                pulse_halo_frame(halo.position, camera) * Mat4::from_scale(Vec3::splat(halo.ease));
+            Some((
+                matrix,
+                (1.0 - halo.age / law.life).clamp(0.0, 1.0),
+                halo.age,
+            ))
+        })
+    }
+
+    /// `(heading, up, right)` of the circuit at the sample nearest `position`:
+    /// the tangent, the sample's own up (the negated down axis, made square to
+    /// the heading) and `heading x up`. The axes the original's first
+    /// hemisphere keeps are those of the track at the detonation (the dumps'
+    /// `(0.995, 0.095, 0)`, `(-0.093, 0.968, 0.234)`, `(0.022, -0.232,
+    /// 0.972)` against Talon's Junction there); **that this is the
+    /// track-fit `PlasmaBlast_Construct` builds is inferred, not read**. A
+    /// circuit with no spline gets the world axes.
+    fn track_frame_at(&self, position: Vec3) -> [Vec3; 3] {
+        let Some((_, sample, _)) = self.sim.spline.nearest(position) else {
+            return [Vec3::NEG_Z, Vec3::Y, Vec3::X];
+        };
+        let up = (-Vec3::from_array(sample.down))
+            .try_normalize()
+            .unwrap_or(Vec3::Y);
+        let tangent = Vec3::from_array(sample.tangent);
+        let heading = (tangent - up * tangent.dot(up))
+            .try_normalize()
+            .unwrap_or_else(|| up.any_orthonormal_vector());
+        [heading, up, heading.cross(up)]
+    }
+
+    /// Ages every live blast one tick, steps its three scale eases and
+    /// retires whichever just crossed its title's own lifetime -
+    /// `PlasmaBlastLaw::life` on Pulse and Pure, [`HD_BLAST_LIFETIME_SECONDS`]
+    /// on HD, branched on `RaceView::hd_plasma_blast`. On HD this also, the
+    /// tick a blast first crosses [`HD_BLAST_HIDE_AT_SECONDS`], plays
+    /// `WO_PLASMA_LIGHTNING_COLLAPSE` at its position -
+    /// `WeaponExplosions_Collapse`'s own trigger.
     ///
     /// Called from [`Race::tick`], after the impacts loop that can spawn a
     /// new one this same tick - a blast spawned this tick draws at `age ==
@@ -266,6 +459,8 @@ impl Race {
     /// one-tick order [`Race::advance_projectile_flares`] already runs a
     /// freshly-placed flare in.
     pub(crate) fn advance_plasma_blast_models(&mut self, dt: f32) {
+        self.advance_disruptor_halos(dt);
+        self.advance_disruptor_craft_fx();
         let hd = self.view.hd_plasma_blast;
         // Looked up once, before the loop borrows `plasma_blasts` mutably -
         // `self.view.stage.play` needs `&mut self.view` too, and nothing
@@ -278,25 +473,27 @@ impl Race {
                     .cloned()
             })
             .flatten();
+        let law = self.view.plasma_blast_law;
+        let (targets, rates) = match law {
+            Some(law) if !hd => (law.ease_targets, law.ease_rates),
+            _ => (HD_BLAST_TARGETS, HD_BLAST_RATES),
+        };
         let mut collapsed_at = Vec::new();
         for slot in &mut self.view.plasma_blasts {
             let Some(blast) = slot else { continue };
             let was_visible = blast.age < HD_BLAST_HIDE_AT_SECONDS;
             blast.age += dt;
+            for (ease, (target, rate)) in blast.ease.iter_mut().zip(targets.into_iter().zip(rates))
+            {
+                *ease += (target - *ease) * rate;
+            }
             let lifetime = if hd {
-                for (ease, (target, rate)) in blast
-                    .hd_ease
-                    .iter_mut()
-                    .zip(HD_BLAST_TARGETS.into_iter().zip(HD_BLAST_RATES))
-                {
-                    *ease += (target - *ease) * rate;
-                }
                 if was_visible && blast.age >= HD_BLAST_HIDE_AT_SECONDS {
                     collapsed_at.push(blast.position);
                 }
                 HD_BLAST_LIFETIME_SECONDS
             } else {
-                PLASMA_BLAST_LIFETIME_SECONDS
+                law.map_or(0.0, |law| law.life)
             };
             if blast.age >= lifetime {
                 *slot = None;
@@ -309,20 +506,22 @@ impl Race {
         }
     }
 
-    /// This frame's transform, per-model scrub and (HD only) per-model
-    /// scale for every render-side blast slot, in slot order - `None` for a
-    /// slot with nothing live, which the caller uses to decide what to
-    /// write and what to draw.
+    /// This frame's placement, tint and clock for every render-side blast
+    /// slot, in slot order - `None` for a slot with nothing live, which the
+    /// caller uses to decide what to write and what to draw. `camera` is the
+    /// camera's world transform (the inverse of its view matrix).
     ///
-    /// `camera_position` decides the basis on both titles alike.
-    /// **`PlasmaBlast_Update`'s own camera read is not fully resolved** -
-    /// plasma.md's own hedge is that it is *some* function of the active
-    /// camera's current orientation, not established to be any one specific
-    /// axis - so this draws the ordinary "face the camera" billboard as a
-    /// stated substitute for that unresolved vector math. **Chosen, not
-    /// measured; no confidence score**, the same footing
-    /// [`weapons::visuals::advance_quake_visual`] already gives its own
-    /// unread orientation term.
+    /// **Pulse: the halo follows the camera's orientation, the hemispheres
+    /// do not follow the camera at all.** `hemisphere1`'s world basis is
+    /// exactly constant over 16 dumps while the view turns, `hemisphere2`
+    /// spins about a world axis at the node track's own rate, and the halo's
+    /// axis moves only as the camera's own direction does (5 degrees in 0.37
+    /// s while the eye travels through the shell): see [`pulse_frame`] and
+    /// [`pulse_halo_frame`]. That a one-sided `hemisphere1` is world-fixed is
+    /// what lets the craft's own travel carry the eye through its wall, which
+    /// is the white-out's cut at age 0.25 (plasma.md; confidence
+    /// 80). **Which pose the hemispheres' frame is derived from is chosen**,
+    /// see [`pulse_frame`].
     ///
     /// **On HD the basis is read, and is two different ones.**
     /// `WeaponExplosions_Start` gives the ring and the halo a per-viewport
@@ -332,39 +531,85 @@ impl Race {
     /// same camera-facing basis here as a stated substitute for that fit:
     /// it is round, so only where its texture's seam falls differs.
     /// **Chosen, not measured.** Each model is then scaled uniformly by its
-    /// own `cur` - read, confidence 90, see plasma.md's 2026-09-23 section.
+    /// own `cur` - read, confidence 90, see plasma.md.
     #[must_use]
     pub(crate) fn plasma_blast_draws(
         &self,
-        camera_position: Vec3,
+        camera: Mat4,
     ) -> [Option<PlasmaBlastDraw>; PLASMA_BLAST_SLOTS] {
         let hd = self.view.hd_plasma_blast;
+        let law = self.view.plasma_blast_law;
         std::array::from_fn(|slot| {
             self.view.plasma_blasts[slot].map(|blast| {
-                let matrix = billboard_matrix(blast.position, camera_position);
                 if hd {
+                    let matrix =
+                        facing_away(billboard_matrix(blast.position, camera.w_axis.truncate()));
                     let visible = blast.age < HD_BLAST_HIDE_AT_SECONDS;
                     PlasmaBlastDraw {
-                        matrix: facing_away(matrix),
-                        halo_seconds: 0.0,
-                        hemisphere2_seconds: 0.0,
-                        hemisphere1_seconds: 0.0,
-                        hd_scale: Some(if visible { blast.hd_ease } else { [0.0; 3] }),
-                        hd_clock: blast.age,
+                        matrices: blast.ease.map(|ease| {
+                            matrix * Mat4::from_scale(Vec3::splat(if visible { ease } else { 0.0 }))
+                        }),
+                        tints: [1.0; 3],
+                        clock: blast.age,
+                        hd: true,
                     }
                 } else {
+                    // `spawn_plasma_blast_model` makes no blast without a law.
+                    let law = law.expect("a Pulse-mechanism blast has its title's law");
+                    let drop = blast.frame[1] * -law.hemisphere_drop;
+                    let hemispheres = pulse_frame(blast.position + drop, blast.frame);
+                    let halo = pulse_halo_frame(blast.position, camera);
+                    let halo_scale = if law.halo_hide_at.is_none_or(|hide| blast.age < hide) {
+                        blast.ease[0]
+                    } else {
+                        0.0
+                    };
+                    let unit = |ease: f32| Mat4::from_scale(Vec3::splat(ease * PULSE_MODEL_UNIT));
                     PlasmaBlastDraw {
-                        matrix,
-                        halo_seconds: blast.age * PLASMA_BLAST_HALO_ANIM_RATE,
-                        hemisphere2_seconds: blast.age * PLASMA_BLAST_HEMISPHERE2_ANIM_RATE,
-                        hemisphere1_seconds: blast.age * PLASMA_BLAST_HEMISPHERE1_ANIM_RATE,
-                        hd_scale: None,
-                        hd_clock: 0.0,
+                        matrices: [
+                            halo * unit(halo_scale),
+                            hemispheres * unit(blast.ease[1]),
+                            hemispheres * unit(blast.ease[2]),
+                        ],
+                        tints: plasma_tints(&law, blast.age),
+                        clock: blast.age,
+                        hd: false,
                     }
                 }
             })
         })
     }
+}
+
+/// The frame Pulse's two hemispheres are placed in, world-fixed from the
+/// detonation: local `x` along the track's heading, `y` its up and `z` its
+/// right, translated to `position` ([`Race::track_frame_at`] has what this
+/// frame is read off and what is inferred).
+fn pulse_frame(position: Vec3, [heading, up, right]: [Vec3; 3]) -> Mat4 {
+    Mat4::from_cols(
+        heading.extend(0.0),
+        up.extend(0.0),
+        right.extend(0.0),
+        position.extend(1.0),
+    )
+}
+
+/// The halo's frame: the camera's own orientation and nothing of its
+/// position - local `z` along the way the camera looks, `y` its up, `x` its
+/// left (the dumps' rows `(0.043, -0.012, -0.999)`, `(0.050, 0.999, -0.010)`,
+/// `(0.998, -0.049, 0.044)` while the camera heads along `+x`). Confidence
+/// 70: one capture heading, and the orientation-only reading is the one
+/// `PlasmaBlast_Update`'s read of the camera's `+0x48/+0x58/+0x68` (three
+/// `z` components, negated and normalised) fits (plasma.md).
+fn pulse_halo_frame(position: Vec3, camera: Mat4) -> Mat4 {
+    let look = camera.transform_vector3(Vec3::NEG_Z).normalize_or_zero();
+    let up = camera.transform_vector3(Vec3::Y).normalize_or_zero();
+    Mat4::from_cols(
+        up.cross(look).extend(0.0),
+        up.extend(0.0),
+        look.extend(0.0),
+        position.extend(1.0),
+    )
 }
 
 /// A billboard basis at `position`, facing `camera_position` - see
@@ -384,7 +629,7 @@ fn billboard_matrix(position: Vec3, camera_position: Vec3) -> Mat4 {
         Vec3::Y
     };
     // `reference x forward`, then `forward x right`: a rotation. The other
-    // order (this function's own until 2026-09-24) is a reflection, which
+    // order is a reflection, which
     // drew Pulse's blast shells mirrored - see
     // `Race::projectile_model_matrices`'s own doc comment for the same fix.
     let right = reference.cross(forward).normalize_or_zero();
@@ -400,8 +645,7 @@ fn billboard_matrix(position: Vec3, camera_position: Vec3) -> Mat4 {
 /// `billboard_matrix`'s basis rebuilt the way Wipeout HD builds its own for
 /// the two discs: `Z` pointing **away** from the camera, the billboard's up
 /// kept, and `X = Y x Z` - a rotation, as `billboard_matrix` itself now is
-/// too (it was a reflection until 2026-09-24; fixing it negated `X` alone,
-/// so this function's output did not move). The handedness matters once back
+/// too. The handedness matters once back
 /// faces are culled: a reflection reverses every triangle's winding on
 /// screen, so the cull would hide exactly the faces the original draws.
 ///
@@ -416,7 +660,7 @@ fn billboard_matrix(position: Vec3, camera_position: Vec3) -> Mat4 {
 /// culls back faces - so the only orientation in which the original can show
 /// it at all is `-Z` towards the viewer. Confidence 80: which camera column
 /// the vector is was not traced element by element, and the disc's own
-/// authoring is what settles the sign. See plasma.md's 2026-09-23 section.
+/// authoring is what settles the sign. See plasma.md.
 fn facing_away(matrix: Mat4) -> Mat4 {
     let up = matrix.y_axis.truncate();
     let away = -matrix.z_axis.truncate();

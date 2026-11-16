@@ -155,6 +155,17 @@ pub(crate) struct MenuArgs {
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_model_seconds: Option<f32>,
 
+    /// With `--menu-page`, the frame of the disc's looping menu backdrop movie
+    /// to draw behind the page, counting from zero; past the end it wraps.
+    ///
+    /// The movie runs from boot and never restarts, so where a reference still
+    /// caught it depends on how long the walk took: the streaks and the craft
+    /// that fly past are bright for about 0.3 s of the nine-second loop.
+    /// `scripts/compare-menu-movie-phase.py` finds the frame a still shows.
+    /// `None` draws frame zero. No effect on a title with no backdrop movie.
+    #[arg(long, value_name = "FRAME")]
+    pub(crate) menu_movie_frame: Option<usize>,
+
     /// With `--menu-page`, draw a modal prompt over it: `rename`,
     /// `rename-note`, `delete`, `delete-built-in` or `binding`.
     ///
@@ -180,6 +191,10 @@ pub(crate) struct MenuArgs {
     /// `docs/formats/fexml.md`'s `TagInput` section. Needs a real `--race`
     /// source open, since it reads the row's geometry live off the disc;
     /// `-typed` is the same screen after a few glyph changes.
+    ///
+    /// `player-name` and `player-tag` draw the first-run entries on Pulse's own `TagInput` row
+    /// (needs a Pulse source); `player-name-grid` and `player-tag-grid` draw the grid every other
+    /// title gets.
     #[arg(long, value_name = "PROMPT", requires = "menu_page")]
     pub(crate) menu_prompt: Option<String>,
 }
@@ -718,7 +733,10 @@ impl NetArgs {
             platform: opened.archives.layout.platform.to_string(),
             content: oag_game::mods::Mods::load_for_profile()
                 .ok()
-                .map_or(0, |mods| mods.content_fingerprint()),
+                .map_or(0, |mods| {
+                    let picks = oag_game::settings::load().unwrap_or_default().mod_settings;
+                    mods.content_fingerprint(&picks)
+                }),
             build: oag_net::BUILD_VERSION.to_string(),
         };
         let action = if self.online_create {
@@ -791,6 +809,23 @@ pub(crate) struct DevArgs {
     #[arg(long, value_name = "SCRIPT")]
     pub(crate) script: Option<String>,
 
+    /// Play one rumble pattern on the connected pad and exit: a disc pattern by name
+    /// (`Missile_Fired_Rumble`, read from `--source`) or the path of a `.toml` pattern.
+    ///
+    /// Opens the pad subsystem with no window, steps the pattern at 60 Hz through the
+    /// same player and `gilrs` backend a race uses, prints every level it sends, and
+    /// silences the motors. The law is `[controls] rumble` (`ps3` or `ps4`; `original`
+    /// is the booted title's own). A looping pattern is held for `--rumble-hold` seconds.
+    /// Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(long, value_name = "NAME|FILE.toml")]
+    pub(crate) rumble_pattern: Option<String>,
+
+    /// Seconds `--rumble-pattern` holds a looping pattern before finishing it.
+    #[cfg(feature = "dev-cli")]
+    #[arg(long, default_value_t = 2.0, requires = "rumble_pattern")]
+    pub(crate) rumble_hold: f32,
+
     /// Log one line a second on every stage, menus included: stage, fps, frame/CPU/GPU/present
     /// time, target rate, window, surface and render size. `OAG_FRAME_LOG=1` does the same.
     /// To the terminal and the log file. Dev only.
@@ -853,4 +888,72 @@ impl DevArgs {
             .map(Some)
             .map_err(|why| anyhow::anyhow!("--drive: {why}"))
     }
+}
+
+/// The attract demo as a run of its own.
+#[derive(clap::Args, Debug)]
+pub(crate) struct DemoArgs {
+    /// Start in an all-AI demo race and chain the next when one ends; any input returns to the menu.
+    ///
+    /// With `--dry-run` or `--screenshot` no window opens: `--dry-run` flies demos back to back
+    /// (`--ticks` shortens each) and logs each pick; `--screenshot` captures one. See
+    /// docs/ui/attract-demo.md.
+    #[arg(long, conflicts_with_all = ["race", "launcher"])]
+    pub(crate) demo: bool,
+
+    /// Like `--demo`, as a wallpaper: input is ignored (Escape quits) and the HUD is hidden.
+    /// On a Wayland compositor with `wlr-layer-shell` (niri, sway, Hyprland) it is the desktop
+    /// background of every output, a camera each; SIGINT or SIGTERM ends it.
+    #[arg(long, conflicts_with_all = ["race", "launcher"])]
+    pub(crate) wallpaper: bool,
+
+    /// The most frames a second a `--wallpaper` draws (a rate, or `unlimited`), whatever the
+    /// VSYNC and FRAME LIMIT settings say, so a background does not run the GPU flat out.
+    #[arg(long, value_name = "FPS", default_value = "30", requires = "wallpaper")]
+    pub(crate) wallpaper_fps: oag_present::perf::FrameLimit,
+}
+
+impl DemoArgs {
+    /// `Some(wallpaper)` when the run is a demo.
+    pub(crate) fn mode(&self) -> Option<bool> {
+        (self.demo || self.wallpaper).then_some(self.wallpaper)
+    }
+
+    /// `--wallpaper-fps`, for a wallpaper only.
+    pub(crate) fn limit(&self) -> Option<oag_present::perf::FrameLimit> {
+        self.wallpaper.then_some(self.wallpaper_fps)
+    }
+}
+
+/// `--png-info` and `--from-png`: reading a screenshot's own description back.
+#[derive(clap::Args, Debug, Default)]
+pub(crate) struct ShotArgs {
+    /// Print the description a screenshot of ours carries (the `oag` text chunk: title, race,
+    /// camera, render settings, adapter, mods, build and the flags that draw it again) and
+    /// stop. Reads the file only; opens no disc and no window.
+    #[arg(long, value_name = "FILE.png")]
+    pub(crate) png_info: Option<PathBuf>,
+
+    /// Make a screenshot of ours again: rebuild its race from the input stream it carries,
+    /// re-simulate to its tick, say whether the state hash matches, and draw the frame to
+    /// `--screenshot` (default `<file>-rerender.png`). Needs the same title's disc, found as
+    /// every other run finds it.
+    #[arg(long, value_name = "FILE.png")]
+    pub(crate) from_png: Option<PathBuf>,
+
+    /// Open a screenshot of ours, or a replay file (`.oagr`), in the replay viewer: the game
+    /// starts, and once the main menu is up the race the file carries is loaded. A replay plays
+    /// from the start; a screenshot opens paused on the tick it was taken at (press CROSS to play
+    /// it from the beginning). A file that is neither, has no input stream, was taken on another title or needs a
+    /// simulation mod this machine lacks is told to the player over the main menu. The same
+    /// opens by dropping the file on the window over the main menu or the attract demo. Needs
+    /// the same title's disc, found as every other run finds it; use `--from-png` to draw the
+    /// frame again headless instead.
+    #[arg(
+        long,
+        value_name = "FILE",
+        visible_alias = "watch",
+        conflicts_with_all = ["from_png", "png_info", "race", "screenshot", "dry_run"]
+    )]
+    pub(crate) replay_png: Option<PathBuf>,
 }

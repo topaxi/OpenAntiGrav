@@ -21,7 +21,8 @@ use super::*;
 fn shield_model(
     archives: &mut oag_assets::Archives,
     name: &str,
-) -> Result<(Model, String), String> {
+    store: oag_gpu::formats::SceneStore,
+) -> Result<(Model, String, Option<[f32; 4]>), String> {
     let blob = archives
         .read_name(name)
         .map_err(|_| format!("{name}: not in the archive set"))?;
@@ -43,21 +44,49 @@ fn shield_model(
                 note.push_str(line.strip_prefix(&format!("{name}: ")).unwrap_or(&line));
             }
         }
-        return Ok((model, note));
+        return Ok((model, note, None));
     }
     let sibling = mesh::rcs::sibling_name(name);
     let geometry = sibling
         .as_deref()
         .and_then(|s| archives.read_name(s).ok())
-        .ok_or_else(|| format!("{name}: a PS3 .vex with no .rcsmodel beside it"))?;
-    let (model, built) = mesh::rcs::build(
-        name,
-        &blob,
-        &geometry,
-        &mut |path| archives.read_name(path).ok(),
-        |c| c.mesh,
-    )
-    .map_err(|error| format!("{name}: its .rcsmodel does not build ({error})"))?;
+        .ok_or_else(|| {
+            format!("{name}: a .vex with external geometry and no .rcsmodel beside it")
+        })?;
+    let (mut model, built, colour) = if mesh::rcs::psp2::is_psp2(&geometry) {
+        let (model, built) = mesh::rcs::psp2::build(name, &geometry, None, &mut |path| {
+            archives.read_name(path).ok()
+        })
+        .map_err(|error| format!("{name}: its .rcsmodel does not build ({error:#})"))?;
+        let half = archives.layout.platform == oag_assets::Platform::Vita;
+        (model, built.describe(), shield_colour_psp2(&geometry, half))
+    } else {
+        let (model, built) = mesh::rcs::build(
+            name,
+            &blob,
+            &geometry,
+            &mut |path| archives.read_name(path).ok(),
+            store,
+            |c| c.mesh,
+        )
+        .map_err(|error| format!("{name}: its .rcsmodel does not build ({error})"))?;
+        (model, built.describe(), shield_colour(&geometry))
+    };
+    if psp2_alpha_from_texture_alpha(&geometry) {
+        for vertex in &mut model.vertices {
+            vertex.slots =
+                (vertex.slots & !mesh::slots::alpha_channel(3)) | mesh::slots::alpha_channel(3);
+        }
+    }
+    if colour.is_some() {
+        // The program multiplies its output by `ShieldColour`. The race writes
+        // that colour into the vertex colour each frame, so the authored baked
+        // light must not scale it.
+        model.shield_shell = true;
+        for vertex in &mut model.vertices {
+            vertex.colour[..3].fill(1.0);
+        }
+    }
     // **Said out loud because the picture does not say it.** A shield model
     // draws additively and `mesh::rcs` resolves no material - HD authors one per
     // team (`/data/materials/ships/<team>_shield.rcsmaterial`) and nothing here
@@ -67,15 +96,84 @@ fn shield_model(
     // still right - it is real decoded geometry, and the substitute is for the
     // missing material alone - but a reviewer looking at an HD capture has to be
     // told which half is recovered.
+    let colour_note = match colour {
+        Some([r, g, b, a]) => format!("ShieldColour ({r:.3}, {g:.3}, {b:.3}, {a:.3})"),
+        None => "no ShieldColour parameter".to_string(),
+    };
     Ok((
         model,
         format!(
             "{}, and no material - HD's own .rcsmaterial is not read, so it is \
-             brighter and flatter than the disc's",
-            built.describe()
+             brighter and flatter than the disc's; {colour_note}",
+            built
         ),
+        colour,
     ))
 }
+
+/// The `ShieldColour` a shell's `.rcsmodel` authors on its material: the colour
+/// the raised shield settles to (`ShipShield_BindColourParam`,
+/// `docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "The steady-state colour is
+/// read"). `None` when the file does not parse or no material carries it.
+fn shield_colour(geometry: &[u8]) -> Option<[f32; 4]> {
+    let model = oag_rcs::rcsmodel::Model::parse(geometry).ok()?;
+    model
+        .materials
+        .iter()
+        .flat_map(|material| material.parameters.iter())
+        .find(|parameter| parameter.hash == oag_fx::absorb_shell::SHIELD_COLOUR)
+        .map(|parameter| parameter.value)
+}
+
+/// [`shield_colour`] for the Vita/PS4 container (`oag_rcs::rcsmodel::psp2`):
+/// four `f32` on PS4, four IEEE halves on the Vita widened by the reader.
+///
+/// **A half the game reads as zero reads as zero here.** The Vita's bind widens
+/// a half with exponent `0` (subnormal) or `0x1f` (Inf/NaN) to `0.0`, which the
+/// reader does not (`Feisar_c1`'s red is a subnormal), so `half` flushes both
+/// (`docs/ghidra/functions/vita-2048-eu-v104/shield.md`). A value that ends the
+/// parameter pool loses its fourth component in the reader (the game copies all
+/// sixteen bytes); that alpha is then `0.0`, unread. The only consumer is
+/// the max with the cockpit sphere's alpha, which is `1`
+/// wherever such a colour occurs (Omega's Zone, an HD-content shell).
+fn shield_colour_psp2(geometry: &[u8], half: bool) -> Option<[f32; 4]> {
+    let model = oag_rcs::rcsmodel::psp2::parse(geometry).ok()?;
+    let value = model
+        .materials
+        .iter()
+        .find_map(|material| material.param(oag_fx::absorb_shell::SHIELD_COLOUR))?;
+    let flush = |x: f32| {
+        if half && (!x.is_finite() || (x != 0.0 && x.abs() < HALF_MIN_NORMAL)) {
+            0.0
+        } else {
+            x
+        }
+    };
+    match value[..] {
+        [r, g, b, a] => Some([flush(r), flush(g), flush(b), flush(a)]),
+        [r, g, b] => Some([flush(r), flush(g), flush(b), 0.0]),
+        _ => None,
+    }
+}
+
+/// Whether a Vita/PS4 shell's material is `2048_shipshield_old`, whose pixel program takes
+/// its output alpha from the diffuse texture's **alpha** channel (`image_sample ... dmask:0x8`)
+/// times `ShieldColour.a` and the vertex alpha; the builder's default reads the red channel,
+/// which on the hexagon atlas is a dim gradient. `2048_Magnetic_Shield` reads red, so it keeps
+/// the default (`docs/ghidra/functions/ps4-omega-eu/shield.md`, "The two shell programs").
+fn psp2_alpha_from_texture_alpha(geometry: &[u8]) -> bool {
+    oag_rcs::rcsmodel::psp2::parse(geometry).is_ok_and(|model| {
+        model.materials.iter().any(|material| {
+            material
+                .name
+                .to_ascii_lowercase()
+                .ends_with("2048_shipshield_old.rcsmaterial")
+        })
+    })
+}
+
+/// The smallest normal binary16, `2^-14`; anything under it is a subnormal.
+const HALF_MIN_NORMAL: f32 = 6.103_515_6e-5;
 
 /// The shell a fired Shield pickup raises, from the first of
 /// [`entry::shield_entry_names`] the source actually carries.
@@ -100,8 +198,9 @@ pub(super) fn shell(
     team: &str,
     ship_dir: &str,
     team_model: Option<&str>,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
-) -> Option<Model> {
+) -> Option<(Model, Option<[f32; 4]>)> {
     let names =
         crate::entry::shield_entry_names(ship_dir, team, archives.layout.platform, team_model);
     for (index, name) in names.iter().enumerate() {
@@ -110,10 +209,10 @@ pub(super) fn shell(
         } else {
             "shared - this source carries no per-team shell"
         };
-        match shield_model(archives, name) {
-            Ok((model, note)) => {
+        match shield_model(archives, name, store) {
+            Ok((model, note, colour)) => {
                 report.push(format!("{name}: {note} - the shield shell, {provenance}"));
-                return Some(model);
+                return Some((model, colour));
             }
             Err(line) => report.push(line),
         }
@@ -136,21 +235,26 @@ pub(super) fn shell(
 /// **`ShipShield_Update` chooses between the two on `craft+0x6d`**, the same
 /// byte `oag_display::display::CameraView::draws_own_ship` reads - see that function,
 /// whose confidence-70 note this is a second consumer for.
+///
+/// The second value is the sphere's `ShieldColour` alpha, which Omega's and
+/// 2048's constructor takes the larger of with the shell's: `1.0` when the model
+/// is missing or authors no such parameter (the object's white default).
 pub fn cockpit_shield(
     archives: &mut oag_assets::Archives,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
-) -> Option<Model> {
+) -> (Option<Model>, f32) {
     let name = oag_pulse::race::COCKPIT_SHIELD;
-    match shield_model(archives, name) {
-        Ok((model, note)) => {
+    match shield_model(archives, name, store) {
+        Ok((model, note, colour)) => {
             report.push(format!(
                 "{name}: {note} - the shield seen from inside the cockpit"
             ));
-            Some(model)
+            (Some(model), colour.map_or(1.0, |colour| colour[3]))
         }
         Err(line) => {
             report.push(format!("{line} - no cockpit shield"));
-            None
+            (None, 1.0)
         }
     }
 }

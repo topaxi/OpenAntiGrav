@@ -84,7 +84,9 @@ pub(super) struct PlayerStep {
     pub(super) evaluated: Evaluated,
     /// [`Race::reset_zone_contact`], read before the collision cage moved the craft.
     reset_contact: bool,
-    spline_distance: Option<f32>,
+    /// The position of the spline sample the craft was located on, the
+    /// original's `craft+0xaf0` record.
+    located: Option<Vec3>,
 }
 
 impl Race {
@@ -106,7 +108,12 @@ impl Race {
             self.autopilot_controls(slot)
         } else {
             self.release_autopilot(slot);
-            ship_controls(snapshot, self.sim.scheme)
+            let snapshot = if self.sim.flip_law.is_some() {
+                snapshot.shoulder_flips()
+            } else {
+                *snapshot
+            };
+            ship_controls(&snapshot, self.sim.scheme)
         };
         // Past the line the original's own law sets the pace - see
         // `race::finished_thrust`.
@@ -138,6 +145,14 @@ impl Race {
         slot: usize,
         controls: &oag_physics::ShipControls,
     ) -> PlayerStep {
+        // Out of the world in a transit: frozen, nothing evaluated (`crate::transit`).
+        if self.sim.world.ships[slot].transit.is_some() {
+            return PlayerStep {
+                evaluated: Evaluated::idle(&self.sim.world.ships[slot].physics),
+                reset_contact: false,
+                located: None,
+            };
+        }
         // The two spline samples the magstrip hold reads. In the original these are
         // `AiTrack_LocatePosition`'s two output records on the ship entity; here
         // they are the nearest table entry and the one after it, which is the same
@@ -152,10 +167,12 @@ impl Race {
         // is, which is the player's own off-track trigger. Taken from here
         // rather than scanned again after the step - the table is ~3,400 samples
         // and a second fold would double the tick's hottest loop to move a
-        // measurement one tick, under a dwell of [`PLAYER_RESCUE_TICKS`].
+        // measurement one tick, under a dwell of [`DISTANCE_RESET_TICKS`].
         let spline_distance = nearest.map(|(_, _, distance)| distance);
+        let located = nearest.map(|(_, sample, _)| Vec3::from_array(sample.pos));
         let track_sample = nearest.map(|(_, sample, _)| Spline::track_sample(sample));
         let crumb_flags = nearest.map(|(_, sample, _)| sample.flags);
+        self.record_track_up(slot, track_sample);
         // The neighbour is the next entry in table order, which at the end of a
         // path is the *next path's* first sample rather than the geometric
         // successor through a junction. The original follows the junction graph;
@@ -213,7 +230,9 @@ impl Race {
         // and this one returns nothing, because a pickup is an event rather than
         // a per-tick force.
         self.test_weapon_pads(slot, before, moved, &sweep);
-        self.sim.extensions.test_triggers(slot, &sweep);
+        self.sim
+            .extensions
+            .test_triggers(slot, &sweep, self.sim.world.tick);
         // The mode's rules, read before the craft is borrowed: `World::mode`
         // asks the whole world and the borrow checker will not have both.
         let env_damage_rules = self.sim.damage_rules();
@@ -263,7 +282,7 @@ impl Race {
             controls,
             &ship.handling,
             &env,
-            &self.sim.collision,
+            &*self.sim.collision,
             self.sim.dt,
         );
         let reset_contact = self.reset_zone_contact(slot, &env, before);
@@ -291,7 +310,7 @@ impl Race {
         PlayerStep {
             evaluated,
             reset_contact,
-            spline_distance,
+            located,
         }
     }
 
@@ -316,13 +335,28 @@ impl Race {
         }
     }
 
+    /// Stores the up of the sample a craft is located on in `Ship::track_up`, the
+    /// original's `-(craft+0xb10)`: the weapons born this tick or the next carry it
+    /// ([`oag_weapons::Craft::launch_normal`]). `None` where the title launches
+    /// along the craft's own up or the track has no sample.
+    pub(super) fn record_track_up(
+        &mut self,
+        slot: usize,
+        sample: Option<oag_physics::TrackSample>,
+    ) {
+        self.sim.world.ships[slot].track_up = sample
+            .filter(|_| self.sim.launch_normal_is_track_up)
+            .map(|sample| sample.normal());
+    }
+
     /// The player's off-track, airborne and reset-zone rescue for slot `slot`,
     /// after the tick's craft have all moved.
     pub(super) fn rescue_player(&mut self, slot: usize, step: &PlayerStep) {
         self.sim.respawn_cooldown[slot] = self.sim.respawn_cooldown[slot].saturating_sub(1);
-        // Unconditionally and before the `||`, so the dwell sees every tick -
-        // the same argument `step_opponents` makes for its two counters.
-        let off_the_track = self.lost_off_the_track(slot, step.spline_distance);
+        // Held in a transit: no trigger reads, so no dwell is banked out of the world.
+        if self.reset_held(slot) {
+            return;
+        }
         // **Not a wreck**, the same gate `step_opponents` applies: in an
         // Eliminator the player sits `Eliminated` for the respawn dwell, and
         // a rescue firing inside it would rebuild the craft as a racing one
@@ -331,12 +365,14 @@ impl Race {
             self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
         let reset = self.reset_zone_touched(slot, step.reset_contact);
         let airborne = self.airborne_too_long(slot);
-        let cage = std::mem::take(&mut self.sim.cage_reset[slot]);
-        if alive && (off_the_track || airborne || reset || cage) {
-            let cause = if off_the_track {
-                respawn::RespawnCause::OffTrack
-            } else if airborne {
+        let distant = self.far_from_the_sample(slot, step.located);
+        let cage = std::mem::take(&mut self.sim.cage_reset[slot])
+            && self.armed(slot, self.sim.reset_triggers.cage);
+        if alive && (airborne || distant || reset || cage) {
+            let cause = if airborne {
                 respawn::RespawnCause::Airborne
+            } else if distant {
+                respawn::RespawnCause::Distance
             } else if cage {
                 respawn::RespawnCause::Cage
             } else {
@@ -405,6 +441,15 @@ impl Race {
         // to the ship's own pool. `Ship_SetShield` (`0x0883e6f4`) does the
         // same clamp against the stat block's maximum, so a full ship gains
         // nothing and the bar cannot overfill.
+        if primary
+            && outcome.zone_advanced
+            && let Some(xp) = self.sim.xp.as_mut()
+        {
+            xp.zone_cleared(self.sim.world.race[slot].zone, outcome.perfect_zone);
+        }
+        if primary && outcome.lap_completed {
+            self.xp_lap_completed();
+        }
         if primary && outcome.perfect_zone && self.draws() {
             self.view.run_stats.perfect_zones += 1;
         }

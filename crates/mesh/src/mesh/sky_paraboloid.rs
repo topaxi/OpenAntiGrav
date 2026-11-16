@@ -88,16 +88,45 @@ fn direction(u: f32, v: f32) -> [f32; 3] {
 /// `+X, -X, +Y, -Y, +Z, -Z`. `SIZE.0 * SIZE.1 * 4` bytes, alpha 255.
 #[must_use]
 pub fn build(faces: [&[u8]; 6], face_size: u32) -> Vec<u8> {
+    build_level(faces, face_size, SIZE)
+}
+
+/// Bytes of a map whose levels `0..levels` are `SIZE` halved per level: what
+/// [`crate::mesh_render::upload_sky_probe`] reads a chain's level count back from.
+#[must_use]
+pub fn chain_bytes(levels: u32) -> usize {
+    (0..levels)
+        .map(|k| ((SIZE.0 >> k) * (SIZE.1 >> k) * 4) as usize)
+        .sum()
+}
+
+/// Omega's sky cube array as a map whose level `k` is cube `k`, each cube one more blur step
+/// (`skyCube.gnf`, `docs/ghidra/functions/ps4-omega-eu/panel-displacement.md`): the program mixes
+/// cube `floor(lod)` with the next by `fract(lod)`, which two level reads at `floor(lod)` and
+/// `floor(lod) + 1` give back. Each cube as its six square `RGBA8` faces, cube `k`'s
+/// `face_size >> k` a side (each read at the mip that matches its level of the map).
+#[must_use]
+pub fn from_cubes(cubes: &[[Vec<[u8; 4]>; 6]], face_size: u32) -> Vec<u8> {
+    let mut out = Vec::with_capacity(chain_bytes(cubes.len() as u32));
+    for (level, faces) in cubes.iter().enumerate() {
+        let faces: [&[u8]; 6] = std::array::from_fn(|f| faces[f].as_flattened());
+        let side = (face_size >> level).max(1);
+        out.extend(build_level(faces, side, (SIZE.0 >> level, SIZE.1 >> level)));
+    }
+    out
+}
+
+fn build_level(faces: [&[u8]; 6], face_size: u32, size: (u32, u32)) -> Vec<u8> {
     let n = face_size as usize;
-    let mut out = Vec::with_capacity((SIZE.0 * SIZE.1 * 4) as usize);
+    let mut out = Vec::with_capacity((size.0 * size.1 * 4) as usize);
     let samples = (SUBSAMPLES * SUBSAMPLES) as f32;
-    for j in 0..SIZE.1 {
-        for i in 0..SIZE.0 {
+    for j in 0..size.1 {
+        for i in 0..size.0 {
             let mut sum = [0.0f32; 3];
             for sj in 0..SUBSAMPLES {
                 for si in 0..SUBSAMPLES {
-                    let u = (i as f32 + (si as f32 + 0.5) / SUBSAMPLES as f32) / SIZE.0 as f32;
-                    let v = (j as f32 + (sj as f32 + 0.5) / SUBSAMPLES as f32) / SIZE.1 as f32;
+                    let u = (i as f32 + (si as f32 + 0.5) / SUBSAMPLES as f32) / size.0 as f32;
+                    let v = (j as f32 + (sj as f32 + 0.5) / SUBSAMPLES as f32) / size.1 as f32;
                     let (face, fu, fv) = face_and_uv(direction(u, v));
                     let px = ((fu * n as f32) as usize).min(n - 1);
                     let py = ((fv * n as f32) as usize).min(n - 1);
@@ -116,10 +145,14 @@ pub fn build(faces: [&[u8]; 6], face_size: u32) -> Vec<u8> {
     out
 }
 
-/// The map of a sky model [`super::sky_cube::build`] made: six square `RGBA8` faces. `None` for any
-/// other model (a Pulse sky mesh, an uploaded or compressed face), which then has no map to bind.
+/// The map of a sky model: the [`Model::sky_reflection`] its loader found, else the one built from
+/// the six square `RGBA8` faces of a [`super::sky_cube::build`] model. `None` for any other model
+/// (a Pulse sky mesh, an uploaded or compressed face), which then has no map to bind.
 #[must_use]
 pub fn from_sky(sky: &Model) -> Option<Vec<u8>> {
+    if let Some(map) = &sky.sky_reflection {
+        return Some(map.to_vec());
+    }
     let mut faces: Vec<&[u8]> = Vec::with_capacity(6);
     let mut size = None;
     for texture in &sky.textures {

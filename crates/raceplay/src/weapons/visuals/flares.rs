@@ -5,9 +5,7 @@
 //! gate and name.
 //!
 //! Split out of `visuals.rs` under the 1,000-line rule in
-//! `scripts/check-file-size.py` on 2026-09-16, when the Plasma's charge glow
-//! and its cockpit halving took that file to 1,008; a move, with no behaviour
-//! change. The seam is the one the file already had - `impl Race` above,
+//! `scripts/check-file-size.py`; a move, with no behaviour change. The seam is the one the file already had - `impl Race` above,
 //! free functions below - and every name keeps its `pub(crate)`
 //! visibility so `weapons.rs`'s test re-exports resolve unchanged.
 
@@ -15,7 +13,8 @@ use super::super::*;
 
 /// Which flare effect, if any, a projectile of this kind rides - the
 /// Rocket's [`Trigger::RocketFlare`], the Missile's [`Trigger::MissileFlare`],
-/// or `None` for everything else, including a Mine or a Bomb.
+/// Pure's laid Bomb's [`Trigger::BombGlow`] and Disruptor's [`Trigger::DisruptorHead`], or
+/// `None` for everything else, a Mine included.
 ///
 /// Split out of [`Race::advance_projectile_flares`] so the gate is testable
 /// without a loaded `psys` library: the bug this replaced (`kind.is_none()`,
@@ -29,8 +28,35 @@ pub(crate) fn flare_effect_for(kind: Option<oag_tables::weapons::Weapon>) -> Opt
         oag_tables::weapons::Weapon::Missile => Some(Trigger::MissileFlare),
         oag_tables::weapons::Weapon::Plasma => Some(Trigger::PlasmaFlare),
         oag_tables::weapons::Weapon::Shuriken => Some(Trigger::ShurikenFlare),
+        // Pure's alone: a title whose table answers neither trigger rides nothing.
+        oag_tables::weapons::Weapon::Bomb => Some(Trigger::BombGlow),
+        oag_tables::weapons::Weapon::Disruptor => Some(Trigger::DisruptorHead),
         _ => None,
     }
+}
+
+/// The most ticks a riding effect attached late is aged by: past it the rest of the trail
+/// is left out. Chosen, not measured; a network client's shot first shows at most
+/// `oag_net::client::FIRST_SEEN_CAP` ticks old.
+pub(crate) const LATE_ATTACH_MAX_TICKS: u32 = 40;
+
+/// For a shot that has been in the air two ticks or more: how many ticks to age the effect
+/// it is about to be given, and how far behind it the effect starts (straight back along its
+/// velocity, the flight's curve not kept). `None` for a shot on the tick it was fired, the
+/// only case with every tick drawn, and for one that does not say how long it has flown
+/// (`Projectile::seconds_since_fired`: the Shuriken), whose effect starts fresh.
+pub(crate) fn late_attach(
+    projectile: &oag_weapons::projectile::Projectile,
+    dt: f32,
+) -> Option<(u32, Vec3)> {
+    let ticks = (projectile.seconds_since_fired()? / dt).round();
+    if ticks < 2.0 {
+        return None;
+    }
+    let ticks = (ticks as u32).min(LATE_ATTACH_MAX_TICKS);
+    #[expect(clippy::cast_precision_loss, reason = "at most forty")]
+    let back = projectile.velocity * (ticks as f32 * dt);
+    Some((ticks, back))
 }
 
 /// One riding flare instance's whole state machine for one tick: attach,
@@ -42,7 +68,7 @@ pub(crate) fn flare_effect_for(kind: Option<oag_tables::weapons::Weapon>) -> Opt
 /// a `&mut Race` method, so the caller can hold two `&mut Option<Playing>`
 /// slots - [`RaceView::projectile_flare`] and [`RaceView::projectile_flare_orbit`] -
 /// live at once without a second borrow of `self`.
-pub(super) fn advance_one_flare(
+pub(crate) fn advance_one_flare(
     stage: &mut psys::Stage,
     handles: &EffectHandles,
     trigger: Option<Trigger>,
@@ -69,6 +95,19 @@ pub(super) fn advance_one_flare(
         (Some(trigger), None) => {
             if let Some(effect) = handles.get(trigger).cloned() {
                 *playing = stage.attach(&effect, at, scale);
+                // `Plasma_Init` spawns the head with flag `0x10` and the craft's
+                // weapon node as its parent (`+0xbc`), whose world matrix
+                // `PsysNode_Update` reads every frame, so the root's arcs (flag
+                // `0x2`) ride the craft (`docs/ghidra/functions/psp-pulse-usa/plasma.md`,
+                // "the head's arcs ride the craft"). Pulse's PSP file only.
+                if let (Trigger::PlasmaFlare, Some(instance), true) =
+                    (trigger, *playing, effect.rides_owner_frame)
+                {
+                    stage.set_rides_frame(instance, true);
+                    // The arcs' drawn size follows the charge, not the severity they
+                    // were born with (`plasma.md`, "the arcs' size follows the charge").
+                    stage.set_draws_live_severity(instance, true);
+                }
             }
         }
     }
@@ -95,7 +134,7 @@ pub(super) fn advance_one_flare(
 /// charging value" rather than needing a second branch for it - see below.
 ///
 /// **Ports the further `* 0.5` when the firing craft's `+0x6d` flag is set -
-/// closed 2026-09-16.** `craft+0x6d` is the internal/cockpit camera flag:
+/// closed.** `craft+0x6d` is the internal/cockpit camera flag:
 /// `camera.md`'s SELECT-view cycle writes `1` for `OPT_INT` and `0` for both
 /// external views, on the player craft alone, and `shield-pickup.md` found a
 /// second, independent consumer (`ShipShield_Update`'s own cockpit-shell
@@ -166,6 +205,20 @@ pub(crate) fn plasma_flare_scale(
     if cockpit { scale * 0.5 } else { scale }
 }
 
+/// The row length of the matrix the Plasma head's local-space arcs are drawn through:
+/// the craft's weapon node while charging, the bolt's after `Plasma_Launch`, both
+/// carrying `g_craft_scale` (`0.75`); `1.0` for any other weapon. Read live through the
+/// whole charge (the head node's world rows are `0.7500` on all 60 charging frames) and
+/// off the bolt's matrix at the launch probe
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix and node").
+pub(crate) fn plasma_ride_scale(kind: Option<oag_tables::weapons::Weapon>) -> f32 {
+    if kind == Some(oag_tables::weapons::Weapon::Plasma) {
+        oag_physics::hover::TARGET_GLOBAL_SCALE
+    } else {
+        1.0
+    }
+}
+
 /// The Missile's own two flare anchors this tick, orbiting its flight line -
 /// the primary anchor first, the second in the returned tuple.
 ///
@@ -194,9 +247,8 @@ pub(crate) fn plasma_flare_scale(
 /// `WO_MISSILE_HEAD`, at entity offsets `+0xf0` and `+0x130`) and
 /// `Missile_Update`'s per-tick rewrite of both.
 ///
-/// **Independently consistent with a maintainer's own description from
-/// play**, given before any of this was decompiled: "the missile rotates
-/// with two trails".
+/// **Consistent with a description from play** given before any of this was
+/// decompiled: "the missile rotates with two trails".
 ///
 /// **What is not settled.** The handedness of `right = cross(up, back)` is
 /// cosmetic - it only swaps which of the two visually-interchangeable

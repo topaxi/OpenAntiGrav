@@ -332,21 +332,11 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   lap before the last and a chequered flag on the last; ours plays the same
   frames and culls per frame to the panel (`race::gantry::BoardWindow`,
   `PanelCull`; [gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md#the-lap-windows-played-2026-10-04-hd-gantry-laps-lane)).
-- **2048 and Omega place no gantry** (Omega since 2026-10-26: the loader reads its
-  `321Go` files but the pass is off, `docs/formats/omega-status.md` "Adverts"), so
-  there is no clock to set. Loaded
-  through `race::load`: all ten native 2048 circuits, **thirteen of the sixteen
-  HD-ported 2048 circuits** (the base package's four - `Anulpha_Pass`,
-  `Chenghou_Project`, `Moa_Therma`, `Vineta_K` - and nine of the DLC's, under
-  `Data\art\published\DLC1\environments\`), and on Omega the default circuit,
-  Tech De Ra (HD's circuit) and Altima (2048's) all report `no start gantry:
-  this circuit's track authors no 321backplate/billboard8 surface`
-  (`start_gantry_clock_inherit_ground_truth.rs`). The three HD-ported circuits
-  not loaded are `zone_2`-`zone_4`. Whether 2048's psp2 copy of HD's
-  `321Go_StartFinish.vex` carries the Edge curve `go_edge` walks was not tested,
-  since no circuit stands one; 2048's native `321Go_2048.vex` (`GO` node sliding
-  in at frame 200) has no texture track at all, so `go_edge` would report none
-  and the clock would run from the race start, chosen.
+- **2048 and Omega play `321Go_2048.vex` as a card, and the HD-lineage board too since `omega-billboards`** ("Omega and 2048: the HD-lineage board counts down", at the end of this page) (2026-11-10,
+  [the section below](#omega-and-2048-the-native-board-as-a-card-2026-11-10-omega-gantry)). The clock
+  for that board is `Clock::assembled_at_release` over the board's authored `GO` frame, not HD's
+  race-manager window. 2048's native files have no texture track, so `go_edge` would report none
+  there as well.
 - **A title whose edge is not found** keeps the timeline running from the race
   start, chosen, and the loader says why (`start gantry clock: no GO edge
   found in ...`).
@@ -959,7 +949,9 @@ gantry node's time (`+0xc0` of the `MeshImporter` node, `AnimNode_GetTime`) out 
 so a pair compares like with like (a pair-script change, plus a way to hand ours a gantry time); (2) with
 that, capture the quad's fragment-program constants on Ubermall (`rpcs3_draw_hook.py`, `HOOK_TGT` for the main target) and
 compare with what ours multiplies the card by.
-**Omega/2048: checked, differs.** 2048 and Omega place no gantry (this page, above); nothing to port.
+**Omega/2048: superseded 2026-11-10.** Both titles stand a card for `321Go_2048.vex` (the section "Omega and 2048"
+below); the HD-lineage board's digits are UV keys in its `.vex`, read since `omega-billboards`, so it plays too
+("Omega and 2048: the HD-lineage board counts down").
 
 **Closed 2026-10-21 (`hd-emissive-glow`, [hd-glow-mask.md](hd-glow-mask.md)).** Both leads above are answered, and neither was the lighting factor:
 (1) the **phase** is read out of RAM now: the gantry node's `+0xc0` among the circuit's `MeshImporter` nodes (19 sit inside a race-manager window, all at one value),
@@ -1032,8 +1024,7 @@ Metropia's card read the same panel means (0.267, 4.348, 2.697), so the card is 
 A card read does not come back from a hooked frame's dump (the older note in `rpcs3-capture.md`); with the
 game paused after a state restore it did, on the second pause of a retry loop on Metropia (the first read all zeros).
 
-**What ours does now.** `oag_title::adverts::Adverts::card_565` (HD `true`, measured; Pulse `false`, its card
-format unmeasured) makes `oag_raceplay::adverts::Cards` draw the card with `SceneStore::Packed565`, which sets
+**What ours does now.** `oag_title::adverts::Adverts::card_store` (HD `R5G6B5Linear`, measured; Pulse `Rgba8` until 2026-11-10, see "Pulse's card is 5-6-5, truncated" below) makes `oag_raceplay::adverts::Cards` draw the card with `SceneStore::Packed565`, which sets
 the shader override `packed_out`; `oag_shaders::target::target_out` (the one place every colour fragment
 stage ends on) then rounds the colour to the 5-6-5 levels in linear light by the sRGB curve and stores it encoded with
 the 2.2 power the track quad's sampler decodes with, so the quad receives the rounded level itself. Test:
@@ -1083,10 +1074,9 @@ down, mean 6.162 to 6.106. The HD race pair `hd-race/talons-pack`, rendered from
 in view). The change rounds every HD advert card (slots 2, 3, 5, 7 and the Zone board), not only the gantry's; the side cards' FX-350 advert shows no banding
 at player size.
 
-**2048 and Omega: checked, applies, not wired.** Neither title's `Title::adverts` is set (no card pass; Omega reads the
-`321Go` files and leaves the pass off, `omega-status.md` "Adverts"), so there is no card to round. When a pass is wired for
-either, HD's `R5G6B5` linear card is the inherited law by the maintainer's rule; the Vita's and PS4's own target format is
-not measured (RPCS3 has no Vita or PS4 counterpart; Vita3K gives no VRAM readout and shadPS4 no memory readout).
+**2048 and Omega: ported (2026-11-10).** Both titles' `Title::adverts` is HD's pass with `CardStore::R5G6B5Linear`, inherited
+by the maintainer's rule; the Vita's and PS4's own target format is not measured (RPCS3 has no Vita or PS4 counterpart;
+Vita3K gives no VRAM readout and shadPS4 no memory readout).
 
 ### "Zone levels have a different gantry animation": the mode picks the file
 
@@ -1117,7 +1107,8 @@ picture. **Both claims were wrong, and the blank panel was not the model:** see
 ["The Zone board", below](#wipeout-hd-the-zone-board---the-model-was-fine-the-zone-grade-was-covering-it-2026-10-12-hd-zone-board).
 
 **Per title** (the rule is a single name table by mode id): **Omega** - ported in the binary's own code
-(`ps4-omega-eu/billboards.md`), checked, not wired (no PS4 capture path); **2048** - checked, differs: no manifest
+(`ps4-omega-eu/billboards.md`), checked, not wired (`zone_gantry` stays `None`: the Zone board's art is HD-lineage, and
+the curves below are unread); **2048** - checked, differs: no manifest
 of the twenty-six names any of the three files (see the census above), so the rule has nothing to
 substitute there; **Pulse** - checked, differs: one gantry file, no chooser, and its gantry
 stays a placed model (the card route is measured on HD only).
@@ -1178,7 +1169,7 @@ frozen `START RACE`). Nothing here compares a pixel of the original. The command
 emulator runs: `rpcs3-drive.py countdown --load 75 --drive 25 --nav "Main Menu=right" --nav "Single
 Player=right,right,right,right,right,cross"`, then `scripts/hd-countdown-frames.py` on the recording.
 
-**Zone Battle and Detonator: what their boards need.** The same chooser (`ZoneGantry` is a `Mode::Zone` rule
+**Zone Battle and Detonator: what their boards need.** The same chooser (`Adverts::mode_gantries` is a table by mode, selected only for `Mode::Zone`
 today; it would become a table by mode id, `13`/`21` Zone Battle, `14` Detonator, per the PS4 branch) and two
 new `oag_race::Mode`s, which is not this lane. Their files are `321Go_HD_Zone_Battle.vex` and
 `321Go_HD_Detonator.vex`; `DATA00`'s `321Go_Zone.vex` already references `detonator_scroll.gtf`, so some of the
@@ -1794,9 +1785,9 @@ argument, passed to `ModelTexture::from_gtf` unchanged):
 `data/environments/talons_junction/textures/dds/billboard8.gtf`, not
 `billboard8.gtf`. Matching the whole label never found an HD surface by name
 at all. `mount` now matches on the label's own file name
-(`oag_render::gantry::basename`) and tries a third candidate,
-[`HD_SLOT8_TEXTURE`](../../crates/render/src/gantry.rs) (`billboard8.gtf`),
-after Pulse's two - HD ships no backplate-shaped second surface next to its
+(`oag_assets::texture_name::stem`: the stem, so `.tga`, `.gtf`, `.gxt` and `.gnf` are one comparison) and tries
+[`SLOT8_STEM`](../../crates/render/src/gantry.rs) (`billboard8`),
+after Pulse's backplate - HD ships no backplate-shaped second surface next to its
 own stub, so there is only one name to try there.
 `oag_render::gantry::strip_slot_placeholders` gained the same eight `.gtf`
 spellings, so HD's own `billboard1-8` stubs are finally suppressed the way
@@ -2441,7 +2432,7 @@ shows no white board, so this is not the player's "transparent edges".
 | circuit | material | slots word | indices | UV rect |
 | --- | --- | --- | --- | --- |
 | amphiseum, modesto_heights, talons_junction, tech_de_ra | `billboarddiffuse` (lit) | `0x18` | 228 | 0..1 |
-| 02_track | `cf_vex_billboard` (lit, second texture `tv_glow.gtf`, not wired: no `ADD_SECOND`) | `0x18` | 6 | 0..1 |
+| 02_track | `cf_vex_billboard` (lit, second texture `tv_glow.gtf`; slots word `0x0d000118` since the Metropia wiring: `ADD_SECOND` and billboard entry 1) | `0x18` when surveyed, `0x0d000118` now | 6 | 0..1 |
 | 01_vineta_k, 05_ubermall | `sign_emissive_glow` | `0xd8` | 276 | -0.003..0.997 x 0.003..1.003 |
 | 03_track, 12_sol_2, 15_anulpha_pass | `sign_emissive_glow` | `0xd8` | 276 | 0..1 |
 | 04_chenghou_project, 10_sebenco_climb | `sign_emissive_glow` | `0xd8` | 6 | 0..1 |
@@ -2475,8 +2466,10 @@ for Omega, whose `billboard8` the shared lineage would put on the same quads; 20
 
 **Open.** (1) `billboarddiffuse` and `cf_vex_billboard` have no specular chain, but the stand-in `32` still applies to every
 lit HD material whose program resolves none: switching it off for all of them (`no_specular` without `colour_factor`) moved
-`10_sebenco_climb` by 2,197 px beyond the board, so it is an HD-wide picture change that was not measured here. (2) `tv_glow.gtf`
-on `02_track`'s `cf_vex_billboard` is not bound (no `ADD_SECOND`).
+`10_sebenco_climb` by 2,197 px beyond the board, so it is an HD-wide picture change that was not measured here. (2) ~~`tv_glow.gtf`
+on `02_track`'s `cf_vex_billboard` is not bound~~: closed. `billboard_glass::classify` takes the compile with no `k`, so the
+slot carries `ADD_SECOND` and `Emissive::program` mode 1 (`picture * (glow.a + glow.rgb * light)`, `docs/formats/rcsmaterial.md`, "The gantry boards on Metropia"); pinned by
+`hd_program_glow_ground_truth::metropia_carries_its_programs_glow_masks`. Omega and 2048: **checked, applies, not wired** (same page).
 
 ## Pulse's gantry card against the original: sampler read, ten circuits laid (2026-10-18, `pulse-card-verify`)
 
@@ -2818,3 +2811,177 @@ at 59.87 Hz, so its loop is 0.2 % longer in clock seconds), with no scatter. The
 because they predate `GO_TICK` 272; with it (`psp-pulse-pair.py`) ours is within about 2 ticks and Moa Therma
 White's board matches. What is left needs the node time read at the capture and handed to `--gantry-seconds`
 (the HD pair script does this): a one-tick phase error is 0.3 of this pair's mean grey difference.
+
+## Pulse's card is 5-6-5, truncated (2026-11-10, `psp-blue-bias`)
+
+**Claim: Pulse PSP's gantry and advert card target is a 16-bit R5G6B5 buffer and the GE truncates the 8-bit result to it,
+so the track quad sees 5-bit red and blue and 6-bit green levels. Confidence 90 for the format (read live, two frames),
+85 for truncation over rounding (the original's panel blue sits at the truncated level, below).** Found while hunting
+the "systematic blue lift" of ours against Pulse PSP's race pairs: most of the blue-specific excess is the green `GO`
+panel, 4 to 6 % of the frame, which ours drew 4 higher in blue than the original (11 or 12 against 8).
+
+**Evidence.**
+
+- PPSSPP v1.20.4 software renderer, `pulse-psp-usa.chd`, Metropia White grid state, `psp-ge-dump.py dump` twice (identical):
+  every one of the 22 PRIMs into the 128 x 128 target (`FRAMEBUFPTR` `0x154000`, `FRAMEBUFWIDTH` `0x80`) has
+  `FRAMEBUFPIXFORMAT` (`0xD2`) **0** (`GE_FORMAT_565`); the main target (`0`, 512 wide) and the two bloom targets (`0x110000`,
+  `0x132000`) read 3 (8888). `DTE` (dither enable) is set on those prims but the four dither matrix registers
+  (`0xE2` to `0xE5`) are **zero**, so the write is a plain truncation, not dither.
+- The panel's modal colour in the six best pairs (R, G, B, `theirs.png`, the green panel after the release or the
+  red one before): blue **8** in five of six (9 on Metropia), where ours drew **11 or 12** and the 5-bit expansion of the
+  truncated level is 8. A rounding quantiser (tried first, `floor(c * 31 + 0.5)`) put the quad's blue at 13: wrong way.
+- Not tested: the track textures' `CLUTFORMAT` (`0xC5`) in the dump, so whether any Pulse texture decode rounds differently is open.
+- Ours after the change draws blue **8** (9 on Metropia) on all six; green still reads 2 higher than the original (77 against 75),
+  not explained here (open below).
+
+**Scope: every Pulse card, not only slot 8.** The 2026-10-18 `pulse-mount-11` measurement has the advert passes (slots 1 to 7) run into the
+same 128 x 128 target as slot 8, and the GE dump above shows one target, so every Pulse advert card now goes through the truncation. Read on
+three gantry pairs and on Outpost 7 White and Vertica White, whose frames also carry a non-gantry advert: no banding or colour shift
+visible at 3x between before and after.
+
+**What ours does now.** `oag_title::adverts::CardStore` replaces the `card_565` flag: `Rgba8`, `R5G6B5Linear` (HD) and
+`R5G6B5Gamma` (Pulse). `SceneStore::Packed565Gamma` sets the shader overrides `packed_out` and `packed_gamma`;
+`oag_shaders::target::pack_565_gamma` truncates the 8-bit value to its high 5, 6 and 5 bits and reads it back with the
+high bits replicated into the low ones (`(v >> 3 << 3) | (v >> 5)`), in gamma space (the PSP does no sRGB decode).
+Pulse PSP and PS2 share `oag_pulse::TITLE`, so PS2 carries it **inherited from PSP, not measured**. Test:
+`pulse_gantry_card_holds_truncated_565_levels` (disc-backed, GPU; fails with the title's `card_store` set back to `Rgba8`).
+
+**Result, 28 Pulse PSP pairs** (grid, zone and race shots, `ours.png` re-rendered on copies from each pair's recorded flags,
+`theirs.png` kept; whole-frame mean of ours minus theirs, PIL RGB):
+
+| | before | after |
+| --- | ---: | ---: |
+| mean blue bias, the six best pairs | +0.88 | +0.56 |
+| mean absolute blue bias, all 28 pairs | 1.62 | 1.49 |
+| blue stddev bias (ours flatter), six best | -0.62 | -0.27 |
+| mean grey difference | every pair within -0.10 to +0.02 of its old value; 26 of 28 fall or hold |
+| pairs without a gantry in frame (race shots, zone) | unchanged to the byte |
+
+The claim "per-channel bias under 0.3 on R, G and B" is **false** for the six: after the card, blue is under 0.3 on two of them
+(Tech de Ra Black -0.23, Talon's Black +0.11) and red and green are untouched (+0.4 to +0.6 on average). What remains is not blue-specific.
+
+**Open, measured the same day.**
+
+- With the GO board and the craft's plume box masked, the six pairs' bias is a uniform **+0.7 on all three channels**
+  (R +0.73, G +0.75, B +0.73), not a blue lift: the plume and hull glow near the craft (white blob in the difference
+  image on four pairs) and structured texture detail carry it. Flat regions agree exactly (63 to 65 % of the pixels flat in both
+  frames differ by 0).
+- **Pulse PS2:** `oag_pulse::TITLE` is one definition for both pressings, so PS2 carries the card format **inherited from PSP, not measured**.
+  The one PS2 race pair (`pulse-ps2/moa-therma-white`) moves by 0.00 mean grey (13.12 to 13.12, RMSE 0.1539 both). To opt PS2 out, give it its own
+  `Adverts` value with `card_store: CardStore::Rgba8`.
+- The panel is drawn through the blend pipeline here, so the texel's alpha (about 0.97) scales the stored level; the original's
+  panel prims have `ABE` 0. Ours' green reads 2 higher than the original's after the card and the opposite sign to what an
+  opaque panel would give: the quad's own lighting or the card sampler is the next thing to read.
+- The original's panel carries a fine 4 to 5 px pattern (blue 3 to 9, green 74 to 78) that ours' panel does not. The `GO` letters
+  read 21 higher in blue and 12 higher in green in ours than in the original on Metropia White and the other way round on
+  Talon's Black: the letters' fade phase at the captured tick, not the format.
+- **Other titles:** HD already carries its own measured 5-6-5 (linear light, rounded). 2048 and Omega draw no Pulse-style card
+  target; not checkable against this PSP read.
+
+## Omega and 2048: the native board as a card (2026-11-10, `omega-gantry`)
+
+**Wired:** both titles stand `321Go_2048.vex` (nodes `Three`, `Two`, `One`, `GO`, stripes) as a card on their
+circuits' `billboard8` quad, through HD's existing card pass (`oag_raceplay::gantry::place_card`). The HD-lineage board
+(`321Go_StartFinish.vex`) is **withheld, and the loader says why**: its digits are material curves, and the Vita and PS4
+material containers' curves are unread (`omega-status.md`, "Adverts"; the 2026-10-26 attempt drew its static face).
+**Retired the same day by the next section: the curve is in the `.vex`, and the board plays.**
+
+**Census (2026-11-10, `data/extracted/vita/PCSF00007` and `data/extracted/ps4`).**
+
+| | HD | 2048 | Omega |
+| --- | --- | --- | --- |
+| native board `321Go_2048.vex` | absent | 33,328 bytes, slot 8 on all ten native circuits | the same size, in `data00.psarc`; `Data/environments2048/<c>/TrackStartup.xml` names it in slot 8 on all ten (`altima`, `sol`, `park`, `square`, `arena`, `subway`, `bridge`, `cathedral` in `data04.psarc`, `tower`, `mall` in `data00.psarc`) |
+| HD-lineage board `321Go_StartFinish.vex` | slot 8, 17 circuits | 13,584 bytes, the 16 HD-ported circuits | the same size, the HD circuits |
+| slot 8 placeholder | `billboard8.gtf` | `textures/billboard8.gxt` (112 bytes) on nine of ten native circuits; **`park` ships none in the base package** | `texturesps4/billboard8.gnf`, `park` included |
+| slot 7 art | `fx350_nomip.gtf` | `.gxt` | `.gnf` |
+
+The earlier "2048 and Omega place no gantry" was a **spelling miss**, not an absence: `oag_render::gantry` matched `.tga`
+and `.gtf` only. `is_slot_placeholder`, `mount` and the FX-350 match (`is_fx350_texture`) now take `.gxt` and `.gnf`
+too (since then they compare the stem, and no spelling list remains) (`gantry/tests.rs`), and `Title::adverts` of both titles is HD's pass, inherited (`CardStore::R5G6B5Linear`, target
+512x256, planes `0.5`/`5500`), with `gantry_boards` naming the one board each plays and its `assembly_ticks`.
+
+**The card carries Omega's and 2048's slot 1-7 adverts too** (the same pass): on Omega's Vineta K the side cards now show
+the Harimau logo card the shadPS4 frame shows (`omega-status.md` had them "dark teal with no logo": that was the `.gnf`
+spelling of `fx350_nomip`). Not otherwise compared. On 2048 the same pass now draws the slot 1-7 cards on the HD-ported circuits
+(Vineta K shows the Harimau card): inherited from HD, not compared against a Vita frame.
+
+**Clock: chosen, not measured.** `321Go_2048.vex` has no texture track, so `go_edge` has nothing to find. The node motion
+authors `GO` sliding in at frame 200 (the key times `[198, 199, 200, ...]`), so frame 0 is tick `273 - 200 = 73`
+(`Clock::assembled_at_release`, `GantryBoard::assembly_ticks`), as HD's `GO` is lit on the release. What the board shows after
+the `GO` leaves at 6.000 s is the asset's own timeline running on. The digits' phase is unmeasured on either title (below).
+**After the `GO`** (Omega Altima at ticks 450, 700 and 3700, 1920x1080): the board shows the authored `A·G·R·C` logo state from tick
+about 600 and holds it for the rest of the race, because a clock with no `laps` is clamped at `CLOCK_LIMIT`. **FINAL LAP (9.333 s) and
+the chequered flag (12.333 s) are never played on these two titles**; HD plays them through `HD_LAP_WINDOWS`, whose beats the
+2048 file shares (three-beat section above). Open, not measured on either title.
+
+**Evidence: shadPS4 cannot show this card's face.** `scripts/shadps4-omega-countdown.py` walks Omega to Race Box, sets GAME
+MODE to WipEout 2048 (one Right), takes Track Select's first circuit (Altima) and the first craft, and grabs frames across the
+countdown (about 5.4 frames per second; the HUD's race clock shows the emulator runs at roughly 0.4x real time). Over the whole
+countdown, 3 to 1 and the first `GO` second (frames 34 to 84, the race clock starting at about frame 56), **the board's
+face is a blank white card in every frame**: no digit, no purple panel. The original's gantry body, struts, hazard stripes and
+the mount's place in the frame are there. So shadPS4 gives the board's **position**, not its digits or phasing, as on Vineta K
+(where only the pre-`3` blank face was captured).
+
+**Pair and box.** `FEISAR_C1`-class craft in 8th place on Altima (ours with `--mode single_race --class venom --team
+FEISAR_C1 --opponents --no-hull-shake`, 1920x1080, tick 100) against shadPS4's grid frame 40, the same camera, the same
+circuit, the same grid slot. Box: the board's face, `180x37+830+255` at 1920x1080. Whole-box RMSE (normalised) against the
+shadPS4 frame: **0.429 with the pass off (the 112-byte `billboard8.gxt` stub drawn raw: a cyan quad with a white glow) to
+0.342 with the card** (tick 100; 0.341 at tick 200). The face reads purple with a white wipe bar on ours and white on theirs,
+so this is the drop in a box whose theirs is blank, not a match of the digits: **do not read it as the countdown matched.**
+The gantry frame sits within about 20 px of theirs (their outer bar starts at x 782, ours at 801). A whole-frame delta under
+1 grey is noise; this box is not a whole frame.
+
+**Played as a player would** (Altima, Omega and 2048, 1920x1080, `--camera-view far`): `3` at frame 50 and `2` at 100 sit
+in a ring on a purple hex panel with side arrows; a white stripe wipes in between digits (frames 20 and 150), `GO!` shows from
+tick 300. Whether the wipe bars are the authored stripe nodes or the positional node-to-submesh mapping
+(75, "Why node-to-submesh correlation is positional here", above) putting a stripe under a digit node is not settled: the
+glyphs and the `GO!` read right on both titles.
+
+**Per title.** **2048: ported** (`start_gantry_clock_inherit_ground_truth.rs`: ten native circuits, nine card, `park` no
+surface). **Omega: ported** (Altima card; Tech De Ra and the default circuit withhold the curve board). **Open:** the
+HD-lineage board on both (PS4 and Vita material curves), `park` on 2048's base package (the patch is not mounted,
+`oag_2048::open`), the Zone and detonator boards, and the digits' phasing (needs a reference that draws the card: Vita3K for
+2048, nothing known for Omega).
+
+## Omega and 2048: the HD-lineage board counts down off its `.vex` UV keys (2026-11-10, `omega-billboards`)
+
+**This retires "withheld" in the section above.** `321Go_StartFinish.vex` now plays on Omega's HD circuits and on 2048's
+HD-ported circuits, through HD's card pass and HD's clock (`gantry::place_card`, `hd_clock`), and a Zone race on either
+title shows `321Go_Zone.vex`.
+
+**Where the curve is (confidence 88).** Not in the `.rcsmodel`: the Vita and PS4 models carry static `uvOffset`/`uvScale`
+and no Edge Animation clip. Each `Mesh` node of the `.vex` carries Pulse's texture-transform keyframe block behind a
+material array at payload `+0x34`, and Omega's `Mesh_Update` (`0x0170c8b0`) samples it with `TexAnim_UpdateTransform`
+(`0x0172ba00`) into a per-mesh instance `Billboard_ConstructResource` points the material's two uniforms at. Layout, the
+instruction-level read and the census (19 `Mesh` nodes, 18 keyed, 800-frame loop):
+[`ps4-omega-eu/billboards.md`](../ghidra/functions/ps4-omega-eu/billboards.md), "The UV keys". The `.vex` is byte-identical
+on Vita and PS4, and both models join their 19 mesh objects to the 19 nodes by the hash at mesh object `+0x04`.
+
+**Wired.** `oag_vex::vex::external_mesh_tex_transforms` reads the block; `oag_mesh::mesh::rcs::psp2::build_billboard`
+(the Vita/PS4 branch of `gantry::build`, so every advert slot, as the engine's constructor does for every slot) gives each
+keyed mesh an `AnimTrack::Psp`, reaching only a material that declares `uvOffset` or `uvScale`. A board
+`Adverts::gantry_boards` does not list then plays HD's clock off its own `GO` edge instead of being withheld.
+
+**The clock.** `go_edge` finds the green step at **asset frame 202** on both titles (HD's own curve gives 203), so frame 0
+is tick 71 and `GO` lights on the release; from there HD's race-manager windows run, **inherited from HD**, not re-read on
+either executable.
+
+**Played as a player would** (Tech De Ra, `--camera-view far`, 1920x1080, Omega and 2048 each at ticks 100, 140, 185, 230
+and 280): a blank red panel, then `3` on the left third, `2` in the middle, `1` on the right (the earlier digits fading to
+a ghost), then a green panel reading `GO`. Reproduce with
+`oag-game <source> --race --track <tech_de_ra track.vex> --no-audio --camera-view far --size 1920x1080 --screenshot out.png --ticks N`.
+Not compared against the original: shadPS4 draws this card blank white, and no Vita frame was taken. On 2048 the panel also
+shows a stippled triangle across one half of the quad, as other 2048 surfaces in the same frame do; not chased here.
+
+**Zone (`321Go_Zone.vex`).** The board is each title's own substitution in a Zone race, read from both executables
+(Omega `TrackStartup_Load` `0x01391130`, confidence 85; 2048 `TrackStartup_Read` `0x8121b688`, confidence 80,
+[`vita-2048-eu-v104/track-startup-sound-bank.md`](../ghidra/functions/vita-2048-eu-v104/track-startup-sound-bank.md)). Its
+`assembly_ticks` (210) are HD's, inherited. Tech De Ra in `--mode zone` at ticks 100, 200 and 280 on both titles: a dark
+panel on which the loop icon's light pieces assemble, as HD's Zone board is described above. Eight of its meshes ride UV keys.
+
+**Per title.** **Omega: ported. 2048: ported**, each on its own `.vex` and `.rcsmodel`
+(`start_gantry_clock_inherit_ground_truth.rs`: the clock line and that `3`, `2`, `1` and `GO` light different vertices, on
+Omega's default circuit and Tech De Ra and on 2048's thirteen HD-ported circuits). **Open:** the Zone Battle, Detonator and
+2048 Combat boards (`321Go_HD_Zone_Battle.vex`, `321go_hd_detonator.vex`, `321Go_2048_Combat.vex`): their files build and
+the substitution is read, and `Adverts::mode_gantries` lists each (`every_omega_mode_board_resolves_to_an_authored_vex`, `every_2048_mode_board_resolves_to_an_authored_vex` read them off the disc), but this engine has no `Mode` for Zone Battle or Combat, so only Zone and (since 2026-11-13, on HD too) Detonator are selected (`gantry_mode`); the digits' phase
+against the original on either title; FINAL LAP and the chequered flag on the node-driven `321Go_2048.vex`.

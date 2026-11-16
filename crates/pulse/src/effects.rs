@@ -121,6 +121,16 @@ pub const LOOKS: &Looks = &Looks {
         on: PSP,
         origin: Origin::Measured,
     },
+    // The launch boost, watched on PPSSPP: `docs/physics/launch-boost.md`. The PS2 disc authors
+    // the same `<StartBoost>` and its law is carried over, unmeasured there.
+    start_boost: Rule {
+        on: PSP,
+        origin: Origin::Measured,
+    },
+    start_boost_carried: Rule {
+        on: Platforms::Only(&[Platform::Ps2]),
+        origin: Origin::InheritedFrom("Wipeout Pulse (PSP)"),
+    },
     // The stencil-stamped mask and the bloom over it: `docs/rendering/glow-mask.md`,
     // `docs/ghidra/functions/psp-pulse-usa/bloom.md`.
     psp_glow_mask: Rule {
@@ -171,6 +181,14 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[Platform::Psp, Platform::Ps2]),
         origin: Origin::Measured,
     },
+    // `SceneLight_Rebuild` writes the colour `SceneLight_BuildLightingList` returns
+    // into the material list the extra pass replays, read and matched to the unit on
+    // a recorded GE list (`mesh-draw.md`, "The extra pass's colour is the light the
+    // hull stands in"). The PS2 inherits the PSP's law, unmeasured there.
+    hull_shine_lit: Rule {
+        on: Platforms::Only(&[Platform::Psp, Platform::Ps2]),
+        origin: Origin::Measured,
+    },
     // Pulse has no sun flare: `lensflare` (`0x3de`) is in its name table, zero nodes
     // and zero strings (`docs/rendering/lens-flare.md`, "Cross-title").
     lens_flare: Rule::UNREAD,
@@ -181,6 +199,16 @@ pub const LOOKS: &Looks = &Looks {
         elsewhere: ShieldPalette::Pulse,
         origin: Origin::Measured,
     },
+    // The opt-in HD-style shield, `graphics.own_shield`: `docs/rendering/own-shield.md`.
+    own_shield: Rule {
+        on: Platforms::Any,
+        origin: Origin::Chosen,
+    },
+    // The opt-in rocket effect, `graphics.own_rockets`: `docs/rendering/own-rockets.md`.
+    own_rockets: Rule {
+        on: Platforms::Any,
+        origin: Origin::Chosen,
+    },
     // Pulse shows its picker; this build waits at it too.
     skips_language_picker: Rule::UNREAD,
     // Pulse lights on the GE; no fragment-program output scale exists there.
@@ -188,7 +216,22 @@ pub const LOOKS: &Looks = &Looks {
     // The GE selects the level by its slope law (`oag_mesh::mesh_render::PSP_TEXLOD_SLOPE`), not a bias.
     material_lod_bias: Rule::UNREAD,
     material_render_state: Rule::UNREAD,
+    // `Mesh_SetBatchDrawState` enables `GU_CULL_FACE` when `pass_mask & 0x20` is clear
+    // (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "The plume is two-sided"), and a
+    // Moa Therma frame at a matched pose draws one ornament where two-sided draws two
+    // (`docs/rendering/batch-cull.md`).
+    batch_back_face_cull: Rule {
+        on: PSP,
+        origin: Origin::Measured,
+    },
+    // The PS2 disc authors the same batch word; the PSP's law is carried over, unmeasured there.
+    batch_back_face_cull_carried: Rule {
+        on: Platforms::Only(&[Platform::Ps2]),
+        origin: Origin::InheritedFrom("Wipeout Pulse (PSP)"),
+    },
     blends_encoded: Rule::UNREAD,
+    texels_srgb: Rule::UNREAD,
+    final_composite_half_texel: Rule::UNREAD,
     // Pulse ends its frame in its own bloom (`oag_post::bloom`), not the `wo_*` chain.
     wo_composite: Rule::UNREAD,
 };

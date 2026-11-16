@@ -600,7 +600,11 @@ pub fn choose(
     title: &oag_title::Title,
     records: &crate::records::Store,
 ) -> Chosen {
-    let medal_of = crate::unlock::campaign_medal_of(records, title.name);
+    let medal_of = crate::unlock::campaign_medal_of(
+        records,
+        title.name,
+        oag_tables::race_campaign::MedalTiers::standard(),
+    );
     chain.choose(
         tag,
         &Profile {
@@ -629,7 +633,11 @@ pub fn present(
             .to_string()
     };
     let words = super::pure_list::wording(strings);
-    let medal_of = crate::unlock::campaign_medal_of(records, title.name);
+    let medal_of = crate::unlock::campaign_medal_of(
+        records,
+        title.name,
+        oag_tables::race_campaign::MedalTiers::standard(),
+    );
     let profile = Profile {
         medal_of: &medal_of,
         unlock_all: crate::unlock::unlock_all(),

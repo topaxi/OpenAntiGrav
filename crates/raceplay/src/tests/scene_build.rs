@@ -20,6 +20,7 @@ pub(super) fn vertex(position: [f32; 3]) -> GpuVertex {
         glow: 0.0,
         texcoord2: [0.0, 0.0],
         tangent: 0,
+        depth_bias: 0.0,
     }
 }
 
@@ -59,11 +60,13 @@ pub(super) fn livery() -> Livery {
         team: "Test".to_string(),
         hull: triangle(),
         nozzle: None,
+        muzzle: None,
         boost: None,
         flare: None,
         flare_spikes: Vec::new(),
         flare_origins: oag_livery::FlareOrigins::default(),
         shield: None,
+        shield_colour: None,
         collision_fx: Vec::new(),
         absorb: Vec::new(),
         absorb_overlay: None,
@@ -75,6 +78,7 @@ pub(super) fn livery() -> Livery {
         engine_light: None,
         cannon_flash: [None, None],
         arc_anchor: None,
+        wingtip: [None, None],
     }
 }
 
@@ -94,6 +98,17 @@ pub(super) fn test_gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
         return None;
     };
     Some(pair)
+}
+
+/// [`test_gpu`] with the device's `max_buffer_size` lowered to `ceiling` bytes: what a
+/// device whose own maximum is that small (a phone, a Steam Deck, WebGPU) is to a model
+/// whose vertex data is larger.
+pub(super) fn test_gpu_with_buffer_ceiling(ceiling: u64) -> Option<(wgpu::Device, wgpu::Queue)> {
+    let instance = wgpu::Instance::default();
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
+    let mut descriptor = mesh_render::device_descriptor("vertex chunk test", &adapter);
+    descriptor.required_limits.max_buffer_size = ceiling;
+    pollster::block_on(adapter.request_device(&descriptor)).ok()
 }
 
 /// A scene over one triangle for a circuit and for every pool: enough to be
@@ -195,7 +210,7 @@ pub(super) fn scene_over_post(
         msaa,
         Vec::new(),
         mesh_render::Light::stand_in(),
-        None,
+        Default::default(),
         None,
         hd_bloom,
         omega_tonemap,
@@ -237,6 +252,31 @@ fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
         distinct < 100,
         "{distinct} distinct pipelines for identical models: the cache is not sharing ({reused} of {asked} reused)"
     );
+}
+
+/// A scene build ends at its first checkpoint once the process is exiting, so the race build
+/// does not hold the exit for a scene nobody will see (`oag_thread::gpu_workers`). `scene_over`
+/// expects the build to succeed, so the stop is its panic. The stop is process-wide and one-way:
+/// nextest runs this in a process of its own.
+#[test]
+fn a_scene_build_ends_once_the_process_is_exiting() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let _worker = oag_thread::gpu_workers::Guard::enter("scene-build-test");
+    assert!(!oag_thread::gpu_workers::finish_within(
+        std::time::Duration::ZERO
+    ));
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        bare_scene(&device, &queue);
+    }))
+    .expect_err("a scene build in a process that is exiting ends early");
+    let message = panic
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| panic.downcast_ref::<&str>().copied())
+        .unwrap_or_default();
+    assert!(message.contains("the process is exiting"), "{message}");
 }
 
 /// **A circuit's advert cards are what its placeholder quads sample.**
@@ -298,7 +338,7 @@ fn adverts_rebound(source: &str) -> Option<(usize, usize, usize)> {
         oag_display::display::Msaa::Off,
         Vec::new(),
         mesh_render::Light::stand_in(),
-        None,
+        Default::default(),
         None,
         None,
         None,

@@ -50,7 +50,15 @@
 0x08812d58	function	InGame_Construct	85	main-loop.md
 0x088130e4	function	InGame_Destruct	85	main-loop.md
 0x08813244	function	InGame_UpdatePauseInput	85	main-loop.md
-0x08818fd8	function	Demo_UpdateAttractMode	80	main-loop.md
+0x08818fd8	function	Demo_UpdateAttractMode	92	attract-demo.md
+0x08818f74	function	DemoSession_Construct	88	attract-demo.md
+0x08818f00	function	DemoSession_IsTrackEligible	86	attract-demo.md
+0x08ac7c20	data	g_demo_session_vtable	85	attract-demo.md
+0x0888e488	function	Definition_IsPresent	75	attract-demo.md
+0x0880569c	function	Game_SetPlayerTeamByName	85	attract-demo.md
+0x088895b8	function	Track_ListDefinitions	80	attract-demo.md
+0x08821ad8	function	Race_DestroyWorld	80	attract-demo.md
+0x08b310b4	data	g_track_definition	88	attract-demo.md
 0x08b30f00	data	g_game	85	main-loop.md
 0x08abf5d4	data	g_display	87	main-loop.md
 0x08b31784	data	g_state_machine	85	main-loop.md
@@ -71,9 +79,11 @@
 0x08934a48	function	CollisionNode_ParseChunks	88	collision.md
 0x08818bdc	function	Collision_SegmentTriangle	90	collision.md
 0x08816ac0	function	Collision_RaycastWorld	88	collision.md
-0x0883198c	function	Collision_SweepSegment	85	rocket-visuals.md
+0x0883198c	function	Collision_SweepSegment	92	rocket-visuals.md
 0x0881646c	function	Collision_RaycastMesh	88	collision.md
 0x08817b1c	function	Collision_RaycastBox	85	collision.md
+0x08815038	function	Collision_ClipSegmentToAabb	78	rocket-visuals.md
+0x08818ab0	function	Collider_BoxTriangleIndices	90	rocket-visuals.md
 0x088304d4	function	Sap_QueryAabb	88	collision.md
 0x08816864	function	Collision_AddContact	86	collision.md
 0x08818540	function	CollisionMesh_BuildSap	85	collision.md
@@ -803,7 +813,7 @@
 0x08ab067c	data	g_class_name_table	92	race-campaign.md
 0x08925ff4	function	VexSoundCone_Init	90	track-sound-emitters.md
 0x08925bec	function	VexSound_Tick	85	track-sound-emitters.md
-0x0886593c	function	Cannon_UpdateRound	82	cannon-quake-leachbeam.md
+0x0886593c	function	Cannon_UpdateRound	92	cannon-quake-leachbeam.md
 0x088582b0	function	CannonPool_Update	88	cannon-quake-leachbeam.md
 0x088579a8	function	Cannon_TestCraftHit	60	cannon-quake-leachbeam.md
 0x08857f2c	function	Cannon_MarkCraftHit	85	cannon-quake-leachbeam.md
@@ -1008,7 +1018,7 @@
 0x088df820	function	GriefReport_UpdateCancel	78	state-machine.md
 0x088df8b0	function	GriefReport_UpdateSend	78	state-machine.md
 0x08830990	function	AiBatchTest_Construct	80	state-machine.md
-0x088331ac	function	Demo_Construct	80	state-machine.md
+0x088331ac	function	Demo_Construct	88	attract-demo.md
 0x0882c108	function	ArcadeRace_Construct	82	state-machine.md
 0x0882e57c	function	Tournament_Construct	82	state-machine.md
 0x0882d9c0	function	TimeTrial_Construct	82	state-machine.md
@@ -1426,7 +1436,9 @@
 0x088290bc	function	RaceManager_ApplyNowPlayingAlpha	80	now-playing.md
 0x08938e70	function	MusicPlayer_StartNextSong	65	now-playing.md
 0x089385b4	function	MusicPlayer_Stop	75	now-playing.md
-0x089387e8	function	MusicPlayer_StartPreRaceDialogue	65	now-playing.md
+0x089387e8	function	MusicPlayer_StartPreRaceDialogue	85	now-playing.md
+0x08938ca8	function	MusicPlayer_StartFile	65	race-intro.md
+0x0893a958	function	Audio_StartSfxFadeIn	80	race-intro.md
 0x0892ca04	function	WoPoint_Init	85	scene-light.md
 0x0892cd00	function	WoPoint_Update	85	scene-light.md
 # 2026-10-26 autopilot-re: the per-craft weapon step and its pad test (autopilot.md)
@@ -1446,3 +1458,22 @@
 0x08819374	function	Ease_Cosine	90	pickup-colour.md
 0x088193ec	function	Ease_GaussianBump	90	pickup-colour.md
 0x08819458	function	Ease_CosineWithBump	90	pickup-colour.md
+0x088fa6fc	function	ParticleSystem_ApplyDrag	85	plasma.md
+0x0885c360	function	Plasma_BuildDrawMatrices	80	plasma.md
+0x0881ba58	function	Hud_UpdateMultiplayerTags	80	hud-game-options.md
+0x08ab083d	data	g_multiplayer_tags_on	88	hud-game-options.md
+0x08966848	function	MpTag_GetPlayerName	70	hud-game-options.md
+0x088e35d4	function	PauseMenu_BindRedirectForMode	85	pause-menu.md
+# 2026-11-11 weapon-bank-follow: the sweep's second query is the collision cage (rocket-visuals.md)
+0x08832134	function	Cage_TestSweepEnd	92	rocket-visuals.md
+0x08831948	function	Cage_QuerySweepEnd	90	rocket-visuals.md
+0x0881a364	function	Hud_RaiseIncomingWarning	95	hud-incoming-warnings.md
+0x0881aa8c	function	Hud_UpdateIncomingWarnings	95	hud-incoming-warnings.md
+0x08ab0994	data	g_hud_incoming_warning_widgets	92	hud-incoming-warnings.md
+0x08887470	function	Race_CreateCameraNodes	82	attract-demo.md
+0x08886320	function	SceneNode_FindByTypeId	90	attract-demo.md
+0x08886158	function	SpectatorCamera_Create	88	attract-demo.md
+0x0887f9bc	function	SpectatorCamera_Construct	88	attract-demo.md
+0x08a6eb5c	function	SpectatorCamera_GetTypeId	88	attract-demo.md
+0x08acb358	data	g_spectator_camera_vtable	85	attract-demo.md
+0x08b32c64	data	g_spectator_camera	90	attract-demo.md

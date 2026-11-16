@@ -91,7 +91,7 @@
 
 use oag_core::math::{Quat, Vec3};
 
-use crate::collide::{Ray, Raycaster, Surface, combine_friction};
+use crate::collide::{Aabb, Ray, Raycaster, Surface, combine_friction};
 use crate::forces::Environment;
 use crate::params::{Dimensions, Handling};
 use crate::ship::{Body, ShipState};
@@ -99,7 +99,9 @@ use crate::ship::{Body, ShipState};
 mod clip;
 pub use clip::{CLIP_BACKOFF, CLIP_PROBE_REACH, Clip, pre_integration_clip};
 mod impulse;
-pub use impulse::{STUN_PER_CONTACT, apply_pending_impulse, post_blast_impulse};
+pub use impulse::{
+    NOSE_OFFSET, STUN_PER_CONTACT, apply_pending_impulse, nose_point, post_blast_impulse,
+};
 
 /// The ship collider's own friction, for [`combine_friction`].
 ///
@@ -230,6 +232,16 @@ pub struct WallResponse {
     /// The input to [`crate::damage::contact_damage`], and the one field here that
     /// physics writes for gameplay rather than for a debug view.
     pub impulse_sum: f32,
+    /// The largest single `|p|` among the contacts that add to [`Self::impulse_sum`] (strictly
+    /// greater wins, so the earliest of equals).
+    ///
+    /// **Reporting only**, not read by physics and not hashed: what the original's ring walk
+    /// keeps per frame for a craft's collision and grind sounds
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "Who fills them: the ring walk").
+    pub impulse_largest: f32,
+    /// The contact normal of [`Self::impulse_largest`]'s contact; zero when there was none.
+    /// Reporting only, like it.
+    pub impulse_largest_normal: Vec3,
     /// The most inbound `normal_speed` across this frame's contacts, as a positive
     /// magnitude; `0.0` if [`Self::impact`] is `false`.
     ///
@@ -373,6 +385,10 @@ pub fn resolve<R: Raycaster + ?Sized>(
         impact |= applied.normal_speed < 0.0;
         impact_speed = impact_speed.max(-applied.normal_speed);
         response.impulse_sum += applied.impulse_magnitude;
+        if applied.impulse_magnitude > response.impulse_largest {
+            response.impulse_largest = applied.impulse_magnitude;
+            response.impulse_largest_normal = contact.normal;
+        }
 
         if deepest.is_none_or(|(d, _)| contact.depth > d.depth) {
             deepest = Some((*contact, friction));
@@ -726,6 +742,19 @@ pub fn hull_probes(body: &Body, handling: &Handling) -> [(Vec3, Vec3, f32); HULL
     })
 }
 
+/// The box around every one of `probes`' segments, each reaching `extra` further: the
+/// bounds of a [`Raycaster::region`] for the batch.
+#[must_use]
+pub fn probe_bounds(probes: &[(Vec3, Vec3, f32); HULL_PROBES], extra: f32) -> Aabb {
+    let mut bounds = Aabb::EMPTY;
+    for &(origin, direction, reach) in probes {
+        let ray = Ray::new(origin, direction, reach + extra);
+        bounds.expand(ray.origin);
+        bounds.expand(ray.end());
+    }
+    bounds
+}
+
 /// How many hits a single hull probe may contribute.
 ///
 /// **An invention.** The original caps nothing per sample point: it appends until the
@@ -758,14 +787,17 @@ fn hull_contacts<R: Raycaster + ?Sized>(
     let mut found = 0;
     let mut dropped = 0;
 
-    for (origin, direction, reach) in hull_probes(&state.body, handling) {
+    let probes = hull_probes(&state.body, handling);
+    let region = raycaster.region(&probe_bounds(&probes, 0.0));
+    for (origin, direction, reach) in probes {
         let probeable = reach > MIN_HULL_EXTENT;
         if !probeable {
             continue;
         }
 
         let mut hits = [None; MAX_HITS_PER_PROBE];
-        let hit_count = raycaster.raycast_all(
+        let hit_count = raycaster.raycast_all_in(
+            &region,
             Ray::new(origin, direction, reach),
             env.self_collider,
             false,

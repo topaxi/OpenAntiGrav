@@ -14,6 +14,7 @@ fn main() {
             "flash",
             "lens_flare",
             "mist",
+            "mod_shader",
             "psys",
             "weapon_quads",
         ],

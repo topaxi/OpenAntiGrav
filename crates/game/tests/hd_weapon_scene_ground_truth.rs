@@ -161,6 +161,38 @@ fn a_rockets_body_is_lit_not_flat_black() {
     );
 }
 
+/// A rocket's smoke ribbon reads its two colour taps decoded on fetch.
+///
+/// Unit 0 and unit 1 of the ribbon's draws carry gamma nibble 7 on two live shots
+/// (`docs/rendering/hd-unlit-programs.md`, "The weapon units, read live"), and the
+/// packer then encodes the product, so a pale smoke stores darker and bluer than the
+/// raw tap did. The chase camera at tick 324, the ribbon in the 160 x 140 box ahead of
+/// the nose at (400, 170): the box's summed mean channels are 472 decoded and 494 raw.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn a_rockets_smoke_reads_its_colour_taps_decoded() {
+    let Some(frame) = frame_of("rocket", 324, None) else {
+        return;
+    };
+    let mut sum = 0u64;
+    let mut pixels = 0u64;
+    for y in 170..310 {
+        for x in 400..560 {
+            sum += frame[y * SIZE.0 + x]
+                .into_iter()
+                .map(u64::from)
+                .sum::<u64>();
+            pixels += 1;
+        }
+    }
+    let mean = sum as f64 / pixels as f64;
+    println!("summed mean channels in the smoke's box: {mean:.1}");
+    assert!(
+        mean < 483.0,
+        "the smoke reads its colour taps raw, as the console does not: {mean:.1}"
+    );
+}
+
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn a_laid_bombs_body_is_lit_by_the_circuits_rig() {
@@ -212,13 +244,18 @@ fn the_cannons_muzzle_flash_takes_the_circuits_scene() {
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn a_plasma_explosions_shells_glow_violet_from_the_real_eye() {
-    // The bolt bursts at (278.9, -40.6, -196.6) and its halo, ring and sphere
-    // are 46 across at tick 490; the camera is 90 units off. Violet pixels:
-    // 10,521 written, 38 dropped.
+    // The bolt bursts near (449.2, -27.5, -105.3) by tick 470 (it left the hull's
+    // `Ship Muzzle` node, 2.4 units further out than the old hold point, so a few
+    // ticks sooner than the 477 this was first aimed at) and its halo, ring and
+    // sphere are about 46 across at 487; the camera is 90 units off.
+    // **Re-aimed 2026-10-31 (`pulse-plasma-timing`)**: the bolt used to burst at
+    // (278.9, -40.6, -196.6) on a wall edge that the Plasma's ride-point steer and
+    // 4.0 ride height now carry it past; same viewing direction, the camera moved
+    // to keep the 90 units. Violet pixels: 14,583 written.
     let Some(frame) = frame_of(
         "plasma",
-        490,
-        Some("190.00,-20.00,-170.00,0.94,-0.22,-0.28,0.00,1.00,0.00"),
+        487,
+        Some("364.60,-7.70,-80.10,0.94,-0.22,-0.28,0.00,1.00,0.00"),
     ) else {
         return;
     };
@@ -231,4 +268,33 @@ fn a_plasma_explosions_shells_glow_violet_from_the_real_eye() {
         violet > 3000,
         "the shells are ghosts: their rim is read from the world's origin"
     );
+}
+
+/// The sphere's own program fades it: alpha `2 rim^(2 t) sum(c) (1 - 0.585 t)`, `t` the
+/// blast's age, so it is a full marbled ball at first, an outline by half a second and
+/// gone by one, where the lit stand-in drew the same dome until the models hide at 1.3 s
+/// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The blast's three programs").
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn a_plasma_explosions_sphere_fades_with_its_age() {
+    const POSE: &str = "364.60,-7.70,-80.10,0.94,-0.22,-0.28,0.00,1.00,0.00";
+    // A box on the sphere's lower left, clear of the striped hoarding behind it.
+    const BOX: (usize, usize, usize, usize) = (280, 250, 430, 400);
+    let violet = |frame: &[[u8; 3]]| {
+        count(frame, BOX, |[r, g, b]| {
+            let (r, g, b) = (i32::from(r), i32::from(g), i32::from(b));
+            r - g > 20 && b - g > 20
+        })
+    };
+    let (Some(young), Some(old)) = (
+        frame_of("plasma", 487, Some(POSE)),
+        frame_of("plasma", 537, Some(POSE)),
+    ) else {
+        return;
+    };
+    let (young, old) = (violet(&young), violet(&old));
+    println!("violet pixels of the sphere's box: {young} young, {old} a second old");
+    // 9,667 at tick 487 and 446 at 537, of the box's 22,500.
+    assert!(young > 6000, "the young sphere fills its box: {young}");
+    assert!(old < 1500, "the sphere is still a dome a second on: {old}");
 }

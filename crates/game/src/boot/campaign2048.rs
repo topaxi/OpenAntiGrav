@@ -10,10 +10,19 @@
 //! language are in hand, so the front end receives text and cells and never
 //! opens a file.
 
-use oag_2048::campaign::EClass;
 use oag_2048::campaign::callout::{Callout, ICONS, NAME_IDS, SEPARATOR, texture};
+use oag_2048::campaign::{EClass, EventKind};
 use oag_ui::frontend::{EventCard, EventIcon, ExtraTile, Launch, MapEvent};
 use oag_ui::language::StringTable;
+
+/// The campaign file's entry name.
+const SP_XML: &str = oag_2048::campaign::SP_XML;
+
+/// This title's own `XPRanks.xml`, which ranks the profile's shared XP total
+/// ([`super::reveals2048`]).
+pub(super) fn xp_ranks(archives: &mut oag_assets::Archives) -> Option<oag_tables::xp::Ranks> {
+    oag_2048::campaign::xp_tables(archives).map(|(_, ranks)| ranks)
+}
 
 /// Every `SP.xml` event that has a map cell, as the map draws it.
 ///
@@ -32,10 +41,11 @@ use oag_ui::language::StringTable;
 pub(super) fn map_events(
     archives: &mut oag_assets::Archives,
     strings: &StringTable,
+    nodes: &oag_title::NodeMap,
     report: &mut Vec<String>,
 ) -> Vec<MapEvent> {
     let text = match archives
-        .read_name(oag_2048::campaign::SP_XML)
+        .read_name(SP_XML)
         .map_err(|e| e.to_string())
         .and_then(|bytes| String::from_utf8(bytes).map_err(|e| e.to_string()))
     {
@@ -43,7 +53,7 @@ pub(super) fn map_events(
         Err(why) => {
             report.push(format!(
                 "{}: {why} - the campaign map has no events",
-                oag_2048::campaign::SP_XML
+                SP_XML
             ));
             return Vec::new();
         }
@@ -55,6 +65,7 @@ pub(super) fn map_events(
     // decided until `Frontend::refresh_campaign_progress` runs, later, once
     // a save is in hand. See `oag_2048::campaign::unlock_gates`'s own doc.
     let gates = oag_2048::campaign::unlock_gates(&doc);
+    let roles = oag_2048::campaign::map_roles(&doc);
     let mut out = Vec::new();
     let mut without_cell = 0usize;
     let mut demo = 0usize;
@@ -90,9 +101,9 @@ pub(super) fn map_events(
         let kind = match event.typedef_id {
             oag_tables::mjolnir::campaign::typedef::RACE_A => EventIcon::SpeedLap,
             _ => match event.kind {
-                oag_2048::campaign::EventKind::Zone => EventIcon::Zone,
-                oag_2048::campaign::EventKind::Elimination => EventIcon::Elimination,
-                oag_2048::campaign::EventKind::Race => EventIcon::Race,
+                EventKind::Zone => EventIcon::Zone,
+                EventKind::Elimination => EventIcon::Elimination,
+                EventKind::Race => EventIcon::Race,
             },
         };
         let mut detail = format!("{circuit} / {}", mode.replace('_', " "));
@@ -123,29 +134,50 @@ pub(super) fn map_events(
             ),
             None => (None, Vec::new()),
         };
+        let tweak = |tag: &str| {
+            doc.instance(event.instance_id)
+                .and_then(|instance| instance.field(tag))
+                .and_then(oag_tables::mjolnir::Field::int)
+                .and_then(|value| i32::try_from(value).ok())
+                .unwrap_or(0)
+        };
+        let Some((col, row)) = nodes.nudged(
+            0,
+            (x, y),
+            (tweak("M_CANVASTWEAK_X"), tweak("M_CANVASTWEAK_Y")),
+        ) else {
+            without_cell += 1;
+            continue;
+        };
         out.push(MapEvent {
             name: event.name.clone(),
             #[expect(
                 clippy::cast_precision_loss,
-                reason = "a map cell is a small integer in the file"
+                reason = "a canvas cell is under 401 across and 120 down"
             )]
-            x: x as f32,
+            x: col as f32,
             #[expect(
                 clippy::cast_precision_loss,
-                reason = "a map cell is a small integer in the file"
+                reason = "a canvas cell is under 401 across and 120 down"
             )]
-            y: y as f32,
+            y: row as f32,
             detail,
             requires,
             kind,
             forced_craft,
             refused_craft,
             card: event_card(&doc, event, kind, strings),
+            rank_gated: oag_2048::campaign::is_rank_gated(&doc, event),
+            rank_required: event.rank_required,
+            role: roles
+                .iter()
+                .find(|(name, _)| *name == event.name)
+                .map_or(oag_title::MapRole::Side, |(_, role)| *role),
         });
     }
     report.push(format!(
         "{}: {} event(s) on the campaign map, {without_cell} with no cell skipped, {demo} E3 demo event(s) left out",
-        oag_2048::campaign::SP_XML,
+        SP_XML,
         out.len()
     ));
     out
@@ -158,35 +190,47 @@ pub(super) fn touch_menus(
     (archives, strings, report): (&mut oag_assets::Archives, &StringTable, &mut Vec<String>),
     (language, title): (Option<&str>, &oag_title::Title),
 ) -> (Vec<MapEvent>, Vec<ExtraTile>) {
-    if !touch {
+    let Some(nodes) = title
+        .front_end
+        .and_then(|front_end| front_end.touch.as_ref())
+        .filter(|_| touch)
+        .map(|touch| &touch.map_nodes)
+    else {
         return (Vec::new(), Vec::new());
-    }
+    };
     let updated = !archives.patch.is_empty();
     (
-        map_events(archives, strings, report),
-        extra_tiles(language, title, updated),
+        map_events(archives, strings, nodes, report),
+        extra_tiles(language, title, archives.layout.platform, updated),
     )
 }
 
-/// This build's own two tiles: the rows of the menu tree built for 2048 that open
-/// the race box and RACE REMIX, labelled as that tree labels them (so a mod that
-/// words them differently, or the language, reaches the tile too).
+/// This build's own tiles: the rows of the menu tree built for 2048 that open the race
+/// box, every submenu attached under it (REPLAYS, and RACE REMIX with `oag.remix` on) and
+/// MULTIPLAYER, in that order, labelled as that tree labels them (so a mod that words
+/// them differently, or the language, reaches the tile too). A row that is not there
+/// (a mod turned off) is no tile.
 ///
 /// 2048's grid is the disc's own touch front end and not a page of this tree, so
-/// the tree supplies only the words and the two destinations
-/// ([`oag_ui::frontend::Launch`]); the positions are chosen
+/// the tree supplies only the words and the destinations
+/// ([`oag_ui::frontend::Launch::Page`]); the positions are chosen
 /// (`oag_ui::frontend::EXTRA_TILES`). A language with no project file of its own
 /// falls back to the English text, as every row does.
 pub(super) fn extra_tiles(
     language: Option<&str>,
     title: &oag_title::Title,
+    platform: oag_assets::Platform,
     updated: bool,
 ) -> Vec<ExtraTile> {
     let built = crate::mods::Mods::load_for_profile().and_then(|mods| {
         mods.build(
             oag_ui::menu::BUILT_IN,
             language,
-            Some(oag_ui::menu::For { title, updated }),
+            Some(oag_ui::menu::For {
+                title,
+                platform,
+                updated,
+            }),
         )
     });
     let built = match built {
@@ -196,19 +240,25 @@ pub(super) fn extra_tiles(
             return Vec::new();
         }
     };
-    let page = &built.definition.pages[built.definition.root];
-    ["racebox", "remix", "multiplayer"]
+    tiles_of(&built.definition)
+}
+
+/// [`extra_tiles`] off a built tree.
+pub(super) fn tiles_of(definition: &oag_ui::menu::Definition) -> Vec<ExtraTile> {
+    let page = &definition.pages[definition.root];
+    let racebox = page.row_with_id("racebox");
+    let under_racebox = (0..page.entries.len())
+        .filter(|&row| page.is_attached(row) && Some(page.family_of(row)) == racebox);
+    racebox
         .into_iter()
-        .filter_map(|id| {
-            let row = page.row_with_id(id)?;
-            Some(ExtraTile {
-                label: page.entries[row].label().to_string(),
-                launch: match id {
-                    "racebox" => Launch::RaceBox,
-                    "remix" => Launch::Remix,
-                    _ => Launch::Multiplayer,
-                },
-            })
+        .chain(under_racebox)
+        .chain(page.row_with_id("multiplayer"))
+        .filter_map(|row| match &page.entries[row] {
+            oag_ui::menu::Entry::Submenu { label, target } => Some(ExtraTile {
+                label: label.clone(),
+                launch: Launch::Page(definition.pages[*target].id.clone()),
+            }),
+            _ => None,
         })
         .collect()
 }
@@ -355,6 +405,21 @@ pub(super) fn card_tabs(strings: &StringTable) -> oag_ui::frontend::CardTabs {
     }
 }
 
+/// The mode page's paragraph for the event whose kind word is `kind_id`
+/// (`CampaignEventCard_DrawModePage`: `Tut_Event_Zone_1`, `_Combat_1`, `_Race_1`,
+/// `_Speed_Lap_1`, `_Time_Trial_1`), resolved.
+pub(super) fn mode_body(strings: &StringTable, kind_id: &str) -> Option<String> {
+    let id = match kind_id {
+        "IG_HUD_RACE" => "Tut_Event_Race_1",
+        "Speed Lap" => "Tut_Event_Speed_Lap_1",
+        "Time Trial" => "Tut_Event_Time_Trial_1",
+        "Zone" => "Tut_Event_Zone_1",
+        "FE_GAMEMODE_ELIM" => "Tut_Event_Combat_1",
+        _ => return None,
+    };
+    strings.get(id).map(str::to_string)
+}
+
 /// What one event's card says, off the same instances the map already read.
 fn event_card(
     doc: &oag_2048::campaign::Document,
@@ -484,6 +549,7 @@ fn event_card(
         tabs: card_tabs(strings),
         title: track.map(|track| track.display_name).unwrap_or_default(),
         kind_label: strings.get(kind_id).map(str::to_string),
+        mode_body: mode_body(strings, kind_id),
         pass_label: strings.get("FE_PASS").map(str::to_string),
         has_objective: objective.is_some(),
         objective: objective.and_then(|objective| {
@@ -590,4 +656,64 @@ pub(super) fn card_textures(events: &[MapEvent]) -> Vec<&str> {
         }
     }
     names
+}
+
+/// Names each circuit `tracks` offers that `names` left unnamed from the
+/// campaign file's `TrackDefinition`s, where the source has one.
+///
+/// The ten circuits of 2048 carry no key into `entries.xml` on Vita, but the
+/// file authors a `TrackDefinition` for each: `M_TRACKNAME` is the `PI_Track` id
+/// and `M_DISPLAYNAME` its name (`docs/formats/2048-campaign.md`,
+/// "`TrackDefinition` resolves to a circuit by its own `M_TRACKNAME`"). A source
+/// with no such file leaves `names` as it was.
+pub(super) fn name_circuits(
+    archives: &mut oag_assets::Archives,
+    tracks: &[oag_raceplay::catalogue::Track],
+    names: &mut oag_ui::language::CircuitNames,
+) {
+    let Some(text) = archives
+        .read_name(SP_XML)
+        .ok()
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+    else {
+        return;
+    };
+    let document = oag_tables::mjolnir::parse(&text);
+    for definition in oag_tables::mjolnir::campaign::tracks(&document) {
+        if let Some(track) = tracks
+            .iter()
+            .find(|track| track.id.eq_ignore_ascii_case(&definition.track_name))
+        {
+            names.name_if_absent(&track.id, &definition.display_name, SP_XML);
+        }
+    }
+}
+
+/// The screens of a campaign map a title's own menus hand off to
+/// ([`oag_title::TouchFrontEnd::canvas_definition`]), parsed with the skin's
+/// globals as fallbacks. `None` on a title whose touch front end is its whole
+/// front end (2048: the root includes the map), and on one that names no
+/// definition; a file that will not read is reported and leaves no map.
+pub(super) fn map_screens(
+    archives: &mut oag_assets::Archives,
+    front_end: &oag_title::FrontEnd,
+    skin: &oag_ui::screen::Screens,
+    report: &mut Vec<String>,
+) -> Option<oag_ui::screen::Screens> {
+    let touch = front_end.touch.filter(|_| front_end.menu.is_some())?;
+    let name = touch.canvas_definition?;
+    match super::load_included_screens(archives, name, skin) {
+        Ok(screens) if screens.by_name(touch.canvas_screen).is_some() => Some(screens),
+        Ok(_) => {
+            report.push(format!(
+                "{name}: no screen {:?} - the campaign map has no canvas",
+                touch.canvas_screen
+            ));
+            None
+        }
+        Err(error) => {
+            report.push(format!("{name}: {error:#} - no campaign map"));
+            None
+        }
+    }
 }

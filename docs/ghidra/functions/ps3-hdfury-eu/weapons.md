@@ -1092,7 +1092,7 @@ per claim; no name is applied (nothing here is above 70 that was not already nam
   burst that does not use this pool (unresolved, not the Quake's wave in the film either way);
   state 10 does nothing at the grid.
 - **The picture, original only.** `m5` (known firer, rival 12 units ahead, a scratch directory, not kept,
-  contact sheet `burst.png`, 30 fps frames `f/h_*.png`): the count rose at host 4.47 s, which is video
+  contact sheet `burst.png`, 30 fps frames `f/h_*.png`; **the same regime was re-filmed and kept 2026-11-09**, [missile-explosion.md](missile-explosion.md) "Film"): the count rose at host 4.47 s, which is video
   9.6 s (offset +5.1 s), and the frame's mean luma goes 135 (9.60 s) to 218 (9.67), 246 (9.80), 241
   (9.93), 209 (10.00), 162 (10.13), 150 (10.20). So the white-out starts within 0.1 s of the rise, is
   white to the frame edge for about 0.3 s with the struck rival's red-and-black hull in the middle of it
@@ -1435,3 +1435,299 @@ sprites are `.gtf` flipbooks under `/data/psys/tex/`; they now play. The measure
 original smoke colour, the cause and what is open are in
 [`particle-triggers.md`](particle-triggers.md), "The Rocket's wall burst". Omega and
 2048: checked, applies, not wired.
+
+## The flying Missile's head draws its own model (2026-11-07, `hd-weapons`)
+
+Until now every HD Missile in flight drew the engine's procedural glow billboard
+(`Race::projectile_sprites`, `exhaust::sprite`), a stand-in, under `WO_MISSILE_HEAD`'s two
+particle balls. The disc's own head is `HD_missile_ball_bloomring.vex`; it is now loaded
+(`WeaponModels::missile_head`) and drawn in the billboard's place.
+
+- **What is read.** `Missile.cpp`'s constructor (`0x0011ccc8`, vtable `0x00863d18`, confidence
+  75 on the class) builds the model **twice**: a scene node into `this + 0x1c0` and another
+  into `this + 0x1c4` (`param_1[0x70]`, `[0x71]` in the decompile), each registered as a render
+  record, state bit 4 cleared. Two nodes per missile match the two `WO_MISSILE_HEAD` flare
+  anchors of `Missile_Init`. The destructor (`0x0011c230`) walks `+0x1c0`/`+0x1c4` only.
+- **What is not read.** The per-tick placement. The Missile's update is an AltiVec body
+  (`0x0011e640`, slot 5 of the vtable; Ghidra truncates it at the first vector op), so which
+  matrix each node takes, and its scale, is unresolved. **Chosen, not measured**: one head on
+  each of the two orbiting flare anchors (`missile_flare_anchors`, the law `WO_MISSILE_HEAD`
+  already rides on HD), on the velocity-built basis every HD body takes, at the model's authored
+  size (`Race::missile_head_model_matrices`).
+- **The model.** Two nodes, 800 triangles: an inline sphere and a bloom ring, the
+  LeachBeam ball's materials (`hd_leachbeam_ball_glow`, `hd_leachbeam_bloomring`), so the
+  existing `RIM_GLOW` routing applies unchanged; the loader reports it as
+  `HD_missile_ball_bloomring.vex: ... - a missile's head is this model, not a billboard`.
+- **What a player sees.** At 1920x1088, tick 305 (fired at 286): the glow billboard is gone and the
+  ring-and-core eye of the head shows inside the two white particle balls. The head is small
+  against the particles, so the change is a few thousand pixels around the missile
+  (3,952 differing pixels in a 160 x 70 box); the stand-in was mostly hidden under the effect
+  already.
+- **Against the original (one RPCS3 boot, `scripts/rpcs3-hd-weapon.py --state 1`, 30 fps film, Talon's
+  Junction, craft at rest; ours at the same rest pose, default chase camera, ticks 290-298).** The
+  original's two heads read as two red-orange lobes pulsing over the nose with a pink twisting halo
+  (`WO_MISSILE_HEAD`'s goo), a hollow ring structure visible around each; ours are white-hot balls
+  with a pink halo and the head's small red ring-and-core eye inside. **They do not match in
+  colour and size**: the difference is in the particle balls' colour and the bloom, not in the
+  head model, which sits under them in both; whether the original's head model is also larger
+  (the rings are about 60 px across at 1280x720, ours about 10 px) is the open placement/scale
+  question above. No `viewProj` was captured, so the camera is not pinned and no pixel comparison was made.
+- ~~**Still not drawn: the Missile's own smoke ribbon.**~~ **Drawn 2026-11-07 (`hd-missile-ribbon`), and
+  it was never pool `+0x74`**: the Missile's ribbons are two `FatLine` pools, see "The Missile's ribbons" below.
+- **No screen flash on HD.** `flash_for` starts `ScreenFlash_Start` for a Missile, but the
+  consumer is Pulse PSP's alone (`Options::screen_flash`), so HD runs none of it.
+- **Omega / 2048.** Omega ships the same entry (`Data\Weapons\HD_missile_ball_bloomring.vex`,
+  300 triangles over 2 submeshes, `hd_missile_ball.gnf`) and it builds through `psp2::build`:
+  **checked, applies, not wired**: the ball's rim-glow program is a PS3 fingerprint the PS4
+  builder does not set (the same hold as the LeachBeam ball), so Omega's Missile keeps its
+  billboard. 2048: the model is not named in its tables, `not checkable` without a title entry.
+- **Test.** `the_missile_head_loads_off_the_disc_and_glows_like_the_leach_ball`
+  (`crates/raceplay/tests/hd_rim_glow_ground_truth.rs`) pins the load, the report line and the
+  sphere's `RIM_GLOW`; `a_missile_places_two_heads_on_its_flare_anchors` pins the placement. The
+  draw call itself is judged by the frame, not a test.
+
+## The Missile's red rings: the white blob was the particles drawn without their atlas (2026-11-07, `hd-weapons-2`)
+
+**Claim before this change** (`hd-weapons`, above): a flying Missile in ours is two white-hot balls with a
+10 px eye where the original shows red-orange lobes with hollow rings about 60 px across; the cause was
+guessed to be the particle balls, the bloom or the head model's scale.
+
+**Result: the cause is the particles' sprite, and it is fixed.** Evidence, all from one RPCS3 grid
+(Talon's Junction, Feisar, rest pose, `scripts/rpcs3-hd-weapon.py --state 1 --shot-at 0.2,0.5,0.8`,
+1920x1080, `Write Color Buffers` on, no toast) and ours at the same pose, camera (`viewProj` decomposed from
+the pushbuffer: eye, forward, up, fov 60.0006) and lap-clock second (`scripts/hd-weapon-pair.py`):
+
+- **Bisect in ours** (the same frame, the head model, the particle effect and both toggled out): the head
+  model alone is two 10 px dots; the white blob is `WO_MISSILE_HEAD`'s particles, and the model draws
+  nothing the blob hides. The head model is **not** the colour gap.
+- **The effect** (`WO_MISSILE_HEAD`, HD `DATA02`): the root emitter and `MISSILE_HEAD_TRANSFORMED` spawn
+  one particle per tick for 12 +/- 6 ticks, additive, half-size 1.5 to 3 (1 to 2), alpha 255 to 0, colour
+  ramp `(255,81,18)` at birth, `(255,240,247)` at mid-life, `(255,11,35)` at the end, sprite
+  `vandergraf_balls_1024x512_missile`, an **8 x 4 atlas of thin red filament arcs** (read with
+  `oag_texture::gtf`). Multiplied by white-disc texels that ramp is a white blowout; multiplied by the
+  filaments it is the original's red rings with small white cores.
+- **The fix is the existing mechanism**: `oag_hd::effects::SPRITES`, the per-effect list of HD effects whose
+  `.gtf` sprites play (`Effects.sprites`), gains `MISSILE_FLARE_EFFECT`. Nothing else in the effect changed.
+- **Region metric**, box 760,330 520x430 of the 1920x1080 frame, `scripts/hd-weapon-region.py`, fire second
+  2.10 (the press window is 1.73 to 2.03 on the lap clock and a sweep over 1.95, 2.10, 2.20 places the
+  phase): lit pixels (red or every channel >= 240), centroid y, theirs against ours at the three frames
+  (lap clock 2.27, 2.55, 2.87):
+
+| | theirs red / white, mean RGB | ours before (list entry absent), red / white, mean RGB | ours after, red / white, mean RGB |
+| --- | --- | --- | --- |
+| frame 1 (2.55 s) | 6,310 / 2,329, (240, 149, 147), centroid y 515 | 1,756 / 6,822, (247, 224, 226), y 501 | 5,338 / 2,351, (239, 151, 153), y 509 |
+| frame 2 (2.87 s) | 2,391 / 1,044, (235, 154, 146), y 479 | not measured | 1,957 / 464, (233, 131, 137), y 472 |
+
+  Before, the lit mass was 80 % white and near-white on average; after, its mean colour is within 4 of
+  the original's on every channel at frame 1.   The centroid is within 7 px of the original's on both frames; the red mass is 85 % and 82 % of theirs. Frame 0
+  is not a clean metric (the original's frame carries a translucent HUD ring through the box).
+- **What still differs**, named: the two lobes orbit wider in ours (the anchor ellipse `1.5` x `3.0` is
+  Pulse's law, the original's is tighter at 0.5 s); the original's long wispy loops from the nose to the
+  missile at 0.8 s are more than the 12-tick particles reach, which is the ribbon below; a listed effect draws
+  each particle on its spawn frame, HD's own flipbook advance still unread (`Effects.sprites`).
+- ~~**Still undrawn: the Missile's smoke ribbon**~~ **drawn since `hd-missile-ribbon`** ("The Missile's ribbons"
+  below; it is not pool `+0x74`). The head model keeps its authored size (about 10 px at this distance): in the
+  original frames nothing a player sees is that small, and the model's own scale and placement stay
+  **chosen, not measured**.
+- **Omega / 2048: checked, applies, no pixel check.** `Effects.sprites` is an HD (`.gtf`) gate only:
+  `oag_raceplay::assets::particle_effect` reads `.gnf` (PS4) and `.gxt` (Vita) sprites for every effect
+  ungated, so an Omega or 2048 `WO_MISSILE_HEAD` draws whatever atlas its own `.pob` names. Whether Omega
+  ships the same ring atlas, and how its Missile looks, was not measured: nobody has a shadPS4 frame of an
+  Omega Missile in flight.
+- **Tests.** `only_hd_lists_effects_whose_gtf_sprites_play` pins the list entry: dropping `WO_MISSILE_HEAD` from
+  `SPRITES` fails it. `the_missile_head_draws_its_ring_atlas_when_listed_and_a_white_disc_when_not`
+  (`crates/raceplay/src/tests/hd_effect_sprites.rs`, disc-backed) pins what the entry does: the two head
+  emitters decode the atlas when listed and none does when not. The picture is judged by the pair above.
+
+### The other weapons against the original (same grid, same camera, `hd-weapons-2`)
+
+One RPCS3 grid, a weapon given by the pickup slot (`scripts/rpcs3-hd-weapon.py --shot-at`), three or four
+paused frames each, ours rendered at the original's pose, camera and fire second
+(`scripts/hd-weapon-pair.py`). **A shot's effect can outlast it**: state 8 left a green shell around the
+craft that was still drawn at the next weapon, so a weapon fired after another on the same grid is not a
+clean frame (the first Plasma and Rocket frames taken that way were discarded and retaken; the Bomb and LeachBeam
+ones were not retaken).
+
+| Weapon (state) | Same moment | Differences | Status |
+| --- | --- | --- | --- |
+| Missile (1) | lap clock 2.27, 2.55, 2.87 | rings drawn since this change; orbit wider; ribbon drawn since `hd-missile-ribbon` | fixed (rings, ribbon) |
+| Rocket (0) | 4.67, 4.92, 5.32 | three flames and three smoke trails in both, rockets level by 0.8 s; the original's trails are blue-grey and fan wider, ours white and tight (the ribbon vertex colour is chosen, `particle-triggers.md`); ours leaves the nose 0.1 s behind (one big white flash where the original shows three flames) | named |
+| Plasma (7) | 10.42, 10.67, 11.05 | the ring-and-ball at the nose matches; the original adds purple lightning rays and a forward blue ripple wave by 0.4 s that ours does not draw. **Candidates, not a cause:** `WO_PLASMA_LAUNCH` (no recovered caller), `WO_PLASMA_CHARGING` (unwired), or `WO_PLASMA_LIGHTNING_EXPAND` (wired) not playing at these ticks in ours. The original's button was held about 0.5 s and ours' for one tick, which matters for a charging weapon. **The brief's growing-sphere question stays open**: the clean frames stop at 0.8 s | named, open |
+| Cannon (8) | 2.28, 2.42, 2.67 | **the original draws a green-cyan shell around the whole craft for many seconds, not a muzzle flash**; ours a small spark; the HUD names it "Machine Gun" with damage 5. Whether state 8's visual is the Cannon's own or a shield-like effect is unresolved | named, open |
+| Bomb (9), Mine, LeachBeam (10) | | frames taken on a grid carrying the state-8 shell and a displaced craft: unusable | not paired; command in the thread |
+| Detonator's weapons | | deferred with the mode | undrawn, named |
+
+`HD_Mine_halo` stays unwired: it needs its own rim program and no original frame of a laid Mine was taken.
+
+## The Missile's ribbons: two `FatLine` pools, drawn (2026-11-07, `hd-missile-ribbon`)
+
+The law is [missile-ribbon.md](missile-ribbon.md): each head lays a 0.3 s stub (pool `+0x50`) and a 2.8 s
+three-chain helix (pool `+0x68`), `ThickLine_Red.gtf`, camera-facing strips, `SRC_ALPHA, ONE`. The brief's "pool
+`+0x74`, `smoke_trails_frame1_ALPHA`" was a mis-reading and is corrected there and in rocket-trail.md.
+Wired on `oag_fx::fat_line` (the law, the strip) and `oag_raceplay::missile_smoke` (the two six-element pools,
+ownership by projectile slot, the loader), HD's config in `oag_hd`'s `WeaponModels::missile_trail`.
+
+Pinned pair: the `hd-weapons-2` capture (camera from the pushbuffer, Talon's Junction, Feisar, rest pose, the
+same lap-clock seconds 2.27, 2.55, 2.87), ours rendered at the same pose, camera and fire second 2.10, before
+(the title data's `missile_trail` off) and after. Box metric (`scripts/hd-weapon-region.py`; red or white lit
+pixels, mean RGB over them, 5th-95th percentile extent):
+
+| frame, box (x,y,w,h) | | lit px | mean RGB | centroid | extent w x h |
+| --- | --- | ---: | --- | --- | --- |
+| 2.87 s, the lower box 880,530,160,90 (the heads' particles are above it) | original | 913 | (232,116,105) | (962,568) | 48 x 64 |
+| | ours before | 127 | (217,106,126) | (957,533) | 41 x 8 |
+| | ours after | 458 | (237,125,120) | (948,570) | 78 x 76 |
+| 2.87 s, the whole effect, box 820,360,320,280 | original | 2,849 (2,350 red) | (233,136,126) | (976,505) | 126 x 228 |
+| | ours before | 2,276 (1,957 red) | (232,124,130) | (952,479) | 52 x 118 |
+| | ours after | 2,312 (1,652 red) | (239,159,153) | (955,490) | 89 x 184 |
+| 2.55 s, the whole effect | original | 7,537 (6,133 red) | (240,137,135) | (973,536) | 128 x 126 |
+| | ours before | 7,283 (5,338 red) | (238,145,148) | (956,518) | 155 x 157 |
+| | ours after | 6,335 (3,738 red) | (243,169,168) | (954,518) | 157 x 164 |
+| 2.27 s, the whole effect | original | 9,276 (5,006 red) | (250,178,180) | (962,568) | 146 x 113 |
+| | ours before | 8,839 (2,149 red) | (252,223,224) | (987,587) | 152 x 88 |
+| | ours after | 8,777 (1,795 red) | (253,228,228) | (988,587) | 152 x 88 |
+
+Ribbon pixels of ours alone, the pixels that differ between before and after by 24 or more in a channel
+(`pair-before` against `pair-final`, box 700,300,520,420): 828 at 2.27 s, 8,841 at 2.55 s, 10,388 at 2.87 s
+(mean RGB (239,209,196), (220,181,162), (196,154,142); extent 52 x 40, 109 x 124, 101 x 158). That includes the
+ribbon's bloom, and the original has no ribbon-free twin frame, so the original's ribbon pixels are only the lit
+counts above. Read with the frames: the ribbon is drawn and is the same kind of thing (thin red-orange helical bands,
+the mean colour of the lower box within about 10 per channel of the original's); the whole-box
+metric does not improve everywhere because the head particles (out of scope here) are still whiter than the
+original's at 2.27 s and the ribbon adds light over them, so "red" falls where the ribbon turns a red pixel
+orange. The **differences**, named: ours' heads orbit wider (the ellipse `1.5` x `3.0` is Pulse's, as above),
+so ours' loops are bigger and the two heads further apart; the original's bands are softer and wider where
+ours show the texture's dark edges and bright core; the vertex tint is **chosen, not measured** (white, the
+source `0x002ec748` negates was not read); the helix's handedness is chosen; the strip's `v = 1` side is chosen.
+One finding from the pair: adding the fragment's alpha into the frame's alpha (the glow mask the bloom reads)
+bloomed the ribbons white (frame 2.87 s: 406 red, mean (251,233,231)), so the draw leaves the alpha channel alone.
+
+Omega / 2048: **checked, applies, not wired** (missile-ribbon.md, "2048 and Omega").
+
+## 2026-11-08 (`hd-missile-explo-re`): the Missile explosion's update, streaks and materials
+
+Read on its own page, [missile-explosion.md](missile-explosion.md): the per-frame
+`MissileExplosion_Update` (`0x00154a78`) that the 2026-10-07 entry did not find
+(lifetime 1.0 s, retired on the first update with `age > 1`, confidence 85), the
+sixteen entries at `+0x190` as `ThickLine_bighalo` `FatLine` streaks from
+`RibbonEffects` pool `+0x5c` (confidence 80), node to material (`bloom` is a
+`lightrays_glow` chunk, not a core one; confidence 90), and a `Bloom adaption boost`
+override (6.0 easing back to the authored value, confidence 80). Its "Corrections"
+section lists which claims of the 2026-10-07/08 entries above it supersedes.
+
+## The ball rides the strip (2026-11-15, `hd-leach-2`)
+
+Read statically from `/hdfury/EBOOT-ps3-hdfury-eu.elf` (TOC `r2 = 0x008ad4d8`), then checked on
+one held beam on RPCS3 (own config, Racebox Single Race, Talon's Junction, Venom, Feisar; the
+player placed 30 units behind the nearest rival; `scripts/rpcs3-hd-whiteout.py --leach`, which
+dumps every field below in the same pause). Closes the 2026-09-25 section's two open questions:
+what `param_4[4]` is, and which end of the strip is fraction 0.
+
+**The ball's argument is the drawn strip's path, at `strip + 0x130`.** `LeachBeam_Update`'s state-4
+case (`0x00153960`, jump table `0x001536e0`, entry 4) runs the ball when `beam + 0xc931` and
+`+0xc932` are both 0: `0x00153b84` passes `dt`, the ball `beam + 0xc820` and `beam + 0x6550` to the
+thunk `0x00114ef0` (`or r5, r6, r6; b LeachBall_Advance`). `0x6550 - 0x6420 = 0x130`, so
+`LeachBall_Advance`'s `param_4` is the path object inside the drawn strip, and its words are:
+
+| path offset | strip offset | what | writer |
+| --- | --- | --- | --- |
+| `+0x00` | `+0x130` | the shooter (`beam + 0xc94c`) | `BeamPath_Rebuild` (`0x001179c8`) |
+| `+0x04` | `+0x134` | the target (craft of index `beam + 0xc93c`) | same |
+| `+0x08` | `+0x138` | the walked craft, the one ahead | same, by the gap's sign |
+| `+0x0c` | `+0x13c` | the other craft | same |
+| `+0x10` | `+0x140` | **the gap**, `Craft_GetTrackGap(shooter, target)` | same, every tick |
+| `+0x14` | `+0x144` | sample count | `BeamPath_Build` |
+| `+0x20 + i*0x50` | `+0x150 + i*0x50` | sample `i` (walked end first) | walk, bend, wobble |
+| `+0x5de0 + 4i` | `+0x5f10 + 4i` | running length at sample `i` | `BeamPath_BendToTarget` |
+
+`beam + 0xc94c` is the shooter: of the two beam inits, `0x00154360` (no target) stores only
+`+0xc94c` (`0x0015441c`), `0x00154558` stores `+0xc94c` (`0x00154610`) and `+0xc93c` (`0x001545f8`);
+the call at `0x00153694` passes `r4 = *(beam + 0xc94c)` and `r5` = the craft looked up from
+`+0xc93c`. The undrawn `+0x50` strip has the same rebuild without the wobble, `0x001178f8`.
+
+**The gap, `Craft_GetTrackGap` (`0x000d0398`, confidence 85).** `target + 0x7010 - shooter + 0x7010`
+(the distance into the lap, `ai-controls.md`), folded into half a lap either way by two loops
+against `0.5 * course` (`0.5` at `0x008a8b04`, the course length `**(craft + 0x6f64)`). When either
+craft's `+0x782c` is 0 (not located) it returns the course length. Live: the stored gap read
+**9.4921875**, the two craft's `+0x7010` were 3746.838 and 3737.346 (difference 9.492). The
+sign test in `BeamPath_Rebuild` is against `0x008a9cbc` = 0.0: a positive gap walks the target.
+
+**The period reads the gap.** `LeachBall_Advance` remaps `|path + 0x10|`, clamped to [20, 100],
+onto [0.3, 1.0] s (the 2026-09-25 constants), so the trip's length is the track gap between the two
+craft, not the strip's length and not their distance in space. Live: gap 9.49, ball `+0x20`
+(period) **0.3**, `+0x1c` (clock) 0.19997, `+0x24` (fraction) **0.66657** = 0.19997 / 0.3. The
+clock had wrapped once at 0.3 s into state 4 (beam clock 0.49997), so the ball runs only in state 4.
+Confidence 90.
+
+**`BeamPath_PointAt` (`0x00116308`, confidence 90).** Real prototype `(r3 path, f1 fraction, r5
+out)` (Ghidra's drops the out pointer; read off the three call sites, e.g. `0x00114e2c..0x00114e40`).
+With `n = path + 0x14` and `total = cum[n-1]`: `d = fraction * total`; if `path + 0x08 == path +
+0x00` (the shooter was walked) `d = total - d`; `d` clamped to [0, total]; the first `i >= 1` with
+`cum[i] >= d` brackets it and the point is `lerp(sample[i-1], sample[i], (d - cum[i-1]) / (cum[i] -
+cum[i-1]))` (`0x002a3bf0`). With `total <= 0` or `n < 2` it returns sample 0; if no bracket is found
+it returns 0 and `LeachBall_Advance` uses a constant vector (TOC `-0x3854`).
+
+So **fraction 0 is always the target's end and 1 the shooter's**: sample 0 is the walked craft;
+when that is the target no flip is applied and fraction 0 is sample 0; when it is the shooter the
+flip puts fraction 0 at the far end, the target's. The ball travels target to shooter, carrying the
+energy, and the 2026-09-25 "chosen" direction is now measured.
+
+**The table is the bend's, the points are the wobble's.** `BeamPath_BendToTarget`'s second loop
+(`0x0011622c..0x001162cc`, raw disassembly past Ghidra's `halt_baddata`) rebuilds `+0x5f10` from the
+bent points at `+0x150 + i*0x50`; `BeamPath_AddWobble` moves those points afterwards and writes no
+`+0x5f10`. So the ball is lerped between wobbled points by pre-wobble lengths. Live, four samples:
+the dumped table read `[0, 5.392, 9.280, 9.717]` where the wobbled points' own segment sums are
+`[0, 5.395, 9.275, 9.858]`; the lookup on the dumped points and table at the dumped fraction gives
+`(80.9847, -46.2307, 163.0922)`, the ball's placed point `+0xd0` to 1e-5
+(`oag_fx::leach_strip::tests::the_live_ball_point_is_the_lookup_on_the_dumped_strip`).
+
+**The burst is on the shooter.** At each wrap the inlined `ABSORB` spawn takes the matrix at
+`*(*(path + 0x00) + 0x6944) + 0x1d0`, the shooter's, so `WO_LEACHBEAM_ABSORB` plays where the
+ball has just arrived (confidence 75: the `+0x6944` object is not otherwise read). Before each spawn
+`0x0013c8e8(ball, shooter)` runs, not read.
+
+**The other two callers, not wired.** State 2 (`0x00153714`) calls the lookup with `1.0 - 2.5 *
+clock` (constants `0x008ab1f0` = 1.0, `0x008ab21c` = 2.5), shooter to target over the 0.4 s ball
+flight, and compares the point with `beam + 0xc920`; state 3 (`0x00153a0c`) with `3.3333 * clock`
+(`0x008ab1e8`), 0 to 1 over the reveal. What each places is not read; both run along the same path.
+
+**Wired** (`oag_fx::leach_strip::{cumulative, point_at}`, `oag_raceplay`'s
+`leach_ball_on_strip`, `oag_weapons::projectile::leach_beam::trip::gap`): the ball model is placed
+on the same walked, bent and wobbled path the strip draws, by the bend's table; the simulation's
+trip period and the view's fraction both read the wrapped track gap (`Craft::progress` and the
+course length); the burst plays on the shooter. A title with no strip (Omega in this engine) keeps
+the straight line between the bodies, same direction. The simulation's trip clock starts once the
+beam is held, 0.7 s after the fire (`trip::HELD_AFTER_SECONDS`: the 0.4 s ball, TOC `-0x22c8`, and
+the 0.3 s reveal, TOC `-0x22c0`), as the original's ball clock starts with state 4. The HD
+Eliminator pace this moved is on [race-modes.md](../../../gameplay/race-modes.md), "The pace of a
+score Eliminator".
+
+**Frame pair** (`data/reference/hd-capture/leach-ball/`, not tracked): `original_leach0_0.png` (the
+held beam above, rival 10 units ahead, ball at fraction 0.667 by the player's nose) against
+`ours_pinned_336.png`: ours with the original's four dumped samples pinned
+(`--force-leach-lock 276:1 --leach-path path_leach0_0.txt --ticks 336`) and a camera built from the
+player's dumped pose with HD's Far rig (eye `(0, 3.0, -11.25)` in the body frame, fov 67.3, `pair.png`
+crops both). Both draw the ball on the strip; the framing is approximate (no `viewProj` was read for
+this frame, and our craft stay on the grid) and the fractions differ (ours runs its own clock).
+
+**Lineage.** Omega (`eboot-ps4-omega-eu-v107.bin`): **checked, applies, not wired**. The only
+`EABL` immediate is in `FUN_0136e340`, the same ball advance: `(|path[4]| clamped 20..100 - 20) *
+0.00875 + 0.3`, the same wrap, `ABSORB` on `*(path[0] + 0x75c8) + 0x10`, and the lookup inlined with
+the same flip (`param_4[2] == *param_4`, 8-byte words; table at `+0x5dec + 4n`). Our Omega draws no
+strip, so its ball keeps the straight line. 2048 (`eboot-vita-2048-eu-v104.elf`): **checked,
+applies**. `FUN_811ec158` (the only reader of `"WO_LEACHBEAM_ABSORB"`) is the same advance with
+the same clamp; it calls `FUN_811ef50a(path, out)` (`d = cum[n-1] * fraction`) into `FUN_811ef3ca`,
+which carries the same flip and bracket walk (0x48-byte samples, table at `+0x5478`). 2048 also
+plays `WO_LEACHBEAM_BALL` (`ABBL`) on its ball, which HD's advance does not. Not checkable live (no
+Vita or PS4 memory readout in this lane).
+
+**Capture notes.** An attached `rpcs3-drive.py serve` takes no pad input while a GDB client is
+connected (a menu cursor did not move with one connected and did with none), so the capture script
+connects only after the walk. A `serve --load-state` race state leaves the TTY without a screen
+line (`--in-race`). Of 3 + 1 shots on the fresh race, one held (the other three ended in state 6).
+
+| address | name | confidence | evidence |
+| --- | --- | ---: | --- |
+| `0x00116308` | `BeamPath_PointAt` | 90 | Decompile plus raw call sites; live point equal to the lookup to 1e-5 |
+| `0x000d0398` | `Craft_GetTrackGap` | 85 | Decompile, TOC `0x008a8b04` = 0.5; live gap equal to the `+0x7010` difference |
+| `0x001178f8` | `BeamPath_RebuildUnwobbled` | 75 | Same body as `BeamPath_Rebuild` less the `BeamPath_AddWobble` call; called at `0x00153680` with `r30 = beam + 0x50` (`addi r30, r3, 0x50` at `0x00153628`), the undrawn strip |

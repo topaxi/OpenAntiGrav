@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [pulse]
-updated: 2026-10-29
-summary: "Scenery clock and the end wash landed; the intro music cue and an optional flyby rise of the pose remain"
+updated: 2026-11-02
+summary: "Landed: flyby clock, wash, voice-over, SFX fade, ambience, squared effects. Open: tick-0 ~AMB loop, ramp ceiling below slider 100"
 categories: [rendering, frontend]
 difficulty: medium (30)
 ---
@@ -54,10 +54,33 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
   `Race::world_clock_seconds` adds `flyby_seconds`; the gantry stays on the race clock (measured:
   it starts at the flyby's end). `scene/frame.rs` is 1,232 lines, under the ceiling, left unsplit.
   Open: clouds still read `World::tick`; no draw alpha during the flyby.
-- **The tail**: the music the intro starts and stops (`g_music_player` calls at the counter's
-  `0x28` and `0`) is not played. ~~The `ScreenFlash` kind 10 wash~~ **wired 2026-10-29**, the
-  executable's 0.7 s white; the 2026-10-02 frames (`h0103` to `h0125`) fade faster (half by two
-  calls, clear by about 17), unresolved whether a call is a tick.
+- ~~**The tail**~~ **landed 2026-11-02 (`pulse-flyby-music`)**: the counter's zero starts the
+  circuit's `PreRaceDialogue` voice-over on its own voice and the flyby's end stops it
+  (`oag_raceplay::intro_camera::IntroCue`, `oag_sound::Audio::start_pre_race_voice`); the `0x28`
+  call is an **SFX fade-in** (50 calls at 0.02 from silence, after 20 silent calls), not music -
+  [the read](../../docs/ghidra/functions/psp-pulse-usa/race-intro.md#the-music-the-two-counter-calls-and-the-exit-stop-read-2026-11-02-lane-pulse-flyby-music).
+  The `0x28` fade **landed 2026-11-02 (`pulse-flyby-sfx`)**: the session runs `sound::race_tick`
+  under the flyby, `PreRace::effects_fade_in` silences the Sfx bus on tick 0 and ramps it from tick
+  20 ([race-intro.md](../../docs/gameplay/race-intro.md)). **Watched 2026-11-02
+  (`pulse-flyby-audio-capture`)**: the fade is exact (silent 20 calls, `+0.02` a call, 50 calls), but
+  what it quiets is the circuit ambience, not the engines (the grid's engines are keyed on at tick
+  3 at volume 0 and only sound from about tick 1,150), and the gain is the **square** of the fade
+  (confidence 85; the whole group volume, slider included, is squared at the commit); see
+  [race-intro.md](../../docs/gameplay/race-intro.md#what-the-original-plays-under-the-flyby-watched-2026-11-02-lane-pulse-flyby-audio-capture).
+  **Landed 2026-11-02 (`pulse-flyby-ambience`)**: the flyby plays the circuit's placed ambience
+  emitters and the craft engines by range, and Pulse's effects bus is `(slider * fade) ** 2`
+  (`Title::effects_volume_law`; always in a race, not only the flyby). `03_Track`: first emitter
+  at tick 390 (original 393), first audible engine 1,144 (original about 1,150). Not played:
+  the original's `~AMB` loop that sounds from its first call (which cue is unread, not an emitter in
+  range) and the `~FLYBY_DIST_*` one-shots (no trigger recovered). Open from this: the fade's
+  ceiling at a slider below 100 (the original's target is the slider; ours ramps slider times 0-1),
+  ~~Speech presumably squared too~~ measured and wired (`Title::speech_volume_law`; the original's
+  Speech group follows the SFX slider and the fade, and so does ours, with the Speech slider as a linear extra), menus
+  outside a race stay linear, Pure inherits the square.
+  Open: no WAV (SDL build has no record action), which cue the one ambience voice is, a circuit
+  whose camera opens near the grid, other modes. The
+  wash frames (`h0103` to `h0125`) fade faster than the executable's 0.7 s, unresolved whether a
+  call is a tick.
 - **Demo mode** skips it (`g_game_mode == 2`); a byte at mode object `+0x40` also skips it
   without a held button and is unread. Only Single Race and Time Trial were captured.
 - **A fresh menu-walk load on `03_Track` and Metropia reached the intro already in its fade-out
@@ -74,7 +97,9 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 
 ## Next Steps
 
-1. The intro music cue (`g_music_player` at the counter's `0x28` and `0`), the disc's own cue only.
+1. ~~The SFX fade-in at the counter's `0x28`~~ landed; ~~what is audible~~ measured and ~~wired~~
+   2026-11-02. Next: identify the tick-0 `~AMB` loop's cue, measure the fade's ceiling at a slider
+   below 100 (~~and Speech's law~~ measured). ~~Speech follows the SFX slider and the flyby fade~~ wired (`Title::speech_follows_effects`).
 2. ~~Pulse's settle~~ closed (see Open). Optional: a view-side rise of the drawn pose over the first ~50
    flyby ticks, if the flyby camera shows the craft then (chosen, not measured).
 3. Re-measure one of the short circuits (`01_Track`) through to its end, and a fresh-load

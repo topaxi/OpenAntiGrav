@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [pulse]
-updated: 2026-10-13
-summary: "Reset distance trigger (0x08841cec) is read, not ported; 05_Track autopilot grinds a wall at samples 1605-1675"
+updated: 2026-11-03
+summary: "Reset distance trigger (0x08841cec) and the shield charge are ported; 05_Track autopilot grinds a wall at samples 1605-1675"
 ---
 
 # The original resets a craft airborne for four seconds, and ours now does
@@ -36,16 +36,18 @@ Basilico Black is `01_Track`.
   ([reset-relocation.md](../../docs/ghidra/functions/psp-pulse-usa/reset-relocation.md)):
   the oldest of seven grounded crumbs, never on a record with `flags` bit 0, the
   width midpoint five up, launched at a quarter of the last grounded speed plus
-  50 (`+0x78c` is that speed, settled). Still open from it:
-  - the player's `min(5, shield - 1)` shield charge;
+  50 (`+0x78c` is that speed, settled). The player's
+  `min(5, shield - 1)` charge landed 2026-11-03 (mode 6's fixed 10 has no
+  counterpart). Still open from it:
   - the Eliminator's state-8 return, which reads the same ring.
 
   The ring was read live by `pulse-13-capture` the same day: nine resets of
   nine on the oldest crumb, speed exact. Names are applied at 90/92.
-- **The distance trigger** (`0x08841cec`: more than 200 units from `craft+0xaf0`
-  for 0.5 s) is read, not ported; the invented `LostCircuit`/`OffTrack` dwells
-  stand where it would. Porting it would retire two inventions and needs its
-  own survey. The fourth trigger (`0x0884239c`, `FUN_0883191c(..) == 2`) is not
+- ~~**The distance trigger**~~ (`0x08841cec`) ported 2026-11-03 as
+  `RespawnCause::Distance`; `LostCircuit` and `OffTrack` are retired (survey 55
+  events to 31, gate all twelve clean). Left: the original's locate is windowed
+  from the previous record, ours is global nearest. `Beneath` and `Stalled` stay
+  invented. The fourth trigger (`0x0884239c`, `FUN_0883191c(..) == 2`) is not
   read.
 - **`05_Track` samples ~1605-1675**: the player's autopilot at every tier grinds
   a wall at 1-3 u/s until its shield runs out (lap 1 after 6,000 ticks); on

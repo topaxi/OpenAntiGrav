@@ -393,10 +393,12 @@ pub struct Exhaust {
     plume_timer: f32,
     plume_visible: bool,
     /// Position history, newest at `write - 1`.
-    trail: [Vec3; TRAIL_SAMPLES],
+    trail: [Vec3; TRAIL_CAPACITY],
     /// The exhaust direction at each sample, so a ribbon segment keeps the
     /// orientation the craft had when it was laid down rather than the current one.
-    trail_back: [Vec3; TRAIL_SAMPLES],
+    trail_back: [Vec3; TRAIL_CAPACITY],
+    /// How many samples the ring keeps: [`TRAIL_SAMPLES`] unless [`Exhaust::set_trail_samples`].
+    trail_cap: usize,
     trail_len: usize,
     trail_write: usize,
     /// The sample the last push overwrote, once the ring was full: the tail a
@@ -426,8 +428,9 @@ impl Exhaust {
             alpha: 0.0,
             plume_timer: 0.0,
             plume_visible: false,
-            trail: [Vec3::ZERO; TRAIL_SAMPLES],
-            trail_back: [Vec3::ZERO; TRAIL_SAMPLES],
+            trail: [Vec3::ZERO; TRAIL_CAPACITY],
+            trail_back: [Vec3::ZERO; TRAIL_CAPACITY],
+            trail_cap: TRAIL_SAMPLES,
             trail_len: 0,
             trail_write: 0,
             trail_dropped: None,
@@ -523,7 +526,7 @@ impl Exhaust {
     /// need to know where the ship is, and keeping it that way is what lets every
     /// ramp be unit-tested without a pose.
     pub fn push_trail(&mut self, nozzle: Vec3, back: Vec3) {
-        self.trail_dropped = (self.trail_len >= TRAIL_SAMPLES).then(|| {
+        self.trail_dropped = (self.trail_len >= self.trail_cap).then(|| {
             (
                 self.trail[self.trail_write],
                 self.trail_back[self.trail_write],
@@ -531,8 +534,8 @@ impl Exhaust {
         });
         self.trail[self.trail_write] = nozzle;
         self.trail_back[self.trail_write] = back;
-        self.trail_write = (self.trail_write + 1) % TRAIL_SAMPLES;
-        self.trail_len = (self.trail_len + 1).min(TRAIL_SAMPLES);
+        self.trail_write = (self.trail_write + 1) % self.trail_cap;
+        self.trail_len = (self.trail_len + 1).min(self.trail_cap);
     }
 
     /// Clears the history, for a race start or a respawn.
@@ -551,7 +554,7 @@ impl Exhaust {
     /// this is the original's own gate rather than a guard against empty geometry.
     #[must_use]
     pub fn trail_ready(&self) -> bool {
-        self.trail_len >= TRAIL_SAMPLES
+        self.trail_len >= self.trail_cap
     }
 
     /// The trail's samples, newest first.
@@ -560,7 +563,7 @@ impl Exhaust {
     /// `Trail_DrawRibbon` walks its ring in.
     fn trail_samples(&self) -> impl Iterator<Item = (Vec3, Vec3)> + '_ {
         (0..self.trail_len).map(move |k| {
-            let i = (self.trail_write + TRAIL_SAMPLES - 1 - k) % TRAIL_SAMPLES;
+            let i = (self.trail_write + self.trail_cap - 1 - k) % self.trail_cap;
             (self.trail[i], self.trail_back[i])
         })
     }
@@ -761,9 +764,9 @@ impl Exhaust {
     /// (`(intensity * 0.6 + 0.4) * 2.5`), so an idle engine shows a small
     /// glow rather than nothing - as the original does on the start line.
     #[must_use]
-    pub fn vertices(&self, nozzle: Vec3, right: Vec3, up: Vec3) -> Vec<GpuVertex> {
+    pub fn vertices(&self, nozzle: Vec3, right: Vec3, up: Vec3) -> [GpuVertex; 6] {
         let half = self.half_size;
-        quad(nozzle, right * half, up * half, self.alpha).to_vec()
+        quad(nozzle, right * half, up * half, self.alpha)
     }
 }
 
@@ -1032,10 +1035,6 @@ const _: () = assert!(MAX_SPRITES >= MAX_TRAILS + (1 + 8 + 3) * 128);
 /// each a four-quad diamond tube.
 pub const TRAIL_VERTICES_PER_CRAFT: usize = LAYERS * (TRAIL_SAMPLES - 1) * TRAIL_FINS * 6;
 
-/// [`TRAIL_VERTICES_PER_CRAFT`] plus the one segment per layer a frame drawn
-/// between ticks adds at the tail ([`ribbon`]).
-pub const TRAIL_MAX_VERTICES_PER_CRAFT: usize = LAYERS * TRAIL_SAMPLES * TRAIL_FINS * 6;
-
 /// The ribbon's vertex budget: the larger of the PSP ribbon's
 /// [`TRAIL_MAX_VERTICES_PER_CRAFT`] and HD's [`hd::MAX_VERTICES_PER_CRAFT`], for every
 /// craft on the grid - all eight trail at once and they share one buffer.
@@ -1046,6 +1045,11 @@ pub const MAX_TRAIL_VERTICES: usize = MAX_TRAILS
         hd::MAX_VERTICES_PER_CRAFT
     };
 
+mod centre_line;
+pub use centre_line::TRAIL_HIT_MIN_BRIGHTNESS;
+mod length;
+mod rigid;
+pub use length::{LONG_TRAIL_SAMPLES, TRAIL_CAPACITY, TRAIL_MAX_VERTICES_PER_CRAFT};
 /// The flare's draw pipeline: the first blended, depth-tested pipeline in this
 /// crate.
 ///
@@ -1102,6 +1106,7 @@ pub struct Pipeline {
     /// Vertices actually uploaded by the last [`Pipeline::upload`].
     count: u32,
     trail_count: u32,
+    flare_count: u32,
 }
 
 impl Pipeline {
@@ -1342,6 +1347,7 @@ impl Pipeline {
             uniforms,
             count: 0,
             trail_count: 0,
+            flare_count: 0,
         }
     }
 
@@ -1357,6 +1363,7 @@ impl Pipeline {
         view_projection: &[[f32; 4]; 4],
         camera: Vec3,
         vertices: &[GpuVertex],
+        flares: &[GpuVertex],
         trail: &[GpuVertex],
     ) {
         // The vertex shader reads only `model`'s fourth column, which carries
@@ -1378,6 +1385,17 @@ impl Pipeline {
             bytemuck::cast_slice(&vertices[..n]),
         );
         self.count = n as u32;
+        // The flare quads follow the sprites in the same buffer, so [`Drawer::draw`]'s sprite
+        // range leaves them out and [`Drawer::draw_flare`] picks them one by one.
+        let f = flares.len().min(MAX_VERTICES - n) / 6 * 6;
+        if f > 0 {
+            queue.write_buffer(
+                &self.drawer.vertices,
+                (n * std::mem::size_of::<GpuVertex>()) as u64,
+                bytemuck::cast_slice(&flares[..f]),
+            );
+        }
+        self.flare_count = f as u32;
 
         let t = trail.len().min(MAX_TRAIL_VERTICES);
         if t > 0 {
@@ -1396,6 +1414,7 @@ impl Pipeline {
         Drawn {
             count: self.count,
             trail_count: self.trail_count,
+            flare_count: self.flare_count,
         }
     }
 
@@ -1441,6 +1460,23 @@ impl Drawer {
             pass.set_vertex_buffer(0, self.vertices.slice(..));
             pass.draw(0..drawn.count, 0..1);
         }
+    }
+}
+
+impl Drawer {
+    /// Draws flare quad `index` of the `flares` the last upload took, over whatever the pass
+    /// has drawn. Binds the pipeline, the texture and the buffer it needs and leaves them
+    /// bound: a caller drawing a mesh next re-binds its own.
+    pub fn draw_flare(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn, index: usize) {
+        let first = drawn.count + (index * 6) as u32;
+        if index >= drawn.flares() {
+            return;
+        }
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(1, &self.texture, &[]);
+        pass.set_vertex_buffer(0, self.vertices.slice(..));
+        pass.draw(first..first + 6, 0..1);
     }
 }
 

@@ -54,6 +54,13 @@
   lets one table carry both authored forms), and checked against HD's own
   `Anim Transform`s on the twelve circuits both titles ship. See
   [`2048-animation.md`](../formats/2048-animation.md)
+- **Pulse's circuit culls each batch's back faces, and a Moa Therma board stipples without it** (2026-11-09,
+  `moa-ad-flicker`): a front copy and a back copy of a trackside board share a plane; two-sided they z-fight
+  frame to frame, the original shows one clean side; wired per title rule, 13 of 29 Pulse pairs closer, 1 worse by 0.0001 - see
+  [`batch-cull.md`](batch-cull.md)
+- **A batch's authored depth bias is applied** (2026-11-13, `gemini-depth-bias`): the original moves a glow, cone or
+  tree batch `6 * bias` levels of its 16-bit depth toward the eye; ours does the same in its own depth through a vertex
+  lane, and Gemini Dam's tunnel light strip no longer z-fights its ceiling - see [`depth-bias.md`](depth-bias.md)
 - **Pulse's frame against the original's, matched and ranked** (2026-09-30): sky,
   fog and tone agree within 5 %; scenery textures now use the disc's mip levels picked by the GE slope law, as the
   original's do. See [`frame-audit.md`](frame-audit.md)
@@ -65,6 +72,14 @@
   per-piece costs at 1080p, one cut landed (craft outside the frustum are no longer drawn,
   byte-identical), the velocity attachment's "10 %" measured as noise, and three suspects cleared -
   see [`hd-gpu-cost.md`](hd-gpu-cost.md)
+- **Which passes grow with the output size** (2026-10-31, `hires-gpu-levers`): spans per pass for HD and
+  Pulse at 800p, 1080p and 4K on the AMD dGPU, iGPU and the Steam Deck, the presented 4K cost under
+  gamescope, and three ranked levers; the track lever landed (2026-10-31: per-model `slots_present`
+  folds `lit_texel`'s unused branches, Deck 1080p HD track solid -7 %, Pulse -52 %, byte-identical,
+  then 2026-11-04: the emissive table, a pipeline for a circuit's plain draws and the rig and Zone
+  folds, Intel iGPU 1080p HD track shaded -51 %, Pulse -47 %, the Deck not run),
+  the blur skip and the 1080p gamescope window were measured and dropped - see
+  [`hires-gpu-levers.md`](hires-gpu-levers.md)
 - **Where the frame thread's CPU goes** (2026-10-21): `--frame-log` prints a per-phase line; a
   paused race costs nearly what a racing one does, about half of it in wgpu's submit, and two
   redundant per-frame uploads were removed (byte-identical) - see
@@ -80,6 +95,11 @@
   linearly with the pixels and defaults stay under 8 ms at 8K; the one outlier, Omega's circuit
   shading 3.7 fragments a pixel with no depth prepass, now has one (pipelined 8K 9.4 to 4.9 ms,
   byte-identical) - see [`high-resolution-cost.md`](high-resolution-cost.md)
+- **A circuit's vertex data in several buffers** (2026-11-12, `big-vertex-buffer`): Omega's Rockway
+  Stadium and Unity Square outgrew wgpu's 256 MiB buffer ceiling and panicked at load; a model that
+  does not fit is now cut between draws and drawn with a negative base vertex, byte-identical to one
+  buffer, with the largest buffer every circuit of every title needs - see
+  [`vertex-buffers.md`](vertex-buffers.md)
 - **Blended glow batches stamp the mask** (2026-10-01): the arch lights, the start-line laser
   and the tunnel's rim light are blended batches with the glow bits, which the original's stencil
   stamps and ours did not, so they had no bloom; now drawn through a second alpha-only pass and
@@ -98,6 +118,15 @@
 - **A struck craft's hull sparks, measured per locator against the original**
   (2026-09-30): three causes named and two fixed, the gap closed from 1.3-2.6x
   to within 10 % - see [`hull-sparks.md`](hull-sparks.md)
+- **A weapon absorb on the player's craft, ours against the original** (2026-11-09): matched pairs on Pulse, Pure and
+  HD scored on the craft box against a no-absorb control, ranked differences per title (Pulse's bar glow, Pure's missing
+  hull overlay, HD's shell tint and tail), 2048 and Omega unpaired - see
+  [`weapon-absorb-pairs.md`](weapon-absorb-pairs.md)
+- **Our own HD/Fury-style shield for Pulse and Pure** (opt-in `graphics.own_shield`, off by default): a procedural,
+  texture-free shell over the craft's own hull, nothing read from any other disc - see [`own-shield.md`](own-shield.md)
+- **Our own rocket effect for Pulse and Pure** (opt-in `graphics.own_rockets`, off by default): flame, smoke trail,
+  launch flash and impact burst as effect files and puff sprites of ours in the fallback layer, nothing read from
+  any disc - see [`own-rockets.md`](own-rockets.md)
 - Lighting and shadow: five authored light classes plus
   `Dynamic Shadow Occluder` and `lensflare` - none implemented. The prelit path
   exists (`GpuVertex.lit`), so this is about which surfaces are which.

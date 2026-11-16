@@ -150,6 +150,7 @@ fn blurred_red(lens_motion: Mat4) -> Option<impl Fn(u32, u32) -> u8> {
             size: (SIZE, SIZE),
             viewport: (0.0, 0.0, SIZE as f32, SIZE as f32),
             strength: 1.0,
+            taps: MAX_TAPS,
             lens_motion,
         },
         None,

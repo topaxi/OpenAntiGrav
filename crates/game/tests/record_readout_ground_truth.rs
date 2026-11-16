@@ -148,7 +148,7 @@ fn an_eliminator_draws_the_kill_column_in_the_default_face() {
     // Two kills for the craft in slot 3 lifts it to the top row.
     race.sim.world.ships[3].standing.kills = 2;
     readout = race.readout();
-    assert_eq!(readout.kill_tags[0].kills, 2);
+    assert_eq!(readout.kill_tags[0].count, 2);
 
     let frame = oag_hud::draw_list(&context, &readout);
     assert!(

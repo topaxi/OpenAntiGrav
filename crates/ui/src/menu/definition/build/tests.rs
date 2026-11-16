@@ -31,6 +31,7 @@ fn main_rows(title: Option<&oag_title::Title>, mod_text: &str) -> Result<Vec<Str
         &english,
         title.map(|title| For {
             title,
+            platform: oag_assets::Platform::Psp,
             updated: false,
         }),
         &mods,
@@ -61,12 +62,13 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
     let pulse = [
         "campaign",
         "racebox",
-        "racebox>remix",
+        "racebox>replays",
         "multiplayer",
         "options",
         "options>records",
         "options>mods",
         "options>quit",
+        "photo_mode",
     ];
     assert_eq!(main_rows(Some(oag_pulse::TITLE), HEADER).unwrap(), pulse);
     assert_eq!(main_rows(Some(oag_pure::TITLE), HEADER).unwrap(), pulse);
@@ -74,11 +76,12 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
     let hd = [
         "campaign",
         "racebox",
-        "racebox>remix",
+        "racebox>replays",
         "multiplayer",
         "options",
         "options>mods",
         "options>quit",
+        "photo_mode",
         "records",
     ];
     assert_eq!(main_rows(Some(oag_hd::TITLE), HEADER).unwrap(), hd);
@@ -89,12 +92,13 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
         main_rows(Some(oag_2048::TITLE), HEADER).unwrap(),
         [
             "racebox",
-            "racebox>remix",
+            "racebox>replays",
             "multiplayer",
             "options",
             "options>records",
             "options>mods",
-            "options>quit"
+            "options>quit",
+            "photo_mode"
         ]
     );
 }
@@ -107,10 +111,11 @@ fn no_title_keeps_every_vanilla_row_and_the_extras_around_them() {
             "campaign",
             "multiplayer",
             "racebox",
-            "racebox>remix",
+            "racebox>replays",
             "options",
             "options>mods",
             "options>quit",
+            "photo_mode",
             "records"
         ]
     );
@@ -123,14 +128,18 @@ fn a_mod_row_goes_after_a_sibling_or_at_the_end_of_its_parents_rows() {
         &row("id = \"a\"\nparent = \"racebox\"\n"),
     )
     .unwrap();
-    assert_eq!(rows[1..4], ["racebox", "racebox>remix", "racebox>a"]);
+    // REPLAYS hangs off RACEBOX from the extras, so a mod's row lands after it.
+    assert_eq!(rows[1..4], ["racebox", "racebox>replays", "racebox>a"]);
 
-    let rows = main_rows(
-        Some(oag_hd::TITLE),
-        &row("id = \"b\"\nparent = \"racebox\"\nafter = \"racebox\"\n"),
-    )
-    .unwrap();
-    assert_eq!(rows[1..4], ["racebox", "racebox>b", "racebox>remix"]);
+    let two = format!(
+        "{}[[entry]]\nid = \"b\"\nparent = \"racebox\"\nafter = \"racebox\"\nkind = \"action\"\nlabel = \"X\"\naction = \"quit\"\n",
+        row("id = \"a\"\nparent = \"racebox\"\n")
+    );
+    let rows = main_rows(Some(oag_hd::TITLE), &two).unwrap();
+    assert_eq!(
+        rows[1..5],
+        ["racebox", "racebox>b", "racebox>replays", "racebox>a"]
+    );
 
     let rows = main_rows(
         Some(oag_hd::TITLE),
@@ -242,6 +251,7 @@ fn built_for(title: &oag_title::Title) -> Definition {
         &english,
         Some(For {
             title,
+            platform: oag_assets::Platform::Psp,
             updated: false,
         }),
         &[ModMenu {
@@ -322,4 +332,240 @@ fn pulse_words_the_multiplayer_row_as_its_disc_does() {
     );
     assert_eq!(label_of(oag_pure::TITLE).0, "MULTIPLAYER");
     assert_eq!(label_of(oag_hd::TITLE).0, "MULTIPLAYER");
+}
+
+const PAGE_MOD: &str = "
+[[page]]
+id = \"picker\"
+title = \"PICKER\"
+
+[[page.entry]]
+kind = \"toggle\"
+label = \"SPARKS\"
+setting = \"mod.test.mod.bloom\"
+
+[[page.entry]]
+kind = \"submenu\"
+label = \"DEEPER\"
+target = \"deeper\"
+
+[[page]]
+id = \"deeper\"
+title = \"DEEPER\"
+
+[[page.entry]]
+kind = \"action\"
+label = \"BACK\"
+action = \"quit\"
+
+[[entry]]
+id = \"picker_row\"
+parent = \"racebox\"
+kind = \"submenu\"
+label = \"PICKER\"
+target = \"picker\"
+";
+
+fn build_with(mod_text: &str) -> Result<(Definition, Vec<Added>), Error> {
+    let extras = extras();
+    let mods = [
+        ModMenu {
+            id: "oag.extras",
+            text: &extras,
+        },
+        ModMenu {
+            id: "test.mod",
+            text: mod_text,
+        },
+    ];
+    let english = english();
+    Definition::build(crate::menu::BUILT_IN, &english, &english, None, &mods)
+}
+
+fn with_header(body: &str) -> String {
+    format!("{HEADER}{body}")
+}
+
+fn mod_error(mod_text: &str) -> (String, String) {
+    match build_with(&with_header(mod_text)) {
+        Err(Error::Mod { mod_id, key, .. }) => (mod_id, key),
+        other => panic!("expected a mod error, got {:?}", other.map(|(_, a)| a)),
+    }
+}
+
+#[test]
+fn a_mod_page_merges_under_its_namespaced_id_and_its_row_reaches_it() {
+    let (tree, report) = build_with(&with_header(PAGE_MOD)).unwrap();
+    let picker = tree.page("test.mod/picker").expect("the mod's page");
+    assert_eq!(picker.entries.len(), 2);
+    assert!(tree.page("test.mod/deeper").is_some());
+    assert!(
+        tree.page("picker").is_none(),
+        "the short id is not a tree id"
+    );
+    let added = report.iter().find(|a| a.mod_id == "test.mod").unwrap();
+    assert_eq!(added.pages, ["test.mod/picker", "test.mod/deeper"]);
+    let at = tree
+        .pages
+        .iter()
+        .position(|p| p.id == "test.mod/picker")
+        .unwrap();
+    let racebox = tree
+        .pages
+        .iter()
+        .flat_map(|page| page.entries.iter())
+        .any(|entry| matches!(entry, Entry::Submenu { target, .. } if *target == at));
+    assert!(racebox, "the mod's row opens its page");
+}
+
+#[test]
+fn the_shipped_vanilla_file_still_parses_without_a_mod() {
+    Definition::parse_vanilla(crate::menu::BUILT_IN, &english()).unwrap();
+}
+
+#[test]
+fn a_mod_page_no_entry_reaches_names_the_mod_and_the_page() {
+    let orphan = "[[page]]\nid = \"lost\"\ntitle = \"LOST\"\n";
+    assert_eq!(
+        mod_error(orphan),
+        ("test.mod".to_string(), "page \"lost\"".to_string())
+    );
+}
+
+#[test]
+fn a_mod_page_id_must_be_plain_and_unique() {
+    let slash = "[[page]]\nid = \"a/b\"\ntitle = \"X\"\n";
+    assert_eq!(mod_error(slash).1, "page \"a/b\" id");
+    let twice = "[[page]]\nid = \"a\"\ntitle = \"X\"\n[[page]]\nid = \"a\"\ntitle = \"Y\"\n";
+    assert_eq!(mod_error(twice).1, "page \"a\" id");
+}
+
+#[test]
+fn a_mod_page_row_naming_a_missing_page_or_string_names_the_row() {
+    let target = "[[page]]\nid = \"a\"\ntitle = \"X\"\n[[page.entry]]\nkind = \"submenu\"\nlabel = \"Y\"\ntarget = \"nowhere\"\n[[entry]]\nid = \"r\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"A\"\ntarget = \"a\"\n";
+    assert_eq!(
+        mod_error(target),
+        (
+            "test.mod".to_string(),
+            "page \"a\" entry 0 target".to_string()
+        )
+    );
+    let string = "[[page]]\nid = \"a\"\ntitle = \"X\"\ntitle_string_id = \"NO_SUCH_STRING\"\n";
+    assert_eq!(mod_error(string).1, "page \"a\" title_string_id");
+}
+
+#[test]
+fn a_mod_cannot_name_another_mods_page_by_its_short_id() {
+    let extras = extras();
+    let owner = with_header(PAGE_MOD);
+    let thief = with_header(
+        "[[entry]]\nid = \"t\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"T\"\ntarget = \"picker\"\n",
+    );
+    let mods = [
+        ModMenu {
+            id: "oag.extras",
+            text: &extras,
+        },
+        ModMenu {
+            id: "test.mod",
+            text: &owner,
+        },
+        ModMenu {
+            id: "thief.mod",
+            text: &thief,
+        },
+    ];
+    let english = english();
+    match Definition::build(crate::menu::BUILT_IN, &english, &english, None, &mods) {
+        Err(Error::Mod { mod_id, key, .. }) => {
+            assert_eq!(
+                (mod_id.as_str(), key.as_str()),
+                ("thief.mod", "entry \"t\" target")
+            );
+        }
+        other => panic!(
+            "expected the thief to be refused, got {:?}",
+            other.map(|(_, a)| a)
+        ),
+    }
+}
+
+#[test]
+fn a_template_choice_row_on_a_mod_page_expands_like_one_on_an_engine_page() {
+    use crate::menu::{Choice, Menu, RowItem, ValueSource};
+    let text = "[[page]]\nid = \"pool\"\ntitle = \"POOL\"\n[[page.entry]]\nkind = \"choice\"\nlabel = \"SOURCE\"\nsetting = \"mod.test.mod.pool\"\nvalues_from = \"music_pool\"\n[[entry]]\nid = \"pool_row\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"POOL\"\ntarget = \"pool\"\n";
+    let (mut tree, _) = build_with(&with_header(text)).unwrap();
+    let items: Vec<RowItem> = ["a", "b"]
+        .iter()
+        .map(|id| RowItem {
+            id: (*id).to_string(),
+            label: id.to_uppercase(),
+            detail: None,
+            values: vec![Choice::labelled("on", "ON"), Choice::labelled("off", "OFF")],
+            current: "off".to_string(),
+        })
+        .collect();
+    // The engine's own MUSIC template expands in the same call.
+    assert!(tree.expand_rows(ValueSource::MusicPool, &items) >= 2);
+    let page = tree.page("test.mod/pool").expect("the mod's page");
+    assert_eq!(page.entries.len(), 2, "the template is replaced, not kept");
+    assert_eq!(page.entries.len(), page.meta.len());
+    assert_eq!(page.entries[1].setting(), Some("mod.test.mod.pool.b"));
+    let menu = Menu::new(tree);
+    assert_eq!(
+        menu.expanded_settings("mod.test.mod.pool"),
+        ["mod.test.mod.pool.a", "mod.test.mod.pool.b"]
+    );
+}
+#[test]
+fn a_mod_page_query_row_checks_its_of_against_the_mods_own_settings() {
+    let page = |of: &str| {
+        format!(
+            "[[page]]\nid = \"a\"\ntitle = \"X\"\n[[page.entry]]\nkind = \"choice\"\nlabel = \"T\"\nsetting = \"mod.test.mod.title\"\nvalues_from = \"titles\"\n[[page.entry]]\nkind = \"choice\"\nlabel = \"R\"\nsetting = \"mod.test.mod.track\"\nvalues_from = {{ query = \"tracks_of\", of = \"{of}\" }}\n[[entry]]\nid = \"r\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"A\"\ntarget = \"a\"\n"
+        )
+    };
+    let (tree, _) = build_with(&with_header(&page("mod.test.mod.title"))).unwrap();
+    let Entry::Choice { query, .. } = &tree.page("test.mod/a").unwrap().entries[1] else {
+        panic!("a choice row");
+    };
+    assert_eq!(query.as_ref().unwrap().of, "mod.test.mod.title");
+    assert_eq!(
+        mod_error(&page("mod.test.mod.nothing")),
+        (
+            "test.mod".to_string(),
+            "page \"a\" entry 1 values_from".to_string()
+        )
+    );
+}
+
+const SETTINGS_ONLY: &str = "settings = \"picker\"
+[[page]]
+id = \"picker\"
+title = \"PICKER\"
+
+[[page.entry]]
+kind = \"toggle\"
+label = \"SPARKS\"
+setting = \"mod.test.mod.bloom\"
+";
+
+#[test]
+fn a_settings_page_needs_no_row_on_the_main_menu() {
+    let (tree, added) = build_with(&with_header(SETTINGS_ONLY)).unwrap();
+    assert_eq!(
+        tree.mod_settings.get("test.mod").map(String::as_str),
+        Some("test.mod/picker")
+    );
+    let test = added.iter().find(|a| a.mod_id == "test.mod").unwrap();
+    assert!(test.rows.is_empty(), "no row: {:?}", test.rows);
+    assert_eq!(test.pages, ["test.mod/picker"]);
+}
+
+#[test]
+fn a_settings_key_naming_no_page_of_the_mod_is_refused() {
+    let text = SETTINGS_ONLY.replace("settings = \"picker\"", "settings = \"options\"");
+    assert_eq!(
+        mod_error(&text),
+        ("test.mod".to_string(), "settings".to_string())
+    );
 }

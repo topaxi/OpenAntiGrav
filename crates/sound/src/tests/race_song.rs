@@ -10,6 +10,7 @@ fn discs() -> MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -31,11 +32,15 @@ fn step(audio: &mut Audio, gated: bool) {
         announcer: &announcer,
         class_announcer: &class_announcer,
         cues: Vec::new(),
+        mod_sounds: Vec::new(),
+        mod_loops: Vec::new(),
         announcements: Vec::new(),
         class_announcements: Vec::new(),
         listener: oag_audio::Listener::at_origin(),
         craft: [None; oag_gameplay::MAX_SHIPS],
+        mod_craft: [None; oag_gameplay::MAX_SHIPS],
         slot_teams: [None; oag_gameplay::MAX_SHIPS],
+        player_slot: 0,
         throttle: 0.0,
         projectiles: oag_weapons::projectile::Projectiles::new().slots,
         running: true,
@@ -45,7 +50,7 @@ fn step(audio: &mut Audio, gated: bool) {
         thrust_gated: gated,
         sight: oag_race::sight::State::Absent,
         quake_point: None,
-        leach_beam: None,
+        leach_beams: [None; oag_weapons::projectile::leach_beam::POOL_SIZE],
     });
 }
 
@@ -223,4 +228,15 @@ fn a_source_switch_landing_after_the_release_moves_the_sounding_song() {
     audio.race_cache = Some((Platform::Ps2, index, silence(180.0, 2, 48_000)));
     audio.set_music_source(&discs(), MusicSource::Ps2, Path::new("unused"));
     assert_eq!(audio.race_from, Some(Platform::Ps2));
+}
+
+#[test]
+fn a_race_launch_on_a_decoded_track_spawns_no_fetch() {
+    let (mut audio, ..) = psp_boot_fixture();
+    let fetch = audio.race_music_fetch(&discs(), MusicSource::Auto, Path::new("unused"));
+    assert!(fetch.is_none(), "the cached track needs no worker");
+
+    audio.race_cache = None;
+    let fetch = audio.race_music_fetch(&discs(), MusicSource::Auto, Path::new("unused"));
+    assert!(fetch.is_some(), "an empty cache still fetches");
 }

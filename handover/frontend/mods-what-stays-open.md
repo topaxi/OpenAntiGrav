@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-12
-summary: "Mods: enable and disable on the MODS page; tracks, craft and pilots read from a mod"
+updated: 2026-11-05
+summary: "Mods: tracks, craft and pilots read from a mod (the enable switch and the live language rebuild have landed)"
 difficulty: medium (30)
 ---
 
@@ -22,11 +22,13 @@ difficulty: medium (30)
   vocabulary is deliberate, opened one kind of content at a time.
 - **2026-10-12 `mods-page`: landed.** OPTIONS, then MODS: a read-only page (one MOD row over the list,
   detail lines for the mod it is on, a mod that did not load dimmed with its error). No enable or
-  disable. Write-up: `docs/tools/mods.md` ("The MODS page"). The list is rebuilt only when the
-  tree is, so a language switch leaves its words as booted (the thread's language item below).
-- **A language switch does not re-resolve labels.** The tree's labels are resolved once when it is built,
-  as every row's always were, so a live LANGUAGE change leaves a mod row in the language it booted in.
-  `Session::resupply_language` clones the built definition; rebuilding it through `Mods::build` is the fix.
+  disable. Write-up: `docs/tools/mods.md` ("The MODS page").
+- **2026-11-05 `mods-switch`: landed.** The ENABLED row had landed already (ADR-0078, `oag_game::mods::switch`,
+  `Session::switch_selected_mod`, `[mods] disabled` by id, `oag-extras` ALWAYS ON). What was open was the
+  live LANGUAGE pick: `Session::resupply_language` now rebuilds the tree through `oag_game::menu_tree::rebuilt`
+  (shared with the switch) and reopens the menus on the same page and row, so a mod row and the MODS page
+  read the new language. Left open: no test reaches the `Session` wiring (it needs a GPU); the seam test is
+  `crates/game/tests/mods_menu.rs`.
 - **`--menu <file>` takes the file whole**: no title trimming and no mods.
 - **`titles` and `oag` in the manifest**: `oag` is checked against the build, `titles` is information and
   filters nothing.
@@ -46,7 +48,5 @@ difficulty: medium (30)
 
 ## Next Steps
 
-1. Enable and disable on the MODS page (a stored per-mod switch, then the tree rebuilt without it).
-2. Read `tracks/`, `craft/` and `pilots/` from a mod, one kind at a time, through the layer the disc's
+1. Read `tracks/`, `craft/` and `pilots/` from a mod, one kind at a time, through the layer the disc's
    own archives use (`docs/architecture/asset-layers.md`).
-3. Rebuild the tree on a live language switch.

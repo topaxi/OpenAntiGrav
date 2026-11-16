@@ -41,9 +41,10 @@ jobs:
         with:
           submodules: true
           lfs: true
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       # `oag-audio` builds `cpal` with its PipeWire host, which links
       # libpipewire-0.3 through pkg-config, and its ALSA backend needs
@@ -58,6 +59,10 @@ jobs:
       # Off by default and enabled by no build; built here so it does not rot.
       - run: cargo clippy -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --all-targets -- -D warnings
       - run: cargo nextest run -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --tests --cargo-profile quick -E 'test(custom_tracks::) | test(survey::)'
+      # Simulation mods (wasmtime): `oag-game`'s default feature. The same
+      # two commands as `just check-extensions`.
+      - run: cargo clippy -p oag-modhost -p oag-raceplay -p oag-game --features oag-game/extensions,oag-raceplay/extensions --all-targets -- -D warnings
+      - run: cargo nextest run -p oag-modhost -p oag-raceplay --features oag-raceplay/extensions --lib --cargo-profile quick
       - name: Assert the two architecture dependency rules still hold
         run: python3 scripts/check-dependency-rules.py
       # Cheap and early: a transcendental in simulation code is a divergence
@@ -84,6 +89,11 @@ jobs:
         run: python3 scripts/check-strings.py
       - name: Assert every shipped TOML validates against its schema and the schemas stage for Pages
         run: scripts/check-schemas.sh
+      # Each mod guest is a workspace of its own: the steps above compile none of them. Its
+      # tests pass and its committed ext/*.wasm is byte-identical to a fresh build, or the
+      # module a player runs is not the source beside it. `just rebuild-guests` regenerates.
+      - name: Assert every mod guest's tests pass and its committed module is its build
+        run: python3 -I scripts/check-mod-guests.py --strict
 
   docs:
     name: documentation links
@@ -101,16 +111,43 @@ jobs:
   # exists to catch. If the two ever diverge, this job is the one that is
   # supposed to fail.
   msrv:
-    name: MSRV build (1.97.1)
+    name: MSRV build (1.100.0)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.100.0
         id: msrv-toolchain
       - uses: Swatinem/rust-cache@v2
       - name: Install libpipewire and ALSA
         run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev libasound2-dev libudev-dev libclang-dev pkg-config
       - run: cargo +${{ steps.msrv-toolchain.outputs.name }} build --workspace
+
+  # The browser build's example (`oag_web`, docs/tools/web.md) type-checks for
+  # wasm32 with the nightly pages.yml builds it with. Cargo builds an example's
+  # dev-dependencies too, so a `validate`-featured `oag-schema` there (toml-schema
+  # does not compile for wasm32) failed the nightly's Pages job for four nights
+  # while every job here was green. `check` is enough: it resolves the same
+  # features and reaches the same compile errors without std rebuilt or linked.
+  # `RUSTFLAGS` is cleared: the wasm-only dead code in the example is not an error.
+  web-compile:
+    name: web build compiles (wasm32)
+    runs-on: ubuntu-24.04
+    env:
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v7
+      # rust-toolchain.toml pins 1.100.0 and wins over the default this step sets,
+      # so the cargo call names the nightly (as the msrv job does).
+      - uses: dtolnay/rust-toolchain@master
+        id: web-toolchain
+        with:
+          toolchain: nightly-2026-10-08
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +${{ steps.web-toolchain.outputs.name }} check --target wasm32-unknown-unknown -p oag-game --no-default-features --example oag_web --features web
+      # The fault hook (docs/tools/web.md, "Reproducing every message") is built by no
+      # published module, so only this check keeps it compiling.
+      - run: cargo +${{ steps.web-toolchain.outputs.name }} check --target wasm32-unknown-unknown -p oag-game --no-default-features --example oag_web --features web,fault-test
 
   # Every WGSL module the web build emits goes through a real browser's shader
   # compiler (scripts/check-web-shaders.py, docs/tools/web.md "Shaders").
@@ -137,7 +174,7 @@ jobs:
       OAG_REQUIRE_WEB_SHADERS: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.100.0
       - uses: Swatinem/rust-cache@v2
       - name: Install libpipewire and ALSA
         run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev libasound2-dev libudev-dev libclang-dev pkg-config
@@ -162,7 +199,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.100.0
       - uses: Swatinem/rust-cache@v2
       - name: Print determinism hashes (release)
         run: cargo run -q -p oag-core --example core_determinism_report
@@ -187,6 +224,9 @@ jobs:
       - name: Assert race-level hashes match the committed reference (release)
         if: ${{ !cancelled() }}
         run: cargo test -p oag-gameplay --release --test determinism -- --nocapture
+      - name: Assert fanned-volley hashes match the committed reference (release)
+        if: ${{ !cancelled() }}
+        run: cargo test -p oag-gameplay --release --test determinism_volley -- --nocapture
       # The force law above is driven by a *scripted* input, so no controller
       # decision is in its hash. This one drives the drivers, which is where
       # `Line::curvature` lives - the platform `acos` it used to call was
@@ -210,6 +250,9 @@ jobs:
       - name: Assert race-level hashes match the committed reference (debug)
         if: ${{ !cancelled() }}
         run: cargo test -p oag-gameplay --test determinism -- --nocapture
+      - name: Assert fanned-volley hashes match the committed reference (debug)
+        if: ${{ !cancelled() }}
+        run: cargo test -p oag-gameplay --test determinism_volley -- --nocapture
       - name: Assert driver hashes match the committed reference (debug)
         if: ${{ !cancelled() }}
         run: cargo test -p oag-ai --test determinism -- --nocapture
@@ -221,7 +264,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           targets: x86_64-pc-windows-gnu
       - uses: Swatinem/rust-cache@v2

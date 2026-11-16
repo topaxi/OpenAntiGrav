@@ -62,7 +62,10 @@ fn sfo(title: &str) -> Vec<u8> {
 }
 
 fn deflate(data: &[u8]) -> Vec<u8> {
-    miniz_oxide::deflate::compress_to_vec(data, 6)
+    use std::io::Write;
+    let mut e = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::new(6));
+    e.write_all(data).unwrap();
+    e.finish().unwrap()
 }
 
 fn scratch(name: &str) -> PathBuf {

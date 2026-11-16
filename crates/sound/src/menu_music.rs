@@ -14,6 +14,8 @@ pub(super) struct MenuLanded {
     /// HD's authored mix, when the booted title has one.
     maps: Option<hd_mix::Maps>,
     loaded: Result<Option<Loaded>>,
+    /// The front end's spectrum sidecar; `Ok(None)` for a title that ships none.
+    spectrum: Result<Option<oag_music::spectrum::Spectrum>>,
 }
 
 /// The menu music being read, polled by [`Audio::tick`].
@@ -47,7 +49,17 @@ impl MenuJob {
                 }
                 _ => front_end_music(&discs, &cache_dir),
             };
-            MenuLanded { maps, loaded }
+            let spectrum = match discs.pick(MusicSource::Auto) {
+                Some((source, _)) if discs.booted() != Some(Platform::Ps2) => {
+                    library::load_front_end_spectrum(discs.library, source)
+                }
+                _ => Ok(None),
+            };
+            MenuLanded {
+                maps,
+                loaded,
+                spectrum,
+            }
         }))
     }
 
@@ -57,10 +69,12 @@ impl MenuJob {
             Some(Ok(landed)) => landed,
             Some(Err(_)) => MenuLanded {
                 maps: None,
+                spectrum: Ok(None),
                 loaded: Err(anyhow::anyhow!("the menu music read panicked")),
             },
             None => MenuLanded {
                 maps: None,
+                spectrum: Ok(None),
                 loaded: Err(anyhow::anyhow!("the menu music thread would not start")),
             },
         }
@@ -109,6 +123,7 @@ impl Audio {
             };
             self.apply_menu_landed(MenuLanded {
                 maps: None,
+                spectrum: Ok(None),
                 loaded: Ok(Some(loaded)),
             });
             return;
@@ -141,6 +156,18 @@ impl Audio {
         if let Some(maps) = landed.maps {
             self.set_hd_mix(maps);
         }
+        match landed.spectrum {
+            Ok(Some(spectrum)) => {
+                debug!(
+                    "audio: music spectrum, {} rows, {:.1} s",
+                    spectrum.frames(),
+                    spectrum.seconds()
+                );
+                self.menu_spectrum = Some(spectrum);
+            }
+            Ok(None) => {}
+            Err(error) => warn!("audio: music spectrum not loaded, the map stays still: {error:#}"),
+        }
         match landed.loaded {
             Ok(Some(loaded)) => {
                 let seconds = loaded.sound.seconds();
@@ -167,5 +194,16 @@ impl Audio {
             Ok(None) => warn!("audio: this source carries no music this can play"),
             Err(error) => race_music::warn_no_music("no music", &error),
         }
+    }
+
+    /// The band levels of the front end's music at the moment it is sounding,
+    /// or `None` with no spectrum sidecar or no music voice. An output of the
+    /// music path, read each tick; never simulation state.
+    #[must_use]
+    pub fn music_levels(&self) -> Option<oag_music::spectrum::Levels> {
+        let spectrum = self.menu_spectrum.as_ref()?;
+        let voice = self.music?;
+        let seconds = self.output.with_mixer(|mixer| mixer.position(voice))?;
+        Some(spectrum.sample_at(seconds as f32))
     }
 }

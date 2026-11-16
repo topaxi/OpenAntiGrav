@@ -95,24 +95,32 @@ use oag_hd::frontend::states as hd_states;
 /// redirects, `touch.rs` the two icon grids after them, `campaign_map.rs`
 /// the map the grids lead to. See each module's own docs.
 mod campaign_map;
+mod campaign_reveal;
 mod campaign_tiers;
+mod campaign_wave;
+pub mod canvas_camera;
+pub mod canvas_cells;
 pub mod canvas_lattice;
+pub mod canvas_mesh;
+pub mod canvas_prism;
+pub mod canvas_wave;
 mod event_card;
 mod faces;
+mod hosted_map;
+mod map_cursor;
+mod map_focus;
 mod mode_grid;
 mod options2048;
 mod team;
 mod team_info;
 mod touch;
 mod wipeout2048;
-pub use campaign_map::{
-    CampaignMap, EarnedTier, EventIcon, HEX_FILLED, HEX_OUTLINE, HEX_SELECT, MapEvent,
-    ProgressState,
-};
+pub use campaign_map::{CampaignMap, EarnedTier, EventIcon, HEX_SELECT, MapEvent, ProgressState};
+pub use campaign_reveal::Reveal;
 pub use campaign_tiers::Tier;
 pub use event_card::{
-    CARD_TEXTURES, CardCraft, CardRestriction, CardState, CardTabs, CardTrophy, CardWeapons,
-    EventCard,
+    Backdrop, CARD_TEXTURES, CardCraft, CardPaint, CardRestriction, CardState, CardTabs,
+    CardTrophy, CardWeapons, EventCard, GameTip, LaunchedCard,
 };
 pub(crate) use faces::{font_line_height, lighten};
 /// The reel's frame counts and every state name: `oag_pulse::frontend`.
@@ -125,10 +133,10 @@ pub(crate) use faces::{font_line_height, lighten};
 /// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::frontend::{FINISH_FRAME, HOLD_SECONDS, PAUSE_FRAMES, states};
 use oag_pure::frontend::states as pure_states;
-pub use options2048::OptionDefaults;
+pub use options2048::{OptionDefaults, ScreenSize};
 pub use team::team_grid_textures;
 pub use team_info::{TeamRating, team_info_textures};
-pub use touch::{EXTRA_TILES, ExtraTile, Launch, TouchState, cursor_ring};
+pub use touch::{EXTRA_TILES, ExtraTile, Launch, TouchState};
 
 /// How long `Developer Publisher Screen` takes, as the reel's own length.
 ///
@@ -329,6 +337,9 @@ pub enum Video {
     /// `Data\Movies\Backdrop.PMF`, looped by `FE Screen` under
     /// [`states::SHOW_LOGO`].
     Backdrop,
+    /// The Bink clip in the race loading screen's mode icon panel. Not the
+    /// front end's: `oag_game::loading` draws it and its stage feeds it.
+    ModeIcon,
 }
 
 mod draw;
@@ -336,7 +347,7 @@ mod pointer;
 mod rows;
 mod updates;
 
-pub use draw::Draw;
+pub use draw::{Corner, Draw};
 
 /// How the intro state is getting on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -437,6 +448,9 @@ pub struct Frontend {
     /// Wipeout 2048's campaign map - see [`CampaignMap`]. Empty on every
     /// other title.
     campaign: CampaignMap,
+    /// Set when a title's own menus opened this as their campaign map - see
+    /// [`Self::hosted_map`].
+    map_host: Option<hosted_map::MapHost>,
     /// How much larger or smaller each font role's face is than the
     /// `Default` one this build draws every screen widget with, by the
     /// role's name in lower case - see [`Self::set_face_scales`]. Empty
@@ -584,6 +598,7 @@ impl Frontend {
             menu_skin: None,
             touch: TouchState::default(),
             campaign: CampaignMap::default(),
+            map_host: None,
             face_scales: Vec::new(),
             default_line_height: None,
             picker_line_height: None,
@@ -900,7 +915,9 @@ impl Frontend {
         }
 
         self.on_screen_for += dt;
-        self.campaign.tick(dt, self.space.size);
+        self.campaign.tick(dt);
+        self.step_map_cursor(dt);
+        self.step_wave(dt);
 
         if self.leg_has_no_picture() {
             input.inject_press(Button::Start);

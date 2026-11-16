@@ -4,7 +4,7 @@
 //! `Race End Photo` (`manager+0x19ed`, set when the state name compares equal) and the race
 //! runs on behind it: up and down call `Camera_CycleModeForward` (`0x088807c8`) and
 //! `Camera_CycleModeBack` (`0x08880838`), left and right hand the camera the previous or next
-//! craft (`Camera_SetSubject`, `0x0888058c`). **Measured** on PPSSPP 2026-10-04: up took the
+//! craft (`Camera_SetSubject`, `0x0888058c`). **Measured** on PPSSPP: up took the
 //! mode `4 -> 3 -> 2`, down `2 -> 3`, right and left stepped the watched craft one slot either
 //! way (`docs/ghidra/functions/psp-pulse-usa/race-finish.md`).
 //!

@@ -34,6 +34,7 @@ fn vertex(position: [f32; 3], lightmap_texcoord: [f32; 2], sun_mask: f32, slots:
         glow: 0.0,
         texcoord2: [0.0, 0.0],
         tangent: 0,
+        depth_bias: 0.0,
     }
 }
 
@@ -193,6 +194,8 @@ fn the_road_under_the_craft_writes_its_own_mask_and_the_far_road_is_culled() {
         mapped_at_creation: false,
     });
     queue.write_buffer(&vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+    let vertex_buffer =
+        oag_mesh::mesh_render::Geometry::single(vertex_buffer, vertices.len() as u32);
     let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("track indices"),
         size: std::mem::size_of_val(&indices[..]) as u64,
@@ -217,7 +220,7 @@ fn the_road_under_the_craft_writes_its_own_mask_and_the_far_road_is_culled() {
         material(&device, &queue, 12),
     ];
     let track = Track {
-        vertices: &vertex_buffer,
+        geometry: &vertex_buffer,
         indices: &index_buffer,
         draws: &draws,
         cutouts: &[],
@@ -235,7 +238,8 @@ fn the_road_under_the_craft_writes_its_own_mask_and_the_far_road_is_culled() {
         towards_light: Vec3::Y,
     };
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    let drawn = maps.render(&queue, &mut encoder, 3, &fit, &track);
+    let drawn = maps.render(&mut encoder, 3, &fit, &track);
+    maps.write_uniforms(&queue);
     queue.submit([encoder.finish()]);
     assert_eq!(drawn, 3, "the three roads in reach, not the far one");
     assert_eq!(maps.drawn(3), 3);

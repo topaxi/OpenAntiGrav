@@ -510,9 +510,12 @@ recovered tensor's own entries - `15.6` on roll and `21.6` on yaw, the two axes 
 acts on once its pitch component is projected out. The fit's `19.8` sits between them,
 which is what a term spread across two axes should look like and is a check the fit could
 not have arranged. On roll alone the recovered value is `400 / 15.6`, a natural frequency
-of `5.06` rad/s against the original's measured `4.49`: **13 % stiff, left standing rather
-than tuned away**, and pinned by
-`hover::tests::the_roll_oscillator_is_stable_by_the_margin_that_was_measured`. See
+of `5.06` rad/s. **That matches the original**: four step captures on 2026-11-11 put its half
+period at `0.6249 s` against `0.6250 s` here. The `4.49` this page carried, and the "13 % stiff"
+gap built on it, came from reading the first zero crossing of a damped step response as a
+quarter period ([roll-step-response.md](roll-step-response.md)). Pinned by
+`hover::tests::the_roll_oscillator_is_stable_by_the_margin_that_was_measured` and
+`ship_dynamics::a_rolled_craft_swings_through_level_at_the_originals_period`. See
 `ALIGNMENT_GAIN` in `crates/physics/src/hover.rs` and
 [angular-velocity-column.md](angular-velocity-column.md).
 
@@ -571,6 +574,13 @@ damping `2*zeta*omega ~= 1.6` (against the transcribed 2.0, itself confirmed at 
 in the PS2 `Ship_ApplyAngularDamping`, `0x0015c1b0`). At `20.2` the oscillator runs at
 4.49 rad/s with `det = 0.9704` and roll decays about 1.5 % a tick. Confidence **80**:
 one ship, one track, hand-fitted from a quarter period and one overshoot.
+
+**That reduction was wrong, and the trace was right.** A damped oscillator released from rest
+first crosses zero at `(pi/2 + atan(c / (2 * omega_d))) / omega_d`, later than a quarter period,
+so frame 21 means about `5.03 rad/s`, not `4.49`. Fitted with the frame map the 28 values above
+give `k = 25.35`, `c = 2.15`; four longer captures give a half period of `0.6249 s`, the
+`400 / 15.6` and `-2.0` this crate runs. The `20.2` and `1.6` are retired:
+[roll-step-response.md](roll-step-response.md).
 
 **Sign.** With `omega = up x n`, `d(up)/dt = omega x up = n - up*(n . up)`, the component
 of `n` perpendicular to `up`, so `+k * cross(up, n)` aligns and the page's literal
@@ -792,10 +802,11 @@ Three consequences, and the first is the interesting one:
   The other arm, `if (controls->0x24 & 1) dir += craft+0x160 * speedpad_jump`, **is now
   implemented**: both of its unknowns were closed live - `craft+0x160` is the hull up axis
   and the gate is d-pad Up - so it is no longer a guess.
-- **The per-team in-air pitch bias** at `stats_base + 0x90`: `<Misc weight_distribution>`
+- ~~**The per-team in-air pitch bias**~~ at `stats_base + 0x90`: `<Misc weight_distribution>`
   (the PS2 parser; read live as `8.0` on the PSP, 2026-10-19), added to the pitch torque
-  whenever the craft is not grounded. `Handling::weight_distribution` carries it and
-  nothing reads it.
+  whenever the craft is not grounded. **Ported**: `oag_physics::engine::pitch` adds it behind
+  `ShipState::air_pitch_bias` (on by default; Pure's `CraftLaws` turn it off, measured). See
+  [airborne-ground-truth.md](airborne-ground-truth.md).
 - **The gate on pitch input**, `Ship_TestPitchAlignment` (`0x088492bc`), decoded
   2026-10-19: input applies only while `dot(hull_up, -spline_down) > 0.9`. HD has the same
   gate and bias. See [engine.md](../ghidra/functions/psp-pulse-usa/engine.md#pitch).

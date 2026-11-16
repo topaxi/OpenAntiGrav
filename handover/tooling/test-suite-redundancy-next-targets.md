@@ -1,8 +1,8 @@
 ---
 status: blocked-maintainer
 titles: [all]
-updated: 2026-10-13
-summary: "Test-suite redundancy: maintainer's call on rcs walk files; merge magstrip_wire_hd, render repeats, GNF profiling"
+updated: 2026-11-16
+summary: "Test-suite redundancy: rcs walk files (psp2 pair merged), render repeats, GNF profiling"
 ---
 
 # Test-suite redundancy: what two trims left, ranked
@@ -31,8 +31,11 @@ redundancy confirmed, **H** means a read-only sweep's lead, not yet verified.
 1. **The maintainer's call, left alone on purpose:**
    - ~~`replay_ground_truth`~~: one recording per title since 2026-10-13
      (62 s to 51 s isolated).
-   - `rcsmodel_decl` (7 walks), `rcsmodel_material` (4), `psp2_rcsmodel` (5),
-     `rcsmodel_ground_truth` (3), about 100 s summed: those files keep one claim
+   - ~~`psp2_rcsmodel` and `psp2_rcsmodel_material`~~: one walk since
+     2026-11-16 (10 tests to 3, 94 to 13 s user CPU), the `Claim` shape in
+     `psp2_rcsmodel_ground_truth.rs`.
+   - `rcsmodel_decl` (7 walks), `rcsmodel_material` (4),
+     `rcsmodel_ground_truth` (3), about 70 s summed: those files keep one claim
      per test for legibility. Recommendation: the `gxp` pattern (one walk, each
      claim a named function with its doc comment) keeps that legibility in the
      source while losing it only in the test list.
@@ -43,9 +46,10 @@ redundancy confirmed, **H** means a read-only sweep's lead, not yet verified.
    `data03` alone, each a fresh `Vec<[u8; 4]>`, and the chain claim decodes a
    base level a second time to compare it with `decode()`. Profile with `perf`
    (not installed on the measuring host) before changing either. (V)
-3. **`magstrip_wire_hd` (72 s):** `every_craft_visits_a_strip...` appears to fly
-   the same 2,400-tick race the hum test renders with audio off; needs one run
-   comparing the two logs before merging. (H)
+3. ~~**`magstrip_wire_hd` (72 s):**~~ merged 2026-11-16: the audio and no-audio
+   logs were compared field by field (equal), `every_craft` folded into the hum
+   flight, and the rumblers share one flight (24.7 to 16.8 s summed).
+
 4. **`oag-render` small repeats, each 6-15 s:** `hd_pad_ne` builds the same pad
    pair three times per circuit, `hd_emissive_glow`'s two tests build the same
    three circuits, `hd_light_bar` builds Vineta K twice, `hd_weapon_pad_split`
@@ -66,7 +70,8 @@ redundancy confirmed, **H** means a read-only sweep's lead, not yet verified.
 
 ## Next Steps
 
-1. Item 3: one run of `magstrip_wire_hd` with both logs printed, then merge if
-   they match. 20 minutes.
-2. Item 4, the render repeats, verified one by one. An hour.
-3. Item 2 with a profiler. An afternoon.
+1. Item 4, the render repeats, verified one by one. An hour.
+2. Item 2 with a profiler. An afternoon.
+3. Item 1's remaining rcs files (`rcsmodel_decl`, `rcsmodel_material`,
+   `rcsmodel_ground_truth`): the maintainer approved the `Claim` shape for the PSP2
+   pair; measure each file's walk alone first. An hour.

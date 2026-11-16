@@ -479,3 +479,12 @@ section above for what was checked and why it came up empty), and
 less profile, i.e. plausibly the fresh-profile default rung) was not traced
 to its initializer this pass - `docs/ui/campaign-screens.md`'s RPCS3 capture
 is this project's only evidence for the default, not this reading.
+
+## The consumer is found - 2026-11-13 (`elim-medal`)
+
+The open questions above ("The comparison consumer itself was not found", "Whether the triple
+is three medal tiers or one target per rung", and the per-record rung byte) are answered on
+[cell-medal-award.md](cell-medal-award.md): `0x001e25c0` and `0x001e1028` are named there, an
+Eliminator or NitroBattle cell's medal is its place against the rung's authored `1`/`2`/`3`,
+the `NitroElim*` triple is the race-end score target (`cell+0xd4 + 4 * rung`), and the record
+byte the migration above writes is `SkillLevel` in `<Save Achieved Time SkillLevel Medal>`.

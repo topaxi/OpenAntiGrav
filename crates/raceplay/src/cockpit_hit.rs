@@ -60,12 +60,14 @@ impl Race {
     }
 
     /// The static to draw in the view being drawn, or `None` with none: no
-    /// node, no run, an extra seat's view, or any camera but the internal one.
+    /// node, no run, an extra seat's view, the view through a portal pair, or any
+    /// camera but the internal one.
     #[must_use]
     pub fn cockpit_hit_strips(
         &self,
     ) -> Option<[oag_fx::cockpit_hit::Vertex; oag_fx::cockpit_hit::VERTICES]> {
         if self.extra_viewpoint().is_some()
+            || self.view.viewpoints.through_portal()
             || self.view.camera_view != oag_display::display::CameraView::Internal
         {
             return None;

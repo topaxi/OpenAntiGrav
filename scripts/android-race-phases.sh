@@ -7,6 +7,9 @@
 #   scripts/android-race-phases.sh --serial S --out FILE [--seconds N]
 #       [--image NAME] [--track PATH] [--cool TENTHS] [-- EXTRA_LINE...]
 #
+# Needs an app built with `OAG_APK_DEV_CLI=1 just apk`: the run passes --seed, which a shipped
+# build does not have.
+#
 # Writes the app's one-shot launch file (files/oag-args.txt, docs/tools/android.md)
 # with a --race --autopilot --frame-log run, launches the installed app, waits,
 # and saves `logcat -s oag` to FILE with the battery temperature before and

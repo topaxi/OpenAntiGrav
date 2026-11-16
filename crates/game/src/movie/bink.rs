@@ -12,7 +12,7 @@
 //!
 //! [ADR-0024](../../../../docs/architecture/adr/0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md)
 //! asks for the check to be *made* rather than inherited from "video means
-//! `ffmpeg`", so it was made on 2026-08-17 and this is the result:
+//! `ffmpeg`", so it was made, and this is the result:
 //!
 //! - **Category 1, a pure-Rust library: one candidate, and its licence closes
 //!   it.** `infinitier_bik_decoder` 0.0.14 is the only Bink decoder published on

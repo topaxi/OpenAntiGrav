@@ -57,7 +57,8 @@
 //! base submeshes, two `f32`s declared `2x9`), at the offset
 //! [`vertex_decl::VertexDecl::own_diffuse_texcoord`] names in the **record's own**
 //! declaration ([`vertex_decl::find_by_header`], reached by the `u32` at
-//! `+0x28`). **Confidence 96** for the half decode,
+//! `+0x28`); a declaration with no `Uv1` and a four-half `uv1_uvDirt` (Omega's `tarmac_*`
+//! roads) takes that attribute's first pair. **Confidence 96** for the half decode,
 //! the same index-exact oracle that settled the normal (1,432 vertices, 9
 //! same-export submeshes across twelve HD-ported circuits): decoded as
 //! `f16`, mean squared distance to Wipeout HD's own diffuse UV at the same
@@ -97,7 +98,7 @@
 //!
 //! Every claim below closes arithmetically over **993 files** - every
 //! `.rcsmodel` the three EU packages ship - and
-//! `crates/formats/tests/psp2_rcsmodel_ground_truth.rs` is that argument,
+//! `crates/rcs/tests/psp2_rcsmodel_ground_truth.rs` is that argument,
 //! executable. All 993 have `A + B + C` equal to the file's own length. All
 //! **244,889** submeshes have an index buffer of exactly `index_count * 2`
 //! bytes rounded up to a 4-byte boundary, with `index_count` divisible by
@@ -107,6 +108,7 @@
 use std::fmt;
 
 use container::u32_at;
+use oag_bytes::le::f32_at;
 
 pub mod container;
 pub mod lighting_only;
@@ -114,6 +116,7 @@ pub mod lineage_blend;
 pub mod material;
 pub mod nodes;
 pub mod normal_map;
+pub mod specular_picture;
 pub mod vertex_decl;
 
 /// The word every 2048 `.rcsmodel` opens with.
@@ -435,6 +438,19 @@ pub struct SubMesh {
     /// by stride the attribute is found on 1 of 28 Vita twin-blend submeshes. Empty where the
     /// record names none. A non-finite value is replaced by the origin, as the coordinates above.
     pub bars_blend_texcoords: Vec<[f32; 4]>,
+    /// The packed `Uv1_Uv2` attribute ([`vertex_decl::UV1_UV2_HASH`]), one per vertex: the first
+    /// pair in `.xy`, the second in `.zw`, as the vertex program exports them. Read through the
+    /// record's own declaration; empty where it names none. A non-finite value is replaced by the
+    /// origin.
+    pub packed_texcoords: Vec<[f32; 4]>,
+    /// `uvMarkings`, one per vertex: the road's decal atlas pair
+    /// ([`vertex_decl::VertexDecl::markings_texcoord`]). Empty unless the record's own
+    /// declaration names it and `uv1_uvDirt` both (Omega's `tarmac_*` roads). A non-finite value
+    /// is replaced by the origin.
+    pub markings_texcoords: Vec<[f32; 2]>,
+    /// The dirt pair of `uv1_uvDirt`, one per vertex (its `.zw`; `.xy` is
+    /// [`Self::texcoords`]). Empty exactly where [`Self::markings_texcoords`] is.
+    pub dirt_texcoords: Vec<[f32; 2]>,
     /// How many of [`Self::texcoords`] decoded to a non-finite value and were
     /// substituted with the origin.
     ///
@@ -457,10 +473,12 @@ pub struct SubMesh {
     /// title's mesh path samples a tangent-space normal map, so this is
     /// carried for a future consumer rather than drawn with today.
     pub tangents: Vec<[f32; 4]>,
-    /// `VertexColour1`, one RGBA per vertex, from the record's own declaration.
+    /// `VertexColour1` (PS4) or `NOVAColor` (Vita), one RGBA per vertex, from the record's own
+    /// declaration. On the Vita it is the baked per-vertex light of a vertex-lit surface: the
+    /// vertex program lays `scale * rgb + bias` on it and passes `a` on as the sun's mask.
     ///
-    /// Empty on a Vita submesh and on a PS4 one whose declaration names none (only the PS4
-    /// flyer shell's reflection is measured to carry one).
+    /// Empty on a submesh whose declaration names neither (on the PS4 only the flyer shell's
+    /// reflection is measured to carry one).
     pub colours: Vec<[u8; 4]>,
     /// Bytes per vertex, derived from the buffer's own length rather than read
     /// from a field - see [`Model::parse`].
@@ -777,7 +795,11 @@ fn one(
     let mut positions = Vec::with_capacity(vertex_count);
     for v in 0..vertex_count {
         let at = vertex_at + v * stride;
-        positions.push([f32_at(file, at), f32_at(file, at + 4), f32_at(file, at + 8)]);
+        positions.push([
+            f32_at(file, at)?,
+            f32_at(file, at + 4)?,
+            f32_at(file, at + 8)?,
+        ]);
     }
     // Read raw here and validated against the material table in `parse`,
     // which is the only place that knows how many entries the table has.
@@ -806,29 +828,25 @@ fn one(
     };
     let mut texcoords = Vec::new();
     let mut non_finite_texcoords = 0usize;
-    // The record's own declaration, on both containers. An attribute of a type this reader
-    // does not decode (neither a half pair nor an `f32` pair) draws nothing rather than noise.
+    // The record's own declaration, on both containers. A PS4 attribute of a type other than
+    // an `f32` pair is read as a half pair whatever its type, as it always was.
+    let float_type = if ps4 {
+        vertex_decl::PS4_FLOAT2
+    } else {
+        vertex_decl::FLOAT2
+    };
     let diffuse = own
-        .and_then(|decl| decl.own_diffuse_texcoord(half_type))
-        .filter(|attr| {
-            // A PS4 `Uv1` is read as a half pair whatever its type, as it always was: 23
-            // submeshes of `data02` declare it type `0` (an `f32` pair on that container),
-            // which this lane did not touch and Omega's pinned renders depend on.
-            ps4 || attr.gxm_type == half_type || attr.gxm_type == vertex_decl::FLOAT2
-        });
+        .and_then(|decl| decl.own_diffuse_texcoord(half_type, float_type))
+        .filter(|attr| ps4 || attr.gxm_type == half_type || attr.gxm_type == float_type);
     if let Some(attr) = diffuse {
         let off = usize::from(attr.offset);
-        let width = if !ps4 && attr.gxm_type == vertex_decl::FLOAT2 {
-            8
-        } else {
-            4
-        };
+        let width = if attr.gxm_type == float_type { 8 } else { 4 };
         if stride >= off + width {
             texcoords.reserve_exact(vertex_count);
             for v in 0..vertex_count {
                 let at = vertex_at + v * stride + off;
                 let uv = if width == 8 {
-                    [f32_at(file, at), f32_at(file, at + 4)]
+                    [f32_at(file, at)?, f32_at(file, at + 4)?]
                 } else {
                     unpack_texcoord([file[at], file[at + 1], file[at + 2], file[at + 3]])
                 };
@@ -850,7 +868,7 @@ fn one(
     let mut lightmap_texcoords = Vec::new();
     if let Some(off) = own
         .and_then(|decl| decl.lightmap_texcoord())
-        .filter(|attr| attr.components == 2 && attr.gxm_type == vertex_decl::PS4_HALF2)
+        .filter(|attr| attr.components == 2 && attr.gxm_type == half_type)
         .map(|attr| usize::from(attr.offset))
         && stride >= off + 4
     {
@@ -885,6 +903,49 @@ fn one(
             });
         }
     }
+    let mut markings_texcoords = Vec::new();
+    let mut dirt_texcoords = Vec::new();
+    if let (Some(markings), Some(dirt)) = (
+        own.and_then(|decl| decl.markings_texcoord(half_type)),
+        own.and_then(|decl| decl.uv_dirt_tiling(half_type)),
+    ) {
+        let (markings, dirt) = (usize::from(markings.offset), usize::from(dirt.offset) + 4);
+        if stride >= markings + 4 && stride >= dirt + 4 {
+            let pair = |at: usize| {
+                let uv = unpack_texcoord([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+                if uv[0].is_finite() && uv[1].is_finite() {
+                    uv
+                } else {
+                    [0.0, 0.0]
+                }
+            };
+            for v in 0..vertex_count {
+                let base = vertex_at + v * stride;
+                markings_texcoords.push(pair(base + markings));
+                dirt_texcoords.push(pair(base + dirt));
+            }
+        }
+    }
+    let mut packed_texcoords = Vec::new();
+    if let Some(off) = own
+        .and_then(|decl| decl.packed_uv_pair())
+        .filter(|attr| attr.gxm_type == half_type)
+        .map(|attr| usize::from(attr.offset))
+        && stride >= off + 8
+    {
+        packed_texcoords.reserve_exact(vertex_count);
+        for v in 0..vertex_count {
+            let at = vertex_at + v * stride + off;
+            let first = unpack_texcoord([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+            let second = unpack_texcoord([file[at + 4], file[at + 5], file[at + 6], file[at + 7]]);
+            let all = [first[0], first[1], second[0], second[1]];
+            packed_texcoords.push(if all.iter().all(|c| c.is_finite()) {
+                all
+            } else {
+                [0.0; 4]
+            });
+        }
+    }
     let mut tangents = Vec::new();
     // The Vita's type is `5`; the PS4's is `0xe` (four signed bytes, `w` exactly +-127), and a
     // PS4 declaration is only sound through the record's own pointer.
@@ -909,7 +970,7 @@ fn one(
     }
     let mut colours = Vec::new();
     if let Some(off) = own
-        .and_then(|decl| decl.vertex_colour1())
+        .and_then(|decl| decl.vertex_colour1().or_else(|| decl.nova_colour()))
         .map(|attr| usize::from(attr.offset))
         && stride >= off + 4
     {
@@ -930,6 +991,9 @@ fn one(
         texcoords,
         lightmap_texcoords,
         bars_blend_texcoords,
+        packed_texcoords,
+        markings_texcoords,
+        dirt_texcoords,
         non_finite_texcoords,
         tangents,
         colours,
@@ -969,10 +1033,6 @@ impl Declarations {
             .get(&target)
             .filter(|decl| decl.stride == stride)
     }
-}
-
-fn f32_at(file: &[u8], at: usize) -> f32 {
-    f32::from_le_bytes(file[at..at + 4].try_into().expect("four bytes"))
 }
 
 #[cfg(test)]

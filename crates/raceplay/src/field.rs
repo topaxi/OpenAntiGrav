@@ -13,6 +13,7 @@ mod opponent_weapons;
 mod pad_seek;
 
 pub use fire_law::FireLaw;
+pub(crate) use fire_law::fire_terms;
 pub use pad_seek::PadSeeking;
 pub(super) use pad_seek::line_positions as pad_seek_positions;
 
@@ -38,6 +39,20 @@ impl Race {
         self.sim.ai_tuning = tuning;
     }
 
+    /// Races a campaign cell at its resolved skill scale (`AI_ResolveSkillScale`'s cell branch,
+    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`): the field's tuning at that
+    /// position ([`oag_ai::Difficulty::tune_at_scale`], which replaces the one [`Self::start`]
+    /// took from the difficulty) and the finished player's thrust, which reads the same scale.
+    /// Before the first tick; both are simulation state a recording's rebuild must repeat
+    /// ([`crate::Launch::campaign_skill`]).
+    pub fn apply_campaign_skill(&mut self, scale: f32) {
+        self.set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
+            scale,
+            &oag_ai::Tuning::default(),
+        ));
+        self.set_finished_thrust_skill(scale);
+    }
+
     /// Replaces the character one slot is flying, mid-race.
     ///
     /// **For measurement, exactly as [`Self::set_ai_tuning`] is**, and it exists
@@ -53,12 +68,13 @@ impl Race {
     /// temper it too. It is not a difficulty setting and nothing in the game
     /// calls it.
     pub fn set_ai_pilot(&mut self, slot: usize, pilot: oag_ai::Pilot) {
-        if let Some(entry) = self.sim.ai_pilots.get_mut(slot) {
+        if let Some(entry) = Arc::make_mut(&mut self.sim.ai_pilots).get_mut(slot) {
             *entry = pilot;
         }
     }
 
-    /// Flies every opponent as `entry`, tempered by `difficulty` - a mod
+    /// Flies every opponent as `entry`, tempered by `difficulty` (and a score race's
+    /// `crate::score_pace`) - a mod
     /// campaign event's pilot (ADR-0077), set once after [`Self::start`] and
     /// before the first tick. The pilot's digest replaces each opponent's in
     /// the world, so the state hash names the pilot as `start`'s own deal does.
@@ -67,8 +83,12 @@ impl Race {
         entry: &crate::pilots::Entry,
         difficulty: oag_ai::Difficulty,
     ) {
-        let tempered = difficulty.temper(&entry.pilot);
-        for pilot in self.sim.ai_pilots.iter_mut().skip(1) {
+        let tempered = crate::score_pace::ScorePace::temper_opponent(
+            self.sim.score_pace,
+            difficulty,
+            &entry.pilot,
+        );
+        for pilot in Arc::make_mut(&mut self.sim.ai_pilots).iter_mut().skip(1) {
             *pilot = tempered;
         }
         let world = &mut self.sim.world;
@@ -132,9 +152,8 @@ impl Race {
     ///
     /// It replaces the mapped input snapshot outright rather than blending with
     /// it, so a run under autopilot is a run nobody is steering. It is flown with
-    /// the *player's* recovery - [`Self::lost_off_the_track`], not the opponents'
-    /// [`Self::lost_off_the_circuit`] - because it is still a person's craft going through
-    /// [`Self::tick`]. That is the same net a human gets, which is what makes a
+    /// the *player's* recovery, not the opponents', because it is still a person's
+    /// craft going through [`Self::tick`]. That is the same net a human gets, which is what makes a
     /// measurement taken under it mean anything about a hand-driven lap.
     ///
     /// **Not the Autopilot pickup**, and the distinction is worth keeping:
@@ -222,20 +241,46 @@ impl Race {
         let route = self
             .nearest_route_sample(position)
             .filter(|&(_, _, distance)| distance < ring);
-        let ship = &mut self.sim.world.ships[slot];
         match route {
-            Some((route, at, _)) => {
-                ship.driver.index = u32::try_from(at).unwrap_or(0);
-                ship.driver.branching =
-                    self.sim.routes[usize::from(route) - 1].entered(ship.driver.branching, route);
-            }
+            Some((route, at, _)) => self.seat_on_route_line(slot, route, at),
             None => {
+                let ship = &mut self.sim.world.ships[slot];
                 ship.driver.index = u32::try_from(index).unwrap_or(0);
                 // Located on the ring, so it is on the ring. See
                 // `oag_ai::branch::Branching::on_ring`.
                 ship.driver.branching = ship.driver.branching.on_ring();
             }
         }
+    }
+
+    /// Puts slot `slot`'s driver on the line of the course's route `course_route` (its
+    /// index in `Course::routes`), at the line's sample nearest the craft. Nothing for a
+    /// route the AI has no line for.
+    pub(super) fn seat_on_route(&mut self, slot: usize, course_route: usize) {
+        let position = self.sim.world.ships[slot].physics.body.position;
+        let found = self
+            .sim
+            .routes
+            .iter()
+            .enumerate()
+            .find(|(_, r)| r.course_route == course_route)
+            .and_then(|(k, r)| {
+                Some((
+                    u16::try_from(k + 1).ok()?,
+                    r.nearest_own_sample(position)?.0,
+                ))
+            });
+        if let Some((route, at)) = found {
+            self.seat_on_route_line(slot, route, at);
+        }
+    }
+
+    /// Slot `slot`'s driver at sample `at` of route line `route` (`k + 1`).
+    fn seat_on_route_line(&mut self, slot: usize, route: u16, at: usize) {
+        let ship = &mut self.sim.world.ships[slot];
+        ship.driver.index = u32::try_from(at).unwrap_or(0);
+        ship.driver.branching =
+            self.sim.routes[usize::from(route) - 1].entered(ship.driver.branching, route);
     }
 
     /// Whether slot `slot` is being flown for its person this tick, by any of
@@ -252,10 +297,10 @@ impl Race {
     /// **The fourth is the finish line.** Once the player has crossed it for the
     /// last time the original stops reading the pad and flies the craft itself
     /// for as long as the race stays up behind the end-race panels - measured
-    /// 2026-10-01 on PPSSPP, three runs, with no input held at all: the craft kept
+    /// on PPSSPP, three runs, with no input held at all: the craft kept
     /// lapping the circuit for the 35 s logged. See
     /// `docs/gameplay/after-the-finish.md`. The same driver as the other three
-    /// routes, which is the maintainer's standing rule (the AI obeys player physics),
+    /// routes, as the AI obeys player physics,
     /// with its thrust capped at the original's own post-finish law - see
     /// `race::finished_thrust`.
     #[must_use]
@@ -501,7 +546,7 @@ impl Race {
         let Some(time) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Autopilot))
             .map(|simple| simple.time)
         else {
@@ -602,7 +647,7 @@ impl Race {
                 air_trim: oag_ai::air_trim(&ship.handling, ship.physics.air_pitch_bias),
                 plan: super::routes::plan_for(
                     &self.sim.routes,
-                    self.sim.speed_plan.as_ref(),
+                    self.sim.speed_plan.as_deref(),
                     super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
                     route,
                 ),
@@ -700,7 +745,8 @@ impl Race {
             // A craft a person flies is stepped by `Race::tick`'s player step,
             // not here. With one person in slot 0 this skips slot 0, which the
             // loop used to start past.
-            if !self.sim.world.ships[slot].active || self.sim.world.person_flown(slot) {
+            // A craft in a transit is out of the world and not stepped (`crate::transit`).
+            if !self.sim.world.ships[slot].in_world() || self.sim.world.person_flown(slot) {
                 continue;
             }
             self.seed_vacated_driver(slot);
@@ -794,7 +840,7 @@ impl Race {
                         yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&handling, &ship.physics.body)),
                         plan: super::routes::plan_for(
                             &self.sim.routes,
-                            self.sim.speed_plan.as_ref(),
+                            self.sim.speed_plan.as_deref(),
                             super::speed_plan::hull_of(
                                 &self.sim.hull_plans,
                                 self.sim.ship_plan[slot],
@@ -826,13 +872,16 @@ impl Race {
             let (moved, sweep) = self.pad_sweep(slot, position);
             let pad_hit = self.test_speedup_pads(slot, position, moved, &sweep);
             self.test_weapon_pads(slot, position, moved, &sweep);
-            self.sim.extensions.test_triggers(slot, &sweep);
+            self.sim
+                .extensions
+                .test_triggers(slot, &sweep, self.sim.world.tick);
             self.spend_opponent_pickup(slot, &controls, &field);
 
             // The driver just located itself, and the line is index-parallel to
             // `ai_order`, so this costs a lookup rather than a search.
             let index = self.sim.world.ships[slot].driver.index as usize;
             let track_sample = self.ai_sample_for(slot, index).map(Spline::track_sample);
+            self.record_track_up(slot, track_sample);
             let track_sample_next = self
                 .ai_sample_for(slot, index + 1)
                 .map(Spline::track_sample)
@@ -879,7 +928,7 @@ impl Race {
                 &controls,
                 &handling,
                 &env,
-                &self.sim.collision,
+                &*self.sim.collision,
                 self.sim.dt,
             );
             let reset_contact = self.reset_zone_contact(slot, &env, position);
@@ -906,7 +955,7 @@ impl Race {
             // hands an opponent a Shield yet - the same gap the shell bulge
             // below records - so the silent branch is unreachable here rather
             // than suppressed.
-            self.raise_contact_cue(slot, evaluated.wall.impact, false);
+            self.raise_wall_cue(slot, &evaluated.wall, false);
             // The wall counters, on the same footing as the roll ones below:
             // bookkeeping, outside `state_hash`, and the only thing in this
             // project that can see the standard an Ace is held to - lapping
@@ -965,7 +1014,7 @@ impl Race {
             // spent away. Two `let`s rather than two terms of the `if`, because
             // `||` short-circuits and the second counter would then only advance
             // on ticks the first one happened not to fire.
-            let lost = self.lost_off_the_circuit(slot);
+            let beneath = self.beneath_too_long(slot);
             let stalled = self.stalled(slot);
             // **Not a wreck.** A destroyed craft is coasting by definition, so
             // the stall dwell would fire on it and `Race::respawn` - whose
@@ -979,16 +1028,19 @@ impl Race {
                 self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
             let reset = self.reset_zone_touched(slot, reset_contact);
             let airborne = self.airborne_too_long(slot);
-            let cage = std::mem::take(&mut self.sim.cage_reset[slot]);
-            if alive && (lost || stalled || airborne || reset || cage) {
-                let cause = if lost && self.beneath_the_line(slot) {
+            let located = self.located_sample_of(slot, index);
+            let distant = self.far_from_the_sample(slot, located);
+            let cage = std::mem::take(&mut self.sim.cage_reset[slot])
+                && self.armed(slot, self.sim.reset_triggers.cage);
+            if alive && (beneath || stalled || airborne || distant || reset || cage) {
+                let cause = if beneath {
                     respawn::RespawnCause::Beneath
-                } else if lost {
-                    respawn::RespawnCause::LostCircuit
                 } else if stalled {
                     respawn::RespawnCause::Stalled
                 } else if airborne {
                     respawn::RespawnCause::Airborne
+                } else if distant {
+                    respawn::RespawnCause::Distance
                 } else if cage {
                     respawn::RespawnCause::Cage
                 } else {
@@ -1028,8 +1080,15 @@ impl Race {
         // a `Vec` copy per frame for nothing.
         let finished_before: [bool; oag_gameplay::MAX_PLAYERS] =
             std::array::from_fn(|slot| self.sim.world.ships[slot].standing.finished());
+        let laps_before: [u32; MAX_SHIPS] =
+            std::array::from_fn(|slot| self.sim.world.ships[slot].standing.lap);
         if let Some(course) = &self.sim.course {
             advance_standings(&mut self.sim.world, course);
+        }
+        for (slot, &before) in laps_before.iter().enumerate() {
+            if self.sim.world.ships[slot].standing.lap > before {
+                self.credit_lap_points(slot);
+            }
         }
         // The tick a person crosses the line for the last time is the tick
         // their craft is handed to the driver, which has never run for them:
@@ -1052,14 +1111,7 @@ impl Race {
     /// reads [`Self::ship_count`] first.
     #[must_use]
     pub fn places(&self) -> [u8; MAX_SHIPS] {
-        let Some(course) = &self.sim.course else {
-            // No closed ring, so no positions. Everyone is first, which is the
-            // honest answer for a track that cannot count a lap at all.
-            return [1; MAX_SHIPS];
-        };
-        let standings: [oag_race::Standing; MAX_SHIPS] =
-            std::array::from_fn(|slot| self.sim.world.ships[slot].standing);
-        oag_race::places(&standings, course)
+        self.sim.places()
     }
 
     /// What slot `slot` can see of the rest of the grid.
@@ -1082,7 +1134,7 @@ impl Race {
             return oag_ai::Field::EMPTY;
         };
         let mine = &self.sim.world.ships[slot];
-        if !mine.active {
+        if !mine.in_world() {
             return oag_ai::Field::EMPTY;
         }
         let body = &mine.physics.body;
@@ -1099,11 +1151,11 @@ impl Race {
         let (mut best_ahead, mut best_behind, mut best_alongside) =
             (f32::INFINITY, f32::INFINITY, f32::INFINITY);
 
-        for other in 0..self.sim.world.ship_count as usize {
-            if other == slot || !self.sim.world.ships[other].active {
+        let ship_count = self.sim.world.ship_count as usize;
+        for (other, them) in self.sim.world.ships.iter().enumerate().take(ship_count) {
+            if other == slot || !them.in_world() {
                 continue;
             }
-            let them = &self.sim.world.ships[other];
             let gap = them.standing.distance(course) - my_distance;
             if gap.abs() >= oag_ai::AWARENESS_RANGE {
                 continue;
@@ -1152,7 +1204,7 @@ impl Race {
     /// The lap counter's ring, for a caller that wants to measure against it.
     #[must_use]
     pub fn course(&self) -> Option<&Course> {
-        self.sim.course.as_ref()
+        self.sim.course.as_deref()
     }
 
     /// The player's own race position, `1`-based.
@@ -1164,8 +1216,7 @@ impl Race {
     /// Craft against craft, every pair, once a tick.
     ///
     /// `oag_physics::pair::resolve` is `Body_ResolveContactPair` (`0x0884ef30`),
-    /// read 2026-08-11 - the function this engine was missing, and the reason
-    /// craft used to pass through each other. The response is recovered; the
+    /// read off the original. The response is recovered; the
     /// *shape* is not, and `pair::overlap` says so.
     ///
     /// **After every craft has been stepped**, not during. Stepping and
@@ -1195,15 +1246,21 @@ impl Race {
     /// through each other and only the track stops them. The rule reads the world's own
     /// mode and how many slots a person flies, both hashed, so it is simulation state
     /// without a byte of its own.
+    ///
+    /// **A touch costs both hulls energy**: [`oag_physics::damage::apply_pair`], the
+    /// wall's law on the pair's impulse, for player and opponents alike, so a rival can
+    /// be wrecked by a bump.
     pub(super) fn resolve_craft_pairs(&mut self) {
         let people = self.sim.world.human_slots().count();
         if !self.sim.world.mode().craft_collide(people) {
             return;
         }
         let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
+        let rules = self.sim.damage_rules();
+        let mut touched = [false; oag_gameplay::MAX_SHIPS];
         for a in 0..self.sim.world.ship_count as usize {
             for b in (a + 1)..self.sim.world.ship_count as usize {
-                if !self.sim.world.ships[a].active || !self.sim.world.ships[b].active {
+                if !self.sim.world.ships[a].in_world() || !self.sim.world.ships[b].in_world() {
                     continue;
                 }
                 if !oag_physics::damage::solid_to_craft(
@@ -1220,13 +1277,13 @@ impl Race {
                 let ship_b = &mut second[0];
                 let a_size = ship_a.handling.dimensions;
                 let b_size = ship_b.handling.dimensions;
-                let touched = oag_physics::pair::resolve(
+                let touched_pair = oag_physics::pair::resolve(
                     &mut ship_a.physics,
                     &a_size,
                     &mut ship_b.physics,
                     &b_size,
                 );
-                if let Some(contact) = touched {
+                if let Some(contact) = touched_pair {
                     // Both bodies' rings get the record (`Body_RecordPairContact`), so each
                     // hull throws from its own nearest locator.
                     #[cfg(feature = "view")]
@@ -1235,19 +1292,61 @@ impl Race {
                             self.throw_contact_spark(slot, contact.point, contact.impulse, true);
                         }
                     }
-                    #[cfg(not(feature = "view"))]
-                    let _ = contact;
-                    #[cfg(feature = "view")]
+                    // The ring loop's friction test passes for a pair record, then splits on the
+                    // craft's running Shield: unshielded charges the pool and spoils the lap,
+                    // shielded bulges the shell instead (`ShipShield_Hit`, `contact-response.md`,
+                    // "A craft-to-craft contact bulges a running Shield"). The gate is read
+                    // before the charge, so a bump that empties a pool still spoils the lap.
+                    // One charge per pair per tick: the original's further records on most
+                    // contact ticks are unread (`contact-response.md`, "an
+                    // unshielded craft-to-craft bump charges the energy pool", Result 5).
+                    touched[a] = true;
+                    touched[b] = true;
+                    // The impulse law hears the pair's impulse on both hulls. The original's
+                    // pair record writes no normal, so the angle reads whatever the ring slot
+                    // held before: zero on a craft whose slot no track contact has used
+                    // (collision-cues.md, "A pair record has no normal"). The stale normal
+                    // that slot otherwise holds is not modelled.
                     for slot in [a, b] {
-                        self.view.pair_spoil[slot] |=
-                            self.sim.world.ships[slot].physics.craft_state
-                                == oag_physics::CraftState::Racing
-                                && self.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0;
+                        self.note_contact_impulse(slot, contact.impulse, true, 0.0);
+                    }
+                    // The original driver reads the record next tick: its lane
+                    // planner pushes away from the rival and its rail lets go.
+                    for slot in [a, b] {
+                        self.original_ai_pair_contact(slot, contact.point);
+                    }
+                    for slot in [a, b] {
+                        let ship = &mut self.sim.world.ships[slot];
+                        let racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
+                        let shielded = ship.physics.shield_pickup_timer > 0.0;
+                        let dimensions = ship.handling.dimensions;
+                        let report = oag_physics::damage::apply_pair(
+                            &mut ship.physics,
+                            &dimensions,
+                            contact.impulse,
+                            rules,
+                        );
+                        self.sim.pair_damage[slot] += report.lost;
+                        #[cfg(feature = "view")]
+                        {
+                            self.view.pair_spoil[slot] |= racing && !shielded;
+                            if racing && shielded {
+                                self.shield_hit(slot);
+                            }
+                        }
+                        #[cfg(not(feature = "view"))]
+                        let _ = (racing, shielded);
                     }
                     #[cfg(test)]
-                    self.pair_contacts.push((a, b));
+                    {
+                        self.pair_contacts.push((a, b));
+                        self.pair_impulses.push(contact.impulse);
+                    }
                 }
             }
+        }
+        for (ticks, on) in self.sim.pair_contact_ticks.iter_mut().zip(touched) {
+            *ticks += u32::from(on);
         }
     }
 }

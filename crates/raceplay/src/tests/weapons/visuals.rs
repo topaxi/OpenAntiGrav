@@ -7,6 +7,7 @@
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 use super::*;
+use oag_fx::psys::streak::Kept;
 
 /// Only the Rocket, the Missile, the Plasma and the Shuriken ride a flare, and
 /// each rides its **own**: four separate authored files, not one generic
@@ -30,6 +31,8 @@ fn each_projectile_rides_only_its_own_flare() {
             Weapon::Missile => Some(Trigger::MissileFlare),
             Weapon::Plasma => Some(Trigger::PlasmaFlare),
             Weapon::Shuriken => Some(Trigger::ShurikenFlare),
+            Weapon::Bomb => Some(Trigger::BombGlow),
+            Weapon::Disruptor => Some(Trigger::DisruptorHead),
             _ => None,
         };
         assert_eq!(
@@ -310,4 +313,285 @@ fn each_detonation_starts_its_own_screen_flash() {
             );
         }
     }
+}
+
+/// The Plasma's head carries particles in its own frame (flag `0x2`) and
+/// `Plasma_Init` parents it to the craft's weapon node, so on Pulse's PSP file
+/// the root's arcs ride the craft instead of strewing a trail behind it.
+/// Dropping the ride leaves every earlier particle where it was born; another
+/// source's head (unmeasured) keeps them where they were born.
+#[test]
+fn the_plasma_heads_arcs_ride_the_anchor_they_were_born_on() {
+    use crate::weapons::advance_one_flare;
+    use oag_core::rng::Rng;
+
+    let nearest_x = |pulse_psp: bool| -> f32 {
+        let blob = super::respawn::one_emitter_pob("WO_PLASMA_HEAD", 0x2);
+        let mut effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+            .expect("the hand-laid effect parses");
+        if !pulse_psp {
+            effect.without_pulse_psp_draw();
+        }
+        let mut handles = EffectHandles::default();
+        handles.insert(Trigger::PlasmaFlare, effect);
+        let mut stage = oag_fx::psys::Stage::new();
+        let mut rng = Rng::new(5);
+        let mut playing = None;
+        for tick in 0..6 {
+            let at = Vec3::new(tick as f32 * 10.0, 0.0, 0.0);
+            advance_one_flare(
+                &mut stage,
+                &handles,
+                Some(Trigger::PlasmaFlare),
+                at,
+                0.5,
+                &mut playing,
+            );
+            stage.advance(1.0 / 60.0, &mut rng);
+        }
+        let (additive, alpha_over) = stage.vertices(Vec3::X, Vec3::Y);
+        additive
+            .iter()
+            .chain(&alpha_over)
+            .map(|v| v.position[0])
+            .fold(f32::MAX, f32::min)
+    };
+    let riding = nearest_x(true);
+    assert!(
+        riding > 30.0,
+        "a particle born at the press stayed behind at x {riding} while the head moved to 50"
+    );
+    let other = nearest_x(false);
+    assert!(
+        other < 5.0,
+        "a source whose head was not measured rode the frame: x {other}"
+    );
+}
+
+/// The head draws through the craft's weapon node while charging and the bolt's matrix
+/// after `Plasma_Launch`, and both carry `g_craft_scale`: the head node's rows read
+/// `0.7500` on all 60 charging frames. Only the Plasma
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix and node").
+#[test]
+fn the_plasma_heads_matrix_carries_the_craft_scale_through_the_charge() {
+    use crate::weapons::plasma_ride_scale;
+    use oag_tables::weapons::Weapon;
+    assert_eq!(plasma_ride_scale(Some(Weapon::Plasma)), 0.75);
+    assert_eq!(plasma_ride_scale(Some(Weapon::Rocket)), 1.0);
+    assert_eq!(plasma_ride_scale(None), 1.0);
+}
+
+/// A charging Plasma's head sits on the craft's weapon node, its hull's `Ship Muzzle`
+/// locator carried through the craft's model matrix (Assegai's `(0, 0, 5.653)` is 4.24
+/// units ahead through the 0.75 rows), where the simulation holds the bolt too; a hull
+/// with no locator keeps the bolt on the hold point 2.23 ahead, and a source whose head
+/// was not measured draws its head on the bolt wherever that is
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix and node").
+#[test]
+fn a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node() {
+    let anchor_ahead = |pulse_psp: bool, muzzle: Option<Vec3>| -> (f32, f32) {
+        let blob = super::respawn::one_emitter_pob("WO_PLASMA_HEAD", 0x2);
+        let mut effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+            .expect("the hand-laid effect parses");
+        if !pulse_psp {
+            effect.without_pulse_psp_draw();
+        }
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_plasma_table());
+        race.view.handles.insert(Trigger::PlasmaFlare, effect);
+        for ship in &mut race.sim.world.ships {
+            ship.muzzle = muzzle;
+        }
+        let mut buttons = Buttons::new();
+        race.tick(&PlayerInputs::single(buttons.tick(0)));
+        race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
+        for _ in 0..5 {
+            race.tick(&PlayerInputs::single(buttons.tick(0)));
+        }
+        let bolt = race.sim.world.projectiles.slots[0];
+        assert!(bolt.charge > 0.0, "the bolt was released within six ticks");
+        let instance = race.view.projectile_flare[0].expect("the head is playing");
+        let anchor = race.view.stage.anchor_of(instance).expect("a live head");
+        let body = race.ship().physics.body;
+        (
+            (anchor - body.position).dot(body.forward()),
+            (bolt.position - body.position).dot(body.forward()),
+        )
+    };
+    let assegai = Some(Vec3::new(0.0, 0.0, 5.653));
+    let expected = 5.653 * 0.75;
+    let (on_node, bolt) = anchor_ahead(true, assegai);
+    assert!(
+        (on_node - expected).abs() < 0.05,
+        "the head sits {on_node} ahead of the body, not on the weapon node at {expected}"
+    );
+    assert!(
+        (bolt - expected).abs() < 0.05,
+        "the bolt is held {bolt} ahead of the body, not on the weapon node at {expected}"
+    );
+    let hold = oag_weapons::projectile::plasma::MUZZLE_FORWARD;
+    let (no_locator, bolt) = anchor_ahead(true, None);
+    assert!(
+        (no_locator - hold).abs() < 0.05 && (bolt - hold).abs() < 0.05,
+        "a hull with no Ship Muzzle moved the head or the bolt off the hold point: \
+         {no_locator} and {bolt} ahead"
+    );
+    let (other, bolt) = anchor_ahead(false, assegai);
+    assert!(
+        (other - bolt).abs() < 0.05,
+        "an unmeasured source's head left the bolt: {other} against {bolt} ahead"
+    );
+}
+
+/// A released Plasma's head draws on the bolt, and the bolt left from the weapon node:
+/// the original launches the bolt's matrix from the head's node and the head draws
+/// through that matrix, so at draw time it sits 4.24, 4.43, 4.62, 4.81, 5.79 ... ahead
+/// of the craft, never stepping back to the hold point 2.23 ahead
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head after the release").
+/// Fails with the bolt released on the hold point (the head would sit 2 units short
+/// of the node's path) or the head anchored anywhere but the bolt.
+#[test]
+fn a_released_plasma_head_draws_on_the_bolt_that_left_from_the_weapon_node() {
+    let released = |pulse_psp: bool, muzzle: Option<Vec3>| -> (f32, f32) {
+        let blob = super::respawn::one_emitter_pob("WO_PLASMA_HEAD", 0x2);
+        let mut effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+            .expect("the hand-laid effect parses");
+        if !pulse_psp {
+            effect.without_pulse_psp_draw();
+        }
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_plasma_table());
+        race.view.handles.insert(Trigger::PlasmaFlare, effect);
+        for ship in &mut race.sim.world.ships {
+            ship.muzzle = muzzle;
+        }
+        let mut buttons = Buttons::new();
+        race.tick(&PlayerInputs::single(buttons.tick(0)));
+        race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
+        let mut released_for = 0;
+        let mut at_release = 0.0;
+        for _ in 0..90 {
+            race.tick(&PlayerInputs::single(buttons.tick(0)));
+            let bolt = race.sim.world.projectiles.slots[0];
+            assert_eq!(
+                bolt.kind,
+                Some(oag_tables::weapons::Weapon::Plasma),
+                "the bolt is alive"
+            );
+            if bolt.charge <= 0.0 {
+                if released_for == 0 {
+                    let body = race.ship().physics.body;
+                    at_release = (bolt.position - body.position).dot(body.forward());
+                }
+                released_for += 1;
+            }
+            if released_for == 4 {
+                break;
+            }
+        }
+        assert_eq!(released_for, 4, "the bolt was released within ninety ticks");
+        let bolt = race.sim.world.projectiles.slots[0];
+        let instance = race.view.projectile_flare[0].expect("the head is playing");
+        let anchor = race.view.stage.anchor_of(instance).expect("a live head");
+        let heading = bolt.velocity.normalize();
+        ((anchor - bolt.position).dot(heading), at_release)
+    };
+    let assegai = Some(Vec3::new(0.0, 0.0, 5.653));
+    let node = 5.653 * 0.75;
+    let (lead, at_release) = released(true, assegai);
+    assert!(
+        (at_release - node).abs() < 0.05,
+        "the bolt was released {at_release} ahead of the body, not on the node at {node}"
+    );
+    assert!(
+        lead.abs() < 0.05,
+        "the released head leads the bolt by {lead}; it draws through the bolt's matrix"
+    );
+    let hold = oag_weapons::projectile::plasma::MUZZLE_FORWARD;
+    let (lead, at_release) = released(true, None);
+    assert!(
+        (at_release - hold).abs() < 0.05 && lead.abs() < 0.05,
+        "a hull with no Ship Muzzle: released {at_release} ahead, head leading by {lead}"
+    );
+    let (lead, _) = released(false, assegai);
+    assert!(
+        lead.abs() < 0.05,
+        "an unmeasured source's head led the bolt by {lead}"
+    );
+}
+
+/// The charging head's arcs draw at the head's severity of the moment, not the one they
+/// were born with: `ParticleSystem_UpdateParticleFields` multiplies the size channel by
+/// the instance's `+0x34` every update, and the original's strip grows 2.4, 5.4, 7.5
+/// units across k20, 36, 44 while a spawn-time read gives 2.3, 3.1, 3.6. Dropping the
+/// switch leaves old particles at the size they had at the press.
+#[test]
+fn the_plasma_heads_arcs_follow_the_charge_they_are_drawn_at() {
+    use crate::weapons::advance_one_flare;
+    use oag_core::rng::Rng;
+
+    let drawn_height = |pulse_psp: bool| -> f32 {
+        let blob = super::respawn::one_emitter_pob("WO_PLASMA_HEAD", 0x2);
+        let mut effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+            .expect("the hand-laid effect parses");
+        if !pulse_psp {
+            effect.without_pulse_psp_draw();
+        }
+        let mut handles = EffectHandles::default();
+        handles.insert(Trigger::PlasmaFlare, effect);
+        let mut stage = oag_fx::psys::Stage::new();
+        let mut rng = Rng::new(5);
+        let mut playing = None;
+        for tick in 0..10 {
+            let scale = if tick < 9 { 0.1 } else { 1.0 };
+            advance_one_flare(
+                &mut stage,
+                &handles,
+                Some(Trigger::PlasmaFlare),
+                Vec3::ZERO,
+                scale,
+                &mut playing,
+            );
+            stage.advance(1.0 / 60.0, &mut rng);
+        }
+        let (additive, alpha_over) = stage.vertices(Vec3::X, Vec3::Y);
+        let ys = additive.iter().chain(&alpha_over).map(|v| v.position[1]);
+        ys.clone().fold(f32::MIN, f32::max) - ys.fold(f32::MAX, f32::min)
+    };
+    let live = drawn_height(true);
+    let born = drawn_height(false);
+    assert!(
+        live > born * 2.0,
+        "a head rescaled to 1.0 from 0.1 drew {live} tall, a spawn-time read {born}"
+    );
+}
+
+/// The loader hands the Plasma head's arcs to the layer before the alpha-over dark disc
+/// on Pulse's PSP file alone: the original draws arcs, then the disc over them
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's draw order").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_loader_draws_the_pulse_psp_heads_arcs_under_the_alpha_over_layer() {
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
+    let name = oag_title::engine_effects::PLASMA_FLARE_EFFECT;
+    let under = |pulse_psp: bool, archives: &mut oag_assets::Archives| -> Vec<bool> {
+        let (effect, _) = crate::assets::particle_effect(
+            archives,
+            r"Data\Psys",
+            name,
+            pulse_psp,
+            pulse_psp,
+            false,
+            Kept::NONE,
+        )
+        .expect("the head loads");
+        effect.emitters.iter().map(|e| e.under_alpha).collect()
+    };
+    let psp = under(true, &mut archives);
+    assert_eq!(psp.iter().filter(|u| **u).count(), 1, "{psp:?}");
+    assert!(psp[0], "the root emitter is the arcs");
+    assert!(under(false, &mut archives).iter().all(|u| !u));
 }

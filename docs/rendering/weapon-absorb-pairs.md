@@ -1,0 +1,578 @@
+# A weapon absorb on the player's craft, ours against the original, per title
+
+2026-11-09 (`absorb-fx-measure`). The player's craft absorbs a held pickup, chase camera, craft at rest on its
+grid slot, and the frames at about 0.1 s, 0.5 s and 1.0 s after the press are compared with ours, scored on the craft
+box (not the whole frame) as the difference from a no-absorb control taken from the same state on both sides.
+Pulse PSP, Pure and HD are paired. 2048 and Omega are not, for the reasons at the end. Burst, hull overlay and HUD are
+built on every title (`oag_raceplay::absorb`, `oag_fx::hull_overlay`, `oag_fx::absorb_shell`; see
+[`hull-sparks.md`](hull-sparks.md), the burst table, and
+[`absorb-feedback.md`](../ghidra/functions/ps3-hdfury-eu/absorb-feedback.md)); this page is what a player still sees
+differently.
+
+## What would have falsified it
+
+Recorded after the first captures and before any scoring (the lane's brief named the question, the box and the control, not
+the threshold). For each title, "ours already matches": the original's craft-box delta at about 0.5 s
+(the overlay's peak) would be inside the noise of two controls, or ours' delta would be within 10 % of it with the same
+tint. The noise floor is the original's own control-to-absorb mean absolute difference before the effect starts (Pulse
+and Pure, frame 3, 2 to 4 luma units; HD 8 to 11 because the rivals move between runs). The tint is the mean
+blue-minus-red of the same difference. Pulse's luma passed, its HUD bar did not; Pure and HD failed on luma, tint or
+tail. The control is the same state without the press on the original. Ours' control differs by title: HD's is ours with the
+pickup given and `--button none` (so the held-pickup icon cancels); Pulse's and Pure's are ours with no `--give` at all,
+so ours' absorb frames carry the held-pickup icon (a `--give` artefact: a purple hexagon with four dots at the top centre
+of the frame on Pulse, the top box of Pure's table reads -8 from it) that the original's do not. Every box scored
+excludes it except Pure's `hud_top`, which is not ranked.
+
+## Method
+
+| | Pulse (PSP, USA) | Pure (PSP, USA) | HD (PS3, EU) |
+| --- | --- | --- | --- |
+| Original | PPSSPP v1.20.4, software renderer, 480x272 | same | RPCS3, Write Color Buffers on, 1278x718 |
+| State | `race-platinum-white-single-grid.ppst` (Platinum Rush, Assegai, 8th of 8, weapons on, at rest) | `pure-single-vineta-feisar-race.ppst` (made for this lane: Vineta K, Vector, Feisar, Single Race, 8th of 8, at rest) | `hd-racebox-talons-venom-weapons-grid`, START RACE, 5 s of lap clock, craft held at rest |
+| Press | the held pickup written at `craft+0x1bc` of the weapon record while stopped, circle held 3 frames (`scripts/psp-absorb-frames.py`) | the held id written at `weapon record+0x1d8`, circle held until it reads 0 (the absorb), see below | pickup state 1 written at `*(ship+0x5edc)+0x204` (mirrored `+0x208`), circle held until `craft+0x7a5c` rises to 1.0 |
+| Frame clock | `craft+0x830` minus the absorb stamp `craft+0x878`, one frame per hit of `Weapons_DispatchFire`; the screenshot lags the stop by about 2 frames | frames counted from the first player frame whose held id is back at 0; lag about 2 frames, unmeasured on Pure | single game frames stepped off the lap clock, `age = lap clock - stamp`, the timer read live (`1.0 - timer`) |
+| Ours | `--pose-from` the original's pose row, `--camera-view close`, `--camera-fov 60`, `--give mine`, circle at tick 520 (race clock 4.2 s), ticks 520 + frame - 2 | same flags, Pure, circle at tick 780 (HUD 8.4 s, the original's clock at frame 0), ticks 780 + frame - 2 | `scripts/hd-weapon-pair.py --button circle` on the original's pose and RSX camera, fired at the stamp clock; a second run with `--button none` is ours' control |
+| Repeats | 2 absorbs, 1 control, 1 boot | 2 absorbs, 1 control, 1 boot | 2 absorbs, 1 control, 3 restores of one state |
+
+Ours' pose (the original's, read at the state's first stop, `psp-trace.py --camera`, world units): Pulse position
+`(-542.789, 2.901, -292.866)`, forward `(0.9984, -0.0166, 0.0542)`, up `(0.0141, 0.9988, 0.0472)`, camera `(-553.980,
+6.084, -293.325)`, race clock 4.02 s at the stop; Pure position `(177.199, 37.171, -116.810)`, forward `(-1.0, 0.0022,
+0.0026)`, up `(0.0022, 1.0, 0.0)`, camera `(188.456, 40.147, -116.839)`, race clock 7.02 s at the stop (HUD 8.4 s at frame 0).
+Pulse: `--track Data\Environments\13_Track\track.vex --team Assegai --class venom`; Pure: `--track
+Data\Environments\01_Vineta_K\track.vex --team Feisar --class vector`; both `--mode single_race --camera-view close
+--camera-fov 60 --size 480x272`, `--world-clock-offset 8.765` on Pulse.
+
+The original's frames are paired by age, not by wall time, because the original runs a variable timestep. Ours is at
+60 Hz. A one-frame error in the lag (0.017 s) is inside every number below.
+
+The frame tables score the 480x272 frame (Pulse, Pure) or the frame resized to 1280x720 (HD). Boxes: Pulse craft
+`(175,140)-(305,250)`, bar `(305,222)-(445,258)`; Pure craft `(150,150)-(330,272)`; HD craft `(400,330)-(880,690)`.
+Each cell is the mean luma difference (Rec. 709, absorb minus control).
+
+## Pulse PSP
+
+Both runs agree to within 1 unit at every age but 1.0 s.
+
+| Age | Original (run 1 / run 2) | Ours |
+| --- | --- | --- |
+| 0.10 s | +5.5 / +4.9 | +0.9 |
+| 0.20 s | +7.8 / +8.6 | +4.3 |
+| 0.30 s | +16.6 / +16.8 | +13.2 |
+| 0.50 s | **+42.6 / +43.4** | **+41.1** |
+| 0.75 s | +32.3 / +32.8 | +31.3 |
+| 1.00 s | +7.2 / +4.2 | +9.1 |
+
+Ranked by what a player sees:
+
+1. **The energy bar's flash has no glow and no second state (fixed 2026-11-09, `pulse-bar-bloom`, then the white phase matched by
+   `pulse-stamp-scene`: see "Pulse: the energy bar" and "Pulse: the stamp's bright pass reads the framebuffer").** The bar fill's mean luma over the window (rows 248 to
+   258, x 315 to 440; normal 164, both sides): the original alternates **207** (bright cyan, with a bloom halo) and
+   **239** (white, with a halo), 7 to 8 frames each, from frame 3 to frame 62, then 163. Ours alternates **163**
+   (nothing changes) and **232** (flat white, no halo) with the same period; the white phases coincide with the
+   original's within a frame (original frames 10-16, 25-31, 40-46, 55-61, ours ticks 8-14, 23-29, 38-44, 53-60 after
+   the press). So the 8 Hz period and the window are right, the off phase and the bloom are missing. In the original
+   the bar is bloomed during the whole window, which reads as the widget's `+0xf4 = 0xff` write feeding the glow mask
+   (`+0xf4` is the open question in [`shield.md`](../ghidra/functions/psp-pulse-usa/shield.md)); confidence 60, not
+   read at the draw call. Frames: the 0.1 s and 0.5 s pairs of the reference set (below), the bar at the bottom right.
+2. **The first 0.2 s are dimmer and about two frames late.** At 0.1 s the original's hull already carries the wing and
+   nose crackles and a +5 delta, ours +0.9; at 0.3 s ours reads 21 % below. The hull overlay's ramp starts a frame or two
+   earlier in the original. Both draw the wingtip ring glints; the peak (0.5 s) matches to 4 % and the tint to 0.5.
+3. **At 1.0 s ours' hull is slightly brighter (+9.1 against +7.2 and +4.2)**, and both draw the dark ground ring on the
+   left of the craft. Inside the run-to-run spread of the original.
+4. **"Short crackles against long streaks" (the thread's open item) is not reproduced at this camera distance.** Both
+   show thin streaks of the same length range around the hull at 0.3 s to 0.5 s. Closed for the chase view.
+
+Nothing else differs that a player would name. The hull overlay, the ground ring and the burst are matched.
+
+## Pure PSP
+
+Every number is new: no Pure absorb had been captured. How the absorb was reached on the USA `BOOT.BIN` (read this
+session, confidence 80, the grant and the 3-frame consume seen live on two boots):
+
+- the player's entity is `*(Ship_UpdateCraft.a0 + 0x1c4)`, the one whose `+0x488` is 0 (rivals read 2); its weapon
+  record is `*(entity + 0xd0)` and the **held id is the word at record `+0x1d8`** (0 none, 1 to 10 a weapon);
+- `Ship_UpdateWeapons` (`0x0892935c`) reads the absorb button as `*(*(entity + 0xc8) + 0x48) + 0x16`, and with a held id
+  calls `FUN_08925e20`, the burst and `ABSORB` cue already read in
+  [`rocket-and-collision-fx.md`](../ghidra/functions/psp-pure-usa/rocket-and-collision-fx.md);
+- writing id 1 into the record and holding circle took it back to 0 three frames later on both boots;
+- `FUN_08925f4c`, the handler of the token that carries the same event, also writes **`*(_DAT_0005364c + 0x98) = 0xff`**
+  (a HUD byte, the Pure counterpart of Pulse's `+0xf4 = 0xff`), so Pure has the HUD flash too. Not renamed (confidence
+  below 70 on the field).
+
+| Age | Original (run 1 / run 2) | Ours |
+| --- | --- | --- |
+| 0.17 s | -4.6 / -4.0 (noise) | +1.0 |
+| 0.33 s | +10.6 / +7.7 | +3.7 |
+| 0.50 s | **+18.3 / +16.2** | **+7.0** |
+| 0.75 s | +5.4 / +10.7 | +3.8 |
+| 1.00 s | +3.0 / +4.4 | 0 |
+
+Tint (blue minus red) at 0.5 s: original -5.8 and -6.1 (pink), ours -0.4.
+
+Ranked:
+
+1. **Ours drew no hull flash on Pure (fixed: see "Fixes and re-pairs on a second machine").** The original's hull goes pale pink-white at 0.5 s over the whole hull and
+   nose, ours only gets the light of its own streaks: peak +7 against +17, tint flat against pink. Pure's disc ships
+   `absorb_surface.mip` (see [`weapons.md`](../ghidra/functions/psp-pure-usa/weapons.md)), the texture Pulse's overlay
+   and HD's shell use; ours does not draw it on Pure (Pure's `oag_title::Effects` is the all-`UNREAD` table, `hull_overlay` included). Frame: the 0.5 s pair of the reference set.
+2. **The burst is long spikes on ours and a short crackle plus a glow on the original.** At 0.5 s ours draws pink
+   star-shaped streaks 30 to 60 px long from the wing and tail locators; the original draws short crackles and one bright
+   pink bloom at the nose and wings. Visible in every frame from 0.17 s to 0.75 s. (The streak draw is now Pure's bar; the bloom and ring are template emitters, still muted: see "Pure: the burst's streak is the pool bar".)
+3. **A purple ground ring at 0.33 s to 0.5 s** under the craft in the original, none in ours.
+4. **HUD.** The original draws two orange bars at the top centre at 0.33 s and 0.5 s (the pickup notice) and its energy
+   bar brightens around 0.75 s (`+12` in run 2, `+5` in run 1: run to run noise, not settled). Ours shows its own
+   held-pickup icon in that place (an artefact of `--give`) and no bar change. The `+0x98` flag above is the
+   candidate for the original's flash.
+
+## HD (PS3)
+
+Frame step and timer reads are live (the shell fade at `craft+0x7a50` read `0.19, 0.34, 0.65, 0.89, 0.95, 0.99` at
+ages 0.07, 0.10, 0.20, 0.30, 0.50, 0.75 s: the shell is up by 0.3 s and falls only after 1.0 s). The tint is
+the shell's, not the burst's.
+
+| Age | Original (run 1 / run 2) | Ours | Blue minus red, original / ours |
+| --- | --- | --- | --- |
+| 0.05 s | +0.1 / +0.1 | +1.7 | -0.1 and +1.2 / +1.5 |
+| 0.10 s | +1.3 / +0.2 | +5.2 | +0.8 and +0.7 / +4.3 |
+| 0.20 s | +6.4 / +5.6 | +13.4 | +8.6 and +7.5 / +8.5 |
+| 0.30 s | +13.2 / +13.5 | +19.4 | +15.6 and +15.7 / +9.7 |
+| 0.50 s | **+21.4 / +22.0** | **+24.4** | +18.4 and +19.0 / +9.4 |
+| 0.75 s | +20.2 / +23.5 | +24.4 | +17.3 and +18.4 / +8.3 |
+| 1.00 s | +6.5 / +6.0 | +17.8 | +10.8 and +9.8 / +7.4 |
+| 1.20 s | +2.8 / +2.7 | +6.8 | +6.0 / +5.5 |
+
+The original's own craft-box mean absolute difference is 8 to 12 even before the effect (the rivals and the craft's
+hover move between runs), so differences under about 3 luma units are not read.
+
+The controls agree: the original's and ours' control craft boxes read mean RGB `(68.0, 97.5, 106.6)` and `(67.2, 97.6,
+107.2)` at 0.5 s, luma 91.9 on both, so the difference is not exposure. At 1.0 s the shell is at full fade on the
+original (fade 0.998, timer 0, read live) and the craft box is only +6.5 over its control, RGB `(+3.6, +5.8, +14.1)`:
+lavender-blue, the livery showing. Ours at 1.0 s is `(+16.1, +17.8, +23.8)`, +17.7. The 0.5 s to 0.75 s peak is the
+shell plus the burst; with the shell at about +6.5 on the original and +17.7 on ours, the burst is about +15 on the
+original and about +7 on ours.
+
+Ranked:
+
+1. **The shell is about 2.7 times too bright and too white (brightness fixed, tint open: see "Fixes and re-pairs on a second machine").** The same craft box, shell alone: +6.5 against +17.7 luma,
+   blue-minus-red +10 against +7, red gain 4 against 16. A player sees the hull bleach to white-cyan where the original
+   keeps a blue hull with the gold livery showing (frames at 0.5 s and 1.0 s). The thread's "ours reads bluer than the
+   original's white-lavender" is the other way round on this pair.
+2. **The burst is about half as strong.** The original's wingtip locators throw large bright balls with electric
+   streaks that also light the floor from 0.3 s to 0.75 s (gone by 1.0 s); ours draws a smaller white glow at the same
+   places (about +7 against +15 once the shell is taken out).
+3. **Timing matches.** The original's shell fade rose `0.19, 0.34, 0.65, 0.89, 0.95, 0.99` at ages 0.07, 0.10, 0.20, 0.30,
+   0.50, 0.75 s (live), and after 1.0 s both sides decay at a similar rate (original 6.5 to 2.8, ours 17.8 to 6.8). The
+   +13.4 against +6 at 0.2 s is the same shell gain showing earlier, not a faster rise. There is no tail or rise
+   difference to wire.
+4. **HUD.** Both blink the shield hex between its blue `100` state and a pale state (blue minus red, hex box: original
+   41 to 23, ours 37 to 18); with eight ages sampled the phase cannot be told apart. The original's frames carry
+   the `DAMAGE` and `Absorb` labels beside the hex, which ours does not (ours prints the held pickup's name there, a
+   `--give` artefact). Whether those labels are absorb-only was not isolated: the control shows a faint `DAMAGE` too.
+
+The cockpit shell (`vr_absorbinternal_cockpit`) is not exercised: the camera is the chase view.
+
+## Fixes and re-pairs on a second machine (`absorb-fx-wire`, 2026-11-09)
+
+The originals were captured again with the scripts named under "Reproducing"; every number below is the box mean luma of the
+absorb frame minus the control frame, Rec. 709, on the page's boxes. A whole-frame delta under 1 grey is noise. The numbers
+above (the first capture) and these differ in what the original did, not only in ours: see each item.
+
+### Pure: the hull overlay is drawn (landed)
+
+`FUN_0886e954` is Pure's `HullOverlay_Submit` and `FUN_08924998` its `HullOverlay_AbsorbFade`: texture `absorb_surface.mip`, state
+`0x282`, `10.0` repeats, `-1.5 * pulse` scroll, the pulse folded at `1.0`, and `(clock + 0x960 - stamp + 0x9ac) * 2` inside one
+second, read at instruction level and the fade live (`docs/ghidra/functions/psp-pure-usa/hull-overlay.md`, confidence 85 for
+the draw, 90 for the fade). `oag_pure::effects::LOOKS.hull_overlay` is on; the shared `oag_fx::hull_overlay` does the rest.
+Test: `absorb_ground_truth.rs`, `pure_lights_the_hull_for_one_second_after_a_pickup_absorb` (fails with the rule off).
+
+Capture: Pure USA on PPSSPP 1.20.4 (software renderer), the Time Trial state `time-trial-vineta-vector-feisar-restart.ppst`
+(Vineta K, Vector, Feisar, craft at rest; the Single Race state of the first capture is not on this machine, and the
+absorb needs only the weapon record), held id 1 at record `+0x1d8`, circle held until it reads 0, 30 updates per second. Two
+absorbs and one control; ours with `--give mine`, circle at tick 780, shot at `780 + 2 * frame - 2`. Craft box `(150,150)-(330,272)`.
+
+| Age | Original (run 1 / run 2) | Ours before | Ours after |
+| --- | --- | --- | --- |
+| 0.17 s | +0.4 / +0.9 | +1.0 | +1.8 |
+| 0.33 s | +8.7 / +11.4 | +3.3 | +10.2 |
+| 0.50 s | **+12.9 / +14.5** | **+6.6** | **+14.3** |
+| 0.73 s | +5.0 / +12.2 | +4.7 | +10.2 |
+| 1.00 s | -1.6 / +1.9 | 0.0 | +0.1 |
+
+Blue minus red at 0.5 s: original -4.2 and -3.9, ours before -0.3, after -3.1. Read as a player: the hull goes pale pink-white over
+its whole surface in both, with the same decay. The first page's +17 at 0.5 s was a Single Race state (rivals, a different pose);
+this capture's peak is +13 to +15.
+
+### Pure: the burst's streak is the pool bar (landed); the templates play (landed); the ring and the spawn pattern are open
+
+**The streak.** Ours drew Pure's burst with the procedural profile (1 to 2 px hard lines with a white core) because `oag_raceplay` keeps
+Pulse's PSP draw laws for Pulse alone. Pure's pool dispatcher routes class 6 to a bar that is Pulse's `ParticleSystem_DrawPoolBars` step for
+step (mean depth, `(d.y, -d.x) * size` across, `d * size * aspect` past each end; `docs/ghidra/functions/psp-pure-usa/particle-bars.md`,
+confidence 85, static, not hit live). `oag_title::Effects::pool_bars` lists `WO_WEAPON_ABSORB` for Pure, `oag_fx::psys::streak::KeptBar::Mean`
+keeps that emitter's `StreakDraw::Bar { aspect: 2.0 }` and its embedded 64x64 sprite. Test:
+`crates/raceplay/src/tests/pure_absorb_bar.rs` (`pure_loads_its_absorb_burst_as_the_pool_bar`, fails with the list dropped).
+
+**The file is not one emitter.** `WO_WEAPON_ABSORB.POB` parses to three: the streak, and two template billboards, `ring1` (additive, alpha 0 to
+100, size about 1, life 50 ticks) and `glow` (life 30 ticks), both class 3. Earlier text on this page and in `hull-overlay.md` that said "one
+emitter, no rings emitter" counted the streak only. Ours muted every template on a source that is not Pulse's PSP (`mute_templates`); the
+columns "before" in the table below are that state. The next subsection is what playing them changed.
+
+Pair: Single Race state (Vineta K, Feisar, `pure-single-vineta-feisar-race.ppst`), the first capture's original frames at the 0.3, 0.5 and 0.75 s
+frames (`age 9, 15, 22`; the file index in the raw capture is twice the age), ours with the recipe under "Reproducing". Box mean luma,
+absorb minus control, 480x272. The Time Trial state of the previous table is not on this machine, and the ground boxes that table's
+"+8.4 and +8.3" were taken on were never written down, so that figure is not reproduced here.
+
+| Age | Box | Original | Ours before | Ours after |
+| --- | --- | --- | --- | --- |
+| 0.3 s | craft `150,150,330,272` | +12.7 | +9.0 | +7.3 |
+| 0.5 s | craft | +18.3 | +14.5 | +11.3 |
+| 0.75 s | craft | +3.1 | +10.0 | +7.7 |
+| 0.5 s | ground left `60,170,150,272` | +0.6 | +0.7 | +0.3 |
+| 0.5 s | ground right `330,170,420,272` | +0.9 | +0.9 | +0.4 |
+
+Blue minus red in the craft box at 0.5 s: original -5.8, before -3.2, after -2.6. Read as a player (`ours` against `original`, three frames
+each): the white core and the 1 to 2 px lines are gone, the streaks are now wide soft purple-magenta shafts, as the original's are. Still
+different: ours are radiating rays where the original's shafts rise mostly vertically; ours are more magenta than the original's purple; ours has
+no ground ring and no bloom (the muted templates), which is where the craft box's light is short (11.3 against 18.3, the box also holds the
+overlay); and at 0.75 s ours still shows streaks (+7.7) where the original has almost none (+3.1; the stagger of eight nodes at 0.1 s is the
+burst trigger, which this lane did not touch). The clear ground boxes carry about no light in this pose.
+
+#### Pure: the templates, tried and held off (`pure-absorb-templates`)
+
+Pure's template draw is Pulse's (`FUN_08875138` over `FUN_08872e50`, `FUN_0893fc34`, `FUN_0893d848`; confidence 85, static;
+`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw"). With `WO_WEAPON_ABSORB` listed in a new `oag_title::Effects::templates`
+(`oag_fx::psys::streak::Kept`) `ring1` and `glow` played with their roll, stretch and sprite. Same state, flags and ticks as the table above
+(originals are the first capture's frames 18, 30 and 44 of 480x272 `n_abs1`/`n_ctl1`, which reproduce +12.7, +18.3 and +3.1):
+
+| Age | Box | Original | Ours, templates muted | Ours, templates on |
+| --- | --- | --- | --- | --- |
+| 0.3 s | craft `150,150,330,272` | +12.7 | +7.3 | +7.4 |
+| 0.5 s | craft | +18.3 | +11.3 | +15.2 |
+| 0.75 s | craft | +3.1 | +7.7 | +17.0 |
+
+Blue minus red: original -2.3, -5.8, -3.3; muted -2.6, -2.6, -3.3; on -2.6, -4.4, -8.2.
+
+Read as a player (the three frames cropped to the craft): with them on, the nose bloom and the two wingtip glows at 0.5 s are in the original's places and about
+its size. **Not matched:** the original's flat purple ground ellipse is absent at every age, and at 0.75 s ours has two saturated wingtip glows where the
+original has one faint one (+17.0 against +3.1), worse than muted. The stagger is not the cause: the original's per-node delay gates the node's update and
+draw, so node `i` starts at `i * 0.1` s as ours does (`particle-bars.md`, "The burst's stagger"). **So Pure lists no templates for now** and the muted column is what
+ships; the live reads that were meant to find the cause did not work (breakpoint stops arrive late on PPSSPP 1.20.4), and the passive recipe is on the
+particle-bars page.
+
+Cross-title: **checked, differs** for 2048 and Omega (their class-6 draw is HD's render-mode 5 far bar, `far_bars`, and their absorb burst is
+HD's lineage); Pulse and HD untouched (`pulse_psp` skips the reset, `far_bars` is unchanged).
+
+### HD: the shell is halved and reads the craft's block (landed); the tint is open
+
+The player of `hd-racebox-talons-venom-weapons-grid` is **`Feisar_c1`** (read from the craft array: `*(*(craft + 0x6298) + 0x1b4)`
+is `Data\Ships\Feisar_c1`), the dark concept hull with blue wingtips, not the standard Feisar: ours is run with
+`--team feisar_c1 --variant concept1`. The first page's "blue hull with the gold livery showing" is the standard hull; the numbers
+there were taken against it.
+
+Two causes found in the path, both from the disc:
+
+1. **The shell had no `/2`.** `hd_absorbinternal`'s fogged blocks #2 to #9 all close on `MAD /2 H0.xyz` (`ps3-microcode.py fp-file`
+   on the material, the scale field), like every scene program of draws 87 to 522
+   (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "Every lit program ends on a /2 output scale"). `shade.wesl`'s absorb branch
+   now multiplies by `scene.light.output_scale` (0.5 on HD, 1.0 elsewhere). Confidence 85 (the scale field is read for all eight
+   blocks; which block the race draws is the fogged family on Talon's Junction, not seen in a draw). The `/2` is on the fogged blocks
+   only (block #1, the unfogged one, has none) and ours halves unconditionally: a circuit with fog off could draw block #1 at full
+   strength. Talon's Junction matches (+5.8 against +5.8).
+2. **The shell was on a scene block of its own.** The shield and absorb drawables were never given a `SceneKind`, so the shell read
+   `Scene::off`: no output scale, no fog, and `scene.time` zero, so the `5 * time` scroll of its texture tap never ran.
+   `share_scene_blocks` now puts it on `SceneKind::Ship` (the craft's block). Test:
+   `tests::scene_blocks::the_absorb_shell_reads_the_craft_scene_block`.
+
+Capture: RPCS3 (Write Color Buffers on, 1760x990 trimmed, compared at 1280x720), the same state, `scripts/rpcs3-hd-absorb-film.py`
+(grant the pickup, hold circle until `craft + 0x7a5c` rises, single game frames, `age = clock - press clock`). One absorb and one
+control: a second absorb run restored about 16 units from the first (`x` -115.8 against -132.3), so it has no control at its pose and was
+not scored. Where the pushbuffer gave no camera for a frame (the craft rests), `--camera-from` borrows the run's own (2 of 8 frames had one). Craft box `(400,330)-(880,690)`.
+
+| Age | Original | Ours before | Ours after |
+| --- | --- | --- | --- |
+| 0.08 s | -0.4 | +1.2 | +1.2 |
+| 0.13 s | -0.2 | +4.5 | +4.6 |
+| 0.21 s | +2.8 | +7.9 | +2.6 |
+| 0.33 s | +6.9 | +11.4 | +11.8 |
+| 0.53 s | +7.7 | +15.3 | +15.9 |
+| 0.76 s | +8.3 | +17.3 | +13.6 |
+| 1.02 s | **+5.8** | **+13.1** | **+5.8** |
+| 1.24 s | +3.4 | +4.5 | +2.9 |
+
+At 1.0 s the shell is alone (the burst is gone): ours drops from 2.3 times the original to equal. Blue minus red at 1.0 s: original
++10.8, ours +6.7: **the colour is still pale lavender-white where the original is a saturated blue** (seen in the pair, not fixed;
+the texture tap and its transfer are the lead). The first page's "2.7 times" was this factor over a different hull.
+
+**The burst on HD is about twice too strong, not half as strong.** At 0.3 s to 0.75 s ours is +11.8 to +15.9 against the original's
++6.9 to +8.3 although the shell is now right, and the shell is about +4 of that. This page first read `renderer.md` item 4 as "particles end on `/2`"; `hd-absorb-burst-half` found that
+reading false (the section "HD burst and shell tint" below), so the factor is not a `/2`.
+
+### Pulse: the energy bar (landed 2026-11-09, `pulse-bar-bloom`)
+
+**Claim, true: the bar is bloomed for the whole window and its off phase is cyan, not unchanged.** The draw call, from three GE lists
+(`scripts/psp-absorb-frames.py --ge-dump`, then `scripts/psp-ge-dump.py census`): outside the window the fill is drawn with the stencil
+off; in the window it is drawn with `STENCILFUNC ALWAYS ref 0xff` and zpass `REPLACE`, which writes `0xff` into the framebuffer's alpha
+(the glow mask) over the fill's whole rectangle, in both halves of the 8 Hz blink. The blink is the fill's vertex alpha, `255` and `0`,
+the RGB staying `(13, 223, 221)`. **There is no white layer**: the off half is the fill at alpha zero over `ShieldBarBg` (`0x60B5D7C8`),
+and the bloom lifts that pale backdrop to white. The table of PRIMs, words and the EDRAM alpha is in
+[`shield.md`](../ghidra/functions/psp-pulse-usa/shield.md), "The absorb flash at the draw call"; confidence 90.
+
+Bar fill luma (Rec. 709, rows 248 to 258, x 315 to 440, 480x272), one value per frame, runs of frames from the press (the original's
+screen, 66 frames at 1/60 s; ours is `--give mine` with circle at tick 520, frame `f` at tick `520 + f - 2`, the same pose and flags as
+the method table):
+
+| | Original | Ours after | Ours before |
+| --- | --- | --- | --- |
+| At rest (control) | 164 | 164 | 164 |
+| On half | **207**, frames 3-9, 17-24, 32-39, 47-54, 62 | **205**, frames 3-9, 17-24, 32-39, 48-54 | 164 (nothing changes) |
+| Off half | **237 to 242**, frames 10-16, 25-31, 40-46, 55-61 | **223 to 227**, frames 10-16, 25-31, 40-47, 55-62 | 232 flat white, no halo |
+| Back at rest | frame 63 | frame 63 | frame 63 |
+
+Read as a player: the original's bar glows cyan with a halo that spreads over the panel above it and the road below, then washes to a
+white-green bar with a wider halo, eight times a second. Ours now does the same (frames 6, 12, 30 and 36 read side by side at 2x, original, before, after); the off half is a little paler and the halo a little narrower. RGB of the bar box, off half:
+original `(228, 242, 235)`, ours `(200, 231, 214)`; on half: original `(43, 252, 251)`, ours `(33, 252, 251)`.
+
+Left open (all one cause, ~~the stamp's colour is the backdrop's own colour at its alpha~~ closed the same day: see "Pulse: the stamp's
+bright pass reads the framebuffer", below). Also not done: the PS2 (its bloom chain has no stamp pass in the port; the PS2 draw was not dumped).
+
+### Pulse: the stamp's bright pass reads the framebuffer (landed 2026-11-09, `pulse-stamp-scene`)
+
+**Claim, true: `Bloom::stamp_glow` feeds the bright pass with the HUD target under the stamped rectangle (HUD at its own alpha over the
+scene showing through it), as the original's bright pass reads its framebuffer, not with the stamp's own backdrop colour.** The shader
+(`fs_stamp`, `crates/post/shaders/bloom.wesl`) samples the target the HUD was drawn into, times the largest mask byte of the rectangles
+over the pixel; `Stamp` and `oag_hud::boost_smear::GlowStamp` lose their `colour` and `opacity` (the HUD's own draw already carries
+the blink's alpha and the boost's `1 / n` copies), `AbsorbGlow` loses its `backdrop`. The stamp pass writes the lane and the composite
+is a later pass, so reading the target it then adds to is no hazard. Pinned by `oag_post`'s
+`a_stamp_glows_in_the_colour_the_target_holds_under_it` (red under one rectangle, green under another, black under a third, one mask
+byte: each halo is its own colour and the black one adds nothing; with the target binding dropped, all three stamp tests fail).
+
+The recipe is the previous section's (`--give mine`, circle at tick 520, frame `f` at tick `520 + f - 2`), re-taken on the same tree
+before and after (`oag-game` built at `main` 6bf65111d and at this change; 480x272, SwiftShader Vulkan: the sandbox hides the GPU ICDs, and
+a before-and-after pair through one software driver is what the comparison needs). The original column is the previous section's: its
+frames and the `race-platinum-white-single-grid.ppst` state are no longer on disk, so the original numbers below are that section's, not
+re-captured. Ours' pose is the section's printed pose (position, forward, up) rebuilt as a one-row `--pose-from` trace (`right_*` columns are the ship's
+left, `up x forward`; speed and velocity zero) with **no camera columns**, so the engine's own `--camera-view close` chase camera draws (the
+original trace's camera row is gone): with a camera invented from the pose, the control reads 164 and the before off half reads
+`(204, 232, 225)` against the section's `(200, 231, 214)`; with no camera columns it reads `(199, 230, 215)`, so those are the numbers below.
+
+| Bar fill luma (Rec. 709) | Original | Ours before | Ours after |
+| --- | --- | --- | --- |
+| At rest (control) | 164 | 163.6 | **163.6** (frame 63: 163.7) |
+| On half | 207 | 205.1 to 205.7 (frames 3, 6, 9, 17, 24, 36) | **207.2 to 207.9** |
+| Off half | 237 to 242 | 222.3 to 226.4 (frames 10, 16, 25, 30, 31, 40, 46, 47) | **238.7 to 243.9** (240.6 at frame 16, 243.9 at frame 46) |
+| Off half RGB (frame 10) | `(228, 242, 235)` | `(199, 230, 215)` | **`(228, 242, 236)`** |
+| On half RGB (frame 6) | `(43, 252, 251)` | `(33, 252, 251)` | **`(43, 252, 251)`** |
+| Band under the bar (x 330-420, rows 259-265), frame 12 | not measured | 98.8 | 113.0 |
+
+Ours' frames 3-9, 17-24, 32-39 are on and 10-16, 25-31, 40-47 off before and after, as before: the window's phase did not move. (Frame 62
+still reads off on ours and on in the original; the section above has that, it is the blink's last half.) The bar's off half now sits in the
+original's range, the on half within 0.9 of 207, the control unchanged, and the off half's RGB equals the original's to a unit.
+
+Read as a player (frames 6, 12, 30 and 36 at 2x over the bar's corner, before then after; the original frames are gone, so the
+comparison is against the previous section's description of them and the numbers above): the off half was a pale mint bar with a
+narrow halo and is now a white bar with a wide soft halo spreading over the panel above and the road under it, the on half's cyan bar
+carries a stronger halo. That is the "white-green bar with a wider halo" the section describes; the on and off halves differ the way the
+original's do. At 1920x1080 the same frame (frame 12) has the same smooth halo, no speckle from the scene seen through the backdrop (the
+bright pass is one bilinear tap per 240x136 lane texel of the presentation-size target, as `fs_bright`'s). **One more thing this made visible:** the halo is lit by the target as it stands when the stamp runs, so everything the HUD
+draws before the stamp (the panel, the road through the backdrop) feeds it, and nothing drawn after does.
+
+**The boost's speed bar**, same change (`talons-boost`, the compare page's boosting pair: the original's `theirs.png`, ours re-rendered
+from `pair.json`'s argv, `--hud-boost-phase 0.457010`, on both binaries; the thread had no numbers to quote):
+
+| | Original | Ours before | Ours after |
+| --- | --- | --- | --- |
+| Speed fill (x 310-420, rows 224-242), mean luma | 252.5 | 250.2 | **252.0** |
+| Speed fill, mean RGB | `(243, 255, 255)` | `(233, 255, 253)` | **`(241, 255, 254)`** |
+| RMSE vs the original, speed bar box (306,218)-(446,248) | 0 | 19.1 | **14.7** |
+| RMSE, whole frame | 0 | 26.2 | 26.9 |
+| RMSE, shield bar box (306,246)-(446,262) | 0 | 120.6 | 129.8 |
+
+The speed bar's white core and halo now match; the glow gap there is closed to a unit of red. The shield bar's box and the whole frame
+read slightly worse: the original's shield bar is red in this frame (a state ours does not reproduce, `pulse-hud-boost-smear-leftovers`),
+ours is cyan, and the boost's smeared copies of the speed bar now light the cyan bar below them more, so the existing 120 RMSE of the wrong
+colour grows with the glow. Not a regression of the stamp; it is the open red bar.
+
+Titles: only Pulse PSP stamps (`oag_pulse::hud::ART` is the only `boost_smear` and `absorb_glow` that is `Some`; Pure, HD, 2048 and Omega
+are `None`). The PS2 shares the art but `Scene::stamp_glow` runs only on the PSP bloom (`Scene::bloom`; the PS2 has `Ps2Bloom`, no stamp
+pass), so the PS2 draws the copies and no stamp glow, as before: not changed, **not checkable** (no PS2 draw dump). **2048 and Omega:
+checked, differs**: their HUD is HD's (`boost_smear` and `absorb_glow` are `None`, no stamp pass in their bloom), so there is no PSP-style
+HUD stamp to read the framebuffer for; HD's HUD glow, where it has one, is a separate path.
+
+### 2048 and Omega
+
+The shell fix is **not checkable** there: neither title draws a shell (their effects tables are the unread one), their archives were not
+censused for an `AbsorbEffect` model, and their shader programs are Vita GXP and PS4 bytecode, which `ps3-microcode.py` (RSX scale
+fields) does not read, so whether their shell closes on a `/2` is unknown. The Pure overlay is **not checkable** there (Pure is not their
+lineage). The unpaired reasons above stand.
+
+## HD burst and shell tint: the `/2` does not apply to particles (`hd-absorb-burst-half`, 2026-11-09)
+
+Claim tried: HD's particle draws close on the programs' `/2`, so the absorb burst falls into the original's range and the shell
+tint moves toward blue. **False as stated; no code changed.**
+
+1. **HD's `psys_*` fragment programs carry no `/2`.** `scripts/ps3-microcode.py fp` on the five particle blocks of the EBOOT
+   (`0x00927a80`, `0x00927a00`, `0x00927f00`, `0x00927c00`, `0x00927b00`) prints `MUL H0, f[COL0], R0` or `MOV H0, f[COL0]`, no
+   scale (the same disassembler prints `/2` on the shell's fogged blocks). `renderer.md` item 4 is corrected. Confidence 90 for the
+   program text.
+2. **The burst's own `kColourScale` is 1.0.** `WO_WEAPON_ABSORB` has two emitters, render mode 5 (blend 2, 32 live) and mode 2
+   (blend 2, 10 live), and the word at `+0xc84` reads `1.0` on both, raw, whatever the mode. Pinned by
+   `pob_ground_truth::hd_absorb_burst_authors_a_unit_colour_scale_on_both_emitters`. So `psys_normal_vp`'s multiply (`c467`) cannot
+   halve the burst if the PPU writes the emitter's word, which is itself unread for HD (inherited from Omega, `engine-trail.md`).
+   Side finding: the word is not a mode-5 field. `WO_MISSILE_EXPLO`'s mode-2 emitter reads `0.5`; `WO_ROCKET_EXPLO_TRACK`'s mode-2
+   emitters read `0.6`, `0.8`, `0.2` and `1.0`; `oag_pob::Emitter::colour_scale` reads it for mode 5 only. If `c467` follows the word on
+   every mode, the missile blast's overbright streak strip is a candidate lead; not tested.
+3. **The two original captures disagree about the burst.** The first capture (this page's first HD table) reads the original at
+   +13.2 / +21.4 / +20.2 at 0.3 / 0.5 / 0.75 s; the second (the `absorb-fx-wire` table) reads +6.9 / +7.7 / +8.3. Same state, same
+   boxes. The "twice too strong" reading rests on the second alone, whose frames are no longer on disk; against the first, ours before
+   the shell fix (+24.4 at 0.5 s) was close. Which is representative is not settled: it needs a fresh original capture (three absorbs
+   and a control on one boot) before any burst gain is tuned.
+4. **The first capture's frames do not frame the craft like ours.** Re-rendered with `hd-weapon-pair.py --team feisar_c1 --extra
+   --variant concept1` on that capture's poses and cameras, ours draws the craft about twice the original's size, so a craft-box score
+   compares different pixels. No number was taken from them.
+5. **Shell tint: the lead is the unit's gamma nibble, unread.** The flame and the bomb-blast fireball read their colour tap with
+   gamma nibble 7 on unit 0 (RGB decoded on fetch, the packer encoding the output): `enc(dec(t) * k / 2)` (`engine-trail.md`, "The
+   flame's colour tap is decoded on fetch"; `hd-unlit-programs.md`, the bomb-blast table, where one unit of four read 0). Ours reads the
+   shell tap raw (`texture * 0.5`). ~~Whether `hd_absorbinternal`'s unit 0 carries 7 is the open value.~~ It does, and decoding it does not close the tint: see "HD: the shell's unit 0 reads gamma nibble 7" below. Read recipe:
+   `scripts/rpcs3-hd-absorb-film.py` with the pushbuffer hook, then `scripts/rsx-draw-list.py DIR NAME --samplers` on the shell's draw
+   (blend `SrcAlpha`/`One`, the absorbeffect mesh): bits 20-23 of `SET_TEXTURE_ADDRESS` on unit 0. If it is 7 the shell is
+   `enc(dec(t) * 0.5)`, 1.46 times ours at a mid texel and bluer by that factor (blue minus red +6.7 to about +9.8 against the
+   original's +10.8); its luma at 1.0 s (+5.8, equal now) would need a re-pair. Not changed: the fix would move a number the page
+   already matches, on an unread value.
+6. **2048 and Omega: not checkable.** Their particle programs are Vita GXP and PS4 bytecode; whether they close on a scale is not
+   read, and neither draws the shell.
+
+## HD: the shell's unit 0 reads gamma nibble 7; decoding it does not close the tint (`hd-absorb-tint-2`, 2026-11-09)
+
+**Claim, half true: N is 7, and wiring the decode makes the shell bluer and dimmer, which misses the brief's 1.0 s blue-minus-red target because the level falls, not because the hue moves away. Nothing landed in the renderer; landing the decode is the lead's call.**
+
+Falsifier written before the capture: bits 20-23 of unit 0's `SET_TEXTURE_ADDRESS` word on the shell's draw are not 7.
+
+**The read (confidence 85, one boot, one frame).** `scripts/rpcs3-hd-absorb-film.py --dump-at 0.5` (new: the target stays paused at that shot's age while
+`rpcs3_draw_hook.py` dumps the frame's RSX draws; `HOOK_LIGHT=1 HOOK_NO_HEADS=1`, ring seeded `0x40000000:0x20000`), then
+`scripts/rsx-draw-list.py DIR d00 --samplers`. The frame is the absorb at age 0.50 s on Talon's Junction (832 draws) and the control at the same lap-clock
+offset (755 draws, same pose to 0.01 units).
+
+| What | Value |
+| --- | --- |
+| The shell's draws | draws 644 to 657 of the absorb frame: 14 draws on the scene target, blend `SrcAlpha`/`One`, one fragment program, **absent from the control** (0 draws with it) |
+| Its program (disassembled live with `scripts/ps3-fp-live.py`) | the listing of `absorb-feedback.md`, "The material": `TEX R0.w` at `(TC3.yz)`, `MAD uv + 0.5 * alpha`, `MAD + 5 * time`, `TEX H1.xyz`, fog `EX2_SAT` lerp, **`MAD /2 H0.xyz`** |
+| Unit 0 on all 14 draws | `SET_TEXTURE_ADDRESS` `0x60710101`: bits 20-23 are **7** (RGB decoded on fetch, alpha raw); format word `0x00098829`, rect `0x01000100` |
+| The same draws, units 1 and 2 | `0x60030303`: nibble **0**, so the field discriminates within one draw |
+| The texture, statically | `data/weapons/textures/hd_absorbinternal.gtf` (`DATA02.PSARC`): 256 x 256, DXT4/5 (`0x88`), 9 mips, which is the draw's format word |
+
+So the shell's colour tap is read in the flame's way (`engine-trail.md`, "The flame's colour tap is decoded on fetch"): the packer encodes the program's output,
+so the console adds `enc(dec(t) * k / 2)`. A second boot did not repeat the draw dump: three more boots stalled in `rsx_fifo.Walk` at 27 draws on every retry
+(the walk stops after the page at `0x74100` that the first dump's last JUMP names; cause not found), where the first two boots walked a whole frame. Read as seen
+once. The 1.0 s frame of the first run is also incomplete (317 draws, no shell draw), so only age 0.5 s is read. `--dump-attempts 1` keeps a stalled attempt's age from drifting
+(each retry runs the game 0.3 s on).
+
+**Wiring it** (two lines of `shade.wesl`'s absorb branch: the flame's `mix(tap, decode(tap), encoded_out * linear_out)` on the second tap's RGB, the
+alpha-offset tap raw) and re-pairing on this run's own frames, ours on one driver before and after (craft box `(400,330)-(880,690)` at 1280x720, absorb minus control,
+`hd-weapon-pair.py --team feisar_c1 --camera-from 01 --extra --variant concept1`; the camera is the control's 1.0 s read, the craft rests):
+
+| Age | Original (this run) | Ours before | Ours with the decode | Ours, decode and no `/2` (diagnostic) |
+| --- | --- | --- | --- | --- |
+| 0.5 s luma / blue minus red | +15.9 / +14.2 | +17.4 / +7.2 | +11.6 / +11.1 | +15.3 / +11.8 |
+| 1.0 s luma / blue minus red | **+7.0 / +9.8** | **+5.8 / +6.8** | **+1.8 / +4.4** | +2.5 / +5.5 |
+
+The target was blue minus red at 1.0 s of at least +9.0, with luma re-paired against the original's: ours falls to +4.4 and +1.8. **That target is missed, so the change was reverted.**
+Blue minus red is a level, not a hue, so the box's own RGB deltas give the hue as blue over red: original 2.2 (0.5 s) and 3.1 (1.0 s), before 1.5 and 2.8, decode 2.3 and 6.6 (red under 1 grey, noisy).
+On hue the decode lands on the original at 0.5 s and overshoots toward blue at 1.0 s; the gap at 1.0 s is the shell's level. At 0.5 s, where the burst is most of the box, the decode is bluer (+7.2 to +11.1) and dimmer, nearer the original on both. Read as a player (the craft crops at 0.5 s and
+1.0 s, original, before, decode, side by side): the original at 1.0 s is a hull in a saturated blue sheen with a blue ring on the pad; ours before is a faint lavender
+rim and the decode makes it fainter, so the shell does **not** read as saturated blue after the change. The decoded shell is `enc(0.5 dec(t))`, always darker than
+`enc(0.5 t)`; the original is brighter than either, so the missing light is not the tap's encoding.
+
+**What is open (leads, none measured):**
+
+1. **Framing.** The craft in ours is about 1.5 times the original's width in this pair (same pose and camera, by eye; the first capture had it near 2 times), so the box holds a
+   different share of hull, track and shell. Ours' craft being larger means its shell covers more of the box, so ours reads high, not low: the level deficit at 1.0 s is at least what the table shows.
+   A like-for-like score needs the craft's own pixel mask, or a camera solved from the craft's projected size.
+2. **The shell mesh.** The original's 14 draws sum to 20,076 indices (6,692 triangles); `absorb-feedback.md` reads 12,977 triangles for Feisar's `LeachEffectShape`.
+   This hull is `Feisar_c1`; which mesh its `AbsorbEffect.vex` names was not read.
+3. **The original's tint moved between captures** on the same state: +10.8 (first), +9.8 (this one, RPCS3 0.0.43-20574); luma +5.8 and +7.0. Controls were equal; the spread is
+   about the size of the effect, so the +9.0 target sat inside it.
+4. **The original's 1.0 s frame may hold more than the shell.** It shows a blue ring on the pad around the craft, outside the hull. An absorb-minus-control difference of the two 1.0 s frames is
+   dominated by the camera and pose differing between runs (the whole scene lights up), so the ring is not isolated; the page's "at 1.0 s the shell is alone" is not shown for the original's frame.
+5. The `/2` was matched on luma alone (+5.8) before the nibble was known; with the decode in, that match is gone, and dropping the `/2` is not it either (table). Re-read the shell's alpha
+   (`ShieldColour` times the vertex ramp) against the draw's constants before touching either factor.
+
+RPCS3 0.0.43-20574 does not load the October save states (`No savestate file found or savestate not compatible`): the weapons grid was rebuilt with
+`OAG_WEAPONS_ON=1 scripts/emu-hd-race-walk.sh <lane> 8 0 0` and `scripts/emu-save-state.sh` (`emulator-recipes.md`).
+
+**2048 and Omega: not checkable.** Neither title draws a shell (their effects tables are the unread one), and a unit's gamma nibble is runtime sampler state: it needs a live
+frame, which neither has (no absorb frame exists for either, see the next section). HD's shell program and its nibble are not evidence about theirs: Omega's
+shaders are PS4 bytecode and 2048's Vita GXP.
+
+## 2048 and Omega
+
+Not paired. Exactly where it stopped:
+
+- **Omega (shadPS4 0.20).** `scripts/shadps4-omega-pair.py` reaches the grid and stops before the countdown. A held
+  pickup needs: the Racebox Weapons row turned on (HD's Racebox default is off, `emu-hd-race-walk.sh` presses the row;
+  the Omega walk does not), a race driven to a pad with no steering feedback, and an absorb press timed on a frame clock
+  shadPS4 does not expose (no memory readout). No Omega absorb function or player pickup record is recovered in
+  `docs/ghidra/functions/ps4-omega-eu/` (the shell colour is, in `shield.md`; `weapon-ai-fire.md` has the AI object's held
+  id at `+0x44`, a lead). Unblocks it: the Omega Racebox weapons walk,
+  or the native port's `/proc/<pid>/mem` (`docs/tools/compare-page.md`, "Omega") with the HD held-slot offsets
+  checked against the eboot.
+- **2048 (Vita3K).** `scripts/vita-2048-pair.py --walk` reaches the grid before GO; Vita3K has no state channel, and its
+  guest `/proc/<pid>/mem` can be written (the hull-shake patch does) but no 2048 held-slot or absorb address is read
+  (the AI's `weapon-ai-fire.md` in that folder reads a held id and clock from the AI's own object, which is a lead, not
+  the player's pickup record or the absorb function).
+  Unblocks it: read `Ship_PlayAbsorbFeedback` and the pickup slot in the 2048 eboot (HD's are `0x000d9398` and
+  `ship+0x5edc`), then the HD recipe above with a write through `/proc`.
+
+Cross-title status (CLAUDE.md, "A 2048 finding is checked against Omega"): the burst is **ported** (both ship the six
+`absorb` locators and HD's three mirrored pairs, `hull-sparks.md`). The HD shell is **not wired** on either: `oag_hd`'s
+effects table sets `absorb_shell` and the 2048 and Omega tables are the all-unread one, so neither draws a shell; whether
+their archives ship an `AbsorbEffect` model was not censused (named open in the thread). The HD tint and brightness
+differences above are **not checkable** on 2048 and Omega until a live absorb frame exists for them.
+
+## Confidence
+
+Per `docs/reverse-engineering/confidence-rubric.md`, measured frames, not decompiled claims; each is two absorb runs on one
+emulator boot (Pulse, Pure) or three restores of one state on one boot (HD), so "seen once" on the boot level:
+Pulse's bar finding 75 (both runs show the same two phases and period); Pulse's overlay match 75; Pure's missing hull
+overlay and burst look 75; Pure's held-id and consume reading 80 (live on two runs, decompile read); Pure's `+0x98` HUD
+write 60 (read, effect not seen); HD's shell ratio and tint 70 (controls equal, run to run spread of the original
+small, ours seen once); HD's burst ratio 60 (derived by subtracting the shell). Pose and lag: one frame of lag
+uncertainty on every age.
+
+## Reference set
+
+The frames behind every number are derived game data, not in this tree. The original's frames (`theirs_*` and
+`theirs-control_*`, 0.1, 0.5 and 1.0 s per title) are the ones `data/reference` admits, for the lead to adopt as
+`data/reference/absorb-pairs/<title>/`; ours' frames and the side sheets regenerate from the poses and flags above.
+
+## Reproducing
+
+New on a second machine (`absorb-fx-wire`), each script's docstring has the full line:
+
+- Pure original: `scripts/psp-pure-absorb-frames.py --port P --display :N --home $PP_HOME --state <ppst> --out DIR [--control]`; ours:
+  `scripts/absorb-ours-frames.py --circle-tick 780 --frames 5,10,15,22,30 --step-ticks 2 --lag-ticks 2 --out DIR -- <oag-game
+  command with --pose-from the pair trace of scripts/psp-pure-pair.py>` (and `--control`); score with `scripts/absorb-score.py --box
+  150,150,330,272 absorb.png control.png ...`.
+- HD original: `scripts/emu-restore-state.sh <lane> data/saves/hd-fury/hd-racebox-talons-venom-weapons-grid.SAVESTAT.zst --pause`, then
+  `OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-hd-absorb-film.py --image data/images/hdfury-ps3-eu-dec.iso --out DIR
+  [--control]`; fill each `NN.json`'s `track` by hand (`/data/environments/talons_junction/track.vex`), then
+  `scripts/hd-weapon-pair.py --capture DIR --weapon mine --team feisar_c1 --button circle|none --camera-from NN --extra --variant
+  concept1`, and score `theirs_NN.png` and `ours_NN.png` of the absorb run against the control's with `absorb-score.py --size 1280x720
+  --box 400,330,880,690`.
+
+Pulse bar (`pulse-bar-bloom`): restore `race-platinum-white-single-grid.ppst` (`scripts/psp-state.py load 2 --file ...`), then
+`scripts/psp-absorb-frames.py --port P --out DIR --frames 66 --edram --display :N` (and `--control`) for the series (the on-screen frame is
+the window cropped from the root screenshot at `(160, 128)` and halved; `fbN` are the two EDRAM framebuffers, which alternate), and with
+`--ge-dump DIR/frame.ppdmp --ge-at 4` (blink on) or `--ge-at 12` (blink off) for the draw call; `scripts/psp-ge-dump.py census` then lists the
+fill as the PRIM of texture `0xc911d0` over `(306, 246)-(446, 258)` with `col0`, `stenciltestenable`, `stenciltest`, `stencilop` and `pmsk2`.
+Ours: `oag-game <pulse-psp-usa.chd> --race --track 'Data\Environments\13_Track\track.vex' --pose-from <pair trace> --pose-tick 0
+--pose-hold --camera-fov 60 --camera-view close --mode single_race --class venom --team Assegai --world-clock-offset 8.765 --give mine
+--input-script <(printf '520 none\n1 circle\n600 none\n') --ticks T --screenshot F.png` with the method table's other flags, T from 520 to 586.
+The disc-backed check without a pose trace is
+`crates/game/tests/hud_boost_glow_ground_truth.rs`, `an_absorb_lights_the_shield_bar_and_its_halo_in_both_blink_phases`.
+
+Earlier recipe:
+
+Pulse: restore the state, `scripts/psp-absorb-frames.py --port P --frames 66 --edram --display $DISPLAY` (and
+`--control`), then `oag-game ... --pose-from <pair trace> --give mine --input-script <(tick none, 1 circle)` at ticks
+520 + age - 2. Pure: the same with the entity and held-id reads above (a scratch driver, the Pure addresses are on this
+page). HD: `rpcs3-hd-missile-film.py`'s frame stepping with the grant and the circle press of this page's method table,
+then `scripts/hd-weapon-pair.py --weapon missile --team feisar --button circle` and `--button none`.

@@ -248,6 +248,34 @@ Pulse's add-on zips go in a folder called `dlc` next to `images` (for example
 `~/.local/share/oag/dlc`, or `dlc` beside the AppImage). Not re-verified for this page. See
 [DLC packs](../formats/dlc-pack.md).
 
+### Demos
+
+Three official Wipeout demos exist as packages. Two of them race here; checked
+2026-11-15 on Linux, each one with a headless race.
+
+| Demo | Plays here? | What it holds |
+| --- | --- | --- |
+| Wipeout HD trial (PS3) | Yes | Installs like the Store version below. |
+| Wipeout 2048 demo (Vita, `PCSF00110` EU, `PCSA00043` US, `PCSC90003` JP) | **Yes, one circuit** | Checked on the EU one; US and JP not tried. One `PSP2/data.psarc` (575 MB) in the full game's layout: the `tower` circuit and five 2048 teams (Feisar, AG Systems, Auricom, Piranha, Qirex). |
+| Wipeout Pulse demo (PSP, `NPEG90003` EU, `NPUG70008` US) | No | No game archives: its data is packed inside the encrypted executable (`EBOOT.BIN`, 13.9 MB; `BOOT.BIN` is blank), and this project reads no PSP executable. Checked on the EU one. |
+
+**The 2048 demo** needs its archive decrypted, which Vita3K's installer does:
+
+1. Install the package with the licence string (zRIF) that comes with the demo:
+   `vita3k --pkg path/to/demo.pkg --zrif <zRIF>`. Run it on a virtual display or
+   expect a window; it installs and exits.
+2. Link the decrypted archive into the folder layout 2048 is read from:
+
+   ```sh
+   mkdir -p data/extracted/vita/PCSF00110/base/PSP2
+   ln -s ~/.local/share/Vita3K/Vita3K/ux0/app/PCSF00110/PSP2/data.psarc \
+     data/extracted/vita/PCSF00110/base/PSP2/data.psarc
+   ```
+
+3. Race its one circuit: `oag-game data/extracted/vita/PCSF00110 --race`. The
+   default circuit (`altima`) is not in the demo, so a bare `--race` opens the
+   first circuit it does ship, `tower`. The front end was not tried.
+
 ## 4. Start it, and what you should see
 
 Start the program: double-click `oag-game.exe` (Windows), the AppImage (Linux,
@@ -292,7 +320,7 @@ Everything from here down is the technical detail the steps above stand on.
 ## Build it yourself
 
 You need a Rust toolchain. The repository pins one in `rust-toolchain.toml`
-(1.99.0 on 2026-10-07), and `rustup` fetches it on the first build by itself.
+(1.100.0 on 2026-11-13), and `rustup` fetches it on the first build by itself.
 
 ```sh
 git clone <this repo> && cd OpenAntiGrav
@@ -455,6 +483,21 @@ campaign screens and the menu backdrop are Fury's and are not drawn (hd-psn.md,
 "What draws differently"); the menu boxes draw from the file this build's own executable
 names. Checked 2026-10-07: the install opened as `Wipeout HD`, raced Vineta K
 tick for tick like the disc, and its menu rows drew.
+
+### Updates for Wipeout HD
+
+Sony's update packages are optional: without them HD runs as it did. They change the voice and
+music mix and the menu text ([hd-updates](../formats/hd-updates.md)). Install **every** package of a
+chain in order: the last one carries no game data of its own, and the program warns about a
+partial chain.
+
+1. Install them with RPCS3 as above, one `rpcs3 --headless --installpkg` per package, oldest
+   first, in the same private profile. RPCS3 may abort as it exits; the files land.
+2. **PSN copy:** copy `dev_hdd0/game/NPEA00057` over your folder as in step 3 above.
+   The folder now also holds `data05`-`data08`.
+3. **Fury disc:** copy `dev_hdd0/game/BCES00664` into `data/extracted/ps3/`, or beside your disc image.
+   Nothing else is needed: the folder is matched to the disc by its own `TITLE_ID`, and it is
+   not listed as a game.
 
 ### 2048: a `.vpk`, or a folder
 
@@ -627,7 +670,7 @@ do not expect a finished game outside Pulse.
 | The intro is skipped, and the log line `ffmpeg is not installed, so the intro is skipped and movies show no picture` | `ffmpeg` is missing (or `--no-video` was given, which logs nothing). Install `ffmpeg` and run once without the flag. The game is otherwise fine |
 | Window opens black, or no window | Vulkan driver missing or broken. The terminal prints a `renderer: vulkan: ...` line naming the adapter. A CPU adapter such as `llvmpipe` works but is slow |
 | Program does not start and the loader says it cannot open `libpipewire-0.3.so.0` (not run: needs a machine without it) | Install the PipeWire client library from the table in section 1 |
-| `frame: 50 ms` warnings fill the terminal | You are on a CPU renderer. Lower RENDER SCALE in the options. The log file is quieter |
+| A `frame: 50 ms` warning, then `frame: N more over 40 ms in the last 5.0 s` every few seconds | Frames are running slow, most often on a CPU renderer. Lower RENDER SCALE in the options |
 
 If something else fails, the log file named above has the detail. Include it
 when you report a problem.

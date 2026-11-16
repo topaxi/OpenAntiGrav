@@ -125,7 +125,7 @@ frames read at the HUD clock, the wave leaving a craft that stands on the grid.
 - **The road** - `GpuVertex::quake`, `Scene::quake` and `crates/mesh/shaders/quake.wesl`: the
   program above, for the surfaces of materials that ship a `StaticQuake` row, fed the two edge
   points the particle wave already rides, the track's up there, `oag_render::ripple::amplitude(age)`
-  and `A.w = 60`. Ground truth: `crates/render/tests/hd_quake_lift.rs` (the GPU against the
+  and `A.w = 60`. Ground truth: `crates/mesh/tests/hd_quake_lift.rs` (the GPU against the
   program's own arithmetic, one marked and one unmarked triangle, amplitude zero the identity) and
   `crates/raceplay/tests/quake_orientation_ground_truth.rs` (the flag on Talon's Junction's draws, and on
   none of Pulse's).

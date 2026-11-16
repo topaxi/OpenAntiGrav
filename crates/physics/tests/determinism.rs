@@ -152,24 +152,27 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   world-axis diagonal and angular damping reads the world-axis momentum. Every tick the
 ///   probe is not level moves. No field hashed; `InertiaFrame::Body` reproduces the previous
 ///   constants.
+/// - **2026-11-12, behaviour.** Pulse flies `Body_Integrate`'s velocity damping
+///   (`Laws::PULSE.body_damping = BodyDamping::PULSE`, `docs/physics/body-damping.md`): every
+///   row moves. No field hashed; `BodyDamping::NONE` reproduces the previous constants.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0xe7c8_5a81_7d6a_904e,
-        0x5a70_12ce_802d_241f,
+        0x41bc_5b25_110f_72a5,
+        0x9466_99a2_cffa_c565,
     ),
     (
         3_600,
         Script::Corridor,
-        0x748f_2c1e_c1e5_a041,
-        0x2090_aba1_2a31_e235,
+        0x1123_3d5a_ede9_f533,
+        0x4cd5_f6cb_0286_d99a,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0x1ab1_29bc_df4a_a853,
-        0x229a_4cc1_aaba_9687,
+        0xddba_0f7c_9da3_cae8,
+        0xb5d3_35bd_155c_a46b,
     ),
 ];
 

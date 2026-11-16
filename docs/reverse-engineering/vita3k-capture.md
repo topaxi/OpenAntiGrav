@@ -346,6 +346,81 @@ texture. It answered "what makes the 2048 lattice about half ink" in one capture
 7. `Vita3K` ignores `SIGTERM` when wedged: `kill -9` by pid. A second launch while one is still
    starting opens a second emulator on the same profile; check `pgrep -a vita3k` before relaunching.
 
+## A fresh profile on a new machine (2026-11-11, `gallery-2048`)
+
+Set up and driven as far as the front end; **taps do not register until the firmware's `vs0/` is in place** (below; resolved 2026-11-12, "Firmware that works").
+
+- **A persistent pref-path outside Vita3K's default**, `data/saves/2048/vita3k/` (the same shape as the other titles' saves): a copy of
+  Vita3K's default `config.yml` with `pref-path` set there, `show-welcome: false`, `warn-missing-firmware: false`, plus the five
+  overrides above (`log-level`, `discord-rich-presence`, `show-compile-shaders`, `validation-layer`, `check-for-updates-mode`), one
+  copy at `<private HOME>/.config/Vita3K/config.yml` (what `-r` resolves against) and one at `OAG_VITA3K_CONFIG`. Run every
+  Vita3K command with `env -u XDG_CONFIG_HOME -u XDG_DATA_HOME` and a private `HOME`: without it the install went to
+  `~/.local/share/Vita3K` (1.6 GiB moved by hand afterwards). `XDG_CACHE_HOME` decides where the pipeline cache and
+  `vita3k.log` go (`~/.cache/Vita3K` by default; set it under `data/saves/2048/` so the cache is reused).
+- **Installing, with Vita3K's own CLI**: `vita3k -c <config> -w --pkg <file>.pkg --zrif <zRIF>` for the base package, then the
+  patch (`2048-vita-eu-patch.pkg`, the base zRIF), then each DLC (`data/dlc/WipEout 2048 - DLC1 (Europe) (DLC).pkg` and DLC2).
+  **A DLC has a zRIF of its own**: with the base one it stops at `header signature is invalid`. The pair list (`PSV_DLCS.tsv`
+  of the pkgi tool) carries `EP9000-PCSF00007_00-DLC1W2048PACKAGE` and `...DLC2W2048PACKAGE`. Each install takes about 1 s
+  for the patch and DLCs and 10 s for the base; DLCs land in `ux0/addcont/PCSF00007/DLC<n>W2048PACKAGE/`, the patch is merged
+  into `ux0/app/PCSF00007/` (`data1.psarc`, `data2.psarc`).
+- **It boots without the firmware** (the welcome dialog and the "Firmware is not fully installed" dialog are what
+  `show-welcome` and `warn-missing-firmware` switch off; `Launch Anyway` otherwise): title, PSN prompt and the Game Mode grid draw,
+  and keys reach the game.
+- **A tap does not register without the firmware.** Every variant failed the same way on three boots (hold times 0.2 to 0.8 s,
+  moves before and during the press, buttons 1, 2 and 3, `T`, `SDL_MOUSE_TOUCH_EVENTS=1`): XTEST clicks reach the Qt search
+  box, keys reach the game, the Game Mode grid does not move. The log has
+  `Missing file at sys/external/libsystemgesture.suprx` followed by `Unimplemented sceSystemGestureCreateTouchRecognizer`,
+  `...UpdateTouchRecognizer`, `...GetTouchEventsCount`: 2048 reads taps through SceSystemGesture, which is a firmware module
+  (also missing: `libhttp.suprx`, `libscemp4.suprx`). Confidence 70 that the firmware (`PSVUPDAT.PUP`, installed with
+  `vita3k --firmware <file>`, plus the font package) is what is missing, not yet tested: this machine has no `.pup` of the Vita's
+  on disk, and Sony's update server answered a plain request with 403.
+- **Firmware that works (2026-11-12, `gallery-2048b`; this replaces the confidence-70 hypothesis above, now measured).** `vita3k --firmware
+  PSP2UPDAT-firmware.PUP` (the 128 MB file, firmware 0x3740000, build 571880, 22 entries) **installs nothing**: it logs "progress 100 %" in 0.9 s, creates no
+  `vs0/` or `os0/` file and no error line, at `log-level: 0` too. `--firmware PSP2UPDAT-fonts.PUP` (57 MB) does install (`sa0/data/font`, `libhwr`,
+  `pd0/`). The tree that works was copied from another machine's working Vita3K: `vs0/` (159 MB, with `vs0/sys/external/libsystemgesture.suprx` and
+  `libfiber.suprx`) and `os0/` (13 MB) into the pref-path. Then the log reads `Loading module "vs0:sys/external/libsystemgesture.suprx"` ... `module_start returned 0x0`,
+  and taps register: the Game Mode grid, the HD map, Home and Options open.
+- **A tap needs the pointer at the spot before the press.** `xdotool mousemove x y mousedown 1` in one command was ignored (three boots); `mousemove`, 0.3 s,
+  `mousedown`, the hold, `mouseup` works (`vita3k-drive.py tap`). The Game Mode tile's first tap selects it (orange), the second opens it.
+- **The guest hangs on about every second boot** (a frame frozen on "Sony Computer Entertainment presents" with the process at 60 % CPU, or on the Game Mode
+  grid at 0 %; no log line; the last error is `sceKernelTryLockLwMutex ... FAILED_TO_OWN`), also on an idle machine. `kill -9` by pid and boot again; a boot
+  that does not hang reaches the Game Mode grid in about 40 s. `scripts/vita-2048-pair.py --walk` stops with `STALLED` after `--boot-timeout`, and a
+  wrapper that runs it again is the way to batch (eleven pairs: five needed a second attempt, one five).
+- **`CameraP1` is on the options screen**: Home (top left `(38, 38)`), Options `(642, 260)`, the Camera page is the first; this profile reads **CLOSE**
+  (three pages, by the dots). Not changed.
+- **Guest memory, with `scripts/vita3k-mem.py`**: `find --text S` (guest addresses of a string in writable memory), `unlock TRACKS [--write]` and
+  `rename-track OLD NEW` over the 2048 grid cell records (`docs/tools/compare-page.md`, "Eleven pairs through a renamed grid cell"). One scan of the 330 MiB
+  guest takes under a second; the daemon (`serve`) must be Vita3K's parent.
+- **Two game windows**: `find_window` takes the first `PCS[AF]000` match, so a Vita3K left running (it ignores `SIGTERM`: `kill -9`
+  by pid and check with `ps`) puts its window first, and `shot`/`key` then read and drive the old instance, which looks like a
+  frozen game.
+- **`DATA.BIN`** (`ux0/user/00/savedata/PCSF00007/-AUTO-/`) has no readable strings (`strings -a` prints noise), so
+  `CameraP1` is not readable off the save; the options screen is (above).
+
+## The race load, with the screen's own fields (2026-11-16, `vita-race-load-re`)
+
+`scripts/vita-2048-race-load.py --profile <private profile> --out <dir> --node X Y` walks to an event card, taps Play,
+and from then on reads the loading screen's object out of the guest (`/proc/<pid>/mem`, every few milliseconds) while
+grabbing a frame four times a second; `samples.json` holds both. What it settled is on
+[race-load.md](../ghidra/functions/vita-2048-eu-v104/race-load.md). For the next capture:
+
+- **The private profile was built from an installed Vita3K in a minute**: a `pref-path` directory with every top-level
+  entry and every `ux0` entry symlinked to the installed tree, except `ux0/user` (copied, 3 MiB) and
+  `ux0/temp/apps.dat` (copied); the installed `config.yml` copied twice with `pref-path` and the quiet keys changed; the
+  shader cache copied into the private `HOME`.
+- **Play starts the load at once.** The "mode description card" of the walk table above (step 7) and of
+  `vita-2048-pair.py --walk` is the loading screen itself, after its card has turned to the mode page: the second
+  `(882, 480)` tap lands on a load already running. One Play tap is enough.
+- **A load's length is the machine's**: 14 s from the tap on a quiet machine, 53 s at a load average of 40, both
+  sitting at 98 % for the difference. A readout stuck at 56 or 57 % is different: the load never reached its first
+  milestone.
+- **This save's map** (Events 1 to 3 passed): Queens Mall is the node at `(295, 60)`; an unlock banner covers
+  x 88 to 408, y 80 to 132.
+- Two of five boots hung on "Sony Computer Entertainment presents" (the hang above), both at a load average of 40. The
+  script kills its Vita3K by pid on any exit, so a retry is the same command.
+- The headless display is `weston` plus `Xwayland`, not `Xvfb`; stop the pair by the pids in
+  `<profile>/vc/pipeline.json` afterwards (the script leaves the display up for the next run).
+
 ## What a frame is, legally
 
 A screenshot of the running game is game content, so no frame is committed.

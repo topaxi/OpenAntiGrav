@@ -38,9 +38,10 @@ Behaviour, the per-title table and the measured runs:
   them, and the tip's "Extreme kicks in automatically in the trickiest parts".
 - **HD's pause-menu row** (`Pilot Assist` between Continue and Game Options) is not in this
   build's pause menu; the CONTROLS row is the only switch.
-- **Omega's `2048_hud` skin** carries 2048's single `PilotAssist` icon instead of HD's four widgets; when
-  a race selects that set (open in the Omega HUD thread), the indicator needs a 2048-dialect `assist`
-  rule for it. Omega's default roots draw HD's four widgets from their own layouts (wired 2026-10-11).
+- **Omega's `2048_hud` skin** carries 2048's single `PilotAssist` icon instead of HD's four widgets; a
+  race on a `Data\Environments2048\` circuit selects that set since `omega-2048-hud-laps`
+  (`oag_omega::hud::ART_2048`, `assist: None`, so the plate draws nothing there yet): it needs a
+  2048-dialect `assist` rule for it. Omega's default roots draw HD's four widgets from their own layouts (wired 2026-10-11).
 - **2048 live**: nothing of 2048's assist was run on Vita3K.
 - **Normal measured only at its weakest.** The demo never steers, and 2048's Normal carries
   `notInUseStrength 0.1`, read (confidence 65) as the strength while the player is not

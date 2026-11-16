@@ -66,8 +66,9 @@ def refusals(prov, profile, pair_kind=None):
     elif armed != True and armed is not False and pair_kind in ("race", "zone"):  # noqa: E712 - "unknown" is a string
         out.append(("autopilot_timer", "a %s state is flown on the Autopilot and its arming was not recorded" % pair_kind))
     lag = prov.get("presented_lag", {})
-    # A menu is a still: no tick, pose or HUD text to be one frame older than the picture (`compare_menu.py`).
-    if pair_kind != "menu" and (lag.get("value") is None or lag.get("basis", "unknown") == "unknown"):
+    # A menu is a still: no tick, pose or HUD text to be one frame older than the picture (`compare_menu.py`). So is a
+    # loading screen: its text is the disc's and the bar's fill is not locked between the two sides.
+    if pair_kind not in ("menu", "loading") and (lag.get("value") is None or lag.get("basis", "unknown") == "unknown"):
         out.append(("unknown_lag", "presented_lag %s" % json.dumps(lag)))
     accepted = {o.get("rule") for o in prov.get("overrides", []) if o.get("reason")}
     return [(r, d) for r, d in out if r not in accepted]
@@ -219,8 +220,8 @@ def backfill_pair(rec, rel):
             ck, cbasis = "savestate_restore", ("inferred: the state is a SAVESTAT and compare-rerender-all restored it (its --hd-cold "
                                                "arrived afterwards); pair.json predates the capture_path field")
         lag = {"value": 3, "unit": "ticks", "basis": "measured",
-               "what": "HUD clock text vs RAM (13 grid pairs); picture not corrected: the RSX had presented the paused frame "
-                       "(hull check on hd-race/talons-pack), per-tick picture lag not measured"}
+               "what": "HUD clock text vs RAM (13 grid pairs); picture not corrected; on a moving craft the frame was measured 0 to 3 ticks "
+                       "older than the RAM read (docs/tools/compare-page.md, \"A moving HD craft\")"}
     elif profile == "pulse-ps2":
         ck, cbasis = "savestate_restore", "pcsx2-pulse-pair.py always loads the .p2s state"
         lag = {"value": 4.25, "unit": "seconds", "basis": "measured",
@@ -375,6 +376,8 @@ def selftest():
     menu = dict(good_hd, pair_kind="menu", presented_lag={}, autopilot={"armed": "unknown"})
     assert refusals(menu, "hd-fury") == [], "a menu pair from a cold boot needs no lag and no Autopilot record"
     assert [r for r, _ in refusals(dict(menu, capture_path={"kind": "savestate_restore"}), "hd-fury")] == ["hd_savestate_scenery"], "a menu from a restore"
+    loading = dict(menu, pair_kind="loading")
+    assert refusals(loading, "hd-fury") == [], "a loading pair from a cold boot needs no lag and no Autopilot record"
     over = dict(armed, overrides=[{"rule": "autopilot_timer", "reason": "state predates the field, looked at"}])
     assert refusals(over, "pulse-psp") == [], "an explicit override with a reason passes"
     assert [r for r, _ in refusals(dict(armed, overrides=[{"rule": "autopilot_timer", "reason": ""}]), "pulse-psp")] == ["autopilot_timer"], "an override needs a reason"

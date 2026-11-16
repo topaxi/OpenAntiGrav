@@ -36,7 +36,9 @@ pub(super) fn output(
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -44,6 +46,7 @@ pub(super) fn output(
     let grade = grade_buffer(device, "presentation grade", graded);
     let bind_group = bind(device, layout, sampler, &grade, &view);
     Ok(Output {
+        texture,
         view,
         bind_group,
         grade,

@@ -5,6 +5,12 @@
 //! lines broke both caps in `scripts/check-file-size.py`); shared fixtures stay
 //! in [`super`].
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use super::*;
 
 #[test]

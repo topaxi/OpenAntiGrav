@@ -81,6 +81,42 @@ and a `Loyalty` field Pure lacks, so every field from `Medal` on sits one slot e
 (`0x088b4f88`) resolves the literal `asSelected` (`0x08a52400`) to the class being
 played: a row with `class="asSelected"` is **per class**.
 
+## `Definition_IsUnlocked` (`0x088b43d4`) and the dev-unlock byte
+
+Confidence **90**. Pure's counterpart of Pulse's `Definition_IsUnlocked`
+([race-box-screens.md](../psp-pulse-usa/race-box-screens.md), "`Definition_IsUnlocked` and the
+two-axis unlock read"), found by following `Unlock_ParseElement`'s record to its consumer: the `Class`
+accessor `0x088b4f88` (`asSelected`) has one caller `0x088b4dcc`, and that has one caller, this
+function. It has thirty callers (`0x0880e0d0`, `0x088b17c4`.. `0x08a420ac`), none read individually here.
+
+What it does, read off the disassembly:
+
+1. `+0xa1` nonzero (a hard-hidden definition) returns `false` at once.
+2. `sceKernelGetGPI() & 1` (the import stub `FUN_08a4302c`, `jal 0x0023f02c` unrelocated), else **`*(*0x08b17794 + 0x381)`**: a nonzero
+   byte returns `true` for every definition. The loaded code reads `lui a0, 0x08b1; lw a0, 0x7794(a0);
+   lbu a0, 0x381(a0)` (read out of PPSSPP's RAM at `0x088b4404`, `0x088b442c`, `0x088b4430`: `0x3c0408b1`, `0x8c847794`,
+   `0x90840381`); the pointer reads `0x08e759a0` on the USA disc after the Main Menu (two boots).
+3. A null list (`+0xa4`) returns `true`. Otherwise it walks the `<Unlock>` records (`next` at `+0x04`): a
+   row whose context filter `0x088b4c80` returns `0` is skipped; for a row with byte `+0x00` (`Exclusive`)
+   clear it ANDs the class check `0x088b4dcc` (when `0x088b5168` does not return `0xff`) and the medal check
+   `0x088b4f2c` (when `0x088b5248` is nonzero) into a running result; for a row with it set, the first of
+   those two checks that passes returns `true`. As decompiled; the rows' combine was not run live.
+   The shape is Pulse's, with the `Loyalty` and `Grid` checks absent.
+
+**Confirmed live (2026-11-11, `gallery-pure`, PPSSPP v1.20.4, USA disc, one profile, one boot).** With
+the byte `0`, League Selection lists ALPHA only. Written to `1` through the debugger (a plain memory write
+with the CPU running) and the screen rebuilt, it lists ALPHA, BETA and CLASSIC, and Track Selection lists
+Beta's Sinucit, Citta Nuova, Sebenco Climb and Sol 2 and the Classic league's Karbonis, Sagarmartha, Manor
+Top and Mandrashee; all eight were raced in Time Trial and paired against ours
+([compare-page.md](../../../tools/compare-page.md), "Pure: eight more circuits through the dev-unlock
+byte"). The byte lives in the loaded profile, so it has to be written after the profile loads and before
+League Selection is built, and a boot or profile load clears it. `scripts/psp-pure-walk.py --unlock`
+does it.
+
+Not read: the gate's `sceKernelGetGPI` branch (a devkit pin PPSSPP reads as zero), the three predicates
+`0x088b4c80`, `0x088b5168`, `0x088b5248` beyond what their call sites show, and the profile object's own
+layout (`+0x381` is the only field of it named here).
+
 ## Confirmed shape, and the one thing the executable does not say
 
 The shipped file authors 17 rows and no `Exclusive` attribute, so they are ANDed

@@ -962,7 +962,7 @@ alpha first. Reversed, HD's `WO_CANNON_SPARKS_DETONATOR` is a white-to-blue
 fade, which is what a pulse cannon looks like.
 
 Strings - the name field, emitter names, texture paths - are byte arrays and
-read as-is. That is why the parser takes an `oag_formats::ByteOrder`
+read as-is. That is why the parser takes an `oag_bytes::ByteOrder`
 *parameter* and never byte-swaps the whole file: a blanket swap would mangle
 every one of them.
 
@@ -1295,8 +1295,8 @@ confidence scores in its own module doc; the summary:
   time.
 
 Confidence **85** for the header layout and positional-addressing rule;
-**40** for the two unknown header bytes and for what distinguishes the six
-texture-less root emitters from the twenty-nine with one. The **25.62%**
+**40** for the two unknown header bytes. (The six root emitters once
+counted as texture-less were 4 bits per pixel; no PSP emitter lacks one.) The **25.62%**
 coverage figure and the "past its last resolved string, unaccounted for"
 framing in the first "Not determined" bullet below are now stale by this
 section's own **56.76%** measurement - left in place with the correction
@@ -1416,6 +1416,36 @@ ones that animate - `hi > 0` and a grid of more than one frame - are:
 
 The PS2 and HD corpora parse unchanged (`pob_ground_truth.rs`).
 
+### The atlas grid word - 2026-11-03
+
+**`+0x9a0` is one `u32` read in the file's byte order, columns in the high half, rows in the low half** (confidence 90).
+It was read as two `u16` fields with the first as columns, which is the right order on HD's big-endian
+files and the wrong one on every little-endian title (PSP, PS2, Vita, PS4). The sprite templates' own
+grid (`+0x880`, `initial.rs`) was already read as the word.
+
+Evidence:
+
+- **The original's quads.** A GE dump of Pure's wreck blast (PPSSPP, `psp-pure-usa/wreck-big-blast.md`) holds
+  two 64x128 CLUT4 alpha-over draws, the debris root and `Debris2`. Their vertex UVs step `0, 0.5` across and
+  `0, 0.25, 0.5, 0.75` down: cells 0.5 wide and 0.25 tall, two columns of four rows. The word on disc is
+  `04 00 02 00`: low half 4, high half 2.
+- **The art.** The debris sprite decodes (swizzled CLUT4, 64x128) to eight shards in a 2x4 grid of 32x32 cells.
+  Pulse's `WO_PLASMA_FLASH` (128x64) and `WO_LEACHBEAM_CHARGING` (64x128), whose words read `1, 2`, are two
+  frames side by side (2 columns, 1 row), not a 1x2 stack.
+- **Wipeout 2048's own sprites.** Of 24 emitters with a non-square grid whose `.gxt` ships, the word gives
+  square cells on 22 (1024x512 on 8x4: 128x128) where the old order gave 256x64; the two it does not are
+  `WO_TRAIL_HITSHIP`/`_RED` `CORE_IMPACT` (256x512, 4x2: 64x256 tall cells).
+- **HD is unchanged** (big-endian: the high half is the first `u16`, as before; `8, 4` on 1024x512 sprites).
+
+Before, Pure's debris cells were 16x64 slivers through the shards, stretched to square quads: the hard dark
+rectangles over the wreck blast. Effects whose grid changes: Pulse PSP/PS2 `WO_PLASMA_FLASH`, `WO_PLASMA_HEAD`
+(`plasma_spikes`) and `WO_LEACHBEAM_CHARGING`; Pure's debris, plasma flash and plasma head; every 2048 and
+Omega emitter with a non-square grid (the 24 above in 2048; Omega's census is not run, its `.gnf` sprites are
+not read here). Checked visually on Pulse's plasma muzzle flash (it now picks a whole frame instead of a strip
+across both). Pinned by `oag_pob`'s `a_big_endian_blob_parses_to_exactly_what_its_little_endian_twin_does`
+(fixture word `2 << 16 | 4`) and
+`oag_fx`'s `an_atlas_grid_is_columns_in_the_high_half_so_its_cells_are_square` (ground truth).
+
 ### The sprite templates at `+0x9a4`/`+0x9a8` - 2026-09-30
 
 An emitter can carry **sprite templates**: records the instance turns into one
@@ -1503,6 +1533,30 @@ first tick's ageing for a template particle. An emitter's particles are not
 treated that way - unmeasured. (Their roll and aspect are a different law: a
 constant `+0x4c8` aspect and a roll that is always a rate; see the emitter
 record's table above.)
+
+### An HD template names its sprite at `+0x87c` - 2026-11-15
+
+Wipeout HD's `.pob` files embed no sprite pixels: an emitter names its texture
+at `+0x4c4` and the caller supplies it (the "sprites beside the effect"
+convention). A **sprite template** record (previous section) names its own
+texture elsewhere: at **`+0x87c`**, a resource-base-relative offset to the
+developer path, the same convention as the emitter's field. Read on the HD
+disc, confidence **90**: all **38** template records name a `.tga` there, and
+every one is shipped as a `.gtf` of the same stem; read at the emitter's
+`+0x4c4`, none does. `oag_pob::texture::TEMPLATE_TEXTURE_PATH_FIELD`,
+`ParticleSystem::template_texture_path`;
+`crates/pob/tests/pob_ground_truth.rs` holds the census. The Plasma's head
+templates are two of them (`glow3` on `WO_RING_BW_64x64`, `glow2` on
+`psysed_default_glow`).
+
+Played only for the effects a title lists (`oag_title::effects` `templates`,
+`oag_fx::psys::Effect::parse_listed`): on HD, `WO_PLASMA_HEAD`'s and
+`WO_PLASMA_CHARGING`'s.
+
+**2048 and Omega: checked, applies, not wired.** 2048's 36 template records
+and Omega's 55 all name a `.tga` at `+0x87c`
+(`crates/fx/tests/psys_2048_ground_truth.rs`, `psys_omega_ground_truth.rs`);
+neither title lists an effect for its templates yet.
 
 ## Effects Pulse names that 2048 and Omega never author - 2026-10-06
 

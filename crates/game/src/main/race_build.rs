@@ -110,13 +110,13 @@ impl BuildWorker {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn spawn(request: Request, loaded: race::Loaded) -> Self {
         let allocation = request.allocation;
-        let guard = oag_game::gpu_workers::Guard::enter("race-build");
+        let guard = oag_thread::gpu_workers::Guard::enter("race-build");
         let handle = std::thread::Builder::new()
             // Named like `race-load` beside it, so a debugger and `top` say
             // which thread the loading screen is waiting on.
             .name("race-build".to_string())
             .spawn(move || {
-                let _guard = guard;
+                guard.hold_to_thread_end();
                 build(request, loaded)
             })
             .ok();
@@ -271,7 +271,10 @@ fn warm(staged: Staged) -> Built {
     // compiled them.** Several backends defer that to the first real draw, so
     // the scene draws one frame here, still behind the loading screen. See
     // `RaceStage::warm_up`.
-    if let Ok(race_stage) = &mut stage {
+    // Not once the process is exiting: nobody sees the frame, and the exit waits for it.
+    if let Ok(race_stage) = &mut stage
+        && !oag_thread::gpu_workers::stopping()
+    {
         race_stage.warm_up(
             &gpu,
             &warm_target,
@@ -306,7 +309,7 @@ pub(crate) fn drop_off_thread(stage: Box<RaceStage>) {
 /// See the wasm twin above: the web build has no thread to drop it on.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn drop_off_thread(stage: Box<RaceStage>) {
-    let guard = oag_game::gpu_workers::Guard::enter("race-drop");
+    let guard = oag_thread::gpu_workers::Guard::enter("race-drop");
     let spawned = std::thread::Builder::new()
         .name("race-drop".to_string())
         .spawn(move || {

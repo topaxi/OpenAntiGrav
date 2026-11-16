@@ -6,6 +6,7 @@
 //! Generic use, not `dyn`: monomorphisation keeps the float operations exactly
 //! as they were when the code named `Ship` directly.
 
+use oag_core::math::Vec3;
 use oag_physics::{ShipState, params::Dimensions};
 
 use crate::disruption::Disruption;
@@ -25,6 +26,12 @@ pub trait Craft {
     /// The authored hull dimensions, which size a blast's reach and a beam's
     /// anchor.
     fn dimensions(&self) -> Dimensions;
+
+    /// The hull's `Ship Muzzle` locator in the hull's own model space, the
+    /// weapon node a Plasma bolt charges on and leaves from
+    /// ([`crate::projectile::plasma::muzzle`]); `None` where the hull authors
+    /// none or its class id is unread.
+    fn muzzle(&self) -> Option<Vec3>;
 
     /// Seconds of slowdown credited this tick and not yet drained into the
     /// engine's timer; see [`crate::slowdown::drain`].
@@ -49,6 +56,17 @@ pub trait Craft {
 
     /// [`Self::disruption`], writable.
     fn disruption_mut(&mut self) -> &mut Disruption;
+
+    /// The up of the track sample the craft is located on (the original's
+    /// `-(craft+0xb10)`), or `None` where it is not known or the title does not
+    /// use it. See [`Self::launch_normal`].
+    fn track_up(&self) -> Option<Vec3>;
+
+    /// The normal a Rocket, Missile, Shuriken or Plasma bolt is born carrying:
+    /// the located track's up, else the craft's own.
+    fn launch_normal(&self) -> Vec3 {
+        self.track_up().unwrap_or_else(|| self.physics().body.up())
+    }
 
     /// How far round the circuit the craft is, as the standings last computed
     /// it, or `None` before it has been located.

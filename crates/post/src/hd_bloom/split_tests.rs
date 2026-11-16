@@ -17,6 +17,7 @@ fn params() -> Params {
         tone_adaption_boost: 1.0,
         tone_darkening_clamp: 0.9,
         tone_maximum_brightness: 1.0,
+        final_half_texel: false,
         // No glow: the exposure is what is under test.
         frame_contribution: 0.0,
         alpha_contribution: 0.0,

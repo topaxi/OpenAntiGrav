@@ -108,15 +108,19 @@ collapsing at the same moment.
 
 ## Omega and 2048
 
-- **Omega**: not checkable in this pass: the code was not located statically, and there is no
-  live path. No `12.0f` immediate sits near the craft code (the five
-  `0x41400000` immediates are elsewhere, so the box extents load from rodata), and the
-  `vminss` census in `0x01310000`-`0x01330000` holds no steering ramp (`FUN_01320c10` is a
-  geometry clamp). Next: Omega's craft update from `Craft_UpdateSurfaceProbes` (`0x0131b510`,
-  reached by a virtual call, so no static caller), then its steering by the class block's
-  `Turning` offsets. No PS4 emulator is in the toolchain, so Omega keeps Pulse's laws
-  (`craft_laws: None`).
-- **2048**: not checked.
+- **Inertia mass: ported, both read (2026-11-11).** 2048 v1.04 calls
+  `Body_SetBoxInertia(body, 1.0, 12, 8, 12)` with immediates in both ship constructors
+  (`0x811b975e`, `0x811c8a7c`), and Omega's two constructors store the folded mass-`1.0` tensor
+  `(17.3333, 24, 17.3333)` and its reciprocals (`0x0130afa7`..`0x0130b01e`,
+  `0x0130f5e2`..`0x0130f676`). Static, confidence 84 each:
+  [vita-2048-eu-v104/craft-laws.md](../vita-2048-eu-v104/craft-laws.md),
+  [ps4-omega-eu/craft-laws.md](../ps4-omega-eu/craft-laws.md). Both titles'
+  `CRAFT_LAWS::inertia_mass` are `measured(1.0)`; the `0.9` they carried was Pulse's.
+- **Steering clamp: open on both**, not checked. Omega's steering was not found among the
+  `vminss` users of `0x01310000`-`0x01330000` (`FUN_01320c10` is a geometry clamp); the route
+  left is its craft update from `Craft_UpdateSurfaceProbes` (`0x0131b510`, reached by a virtual
+  call), then the class block's `Turning` offsets. Both titles keep
+  `steer_ramp_clamped` `inherited(false, "Pulse")`.
 
 ## Wired
 

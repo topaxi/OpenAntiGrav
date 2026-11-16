@@ -117,12 +117,7 @@ pub fn draw(sheet: &Sheet, at: (f32, f32)) -> Option<Draw> {
     let placed = sheet.get(SRC)?;
     Some(Draw::Sprite {
         rect: [at.0, at.1, WIDTH, HEIGHT],
-        uv: [
-            placed.x as f32,
-            placed.y as f32,
-            placed.width as f32,
-            placed.height as f32,
-        ],
+        uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
         color: [1.0, 1.0, 1.0, 1.0],
     })
 }
@@ -142,6 +137,7 @@ mod tests {
             ("pure", oag_pure::TITLE.cursor),
             ("hd", oag_hd::TITLE.cursor),
             ("2048", oag_2048::TITLE.cursor),
+            ("omega", oag_omega::TITLE.cursor),
         ];
         for (name, svg) in sources {
             let sheet = sheet(svg);
@@ -164,6 +160,30 @@ mod tests {
             // And the far corner is clear: the arrow does not fill its box.
             let alpha = sheet.alpha_at(placed, 0.97, 0.97).unwrap();
             assert!(alpha < 0.05, "{name}: the far corner is painted ({alpha})");
+        }
+    }
+
+    /// The arrow narrows to its tip, and its head reaches the same place on every title: a mitre
+    /// clipped by the box reads as a flat top, and a shallower edge as a different arrow.
+    #[test]
+    fn every_title_cursor_is_one_arrow_with_a_point() {
+        let sources = [
+            ("pulse", oag_pulse::TITLE.cursor),
+            ("pure", oag_pure::TITLE.cursor),
+            ("hd", oag_hd::TITLE.cursor),
+            ("2048", oag_2048::TITLE.cursor),
+            ("omega", oag_omega::TITLE.cursor),
+        ];
+        for (name, svg) in sources {
+            let sheet = sheet(svg);
+            let placed = sheet.get(SRC).unwrap();
+            let ink = |x: f32, y: f32| sheet.alpha_at(placed, x / 24.0, y / 32.0).unwrap() > 0.5;
+            // Half a unit down: the tip is at most about a unit wide there.
+            let wide = (0..48).filter(|&x| ink(x as f32 / 2.0, 0.5)).count();
+            assert!(wide <= 5, "{name}: the tip is {wide} half-units wide");
+            // The head's top edge passes clear of a point a shallower arrow covers.
+            assert!(!ink(15.5, 8.5), "{name}: the head bulges past its edge");
+            assert!(ink(10.0, 12.0), "{name}: the head is hollow");
         }
     }
 

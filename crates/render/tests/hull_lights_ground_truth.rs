@@ -233,3 +233,41 @@ fn arc_primes_floor_light_lights_the_hull_where_the_sweep_has_put_it() {
     let gone = point_slots("10_Track\\track", 2, under_it_at_rest, 2.0, 255);
     assert_eq!(white(&gone), None, "{gone:?}");
 }
+
+/// The colour the hull's extra pass is drawn in, against a recorded GE list of Metropia
+/// White's grid: the three `TEXMAPMODE` 2 hull PRIMs and the canopy's carry
+/// `MATERIALAMBIENT` `0x72a6b7` (R 183, G 166, B 114). The hull's own light list in that
+/// frame pins the scale bytes: the ambient `(24, 31, 40)` needs a scale of 199 to 201 and
+/// the first directional's clamped red `123` exactly 124. Tech de Ra's grid, three bright
+/// directionals at 249, reads `0xffffff`.
+/// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "The extra pass's colour is the
+/// light the hull stands in".
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_extra_pass_colour_is_the_material_word_the_ge_was_handed() {
+    use oag_mesh::mesh_render::HullPassColour;
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
+    let mut pass = |circuit: &str| {
+        let blob = archives
+            .read_name(&format!(r"Data\Environments\{circuit}\track.vex"))
+            .expect("track.vex");
+        let nodes = vex::nodes(&blob).expect("nodes");
+        HullPassColour::from_track(&blob, &nodes).expect("the circuit authors lights")
+    };
+    let bytes = |rgb: [f32; 3]| rgb.map(|c| (c * 255.0).round() as u32);
+    let metropia = pass("02_Track");
+    for ambient in 199..=201 {
+        assert_eq!(
+            bytes(metropia.at([ambient, 124], [0.0; 3])),
+            [183, 166, 114],
+            "ambient scale {ambient}"
+        );
+    }
+    // The hull's lit colours in the same frame clamp that directional's red to a byte
+    // first; the returned colour does not, which is where its red comes from.
+    assert!(bytes(metropia.at([200, 255], [0.0; 3]))[0] == 255);
+    assert_eq!(bytes(pass("04_Track").at([249, 249], [0.0; 3])), [255; 3]);
+}

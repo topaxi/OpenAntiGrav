@@ -11,7 +11,10 @@ the five title crates (text only, no compiler) and fails when
   and `set`/`none` for a model field or an effect trigger;
 - the provenance word differs from the source, **where the source carries an
   `Origin`**: `ghost_static`, `cockpit_hit`, the `effects.*` rows and the two `Sourced`
-  bools of `Weapons` (`autopilot_absorb_cancels`, `autopilot_pad_grants`).
+  bools of `Weapons` (`autopilot_absorb_cancels`, `autopilot_pad_grants`,
+  `pads_stamp_in_eliminator`, `launch_normal_is_track_up`,
+  `floor_arms_steer_to_ride_point`, `plasma_release_at_display_scale`) and the
+  `Sourced` count `leach_beams`.
 
 What it does not check, and the page says so: the provenance of a `Weapons`
 axis or of any other `WeaponModels` field (comments only), every cell of the
@@ -46,6 +49,10 @@ EFFECT_ROWS = {
     "effects.weapon_spark": "WeaponSpark",
     "effects.shield_absorb": "ShieldAbsorb",
     "effects.bomb_rays": "BombRays",
+    "effects.bomb_glow": "BombGlow",
+    "effects.disruptor_head": "DisruptorHead",
+    "effects.disruptor_explo": "DisruptorExplo",
+    "effects.disruptor_launch": "DisruptorLaunch",
 }
 
 # Where each title's `Effects` are built. 2048 and Omega build them in lib.rs.
@@ -185,6 +192,11 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
             cells.setdefault(f"weapons.{field}", {})[title] = (path_of(weapons[field]), None)
         drain = weapons["leach_drain"].rsplit("::", 1)[-1]
         cells.setdefault("weapons.leach_drain", {})[title] = (drain, None)
+        # `Sourced::chosen(8)`: the count is the value, the constructor the provenance.
+        beams = re.search(r"Sourced::(\w+)\(\s*(\d+)", weapons["leach_beams"])
+        if beams is None:
+            raise SystemExit(f"check-weapon-lineage: {title}: `leach_beams` is not a `Sourced` count")
+        cells.setdefault("weapons.leach_beams", {})[title] = (beams.group(2), beams.group(1))
         # `QuakeHit::WaveHeight { origin: Origin::X }`: the variant is the value,
         # and the source carries an `Origin`, so the provenance is checked.
         quake = weapons["quake_hit"]
@@ -193,13 +205,40 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
 
         # `Sourced::measured(true)`: the bool is the value (`set` is true, `none`
         # is false) and the constructor is the provenance, which is checked.
-        for field in ("autopilot_absorb_cancels", "autopilot_pad_grants"):
+        for field in (
+            "autopilot_absorb_cancels",
+            "autopilot_pad_grants",
+            "pads_stamp_in_eliminator",
+            "launch_normal_is_track_up",
+            "floor_arms_steer_to_ride_point",
+            "plasma_release_at_display_scale",
+        ):
             sourced = re.search(r"Sourced::(\w+)\(\s*(true|false)", weapons[field])
             if sourced is None:
                 raise SystemExit(f"check-weapon-lineage: {title}: `{field}` is not a `Sourced` bool")
             word = {"measured": "measured", "chosen": "chosen", "inherited": "inherited"}[sourced.group(1)]
             value = "set" if sourced.group(2) == "true" else "none"
             cells.setdefault(f"weapons.{field}", {})[title] = (value, word)
+
+        # `Sourced::measured(OwnCraftBox::Holds)`: the variant is the value.
+        own_box = re.search(
+            r"Sourced::(\w+)\(\s*[\w:]*OwnCraftBox::(\w+)", weapons["own_craft_box_hides_track"]
+        )
+        if own_box is None:
+            raise SystemExit(f"check-weapon-lineage: {title}: `own_craft_box_hides_track` is not a `Sourced` OwnCraftBox")
+        cells.setdefault("weapons.own_craft_box_hides_track", {})[title] = (own_box.group(2), own_box.group(1))
+
+        # `Sourced::measured(OpponentFire::HD)`: the const is the value.
+        fire = re.search(r"Sourced::(\w+)\(\s*[\w:]*OpponentFire::(\w+)", weapons["opponent_fire"])
+        if fire is None:
+            raise SystemExit(f"check-weapon-lineage: {title}: `opponent_fire` is not a `Sourced` OpponentFire")
+        cells.setdefault("weapons.opponent_fire", {})[title] = (fire.group(2), fire.group(1))
+
+        # `Sourced::inherited(BlastPush::Posted, "...")`: the variant is the value.
+        push = re.search(r"Sourced::(\w+)\(\s*[\w:]*BlastPush::(\w+)", weapons["blast_push"])
+        if push is None:
+            raise SystemExit(f"check-weapon-lineage: {title}: `blast_push` is not a `Sourced` BlastPush")
+        cells.setdefault("weapons.blast_push", {})[title] = (push.group(2), push.group(1))
 
         models = models_block(title)
         for field, value in models.items():

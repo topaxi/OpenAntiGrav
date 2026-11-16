@@ -7,6 +7,7 @@
 
 use super::*;
 use oag_gameplay::PlayerInputs;
+use oag_race::recovery::{DISTANCE_RESET_TICKS, RESCUE_TICKS, STALL_TICKS};
 
 /// Craft used to pass through each other, which is what this catches.
 ///
@@ -102,7 +103,7 @@ fn craft_that_are_not_touching_are_left_alone() {
 #[test]
 fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(one_rocket_table());
+    race.sim.weapons = Some(Arc::new(one_rocket_table()));
     // Whether to fire is `Race::opponent_decides`'s question, asked by the
     // caller; this asks only who owns what leaves the rails.
     let firing = 3usize;
@@ -208,7 +209,7 @@ fn a_craft_on_the_grid_can_see_somebody() {
 }
 
 /// the AI landed. That the field then goes somewhere is
-/// `race_ground_truth::the_ai_drives_the_field_along_the_track`, on real
+/// `race_field_ground_truth::the_ai_drives_the_field_along_the_track`, on real
 /// geometry, where it can be true.
 ///
 /// # This fixture has a horizon, and it is [`STALL_TICKS`] long
@@ -319,7 +320,7 @@ fn giving_up_on_one_craft_leaves_the_others_recoverable() {
     race.sim.respawns_in_a_row[1] = RESPAWN_GIVE_UP;
 
     let away = race.sim.world.ships[2].physics.body.position + Vec3::Y * 100_000.0;
-    for _ in 0..=RESCUE_TICKS {
+    for _ in 0..DISTANCE_RESET_TICKS {
         race.sim.world.ships[1].physics.body.position += Vec3::Y * 100_000.0;
         race.sim.world.ships[2].physics.body.position = away;
         race.tick(&PlayerInputs::none());

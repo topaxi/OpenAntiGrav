@@ -33,6 +33,43 @@ fn a_substitute_takes_the_disc_glyphs_box_and_advance() {
     assert!(ink > 0, "the substitute is drawn into the atlas");
 }
 
+/// An outlined face takes opacity from the body mask alone (`ui.wesl`, the two passes), so an added
+/// cell whose mask were solid would draw as a filled box. Pulse PS2's menu face is one.
+#[test]
+fn an_outlined_face_keeps_a_substitutes_empty_pixels_empty() {
+    let font = oag_texture::fnt::Font {
+        line_height: 8,
+        unknown: 0,
+        width: 8,
+        height: 8,
+        palette: vec![[0, 0, 0, 0], [255, 255, 255, 255], [0, 0, 0, 255]],
+        indices: vec![1; 64],
+        glyphs: vec![oag_texture::fnt::Glyph {
+            codepoint: u16::from(b'A'),
+            width: 8,
+            height: 8,
+            u0: 0,
+            u1: 8,
+            v0: 0,
+            v1: 8,
+            advance: 8,
+        }],
+    };
+    assert!(font.is_outlined(), "the fixture must be an outlined font");
+    let swapped = Atlas::from_font(&font).with_prompts(&PROMPTS);
+    let cell = swapped
+        .cell(sub_char(0, art_index("xbox-a").unwrap()))
+        .expect("a cell was added");
+    for y in 0..cell.height {
+        for x in 0..cell.width {
+            let at = ((cell.y + y) * swapped.width + cell.x + x) as usize;
+            assert_eq!(swapped.luma[at], swapped.coverage[at], "at +{x},+{y}");
+        }
+    }
+    let at = (cell.y * swapped.width + cell.x) as usize;
+    assert_eq!(swapped.coverage[at], 0, "the fixture's corner is empty");
+}
+
 #[test]
 fn a_stand_in_the_atlas_lacks_gets_no_cells() {
     let swapped = Atlas::build().with_prompts(&Prompts {

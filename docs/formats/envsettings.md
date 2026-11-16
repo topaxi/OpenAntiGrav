@@ -179,7 +179,16 @@ draw through the stand-in rig, because the viewer's job is to show what is on
 the disc clearly rather than as the circuit stages it. The authored rig reaches
 a race and nothing else.
 
-## The one file that is not a circuit's
+## The front end's files
+
+Seven more files under `data/fe/` light the front end's models: `fe.envsettings`,
+`fe.fury.envsettings`, their `.track` and `.medal` variants. They author the same `Lighting.`,
+`Fog.` and `HDR and Bloom` keys as a circuit's, and the executable loads one by front-end style
+into a block of the front end's own
+([front-end-model-lighting.md](../ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md)).
+Ship Select's craft is lit by one of them (`fe.fury.envsettings` or `fe.envsettings`, by style; Omega's `fe.EnvSettings`), read through the reader a circuit's file takes (`oag_raceplay::authored_light`); the other screens' models and the `.track` and `.medal` variants are not read.
+
+## The one file that is not a lighting file
 
 `/data/fe/fury.envsettings`, 436 lines, with `Feedback`, `Equaliser` and
 `Music Pulse` keys for the Fury front end. It parses through the same reader and
@@ -317,7 +326,9 @@ intensity`), which 2048's carry none of: **checked, differs**. The executable
 multiplies the diffuse one into the diffuse colour where the light is built (default
 1.0), so Omega's sun is the product, now read
 ([sun-intensity.md](../ghidra/functions/ps4-omega-eu/sun-intensity.md)). The specular
-pair stays unwired for the RGB-against-scalar reason below.
+pair is read on Omega too (2026-11-16, `panelmap-sun`): `Sun specular colour` times
+`Sun specular intensity` fills `mesh_render::Light::sun_specular`, which only the panel-map road's
+sun lobe reads; 2048 stays unwired for the reason below.
 
 **2048 additionally authors a literal `"Lighting.Sun color"` key, spelled
 exactly like HD's, and it is deliberately not wired as the diffuse term.**
@@ -334,8 +345,9 @@ as a light-rig colour on the strength of its name alone is exactly the
 "plausible-looking stand-in" `CLAUDE.md` warns against - it stays unwired
 until a real consumer, or the confirmed absence of one, is found.
 
-**`"Lighting.Sun specular colour"` is left unwired too, for a different
-reason: a shape mismatch, not an unresolved key.** `mesh_render::Light::authored`
+**On 2048 `"Lighting.Sun specular colour"` is left unwired too, for a different
+reason: a shape mismatch, not an unresolved key** (Omega reads it into a separate RGB field,
+`Light::sun_specular`, because its panel-map road has a consumer; 2048 has none). `mesh_render::Light::authored`
 takes a scalar `specular_scale`; 2048 authors a full RGB term. Reducing it to
 a scalar (a luminance, say) would be this project inventing a blend the disc
 never specifies, so it is left absent - the same as a missing key - rather
@@ -406,7 +418,13 @@ executable registers (`FUN_015c1f20`) and this crate now reads:
 - `"Tonemap.*"` and `"TonemapHDR.*"` - ten keys each (exposure
   minimum/maximum/response/time, luminance and source-colour end a/b
   coefficients, start and end angle), read whole by `EnvSettings::tonemap`.
-  **Nothing consumes them yet**: the consumer is not located.
+  Consumer and law: [tonemap](../ghidra/functions/ps4-omega-eu/tonemap.md).
+- `"Bloom.*"`, with `"BloomHDR.*"` and, in the patch, `"BloomVR.*"` - the bright pass
+  (threshold, offset, scale, power, alpha scale) and `Blend factors`, four numbers
+  (three under `BloomHDR`), read by `EnvSettings::bright_pass`. Not HD's
+  `HDR and Bloom.*`, which Omega's registrar never names.
+  Every circuit file authors `Bloom.*` whole; drawn by `oag_post::omega_tonemap`
+  ([tonemap](../ghidra/functions/ps4-omega-eu/tonemap.md), "The bloom chain").
 
 ## See also
 

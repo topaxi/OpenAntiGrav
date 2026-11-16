@@ -53,9 +53,16 @@
 //!   `byte0..=byte1` of its parameter record (mode `0`: uniform, no history),
 //!   walked as an alternate group. Its `0x29` (key off) and `0x04` (modulator)
 //!   are read but not modelled, so they stay in [`Timeline::unread`].
+//! - HD's race cues ([`WalkModel::cue_variables`]) read their operand bytes one
+//!   place over and guard on four cue variables the caller supplies: `0x22`
+//!   skips the next command on a variable, `0x1e`/`0x20` write one, `0x25` is a
+//!   random goto over marker ids `a..=b` (walked as an alternate group) and
+//!   `0x18` ends the cue; see `docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`.
 //! - `0x1a` is a **random wait** that delays the commands after it. With
 //!   [`WalkModel::tail_waits`] one that no key-on or child follows is passed
-//!   (it delays nothing audible); any other is unread.
+//!   (it delays nothing audible); with [`WalkModel::zero_waits`] one whose
+//!   operand is zero is passed (`rand16 % 1` adds nothing); any other is
+//!   unread.
 //! - Every other opcode is reported in [`Timeline::unread`], not skipped
 //!   silently: `0x1a` adds a random wait, `0x08` replaces the voice's playback
 //!   state, `0x04` starts an LFO. A timeline that met any is not the whole cue.
@@ -96,6 +103,14 @@ const RANDOM_GOTO: u8 = 0x2e;
 /// The opcode that skips the next command unless a variable holds
 /// (`Scream_OpGuard`), walked only under [`WalkModel::globals`].
 const GUARD: u8 = 0x22;
+/// The opcode that sets a cue variable (`Scream_DoGrainSetVar`).
+const SET_VARIABLE: u8 = 0x1e;
+/// The opcode that adds one to a cue variable (`Scream_DoGrainIncVar`).
+const INCREMENT_VARIABLE: u8 = 0x20;
+/// HD's random marker goto (`Scream_DoGrainGotoRandom`).
+const HD_RANDOM_GOTO: u8 = 0x25;
+/// HD's stop (`Scream_DoGrainStop`): the cue ends.
+const HD_STOP: u8 = 0x18;
 /// The opcode that hands the voice to a child cue (`Scream_OpPlayChild`'s
 /// sibling that replaces the playback state), walked as a child only under
 /// [`WalkModel::globals`]; see [`WalkModel::globals`].
@@ -157,6 +172,28 @@ pub struct WalkModel {
     /// Pass a `0x1a` random wait that nothing audible follows. Off by default so
     /// no other cue's census moves; the countdown's `HBEAT` ends on one.
     pub tail_waits: bool,
+    /// Pass a `0x1a` whose operand is zero. The handler adds
+    /// `rand16 % (operand + 1)` ticks to the next command's delay, so a zero
+    /// operand adds exactly nothing and the wait is deterministic (HD's
+    /// `speech_zone.bnk` `MR_*` lines are a delay word and a `0x1a` 0, then
+    /// their key-ons). A larger operand stays unread. Off by default so no
+    /// other cue's census moves.
+    pub zero_waits: bool,
+    /// Read the commands as HD's race-cue handlers do, with the four **cue
+    /// variables** the caller supplies (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`).
+    ///
+    /// The operand bytes sit one place over from Pulse's: `0x19` is count `a`
+    /// and stride `b`, `0x1b` a percent `a`, `0x22` variable `a`, mode `b` and
+    /// threshold `c`, `0x25` markers `a..=b`, with `a` the operand's high byte
+    /// (`word >> 16`). A guard reads `variables[a]`, `0x1e` writes one and
+    /// `0x20` adds one (clamped at 127), a child starts with a copy of its
+    /// parent's four, and a negative or out-of-range variable (HD's global
+    /// table, unread) leaves the command unread. `0x25` is walked as an
+    /// alternate group over its markers, `0x18` ends the cue, and a `0x1b` after
+    /// a key-on re-pitches the voices this handler already keyed, as the handler's
+    /// bend does. `0x08` is not walked as a child unless [`Self::globals`] is
+    /// set. `None` keeps every other reading.
+    pub cue_variables: Option<[i8; 4]>,
 }
 
 /// One waveform started at one moment.
@@ -237,6 +274,32 @@ fn guard_skips(word: u32, globals: &[i8; GLOBAL_SLOTS]) -> Option<bool> {
     })
 }
 
+/// HD's `Scream_DoGrainGuard`: whether the command after the guard `word` is
+/// skipped, or `None` for a variable outside the handler's four.
+/// The operand is `[variable, mode, threshold]`, bytes `word >> 16`, `word >> 8`
+/// and `word`; the three modes compare as [`guard_skips`] does.
+fn variable_guard_skips(word: u32, variables: &[i8; 4]) -> Option<bool> {
+    let variable = usize::try_from((word >> 16) as u8 as i8).ok()?;
+    let value = *variables.get(variable)?;
+    let mode = ((word >> 8) & 0xff) as u8 as i8;
+    let threshold = (word & 0xff) as u8 as i8;
+    Some(match mode {
+        0 => threshold <= value,
+        1 => value != threshold,
+        2 => value <= threshold,
+        _ => false,
+    })
+}
+
+/// SplitMix64, the draw behind [`Bank::cue_timelines_sampled`].
+fn splitmix64(state: &mut u64) -> u64 {
+    *state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    let mut z = *state;
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    z ^ (z >> 31)
+}
+
 /// Where a walk is: shared state that threads through children.
 struct Walk<'a> {
     model: WalkModel,
@@ -255,6 +318,8 @@ pub(super) struct Frame {
     pub(super) cue_volume: i8,
     pub(super) scale: f32,
     pub(super) bend: Option<usize>,
+    /// The handler's four cue variables ([`WalkModel::cue_variables`]).
+    pub(super) locals: [i8; 4],
 }
 
 impl Bank<'_> {
@@ -292,6 +357,7 @@ impl Bank<'_> {
             cue_volume: cue.volume,
             scale: 1.0,
             bend: None,
+            locals: model.cue_variables.unwrap_or_default(),
         };
         self.walk(cue, frame, &mut walk);
         let mut out = walk.out;
@@ -311,26 +377,67 @@ impl Bank<'_> {
     /// [`Self::cue_timelines`] under an explicit [`WalkModel`].
     #[must_use]
     pub fn cue_timelines_modelled(&self, cue: &Cue, model: WalkModel) -> Option<Vec<Timeline>> {
+        self.timelines_of(cue, model, None)
+    }
+
+    /// [`Self::cue_timelines_modelled`], and when the combinations pass
+    /// [`MAX_COMBINATIONS`] (HD's explosions draw five to seventeen independent
+    /// groups) [`MAX_COMBINATIONS`] of them drawn from `seed` instead of `None`.
+    /// Each group's pick is uniform and independent, so a play that picks one of
+    /// the drawn timelines at random is a sample of the original's draw, not the
+    /// whole space.
+    #[must_use]
+    pub fn cue_timelines_sampled(
+        &self,
+        cue: &Cue,
+        model: WalkModel,
+        seed: u64,
+    ) -> Option<Vec<Timeline>> {
+        self.timelines_of(cue, model, Some(seed))
+    }
+
+    fn timelines_of(
+        &self,
+        cue: &Cue,
+        model: WalkModel,
+        seed: Option<u64>,
+    ) -> Option<Vec<Timeline>> {
         let first = self.cue_timeline_modelled(cue, &[], model);
         let counts: Vec<u8> = first.groups.iter().map(|g| g.count.max(1)).collect();
         let total = counts
             .iter()
-            .try_fold(1usize, |n, &c| n.checked_mul(usize::from(c)))?;
-        if total > MAX_COMBINATIONS {
-            return None;
-        }
-        let mut out = Vec::with_capacity(total);
-        for combination in 0..total {
-            let mut rest = combination;
-            let picks: Vec<u8> = counts
-                .iter()
-                .map(|&c| {
-                    let pick = (rest % usize::from(c)) as u8;
-                    rest /= usize::from(c);
-                    pick
+            .try_fold(1usize, |n, &c| n.checked_mul(usize::from(c)))
+            .filter(|&n| n <= MAX_COMBINATIONS);
+        let picks: Vec<Vec<u8>> = match (total, seed) {
+            (Some(total), _) => (0..total)
+                .map(|combination| {
+                    let mut rest = combination;
+                    counts
+                        .iter()
+                        .map(|&c| {
+                            let pick = (rest % usize::from(c)) as u8;
+                            rest /= usize::from(c);
+                            pick
+                        })
+                        .collect()
                 })
-                .collect();
-            let timeline = self.cue_timeline_modelled(cue, &picks, model);
+                .collect(),
+            (None, Some(seed)) => {
+                let mut state = seed;
+                (0..MAX_COMBINATIONS)
+                    .map(|_| {
+                        counts
+                            .iter()
+                            .map(|&c| (splitmix64(&mut state) % u64::from(c)) as u8)
+                            .collect()
+                    })
+                    .collect()
+            }
+            (None, None) => return None,
+        };
+        let mut out = Vec::with_capacity(picks.len());
+        for picks in &picks {
+            let timeline = self.cue_timeline_modelled(cue, picks, model);
             if timeline.groups != first.groups {
                 return None;
             }
@@ -350,6 +457,9 @@ impl Bank<'_> {
         let mut repeat: Option<(i32, i32)> = None;
         let mut started = false;
         let mut gotos_this_tick = 0_u32;
+        let hd = walk.model.cue_variables.is_some();
+        // The grains this handler keyed itself, for a `0x1b` that follows them.
+        let mut own: Vec<usize> = Vec::new();
         let count = cue.commands as i32;
         let mut pc: i32 = 0;
         while (0..count).contains(&pc) {
@@ -375,6 +485,7 @@ impl Bank<'_> {
 
             if KEY_ON_OPCODES.contains(&opcode) {
                 if let Some(sound) = walk.sounds.iter().find(|s| s.command == command) {
+                    own.push(walk.out.grains.len());
                     walk.out.grains.push(self.keyed(sound, tick, &frame));
                     started = true;
                 } else {
@@ -385,21 +496,55 @@ impl Bank<'_> {
             {
                 started = true;
                 self.walk_child(word & 0x00ff_ffff, tick, frame, walk);
-            } else if let (GUARD, Some(globals)) = (opcode, walk.model.globals) {
+            } else if let (GUARD, Some(globals), false) = (opcode, walk.model.globals, hd) {
                 match guard_skips(word, &globals) {
                     Some(true) => pc += 1,
                     Some(false) => {}
                     None => walk.out.unread.push(opcode),
                 }
                 walk.out.passed.push(opcode);
+            } else if hd && opcode == GUARD {
+                match variable_guard_skips(word, &frame.locals) {
+                    Some(true) => pc += 1,
+                    Some(false) => {}
+                    None => walk.out.unread.push(opcode),
+                }
+                walk.out.passed.push(opcode);
+            } else if hd && (opcode == SET_VARIABLE || opcode == INCREMENT_VARIABLE) {
+                let variable = usize::try_from((word >> 16) as u8 as i8)
+                    .ok()
+                    .filter(|&v| v < frame.locals.len());
+                if let Some(v) = variable {
+                    frame.locals[v] = if opcode == SET_VARIABLE {
+                        (word >> 8) as u8 as i8
+                    } else {
+                        frame.locals[v].saturating_add(1)
+                    };
+                    walk.out.passed.push(opcode);
+                } else {
+                    walk.out.unread.push(opcode);
+                }
+            } else if hd && opcode == HD_STOP {
+                return;
             } else if opcode == RANDOM_BEND {
-                if started {
+                let percent = if hd {
+                    (word >> 16) as u8 as i8
+                } else {
+                    (word & 0xff) as u8 as i8
+                };
+                if started && !hd {
                     // Voices already keyed would be re-pitched by the handler;
                     // not modelled.
                     walk.out.unread.push(opcode);
                 } else {
-                    walk.out.bends.push((word & 0xff) as u8 as i8);
-                    frame.bend = Some(walk.out.bends.len() - 1);
+                    walk.out.bends.push(percent);
+                    let draw = Some(walk.out.bends.len() - 1);
+                    frame.bend = draw;
+                    // The bend is the handler's: the voices it already keyed
+                    // follow the new draw.
+                    for &grain in &own {
+                        walk.out.grains[grain].bend = draw;
+                    }
                 }
             } else if PASS_THROUGH.contains(&opcode)
                 || (walk.model.goto_markers && opcode == MARKER)
@@ -419,18 +564,23 @@ impl Bank<'_> {
                     // No marker is an error return: the cue ends.
                     None => return,
                 }
-            } else if walk.model.tail_waits
-                && opcode == RANDOM_WAIT
-                && self.nothing_audible_after(cue, pc)
+            } else if opcode == RANDOM_WAIT
+                && ((walk.model.zero_waits && word & 0x00ff_ffff == 0)
+                    || (walk.model.tail_waits && self.nothing_audible_after(cue, pc)))
             {
                 walk.out.passed.push(opcode);
-            } else if walk.model.vita && opcode == RANDOM_GOTO {
+            } else if (walk.model.vita && opcode == RANDOM_GOTO) || (hd && opcode == HD_RANDOM_GOTO)
+            {
                 gotos_this_tick += 1;
-                let Some(r) = self.record(word & 0x00ff_ffff, 4) else {
+                // 2048 names the markers in a parameter record, HD in the operand.
+                let (first, last, mode) = if hd {
+                    ((word >> 16) as u8 as i8, (word >> 8) as u8 as i8, 0)
+                } else if let Some(r) = self.record(word & 0x00ff_ffff, 4) {
+                    (r[0] as i8, r[1] as i8, r[2])
+                } else {
                     walk.out.unread.push(opcode);
                     return;
                 };
-                let (first, last, mode) = (r[0] as i8, r[1] as i8, r[2]);
                 let count = i32::from(last) - i32::from(first) + 1;
                 if mode != 0 || count < 1 || gotos_this_tick > MAX_GOTOS_PER_TICK {
                     walk.out.unread.push(opcode);
@@ -443,15 +593,15 @@ impl Bank<'_> {
                     stride: 0,
                 });
                 // No marker is an error return: the cue ends.
-                let Some(marker) = self.marker_of(cue, (i32::from(first) + pick) as u8, true)
-                else {
+                let id = (i32::from(first) + pick) as u8;
+                let Some(marker) = self.marker_of(cue, id, walk.model.vita) else {
                     return;
                 };
                 pc = marker - 1;
             } else if opcode == END {
                 return;
             } else if opcode == ALTERNATE {
-                let (alternates, stride) = if walk.model.hd_alternates {
+                let (alternates, stride) = if walk.model.hd_alternates || hd {
                     (((word >> 16) & 0xff) as i32, ((word >> 8) & 0xff) as i32)
                 } else {
                     ((word & 0xff) as i32, ((word >> 8) & 0xff) as i32)
@@ -588,6 +738,7 @@ impl Bank<'_> {
                 cue_volume: record_volume,
                 scale: frame.scale * f32::from(frame.cue_volume.unsigned_abs()) / 127.0,
                 bend: frame.bend,
+                locals: frame.locals,
             },
             walk,
         );

@@ -32,6 +32,7 @@ use oag_gameplay::input::{Button, Input};
 use oag_tables::fexml;
 
 use crate::prompt::{NavLog, Outcome};
+use crate::window_layout::legible;
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::menu::nav::{Dir, Nav};
 use oag_ui::screen::{self, Fill, Node, Screens, Text, argb_to_rgba};
@@ -532,7 +533,9 @@ impl TagEntry {
                 // own header behind it. Chosen, not measured.
                 y: title.y.max(panel_top + skin.line_height() * 0.3),
                 scale: skin.row_scale(),
-                color: argb_to_rgba(title.color),
+                // Authored `FEGlobals->TitleColor` (black); it reads on this panel only once
+                // `legible` swaps it for white.
+                color: legible(argb_to_rgba(title.color)),
                 border: None,
                 align: Align::parse(&title.align),
                 text: self.labels.title.clone(),

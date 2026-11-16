@@ -209,8 +209,11 @@ fresh process, so they are approximate.
 | Rollback of 12 ticks (200 ms) | 0.77 ms | 0.71 - 0.98 ms |
 | Rollback of 24 ticks (400 ms) | 1.50 ms | 1.37 - 1.87 ms |
 | The same 6 / 12 / 24 through `Race::tick` | 0.44 / 0.82 / 1.62 ms | 0.42 - 0.60 / 0.77 - 1.09 / 1.50 - 2.11 ms |
-| `snapshot_sim()` (whole `RaceSim` clone) | 63 us, 1.7 MiB | 48 - 86 us, 1.4 - 2.6 MiB |
+| `snapshot_sim()` (whole `RaceSim` clone, as it then was) | 63 us, 1.7 MiB | 48 - 86 us, 1.4 - 2.6 MiB |
 | The immutable track half of it | 47 us, 0.74 MiB | 35 - 52 us, 0.58 - 0.84 MiB |
+
+The snapshot rows are superseded by "The snapshot since the constant half is shared",
+at the end of this section.
 
 What it says.
 
@@ -227,18 +230,60 @@ What it says.
   second of 6 ticks is 360 replayed ticks a second, about 22 ms of CPU per
   second, 2.2 percent of one core. M1 (how often a real stick forces a rollback)
   is still unmeasured.
-- **A snapshot costs as much as a tick** (63 us against 65 us). A client that
-  snapshots every tick doubles its simulation CPU; one that restores from the
-  server's snapshot and snapshots only on demand does not. The track half is 75
-  percent of the clone's time and 44 percent of its bytes, so splitting it would
-  take a snapshot from 63 to about 16 us. That is the lever to reach for if a
-  design snapshots per tick; the whole-struct clone stays until one does. A
-  24-tick window of per-tick snapshots would hold about 41 MiB.
+- **A snapshot cost as much as a tick** (63 us against 65 us) while it copied the
+  track. The split this section called for has landed: see below.
 
 Reproduce: `OAG_SWEEP=1 OAG_SWEEP_TRACKS=09_Track OAG_REQUIRE_GAME_DATA=1 cargo
 nextest run -p oag-raceplay --run-ignored all --no-capture -E 'test(/reconcile_cost/)'`
 (one circuit per process; omit `OAG_SWEEP_TRACKS` for all twelve, with heap
 figures that then read low after the first).
+
+**Re-measured with an exact allocator (2026-11-07, lane `replay-timeline`).** The "track half"
+row above is the resident-set delta of 64 copies and leaves out the speed plans, which are
+built on the first tick and make up the rest. By live-heap bytes of one `RaceSim` clone, on all
+five titles (Pulse, Pure, HD, 2048, Omega: 1.3 to 5.1 MiB), **97.8 to 99.3 percent of a
+snapshot is load-constant after the first tick** (collision, spline, racing line, pads, routes,
+weapon tables, speed and hull plans) and no tick writes it; the part that changes is the
+27.8 KiB inline struct plus 2 to 8 KiB of heap. So a snapshot that shares the constant half is
+about 30 to 35 KiB and `World::clone` alone is 0 to 2 us, against 57 to 1,132 us for the whole
+clone (release, loaded). This moves the "lever to reach for": sharing the constant half takes a
+24-tick window of per-tick snapshots from about 41 MiB (Pulse) to under 1 MiB. Method, per-title
+tables and the reproducing command:
+[ADR-0087](../architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md), "The
+measurements this ADR rests on".
+
+### The snapshot since the constant half is shared (2026-11-07)
+
+`RaceSim` now holds its constant half behind `Arc`s (ADR-0087, decision 2, stage 1), so
+`snapshot_sim` copies the mutable half and counts references for the rest. Same sweep as the
+ADR, release, one title per process, 300 keyframes a run. Bytes are exact (inline plus heap,
+at the end of the run, where the keyframes peak); times are the median of 7 repeats of 50 clones, on a shared
+machine, so the two time columns were taken at different loads and only the order of magnitude
+compares.
+
+| Title | Snapshot before | Snapshot now | `snapshot_sim` before (load) | now (load) |
+| --- | ---: | ---: | ---: | ---: |
+| Pulse | 2,013 KiB | 26.5 KiB | 234 us (33) | 3 us (12) |
+| Pure | 1,345 KiB | 27.1 KiB | 143 us (30) | 2 us (13) |
+| HD | 3,168 KiB | 27.8 KiB | 457 us (26) | 3 us (13) |
+| 2048 | 5,238 KiB | 31.2 KiB | 477 us (23) | 1 us (11) |
+| Omega | 3,625 KiB | 27.7 KiB | 607 us (23) | 3 us (12) |
+
+All 300 keyframes of a run hold the same allocations as the race at its end, so five minutes
+of keyframes is 7.7 to 9.1 MiB of copies over one constant half, not 394 to 1,536 MiB. 2048
+and Omega: **ported**, each measured on its own data; 2048 fills `routes` on the first tick
+and Omega does not, as the ADR records, and the copy on write covers both.
+
+On the twelve Pulse circuits of the "Reconciliation cost" sweep (profile `dev`, load 14 to
+24): a snapshot 4 us (1 to 6), where the table above reads 63 us. A correction's two clones
+are no longer a cost worth counting, and a client may snapshot every tick: a 24-tick window
+holds under 1 MiB.
+
+What is still copied: `World` (20,136 B), the per-slot counters, the pad caches and the small
+laws read by value (about 1 KiB: pilot assist, the hover rig, the reset triggers, the
+reference handling and the like), where an `Arc` would save less than the struct it fills.
+A snapshot taken before the first tick has no plans, and a race restored to it learns them
+again, as a whole copy did; a viewer that wants to skip that restores a later snapshot.
 
 ## Remote-input predictability (2026-10-14, desktop)
 
@@ -602,6 +647,8 @@ driver) and **62** (4 clients, the hand): resend waits, the 63 of ADR-0071's tab
 again and larger. They are the worst late presentations measured: 3 of the 12 client runs
 at 5 percent loss and 30 ms jitter, none at 0 percent loss (30 once, clean), so ADR-0071's
 "none older than 15 ticks" has a tail that loss and jitter reach; nothing here caps it.
+**Corrected 2026-11-11:** these were not first appearances; the counter misread them
+("A shot's first appearance" below).
 
 **Own craft.** "Own craft moved" counts corrections that moved the player's own craft by
 more than 0.05 units: 1 to 25 of 100 to 180 corrections per client, so about one in ten,
@@ -618,12 +665,156 @@ keyboard, 0.9 to 2.5 for the hand and 0.6 to 1.8 for the driver, so the choice o
 policy, not the stream, decides the cost, and any plausible stream lands inside 2.5 a
 second at a 1-unit threshold. A recorded pad stream would pin it.
 
+## A shot's first appearance (2026-11-11)
+
+**The claim.** Under packet loss and jitter, a shot fired by another person first appears on
+a client no later than a stated cap. **True, and it already was: the 62, 137 and 152 tick
+tails were a miscount.** The cap is `oag_net::client::FIRST_SEEN_CAP`, 33 ticks (0.55 s); the
+most measured is 21.
+
+**What the old counter read.** "Largest pop-in age" was `weapon_sync::change`'s
+`oldest_appeared`: the oldest shot in the present after a correction that the present before
+it had no match for. Two things made it wrong.
+
+1. Its age was `Projectile::age`, which only a laid Mine or Bomb raises (seconds it has sat);
+   every flying shot read 0. The 9 to 18 tick figures were Mines.
+2. It matched a shot by weapon and owner alone, and it could not tell a shot shown for the
+   first time from one the prediction had wrongly ended (a Mine tripped or a Rocket landed on
+   the guessed timeline only) and the correction **put back**. A Mine 137 ticks old that the
+   present lost for 6 ticks and got back counted as "first appears 137 ticks into its flight".
+
+Reproduced on this tree before any change (same harness, `sweep_*_lossy`, the old counter):
+236 once with the driver at 4 clients, 59 to 87 on all four clients with the hand, 0 to 14
+elsewhere; the figures of 2026-10-19 differ because the physics has moved since.
+
+**What is measured now** (`Client::note_shown`, `Stats::first_seen_latest`,
+`Stats::restored`, `Stats::restored_gap_max`). A shot is known by weapon, owner and the tick
+its time runs out (`weapon_sync::Shot::expires`: `lifetime` counts down from a fixed start on
+both timelines, so the expiry tick is fixed at the fire and exact for every weapon). The
+client notes the tick the **confirmed** state first holds each shot, which is the tick the
+server fired it. After every step it compares the present, which is what the next frame
+draws, with the shots it has held before: one never held is a first appearance, as old as the
+ticks since the server fired it; one held, missing for more than two ticks and held again is
+a shot put back. A shot the confirmed state has not held yet is this machine's own
+prediction and counts as age 0. (An age derived from the time left was tried first and was
+480 ticks out for the Shuriken, which starts its clock from its table's fuse, not from the
+ten seconds every other flying shot starts from; hence the confirmed timeline.)
+
+**Measured** (`weapons_ground_truth::loss_and_jitter_sweep` and `sweep_*`, `OAG_SWEEP=1`;
+Pulse circuit 01, `Shim` at a 100 ms round trip on a virtual clock, 5,400 ticks, weapons on,
+so every run is the same on any machine; 0 bad hashes in all of them). Per client ranges over
+the driver and the hand:
+
+| Clients | Loss, jitter | Shots first seen | Oldest at first sight (ticks) | Shots put back | Longest a put-back shot was missing (ticks) |
+| --- | --- | --- | --- | --- | --- |
+| 2 | 0, 0 | 35 to 82 | 0 to 9 | 0 to 1 | 10 |
+| 2 | 1 %, 0 | 62 to 65 | 10 | 0 to 1 | 11 |
+| 2 | 5 %, 0 | 79 | 11 to 12 | 0 | - |
+| 2 | 0, 30 ms | 81 to 84 | 13 | 0 | - |
+| 2 | 5 %, 30 ms | 28 to 62 | 14 to 15 | 0 | - |
+| 4 | 0, 0 | 65 to 76 | 9 | 0 to 2 | 10 |
+| 4 | 1 %, 0 | 25 to 28 | 10 | 0 to 1 | 11 |
+| 4 | 5 %, 0 | 121 | 11 to 12 | 0 to 1 | 12 |
+| 4 | 0, 30 ms | 28 to 33 | 12 to 13 | 0 to 1 | 6 |
+| 4 | 5 %, 30 ms | 29 to 31 | 14 to 15 | 0 to 6 | 14 |
+| 4 | 20 %, 60 ms | 28 to 37 | 18 to 21 | 0 to 4 | 17 |
+| 2, Eliminator | 0, 0 | 403 | 9 | 0 to 1 | 6 |
+
+So a shot first shows 9 ticks into its flight on a clean 100 ms link (the prediction window,
+as ADR-0071 said), 15 at 5 percent loss and 30 ms jitter, and 21 at 20 percent and 60 ms,
+which is past what a playable link does. With the position-only trigger (ADR-0071's
+baseline) the same clean 4-client race shows 47 to 52: the weapon trigger is what holds the
+figure, not luck. A shot the prediction wrongly ended is back within 17 ticks.
+
+**The cap, and why it holds** (`FIRST_SEEN_CAP = MAX_WINDOW + 3`). The present never runs
+more than `MAX_WINDOW` (30 ticks) ahead of the confirmed state: past it the client stops
+predicting and waits. Every confirmed batch compares the weapon digest predicted for its
+newest tick with the confirmed one and corrects on any difference, and a correction rebuilds
+the present from the confirmed state, shots included. So a shot the server holds is in the
+present by the end of the step that confirmed a tick holding it: at most the window, the
+tick it was fired in and the two ticks a step may predict after its correction.
+`race_in_mode` asserts it on every client of every weapons test in `just test-data`
+(`four_firing_clients_agree_through_5_percent_loss_and_jitter`, the 100 ms pair, Eliminator)
+and of every sweep cell. The price of the cap is the stall: on a link bad enough to hold the
+window at 30 the game stops for the wait rather than showing a shot later. No run here
+stalled once racing.
+
+**One hole closed on the way, with no measured effect.** The digest knew a shot by weapon,
+owner and target. A present that kept a shot the server had ended, while the server held a
+newer one of the same weapon, owner and target, digested equal, and the newer shot would
+have waited for some other correction. Each shot's `lifetime` bits now enter the digest
+(`weapon_sync::digest`), so the two differ
+(`loopback::the_weapon_digest_knows_a_shot_by_the_tick_it_was_fired_on`). Run with and
+without it, all 20 sweep cells (60 client runs) were identical row for row, corrections
+included: the case did not occur once. It is kept because it is what makes the cap an
+argument and not an observation, and it costs four bytes hashed per shot.
+
+**On a real network** (2026-11-11): the lean `oag-server` on a remote x86-64 host (1 core,
+1 GB), two `oag-game --connect --net-bot` headless clients here (debug build), Pulse EU
+circuit 01, two people with the AI on the other six, weapons on, 5,400 ticks to
+`--max-ticks`; QUIC round trip 9.6 to 16 ms (median 10 to 11), loss 0.0 %. "Before" is the
+same client built with the old digest. Per client:
+
+| Path | Client | Hash ok / bad | Corrections | Ticks replayed | Largest pop | Shots first seen | Oldest at first sight | Put back, longest missing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| IPv6 | before | 5,390 / 0, 5,382 / 0 | 106, 94 | 607, 428 | 2.6, 2.9 | 99, 99 | 7, 0 | 1 for 5, 0 |
+| IPv6 | after | 5,385 / 0, 5,390 / 0 | 108, 110 | 599, 607 | 2.4, 2.6 | 70, 68 | 6, 7 | 1 for 8, 0 |
+| IPv4 only | after | 5,383 / 0, 5,375 / 0 | 108, 91 | 638, 531 | 3.9, 2.3 | 128, 128 | 7, 7 | 0, 0 |
+| IPv6, `--net-shim 100:5` | before | 5,395 / 0, 5,394 / 0 | 128, 138 | 1,555, 1,624 | 10.9, 5.4 | 111, 109 | 14, 14 | 0, 0 |
+| IPv6, `--net-shim 100:5` | after | 5,391 / 0, 5,392 / 0 | 129, 124 | 1,430, 1,461 | 7.3, 9.4 | 55, 55 | 13, 14 | 1 for 8, 2 for 14 |
+
+The runs are wall clock, so two of them are two different races (the shots first seen
+differ); what holds across all ten client runs is 0 bad hashes and a first sight of at most
+7 ticks on the plain link and 14 with 100 ms and 5 percent loss added. **The IPv4-only
+client path works**: the server listens on `[::]` (dual stack) and a client given the host's
+IPv4 address raced the same race, which was untested before. The client's once-a-second line
+now ends `shots first seen N oldest M ticks, put back R after G ticks`.
+
+## A fire seen late (2026-11-11)
+
+What a client shows of another person's fire it learns of late, beyond the cue, the blast
+and the shield bulge of ADR-0071's follow-up. Both are view only; no hash moves.
+
+- **The screen flash is aged.** A blast journalled in a quiet tick and started late
+  (`catch_up::present_late`) started its `ScreenFlash` at the first key, so a detonation
+  nine ticks old washed the screen at full strength nine ticks late.
+  `ScreenFlash::start_aged` joins the kind's own ramp at the blast's age, is measured
+  against the running flash by its colour at that age, and never draws once the age is past
+  the kind's duration (`Race::ignite_blast_aged`).
+  `flash::tests::a_flash_started_late_is_as_old_as_its_detonation` holds it frame for frame
+  against a flash started on time, and
+  `tests::catch_up::a_blast_first_seen_late_starts_its_screen_flash_aged` through the
+  journal; both fail with the age dropped.
+- **The effect a shot rides is aged along its flight.** A shot first drawn mid-flight was
+  given its riding effect (`advance_projectile_flares`: the Rocket's, Missile's, Plasma's,
+  Disruptor's, the Bomb's glow) fresh at where it was, so an effect that opens with a
+  one-shot part replayed it mid-air (our own rocket's `launch-flash` emitter,
+  `docs/rendering/own-rockets.md`) and the trail began at the shot. The effect is now
+  attached where the shot was fired from and walked to where it is over the shot's age
+  (`Stage::pre_age_riding`, at most 40 ticks, straight back along the velocity; both
+  **chosen, not measured**, the flight's curve is not kept): the one-shot part is as spent
+  as the shot is old and the trail lies behind it.
+  `psys::tests::an_effect_attached_late_is_pre_aged_along_its_owners_path` holds the result
+  equal, particle for particle, to an effect that rode the owner on every tick, and
+  `tests::catch_up::a_rocket_first_drawn_mid_flight_gets_its_effect_as_old_as_it_is` holds
+  the wiring (0 particles with it dropped, 69 drawn all along). A shot drawn on the tick it
+  is fired is untouched, so nothing moves off the network.
+- **Not aged, named.** The Shuriken's head and trail start fresh: it does not carry how long
+  it has flown (`Projectile::seconds_since_fired` is `None`; its fuse is its table's). The
+  Cannon's muzzle flash needs nothing: it is drawn from the round's own age. The Plasma, Bomb
+  and Disruptor blast *models* and HD's Missile blast model still start fresh. The Quake's,
+  the Repulser's and a craft's own screen flashes are not journalled, so a late one is
+  dropped, not aged. Every title takes the same path (the triggers are per title, the ageing
+  is not); only Pulse and the own-rocket effect were looked at, and no frame was captured:
+  as on 2026-10-19 the forced scenes put the blast far ahead of the camera.
+
 ## Replay cost on this machine (2026-10-19)
 
 The same sweep as "Reconciliation cost" above, one circuit (09_Track), profile `dev`,
 AMD Ryzen 9 7900, 1-minute load average 9.0 (21.97 and 20.47 over five and fifteen
 minutes), so read as inflated: a tick 63 us (`Race::tick`) and 59 us (`tick_sim_only`),
-a 6-tick rollback 0.446 ms, 12 ticks 0.77 ms, 24 ticks 1.48 ms, a snapshot 62 us. The
+a 6-tick rollback 0.446 ms, 12 ticks 0.77 ms, 24 ticks 1.48 ms, a snapshot 62 us (since shared: "The snapshot since the constant half is
+shared" above). The
 2026-10-14 figures (65 / 60 us, 0.42 / 0.77 / 1.50 ms) hold. **Per correction**, the
 network runs above replay 7 to 11 ticks a correction, so about **0.4 to 0.65 ms a
 correction and 0.05 to 0.10 ms of CPU a second** averaged (the 4-client run's 1,019 to
@@ -939,7 +1130,7 @@ to the menus; a LAN rematch is a new lobby; an online race has one, `online-lobb
 ### The join list says whether you can join (maintainer's requirement)
 
 Every host the browser finds stays in the list. The advert carries the title, the platform of its image, the build
-(`BUILD_VERSION`), the wire protocol, a content fingerprint (the player mods loaded, FNV-1a of their ids and releases;
+(`BUILD_VERSION`), the wire protocol, a content fingerprint (the player mods loaded that change a race - a simulation module, a track or a campaign - FNV-1a of their ids and releases;
 mods may change the sim), the circuit, the mode, and the people in out of the seats. `oag_net::discovery::compat` decides,
 on the joiner, before connecting, in this order: **OtherTitle** (another title, another platform's pressing, or this
 client lacks that image), **OtherVersion** (another protocol or build), **OtherContent** (other mods), **Full**, else
@@ -1033,8 +1224,8 @@ a few high ports the same way; do not change the host's firewall for a test.
 
 ### Measured against a remote host (2026-10-14)
 
-A server on a small Linux host over the internet (Ubuntu 22.04, glibc 2.35, one
-vCPU, release build, no GPU), the client on the shared desktop (debug game
+A server on a remote x86-64 host (1 core, 1 GB) over the internet (release build,
+no GPU), the client on the shared desktop (debug game
 build), Pulse EU, circuit 01, VENOM, seed 1, one person with the AI on the other
 seven, weapons off, three laps. **Round trip** by a 100-packet UDP echo, 50 ms
 apart: minimum 11.4 ms, median 11.9, 95th percentile 14.7, maximum 19.6. No

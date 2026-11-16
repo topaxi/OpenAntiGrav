@@ -5,6 +5,7 @@
 // .envsettings "HDR and Bloom" block; the inline constants are the
 // executable's verbatim.
 
+import oag_shaders::colour::{srgb_decode, srgb_encode};
 import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
 
 struct Constants {
@@ -28,8 +29,10 @@ struct Constants {
     tone_adaption_boost: f32,
     tone_darkening_clamp: f32,
     tone_maximum_brightness: f32,
-    _pad0: f32,
-    _pad1: f32,
+    // The resolve's read offset, in the drawn rectangle's own 0..1: half a
+    // source texel on each axis, or zero where the title's final composite
+    // reads on the texel centres. Only `fs_encode` reads it.
+    read_shift: vec2<f32>,
     // Which sub-rectangle of every source in this chain was drawn, as a UV
     // scale and a clamp half a texel inside its edge. One pair for the whole
     // ladder: each level's viewport is its own size times the same fraction,
@@ -133,7 +136,7 @@ fn fs_copy(in: VertexOutput) -> @location(0) vec4<f32> {
 // one.** Every buffer the original's chain touches is
 // `CELL_GCM_SURFACE_A8R8G8B8`: the scene target created at `0x003e17a0` and
 // all seven ladder buffers `FUN_003af980` allocates - `li r6, 8` at seven
-// separate call sites, read off `EBOOT.elf` on 2026-08-20 together with the
+// separate call sites, read off `EBOOT.elf` together with the
 // surface-format word builder (`FUN_005c9a50`) and the render-target factory
 // (`FUN_005a6ce0`), whose `+0x24` field is confirmed as the raw RSX enum by
 // its own `32`/`64` depth branch. Only one `F_W16Z16Y16X16` surface exists in
@@ -162,7 +165,7 @@ override scene_encoded: f32 = 0.0;
 // A tap of the scene target, in linear light.
 fn scene_tap(texel: vec4<f32>) -> vec4<f32> {
     let c = surface(texel);
-    return vec4<f32>(mix(c.rgb, pow(c.rgb, vec3<f32>(2.2)), scene_encoded), c.a);
+    return vec4<f32>(mix(c.rgb, srgb_decode(c.rgb), scene_encoded), c.a);
 }
 
 // The luminance reduction's halving step, in two forms.
@@ -196,7 +199,7 @@ fn reduce_sum(pixel: vec2<i32>, first: bool) -> vec4<f32> {
                 // The adaptation averages encoded values: RPCS3's readback of the
                 // original is the mean of the encoded per-pixel luma, not the
                 // encode of the linear mean (docs/rendering/hd-track-tone.md,
-                // "Decide the adaptation law"; maintainer's choice 2026-10-27).
+                // "Decide the adaptation law").
                 value = pow(clamp(value, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
             }
             rgb = rgb + value * share;
@@ -282,6 +285,33 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(sum / 4.2, 1.0);
 }
 
+// The resolve's tap of the scene, in linear light.
+//
+// With no `read_shift` it is the plain bilinear tap. With one it is the same
+// bilinear filter taken by hand, texel by texel: the target holds an encoded
+// value on a title whose scene stores encoded (`scene_encoded`), and the
+// hardware filter would average those and decode after, where the original's
+// units decode on fetch and filter light. Each texel is clamped and decoded
+// first (`scene_tap`), then weighted, and the four stay inside the drawn
+// rectangle.
+fn resolve_scene_tap(uv: vec2<f32>) -> vec3<f32> {
+    if constants.read_shift.x == 0.0 && constants.read_shift.y == 0.0 {
+        return scene_tap(textureSample(source_tex, source_sampler, drawn_scene(uv))).rgb;
+    }
+    let size = vec2<f32>(textureDimensions(source_tex));
+    let at = drawn_scene(uv) * size - 0.5;
+    let first = floor(at);
+    let weight = at - first;
+    let last = floor(constants.scene_max * size);
+    let low = vec2<i32>(max(first, vec2<f32>(0.0)));
+    let high = vec2<i32>(min(first + 1.0, last));
+    let a = scene_tap(textureLoad(source_tex, vec2<i32>(low.x, low.y), 0)).rgb;
+    let b = scene_tap(textureLoad(source_tex, vec2<i32>(high.x, low.y), 0)).rgb;
+    let c = scene_tap(textureLoad(source_tex, vec2<i32>(low.x, high.y), 0)).rgb;
+    let d = scene_tap(textureLoad(source_tex, vec2<i32>(high.x, high.y), 0)).rgb;
+    return mix(mix(a, b, weight.x), mix(c, d, weight.x), weight.y);
+}
+
 // The read resolve, `downsamplescaleaddfeedback_fp` (0x92a500) plus the PPU
 // arithmetic that fills its `scale` parameter (FUN_003e3268/FUN_003df7c0,
 // all four parameter names settled by crc32 preimage):
@@ -297,13 +327,15 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
 // float; no circuit file authors the key, default 0) and the persistent
 // `fullscreenTintColour` (an event tint this renderer does not model).
 //
-// The `pow` at the end is the ROP's sRGB encode on write (`SET_SHADER_PACKER`
-// is 1 on the scene and ladder draws), approximated by one `1/2.2` curve; it is
+// The encode at the end is the ROP's sRGB encode on write (`SET_SHADER_PACKER`
+// is 1 on the scene and ladder draws), the same piecewise curve `scene_tap`
+// decodes with, so a scene value no bloom reaches resolves to itself; it is
 // not an exposure stage. The original's resolve itself ends on the ADD_SAT.
 @fragment
 fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {
-    let scene = scene_tap(textureSample(source_tex, source_sampler, drawn_scene(in.uv))).rgb;
-    let bloom = textureSample(bloom_tex, source_sampler, drawn(in.uv)).rgb;
+    let uv = in.uv + constants.read_shift;
+    let scene = resolve_scene_tap(uv);
+    let bloom = textureSample(bloom_tex, source_sampler, drawn(uv)).rgb;
     let adapted = textureSample(state_tex, source_sampler, vec2<f32>(0.5, 0.5)).x;
     let scale = constants.tone_maximum_brightness
         - min(
@@ -314,8 +346,3 @@ fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(srgb_encode(resolved), 1.0);
 }
 
-fn srgb_encode(c: vec3<f32>) -> vec3<f32> {
-    let lo = c * 12.92;
-    let hi = 1.055 * pow(max(c, vec3<f32>(1e-6)), vec3<f32>(1.0 / 2.4)) - vec3<f32>(0.055);
-    return select(hi, lo, c <= vec3<f32>(0.0031308));
-}

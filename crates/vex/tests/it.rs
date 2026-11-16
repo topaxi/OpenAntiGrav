@@ -9,6 +9,9 @@
 //! A new test file is only compiled once it is listed here, and
 //! `every_test_file_is_listed` below fails until it is.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 mod wad_walk;
 
 mod alpha_test_reference_ground_truth;

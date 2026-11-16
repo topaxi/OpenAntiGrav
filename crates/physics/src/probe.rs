@@ -362,6 +362,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         released: _,
         // Not hashed, for `on_grid`'s reason.
         wrong_way_kill: _,
+        flip,
         // Not hashed: the race writes it from the mode every tick.
         four_corner: _,
         // Not hashed, for `on_grid`'s reason.
@@ -393,6 +394,13 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     } = *state;
 
     hash_body(hasher, &body);
+    // Only once a craft has flipped, so a race without the move hashes as it always did.
+    if flip != crate::flip::Flip::IDLE {
+        hasher.write_u8(u8::from(flip.active));
+        hasher.write_f32(flip.angle);
+        hasher.write_f32(flip.rate);
+        hasher.write_vec3(flip.forward);
+    }
     hasher.write_f32(airbrake_left);
     hasher.write_f32(airbrake_right);
     hasher.write_f32(thrust);

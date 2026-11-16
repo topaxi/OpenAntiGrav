@@ -23,6 +23,18 @@ use super::rows::LanguageRows;
 use super::*;
 use oag_display::space::pillarbox_in;
 
+/// One corner of a [`Draw::Triangles`] triangle.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Corner {
+    /// Where it lands on the screen, in the same space as a [`Draw::Sprite`]'s rect.
+    pub at: [f32; 2],
+    /// The sheet pixel it samples.
+    pub uv: [f32; 2],
+    /// Modulating colour, interpolated across the triangle; the draw is opaque
+    /// to it, so the sampled texel's own alpha is all the transparency there is.
+    pub color: [f32; 3],
+}
+
 /// One thing to draw, in the PSP's 480x272 screen space.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Draw {
@@ -180,6 +192,25 @@ pub enum Draw {
         /// Where it is in the sheet, in sheet pixels: `[x, y, width, height]`.
         uv: [f32; 4],
         /// Modulating colour. White leaves the texture alone.
+        color: [f32; 4],
+    },
+    /// Textured triangles from the sprite sheet, each corner with its own
+    /// position, sheet pixel and colour, drawn in list order.
+    ///
+    /// What a [`Self::Sprite`] cannot say: a picture that is not an
+    /// axis-aligned rectangle of the sheet, or one whose shading differs from
+    /// corner to corner. 2048's campaign map raises lattice cells with it
+    /// (`canvas_wave`).
+    Triangles(Vec<[Corner; 3]>),
+    /// Solid-colour triangles, each three screen points, all in one colour.
+    ///
+    /// What a [`Self::Fill`] cannot say: a shape with no axis-aligned edge. The race load's
+    /// seven-triangle meter is rings of them (`FrontEnd_DrawLoadingMeter`,
+    /// `docs/ghidra/functions/vita-2048-eu-v104/race-load.md`).
+    SolidTriangles {
+        /// Each triangle's three corners, in the screen's space.
+        triangles: Vec<[[f32; 2]; 3]>,
+        /// Colour, RGBA.
         color: [f32; 4],
     },
     /// A sprite spun about its own centre.
@@ -644,6 +675,15 @@ impl Frontend {
             rect: [0.0, 0.0, width, height],
             color: [0.0, 0.0, 0.0, 1.0],
         }];
+        out.extend(self.draw_screen_over(name, elapsed));
+        out
+    }
+
+    /// [`Self::draw_screen_at`] without the black backdrop under it: the screen's own widgets
+    /// alone, for one drawn over a picture (the attract demo's `Demo InGame` over its race).
+    #[must_use]
+    pub fn draw_screen_over(&self, name: &str, elapsed: f64) -> Vec<Draw> {
+        let mut out = Vec::new();
 
         let Some(screen) = self
             .screens
@@ -761,12 +801,12 @@ impl Frontend {
             // Pure's `Title Screen`) need their own patch of it rather than
             // all drawing its top-left corner. Absent means the whole placed
             // texture, exactly as it did before. See [`crate::screen::Image::u`].
-            let mut uv = [
-                placed.x as f32 + image.u.unwrap_or(0.0),
-                placed.y as f32 + image.v.unwrap_or(0.0),
+            let mut uv = placed.sheet_rect([
+                image.u.unwrap_or(0.0),
+                image.v.unwrap_or(0.0),
                 image.texture_width.unwrap_or(placed.width as f32),
                 image.texture_height.unwrap_or(placed.height as f32),
-            ];
+            ]);
 
             // A wrapped `<Animation>`'s own `TextureWidth` shrinks both the
             // sampled and the rendered width by the same amount, rather than
@@ -779,7 +819,7 @@ impl Frontend {
             // full and shrinking only the render rect.
             let delta = reveal_delta(&image.reveal, elapsed);
             let w = w + delta;
-            uv[2] += delta;
+            uv[2] += delta * placed.scale[0];
 
             let mut color = argb_to_rgba(image.color);
             color[3] *= fade_alpha(image.transition, elapsed);

@@ -81,14 +81,7 @@ pub(super) fn block_art(
 /// rule and why it stands in for `FrontEnd_IsFuryStyle`. Read by the menu
 /// backdrop's loader too, since it is the same byte both widgets check.
 pub(super) fn fury_style(screens: &Screens) -> bool {
-    screens
-        .globals
-        .get("HD_BG")
-        .and_then(|value| oag_ui::screen::parse_argb(value))
-        .is_some_and(|argb| {
-            let [r, g, b] = [argb >> 16 & 0xff, argb >> 8 & 0xff, argb & 0xff];
-            r + g + b < 3 * 128
-        })
+    screens.global_is_dark("HD_BG")
 }
 
 /// Decodes every image the screens name.
@@ -146,37 +139,39 @@ pub(super) fn load(
     let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
     let mut reversed: Vec<oag_hud::sprite::DecodedImage> = Vec::new();
     for src in &srcs {
-        match read_front_end_first(archives, src) {
-            Ok(blob) => blobs.push((src.clone(), blob)),
-            // Wipeout: Omega Collection's front-end XML still spells its
-            // images `.gtf`, the way `vita_texture_name` above already
-            // documents for 2048's `.gxt`, but the shipped file is Sony's
-            // PS4 `.gnf` container (`docs/formats/gnf.md`) - checked and,
-            // when it decodes, pushed under `src`'s own `.gtf`-spelled key
-            // so every downstream lookup keeps working unchanged; when it
-            // does not, a report line names the real file and the exact
-            // reason rather than the `.gtf` spelling that was never going
-            // to resolve, what `CLAUDE.md`'s "draw nothing and say so" asks
-            // for.
-            Err(e) => match gnf_sibling(archives, src) {
-                Some(Ok(blob)) if is_bottom_up(src, bottom_up) => {
-                    match bottom_up_rows(src, &blob) {
+        match read_front_end_texture(archives, src) {
+            Ok((held, blob)) if is_gnf(&held) && is_bottom_up(src, bottom_up) => {
+                match gnf_refusal(&held, src, &blob) {
+                    Some(reason) => report.push(reason),
+                    None => match bottom_up_rows(src, &blob) {
                         Some(image) => reversed.push(image),
                         None => report.push(format!("image {src}: .gnf rows would not reverse")),
-                    }
+                    },
                 }
-                Some(Ok(blob)) => blobs.push((src.clone(), blob)),
-                Some(Err(reason)) => report.push(reason),
-                None => report.push(format!("image {src}: {e}")),
+            }
+            Ok((held, blob)) => match gnf_refusal(&held, src, &blob) {
+                Some(reason) => report.push(reason),
+                None => blobs.push((src.clone(), blob)),
             },
+            Err(e) => report.push(format!("image {src}: {e}")),
         }
     }
 
     if let Some(atlas) = lattice_atlas {
-        reversed.extend(lattice_tile(archives, atlas, report));
+        let cards = front_end
+            .touch
+            .as_ref()
+            .and_then(|touch| {
+                sources
+                    .iter()
+                    .find_map(|screens| screens.by_name(touch.canvas_screen))
+            })
+            .map(|screen| oag_ui::frontend::canvas_cells::season_cards(&screen.canvas_labels))
+            .unwrap_or_default();
+        reversed.extend(canvas_pictures(archives, atlas, &cards, report));
     }
 
-    let sheet = oag_hud::sprite::Sheet::build_with(&blobs, reversed, report);
+    let sheet = oag_hud::sprite::Sheet::build_replaced(&blobs, reversed, report);
     report.push(format!(
         "{} of {} front-end image(s) decoded into a {}x{} sheet",
         sheet.len(),
@@ -209,88 +204,77 @@ pub(crate) fn read_front_end_first(
     archives: &mut oag_assets::Archives,
     name: &str,
 ) -> oag_assets::Result<Vec<u8>> {
+    read_front_end_texture(archives, name).map(|(_, blob)| blob)
+}
+
+/// [`read_front_end_first`], and the name the entry was held under.
+///
+/// A name that is none of the above is read as a texture
+/// ([`oag_assets::Archives::read_texture`]): as written, then in this
+/// platform's own spelling. **Wipeout 2048's and Omega's front-end XML spells
+/// every texture `.gtf`** - HD's, retargeted, the extension never re-authored -
+/// and their packages hold the same files as `.gxt` and `.gnf`
+/// (`docs/formats/2048-frontend.md`, `docs/formats/gnf.md`). The resolved name
+/// is what says which container a blob is.
+pub(crate) fn read_front_end_texture(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+) -> oag_assets::Result<(String, Vec<u8>)> {
     if let Some(hash) = super::images::hash_spec(name) {
-        return archives.read_hash(hash);
+        return archives
+            .read_hash(hash)
+            .map(|blob| (name.to_string(), blob));
     }
     if oag_ui_screens::picker::hd::hex::is_thumb(name)
         && let Some((_, blob)) = archives.read_every_name(name).pop()
     {
-        return Ok(blob);
+        return Ok((name.to_string(), blob));
     }
     if let Some(fe) = archives.fe.as_mut()
         && let Ok(blob) = fe.read_entry(name)
     {
-        return Ok(blob);
+        return Ok((name.to_string(), blob));
     }
-    match oag_pulse::read_image(archives, name) {
-        Ok(blob) => Ok(blob),
-        // **Wipeout 2048's front-end XML spells every texture `.gtf` and its
-        // package holds every one as `.gxt`** - `Data\FE\Images\StudioLogo.gtf`
-        // in `Intro_Definition.xml` is `data/FE/Images/StudioLogo.gxt` in
-        // `data.psarc`, and so on for all of them (`2048-frontend.md`). The
-        // XML is Wipeout HD's, retargeted, and the extension was never
-        // re-authored; the Vita loader evidently maps it. Tried only after
-        // the name as written fails, so a source that does ship a `.gtf`
-        // still gets the file it named. The same rewrite HD's own HUD
-        // loader makes in the other direction (`oag_hd::hud`).
-        Err(error) => match vita_texture_name(name) {
-            Some(gxt) => archives.read_name(&gxt).or(Err(error)),
-            None => Err(error),
-        },
-    }
+    archives.read_texture(name)
 }
 
-/// `name` with a `.gtf` extension respelled `.gxt`, or `None` for any other
-/// extension. Case-insensitive on the extension, as the archive is on the
-/// whole path.
-fn vita_texture_name(name: &str) -> Option<String> {
-    let stem = name
-        .strip_suffix(".gtf")
-        .or_else(|| name.strip_suffix(".GTF"))?;
-    Some(format!("{stem}.gxt"))
+/// Whether the resolved name `held` is a PS4 `.gnf`.
+pub(crate) fn is_gnf(held: &str) -> bool {
+    oag_texture::decode::Container::of_name(held) == Some(oag_texture::decode::Container::Gnf)
 }
 
-/// If `name`'s `.gtf` spelling failed to resolve but a `.gnf` sibling is
-/// present in the served archives, decodes it (`docs/formats/gnf.md`) and
-/// returns `Some(Ok(bytes))` - still the raw `.gnf` bytes, not pixels, so
-/// [`oag_hud::sprite::Image::decode`]'s own `.gnf` branch is what actually
-/// draws them, the same one `Sheet::build` already runs every other image
-/// through - or `Some(Err(reason))` naming the file, its size and the exact
-/// reason it draws nothing instead (a genuinely tiled surface this project
-/// has no formula for, or [`oag_texture::gnf::Error::CorruptBlocks`] - the
-/// PSARC-level missing-content population `docs/formats/psarc.md`'s "Block
-/// data location" section documents, landing on this specific file).
-/// `None` when there is no `.gnf` sibling either, so the caller falls back
-/// to the ordinary "not found" message.
-pub(crate) fn gnf_sibling(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-) -> Option<Result<Vec<u8>, String>> {
-    let stem = name
-        .strip_suffix(".gtf")
-        .or_else(|| name.strip_suffix(".GTF"))?;
-    let gnf = format!("{stem}.gnf");
-    let bytes = archives.read_name(&gnf).ok()?;
+/// Why a `.gnf` read as `held` for `name` draws nothing, or `None` when it
+/// decodes (`docs/formats/gnf.md`) or is not a `.gnf` at all.
+///
+/// The reason names the file, its size and the exact refusal - a genuinely
+/// tiled surface this project has no formula for, or
+/// [`oag_texture::gnf::Error::CorruptBlocks`] (the PSARC-level missing-content
+/// population `docs/formats/psarc.md`'s "Block data location" section
+/// documents, landing on this specific file) - so a report says "draw nothing"
+/// about the real file rather than about a `.gtf` spelling that was never
+/// going to resolve. The blob itself stays raw so
+/// [`oag_hud::sprite::Image::decode`]'s own `.gnf` branch is what draws it.
+pub(crate) fn gnf_refusal(held: &str, name: &str, bytes: &[u8]) -> Option<String> {
+    if !is_gnf(held) {
+        return None;
+    }
     let refuse = |detail: String| {
         format!(
-            "image {name}: found as {gnf} ({} bytes) - PS4 GNF container, {detail}, drawing nothing",
+            "image {name}: found as {held} ({} bytes) - PS4 GNF container, {detail}, drawing nothing",
             bytes.len()
         )
     };
-    let texture = match oag_texture::gnf::Texture::parse(&bytes) {
+    let texture = match oag_texture::gnf::Texture::parse(bytes) {
         Ok(t) => t,
-        Err(e) => return Some(Err(refuse(e.to_string()))),
+        Err(e) => return Some(refuse(e.to_string())),
     };
-    match texture.decode(&bytes) {
-        Ok(_) => Some(Ok(bytes)),
-        Err(e) => Some(Err(refuse(e.to_string()))),
-    }
+    texture.decode(bytes).err().map(|e| refuse(e.to_string()))
 }
 
 /// A `.gnf` whose rows are in HD's `.gtf` order, decoded and reversed into the
 /// top-down order a sheet holds - see
 /// [`oag_title::FrontEnd::bottom_up_gnf`] for which images and why.
-fn bottom_up_rows(src: &str, blob: &[u8]) -> Option<oag_hud::sprite::DecodedImage> {
+pub(crate) fn bottom_up_rows(src: &str, blob: &[u8]) -> Option<oag_hud::sprite::DecodedImage> {
     let texture = oag_texture::gnf::Texture::parse(blob).ok()?;
     let pixels = texture.decode(blob).ok()?;
     let width = usize::try_from(texture.width).ok()?.max(1);
@@ -311,57 +295,125 @@ fn bottom_up_rows(src: &str, blob: &[u8]) -> Option<oag_hud::sprite::DecodedImag
 }
 
 /// Whether `src`'s file stem, lower-cased, is one of `stems`.
-fn is_bottom_up(src: &str, stems: &[&str]) -> bool {
+pub(crate) fn is_bottom_up(src: &str, stems: &[&str]) -> bool {
     let leaf = src.rsplit(['\\', '/']).next().unwrap_or(src);
     let stem = leaf.rsplit_once('.').map_or(leaf, |(stem, _)| stem);
     stems.iter().any(|known| known.eq_ignore_ascii_case(stem))
 }
 
-/// 2048's backdrop lattice tile, rendered off its atlas (`canvasTexture.gxt`,
-/// a 2048 x 2048 sheet that never goes into the sprite sheet whole). `None`
-/// with a report line when the atlas is missing or does not decode: the page
-/// then draws without the lattice rather than with a stand-in.
-fn lattice_tile(
+/// 2048's two canvas pictures, rendered off its atlas (`canvasTexture.gxt`, a
+/// 2048 x 2048 sheet that never goes into the sprite sheet whole): the
+/// backdrop lattice and a campaign tile's prism. Nothing, with a report line,
+/// when the atlas is missing or does not decode: the page then draws without
+/// them rather than with a stand-in.
+fn canvas_pictures(
     archives: &mut oag_assets::Archives,
     atlas: &str,
+    cards: &[oag_ui::frontend::canvas_cells::Card],
     report: &mut Vec<String>,
-) -> Option<oag_hud::sprite::DecodedImage> {
-    use oag_ui::frontend::canvas_lattice as lattice;
-    let blob = match read_front_end_first(archives, atlas) {
-        Ok(blob) => blob,
+) -> Vec<oag_hud::sprite::DecodedImage> {
+    use oag_ui::frontend::{
+        canvas_cells as cells, canvas_lattice as lattice, canvas_prism as prism,
+    };
+    let (held, blob) = match read_front_end_texture(archives, atlas) {
+        Ok(found) => found,
         Err(e) => {
             report.push(format!("lattice atlas {atlas}: {e}"));
-            return None;
+            return Vec::new();
         }
     };
-    let decoded = oag_texture::gxt::Gxt::parse(&blob).ok().and_then(|gxt| {
-        let texture = gxt.only()?;
-        let rgba = texture.to_rgba(&blob).ok()?;
-        Some((texture.width, texture.height, rgba))
-    });
+    let decoded = if is_gnf(&held) {
+        oag_texture::gnf::Texture::parse(&blob)
+            .ok()
+            .and_then(|texture| {
+                let rgba = texture.decode(&blob).ok()?;
+                Some((
+                    u16::try_from(texture.width).ok()?,
+                    u16::try_from(texture.height).ok()?,
+                    rgba,
+                ))
+            })
+    } else {
+        oag_texture::gxt::Gxt::parse(&blob).ok().and_then(|gxt| {
+            let texture = gxt.only()?;
+            let rgba = texture.to_rgba(&blob).ok()?;
+            Some((texture.width, texture.height, rgba))
+        })
+    };
     let Some((width, height, rgba)) = decoded else {
-        report.push(format!("lattice atlas {atlas}: did not decode as a .gxt"));
-        return None;
+        report.push(format!(
+            "lattice atlas {atlas}: did not decode as {held}, drawing no lattice"
+        ));
+        return Vec::new();
     };
     let rgba: Vec<u8> = rgba.into_iter().flatten().collect();
-    let Some(tile) = lattice::bake(&rgba, u32::from(width), u32::from(height)) else {
-        report.push(format!(
-            "lattice atlas {atlas}: {width}x{height} is too small"
-        ));
-        return None;
-    };
-    report.push(format!(
-        "lattice picture baked off {atlas} ({width}x{height}) at {}x{}",
-        lattice::VIEWPORT[0],
-        lattice::VIEWPORT[1]
-    ));
-    Some(oag_hud::sprite::DecodedImage {
-        src: lattice::TILE.to_string(),
-        width: lattice::VIEWPORT[0],
-        height: lattice::VIEWPORT[1],
-        rgba: tile,
+    let (width, height) = (u32::from(width), u32::from(height));
+    let image = |src: &str, size: (u32, u32), rgba: Vec<u8>| oag_hud::sprite::DecodedImage {
+        src: src.to_string(),
+        width: size.0,
+        height: size.1,
+        rgba,
         quad_extent: None,
         quad_centre: None,
         blend: None,
-    })
+    };
+    let mut pictures = Vec::new();
+    match lattice::bake(&rgba, width, height) {
+        Some(tile) => {
+            report.push(format!(
+                "lattice picture baked off {atlas} ({width}x{height}) at {}x{}",
+                lattice::VIEWPORT[0],
+                lattice::VIEWPORT[1]
+            ));
+            pictures.push(image(
+                lattice::TILE,
+                (lattice::VIEWPORT[0], lattice::VIEWPORT[1]),
+                tile,
+            ));
+        }
+        None => report.push(format!(
+            "lattice atlas {atlas}: {width}x{height} is too small"
+        )),
+    }
+    match cells::bake(&rgba, width, height) {
+        Some(baked) => {
+            let size = cells::layout(true).size;
+            report.push(format!(
+                "campaign ground cells baked off {atlas}: {} pictures of {}x{}",
+                baked.len(),
+                size.0,
+                size.1
+            ));
+            pictures.extend(
+                baked
+                    .into_iter()
+                    .map(|cell| image(&cell.name, cell.size, cell.rgba)),
+            );
+        }
+        None => report.push(format!(
+            "lattice atlas {atlas}: {width}x{height} is too small for the ring cells"
+        )),
+    }
+    for card in cards {
+        match cells::bake_card(&rgba, width, height, card) {
+            Some(picture) => {
+                report.push(format!(
+                    "canvas card {} baked off {atlas}: {}x{}",
+                    card.name, picture.size.0, picture.size.1
+                ));
+                pictures.push(image(&picture.name, picture.size, picture.rgba));
+            }
+            None => report.push(format!(
+                "canvas card {}: the crop is not inside {atlas} ({width}x{height})",
+                card.name
+            )),
+        }
+    }
+    let size = prism::layout().size;
+    report.push(format!(
+        "campaign tile prism baked at {}x{}",
+        size.0, size.1
+    ));
+    pictures.push(image(prism::TILE, size, prism::bake()));
+    pictures
 }

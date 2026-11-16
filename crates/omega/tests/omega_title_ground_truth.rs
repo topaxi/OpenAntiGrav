@@ -232,3 +232,22 @@ fn weapon_models_resolve_against_omegas_archives() {
         "absent from Omega's archives: {missing:?}"
     );
 }
+
+/// Omega ships the same `XPAwards.xml` row for row and an `XPRanks.xml` with the same 50 ranks at
+/// half the thresholds (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`, "Cross-check").
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn xp_tables_match_2048s_awards_and_halve_its_ranks() {
+    let Some(source) = source() else { return };
+    let mut archives = oag_omega::open(&source).expect("open the omega source");
+    let mut read = |name: &str| {
+        let bytes = archives.read_name(name).expect(name);
+        oag_tables::fexml::text(&bytes).expect("text")
+    };
+    let awards = oag_tables::xp::Awards::parse(&read(r"Data\xml\XPAwards.xml")).expect("awards");
+    let ranks = oag_tables::xp::Ranks::parse(&read(r"Data\xml\XPRanks.xml")).expect("ranks");
+    assert_eq!(awards.awards.len(), 78);
+    assert_eq!(ranks.thresholds.len(), 50);
+    assert_eq!(ranks.thresholds[0], 15_000);
+    assert_eq!(ranks.threshold_xp(50, 0), 1_790_000);
+}

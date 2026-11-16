@@ -38,6 +38,36 @@ pub(super) struct Inputs {
     pub art: crate::foreign::art::Extras,
 }
 
+/// The circuit a race with no `--track` opens: the title's default, or the first
+/// circuit this source ships when the default is not in it (a demo holds a
+/// subset of the full game's circuits). The title's default is returned when the
+/// source ships no circuit either, so the miss that follows names it.
+fn default_circuit(archives: &mut Archives, title: &'static oag_title::Title) -> String {
+    let default = title.race.track;
+    if archives.locate(default).is_some() {
+        return default.to_string();
+    }
+    let track_definition = title
+        .track_plugin_definition
+        .unwrap_or(title.plugin_definition);
+    let documents =
+        crate::catalogue::documents(archives, &[title.plugin_definition, track_definition]);
+    let tracks = crate::catalogue::all_tracks(&documents);
+    match crate::catalogue::circuit_to_open(default, &tracks, |entry| {
+        archives.locate(entry).is_some()
+    }) {
+        Some(pick) => {
+            log::warn!(
+                "{}'s default circuit {default} is not in this source; racing {pick}, \
+                 the first circuit it ships",
+                title.name
+            );
+            pick
+        }
+        None => default.to_string(),
+    }
+}
+
 pub(super) fn resolve(
     options: &Options,
     archives: &mut Archives,
@@ -45,6 +75,11 @@ pub(super) fn resolve(
     craft_title: &'static oag_title::Title,
     report: &mut Vec<String>,
 ) -> Result<Inputs> {
+    anyhow::ensure!(
+        options.mode != oag_race::Mode::Detonator || title.race.detonator.is_some(),
+        "{} has no Detonator mode",
+        title.name
+    );
     if let Some(path) = &options.foreign_track {
         return foreign(path, options, archives, title, craft_title, report);
     }
@@ -52,14 +87,19 @@ pub(super) fn resolve(
     // the first point the title is known - see [`Options::track`]. Reported
     // either way, so a run that took a default says which title's default it was
     // rather than leaving a reader to work it out from the path.
+    let default = if options.track.is_none() {
+        default_circuit(archives, title)
+    } else {
+        title.race.track.to_string()
+    };
     let track = match &options.track {
         Some(asked) => asked.clone(),
         None => {
             report.push(format!(
-                "no track named: {}'s own default, {}",
-                title.name, title.race.track
+                "no track named: {}'s own default, {default}",
+                title.name
             ));
-            title.race.track.to_string()
+            default.clone()
         }
     };
 
@@ -75,7 +115,7 @@ pub(super) fn resolve(
     let track = if options.mode == Mode::Zone {
         let zone = match &options.track {
             Some(_) => title.race.zone.variant_of(&track),
-            None => title.race.zone.default_track(title.race.track),
+            None => title.race.zone.default_track(&default),
         };
         if zone == track {
             report.push(format!("zone: racing {track} as named"));
@@ -113,7 +153,7 @@ pub(super) fn resolve(
     let track_blob = archives
         .read_name(&track)
         .with_context(|| format!("reading {track} out of {}", archives.layout.describe()))?;
-    stages::reach(stages::Stage::TrackRead);
+    stages::reach(stages::Stage::TrackRead)?;
     // **This track file's own class numbering.** Read once, off its version word,
     // and consulted everywhere below that used to spell a `vex::CLASS_*`
     // constant - all of which are version 6's. A version-4 track (Pure's are)
@@ -404,6 +444,7 @@ pub(super) fn export(
     let art = None;
     notes.extend(report);
     Ok(oag_trackfile::Track {
+        channels: Vec::new(),
         id: inputs.track,
         title: inputs.label,
         host: Some(oag_source::layers::slug(title)),
@@ -419,6 +460,7 @@ pub(super) fn export(
         path_props: Vec::new(),
         triggers: Vec::new(),
         art,
+        loading: None,
         notes,
     })
 }
@@ -432,14 +474,17 @@ pub(super) fn export(
 pub(super) fn host_zone_sky(
     archives: &mut Archives,
     track: &str,
-    title: &'static oag_title::Title,
-    mode: Mode,
+    (title, mode, store): (
+        &'static oag_title::Title,
+        Mode,
+        oag_gpu::formats::SceneStore,
+    ),
     report: &mut Vec<String>,
 ) -> Option<Model> {
     if !track.starts_with("foreign:") || title.race.zone_sky.is_none() {
         return None;
     }
-    super::environment::hd_sky_model(archives, track, title.race, mode, report)
+    super::environment::hd_sky_model(archives, track, title.race, mode, store, report)
 }
 
 /// A track file's sky: the `Skycube` of the host circuit its art names, built

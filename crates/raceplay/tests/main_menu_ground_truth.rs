@@ -15,6 +15,10 @@
 //! it and compares the whole list, so a row dropped, added or reordered fails by
 //! name rather than by a menu that quietly drifted. The rows this build has nothing
 //! behind (`builds: None`) stay in the list: the list is the disc's.
+//!
+//! The same pass reads each title's pause screens (`Title::pause_menu`) out of the
+//! `InGame_Definition.xml` beside it: every authored screen's row list, whole, and the
+//! default the pause redirect names.
 
 use std::path::{Path, PathBuf};
 
@@ -87,6 +91,7 @@ fn copies(archives: &mut oag_assets::Archives, name: &str) -> Vec<(String, Node)
 }
 
 const PULSE_MAIN: &str = r"Data\Plugins\PI001\GUI\MainMenu_Definition.xml";
+const PULSE_INGAME: &str = r"Data\Plugins\PI001\GUI\InGame_Definition.xml";
 const HD_MAIN: &str = r"Data\Plugins\Frontend\Gui\MainMenu_Definition.xml";
 
 fn check(menu: &MainMenu, found: &[String], what: &str) {
@@ -384,4 +389,549 @@ fn wipeout_2048s_dlc_archives_carry_no_front_end_definition() {
             .collect();
         assert!(found.is_empty(), "{dlc}: {found:?}");
     }
+}
+
+/// The `goto` of the first `<Default>` under the screen named `screen`.
+fn default_goto(root: &Node, screen: &str) -> Option<String> {
+    fn find<'a>(node: &'a Node, screen: &str) -> Option<&'a Node> {
+        if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(screen) {
+            return Some(node);
+        }
+        node.children.iter().find_map(|child| find(child, screen))
+    }
+    fn default(node: &Node) -> Option<&Node> {
+        if node.name.eq_ignore_ascii_case("Default") {
+            return Some(node);
+        }
+        node.children.iter().find_map(default)
+    }
+    default(find(root, screen)?)?
+        .attr("goto")
+        .map(str::to_string)
+}
+
+/// Every pause screen the title authors, row for row, and the screen its pause redirect
+/// opens by default. `InGame Pause MP` and its tournament host are the network modes' and a
+/// race here never opens them, so they are not in the table.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_psp_pause_screens_are_the_four_single_player_lists_on_both_pressings() {
+    let pause = oag_pulse::TITLE
+        .pause_menu
+        .expect("Pulse authors pause screens");
+    for name in ["pulse-psp-eu.chd", "pulse-psp-usa.chd"] {
+        let Some(image) = image(name) else { continue };
+        let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening the disc");
+        let root = read(&mut archives, PULSE_INGAME);
+        for screen in pause.screens {
+            let rows: Vec<&str> = screen.rows.iter().map(|row| row.disc_id).collect();
+            assert_eq!(
+                entries(&root, screen.name, "Option"),
+                rows,
+                "{name}: {:?} against `Title::pause_menu`",
+                screen.name
+            );
+        }
+        assert_eq!(
+            default_goto(&root, "InGame Pause Redirect").as_deref(),
+            Some(pause.default_screen),
+            "{name}: the screen the pause redirect opens by default"
+        );
+        for (_, screen) in pause.by_mode {
+            assert!(
+                pause.screen(screen).is_some(),
+                "{name}: {screen:?} is a table row"
+            );
+        }
+    }
+}
+
+/// Checked, differs: the PS2 pressing authors the same four screens without `EXT_PHOTO` and
+/// `IG_PAUSE_GMAN`. The table is the PSP's; the PS2 gets the same rows built, because the game
+/// manual is not built anywhere and PHOTO MODE is this project's row after OPTIONS where the
+/// screen authors none (`PauseMenu::offers_photo`).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_ps2_pause_screens_are_the_psps_without_photo_and_the_manual() {
+    let pause = oag_pulse::TITLE
+        .pause_menu
+        .expect("Pulse authors pause screens");
+    let Some(image) = image("pulse-ps2-eu.chd") else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening the disc");
+    let root = read(&mut archives, PULSE_INGAME);
+    for screen in pause.screens {
+        let rows: Vec<&str> = screen
+            .rows
+            .iter()
+            .map(|row| row.disc_id)
+            .filter(|id| !["EXT_PHOTO", "IG_PAUSE_GMAN"].contains(id))
+            .collect();
+        assert_eq!(
+            entries(&root, screen.name, "Option"),
+            rows,
+            "PS2: {:?} against `Title::pause_menu` without the two rows it lacks",
+            screen.name
+        );
+    }
+    assert_eq!(
+        default_goto(&root, "InGame Pause Redirect").as_deref(),
+        Some(pause.default_screen),
+        "PS2: the screen the pause redirect opens by default"
+    );
+}
+
+/// The `(item, equals, goto)` of every `Entry` of `screen`'s redirect named `redirect`, and its
+/// `Default`'s `goto`.
+fn redirect_rows(
+    root: &Node,
+    screen: &str,
+    redirect: &str,
+) -> (Vec<(String, String, String)>, String) {
+    fn find<'a>(node: &'a Node, screen: &str) -> Option<&'a Node> {
+        if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(screen) {
+            return Some(node);
+        }
+        node.children.iter().find_map(|child| find(child, screen))
+    }
+    let screen = find(root, screen).unwrap_or_else(|| panic!("no screen {screen:?}"));
+    let redirect = screen
+        .children
+        .iter()
+        .find(|node| {
+            node.name.eq_ignore_ascii_case("Redirect") && node.attr("name") == Some(redirect)
+        })
+        .unwrap_or_else(|| panic!("no redirect {redirect:?}"));
+    let attr = |node: &Node, name: &str| node.attr(name).unwrap_or_default().to_string();
+    let rows = redirect
+        .children
+        .iter()
+        .filter(|node| node.name.eq_ignore_ascii_case("Entry"))
+        .map(|node| (attr(node, "item"), attr(node, "equals"), attr(node, "goto")))
+        .collect();
+    let default = redirect
+        .children
+        .iter()
+        .find(|node| node.name.eq_ignore_ascii_case("Default"))
+        .map(|node| attr(node, "goto"))
+        .expect("a default");
+    (rows, default)
+}
+
+/// Where `screen`'s redirect that carries `forward="start"` goes by default.
+fn start_goes_to(root: &Node, screen: &str) -> Option<String> {
+    fn find<'a>(node: &'a Node, screen: &str) -> Option<&'a Node> {
+        if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(screen) {
+            return Some(node);
+        }
+        node.children.iter().find_map(|child| find(child, screen))
+    }
+    find(root, screen)?
+        .children
+        .iter()
+        .filter(|node| node.name.eq_ignore_ascii_case("Redirect"))
+        .find(|redirect| {
+            redirect.children.iter().any(|values| {
+                values.name.eq_ignore_ascii_case("Values")
+                    && values.attr("forward") == Some("start")
+            })
+        })?
+        .children
+        .iter()
+        .find(|node| node.name.eq_ignore_ascii_case("Default"))?
+        .attr("goto")
+        .map(str::to_string)
+}
+
+/// Pure's pause screens are the `<Menu name="Option">` entries of the three screens `InGame`'s
+/// START redirect picks between, on both pressings. The mode is **in the file**: the redirect
+/// tests the front end's own `Single Player->Mode` and `Main Menu->Mode`, so `by_mode` is read
+/// back from its `Entry` rows (Tournament and multiplayer: `InGame NoRestart Main Menu`; Free
+/// Play: `InGame Free Play Menu`; everything else the default), where Pulse's and HD's is the
+/// executable's switch. The band, its two rules and the menu's place are the file's too, and
+/// the table's `menu_rows` are the two things it does not author (measured, `docs/ui/pause-menu.md`).
+/// `InGame Pause` is a rowless band with a `Paused` text: no row to choose, not what START opens.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pures_pause_screens_are_the_three_menus_the_ingame_redirect_picks_between() {
+    let pause = oag_pure::TITLE
+        .pause_menu
+        .expect("Pure authors pause screens");
+    let layout = pause.layout.expect("Pure names where its screens are read");
+    for name in ["pure-psp-eu.chd", "pure-psp-usa.chd"] {
+        let Some(image) = image(name) else { continue };
+        let mut archives = oag_pure::open(&image.display().to_string()).expect("opening the disc");
+        let root = read(&mut archives, layout.definition);
+        for screen in pause.screens {
+            let rows: Vec<&str> = screen.rows.iter().map(|row| row.disc_id).collect();
+            assert_eq!(
+                entries(&root, screen.name, "Option"),
+                rows,
+                "{name}: {:?} against `Title::pause_menu`",
+                screen.name
+            );
+        }
+        let (rows, default) = redirect_rows(&root, "InGame", "Redirect");
+        assert_eq!(default, pause.default_screen, "{name}: the default screen");
+        let mut named: Vec<(String, String)> = rows
+            .iter()
+            .filter(|(item, _, _)| item.ends_with("->Mode"))
+            .map(|(item, equals, goto)| (format!("{item}={equals}"), goto.clone()))
+            .collect();
+        named.sort();
+        let mut want = vec![
+            (
+                "Main Menu->Mode=Multiplayer".to_string(),
+                pause.screen_for("tournament").name.to_string(),
+            ),
+            (
+                "Single Player->Mode=Free Play".to_string(),
+                pause.screen_for("free_play").name.to_string(),
+            ),
+            (
+                "Single Player->Mode=Tournament".to_string(),
+                pause.screen_for("tournament").name.to_string(),
+            ),
+        ];
+        want.sort();
+        assert_eq!(named, want, "{name}: the redirect's rows against `by_mode`");
+        for screen in pause.screens {
+            assert_eq!(
+                start_goes_to(&root, screen.name).as_deref(),
+                Some("InGame"),
+                "{name}: START resumes from {:?}",
+                screen.name
+            );
+        }
+
+        let screens = oag_ui::screen::Screens::from_xml(
+            &fexml::text(&archives.read_name(layout.definition).expect("the file")).expect("text"),
+        );
+        for screen in pause.screens {
+            let parsed = screens.by_name(screen.name).expect("the screen parses");
+            let fills: Vec<(u32, [f32; 4])> = parsed
+                .fills
+                .iter()
+                .map(|fill| {
+                    (
+                        fill.color,
+                        [
+                            fill.x,
+                            fill.y,
+                            fill.width.unwrap_or(0.0),
+                            fill.height.unwrap_or(0.0),
+                        ],
+                    )
+                })
+                .collect();
+            assert_eq!(
+                fills,
+                [
+                    (0xc000_0010, [0.0, 75.0, 480.0, 120.0]),
+                    (0xff31_92bb, [0.0, 75.0, 480.0, 1.0]),
+                    (0xff31_92bb, [0.0, 175.0, 480.0, 1.0]),
+                ],
+                "{name}: {:?}'s band and its two rules",
+                screen.name
+            );
+            let menu = parsed.menu.as_ref().expect("the screen's Menu widget");
+            assert_eq!(
+                (menu.x, menu.y, menu.middle, menu.align.as_str()),
+                (240.0, 106.0, true, "centre"),
+                "{name}: {:?}",
+                screen.name
+            );
+            let scale = if screen.name == "InGame Main Menu" {
+                1.2
+            } else {
+                1.0
+            };
+            assert!(
+                (menu.scale - scale).abs() < 1e-6,
+                "{name}: {:?}",
+                screen.name
+            );
+        }
+    }
+}
+
+/// The `idstring` of every live row of the HD-style pause screen `screen`: its `Block` and
+/// `List` widgets in document order. The `aVertMenu` and `aBlock` elements the file spells with
+/// an `a` prefix are switched off, and are not rows.
+fn widget_rows(root: &Node, screen: &str) -> Vec<String> {
+    fn find<'a>(node: &'a Node, screen: &str) -> Option<&'a Node> {
+        if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(screen) {
+            return Some(node);
+        }
+        node.children.iter().find_map(|child| find(child, screen))
+    }
+    let screen = find(root, screen).unwrap_or_else(|| panic!("no screen {screen:?}"));
+    screen
+        .children
+        .iter()
+        .filter(|node| {
+            node.name.eq_ignore_ascii_case("Block") || node.name.eq_ignore_ascii_case("List")
+        })
+        .filter_map(|node| {
+            let values = node
+                .children
+                .iter()
+                .find(|child| child.name.eq_ignore_ascii_case("Values"))?;
+            values.attr("idstring").or_else(|| values.attr("IDString"))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+const HD_INGAME: &str = r"Data\Plugins\Frontend\Gui\ingame_definition.xml";
+
+/// Every pause screen `pause` names, row for row, and the screen its pause redirect opens by
+/// default, in `root`.
+fn check_widget_pause_screens(pause: &oag_title::PauseMenu, root: &Node, what: &str) {
+    for screen in pause.screens {
+        let rows: Vec<&str> = screen.rows.iter().map(|row| row.disc_id).collect();
+        assert_eq!(
+            widget_rows(root, screen.name),
+            rows,
+            "{what}: {:?} against `Title::pause_menu`",
+            screen.name
+        );
+    }
+    assert_eq!(
+        default_goto(root, "InGame Pause Redirect").as_deref(),
+        Some(pause.default_screen),
+        "{what}: the screen the pause redirect opens by default"
+    );
+    for (_, screen) in pause.by_mode {
+        assert!(
+            pause.screen(screen).is_some(),
+            "{what}: {screen:?} is a table row"
+        );
+    }
+}
+
+/// HD's pause screens are `Block` and `List` widgets, not an `Option` menu's entries. The file
+/// the game reads (`Archives::read_name`) is the table. The other four copies are **checked,
+/// differs**: `DATA05` has no `FE_GHOST` row, and the base game's `DATA02` and `DATA03` neither
+/// that nor `ONL_VIEW_INV`, and their Speed Lap screen also has RESTART and QUIT. Everything else
+/// agrees. The split-screen and network screens are the ones a race here never opens, so they
+/// are not in the table.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hds_pause_screens_are_the_five_single_player_widget_lists() {
+    let Some(image) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let pause = oag_hd::TITLE.pause_menu.expect("HD authors pause screens");
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("opening the disc");
+    check_widget_pause_screens(
+        pause,
+        &read(&mut archives, HD_INGAME),
+        "the file the game reads",
+    );
+    check_pause_layout(&mut archives, pause);
+    let all = copies(&mut archives, HD_INGAME);
+    assert_eq!(
+        all.len(),
+        5,
+        "{:?}",
+        all.iter().map(|c| &c.0).collect::<Vec<_>>()
+    );
+    for (label, root) in &all {
+        for screen in pause
+            .screens
+            .iter()
+            .filter(|screen| !screen.name.ends_with("Speed Lap"))
+        {
+            let rows: Vec<&str> = screen
+                .rows
+                .iter()
+                .map(|row| row.disc_id)
+                .filter(|id| !["ONL_VIEW_INV", "FE_GHOST"].contains(id))
+                .collect();
+            let found: Vec<String> = widget_rows(root, screen.name)
+                .into_iter()
+                .filter(|id| !["ONL_VIEW_INV", "FE_GHOST"].contains(&id.as_str()))
+                .collect();
+            assert_eq!(found, rows, "{label}: {:?}", screen.name);
+        }
+    }
+}
+
+/// The globals each archive's copy of the front end's `Skin.xml` declares, by archive label.
+fn skin_globals(
+    archives: &mut oag_assets::Archives,
+) -> Vec<(String, std::collections::HashMap<String, String>)> {
+    const SKIN: &str = r"Data\Plugins\Frontend\Gui\Skin.xml";
+    let containers = std::iter::once(&mut archives.data)
+        .chain(archives.patch.iter_mut())
+        .chain(archives.fe.iter_mut())
+        .chain(archives.extra.iter_mut());
+    let mut out = Vec::new();
+    for container in containers {
+        if !container.contains(SKIN) {
+            continue;
+        }
+        let label = container.label().to_string();
+        let blob = container.read_entry(SKIN).expect("the skin");
+        let xml = fexml::text(&blob).expect("text");
+        out.push((label, oag_ui::screen::Screens::from_xml(&xml).globals));
+    }
+    out
+}
+
+/// Where HD's pause screens draw their rows, read off the file the game reads: every row of
+/// every screen is a `Block` or `List` at `x = 480`, fifty apart from `y = 310`, in the table's
+/// order, and the chrome screen behind them carries the two rules (`y = 292` and `790`, 960
+/// wide). The focused row's ink is `HD_Blue`, which the HD-style archive resolves to
+/// `0xff8ac0ca` and the Fury-style one to red: the original's pause screen on RPCS3 in the HD
+/// style measured (138, 192, 202) on its focused row and (100, 100, 100) on the others.
+fn check_pause_layout(archives: &mut oag_assets::Archives, pause: &oag_title::PauseMenu) {
+    let layout = pause
+        .layout
+        .expect("HD names where its screens are drawn from");
+    let blob = archives.read_name(layout.definition).expect("the file");
+    let xml = fexml::text(&blob).expect("text");
+    let skins = skin_globals(archives);
+    let colour = |globals: &std::collections::HashMap<String, String>, name: &str| {
+        oag_ui::screen::parse_argb(globals.get(name).unwrap_or_else(|| panic!("no {name}")))
+    };
+    let mut styles = (false, false);
+    for (label, globals) in &skins {
+        let blue = colour(globals, "HD_Blue");
+        let grey = colour(globals, "HD_Grey");
+        if label.contains("DATA06") {
+            assert_eq!(
+                blue,
+                Some(0xff8a_c0ca),
+                "{label}: the HD style's focused ink"
+            );
+            assert_eq!(
+                grey,
+                Some(0xff64_6464),
+                "{label}: the HD style's resting ink"
+            );
+            styles.0 = true;
+        } else if label.contains("DATA00") {
+            assert_ne!(
+                blue,
+                Some(0xff8a_c0ca),
+                "{label}: the Fury style is not cyan"
+            );
+            assert_eq!(
+                grey,
+                Some(0xff96_9696),
+                "{label}: the Fury style's resting ink"
+            );
+            styles.1 = true;
+        }
+    }
+    assert_eq!(
+        styles,
+        (true, true),
+        "both styles' archives were read: {:?}",
+        skins.iter().map(|s| &s.0).collect::<Vec<_>>()
+    );
+    // The focused row's ink is whatever `HD_Blue` the served front end declares: the page reads
+    // the file with the skin's globals as fallbacks, so each style's own colours reach the row.
+    for (label, globals) in skins {
+        let fallback: Vec<(&str, &str)> = globals
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+            .collect();
+        let read = oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, &fallback);
+        let want = oag_ui::screen::parse_argb(&globals["HD_Blue"]).expect("a colour");
+        let rows = read.by_name("InGame Pause SP").expect("the default screen");
+        let focus = rows
+            .blocks
+            .iter()
+            .find(|block| block.name.as_deref() == Some("Continue"))
+            .expect("the CONTINUE block");
+        assert_eq!(
+            focus.active_color, want,
+            "{label}: CONTINUE's focus ink is HD_Blue"
+        );
+        assert!(focus.selectable, "{label}");
+    }
+    let screens = oag_ui::screen::Screens::from_xml(&xml);
+    let chrome_name = layout.chrome.expect("HD's screens share a chrome screen");
+    let chrome = screens.by_name(chrome_name).expect("the chrome screen");
+    let rules: Vec<[f32; 4]> = chrome
+        .fills
+        .iter()
+        .map(|fill| {
+            [
+                fill.x,
+                fill.y,
+                fill.width.unwrap_or(0.0),
+                fill.height.unwrap_or(0.0),
+            ]
+        })
+        .collect();
+    assert_eq!(
+        rules,
+        [[480.0, 292.0, 960.0, 4.0], [480.0, 790.0, 960.0, 4.0]],
+        "{chrome_name}: the two rules"
+    );
+    for screen in pause.screens {
+        let read = screens.by_name(screen.name).expect(screen.name);
+        let mut at: Vec<(f32, f32)> = read
+            .blocks
+            .iter()
+            .map(|block| (block.x, block.y))
+            .chain(read.lists.iter().map(|list| (list.x, list.y)))
+            .collect();
+        at.sort_by(|a, b| a.1.total_cmp(&b.1));
+        assert!(at.len() >= screen.rows.len(), "{}", screen.name);
+        for (index, (x, y)) in at.iter().take(screen.rows.len()).enumerate() {
+            assert_eq!(*x, 480.0, "{}: row {index}", screen.name);
+            assert_eq!(
+                *y,
+                310.0 + 50.0 * index as f32,
+                "{}: row {index}",
+                screen.name
+            );
+        }
+    }
+}
+
+/// Omega's `ingame_definition.xml` (`data00`, `data08`, `data09`) is HD's file with the same five
+/// pause screens **without `ONL_VIEW_INV`** (checked, differs): the table is the same rows less
+/// that one, in all three copies.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omegas_pause_screens_are_hds_without_the_invites_row_in_every_archive() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let pause = oag_omega::pause_menu::PAUSE_MENU;
+    let mut archives = oag_omega::open(&source.display().to_string()).expect("opening Omega");
+    let all = copies(&mut archives, HD_INGAME);
+    assert!(
+        all.len() >= 3,
+        "{:?}",
+        all.iter().map(|c| &c.0).collect::<Vec<_>>()
+    );
+    for (label, root) in &all {
+        check_widget_pause_screens(pause, root, label);
+    }
+    let hd = oag_hd::TITLE.pause_menu.expect("HD authors pause screens");
+    for screen in hd.screens {
+        let hd_rows: Vec<&str> = screen
+            .rows
+            .iter()
+            .map(|row| row.disc_id)
+            .filter(|id| *id != "ONL_VIEW_INV")
+            .collect();
+        let omega_rows: Vec<&str> = pause
+            .screen(screen.name)
+            .expect("the same screens")
+            .rows
+            .iter()
+            .map(|row| row.disc_id)
+            .collect();
+        assert_eq!(omega_rows, hd_rows, "{:?}", screen.name);
+    }
+    assert_eq!(pause.by_mode, hd.by_mode, "the same mode switch");
 }

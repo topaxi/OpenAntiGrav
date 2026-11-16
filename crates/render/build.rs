@@ -5,7 +5,14 @@
 fn main() {
     oag_shader_check::link_each(
         "shaders",
-        &["caster", "ghost", "loading", "occlusion", "shadow"],
+        &[
+            "caster",
+            "ghost",
+            "loading",
+            "occlusion",
+            "probe_blend",
+            "shadow",
+        ],
     );
     oag_shader_check::check_dir("src", &[]);
     println!("cargo::rerun-if-changed=build.rs");

@@ -161,6 +161,28 @@ cell does nothing and its Circle cancels, neither of which the widget does. Both
 **The alphabet is not in this file.** It is 70 bytes in `BOOT.BIN`, not the
 WAD - see `oag_pulse::tag_input::ALPHABET`.
 
+### Which titles keep a name and a tag
+
+Read 2026-11-06 from executable strings and shipped XML only, no decompile, so confidence 55. "Used" means the executable names the
+widget by the path `Create Profile Setup->Name` or `->Tag`.
+
+| Title | Name (`length="10"`) | Tag (`length="3"`) | Evidence |
+| --- | --- | --- | --- |
+| Pulse PSP | used | used | both paths in `BOOT.BIN`, USA and EU; `<TagInput>` in `Data.wad` |
+| Pulse PS2 | not checked | not checked | `TagInput` in `SCES_547.48`; the two paths not searched |
+| Pure PSP | used | used | both paths in `BOOT.BIN`; no front-end XML on the disc |
+| HD/Fury | used | no | `->Name` in `EBOOT.elf`, no `->Tag` string |
+| 2048 | no | no | no `TagInput` or `Create Profile` string in any `eboot.elf`; `Posting NpOnlineId`, `Adding Column -- PlayerName` |
+| Omega | no | no | no `Create Profile` string in `eboot.bin`, base or patch |
+
+Omega's `data00`, `data08` and `data09.psarc` still ship `<TagInput name="Name">` and `name="Tag"` in HD's front-end XML, on screens such
+as `Create Profile Setup` and `CreateProfileFromBootScreen`. Nothing in the executable names them that way, so they read as leftovers.
+HD's own PSARCs were not read for this table; Omega's copy stands in. Whether 2048 and Omega take the PSN online ID as the only
+player name is inferred from the strings above, not read.
+
+A multiplayer tag on Pulse draws the slot's name, not the 3-character tag
+(`docs/ghidra/functions/psp-pulse-usa/hud-game-options.md`, `MpTag_GetPlayerName`).
+
 ## `FEGlobals->` and `FEConst->`: named values where a number is expected
 
 An attribute that expects a number may instead name a value held in a run-time

@@ -12,7 +12,12 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
+mod scenery_sort_ground_truth;
 mod selection_screens_ground_truth;
+mod settings_schema;
 mod sfx_ground_truth;
 mod sfx_weapon_ground_truth;
 mod shake_blur_ground_truth;
@@ -26,6 +31,8 @@ mod split_hud_ground_truth;
 mod split_recording_ground_truth;
 mod split_screen_ground_truth;
 mod texture_detail_ground_truth;
+mod texture_pack_frontend_ground_truth;
+mod texture_pack_titles;
 mod title_behaviour_data;
 mod track_audio_2048_ground_truth;
 mod track_audio_ground_truth;
@@ -38,13 +45,16 @@ mod vita_2048_campaign_progress_ground_truth;
 mod vita_2048_dlc_menus_ground_truth;
 mod vita_2048_endrace_ground_truth;
 mod vita_2048_event_card_ground_truth;
+mod vita_2048_focus_ground_truth;
 mod vita_2048_music_ground_truth;
+mod vita_2048_season_cards_ground_truth;
 mod weapon_stamp_ground_truth;
 mod window_layout_ground_truth;
 mod window_seats_grid_ground_truth;
 mod wreck_ground_truth;
 mod wreck_voice_ground_truth;
 mod zone_airbrake_flaps_ground_truth;
+mod zone_preview_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

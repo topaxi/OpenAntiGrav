@@ -349,7 +349,7 @@ fn decode_identifier(raw: &[u8]) -> String {
             if !version.is_empty() && version.bytes().all(|b| b.is_ascii_digit()) =>
         {
             // `NAME.;1` is a file with no extension; the trailing dot is noise.
-            name.strip_suffix('.').unwrap_or(name).to_string()
+            name.trim_suffix('.').to_string()
         }
         _ => text,
     }

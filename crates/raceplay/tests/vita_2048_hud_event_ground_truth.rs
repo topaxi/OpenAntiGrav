@@ -173,6 +173,56 @@ fn the_hd_campaigns_zone_reads_its_hd_layout() {
         hd.report
     );
     assert_eq!(authored(&hd), [true; 4], "{:#?}", hd.report);
+    the_zone_line_names_the_class_in_the_players_language(&hd);
+}
+
+/// The class name over `ZONE` is the localised string of the table's id, off the zone counter
+/// (`FUN_811538c2`, `docs/ghidra/functions/vita-2048-eu-v104/zone-speed-class-text.md`): `FLASH` at
+/// zone 5 as `68-zone-5.png` reads, `SUB-FLASH` and `ZEN` and `SUPERSONIC` where the ids are
+/// `MSC_*`/`IG_HUD_*` keys of the language plugin. Runs on the load
+/// [`the_hd_campaigns_zone_reads_its_hd_layout`] already made.
+///
+/// Fails if `HudArt::zone_speed_classes` is dropped from 2048 (nothing is drawn), if the ids stop
+/// resolving against 2048's own plugins (the raw key is drawn), or if a threshold moves.
+fn the_zone_line_names_the_class_in_the_players_language(loaded: &oag_raceplay::Loaded) {
+    let context = loaded.hud.context().expect("the layout parses");
+    let drawn = |zone: u32| -> Vec<String> {
+        let frame = oag_hud::draw_list(
+            &context,
+            &oag_hud::Readout {
+                zone,
+                ..oag_hud::Readout::blank()
+            },
+        );
+        frame
+            .hud_text
+            .iter()
+            .chain(&frame.small_text)
+            .filter_map(|draw| match draw {
+                Draw::Text { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    for (zone, name) in [
+        (2, "VENOM"),
+        (3, "SUB-FLASH"),
+        (5, "FLASH"),
+        (35, "ZEN"),
+        (75, "SUPERSONIC"),
+    ] {
+        let text = drawn(zone);
+        assert!(
+            text.iter().any(|line| line == name),
+            "zone {zone}: {text:?}"
+        );
+        assert!(
+            !text
+                .iter()
+                .any(|line| line.starts_with("MSC_") || line.starts_with("IG_HUD_")),
+            "zone {zone} drew a raw string key: {text:?}"
+        );
+    }
 }
 
 /// The HD Campaign's grid with Pilot Assist Extreme on, as the original's frame
@@ -184,6 +234,9 @@ fn the_hd_campaigns_zone_reads_its_hd_layout() {
 /// corner (a solid white bar), if the icon stops following the setting, or if
 /// `HudArt::total_time_hundredths` is dropped from 2048. Omega plays HD's layouts and HD authors
 /// no widget of this kind (checked over HD's 191 HUD files), so it is **checked, not wired**.
+///
+/// It ends on [`a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame`]: the same
+/// 17 s load serves both claims.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths() {
@@ -222,4 +275,109 @@ fn pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths() {
         .collect();
     assert!(text.contains(&"0.00.00"), "TOTAL in hundredths: {text:?}");
     assert!(text.contains(&"0.00.0"), "CURRENT in tenths: {text:?}");
+
+    a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame(&context, &mut race);
+}
+
+/// 2048's pickup grant on the disc's own layout and Missile icon: the icon sits at the authored
+/// top-centre rect while the caption is up, then flies down and left at `dt * 1800.0` a frame
+/// with `PickupBgFrame` widening, and settles at the slot (`Hud_UpdatePickupIcon`,
+/// `Hud_BindWidgets`). Runs on the race
+/// [`pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths`] already loaded.
+///
+/// Fails if `Readout::pickup_fly` is dropped from the readout or the draw (the icon snaps), if
+/// the slot loses its `2.0` x nudge, or if the frame stops following the flight.
+fn a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame(
+    context: &oag_hud::Context<'_>,
+    race: &mut oag_raceplay::Race,
+) {
+    let slot = race.player_slot();
+    // Whatever the race held before, a few ticks of nothing re-arm the pop-in (the height runs out
+    // at 10/s, then the next frame resets it).
+    race.sim.world.ships[slot].pickup.weapon = None;
+    for _ in 0..20 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+    }
+    race.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+
+    // The icon is the one 85x86 sprite (`PickupIcon`'s size) and the frame the one 95 high
+    // (`PickupBgFrame`'s height, which the fly leaves alone).
+    let frame_of = |race: &oag_raceplay::Race| {
+        let mut icon = None;
+        let mut frame = None;
+        for draw in &oag_hud::draw_list(context, &race.readout()).sprites {
+            if let Draw::Sprite { rect, .. } = draw {
+                if rect[2..] == [85.0, 86.0] {
+                    icon = Some(*rect);
+                } else if rect[3] == 95.0 {
+                    frame = Some(*rect);
+                }
+            }
+        }
+        (icon, frame)
+    };
+    // The icon pops in over its first ticks (`hud+0x220` falls `10 -> 1` at 70/s, `hud+0x224`
+    // rises `0 -> 1` at 7/s): a wide bar about the authored centre, not yet its 85x86 box.
+    race.tick(&oag_gameplay::PlayerInputs::none());
+    let popping = oag_hud::draw_list(context, &race.readout())
+        .sprites
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Sprite { rect, .. }
+                if (rect[0] + rect[2] * 0.5 - 480.0).abs() < 0.01
+                    && (rect[1] + rect[3] * 0.5 - 60.0).abs() < 0.01 =>
+            {
+                Some(*rect)
+            }
+            _ => None,
+        })
+        .expect("the popping icon draws about the authored centre");
+    assert!(
+        popping[2] > 85.0 * 5.0 && popping[3] < 86.0 * 0.3,
+        "{popping:?}"
+    );
+    // Nine more ticks finish the pop (`9 / 70` s wide, `1 / 7` s high); the caption has run ten.
+    for _ in 0..9 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+    }
+    let mut seen = Vec::new();
+    for _ in 0..80 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        let (icon, frame) = frame_of(race);
+        seen.push((
+            race.readout().pickup_announcing,
+            (icon.expect("the Missile icon draws once popped"), frame),
+        ));
+    }
+    let announcing = seen.iter().take_while(|(up, _)| *up).count();
+    assert!(
+        (49..=50).contains(&announcing),
+        "{announcing} ticks of caption left after the pop"
+    );
+    for (_, (icon, frame)) in &seen[..announcing] {
+        assert_eq!(
+            icon[..2],
+            [437.5, 17.0],
+            "the authored rect while announcing"
+        );
+        assert_eq!(*frame, None, "no frame while announcing");
+    }
+    let flight = &seen[announcing..];
+    let moved = flight
+        .iter()
+        .take_while(|(_, (icon, _))| icon[..2] != [101.5, 404.5])
+        .count();
+    assert!((12..=14).contains(&moved), "{moved} ticks in flight");
+    let mut last = (f32::MIN, f32::MAX, 0.0);
+    for (_, (icon, frame)) in &flight[..moved] {
+        let width = frame.expect("the frame draws in flight")[2];
+        assert!(
+            icon[1] > last.0 && icon[0] < last.1 && width > last.2,
+            "{icon:?}"
+        );
+        last = (icon[1], icon[0], width);
+    }
+    let (_, (icon, frame)) = flight.last().expect("it settled");
+    assert_eq!(icon[..2], [101.5, 404.5], "the slot");
+    assert_eq!(frame.expect("the frame stays")[2..], [110.0, 95.0]);
 }

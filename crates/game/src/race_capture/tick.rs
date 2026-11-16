@@ -17,6 +17,8 @@ pub struct Medals {
         oag_tables::race_campaign::Cell,
         oag_tables::race_campaign::Difficulty,
     )>,
+    /// The title's [`oag_title::Campaign::counting_modes`], the law [`Self::cell`] is judged by.
+    pub counting_modes: &'static [&'static str],
     /// The best medal the watch has raised so far, as `RaceStage::earned_medal`.
     pub earned: std::cell::Cell<Option<oag_tables::race_campaign::Medal>>,
 }
@@ -44,18 +46,34 @@ pub(super) fn advance_one_tick(
     // Before the tick, so `spend_pickup` can fire it on this tick's edge.
     // Every viewed slot, which is slot 0 alone without a split.
     for slot in 0..race.viewport_count() {
-        if let Some(weapon) = options.give
-            && race.sim.world.ships[slot].pickup.weapon.is_none()
-        {
-            race.sim.world.ships[slot].pickup.weapon = Some(weapon);
+        if let Some(weapon) = options.give {
+            race.give_weapon(slot, weapon);
         }
     }
+    let held_pose =
+        (options.pose_hold == pose_hold::Hold::EveryTick).then(|| pose_hold::StartPose::of(race));
     match (&options.net, &options.remote_correction) {
         (Some(net), _) => net.drive_to(race, u64::from(tick) + 1, snapshot),
         (None, Some(scene)) => scene.tick(race, &snapshot, tick),
+        (None, None) if options.shot.restage.is_some() => {
+            let record = options
+                .shot
+                .restage
+                .as_deref()
+                .expect("matched by the guard");
+            for event in record.replay.events_at(u64::from(tick)) {
+                if let Err(why) = race.apply_event(event) {
+                    log::warn!("--from-png: {why}");
+                }
+            }
+            race.tick(&record.replay.inputs_at(u64::from(tick)));
+        }
         (None, None) => {
             race.tick(&oag_gameplay::PlayerInputs::single(snapshot));
         }
+    }
+    if let Some(pose) = held_pose {
+        pose.restore_at_rest(race);
     }
     // After the tick, as an impact arms it: the frame this tick ends on shows
     // the shake at progress 0.
@@ -84,7 +102,13 @@ pub(super) fn advance_one_tick(
     }
     if let Some((cell, difficulty)) = &options.medals.cell {
         let mut earned = options.medals.earned.get();
-        crate::medal_watch::tick(cell, *difficulty, &mut earned, race);
+        crate::medal_watch::tick(
+            cell,
+            *difficulty,
+            options.medals.counting_modes,
+            &mut earned,
+            race,
+        );
         options.medals.earned.set(earned);
     }
     race.set_weapon_lights(!options.no_weapon_lights);

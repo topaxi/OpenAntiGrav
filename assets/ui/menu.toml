@@ -10,7 +10,9 @@
 # row that does nothing when pressed:
 #
 #   - every `target` names a page in this file;
-#   - every `action` is one the game handles: launch_race, launch_remix, quit,
+#   - every `action` is one the game handles: launch_race (with `launch = { ... }`
+#     naming its inputs by setting key, or without it for the RACE page's own
+#     launch), quit,
 #     save_pilot, new_pilot, rename_pilot, delete_pilot, open_campaign, multiplayer_local,
 #     lan_host, lan_join, online_open, online_create, online_join;
 #   - every `button` is an abstract button name;
@@ -57,11 +59,11 @@ title_string_id = "OAG_MENU_MAIN_TITLE"
 # **This page holds the rows an original main menu can have, each with a stable
 # `id`, and nothing else.** A title shows the ones its own disc's main menu opens,
 # in the disc's order (`oag_title::Title::main_menu`); every other row of the main
-# page - REMIX, QUIT, RECORDS where the original has none, RACEBOX or OPTIONS
+# page - QUIT, RECORDS where the original has none, RACEBOX or OPTIONS
 # where the original has none - comes from the built-in mod `oag-extras`
 # (`assets/mods/oag-extras/menu.toml`), attached with `parent`. A row a player's
 # mod adds attaches the same way. See `docs/architecture/menus.md` and ADR-0066.
-# The `remix` and `records` pages below are reachable only through those rows, so
+# The `records` page below is reachable only through those rows, so
 # this file is whole only once `Definition::build` has merged the extras in.
 
 # **Ordered and worded to match `MainMenu_Definition.xml`'s own first two
@@ -265,7 +267,8 @@ values_from = "race_modes"
 # where Wipeout Pulse's authors four, each measured on its own disc. A literal
 # list here would have to be either wrong for Pure or silently reused as if
 # someone had checked - see `oag_title::SpeedClasses`. This row offers the
-# booted title's own ladder; RACE REMIX below unions every available title's.
+# booted title's own ladder; a mod page may offer every available title's
+# (`values_from = { query = "speed_classes_union" }`).
 [[page.entry]]
 kind = "choice"
 label = "SPEED CLASS"
@@ -335,6 +338,18 @@ setting = "race.kill_target"
 values_from = "kill_targets"
 disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race", "head_to_head"] }
 
+# The race box's `TARGET` row, HD's Eliminator score target: the values are the steps of the
+# disc's own `Eliminations` slider (`oag_game::boot::RaceSetup::score_targets`, `200` to `600`
+# by `20`). It stands where `KILLS` does and only a title whose Eliminator ends on a score offers
+# it (`Definition::drop_rows_picked_on_screen`); the original enables it in an Eliminator alone.
+[[page.entry]]
+kind = "choice"
+label = "TARGET"
+string_id = "OAG_RACE_TARGET"
+setting = "race.score_target"
+values_from = "score_targets"
+disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race", "head_to_head"] }
+
 # Live in Zone too: every craft flies the one Zone hull, but the team is the one the race and
 # its loyalty credit use, and on some titles the paint on that hull
 # (`oag_title::ZoneTeamStep`). VARIANT below stays greyed there - the hull has no variant to pick.
@@ -383,114 +398,6 @@ kind = "back"
 label = "BACK"
 string_id = "OAG_MENU_BACK"
 
-[[page]]
-id = "remix"
-title = "RACE REMIX"
-title_string_id = "OAG_REMIX_PAGE_TITLE"
-
-# Mode and AI difficulty are title-agnostic and shared with the ordinary RACE
-# page verbatim - same settings keys, same values, same `disabled_by`.
-# Nothing about racing a mixed grid changes what a mode or a difficulty means.
-#
-# **SPEED CLASS is no longer one of them.** It shares the settings key, and
-# that is all: the RACE page offers the booted title's ladder and the row
-# below offers the union across every title this machine can open. A mixed
-# grid is exactly the case where one title's four rungs are the wrong list.
-[[page.entry]]
-kind = "choice"
-label = "MODE"
-string_id = "OAG_RACE_MODE"
-setting = "race.mode"
-values_from = "race_modes"
-
-# The union of every available title's ladder, not this one title's - the row
-# that makes RACE REMIX a cross-title surface for the class the way TRACK
-# TITLE and CRAFT TITLE already are for the circuit and the craft. Built from
-# whichever titles this machine can actually open a source for, so a class
-# whose title is absent is not offered at all rather than offered and then
-# unable to load. See `oag_title::SpeedClasses::union`.
-[[page.entry]]
-kind = "choice"
-label = "SPEED CLASS"
-string_id = "OAG_RACE_SPEED_CLASS"
-setting = "race.class"
-values_from = "remix_speed_classes"
-
-[[page.entry]]
-kind = "choice"
-label = "AI DIFFICULTY"
-string_id = "OAG_RACE_AI_DIFFICULTY"
-setting = "ai.difficulty"
-values_from = "remix_ai_difficulty"
-disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "head_to_head"] }
-# A class no controller covers races without opponents (`oag_ai::coverage`:
-# this project's driver is verified on Pulse's four and Pure's VECTOR; the
-# original's driver only in the campaign). The list below is the classes the
-# project driver does not cover - a test keeps it equal to `KNOWN` minus
-# `PROJECT_DRIVER_CLASSES`.
-pinned = [
-    { setting = "race.class", values = ["superphantom"], shows = "none" },
-]
-
-# Title first, then a title-scoped list, on both halves - the shape the
-# feature's own request asked for. TRACK TITLE and CRAFT TITLE are the same
-# `values_from` (every title this machine can open a source for); TRACK and
-# TEAM are resupplied every time the title above them changes, which is what
-# makes them different rows from the ordinary RACE page's `tracks`/`teams`
-# rather than the same ones reused.
-[[page.entry]]
-kind = "choice"
-label = "TRACK TITLE"
-string_id = "OAG_REMIX_TRACK_TITLE"
-setting = "remix.track_title"
-values_from = "titles"
-
-[[page.entry]]
-kind = "choice"
-label = "TRACK"
-string_id = "OAG_RACE_TRACK"
-setting = "remix.track"
-values_from = "remix_tracks"
-
-[[page.entry]]
-kind = "choice"
-label = "CRAFT TITLE"
-string_id = "OAG_REMIX_CRAFT_TITLE"
-setting = "remix.craft_title"
-values_from = "craft_titles"
-
-[[page.entry]]
-kind = "choice"
-label = "TEAM"
-string_id = "OAG_RACE_TEAM"
-setting = "remix.team"
-values_from = "remix_teams"
-
-# Most teams offer nothing here - `values_from = "remix_variant"` is supplied
-# empty for them, the same idiom MUSIC SOURCE uses on a machine with one
-# disc, which draws the row unusable rather than lying about having a choice.
-# Wipeout 2048's five-team roster and Wipeout HD/Fury's twelve are the ones
-# today whose teams carry more than one selectable directory - and 2048
-# reships HD/Fury's twelve, so this row is what reaches them there too.
-[[page.entry]]
-kind = "choice"
-label = "VARIANT"
-string_id = "OAG_RACE_VARIANT"
-setting = "remix.variant"
-values_from = "remix_variant"
-disabled_by = { setting = "race.mode", value = "zone" }
-
-[[page.entry]]
-kind = "action"
-label = "START"
-string_id = "OAG_RACE_START"
-action = "launch_remix"
-
-[[page.entry]]
-kind = "back"
-label = "BACK"
-string_id = "OAG_MENU_BACK"
-
 # **The disc authors this screen too, and this page follows its shape rather
 # than inventing one.** `Data\Plugins\PI001\GUI\RecordGrid_Definition.xml`
 # (in `Data.wad`, on the same `Skin.xml` `LoadXML` list `docs/formats/
@@ -507,10 +414,9 @@ string_id = "OAG_MENU_BACK"
 # hand-authored layouts. TRACK and the four per-class rows below it are the
 # disc's own shape.
 #
-# **Shares `race.mode`/`race.track` with the RACE page, and that is all** -
-# the same precedent RACE REMIX's own MODE row already set: browsing here
-# moves what a launched race would use, which is a feature, not a leak - see
-# that page's own comment above.
+# **Shares `race.mode`/`race.track` with the RACE page, and that is all**:
+# browsing here moves what a launched race would use, which is a feature, not
+# a leak.
 [[page]]
 id = "records"
 title = "RACE RECORDS"
@@ -566,6 +472,58 @@ string_id = "OAG_MODS_ENABLED"
 setting = "mods.enabled"
 values_from = "mod_switch"
 
+# The selected mod's own settings page (its `menu.toml`'s `settings`): on the page only while
+# that mod is on and has one.
+[[page.entry]]
+kind = "action"
+label = "SETTINGS"
+string_id = "OAG_MODS_SETTINGS"
+action = "open_mod_settings"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
+# **The REPLAYS page** (ADR-0087, stage 5). One REPLAY row that steps through the recorded races
+# (`values_from = "replays"`: `saved/` then `auto/`, newest first, read each time the menus open;
+# a file this build will not play is listed dimmed with the reason, as a mod that did not load
+# is), WATCH, KEEP and DELETE for the file it is on, and under them its detail lines
+# (`oag_game::replays::page`). `replays.selected` is never stored. Reached from the main page
+# through the built-in mod `oag-extras`, as PHOTO MODE is. Chosen, not measured.
+[[page]]
+id = "replays"
+title = "REPLAYS"
+title_string_id = "OAG_REPLAYS_PAGE_TITLE"
+
+[[page.entry]]
+kind = "choice"
+label = "REPLAY"
+string_id = "OAG_REPLAYS_ROW"
+setting = "replays.selected"
+values_from = "replays"
+
+[[page.entry]]
+id = "watch_replay"
+kind = "action"
+label = "WATCH"
+string_id = "OAG_REPLAYS_WATCH"
+action = "watch_replay"
+
+[[page.entry]]
+id = "keep_replay"
+kind = "action"
+label = "KEEP"
+string_id = "OAG_REPLAYS_KEEP"
+action = "keep_replay"
+
+[[page.entry]]
+id = "delete_replay"
+kind = "action"
+label = "DELETE"
+string_id = "OAG_REPLAYS_DELETE"
+action = "delete_replay"
+
 [[page.entry]]
 kind = "back"
 label = "BACK"
@@ -605,6 +563,20 @@ kind = "submenu"
 label = "CONTROLS"
 string_id = "OAG_OPTIONS_CONTROLS"
 target = "controls"
+
+# The name every title shares, and the tag Pulse and Pure draw (`oag_title::profile`). The
+# rows are dropped on a title that keeps neither (`drop_unavailable_player_rows`).
+[[page.entry]]
+kind = "action"
+label = "PLAYER NAME"
+string_id = "OAG_OPTIONS_PLAYER_NAME"
+action = "edit_player_name"
+
+[[page.entry]]
+kind = "action"
+label = "PLAYER TAG"
+string_id = "OAG_OPTIONS_PLAYER_TAG"
+action = "edit_player_tag"
 
 # Ours - no disc has ever shipped a pilot editor, because pilots are this
 # project's own invention. See `crates/game/src/pilots.rs`.
@@ -743,6 +715,18 @@ setting = "display.hud_style"
 values_from = "hud_styles"
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 
+# How much of the screen the front end and the HUD use: HD's own `Screen Size` slider
+# (`OPT_SCREEN_SIZE`, `additional_definition.xml`'s `Safe Area Setting`, 80 to 100 in steps of 2,
+# default 90) and, on a title whose disc authors none, the same range with a default of 100 so it
+# looks unchanged until moved (`oag_title::hud::SafeArea`). One value for every title
+# (`[graphics] hud_safe_area`), the values supplied from the booted title's data. Applies live.
+[[page.entry]]
+kind = "choice"
+label = "SCREEN SIZE"
+string_id = "OAG_DISPLAY_SCREEN_SIZE"
+setting = "graphics.hud_safe_area"
+values_from = "safe_areas"
+
 # Pulse's `Dynamic HUD` option (`Additional_Definition.xml`, a list of `FE_DEFAULT`,
 # `FE_CONCAVE`, `FE_FLAT` and `FE_OFF`, default `FE_DEFAULT`). `off` draws no HUD at all, the
 # song marquee included: a poke of the byte `FE_OFF` clears removed every element from a
@@ -757,6 +741,36 @@ label = "DYNAMIC HUD"
 string_id = "OAG_DISPLAY_DYNAMIC_HUD"
 setting = "display.dynamic_hud"
 values = ["default", "off"]
+
+# Pulse's `Ghost Ship Visible` and `Auto Load Ghost` (`Additional_Definition.xml`'s `Settings`
+# screen, `FE_ON` / `FE_OFF`, default on; the PS2 list lacks the second and the PSP list wins).
+# Visible off stops drawing the ghost ship and nothing else: it is still raced, recorded and
+# replaced by a quicker lap. Auto load off races no stored ghost when a Time Trial or Speed Lap
+# starts; the run is still recorded and a quicker lap still saved. Each is dropped on a title whose
+# options list no such row (`menu::Definition::drop_unavailable_game_options`).
+[[page.entry]]
+kind = "choice"
+label = "GHOST SHIPS VISIBLE"
+string_id = "OAG_DISPLAY_GHOST_SHIP_VISIBLE"
+setting = "display.ghost_ship_visible"
+values = ["on", "off"]
+
+[[page.entry]]
+kind = "choice"
+label = "AUTO LOAD GHOST"
+string_id = "OAG_DISPLAY_AUTO_LOAD_GHOST"
+setting = "display.auto_load_ghost"
+values = ["on", "off"]
+
+# Pulse's `Multiplayer Tags` (PSP list; `FE_ON` / `FE_OFF`, default on): each other person's name
+# over their craft in a multiplayer race. Dropped on a title whose options list no such row
+# (`menu::Definition::drop_unavailable_game_options`). Applies live.
+[[page.entry]]
+kind = "choice"
+label = "MULTIPLAYER TAGS"
+string_id = "OAG_DISPLAY_MULTIPLAYER_TAGS"
+setting = "display.multiplayer_tags"
+values = ["on", "off"]
 
 # `off` never waits and tears; `on` is classic vsync, which never tears and
 # halves the rate when a frame misses a refresh; `smooth` is that miss handled
@@ -812,6 +826,7 @@ values = [
     "360",
     "480",
     "1000",
+    "refresh_rate",
 ]
 
 # Both are applied by the blit that puts the finished frame on the surface, so
@@ -912,12 +927,16 @@ values = ["25", "33", "50", "67", "75", "100", "125", "150", "200"]
 # `disabled_by` names a *setting*, and an adapter capability is not one - see
 # `docs/architecture/menus.md`. The row is stored and inert, which is the same
 # thing `restart_required` already means.
+# `default` aims for the refresh rate of the output the window is on and follows
+# it to another monitor; it draws as `DEFAULT (<rate>)` (60 when no rate is
+# known). It has no `warn_when` pair below: its rate is the output's own, which
+# `drs::Target::at_most` already holds the controller to.
 [[page.entry]]
 kind = "choice"
 label = "TARGET FPS"
 string_id = "OAG_GRAPHICS_TARGET_FPS"
 setting = "graphics.target_fps"
-values = ["off", "30", "60", "90", "120", "144"]
+values = ["off", "30", "60", "90", "100", "120", "144", "default"]
 warn_when = [
     { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
         { setting = "graphics.target_fps", value = "60" },
@@ -927,6 +946,11 @@ warn_when = [
     { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
         { setting = "graphics.target_fps", value = "90" },
         { setting = "display.frame_limit", values = ["30", "60", "70", "72", "75"] },
+        { setting = "display.vsync", values = ["off", "smooth"] },
+    ] },
+    { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
+        { setting = "graphics.target_fps", value = "100" },
+        { setting = "display.frame_limit", values = ["30", "60", "70", "72", "75", "90"] },
         { setting = "display.vsync", values = ["off", "smooth"] },
     ] },
     { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
@@ -1199,7 +1223,8 @@ title_string_id = "OAG_GRAPHICS_ADVANCED"
 
 
 # A strength, not a boolean - each value is a shutter fraction of one
-# simulation tick, and the technique underneath can improve without this row
+# simulation tick and a tap budget for the gather (`high` 11, `medium` 9,
+# `low` 7: a lower tier is cheaper, not only shorter), and the technique underneath can improve without this row
 # or anyone's settings file moving; it already has once, camera reprojection
 # to `docs/rendering/motion-blur.md`'s per-object velocity buffer, with no
 # migration. Applies live: `Scene::render` reads it fresh each frame, so no
@@ -1296,8 +1321,8 @@ values = ["original", "high", "maximum"]
 # `original` is the measured order and the default: the original queues every
 # `Trail` at the constant key 0x4d000000, ahead of the circuit's blended list,
 # so a translucent floor patch paints over the ribbon (it writes no depth).
-# `over-floors` draws the ribbons after that list, the order this project drew
-# before the original's was measured: a brighter trail, chosen, not measured.
+# `over-floors` draws the ribbons after that list: a brighter trail, chosen, not
+# measured. It moves the ribbons only; the circuit's own order is unchanged.
 # Only a title whose ribbon is the PSP preset (Pulse, Pure) has a choice; the
 # row is dropped elsewhere (`Definition::drop_unavailable_trail_order`).
 # See `docs/ghidra/functions/psp-pulse-usa/exhaust.md`, "The ribbon is queued
@@ -1308,6 +1333,39 @@ label = "TRAIL ORDER"
 string_id = "OAG_GRAPHICS_TRAIL_ORDER"
 setting = "graphics.trail_order"
 values = ["original", "over-floors"]
+
+# How the circuit's blended list (trees, translucent floor patches, glass) decides which
+# tree is in front. `original` is the default and is byte-identical to a build without the
+# row: one queue key per mesh from its box centre, far to near, no depth written
+# (`Mesh_SubmitNode`), so a tree can be drawn over a nearer one, and which one changes as the
+# camera pans. `depth` makes the foliage's solid texels (alpha at least one half) occlude what
+# draws after them, so a nearer tree is over a farther one at any angle: this project's own,
+# chosen rather than measured. Only a title whose circuit is the PSP preset (Pulse, Pure) has
+# a choice; the row is dropped elsewhere (`Definition::drop_unavailable_scenery_sort`). See
+# `docs/rendering/draw-order.md`, "Trees overlapping trees on Platinum Rush White". Applies
+# live: the session hands the sort to the race every frame.
+[[page.entry]]
+kind = "choice"
+label = "SCENERY SORT"
+string_id = "OAG_GRAPHICS_SCENERY_SORT"
+setting = "graphics.scenery_sort"
+values = ["original", "depth"]
+
+# How long a craft's engine ribbon is. `original` is the default: the PSP
+# preset's ten samples, byte-identical to a build without the row. `hd` keeps
+# Wipeout HD's 54 samples (one a frame) on the preset's own head width, fade
+# and taper, stretched along the longer ribbon: an enhancement of this
+# project's, a departure from the original. Only a title whose ribbon is the
+# PSP preset (Pulse, Pure) has a choice; the row is dropped elsewhere
+# (`Definition::drop_unavailable_trail_length`). Applies live; a change restarts
+# the rings, so the ribbon is missing for the 0.9 s the longer ring takes to
+# fill. See `docs/rendering/trail-ribbon.md`, "A longer ribbon".
+[[page.entry]]
+kind = "choice"
+label = "TRAIL LENGTH"
+string_id = "OAG_GRAPHICS_TRAIL_LENGTH"
+setting = "graphics.trail_length"
+values = ["original", "hd"]
 
 # What a circuit's rain and snow add to the original's. `original` is the
 # default and draws the weather exactly as the original does; `enhanced` adds
@@ -1401,6 +1459,63 @@ kind = "choice"
 label = "BOOST ZOOM"
 string_id = "OAG_GRAPHICS_BOOST_ZOOM"
 setting = "graphics.boost_zoom"
+values = ["off", "on"]
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
+
+# The burst a craft flying in a rival's engine trail plays, on the titles whose original never
+# shows it: Pulse and Pure, which author none, and 2048 and Omega, which author it but never
+# fire it. **An enhancement of this project's, off by default.** 2048 and Omega play their own
+# file; Pulse and Pure read it off another source that authors it (Wipeout HD's, else 2048's or
+# Omega's), and nothing is drawn, and the loader report says so, when this machine has none.
+# The row is dropped on Wipeout HD, which always plays it, by
+# `menu::Definition::drop_unavailable_trail_hits`. Read when a race loads.
+[[page.entry]]
+kind = "choice"
+label = "TRAIL HITS"
+string_id = "OAG_GRAPHICS_TRAIL_HITS"
+setting = "graphics.trail_hits"
+values = ["off", "on"]
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
+
+# The white contrails HD's craft lay from their wing tips after a speed pad, on the titles whose
+# original has none: Pulse and Pure. **An enhancement of this project's, off by default.** The
+# config and the ribbon's texture are read off another source that carries them (Wipeout HD's, else
+# 2048's or Omega's), and nothing is drawn, and the loader report says so, when this machine has
+# none. The row is dropped on HD, 2048 and Omega, which lay their own, by
+# `menu::Definition::drop_unavailable_wingtip_contrails`. Read when a race loads.
+[[page.entry]]
+kind = "choice"
+label = "WINGTIP CONTRAILS"
+string_id = "OAG_GRAPHICS_WINGTIP_CONTRAILS"
+setting = "graphics.wingtip_contrails"
+values = ["off", "on"]
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
+
+# Our own HD/Fury-style shield for Pulse and Pure, in place of the disc's shell. **An enhancement of
+# this project's, off by default**: a procedural shell over the craft's own hull, reading nothing from
+# any other disc. The row is dropped on HD, 2048 and Omega, which draw their own, by
+# `menu::Definition::drop_unavailable_own_shield`. Read when a race loads.
+[[page.entry]]
+kind = "choice"
+label = "OWN SHIELD"
+string_id = "OAG_GRAPHICS_OWN_SHIELD"
+setting = "graphics.own_shield"
+values = ["off", "on"]
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
+# Our own rocket effect for Pulse and Pure, in place of the disc's rocket flare and blasts: an
+# exhaust flame, a smoke trail, a launch flash and an impact burst. **An enhancement of this
+# project's, off by default**: authored under `assets/fx/own-rocket/`, reading nothing from any
+# disc. The row is dropped on HD, 2048 and Omega by `menu::Definition::drop_unavailable_own_rockets`.
+# Read when a race loads.
+[[page.entry]]
+kind = "choice"
+label = "OWN ROCKETS"
+string_id = "OAG_GRAPHICS_OWN_ROCKETS"
+setting = "graphics.own_rockets"
 values = ["off", "on"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 
@@ -1526,6 +1641,69 @@ string_id = "OAG_AUDIO_MUSIC_SOURCE"
 setting = "audio.music_source"
 values_from = "music_sources"
 
+# In which order the race playlist plays: `sequential` (the pool's own numbering, the default) or
+# `random`, a shuffled deck that plays every song before repeating one and never opens a new
+# round on the song that just ended (`oag_sound::shuffle`). Pulse's disc authors this as
+# `Music Order` (`OPT_MUSIC_PL`: Sequential, Random; default sequential) in its Game Options
+# screen, beside the volumes; this build keeps the volumes on this page, so the row sits here
+# for every title, one setting and one row. It is on this page and not the MUSIC page because
+# that page is taken out of the tree on a machine with a single source. Menu loops are authored
+# loops and not a playlist; only a song the race draws from the soundtrack follows the order.
+# Applies from the next song on.
+[[page.entry]]
+kind = "choice"
+label = "MUSIC ORDER"
+string_id = "OAG_AUDIO_MUSIC_ORDER"
+setting = "audio.music_order"
+values = ["sequential", "random"]
+
+# Whether a placed sound (a craft, a weapon) is heard ahead of or behind the camera.
+# `original` is the stereo pan alone, which cannot tell front from back (measured:
+# `docs/ghidra/functions/psp-pulse-usa/positional-audio.md`); `rear_cue` low-passes and
+# lowers a sound behind the camera; `headphones` renders it through a head-related
+# transfer function and is meant for headphones; `auto` (the default) is `headphones` on
+# a headphone output and `rear_cue` on any other, and follows the output when it
+# changes. A pick is remembered for the output it was made on. Every title offers all
+# four. The
+# reference for "behind" is the camera, the original's listener. Music and unplaced
+# cues are never touched.
+[[page.entry]]
+kind = "choice"
+label = "SPATIAL AUDIO"
+string_id = "OAG_AUDIO_SPATIAL_AUDIO"
+setting = "audio.spatial_audio"
+values = ["auto", "original", "rear_cue", "headphones"]
+
+[[page.entry]]
+kind = "submenu"
+label = "MUSIC"
+string_id = "OAG_AUDIO_MUSIC"
+target = "music"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
+# One on/off row per soundtrack source this machine can open: the booted disc, the
+# other titles' discs on the search path, and the folders listed in settings.toml
+# under `[audio] music_folders`. The booted disc starts on, everything else off.
+# The one row below is a template: `oag_game::music_pool::expand` replaces it with a
+# row per source (`oag_ui::menu::Definition::expand_rows`), and with fewer than two
+# sources takes the page and the MUSIC row that opens it out. Adding a folder from
+# here needs a text input the menus do not have yet, so a folder is named in the file.
+[[page]]
+id = "music"
+title = "MUSIC"
+title_string_id = "OAG_MUSIC_PAGE_TITLE"
+
+[[page.entry]]
+kind = "choice"
+label = "SOURCE"
+string_id = "OAG_MUSIC_SOURCE_ROW"
+setting = "audio.music_pool"
+values_from = "music_pool"
+
 [[page.entry]]
 kind = "back"
 label = "BACK"
@@ -1609,6 +1787,13 @@ label = "AIRBRAKE RIGHT"
 string_id = "OAG_CONTROLS_AIRBRAKE_RIGHT"
 button = "r"
 
+# The original's action 8, the Eliminator flip. L1 on a pad.
+[[page.entry]]
+kind = "binding"
+label = "ELIMINATOR FLIP"
+string_id = "OAG_CONTROLS_ELIMINATOR_FLIP"
+button = "flip"
+
 # Not one of the original's eight driving bindings, and listed here anyway: the
 # in-race camera cycle is the one control a player has no other way to discover.
 # It is bound (SELECT on a pad, TAB on a keyboard, through
@@ -1681,6 +1866,18 @@ string_id = "OAG_CONTROLS_TRIGGER_SENSITIVITY"
 setting = "controls.trigger_sensitivity"
 values = ["50", "75", "100", "125", "150", "200"]
 
+# What the pad's motors play (`docs/gameplay/rumble.md`). `original` is the
+# title's own small-motor law and is offered only where the original plays
+# patterns (`oag_title::rumble::Rumble`, HD and Omega; `Definition::
+# drop_choice_value`). `ps3` is HD's on/off small motor, `ps4` is Omega's byte
+# sum, the default. See `oag_input::rumble::Mode`.
+[[page.entry]]
+kind = "choice"
+label = "RUMBLE"
+string_id = "OAG_CONTROLS_RUMBLE"
+setting = "controls.rumble"
+values = ["none", "original", "ps3", "ps4"]
+
 # A page of its own, with a live picture of the overlay beside the rows
 # (`oag_game::touch_controls::preview`). Only a touchscreen has an overlay to
 # set, so `Definition::drop_touch_controls` takes this row away off Android
@@ -1745,7 +1942,7 @@ title_string_id = "OAG_PILOT_PAGE_TITLE"
 # draws opponents from, not something either original game's data authors.
 #
 # PILOT first, because it decides what AXIS below is even editing - the same
-# order TRACK TITLE puts ahead of TRACK on RACE REMIX. **A name with no `*`
+# order a title row puts ahead of the list it scopes. **A name with no `*`
 # after it is a built-in.** Editing one and saving does not touch the four
 # built into the binary - it writes a same-named file that *replaces* the
 # built-in the next time pilots are loaded, which is why SAVE always works

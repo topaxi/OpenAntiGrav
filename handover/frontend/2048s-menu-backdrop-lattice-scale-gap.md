@@ -1,8 +1,8 @@
 ---
 status: parked
 titles: [2048]
-updated: 2026-10-27
-summary: "2048 lattice wired on title and game mode; open: other pages' blurred backdrop, composite constants, scroll writer"
+updated: 2026-11-10
+summary: "2048 lattice wired on title, game mode and the campaign map; open: other pages' blurred backdrop, composite constants, painted cells"
 ---
 
 # 2048's menu backdrop lattice: wired on the title and game mode pages
@@ -31,9 +31,13 @@ it: our home page lacks the house icon in the top-left square and the underline 
   front-end branch of `PostFx_RenderChain`) and its uniforms sit behind a buffer pointer. Read them from guest
   memory (`vita3k-mem.py`) to turn the measured law into a read one, and check whether the in-race composite
   (`exposure.md`) and this one are the same program with different inputs.
-- **Who writes the (-3000, -1500) scroll.** Candidates `FUN_810efc4a` (`0x810effcc`) and `FUN_810efff6`
-  (`0x810f032a`), the campaign map's centring of the first event (confidence 55). Our phase is the live
-  translation row, a constant; deriving it from the page's own node positions needs the call pinned.
+- **The scroll writers are pinned for the campaign map (2026-11-10, lane `2048-campaign-map`)**:
+  [campaign-map-projection.md](../../docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md), "The scroll".
+  The map draws the lattice now, at its own view's phase, from the same baked picture. The title's (-3000, -1500)
+  is the same item's state 0 (`0x810f2d18`, a sweep to (3000, 3350); read, confidence 55); the title's phase is
+  still the live translation row, not derived from it.
+- **Home's blurred backdrop is the campaign map's canvas** (seen once from the map, confidence 70): the map's own
+  tiles show blurred behind Home's five tiles. Still parked with the other pages.
 - Who sets bit `0x80` at `canvas+0x30` (the page set is read off the captures); painted cells (the campaign
   map, `canvasTex` alpha and `canvasTex2` shifts).
 - **Omega**: `canvasTexture.gnf` ships and the reset angles are the same; whether Omega's pages draw a
@@ -44,4 +48,4 @@ it: our home page lacks the house icon in the top-left square and the underline 
 1. RenderDoc the 2048 home page (same recipe, one capture): is the blurred backdrop the canvas through the
    bloom chain? If so it is this composite with a nonzero bloom, and a draw from the disc's data.
 2. Read the composite's uniform block from guest memory at the title and name the program.
-3. Pin the scroll writer, then derive the phase from the page's nodes.
+3. Execute `0x810f2d18` to its settled value and derive the title's phase from it.

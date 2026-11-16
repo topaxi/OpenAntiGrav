@@ -717,6 +717,109 @@ looked for any 64-entry run of `floor(k * cos/sin(i * step))` pairs over
 the PS2 build either computes its pan or tabulates it in a form none of those
 describe. Unexplained, and worth a look by whoever next opens `SCES_547.48`.
 
+## Our front/back cue (ours, not the original's)
+
+This is Pulse's law. HD and 2048 add a measured rear low-pass (HD's plays under `original`,
+2048's is not wired), and Omega pans through Wwise: the title-by-title comparison of every value is in
+[audio-3d.md](../ps4-omega-eu/audio-3d.md#spatial-audio-against-the-originals).
+
+The law above cannot tell front from back, so the `original` value of the
+SPATIAL AUDIO setting is exactly it (bit-identical, pinned by
+`mixer::tests::original_ignores_where_a_voice_is_along_the_forward_axis`). The
+other values are additions, **chosen, not measured**:
+
+- `auto` (the default): `headphones` on a headphone output, `rear_cue` on
+  speakers and on any output the platform cannot name
+  (`oag_audio::SpatialChoice::resolve`, `oag_audio::route`); a pick is
+  remembered per output.
+- `rear_cue`: the listener now carries a forward axis (the
+  camera's `-Z`, `oag_game::sound::listener_of_view`), `Emitter::place` returns
+  `front = dot(direction, forward)`, and a voice with `front < 0` is run
+  through a one-pole low-pass (2.5 kHz dead behind) and lowered to 0.8,
+  both eased linearly over the rear half. The front half is bit-identical to
+  `original`. "Behind" is the camera, as the original's listener is.
+- `headphones`: `oag_audio::binaural`, the `hrtf` crate over 200 directions of
+  SADIE II subject D1 (Apache-2.0, `assets/audio/hrtf/README.md`). Horizontal
+  plane only (the direction is rebuilt from `pan` and `front`; elevation is not
+  carried). 512 frames of latency per voice. Until the sphere has loaded it
+  sounds as `rear_cue`.
+
+Music and unplaced cues (`pan: None`) are never touched. Pre-mixed sequences
+(`sfx/compose.rs`) keep the pan they were baked with. Cost of a headphone
+voice: see below; `rear_cue` is a handful of multiply-adds per sample.
+
+### Cost on a Steam Deck
+
+Measured on the Deck (Zen 2, `powersave` governor, AC, load 0.4 to 2), release
+build with `-C target-cpu=znver2` in the Debian bookworm container (glibc 2.36).
+The audio render thread draws 512 frames per call at 48 kHz, so a call has a
+budget of 10,667 us. Per call, mean of 2,000 calls, two repeats within 2 %,
+voices looping with a pitch spread, half a second of white noise each:
+
+| placed voices | `original` | `rear_cue` | `headphones` | `headphones` share of a core |
+| --- | --- | --- | --- | --- |
+| 1 | 11.6 us | 11.3 us | 42.3 us | 0.40 % |
+| 8 | 79 us | 83 us | 326 us | 3.1 % |
+| 16 | 157 us | 164 us | 657 us | 6.2 % |
+| 32 | 315 us | 250 us | 912 us | 8.6 % |
+| 64 | 431 us | 453 us | 1,835 us | 17.2 % |
+
+- **Per voice**: `original` and `rear_cue` about 10 us (0.1 % of a core), within
+  noise of each other. `headphones` about 41 us for 1 to 16 voices (0.38 % of a
+  core), about 29 us at 32 and 64 voices. The extra over `original` is about
+  31 us per voice. The desktop figure (80 us, dev profile, load 35) was a
+  noisier and slower build; this one is the release build.
+- **p99 / max** stay within 1.2 / 1.4 times the mean (headphones, 64 voices:
+  mean 1,835 us, p99 2,078 us, max 2,416 us, 22.6 % of the budget). No call
+  came near the budget, `Mixer::starved` was 0 in every row.
+- **One-shots cost more per voice in `headphones`**: a race-shaped mix (16
+  placed loops, 2 music loops, 8 placed 250 ms one-shots retriggered every 8th
+  call, about 41 voices live) cost 1,159 us (10.9 %) against 282 us for
+  `original`. The ended one-shot keeps rendering its drain tail
+  (`binaural::LATENCY`), which probably explains the cost (not profiled).
+- **A full 128-voice HD pool**, 72 placed plus music plus one-shots, about 97
+  live: `headphones` 2,800 us (26 %, p99 28.7 %), `original` 656 us (6.2 %).
+
+A real race on the Deck (Pulse PSP EU, `--race --autopilot`, eight craft, the
+default field, 1280x800, vsync off, no frame limit, 90 fps under gamescope,
+master volume 0, 27 s window after the track loaded), the `oag-audio-render`
+thread's CPU from `/proc`, in percent of one core:
+
+| render size | `original` | `rear_cue` | `headphones` |
+| --- | --- | --- | --- |
+| 1280x800 | 1.11 | 1.11 | 2.44 |
+| 1920x1200 | 1.11 | not run | 2.44 |
+| 2560x1600 | 1.29 | not run | 2.77 |
+
+The game's `Health` counters (dropped buffers, late callbacks, starved
+renders) logged nothing in any run, at the default buffer. `headphones` costs
+about 1.3 points of one core more than `original` in a real race, so about 40
+placed voices at the synthetic 29 to 41 us each. A heavier render raises every
+mode by about 0.2 points (shared L2/L3 and memory), the HRTF cost by 0.3.
+Not reachable here: a 3840x2160 output (gamescope fixes the output at the
+panel's 1280x800; `--render-scale` stops at 200 %), so the 4K row is the
+2560x1600 render. Whether the autopilot fired weapons in the window was not
+checked, so a race with every weapon in use may have more one-shots.
+
+**Recommendation.** No voice cap is needed on the Deck for Pulse and Pure (32
+voices: 8.6 % of a core, p99 under 10 %). For HD's 128-voice pool, worst case
+about 128 x 41 us = 5.2 ms (49 % of the budget on one thread) would leave
+little room beside a loaded CPU, so cap `headphones` at the 32 nearest or
+loudest placed voices and let the rest take `rear_cue` (one shared
+convolver, a per-voice FIFO, so a voice can change mode at a block edge).
+**Built** (2026-11-03): `Mixer::set_hrtf_voice_cap`, default
+`HRTF_VOICES` = 32 (chosen, not measured). Each render ranks the placed voices
+by their own gain through their bus (ties keep a voice already holding a
+convolver, then the lower slot); the top 32 run the HRTF, the rest the rear
+cue. A voice changing sides crossfades over 256 frames (it keeps its convolver
+until the fade ends; a voice that was heard on the rear cue waits out the
+convolver's 512-frame latency before fading in); a voice that never sounded
+any other way starts on the HRTF at full level, so a mix under the cap is
+unchanged. Desktop bench (release, load about 29, 512-frame call, the HD-size
+mix of 72 placed + music + one-shots): `headphones` 1,558 us (14.6 % of the
+budget) uncapped, 737 us (6.9 %) capped at 32; `rear_cue` 382 us (3.6 %). The
+one-shot drain tail was not profiled.
+
 ## Not determined
 
 - **Nine of the fourteen emitter construction sites** (2026-09-01: `Mine_Init`

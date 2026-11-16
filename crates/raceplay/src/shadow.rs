@@ -10,7 +10,7 @@
 //! pose the tick left behind, rather than being recorded during the step. See
 //! `docs/architecture/determinism.md`.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 use oag_physics::collide::{Ray, Raycaster, Surface};
 use oag_render::shadow::{self, Placement};
 use oag_vex::shadow_occluder::Occluder;
@@ -53,7 +53,7 @@ impl Race {
         let mut out = Vec::with_capacity(self.sim.world.ship_count as usize);
         for slot in 0..self.sim.world.ship_count as usize {
             let ship = &self.sim.world.ships[slot];
-            if !ship.active {
+            if !ship.in_world() {
                 continue;
             }
             // The body as this draw places it, so the blob stays under a hull
@@ -167,7 +167,12 @@ impl Race {
 fn silhouette_entry(archives: &oag_assets::Archives, ship_entry: &str) -> String {
     let dir = ship_entry.rsplit_once('\\').map_or("", |(dir, _)| dir);
     let gtf = format!(r"{dir}\textures\ambient_shadow.gtf");
-    super::assets::platform_sibling(archives, &gtf).unwrap_or(gtf)
+    archives.resolve_texture(&gtf).unwrap_or_else(|| {
+        // Held nowhere: name the platform's own spelling, which is the file a
+        // reader would look for.
+        let spelled = oag_assets::texture_name::spellings(archives.layout.platform, &gtf);
+        spelled.into_iter().nth(1).unwrap_or(gtf)
+    })
 }
 
 /// One `blob` silhouette per grid slot, in `teams`' own order.
@@ -195,7 +200,9 @@ pub fn silhouettes(
     let mut out = Vec::with_capacity(teams.len());
     let mut fallbacks = 0;
     for (slot, team) in teams.iter().enumerate() {
-        let hull = oag_livery::entry::ship_entry_name(race.ships_for(team), team, mode, None);
+        let hull = race
+            .ships_for(team)
+            .hull_entry_name(team, mode == oag_race::Mode::Zone, None);
         let name = silhouette_entry(archives, &hull);
         match super::assets::decode_texture(archives, &name) {
             Ok(image) => {
@@ -271,7 +278,9 @@ pub fn hulls(
         // its shadow geometry, and threading the player's choice through
         // here would only matter the day the two shapes are shown to
         // disagree.
-        let name = oag_livery::entry::ship_entry_name(race.ships_for(team), team, mode, None);
+        let name = race
+            .ships_for(team)
+            .hull_entry_name(team, mode == oag_race::Mode::Zone, None);
         let found = archives.read_name(&name).ok().and_then(|blob| {
             let tree = vex::nodes(&blob).ok()?;
             let found: Vec<usize> = tree

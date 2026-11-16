@@ -124,24 +124,27 @@ use oag_ai::probe::{self, Scenario};
 /// - **2026-10-20, all rows and the plan (maintainer-approved physics port)**: the
 ///   player's physics, no driver code: Pulse's inertia diagonal in world axes
 ///   (`oag_physics::InertiaFrame::World`, `docs/physics/airborne-ground-truth.md`).
+/// - **2026-11-12, all rows and the plan**: the player's physics, no driver code: Pulse's
+///   body damping (`Laws::PULSE.body_damping`, `docs/physics/body-damping.md`);
+///   `BodyDamping::NONE` reproduces the previous constants.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Solo,
-        0xf96e_d07e_cadf_d101,
-        0xdc2d_92b4_6cbb_6ab4,
+        0x551c_c8f3_c3fc_a07f,
+        0xa87c_2e67_c4b1_67ce,
     ),
     (
         600,
         Scenario::Field,
-        0x3d7d_62f5_72e7_60d4,
-        0x9855_1bad_0258_1292,
+        0xead6_92ab_4ce8_95be,
+        0x1757_0c9f_6dcf_0428,
     ),
     (
         1_800,
         Scenario::Field,
-        0x22fd_eaeb_61ee_a41c,
-        0xa077_9ebc_90e0_b0b2,
+        0xd31b_ac02_c748_e01f,
+        0xa30e_197f_bb86_421b,
     ),
 ];
 
@@ -220,7 +223,7 @@ fn the_scenario_still_exercises_corners_and_craft_that_drive() {
 /// The speed plan learned on the probe's circuit, hashed ([`probe::speed_plan`]).
 /// Added 2026-10-03 with the plan; nothing above moved, every scenario there
 /// drives with `plan: None`.
-const PLAN_REFERENCE: u64 = 0x2b15_a393_2422_05de;
+const PLAN_REFERENCE: u64 = 0x7c32_8e02_f35a_d3db;
 
 #[test]
 fn the_speed_plan_matches_the_committed_reference() {

@@ -33,7 +33,11 @@ fn snapshot(bits: u32, previous: Option<&Input>) -> oag_gameplay::InputSnapshot 
 }
 
 /// `(bank_cos, residual)` for every round slot 0 fired on one lap of the autopilot.
-fn residuals(disc: &str, track: &str) -> Option<Vec<(f32, f32, f32)>> {
+/// `(bank_cos, residual, round-up . craft-up)` per round that flew free, and how
+/// many rounds glanced the track on their first tick.
+type Fired = (Vec<(f32, f32, f32)>, usize);
+
+fn residuals(disc: &str, track: &str) -> Option<Fired> {
     let image = oag_testdata::image(disc)?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
@@ -49,6 +53,7 @@ fn residuals(disc: &str, track: &str) -> Option<Vec<(f32, f32, f32)>> {
     let mut input: Option<Input> = None;
     let mut seen = [None::<u32>; oag_weapons::projectile::MAX_PROJECTILES];
     let mut out = Vec::new();
+    let mut glanced = 0_usize;
     for tick in 0..4_000_u32 {
         let burst = tick >= 240 && tick % 90 < 20;
         // The autopilot fires nothing, so it flies between bursts and the pad
@@ -75,12 +80,23 @@ fn residuals(disc: &str, track: &str) -> Option<Vec<(f32, f32, f32)>> {
             if seen[slot].replace(tick).is_some() {
                 continue;
             }
-            let residual = [false, true]
-                .into_iter()
-                .map(|left| {
-                    let (position, velocity) =
-                        oag_weapons::projectile::cannon::launch(&before, &dimensions, left);
-                    (round.position - (position + velocity * dt)).length()
+            let launches = [false, true]
+                .map(|left| oag_weapons::projectile::cannon::launch(&before, &dimensions, left));
+            // A round whose first sweep meets the track within one step (at
+            // 0.75 * (km/h + 500) units/s that is 6 to 13 units) is moved to
+            // the hit and turned: its velocity is no longer the launch's, and
+            // the law under test is the muzzle line of a round that flew free.
+            if launches
+                .iter()
+                .all(|(_, velocity)| (round.velocity - *velocity).length() > 1e-3)
+            {
+                glanced += 1;
+                continue;
+            }
+            let residual = launches
+                .iter()
+                .map(|(position, velocity)| {
+                    (round.position - (*position + *velocity * dt)).length()
                 })
                 .fold(f32::MAX, f32::min);
             out.push((
@@ -90,11 +106,20 @@ fn residuals(disc: &str, track: &str) -> Option<Vec<(f32, f32, f32)>> {
             ));
         }
     }
-    Some(out)
+    Some((out, glanced))
 }
 
-fn assert_muzzle_residuals(shots: Option<Vec<(f32, f32, f32)>>) {
-    let Some(shots) = shots else { return };
+fn assert_muzzle_residuals(shots: Option<Fired>) {
+    let Some((shots, glanced)) = shots else {
+        return;
+    };
+    // The skipped rounds are a small share: a round that turns on its first
+    // tick without meeting the track would hide behind the skip.
+    assert!(
+        glanced * 10 <= shots.len() + glanced,
+        "{glanced} of {} rounds glanced the track on their first tick",
+        shots.len() + glanced
+    );
     let tilted = shots.iter().filter(|(bank, ..)| *bank < 0.95).count();
     assert!(shots.len() >= 100, "only {} rounds fired", shots.len());
     assert!(tilted >= 20, "only {tilted} rounds fired on a tilt");
@@ -134,11 +159,12 @@ fn an_hd_cannon_round_leaves_the_muzzle_on_a_tilted_track() {
     assert_muzzle_residuals(residuals("data/images/hdfury-ps3-eu-dec.iso", VINETA_K));
 }
 
-/// The Missile and the Shuriken leave a banked craft riding **its** up, as
-/// `Missile_Init` and `Shuriken_Init` store `-craft+0xb10`, not world up.
+/// The Missile leaves a banked craft riding the located track's up, as `Missile_Init`
+/// stores `-craft+0xb10` (the located sample's down, negated), not world up and not the
+/// craft's own up.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_missile_fired_on_a_bank_is_born_riding_the_craft_up() {
+fn a_missile_fired_on_a_bank_is_born_riding_the_located_tracks_up() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
@@ -173,9 +199,12 @@ fn a_missile_fired_on_a_bank_is_born_riding_the_craft_up() {
             .iter()
             .find(|p| p.kind == Some(Weapon::Missile))
             .expect("a missile in the air");
-        assert!(
-            (missile.surface - up).length() < 1e-4,
-            "born riding {:?}, the craft's up is {up:?}",
+        let track_up = race.sim.world.ships[0]
+            .track_up
+            .expect("a stepped craft on a track with samples is located");
+        assert_eq!(
+            missile.surface, track_up,
+            "born riding {:?}, the located track's up is {track_up:?} (the craft's is {up:?})",
             missile.surface
         );
         return;

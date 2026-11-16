@@ -30,8 +30,8 @@ use oag_raceplay::{Race, Scene};
 /// own ladder and any other Time Trial or Speed Lap races the record. See
 /// `oag_hud::Readout::time_trial_pace`. `campaign_cell` is title-blind (HD
 /// reuses the same `oag_tables::race_campaign::Cell`). `record_target` is
-/// whatever the circuit's own `stats.xml` gave: Pulse's, and since 2026-10-21
-/// HD's too (`<RaceTimes Venom="599">`, the `RECORD` the original counts down
+/// whatever the circuit's own `stats.xml` gave: Pulse's and
+/// HD's (`<RaceTimes Venom="599">`, the `RECORD` the original counts down
 /// from), so a Time Trial on either draws `RECORD`; a title whose file does not
 /// read keeps the plain `TOTAL` clock. The
 /// capture path has no cell and passes `None`.
@@ -266,6 +266,7 @@ pub fn view_draws<'a>(
                         },
                         readout: Readout {
                             sight: None,
+                            player_tags: Vec::new(),
                             ..readout.clone()
                         },
                         placement: piece.placement(rect, space.size),
@@ -403,6 +404,7 @@ pub fn draw(
     countdown: Option<&str>,
     viewport: (f32, f32, f32, f32),
 ) {
+    oag_gpu::perfprobe::mark("hud-begin");
     let (slots, cut) = if race.windowed() {
         (race.window_drawn(window), race.window_cut(window))
     } else if race.viewport_count() <= 1 {
@@ -444,10 +446,11 @@ pub fn draw(
     );
 }
 
-/// Adds the glow of the HUD's stamped rectangles (a speed bar under a boost,
+/// Adds the glow of the HUD's stamped rectangles (a speed bar under a boost, a shield bar under an absorb,
 /// `oag_hud::boost_smear`) onto `view`: the bloom's bright pass ran before the HUD existed, so the
 /// original's "the bright pass reads the HUD" is a second, rectangle-only chain here
-/// (`oag_post::bloom::Bloom::stamp_glow`). Nothing without a stamp, so a frame with no boost is
+/// (`oag_post::bloom::Bloom::stamp_glow`) that reads `view` as the HUD left it, scene and HUD
+/// together, as the original's bright pass reads its framebuffer. Nothing without a stamp, so a frame with no boost is
 /// untouched.
 #[allow(clippy::too_many_arguments)]
 fn stamp_glow(
@@ -460,34 +463,23 @@ fn stamp_glow(
     space: oag_display::space::Space,
     glow: &[oag_hud::boost_smear::GlowStamp],
 ) {
-    let Some(first) = glow.first() else {
+    if glow.is_empty() {
         return;
-    };
+    }
     let (hud_x, hud_y, per_x, per_y) = grid_of(viewport, space);
-    let rects: Vec<[f32; 4]> = glow
+    let stamps: Vec<oag_post::bloom::Stamp> = glow
         .iter()
-        .map(|stamp| {
-            [
+        .map(|stamp| oag_post::bloom::Stamp {
+            rect: [
                 (hud_x + stamp.rect[0] * per_x - viewport.0) / viewport.2,
                 (hud_y + stamp.rect[1] * per_y - viewport.1) / viewport.3,
                 stamp.rect[2] * per_x / viewport.2,
                 stamp.rect[3] * per_y / viewport.3,
-            ]
+            ],
+            value: stamp.value,
         })
         .collect();
-    scene.stamp_glow(
-        device,
-        queue,
-        encoder,
-        view,
-        viewport,
-        &oag_post::bloom::Stamps {
-            rects: &rects,
-            colour: first.colour,
-            opacity: first.opacity,
-            value: first.value,
-        },
-    );
+    scene.stamp_glow(device, queue, encoder, view, viewport, &stamps);
 }
 
 #[cfg(test)]

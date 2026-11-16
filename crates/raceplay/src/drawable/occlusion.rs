@@ -17,7 +17,7 @@ impl Drawable {
     /// [`Drawable::caster`].
     pub(crate) fn occlusion_track(&self) -> oag_render::shadow::occlusion::Track<'_> {
         oag_render::shadow::occlusion::Track {
-            vertices: &self.vertices,
+            geometry: &self.geometry,
             indices: &self.indices,
             draws: &self.model.draws,
             cutouts: &self.model.alpha_tested_draws,

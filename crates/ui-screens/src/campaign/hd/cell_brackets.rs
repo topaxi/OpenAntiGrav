@@ -27,7 +27,6 @@ pub fn draws(brackets: &[Bracket], sprites: &dyn Fn(&str) -> Option<Placed>) -> 
     let Some(mask) = sprites(SRC) else {
         return Vec::new();
     };
-    let (mx, my) = (mask.x as f32, mask.y as f32);
     let mut out = Vec::new();
     for bracket in brackets.iter().filter(|bracket| bracket.corner) {
         let color = argb_to_rgba(bracket.color);
@@ -46,12 +45,12 @@ pub fn draws(brackets: &[Bracket], sprites: &dyn Fn(&str) -> Option<Placed>) -> 
             // own corner is its bottom-left one (an RPCS3 frame of Cell
             // Selection and of Ship Select draws the top-left mark as the
             // texture turned over), so the top marks are the flipped ones.
-            let uv = [
-                if right { mx + SIDE } else { mx },
-                if bottom { my } else { my + SIDE },
+            let uv = mask.sheet_rect([
+                if right { SIDE } else { 0.0 },
+                if bottom { 0.0 } else { SIDE },
                 if right { -SIDE } else { SIDE },
                 if bottom { SIDE } else { -SIDE },
-            ];
+            ]);
             out.push(Draw::Sprite {
                 rect: [x, y, SIDE, SIDE],
                 uv,

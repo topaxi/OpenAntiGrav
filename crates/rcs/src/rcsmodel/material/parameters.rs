@@ -54,7 +54,7 @@
 //! the exponent's own `MUL`, and `oag_mesh::mesh::rcs::skin` now reads it there
 //! (`docs/rendering/hd-ship-materials.md`, "The hull's specular exponent").
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Bytes per entry.
 const ENTRY_LEN: usize = 0x20;

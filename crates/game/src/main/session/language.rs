@@ -19,7 +19,9 @@ impl Session {
     /// Reloads every disc-derived, language-scoped piece of the front end
     /// after a LANGUAGE row pick, instead of leaving the switch to sit until
     /// the next boot - see `main::session::apply::Session::apply_setting`'s
-    /// `"language"` arm, which is this function's one caller.
+    /// `"language"` arm. The MODS page calls it too when a texture pack is switched
+    /// ([`Session::switch_selected_mod`]): the faces are built with the shell, from the
+    /// packs the settings leave on.
     ///
     /// **Re-runs `boot::load_shell`, the exact call a fresh boot makes**,
     /// rather than re-deriving which fields the new language touches by
@@ -32,22 +34,17 @@ impl Session {
     /// calls - so a live switch and a fresh boot cannot read the same
     /// `boot::Shell` two different ways.
     ///
-    /// **Leaves `self.shell.definition`, and the live menu's cursor, stack
-    /// and scroll, untouched.** A title's row *structure* does not depend on
-    /// which language draws its labels - only the *labels* on
-    /// [`menu::ValueSource::Teams`]/`Tracks`/`RaceModes`/`Languages`/
-    /// `FrontEndStyles` do, and those are re-`supply`d onto the menu that is
-    /// already open, the same mechanism
-    /// [`super::menus::Session::resupply_tracks_for_mode`] uses for a MODE
-    /// change. A player standing on DIFFICULTY when they picked German is
-    /// still standing on DIFFICULTY afterwards.
+    /// **Builds the menu tree again** ([`oag_game::menu_tree::rebuilt`], the call a MODS
+    /// page switch makes) when the run has mods to read, so every row's label, a mod's
+    /// `strings/<language>.toml` and the MODS page's listing resolve against the new
+    /// language. The menu model is rebuilt on that tree and reopened on the pages and rows
+    /// the player stood on ([`Session::reopened_menu`]), so a player standing on LANGUAGE
+    /// is still standing there afterwards. A `--menu` file has no mods: its tree is kept as
+    /// built and only the supplied lists are re-`supply`d, the same mechanism
+    /// [`super::menus::Session::resupply_tracks_for_mode`] uses for a MODE change.
     ///
-    /// **Does not re-parse `self.shell.definition`'s own row titles.** Those
-    /// come from `oag_ui::strings::project_table`, a project-owned
-    /// translation layer separate from the disc's own, and this build ships
-    /// one today for English and French only - see that module's own doc.
-    /// Picking German changes nothing there at boot either, so there is
-    /// nothing this call could show that a restart would not also fail to.
+    /// The extras' own rows follow `oag_ui::strings::project_table`, a project-owned
+    /// translation layer separate from the disc's, which has English and French only.
     ///
     /// A parked race's own `hud::Assets` is not touched: it already resolved
     /// its strings and fonts when that race loaded, and reaching into a
@@ -89,6 +86,7 @@ impl Session {
             no_video: true,
             refresh_video: false,
             prefer_av1_cache: false,
+            find_texture_packs: Some(oag_game::texture_pack::finder(&self.settings.mods)),
         };
         let (boot_shell, _archives, title) = match boot::load_shell(&options) {
             Ok(loaded) => loaded,
@@ -98,16 +96,48 @@ impl Session {
             }
         };
         oag_raceplay::loader_log::lines(&boot_shell.report);
+        // The tree is built again for the new language, as a boot builds it, so every
+        // mod's rows and the MODS page read it; a `--menu` file has no mods to rebuild
+        // and keeps its tree.
+        let rebuilt = rebuild.and_then(|rebuild| {
+            oag_game::menu_tree::rebuilt(
+                &oag_mod::mods_search_path(),
+                &self.settings.mods,
+                self.settings.language.as_deref(),
+                title,
+                boot_shell.platform,
+                rebuild.updated,
+                &boot_shell.strings,
+            )
+            .map_err(|e| error!("could not rebuild the menus for the language: {e:#}"))
+            .ok()
+        });
+        let rebuilt_tree = rebuilt.is_some();
         let mut shell = Shell::from_boot(title, definition, &boot_shell);
         shell.mods = mods;
         shell.custom_campaigns = custom_campaigns;
         shell.rebuild = rebuild;
+        if let Some((definition, listing, installed)) = rebuilt {
+            self.custom_tracks.set_mod_files(&installed.tracks);
+            shell.definition = definition;
+            shell.mods = listing;
+            shell.custom_campaigns = std::sync::Arc::new(installed);
+        }
         // Decoded once at boot and language-independent, so it rides across.
         shell.menu_sfx = self.shell.as_ref().and_then(|old| old.menu_sfx.clone());
         let mode = self.race_mode();
+        let reopened = if rebuilt_tree {
+            self.reopened_menu(&shell)
+        } else {
+            None
+        };
         let device = &self.gpu.device;
         let queue = &self.gpu.queue;
         if let Stage::Menu(stage) = &mut self.stage {
+            if let Some(mut model) = reopened {
+                model.settle();
+                stage.menu = model;
+            }
             let tracks: Vec<menu::Choice> = shell
                 .tracks_for(mode)
                 .iter()
@@ -128,7 +158,7 @@ impl Session {
             // `Session::open_menus`' own build of these from `shell`, since a
             // `MenuStage` keeps its own copies rather than reading `self.shell`
             // fresh every frame.
-            stage.nav_legend = shell.nav_legend.clone();
+            stage.nav_legend = super::player_name::tagged(shell.nav_legend.clone(), &self.settings.player, shell.title);
             stage.ticker = shell.ticker.clone();
             stage.frame = shell.frame.clone();
             stage.default_atlas = shell.font.clone();
@@ -158,6 +188,9 @@ impl Session {
                 shell.title_font.clone(),
                 shell.buttons_font.clone(),
             );
+            // The art a texture pack draws is in the sheet: the frame and rows just rebuilt
+            // sample the new one.
+            stage.renderer.set_sprites(device, queue, &shell.sprites);
             self.stalled = true;
         }
         self.shell = Some(shell);
@@ -179,7 +212,7 @@ impl Session {
         let family = self.controls.prompt_family(style);
         if self.prompt.family_logged != Some(family) {
             self.prompt.family_logged = Some(family);
-            log::info!(
+            log::debug!(
                 "button prompts: {} (style {}, last used {:?})",
                 family.map_or("the disc's own", |family| family.name()),
                 style.name(),

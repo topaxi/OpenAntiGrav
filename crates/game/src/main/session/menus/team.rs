@@ -54,6 +54,9 @@ pub(crate) fn apply_race_team(
     // `--skin` takes, resolved against the team's own `PI_ModelSkin`s at
     // load. Empty is the baseline paint.
     options.skin = Some(race.skin.clone()).filter(|skin| !skin.trim().is_empty());
+    options.livery = oag_title::race::split_livery(&race.variant)
+        .1
+        .map(str::to_string);
     warnings
 }
 

@@ -265,8 +265,7 @@ carries no light with the bands at zero. Not tuned: the sprite sampler state and
 the blend quad grid are the things to read.
 
 Also unread: the morph and line modes (`5`, `9`, `10`, `11`) and their extra
-streams, the blend pass's quad grid, the equaliser tap (`musicPulse` sits at
-`1`), `OnEnable`'s brightness pulse, and the HD-style `<BackgroundAnim>` widget
+streams, the blend pass's quad grid, `OnEnable`'s brightness pulse, and the HD-style `<BackgroundAnim>` widget
 itself (`FEBackgroundAnim_vp/fp/Copy_fp`, `blur`, `use_bands`) - which is the
 answer to the older open item below about which non-Fury program the HD style
 resolves to: its own, not a RadioHead.

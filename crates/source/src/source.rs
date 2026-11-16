@@ -55,6 +55,10 @@
 //! disc folder or a raw zip extract beside it is not offered. See
 //! `docs/formats/hd-psn.md`.
 //!
+//! A disc cannot be patched, so its update is a folder of its own: the `CATEGORY`
+//! `GD` install of the same `TITLE_ID`, beside the image or under `extracted/ps3`
+//! ([`ps3_updates`]). It is mounted over that disc and never offered as a game.
+//!
 //! # The first three are a decision; the last three are a guess
 //!
 //! Steps 1 to 3 are a player *stating* which source they want, and [`explicit`]
@@ -571,9 +575,48 @@ fn ps3_package_directories() -> Vec<PathBuf> {
 /// Whether `path` is a PS3 HDD install: a `PARAM.SFO` at its root beside a
 /// `USRDIR`. **That shape only.** A decrypted disc extract keeps these under
 /// `PS3_GAME/` and is not offered, nor is a raw zip extract or the unlock
-/// key's folder; the disc image is the source for a disc.
+/// key's folder; the disc image is the source for a disc. Nor is a disc game's
+/// update, [`ps3_update_of`]: it is no game on its own.
 fn is_ps3_install(path: &Path) -> bool {
-    path.join("PARAM.SFO").is_file() && path.join("USRDIR").is_dir()
+    path.join("USRDIR").is_dir()
+        && std::fs::read(path.join("PARAM.SFO"))
+            .is_ok_and(|sfo| oag_disc::sfo::text_field(&sfo, "CATEGORY").as_deref() != Some("GD"))
+}
+
+/// What `path` updates, when it is an update to a disc game: the shape of
+/// [`is_ps3_install`] with `CATEGORY` `GD`, the folder a PS3 or RPCS3 installs
+/// `dev_hdd0/game/<serial>` to.
+fn ps3_update_of(path: &Path) -> Option<oag_assets::UpdateFolder> {
+    if !path.join("USRDIR").is_dir() {
+        return None;
+    }
+    let sfo = std::fs::read(path.join("PARAM.SFO")).ok()?;
+    let category = oag_disc::sfo::text_field(&sfo, "CATEGORY");
+    (category.as_deref() == Some("GD")).then_some(())?;
+    Some(oag_assets::UpdateFolder {
+        serial: oag_disc::sfo::title_id(&sfo)?,
+        root: path.to_string_lossy().into_owned(),
+    })
+}
+
+/// Every disc update a player holds for the image `source`: the folders beside the
+/// image, then those on [`ps3_search_path`]. The image's own release picks among
+/// them, the rule `.vpk` and PS4 `.pkg` patches go by. Nothing for a folder source: a
+/// package install is patched in place.
+#[must_use]
+pub fn ps3_updates(source: &str) -> Vec<oag_assets::UpdateFolder> {
+    let source = Path::new(source);
+    if !source.is_file() {
+        return Vec::new();
+    }
+    source
+        .parent()
+        .map(Path::to_path_buf)
+        .into_iter()
+        .chain(ps3_search_path())
+        .flat_map(|root| std::fs::read_dir(root).into_iter().flatten().flatten())
+        .filter_map(|entry| ps3_update_of(&entry.path()))
+        .collect()
 }
 
 /// Every PSN HD install directly under `root`, European serials (`NPEA`,

@@ -240,22 +240,28 @@ already carry, not by a second Zone_Update.
 **HD's speed-class cues are a second, independent ladder, now wired.** `MR_VEN`,
 `MR_FLA`, `MR_RAP`, `MR_PHA` and friends read as Venom/Flash/Rapier/Phantom-
 shaped speed-class names, matching HD's Zone HUD's `SpeedClass` and
-`NextSpeedClass` text widgets (`docs/ui/hud.md`). **2026-08-31: HD ships them
-twice.** Extracted and parsed directly (`oag_formats::sblk`, not assumed): a
-**dedicated** bank, `Data\Sound\speech_class.bnk`, names `ZONEMALE` at cue `0`
+`NextSpeedClass` text widgets (`docs/ui/hud.md`). **HD ships them twice**
+(2026-08-31, extracted and parsed directly with `oag_formats::sblk`): a
+dedicated `Data\Sound\speech_class.bnk` (`DATA01`) names `ZONEMALE` at cue `0`
 plus fourteen consecutive cues at `1`-`14` - `MR_SVE`, `MR_VEN`, `MR_SFL`,
 `MR_FLA`, `MR_SRA`, `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`,
-`MR_Z_SUB`, `MR_Z_M1`, `MR_Z_SUP` - nothing else. The same fourteen, in the
-same order, are also folded into the general `speech_zone.bnk` at cue indices
-`26`-`39`. That is a 14/14 order match against [`oag_title::ZoneStages`]'
-(`crates/title/src/race.rs`) own fourteen non-`Start` HD stage names, and it is
-what `oag_title::ZoneClassAnnouncer` and
-[`oag_sound::sfx::ClassAnnouncer`](../../crates/sound/src/sfx/announcer.rs)
-now play - fired on the same `ZoneStages::stage_for` edge the HUD text and the
-colour grade already key off, since no call site in HD's own executable has
-been read for this ladder either. See `crates/hd/tests/hd_title_ground_truth.rs`'s
-`the_speed_class_announcer_names_the_disc_s_own_dedicated_bank_by_cue_index` for
-the ground truth.
+`MR_Z_SUB`, `MR_Z_M1`, `MR_Z_SUP` - and the same fourteen, in the same order,
+sit in `speech_zone.bnk` at cue indices `26`-`39`. That is a 14/14 order match
+against [`oag_title::ZoneStages`]' (`crates/title/src/race.rs`) own fourteen
+non-`Start` HD stage names. **2026-11-15: the live copy is `speech_zone.bnk`.**
+A Zone race on the Fury disc loads `DATA00`'s `speech_zone.bnk` (43 cues) in its
+speech slot and no 15-cue `speech_class.bnk`; at a natural class step the race
+queues the new class's `MR_*` name from there (conf 88). This port plays that
+bank (`oag_title::ZoneClassAnnouncer::bank`), each line as the timeline it
+authors: a 200 tick lead-in (0.83 s at 240 Hz; a delay word and a `0x1a` with
+operand 0), then both voices on one tick at +30 and +330 degrees, and four
+voices for the last three (two clips, each at both angles). The `speech_class.bnk`
+variant is a 5-tick L/R comb instead; the port does not play it. Evidence and
+the trigger: [`sound.md`](../ghidra/functions/ps3-hdfury-eu/sound.md#the-class-step-cues-light_wipe-and-an-mr_-line-from-the-banks-a-zone-race-loads).
+The ground truth is `crates/hd/tests/hd_title_ground_truth.rs`'s
+`the_speed_class_announcer_names_the_zone_speech_bank_by_cue_index`. The edge is
+still `ZoneStages::stage_for`, the one the HUD text and the colour grade key off
+(the original queues the line a few ticks before the commit).
 
 **All fourteen decode.** Checked by playing the bank, not just parsing its
 directory. `MR_SUZ` ("Super Zen") used to be the one miss: both of its own
@@ -304,23 +310,21 @@ collision zone, or one loses a refused voice slot to something else entirely,
 is not established** - only that the code path itself arbitrates nothing
 between the two calls it makes on the same tick.
 
-**A candidate for the non-verbal half of a class change, found the same day
-and deliberately left unwired - and the maintainer's own play now
-corroborates that it exists.** `env0_zone.bnk` (HD's Zone environment sound
-bank, not `speech_zone.bnk`) names a cue `ZONEBAR_TRANS` - plausibly "Zone bar
-transition," the HUD ladder widget's own animation - but nothing traces a call
-site for it, and a single unread label is not the fourteen-way order match the
-`MR_*` ladder has. **Asked directly, the maintainer describes the class-change
-sound as a spoken class name and a non-verbal tone together, not one or the
-other** - independent evidence that a second, non-verbal cue really is there
-to find, strengthening the case for chasing `ZONEBAR_TRANS`'s trigger next
-rather than treating it as a name-only guess. **This entry previously also
+**The non-verbal half of a class change is `light_wipe`, wired 2026-11-15.**
+`Environment_UpdateStageBlend` keys it from the race's environment bank
+(`env0_zone.bnk`, `DATA00`'s 67-cue copy on Fury) immediately before the stage
+commit; the port plays its six-voice timeline (the `0x24` goto skips its first six
+key-ons) on the same class-step edge as the `MR_*` line. `ZONEBAR_TRANS` is not
+this tone: it belongs to Zone Battle and `DATA00`'s `env0_zone.bnk` does not name
+it. Evidence:
+[sound.md](../ghidra/functions/ps3-hdfury-eu/sound.md#the-class-step-cues-light_wipe-and-an-mr_-line-from-the-banks-a-zone-race-loads).
+**This entry previously also
 listed `HBEAT_ZCHANGE` as a
-third cue beside `HBEAT`/`HBEAT_GO`; that was checked directly this session
-and is wrong - `speech_zone.bnk` names exactly 42 cues (`cue_count`, read off
-the bank's own header), `0`-`41`, and no `HBEAT_ZCHANGE` string appears
-anywhere in the file.** Corrected here rather than left to be re-discovered
-wrong a second time.
+third cue beside `HBEAT`/`HBEAT_GO`; that was checked directly and is wrong -
+`speech_zone.bnk` (`DATA01`'s copy) names 42 cues (`cue_count`, read off the
+bank's own header), `0`-`41`, and no `HBEAT_ZCHANGE` string appears anywhere in
+the file.** Corrected here rather than left to be re-discovered wrong a second
+time.
 
 ### A cue can be a sequence, and `zone_N` is one
 
@@ -557,8 +561,8 @@ on, which HD's speech needs: its speech bus rides the effects slider).
 | Pulse (PSP, PS2) | `ready` at tick 91, `go` at 271, from the mode's speech bank | the same | measured (above) |
 | Pure (PSP, USA) | `ready` (cue 12, 1.25 s) at 91, `go` (cue 13, 1.12 s) at 271, `speech.bnk` | the same two cues | **measured 2026-10-19**: `Scream_StartSound` (`0x0883defc`) logs `SPEECH` 12 then 13, 180.0 frames apart, three runs; the craft's launch gate flips in the first update after `go`; [countdown-voice.md](../ghidra/functions/psp-pure-usa/countdown-voice.md), confidence 85 (cues, spacing, and `go` at the release: the throttle field `craft+0x270` first reads non-zero 2 to 4 frames after `go`, at Pure's 30 Hz update). Zone, Eliminator and the EU pressing not run |
 | HD / Fury | `ready` at 91 (the authored 3.0 s tail of `321_GO`), **`HBEAT` with it (now: three groups of voices at 0.52, 1.375 and 2.23 s)**, `go` at 271 (5.1 s), `speech.bnk` | `ready`, `HBEAT`, `go` and nothing else of the start | **triggers read and the order captured 2026-10-19** (RPCS3 cue-start log on `Sound_QueueAnnouncerCue` and `Sound_PlayBankCue`): `RaceManager_SetPhase` phase 1 queues `ready` and plays `HBEAT`, `RaceManager_UpdateCountdown` queues `go` after entering phase 2, [countdown-voice.md](../ghidra/functions/ps3-hdfury-eu/countdown-voice.md), 85; `321_GO`, `INIT_GO` and `LAUNCHSEQ` start no cue. The ready-to-go spacing (the countdown timer `+0x1958`) is **inherited from Pulse, not measured** (the audio clock the capture counted is not game time) |
-| 2048 (Vita) | a named mode: `ready`, `HBEAT` at 91 and `go` (1.15 s) at 271, `speech.bnk`, timelines on the 240 Hz tick (**now**, was nothing); a campaign event: `Go_NGP` at 271 alone (**now**), `321_NGP` authored and not played | native events: `321_NGP`, `Go_NGP` (`Weapons_NGP.bnk`); named modes: `ready`, `go`, `HBEAT` (`speech.bnk`) | trigger read statically, [countdown-voice.md](../ghidra/functions/vita-2048-eu-v104/countdown-voice.md), confidence 80; tick 240 Hz read, 85; `321_NGP` is two looping voices keyed off after 3.75 s under a +-180 degree pan sweep at 1 Hz, which the mixer cannot play; ready-to-go spacing is Pulse's, **chosen, not measured** |
-| Omega | nothing | Wwise events (`BKHD` v118, `speech.bnk` is a 32-byte header): `_321_NGP`, `Go_NGP`, `Ship_Gear_up_PirProto`, `RACE_Combat_Start` | **checked, differs**: the executable posts `_321_NGP` at state 1 and `Go_NGP` at the countdown's end on every non-demo mode, no `< 0x17` split (decompile, 80); not playable, no Wwise event path |
+| 2048 (Vita) | a named mode: `ready` (cue 0, into `321_GO`'s 3.00 s pair), `HBEAT` (cue 27, three beat groups) at 91 and `go` (cue 3, a 5.14 s pair) at 271, `speech.bnk`, timelines on the 240 Hz tick (**now**; the cue indices were the hash buckets until 2026-11-02, so the words were wrong); a campaign event: `321_NGP` (cue 70) and `Go_NGP` (cue 68), a centre voice and a 90/270 pair per group, **now played** (90 degrees is the pan law's rear edge, hard right) | native events: `321_NGP`, `Go_NGP` (`Weapons_NGP.bnk`); named modes: `ready`, `go`, `HBEAT` (`speech.bnk`) | trigger read statically, [countdown-voice.md](../ghidra/functions/vita-2048-eu-v104/countdown-voice.md), confidence 80; tick 240 Hz read, 85; both event cues pan a pair to 90 and 270 degrees, 90 being the rear edge of the pan law (`pan_of_angle_to_rear_edge`); ready-to-go spacing is Pulse's, **chosen, not measured** |
+| Omega | nothing | Wwise events (`BKHD` v118, `speech.bnk` is a 32-byte header): `_321_NGP`, `Go_NGP`, `Ship_Gear_up_PirProto`, `RACE_Combat_Start` | **checked, differs**: the executable posts `_321_NGP` at state 1 and `Go_NGP` at the countdown's end on every non-demo mode, no `< 0x17` split (decompile, 80); the posted names are `<cue>__Weapons_NGP`, defined in `English(US)/Weapons_NGP.bnk` (88, [wwise-sound.md](../ghidra/functions/ps4-omega-eu/wwise-sound.md)); ours plays both as the events' timelines, on Pulse's 180-tick spacing (lent) |
 
 HD's `ready` is the change of this lane: the countdown loader walks opcode `0x08` as a child (the
 reading Pulse's front end measured, `WalkModel::globals`), so `ready` plays `321_GO` after its goto, the

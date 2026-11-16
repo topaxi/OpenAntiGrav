@@ -179,7 +179,17 @@ instead.
   and `w` is reconstructed as `sqrt(1 - x^2 - y^2 - z^2)` - a **compressed unit
   quaternion**, three components stored. Between keys it slerps
   (`0x08986060`) and renormalises through `vdot_q`/`vrsq_s`/`vscl_q`, then
-  converts to a matrix. A count of `0` copies a constant identity basis.
+  converts to a matrix.
+  **The slerp, read 2026-10-31 (`dekon-white-flyby`, confidence 90):** `d = q0 . q1`; if `d < 0`
+  `q1` is negated (short arc); if `|d| >= 0.998` (half-float `0x3bfc`) the blend is the lerp
+  `(1-t) q0 + t q1`; else `a = acos|d|`, weights `sin((1-t)a)/sin a` and `sin(t a)/sin a`; if
+  `sin a < 5e-5` the result is `q0`. `oag_vex`'s evaluator lerped raw components until then,
+  which is wrong where keys alternate a quaternion's sign: `05_Track`'s `start_grid.vex`
+  (de Konstruct, Black and White share it) stores `q`/`-q` around frames 0-40, 73-95, 402-462 and
+  623-671, and the lerp passed through the identity, turning the view up to 173 degrees a tick
+  (the maintainer's "flickers and weird camera movements" in White's flyby). Checked on Pure,
+  HD and 2048: the widened-`f32` path now slerps too, unmeasured on those titles (checked,
+  applies, not measured; the same reader, scenery tests unchanged). A count of `0` copies a constant identity basis.
 - **Scale** (`0x088ffc08`): lerped raw, then scaled by `0x3b800000` = **1/256**
   - the same fixed point the texture-transform block uses - and multiplied into
   matrix rows 0, 1 and 2. A count of `0` leaves the basis alone.

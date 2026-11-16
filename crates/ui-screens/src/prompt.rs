@@ -733,7 +733,7 @@ impl Confirm {
             (Button::Down, Dir::Down),
         ] {
             if input.take(button) {
-                self.yes = !self.yes;
+                self.yes.toggle();
                 self.navs.push(match dir {
                     Dir::Left | Dir::Right => Nav::Stepped(Some(dir)),
                     Dir::Up | Dir::Down => Nav::Moved(Some(dir)),
@@ -1037,6 +1037,28 @@ pub fn record_row_draw(
             wrap_width: None,
         },
     ]
+}
+
+/// A dark band behind the [`record_row_draw`] line `index`, for a page whose lines sit on a
+/// backdrop the skin's text colour is not readable over (Omega's is light and its rows are
+/// white on black bars; a detail line has no bar of its own).
+#[must_use]
+pub fn record_row_back(menu: &Menu, skin: &Skin, index: usize) -> Draw {
+    let entries = menu.page().entries.len();
+    let shown = menu
+        .visible_rows()
+        .min(entries.saturating_sub(menu.scroll()));
+    let pitch = skin.row_pitch();
+    let y = skin.first_row_y() + (shown + index) as f32 * pitch;
+    Draw::Fill {
+        rect: [
+            skin.menu_x() - 4.0,
+            y,
+            skin.value_right() - skin.menu_x() + 8.0,
+            pitch * 0.9,
+        ],
+        color: [0.0, 0.0, 0.0, 0.62],
+    }
 }
 
 /// What everything outside the panel is dimmed with.

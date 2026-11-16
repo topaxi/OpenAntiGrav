@@ -33,6 +33,7 @@ mod rects;
 #[cfg(test)]
 use movie::has_movie_extension;
 mod block;
+mod list;
 mod mode3d;
 mod reveal;
 mod settings;
@@ -43,13 +44,14 @@ pub use block::BlockWidget;
 pub use color::{argb_to_rgba, parse_argb};
 pub use display_type::DisplayType;
 pub use fade::{MEASURED_HIDDEN_WIDGET_FADE_IN_SECONDS, resolve_fade_in};
+pub use list::ListWidget;
 pub use mode3d::{DEFAULT_FAR_Z, DEFAULT_NEAR_Z, Mode3dModel, Model};
 pub use movie::{DEFAULT_REGION, MOVIE_EXTENSIONS, Movie};
 pub use rects::{Bracket, Slot};
 pub use reveal::{RevealKey, interpolate_reveal};
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
 pub use tag_input::TagInput;
-pub use touch::{Include, TouchButton};
+pub use touch::{CanvasLabel, Include, TouchButton};
 
 /// One `Text` widget.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -380,6 +382,8 @@ pub struct Menu {
     pub align: String,
     /// Font name, e.g. `Default`.
     pub font: String,
+    /// `vertalign="middle"`: [`Self::y`] is the middle of the first row, not its top.
+    pub middle: bool,
 }
 
 /// One screen, flattened out of the tree.
@@ -419,6 +423,8 @@ pub struct Screen {
     pub texts: Vec<Text>,
     /// The box half of every `<Block>` (label in [`Self::texts`]).
     pub blocks: Vec<BlockWidget>,
+    /// Every `<List>` widget (its label is the widget's own, not in [`Self::texts`]).
+    pub lists: Vec<ListWidget>,
     /// Every `<Mode3D>`'s `<Model>`s, in document order.
     pub models: Vec<Mode3dModel>,
     /// `Redirect` widgets in document order.
@@ -432,6 +438,10 @@ pub struct Screen {
     /// `TouchSlider` widgets in document order, see [`TouchSlider`]. Empty on
     /// every other title's screens.
     pub touch_sliders: Vec<TouchSlider>,
+    /// The `<CanvasLabel>`s of the `<FE3DCanvas>` a `<TouchScroll>` holds, in
+    /// document order - Wipeout 2048's campaign map. Empty on every other
+    /// title's screens.
+    pub canvas_labels: Vec<CanvasLabel>,
     /// Whether the screen has a `DisplayLanguages` widget, which is what makes
     /// it the language picker.
     pub display_languages: bool,
@@ -498,6 +508,23 @@ pub struct Screens {
 }
 
 impl Screens {
+    /// Whether the global `name` is a dark colour: its red, green and blue sum under
+    /// half. `false` for a global that is absent or not a colour.
+    ///
+    /// What stands in for `FrontEnd_IsFuryStyle` is `HD_BG`'s darkness, since the two
+    /// HD archives clear their front end to black and white respectively; the menus'
+    /// art and the loading screen's style both ask it.
+    #[must_use]
+    pub fn global_is_dark(&self, name: &str) -> bool {
+        self.globals
+            .get(name)
+            .and_then(|value| color::parse_argb(value))
+            .is_some_and(|argb| {
+                let [r, g, b] = [argb >> 16 & 0xff, argb >> 8 & 0xff, argb & 0xff];
+                r + g + b < 3 * 128
+            })
+    }
+
     /// `screen` is the innermost named `Screen` enclosing `node`, which is
     /// what a `DirectEmbed` include's widgets belong to - see [`Include`].
     fn collect_globals(&mut self, node: &Node, screen: Option<&str>) {
@@ -847,6 +874,11 @@ impl Screens {
                     .blocks
                     .push(self.block_widget_from_node(child, inner));
             }
+            // A `List` is the settings row; it lands in [`Screen::lists`] and nowhere else, so a
+            // screen drawn from its texts gains nothing.
+            "list" => screen
+                .lists
+                .push(self.list_widget_from_node(child, viewport_width, inner)),
             "mode3d" => screen.models.extend(self.mode3d_models_from_node(child)),
             "redirect" => screen.redirects.push(widgets::redirect_from_node(child)),
             "touchbutton" => screen
@@ -858,6 +890,24 @@ impl Screens {
             "touchslider" => screen
                 .touch_sliders
                 .push(self.touch_slider_from_node(child, inner)),
+            // Only the canvas's labels are read from a scroll: its other
+            // children are not walked (no reading of them is measured).
+            "touchscroll" => screen.canvas_labels.extend(
+                child
+                    .children
+                    .iter()
+                    .filter(|canvas| canvas.name.eq_ignore_ascii_case("fe3dcanvas"))
+                    .flat_map(|canvas| &canvas.children)
+                    .filter(|label| {
+                        // Omega spells its three season cards `aCanvasLabel`
+                        // (`docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md`,
+                        // "Season cards: checked, differs").
+                        ["canvaslabel", "acanvaslabel"]
+                            .iter()
+                            .any(|tag| label.name.eq_ignore_ascii_case(tag))
+                    })
+                    .filter_map(|label| self.canvas_label_from_node(label)),
+            ),
             "displaylanguages" => screen.display_languages = true,
             "menu" => screen.menu = Some(self.menu_from_node(child, offset)),
             "taginput" => screen.tag_inputs.push(self.tag_input_from_node(child)),

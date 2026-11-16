@@ -70,7 +70,7 @@
 //! `Grid Selection`".
 
 use crate::vex::{self, Node};
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Class ID of a `Camera` node.
 pub const CLASS_CAMERA: u32 = 0xf7;

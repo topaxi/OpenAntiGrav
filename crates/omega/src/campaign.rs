@@ -8,11 +8,11 @@
 //! `"CellSelection"` screens in the disc's own 1920x1080 grid, plain UTF-8
 //! rather than Pulse's dictionary-shortened copy - see
 //! `docs/formats/omega-frontend.md`'s "2048's campaign" section, which found
-//! a fifth screen (`Grid Selection 2048`) this module does not read: that
-//! branch's own content is `campaign2048_definition.xml`, corrupted past its
-//! own opening tags in this project's extraction, and 2048's own
-//! `FE3DCanvas`/`CanvasLabel` vocabulary rather than this schema - out of
-//! scope here.
+//! a fifth screen (`Grid Selection 2048`, over `grid_16`..`grid_18`) whose
+//! events this module does not read: they are `Campaign2048_Definition.xml`'s
+//! (whole, 29,919 bytes), in 2048's own `FE3DCanvas`/`CanvasLabel`
+//! vocabulary rather than this schema, and the three grids themselves author
+//! no `RequiredPoints`.
 
 /// The file that lists every grid, confirmed present in `data09.psarc`.
 pub const DEFINITION_ENTRY: &str = r"Data\Plugins\grids\Definition.xml";

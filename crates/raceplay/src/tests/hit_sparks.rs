@@ -372,19 +372,15 @@ fn the_weapon_spark_picks_the_locator_nearest_the_contact() {
     assert!(crate::hit_sparks::nearest_locator(&[], model, Vec3::ZERO).is_none());
 }
 
-/// The title's `WeaponSpark` entry is the only thing keeping the other titles
-/// from firing HD's Cannon spark: present for HD and for no other title this
-/// workspace ships.
+/// The title's `WeaponSpark` entry is the only thing keeping the other titles from firing the
+/// Cannon's craft-hit spark: HD's, and 2048's and Omega's by inheritance from it.
 #[test]
-fn only_hd_throws_the_cannon_craft_hit_spark() {
+fn hd_2048_and_omega_throw_the_cannon_craft_hit_spark() {
     use crate::hit_sparks::throws_weapon_spark;
-    assert!(throws_weapon_spark(oag_hd::TITLE));
-    for other in [
-        oag_pulse::TITLE,
-        oag_pure::TITLE,
-        oag_2048::TITLE,
-        oag_omega::TITLE,
-    ] {
+    for title in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
+        assert!(throws_weapon_spark(title), "{} does not", title.name);
+    }
+    for other in [oag_pulse::TITLE, oag_pure::TITLE] {
         assert!(!throws_weapon_spark(other), "{} fires it", other.name);
     }
     let liveries: Vec<oag_livery::Livery> = Vec::new();

@@ -108,7 +108,8 @@ fn pure_walks_the_five_screens_the_disc_walks() {
     );
 }
 
-/// START on `Title Screen` hands off to the menus, and nothing else does.
+/// START or CROSS on `Title Screen` hands off to the menus, and nothing else
+/// does. CROSS is ours, as on Pulse's `Show Logo`.
 ///
 /// The counterpart to [`start_on_show_logo_launches_the_game`], and pinned
 /// for the same reason: the button is measured (the screen's own
@@ -116,7 +117,7 @@ fn pure_walks_the_five_screens_the_disc_walks() {
 /// destination is this build's divergence, so a change to either should
 /// have to come here and say so. See [`Frontend::update_title_screen`].
 #[test]
-fn start_on_pures_title_screen_launches_the_game() {
+fn start_or_cross_on_pures_title_screen_launches_the_game() {
     let mut frontend = pure(60);
     let mut input = Input::new();
     reach_the_second_movie(&mut frontend, &mut input);
@@ -124,26 +125,28 @@ fn start_on_pures_title_screen_launches_the_game() {
         f.machine().is(pure_states::TITLE_SCREEN)
     });
 
-    // Every button the abstract layer carries except START, held for ten
-    // seconds. The screen has no timeout of its own either - its unnamed
-    // redirect is left unfired on purpose - so this must not move.
+    // Every button the abstract layer carries except START and CROSS, held
+    // for ten seconds. The screen has no timeout of its own either - its
+    // unnamed redirect is left unfired on purpose - so this must not move.
     for _ in 0..600 {
-        input.begin_frame(!Button::Start.bit());
+        input.begin_frame(!(Button::Start.bit() | Button::Cross.bit()));
         frontend.update(FRAME, &mut input, None);
     }
     assert!(
         frontend.machine().is(pure_states::TITLE_SCREEN),
-        "only START leaves Title Screen, and it does not time out; got {:?}",
+        "only START or CROSS leaves Title Screen, and it does not time out; got {:?}",
         frontend.machine().current()
     );
     assert!(!frontend.is_finished());
 
-    input.begin_frame(Button::Start.bit());
+    input.begin_frame(0);
+    frontend.update(FRAME, &mut input, None);
+    input.begin_frame(Button::Cross.bit());
     frontend.update(FRAME, &mut input, None);
     assert!(
         frontend.machine().is(states::LAUNCH_GAME),
-        "START hands off to the menus, the way Pulse's own last boot screen \
-         does; got {:?}",
+        "CROSS (ours; the disc reads START alone) hands off to the menus, the \
+         way Pulse's own last boot screen does; got {:?}",
         frontend.machine().current()
     );
     assert!(
@@ -264,12 +267,16 @@ fn start_on_show_logo_launches_the_game() {
 }
 
 #[test]
-fn show_logo_waits_and_ignores_every_button_but_start() {
+fn show_logo_waits_and_ignores_every_button_but_start_and_cross() {
     // The screen's XML has one `forward="start"` redirect and no timer, so
-    // neither time passing nor the buttons `LogoFMV` itself accepts may move
-    // it on. Cross is the one that matters: it skips the movie, and it is
-    // also the button that was just pressed to pick a language.
-    for held in [Button::Cross, Button::Circle, Button::Down] {
+    // neither time passing nor the other buttons may move it on. CROSS is
+    // ours (`Frontend::update_show_logo`), tested below.
+    for held in [
+        Button::Circle,
+        Button::Square,
+        Button::Triangle,
+        Button::Down,
+    ] {
         let mut frontend = frontend(300);
         let mut input = Input::new();
         pick_a_language(&mut frontend, &mut input);
@@ -286,6 +293,33 @@ fn show_logo_waits_and_ignores_every_button_but_start() {
         );
         assert!(!frontend.is_finished());
     }
+}
+
+/// CROSS leaves Show Logo as START does: an intended divergence, the disc
+/// reads START alone. The CROSS that picked the language, still held, must
+/// not carry through: only a fresh press advances.
+#[test]
+fn a_fresh_cross_on_show_logo_launches_the_game_and_a_held_one_does_not() {
+    let mut frontend = frontend(300);
+    let mut input = Input::new();
+    pick_a_language(&mut frontend, &mut input);
+
+    for _ in 0..60 {
+        input.begin_frame(Button::Cross.bit());
+        frontend.update(FRAME, &mut input, None);
+    }
+    assert!(
+        frontend.machine().is(states::SHOW_LOGO),
+        "a held CROSS is not a press; got {:?}",
+        frontend.machine().current()
+    );
+
+    input.begin_frame(0);
+    frontend.update(FRAME, &mut input, None);
+    input.begin_frame(Button::Cross.bit());
+    let events = frontend.update(FRAME, &mut input, None);
+    assert!(frontend.is_finished());
+    assert!(events.contains(&Event::Enter(states::LAUNCH_GAME.into())));
 }
 
 #[test]

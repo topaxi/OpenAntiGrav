@@ -60,6 +60,17 @@ pub enum Skip {
     Press,
 }
 
+/// The flyby files a game mode takes in place of [`PreRace::grid`] and [`PreRace::grid_reversed`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ModeGrid {
+    /// The modes that take these files, by `oag_race::Mode::name`.
+    pub modes: &'static [&'static str],
+    /// The file for a circuit run the way it is authored.
+    pub grid: &'static str,
+    /// The file for a circuit run the other way round; `None`: the forward file serves both.
+    pub grid_reversed: Option<&'static str>,
+}
+
 /// One title's pre-race flyby.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PreRace {
@@ -70,6 +81,9 @@ pub struct PreRace {
     /// The file for a circuit run the other way round, where the title ships one. `None`: the
     /// forward file serves both.
     pub grid_reversed: Option<&'static str>,
+    /// The modes that fly another pair of files than [`Self::grid`]: the title's executable picks
+    /// the file by the race's mode. A mode in no row flies [`Self::grid`].
+    pub by_mode: &'static [ModeGrid],
     /// Vertical field of view, degrees. The `gridCamera` payload does not carry it.
     pub fov_degrees: Sourced<f32>,
     /// Ticks before the animation starts moving.
@@ -84,4 +98,68 @@ pub struct PreRace {
     pub skip: Sourced<Skip>,
     /// Whether the track-description panel (Pulse's `InGameTrackDescriptionScreen`) is drawn.
     pub panel: bool,
+    /// The circuit's voice-over, played through the music player from the tick the lock counter
+    /// reaches zero until the flyby ends: an archive entry name with `{}` where the circuit's
+    /// number goes (the leading digits of its `PI_Track` id, as `atoi` reads them, so `03_Track`
+    /// is `3`). `None`: the title plays none.
+    pub voice_over: Option<Sourced<&'static str>>,
+    /// The sound effects held silent through the flyby and faded back in part-way through it.
+    /// `None`: the title's effects play from the first tick.
+    pub effects_fade_in: Option<Sourced<EffectsFade>>,
+}
+
+/// The flyby's sound-effects fade: silent from the first tick, then a linear ramp from silence
+/// that starts when the lock counter reaches a value.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EffectsFade {
+    /// The lock counter value (it counts down to zero over `lock_ticks`) at which the ramp starts.
+    pub at_counter: u32,
+    /// The gain added on each tick after it, until it reaches one.
+    pub per_tick: f32,
+}
+
+impl PreRace {
+    /// The files to try for a circuit, in order: the mode's file (its `_reversed` one for a
+    /// circuit run backwards), then the forward default, which the original falls back to when the
+    /// first is not on the disc. `mode` is `oag_race::Mode::name`.
+    #[must_use]
+    pub fn grid_files(&self, mode: &str, reversed: bool) -> Vec<&'static str> {
+        let (grid, grid_reversed) = self
+            .by_mode
+            .iter()
+            .find(|row| row.modes.contains(&mode))
+            .map_or((self.grid, self.grid_reversed), |row| {
+                (row.grid, row.grid_reversed)
+            });
+        let first = match grid_reversed {
+            Some(file) if reversed => file,
+            _ => grid,
+        };
+        let mut files = vec![first];
+        if first != self.grid {
+            files.push(self.grid);
+        }
+        files
+    }
+
+    /// The flyby tick the effects fade-in starts on, with its step per tick, or `None` for a title
+    /// with no such fade. The counter reads `lock_ticks - tick` after tick `tick`'s decrement.
+    #[must_use]
+    pub fn effects_fade_start(&self) -> Option<(u32, f32)> {
+        let fade = self.effects_fade_in?.value;
+        Some((
+            self.lock_ticks.value.saturating_sub(fade.at_counter),
+            fade.per_tick,
+        ))
+    }
+
+    /// The entry holding the voice-over for the circuit whose `PI_Track` id is `track_id`, or
+    /// `None` for a title with none or an id that starts with no digit.
+    #[must_use]
+    pub fn voice_over_entry(&self, track_id: &str) -> Option<String> {
+        let template = self.voice_over?.value;
+        let digits: String = track_id.chars().take_while(char::is_ascii_digit).collect();
+        let number: u64 = digits.parse().ok()?;
+        Some(template.replace("{}", &number.to_string()))
+    }
 }

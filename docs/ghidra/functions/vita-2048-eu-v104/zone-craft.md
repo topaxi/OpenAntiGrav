@@ -49,6 +49,10 @@ and `0xe`, remaps `zoneship_zone` to the craft's livery name. So the *menu*
 shows the picked craft's own hull wearing the Zone livery key, while the *race*
 loads the shared hull. Hypothesis, below 70, not renamed.
 
+Our preview side: **checked, differs.** 2048 has no race-box Ship Select, and its touch `Select Team` screen (`oag_game::team_hull`) lists native teams only, with no mode, and those author no Zone livery; so nothing draws;
+the shared livery decision is tested against the race for it
+(`vita_2048_zone_preview_wears_the_livery_the_race_does`).
+
 ## `ship_zone.vex` is not loaded by anything found (65, negative)
 
 The 18 `Data/art/published/Ships/<team>2048/<n>/ship_zone.vex` (+ `.rcsmodel`)
@@ -75,3 +79,7 @@ was not read; v1.04 is what is wired.
 
 - ~~Livery texture swap by `zoneship_zone`~~ wired 2026-10-06: the `PI_TeamModel name="zone"` `texturelocation` replaces the path component on the hull's 9 texture requests; native teams author none, so no swap.
 - Which livery name 2048-native craft carry (`+0x1ac`): the definition authors none for them and no `Zoneship_feisar2048` exists; the original's fallback is unread, so the default skin is kept.
+
+## HD/Fury
+
+Checked 2026-11-16: HD's `Ship_ReloadModelForSkin` (`0x000dbdc8`) queues the same `zoneship_zone` substitution, with the same twelve liveries ([`ps3-hdfury-eu/zone-craft.md`](../ps3-hdfury-eu/zone-craft.md), confidence 80). It is now wired on HD. This title's livery swap gained its own ground truth, `vita_2048_zone_hull_wears_the_livery_its_definition_names`.

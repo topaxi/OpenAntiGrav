@@ -23,7 +23,7 @@ pub fn is_linear_target(format: wgpu::TextureFormat) -> bool {
 /// values ([`SceneStore::Encoded`]) and its `square_decode` for one in 2048's
 /// gamma-2 space ([`SceneStore::Squared`]), both ignored on a gamma target, and
 /// its `packed_out` for a gamma target that is a 5-6-5 card
-/// ([`SceneStore::Packed565`]) - `&[]` on any other gamma target, so a pipeline
+/// ([`SceneStore::Packed565`], with `packed_gamma` for [`SceneStore::Packed565Gamma`]) - `&[]` on any other gamma target, so a pipeline
 /// built against one is bit-identical to what it was before linear targets existed.
 #[must_use]
 pub fn linear_constants(
@@ -33,8 +33,12 @@ pub fn linear_constants(
     match (is_linear_target(format), store) {
         (true, SceneStore::Encoded) => &[("linear_out", 1.0), ("encoded_out", 1.0)],
         (true, SceneStore::Squared) => &[("linear_out", 1.0), ("square_decode", 1.0)],
-        (true, SceneStore::Computed | SceneStore::Packed565) => &[("linear_out", 1.0)],
+        (true, SceneStore::SrgbTexels) => &[("linear_out", 1.0), ("srgb_texels", 1.0)],
+        (true, SceneStore::Computed | SceneStore::Packed565 | SceneStore::Packed565Gamma) => {
+            &[("linear_out", 1.0)]
+        }
         (false, SceneStore::Packed565) => &[("packed_out", 1.0)],
+        (false, SceneStore::Packed565Gamma) => &[("packed_out", 1.0), ("packed_gamma", 1.0)],
         (false, _) => &[],
     }
 }
@@ -49,5 +53,25 @@ pub fn fragment_options(
     wgpu::PipelineCompilationOptions {
         constants: linear_constants(format, store),
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Omega's store selects the shader's sRGB texel decode on the linear scene, and only there.
+    #[test]
+    fn srgb_texels_set_the_override_on_the_linear_scene() {
+        let scene = oag_gpu::formats::SCENE_FORMAT;
+        assert!(linear_constants(scene, SceneStore::SrgbTexels).contains(&("srgb_texels", 1.0)));
+        assert!(
+            !linear_constants(scene, SceneStore::Computed)
+                .iter()
+                .any(|(name, _)| *name == "srgb_texels")
+        );
+        assert!(
+            linear_constants(wgpu::TextureFormat::Rgba8Unorm, SceneStore::SrgbTexels).is_empty()
+        );
     }
 }

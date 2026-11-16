@@ -120,7 +120,7 @@ pub struct CloudCube {
 
 /// Decodes a `cloudCube` payload. `None` if it is not the one shipped shape.
 #[must_use]
-pub fn cloud_cube(payload: &[u8], order: oag_formats::ByteOrder) -> Option<(u32, f32)> {
+pub fn cloud_cube(payload: &[u8], order: oag_bytes::ByteOrder) -> Option<(u32, f32)> {
     if payload.len() < CLOUD_CUBE_PAYLOAD_LEN {
         return None;
     }

@@ -45,7 +45,7 @@ pub struct Listing {
     pub author: Option<String>,
     /// The title a track file names as its host (`oag_trackfile::Track::host`,
     /// as `oag_source::layers::slug` spells it), or `None` for a Workshop track
-    /// or a file that would not read. A RACE REMIX of it takes this title's
+    /// or a file that would not read. a two-title race page of it takes this title's
     /// disc as the track source.
     pub host: Option<String>,
     /// The titles the file offers itself on (`oag_trackfile::Track::titles`),

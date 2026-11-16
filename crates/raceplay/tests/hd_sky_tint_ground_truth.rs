@@ -17,7 +17,7 @@
 //! read off live draws"). So the tint is `byte / 255` in linear light
 //! ([`oag_mesh::mesh::sky_cube::SKY_COLOUR_FULL`]): 255 leaves the texture
 //! alone and 128 halves it. The corners carry it as the displayed factor
-//! `(byte / 255) ^ (1 / 2.2)`, since the sky multiplies the encoded texel. The `byte / 128` fit this replaced
+//! the sRGB encode of `byte / 255`, since the sky multiplies the encoded texel. The `byte / 128` fit this replaced
 //! doubled Sol 2's sky and Sebenco's; dropping the tint from the loader leaves
 //! every circuit at 1.0 and fails the Talon's and Amphiseum assertions.
 
@@ -54,11 +54,16 @@ fn the_sky_tint_is_the_authored_byte_over_255() {
         let Some(tint) = sky_tint(track, oag_race::Mode::SingleRace) else {
             return;
         };
-        // The corners carry the displayed factor, `(byte / 255) ^ (1 / 2.2)`,
+        // The corners carry the displayed factor, the sRGB encode of `byte / 255`,
         // because the sky multiplies the encoded texel (`sky_cube`'s
         // `tint_in_texel_domain`); the live draw shows 0.736 at 128 and 0.765
         // at 140.
-        let displayed = (byte / 255.0f32).powf(1.0 / 2.2);
+        let linear = byte / 255.0f32;
+        let displayed = if linear <= 0.003_130_8 {
+            linear * 12.92
+        } else {
+            1.055 * linear.powf(1.0 / 2.4) - 0.055
+        };
         for c in tint {
             assert!(
                 (c - displayed).abs() < 1e-6,

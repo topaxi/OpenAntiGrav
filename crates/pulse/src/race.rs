@@ -19,10 +19,13 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // The directory three of the four titles spell identically; Wipeout 2048 is
     // the one that does not. See `oag_title::RaceDefaults::ship_dir`.
     ship_dir: oag_title::race::SHIP_DIR,
+    ship_hull: ships::HULL,
     // The same directory: this title keeps a team's tuning beside its models.
     handling_dir: oag_title::race::SHIP_DIR,
     effect_dir: oag_title::race::EFFECT_DIR,
     effect_dir_by_circuit: &[],
+    hull_by_track_type: &[],
+    circuit_lineages: &[],
     zone: oag_title::ZoneCircuit::Prefixed(ZONE_TRACK_PREFIX),
     // The one variant with a recovered selector behind it rather than a name
     // probe: `Ship_LoadModel`'s `case 6`. See `ships::ZONE_HULL`.
@@ -66,10 +69,20 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_transition: None,
     zoom_ring: None,
     borrows_zoom_ring: true,
+    // `Additional_Definition.xml`'s `Settings` screen on the PSP discs (USA and EU) lists
+    // `Ghost Ship Visible`, `Auto Load Ghost` and `Multiplayer Tags`; the PS2 list has the first
+    // only, and the PSP list wins (`docs/ui/menus-original.md`, "Game Options").
+    game_options: oag_title::race::GameOptions {
+        ship_visible: true,
+        auto_load: true,
+        multiplayer_tags: true,
+    },
     zone_stage_textures: None,
+    zone_fallback: None,
     // `None` on the same terms as the table above: Pulse ships no Zone
     // effectSettings and no located Zone sky.
     zone_sky: None,
+    detonator: None,
     // Pulse authors one roster and no *second directory* for any team in it.
     team_variants: None,
     guest_roster: None,
@@ -89,7 +102,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     fresh_variant: None,
     speed_classes: Some(oag_title::SpeedClasses {
         names: oag_title::SpeedClasses::PULSE_LADDER,
-        remix_only: &[],
+        union_only: &[],
     }),
 };
 
@@ -141,6 +154,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
         origin: oag_title::Origin::Measured,
     },
     crossfade: None,
+    wwise: None,
 };
 
 /// The banks Pulse's `ready` and `go` are read from in the two modes that do
@@ -160,6 +174,7 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     tick: oag_title::SequenceTick::Psp,
     hashed: false,
     event: None,
+    event_every_mode: false,
     beat: None,
 };
 
@@ -365,24 +380,12 @@ pub mod ships {
     /// (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`).
     pub const ZONE_WRECK: &str = "zonewreck";
 
-    /// The archive entry name of one of a team's models, under the ship
-    /// directory this title keeps its roster in.
-    ///
-    /// Assembled the way the loader assembles it, with backslashes, which is
-    /// what the name hash needs. `dir` comes from
-    /// [`oag_title::RaceDefaults::ship_dir`] - see that field for why it is an
-    /// axis and not the constant this function used to spell inline.
-    #[must_use]
-    pub fn entry_name_in(dir: &str, team: &str, model: &str) -> String {
-        format!(r"{dir}\{team}\{model}.vex")
-    }
-
-    /// [`entry_name_in`] under
+    /// [`oag_title::race::entry_name_in`] under
     /// [`oag_title::race::SHIP_DIR`](oag_title::race::SHIP_DIR), which is where
     /// Pulse, Pure and Wipeout HD all keep their rosters.
     #[must_use]
     pub fn entry_name(team: &str, model: &str) -> String {
-        entry_name_in(oag_title::race::SHIP_DIR, team, model)
+        oag_title::race::entry_name_in(oag_title::race::SHIP_DIR, team, model)
     }
 }
 
@@ -408,8 +411,24 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         halo: r"Data\Weapons\pulse_plasma_halo1.vex",
         hemisphere2: r"Data\Weapons\pulse_plasma_hemisphere2.vex",
         hemisphere1: r"Data\Weapons\pulse_plasma_hemisphere1.vex",
+        // The tint ramps and the 1.5 s life are read to the byte off the GE dumps; the scale
+        // targets are fitted to them (`oag_raceplay`'s `PULSE_MODEL_UNIT` is the unit), the halo's
+        // hide age is chosen between two dumped frames. The hemispheres' `-3.5 x row1` drop is
+        // read in the executable and in the dumps (hemispheres 3.5 below the halo, along minus
+        // the frame's up) (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the hemisphere drop").
+        law: oag_title::weapons::PlasmaBlastLaw {
+            tint: [(0.2, 1.0), (0.3, 1.5), (0.0, 1.0)],
+            ease_targets: [320.0, 135.3, 112.75],
+            ease_rates: [0.1, 0.07, 0.07],
+            life: 1.5,
+            halo_hide_at: Some(0.65),
+            hemisphere_drop: 3.5,
+            origin: oag_title::Origin::Measured,
+        },
     }),
     plasma_blast_hd: None,
+    disruptor_halo: None,
+    disruptor_craft: None,
     // `BombBlast_Construct`'s own load order - see
     // `docs/ghidra/functions/psp-pulse-usa/mine.md`.
     bomb_blast_pulse: Some(oag_title::weapons::PulseBombBlast {
@@ -429,8 +448,10 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     magstrip_wake: None,
     magstrip_pob: false,
     rocket_trail: None,
+    missile_trail: None,
     leach_strip: None,
     leachbeam_ball: None,
+    missile_head: None,
     // `Shuriken_Init`'s model string `0x08a7cd74`.
     shuriken: Some(r"Data\Weapons\pulse_shuriken.vex"),
     // `None` is this title's own reading - see the field's doc comment.

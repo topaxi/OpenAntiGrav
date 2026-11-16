@@ -1,8 +1,8 @@
 ---
 status: re-first
-titles: [hd]
-updated: 2026-10-21
-summary: "Vineta K: rock-to-sand mask blend (j_rockblend5) unread; the sea sheet ripple needs the paraboloid probe"
+titles: [hd, 2048, omega]
+updated: 2026-11-01
+summary: "Vineta K: HD rock-to-sand blend unread, sea ripple needs the paraboloid probe; 2048/Omega target drawn, rt_icetunnel (Sebenco) glass law unread"
 ---
 
 # Vineta K's glass refraction and arch glow: what is left
@@ -19,6 +19,15 @@ a scratch directory, not kept (`report.md`, `shots/`, `sweep/`).
 
 ## Open
 
+- **2048 Vineta K: the main view leaves out the meshes named `wohdmeshrefract` (wired 2026-11-01, `psp2-glass-re`).** It is not a file field. `Environment_Load` substring-matches each track mesh object's name and sets instance flag `0x20`. `TrackPass_FilterSubmesh` (`0x813b9670`) rejects that flag in the main view and draws flags `0x30` only into the half-size `screenSpaceRefractionTex` target. Confidence 82, evidence in `docs/ghidra/functions/vita-2048-eu-v104/refraction-pass.md`. There are 238 such meshes on Vineta K. The `tunnel_understruts*` are **not** among them, so the original 2048 draws them in its main view (HD's chunk 1574 has no 2048 counterpart in this rule). Wired for 2048 and Omega (`psp2::refraction_only`, `psp2_refraction_only_ground_truth`).
+  - **Omega: ported (2026-11-01, `omega-glass-re`).** `TrackPass_FilterSubmesh` is at `0x01605760` with the same kind-0 `0x20` and kind-1 `0x30` tests (confidence 80, `docs/ghidra/functions/ps4-omega-eu/refraction-pass.md`). The `is_ps4` guard is gone. Omega skips 212 meshes on Vineta K, plus one on **Sebenco Climb** (`ice_tunnel_wohdmeshrefract2Shape`; the Vita's Sebenco has none).
+  - **Zone keeps them (wired).** Zone pass kinds never test `0x20`: kinds 2 to 4 on the Vita, 3 to 5 on Omega. So the skip runs outside Zone only.
+  - **Sebenco Climb moved, and the glass is wired (2026-11-01, `omega-icetunnel-glass`).** The icy rock sheet above the track is drawn into the target and `rt_icetunnel` samples it (`2 * Constant1 * a * G`, `a` the vertex colour, law and offsets on the Omega page). Still generic: the glass's cube reflection, snow and ice normal blends and own lit combine. Compare against the wipeout_pc native port at that spot when a frame exists.
+  - The render target of Omega's kind-1 list `0x01f8f310` is not traced (`FUN_016304d0(5, ...)` in `FUN_015c63a0`).
+  - **The refraction target is drawn (2026-11-01, `psp2-refraction-target`).** The left-out meshes go into a half-surface target (2048 480x272 measured, Omega 960x540 inherited) and `mt_tunnelrefraction` (2048, 26 submeshes) and Omega's `mt_`/`cl_tunnelrefraction` sample it: law `mix(fog, W * 2.0039 * D.a * G^2 + spec + lit * D^2, vis)` read off Vita3K's cached fragment SPIR-V (80). Test: `psp2_refraction_only_ground_truth` (target set == Zone's draws of the `0x30` meshes, main view == Zone minus refract, Zone has no target). **Inherited from HD, unread on the Vita:** the sample coordinate (the vertex program has no cached permutation), the 0.75 clip narrowing, single-sided drawing. **No alternate fog pair** exists in 2048/Omega `.envsettings`, so one primary-fog group; what the Vita does with flag `0x1000` (`wohdsecondaryfog`, 236 of 238) is unread. No Vita3K frame of a Vineta K tunnel exists to score the panes against.
+  - **Open: `rt_icetunnel`'s remaining terms** (cube reflection `cubeReflectionTexSampler` with `Reflectivity*`, `SnowIceAlphaBlend`/`snow1`/`icenormal` blends, `SnowSpec`, the normal-mapped sample point): all in the 311-instruction pixel program `0x4824`, read in outline on the Omega page, not drawn.
+  - Next: Vita3K capture at a tunnel pose to score the panes and the sample coordinate; read the Vita's target camera and flag `0x1000`.
+  - A Vita3K capture of the target's draws at the tunnel would take the confidence from 82 to 90+.
 - **The dunes inside the target are rock, the capture's are sand.** `and_rocktosand`'s red-channel blend mask
   (`j_rockblend5`) is read as the rock picture alone (rcsmaterial.md's table, "the red shape behind the glass"). It
   now shows through every pane that looks at the terrain.

@@ -5,8 +5,7 @@
 //! A row reads the host's name and its state on the left (`ADA  JOINABLE`) and, on the right,
 //! the title it runs and how many are in (`WIPEOUT PULSE (1/8)`). A host this machine cannot join stays in the list, dimmed and
 //! unselectable, and its reason is the line under the title while the cursor is on it; a host it
-//! can join says its circuit there. **Chosen, not measured** (maintainer's requirement,
-//! 2026-10-14).
+//! can join says its circuit there. **Chosen, not measured.**
 
 use oag_net::discovery::{Advert, Compat, Local, compat};
 use oag_ui::language::StringTable;

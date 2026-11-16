@@ -175,6 +175,134 @@ whether any of this binary's manifests author a `type` other than the
 default, and whether `param_3` is read anywhere `Billboard_ConstructResource`
 itself doesn't show.
 
+## The UV keys: a board's texture curve is in its `.vex`, not its `.rcsmodel`
+
+2026-11-10 (`omega-billboards`). Wipeout HD animates a billboard material's
+`uvOffset`/`uvScale` with an Edge Animation curve inside the `.rcsmodel`
+(`ps3-hdfury-eu/billboards.md`). **Omega's and 2048's `.rcsmodel` carry no
+curve at all**: the same motion is authored in each `Mesh` node of the `.vex`
+beside the model, as the texture-transform keyframe block Pulse uses
+(`psp-pulse-usa/texture-animation.md`), and the engine samples it per frame
+into a per-mesh instance the material's two uniforms are pointed at.
+
+### What the files hold
+
+- `321go_startfinish.rcsmodel`, Vita and PS4: `uvOffset`/`uvScale` are static
+  material parameters; no `EA02` clip and no curve pointer where HD's material
+  header carries one (bytes compared against HD's own file).
+- `321Go_StartFinish.vex` is **byte-identical on Vita and PS4** (13,584 bytes,
+  `cmp`). Its 19 `Mesh` nodes (class `0x125`) carry, at payload `+0x30`, a hash,
+  then the material array at `+0x34` (`0x14` bytes each, bit `0x10` of the first
+  word gating a block) and behind it one `0x40`-byte block per material:
+
+  | block | field |
+  | --- | --- |
+  | `+0x00` u16 | offset key count |
+  | `+0x02` u16 | scale key count |
+  | `+0x04` u32 | offset key times, relative to the block array |
+  | `+0x08` u32 | scale key times |
+  | `+0x0c` f32 | seconds per key-time unit (`1/60` on every block) |
+  | `+0x10` u32 | offset values (`i16` pairs, `/256`) |
+  | `+0x14` u32 | scale values |
+  | `+0x18` f32 x2 | runtime: sampled scale |
+  | `+0x20` f32 x2 | runtime: sampled offset |
+  | `+0x28` f32 | runtime: wrapped time |
+  | `+0x2c` f32 | loop period in seconds; bit 0 of the same word is the step flag |
+  | `+0x30` ptr | runtime: block array base |
+
+  Census of the 19 nodes: **18 keyed, one static** (the background). All 18 have
+  one scale key and a 13.333 s loop (800 frames), step flag clear; offset keys
+  are 2 (one node, last key 800), 3 (eight nodes, last key 723), 4 (two nodes,
+  340) and 6 (seven nodes, 510).
+- The join: a `.rcsmodel` mesh object's `+0x04` word equals the `+0x30` word
+  of exactly one `Mesh` node's payload: **19 of 19 on both platforms**
+  (`oag_rcs::rcsmodel::psp2::nodes::MeshObject::vex_hash`).
+
+### What the executable does
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x0172ba00` | `TexAnim_UpdateTransform` | 88 |
+| `0x0172bb00` | `TexAnim_EvalKeyframes` | 88 |
+| `0x0170c8b0` | `Mesh_Update` | 72 |
+| `0x0170cce0` | `Mesh_Load` | 72 |
+
+**`Mesh_Load` (`0x0170cce0`)** reads a `Mesh` node's payload: the material
+array at `payload + 0x34`, count from the `u16` at `+0x02`; on the first
+material whose flag byte has `0x10` it stores `payload + 0x34 + count * 0x14`
+at `node + 0xb0` (the block array) and writes that base into each flagged
+material's block at `+0x30`. `FUN_0170d6a0` registers the class as `0x125`.
+
+**`Mesh_Update` (`0x0170c8b0`)** advances the node's clock at `node + 0x80` by
+the frame's time step and, when it moved, calls
+`TexAnim_UpdateTransform(clock, blocks + i * 0x40)`. For a billboard instance
+it then copies the node's **first** block's sampled pairs out: block `+0x20`
+(offset) to `instance + 0x90` and block `+0x18` (scale) to `instance + 0x98`.
+
+**`TexAnim_UpdateTransform` (`0x0172ba00`)**, read at the instruction level:
+
+```
+0172ba29  VMOVSS [RBX+0x28],XMM0          ; time
+0172ba30  VMOVSS XMM1,[RBX+0x2c]          ; loop period
+0172ba35  CALL   fmodf                    ; only when time != 0
+0172ba3f  VDIVSS XMM0,XMM0,[RBX+0xc]      ; / seconds per key
+0172ba4d  CALL   modff                    ; integer part -> frame
+0172ba58  MOV    R15D,[RBX+0x2c] ; AND R15D,1   ; step flag
+0172ba83  CALL   0x0172bb00               ; scale: count [RBX+2], times [RBX+8], values [RBX+0x14] -> [RBX+0x18]
+0172ba8c  MOV    [RBX+0x1c],1.0 ; [RBX+0x18],1.0   ; no keys: scale (1, 1)
+0172bac0  CALL   0x0172bb00               ; offset: count [RBX+0], times [RBX+4], values [RBX+0x10] -> [RBX+0x20]
+0172bac9  MOV    [RBX+0x24],0 ; [RBX+0x20],0       ; no keys: offset (0, 0)
+```
+
+**`TexAnim_EvalKeyframes` (`0x0172bb00`)**: before the first key the first
+value; at or past the last key the last value; otherwise the first key whose
+time exceeds the frame, and either the preceding value (step) or a linear blend
+by `(t - t0) / (t1 - t0)`. Both components are `i16` and are multiplied by
+`0.00390625` (`1/256`) on the way out.
+
+This is `psp-pulse-usa`'s `TexAnim_UpdateTransform` (`0x08927204`) and
+`TexAnim_EvalKeyframes` (`0x08927034`) field for field, which is why
+`oag_vex::vex::mesh_tex_transforms`' block reader serves it with the material
+array four bytes on (`oag_vex::vex::external_mesh_tex_transforms`).
+
+**`Billboard_ConstructResource` (`0x016e53a0`) wires the two together.** It
+allocates one `0xe0`-byte instance per mesh object of the model (stored at the
+mesh object's `+0x10`), then walks every material the mesh draws with and, for
+the parameters whose name hash is `0x1eb13436` (`~crc32("uvOffset")`) or
+`0xea1dcc4c` (`~crc32("uvScale")`), repoints the parameter's value at
+`instance + 0x90` and `instance + 0x98`. After the `.vex` loads it walks the
+`Mesh` nodes and, for each, finds the mesh object whose `+0x04` equals the
+node payload's `+0x30` word and stores the node at `instance + 0xb0` (the
+`GetBillboardMeshIdFromName: Couldn't find name %x` branch is the miss). So the
+keys belong to the **mesh**, reach only a material that declares `uvOffset` or
+`uvScale`, and only the first block of a node is used.
+
+**Confidence.** 88 for the two `TexAnim` functions: an unambiguous decompile
+checked against the disassembly, the same law field for field as the PSP pair
+(itself runtime-verified at 90), and agreement with shipped data: read this
+way, `321Go_StartFinish.vex` shows `3`, `2`, `1` and then steps to its green
+`GO` at asset frame 202, one frame off HD's curve-driven 203. Not runtime
+verified on PS4 (shadPS4 has no memory readout and draws this card blank).
+72 for `Mesh_Update` and `Mesh_Load`: only the texture-transform part of each
+was read.
+
+**Not the carrier:** the string `HDFuryUvScaleOffset` (referenced from
+`FUN_015f1990`, a shader-parameter registration list) is a uniform name, not
+an animation source.
+
+### 2048 (Vita): ported
+
+The `.vex` is the same file, and the Vita `.rcsmodel` joins 19 of 19 by the
+same hash. 2048's executable was not re-read for the sampler; the data
+agreement is the evidence (the board counts down on the thirteen HD-ported
+circuits, `crates/raceplay/tests/start_gantry_clock_inherit_ground_truth.rs`).
+The Zone substitution is read on both: `TrackStartup_Load` above for Omega,
+and `TrackStartup_Read` (`0x8121b688`,
+[`vita-2048-eu-v104/track-startup-sound-bank.md`](../vita-2048-eu-v104/track-startup-sound-bank.md))
+for 2048, which replaces `321Go_StartFinish.vex` in a Zone-family mode with
+`321Go_HD_Zone_Battle.vex`, `321go_hd_detonator.vex` (mode `0xe`) or
+`321Go_Zone.vex`.
+
 ## Not chased this pass
 
 - `+0x21c`'s meaning on the `DAT_01e31910`-shaped `RaceManager` object, and

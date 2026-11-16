@@ -61,6 +61,7 @@ fn options(source: &Path) -> boot::Options {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     }
 }
 
@@ -276,40 +277,44 @@ fn the_pad_walks_from_boot_connect_to_the_campaign_shell() {
 /// the flat colour square [`oag_ui::frontend::campaign_map::Frontend::placed`]
 /// falls back to when the sheet has none of it.
 ///
-/// **What this pins.** `oag_game::boot::sprites::load` asks for
-/// `HEX_FILLED`/`HEX_OUTLINE`/`HEX_SELECT` and the four `EventIcon` names
-/// through its own `extra` list (2026-09-27), the same mechanism the menu
-/// blocks' nine-patch already used - but `boot::assemble`'s own
-/// `Frontend::placements` used to be rebuilt by re-walking every screen's
-/// `Image`/`TouchButton` `Src=`, which by construction never named an
-/// `extra`-only texture at all. Nothing caught that gap until this test:
-/// `sprites::load`'s own report line said "N of N decoded" (true), and
-/// `oag-ui`'s unit tests boot with an empty sheet either way (see
-/// `crate::frontend::campaign_map::HEX_FILLED`'s own doc comment), so both
-/// looked green while the campaign map silently drew flat squares against a
-/// full sheet. `assemble` now reads `Frontend::placements` straight off
-/// `Sheet::entries`, which is a superset that already includes them; this
-/// test is what would have caught the old, narrower rebuild.
+/// **What this pins.** `oag_game::boot::sprites::load` bakes the canvas prism
+/// (`oag_ui::frontend::canvas_prism`) off `canvasTexture.gxt` into the sheet and
+/// asks for the selection ring and the four `EventIcon` names through its own
+/// `extra` list, the same mechanism the menu blocks' nine-patch uses.
+/// `oag-ui`'s unit tests boot with an empty sheet either way, so they cannot
+/// tell a map that draws prisms from one that falls back to flat rectangles;
+/// this does, against the full sheet.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
-fn the_campaign_map_draws_the_discs_own_hex_tiles_not_flat_squares() {
+fn the_campaign_map_draws_the_canvas_prism_not_flat_squares() {
     let Some(source) = source() else { return };
     let loaded = boot::load(&options(&source)).expect("the whole boot");
     let mut frontend = loaded.frontend;
+    // A fresh save has Event 1 open and the rank-gated side challenges hidden;
+    // a pass on Event 1 opens Event 2 beside it.
+    frontend.refresh_campaign_progress(|name| {
+        (name == "2048 - Event 1").then_some(frontend::EarnedTier::Pass)
+    });
     assert!(drive_until(
         &mut frontend,
         &[Button::Cross],
         w2048::NEW_FE_SHELL
     ));
     let list = frontend.draw_list();
+    let prism = oag_ui::frontend::canvas_prism::layout().size;
     let hex_tiles = list
         .iter()
-        .filter(|draw| matches!(draw, frontend::Draw::Sprite { uv, .. } if uv[2] == 128.0 && uv[3] == 128.0))
+        .filter(|draw| {
+            matches!(draw, frontend::Draw::Sprite { uv, .. }
+            if (uv[2], uv[3]) == (prism.0 as f32 - 2.0, prism.1 as f32 - 2.0))
+        })
         .count();
     assert!(
         hex_tiles >= 2,
-        "expected at least a filled and an outline hex sprite per visible \
-         marker, found {hex_tiles} 128x128 sprites in {} draw(s): {list:#?}",
+        "expected the baked prism once per visible tile, found {hex_tiles} \
+         sprite(s) of its {}x{} size in {} draw(s): {list:#?}",
+        prism.0 - 2,
+        prism.1 - 2,
         list.len()
     );
     let mode_icons = list
@@ -322,6 +327,343 @@ fn the_campaign_map_draws_the_discs_own_hex_tiles_not_flat_squares() {
          found {mode_icons} in {} draw(s): {list:#?}",
         list.len()
     );
+}
+
+/// Every tile of the base campaign map sits where the original's canvas
+/// camera puts it, on the reference save (Events 1 to 3 passed) at the two
+/// views of the committed reference frames: the view the map opens on, and
+/// the view after a tap on Event 1's tile. The expected centres are the top
+/// faces measured in those frames (left and right edge, top edge plus half the
+/// face), not this build's own arithmetic
+/// (`docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md`,
+/// "Evidence"). An even grid of cells puts none of them within 100 px.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
+    use oag_ui::frontend::{EarnedTier, canvas_lattice};
+    use oag_ui::pointer::Pointer;
+
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    frontend.refresh_campaign_progress(|name| {
+        matches!(name, "2048 - Event 1" | "2048 - Event 2" | "2048 - Event 3")
+            .then_some(EarnedTier::Pass)
+    });
+    // The original opens on the first event of the chain that is not passed.
+    assert!(frontend.select_campaign_event("2048 - Event 4"));
+    assert!(drive_until(
+        &mut frontend,
+        &[Button::Cross],
+        w2048::NEW_FE_SHELL
+    ));
+    // The prism's picture is anchored on the middle of the top face, one
+    // texel in from the picture's edge.
+    let prism = oag_ui::frontend::canvas_prism::layout();
+    let centres = |frontend: &frontend::Frontend| -> Vec<(f32, f32)> {
+        frontend
+            .draw_list()
+            .iter()
+            .filter_map(|draw| match draw {
+                frontend::Draw::Sprite { rect, uv, .. }
+                    if (uv[2], uv[3]) == (prism.size.0 as f32 - 2.0, prism.size.1 as f32 - 2.0) =>
+                {
+                    Some((
+                        rect[0] - 1.0 + prism.anchor.0,
+                        rect[1] - 1.0 + prism.anchor.1,
+                    ))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let assert_tiles = |frontend: &frontend::Frontend, view: &str, expected: &[(f32, f32)]| {
+        let ours = centres(frontend);
+        for want in expected {
+            let nearest = ours
+                .iter()
+                .map(|at| (at.0 - want.0).abs().max((at.1 - want.1).abs()))
+                .fold(f32::INFINITY, f32::min);
+            assert!(
+                nearest <= 4.0,
+                "{view}: no tile within 4 px of {want:?} (nearest is {nearest} px off): {ours:?}"
+            );
+        }
+    };
+    // Frame 13: Event 3 (green) and Event 4 (grey, the current one).
+    assert_tiles(
+        &frontend,
+        "the opening view",
+        &[(412.0, 174.7), (527.0, 268.0)],
+    );
+    // The canvas lattice is under the tiles: the baked picture, repeated.
+    let lattice = frontend
+        .draw_list()
+        .iter()
+        .filter(|draw| {
+            matches!(draw, frontend::Draw::Sprite { uv, .. }
+            if (uv[2], uv[3])
+                == (
+                    canvas_lattice::VIEWPORT[0] as f32 - 2.0,
+                    canvas_lattice::VIEWPORT[1] as f32 - 2.0,
+                ))
+        })
+        .count();
+    assert_eq!(
+        lattice, 4,
+        "four copies of the lattice picture cover the view"
+    );
+    // A tap on Event 1's tile, whose lower half shows at the top left.
+    assert!(frontend.pointer(&Pointer {
+        at: Some((185.0, 20.0)),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    }));
+    assert_eq!(
+        frontend.selected_event().map(|event| event.name.as_str()),
+        Some("2048 - Event 1")
+    );
+    (0..120).for_each(|_| frontend.update(1.0 / 60.0, &mut Input::new(), None).clear());
+    // Frame 12: Events 1, 2 and 3 down the diagonal.
+    assert_tiles(
+        &frontend,
+        "Event 1 selected",
+        &[(500.0, 269.7), (614.5, 365.7), (729.5, 460.7)],
+    );
+}
+
+/// The 15 events the original's "locked" option (`m_options & 0x10`) hides, off the
+/// authored flag: five `"* P Ship Challenge"`, ten `"* - S Phantom Challenge"`.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_rank_gated_side_challenges_are_the_authored_locked_option() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let events = loaded.frontend.campaign_events();
+    let gated = events.iter().filter(|event| event.rank_gated);
+    let side =
+        |name: &str| name.contains("P Ship Challenge") || name.contains("S Phantom Challenge");
+    assert_eq!(gated.clone().count(), 15);
+    assert!(gated.clone().all(|event| side(&event.name)));
+    assert_eq!(events.iter().filter(|event| side(&event.name)).count(), 15);
+}
+
+/// The map's opening view, rendered, against frame 13
+/// (`data/reference/2048-frontend/13-campaign-map-mid-cluster.png`, Events 1 to 3
+/// passed): one capture, three named checks.
+///
+/// - [`check_passed_tile_has_a_wall`]: Event 3's green prism has a lit wall that
+///   darkens towards its foot, and no pale box over the lattice around it.
+/// - [`check_ring_cells`]: the striped and dotted cells the canvas paints around
+///   and between the tiles (`CanvasButton_PaintIconAndRing`). Each probe is one
+///   cell's centre, placed by the canvas camera; the statistic is the mean
+///   absolute difference between horizontally adjacent pixels over a window
+///   inside the cell (stripes and dots have texture, the plain lattice and a flat
+///   tint have none). The bounds are half the figure measured on frame 13 over
+///   the same cells: 20.6 dark stripes, 8.4 dark dots, 3.5 light stripes.
+/// - [`check_unreached_events_raise_no_prism`]: Events 4-1 and 5 are not reached
+///   yet; the canvas paints them as flat tinted cells (`0x810ef78c`, state 1),
+///   not as a prism, so no wall and no shade hangs below them. Frame 13: the
+///   darkest red in the 60 px under the face is 215 (Event 5) and 225
+///   (Event 4-1); a prism's foot reads 179.
+///
+/// The profile pins `[dev] unlock_everything = false`: a debug build opens every
+/// gate without it.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/ and a GPU adapter"]
+fn the_opening_view_renders_the_prism_the_rings_and_no_prism_for_an_unreached_event() {
+    let Some(source) = source() else { return };
+    let scratch = std::env::temp_dir().join(format!("oag-prism-map-{}", std::process::id()));
+    let records = scratch.join("config/oag");
+    std::fs::create_dir_all(&records).expect("creating the scratch directory");
+    std::fs::write(
+        records.join("records.toml"),
+        ["2048 - event 1", "2048 - event 2", "2048 - event 3"]
+            .map(|cell| {
+                format!(
+                    "[[campaign]]\ntitle = \"wipeout 2048\"\ncell = \"{cell}\"\n\
+                     best_medal = \"bronze\"\nbest_points = 1\n\n"
+                )
+            })
+            .concat(),
+    )
+    .expect("writing the records");
+    std::fs::write(
+        records.join("settings.toml"),
+        "[dev]\nunlock_everything = false\n",
+    )
+    .expect("writing the settings");
+    let out = scratch.join("map.png");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&source)
+        .args([
+            "--until",
+            "map:2048 - Event 4",
+            "--press",
+            "cross",
+            "--ticks",
+            "1",
+        ])
+        .args(["--no-audio", "--no-video", "--size", "960x544"])
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --until newFEshell");
+    let pixels = pixels_of(&std::fs::read(&out).expect("reading the screenshot"));
+    std::fs::remove_dir_all(&scratch).ok();
+    check_passed_tile_has_a_wall(&pixels);
+    check_ring_cells(&pixels);
+    check_unreached_events_raise_no_prism(&pixels);
+}
+
+fn pixel_at(pixels: &[u8], x: f32, y: f32) -> [i32; 3] {
+    let i = (y.round() as usize * 960 + x.round() as usize) * 4;
+    [
+        i32::from(pixels[i]),
+        i32::from(pixels[i + 1]),
+        i32::from(pixels[i + 2]),
+    ]
+}
+
+fn check_passed_tile_has_a_wall(pixels: &[u8]) {
+    let at = |x: f32, y: f32| pixel_at(pixels, x, y);
+    // Event 3 at the opening view: the top face's centre in frame 13, and the
+    // face's half height (95.4 px / 2); the wall hangs 26 px below its edge.
+    let (x, y) = (412.0, 174.7);
+    let face = at(x, y + 40.0);
+    assert!(
+        face[1] > 180 && face[0] < 140 && face[2] < 80,
+        "the top face is the passed green: {face:?}"
+    );
+    let upper = at(x, y + 47.7 + 4.0);
+    let lower = at(x, y + 47.7 + 22.0);
+    assert!(
+        upper[1] > 150 && upper[0] < 140,
+        "the wall under the face is green: {upper:?}"
+    );
+    assert!(
+        lower[1] + 12 < upper[1] && lower[1] < face[1],
+        "the wall darkens towards its foot: face {face:?}, upper {upper:?}, lower {lower:?}"
+    );
+    // The corner of the 128 x 128 art's square, outside the hexagon: the hex
+    // art tinted it with the tile's colour. The canvas leaves ring cells there
+    // (dark stripes, blue over white), never a green tint.
+    let corner = at(x - 58.0, y - 55.0);
+    assert!(
+        corner[1] <= corner[0].max(corner[2]) + 6,
+        "no tinted square around the tile: {corner:?}"
+    );
+}
+
+/// Mean absolute difference between horizontally adjacent pixels, over a
+/// window of 19 x 13 pixels centred on `(x, y)`.
+fn texture_energy(pixels: &[u8], x: f32, y: f32) -> f32 {
+    let (cx, cy) = (x.round() as i32, y.round() as i32);
+    let mut sum = 0;
+    let mut count = 0;
+    for yy in cy - 6..=cy + 6 {
+        for xx in cx - 9..cx + 9 {
+            let a = pixel_at(pixels, xx as f32, yy as f32);
+            let b = pixel_at(pixels, xx as f32 + 1.0, yy as f32);
+            sum += (0..3).map(|c| (a[c] - b[c]).abs()).sum::<i32>();
+            count += 3;
+        }
+    }
+    sum as f32 / count as f32
+}
+
+fn check_ring_cells(pixels: &[u8]) {
+    // Cell centres at the opening view, (col, row) of the lattice in the comment.
+    // Ring fill 4 (dark stripes) around the passed and the open chain tiles;
+    // fill 2 (dark dots) around the open branch tiles; fill 3 (light stripes)
+    // around the chain event not reached yet.
+    /// A ring fill's name, its probe cell centres and the least mean energy.
+    type Group<'a> = (&'a str, &'a [(f32, f32)], f32);
+    let groups: [Group; 3] = [
+        (
+            "dark stripes",
+            &[
+                (239.0, 169.0),
+                (478.0, 169.0),
+                (354.0, 264.0),
+                (443.0, 280.0),
+                (469.0, 359.0),
+                (589.0, 359.0),
+            ],
+            10.0,
+        ),
+        (
+            "dark dots",
+            &[
+                (538.0, 169.0),
+                (598.0, 169.0),
+                (145.0, 280.0),
+                (235.0, 264.0),
+                (89.0, 185.0),
+                (267.0, 216.0),
+            ],
+            4.0,
+        ),
+        (
+            "light stripes",
+            &[
+                (650.0, 328.0),
+                (709.0, 328.0),
+                (765.0, 423.0),
+                (703.0, 455.0),
+                (823.0, 455.0),
+                (584.0, 455.0),
+            ],
+            1.5,
+        ),
+    ];
+    for (what, centres, bound) in groups {
+        let mean = centres
+            .iter()
+            .map(|&(x, y)| texture_energy(pixels, x, y))
+            .sum::<f32>()
+            / centres.len() as f32;
+        assert!(
+            mean >= bound,
+            "{what}: the ring cells carry texture (mean {mean:.2}, frame 13 reads about \
+             twice {bound}): the canvas's fill types are not drawn"
+        );
+    }
+}
+
+fn check_unreached_events_raise_no_prism(pixels: &[u8]) {
+    // Frame 13: Event 5 (chain, tint e0e0e9) and Event 4-1 (branch, tint f3f3fa).
+    for (name, x, y, face_range, foot_floor) in [
+        ("Event 5", 641.0, 365.0, 222.0..=240.0, 205),
+        ("Event 4-1", 403.0, 365.0, 236.0..=249.0, 215),
+    ] {
+        let mut face = 0;
+        for yy in -12..12 {
+            for xx in -25..25 {
+                face += pixel_at(pixels, x + xx as f32, y + yy as f32)[0];
+            }
+        }
+        let face = face as f32 / 1200.0;
+        assert!(
+            face_range.contains(&face),
+            "{name}: the face is the flat state tint (mean red {face:.1}, frame 13 reads \
+             232 and 243)"
+        );
+        let foot = (30..90)
+            .map(|dy| pixel_at(pixels, x, y + dy as f32)[0])
+            .min()
+            .unwrap();
+        assert!(
+            foot >= foot_floor,
+            "{name}: no prism wall or foot shade under an unreached event (darkest red {foot}, \
+             frame 13's is at least {foot_floor}, a prism's foot is 179)"
+        );
+    }
 }
 
 /// The pale triangle lattice is one picture baked off `canvasTexture.gxt` with
@@ -487,10 +829,12 @@ fn ship_model_data_forces_the_player_craft_on_some_events() {
     );
 }
 
-/// This build's two tiles are on the grid, after the authored six, and ask for this build's own pages.
+/// This build's tiles are on the grid, after the authored six, and ask for this build's own pages.
+/// A mod's tile under RACEBOX (a mod's two-title page) depends on the mods found, and is
+/// `boot::tests::a_mods_row_under_racebox_is_a_tile_between_them`'s.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
-fn the_race_box_and_remix_tiles_follow_the_authored_grid() {
+fn the_race_box_tile_follows_the_authored_grid() {
     let Some(source) = source() else { return };
     let loaded = boot::load(&options(&source)).expect("the whole boot");
     let mut frontend = loaded.frontend;
@@ -500,15 +844,13 @@ fn the_race_box_and_remix_tiles_follow_the_authored_grid() {
         w2048::GAME_MODE_CHOICE
     ));
     let list = frontend.draw_list();
-    for label in ["RACEBOX", "REMIX"] {
-        assert!(
-            list.iter().any(
-                |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. } if text == label)
-            ),
-            "{label} is on the grid"
-        );
-    }
-    // Six tiles (the tick is hidden), then the two: six rights land on RACEBOX.
+    assert!(
+        list.iter().any(
+            |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. } if text == "RACEBOX")
+        ),
+        "RACEBOX is on the grid"
+    );
+    // Six tiles (the tick is hidden), then this build's: six rights land on RACEBOX.
     let mut input = Input::new();
     for _ in 0..6 {
         input.begin_frame(Button::Right.bit());
@@ -518,7 +860,10 @@ fn the_race_box_and_remix_tiles_follow_the_authored_grid() {
     }
     input.begin_frame(Button::Cross.bit());
     frontend.update(1.0 / 60.0, &mut input, None);
-    assert_eq!(frontend.launch(), Some(&oag_ui::frontend::Launch::RaceBox));
+    assert_eq!(
+        frontend.launch(),
+        Some(&oag_ui::frontend::Launch::Page("race".to_string()))
+    );
 }
 
 /// Presses `button` for one tick and releases it for the next - the same
@@ -725,7 +1070,10 @@ fn every_select_team_hull_builds_with_its_textures() {
         boot::load_shell(&options(&source)).expect("2048's front end walks");
     let roster = title.race.team_variants.expect("2048's native roster");
     let touch = title.front_end.and_then(|front_end| front_end.touch);
-    assert_eq!(touch.map(|t| t.team_model_origin), Some((1400.0, 264.0)));
+    assert_eq!(
+        touch.and_then(|t| t.team_model_origin),
+        Some((1400.0, 264.0))
+    );
     let mut hulls = 0;
     for team in roster.teams {
         for variant in roster.variants {
@@ -978,6 +1326,85 @@ fn options_camera_is_reached_directly_from_home_and_the_choice_cycles() {
         frontend.machine().is(w2048::OPTIONS),
         "Circle returns to the hub - chosen, no widget names this button"
     );
+}
+
+/// `OptionsCamera`'s second control, SCREEN SIZE: the shared slider on a title whose disc authors
+/// none. It reports nothing until moved, Down focuses it, Left steps it one slider step of two
+/// below the title's default 100, a tap inside its own rect steps it forward, and Square (or a tap on the
+/// hint under it) puts it back on 100. Dropping `Frontend::set_screen_size` leaves the
+/// control absent, so the first Left reports nothing.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn options_camera_carries_the_screen_size_control() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let area = loaded
+        .title
+        .hud_art
+        .safe_area
+        .expect("2048 offers the slider");
+    let mut frontend = loaded.frontend;
+    frontend.set_screen_size(area.value, None);
+    frontend.set_option_defaults(oag_game::settings::option_defaults());
+    drive_to_home(&mut frontend);
+    let mut input = Input::new();
+    for _ in 0..3 {
+        press_release(&mut frontend, &mut input, Button::Right);
+    }
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::OPTIONS_CAMERA));
+    assert_eq!(frontend.screen_size_choice(), None, "untouched so far");
+    // Left/Right still belong to the camera list until SCREEN SIZE is focused.
+    press_release(&mut frontend, &mut input, Button::Down);
+    press_release(&mut frontend, &mut input, Button::Left);
+    assert_eq!(
+        frontend.screen_size_choice(),
+        Some(98),
+        "one step of two under 100"
+    );
+    assert_eq!(frontend.screen_size_scale(), Some(0.98));
+    assert_eq!(
+        frontend.camera_choice(),
+        None,
+        "the camera list was not moved"
+    );
+    let hint = frontend
+        .panel_reset_rect()
+        .expect("SCREEN SIZE is off its default, so the hint is shown");
+    press_release(&mut frontend, &mut input, Button::Square);
+    assert_eq!(
+        frontend.screen_size_choice(),
+        Some(100),
+        "reset to the title's default"
+    );
+    assert_eq!(frontend.panel_reset_rect(), None, "nothing left to reset");
+    press_release(&mut frontend, &mut input, Button::Left);
+    press_release(&mut frontend, &mut input, Button::Left);
+    assert_eq!(frontend.screen_size_choice(), Some(96));
+    let click = |frontend: &mut oag_ui::frontend::Frontend, at: [f32; 4]| {
+        frontend.pointer(&oag_ui::pointer::Pointer {
+            at: Some((at[0] + 2.0, at[1] + 2.0)),
+            moved: true,
+            clicked: true,
+            ..oag_ui::pointer::Pointer::default()
+        });
+    };
+    click(&mut frontend, hint);
+    assert_eq!(
+        frontend.screen_size_choice(),
+        Some(100),
+        "the tap on the hint resets too"
+    );
+    press_release(&mut frontend, &mut input, Button::Left);
+    let widget = frontend.screen_size_rect().expect("the control has a rect");
+    click(&mut frontend, widget);
+    assert_eq!(
+        frontend.screen_size_choice(),
+        Some(100),
+        "a tap on the widget steps it forward"
+    );
+    press_release(&mut frontend, &mut input, Button::Circle);
+    assert!(frontend.machine().is(w2048::OPTIONS));
 }
 
 /// `OptionsPilot`'s list starts on its authored `FE_NORMAL` and reports a choice only once

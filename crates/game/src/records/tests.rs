@@ -1001,3 +1001,123 @@ fn background_saves_land_in_order_and_none_is_lost() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+const PLATINUM_ORDER: [&str; 4] = ["platinum", "gold", "silver", "bronze"];
+
+fn earn<'a>(name: &'a str, class: Medal, points: u32) -> Option<TierEarned<'a>> {
+    Some(TierEarned {
+        name,
+        class,
+        points,
+        order: &PLATINUM_ORDER,
+    })
+}
+
+/// A mod campaign's own tier is kept by name beside the class it stands in for, the better of
+/// two results is decided by the campaign's order, and a disc campaign's row has no new key.
+#[test]
+fn a_campaign_tier_is_stored_by_name_and_never_downgraded() {
+    let mut store = Store::default();
+    store.record_campaign_tier("m", "grid0_1_1", earn("gold", Medal::Gold, 3), None);
+    store.record_campaign_tier("m", "grid0_1_1", earn("platinum", Medal::Gold, 4), None);
+    store.record_campaign_tier("m", "grid0_1_1", earn("gold", Medal::Gold, 3), None);
+    let row = store.campaign_medal("m", "grid0_1_1").unwrap();
+    assert_eq!(row.best_tier.as_deref(), Some("platinum"));
+    assert_eq!(
+        row.best_medal,
+        Some(Medal::Gold),
+        "the class a trophy and a jingle use"
+    );
+    assert_eq!(row.best_points, Some(4));
+    assert_eq!(row.last_tier, None, "the last race was a plain gold");
+    assert_eq!(row.best_tier_name(), Some("platinum"));
+
+    let text = toml::to_string_pretty(&store).expect("serialises");
+    assert!(text.contains("best_tier = \"platinum\""), "{text}");
+    let (parsed, notes) = parse(&text).expect("parses back");
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(parsed.campaign_rows(), store.campaign_rows());
+
+    let mut disc = Store::default();
+    disc.record_campaign("wipeout pulse", "grid0_2_1", Some(Medal::Gold), None);
+    let text = toml::to_string_pretty(&disc).expect("serialises");
+    assert!(
+        !text.contains("_tier"),
+        "a disc row is the file it always was: {text}"
+    );
+}
+
+/// A row written before tiers had names reads as the tier its medal word names.
+#[test]
+fn an_old_campaign_row_reads_as_its_medal_word() {
+    let text = "[[campaign]]\ntitle = \"m\"\ncell = \"grid0_1_1\"\nbest_medal = \"silver\"\nbest_points = 2\n";
+    let (store, notes) = parse(text).expect("parses");
+    assert!(notes.is_empty(), "{notes:?}");
+    let row = store.campaign_medal("m", "grid0_1_1").unwrap();
+    assert_eq!(row.best_tier, None);
+    assert_eq!(row.best_tier_name(), Some("silver"));
+    let mut store = store;
+    store.record_campaign_tier("m", "grid0_1_1", earn("gold", Medal::Gold, 3), None);
+    assert_eq!(
+        store
+            .campaign_medal("m", "grid0_1_1")
+            .unwrap()
+            .best_tier_name(),
+        Some("gold"),
+        "a better result replaces it"
+    );
+}
+
+/// The XP total accumulates, round-trips, and a file written before it existed reads `0`.
+#[test]
+fn xp_accumulates_round_trips_and_an_old_file_reads_zero() {
+    let (old, _) = parse("[[records]]\ntitle = \"pulse\"\n").expect("old file parses");
+    assert_eq!(old.xp(), 0);
+
+    let mut store = Store::default();
+    assert_eq!(store.bank_xp(10_000), 10_000);
+    assert_eq!(store.bank_xp(55), 10_055);
+    store.record_loyalty(oag_pulse::TITLE, "qirex", 3);
+    let text = toml::to_string_pretty(&store).expect("serialises");
+    let (parsed, notes) = parse(&text).expect("parses back");
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(parsed.xp(), 10_055);
+    assert_eq!(
+        parsed.loyalty_total(oag_pulse::TITLE, "qirex"),
+        3,
+        "the tables survive the scalar"
+    );
+
+    let (clamped, _) = parse("xp = -5\n").expect("parses");
+    assert_eq!(clamped.xp(), 0);
+}
+
+#[test]
+fn a_run_that_named_no_circuit_files_under_the_circuit_it_raced_not_the_titles_default() {
+    let tower = r"Data\art\published\environments\tower\track.vex";
+    let altima = r"Data\art\published\environments\altima\track.vex";
+    let raced = Key::raced("Wipeout 2048", None, tower, "time_trial", "venom");
+    assert_eq!(
+        raced,
+        Key::new("Wipeout 2048", Some(tower), "time_trial", "venom")
+    );
+    assert_ne!(
+        raced,
+        Key::new("Wipeout 2048", Some(altima), "time_trial", "venom")
+    );
+}
+
+#[test]
+fn a_run_that_named_a_circuit_files_under_that_one() {
+    let named = r"Data\Environments\01_Vineta_K\track.vex";
+    assert_eq!(
+        Key::raced(
+            "Wipeout Pulse",
+            Some(named),
+            "zone_track.vex",
+            "zone",
+            "venom"
+        ),
+        Key::new("Wipeout Pulse", Some(named), "zone", "venom")
+    );
+}

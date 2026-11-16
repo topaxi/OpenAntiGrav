@@ -67,6 +67,9 @@ oag-physics.workspace = true
 oag-race.workspace = true
 oag-raceplay = { workspace = true, features = ["view"] }
 oag-source.workspace = true
+oag-trackfile.workspace = true
+# An author's PNG for a track's own loading screen (`oag_game::loading::track`).
+png.workspace = true
 # Where a phone keeps its files and how its OS builds the event loop; the entry
 # points themselves stay here. See ADR-0065.
 oag-mobile.workspace = true
@@ -97,7 +100,7 @@ bytemuck = { workspace = true, features = ["derive"] }
 # Rasterises the SVGs under `assets/icons/` into the window/taskbar icon - see
 # `oag_game::icon`. No `<text>` node in either source SVG, so the `text`
 # feature (and the fontdb/rustybuzz/ttf-parser it drags in) is off.
-resvg = { version = "0.48", default-features = false }
+resvg.workspace = true
 wgpu.workspace = true
 winit.workspace = true
 pollster.workspace = true
@@ -110,6 +113,18 @@ serde_json = "1"
 # where `std::time::Instant::now` panics. See docs/tools/web.md.
 web-time = "1.1.0"
 
+# Idle inhibition over winit's Wayland connection (`oag_game::idle`).
+[target.'cfg(target_os = "linux")'.dependencies]
+wayland-backend.workspace = true
+wayland-client.workspace = true
+wayland-protocols.workspace = true
+# `--wallpaper`'s desktop background: the wlr-layer-shell surfaces and their loop
+# (`crate::wallpaper`). Already built for winit's Wayland backend; no further features.
+smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop"] }
+# `--wallpaper`'s SIGINT/SIGTERM handler.
+libc = "0.2"
+x11rb.workspace = true
+
 # Platform-native H.264 decode for the PSP `.PMF` path, behind the
 # `native-video` feature: `just build`/`just check`/CI never touch
 # GStreamer, and a Linux build that wants the accelerated path opts in
@@ -118,7 +133,6 @@ web-time = "1.1.0"
 # libav otherwise) - none of that is code this crate carries. See
 # docs/architecture/adr/0017-gstreamer-native-video.md. PS2 content always
 # uses the AV1 cache below, unaffected either way.
-[target.'cfg(target_os = "linux")'.dependencies]
 gstreamer = { version = "0.25", optional = true }
 gstreamer-app = { version = "0.25", optional = true }
 gstreamer-video = { version = "0.25", optional = true }
@@ -135,15 +149,20 @@ oag-video = { workspace = true, features = ["av1"] }
 # The browser: wasm-bindgen glue, the WebGPU adapter request (async on the
 # web), and the console as the log sink. See docs/tools/web.md.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2.129"
-wasm-bindgen-futures = "0.4.79"
-js-sys = "0.3.106"
-web-sys = { version = "0.3.106", features = ["console", "Window", "Document", "Element", "HtmlCanvasElement", "Storage"] }
+wasm-bindgen = "0.2.130"
+wasm-bindgen-futures = "0.4.80"
+js-sys = "0.3.107"
+web-sys = { version = "0.3.107", features = ["console", "Window", "Document", "Element", "HtmlCanvasElement", "Storage"] }
 
 [features]
 # Only the web build turns this on (`just web`): the `oag_web` example below,
 # the same arrangement as `android`.
 web = []
+# Adds `fault_test` to the web module: a hook that panics, traps, overflows the
+# stack or raises a GPU error on demand, so the page's error reports can be
+# looked at in a browser (`OAG_WEB_FAULT_TEST=1 just web`, docs/tools/web.md,
+# "Troubleshooting"). Never in a published build.
+fault-test = ["web"]
 # Only the Android build turns this on (`just apk`): it is what makes the
 # `oag_android` example below exist, so a desktop `--all-targets` neither builds
 # nor links a second copy of the binary.
@@ -152,10 +171,22 @@ android = []
 # Off by default and enabled by no build (maintainer, 2026-10-27: it does not
 # render enough to ship); `just lint` builds it so it does not rot.
 ballisticng = ["oag-raceplay/ballisticng"]
-# Simulation mods (WebAssembly, wasmtime): `oag_raceplay::extensions`. Off by default;
-# off, a mod's module is named in the load report as left out and nothing of wasmtime
+# Simulation mods (WebAssembly, wasmtime with Cranelift): `oag_raceplay::extensions`.
+# On by default on Linux, Windows, macOS and Android. The web build (`just web`) and iOS
+# (`just ios-app`) pass `--no-default-features`: the browser's own engine and a Pulley
+# build for iOS are not built, and `oag-modhost` refuses to compile for either.
+# Off, a mod's module is named in the load report as left out and nothing of wasmtime
 # is linked. docs/architecture/wasm-extensions/.
+default = ["extensions", "dev-cli"]
+# `--seed` and `--give`: flags that choose the world generator's seed and hand the player a
+# weapon. A race using either saves no record and no ghost (`oag_game::official`), but a
+# shipped binary does not carry them at all: packaging builds pass
+# `--no-default-features --features extensions` (docs/tools/packaging.md).
+dev-cli = []
 extensions = ["oag-raceplay/extensions"]
+# Run the mods on wasmtime's Pulley interpreter instead of Cranelift, to compare the two
+# (`just play --interpreter`). Implies `extensions`; off in every shipped build.
+wasm-interpreter = ["extensions", "oag-raceplay/wasm-interpreter"]
 native-video = ["dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
 # See `oag-render`'s feature of the same name. Off by default.
 perf-probe = ["oag-render/perf-probe", "oag-raceplay/perf-probe"]
@@ -167,10 +198,18 @@ oag-shader-check.workspace = true
 workspace = true
 
 [dev-dependencies]
+oag-bytes.workspace = true
 oag-testdata.workspace = true
 oag-pob.workspace = true
-zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
+zip = { version = "9.5.0", default-features = false, features = ["deflate"] }
 oag-weapons.workspace = true
+
+# The TOML Schema reference validator (`settings_schema` test). Cargo builds an
+# example's dev-dependencies, and the `oag_web` example is a wasm32 build where
+# `toml-schema` (`url::Url::from_file_path`) does not compile, so it is left out
+# there; no test runs on wasm32.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+oag-schema = { workspace = true, features = ["validate"] }
 
 # The Android entry point: the binary's own body again (`src/android.rs`
 # `include!`s `src/main_body.rs`, as `src/main.rs` does), as the cdylib the

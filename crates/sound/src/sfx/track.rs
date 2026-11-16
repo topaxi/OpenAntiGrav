@@ -90,6 +90,10 @@ pub struct TrackEmitters {
     /// The directional `soundcone` `0x3e9` nodes, in authored order. Split from
     /// [`Self::omni`] because [`Ambience::tick`] places each under its own law.
     pub directional: Vec<Authored>,
+    /// The circuit's own `AudioConfig.xml` switches its distance low-pass off
+    /// (`low_pass="0"`; Moa Therma): the rear low-pass is not played there. Read by
+    /// [`Self::load`] off the file, never off a circuit's name.
+    pub low_pass_off: bool,
     /// What parsing did, for the race's own report.
     pub report: Vec<String>,
 }
@@ -128,6 +132,7 @@ impl TrackEmitters {
         Self {
             omni,
             directional,
+            low_pass_off: false,
             report,
         }
     }
@@ -158,6 +163,7 @@ impl TrackEmitters {
         blob: &[u8],
     ) -> Self {
         let mut parsed = Self::parse(track, blob);
+        parsed.low_pass_off = circuit_low_pass_off(archives, track);
 
         // Read whole, parsed after: `sblk::Bank` borrows the blob.
         let mut blobs: Vec<(&str, String, Vec<u8>)> = Vec::new();
@@ -447,6 +453,19 @@ fn circuit_bank_entries(
     }
 }
 
+/// Whether the `AudioConfig.xml` beside the circuit's `.vex` switches its distance low-pass off.
+/// A circuit with no such file keeps it.
+fn circuit_low_pass_off(archives: &mut Archives, track: &str) -> bool {
+    let Some(at) = track.rfind(['/', '\\']) else {
+        return false;
+    };
+    archives
+        .read_name(&format!("{}AudioConfig.xml", &track[..=at]))
+        .is_ok_and(|xml| {
+            oag_tables::audio_config::distance_filter_low_pass_off(&String::from_utf8_lossy(&xml))
+        })
+}
+
 /// The circuit's own `trackstartup.xml`, parsed, or `None` where it ships none:
 /// one read for the sound bank above and, from `oag_raceplay`'s scenery effects, its weather.
 pub fn circuit_manifest(
@@ -541,6 +560,7 @@ impl Ambience {
                 (Some(placed), Some(id)) if mixer.is_playing(id) => {
                     mixer.set_gain(id, placed.gain);
                     mixer.set_pan(id, Some(placed.pan));
+                    mixer.set_front(id, placed.front);
                     mixer.set_pitch(id, doppler.ratio(placed.distance, dt, doppler_enabled));
                 }
                 // In range, opened once, finished: leave it alone. Not every
@@ -569,6 +589,7 @@ impl Ambience {
                         mixer.play(oag_audio::Play {
                             gain: placed.gain,
                             pan: Some(placed.pan),
+                            front: placed.front,
                             ..play
                         })
                     });

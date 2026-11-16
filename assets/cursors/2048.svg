@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="24" height="32">
   <!-- Wipeout 2048: the flat orange of its front end on a heavy black key
-       line, no gradient and no highlight, because that title's screens have
-       neither. Ours. -->
-  <polygon fill="#111111" stroke="#111111" stroke-width="3" stroke-linejoin="miter"
-           points="2,2 2,22 6.5,17.5 10,25.5 14,23.5 10.5,15.5 17,15.5"/>
-  <polygon fill="#F26522" points="2,2 2,22 6.5,17.5 10,25.5 14,23.5 10.5,15.5 17,15.5"/>
-  <polygon fill="#FFFFFF" points="4.5,6 4.5,15 7,12.5 9.5,10"/>
+       line, no gradient, because that title's screens have none, and one flat
+       white facet. The tip sits low enough that its mitre stays in the box. Ours. -->
+  <polygon fill="#111111" stroke="#111111" stroke-width="2" stroke-linejoin="miter"
+           points="1.25,2.25 1.25,22.25 5.75,17.75 9.25,25.75 13.25,23.75 9.75,15.75 16.25,15.75"/>
+  <polygon fill="#F26522" points="1.25,2.25 1.25,22.25 5.75,17.75 9.25,25.75 13.25,23.75 9.75,15.75 16.25,15.75"/>
+  <polygon fill="#FFFFFF" points="3.25,5 3.25,11 7.75,15.5 9.25,14"/>
 </svg>

@@ -241,7 +241,8 @@ impl Container {
 /// The one directory every entry sits under, when the manifest is under it and
 /// not at the root: what zipping a mod's folder (rather than its contents) makes.
 fn wrapper(entries: &[String]) -> String {
-    if entries.iter().any(|name| name == crate::MANIFEST) {
+    let roots = [crate::MANIFEST, crate::texture_pack::INI];
+    if entries.iter().any(|name| roots.contains(&name.as_str())) {
         return String::new();
     }
     let Some(first) = entries.first().and_then(|name| name.split_once('/')) else {
@@ -251,7 +252,7 @@ fn wrapper(entries: &[String]) -> String {
     if entries.iter().all(|name| name.starts_with(&prefix))
         && entries
             .iter()
-            .any(|name| name == &format!("{prefix}{}", crate::MANIFEST))
+            .any(|name| roots.iter().any(|root| name == &format!("{prefix}{root}")))
     {
         prefix
     } else {

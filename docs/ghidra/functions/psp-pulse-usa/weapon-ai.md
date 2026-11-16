@@ -683,3 +683,12 @@ kills median **108 s -> 75 s** (17 to 232 s -> 17 to 154 s), field kill rate
 weapon is held about 1.9 s before it goes, against 10 to 12 s. With one
 decision every 15 ticks instead (the four-a-second reading): 93 s. See
 [race-modes.md](../../../gameplay/race-modes.md#eliminator).
+
+## Every title carries the table (searched 2026-10-03)
+
+`oag_title::Weapons::ai`: Pure's `Data.wad` holds an entry under the same name's hash (`0xac744a8d`; the hash
+folds case, so the spelling is Pulse's) that parses. HD, Omega and 2048 each ship one too, searched the same day.
+So every title here runs Pulse's law on its own odds: no other title's decision code is read, and the law is
+inherited from Pulse and unmeasured on the rest. A race without the file fires on this project's own rule
+(`oag_raceplay::FireLaw`). `oag_raceplay`'s `load_weapons` has opened `WeaponStats_Elimination.xml` for
+`Mode::Eliminator` since 2026-09-08.

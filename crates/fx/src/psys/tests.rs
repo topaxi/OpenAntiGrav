@@ -7,6 +7,7 @@
 //! `scripts/check-file-size.py`, which is both rules as a gate.
 
 use super::*;
+use oag_mesh::mesh::GpuVertex;
 
 pub(super) const DT: f32 = 1.0 / TICK_HZ;
 
@@ -46,6 +47,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             streak: StreakDraw::Procedural,
             blend: Blend::Additive,
             distort_strength: 0.0,
+            colour_scale: 1.0,
             particle_child: None,
             death_child: None,
             spawn_probability: 1.0,
@@ -59,6 +61,8 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             frames: FrameAdvance::Still,
             sheet_rect: None,
             short_run: false,
+            under_alpha: false,
+            shader: None,
             world_space: false,
             template: false,
             rotation: None,
@@ -66,6 +70,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
         roots: vec![0],
         field: None,
         view_depth: 0.0,
+        rides_owner_frame: true,
         skipped_templates: 0,
     })
 }
@@ -151,6 +156,45 @@ fn a_burst_never_recycles_an_attached_instance() {
             "a burst evicted an attached flare"
         );
     }
+}
+
+/// A mod's surface is one quad, the fewest particles in a pool a title's sparks have filled, so
+/// a plain burst would take its slot on the next tick (Omega's grid: all 32 were
+/// `WO_TRAIL_HITSHIP`, and the surface drew on no frame).
+#[test]
+fn a_full_pool_of_bursts_leaves_a_held_surface_standing() {
+    let mut stage = Stage::new();
+    let burst = effect("burst", false, 4.0);
+    let surface = effect("surface", false, 1.0);
+    let standing = |stage: &Stage| {
+        stage
+            .instances
+            .iter()
+            .filter(|instance| {
+                instance
+                    .effect
+                    .as_ref()
+                    .is_some_and(|e| e.name == "surface")
+            })
+            .count()
+    };
+    for _ in 0..MAX_INSTANCES {
+        stage.play(&burst, Vec3::ZERO, 1.0);
+    }
+    assert!(stage.play_held(&surface, Vec3::ZERO, 1.0).is_some());
+    for _ in 0..MAX_INSTANCES * 2 {
+        assert!(stage.play(&burst, Vec3::ZERO, 1.0).is_some());
+    }
+    assert_eq!(standing(&stage), 1, "a burst took the surface's slot");
+
+    // The cap: bursts always have the rest of the pool.
+    for _ in 0..MAX_HELD * 2 {
+        stage.play_held(&surface, Vec3::ZERO, 1.0);
+    }
+    for _ in 0..MAX_INSTANCES * 2 {
+        stage.play(&burst, Vec3::ZERO, 1.0);
+    }
+    assert_eq!(standing(&stage), MAX_HELD);
 }
 
 #[test]
@@ -285,6 +329,81 @@ fn an_oriented_instance_emits_along_its_own_up() {
     );
 }
 
+/// A held surface takes the `up` it is given (`Fired::OwnAt`'s, the road's own): `orient` is
+/// for attached instances and did nothing for it, so a banked road's portal stood square to
+/// world up. A plain `play` is left to `orient` as ever, which still ignores it.
+#[test]
+fn a_held_surface_takes_its_orientation() {
+    let mut rng = Rng::new(5);
+    let mut spec = (*effect("aimed", true, 10.0)).clone();
+    spec.emitters[0].speed_per_tick = (1.0, 0.0);
+    let aimed = std::sync::Arc::new(spec);
+    let emitted_along_x = |stage: &mut Stage, rng: &mut Rng| {
+        for _ in 0..8 {
+            stage.advance(DT, rng);
+        }
+        let (additive, _) = stage.vertices(Vec3::Z, Vec3::Y);
+        assert!(!additive.is_empty(), "nothing was emitted");
+        let centre = additive
+            .iter()
+            .fold(Vec3::ZERO, |sum, v| sum + Vec3::from_array(v.position))
+            / additive.len() as f32;
+        centre.x > 1.0 && centre.y.abs() < 0.5
+    };
+    let mut stage = Stage::new();
+    let held = stage.play_held(&aimed, Vec3::ZERO, 1.0).expect("play_held");
+    stage.orient_surface(held, Vec3::X);
+    assert!(emitted_along_x(&mut stage, &mut rng), "a held surface");
+
+    let mut stage = Stage::new();
+    let burst = stage.play(&aimed, Vec3::ZERO, 1.0).expect("play");
+    stage.orient(burst, Vec3::X);
+    assert!(
+        !emitted_along_x(&mut stage, &mut rng),
+        "orient is still attached-only"
+    );
+}
+
+/// A mod's `fire-effect` burst takes the direction its file's `axis` names: `play` then
+/// `orient` left it on world up, since `orient` addresses attached instances alone.
+#[test]
+fn a_fired_mod_effect_takes_the_axis_its_file_declares() {
+    use parametric::Axis;
+    let mut spec = (*effect("sputter", true, 10.0)).clone();
+    spec.emitters[0].speed_per_tick = (1.0, 0.0);
+    let aimed = std::sync::Arc::new(spec);
+    let centre_of = |stage: &mut Stage, rng: &mut Rng| {
+        for _ in 0..8 {
+            stage.advance(DT, rng);
+        }
+        let (additive, _) = stage.vertices(Vec3::Z, Vec3::Y);
+        assert!(!additive.is_empty(), "nothing was emitted");
+        additive
+            .iter()
+            .fold(Vec3::ZERO, |sum, v| sum + Vec3::from_array(v.position))
+            / additive.len() as f32
+    };
+    let mut rng = Rng::new(5);
+    for (axis, along) in [(Axis::Rear, Vec3::X), (Axis::Up, Vec3::Z)] {
+        let mut stage = Stage::new();
+        stage
+            .play_aimed(&aimed, Vec3::ZERO, axis, Vec3::X, Vec3::Z)
+            .expect("play_aimed");
+        let centre = centre_of(&mut stage, &mut rng);
+        assert!(centre.dot(along) > 1.0, "{axis:?}: {centre:?}");
+        assert!(
+            (centre - along * centre.dot(along)).length() < 0.5,
+            "{axis:?} drifted off its axis: {centre:?}"
+        );
+    }
+
+    let mut stage = Stage::new();
+    let title = stage.play(&aimed, Vec3::ZERO, 1.0).expect("play");
+    stage.orient(title, Vec3::X);
+    let centre = centre_of(&mut stage, &mut rng);
+    assert!(centre.x.abs() < 0.5, "a title burst stays on its own up");
+}
+
 /// One live streak particle, head at `position` and tail at `origin`.
 fn streak_particle(position: Vec3, origin: Vec3) -> Particle {
     Particle {
@@ -307,8 +426,261 @@ fn streak_spec(draw: StreakDraw, rect: Option<[f32; 4]>) -> EmitterSpec {
 
 fn streak_vertices(spec: &EmitterSpec, particle: &Particle) -> Vec<GpuVertex> {
     let mut out = Vec::new();
-    streak::extend(&mut out, spec, particle, 1.0, [1.0; 4], Vec3::X, Vec3::Y);
+    streak::extend(
+        &mut out,
+        spec,
+        particle,
+        1.0,
+        [1.0; 4],
+        (Vec3::X, Vec3::Y),
+        None,
+    );
     out
+}
+
+/// `FUN_08917c7c` scales both ends onto the mean of their depths before it builds the
+/// bar, so the strip is one plane and each end keeps its screen point
+/// (`particle-system.md`, "`FUN_08917c7c`"; the `WO_REPULSER` dump's four corners share
+/// one depth, `-12.125`).
+#[test]
+fn a_pool_bar_is_built_at_the_mean_depth_of_its_ends_when_the_eye_is_known() {
+    let spec = streak_spec(StreakDraw::Bar { aspect: 1.0 }, Some([0.0, 0.0, 1.0, 1.0]));
+    let particle = streak_particle(Vec3::new(0.0, 0.0, -10.0), Vec3::new(10.0, 0.0, -20.0));
+    let view = guard::GuardBand {
+        eye: Vec3::ZERO,
+        right: Vec3::X,
+        up: Vec3::Y,
+        forward: Vec3::NEG_Z,
+    };
+    let mut out = Vec::new();
+    streak::extend(
+        &mut out,
+        &spec,
+        &particle,
+        1.0,
+        [1.0; 4],
+        (Vec3::X, Vec3::Y),
+        Some(&view),
+    );
+    assert_eq!(out.len(), 6);
+    assert!(
+        out.iter().all(|v| (v.position[2] + 15.0).abs() < 1e-4),
+        "one depth, the mean -15: {:?}",
+        out.iter().map(|v| v.position[2]).collect::<Vec<_>>()
+    );
+    // The origin's screen point (10 / 20) is kept: x 7.5 at depth 15, plus the cap and half.
+    let max_x = out.iter().map(|v| v.position[0]).fold(f32::MIN, f32::max);
+    assert!((max_x - 8.5).abs() < 1e-3, "{max_x}");
+}
+
+fn eye_at_origin() -> guard::GuardBand {
+    guard::GuardBand {
+        eye: Vec3::ZERO,
+        right: Vec3::X,
+        up: Vec3::Y,
+        forward: Vec3::NEG_Z,
+    }
+}
+
+fn streak_vertices_seen(spec: &EmitterSpec, particle: &Particle) -> Vec<GpuVertex> {
+    let mut out = Vec::new();
+    streak::extend(
+        &mut out,
+        spec,
+        particle,
+        1.0,
+        [1.0; 4],
+        (Vec3::X, Vec3::Y),
+        Some(&eye_at_origin()),
+    );
+    out
+}
+
+/// HD's class 6 (render mode 5, `engine-trail.md`, "The class-6 draw law"): both ends go onto
+/// the farther view depth, where Pulse's pool bar takes the mean. The bar is `2 size` wide and
+/// reaches `aspect * size` past each end. `WO_TRAIL_HITSHIP`'s first emitter has no sprite, so
+/// this holds with none placed: the corners are the bar's, the shading the procedural profile.
+#[test]
+fn hd_class_6_bar_is_built_at_the_farther_depth_with_no_sprite() {
+    let spec = streak_spec(StreakDraw::FarBar { aspect: 2.0 }, None);
+    let particle = streak_particle(Vec3::new(0.0, 0.0, -10.0), Vec3::new(10.0, 0.0, -20.0));
+    let out = streak_vertices_seen(&spec, &particle);
+    assert_eq!(out.len(), 6);
+    assert!(
+        out.iter().all(|v| (v.position[2] + 20.0).abs() < 1e-4),
+        "one depth, the farther -20: {:?}",
+        out.iter().map(|v| v.position[2]).collect::<Vec<_>>()
+    );
+    // The position's screen point is kept (x 0); the origin is already at -20 (x 10). The
+    // bar reaches 2 * size past each end.
+    let mut xs: Vec<f32> = out.iter().map(|v| v.position[0]).collect();
+    xs.sort_by(f32::total_cmp);
+    xs.dedup_by(|a, b| (*a - *b).abs() < 1e-4);
+    assert_eq!(xs.len(), 2, "{xs:?}");
+    assert!(
+        (xs[0] + 2.0).abs() < 1e-4 && (xs[1] - 12.0).abs() < 1e-4,
+        "{xs:?}"
+    );
+    assert!(
+        out.iter().all(|v| (v.position[1].abs() - 1.0).abs() < 1e-4),
+        "2 size wide"
+    );
+    assert!(
+        out.iter().all(|v| v.normal[0] == 0.0),
+        "no sprite: the procedural profile shades it"
+    );
+}
+
+/// With a sprite placed the same bar samples its cell, as Pulse's does.
+#[test]
+fn hd_class_6_bar_samples_its_sprite_when_one_is_placed() {
+    let spec = streak_spec(
+        StreakDraw::FarBar { aspect: 1.0 },
+        Some([0.0, 0.0, 1.0, 1.0]),
+    );
+    let particle = streak_particle(Vec3::new(0.0, 0.0, -10.0), Vec3::new(10.0, 0.0, -20.0));
+    let out = streak_vertices_seen(&spec, &particle);
+    assert_eq!(out.len(), 6);
+    assert!(out.iter().all(|v| v.normal[0] == 1.0), "samples the sheet");
+    assert!(out.iter().all(|v| (v.position[2] + 20.0).abs() < 1e-4));
+}
+
+/// Pulse's pool bar keeps the mean depth beside HD's farther one.
+#[test]
+fn pulses_pool_bar_and_hds_bar_differ_only_in_depth() {
+    let particle = streak_particle(Vec3::new(0.0, 0.0, -10.0), Vec3::new(10.0, 0.0, -20.0));
+    let rect = Some([0.0, 0.0, 1.0, 1.0]);
+    let depth = |draw| streak_vertices_seen(&streak_spec(draw, rect), &particle)[0].position[2];
+    assert!((depth(StreakDraw::Bar { aspect: 1.0 }) + 15.0).abs() < 1e-4);
+    assert!((depth(StreakDraw::FarBar { aspect: 1.0 }) + 20.0).abs() < 1e-4);
+}
+
+/// The far bar is opted into per effect: `without_pulse_psp_draw` still turns every
+/// streak procedural, and the far-bar variant of it keeps only class 6.
+#[test]
+fn only_the_far_bar_reset_keeps_class_6_and_never_class_7() {
+    let base = || {
+        let mut effect = (*effect("hd", false, 10.0)).clone();
+        let spec = effect.emitters[0].clone();
+        effect.emitters = vec![spec.clone(), spec.clone(), spec];
+        effect.emitters[0].streak = StreakDraw::Bar { aspect: 1.0 };
+        effect.emitters[1].streak = StreakDraw::Capped;
+        effect.emitters[2].streak = StreakDraw::Wedge;
+        effect
+    };
+    let mut plain = base();
+    plain.without_pulse_psp_draw();
+    assert!(
+        plain
+            .emitters
+            .iter()
+            .all(|e| e.streak == StreakDraw::Procedural)
+    );
+    let mut kept = base();
+    kept.without_pulse_psp_draw_but(streak::Kept::bar(streak::KeptBar::Far));
+    let draws: Vec<StreakDraw> = kept.emitters.iter().map(|e| e.streak).collect();
+    assert_eq!(
+        draws,
+        [
+            StreakDraw::FarBar { aspect: 1.0 },
+            StreakDraw::Procedural,
+            StreakDraw::Procedural
+        ]
+    );
+}
+
+/// The pool bar is the other opt-in: it keeps class 6 as [`StreakDraw::Bar`] (the mean-depth rectangle
+/// Pulse's and Pure's PSP engines build), and the wedge and the capped bar still go procedural.
+#[test]
+fn only_the_pool_bar_reset_keeps_class_6_as_the_mean_depth_bar() {
+    let mut effect = (*effect("pure", false, 10.0)).clone();
+    let spec = effect.emitters[0].clone();
+    effect.emitters = vec![spec.clone(), spec.clone(), spec];
+    effect.emitters[0].streak = StreakDraw::Bar { aspect: 0.5 };
+    effect.emitters[1].streak = StreakDraw::Capped;
+    effect.emitters[2].streak = StreakDraw::Wedge;
+    effect.without_pulse_psp_draw_but(streak::Kept::bar(streak::KeptBar::Mean));
+    let draws: Vec<StreakDraw> = effect.emitters.iter().map(|e| e.streak).collect();
+    assert_eq!(
+        draws,
+        [
+            StreakDraw::Bar { aspect: 0.5 },
+            StreakDraw::Procedural,
+            StreakDraw::Procedural
+        ]
+    );
+}
+
+/// The templates are the third opt-in: a listed effect keeps a template emitting and rolling, an unlisted
+/// one mutes it and takes its rotation, and the listing never reaches an emitter's own rotation.
+#[test]
+fn only_the_kept_templates_reset_keeps_templates_emitting_and_rolling() {
+    let base = || {
+        let mut effect = (*effect("pure", false, 10.0)).clone();
+        let spec = effect.emitters[0].clone();
+        effect.emitters = vec![spec.clone(), spec];
+        effect.emitters[0].rotation = Some(roll::Rotation::emitter(1.0, constant(1.0), 0));
+        effect.emitters[1].template = true;
+        effect.emitters[1].per_emission = (3, 3);
+        effect.emitters[1].rotation = Some(roll::Rotation::emitter(1.7, constant(1.0), 0));
+        effect
+    };
+    let mut muted = base();
+    muted.without_pulse_psp_draw();
+    assert_eq!(muted.emitters[1].per_emission, (0, 0));
+    assert!(muted.emitters.iter().all(|e| e.rotation.is_none()));
+
+    let mut kept = base();
+    kept.without_pulse_psp_draw_but(streak::Kept {
+        bar: streak::KeptBar::No,
+        templates: true,
+    });
+    assert_eq!(kept.emitters[1].per_emission, (3, 3));
+    assert!(kept.emitters[1].rotation.is_some());
+    assert!(
+        kept.emitters[0].rotation.is_none(),
+        "an emitter's own particle stays unrotated"
+    );
+}
+
+/// `kColourScale` (`+0xc84`) is applied to HD's bar alone, as the authored colour times
+/// `scale^(1/2.2)`, which our 2.2 decode turns back into `scale` in linear light.
+#[test]
+fn only_the_far_bar_takes_the_colour_scale() {
+    let gain = StreakDraw::FarBar { aspect: 1.0 }.colour_gain(0.7);
+    assert!((gain - 0.7_f32.powf(1.0 / 2.2)).abs() < 1e-6);
+    assert!((gain.powf(2.2) - 0.7).abs() < 1e-5);
+    for draw in [
+        StreakDraw::Procedural,
+        StreakDraw::Bar { aspect: 1.0 },
+        StreakDraw::Wedge,
+        StreakDraw::Capped,
+    ] {
+        assert_eq!(draw.colour_gain(0.7), 1.0);
+    }
+}
+
+/// The gain reaches the vertices a playing far-bar streak builds, and a plain streak off the
+/// same emitter keeps its authored colour.
+#[test]
+fn a_playing_far_bar_streak_is_drawn_at_its_colour_scale() {
+    let drawn = |draw| {
+        let mut spec = effect("hit", false, 10.0).emitters[0].clone();
+        spec.render = Render::Streak { from_spawn: false };
+        spec.streak = draw;
+        spec.colour_scale = 0.5;
+        let mut effect = (*effect("hit", false, 10.0)).clone();
+        effect.emitters = vec![spec];
+        let effect = std::sync::Arc::new(effect);
+        let mut system = System::new();
+        system.ignite(&effect, Vec3::ZERO, 1.0);
+        run(&mut system, &effect, 3, &mut Rng::new(1));
+        let (additive, _) = system.vertices(&effect, Vec3::X, Vec3::Y);
+        assert!(!additive.is_empty());
+        additive[0].colour[0]
+    };
+    assert!((drawn(StreakDraw::FarBar { aspect: 1.0 }) - 0.5_f32.powf(1.0 / 2.2)).abs() < 1e-5);
+    assert_eq!(drawn(StreakDraw::Procedural), 1.0);
 }
 
 /// `ParticleSystem_DrawStreak`'s third vertex sits by the particle, not
@@ -726,4 +1098,113 @@ fn a_titles_effect_directory_replaces_data_psys_and_nothing_else() {
         effect_path_in(r"Data\Particles2048", "WO_QUAKE"),
         r"Data\Particles2048\WO_QUAKE.POB"
     );
+}
+
+/// A template is born once, at the instance's first update, and draws at the
+/// instance's severity of the moment: the Plasma's head attaches at severity
+/// zero and is rescaled every tick. An emitter's particle keeps the severity
+/// it spawned with.
+#[test]
+fn a_template_draws_at_the_instances_current_severity() {
+    let mut effect = (*effect("tpl", false, 1.0)).clone();
+    {
+        let spec = &mut effect.emitters[0];
+        spec.template = true;
+        spec.lifetime_ticks = (60000.0, 0.0);
+        spec.size = Channel {
+            period: 0.0,
+            mode: ChannelMode::Constant,
+            lo: 0.0,
+            hi: 2.0,
+            keys: vec![(0.0, 1.0), (1.0, 1.0)],
+        };
+    }
+    let mut rng = Rng::new(3);
+    let mut system = System::new();
+    system.ignite(&effect, Vec3::ZERO, 0.0);
+    run(&mut system, &effect, 1, &mut rng);
+    for severity in [0.25, 0.75] {
+        system.rescale(severity);
+        run(&mut system, &effect, 1, &mut rng);
+        let (additive, _) = system.vertices(&effect, Vec3::X, Vec3::Y);
+        let xs = additive.iter().map(|v| v.position[0]);
+        let half = (xs.clone().fold(f32::MIN, f32::max) - xs.fold(f32::MAX, f32::min)) / 2.0;
+        assert!(
+            (half - 2.0 * severity).abs() < 1e-4,
+            "severity {severity}: {half}"
+        );
+    }
+}
+
+#[test]
+fn an_underlay_emitter_draws_in_its_own_layer_and_not_with_the_additive_ones() {
+    let mut flagged = (*effect("underlay", true, 100.0)).clone();
+    flagged.draw_root_under_alpha();
+    let flagged = std::sync::Arc::new(flagged);
+    let plain = effect("plain", true, 100.0);
+    for (effect, in_underlay) in [(flagged, true), (plain, false)] {
+        let mut system = System::new();
+        system.ignite(&effect, Vec3::ZERO, 1.0);
+        let mut rng = Rng::new(1);
+        run(&mut system, &effect, 3, &mut rng);
+        let (additive, _) = system.vertices(&effect, Vec3::X, Vec3::Y);
+        let mut underlay = Vec::new();
+        system.extend_underlay_vertices(&mut underlay, &effect, Vec3::X, Vec3::Y, None);
+        assert_eq!(!additive.is_empty(), !in_underlay, "{}", effect.name);
+        assert_eq!(!underlay.is_empty(), in_underlay, "{}", effect.name);
+    }
+}
+
+#[test]
+fn a_source_without_pulse_psps_laws_keeps_every_emitter_in_the_additive_layer() {
+    let mut flagged = (*effect("underlay", true, 100.0)).clone();
+    flagged.draw_root_under_alpha();
+    flagged.without_pulse_psp_draw();
+    assert!(flagged.emitters.iter().all(|e| !e.under_alpha));
+}
+
+/// An effect attached late and pre-aged along its owner's path is the effect that rode the
+/// owner all along: the same particles in the same places, strung out behind it, and a part
+/// that plays once at the start is as spent as it would be.
+#[test]
+fn an_effect_attached_late_is_pre_aged_along_its_owners_path() {
+    const AGE: u32 = 9;
+    let from = Vec3::new(-90.0, 0.0, 0.0);
+    let to = Vec3::ZERO;
+    let positions = |stage: &Stage| -> Vec<[f32; 3]> {
+        let (additive, _) = stage.vertices(Vec3::X, Vec3::Y);
+        additive.iter().map(|vertex| vertex.position).collect()
+    };
+    for (name, looping) in [("trail", true), ("launch flash", false)] {
+        let effect = effect(name, looping, 4.0);
+
+        let mut ridden = Stage::new();
+        let mut rng = Rng::new(7);
+        let rider = ridden.attach(&effect, from, 1.0).expect("attach");
+        for step in 1..=AGE {
+            ridden.follow(rider, from + (to - from) * (step as f32 / AGE as f32));
+            ridden.advance(DT, &mut rng);
+        }
+
+        let mut late = Stage::new();
+        let mut rng = Rng::new(7);
+        let handle = late.attach(&effect, from, 1.0).expect("attach");
+        late.pre_age_riding(handle, AGE, DT, to, &mut rng);
+
+        assert_eq!(positions(&late), positions(&ridden), "{name}");
+        late.advance(DT, &mut rng);
+        let now = positions(&late);
+        if looping {
+            assert!(
+                now.iter().any(|p| p[0] < -30.0),
+                "no trail behind the owner: {now:?}"
+            );
+        } else {
+            // Four ticks of emission, nine ticks ago: nothing is put out at the owner now.
+            assert!(
+                now.iter().all(|p| p[0] < -40.0),
+                "the launch flash started fresh at the owner: {now:?}"
+            );
+        }
+    }
 }

@@ -11,6 +11,7 @@ use oag_game::input;
 use oag_game::{loading, movie, prefetch, settings};
 use oag_gameplay::ControlScheme;
 use oag_input::bindings::Bindings;
+use oag_input::music::MusicBindings;
 use oag_input::pad::TriggerMode;
 
 use crate::cli::Cli;
@@ -102,6 +103,16 @@ pub(crate) fn resolve_bindings(settings: &settings::Settings) -> Bindings {
     let (bindings, ignored) = Bindings::from_pairs(&settings.controls.bindings);
     for name in ignored {
         warn!("ignoring [controls.bindings] {name:?}; using its default key");
+    }
+    bindings
+}
+
+/// The pad's music controls: `[controls.music]`. An entry that cannot be read, or names a game
+/// button, is reported by key and leaves that action unbound.
+pub(crate) fn resolve_music_bindings(settings: &settings::Settings) -> MusicBindings {
+    let (bindings, problems) = settings.controls.music_bindings();
+    for problem in problems {
+        warn!("ignoring [controls.music] {problem}; that action stays unbound");
     }
     bindings
 }
@@ -208,7 +219,7 @@ pub(crate) fn parse_progress(spec: &str) -> Result<prefetch::Progress> {
         // Pulse-only by construction anyway (`prefetch.rs` hardcodes
         // `oag_pulse::TITLE` - finding S11). Named here so a reader of an HD
         // preview knows the text is a stand-in for width rather than a claim
-        // about that disc. Finding G5 of the 2026-08-18 review.
+        // about that disc.
         current: (done < total).then(|| format!("Data.wad {}", oag_pulse::names::INTRO_MOVIE)),
         finished: done == total,
         load_stage: 0,
@@ -384,10 +395,12 @@ pub(crate) fn leach_path(path: Option<&std::path::Path>) -> Result<Option<Vec<oa
 /// actually holds, so a typo is one read away from fixed.
 pub(crate) fn give_weapon(name: Option<&str>) -> Result<Option<oag_tables::weapons::Weapon>> {
     let Some(name) = name else { return Ok(None) };
-    // `extension` is a simulation mod's own pickup: inert without a mod that owns it.
+    // `extension` is the first simulation mod's own pickup: inert without a mod that owns it.
     let found = oag_tables::weapons::Weapon::ALL
         .into_iter()
-        .chain([oag_tables::weapons::Weapon::Extension])
+        .chain([oag_tables::weapons::Weapon::Extension(
+            oag_tables::weapons::ModKind::FIRST,
+        )])
         .find(|weapon| weapon.as_type().eq_ignore_ascii_case(name));
     match found {
         Some(weapon) => Ok(Some(weapon)),

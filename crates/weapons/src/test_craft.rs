@@ -5,6 +5,7 @@
 //! field names and defaults as the parts of `Ship` and `World` a weapon reads,
 //! so a test reads the way it did when it named the real ones.
 
+use oag_core::math::Vec3;
 use oag_physics::params::Dimensions;
 use oag_physics::{Handling, ShipState};
 
@@ -21,6 +22,8 @@ pub(crate) struct Ship {
     pub pending_thrust_scale: f32,
     pub quake_lift: f32,
     pub disruption: Disruption,
+    pub muzzle: Option<Vec3>,
+    pub track_up: Option<Vec3>,
     pub active: bool,
 }
 
@@ -34,6 +37,8 @@ impl Default for Ship {
             pending_thrust_scale: 1.0,
             quake_lift: 0.0,
             disruption: Disruption::default(),
+            muzzle: None,
+            track_up: None,
             active: false,
         }
     }
@@ -73,8 +78,14 @@ impl Craft for Ship {
     fn disruption_mut(&mut self) -> &mut Disruption {
         &mut self.disruption
     }
+    fn muzzle(&self) -> Option<Vec3> {
+        self.muzzle
+    }
     fn progress(&self) -> Option<f32> {
         self.standing.progress
+    }
+    fn track_up(&self) -> Option<Vec3> {
+        self.track_up
     }
     fn course_index(&self) -> Option<u32> {
         self.standing.course_index

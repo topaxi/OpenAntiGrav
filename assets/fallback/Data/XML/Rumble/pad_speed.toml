@@ -1,0 +1,16 @@
+# Wipeout Pulse and Pure rumble: a speed pad: a firm kick that fades.
+# Read through the fallback asset layer; a disc pattern of the same name wins, and a file
+# in overrides/<title>/Data/XML/Rumble/ replaces this one.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/rumble.tosd"
+version = "1.0.0"
+
+[pattern]
+type = "OneShot"
+class = "Game"
+priority = "Medium"
+
+[tracks]
+large = [255, 255, 230, 200, 170, 140, 110, 80, 55, 35, 20, 10]
+small = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]

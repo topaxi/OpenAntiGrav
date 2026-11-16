@@ -6,10 +6,8 @@ struct Uniforms {
     // Which layer of the per-craft sun-occlusion array this model samples,
     // **plus one** - `0.0` for none, which is every draw but a Wipeout HD hull
     // under the `original` tier. See `sun_occlusion` below and
-    // `oag_render::shadow::occlusion`. The slot was a global
-    // texture-animation phase before the authored per-material keyframe
-    // blocks (`TexAnims`) replaced it, and sat as padding until this; reusing
-    // it keeps the layout `UNIFORMS_SIZE` and four other pipelines mirror.
+    // `oag_render::shadow::occlusion`. It sits in this slot to keep the
+    // layout `UNIFORMS_SIZE` and four other pipelines mirror.
     //
     // Three trailing f32 fields rather than a vec3: WGSL aligns vec3 to 16
     // bytes, which would silently insert padding this struct's Rust mirror
@@ -17,15 +15,14 @@ struct Uniforms {
     sun_occlusion_layer: f32,
     // The model's own animation clock, seconds: what an HD material's
     // `UV_offset` is bound to (`slots::CLOCK_SCROLL_RING`/`_HALO`). Zero for
-    // every other draw. Was padding until 2026-10-05.
+    // every other draw.
     model_clock: f32,
     // A second per-draw scalar: `ColourAnim` on the Bomb's fireball
     // (`slots::BOMB_FIRE`), a float the blast owns. Zero for every other draw.
-    // Was padding until 2026-10-07.
     model_colour: f32,
     // Pulse's hull light scales, packed `ambient | directional << 8` as an
     // integer-valued float; `0.0` is the default `255` for both. Written for a
-    // craft's hull alone. Was padding until 2026-10-17.
+    // craft's hull alone.
     hull_scale: f32,
     // Which layer of the per-craft environment-probe array this model's hull is
     // lit from, **plus one** - `0.0` for none. Wipeout HD's hull draws its
@@ -39,7 +36,7 @@ struct Uniforms {
     env_desat: f32,
     // A track module's `grade-sky`: how far this draw's colour is mixed toward a grey,
     // rainy one, `0.0..=1.0`. Written for the sky alone; `0.0` is the identity and
-    // skips the branch. Was padding until 2026-10-30.
+    // skips the branch.
     sky_grey: f32,
     // Pulse's point and spot lights for a hull, `mesh_render::HullPointLights`:
     // per slot the unit vector towards the light, `.w` its colour bytes packed
@@ -131,6 +128,8 @@ struct Light {
     hull_ambient: vec4<f32>,
     hull_direction: array<vec4<f32>, 4>,
     hull_diffuse: array<vec4<f32>, 4>,
+    // Omega's `liveLighting0specular` (`mesh_render::Light::sun_specular`); zero elsewhere.
+    sun_specular: vec4<f32>,
 };
 
 // One of the two colour groups a Zone stage authors - `mesh_render::ZoneSet`.
@@ -170,6 +169,13 @@ struct Zone {
     // sphere. Equal to the pair above whenever no transition is in flight.
     track_outer: ZoneSet,
     scene_outer: ZoneSet,
+    // `zoneAnisoPower` for `aniso`'s four ramps, in their order.
+    aniso_power: vec4<f32>,
+    // `.x` 1.0 on a Zone arena (the aniso shape), 0.0 on a circuit.
+    shape: vec4<f32>,
+    // Scene inner, Scene outer, Track inner, Track outer: 17 texels each.
+    // See `mesh_render::Zone::aniso` and `zone_aniso` in `zone.wesl`.
+    aniso: array<vec4<f32>, 68>,
 };
 
 // Wipeout HD's SPU vertex lights, in the record layout `SpuLight_AddCandidate`
@@ -325,6 +331,8 @@ struct VertexInput {
     // `xyz` is `2b - 1`, `w` the factor on the binormal; all zero where the
     // material reads no normal map.
     @location(14) tangent: vec4<f32>,
+    // The batch's authored depth bias, `0..9` - see `depth_bias.wesl`.
+    @location(15) depth_bias: f32,
 };
 
 struct VertexOutput {

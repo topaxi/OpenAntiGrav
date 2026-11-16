@@ -1,0 +1,17 @@
+# Wipeout Pulse and Pure rumble: a firm scrape on the right: a pulsing grind.
+# Read through the fallback asset layer; a disc pattern of the same name wins, and a file
+# in overrides/<title>/Data/XML/Rumble/ replaces this one.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/rumble.tosd"
+version = "1.0.0"
+
+[pattern]
+type = "Looping"
+class = "Game"
+priority = "High"
+loop = [1, 7]
+
+[tracks]
+large = [200, 235, 190, 225, 180, 215, 175, 210]
+small = [1, 0, 1, 0]

@@ -11,6 +11,7 @@ use std::sync::Arc;
 const LISTENER: oag_audio::Listener = oag_audio::Listener {
     position: [0.0; 3],
     right: [1.0, 0.0, 0.0],
+    forward: [0.0, 0.0, -1.0],
 };
 const HEARD: [f32; 3] = [0.0; 3];
 
@@ -328,4 +329,61 @@ fn a_closing_engine_is_sharp_and_a_receding_one_flat_and_a_cut_is_neither() {
     // A cut frame plays the bare note whatever the distance did.
     let cut = tick(&mut engine, &mut mixer, 10.0, false);
     assert!((cut - held).abs() < 1e-3, "cut {cut} against held {held}");
+}
+
+/// The engine's voice carries where the craft is along the listener's forward
+/// axis into the mixer: a bright note behind the camera is filtered under the
+/// rear cue and is not under `original`. Fails if the engine drops `front`.
+#[test]
+fn a_craft_behind_the_camera_has_its_engine_note_filtered_under_the_rear_cue() {
+    use oag_audio::SpatialMode;
+    let buzz = Arc::new(
+        Sound::new(
+            (0..2048)
+                .map(|i| if i % 2 == 0 { 12_000 } else { -12_000 })
+                .collect(),
+            1,
+            44_100,
+        )
+        .expect("sound"),
+    );
+    let banks = Banks {
+        sounds: [(
+            Cue::Engine,
+            Loaded {
+                waveforms: vec![(buzz, true)],
+            },
+        )]
+        .into_iter()
+        .collect(),
+        report: Vec::new(),
+        ..Default::default()
+    };
+    let heard = |mode: SpatialMode, z: f32| {
+        let mut mixer = Mixer::new(44_100);
+        mixer.set_spatial_mode(mode);
+        let mut rng = Rng::new(9);
+        let mut engine = Engine::new(&mut rng);
+        engine.tick(
+            &mut mixer,
+            &banks,
+            &mut rng,
+            100.0,
+            true,
+            [0.0, 0.0, z],
+            &LISTENER,
+            false,
+            true,
+            1.0 / 60.0,
+        );
+        let mut out = vec![0.0; 2 * 735];
+        mixer.render(&mut out);
+        out.iter().skip(128).map(|s| s * s).sum::<f32>()
+    };
+    let ahead = heard(SpatialMode::RearCue, -5.0);
+    let behind = heard(SpatialMode::RearCue, 5.0);
+    let behind_original = heard(SpatialMode::Original, 5.0);
+    assert!(ahead > 0.0);
+    assert!(behind < ahead * 0.2, "{behind} vs {ahead}");
+    assert!((behind_original - ahead).abs() < ahead * 1e-4);
 }

@@ -220,12 +220,7 @@ fn draw_list_rows(
                 };
                 let [left_rect, right_rect] =
                     arrow_rects(&numbers, list.x, label_width, y + geometry.lift, (sx, sy));
-                let uv = [
-                    arrow.x as f32,
-                    arrow.y as f32,
-                    arrow.width as f32,
-                    arrow.height as f32,
-                ];
+                let uv = arrow.sheet_rect([0.0, 0.0, arrow.width as f32, arrow.height as f32]);
                 // The left arrow is the right one drawn with a negative
                 // width from its anchor, so it extends leftward, mirrored.
                 out.push(Draw::Sprite {
@@ -523,9 +518,9 @@ fn step_arrows(
     let rects = layout.arrow_rects(y);
     if focused {
         let (dx, dy) = layout.spec.glow_inset;
-        for (rect, glow) in rects.iter().zip(art.glow) {
+        for ((rect, glow), drawn) in rects.iter().zip(art.glow).zip(layout.spec.arrow_glow) {
             out.push(Draw::Sprite {
-                rect: [rect[0] + dx, rect[1] + dy, glow[2], glow[3]],
+                rect: [rect[0] + dx, rect[1] + dy, drawn[2], drawn[3]],
                 uv: glow,
                 color: ink,
             });
@@ -581,37 +576,16 @@ fn list_row(
     }
 }
 
-/// Where a list row's two step arrows are drawn: the left one first. Both
-/// `[x, y, width, height]`, in the grid being drawn in.
-///
-/// The left arrow is anchored by its right edge - it is the right one
-/// drawn mirrored from the same anchor - so its rect starts a full arrow
-/// width before `arrow_left_offset`.
+/// Where a list row's two step arrows are drawn: [`super::block::list_arrow_rects`] for the
+/// label block at `list_x`.
 fn arrow_rects(
     numbers: &oag_title::ListBlocks,
     list_x: f32,
     label_width: f32,
     y: f32,
-    (sx, sy): (f32, f32),
+    scale: (f32, f32),
 ) -> [[f32; 4]; 2] {
-    let size = numbers.arrow_size * sx;
-    let label_right = list_x + label_width;
-    let top = y + numbers.marker_offset.1 * sy;
-    let height = numbers.arrow_size * sy;
-    [
-        [
-            label_right + numbers.arrow_left_offset * sx - size,
-            top,
-            size,
-            height,
-        ],
-        [
-            label_right + numbers.arrow_right_offset * sx,
-            top,
-            size,
-            height,
-        ],
-    ]
+    super::block::list_arrow_rects(numbers, [list_x, y, label_width, 0.0], scale)
 }
 
 /// The rects a pointer can land on, for the rows on screen - the same

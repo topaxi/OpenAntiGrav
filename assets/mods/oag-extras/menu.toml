@@ -5,8 +5,7 @@
 # skipped (`only_if_missing`): RACEBOX, OPTIONS and RECORDS are the original's own
 # rows on some titles and ours on the rest, and the definitions below are the same
 # ones `assets/ui/menu.toml` carries for the titles that have them. A `parent` the
-# title's menu lacks places the row at the top level. REMIX hangs off RACEBOX
-# because it is a race setup; QUIT and RECORDS hang off OPTIONS because no original
+# title's menu lacks places the row at the top level. QUIT and RECORDS hang off OPTIONS because no original
 # top level has a natural parent for either (RECORDS: Pulse's PROFILE would be one,
 # and nothing is built behind it here). Chosen, not measured.
 #
@@ -31,24 +30,6 @@ target = "race"
 subtitle = "Set up your own race"
 subtitle_string_id = "OAG_MENU_RACEBOX_SUBTITLE"
 
-# **Shown unconditionally, not gated on "more than one title available".**
-# The menu definition has no way to ask that question - `disabled_by` only
-# ever reads another row's own held value (`Menu::held`), never an
-# externally-seeded fact, and it refuses to apply to anything but a `choice`
-# or a `toggle` in the first place, which a `submenu` entry is neither. With
-# one title on this machine, TRACK TITLE and CRAFT TITLE on the `remix` page
-# each offer exactly one row and the page degrades to an ordinary custom
-# race - nothing broken, nothing misleading, the same page doing less.
-[[entry]]
-id = "remix"
-parent = "racebox"
-kind = "submenu"
-label = "REMIX"
-string_id = "OAG_MENU_REMIX"
-target = "remix"
-subtitle = "Mix tracks and ships across every title you own"
-subtitle_string_id = "OAG_MENU_REMIX_SUBTITLE"
-
 # **MULTIPLAYER: chosen, not measured.** The row for the titles whose own main menu has no
 # multiplayer entry of its own to build: HD, Omega and 2048 (Pulse's `FE_MP` and Pure's
 # `Multiplayer` carry it in `oag_title::MainMenu`, and the build then skips this one). It
@@ -66,6 +47,21 @@ string_id = "OAG_MENU_MULTIPLAYER"
 target = "multiplayer"
 subtitle = "Race with other people, on this machine and later over a network"
 subtitle_string_id = "OAG_MENU_MULTIPLAYER_SUBTITLE"
+
+# REPLAYS lists the races the game recorded and plays them back (ADR-0087). It hangs off RACEBOX,
+# as a mod's REMIX does, and not off the top: HD's strip fits RACE CAMPAIGN, RACEBOX, MULTIPLAYER,
+# OPTIONS and RECORDS, and a sixth tab pushed RECORDS off the end of it. Where the build has no
+# directory a player can reach (a page, a phone) the page is empty and says so. Chosen, not
+# measured.
+[[entry]]
+id = "replays"
+parent = "racebox"
+kind = "submenu"
+label = "REPLAYS"
+string_id = "OAG_MENU_REPLAYS"
+target = "replays"
+subtitle = "Watch, keep or delete the races you have recorded"
+subtitle_string_id = "OAG_MENU_REPLAYS_SUBTITLE"
 
 [[entry]]
 id = "options"
@@ -101,6 +97,19 @@ string_id = "OAG_MENU_MODS"
 target = "mods"
 subtitle = "Turn each mod on or off; who made it, its licence and what it adds"
 subtitle_string_id = "OAG_MENU_MODS_SUBTITLE"
+
+# PHOTO MODE is a row of the pause menu: `Menu::offer` leaves it off the page unless a race with
+# one view is held behind the menus. Chosen, not measured.
+[[entry]]
+id = "photo_mode"
+parent = "top"
+after = "options"
+kind = "action"
+label = "PHOTO MODE"
+string_id = "OAG_MENU_PHOTO_MODE"
+action = "photo_mode"
+subtitle = "Fly the camera round the race and save a picture"
+subtitle_string_id = "OAG_MENU_PHOTO_MODE_SUBTITLE"
 
 [[entry]]
 id = "quit"

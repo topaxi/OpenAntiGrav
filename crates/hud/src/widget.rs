@@ -151,6 +151,10 @@ pub struct Sprite {
     /// shows only the part of the grade up to its value: see
     /// `draw::crop_horizontally`.
     pub gradient: Option<[[f32; 4]; 2]>,
+    /// The widget authors `Centred="true"`: its `x`/`y` is the middle of [`Self::rect`], not
+    /// its top-left. The boost's copies step away from the authored point
+    /// ([`crate::boost_smear`]).
+    pub centred: bool,
 }
 
 /// One `<Text>`: a string, a font, and where it goes.
@@ -230,7 +234,7 @@ pub struct Fill {
 ///
 /// # `colour`, and why Pulse's and HD/Fury's own sight models never set it
 ///
-/// Pure authors a `colour="0xAARRGGBB"` on every one of its ten weapon-icon
+/// Pure authors a `colour="0xAABBGGRR"` on every one of its ten weapon-icon
 /// `<Model>`s (`Data\XML\Arcade_HUD.xml`, `TimeTrial_HUD.xml`) and on none of
 /// its three sight/bar models beside them - the same split [`Sprite::color`]
 /// and [`Fill::color`] draw for `<Image>`. Pulse's and HD/Fury's own `<Model>`

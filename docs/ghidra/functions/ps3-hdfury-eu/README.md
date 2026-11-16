@@ -78,12 +78,20 @@ Two structural facts to expect, both different from every other binary here:
   `RibbonEffects` pool manager, the ribbon node law (life 1.85 s, half-width
   0.4 to 2.0, the opacity ramp TGA read two bytes late), the three-fin
   geometry and the material, all matched against a live RPCS3 dump.
+- [missile-explosion.md](missile-explosion.md) - the Missile's explosion object:
+  `MissileExplosion_Update` (1.0 s life, retired on `age > 1`), the sixteen
+  `ThickLine_bighalo` `FatLine` streaks at `+0x190`, node to material for
+  `sphere`/`bloom`/`rays`/`shockwave`, and the `Bloom adaption boost` override.
 - [plasma.md](plasma.md) - `PlasmaManager_Update`, `Plasma_Update`,
   `Plasma_CheckShipHit` and the `WeaponExplosions` update/draw pair: the
   1.0 s hardcoded wind-up, the 10.0 s reap, the 6.0 probe, the +-6.0 hit
   corridor, `WeaponStats_ParsePlasma`'s eleven attributes with `charge_time`
   unread, and the explosion's 1.7/1.3/1.3 s ramps - the PS3 half of the
   Pulse/HD/Omega comparison.
+- [projectile-launch-normal.md](projectile-launch-normal.md) - the carried normal every
+  track-following projectile is born with: `0 - craft+0x7850`, the located track's up, in
+  `Rocket_Init`, `Missile_Init`, `Plasma_Init`/`Plasma_Launch`, `Shuriken_Init` and a
+  `PulseBullet` init, with the locate chain that writes it; Omega and 2048 checked.
 - [cannon.md](cannon.md) - `CannonBullet`: `hd_muzzleflash` flashed at the
   craft's `cannon_flash` locators for the round's first `0.1` s rather than
   riding the round, the 0.25-wide full-segment bolt, and the negative search
@@ -117,6 +125,15 @@ Two structural facts to expect, both different from every other binary here:
   sound with: `XFadeSystem_AddCrossFader` and its update path, the ship-side
   cache and instance, and `Ship_UpdateEngineCrossfade`, the per-tick writer of
   four input channels (three of four terms recovered, one unidentified).
+- [collision-cues.md](collision-cues.md) - `Ship_UpdateCollisionCues`: what a
+  contact's impulse has to be before `.COLLISIONS` or `.GRIND` starts, the
+  severity and surface it hands the cue, the volume law, the Shield's swap, and
+  the live captures that agree; 2048 and Omega carry the same law.
+- [cue-variables.md](cue-variables.md) - the four cue variables a command list
+  reads (listener perspective, severity, surface) and who writes them, the
+  rest of the grain opcodes HD's banks use, `SPEEDUPPAD`'s list and call path,
+  and the ranked audit of every race cue this engine plays against the
+  original's list.
 - [sound.md](sound.md) - the SCREAM grain-opcode dispatch table
   (`0x00927614`), the located `0x05`/`0x06`/`0x08` "play/stop a child cue"
   handlers, guard `0x22`'s three-way variable-versus-immediate skip (the
@@ -158,6 +175,10 @@ Two structural facts to expect, both different from every other binary here:
   transparency difference), the strip's `ItemWidth` default of 298 and its
   selected-entry bonus of 70, and the one-sixth-per-frame easing all three
   menu classes grow with.
+- [scene-width-throttle.md](scene-width-throttle.md) - the 1080p scene width:
+  32 prebuilt targets from 1920 down to 1300, the level at
+  `g_RenderGlobals + 0x88`, and the end-of-frame controller that moves it one
+  step on the RSX's frame time and a missed vblank. Read live.
 - [shield.md](shield.md) - `Shield.cpp`: the fired pickup's shell, read and
   cross-checked field for field against `psp-pulse-usa/shield-pickup.md` - the
   same law (colour lerp, swell lerp, 60 Hz substep, cockpit-vs-shell camera
@@ -169,11 +190,19 @@ Two structural facts to expect, both different from every other binary here:
   RSX frames with the live inputs read), and `FunkLayerZoom`, the one extra pass, a 24-quad zoom-streak
   ring at the screen edge that a boost pulse (about 1.2 s) or a damage pulse (0.6 s) switches on;
   its geometry, alpha and pulse laws, and what is still unread.
+- [team-selection-model.md](team-selection-model.md) - `TeamSelection_Screen`'s craft: the
+  update that writes over the `ShipModel` widget's authored pose every frame, the depth fit on
+  the model's `<FE Length>`, the `Model_Item` attribute table and lens.
+- [front-end-model-lighting.md](front-end-model-lighting.md) - what a front-end model is lit
+  with: `FrontEnd_LoadEnvSettings` loads `data/fe/fe.fury.EnvSettings` or `fe.envsettings` into the
+  front end's own block, `FeModel_DrawAtOrigin` binds it to the race's light parameters, and the
+  Ship Select hull's frame check (the rig leaves one channel-neutral scale, the unread tone stage).
 - [menu-backdrop-scene.md](menu-backdrop-scene.md) - `BackgroundAnim_Item.cpp`, the HD
   style's backdrop and the one Omega's menus draw: the scene `FrontEndScene_HD_ATG.vex` flown
   through its own animated camera into a white target, filtered by `FEBackgroundAnim_fp`'s
   Roberts cross (edge and fill levels) and blurred, the `ScreenSetting` row layout and its
   0.97/0.03 easing, the 60 s clock, the 57.3 degree field of view.
+- [update-0251.md](update-0251.md) - the 02.51 executable against this one: what a third party's function map is worth, which offsets carry over.
 - [menu-backdrop.md](menu-backdrop.md) - `BackgroundAnimFury_Item.cpp`, the
   Fury menu's backdrop: one of nineteen `.points2` ship point clouds (the record
   format, measured on all nineteen), the camera paths and colours in
@@ -182,6 +211,11 @@ Two structural facts to expect, both different from every other binary here:
   six-mip sprite, the feedback-trail post passes, and the per-screen tint. Also
   where `ShaderRegistry_RegisterPair` closes renderer.md's unpaired-shader
   question.
+- [cell-medal-award.md](cell-medal-award.md) - how a campaign cell's medal is awarded and
+  saved: `Profile_RecordCampaignResult`, `PI_Cell_EvaluateMedalForValue`, the
+  `<Save Achieved Time SkillLevel Medal>` record; an Eliminator or NitroBattle cell's
+  medal is its place against the rung's `1`/`2`/`3`, and `NitroElim*` is the race-end
+  score target.
 - [race-campaign.md](race-campaign.md) - `PI_Cell`'s own attribute table
   (`0x008ae898`), which puts `NitroElimNovice`/`Skilled`/`Elite` in the class's
   own field list rather than an unrelated subsystem; the `HARD(ELITE)` save

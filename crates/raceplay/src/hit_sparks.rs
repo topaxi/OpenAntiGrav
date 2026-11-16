@@ -27,12 +27,12 @@
 //! **The same call plays `.COLLISIONS`** (`Sound_Play`, return `0x0892486c`),
 //! positional at the locator, once per call past that gate: the live
 //! `Sound_Play` log at a Quake hit on the player shows `QUAKEHIT` and two
-//! `.COLLISIONS`, volume `1.0` (`cannon-quake-leachbeam.md`, 2026-10-26,
+//! `.COLLISIONS`, volume `1.0` (`cannon-quake-leachbeam.md`,
 //! confidence 88). So every spark thrown here raises one [`oag_gameplay::cue::Cue::Collision`] on
 //! the struck craft, kind 1 (the LeachBeam's) included: `ShipCollisionFx_Trigger`
 //! plays it for "each surviving kind-0/1 call" (`contact-response.md`).
 //!
-//! Measured on PPSSPP (2026-09-24): a Cannon-tagged hit posted into the
+//! Measured on PPSSPP: a Cannon-tagged hit posted into the
 //! player's pending-damage channel stops at `ShipCollisionFx_Trigger` with
 //! `ra = 0x08844050` (inside `Ship_Damage`), kind 0, damaged 1, intensity 1.0,
 //! on one of the player's six locators, and the next `Psys_Spawn_q` is
@@ -66,12 +66,12 @@
 //!
 //! # Titles
 //!
-//! Pulse only here. HD's Cannon throws its own weapon spark from the weapon's side,
-//! a different mechanism (`docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`),
-//! and Pure's `Ship_Damage` is unread; both keep an empty anchor list and draw
-//! and play nothing here, the `.COLLISIONS` cue included: it rides the same
-//! locators and the same gate, and no read of either title's weapon-hit sound
-//! exists.
+//! Pulse's `Ship_Damage` rule, and Pure inherits it (its `Ship_Damage` is unread; its
+//! `WO_SHIP_COLL_SPARK_DAMAGE` gate is Pulse's, `rocket-and-collision-fx.md`), so Pure's weapon
+//! hits throw the same sparks, and raise the `.COLLISIONS` cue with them. HD's Cannon throws its
+//! own weapon spark from the weapon's side, a different mechanism
+//! (`docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`), which 2048 and Omega take from
+//! HD; they keep an empty anchor list here and draw and play nothing from this module.
 
 use super::*;
 use oag_livery::SparkAnchor;
@@ -262,8 +262,8 @@ impl Race {
     /// `source == 2` block), beside the spark and gated on `+0x368 == 0` like
     /// it. Magnitude `0.6` is passed as authored, where a wall contact's is
     /// its clamped severity times `0.3` - hence the division; the duration is
-    /// the same `0.6` s and the mode `1`, [`Side::Elsewhere`]. Read
-    /// 2026-09-30, confidence 85. **The game-mode gate** (not mode 2 or 12) is
+    /// the same `0.6` s and the mode `1`, [`Side::Elsewhere`]. Read,
+    /// confidence 85. **The game-mode gate** (not mode 2 or 12) is
     /// not applied: neither mode is one this port races in.
     pub(super) fn arm_weapon_hit_shake(&mut self, slot: usize) {
         use oag_render::camera::shake::{MAGNITUDE_SCALE, Side};
@@ -294,7 +294,7 @@ impl Race {
             return;
         };
         let ship = &self.sim.world.ships[slot];
-        if anchors.is_empty() || !ship.active {
+        if anchors.is_empty() || !ship.in_world() {
             return;
         }
         let Some(effect) = self.view.handles.get(Trigger::WeaponSpark).cloned() else {
@@ -351,7 +351,7 @@ impl Race {
         damaged: bool,
     ) {
         let ship = &self.sim.world.ships[slot];
-        if !ship.active || ship.physics.shield_pickup_timer > 0.0 {
+        if !ship.in_world() || ship.physics.shield_pickup_timer > 0.0 {
             return;
         }
         let Some(anchors) = self.view.hit_sparks.anchors.get(slot) else {
@@ -446,7 +446,7 @@ impl Race {
             return;
         }
         sparks.cooldown[slot][node] = oag_gameplay::cue::COLLISION_COOLDOWN;
-        if self.draws() {
+        if self.draws() && self.sim.contact_cues == oag_title::contact_cue::ContactCues::Rearmed {
             self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                 oag_gameplay::cue::Cue::Collision,
                 slot,
@@ -485,7 +485,7 @@ impl Race {
         let mut riding = std::mem::take(&mut self.view.hit_sparks.riding);
         riding.retain(|spark| {
             let ship = &self.sim.world.ships[spark.slot];
-            if !ship.active || !self.view.stage.is_emitting(spark.playing) {
+            if !ship.in_world() || !self.view.stage.is_emitting(spark.playing) {
                 self.view.stage.detach(spark.playing);
                 return false;
             }

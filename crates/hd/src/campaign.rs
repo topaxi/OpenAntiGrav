@@ -236,6 +236,11 @@ pub const HEX_TEXTURES: [(&str, &str); 5] = [
     ),
 ];
 
+/// The medal atlas: a 60 px frame per tier, three tiers per difficulty block
+/// (`oag_ui_screens::campaign::hd::medal::hd_medal_frame`). Its per-difficulty copy is in
+/// [`PER_DIFFICULTY_MEDAL_ARCHIVE`].
+pub const MEDAL_ATLAS: &str = r"Data\FE\Images\Hexmedal_HD.gtf";
+
 /// Everything else `SCREEN_ENTRY`'s own `src=` attributes name that this
 /// build draws, beyond the hex art above - the bullet arrow beside every
 /// detail-column row, the lock overlay HD's `Grid Selection` shows over a
@@ -261,11 +266,13 @@ pub const HEX_TEXTURES: [(&str, &str); 5] = [
 /// answering `None`, the same silent, honest-absence path a genuinely
 /// missing texture takes) - confirmed on a live capture,
 /// `after-cell-select-2.png`.
-pub const OTHER_TEXTURES: [&str; 4] = [
+pub const OTHER_TEXTURES: [&str; 6] = [
     r"Data\FE\Images\NonSelectable_Arrow_HD.gtf",
     r"Data\FE\Images\Subtitle_Arrow_HD.gtf",
     r"Data\FE\Images\Padlock.gtf",
-    r"Data\FE\Images\Hexmedal_HD.gtf",
+    MEDAL_ATLAS,
+    r"Data\FE\Images\tilted_arrows.gtf",
+    r"Data\FE\Images\dot.gtf",
 ];
 
 /// **`Hexmedal_HD.gtf` itself has two disagreeing copies - measured
@@ -314,6 +321,16 @@ mod tests {
     fn entry_names_are_spelled_the_way_definition_xml_spells_them() {
         assert_eq!(entry_name(0), r"Data\Plugins\grids\grid_00.xml");
         assert_eq!(entry_name(15), r"Data\Plugins\grids\grid_15.xml");
+    }
+
+    #[test]
+    fn grid_selection_s_arrows_and_dotted_panel_are_loaded() {
+        for src in [
+            r"Data\FE\Images\tilted_arrows.gtf",
+            r"Data\FE\Images\dot.gtf",
+        ] {
+            assert!(OTHER_TEXTURES.contains(&src), "{src}");
+        }
     }
 
     #[test]

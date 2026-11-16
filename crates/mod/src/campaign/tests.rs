@@ -85,7 +85,7 @@ fn a_small_campaign_reads_with_its_defaults() {
     assert_eq!(grid.events[0].reference(grid), "g0/1-2");
     let medals = grid.events[1].medals.as_ref().unwrap();
     assert_eq!(medals.all().gold, Some(90.0));
-    assert_eq!(medals.hard.unwrap().gold, Some(80.0));
+    assert_eq!(medals.hard.as_ref().unwrap().gold, Some(80.0));
     let requires = &grid.events[1].unlock.as_ref().unwrap().requires;
     assert_eq!(requires[0].medal, "gold");
 }
@@ -151,9 +151,18 @@ fn a_mod_lists_its_campaigns_and_reports_a_broken_one() {
     ) else {
         return;
     };
+    let medals: &'static Vec<u8> = Box::leak(Box::new(
+        std::fs::read(
+            example_dir("example-campaign/ui")
+                .expect("the manifest's icon is there")
+                .join("medals.png"),
+        )
+        .expect("the example's medal atlas reads"),
+    ));
     let files: &'static [(&'static str, &'static [u8])] = Box::leak(Box::new([
         ("oag-mod.toml", manifest.as_bytes()),
         ("campaigns/night-run.toml", campaign.as_bytes()),
+        ("ui/medals.png", medals.as_slice()),
         ("campaigns/broken.toml", b"[campaign]\nid = 3\n"),
         ("campaigns/notes.txt", b"not a campaign"),
         ("campaigns/deeper/skip.toml", b""),
@@ -185,6 +194,30 @@ fn the_schema_and_the_reader_agree_on_every_example() {
         (
             "unknown reveal",
             with_header(&SMALL.replace("name = \"Small\"", "name = \"Small\"\nreveal = \"faded\"")),
+            false,
+        ),
+        (
+            "a ramp from a base",
+            with_header(&SMALL.replace(
+                "name = \"Small\"",
+                "name = \"Small\"\ndifficulty = \"hard\"\nprogression = \"ramp\"",
+            )),
+            true,
+        ),
+        (
+            "our driver's base",
+            with_header(&SMALL.replace(
+                "name = \"Small\"",
+                "name = \"Small\"\ndifficulty = \"skilled\"",
+            )),
+            true,
+        ),
+        (
+            "an unknown progression",
+            with_header(&SMALL.replace(
+                "name = \"Small\"",
+                "name = \"Small\"\nprogression = \"spiral\"",
+            )),
             false,
         ),
         (
@@ -243,10 +276,286 @@ fn the_schema_and_the_reader_agree_on_every_example() {
     ));
     assert!(oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &typo).is_err());
     assert!(CampaignDef::parse(&typo).is_ok());
+    // A difficulty word is a name the game checks when the campaign compiles.
+    let brutal = with_header(&SMALL.replace(
+        "name = \"Small\"",
+        "name = \"Small\"\ndifficulty = \"brutal\"",
+    ));
+    assert!(oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &brutal).is_err());
+    assert!(CampaignDef::parse(&brutal).is_ok());
     for (what, text, accepted) in cases {
         let schema = oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &text);
         let reader = CampaignDef::parse(&text);
         assert_eq!(schema.is_ok(), accepted, "schema, {what}: {schema:?}");
         assert_eq!(reader.is_ok(), accepted, "reader, {what}: {reader:?}");
     }
+}
+
+fn built() -> CampaignDef {
+    let mut def = CampaignDef::parse(&with_header(SMALL)).unwrap();
+    def.grids[0].events[0].craft = Some(CraftDef {
+        team: "Feisar".to_string(),
+    });
+    def.grids[0].events[0].field = Some(FieldDef {
+        ai: Some("original".to_string()),
+        difficulty: Some("hard".to_string()),
+        skill: Some(1.75),
+        pilot: None,
+        teams: vec!["Qirex".to_string(), "Piranha".to_string()],
+    });
+    def.grids[0].events[1].weapons = Some(false);
+    def.grids[0].events[1].laps = Some(4);
+    def
+}
+
+#[test]
+fn a_written_campaign_reads_back_as_the_same_definition() {
+    for def in [CampaignDef::parse(&with_header(SMALL)).unwrap(), built()] {
+        let text = def.write().unwrap();
+        assert_eq!(CampaignDef::parse(&text).unwrap(), def, "{text}");
+    }
+}
+
+#[test]
+fn a_difficulty_setting_survives_a_write_and_validates_against_the_schema() {
+    let mut def = built();
+    def.campaign.difficulty = Some("medium".to_string());
+    def.campaign.progression = Progression::Ramp;
+    let text = def.write().unwrap();
+    assert!(text.contains("difficulty = \"medium\""), "{text}");
+    assert!(text.contains("progression = \"ramp\""), "{text}");
+    assert_eq!(CampaignDef::parse(&text).unwrap(), def);
+    oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &text)
+        .unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+    let flat = built().write().unwrap();
+    assert!(
+        !flat.contains("progression") && !flat.contains("[campaign]\ndifficulty"),
+        "{flat}"
+    );
+}
+
+#[test]
+fn a_definition_built_in_code_writes_with_the_header() {
+    let info = Info {
+        id: "mine".to_string(),
+        name: "Mine".to_string(),
+        description: String::new(),
+        titles: Vec::new(),
+        reveal: Reveal::Locked,
+        difficulty: None,
+        progression: Progression::Flat,
+    };
+    let event = EventDef {
+        slot: [3, 2],
+        id: None,
+        name: String::new(),
+        mode: "race".to_string(),
+        track: Some("01_Track".to_string()),
+        tracks: Vec::new(),
+        file: None,
+        class: Some("venom".to_string()),
+        laps: None,
+        weapons: None,
+        craft: None,
+        field: None,
+        medals: None,
+        unlock: None,
+    };
+    let grid = GridDef {
+        id: "grid0".to_string(),
+        name: String::new(),
+        required_points: 0,
+        unlock_grid: None,
+        reveal: None,
+        flyer: None,
+        events: vec![event],
+    };
+    let def = CampaignDef::new(info, vec![grid]);
+    let text = def.write().unwrap();
+    assert!(text.starts_with("[toml-schema]"), "{text}");
+    assert_eq!(CampaignDef::parse(&text).unwrap(), def);
+}
+
+#[test]
+fn every_written_campaign_validates_against_the_schema() {
+    let mut texts = vec![built().write().unwrap()];
+    if let Some(base) = example_dir("example-campaign/campaigns") {
+        for entry in std::fs::read_dir(base).unwrap().flatten() {
+            let def = CampaignDef::parse(&std::fs::read_to_string(entry.path()).unwrap()).unwrap();
+            texts.push(def.write().unwrap());
+        }
+    }
+    for text in texts {
+        oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &text)
+            .unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+    }
+}
+
+#[test]
+fn a_definition_that_would_not_read_back_is_not_written() {
+    let mut def = built();
+    def.grids[0].events[1].slot = def.grids[0].events[0].slot;
+    assert!(def.write().is_err());
+}
+
+#[test]
+fn every_committed_example_campaign_survives_a_write() {
+    let Some(base) = example_dir("example-campaign/campaigns") else {
+        return;
+    };
+    let mut seen = 0;
+    for entry in std::fs::read_dir(base).unwrap().flatten() {
+        let text = std::fs::read_to_string(entry.path()).unwrap();
+        let def = CampaignDef::parse(&text).unwrap();
+        let again = def.write().unwrap();
+        assert_eq!(
+            CampaignDef::parse(&again).unwrap(),
+            def,
+            "{}",
+            entry.path().display()
+        );
+        seen += 1;
+    }
+    assert!(seen > 0);
+}
+
+fn example_dir(path: &str) -> Option<std::path::PathBuf> {
+    let full = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/mods/examples")
+        .join(path);
+    if full.is_dir() {
+        Some(full)
+    } else {
+        eprintln!("skipped: {} is not checked out", full.display());
+        None
+    }
+}
+
+#[test]
+fn a_written_mod_is_found_opened_and_lists_its_campaign() {
+    let root = std::env::temp_dir().join(format!("oag-campaign-write-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let def = built();
+    let first = write_mod(&root, &def, &["wipeout-pulse"]).unwrap();
+    let second = write_mod(&root, &def, &["wipeout-pulse"]).unwrap();
+    assert_ne!(first, second, "a saved campaign never overwrites another");
+    let found = crate::search(std::slice::from_ref(&root));
+    assert_eq!(found.len(), 2);
+    let opened = crate::Mod::open(&first).unwrap();
+    assert_eq!(opened.manifest.id, "player.small");
+    assert!(opened.is_for("wipeout-pulse") && !opened.is_for("wipeout-hd"));
+    let campaigns = opened.campaigns();
+    assert_eq!(campaigns.len(), 1);
+    assert_eq!(campaigns[0].def.as_ref().unwrap(), &def);
+    let again = crate::Mod::open(&second).unwrap();
+    assert_eq!(again.manifest.id, "player.small-2");
+    oag_schema::validate::accepts(
+        crate::SCHEMA_KIND,
+        crate::SCHEMA_MAJOR,
+        &std::fs::read_to_string(first.join(crate::MANIFEST)).unwrap(),
+    )
+    .unwrap();
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+const WITH_PLATINUM: &str = r##"
+[[medal-tier]]
+name = "platinum"
+points = 4
+colour = "#e5e4e2"
+string_id = "NR_PLATINUM"
+
+[[medal-tier]]
+name = "gold"
+points = 3
+colour = "#faeb38"
+
+[[medal-tier]]
+name = "silver"
+points = 2
+colour = "#dae3e4"
+
+[[medal-tier]]
+name = "bronze"
+points = 1
+colour = "#df942f"
+"##;
+
+fn platinum_campaign() -> String {
+    let body = SMALL.replace(
+        "medals = { gold = 90.0, hard = { gold = 80.0 } }",
+        "medals = { gold = 90.0, extra = [{ tier = \"platinum\", target = 80.0 }], hard = { gold = 80.0, extra = [{ tier = \"platinum\", target = 70.0 }] } }",
+    );
+    with_header(&format!("{WITH_PLATINUM}{body}"))
+}
+
+#[test]
+fn a_campaign_declares_its_medal_tiers_best_first() {
+    let text = platinum_campaign();
+    let def = CampaignDef::parse(&text).expect("parses");
+    let names: Vec<_> = def.medal_tiers.iter().map(|t| t.name.as_str()).collect();
+    assert_eq!(names, ["platinum", "gold", "silver", "bronze"]);
+    assert_eq!(def.medal_tiers[0].argb(), Some(0xffe5_e4e2));
+    assert_eq!(def.medal_tiers[0].string_id.as_deref(), Some("NR_PLATINUM"));
+    oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &text)
+        .unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+    let written = def.write().unwrap();
+    assert_eq!(CampaignDef::parse(&written).unwrap(), def);
+}
+
+#[test]
+fn a_requirement_may_name_a_declared_tier_and_no_other() {
+    let text = platinum_campaign().replace("medal = \"gold\"", "medal = \"platinum\"");
+    assert!(CampaignDef::parse(&text).is_ok());
+    let text = platinum_campaign().replace("medal = \"gold\"", "medal = \"diamond\"");
+    let error = CampaignDef::parse(&text).unwrap_err().to_string();
+    assert!(
+        error.contains("diamond") && error.contains("platinum"),
+        "{error}"
+    );
+}
+
+#[test]
+fn a_target_for_an_undeclared_tier_is_refused_by_name() {
+    let text = platinum_campaign().replace(
+        "tier = \"platinum\", target = 80.0",
+        "tier = \"diamond\", target = 80.0",
+    );
+    let error = CampaignDef::parse(&text).unwrap_err().to_string();
+    assert!(error.contains("diamond"), "{error}");
+    let plain = with_header(&SMALL.replace(
+        "gold = 90.0",
+        "gold = 90.0, extra = [{ tier = \"platinum\", target = 80.0 }]",
+    ));
+    assert!(
+        CampaignDef::parse(&plain)
+            .unwrap_err()
+            .to_string()
+            .contains("platinum")
+    );
+}
+
+#[test]
+fn a_bad_tier_list_is_refused() {
+    let twice = platinum_campaign().replace("name = \"silver\"", "name = \"gold\"");
+    assert!(
+        CampaignDef::parse(&twice)
+            .unwrap_err()
+            .to_string()
+            .contains("twice")
+    );
+    let colour = platinum_campaign().replace("#e5e4e2", "silver");
+    assert!(
+        CampaignDef::parse(&colour)
+            .unwrap_err()
+            .to_string()
+            .contains("#RRGGBB")
+    );
+}
+
+#[test]
+fn a_file_without_medal_tiers_reads_as_before() {
+    let def = CampaignDef::parse(&with_header(SMALL)).expect("parses");
+    assert!(def.medal_tiers.is_empty());
+    assert!(!def.write().unwrap().contains("medal-tier"));
 }

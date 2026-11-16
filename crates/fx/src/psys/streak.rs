@@ -47,13 +47,16 @@
 //! each of the three spans, and keeps a streak to the six vertices
 //! [`super::MAX_VERTICES`] budgets for.
 //!
-//! **Built in world space, not view space - chosen, not measured.** The
-//! original pushes both endpoints to one depth before building the strip
-//! (the farther, `min(z)`, for class 6; the mean for class 7), so the strip
-//! is screen-parallel with a width that is `half` at that depth. Here the
-//! perpendicular is `dir x (right x up)`, which is the view-space
-//! `(dir.y, -dir.x)` for a streak lying in the screen plane, and each end
-//! keeps its own depth. No eye position reaches this code to do otherwise.
+//! **View space when the camera is known.** The original pushes both endpoints
+//! onto one depth along the line to the eye before building the strip (the
+//! mean of the two for the pool bar and class 7, the farther for the template
+//! wedge), so the strip is screen-parallel and its width is `half` at that
+//! depth; [`at_one_depth`] does it, and the perpendicular is then exactly the
+//! view-space `(dir.y, -dir.x)`. Without a camera (`view` is `None`: a source
+//! the strips were not read on, and the pools whose caller passes none) the
+//! perpendicular is `dir x (right x up)` and each end keeps its own depth,
+//! which is the same for a streak lying in the screen plane - chosen, not
+//! measured.
 //!
 //! **Pulse on the PSP only.** A source whose executable is unread keeps the
 //! procedural profile - see [`super::Effect::without_pulse_psp_draw`].
@@ -61,6 +64,7 @@
 use oag_core::math::Vec3;
 
 use super::between_ticks::set_shift;
+use super::guard::GuardBand;
 use super::{Effect, EmitterSpec, Particle, quad, sprite};
 use oag_mesh::mesh::GpuVertex;
 
@@ -76,13 +80,91 @@ impl Effect {
     /// off Pulse's PSP `BOOT.BIN` alone, and Pure's is a different
     /// executable that ships sprites of its own.
     pub fn without_pulse_psp_draw(&mut self) {
+        self.reset_pulse_psp_draw(Kept::NONE);
+    }
+
+    /// [`Self::without_pulse_psp_draw`], except for the laws `kept` names: an emitter's own
+    /// class-6 particle keeps the bar [`Kept::bar`] names (HD's view-space bar,
+    /// [`StreakDraw::FarBar`], [`KeptBar::Far`], the draw HD's `PartRender` job and Omega's CPU
+    /// twin build for render mode 5, `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The
+    /// class-6 draw law"; or the pool bar Pulse's and Pure's PSP executables build,
+    /// [`StreakDraw::Bar`], [`KeptBar::Mean`], Pure's `FUN_088746c8` reading
+    /// `ParticleSystem_DrawPoolBars`'s strip law,
+    /// `docs/ghidra/functions/psp-pure-usa/particle-bars.md`), and the sprite templates play when
+    /// [`Kept::templates`] is set. Per effect, for the ones a title lists
+    /// (`oag_title::Effects::{far_bars, pool_bars, templates}`): each law was read on a named
+    /// effect alone.
+    pub fn without_pulse_psp_draw_but(&mut self, kept: Kept) {
+        self.reset_pulse_psp_draw(kept);
+    }
+
+    fn reset_pulse_psp_draw(&mut self, kept: Kept) {
+        self.rides_owner_frame = false;
         for spec in &mut self.emitters {
-            spec.streak = StreakDraw::Procedural;
+            spec.under_alpha = false;
+            spec.streak = match (spec.streak, kept.bar) {
+                (StreakDraw::Bar { aspect }, KeptBar::Far) => StreakDraw::FarBar { aspect },
+                (StreakDraw::Bar { aspect }, KeptBar::Mean) => StreakDraw::Bar { aspect },
+                _ => StreakDraw::Procedural,
+            };
             spec.frames = super::FrameAdvance::Still;
             spec.short_run = false;
         }
-        self.mute_templates();
-        self.mute_rotation();
+        if !kept.templates {
+            self.mute_templates();
+        }
+        self.mute_rotation(kept.templates);
+    }
+}
+
+/// Which Pulse PSP draw laws an effect keeps when [`Effect::without_pulse_psp_draw_but`] takes
+/// the rest away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Kept {
+    /// The class-6 bar.
+    pub bar: KeptBar,
+    /// The sprite templates, played with their own roll and stretch.
+    pub templates: bool,
+}
+
+impl Kept {
+    /// Nothing: [`Effect::without_pulse_psp_draw`].
+    pub const NONE: Self = Self {
+        bar: KeptBar::No,
+        templates: false,
+    };
+
+    /// Only the class-6 bar `bar` names.
+    #[must_use]
+    pub const fn bar(bar: KeptBar) -> Self {
+        Self {
+            bar,
+            templates: false,
+        }
+    }
+}
+
+/// Which class-6 bar an effect keeps: see [`Kept`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeptBar {
+    /// None: every streak is procedural.
+    No,
+    /// The pool bar, both ends on the mean of their two view depths ([`StreakDraw::Bar`]).
+    Mean,
+    /// HD's bar, both ends on the farther depth ([`StreakDraw::FarBar`]).
+    Far,
+}
+
+impl Effect {
+    /// Draws the root emitter in the layer before the alpha-over particles, as the
+    /// original's draw list for `WO_PLASMA_HEAD` does (arcs, then the dark disc over
+    /// them, then ring, spikes, glow: `docs/ghidra/functions/psp-pulse-usa/plasma.md`,
+    /// "the head's draw order"). Pulse's PSP file only; [`Self::without_pulse_psp_draw`]
+    /// takes it back.
+    pub fn draw_root_under_alpha(&mut self) {
+        if let Some(root) = self.emitters.first_mut() {
+            root.under_alpha = true;
+        }
     }
 }
 
@@ -97,6 +179,15 @@ pub enum StreakDraw {
     /// Class 6 on an emitter's own particle, the bar, with the record's
     /// `res+0x4c8` as the cap's share of the size.
     Bar {
+        /// `res+0x4c8`.
+        aspect: f32,
+    },
+    /// Class 6 on HD's renderer (render mode 5): the same rectangle as
+    /// [`Self::Bar`], with both ends on the **farther** of their two view
+    /// depths where Pulse's takes the mean. With no sprite placed it is
+    /// shaded with the procedural profile, standing in for the texture the
+    /// original binds (`record+0xca4`, unread).
+    FarBar {
         /// `res+0x4c8`.
         aspect: f32,
     },
@@ -119,6 +210,21 @@ impl StreakDraw {
 }
 
 impl StreakDraw {
+    /// What an emitter's authored colour is multiplied by for this draw, given its
+    /// `kColourScale` (`+0xc84`): HD's vertex program decodes the colour with a 2.2 power and
+    /// multiplies the linear result by the scale, so the same product through our 2.2 decode
+    /// (`target.wesl`'s `decode`) is the authored colour times `scale^(1/2.2)`. Only a
+    /// [`Self::FarBar`] takes it. **Inherited from Omega**, whose CPU renderer reads the word
+    /// as `kColourScale`; HD's own reader of it is unread
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The class-6 draw law").
+    #[must_use]
+    pub fn colour_gain(self, scale: f32) -> f32 {
+        match self {
+            Self::FarBar { .. } => scale.max(0.0).powf(1.0 / 2.2),
+            _ => 1.0,
+        }
+    }
+
     /// The same class drawn as a template (`ParticleSystem_DrawParticle`), whose
     /// class 6 is the wedge.
     #[must_use]
@@ -128,6 +234,28 @@ impl StreakDraw {
             other => other,
         }
     }
+}
+
+/// Both ends of a two-point particle moved onto one depth along the line to
+/// the eye, which keeps each on its own screen point and makes the pair
+/// co-planar, so the strip built in that plane is screen-parallel
+/// (`docs/ghidra/functions/psp-pulse-usa/particle-system.md`, "`FUN_08917c7c`"
+/// and "`FUN_08916d00`"): the mean of the two depths, except the template
+/// wedge and HD's class-6 bar, which take the farther. Returned as `(position, origin)` in world
+/// space. A particle at or behind the eye keeps its own points.
+fn at_one_depth(view: &GuardBand, draw: StreakDraw, particle: &Particle) -> (Vec3, Vec3) {
+    let (position, origin) = (particle.position, particle.origin);
+    let depth = |p: Vec3| (p - view.eye).dot(view.forward);
+    let (dp, dor) = (depth(position), depth(origin));
+    if dp < 1e-3 || dor < 1e-3 {
+        return (position, origin);
+    }
+    let common = match draw {
+        StreakDraw::Wedge | StreakDraw::FarBar { .. } => dp.max(dor),
+        _ => (dp + dor) * 0.5,
+    };
+    let onto = |p: Vec3, d: f32| view.eye + (p - view.eye) * (common / d);
+    (onto(position, dp), onto(origin, dor))
 }
 
 /// `psys.wesl`'s `normal.x` for a class-7 bar: sample the sheet, and fold
@@ -147,11 +275,11 @@ pub(super) fn extend(
     particle: &Particle,
     half: f32,
     rgba: [f32; 4],
-    right: Vec3,
-    up: Vec3,
+    (right, up): (Vec3, Vec3),
+    view: Option<&GuardBand>,
 ) {
     let start = out.len();
-    extend_at_tick(out, spec, particle, half, rgba, right, up);
+    extend_at_tick(out, spec, particle, half, rgba, (right, up), view);
     let head = particle.shift();
     let from_spawn = matches!(spec.render, super::Render::Streak { from_spawn: true });
     let along = particle.position - particle.origin;
@@ -176,8 +304,8 @@ fn extend_at_tick(
     particle: &Particle,
     half: f32,
     rgba: [f32; 4],
-    right: Vec3,
-    up: Vec3,
+    (right, up): (Vec3, Vec3),
+    view: Option<&GuardBand>,
 ) {
     let [r, g, b, alpha] = rgba;
     let colour = [r, g, b];
@@ -186,17 +314,35 @@ fn extend_at_tick(
         .sheet_rect
         .filter(|_| spec.streak != StreakDraw::Procedural);
     let Some(rect) = rect else {
-        out.extend_from_slice(&procedural(particle, half, colour, alpha, right, up, back));
+        match spec.streak {
+            // HD's bar with no sprite placed: the bar's corners, shaded with
+            // the procedural profile.
+            StreakDraw::FarBar { aspect } => {
+                let (position, origin, dir, perp) =
+                    strip_frame(spec, particle, half, (right, up), view);
+                let reach = half * aspect;
+                let half_span = (origin - position).length() * 0.5 + reach;
+                out.extend_from_slice(&quad(
+                    (position + origin) * 0.5,
+                    dir * half_span,
+                    perp,
+                    if half_span > 0.0 {
+                        reach / half_span
+                    } else {
+                        0.5
+                    },
+                    colour,
+                    alpha,
+                ));
+            }
+            _ => out.extend_from_slice(&procedural(particle, half, colour, alpha, right, up, back)),
+        }
         return;
     };
-    let cell = spec.atlas.cell(rect, particle.frame);
-    let along = particle.origin - particle.position;
-    let length = along.length();
-    // `(0, 1, 0)` in view space for a zero-length streak: the camera's up.
-    let dir = if length > 1e-6 { along / length } else { up };
-    let perp = dir.cross(back).try_normalize().unwrap_or(right) * half;
+    let (position, origin, dir, perp) = strip_frame(spec, particle, half, (right, up), view);
     let cap = dir * half;
-    let (position, origin) = (particle.position, particle.origin);
+    let length = (origin - position).length();
+    let cell = spec.atlas.cell(rect, particle.frame);
     let corner = |at: Vec3, u: f32, v: f32| GpuVertex {
         position: at.to_array(),
         normal: [0.0, 0.0, 0.0],
@@ -204,7 +350,7 @@ fn extend_at_tick(
         texcoord: [u, v],
         ..bytemuck::Zeroable::zeroed()
     };
-    if let StreakDraw::Bar { aspect } = spec.streak {
+    if let StreakDraw::Bar { aspect } | StreakDraw::FarBar { aspect } = spec.streak {
         let cap = cap * aspect;
         let mut strip = [
             corner(position - cap - perp, 1.0, 0.0),
@@ -242,6 +388,36 @@ fn extend_at_tick(
     let b0 = bar(origin + cap - perp, 1.0, 1.0);
     let b1 = bar(origin + cap + perp, 0.0, 1.0);
     out.extend_from_slice(&[a0, a1, b0, a1, b1, b0]);
+}
+
+/// A strip's two ends and its frame: `(position, origin, dir, perp)`, the ends
+/// on one depth when the camera is known ([`at_one_depth`]), `dir` along the
+/// strip and `perp` across it with length `half`.
+fn strip_frame(
+    spec: &EmitterSpec,
+    particle: &Particle,
+    half: f32,
+    (right, up): (Vec3, Vec3),
+    view: Option<&GuardBand>,
+) -> (Vec3, Vec3, Vec3, Vec3) {
+    let back = right.cross(up);
+    let (position, origin) = match view {
+        Some(view) => at_one_depth(view, spec.streak, particle),
+        None => (particle.position, particle.origin),
+    };
+    // `(0, 1, 0)` in view space for a zero-length streak: the camera's up.
+    let (dir, perp) = if view.is_some() {
+        let along = (origin - position) - back * (origin - position).dot(back);
+        let length = along.length();
+        let dir = if length > 1e-6 { along / length } else { up };
+        (dir, dir.cross(back) * half)
+    } else {
+        let along = origin - position;
+        let length = along.length();
+        let dir = if length > 1e-6 { along / length } else { up };
+        (dir, dir.cross(back).try_normalize().unwrap_or(right) * half)
+    };
+    (position, origin, dir, perp)
 }
 
 /// The profile every source drew before the strips were read: one

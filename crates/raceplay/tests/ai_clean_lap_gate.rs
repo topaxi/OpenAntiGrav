@@ -398,7 +398,8 @@ fn solos_on(track: &str, class: &str, offset: f32) -> Option<Vec<Solo>> {
     )
 }
 
-/// One lone race from `setup`.
+/// One lone race from `setup`. Ticked with `tick_sim_only`: the gate reads simulation state alone
+/// (respawns, laps, wall contact, craft state), and a sim-only tick skips the drawn effects.
 fn solo(setup: race::Setup) -> Solo {
     let mut race = race::Race::start(setup);
     for slot in 2..8 {
@@ -412,7 +413,7 @@ fn solo(setup: race::Setup) -> Solo {
     let mut recovered_this_lap = false;
     for tick in 0..TICKS {
         let before = race.respawns_of(LONE);
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         if race.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }

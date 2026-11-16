@@ -16,6 +16,8 @@ use oag_audio::Sound;
 use oag_disc::Platform;
 use oag_title::Title;
 
+use crate::listings::Listings;
+
 /// A source opened as a title this build knows.
 #[derive(Debug)]
 pub struct Opened {
@@ -34,6 +36,13 @@ pub trait Library: std::fmt::Debug + Send + Sync {
     /// Every disc image the host would search for a counterpart release, in
     /// search order (alphabetical within a directory, so two runs agree).
     fn containers(&self) -> Vec<PathBuf>;
+
+    /// Every source the host can open as a title, one path each, in search order: the
+    /// disc images [`Self::containers`] names and the extracted packages and directories
+    /// that stand in for a disc on some titles. What the music pool lists.
+    fn sources(&self) -> Vec<PathBuf> {
+        self.containers()
+    }
 }
 
 /// A [`Library`] that knows no source: a [`crate::MusicDiscs`] built without a
@@ -100,9 +109,22 @@ pub fn named_listing(library: &dyn Library, source: &str) -> Result<Option<Named
 /// A source that is not a known archived title, or an entry that will not
 /// decode.
 pub fn load_entry(library: &dyn Library, source: &str, at: u32, cache_dir: &Path) -> Result<Sound> {
+    load_entry_kept(library, source, at, cache_dir, &Listings::default())
+}
+
+/// [`load_entry`], taking a bank-driven title's playlist and bank from `kept`
+/// (reading them there the first time) instead of reading them per track.
+pub(crate) fn load_entry_kept(
+    library: &dyn Library,
+    source: &str,
+    at: u32,
+    cache_dir: &Path,
+    kept: &Listings,
+) -> Result<Sound> {
     let (title, mut archives) = open_archived(library, source)
         .with_context(|| format!("opening {source} as a known title"))?;
-    oag_music::load_entry(title, &mut archives, at, cache_dir)
+    let prepared = kept.prepared(source, || oag_music::prepare(title, &mut archives))?;
+    oag_music::load_entry(title, &mut archives, at, cache_dir, prepared.as_deref())
 }
 
 /// Decodes the front end's own music loop, named alongside the sound.
@@ -119,4 +141,35 @@ pub fn load_front_end(
         return Ok(None);
     };
     oag_music::load_front_end(title, &mut archives, cache_dir)
+}
+
+/// The spectrum sidecar of the front end's music, for a title that ships one.
+///
+/// # Errors
+///
+/// A declared sidecar that is absent or will not parse.
+pub fn load_front_end_spectrum(
+    library: &dyn Library,
+    source: &str,
+) -> Result<Option<oag_music::spectrum::Spectrum>> {
+    let Some((title, mut archives)) = open_archived(library, source) else {
+        return Ok(None);
+    };
+    oag_music::load_front_end_spectrum(title, &mut archives)
+}
+
+/// Decodes the archive entry `name` of `source`, a clip outside the soundtrack.
+///
+/// # Errors
+///
+/// A source that is not a known archived title, or an entry that will not read or decode.
+pub fn load_named(
+    library: &dyn Library,
+    source: &str,
+    name: &str,
+    cache_dir: &Path,
+) -> Result<Sound> {
+    let (_, mut archives) = open_archived(library, source)
+        .with_context(|| format!("opening {source} as a known title"))?;
+    oag_music::load_named(&mut archives, name, cache_dir)
 }

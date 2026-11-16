@@ -31,6 +31,8 @@ pub mod campaign;
 pub mod capture;
 pub mod cursor;
 pub mod custom_tracks;
+pub mod demo;
+pub mod demo_overlay;
 pub mod devrun;
 pub mod drive;
 pub mod endrace;
@@ -41,9 +43,13 @@ pub mod hud_countdown;
 pub mod hud_overlay;
 pub mod hud_views;
 pub mod icon;
+pub mod idle;
+pub mod music_pad;
 pub mod pause;
 pub mod pending_race;
+pub mod photo;
 pub mod touch_controls;
+pub mod web_fault;
 /// The abstract button layer, which lives in `oag-gameplay` because the
 /// simulation owns the input snapshot type and everything that produces one
 /// depends on it. Re-exported here so call sites that predate `oag-ui`
@@ -55,18 +61,20 @@ pub use oag_gameplay::input;
 /// is a device concern, and the front end is one of its consumers rather than
 /// its owner.
 pub use oag_input::keys;
-pub mod gpu_workers;
 pub mod lan_list;
 pub mod launcher;
 pub mod livery_row;
 pub mod loading;
 pub mod logfile;
 pub mod medal_watch;
+pub mod menu_tree;
 pub mod mod_extensions;
 pub mod mods;
 pub mod movie;
+pub mod music_pool;
 pub mod music_state;
 pub mod net_play;
+pub mod official;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod online;
 pub mod online_screen;
@@ -75,16 +83,22 @@ pub mod preview;
 pub mod profile;
 pub mod prompts;
 pub mod race_capture;
+pub mod race_seed;
 pub mod records;
-pub mod remix;
 pub mod render;
+pub mod replay_view;
+pub mod replays;
 pub mod results_tables;
+pub mod rumble;
 pub mod scoreboard;
 pub mod screen;
 pub mod settings;
+pub mod shot_meta;
 pub mod sound;
 pub mod split_screen;
 pub mod team_hull;
+pub mod texture_pack;
+pub mod title_lists;
 pub mod track_panel;
 pub mod unlock;
 

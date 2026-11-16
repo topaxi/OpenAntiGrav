@@ -125,6 +125,52 @@ fn hd_files_parse_and_share_the_fifteen_stage_ladder() {
             HD_STAGES,
             "{path} should carry the same 15-stage ladder"
         );
+        check_aniso_ramps(name, &effect);
+    }
+}
+
+/// **The four Zone arenas' table authors a complete aniso ramp for both groups
+/// on every stage; the circuits' table authors none.** The ramp is what the
+/// arena shape's rim term reads
+/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md`), so a stage
+/// missing a key would draw no rim colour. Stage 4's Scene ramp is the one read
+/// live on RPCS3 on `Zone_1`: points `(0, 0, 0)`, `(0.992157, 0.992157,
+/// 0.858824)`, `(1.720692, 1.953218, 1.976471)`, `(1, 1, 1)`, `(1.864545,
+/// 2.847059, 2.791234)` on texels 0, 4, 8, 12, 16.
+fn check_aniso_ramps(name: &str, effect: &EffectSettings) {
+    use oag_tables::effectsettings::aniso::Group;
+    let complete = |group| {
+        (0..15)
+            .filter(|&s| effect.aniso_group(s, group).is_some())
+            .count()
+    };
+    match name {
+        "zonemodedlc3" => {
+            assert_eq!(
+                (complete(Group::Scene), complete(Group::Track)),
+                (15, 15),
+                "{name}"
+            );
+            let ramp = effect.aniso_group(4, Group::Scene).expect("stage 4").ramp();
+            assert_eq!(
+                ramp[4],
+                [0.992_157, 0.992_157, 0.858_824],
+                "{name} stage 4 texel 4"
+            );
+            assert_eq!(
+                ramp[16],
+                [1.864_545, 2.847_059, 2.791_234],
+                "{name} stage 4 texel 16"
+            );
+        }
+        "zonemode" => {
+            assert_eq!(
+                (complete(Group::Scene), complete(Group::Track)),
+                (0, 0),
+                "{name}"
+            );
+        }
+        _ => {}
     }
 }
 

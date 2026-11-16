@@ -46,6 +46,11 @@ pub struct RaceView {
     /// `tests::cycling_the_camera_changes_no_simulation_state`.
     pub(super) camera_view: oag_display::display::CameraView,
     pub(super) camera: Chase,
+    /// The followed craft's moves along the circuit ([`Race::move_to`]) as of the camera's
+    /// last step: a change seats the camera behind the craft where it came out.
+    pub(super) camera_jumps: u32,
+    /// Where each craft in a transit is followed from. See [`super::transit_camera`].
+    pub(super) transit_seats: [Option<super::transit_camera::Seat>; oag_gameplay::MAX_SHIPS],
     /// The previous tick's draw poses and the alpha a draw blends them by.
     /// See [`super::between_ticks`].
     pub(super) poses: super::between_ticks::Poses,
@@ -60,13 +65,18 @@ pub struct RaceView {
     pub(super) hull_shake_law: Option<oag_title::hull_shake::HullShake>,
     /// Whether the shake runs ([`super::Race::set_hull_shake`]).
     pub(super) hull_shake_on: bool,
+    /// Whether an impact shakes the camera; a demo's does not ([`super::Race::fly_as_demo`]).
+    pub(super) camera_shake_on: bool,
+    /// Whether other people's multiplayer tags are drawn ([`super::Race::set_player_tags`]).
+    pub(super) player_tags_on: bool,
     /// The grid slot this machine's person flies in a network race, set by
     /// [`super::Race::set_seat`]. View-only: in a network race every person's slot
     /// is [`oag_gameplay::Controller::Remote`] on every peer, because the
     /// controllers are hashed, so "which craft is mine" cannot live in the world.
     pub(super) seat: Option<usize>,
-    /// The name of the person flying each slot in a network race, by slot, empty for a slot
-    /// with none ([`super::Race::set_person_names`]). View-only: the end screens name people.
+    /// The name of the person flying each slot, by slot, empty for a slot with none
+    /// ([`super::Race::set_person_names`]): the lobby's in a network race, the stored player name
+    /// for seat 1 in a local one. View-only: the end screens and the multiplayer tags name people.
     pub(super) person_names: Vec<String>,
     /// The seat's wall-contact effects: the camera shake, the collision sparks and
     /// what paces them. See [`ContactFx`](super::contact_fx::ContactFx).
@@ -87,10 +97,19 @@ pub struct RaceView {
     /// The spectator director that flies the camera behind the end-race panels, `None` on a
     /// title it was not read for. See [`super::finish_camera`].
     pub(super) finish_camera: Option<super::finish_camera::FinishCamera>,
+    /// Whether the director runs from the race's first tick, not after the player's finish: an
+    /// attract demo's camera ([`super::Race::fly_as_demo`]).
+    pub(super) spectates_from_start: bool,
+    /// Photo mode's camera while it is open. See [`super::photo`].
+    pub(super) photo: Option<super::photo::Photo>,
     /// The tick the player's wreck ended the race on, `None` until it does.
     /// View-side bookkeeping for [`Race::runs_on_after_the_end`] and the spectator
     /// director's clock; nothing the simulation reads.
     pub(super) wreck_ended_tick: Option<u64>,
+    /// How many times a viewer has put the race back to another tick
+    /// ([`Race::restore_for_viewing`]): each is a cut, so the motion blur and a temporal
+    /// upscaler do not read the jump as motion ([`Race::camera_cuts`]).
+    pub(super) restores: u32,
     /// The external block the chase camera is currently flying, which is
     /// whichever of [`Self::chase_far`] / [`Self::chase_close`]
     /// [`Self::camera_view`] names. Kept as its own field rather than looked up
@@ -150,6 +169,17 @@ pub struct RaceView {
     /// ease rather than Pulse's baked anim-time scrub. See
     /// `options::Setup::hd_plasma_blast`.
     pub(super) hd_plasma_blast: bool,
+    /// See `options::Setup::plasma_blast_law`.
+    pub(super) plasma_blast_law: Option<oag_title::weapons::PlasmaBlastLaw>,
+    /// See `options::Setup::disruptor_halo_law`.
+    pub(super) disruptor_halo_law: Option<oag_title::weapons::DisruptorHalo>,
+    /// Live Disruptor explosion halos, one per [`blast_models::PLASMA_BLAST_SLOTS`].
+    pub(super) disruptor_halos:
+        [Option<blast_models::DisruptorHaloBlast>; blast_models::PLASMA_BLAST_SLOTS],
+    /// See `options::Setup::disruptor_craft_law`.
+    pub(super) disruptor_craft_law: Option<oag_title::weapons::DisruptorCraftFx>,
+    /// Each craft's live on-craft Disruptor effect, by slot.
+    pub(super) disruptor_craft: [Option<blast_models::DisruptorCraftBlast>; MAX_SHIPS],
     /// See `options::Setup::pulse_laid_pose`.
     pub(super) pulse_laid_pose: bool,
     /// See `options::Setup::laid_pose_scaled`.
@@ -200,6 +230,9 @@ pub struct RaceView {
     pub(super) campaign_event: bool,
     /// Who is inside whose trail, one bit per intruder; level, not edge.
     pub(super) trail_inside: [u8; MAX_SHIPS],
+    /// Per owner, the intruders whose lent burst sits out this tick: see
+    /// [`Race::trail_hit_due`].
+    pub(super) trail_hit_rest: [u8; MAX_SHIPS],
     pub(super) hd_flame: [exhaust::hd::Flame; MAX_SHIPS],
     pub(super) hd_sprite: [exhaust::hd::Sprite; MAX_SHIPS],
     /// Each craft's shield shell animation, when one is up.
@@ -227,6 +260,9 @@ pub struct RaceView {
     pub(super) pair_spoil: [bool; MAX_SHIPS],
     /// The lap-line time gap, on and off with the primary slot's lap watch.
     pub(super) split_gap: Option<super::split_gap::SplitGap>,
+    /// The warnings the tick's opponent fire earned the viewer, waiting for the HUD's
+    /// next advance ([`super::incoming_warnings`]).
+    pub(super) incoming_raises: Vec<oag_hud::incoming::Look>,
     /// The `engine_flare` locator in model space, when the ship model has one.
     ///
     /// One value for the whole field, because every craft wears the player's hull
@@ -234,7 +270,7 @@ pub struct RaceView {
     /// land, at which point the locator moves with the model rather than with the
     /// race.
     pub(super) nozzles: Vec<Option<Vec3>>,
-    /// Wipeout HD's engine light per slot - see [`Setup::engine_lights`] and
+    /// The engine light per slot (HD, 2048, Omega) - see [`Setup::engine_lights`] and
     /// `race::engine_light`. Render-side, out of the hash.
     pub(super) engine_lights: Vec<Option<oag_livery::engine_light::EngineLight>>,
     /// The circuit's `"Lighting.Enable spu vertex lights"`, on by default.
@@ -267,6 +303,8 @@ pub struct RaceView {
     /// permanently hull-mounted emitter re-ignited on a cooldown rather than
     /// an effect that comes and goes - see [`Self::sparks_anchor`].
     pub(super) stage: psys::Stage,
+    /// The surfaces a mod placed on [`Self::stage`] that `stop-mod-effect` can still end.
+    pub(super) surfaces: Vec<super::extension_effects::Surface>,
     /// The circuit's own placed effects, in a pool of their own - see
     /// `race::scenery_fx`.
     pub(super) scenery_fx: super::scenery_fx::SceneryFx,
@@ -286,6 +324,9 @@ pub struct RaceView {
     /// alone.
     pub(super) projectile_flare_orbit:
         [Option<psys::Playing>; oag_weapons::projectile::MAX_PROJECTILES],
+    /// HD's Plasma release effects riding their craft - see
+    /// [`super::plasma_launch`].
+    pub(super) plasma_launch: super::plasma_launch::PlasmaLaunch,
     /// The [`Trigger::Quake`] instance riding the travelling
     /// wave, or `None` when no Quake is in flight. One slot, not an array,
     /// the same shape [`oag_gameplay::World::quake`] itself takes - see that
@@ -315,13 +356,11 @@ pub struct RaceView {
     /// The road's lift under that wave, for the surfaces the title's
     /// materials mark - see [`Race::quake_wave`]. `None` with no wave.
     pub(super) quake_surface: Option<oag_mesh::mesh_render::QuakeWave>,
-    /// The [`Trigger::LeachbeamEnergy`] instance riding the
-    /// craft a beam is fastened to, or `None` when no link is connected.
-    ///
-    /// One slot for the same reason [`Self::quake_effect`] is one: the
-    /// original allows a single beam in the whole race, so
-    /// [`oag_gameplay::World::leach_beam`] is one `Option` and this follows it.
-    pub(super) leach_beam_effect: Option<psys::Playing>,
+    /// The [`Trigger::LeachbeamEnergy`] instance riding the craft a beam is
+    /// fastened to, or `None` when no link is connected: one per entry of
+    /// [`oag_gameplay::World::leach_beams`], which it follows by index.
+    pub(super) leach_beam_effect:
+        [Option<psys::Playing>; oag_weapons::projectile::leach_beam::POOL_SIZE],
     /// Per craft slot, the [`Trigger::LeachbeamCharging`]
     /// instance riding that craft while it is *holding* a LeachBeam, or `None`.
     ///
@@ -334,9 +373,11 @@ pub struct RaceView {
     /// The LeachBeam ribbon's own render-side state - the amplitude table and
     /// scroll phase [`oag_weapons::projectile::leach_beam::Beam`]
     /// deliberately does not carry, see `oag_fx::beam`'s module doc
-    /// comment. `Some` for exactly as long as [`oag_gameplay::World::leach_beam`]
-    /// is `Some(Kind::Locked)`, rebuilt fresh each time a new beam locks on.
-    pub(super) leach_beam_ribbon: Option<oag_fx::beam::Ribbon>,
+    /// comment. Per entry of [`oag_gameplay::World::leach_beams`], `Some` for exactly
+    /// as long as that entry is `Some(Kind::Locked)`, rebuilt fresh each time a new
+    /// beam locks on.
+    pub(super) leach_beam_ribbon:
+        [Option<oag_fx::beam::Ribbon>; oag_weapons::projectile::leach_beam::POOL_SIZE],
     /// The LeachBeam ribbon's own generator, deliberately **not** `world.rng` -
     /// see [`Self::exhaust_rng`].
     pub(super) leach_beam_rng: Rng,
@@ -346,10 +387,15 @@ pub struct RaceView {
     /// which the burst's timing reads; on a per-tick title the view keeps it
     /// on the same law. Reset to `0.0` whenever no beam is locked, the same way
     /// [`Self::leach_beam_ribbon`] is torn down - see
-    /// [`weapons::visuals::advance_leach_beam_ribbon`].
-    pub(super) leach_ball_elapsed: f32,
+    /// [`weapons::visuals::advance_leach_beam_ribbon`]. Per pool entry.
+    pub(super) leach_ball_elapsed: [f32; oag_weapons::projectile::leach_beam::POOL_SIZE],
     /// The Rocket's smoke ribbons - see [`crate::rocket_smoke`].
     pub(super) rocket_smoke: crate::rocket_smoke::Smoke,
+    /// The Missile's ribbons, `None` where the title draws none - see
+    /// [`crate::missile_smoke`].
+    pub(super) missile_smoke: Option<crate::missile_smoke::Smoke>,
+    /// The wingtip contrails, `None` where the race draws none - see [`crate::wingtip`].
+    pub(super) wingtip: Option<crate::wingtip::Contrails>,
     /// The Plasma's own render-side detonation instances, one per
     /// [`blast_models::PLASMA_BLAST_SLOTS`] - see that module's own doc
     /// comment for why this lives here rather than in `World`, and
@@ -371,6 +417,9 @@ pub struct RaceView {
     /// Wipeout HD's Missile explosions, a pool of the original's sixteen. See
     /// [`missile_blast`].
     pub(super) hd_missile_blasts: [Option<missile_blast::MissileBlast>; missile_blast::SLOTS],
+    /// The streaks those explosions start and the pool they share, `None` where the title
+    /// draws none. See [`missile_blast::streaks`].
+    pub(super) hd_missile_streaks: Option<missile_blast::streaks::Streaks>,
     /// Whether a Missile that reaches a craft plays HD's explosion model. See
     /// `options::Setup::hd_missile_blast`.
     pub(super) hd_missile_blast: bool,
@@ -389,6 +438,8 @@ pub struct RaceView {
     /// Zone mode's speed-class announcer, straight out of
     /// [`Setup::class_announcer`].
     pub(super) class_announcer: oag_sound::sfx::ClassAnnouncer,
+    /// [`Setup::rumble`].
+    pub(super) rumble: oag_tables::rumble::Library,
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///
     /// Render-only state, on `Race` rather than in `World` for the same reason
@@ -459,22 +510,28 @@ pub struct RaceView {
     /// Where the PSP ribbons draw against the circuit's blended list.
     /// `[render_profiles.<title>] trail_order`; see [`Race::ribbons_first`].
     pub(super) trail_order: oag_display::display::TrailOrder,
+    /// How the circuit's blended list is sorted.
+    /// `[render_profiles.<title>] scenery_sort`; see [`Race::writes_foliage_depth`].
+    pub(super) scenery_sort: oag_display::display::ScenerySort,
     /// What the weather adds to the original's. `[render_profiles.<title>] weather`;
     /// see [`Race::set_weather`].
     pub(super) weather: oag_display::display::Weather,
     /// The results table, taken on the tick the race reached its finish
     /// condition, and `None` before that.
     ///
-    /// **A snapshot rather than a live query**, and that is the whole point: "the
-    /// race is over" has to mean one fixed table. The field is still moving when
-    /// the player crosses - `oag_race::places` ranks whoever has not finished by
-    /// distance covered, which is the honest answer at that instant - and a board
-    /// recomputed a second later would show a different one.
+    /// **A snapshot rather than a live query**: "the race is over" has to mean
+    /// one table, not one that moves under a reader at every tick. The field is
+    /// still moving when the player crosses - `oag_race::places` ranks whoever
+    /// has not finished by distance covered - so the board is replaced only by
+    /// [`Race::refresh_results`], when the world runs on behind the end screens,
+    /// and each replacement bumps [`Self::results_revision`].
     ///
     /// On `Race` rather than in `World`: it is derived from state the world
     /// already holds, so hashing it would hash the same facts twice, and a
     /// replay reproduces it by reaching the same tick. See [`Self::results`].
     pub(super) results: Option<crate::scoreboard::Board>,
+    /// Boards taken or replaced so far, for [`Race::results_revision`].
+    pub(super) results_revision: u32,
     /// The tallies the Zone results screen reports - see [`RunStats`].
     pub(super) run_stats: super::results::RunStats,
 }
@@ -493,5 +550,6 @@ pub struct RaceView {
     pub(super) wreck_ended_tick: Option<u64>,
     pub(super) slot_teams: Vec<String>,
     pub(super) results: Option<crate::scoreboard::Board>,
+    pub(super) results_revision: u32,
     pub(super) run_stats: super::results::RunStats,
 }

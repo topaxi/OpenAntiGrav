@@ -12,7 +12,7 @@ const ROW_Y: f32 = 370.0;
 /// sits in it (`x + 7`).
 const CRAFT_CELL: f32 = 108.0;
 
-impl Frontend {
+impl CardPaint<'_> {
     /// The width of the glyph row (`FUN_81055006`), in the executable's own
     /// terms: 56 per glyph, the callout's `n * 56`, 108 for a forced craft.
     fn glyph_row_width(card: &EventCard) -> f32 {
@@ -33,7 +33,7 @@ impl Frontend {
         let blue = self.global_colour("Blue2048");
         let white = [1.0, 1.0, 1.0, 1.0];
         let card = &event.card;
-        let state = self.campaign.state_of(self.campaign.selected);
+        let state = self.state;
         // `param_3[0xb6]` is `3` once passed and `4` once elite: from then on
         // the page shifts up 40 units and adds the elite line under the pass
         // line, each with its own medal (`FUN_81061344`).

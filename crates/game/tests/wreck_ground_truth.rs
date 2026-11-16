@@ -44,15 +44,20 @@ fn load(wreck: bool, mode: Mode) -> Option<(Vec<livery::Livery>, Vec<String>)> {
         &mut archives,
         &teams,
         &LoadContext {
+            store: Default::default(),
             race: oag_pulse::TITLE.race,
             mode,
             flare: oag_pulse::TITLE.flare,
             hull_overlay: false,
+            leach_overlay: false,
             hull_shine: true,
             hull_wreck: wreck,
             absorb_shell: false,
+            own_shield: false,
             zone_liveries: &[],
             forced_skins: &[],
+            circuit_hull: None,
+            player_livery: None,
         },
         None,
         None,
@@ -181,7 +186,7 @@ fn frame(
         .and_then(|count| count.parse().ok())
         .unwrap_or_else(|| panic!("{name}: no frame statistics in the log:\n{log}"));
     (
-        std::fs::read(&out).expect("reading the screenshot"),
+        oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot")),
         triangles,
     )
 }

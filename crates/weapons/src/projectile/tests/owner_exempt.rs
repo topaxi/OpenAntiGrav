@@ -19,7 +19,20 @@ fn ticks_to_trip(kind: Weapon, owner_at_slot: u8, limit: usize) -> Option<(usize
     // One craft, standing on the charge.
     let field = ships(&[(true, Vec3::ZERO)]);
     for tick in 1..=limit {
-        let impacts = projectiles.advance(DT, &world, &field, None, None, None, radii, "VENOM");
+        let impacts = projectiles.advance(
+            DT,
+            &world,
+            None,
+            &field,
+            None,
+            None,
+            None,
+            radii,
+            "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
+        );
         if let Some(impact) = impacts.iter().flatten().next() {
             return Some((tick, *impact));
         }

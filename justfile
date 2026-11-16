@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -113,6 +113,10 @@ debt:
 threads *args:
     python3 -I scripts/handover-threads.py {{args}}
 
+# Delete data/scratch lane dirs untouched for 7 days (`--days N`, `--yes`); lists first
+clean-scratch *args:
+    python3 -I scripts/clean-scratch.py {{args}}
+
 fmt:
     cargo fmt --all
 
@@ -138,8 +142,9 @@ check-ballisticng:
     cargo nextest run -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --tests --cargo-profile quick -E 'test(custom_tracks::) | test(survey::)'
 
 # The `extensions` feature (simulation mods in WebAssembly through `oag-modhost` and
-# wasmtime) is off by default, so nothing above compiles it. This lints the code
-# behind it and runs, with it on, the host's tests and every `oag-raceplay` unit
+# wasmtime) is `oag-game`'s default, so `test` compiles it through feature unification;
+# this keeps it covered package by package. It lints the code behind it and runs, with
+# it on, the host's tests and every `oag-raceplay` unit
 # test (the hash goldens among them, which a vanilla race must still meet with the
 # feature on). The disc-backed Wall Penalty test runs by hand:
 # `cargo nextest run -p oag-raceplay --features extensions --run-ignored only -E 'test(/wall_penalty_ground_truth::/)'`.
@@ -151,6 +156,14 @@ check-extensions:
     python3 -I scripts/gen-ext-typings.py --check
     cargo clippy -p oag-modhost -p oag-raceplay -p oag-game --features oag-game/extensions,oag-raceplay/extensions --all-targets -- -D warnings
     cargo nextest run -p oag-modhost -p oag-raceplay --features oag-raceplay/extensions --lib --cargo-profile quick
+
+# The browser module (`just web`'s `oag_web` example for wasm32-unknown-unknown)
+# type-checked with `scripts/build-web.sh`'s own flags, so a change that breaks
+# the web build fails here and not on the next deploy. Needs the nightly that
+# script names, with `rust-src` and the wasm32 target; its own target directory
+# (`target/web-threads`). See docs/tools/web.md, "Verifying it".
+check-web:
+    ./scripts/build-web.sh --check
 
 # `--tests` builds what has tests to run - libraries, binaries, integration tests.
 #
@@ -192,25 +205,34 @@ test:
 test-data *ARGS:
     python3 scripts/test-data.py "$@"
 
-# A member lane's gate: every check in `check` in full, but only the tests of
-# the packages this branch changed and everything that depends on them.
-# `scripts/affected.py` says what it selected and why; a change to `oag-core`,
-# a simulation crate or a build input (`Cargo.lock`, the toolchain, this file,
-# `.config/`, a `build.rs`) selects the whole workspace, and a docs-only change
-# selects nothing. The lead still runs the full `just` and `just test-data` once
-# per merge batch - see `.claude/skills/oag-drive/member-rules.md`.
+# A member lane's gate: every check in `check` in full, but only the tests the
+# branch's change can reach. `scripts/affected.py` says what it selected and
+# why: the packages that link a changed one, narrowed to the test modules that
+# do; a docs-only or comments-only change selects nothing, and a workspace build
+# input (the root `Cargo.toml`, the toolchain, `.cargo/`) selects everything.
+# The rules, what each could miss and the measurements are in
+# `docs/architecture/affected-gate.md`. The lead still runs the full `just` and
+# `just test-data` once per merge batch - see
+# `.claude/skills/oag-drive/member-rules.md`.
+# `check-status` is left out: a member never commits `status.md`, so a stale table is
+# the lead's to regenerate, and the full `just` checks it.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
-# `just test`, narrowed to what `scripts/affected.py` selects.
+# `just test`, narrowed to what `scripts/affected.py` selects. A selection is
+# nextest arguments, one per line; `--no-tests=pass` because a narrowed
+# selection may hold no test of the kind this run takes.
 test-affected:
     #!/usr/bin/env bash
     set -euo pipefail
     selection=$(python3 scripts/affected.py)
     case "$selection" in
-        none) echo "test-affected: no package selected, nothing to run" ;;
+        none) echo "test-affected: nothing selected, nothing to run" ;;
         full) cargo nextest run --workspace --tests --cargo-profile quick ;;
-        *) cargo nextest run $selection --tests --cargo-profile quick ;;
+        *)
+            mapfile -t args <<<"$selection"
+            cargo nextest run "${args[@]}" --tests --cargo-profile quick --no-tests=pass
+            ;;
     esac
 
 # `just test-data`, narrowed the same way. A full selection is `just test-data`
@@ -223,11 +245,12 @@ test-data-affected:
     set -uo pipefail
     selection=$(python3 scripts/affected.py) || exit $?
     case "$selection" in
-        none) echo "test-data-affected: no package selected, nothing to run"; exit 0 ;;
+        none) echo "test-data-affected: nothing selected, nothing to run"; exit 0 ;;
         full) exec just test-data ;;
     esac
+    mapfile -t args <<<"$selection"
     mkdir -p target
-    cargo nextest run $selection --tests --run-ignored only --no-fail-fast 2>&1 \
+    cargo nextest run "${args[@]}" --tests --run-ignored only --no-fail-fast --no-tests=pass 2>&1 \
         | tee target/test-data-affected.log
     tests=${PIPESTATUS[0]}
     budget=0
@@ -266,7 +289,7 @@ build:
 # slow to build and into `target/dist/`. The local `--release` recipes stay on
 # the quick profile. See docs/tools/packaging.md, "The dist profile".
 build-dist *ARGS:
-    cargo build --profile dist -p oag-game {{ARGS}}
+    cargo build --profile dist -p oag-game --no-default-features --features extensions {{ARGS}}
 
 # A release `oag-game` tuned for a CPU tier, in its own target directory so the
 # baseline build is untouched: `just build-cpu` for `x86-64-v3` (AVX2, FMA,
@@ -274,7 +297,7 @@ build-dist *ARGS:
 # Steam Deck's own core. The simulation hashes are unchanged under either -
 # see docs/tools/packaging.md, "A CPU-tier build", for what was measured.
 build-cpu cpu="x86-64-v3" *ARGS:
-    CARGO_TARGET_DIR=target/cpu-{{cpu}} RUSTFLAGS="-C target-cpu={{cpu}}" cargo build --release -p oag-game {{ARGS}}
+    CARGO_TARGET_DIR=target/cpu-{{cpu}} RUSTFLAGS="-C target-cpu={{cpu}}" cargo build --release -p oag-game --no-default-features --features extensions {{ARGS}}
 
 docs:
     cargo doc --workspace --no-deps --document-private-items
@@ -467,10 +490,18 @@ hash-images:
 # A bare flag (`--ticks 5`) still gets the EU default; anything
 # else (a path or `image:entry` spec) is passed straight through unchanged,
 # so `just play data/images/foo.chd --ticks 5` still works.
-play *ARGS:
+# Every mod guest is rebuilt first (`rebuild-guests`, about a second once
+# cached), so a guest edited since its last build never runs stale.
+play *ARGS: rebuild-guests
     #!/usr/bin/env bash
     set -euo pipefail
-    args=("$@")
+    # `--interpreter` is ours, not the game's: it builds with `wasm-interpreter` (the
+    # simulation mods on wasmtime's Pulley interpreter instead of Cranelift).
+    interpreter=""
+    args=()
+    for arg in "$@"; do
+        if [ "$arg" = "--interpreter" ]; then interpreter=1; else args+=("$arg"); fi
+    done
     first="${args[0]:-}"
     case "$first" in
         ""|--*)
@@ -559,11 +590,14 @@ play *ARGS:
             args=("$img" "${args[@]:1}")
             ;;
     esac
-    # Simulation mods run by default (the `extensions` feature, wasmtime);
-    # `OAG_NO_EXTENSIONS=1` builds without it. `OAG_PLAY_FEATURES` adds more.
+    # Simulation mods run by default (`oag-game`'s default `extensions` feature,
+    # wasmtime); `OAG_NO_EXTENSIONS=1` builds without it. `OAG_PLAY_FEATURES` adds more;
+    # `--interpreter` adds `wasm-interpreter`, which turns `extensions` back on.
     features="${OAG_PLAY_FEATURES:-}"
-    [ -n "${OAG_NO_EXTENSIONS:-}" ] || features="extensions${features:+,$features}"
-    ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game {{native_video_flags}} ${features:+--features "$features"} -- "${args[@]}"
+    [ -z "$interpreter" ] || features="${features:+$features,}wasm-interpreter"
+    no_default=""
+    [ -z "${OAG_NO_EXTENSIONS:-}" ] || no_default="--no-default-features"
+    ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game $no_default {{native_video_flags}} ${features:+--features "$features"} -- "${args[@]}"
 
 # `just bench-render [title ...] [--tag NAME] [--repeat] [--profile debug] [--views 1,2h,2v] [--size WxH]`, titles from
 # pulse pure hd 2048 omega (default all). Builds a release `oag-game` OUTSIDE the lock, then
@@ -687,13 +721,13 @@ apk *ARGS:
 # OpenAntiGrav.app zipped, from a dist build of oag-game (macOS only for a bundle
 # that launches; the layout assembles anywhere). See docs/tools/macos.md.
 mac-app *ARGS:
-    cargo build --profile dist -p oag-game
+    cargo build --profile dist -p oag-game --no-default-features --features extensions
     ./scripts/build-mac-app.sh {{ARGS}}
 
 # OpenAntiGrav.app inside an unsigned-for-the-store .ipa, for aarch64-apple-ios
 # (macOS only: needs the iOS SDK; the layout assembles anywhere). See docs/tools/ios.md.
 ios-app *ARGS:
-    cargo build --profile dist --target aarch64-apple-ios -p oag-game
+    cargo build --profile dist --target aarch64-apple-ios -p oag-game --no-default-features
     cargo build -p oag-game
     ./scripts/build-ios-app.sh {{ARGS}}
 
@@ -742,12 +776,20 @@ logcat-android *ARGS:
     ./scripts/logcat-android.sh "$@"
 
 # Pick game data (disc images, DLC, unpacked 2048/Omega packages, Pure's DLC
-# keys) in an fzf multiselect, each row marked as already on the device or not,
+# keys, the PPSSPP texture packs `just fetch-texture-packs` fetched) in an fzf multiselect, each row marked as already on the device or not,
 # and copy it: `just push-data deck [user@host]` or `just push-data android`.
 # Globs instead of the picker: `just push-data android 'images/pulse-psp-*'`.
 # See scripts/push-game-data.sh
 push-data *ARGS:
     ./scripts/push-game-data.sh "$@"
+
+# Fetch the PPSSPP texture packs for Pulse and Pure into data/texture-packs/<name>/ at the
+# commit scripts/texture-packs.pin names (shallow clone; never committed, both are unlicensed
+# fan work). `--update` moves the pin to each repo's head; `--install-ppsspp ~/.config/ppsspp`
+# also links them into a PPSSPP install's PSP/TEXTURES/<serial>/. `just push-data` carries them to a
+# device. See docs/tools/texture-packs.md and scripts/fetch-texture-packs.sh
+fetch-texture-packs *ARGS:
+    ./scripts/fetch-texture-packs.sh "$@"
 
 # Run the tick loop with no renderer, no window and no disc, and print its hash
 headless-sim *ARGS:
@@ -1117,12 +1159,48 @@ compare-rerender-all *ARGS:
 compare-seed:
     python3 scripts/compare-seed.py
 
-# Rebuild data/compare/ strictly from a curated manifest directory, then upload it to the
-# separate compare Pages project with wrangler. LOCKED: refuses unless the screenshot-policy
-# ADR's status reads Accepted; never run in CI. No default: the seed set is not a publishing set.
-[doc("Publish a curated comparison page (locked until the screenshot-policy ADR is Accepted)")]
-publish-compare manifests:
+# Sync data/saves/ with another workstation over ssh, both ways: the newer copy of a file wins and
+# nothing is deleted. The other checkout sits at the same path under its own $HOME as this one
+# (OAG_REMOTE_REPO overrides it). Save states are memory dumps, so they travel only between your
+# own machines, never through a repository (ADR-0085). Pass -n for a dry run.
+[doc("Sync data/saves/ with another workstation over ssh, both ways, newer file wins")]
+sync-saves host *flags:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    remote="${OAG_REMOTE_REPO:-${PWD#"$HOME"/}}/data/saves/"
+    rsync -a --update --info=stats1 {{flags}} data/saves/ "{{host}}:$remote"
+    rsync -a --update --info=stats1 {{flags}} "{{host}}:$remote" data/saves/
+
+# Rebuild data/compare/ strictly from the curated manifest directory (default data/reference/curated,
+# never the seed set), then upload it to the separate compare Pages project with wrangler. Refuses
+# unless the screenshot-policy ADR's status reads Accepted; never run in CI.
+[doc("Publish the curated comparison page (data/reference/curated unless a directory is given)")]
+publish-compare *manifests:
     python3 scripts/compare-page.py {{manifests}} --publish
+
+# Pull the private comparison repo (data/reference), re-render our side of every pair at this tree,
+# commit and push that re-render there so every host shares it, then publish the curated page.
+# Refuses if data/reference has uncommitted changes, so another run's re-render is never mixed in.
+[doc("Pull data/reference, re-render ours, commit and push it there, then publish the curated page")]
+compare-publish:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ref=data/reference
+    if [ -n "$(git -C "$ref" status --porcelain)" ]; then
+        echo "compare-publish: $ref has uncommitted changes; commit or discard them first" >&2
+        git -C "$ref" status --short | head -20 >&2
+        exit 1
+    fi
+    git -C "$ref" pull --ff-only
+    python3 scripts/compare-rerender-ours.py
+    tree="$(git rev-parse --short HEAD)"
+    if [ -n "$(git -C "$ref" status --porcelain)" ]; then
+        git -C "$ref" add -A compare-page
+        git -C "$ref" commit -q -m "Comparison pairs: ours re-rendered at $tree"
+        git -C "$ref" push -q
+        echo "compare-publish: $ref committed and pushed ($(git -C "$ref" rev-parse --short HEAD))"
+    fi
+    python3 scripts/compare-page.py --publish
 
 # Build the Allegrex processor module against the installed Ghidra.
 # Stock Ghidra mis-decodes PSP vector code; see docs/psp/allegrex-vfpu.md.
@@ -1254,6 +1332,12 @@ type-sizes *CRATES:
 check-size:
     python3 scripts/check-file-size.py
 
+# A ratchet on history in code comments: a date, "maintainer" or a drive lane
+# name in a `.rs`/`.wgsl`/`.wesl` comment (CLAUDE.md, "Code comments"). A crate
+# may lose counted lines, never gain them; `--table` prints the counts
+check-comment-history:
+    python3 -I scripts/check-comment-history.py
+
 # A ratchet on title-identity comparisons (`title.name == oag_hd::TITLE.name`)
 # in generic crates: per-title behaviour is `Title` data, ADR-0058. A file may
 # drop, never rise, and a new file may have none
@@ -1283,6 +1367,34 @@ check-status:
 check-weapon-lineage:
     python3 -I scripts/check-weapon-lineage.py
 
+# `.config/nextest.toml`'s `gpu-vram` group lists exactly the test modules that
+# spawn the game or capture a frame through the default adapter, so a new one
+# cannot bring the NVIDIA out-of-memory failures back on a loaded run. Text
+# scan, no build, no GPU.
+check-test-groups:
+    python3 -I scripts/check-test-groups.py
+
+# Every mod guest crate under assets/mods passes its own tests, and each committed
+# `ext/*.wasm` is what its guest builds: the main workspace compiles neither, a guest being a
+# workspace of its own. Needs `rustup target add wasm32-unknown-unknown`. After an SDK, ABI or
+# toolchain change, regenerate every module with `just rebuild-guests` and commit
+# `assets/mods/*/*/ext/` in each submodule. Bare, a stale module is only reported; the gate and
+# CI run `--strict`, which fails a stale module and a missing wasm target.
+check-guests *ARGS:
+    python3 -I scripts/check-mod-guests.py "$@"
+
+# `git status` in `assets/mods/examples` and `assets/mods/official` shows which modules changed.
+# Rebuild every mod guest's committed module (the one command after an SDK or toolchain change)
+rebuild-guests:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    unset RUSTFLAGS CARGO_ENCODED_RUSTFLAGS
+    export CARGO_INCREMENTAL=0
+    for build in assets/mods/*/*/guest/build.sh; do
+        echo "== $build"
+        bash "$build"
+    done
+
 # Every shipped TOML validates against the TOML Schema it names (schemas/v1/), the
 # schema and its loader give the same verdict on each example, and the schemas
 # stage to the path the Pages site serves them at. docs/formats/toml-schema.md
@@ -1307,6 +1419,17 @@ blender-fixtures *ARGS:
 # Regenerate that table after a names.tsv or evidence-page change
 gen-status:
     python3 scripts/gen-re-coverage.py
+
+# A drive lead's merge: --no-ff with MESSAGE, then status.md regenerated and
+# committed if the merge changed it. MESSAGE carries the attribution trailer.
+merge-lane BRANCH MESSAGE:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    git merge --no-ff -m "$2" "$1"
+    python3 scripts/gen-re-coverage.py
+    if ! git diff --quiet -- docs/overview/status.md; then
+        git commit -m "status: regenerated" -m "$(git log -1 --format=%B | grep '^Co-Authored-By:' || true)" -- docs/overview/status.md
+    fi
 
 # docs/ghidra/captures/ is what a Ghidra database held that names.tsv does not:
 # labels, plate comments, and the structs and prototypes that turned out not to

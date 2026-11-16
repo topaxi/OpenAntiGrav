@@ -67,8 +67,9 @@
 
 use std::fmt;
 
-use miniz_oxide::inflate::TINFLStatus;
-use miniz_oxide::inflate::core::{DecompressorOxide, decompress, inflate_flags};
+use oag_bytes::be;
+
+use flate2::{Decompress, FlushDecompress, Status};
 
 mod md5;
 
@@ -244,19 +245,21 @@ impl Header {
         if magic != MAGIC {
             return Err(Error::BadMagic { found: magic });
         }
-        let entry_len = u32_at(data, 0x10);
+        let u16_at = |at| be::u16_at(data, at).expect("HEADER_LEN bytes checked above");
+        let u32_at = |at| be::u32_at(data, at).expect("HEADER_LEN bytes checked above");
+        let entry_len = u32_at(0x10);
         if entry_len as usize != ENTRY_LEN {
             return Err(Error::UnknownEntryLen { entry_len });
         }
         Ok(Self {
-            version_major: u16_at(data, 0x04),
-            version_minor: u16_at(data, 0x06),
+            version_major: u16_at(0x04),
+            version_minor: u16_at(0x06),
             compression: data[8..12].try_into().expect("four bytes"),
-            toc_len: u32_at(data, 0x0c),
+            toc_len: u32_at(0x0c),
             entry_len,
-            entry_count: u32_at(data, 0x14),
-            block_size: u32_at(data, 0x18),
-            flags: u32_at(data, 0x1c),
+            entry_count: u32_at(0x14),
+            block_size: u32_at(0x18),
+            flags: u32_at(0x1c),
         })
     }
 
@@ -325,7 +328,7 @@ impl Directory {
             let e = &toc[at..at + ENTRY_LEN];
             entries.push(Entry {
                 digest: e[0..16].try_into().expect("sixteen bytes"),
-                first_block: u32_at(e, 0x10),
+                first_block: be::u32_at(e, 0x10).expect("ENTRY_LEN bytes sliced above"),
                 size: u40_at(e, 0x14),
                 offset: u40_at(e, 0x19),
             });
@@ -484,7 +487,7 @@ impl Directory {
         let blocks = self.head_blocks(index, len)?;
 
         let mut out = Vec::with_capacity(size);
-        let mut inflater: Option<Box<DecompressorOxide>> = None;
+        let mut inflater: Option<Decompress> = None;
         let mut at = 0usize;
         for (n, stored_len) in blocks.into_iter().enumerate() {
             let block = entry.first_block + u32::try_from(n).unwrap_or(u32::MAX);
@@ -527,8 +530,7 @@ impl Directory {
                 let room = block_size.min(size.saturating_sub(start));
                 if !inflate_block_into(&mut inflater, chunk, &mut out, room) {
                     out.extend_from_slice(
-                        &miniz_oxide::inflate::decompress_to_vec_zlib(chunk)
-                            .unwrap_or_else(|_| chunk.to_vec()),
+                        &crate::wad::decompress_zlib(chunk).unwrap_or_else(|_| chunk.to_vec()),
                     );
                 }
             } else {
@@ -554,34 +556,33 @@ impl Directory {
 /// Inflates one zlib-wrapped block straight onto the end of `out`, with one
 /// decompressor reused across an entry's blocks, and says whether it did.
 ///
-/// The same inflate and flags as `miniz_oxide::inflate::decompress_to_vec_zlib`,
-/// minus what that call costs per block: a fresh decompressor (about 11 KiB to
-/// set up) and an output buffer started at twice the input and doubled until the
-/// block fits, then copied once more onto `out`. Only a stream that finishes
-/// within `room` bytes (a block, or what the entry has left) is taken; anything
-/// else (an error, or more output than `room` holds) leaves `out` as it was and
-/// returns `false`, and the caller runs `decompress_to_vec_zlib` itself, so
-/// every outcome is the one it always produced.
+/// The same stream as [`crate::wad::decompress_zlib`] (header and Adler-32 both
+/// checked), minus what that call costs per block: a fresh decompressor and an
+/// output buffer grown by doubling and copied once more onto `out`. Only a
+/// stream that finishes within `room` bytes (a block, or what the entry has
+/// left) is taken; anything else (an error, or more output than `room` holds)
+/// leaves `out` as it was and returns `false`, and the caller runs
+/// `decompress_zlib` itself, so every outcome is the one it always produced.
 fn inflate_block_into(
-    inflater: &mut Option<Box<DecompressorOxide>>,
+    inflater: &mut Option<Decompress>,
     chunk: &[u8],
     out: &mut Vec<u8>,
     room: usize,
 ) -> bool {
-    let inflater = inflater.get_or_insert_with(Box::default);
-    inflater.init();
+    let inflater = inflater.get_or_insert_with(|| Decompress::new(true));
+    inflater.reset(true);
     let start = out.len();
     out.resize(start + room, 0);
-    let flags = inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER
-        | inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
-    let (status, _, written) = decompress(inflater, chunk, &mut out[start..], 0, flags);
-    if status == TINFLStatus::Done {
-        out.truncate(start + written);
-        true
+    let done = matches!(
+        inflater.decompress(chunk, &mut out[start..], FlushDecompress::Finish),
+        Ok(Status::StreamEnd)
+    );
+    if done {
+        out.truncate(start + usize::try_from(inflater.total_out()).unwrap_or(room));
     } else {
         out.truncate(start);
-        false
     }
+    done
 }
 
 /// Splits the manifest's text into paths.
@@ -637,6 +638,11 @@ pub struct PathEntry {
 /// for any block table (see [`read_block_table`]) still yields a [`PathEntry`];
 /// [`Directory::entry_range`] reports it unreadable.
 #[must_use]
+#[expect(
+    clippy::disallowed_types,
+    reason = "lookup only: the map is never iterated, the result follows `entries` order, and \
+              `or_insert` keeps the first manifest path for a repeated digest"
+)]
 pub fn match_paths_to_entries(entries: &[Entry], manifest_paths: &[String]) -> Vec<PathEntry> {
     let mut path_by_digest: std::collections::HashMap<[u8; 16], &str> =
         std::collections::HashMap::with_capacity(manifest_paths.len());
@@ -713,14 +719,6 @@ fn read_block_table(rest: &[u8], entries: &[Entry]) -> Result<(Vec<u32>, usize)>
         table_len: rest.len(),
         highest_block: highest,
     })
-}
-
-fn u16_at(data: &[u8], at: usize) -> u16 {
-    u16::from_be_bytes([data[at], data[at + 1]])
-}
-
-fn u32_at(data: &[u8], at: usize) -> u32 {
-    u32::from_be_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
 }
 
 /// A 40-bit big-endian field, of which the format has two.

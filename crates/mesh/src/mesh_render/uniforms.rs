@@ -524,7 +524,7 @@ pub use light::Light;
 /// past `1.0` (`Track.Texture Colour` reaches `9.0`), which is a
 /// multiplier's range. Getting
 /// that wrong is invisible whenever `zoneEffect` is exactly `1.0`, which is
-/// why `crates/render/tests/zone_recolour.rs` binds `2.0`.
+/// why `crates/mesh/tests/zone_recolour.rs` binds `2.0`.
 ///
 /// # The stage-transition wavefront
 ///
@@ -575,23 +575,21 @@ pub use light::Light;
 /// whole drawable - so the boundary is a step in the texture now, not only
 /// in the two colour sets over one texture.
 ///
-/// **Two terms of the recovered rule are deliberately absent**, because
-/// nothing on the disc feeds them and this project does not invent:
+/// **The arena shape is drawn on the four Zone arenas** ([`Self::shape`]):
+/// `albedo + (zoneTex * zoneEffect + 2 * zoneAnisoPalette[pow(rim,
+/// zoneAnisoPower)]) * (1 - blackMask)`, its ramps ([`Self::aniso`]) built per
+/// stage by `Environment_BuildAnisoPalette`'s law
+/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md`).
 ///
-/// 1. The whole `zoneAniso` shape - `2 * zoneAnisoPalette[pow(rim,
-///    zoneAnisoPower)]` and the `blackMask` gate that comes with it. Its
-///    palette textures (`0x00c81330`-`0x00c81350`) have no located filling
-///    write, and it applies to the four Zone arenas rather than to a circuit,
-///    so it is absent by scope as much as for want of a source.
-/// 2. The visualiser glow's own table, `zoneTexVis[band]`: the 256-entry
+/// **One term of the recovered rule is deliberately absent**, because nothing
+/// on the disc feeds it and this project does not invent:
+///
+/// 1. The visualiser glow's own table, `zoneTexVis[band]`: the 256-entry
 ///    lookup is rewritten every frame from a value whose source is unread,
 ///    so `shaders/zone.wesl`'s `zone_glow` samples a lookup this project fills from
-///    its own mixer instead. Its additive sibling, `5.0 * saturate(1 - 0.1 *
-///    (distance - zoneColourTint.w))`, now has both its inputs and is still
-///    left out: as read it adds `5.0` to *every* fragment inside the sphere,
-///    not just at its edge, and the live frame at radius `799` shows no such
-///    flood - so the reading of that term is what is in doubt, and it stays
-///    out until it is re-read. See `shaders/zone.wesl`'s `zone_glow`.
+///    its own mixer instead. Its additive sibling, the wavefront's white ring
+///    `5.0 * saturate(1 - 0.1 * |distance - zoneColourTint.w|)`, is drawn
+///    from [`Self::origin`] and [`Self::radius`]; see `zone_glow`.
 // **`align(16)` is load-bearing, not decoration.** WGSL gives this struct an
 // alignment of 16 because it holds a `vec4<f32>`, so `Scene`'s `zone` field
 // starts at a 16-aligned offset there. Rust's own alignment for it is 4, and
@@ -635,6 +633,33 @@ pub struct Zone {
     /// The `Scene.*` colours of the stage being swept out - `zone*Outer`,
     /// read by every other chunk's fragment outside the sphere.
     pub scene_outer: ZoneSet,
+    /// `zoneAnisoPower` for the four ramps in [`Self::aniso`]'s order: Scene
+    /// inner, Scene outer, Track inner, Track outer. The original publishes a
+    /// Scene pair (`0x00c81460`) and a Track pair (`0x00c814e0`), `.x` the
+    /// new stage's `Aniso Power`, `.y` the one before.
+    pub aniso_power: [f32; 4],
+    /// `.x` is `1.0` on a Zone arena, whose materials compile the aniso shape
+    /// (`surface = albedo + zoneCol * (1 - blackMask)`, `zoneCol = zoneTex *
+    /// zoneEffect + 2 * zoneAnisoPalette[pow(rim, zoneAnisoPower)]`), and
+    /// `0.0` on a racing circuit, whose materials compile the rim shape that
+    /// replaces the albedo. All 25 materials of `zone_1`..`zone_4` carry
+    /// `zoneAnisoPalette` and none `zoneBaseInner`
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md`, "The
+    /// port"). `.yzw` unused.
+    pub shape: [f32; 4],
+    /// The four `zoneAnisoPalette` ramps, Scene inner, Scene outer, Track
+    /// inner, Track outer: the 17 texels `Environment_BuildAnisoPalette`
+    /// writes, carried here rather than in a texture and interpolated in the
+    /// shader the way a linear, clamped lookup into a 17-texel strip reads.
+    pub aniso: [ZoneRamp; 4],
+}
+
+/// One 17-texel `zoneAnisoPalette` ramp, `.w` unused. See [`Zone::aniso`].
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ZoneRamp {
+    /// Texel 0 is the head-on colour (`rim = 0`), texel 16 the silhouette's.
+    pub texels: [[f32; 4]; 17],
 }
 
 /// One of the two colour groups a Zone stage authors, in the order the
@@ -818,6 +843,10 @@ pub struct ShadowMaps<'a> {
     /// `Rgba8UnormSrgb`), a `D2` view: Wipeout HD's `paraboloidReflectionTex`, which its glass and
     /// water programs read by a reflection vector. Not a shadow either.
     pub sky_probe: Option<&'a wgpu::TextureView>,
+    /// The per-craft spherical-harmonic ambient table (`SH_PROBE_BYTES`), a uniform buffer read by
+    /// a hull whose uniform names a layer and whose row is flagged: Omega's `shCoeffs`. Not a
+    /// shadow either.
+    pub sh_probes: Option<&'a wgpu::Buffer>,
 }
 
 impl ShadowMaps<'_> {
@@ -830,6 +859,7 @@ impl ShadowMaps<'_> {
         behind_glass: None,
         env_probes: None,
         sky_probe: None,
+        sh_probes: None,
     };
 }
 
@@ -980,8 +1010,8 @@ impl Scene {
 }
 
 const _: () = assert!(
-    std::mem::size_of::<Zone>() == 224,
-    "shaders/types.wesl's Zone is two vec4s and four three-vec4 sets"
+    std::mem::size_of::<Zone>() == 224 + 32 + 4 * 17 * 16,
+    "shaders/types.wesl's Zone is two vec4s, four three-vec4 sets, two vec4s and four 17-vec4 ramps"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, zone).is_multiple_of(16),

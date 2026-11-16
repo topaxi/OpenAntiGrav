@@ -21,6 +21,7 @@ fn open() -> Option<(oag_assets::Archives, &'static oag_title::Title)> {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let (_, archives, title) = oag_game::boot::load_shell(&options).expect("HD boots");
     Some((archives, title))

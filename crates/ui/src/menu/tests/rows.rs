@@ -280,6 +280,7 @@ fn the_campaign_row_is_worded_by_the_title_and_keeps_its_place() {
                 Entry::Run {
                     action: Action::OpenCampaign,
                     label,
+                    ..
                 } => Some((index, label.clone())),
                 _ => None,
             })
@@ -310,15 +311,15 @@ fn an_unusable_option_is_listed_dimmed_with_its_reason_and_can_be_left() {
         [[page.entry]]
         kind = "choice"
         label = "TRACK"
-        setting = "remix.track"
-        values_from = "remix_tracks"
+        setting = "race.track"
+        values_from = "tracks"
         "#,
         &crate::language::StringTable::default(),
     )
     .expect("parses");
     let mut menu = Menu::new(definition);
     menu.supply(
-        ValueSource::RemixTracks,
+        ValueSource::Tracks,
         &[
             Choice::labelled("good", "GOOD"),
             Choice::labelled("bad", "BAD").unusable("no lap loop"),
@@ -382,7 +383,7 @@ fn the_campaign_picker_appears_only_with_a_mod_campaign() {
     let strings = crate::language::StringTable::default();
     let built_in = Definition::built_in(&strings).unwrap();
     let mut untouched = built_in.clone();
-    untouched.add_campaign_picker("CAMPAIGNS", &[]);
+    untouched.add_campaign_picker("CAMPAIGNS", &[], None);
     assert_eq!(untouched, built_in);
 
     let mut picked = built_in;
@@ -393,16 +394,17 @@ fn the_campaign_picker_appears_only_with_a_mod_campaign() {
             "NIGHT RUN".to_string(),
             "Five events".to_string(),
         )],
+        None,
     );
     let page = picked.page(crate::menu::CAMPAIGN_PICKER_PAGE).unwrap();
     assert_eq!(page.title, "CAMPAIGNS");
     assert!(matches!(
         &page.entries[0],
-        Entry::Run { label, action: Action::OpenCampaign } if label == "RACE CAMPAIGN"
+        Entry::Run { label, action: Action::OpenCampaign, .. } if label == "RACE CAMPAIGN"
     ));
     assert!(matches!(
         &page.entries[1],
-        Entry::Run { label, action: Action::OpenCustomCampaign } if label == "NIGHT RUN"
+        Entry::Run { label, action: Action::OpenCustomCampaign, .. } if label == "NIGHT RUN"
     ));
     assert_eq!(
         page.meta[1].id.as_deref(),
@@ -414,6 +416,41 @@ fn the_campaign_picker_appears_only_with_a_mod_campaign() {
     assert!(matches!(&main.entries[row], Entry::Submenu { label, .. } if label == "RACE CAMPAIGN"));
     let menu = Menu::new(picked);
     assert!(!menu.definition().pages.is_empty());
+}
+
+/// An editor row makes the picker exist with no mod campaign, as its last row.
+#[test]
+fn the_editor_row_makes_the_picker_exist_and_comes_last() {
+    let strings = crate::language::StringTable::default();
+    let built_in = Definition::built_in(&strings).unwrap();
+    let mut picked = built_in.clone();
+    picked.add_campaign_picker("CAMPAIGNS", &[], Some(("NEW CAMPAIGN", "Make your own")));
+    let page = picked.page(crate::menu::CAMPAIGN_PICKER_PAGE).unwrap();
+    assert_eq!(page.entries.len(), 2);
+    assert!(matches!(
+        &page.entries[1],
+        Entry::Run { label, action: Action::OpenCampaignEditor, .. } if label == "NEW CAMPAIGN"
+    ));
+    assert_eq!(
+        page.meta[1].id.as_deref(),
+        Some(crate::menu::CAMPAIGN_EDITOR_ROW)
+    );
+
+    let mut both = built_in;
+    both.add_campaign_picker(
+        "CAMPAIGNS",
+        &[("m/c".to_string(), "MINE".to_string(), String::new())],
+        Some(("NEW CAMPAIGN", "")),
+    );
+    let page = both.page(crate::menu::CAMPAIGN_PICKER_PAGE).unwrap();
+    assert_eq!(page.entries.len(), 3);
+    assert!(matches!(
+        &page.entries[2],
+        Entry::Run {
+            action: Action::OpenCampaignEditor,
+            ..
+        }
+    ));
 }
 
 /// What a blooming title's vertical `<Menu>` stamps into the glow mask (Pulse PSP's `Main Menu`,

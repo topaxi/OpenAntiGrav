@@ -31,7 +31,9 @@ fn with_props() -> Track {
         min: [-20.0, -2.0, -5.0],
         max: [20.0, 12.0, 5.0],
         props: props(&[("dark", 0.1), ("gate", 2.0)]),
+        emits: Some("test.gate/passed".into()),
     }];
+    track.channels = vec!["test.gate/passed".into()];
     track
 }
 
@@ -119,5 +121,43 @@ fn what_a_mod_could_not_read_is_refused_naming_it() {
     assert!(
         matches!(&err, Error::Props { why, .. } if why.contains("65 triggers")),
         "{err}"
+    );
+}
+
+#[test]
+fn a_trigger_names_the_channel_it_sends_and_the_track_publishes_it() {
+    let track = with_props();
+    let parts = to_parts(&track, "t.glb").expect("writable");
+    assert!(
+        parts.manifest.contains("[channels]") && parts.manifest.contains("test.gate/passed"),
+        "{}",
+        parts.manifest
+    );
+    let loaded = from_parts(&parts.manifest, &parts.glb).expect("reads");
+    assert_eq!(
+        loaded.track.triggers[0].emits.as_deref(),
+        Some("test.gate/passed")
+    );
+    assert_eq!(loaded.track.channels, ["test.gate/passed"]);
+    oag_schema::validate::accepts("track", 1, &parts.manifest)
+        .expect("the schema takes [channels]");
+}
+
+#[test]
+fn an_emit_the_track_does_not_publish_or_a_malformed_channel_is_refused_by_name() {
+    let mut track = with_props();
+    track.channels.clear();
+    let error = to_parts(&track, "t.glb").unwrap_err().to_string();
+    assert!(
+        error.contains("test.gate/passed") && error.contains("publishes"),
+        "{error}"
+    );
+    let mut track = with_props();
+    track.triggers[0].emits = Some("passed".into());
+    track.channels = vec!["passed".into()];
+    let error = to_parts(&track, "t.glb").unwrap_err().to_string();
+    assert!(
+        error.contains("\"passed\"") && error.contains("<mod id>/<name>"),
+        "{error}"
     );
 }

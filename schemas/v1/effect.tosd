@@ -97,6 +97,11 @@ type = "any"
 type = "any"
 optional = true
 
+# A name in the mod's `[shaders]`: that shader draws each particle, in place of `texture` and `blend`.
+[types.emitter.shader]
+type = "string"
+optional = true
+
 [elements]
 
 [elements.toml-schema]

@@ -19,6 +19,7 @@ pub(crate) const fn hd_mode_id(mode: oag_race::Mode) -> u32 {
         oag_race::Mode::SpeedLap => mode::SPEED_LAP,
         oag_race::Mode::Zone => mode::ZONE,
         oag_race::Mode::Eliminator => mode::ELIMINATION,
+        oag_race::Mode::Detonator => mode::DETONATOR,
     }
 }
 

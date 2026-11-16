@@ -4,7 +4,7 @@
 //! the sprite sheet, the font atlases and the string table - none of which a
 //! headless test of either needs.
 
-use super::Layout;
+use super::{Label, Layout};
 
 /// Everything the HUD needs off the disc.
 ///
@@ -29,7 +29,7 @@ pub struct Assets {
     ///
     /// Keyed by the *reference* so [`super::sprite_draw`] can look a sprite's
     /// own `src` up directly. Which entry a reference resolves to is the
-    /// loader's business and `oag_title::HudArt::texture_extension`'s rule.
+    /// loader's business: `oag_assets::Archives::read_texture`.
     pub sheet: crate::sprite::Sheet,
     /// The `HUD` font, or the built-in 5x7 set when the disc's is unreadable.
     pub font: oag_ui::font::Atlas,
@@ -80,6 +80,16 @@ pub struct Assets {
     /// ([`oag_title::HudLayouts::split_layout`]). `None` for one view and for a
     /// file that is absent or refused, which is reported at load.
     pub split_hud: Option<crate::split_hud::SplitHudAssets>,
+    /// The mods' `.svg` icons of this race, rasterised into [`Self::sheet`] by
+    /// [`Self::rasterise_vector_icons`].
+    pub vector_icons: Vec<crate::svg::VectorIcon>,
+    /// [`Self::sheet`] before any of [`Self::vector_icons`] was put in it, `None` until the first rasterisation; kept so a
+    /// change of size rasterises again over the same base rather than stacking.
+    pub vector_base: Option<crate::sprite::Sheet>,
+    /// `PlrTag0` of the title's player-tag layout ([`oag_title::HudLayouts::player_tags`]),
+    /// read only for a race of two or more people. `None` for everything else, and for a
+    /// layout that is absent or refused, which is reported at load.
+    pub tag_label: Option<Label>,
 }
 
 /// A title's own split-screen HUD for two players: one layout per player.
@@ -108,6 +118,27 @@ impl SplitAssets {
 }
 
 impl Assets {
+    /// Rasterises [`Self::vector_icons`] for a screen showing `pixels_per_unit` pixels of
+    /// every layout unit, into [`Self::sheet`]. Run again for another size, it starts over
+    /// from the sheet as it was. Nothing happens when there is no vector icon.
+    pub fn rasterise_vector_icons(&mut self, pixels_per_unit: f32, report: &mut Vec<String>) {
+        let Some(layout) = self.layout.as_ref() else {
+            return;
+        };
+        if self.vector_icons.is_empty() {
+            return;
+        }
+        let base = self.vector_base.get_or_insert_with(|| self.sheet.clone());
+        self.sheet = crate::svg::place(
+            base,
+            layout,
+            self.art,
+            &self.vector_icons,
+            pixels_per_unit,
+            report,
+        );
+    }
+
     /// The authored pair a two-view window of this cut draws: the left-and-right family for
     /// a vertical one, the top-and-bottom family otherwise. A title that ships no
     /// left-and-right family (Pulse has no authored split at all, Pure borrows Pulse's) draws
@@ -144,6 +175,7 @@ impl Assets {
         let layout = self.layout.as_ref()?;
         Some(super::Context {
             default_border: layout.default_border(),
+            tag_label: self.tag_label.as_ref(),
             layout,
             strings: &self.strings,
             sheet: &self.sheet,

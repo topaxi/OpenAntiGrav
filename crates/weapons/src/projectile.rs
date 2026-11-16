@@ -25,9 +25,10 @@
 //! straight, a volley died in the tick it was fired.
 //!
 //! **Wall versus floor is the surface class of the hit, never its angle.** The
-//! original's query returns `0` wall, `1` floor, `3` mag floor, `4` a craft,
-//! `0x7f` nothing; this raycaster returns the same tag in
-//! `RaycastHit::surface`. See `docs/gameplay/projectile-floor.md`.
+//! original's query returns `0` wall, `1` floor, `3` mag floor, `4` outside
+//! the collision cage, `0x7f` nothing; this raycaster returns the first three in
+//! `RaycastHit::surface`, and `4` comes from the track's
+//! [`oag_physics::cage::Containment`]. See `docs/gameplay/projectile-floor.md`.
 //!
 //! **Ours.**
 //!
@@ -65,15 +66,15 @@ pub mod repulser;
 mod rocket;
 pub mod shuriken;
 
-pub use geometry::hull_radius;
+pub use geometry::{OwnCraftProbe, hull_radius, own_box_blocks};
 use geometry::{SweepHit, nearest_hit};
 pub use hit::WeaponHit;
 
-pub use blast::{BlastStats, blast, blast_stats};
+pub use blast::{BlastPush, BlastStats, blast, blast_stats};
 pub use mine::TriggerRadii;
 pub use rocket::{
     LAUNCH_SPEED_SCALE as ROCKET_LAUNCH_SPEED_SCALE, LIFETIME_SECONDS as ROCKET_LIFETIME_SECONDS,
-    ROCKET_SHOTS, fire as fire_rocket, launch,
+    ROCKET_SHOTS, Volley, fire as fire_rocket, launch,
 };
 
 use crate::Craft;
@@ -254,6 +255,23 @@ pub struct Impact {
     /// other weapons and for a wall hit. Read by `blast::apply_impacts`, which
     /// routes it through [`crate::disruption::land`].
     pub effect: Option<oag_tables::weapons::DisruptorEffectKind>,
+}
+
+impl Projectile {
+    /// Seconds since this one was fired or laid, where the shot itself says: what a laid
+    /// Mine or Bomb has sat ([`Self::age`]), and for a shot that starts with
+    /// [`MAX_FLIGHT_SECONDS`] what it has used of them. `None` for the Shuriken, which starts
+    /// with its table's fuse and does not carry it, and for a Plasma still charging, whose
+    /// clock has not started.
+    #[must_use]
+    pub fn seconds_since_fired(&self) -> Option<f32> {
+        match self.kind? {
+            Weapon::Mine | Weapon::Bomb => Some(self.age),
+            Weapon::Shuriken => None,
+            _ if self.charge > 0.0 => None,
+            _ => Some(MAX_FLIGHT_SECONDS - self.lifetime),
+        }
+    }
 }
 
 /// Everything in the air, in one fixed-size array.
@@ -517,6 +535,48 @@ impl Projectiles {
     }
 }
 
+/// How a projectile's floor arms write its velocity: the probe's, when the surface under it is a
+/// floor, and the travel sweep's, when its segment crosses one.
+///
+/// Pulse's laws are the decompile's (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`,
+/// "The probe-hit arm" and "By-catch in the flight arms"; `shuriken.md`; `missile.md`;
+/// `plasma.md`). `Weapons::floor_arms_steer_to_ride_point` picks per title.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FloorArms {
+    /// Pulse's. The Missile's probe arm steers to the ride point as the Rocket's and the
+    /// Plasma's do; the Shuriken's probe arm and the Rocket's and Shuriken's sweep arm write
+    /// `(ride point - start) / dt` raw, with no rescale; the Plasma's sweep arm only moves.
+    SteerToRidePoint,
+    /// Every arm not already a steer turns the velocity parallel to the floor and keeps its
+    /// length, and the sweep adopts the normal. A title's own arms are unread (chosen).
+    ParallelToFloor,
+}
+
+/// How fast a Plasma bolt leaves the craft's weapon node, until its first floor ride.
+///
+/// `Weapons::plasma_release_at_display_scale` picks per title.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlasmaRelease {
+    /// Pulse's: `Plasma_Launch` takes the weapon-node matrix with the craft's display scale
+    /// in it, so the bolt leaves at [`plasma::LAUNCH_SPEED_SCALE`] x its release speed.
+    DisplayScaled,
+    /// HD's: the node matrix is orthonormalised before `Plasma_Launch` reads it, so the bolt
+    /// leaves at its release speed, on its ramp from the first tick
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "Measured live").
+    Unscaled,
+}
+
+impl PlasmaRelease {
+    /// What the release speed is multiplied by.
+    #[must_use]
+    pub fn scale(self) -> f32 {
+        match self {
+            Self::DisplayScaled => plasma::LAUNCH_SPEED_SCALE,
+            Self::Unscaled => 1.0,
+        }
+    }
+}
+
 /// Flies the world's projectiles and detonates whatever stopped, in one call.
 ///
 /// Returns the impacts so a caller can put a spark where each landed. `hits` is
@@ -531,15 +591,20 @@ impl Projectiles {
 /// impacts see the pre-blast poses and array index is not part of the physics.
 #[allow(
     clippy::too_many_arguments,
-    reason = "the seven facts of a tick it always took, now with the pool and the occupied craft passed in place of the `World` that held both"
+    reason = "the facts of a tick and the title's flight laws, with the pool and the occupied craft passed in place of the `World` that held both"
 )]
 pub fn step<R: Raycaster + ?Sized, S: Craft>(
     projectiles: &mut Projectiles,
     ships: &mut [S],
     dt: f32,
     raycaster: &R,
+    cage: Option<&dyn oag_physics::cage::Containment>,
     weapons: Option<&oag_tables::weapons::WeaponStats>,
     class: &str,
+    floor_arms: FloorArms,
+    own_craft: OwnCraftProbe,
+    plasma_release: PlasmaRelease,
+    push: BlastPush,
     rules: oag_physics::DamageRules,
     hits: &mut [WeaponHit],
 ) -> [Option<Impact>; MAX_PROJECTILES] {
@@ -549,15 +614,19 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
     let impacts = projectiles.advance(
         dt,
         raycaster,
+        cage,
         ships,
         missile_stats.as_ref(),
         plasma_stats.as_ref(),
         disruptor_stats.as_ref(),
         TriggerRadii::from_table(weapons),
         class,
+        floor_arms,
+        own_craft,
+        plasma_release,
     );
 
-    blast::apply_impacts(ships, weapons, &impacts, rules, hits);
+    blast::apply_impacts(ships, weapons, &impacts, push, rules, hits);
 
     impacts
 }

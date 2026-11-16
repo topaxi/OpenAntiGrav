@@ -32,7 +32,7 @@ impl Chain {
 
     pub(super) fn zoom_history(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         viewport: (u32, u32),
     ) {
@@ -52,7 +52,7 @@ impl Chain {
 
     pub(super) fn zoom_ring(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         viewport: (u32, u32),
     ) {

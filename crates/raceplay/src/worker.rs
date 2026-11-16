@@ -3,15 +3,15 @@
 //!
 //! # Why this exists at all
 //!
-//! `Session::launch_race` used to be `self.stalled = true; race::load(options)?`
-//! on the frame thread. Measured across every circuit on all four discs in hand,
+//! Loading on the frame thread (`self.stalled = true; race::load(options)?`) is
+//! too slow. Measured across every circuit on all four discs in hand,
 //! that call is **1.5 to 5 seconds** - the PS3's circuits are the slow end - and
 //! for all of it the event loop is not pumping. A window that stops answering
 //! the compositor for four seconds is not a window that looks busy; on some it
 //! is greyed out and offered for killing.
 //!
 //! So the load moves to a thread and the loading screen goes up over it, which
-//! is the same shape `crate::boot::MediaWorker` already has for the boot's own
+//! is the same shape `crate::boot::worker::MediaWorker` already has for the boot's own
 //! movies - deliberately, because the two waits are the same problem and a
 //! second mechanism for it would be a second thing to keep in step with the
 //! frame loop.
@@ -40,13 +40,14 @@ use super::{Loaded, Options, TextureSink};
 
 /// A circuit being read, on a thread.
 ///
-/// Holds no GPU and hands back none: [`super::load`] produces plain data -
-/// vertex and index buffers, handling blocks, a spline - and the device only
-/// enters at `Stage::race`, which runs on the frame thread with the result.
-/// The one exception is an optional [`TextureSink`], which only *receives*
-/// decoded textures.
-/// That is what makes the split cheap rather than a rewrite; see
-/// [`super::Setup`]'s own "no GPU anywhere in sight".
+/// Without a [`TextureSink`] it holds no GPU and hands back none:
+/// [`super::load`] produces plain data - vertex and index buffers, handling
+/// blocks, a spline - and the device only enters at `Stage::race`, which runs
+/// on the frame thread with the result. That is what makes the split cheap
+/// rather than a rewrite; see [`super::Setup`]'s own "no GPU anywhere in sight".
+///
+/// With one, the thread is inside the driver for every texture and its result
+/// holds their views, so it is a GPU worker (`oag_thread::gpu_workers`).
 #[derive(Debug)]
 pub struct LoadWorker {
     /// The load, on a thread natively and on a Web Worker in the browser,
@@ -75,19 +76,31 @@ impl LoadWorker {
     /// `sink` is the device the scene will be built from, where the caller has
     /// one: every texture is then uploaded as it is decoded instead of being
     /// held for the scene - see [`super::TextureSink`].
-    pub fn spawn(options: Options, label: Option<String>, sink: Option<TextureSink>) -> Self {
+    ///
+    /// `plan_ahead` starts the race on this thread once the circuit is read and
+    /// begins learning its speed plans there ([`crate::Race::begin_speed_plans_ahead`]),
+    /// for a launch that will seat no one else and take no network host's race:
+    /// the menus' own. The scene build then takes the started race
+    /// ([`Loaded::started`]).
+    pub fn spawn(
+        options: Options,
+        label: Option<String>,
+        sink: Option<TextureSink>,
+        plan_ahead: bool,
+    ) -> Self {
         // No sink on the web: the load runs on a worker there, and wgpu's web
         // types stay on the page's thread (docs/tools/web.md, "Threads").
         #[cfg(target_arch = "wasm32")]
         return {
             drop(sink);
-            Self::spawn_with(label, move || super::load(&options))
+            Self::spawn_with(label, plan_ahead, move || super::load(&options))
         };
         #[cfg(not(target_arch = "wasm32"))]
-        Self::spawn_with(label, move || {
-            let _scope = TextureSink::open_if(sink.as_ref());
-            super::load(&options)
-        })
+        Self::spawn_with(
+            label,
+            plan_ahead,
+            sinking(sink, move || super::load(&options)),
+        )
     }
 
     /// [`Self::spawn`] for a Wipeout 2048 campaign event, resolved on the
@@ -99,21 +112,26 @@ impl LoadWorker {
         event: String,
         label: Option<String>,
         sink: Option<TextureSink>,
+        plan_ahead: bool,
     ) -> Self {
         #[cfg(target_arch = "wasm32")]
         return {
             drop(sink);
-            Self::spawn_with(label, move || super::load_event(&options, &event))
+            Self::spawn_with(label, plan_ahead, move || {
+                super::load_event(&options, &event)
+            })
         };
         #[cfg(not(target_arch = "wasm32"))]
-        Self::spawn_with(label, move || {
-            let _scope = TextureSink::open_if(sink.as_ref());
-            super::load_event(&options, &event)
-        })
+        Self::spawn_with(
+            label,
+            plan_ahead,
+            sinking(sink, move || super::load_event(&options, &event)),
+        )
     }
 
     fn spawn_with(
         label: Option<String>,
+        plan_ahead: bool,
         load: impl FnOnce() -> anyhow::Result<Loaded> + Send + 'static,
     ) -> Self {
         let current = Arc::new(Mutex::new(label));
@@ -134,6 +152,26 @@ impl LoadWorker {
                     loaded.started = Some(Box::new(crate::Race::start(loaded.setup.clone())));
                     loaded
                 });
+                // Natively, so the speed plans learn beside the scene build
+                // rather than after it; see `Self::spawn`.
+                #[cfg(not(target_arch = "wasm32"))]
+                let loaded = loaded.map(|mut loaded| {
+                    // Only where there is a fork: elsewhere this would only
+                    // add a copy of the setup to the load and change nothing.
+                    let forked = loaded
+                        .setup
+                        .course
+                        .as_ref()
+                        .is_some_and(|course| !course.routes().is_empty());
+                    if plan_ahead && forked {
+                        let mut race = crate::Race::start(loaded.setup.clone());
+                        race.begin_speed_plans_ahead();
+                        loaded.started = Some(Box::new(race));
+                    }
+                    loaded
+                });
+                #[cfg(target_arch = "wasm32")]
+                let _ = plan_ahead;
                 loaded
             }
         });
@@ -158,14 +196,14 @@ impl LoadWorker {
     ///
     /// **Never actually waits in the frame loop**, which only calls this once
     /// [`Self::is_finished`] is true - the same contract
-    /// `crate::boot::MediaWorker::join` has. `None` on the second call, and
+    /// `crate::boot::worker::MediaWorker::join` has. `None` on the second call, and
     /// on a worker whose thread would not spawn.
     pub fn join(&mut self) -> Option<anyhow::Result<Loaded>> {
         let joined = self.task.join()?;
         // wasm32 caps the shared memory at 4 GiB and it never shrinks, so its
         // high-water mark is the number a load has to stay under.
         #[cfg(target_arch = "wasm32")]
-        log::info!(
+        log::debug!(
             "web: module memory {} MiB after the race load",
             core::arch::wasm32::memory_size::<0>() / 16
         );
@@ -202,6 +240,36 @@ impl LoadWorker {
             finished: self.is_finished(),
             stage: self.stages.reached(),
         }
+    }
+}
+
+/// `load` with `sink` open around it, and registered as a GPU worker for as
+/// long as the thread lives (`oag_thread::gpu_workers`): the process must not
+/// exit while the sink is inside the driver, or while a result holding its
+/// views is still to drop here.
+#[cfg(not(target_arch = "wasm32"))]
+fn sinking(
+    sink: Option<TextureSink>,
+    load: impl FnOnce() -> anyhow::Result<Loaded> + Send + 'static,
+) -> impl FnOnce() -> anyhow::Result<Loaded> + Send + 'static {
+    let guard = sink
+        .as_ref()
+        .map(|_| oag_thread::gpu_workers::Guard::enter("race-load"));
+    move || {
+        if let Some(guard) = guard {
+            guard.hold_to_thread_end();
+        }
+        // Debug builds only: the exit-during-a-load test holds the load up so the process is
+        // leaving while it runs, however fast the machine (`drive_ground_truth`).
+        #[cfg(debug_assertions)]
+        if let Some(ms) = std::env::var("OAG_TEST_RACE_LOAD_DELAY_MS")
+            .ok()
+            .and_then(|ms| ms.parse().ok())
+        {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
+        let _scope = TextureSink::open_if(sink.as_ref());
+        load()
     }
 }
 

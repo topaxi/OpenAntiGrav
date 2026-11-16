@@ -1,6 +1,6 @@
 [package]
 name = "oag-gpu"
-description = "GPU vocabulary the renderer's crates share: the off-by-default perf probe, GPU timestamp timing and the offscreen target formats"
+description = "GPU vocabulary the renderer's crates share: the off-by-default perf probe, GPU timestamp timing, the offscreen target formats and run-time shader files"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,6 +10,9 @@ rust-version.workspace = true
 [dependencies]
 wgpu.workspace = true
 pollster.workspace = true
+# `shader_file::validate`: see that module for why not `wgpu::naga`. The same version and
+# feature `oag-shader-check` pins.
+naga = { version = "30.0.1", default-features = false, features = ["wgsl-in"] }
 bytemuck = { workspace = true, features = ["derive"] }
 
 [features]

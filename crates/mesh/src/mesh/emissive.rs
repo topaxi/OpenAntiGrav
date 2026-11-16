@@ -88,6 +88,62 @@ pub const PROGRAM_TWIN_BLEND: f32 = 6.0;
 /// `super::rcs::static_hologram`.
 pub const PROGRAM_STATIC_HOLOGRAM: f32 = 7.0;
 
+/// [`Emissive::program`]'s mode for 2048's `diffuse_normal_specular_emmissive_alpha`: the
+/// third binding's rgb, squared, times the entry's tint (`Constant1`), added after the light
+/// and before the fog. See `super::rcs::psp2`'s `emissive_add`.
+pub const PROGRAM_EMISSIVE_ADD: f32 = 8.0;
+
+/// [`Emissive::program`]'s mode for HD's `uvdistortion_*plusoverlay*` banner: the entry and the
+/// one after it carry the program's values, and the overlay of the Ossego logo (third binding)
+/// on the distorted clouds (second binding) is added after the light. See
+/// `super::rcs::uv_overlay`.
+pub const PROGRAM_UV_OVERLAY: f32 = 13.0;
+
+/// [`Emissive::program`]'s mode for Omega's `tarmac_markings_dirt_markingsnormal[_emis]` roads:
+/// the sixth binding (dirt) and the fifth (markings) are laid over the albedo by their own alpha,
+/// dirt first. See `super::rcs::psp2`'s `tarmac`.
+pub const PROGRAM_TARMAC: f32 = 14.0;
+
+/// [`Emissive::program`]'s mode for Omega's `road_alphaspec_normal_emissive_panelmap1[_mask]`
+/// roads: the panel-map march, the sun lobe and the sky reflection, with two more entries
+/// following this one. See `super::rcs::psp2`'s `panel_map`.
+pub const PROGRAM_PANEL_MAP: f32 = 15.0;
+
+/// [`Emissive::program`]'s mode for Omega's `crowd_sprite_diffuse_normal_alpha_shadow` and `crowd_diffuse_normal_shadow`: the light
+/// sum is `tint + ambient + sun * sat(N.L)` (the tint is the material's `Ambient`) and the lit
+/// picture is multiplied by `program[1]`, its `Shadowed`. See `super::rcs::psp2`'s `crowd`.
+pub const PROGRAM_CROWD: f32 = 16.0;
+
+/// [`Emissive::program`]'s mode for 2048's plain `diffuse_normal_specular_emmissive`: the third
+/// binding's **alpha**, unsquared, times the entry's tint, added like [`PROGRAM_EMISSIVE_ADD`].
+pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;
+
+/// [`Emissive::program`]'s mode for Omega's `rt_icetunnel`: the tunnel glass's refraction term
+/// (`2 * Constant1 * a * grab`, `a` the vertex colour's red, carried in `colour.a`), with the
+/// sample point pushed `Refraction * a` along the normal (`program[1]` is `Refraction`). See
+/// `psp2::refraction::ice_layer`.
+pub const PROGRAM_ICE_GLASS: f32 = 10.0;
+
+/// [`Emissive::program`]'s mode for Omega's `2048_shipshield_old` shield shell: the diffuse
+/// colour scrolled along `u` at the tint's `y`, plus the third binding scrolled by the clock and
+/// a noise (its alpha, `v` scaled by the offset and moved at the tint's `z`), times the tint's
+/// `x`, at the second coordinate set. See `psp2::shield_lightning`.
+pub const PROGRAM_SHIELD_LIGHTNING: f32 = 11.0;
+
+/// [`Emissive::program`]'s mode for HD's emissive-in-alpha families (`diffuse_emissive_alpha*`,
+/// `dn_diffuse_specular_emiss`): the **picture's own** alpha times the entry's tint, added
+/// after the light and before the fog, like [`PROGRAM_EMISSIVE_ALPHA_MASK`] with no third
+/// binding. See `super::rcs::alpha_emissive` (HD) and `super::rcs::psp2::alpha_emissive` (2048, Omega).
+///
+/// The entry's second lane, [`ALPHA_EMISSIVE_SPECULAR_MAP`], says the **third binding is the
+/// material's specular map** (`dn_diffuse_specular_emiss`): the specular term is weighted by its
+/// rgb in place of the picture's alpha.
+pub const PROGRAM_PICTURE_ALPHA_EMISSIVE: f32 = 12.0;
+
+/// [`Emissive::program`]'s second lane on a [`PROGRAM_PICTURE_ALPHA_EMISSIVE`] entry whose
+/// material binds a specular map third. See `super::rcs::psp2::alpha_emissive`.
+pub const ALPHA_EMISSIVE_SPECULAR_MAP: f32 = 1.0;
+
 /// [`Emissive::program`]'s mode for a PSP hull's alpha-weighted extra pass: the
 /// picture (the environment map) multiplied by the **second** texture's alpha at
 /// the second coordinate set, which carry the batch's own texture and its

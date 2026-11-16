@@ -44,14 +44,13 @@ use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_pob::{self as pob, Channel, ChannelMode, ParticleSystem};
 
-use oag_mesh::mesh::GpuVertex;
-
 mod distort;
 mod emitter_state;
 mod error;
 pub mod field;
 pub mod frames;
 pub mod guard;
+mod layers;
 mod library;
 pub mod parametric;
 mod path;
@@ -308,6 +307,10 @@ pub struct EmitterSpec {
     pub blend: Blend,
     /// A [`Blend::Distort`] emitter's strength, [`pob::Emitter::distort_strength`].
     pub distort_strength: f32,
+    /// A class 6 emitter's `kColourScale`, [`pob::Emitter::colour_scale`]; applied only to a
+    /// [`StreakDraw::FarBar`], whose effect a title lists
+    /// (`oag_title::Effects::far_bars`).
+    pub colour_scale: f32,
     /// A system attached to each particle this emitter spawns, as an index
     /// into [`Effect::emitters`].
     pub particle_child: Option<usize>,
@@ -345,6 +348,15 @@ pub struct EmitterSpec {
     /// spikes `4`, 9; the glow's five draws). `false` for every other source -
     /// [`Effect::without_pulse_psp_draw`].
     pub short_run: bool,
+    /// Drawn in the layer before the alpha-over particles instead of with the
+    /// additive ones ([`System::extend_underlay_vertices`]), for the one
+    /// emitter whose draw the original issues ahead of an alpha-over draw of
+    /// its own effect ([`Effect::draw_root_under_alpha`]).
+    pub under_alpha: bool,
+    /// The place in the race's [`crate::mod_shader::Stage`] that draws this emitter's
+    /// particles, each a quad with a `0..1` uv, instead of either blend class
+    /// ([`System::extend_shaded`]). A mod's alone.
+    pub shader: Option<u16>,
     /// Spawn offsets and velocities skip the emitter node's matrix -
     /// [`pob::flags::WORLD_SPACE`], so [`System::set_frame_scale`] does not reach them.
     pub world_space: bool,
@@ -370,6 +382,10 @@ pub struct Effect {
     /// Which emitters start on [`System::ignite`]: the root and its sibling
     /// chain, but not a child, which starts when its parent's particle does.
     roots: Vec<usize>,
+    /// Whether a local-space root (flag `0x2`) rides the frame of whatever the
+    /// effect is attached to, as the original's node does for an owner that
+    /// parents it. Pulse on the PSP only - [`Self::without_pulse_psp_draw`].
+    pub rides_owner_frame: bool,
     /// See [`Effect::skipped_templates`].
     skipped_templates: usize,
 }
@@ -394,6 +410,21 @@ impl Effect {
     pub fn parse_with(
         data: &[u8],
         scale: ColourScale,
+        external: &mut dyn FnMut(&str) -> Option<Sprite>,
+    ) -> Result<Self, Error> {
+        Self::parse_listed(data, scale, false, external)
+    }
+
+    /// [`Self::parse_with`], and with `template_paths` a sprite template whose file embeds
+    /// no pixels also asks `external` for the sprite its own record names (Wipeout HD): for
+    /// an effect a title lists for its templates.
+    ///
+    /// # Errors
+    /// As [`Self::parse`].
+    pub fn parse_listed(
+        data: &[u8],
+        scale: ColourScale,
+        template_paths: bool,
         external: &mut dyn FnMut(&str) -> Option<Sprite>,
     ) -> Result<Self, Error> {
         let system = ParticleSystem::parse(data)?;
@@ -423,9 +454,10 @@ impl Effect {
                 .and_then(|root| system.view_depth(data, root))
                 .unwrap_or(0.0),
             roots,
+            rides_owner_frame: true,
             skipped_templates: 0,
         };
-        effect.add_templates(&system, data, &records, scale, external);
+        effect.add_templates(&system, data, &records, scale, template_paths, external);
         Ok(effect)
     }
 
@@ -567,6 +599,7 @@ impl EmitterSpec {
             streak: StreakDraw::of(record.draw_class(), record.aspect),
             blend,
             distort_strength: record.distort_strength,
+            colour_scale: record.colour_scale,
             particle_child: record.particle_child,
             death_child: record.death_child,
             spawn_probability: record.child_spawn_probability.clamp(0.0, 1.0),
@@ -584,6 +617,8 @@ impl EmitterSpec {
             frames: FrameAdvance::of(record, Atlas::of(record).frames()),
             sheet_rect: None,
             short_run: true,
+            under_alpha: false,
+            shader: None,
             world_space: record.flags & pob::flags::WORLD_SPACE != 0,
             template: false,
             rotation: roll::Rotation::of_emitter(record),
@@ -612,6 +647,9 @@ pub struct System {
     /// multiplies every root emitter's spawn offset and ejection velocity
     /// and nothing else - see [`System::set_frame_scale`].
     frame_scale: f32,
+    /// The row length of the matrix local-space particles are drawn through, see
+    /// [`System::set_ride_scale`].
+    ride_scale: f32,
     /// World-space direction the emitter frame's `X` points along - what a
     /// [`Spawn::Line`] spreads its particles over. Unit length and
     /// perpendicular to `up` once [`System::advance`] has run.
@@ -625,6 +663,9 @@ pub struct System {
     azimuth: Option<f32>,
     /// The frame local-space particles were last carried to, while they ride it.
     ridden: Option<playback::Frame>,
+    /// Whether every particle draws at the instance's current severity rather than the
+    /// one it spawned with - see [`System::set_draws_live_severity`].
+    live_severity: bool,
     ignitions: u32,
 }
 
@@ -644,11 +685,13 @@ impl System {
             scale: 1.0,
             extent_scale: 1.0,
             frame_scale: 1.0,
+            ride_scale: 1.0,
             across: Vec3::X,
             anchor: Vec3::ZERO,
             up: Vec3::Y,
             azimuth: None,
             ridden: None,
+            live_severity: false,
             ignitions: 0,
         }
     }
@@ -901,7 +944,11 @@ impl System {
     ) -> Option<(usize, Vec3, Vec3)> {
         let spec = &effect.emitters[usize::from(spec_index)];
         let frame_scale = if spec.world_space {
-            1.0
+            if self.ridden.is_some() {
+                self.ride_scale
+            } else {
+                1.0
+            }
         } else {
             burst.frame_scale
         };
@@ -1068,77 +1115,6 @@ impl System {
     pub fn ignitions(&self) -> u32 {
         self.ignitions
     }
-
-    /// This frame's geometry, split by blend class: `(additive, alpha_over)`,
-    /// the two GE configurations the original's state selector switches
-    /// between. `right` and `up` come from the camera; streaks follow the
-    /// streak-quad builder at `0x08916820`.
-    #[must_use]
-    pub fn vertices(
-        &self,
-        effect: &Effect,
-        right: Vec3,
-        up: Vec3,
-    ) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
-        let mut additive = Vec::new();
-        let mut alpha_over = Vec::new();
-        self.extend_vertices(&mut additive, &mut alpha_over, effect, right, up, None);
-        (additive, alpha_over)
-    }
-
-    /// [`Self::vertices`], appended to two lists the caller owns - the
-    /// renderer's form (a returned pair per effect allocated 1.99 MB a frame
-    /// with rockets in the air). `guard` is the GE's screen-range cull, or
-    /// `None` for a source it was not measured on.
-    pub fn extend_vertices(
-        &self,
-        additive: &mut Vec<GpuVertex>,
-        alpha_over: &mut Vec<GpuVertex>,
-        effect: &Effect,
-        right: Vec3,
-        up: Vec3,
-        guard: Option<&guard::GuardBand>,
-    ) {
-        for particle in &self.particles {
-            if !particle.alive() {
-                continue;
-            }
-            let spec = &effect.emitters[usize::from(particle.spec)];
-            let age = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
-            let half = channel_sample(&spec.size, age, particle.size_sample) * particle.scale;
-            let alpha =
-                channel_sample(&spec.alpha, age, particle.alpha_sample) / spec.colour_divisor;
-            let colour = match spec.colour_mode {
-                ColourMode::RandomEntry => spec.palette[usize::from(particle.colour_index)],
-                // `palette[(int)(age * 255.999)]`, the original's own
-                // index; the alpha byte comes from the channel either way.
-                ColourMode::OverLife => spec.palette[(age * 255.999) as usize & 0xff],
-            };
-            let out: &mut Vec<GpuVertex> = match spec.blend {
-                Blend::Additive => additive,
-                Blend::AlphaOver => alpha_over,
-                Blend::Distort => continue,
-            };
-            let rgb = [colour[0], colour[1], colour[2]];
-            if let Render::Streak { .. } = spec.render {
-                streak::extend(
-                    out,
-                    spec,
-                    particle,
-                    half,
-                    [rgb[0], rgb[1], rgb[2], alpha],
-                    right,
-                    up,
-                );
-                continue;
-            }
-            let corners = billboard(spec, particle, age, half, right, up, rgb, alpha);
-            if guard::drops(guard, &effect.name, spec.template, &corners) {
-                continue;
-            }
-            out.extend_from_slice(&corners);
-        }
-    }
 }
 
 /// Effects a [`Stage`] plays at once.
@@ -1147,17 +1123,20 @@ impl System {
 /// [`System`], not a bigger one: `WO_ROCKET_EXPLO` alone schedules about 150
 /// concurrent particles and four of its seven emitters author a `2000` cap
 /// that never binds, so two explosions sharing a pool would evict each
-/// other's particles rather than queue. Twenty-four covered what a race
-/// actually puts on screen - one engine flare per craft on a source that
-/// authors one (eight), a handful of rockets in flight each carrying a
-/// flare, plus their detonations - at about 500 KB of pool.
+/// other's particles rather than queue.
 ///
-/// **Thirty-two since the absorb burst landed, chosen, not measured.** One
-/// absorb alone starts up to ten instances on Pulse (one per `Ship Collision
-/// Fx` node, `oag_raceplay::absorb`), each alive about a second, which
-/// against twenty-four would have recycled the detonations the old count was
-/// sized for. About 670 KB of pool.
-pub const MAX_INSTANCES: usize = 32;
+/// **Sixty-four, sized by a measured peak.** A wrecked craft holds about
+/// twenty instances for as long as it burns, ten attached `WO_SHIP_DEATH_SPARKS`
+/// and ten `WO_SHIP_FXNODE_EXPLO`, and [`Stage::attach`] refuses with fewer than
+/// [`RESERVED_FOR_BURSTS`] left. Eleven headless stock Pulse races of eight
+/// craft peaked at 16 to 29 instances that are not trail hits, with one wreck;
+/// two wrecks and the reserve put the need near 55, and a run with two mods
+/// loaded reached 56. Trail hits are [`Stage::play_expendable`] and take what is
+/// left (up to 112 at once in those runs). The pool is 26,784 bytes an
+/// instance, 1.7 MB in all, and [`pipeline::MAX_VERTICES`] sizes three
+/// 100-byte-vertex buffers at `MAX_INSTANCES * MAX_PARTICLES * 6`, 28.1 MiB on
+/// the GPU. `docs/formats/pulse-absent-effects.md`, "Trail-hit burst budget".
+pub const MAX_INSTANCES: usize = 64;
 
 /// Instances [`Stage::attach`] refuses to take, so a detonation always has
 /// somewhere to play.
@@ -1166,6 +1145,9 @@ pub const MAX_INSTANCES: usize = 32;
 /// every instance and the explosions - the effect the player is actually
 /// looking at - would be the ones dropped.
 const RESERVED_FOR_BURSTS: usize = 6;
+
+/// How many instances [`Stage::play_held`] keeps at once; past it, it is [`Stage::play`].
+const MAX_HELD: usize = 4;
 
 /// A [`Stage`] instance a caller still owns.
 ///
@@ -1190,10 +1172,18 @@ struct Instance {
     /// Set while a caller owns this instance. An attached instance is never
     /// recycled out from under its owner.
     attached: bool,
+    /// Not recycled by a burst while it runs: see [`Stage::play_held`].
+    held: bool,
+    /// Yields its slot to any other effect: see [`Stage::play_expendable`].
+    expendable: bool,
+    /// [`Stage::claims`] when the slot was last claimed; the oldest expendable instance goes first.
+    claimed: u64,
     /// Bumped every time the slot is claimed.
     generation: u32,
     /// The emitter frame's `+Y` in world space - see [`Stage::orient`].
     up: Vec3,
+    /// The hue every vertex of the instance is redrawn in: see [`Tint`].
+    tint: Option<Tint>,
 }
 
 impl Instance {
@@ -1202,8 +1192,12 @@ impl Instance {
         system: System::new(),
         anchor: Vec3::ZERO,
         attached: false,
+        held: false,
+        expendable: false,
+        claimed: 0,
         generation: 0,
         up: Vec3::Y,
+        tint: None,
     };
 
     fn busy(&self) -> bool {
@@ -1232,6 +1226,8 @@ impl Instance {
 #[derive(Debug, Clone)]
 pub struct Stage {
     instances: Box<[Instance]>,
+    /// How many times an instance has been claimed.
+    claims: u64,
 }
 
 impl Default for Stage {
@@ -1249,6 +1245,7 @@ impl Stage {
     pub fn new() -> Self {
         Self {
             instances: vec![Instance::IDLE; MAX_INSTANCES].into_boxed_slice(),
+            claims: 0,
         }
     }
 
@@ -1259,23 +1256,37 @@ impl Stage {
     /// [`RESERVED_FOR_BURSTS`] is there to prevent.
     ///
     /// Recycles the *unattached* instance with the fewest live particles
-    /// when nothing is free: a burst that has thinned out is the least
-    /// visible thing to cut short.
+    /// when nothing is free, an [`Self::play_expendable`] one before any
+    /// other: a burst that has thinned out is the least visible thing to cut
+    /// short.
     pub fn play(
         &mut self,
         effect: &std::sync::Arc<Effect>,
         point: Vec3,
         scale: f32,
     ) -> Option<Playing> {
-        let index = self.free_slot().or_else(|| {
-            self.instances
-                .iter()
-                .enumerate()
-                .filter(|(_, instance)| !instance.attached)
-                .min_by_key(|(_, instance)| instance.system.alive_count())
-                .map(|(index, _)| index)
-        })?;
+        let index = self.free_slot().or_else(|| self.victim(false))?;
         Some(self.claim(index, effect, point, scale, false))
+    }
+
+    /// [`Self::play`] for a surface that stands somewhere, a mod's portal or marker: it holds
+    /// its slot until it ends. A burst recycles the live instance with the fewest particles,
+    /// which is the one lone quad a surface is, and a pool full of a title's sparks would take
+    /// it on the next tick. At most [`MAX_HELD`], so bursts always have the rest.
+    pub fn play_held(
+        &mut self,
+        effect: &std::sync::Arc<Effect>,
+        point: Vec3,
+        scale: f32,
+    ) -> Option<Playing> {
+        let held = self
+            .instances
+            .iter()
+            .filter(|instance| instance.held && instance.system.is_running())
+            .count();
+        let playing = self.play(effect, point, scale)?;
+        self.instances[usize::from(playing.index)].held = held < MAX_HELD;
+        Some(playing)
     }
 
     /// Starts `effect` at `point` and hands the caller a handle to keep it
@@ -1287,18 +1298,19 @@ impl Stage {
     /// long as the stage lives.
     ///
     /// Returns `None` when fewer than [`RESERVED_FOR_BURSTS`] instances
-    /// would be left free. A caller that gets `None` draws nothing rather
-    /// than something invented.
+    /// would be left free, an [`Self::play_expendable`] one counting as free.
+    /// A caller that gets `None` draws nothing rather than something
+    /// invented.
     pub fn attach(
         &mut self,
         effect: &std::sync::Arc<Effect>,
         point: Vec3,
         scale: f32,
     ) -> Option<Playing> {
-        if self.free_count() <= RESERVED_FOR_BURSTS {
+        if self.free_count() + self.expendable_count() <= RESERVED_FOR_BURSTS {
             return None;
         }
-        let index = self.free_slot()?;
+        let index = self.free_slot().or_else(|| self.victim(true))?;
         Some(self.claim(index, effect, point, scale, true))
     }
 
@@ -1317,6 +1329,19 @@ impl Stage {
     /// travel (`rocket-visuals.md`, 2026-09-24). A no-op on a stale handle.
     pub fn orient(&mut self, playing: Playing, up: Vec3) {
         if let Some(instance) = self.get_mut(playing) {
+            instance.up = up;
+        }
+    }
+
+    /// [`Self::orient`] for a handle from [`Self::play_held`] (`orient` addresses attached
+    /// instances alone, which a held surface is not): a mod's portal or marker standing square
+    /// to the road rather than to world up. A no-op on a stale handle.
+    pub fn orient_surface(&mut self, playing: Playing, up: Vec3) {
+        if let Some(instance) = self
+            .instances
+            .get_mut(usize::from(playing.index))
+            .filter(|instance| instance.generation == playing.generation)
+        {
             instance.up = up;
         }
     }
@@ -1368,36 +1393,6 @@ impl Stage {
         }
     }
 
-    /// Every playing instance's geometry, split by blend class the same way
-    /// [`System::vertices`] splits one.
-    #[must_use]
-    pub fn vertices(&self, right: Vec3, up: Vec3) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
-        let mut additive = Vec::new();
-        let mut alpha_over = Vec::new();
-        self.extend_vertices(&mut additive, &mut alpha_over, right, up, None);
-        (additive, alpha_over)
-    }
-
-    /// [`Self::vertices`], appended to two lists the caller owns - the form
-    /// the renderer uses, for the reason [`System::extend_vertices`] gives.
-    pub fn extend_vertices(
-        &self,
-        additive: &mut Vec<GpuVertex>,
-        alpha_over: &mut Vec<GpuVertex>,
-        right: Vec3,
-        up: Vec3,
-        guard: Option<&guard::GuardBand>,
-    ) {
-        for instance in &self.instances {
-            let Some(effect) = instance.effect.as_deref() else {
-                continue;
-            };
-            instance
-                .system
-                .extend_vertices(additive, alpha_over, effect, right, up, guard);
-        }
-    }
-
     /// How many instances are emitting or still hold live particles.
     #[must_use]
     pub fn playing_count(&self) -> usize {
@@ -1436,13 +1431,18 @@ impl Stage {
         scale: f32,
         attached: bool,
     ) -> Playing {
+        self.claims += 1;
         let instance = &mut self.instances[index];
+        instance.claimed = self.claims;
         instance.generation = instance.generation.wrapping_add(1);
         instance.effect = Some(effect.clone());
         instance.system = System::new();
         instance.anchor = point;
         instance.attached = attached;
+        instance.held = false;
+        instance.expendable = false;
         instance.up = Vec3::Y;
+        instance.tint = None;
         instance.system.ignite(effect, point, scale);
         Playing {
             index: index as u16,
@@ -1464,11 +1464,13 @@ impl Stage {
 }
 
 mod direction;
+mod expendable;
 mod sample;
 use direction::{direction_for, signed_unit};
 use sample::{channel_sample, random_range};
 mod frame;
 mod pipeline;
+pub(crate) use pipeline::SURFACE_ATTRIBUTES;
 pub use pipeline::{BLEND, BLEND_ALPHA_OVER, Drawer, Drawn, MAX_VERTICES, Pipeline};
 
 mod between_ticks;
@@ -1476,7 +1478,9 @@ mod carried;
 mod particle;
 mod release;
 mod riding;
+mod tint;
 use particle::{Particle, expendable_slot};
+pub use tint::Tint;
 mod quad;
 use quad::{billboard, quad};
 

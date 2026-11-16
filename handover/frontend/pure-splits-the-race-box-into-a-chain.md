@@ -17,7 +17,7 @@ on. The permanent write-up is
 *2026-10-12: the chain below is now walked by SINGLE PLAYER (`pure-single-player-chain-what-stays-open.md`); the race box's own pickers still serve RACEBOX.*
 
 Pure keeps `Track Selection` and `Team Selection` but has **no `Racebox`, no
-hex grid and no grid editor** - that branding postdates it. Where Pulse puts
+hex grid and no custom-race screen** - that branding postdates it. Where Pulse puts
 five rows on one `Single Player` page, Pure walks a **linear chain of
 one-choice-per-screen menus**:
 

@@ -126,6 +126,16 @@ impl Engine {
         }
     }
 
+    /// This engine as it stands `ticks` into a race it has run through: the volume's rise
+    /// (`0.25` a second, to its ceiling) already made. The pitch needs nothing: the first tick
+    /// snaps `lag` to its target, so a rebuilt engine is at the note a craft at that speed has
+    /// settled on, not gliding up from rest.
+    #[must_use]
+    pub fn running_for(mut self, ticks: u64) -> Self {
+        self.intensity = (ticks as f32 * super::DT * ENGINE_RISE).clamp(0.0, 1.0);
+        self
+    }
+
     /// Advances the law one tick and writes the result to the voice.
     ///
     /// `on` is the original's `engine_on`, mapped to "the race is still
@@ -219,6 +229,7 @@ impl Engine {
                 mixer.set_pitch(id, pitch);
                 mixer.set_gain(id, gain);
                 mixer.set_pan(id, pan);
+                mixer.set_front(id, placed.map_or(1.0, |p| p.front));
             }
             // Never re-opened once the spin-down closed it: a finished race would
             // restart the engine the tick after it went quiet.
@@ -240,10 +251,18 @@ impl Engine {
                     gain,
                     pitch,
                     pan,
+                    front: placed.map_or(1.0, |p| p.front),
                     ..Play::looping(sound, Cue::Engine.bus())
                 });
             }
         }
+    }
+
+    /// Whether the voice is open with a gain above zero: out of range it is held at zero.
+    pub fn audible(&self, mixer: &Mixer) -> bool {
+        self.voice
+            .and_then(|id| mixer.gain(id))
+            .is_some_and(|gain| gain > 0.0)
     }
 
     /// Releases the voice, on leaving a race.

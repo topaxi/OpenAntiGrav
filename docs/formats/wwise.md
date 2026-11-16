@@ -47,9 +47,10 @@ Chunks `{ char[4] tag, u32 size, body }`, little-endian, tiling the file exactly
 | `STID` (bank names) | none | absent |
 
 Sixteen banks in each archive are a `BKHD` and nothing else - 32 bytes
-(`weapons`, `shipHD`, `voppler`, every `speech_*` but two). The names exist and
-their content is not in them; where it is has not been established (see
-"Where the references go").
+(`weapons`, `shipHD`, `voppler`, every `speech_*` but two). They are legacy
+names: the executable never loads them (but `Speech_NGP_Grid`, loaded and
+empty), and the events named after them live in the loaded `_NGP` banks (see
+"Event names and the stub banks", below).
 
 **`BKHD`**: `u32` version (118), `u32` bank id (the FNV-1 hash of the bank's
 name), `u32` language id (0 for SFX), `u16` alignment, `u16` device-allocated,
@@ -91,9 +92,8 @@ random/sequence (61), plus settings, attenuations and effects.
   (playlist, clip automation) is unread. All 927 (`data00`) have one source.
 * **The parent id** of a node (sound, container, actor-mixer) is at the head of
   its base parameters, after a variable effect list, an `u8` and the override bus
-  id. The rest of the base parameters (positioning, sends, states, RTPCs) are
-  not read: nothing here needs them, and a fit for the whole structure was not
-  attempted.
+  id. The rest of the base parameters are read only for containers (below);
+  for sounds and actor-mixers they are not.
 
 The source's plugin id is `AKMAKECLASSID(type, company, number)`, `type |
 company << 4 | number << 16`. **Codec plugins** (`0x000N0001`): number 1 is PCM
@@ -132,13 +132,51 @@ them leaves media unresolved.
 (counted within each archive's own banks; the base and the patch together do
 not close them either). They cluster: `Ship_NGP.bnk` 401 of 486 in the base,
 and the eight HD-heritage circuit banks (`env1_vinetak` to `env8_anulphapass`)
-about 30 of 46 each. The empty stub banks (`shipHD`, `weapons`, `speech_*`) are
-the likeliest home for what is missing. Nothing here guesses at them:
-`Library::resolve_event` reports the target ids and plays nothing for them.
+about 30 of 46 each. The stub banks are **not** their home (they are legacy
+names, below); where these targets went is still open, and nothing here
+guesses at them: `Library::resolve_event` reports the target ids and plays
+nothing for them.
 Of the 3,706 `data00` events, 2,369 resolve to no media - stop and state
 actions, music events (read in the Music section, below, but not followed by
 `resolve_event`, which reports them in `EventPlan::unread`), and those dangling
 targets - which is why "events reaching media" is a count and not a defect.
+
+### Event names and the stub banks (2026-11-02)
+
+Read in the executable and checked against the banks; the evidence is
+[`ps4-omega-eu/wwise-sound.md`](../ghidra/functions/ps4-omega-eu/wwise-sound.md).
+
+* **Every bank ships its Wwise listing.** Beside each `.bnk` is a `.txt` of the
+  same name (`Weapons_NGP.txt` 351,965 bytes in the patch) with sections
+  `Event`, `Switch Group`, `Switch`, `State Group`, `State`, `Custom State`,
+  `Game Parameter`, `Effect plug-ins`, `In Memory Audio`, `Streamed Audio`:
+  tab-separated id, name and authoring path. The stubs' listings are empty.
+* **The executable posts `<cue>[_PC]__<bank>`** and Wwise hashes that whole
+  string (FNV-1, lower case). The cue is the code's string (`_321_NGP`), `_PC`
+  is added when the emitter group belongs to the player, and the bank is the
+  name of the slot the cue plays in (`Weapons_NGP`). So `_321_NGP` is the
+  event `_321_NGP__Weapons_NGP` (243270081) and `Go_NGP` is
+  `Go_NGP__Weapons_NGP` (744083536), both in `English(US)/Weapons_NGP.bnk`.
+  Confidence 92: the listing ids, the music events (`Set_Music_Track_N__frontend`,
+  above) and 1,212 of 1,272 trackside emitters agree.
+* **`_PC` events are relays.** Kind `0x2103` is an action whose target is
+  another event, played in turn; `_321_NGP_PC__Weapons_NGP` is one such action
+  to `_321_NGP__Weapons_NGP`. Weapons go further: `NGP_MissileFire__Weapons_NGP`
+  is a single relay to `WPN_MISSILE_Fire`. `Library::resolve_event` follows
+  `Play` only and returns nothing for a relay; the ground-truth check
+  (`posted_events_resolve`) follows both.
+* **The stubs are never loaded** (all eleven bank-load call sites read), and
+  events named after them are in loaded banks: `*__voppler` in `Ship_NGP.bnk`,
+  `_AUTOPILOT__weapons` in `Weapons_NGP.bnk`, `_321_GO__speech` in
+  `Speech_NGP.bnk`, 482 `*__Speech_NGP` in `English(US)/frontend.bnk`. The
+  bank in an event name is a namespace. Legacy 8-character bank names in the
+  data (`track.final.audio`, `crowd`, `env_moa`, `shipHD`) reach a Wwise bank
+  through a 50-entry alias table in the executable.
+* **Which banks a race has loaded:** `frontend`, `Speech_NGP`, `generaltrack`,
+  `speech_fe`, `Ship_NGP`, `Weapons_NGP`, `crowd`, `Speech_NGP_Grid` from boot
+  (plus `Init` and `Music`), and the track's `TrackStartup.xml` bank, or
+  `env0_zone` (Zone, Nitro Battle) or `env0_det` (Detonator). Each is opened
+  under `English(US)/` first, then at the root (watched live once).
 
 **Prefetch.** A streamed source may have its first bytes in `DIDX`: 164
 (`data00`) and 175 (`data08`) embedded records are a **head** of a loose
@@ -369,22 +407,142 @@ Counts come from the ground-truth tests, over every bank of each archive.
 * **Looping.** Whether the ranseq's `loop 1` or the segment loops the song was
   not read; the engine plays each track once and advances the playlist.
 
+## Sound containers
+
+`oag_formats::wwise::container` reads a random/sequence container (type 5) and a
+switch container (type 6). Both open with the node's base parameters, read as far
+as it takes to reach what the kind adds, and end exactly at the body's last byte
+(`TrailingBytes` otherwise); a shape not read is refused by name.
+
+```text
+base      u8, u8 n fx [, u8, n * 7], u8, u32 bus, u32 parent, u8        (the head)
+          u8 n + n ids + n f32, u8 n + n ids + n * 8                    (two bundles)
+          u8 positioning   bits 6,7 set; bit 3 or 4 set: u8 1, u32 attenuation follow
+          u8 sends         bit 3 set: four u32 bus ids follow
+          u8, u8, u16, u8, u8   advanced settings (unread)
+          u32 groups, each { u32 id, u8, u16 n, n * { u32, u32 } }      state groups
+          u16 rtpc, each { u32, u8, u8, u8, u32, u8, u16 points, points * 12 }
+ranseq    u16 loop (0 forever), u16, u16, f32 transition + 2 f32 bounds,
+          u16 avoid repeat, u8 transition mode, u8 random mode, u8 mode (0 random,
+          1 sequence), u8 flags, u32 n + n child ids, u16 m + m * { u32 id, i32 weight }
+switch    u8 group type (1 = state group), u32 group, u32 default switch, u8,
+          u32 n + n child ids, u32 cases + cases * { u32 switch, u32 k, k ids },
+          u32 params + params * { u32 id, u8, u8, i32, i32 }   (14 bytes each)
+```
+
+Census, `crates/formats/tests/wwise_ground_truth.rs` (`Containers`, per archive):
+
+| | `data00` | `data05` | `data08` |
+| --- | ---: | ---: | ---: |
+| random/sequence containers read | 462 (453 random, 9 sequence) | 19 | 551 (538, 13) |
+| refused by name (`BaseParams`: a 3D block that opens a path) | 1 | 0 | 1 |
+| switch containers read (state groups) | 525 (340) | 39 (17) | 626 (400) |
+| any other refusal | 0 | 0 | 0 |
+| child ids / resolving to an object of the archive | 5,460 / 5,460 | 243 / 243 | 6,015 / 6,015 |
+| of them whose own parent id names the container | 5,455 | 243 | 6,008 |
+| playlist items / containers with avoid-repeat > 0 | 2,116 / 458 | 111 / 19 | 2,449 / 547 |
+| containers weighting their picks (flag bit 0) | 0 | 0 | 0 |
+
+The refused one is `Ship_NGP`'s, in both base and patch. Every `Weapons_NGP`
+container reads. Measured: the layouts above (exact consumption of the body on
+all of the above, a second source in the children's own parent ids), 85.
+Unknown, named: the six advanced-settings bytes (their values are not decoded
+beyond their length), the switch's `u8` after the default switch, a switch
+parameter's two bytes (`0, 1` on most, `2, 1` on a few) and its two `i32` (fade
+times in ms, a guess, 55), a random container's transition bytes, and the flag
+bits (names recalled from public Wwise documentation, 55; `0x12` or `0x1a` on
+every one). No container sets the weight bit, so a weighted pick is refused by
+the player rather than guessed.
+
+**What a post plays** (`oag_sound::sfx`, `wwise_start`): one child of a random
+container, drawn by the `Rng` passed in; the first playlist item of a sequence;
+a switch container is still refused (its group's current value is the game's).
+The missile launch (`NGP_MissileFire__Weapons_NGP` -> relay -> `WPN_MISSILE_Fire`)
+plays *one layer container* of five layers: four random containers (275399150 has
+one item, three others six) and one plain sound, so a post sounds five media, one
+per layer; the thread's earlier "resolves to one sounding media" was a
+misreading. The player's `NGP_MissileFire_PC` event is not a twin of the NPC one:
+it plays its own sound, relays to a second event after 100 ms and sets a state
+(`0x1204`), none of which is wired.
+
+**2048 and Omega:** 2048 ships `SBlk` banks, not Wwise: *checked, differs*
+(`oag_formats::sblk` opens 2048's `.bnk`; `Bank::parse` refuses them with
+`NoHeader`, the `data02` result above).
+
+## Loops
+
+Lane `omega-wwise-held-loops`, 2026-11-12. A Wwise object loops in one of two
+ways, both read now (`oag_formats::wwise::hirc::prop::LOOP`,
+`container::RanSeq::is_continuous`) and played by `oag_sound::sfx`'s
+`wwise_start`:
+
+* **A sound's loop count, property 58** in the node's own property bundle
+  (`hirc::node_props`): an `i32`, `0` forever, `n` plays `n` times, absent plays
+  once. Values seen over the patch's banks: `0` on 1,077 sounds, `2` on 4, `10`
+  on 2, `20` on 4.
+* **A continuous random or sequence container** (flag bit 3, `0x1a`) plays item
+  after item, `loop count` times over (`0` forever). The held cues' looping
+  containers are `0x1a` with loop `0` (magstrip, autopilot, shuriken travel) or
+  `200` (the player's autopilot); every one-shot pick read is `0x12`, loop `1`.
+
+Evidence, two independent sources:
+
+1. **The held cues against the one-shots.** Every layer of Omega's held cues
+   that should sustain carries one of the two (the probe over
+   `_SHIELD`, `_AUTOPILOT`, `_magstrip01`, `_SHURIKENTRAVEL` and the six travel
+   and lock events, each with its `_PC` twin; the evidence page's "Held
+   loops"); none of the ten one-shot cues this port plays reaches either
+   (`a_race_plays_its_posted_cues_from_their_wwise_events` asserts no voice of
+   theirs loops).
+2. **The media's own loop points.** A sound whose embedded `.wem` carries a
+   `smpl` chunk (a loop point) has property 58 = `0`:
+
+   | Archive | prop 58 = `0`: with `smpl` / without | absent: with `smpl` / without | `2`, `10`, `20` |
+   | --- | ---: | ---: | ---: |
+   | `data08` (patch) | 428 / 648 | 5 / 5,473 | 2 / 8 |
+   | `data00` (base) | 214 / 512 | 5 / 5,173 | 2 / 6 |
+
+   435 of `data08`'s sounds play media carrying `smpl`; 428 of them loop forever
+   (`data00`: 214 of 221).
+
+Confidence: **property 58 is the loop count, 85** (fitted, two sources above;
+the id is recalled from public Wwise documentation as `Loop`, beside 59
+`InitialDelay` already fitted); **the continuous flag and the container's loop
+count, 75** (bit names recalled from the same documentation, every held-cue
+container agrees).
+
+**How it plays** (chosen where the read stops): a forever sound is a looping
+layer, held until the game releases the cue; a counted loop is the media laid
+out `n` times, and one past 30 s of media loops instead (the player's
+autopilot's 200 plays). A continuous container's one pick stands for every
+item it would play, so a held random container repeats its first draw rather
+than drawing per pass, and its transition (crossfade mode 5, durations unread)
+is not played. A loop that its own event also stops or seeks is laid out to
+the cut and ends there (none of the held cues has one). The `smpl` loop
+points are not read: the whole media loops, so a sound authored with a lead-in
+before its loop start replays the lead-in.
+
+**2048: checked, differs.** 2048 ships `SBlk` banks, not Wwise; its looping is
+the `SBlk` reader's. **HD:** `SBlk` too, untouched.
+
 ## What is not done
 
-* **Event names.** A bank carries ids only: an event id is a hash of a name the
-  banks do not contain. Mapping Wwise events to the cue names the simulation
-  emits needs the simulation's own list beside the ids, and a hash function to
-  test candidate names against (FNV-1 over the lower-case name is what a bank id
-  is; the same for events is not verified).
+* **Event names.** A bank carries ids only, but its `.txt` listing names every
+  event, and the executable's name for a cue is `<cue>[_PC]__<bank>` (above).
+  Mapping this project's cues to Omega's cue strings is wiring, not reading.
 * **Multi-channel ATRAC9**, above.
-* **The unread parts of `HIRC`**: the rest of node base parameters, sound
-  containers' playlists, `Init.bnk`'s bus and state definitions. Music
+* **The unread parts of `HIRC`**: the base parameters of sounds and
+  actor-mixers, switch values, `Init.bnk`'s bus and state definitions. Music
   objects are read (above); `EventPlan::unread` still lists the events that
   play one, and `Library::walk_music` is how they are followed.
-* **Loop points.** 173 embedded files carry a `smpl` chunk; nothing reads it.
+* **Loop points.** 173 embedded files carry a `smpl` chunk; its loop start and
+  end are not read (the loop count is, "Loops" above).
 * **The 1,450 dangling Play targets.**
 * **Race sound effects on this title** are not wired: the simulation's cues go
-  through `oag_sound::sfx`, which reads `SBlk` banks by name. (Music is.)
+  through `oag_sound::sfx`, which reads `SBlk` banks by name. (Music is.) The
+  start plays (`oag_sound::sfx`'s Wwise event timeline, the evidence page's
+  "What the port plays"); every other cue waits on the evidence page's "Open"
+  list (switch containers, positioning). Random containers are read and played.
 
 ## Confidence
 
@@ -392,10 +550,15 @@ Counts come from the ground-truth tests, over every bank of each archive.
 | --- | ---: | --- |
 | Chunk walk, `BKHD`, `DIDX`, `HIRC` framing | 94 | tile the file / the chunk exactly on 107 of 107 banks; padding is zero |
 | Event, `Play`, sound and music-track layouts | 90 | exact-end on 2,183 of 2,183 Play; embedded size = `DIDX` size on every embedded sound; 0 unresolved media over two archives |
+| Property 58 is a sound's loop count, `0` forever | 85 | "Loops": every sustaining held-cue layer carries it or a continuous container, no one-shot does; 428 of the 435 `data08` sounds whose media carries `smpl` have it at `0` |
+| Container flag bit 3 is *continuous*, its loop count read only then | 75 | "Loops": `0x1a` on every held-cue looping container, `0x12` on every one-shot pick; bit name recalled |
 | Parent id at the head of the base parameters | 85 | fitted: resolves to an object or root on every node, 110 roots; the rest of the structure unread |
 | `.wem` is ATRAC9 | 93 | four independent statements above |
 | Plugin number 12 *means* ATRAC9 | 75 | recalled from the SDK; agrees with the media on every source |
 | Plugin number 12 / 1 versus media tag `0xFFFC` / `0xFFFE` | 94 | 7,785 + 10 sources in `data00`, 8,503 + 10 in `data08`, 0 mismatches |
 | The 18 bytes of extra data | 90 | every field checked against `fmt ` and the frame count on every file |
 | Mono/stereo decode is right | 90 | two independent decoders agree to 1 LSB up to polarity |
+| Event id = FNV-1 of `<cue>[_PC]__<bank>` | 92 | listing ids, the music events, 1,212 of 1,272 trackside emitters; executable read ([wwise-sound.md](../ghidra/functions/ps4-omega-eu/wwise-sound.md)) |
+| Kind `0x2103` plays its target event | 80 | target is an event on every relay read (the `_PC` twins, the missile); fitted, not from the SDK |
+| Random/sequence and switch container layouts | 85 | exact consumption of every body in the three archives bar 2 path-positioned ones (refused by name); children resolve and name the container as parent on 11,706 of 11,718 |
 | Which polarity is Sony's | - | not known |

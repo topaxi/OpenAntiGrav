@@ -258,7 +258,7 @@ fn every_cue_states_where_it_is_heard_from() {
 
 #[test]
 fn an_opponents_collision_arrives_from_the_side_it_happened_on() {
-    let placed = place(CueEvent::new(Cue::Collision, 1), &ears(), &grid(60.0)).unwrap();
+    let placed = place(CueEvent::new(Cue::Collision, 1), &ears(), &grid(60.0), 0).unwrap();
     assert_eq!(
         placed.pan,
         Some(1.0),
@@ -271,7 +271,7 @@ fn an_opponents_collision_arrives_from_the_side_it_happened_on() {
 fn the_players_own_collision_is_placed_too() {
     // `ShipCollisionFx_Trigger` passes `craft+0x50` unbranched, so the player's
     // hull is positional too (always close).
-    let placed = place(CueEvent::new(Cue::Collision, 0), &ears(), &grid(60.0)).unwrap();
+    let placed = place(CueEvent::new(Cue::Collision, 0), &ears(), &grid(60.0), 0).unwrap();
     assert_eq!(placed.pan, Some(0.0));
     assert_eq!(placed.gain, 1.0);
 }
@@ -279,7 +279,7 @@ fn the_players_own_collision_is_placed_too() {
 #[test]
 fn a_rival_beyond_the_craft_radius_is_refused_rather_than_played_quietly() {
     let far = grid(oag_audio::Emitter::CRAFT_RADIUS + 1.0);
-    assert!(place(CueEvent::new(Cue::Collision, 1), &ears(), &far).is_none());
+    assert!(place(CueEvent::new(Cue::Collision, 1), &ears(), &far, 0).is_none());
 }
 
 #[test]
@@ -287,18 +287,28 @@ fn the_pad_cue_splits_the_player_off_from_the_field() {
     // The `racer+0x368` split: the player dry at full volume, a rival through its
     // emitter (`Placement::CraftUnlessPlayer`).
     let craft = grid(60.0);
-    let player = place(CueEvent::new(Cue::SpeedupPad, 0), &ears(), &craft).unwrap();
+    let player = place(CueEvent::new(Cue::SpeedupPad, 0), &ears(), &craft, 0).unwrap();
     assert_eq!(player.pan, None);
     assert_eq!(player.gain, 1.0);
 
-    let rival = place(CueEvent::new(Cue::SpeedupPad, 1), &ears(), &craft).unwrap();
+    let rival = place(CueEvent::new(Cue::SpeedupPad, 1), &ears(), &craft, 0).unwrap();
     assert_eq!(rival.pan, Some(1.0));
     assert!(rival.gain < 1.0);
 }
 
+/// A client seated at slot 1: its own pad cue is the dry one, slot 0's is a rival's.
+#[test]
+fn the_dry_branch_follows_the_listening_seat() {
+    let craft = grid(60.0);
+    let own = place(CueEvent::new(Cue::SpeedupPad, 1), &ears(), &craft, 1).unwrap();
+    assert_eq!((own.pan, own.gain), (None, 1.0));
+    let other = place(CueEvent::new(Cue::SpeedupPad, 0), &ears(), &craft, 1).unwrap();
+    assert!(other.pan.is_some());
+}
+
 #[test]
 fn the_announcer_is_left_dry() {
-    let placed = place(CueEvent::new(Cue::ShieldActive, 0), &ears(), &grid(0.0)).unwrap();
+    let placed = place(CueEvent::new(Cue::ShieldActive, 0), &ears(), &grid(0.0), 0).unwrap();
     assert_eq!(placed.pan, None);
     assert_eq!(placed.gain, 1.0);
 }
@@ -307,15 +317,15 @@ fn the_announcer_is_left_dry() {
 fn a_cue_from_a_slot_with_no_craft_is_dropped() {
     // Not played dry: a rival's collision at full volume the moment its slot
     // empties is louder and more wrong than silence.
-    assert!(place(CueEvent::new(Cue::Collision, 5), &ears(), &grid(10.0)).is_none());
-    assert!(place(CueEvent::new(Cue::Collision, 200), &ears(), &grid(10.0)).is_none());
+    assert!(place(CueEvent::new(Cue::Collision, 5), &ears(), &grid(10.0), 0).is_none());
+    assert!(place(CueEvent::new(Cue::Collision, 200), &ears(), &grid(10.0), 0).is_none());
 }
 
 #[test]
 fn an_unplaced_cue_survives_a_slot_that_has_no_craft() {
     // The announcer has no emitter at all, so it must not be gated by one.
     let empty = [None; oag_gameplay::MAX_SHIPS];
-    assert!(place(CueEvent::new(Cue::ShieldActive, 0), &ears(), &empty).is_some());
+    assert!(place(CueEvent::new(Cue::ShieldActive, 0), &ears(), &empty, 0).is_some());
 }
 
 #[test]
@@ -338,4 +348,85 @@ fn the_results_lines_live_in_their_own_bank_which_only_a_naming_title_has() {
         BankName::SpeechResults.entry(oag_pure::race::SOUND_BANKS, false),
         ""
     );
+}
+
+/// One timeline of one layer `marker` frames long, so the cue it stands for is told by length.
+fn marked(marker: usize) -> Vec<layers::Timeline> {
+    vec![layers::Timeline {
+        layers: vec![layers::Layer {
+            sound: Arc::new(Sound::new(vec![1; marker], 1, 44_100).expect("sound")),
+            looping: false,
+            delay: 0.0,
+            angle: 0,
+            rear: layers::RearPan::Front,
+            bend: None,
+        }],
+        bends: Vec::new(),
+    }]
+}
+
+/// A title's player version of a cue plays from the player's emitter alone; a cue with none
+/// plays the same for everyone; an authored player version that did not load is silence for the
+/// player, never the other event (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`).
+#[test]
+fn the_player_hears_its_own_version_of_a_cue_or_nothing() {
+    let mut banks = Banks {
+        timelines: [
+            (Cue::Missile, marked(1)),
+            (Cue::Rocket, marked(3)),
+            (Cue::LeachEnergy, marked(4)),
+        ]
+        .into_iter()
+        .collect(),
+        player_timelines: [(Cue::Missile, marked(2))].into_iter().collect(),
+        ..Default::default()
+    };
+    banks.player_silent.insert(Cue::LeachEnergy);
+    let mut rng = Rng::new(1);
+    let mut sample = |cue: Cue, player: bool| {
+        banks
+            .voices_for(cue, player, &mut rng)
+            .map(|v| v[0].sound.frames())
+    };
+    assert_eq!(sample(Cue::Missile, false), Some(1));
+    assert_eq!(sample(Cue::Missile, true), Some(2));
+    assert_eq!(sample(Cue::Rocket, false), Some(3));
+    assert_eq!(sample(Cue::Rocket, true), Some(3));
+    assert_eq!(sample(Cue::LeachEnergy, false), Some(4));
+    assert_eq!(sample(Cue::LeachEnergy, true), None);
+}
+
+#[test]
+fn hd_s_cue_variables_carry_the_perspective_the_originals_caller_sets() {
+    // Measured live (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`).
+    assert_eq!(Cue::SpeedupPad.variables(true), [0, 0, 0, 0]);
+    assert_eq!(Cue::SpeedupPad.variables(false), [0, 0, 2, 0]);
+    assert_eq!(Cue::Turbo.variables(true), [0, 0, 0, 0]);
+    assert_eq!(Cue::MineLaunch.variables(true), [0, 0, 1, 0]);
+    assert_eq!(Cue::Cannon.variables(false), [0, 0, 2, 0]);
+    for cue in [
+        Cue::Rocket,
+        Cue::Missile,
+        Cue::Plasma,
+        Cue::RocketHitShip,
+        Cue::PlasmaHitWall,
+    ] {
+        assert_eq!(cue.variables(true), [0; 4], "{}", cue.name());
+        assert_eq!(cue.variables(false), [0; 4], "{}", cue.name());
+    }
+}
+
+#[test]
+fn only_one_shot_ship_hud_and_weapon_cues_are_walked_with_variables() {
+    assert!(Cue::SpeedupPad.walks_variables() && Cue::RocketHitShip.walks_variables());
+    // Held cues loop and re-key; the engine is one voice; speech has its own walk.
+    for cue in [
+        Cue::Shield,
+        Cue::Blowup,
+        Cue::LockOn,
+        Cue::Engine,
+        Cue::Ready,
+    ] {
+        assert!(!cue.walks_variables(), "{}", cue.name());
+    }
 }

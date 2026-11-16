@@ -1381,7 +1381,7 @@ table, 4,365 track chunks in 37 files, 124 of Talon's Junction's 983 - and
 layout byte is *also* a `+0x06`. `oag_render` carries the bit per chunk as
 `mesh::slots::ZONE_TRACK` and `mesh.wgsl` binds `zoneModeTrack*` with the
 `Track.*` colours where it is set and `zoneMode*` with the `Scene.*` colours
-otherwise (`crates/render/tests/zone_recolour.rs`). Before that it bound the
+otherwise (`crates/mesh/tests/zone_recolour.rs`). Before that it bound the
 Track set to every chunk, colouring 859 of Talon's Junction's chunks with
 the set the original reserves for 124. Bits 2-5 (the draw-bucket routing)
 and 9-10 (the PVS scrub) are carried in the field and not acted on.

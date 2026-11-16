@@ -13,7 +13,13 @@ const ALL: [&Title; 5] = [
 ];
 
 /// The triggers a title answers for itself; the rest are the engine's.
-const OWN: [Trigger; 10] = [
+const OWN: [Trigger; 19] = [
+    Trigger::PlasmaCharging,
+    Trigger::PlasmaLaunch,
+    Trigger::BombGlow,
+    Trigger::DisruptorHead,
+    Trigger::DisruptorExplo,
+    Trigger::DisruptorLaunch,
     Trigger::BombRays,
     Trigger::HitSpark,
     Trigger::LeachHitSpark,
@@ -21,6 +27,9 @@ const OWN: [Trigger; 10] = [
     Trigger::ShieldAbsorb,
     Trigger::WreckNode,
     Trigger::WreckSparks,
+    Trigger::WreckBigNode,
+    Trigger::WreckDebris,
+    Trigger::WreckSmoke,
     Trigger::DamageMild,
     Trigger::DamageModerate,
     Trigger::DamageCritical,
@@ -42,8 +51,9 @@ fn the_vita_and_ps4_titles_drop_what_they_never_author_and_the_rest_keep_it() {
         // Pure has no LeachBeam at all (`PURE_ABSENT`), so it names none of the
         // beam's effects, the energy one included.
         let pure = !PURE_ABSENT.contains(&trigger);
-        // HD drops the PS2 engine-flare particle too (`HD_ABSENT`).
-        let hd = !HD_ABSENT.contains(&trigger);
+        // HD drops the PS2 engine-flare particle too (`HD_ABSENT`), and the Plasma flash
+        // its executable never names (`HD_UNNAMED`).
+        let hd = !HD_ABSENT.contains(&trigger) && !HD_UNNAMED.contains(&trigger);
         let pulse = !PULSE_ABSENT.contains(&trigger);
         assert_eq!(has(trigger), [pulse, pure, hd, false, false], "{trigger:?}");
     }
@@ -65,6 +75,18 @@ fn the_vita_and_ps4_titles_drop_what_they_never_author_and_the_rest_keep_it() {
     }
 }
 
+/// The engine-table triggers Pure's own executable was read for, so its table says
+/// `Measured` where the rest inherit Pulse's
+/// (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, `plasma.md`).
+const PURE_MEASURED: [Trigger; 6] = [
+    Trigger::MissileFlare,
+    Trigger::MissileBounce,
+    Trigger::MissileExplo,
+    Trigger::MineExplo,
+    Trigger::BombSmokering,
+    Trigger::PlasmaBlast,
+];
+
 #[test]
 fn the_trigger_list_is_in_index_order_and_counts_itself() {
     assert_eq!(Trigger::COUNT, Trigger::ALL.len());
@@ -77,16 +99,13 @@ fn the_trigger_list_is_in_index_order_and_counts_itself() {
 fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     let has = |trigger| ALL.map(|t| t.effect_on(trigger).is_some());
     // Pulse, Pure, HD, 2048, Omega.
-    assert_eq!(has(Trigger::HitSpark), [true, false, false, false, false]);
+    assert_eq!(has(Trigger::HitSpark), [true, true, false, false, false]);
     assert_eq!(
         has(Trigger::LeachHitSpark),
         [true, false, true, false, false]
     );
-    assert_eq!(
-        has(Trigger::WeaponSpark),
-        [false, false, true, false, false]
-    );
-    assert_eq!(has(Trigger::ShieldAbsorb), [true, true, true, false, false]);
+    assert_eq!(has(Trigger::WeaponSpark), [false, false, true, true, true]);
+    assert_eq!(has(Trigger::ShieldAbsorb), [true, true, true, true, true]);
     // `ShipDamageFx_Update_q` is read on HD alone; 2048 and Omega are
     // "checked, applies, not wired" (their trigger unread).
     for damage in [
@@ -100,16 +119,43 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
             "{damage:?}"
         );
     }
-    for wreck in [
-        Trigger::WreckNode,
-        Trigger::WreckSparks,
-        Trigger::WreckExplosion,
+    // Pure runs Pulse's node loop but has no `WO_SHIP_EXPLOSION`; HD, 2048 and Omega read none.
+    for wreck in [Trigger::WreckNode, Trigger::WreckSparks] {
+        assert_eq!(has(wreck), [true, true, false, false, false], "{wreck:?}");
+    }
+    assert_eq!(
+        has(Trigger::WreckExplosion),
+        [true, false, false, false, false]
+    );
+    // Pure's own big blast is built from three names Pulse's executable does not carry.
+    for big in [
+        Trigger::WreckBigNode,
+        Trigger::WreckDebris,
+        Trigger::WreckSmoke,
     ] {
-        assert_eq!(has(wreck), [true, false, false, false, false], "{wreck:?}");
+        assert_eq!(has(big), [false, true, false, false, false], "{big:?}");
     }
     // `NormalBombBlast_Update` (HD, `0x001503d8`) spawns it; no other title's
     // blast does.
     assert_eq!(has(Trigger::BombRays), [false, false, true, false, false]);
+    // `Plasma_Init` and `Plasma_Launch` (HD, `0x00120fe8`, `0x0011f810`) name them; 2048 and
+    // Omega ship the files and are "checked, applies, not wired".
+    for plasma in [Trigger::PlasmaCharging, Trigger::PlasmaLaunch] {
+        assert_eq!(
+            has(plasma),
+            [false, false, true, false, false],
+            "{plasma:?}"
+        );
+    }
+    // Pure's laid Bomb glow and Disruptor bolt are read on its executable alone.
+    for own in [
+        Trigger::BombGlow,
+        Trigger::DisruptorHead,
+        Trigger::DisruptorExplo,
+        Trigger::DisruptorLaunch,
+    ] {
+        assert_eq!(has(own), [false, true, false, false, false], "{own:?}");
+    }
 }
 
 /// The engine-table triggers whose effect no Pulse archive holds and no Pulse
@@ -160,6 +206,19 @@ const HD_ABSENT: [Trigger; 3] = [
     Trigger::MagstripZone,
     Trigger::EngineFlare,
 ];
+
+/// `WO_PLASMA_FLASH`: HD's disc ships the file and its executable never names it, the
+/// detonation being `WO_PLASMA_LIGHTNING_EXPAND` (`ps3-hdfury-eu/plasma.md`, "The effects
+/// and their triggers").
+const HD_UNNAMED: [Trigger; 1] = [Trigger::PlasmaBlast];
+
+#[test]
+fn hd_asks_for_none_of_the_effects_its_executable_never_names() {
+    for trigger in HD_UNNAMED {
+        assert!(oag_hd::TITLE.effect_on(trigger).is_none(), "{trigger:?}");
+    }
+    assert!(!oag_hd::TITLE.effects.names().contains(&"WO_PLASMA_FLASH"));
+}
 
 #[test]
 fn hd_asks_for_none_of_the_effects_its_disc_does_not_author() {
@@ -227,7 +286,8 @@ fn every_title_tries_the_engines_own_effects_as_pulses() {
             !OWN.contains(t)
                 && *t != Trigger::WreckExplosion
                 && !(title.name == oag_pulse::TITLE.name && PULSE_ABSENT.contains(t))
-                && !(title.name == oag_hd::TITLE.name && HD_ABSENT.contains(t))
+                && !(title.name == oag_hd::TITLE.name
+                    && (HD_ABSENT.contains(t) || HD_UNNAMED.contains(t)))
                 && !(title.name == oag_pure::TITLE.name && PURE_ABSENT.contains(t))
                 && !(at >= 3 && UNAUTHORED.contains(t))
                 && !(at == 4 && matches!(t, Trigger::MagstripSparks | Trigger::MagstripZone))
@@ -235,7 +295,9 @@ fn every_title_tries_the_engines_own_effects_as_pulses() {
             let spec = title
                 .effect_on(trigger)
                 .unwrap_or_else(|| panic!("{} has no {trigger:?}", title.name));
-            let want = if title.name == oag_pulse::TITLE.name {
+            let want = if title.name == oag_pulse::TITLE.name
+                || (title.name == oag_pure::TITLE.name && PURE_MEASURED.contains(&trigger))
+            {
                 Origin::Measured
             } else {
                 Origin::InheritedFrom("Wipeout Pulse")
@@ -318,8 +380,10 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
         1
     );
     // 43 since Pure, the last title that named it, dropped `WO_SHIP_ENGINEFLARE`; 44 with
-    // `WO_SHIP_COLL_SPARK_NODAMAGE`, the collision cage's contact spark.
-    assert_eq!(crate::RACE_EFFECTS.len(), 44);
+    // `WO_SHIP_COLL_SPARK_NODAMAGE`, the collision cage's contact spark; 47 with Pure's three
+    // big-blast names; 50 with Pure's Bomb glow and Disruptor head and explosion; 51 with its
+    // Disruptor launch; 53 with HD's Plasma wind-up and release.
+    assert_eq!(crate::RACE_EFFECTS.len(), 53);
 }
 
 #[test]
@@ -369,8 +433,9 @@ fn the_absorb_burst_is_each_titles_own() {
         burst(oag_hd::TITLE),
         Some(Burst::MirroredPairs { stagger: 0.2 })
     );
-    assert_eq!(burst(oag_2048::TITLE), None);
-    assert_eq!(burst(oag_omega::TITLE), None);
+    // 2048 and Omega take HD's burst by inheritance.
+    assert_eq!(burst(oag_2048::TITLE), Some(Burst::HD));
+    assert_eq!(burst(oag_omega::TITLE), Some(Burst::HD));
 }
 
 #[test]
@@ -389,11 +454,27 @@ fn a_burst_staggers_its_locators_the_way_the_original_spawns_them() {
 }
 
 #[test]
-fn no_title_labels_a_present_effect_chosen_and_the_others_are_measured() {
+fn no_title_labels_a_present_effect_chosen_and_the_others_are_measured_or_inherited() {
+    // What a title takes from another's measured law instead of reading its own, and from whom.
+    let inherited = |title: &Title, trigger: Trigger| match (title.name, trigger) {
+        (n, Trigger::HitSpark | Trigger::WreckNode | Trigger::WreckSparks)
+            if n == oag_pure::TITLE.name =>
+        {
+            Some("Wipeout Pulse")
+        }
+        (n, Trigger::ShieldAbsorb | Trigger::WeaponSpark)
+            if n == oag_2048::TITLE.name || n == oag_omega::TITLE.name =>
+        {
+            Some("Wipeout HD")
+        }
+        _ => None,
+    };
     for title in ALL {
         for trigger in OWN {
             if let Some(spec) = title.effect_on(trigger) {
-                assert_eq!(spec.origin, Origin::Measured, "{} {trigger:?}", title.name);
+                let want =
+                    inherited(title, trigger).map_or(Origin::Measured, Origin::InheritedFrom);
+                assert_eq!(spec.origin, want, "{} {trigger:?}", title.name);
             }
         }
     }
@@ -411,7 +492,7 @@ fn the_flags_the_loader_derived_from_a_name_are_the_titles() {
     };
     assert_eq!(every(oag_pulse::TITLE), [true, true, true, false]);
     assert_eq!(every(oag_hd::TITLE), [false, false, false, true]);
-    assert_eq!(every(oag_pure::TITLE), [false, true, false, false]);
+    assert_eq!(every(oag_pure::TITLE), [true, true, false, false]);
     for other in [oag_2048::TITLE, oag_omega::TITLE] {
         assert_eq!(every(other), [false; 4], "{}", other.name);
     }
@@ -438,6 +519,8 @@ fn the_flags_the_loader_derived_from_a_name_are_the_titles() {
     }
     assert!(wreck(oag_pulse::TITLE, Platform::Psp));
     assert!(wreck(oag_pulse::TITLE, Platform::Ps2));
+    // Pure swaps in its `Shipwreck.vex` by Pulse's rule, inherited; it ships on PSP only.
+    assert!(wreck(oag_pure::TITLE, Platform::Psp));
     for other in [
         oag_pure::TITLE,
         oag_hd::TITLE,
@@ -445,6 +528,8 @@ fn the_flags_the_loader_derived_from_a_name_are_the_titles() {
         oag_omega::TITLE,
     ] {
         assert!(!psp(other) && !ps2(other), "{}", other.name);
+    }
+    for other in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
         assert!(!wreck(other, Platform::Psp), "{}", other.name);
     }
 }
@@ -471,18 +556,18 @@ fn only_2048_ends_its_race_in_the_wo_composite_and_it_is_measured() {
 }
 
 #[test]
-fn the_shield_tint_is_hds_own_and_everyone_elses_is_pulses_by_inheritance() {
+fn the_shield_tint_is_hds_own_and_omega_and_2048_take_their_own_while_pulses_stays_on_pure() {
     let tint = |t: &Title, p| t.looks.shield_palette.on(p);
     assert_eq!(tint(oag_hd::TITLE, Platform::Psp), ShieldPalette::Hd);
     assert_eq!(tint(oag_hd::TITLE, Platform::Ps2), ShieldPalette::Hd);
-    for title in [
-        oag_pulse::TITLE,
-        oag_pure::TITLE,
-        oag_2048::TITLE,
-        oag_omega::TITLE,
-    ] {
+    for title in [oag_pulse::TITLE, oag_pure::TITLE] {
         assert_eq!(tint(title, Platform::Psp), ShieldPalette::Pulse);
         assert_eq!(tint(title, Platform::Ps2), ShieldPalette::Ps2Pulse);
+    }
+    for title in [oag_2048::TITLE, oag_omega::TITLE] {
+        assert_eq!(tint(title, Platform::Vita), ShieldPalette::Omega);
+        assert_eq!(tint(title, Platform::Ps4), ShieldPalette::Omega);
+        assert_eq!(title.looks.shield_palette.origin, Origin::Measured);
     }
     assert_eq!(
         oag_pure::TITLE.looks.shield_palette.origin,
@@ -524,5 +609,36 @@ fn the_psp_bloom_belongs_to_pulse_and_pure_and_only_pure_lands_it_under_the_hud(
             "{}",
             other.name
         );
+    }
+}
+
+/// A Pulse circuit's batches cull per their own bit: measured on the PSP, carried to the PS2,
+/// and Pure's, which nothing measured, keep drawing two-sided.
+#[test]
+fn pulse_culls_a_circuits_batches_by_their_own_bit_and_nothing_else_does() {
+    let psp = |t: &Title| t.looks.batch_back_face_cull.applies(Platform::Psp);
+    let ps2 = |t: &Title| t.looks.batch_back_face_cull_carried.applies(Platform::Ps2);
+    assert!(psp(oag_pulse::TITLE) && ps2(oag_pulse::TITLE));
+    assert_eq!(
+        oag_pulse::TITLE.looks.batch_back_face_cull.origin,
+        Origin::Measured
+    );
+    assert_eq!(
+        oag_pulse::TITLE.looks.batch_back_face_cull_carried.origin,
+        Origin::InheritedFrom("Wipeout Pulse (PSP)")
+    );
+    assert!(
+        !oag_pulse::TITLE
+            .looks
+            .batch_back_face_cull
+            .applies(Platform::Ps2)
+    );
+    for other in [
+        oag_pure::TITLE,
+        oag_hd::TITLE,
+        oag_2048::TITLE,
+        oag_omega::TITLE,
+    ] {
+        assert!(!psp(other) && !ps2(other), "{}", other.name);
     }
 }

@@ -9,7 +9,7 @@ use super::*;
 use oag_gameplay::PlayerInputs;
 
 /// The fixture grid, with an engine on slot 1 so the race has something to scale.
-fn grid(extensions: crate::extensions::Prepared) -> Race {
+pub(super) fn grid(extensions: crate::extensions::Prepared) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.extensions = extensions;
@@ -27,7 +27,7 @@ fn grid(extensions: crate::extensions::Prepared) -> Race {
 }
 
 /// Every tick's state hash over `ticks` ticks, folded into one, and the hashes.
-fn run(mut race: Race, ticks: u32) -> (Race, Vec<u64>) {
+pub(super) fn run(mut race: Race, ticks: u32) -> (Race, Vec<u64>) {
     let hashes = (0..ticks)
         .map(|_| {
             race.tick(&PlayerInputs::none());
@@ -46,8 +46,9 @@ fn fold(hashes: &[u64]) -> u64 {
 }
 
 /// The fixture race's 600 tick hashes, folded. Recorded from the build **without**
-/// the `extensions` feature on 2026-10-29; the build with it must reproduce it.
-const VANILLA_FOLD: u64 = 0x0898_d286_7629_23f9;
+/// the `extensions` feature; the build with it must reproduce it. Moved with Pulse's body
+/// damping (`docs/physics/body-damping.md`).
+const VANILLA_FOLD: u64 = 0x43a3_a21f_8003_8fb0;
 
 #[test]
 fn a_vanilla_race_hashes_the_same_with_the_feature_on_or_off_and_builds_no_engine() {
@@ -63,17 +64,17 @@ fn a_vanilla_race_hashes_the_same_with_the_feature_on_or_off_and_builds_no_engin
 }
 
 #[cfg(feature = "extensions")]
-mod on {
+pub(super) mod on {
     use std::sync::Arc;
 
     use super::*;
-    use crate::extensions::{Prepared, Source, prepare};
+    use crate::extensions::{IconSource, Prepared, Source, prepare};
 
-    const STATE: i32 = 1024 + oag_ext_abi::STATE_AT as i32;
-    const REPLY: i32 = 1024 + oag_ext_abi::REPLY_AT as i32;
+    pub(in crate::tests) const STATE: i32 = 1024 + oag_ext_abi::STATE_AT as i32;
+    pub(in crate::tests) const REPLY: i32 = 1024 + oag_ext_abi::REPLY_AT as i32;
     const POOL: i32 = 1024 + oag_ext_abi::POOL_AT as i32;
 
-    fn module(id: &str, body: &str) -> Source {
+    pub(in crate::tests) fn module(id: &str, body: &str) -> Source {
         let wasm = wat::parse_str(format!(
             r#"(module
                 (memory (export "memory") 1)
@@ -85,18 +86,26 @@ mod on {
         .unwrap();
         Source {
             mod_id: id.to_string(),
+            version: "1.0.0".to_string(),
             module: "test.wasm".to_string(),
             titles: Vec::new(),
             api: 1,
             memory_pages: 1,
             state_bytes: 8,
+            drives_ai_pickup: false,
             scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
             strings: Arc::new(|_| Default::default()),
             icons: Vec::new(),
             effects: Vec::new(),
+            shaders: Vec::new(),
+            sounds: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
+            pickup_titles: Vec::new(),
+            pickup_odds: Vec::new(),
+            options: Default::default(),
+            channels: crate::extensions::Declared::default(),
         }
     }
 
@@ -191,14 +200,14 @@ mod on {
     /// Gives slot 0 the mod pickup while it holds nothing and nothing has been fired or
     /// absorbed yet, and counts the `pickup-fire` (blob word 0) and `pickup-absorbed`
     /// (word 1) events it is sent.
-    fn giver(id: &str) -> Source {
+    pub(in crate::tests) fn giver(id: &str) -> Source {
         module(
             id,
             &format!(
                 "(local $i i32) (local $kind i32)
                  (block $done (loop $next
                    (br_if $done (i32.ge_u (local.get $i) (i32.load (i32.const {count}))))
-                   (local.set $kind (i32.load8_u (i32.add (i32.const {EVENTS}) (i32.mul (local.get $i) (i32.const 8)))))
+                   (local.set $kind (i32.load8_u (i32.add (i32.const {EVENTS}) (i32.mul (local.get $i) (i32.const {EVENT_LEN})))))
                    (if (i32.eq (local.get $kind) (i32.const 2))
                      (then (i32.store (i32.const {STATE}) (i32.add (i32.load (i32.const {STATE})) (i32.const 1)))))
                    (if (i32.eq (local.get $kind) (i32.const 3))
@@ -212,6 +221,7 @@ mod on {
                      (i32.store8 (i32.const {cmd}) (i32.const 3))
                      (i32.store8 (i32.const {slot}) (i32.const 0))))
                  i32.const 0",
+                EVENT_LEN = oag_ext_abi::EVENT_LEN,
                 count = 1024 + 24,
                 s4 = STATE + 4,
                 cmd = REPLY + 4,
@@ -221,7 +231,7 @@ mod on {
     }
 
     /// Every tick: `pickup-roll` every second Turbo.
-    fn roller() -> Source {
+    pub(in crate::tests) fn roller() -> Source {
         module(
             "test.roller",
             &format!(
@@ -256,7 +266,7 @@ mod on {
         race.tick(&PlayerInputs::none()); // the give
         assert_eq!(
             race.sim.world.ships[0].pickup.weapon,
-            Some(Weapon::Extension)
+            Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
         );
         assert_eq!(
             race.sim.world.ships[0].pickup.last, None,
@@ -265,7 +275,7 @@ mod on {
         race.tick(&pressed(Button::Square));
         assert_eq!(
             race.sim.world.ships[0].pickup.weapon,
-            Some(Weapon::Extension),
+            Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)),
             "fire does not spend it"
         );
         assert_eq!(
@@ -296,7 +306,7 @@ mod on {
         use oag_tables::weapons::Weapon;
         let mut race = grid(prepared(&[roller()]));
         assert!(
-            !race.sim.extensions.rolls(Weapon::Turbo),
+            race.sim.extensions.rolls(0, Weapon::Turbo).is_none(),
             "no rule before the first call"
         );
         race.tick(&PlayerInputs::none());
@@ -308,7 +318,7 @@ mod on {
             Weapon::Turbo,
         ]
         .into_iter()
-        .map(|weapon| race.sim.extensions.rolls(weapon))
+        .map(|weapon| race.sim.extensions.rolls(0, weapon).is_some())
         .collect();
         assert_eq!(
             rolled,
@@ -317,25 +327,8 @@ mod on {
         );
         // Re-sent every tick, the same rule keeps its count.
         race.tick(&PlayerInputs::none());
-        assert!(!race.sim.extensions.rolls(Weapon::Turbo));
-        assert!(race.sim.extensions.rolls(Weapon::Turbo));
-    }
-
-    #[test]
-    fn a_second_module_reaching_for_the_mods_pickup_faults_and_the_first_keeps_it() {
-        let mut race = grid(prepared(&[giver("test.a"), giver("test.b")]));
-        race.tick(&PlayerInputs::none());
-        let reports = race.extension_reports();
-        assert!(reports[0].faulted.is_none(), "{:?}", reports[0].faulted);
-        let (_, why) = reports[1]
-            .faulted
-            .clone()
-            .expect("the second giver faulted");
-        assert!(why.contains("test.a"), "{why}");
-        assert_eq!(
-            race.sim.world.ships[0].pickup.weapon,
-            Some(oag_tables::weapons::Weapon::Extension)
-        );
+        assert!(race.sim.extensions.rolls(0, Weapon::Turbo).is_none());
+        assert!(race.sim.extensions.rolls(0, Weapon::Turbo).is_some());
     }
 
     #[test]
@@ -385,12 +378,18 @@ mod on {
         let mut source = giver("test.giver");
         source.pickup = Some(declared.clone());
         let mut race = grid(prepared(&[source]));
-        assert_eq!(race.sim.extensions.pickup_look(0), None, "no owner yet");
+        let first = oag_tables::weapons::ModKind::FIRST;
+        let second = oag_tables::weapons::ModKind::new(1).unwrap();
+        assert_eq!(
+            race.sim.extensions.pickup_look(0, second),
+            None,
+            "no module has the second kind"
+        );
         race.tick(&PlayerInputs::none());
         let mut resolved = declared;
         resolved.icon = Icon::Mod(crate::extensions::mod_icon_src("test.giver", "bolt"));
         assert_eq!(
-            race.sim.extensions.pickup_look(0),
+            race.sim.extensions.pickup_look(0, first),
             Some(resolved.clone()),
             "the manifest's icon key is the HUD sheet's key"
         );
@@ -408,22 +407,20 @@ mod on {
         );
     }
 
-    /// Every tick: `fire-effect` with bit 15 set, the mod's own effect 2, for slot 1.
+    /// Every tick: the mod's own effect "c-ring" (the third of its `[effects]`) for slot 1.
     fn mod_effect_firer(id: &str, fires: bool) -> Source {
-        let body = if fires {
-            format!(
-                "(i32.store (i32.const {REPLY}) (i32.const 1))
-                 (i32.store8 (i32.const {c}) (i32.const 6)) (i32.store8 (i32.const {s}) (i32.const 1))
-                 (i32.store16 (i32.const {a}) (i32.const 0x8002))
-                 i32.const 0",
-                c = REPLY + 4,
-                s = REPLY + 5,
-                a = REPLY + 6,
-            )
-        } else {
-            "i32.const 0".to_string()
+        if !fires {
+            return module(id, "i32.const 0");
+        }
+        let fire = oag_ext_abi::Command::FireModEffect {
+            slot: oag_ext_abi::Slot::new(1).unwrap(),
+            effect: oag_ext_abi::ModName::new("c-ring").unwrap(),
         };
-        module(id, &body)
+        let mut source = super::super::extension_faults::scripted(id, "", &[fire], &[]);
+        source.effects = ["a-flash", "b-spark", "c-ring"]
+            .map(|name| (name.to_string(), format!("fx/{name}.toml")))
+            .to_vec();
+        source
     }
 
     #[test]
@@ -488,7 +485,7 @@ mod on {
                     w = POOL + 5,
                 );
             format!(
-                "(i32.store (i32.const {REPLY}) (i32.const 10))
+                "(i32.store (i32.const {REPLY}) (i32.const 12))
                  (i32.store8 (i32.const {c0}) (i32.const 5)) (i32.store8 (i32.const {s0}) (i32.const 1))
                  (i32.store16 (i32.const {a0}) (i32.const 1))
                  (i32.store8 (i32.const {c1}) (i32.const 6)) (i32.store8 (i32.const {s1}) (i32.const 1))
@@ -497,7 +494,7 @@ mod on {
                  (i32.store16 (i32.const {a2}) (i32.const 6))
                  (i32.store (i32.const {b2}) (i32.const 0xff0000ff))
                  {weather} {sun} {grade}
-                 {shake} {extra} {text} {icon} {pool}
+                 {shake} {extra} {text} {icon} {fill} {fov} {pool}
                  i32.const 0",
                 c0 = REPLY + 4,
                 s0 = REPLY + 5,
@@ -513,6 +510,8 @@ mod on {
                 extra = hud(7, 18, 2, 0.5_f32.to_bits(), 0xff20_20e0),
                 text = hud(8, 19, 0, 0x0050_0344, 0xffff_ffff),
                 icon = hud(9, 20, 3, 0x0050_0344, 0xffff_ffff),
+                fill = hud(10, 30, 0, 0, 0x80ff_2010),
+                fov = hud(11, 31, 0, 8.0_f32.to_bits(), 0),
                 weather = race_wide(3, 10, 0.5),
                 sun = race_wide(4, 11, 0.5),
                 grade = race_wide(5, 12, 0.25),
@@ -549,6 +548,17 @@ mod on {
                 crate::extension_effects::Fired::Title(oag_title::effects::Trigger::CollisionSpark)
             )]
         );
+        // The view outputs reach the race's readers for slot 1 alone, and the quiet race has
+        // none: the same equal hashes above show they are never state.
+        assert_eq!(
+            loud.extension_fill(1),
+            Some([16.0 / 255.0, 32.0 / 255.0, 1.0, 128.0 / 255.0])
+        );
+        assert_eq!(loud.extension_fill(0), None);
+        assert_eq!(loud.extension_fov_offset(1), 8.0);
+        assert_eq!(loud.extension_fov_offset(0), 0.0);
+        assert_eq!(quiet.extension_fill(1), None);
+        assert_eq!(quiet.extension_fov_offset(1), 0.0);
         let tick = loud.sim.world.tick;
         let hud = loud.sim.extensions.hud(1, tick);
         assert_eq!(
@@ -706,7 +716,7 @@ mod on {
         let items = shown(Some("German"), &[namer()]);
         assert_eq!(
             items[1].what,
-            oag_hud::ext_draws::What::ModIcon("mod:test.names/badge".into())
+            oag_hud::ext_draws::What::ModName("mod:test.names/badge".into())
         );
         let mut bare = namer();
         bare.strings = Arc::new(|_| Default::default());
@@ -721,18 +731,57 @@ mod on {
     fn a_mods_icons_are_read_and_decoded_for_the_sheet_and_a_bad_one_is_named() {
         let png = oag_texture::png::encode_rgba(2, 1, &[255, 0, 0, 255, 0, 0, 255, 128]);
         let mut source = namer();
+        let icon = |name: &str, path: &str, read: crate::extensions::Reader| IconSource {
+            name: name.to_string(),
+            path: path.to_string(),
+            read,
+        };
         source.icons = vec![
-            ("badge".to_string(), Arc::new(move || Ok(png.clone()))),
-            ("broken".to_string(), Arc::new(|| Ok(b"not a png".to_vec()))),
-            (
-                "gone".to_string(),
+            icon("badge", "ui/badge.png", Arc::new(move || Ok(png.clone()))),
+            icon(
+                "broken",
+                "ui/broken.png",
+                Arc::new(|| Ok(b"not a png".to_vec())),
+            ),
+            icon(
+                "gone",
+                "ui/gone.png",
                 Arc::new(|| Err("no such file".to_string())),
+            ),
+            icon(
+                "vector",
+                "ui/vector.svg",
+                Arc::new(|| {
+                    Ok(
+                        br#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>"#
+                            .to_vec(),
+                    )
+                }),
+            ),
+            icon(
+                "torn",
+                "ui/torn.svg",
+                Arc::new(|| Ok(b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=".to_vec())),
             ),
         ];
         let mut report = Vec::new();
-        let icons =
+        let all =
             crate::extensions::mod_icons(&[source.clone()], "wipeout-pulse", None, &mut report);
+        let icons = all.raster;
         assert_eq!(icons.len(), 1);
+        assert_eq!(
+            all.vector
+                .iter()
+                .map(|v| v.src.as_str())
+                .collect::<Vec<_>>(),
+            ["mod:test.names/vector"],
+            "an .svg is parsed, not decoded as a PNG; a torn one is left out"
+        );
+        let said = report.join("\n");
+        assert!(
+            said.contains("icon torn (ui/torn.svg) left out:") && said.contains("draws nothing"),
+            "the file and the parser's error: {said}"
+        );
         assert_eq!(icons[0].src, "mod:test.names/badge");
         assert_eq!((icons[0].width, icons[0].height), (2, 1));
         assert_eq!(icons[0].rgba, [255, 0, 0, 255, 0, 0, 255, 128]);
@@ -746,6 +795,7 @@ mod on {
         other.titles = vec!["wipeout-pulse".to_string()];
         assert!(
             crate::extensions::mod_icons(&[other], "wipeout-pure", None, &mut Vec::new())
+                .raster
                 .is_empty(),
             "a mod for another title loads none of its icons"
         );
@@ -806,6 +856,7 @@ colour = "#ff2010"
             &[source.clone()],
             "wipeout-pulse",
             None,
+            &Default::default(),
             &mut library,
             &mut |entry, name| match (entry, name) {
                 ("Track.vex", "spark.tga") => Ok(oag_fx::psys::sprite::Sprite {
@@ -855,6 +906,7 @@ colour = "#ff2010"
             &[other],
             "wipeout-pure",
             None,
+            &Default::default(),
             &mut oag_fx::psys::Library::new(),
             &mut |_, _| Err("none".to_string()),
             &mut Vec::new(),
@@ -926,7 +978,11 @@ colour = "#ff2010"
         )
     }
 
-    fn prepared(sources: &[Source]) -> Prepared {
+    pub(in crate::tests) fn prepared(sources: &[Source]) -> Prepared {
+        prepared_for("wipeout-pulse", sources)
+    }
+
+    pub(in crate::tests) fn prepared_for(title: &str, sources: &[Source]) -> Prepared {
         let mut report = Vec::new();
         let props = crate::extensions::TrackProps::default();
         let track = crate::extensions::Track {
@@ -937,7 +993,7 @@ colour = "#ff2010"
             paths: &[],
             routes: &[],
         };
-        let prepared = prepare(sources, "wipeout-pulse", None, track, None, &mut report);
+        let prepared = prepare(sources, title, None, track, None, &mut report);
         assert!(
             report.iter().all(|line| !line.contains("left out")),
             "{report:?}"
@@ -970,6 +1026,8 @@ colour = "#ff2010"
         let reports = first.extension_reports();
         assert_eq!(reports.len(), 1);
         assert!(reports[0].fuel_used > 0 && reports[0].faulted.is_none());
+        assert!(reports[0].memory_bytes > 0 && reports[0].memory_peak >= reports[0].memory_bytes);
+        assert!(reports[0].memory_peak <= reports[0].memory_cap);
     }
 
     #[test]
@@ -1024,7 +1082,7 @@ mod triggers {
                 (func (export "tick") (result i32) (local $i i32) (local $p i32)
                   (block $done (loop $next
                     (br_if $done (i32.ge_u (local.get $i) (i32.load (i32.const {count}))))
-                    (local.set $p (i32.add (i32.const {events}) (i32.mul (local.get $i) (i32.const 8))))
+                    (local.set $p (i32.add (i32.const {events}) (i32.mul (local.get $i) (i32.const {EVENT_LEN}))))
                     (if (i32.eq (i32.load8_u (i32.add (local.get $p) (i32.const 1))) (i32.const 1))
                       (then
                         (if (i32.eq (i32.load8_u (local.get $p)) (i32.const 7))
@@ -1037,6 +1095,7 @@ mod triggers {
                   (i32.store (i32.const {value}) (i32.load (i32.const {first_value})))
                   i32.const 0))"#,
             word = oag_ext_abi::ABI_WORD,
+            EVENT_LEN = oag_ext_abi::EVENT_LEN,
             count = IO + oag_ext_abi::EVENT_COUNT_AT,
             exit = state + 1,
             triggers = state + 2,
@@ -1047,18 +1106,26 @@ mod triggers {
         .unwrap();
         Source {
             mod_id: "test.triggers".to_string(),
+            version: "1.0.0".to_string(),
             module: "test.wasm".to_string(),
             titles: Vec::new(),
             api: 1,
             memory_pages: 1,
             state_bytes: 8,
+            drives_ai_pickup: false,
             scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
             strings: Arc::new(|_| Default::default()),
             icons: Vec::new(),
             effects: Vec::new(),
+            shaders: Vec::new(),
+            sounds: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
+            pickup_titles: Vec::new(),
+            pickup_odds: Vec::new(),
+            options: Default::default(),
+            channels: crate::extensions::Declared::default(),
         }
     }
 
@@ -1073,6 +1140,7 @@ mod triggers {
                 min: [(from - to) * 0.5, -100.0, -100.0],
                 max: [(to - from) * 0.5, 100.0, 100.0],
                 props: [("gate".to_string(), 0.25)].into(),
+                emits: None,
             }],
             ..TrackProps::default()
         }
@@ -1102,7 +1170,7 @@ mod triggers {
 
     #[test]
     fn a_craft_passing_through_a_trigger_enters_and_leaves_it_once_and_the_guest_reads_it() {
-        // Where slot 1 is at 300 and at 380 ticks of the fixture race: the gate sits
+        // Where slot 1 is at 284 and at 312 ticks of the fixture race: the gate sits
         // between, so it is driven into and out of once (the fixture's ring sends the
         // craft back round after that).
         let x_at = |ticks| {
@@ -1112,10 +1180,10 @@ mod triggers {
                 .position
                 .x
         };
-        let (from, to) = (x_at(300), x_at(380));
+        let (from, to) = (x_at(284), x_at(312));
         assert!(to > from + 10.0, "slot 1 drives along +x: {from} to {to}");
         let props = gate(from + (to - from) * 0.25, from + (to - from) * 0.5);
-        let (race, _) = run(grid(prepared_on(&props)), 380);
+        let (race, _) = run(grid(prepared_on(&props)), 320);
         let blob = race.extension_state(0).unwrap();
         assert_eq!(
             blob[..3],
@@ -1124,7 +1192,7 @@ mod triggers {
         );
         assert_eq!(blob[4..8], 0.25_f32.to_le_bytes(), "its gate property");
         // A gate the craft never reaches is never entered.
-        let (race, _) = run(grid(prepared_on(&gate(to + 1000.0, to + 1010.0))), 380);
+        let (race, _) = run(grid(prepared_on(&gate(to + 1000.0, to + 1010.0))), 320);
         assert_eq!(race.extension_state(0).unwrap()[..2], [0, 0]);
     }
 

@@ -5,7 +5,8 @@
 // exposure step, the original's own order: the gate into a quarter-resolution
 // 8-bit target (wo_bloom_gate_fp), two diagonal blurs (wo_blur_fp), the
 // composite (wo_composite_nocc_fp), then the step the CPU takes over the gate
-// target's alpha (Exposure_AdaptFromReadback, 0x8103d148). `law.rs` is the same
+// target's alpha (Exposure_AdaptFromReadback, 0x8103d148). The composite is
+// drawn as the vignette mesh, not the full-screen triangle. `law.rs` is the same
 // arithmetic in Rust; its tests hold this file to it.
 
 import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
@@ -53,6 +54,47 @@ const LUMINANCE: vec3<f32> = vec3<f32>(0.3, 0.59, 0.11);
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
     return fullscreen_triangle(index);
+}
+
+// `vignetteTint`, `0x816aef08..0x816aef14`: the half4 `PostFx_RegisterPrograms` seeds.
+const VIGNETTE_TINT: vec3<f32> = vec3<f32>(1.0, 1.0, 0.97);
+// The vignette mesh `PostFx_RenderChain` draws the composite as (0x8103ae80..):
+// 32 sectors of nine vertices, `A B C | B C D | C D E`, round clip-space
+// `(0, VIGNETTE_CENTRE_Y)`. A is the centre, B and C the inner circle's two ends of the
+// sector, D and E the outer circle's; `pos.w` is 0 on A, B and C and VIGNETTE_STRENGTH on D
+// and E, and `wo_composite_vp` turns it into `t = vignetteTint * w`.
+const VIGNETTE_CENTRE_Y: f32 = -0.885;
+const VIGNETTE_INNER: f32 = 1.5;
+const VIGNETTE_OUTER: f32 = 2.1500000953674316;
+const VIGNETTE_STRENGTH: f32 = 1.0;
+const VIGNETTE_SECTORS: u32 = 32u;
+const TAU: f32 = 6.283185307179586;
+
+struct VignetteOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+    // The mesh's `pos.w`, interpolated across the triangle.
+    @location(1) w: f32,
+}
+
+@vertex
+fn vs_vignette(@builtin(vertex_index) index: u32) -> VignetteOutput {
+    let sector = index / 9u;
+    let local = index % 9u;
+    // C (local 2, 4, 6) and E (8) sit at the sector's far angle; A has no angle.
+    let angle = (f32(sector) + f32(local % 2u == 0u && local != 0u)) * (TAU / f32(VIGNETTE_SECTORS));
+    // 0 for A, 1 for B and C (the inner circle), 2 for D and E (the outer); the nine are
+    // A B C, B C D, C D E.
+    let outer = local == 5u || local >= 7u;
+    let ring = select(select(1u, 2u, outer), 0u, local == 0u);
+    let radius = f32(min(ring, 1u)) * VIGNETTE_INNER + f32(ring / 2u) * (VIGNETTE_OUTER - VIGNETTE_INNER);
+    let clip = vec2<f32>(radius * sin(angle), VIGNETTE_CENTRE_Y + radius * cos(angle));
+    var out: VignetteOutput;
+    out.position = vec4<f32>(clip, 0.0, 1.0);
+    // The picture's V runs down, clip-space Y up.
+    out.uv = vec2<f32>(clip.x * 0.5 + 0.5, 0.5 - clip.y * 0.5);
+    out.w = f32(ring / 2u) * VIGNETTE_STRENGTH;
+    return out;
 }
 
 // A coordinate inside the drawn rectangle of the scene.
@@ -128,15 +170,18 @@ fn fs_blur_second(in: VertexOutput) -> @location(0) vec4<f32> {
 //   e = E * main,  L = dot(e, LUMINANCE),
 //   out = sqrt(e * L / (1 + L) + BloomFactor * bloom) * v + screenTint
 // with `c = alpha.rgb + (1 - alpha.a) * main` read as `main` (nothing here
-// draws into the original's separate `alphaTex`), the vignette `v` at 1 and the
-// tint at 0: both are unread (exposure.md, "Open").
+// draws into the original's separate `alphaTex`) and the tint at 0: both are
+// unread (exposure.md, "Open"). `v = 1 - t * t` per channel, `t = vignetteTint * w`
+// from the mesh (`vs_vignette`).
 @fragment
-fn fs_composite(in: VertexOutput) -> @location(0) vec4<f32> {
+fn fs_composite(in: VignetteOutput) -> @location(0) vec4<f32> {
     let main = textureSampleLevel(source_tex, source_sampler, scene_uv(in.uv), 0.0).rgb;
     let bloom = textureSampleLevel(bloom_tex, source_sampler, quarter_uv(in.uv), 0.0).rgb;
     let e = exposed.exposure * max(main, vec3<f32>(0.0));
     let l = dot(e, LUMINANCE);
-    return vec4<f32>(sqrt(e * l / (1.0 + l) + params.bloom_factor * bloom), 1.0);
+    let t = VIGNETTE_TINT * in.w;
+    let v = vec3<f32>(1.0) - t * t;
+    return vec4<f32>(sqrt(e * l / (1.0 + l) + params.bloom_factor * bloom) * v, 1.0);
 }
 
 @group(1) @binding(0) var<storage, read_write> state: State;

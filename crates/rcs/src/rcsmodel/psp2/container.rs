@@ -115,13 +115,11 @@ pub fn read(file: &[u8]) -> Result<Container> {
 
 /// A little-endian `u32` at `at`, or an [`Error::OutOfBounds`] naming `what`.
 pub(crate) fn u32_at(file: &[u8], at: usize, what: &'static str) -> Result<u32> {
-    file.get(at..at + 4)
-        .map(|b| u32::from_le_bytes(b.try_into().expect("four bytes")))
-        .ok_or(Error::OutOfBounds {
-            what,
-            end: at + 4,
-            len: file.len(),
-        })
+    oag_bytes::le::u32_at(file, at).ok_or(Error::OutOfBounds {
+        what,
+        end: at + 4,
+        len: file.len(),
+    })
 }
 
 /// Wraps one section into a container image, for a test that builds a file

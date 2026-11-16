@@ -5,6 +5,7 @@
 //! `docs/architecture/adr/0003-no-ecs.md` for why this is not an ECS.
 
 use oag_core::Rng;
+use oag_core::math::Vec3;
 use oag_physics::{DamageRules, Handling, ShipState};
 use oag_race::{Mode, RaceState};
 
@@ -112,6 +113,10 @@ pub struct Ship {
     /// `ShipState::turbo_timer` instead, and the inventory itself changes no
     /// force.
     pub pickup: oag_weapons::pickup::Held,
+    /// How many rockets a press fires and how many mines a drop lays, from this craft's own
+    /// `handlingstats.xml` (`oag_weapons::counts`). Load-time data like [`Self::handling`]:
+    /// no tick writes it.
+    pub weapon_counts: oag_weapons::counts::WeaponCounts,
     /// Where this craft's driver last found itself on the racing line.
     ///
     /// Only an opponent uses it - slot 0 is flown by the player - and it is the
@@ -219,8 +224,60 @@ pub struct Ship {
     /// root decides that. Hashed, because a craft that cannot thrust is a
     /// different race from one that can.
     pub disruption: oag_weapons::disruption::Disruption,
+    /// The hull's `Ship Muzzle` locator in the hull's own model space: the weapon
+    /// node a Plasma bolt charges on and is released from
+    /// (`oag_weapons::projectile::plasma::muzzle`). `None` where the hull authors
+    /// none or its class id is unread, which keeps the measured hold point.
+    ///
+    /// Set by the composition root from the slot's hull, per team, and read-only
+    /// through the race like [`Self::handling`]; not hashed, for that field's
+    /// reason.
+    pub muzzle: Option<Vec3>,
+    /// The up of the track sample the craft is located on: `-down` of the sample
+    /// the tick's step fed the hover and magstrip probes, the original's
+    /// `-(craft+0xb10)`. A Rocket, Missile, Shuriken or Plasma bolt is born
+    /// carrying it ([`oag_weapons::Craft::launch_normal`]).
+    ///
+    /// `None` before the first step, on a track with no samples, and on a title
+    /// whose `Weapons::launch_normal_is_track_up` is `false`; the weapons then
+    /// take the craft's up. Written once a step, by the composition root, so a
+    /// weapon spent before the step reads the previous tick's, as the original's
+    /// does. Not hashed: it is re-derived from the pose every step, and the
+    /// projectile it seeds is hashed.
+    pub track_up: Option<Vec3>,
     /// Whether this slot holds a ship at all.
     pub active: bool,
+    /// A jump along the circuit in progress (a simulation mod's `transit`): while it
+    /// runs the craft is out of the world ([`Self::in_world`]). `None` in every vanilla
+    /// race, and hashed only while it is `Some`.
+    pub transit: Option<Transit>,
+}
+
+/// A craft out of the world on its way to a point further round the circuit: frozen
+/// where it entered, not stepped, not drawn, collided with or hit, its reset triggers
+/// held. When [`Self::ticks_left`] runs out it is put at course point [`Self::to`],
+/// forward of where it went in, at [`Self::exit_speed`] (`oag_raceplay`'s `transit`
+/// module).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Transit {
+    /// Ticks still to spend out of the world.
+    pub ticks_left: u16,
+    /// The course ring point it comes out at, resolved when it entered.
+    pub to: u32,
+    /// The fork route it comes out on, as its index in the course's routes plus one; `0`
+    /// for the ring.
+    pub route: u16,
+    /// Its speed coming out, track units a second.
+    pub exit_speed: f32,
+}
+
+impl Ship {
+    /// Whether the craft is in play in the world: a slot holding a ship that is not in
+    /// a [`Transit`]. What drawing, craft-to-craft contact and weapon targeting ask.
+    #[must_use]
+    pub fn in_world(&self) -> bool {
+        self.active && self.transit.is_none()
+    }
 }
 
 impl Default for Ship {
@@ -230,6 +287,7 @@ impl Default for Ship {
             handling: Handling::ZERO,
             segment: 0,
             pickup: oag_weapons::pickup::Held::empty(),
+            weapon_counts: oag_weapons::counts::WeaponCounts::default(),
             driver: oag_ai::Driver::default(),
             weapon_ai: oag_ai::weapon_ai::WeaponAi::default(),
             standing: oag_race::Standing::default(),
@@ -238,7 +296,10 @@ impl Default for Ship {
             pending_thrust_scale: 1.0,
             quake_lift: 0.0,
             disruption: oag_weapons::disruption::Disruption::default(),
+            muzzle: None,
+            track_up: None,
             active: false,
+            transit: None,
         }
     }
 }
@@ -385,15 +446,17 @@ pub struct World {
     /// covered by [`crate::hash::hash_world`] exactly as [`Self::projectiles`]
     /// is.
     pub quake: Option<oag_weapons::projectile::quake::Wave>,
-    /// The single LeachBeam link, or `None` when none is in flight.
+    /// The LeachBeam links in flight, `None` for a free entry.
     ///
-    /// Beside [`Self::quake`] and for the same reason - see
-    /// `oag_weapons::projectile::leach_beam`'s module doc comment: the original's own
-    /// pool cursor allows exactly one beam **in the whole race** at a time, a
-    /// stricter gate than any other weapon has, and a beam carries a link
-    /// between two craft rather than a position and a velocity. Simulation
+    /// Beside [`Self::quake`]: a beam carries a link between two craft rather
+    /// than a position and a velocity. A fire arms the first free entry while
+    /// fewer than the title's limit are live
+    /// (`oag_title::weapons::Weapons::leach_beams`, at most the pool's eight);
+    /// a retired entry is left empty where it is, so a beam keeps its index (and
+    /// the render-side state that follows it) for as long as it lives. Simulation
     /// state, so [`crate::hash::hash_world`] covers it.
-    pub leach_beam: Option<oag_weapons::projectile::leach_beam::Beam>,
+    pub leach_beams: [Option<oag_weapons::projectile::leach_beam::Beam>;
+        oag_weapons::projectile::leach_beam::POOL_SIZE],
     /// The live Repulsers, in pool order, `None` for a free slot.
     ///
     /// Sixteen, `Weapon_FireRepulser`'s own cap. Beside [`Self::quake`] rather
@@ -405,6 +468,19 @@ pub struct World {
 }
 
 impl World {
+    /// How many LeachBeams are live.
+    #[must_use]
+    pub fn leach_beams_live(&self) -> usize {
+        self.leach_beams.iter().flatten().count()
+    }
+
+    /// The live LeachBeams, in pool order.
+    pub fn leach_beams_iter(
+        &self,
+    ) -> impl Iterator<Item = &oag_weapons::projectile::leach_beam::Beam> {
+        self.leach_beams.iter().flatten()
+    }
+
     /// An empty world with the given seed.
     #[must_use]
     pub fn new(seed: u64) -> Self {
@@ -417,7 +493,7 @@ impl World {
             controllers: Self::SINGLE_PLAYER,
             projectiles: oag_weapons::projectile::Projectiles::new(),
             quake: None,
-            leach_beam: None,
+            leach_beams: [None; oag_weapons::projectile::leach_beam::POOL_SIZE],
             repulsers: [None; oag_weapons::projectile::repulser::POOL_SIZE],
         }
     }
@@ -545,7 +621,12 @@ mod tests {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn the_world_snapshot_does_not_grow() {
-        const LIMIT: usize = 19_392; // +24 bytes x 8 crafts: Handling::camera_lean
+        // +360 bytes: the LeachBeam pool of eight (was one Option<Beam>); +64: `Held::quake_armed`,
+        // one byte per ship; +128: `Ship::muzzle`, the hull's weapon node, 16 bytes per ship;
+        // +128: `Ship::transit`, a mod's jump along the circuit, 16 bytes per ship;
+        // +192: `ShipState::flip`, the Eliminator flip, 24 bytes per craft;
+        // +128: `Ship::track_up`, the located track's up a weapon is born carrying, 16 bytes per ship.
+        const LIMIT: usize = 20_392;
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,

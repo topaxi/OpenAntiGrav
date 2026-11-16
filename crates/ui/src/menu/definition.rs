@@ -27,14 +27,15 @@
 //! at once and neither can a player watching one screen ever tell that a
 //! *different* screen forgot.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::language::StringTable;
 use oag_core::buttons::button_from_name;
 
 use super::{
-    Action, CAMPAIGN_PICKER_PAGE, CUSTOM_CAMPAIGN_ROW, Choice, Condition, Entry,
-    ORIGINAL_CAMPAIGN_ROW, Page, Pin, Restart, RowMeta, Value, ValueSource, Warning,
+    Action, CAMPAIGN_EDITOR_ROW, CAMPAIGN_PICKER_PAGE, CUSTOM_CAMPAIGN_ROW, Choice, Condition,
+    Entry, LaunchInputs, ORIGINAL_CAMPAIGN_ROW, Page, Pin, Query, QueryRef, Restart, RowMeta,
+    Value, ValueSource, Warning,
 };
 
 /// The schema kind a menu file declares in its `[toml-schema]` header.
@@ -49,6 +50,10 @@ pub struct Definition {
     pub pages: Vec<Page>,
     /// Index of the page the menus open on.
     pub root: usize,
+    /// Each mod's settings page by mod id: the tree id (`<mod id>/<id>`) its `menu.toml`'s
+    /// `settings` names. The MODS page's SETTINGS row opens it
+    /// ([`super::Action::OpenModSettings`]), so it needs no row of its own to be reached.
+    pub mod_settings: BTreeMap<String, String>,
 }
 
 /// What went wrong loading a definition.
@@ -124,7 +129,25 @@ pub enum Error {
 }
 
 mod build;
+mod mod_setting;
+mod pause;
 pub use build::{Added, For, ModMenu};
+pub use pause::{PAUSE_PAGE, PHOTO_ROW, Pause, row_id as pause_row_id};
+
+impl From<&raw::Launch> for LaunchInputs {
+    fn from(keys: &raw::Launch) -> Self {
+        Self {
+            track_title: keys.track_title.clone(),
+            track: keys.track.clone(),
+            craft_title: keys.craft_title.clone(),
+            team: keys.team.clone(),
+            variant: keys.variant.clone(),
+            mode: keys.mode.clone(),
+            class: keys.class.clone(),
+            difficulty: keys.difficulty.clone(),
+        }
+    }
+}
 
 /// The file's own shape, before it is checked and resolved.
 mod raw {
@@ -155,6 +178,27 @@ mod raw {
         pub entries: Vec<Entry>,
     }
 
+    /// `values_from = "<fixed name>"` or `values_from = { query = "<name>", of = "<setting>" }`.
+    /// Kept permissive here: [`super::resolve`] names the bad part with the row's context.
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    pub enum ValuesFrom {
+        Name(String),
+        Query(QuerySpec),
+    }
+
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct QuerySpec {
+        pub query: String,
+        #[serde(default)]
+        pub of: String,
+        /// [`super::Query::companion`]'s keys; at most the one its query takes.
+        pub craft_title: Option<String>,
+        pub class: Option<String>,
+        pub team: Option<String>,
+    }
+
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
     pub struct Entry {
@@ -166,10 +210,19 @@ mod raw {
         pub label: String,
         pub target: Option<String>,
         pub action: Option<String>,
+        /// `launch = { track_title = "mod.<id>.track_title", ... }`: the settings keys
+        /// a `launch_race` row reads its race's inputs from.
+        pub launch: Option<Launch>,
         pub setting: Option<String>,
         #[serde(default)]
         pub values: Vec<String>,
-        pub values_from: Option<String>,
+        pub values_from: Option<ValuesFrom>,
+        /// A choice row's value while nothing is saved for it; read for `mod.<id>.<key>` rows.
+        pub default: Option<String>,
+        /// A mod's choice row: `"sim"` (the default) or `"view"`. A `sim` pick reaches the
+        /// module's simulation tick and travels with the race; a `view` pick reaches only
+        /// what the module draws and stays on this device.
+        pub scope: Option<String>,
         pub button: Option<String>,
         /// `{ setting = "...", value = ... }`: what makes this row inert. Only
         /// `choice` and `toggle` rows may carry it.
@@ -199,6 +252,22 @@ mod raw {
         /// An id [`super::resolved`] looks up in place of `subtitle`, the same
         /// mechanism `string_id` is for `label`.
         pub subtitle_string_id: Option<String>,
+    }
+
+    /// A `launch_race` row's `launch = { ... }` table: which setting each input of
+    /// the race is read from. Every key is optional; an input left out is the
+    /// booted title's own.
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct Launch {
+        pub track_title: Option<String>,
+        pub track: Option<String>,
+        pub craft_title: Option<String>,
+        pub team: Option<String>,
+        pub variant: Option<String>,
+        pub mode: Option<String>,
+        pub class: Option<String>,
+        pub difficulty: Option<String>,
     }
 
     /// `disabled_by = { setting = "display.vsync", value = "on" }`,
@@ -261,7 +330,7 @@ impl Definition {
     }
 
     /// [`Self::parse`] without the reachability check: the tree this project
-    /// ships holds pages (REMIX, RECORDS) that only a mod's row opens, so it is
+    /// ships holds pages (RECORDS) that only a mod's row opens, so it is
     /// whole only once [`Self::build`] has merged the extras in.
     ///
     /// # Errors
@@ -310,7 +379,17 @@ impl Definition {
             });
         }
 
-        let definition = Self { pages, root };
+        let definition = Self {
+            pages,
+            root,
+            mod_settings: BTreeMap::new(),
+        };
+        if let Some((page, row, of)) = unknown_query_of(&definition.pages) {
+            return Err(Error::BadEntry {
+                context: format!("page {:?} entry {row}", definition.pages[page].id),
+                problem: format!("values_from names {of:?}, the setting of no choice row"),
+            });
+        }
         definition.check_rows()?;
         if reachable {
             definition.check_reachable()?;
@@ -404,6 +483,11 @@ impl Definition {
     fn check_reachable(&self) -> Result<(), Error> {
         let mut seen = BTreeSet::new();
         let mut stack = vec![self.root];
+        // A mod's settings page, which the MODS page's SETTINGS row opens.
+        stack.extend(
+            (self.mod_settings.values())
+                .filter_map(|id| self.pages.iter().position(|page| &page.id == id)),
+        );
         while let Some(page) = stack.pop() {
             if !seen.insert(page) {
                 continue;
@@ -459,9 +543,9 @@ impl Definition {
     /// at draw time would leave a gap in the strip with the cursor still
     /// able to land on it.
     ///
-    /// RACE REMIX's own VARIANT row is untouched: `remix.team` can name any
-    /// title's team regardless of which one booted, so it keeps offering
-    /// real variants even in a Pure-booted session.
+    /// A `variants_of` row is untouched: its title can be any title's, not
+    /// the booted one, so it keeps offering real variants even in a
+    /// Pure-booted session.
     pub fn drop_unavailable_race_variant(&mut self, title: &oag_title::Title) {
         if title.race.has_team_variants() {
             return;
@@ -482,6 +566,55 @@ impl Definition {
         }
         for page in &mut self.pages {
             page.retain_rows(|entry| entry.setting() != Some("graphics.boost_zoom"));
+        }
+    }
+
+    /// Drops the TRAIL HITS row on a title whose original plays the trail-hit burst by itself
+    /// (`oag_title::Effects::plays_trail_hits_natively`): Wipeout HD alone. 2048 and Omega author
+    /// the burst but never fire it, so they keep the row, as Pulse and Pure do. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_trail_hits(&mut self, title: &oag_title::Title) {
+        if !title.effects.plays_trail_hits_natively() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.trail_hits"));
+        }
+    }
+
+    /// Drops the WINGTIP CONTRAILS row on a title that carries them itself
+    /// (`oag_title::Title::wingtip`): HD, 2048 and Omega. Pulse and Pure keep it. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_wingtip_contrails(&mut self, title: &oag_title::Title) {
+        if title.wingtip.is_none() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.wingtip_contrails"));
+        }
+    }
+
+    /// Drops the OWN SHIELD row on a title whose original draws the HD-style shield itself
+    /// (`oag_title::Looks::own_shield` unread): HD, 2048 and Omega. Pulse and Pure keep it. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_own_shield(&mut self, title: &oag_title::Title) {
+        if title.looks.own_shield.applies_everywhere() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.own_shield"));
+        }
+    }
+
+    /// Drops the OWN ROCKETS row on a title it is not offered on
+    /// (`oag_title::Looks::own_rockets` unread): HD, 2048 and Omega. Pulse and Pure keep it. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_own_rockets(&mut self, title: &oag_title::Title) {
+        if title.looks.own_rockets.applies_everywhere() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.own_rockets"));
         }
     }
 
@@ -509,6 +642,42 @@ impl Definition {
         }
     }
 
+    /// Drops the PLAYER NAME and PLAYER TAG rows a title does not use
+    /// (`oag_title::profile::Profile`): 2048 and Omega keep neither, HD only the name. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_player_rows(&mut self, title: &oag_title::Title) {
+        let profile = title.profile;
+        for page in &mut self.pages {
+            page.retain_rows(|entry| match entry {
+                Entry::Run {
+                    action: Action::EditPlayerName,
+                    ..
+                } => profile.asks_for_name(),
+                Entry::Run {
+                    action: Action::EditPlayerTag,
+                    ..
+                } => profile.asks_for_tag(),
+                _ => true,
+            });
+        }
+    }
+
+    /// Drops the GHOST SHIPS VISIBLE, AUTO LOAD GHOST and MULTIPLAYER TAGS rows a title's own
+    /// options list lacks (`oag_title::race::RaceDefaults::game_options`): Pulse's list has the
+    /// first on both pressings and the others on the PSP's, so it offers all three. Same once-before-read
+    /// timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_game_options(&mut self, title: &oag_title::Title) {
+        let offered = title.race.game_options;
+        for page in &mut self.pages {
+            page.retain_rows(|entry| match entry.setting() {
+                Some("display.ghost_ship_visible") => offered.ship_visible,
+                Some("display.auto_load_ghost") => offered.auto_load,
+                Some("display.multiplayer_tags") => offered.multiplayer_tags,
+                _ => true,
+            });
+        }
+    }
+
     /// Drops the TRAIL ORDER row on a title whose engine ribbon is not the PSP
     /// preset (`oag_title::exhaust::Exhaust::is_psp_preset`): HD/Fury's tube keeps
     /// its own order whatever the setting holds, and Omega and 2048 reuse it. Same
@@ -522,6 +691,30 @@ impl Definition {
         }
     }
 
+    /// Drops the SCENERY SORT row on a title whose circuit is not the PSP preset's: HD/Fury
+    /// keeps its own blended order, and Omega and 2048 reuse it. The same titles as
+    /// [`Self::drop_unavailable_trail_order`].
+    pub fn drop_unavailable_scenery_sort(&mut self, title: &oag_title::Title) {
+        if title.exhaust.is_psp_preset() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.scenery_sort"));
+        }
+    }
+
+    /// Drops the TRAIL LENGTH row on a title whose engine ribbon is not the PSP preset: HD/Fury
+    /// draws its own 54-sample tube, and Omega and 2048 reuse it. The same titles as
+    /// [`Self::drop_unavailable_trail_order`].
+    pub fn drop_unavailable_trail_length(&mut self, title: &oag_title::Title) {
+        if title.exhaust.is_psp_preset() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.trail_length"));
+        }
+    }
+
     /// Drops the WEATHER row on a title whose weather is not played
     /// (`oag_title::weather::Weather::is_played`): every title but Pulse. Same
     /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
@@ -531,6 +724,26 @@ impl Definition {
         }
         for page in &mut self.pages {
             page.retain_rows(|entry| entry.setting() != Some("graphics.weather"));
+        }
+    }
+
+    /// Drops the RUMBLE row's `original` value on a title whose original plays
+    /// no pattern rumble (`oag_title::rumble::Rumble::is_played`): Pulse, Pure
+    /// and 2048. Same once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_rumble_original(&mut self, title: &oag_title::Title) {
+        if title.rumble.is_played() {
+            return;
+        }
+        for page in &mut self.pages {
+            for entry in &mut page.entries {
+                if let Entry::Choice {
+                    setting, values, ..
+                } = entry
+                    && setting == "controls.rumble"
+                {
+                    values.retain(|choice| choice.value != "original");
+                }
+            }
         }
     }
 
@@ -573,6 +786,20 @@ impl Definition {
         }
     }
 
+    /// [`Self::relabel_choice`] with the words `strings` has under `id`; the
+    /// label stays when the table has none.
+    pub fn relabel_choice_from(
+        &mut self,
+        setting: &str,
+        value: &str,
+        strings: &StringTable,
+        id: &str,
+    ) {
+        if let Some(label) = strings.get(id) {
+            self.relabel_choice(setting, value, label);
+        }
+    }
+
     /// Words the row that fires `action` as `label`, with `subtitle` under it
     /// while it is selected, for a title whose original names that row
     /// differently (Wipeout Pure's `SINGLE PLAYER` where this project's tree
@@ -584,6 +811,7 @@ impl Definition {
                 if let Entry::Run {
                     action: found,
                     label: shown,
+                    ..
                 } = entry
                     && *found == action
                 {
@@ -618,11 +846,18 @@ impl Definition {
     /// campaign and each mod campaign in `rows` (`(key, name, description)`),
     /// ADR-0077. The page's first row is the original campaign, worded as the
     /// row was; each other row fires [`Action::OpenCustomCampaign`] and carries
-    /// `CUSTOM_CAMPAIGN_ROW` + its key as its id. With `rows` empty, or no
+    /// `CUSTOM_CAMPAIGN_ROW` + its key as its id. `editor` (`(label, subtitle)`)
+    /// adds a last row firing [`Action::OpenCampaignEditor`], and makes the page
+    /// exist with no mod campaign. With no `rows` and no `editor`, or no
     /// campaign row in the tree, nothing changes. Run once, after the title's
     /// own trimming and [`Self::rename_campaign_row`].
-    pub fn add_campaign_picker(&mut self, title: &str, rows: &[(String, String, String)]) {
-        if rows.is_empty() {
+    pub fn add_campaign_picker(
+        &mut self,
+        title: &str,
+        rows: &[(String, String, String)],
+        editor: Option<(&str, &str)>,
+    ) {
+        if rows.is_empty() && editor.is_none() {
             return;
         }
         let Some((page, row)) = self.pages.iter().enumerate().find_map(|(p, page)| {
@@ -651,6 +886,7 @@ impl Definition {
             entries: vec![Entry::Run {
                 label: label.clone(),
                 action: Action::OpenCampaign,
+                inputs: None,
             }],
             subtitles: vec![subtitle],
             meta: vec![RowMeta {
@@ -663,12 +899,25 @@ impl Definition {
             picker.entries.push(Entry::Run {
                 label: name.clone(),
                 action: Action::OpenCustomCampaign,
+                inputs: None,
             });
             picker
                 .subtitles
                 .push((!description.is_empty()).then(|| description.clone()));
             picker.meta.push(RowMeta {
                 id: Some(format!("{CUSTOM_CAMPAIGN_ROW}{key}")),
+                parent: None,
+            });
+        }
+        if let Some((name, description)) = editor {
+            picker.entries.push(Entry::Run {
+                label: name.to_string(),
+                action: Action::OpenCampaignEditor,
+                inputs: None,
+            });
+            picker.subtitles.push(Some(description.to_string()));
+            picker.meta.push(RowMeta {
+                id: Some(CAMPAIGN_EDITOR_ROW.to_string()),
                 parent: None,
             });
         }
@@ -749,10 +998,10 @@ impl Definition {
     /// and the cursor all agree.
     ///
     /// A title with no such screens - Pure, 2048 today - keeps all
-    /// three, and START launches off the rows as before. RACE REMIX and
-    /// RECORDS keep their own `race.track`/`remix.*` rows either way: the
-    /// first mixes titles and the second browses records, neither of which
-    /// the selection screens do.
+    /// three, and START launches off the rows as before. A mod's
+    /// two-title race page and RECORDS keep their own rows (`mod.<id>.*`) either
+    /// way: the first mixes titles and the second browses records, neither of
+    /// which the selection screens do.
     pub fn drop_rows_picked_on_screen(&mut self, title: &oag_title::Title) {
         // The KILLS and WEAPONS rows offer the lists of the race box's
         // `Single Player` screen, which only a title with a
@@ -766,6 +1015,15 @@ impl Definition {
             page.retain_rows(|entry| {
                 !matches!(entry.setting(), Some("race.kill_target" | "race.weapons"))
             });
+        }
+        // The TARGET row is the score Eliminator's own: a title whose Eliminator ends on kills
+        // has the KILLS row (or none) and no slider to read.
+        let scores = matches!(
+            title.eliminator.value,
+            oag_title::eliminator::EliminatorRule::Score(_)
+        );
+        if !scores && let Some(page) = self.pages.iter_mut().find(|page| page.id == "race") {
+            page.retain_rows(|entry| entry.setting() != Some("race.score_target"));
         }
         // Both screens, for a title that authors them in files of its own
         // (Wipeout HD/Fury): with only one of the two, the other pick would
@@ -804,6 +1062,32 @@ impl Definition {
 ///
 /// Shared between a row's own `label`/`string_id` and a page's `title`/
 /// `title_string_id` - one lookup, two callers, the same fallback rule.
+/// The first row (page index, row index, `of`) whose query argument names a setting no choice
+/// row of `pages` writes: such a key never holds a value.
+pub(super) fn unknown_query_of(pages: &[Page]) -> Option<(usize, usize, String)> {
+    let edited = |key: &str| {
+        pages.iter().any(|p| {
+            p.entries
+                .iter()
+                .any(|e| matches!(e, Entry::Choice { setting, .. } if setting == key))
+        })
+    };
+    for (at, page) in pages.iter().enumerate() {
+        for (row, entry) in page.entries.iter().enumerate() {
+            if let Entry::Choice {
+                query: Some(query), ..
+            } = entry
+                && let Some(key) = std::iter::once(&query.of)
+                    .chain(&query.companion)
+                    .find(|key| !edited(key))
+            {
+                return Some((at, row, key.clone()));
+            }
+        }
+    }
+    None
+}
+
 fn resolved(strings: &StringTable, string_id: Option<&str>, literal: &str) -> String {
     string_id
         .and_then(|id| strings.get(id))
@@ -851,6 +1135,17 @@ fn resolve(
             context: context.to_string(),
             problem: format!(
                 "a {:?} entry cannot be disabled_by anything; only choice and toggle can",
+                entry.kind
+            ),
+        });
+    }
+    if let Some(scope) = entry.scope.as_deref()
+        && (entry.kind != "choice" || !matches!(scope, "sim" | "view"))
+    {
+        return Err(Error::BadEntry {
+            context: context.to_string(),
+            problem: format!(
+                "a {:?} entry has scope {scope:?}; only a choice row takes \"sim\" or \"view\"",
                 entry.kind
             ),
         });
@@ -928,23 +1223,99 @@ fn resolve(
                     .collect::<Vec<_>>()
                     .join(", "),
             })?;
-            Ok(Entry::Run { label, action })
+            let inputs = match &entry.launch {
+                Some(keys) if action == Action::LaunchRace => Some(LaunchInputs::from(keys)),
+                Some(_) => {
+                    return Err(Error::BadEntry {
+                        context: context.to_string(),
+                        problem: "only a launch_race action names its inputs with `launch`"
+                            .to_string(),
+                    });
+                }
+                None => None,
+            };
+            Ok(Entry::Run {
+                label,
+                action,
+                inputs,
+            })
         }
         "choice" => {
             let setting = entry.setting.as_ref().ok_or_else(|| missing("setting"))?;
-            let source = match entry.values_from.as_deref() {
-                Some(name) => Some(ValueSource::parse(name).ok_or_else(|| Error::BadEntry {
-                    context: context.to_string(),
-                    problem: format!("{name:?} is not a value source (languages, tracks)"),
-                })?),
-                None => None,
+            let (source, query) = match &entry.values_from {
+                Some(raw::ValuesFrom::Name(name)) => {
+                    let source = ValueSource::parse(name).ok_or_else(|| Error::BadEntry {
+                        context: context.to_string(),
+                        problem: format!(
+                            "values_from {name:?} is not a value source or a query table \
+                             (queries: {})",
+                            Query::ALL.map(Query::name).join(", ")
+                        ),
+                    })?;
+                    (Some(source), None)
+                }
+                Some(raw::ValuesFrom::Query(spec)) => {
+                    let bad = |problem: String| Error::BadEntry {
+                        context: context.to_string(),
+                        problem,
+                    };
+                    let query = Query::parse(&spec.query).ok_or_else(|| {
+                        bad(format!(
+                            "values_from query {:?} is not a query ({})",
+                            spec.query,
+                            Query::ALL.map(Query::name).join(", ")
+                        ))
+                    })?;
+                    if !spec.of.is_empty() && !query.takes_of() {
+                        return Err(bad(format!(
+                            "values_from query {:?} takes no `of`",
+                            spec.query
+                        )));
+                    }
+                    let mut companion = None;
+                    for (name, key) in [
+                        ("craft_title", &spec.craft_title),
+                        ("class", &spec.class),
+                        ("team", &spec.team),
+                    ] {
+                        let Some(key) = key else { continue };
+                        if query.companion() != Some(name) {
+                            return Err(bad(format!(
+                                "values_from query {:?} takes no `{name}`",
+                                spec.query
+                            )));
+                        }
+                        if spec.of.is_empty() {
+                            return Err(bad(format!(
+                                "values_from `{name}` needs an `of` beside it"
+                            )));
+                        }
+                        companion = Some(key.clone());
+                    }
+                    if spec.of.is_empty() {
+                        (query.booted_source(), None)
+                    } else {
+                        (
+                            None,
+                            Some(QueryRef {
+                                query,
+                                of: spec.of.clone(),
+                                companion,
+                            }),
+                        )
+                    }
+                }
+                None => (None, None),
             };
+            let has_list = source.is_some()
+                || query.is_some()
+                || matches!(&entry.values_from, Some(raw::ValuesFrom::Query(_)));
             // A list has to come from exactly one place. Both would leave it
             // ambiguous which wins when the source turns out to be empty, and
             // neither is a row with nothing on it.
-            match (source, entry.values.is_empty()) {
-                (None, true) => return Err(missing("values, or a values_from")),
-                (Some(_), false) => {
+            match (has_list, entry.values.is_empty()) {
+                (false, true) => return Err(missing("values, or a values_from")),
+                (true, false) => {
                     return Err(Error::BadEntry {
                         context: context.to_string(),
                         problem: "values and values_from are alternatives, not both".to_string(),
@@ -952,11 +1323,22 @@ fn resolve(
                 }
                 _ => {}
             }
+            if let Some(default) = &entry.default
+                && !entry.values.is_empty()
+                && !entry.values.contains(default)
+            {
+                return Err(Error::BadEntry {
+                    context: context.to_string(),
+                    problem: format!("default {default:?} is not one of its values"),
+                });
+            }
             Ok(Entry::Choice {
                 label,
                 setting: setting.clone(),
                 values: entry.values.iter().map(Choice::plain).collect(),
                 source,
+                query,
+                default: entry.default.clone(),
                 current: 0,
                 disabled_by,
                 pins,

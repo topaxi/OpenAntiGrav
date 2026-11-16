@@ -17,6 +17,7 @@
 //! crates undo.
 
 pub mod bcn;
+pub mod decode;
 pub mod fnt;
 pub mod gnf;
 pub mod gtf;
@@ -25,5 +26,10 @@ pub mod mask;
 pub mod png;
 pub mod ps2_texture;
 mod pvrtc;
+pub mod replacement;
+pub mod replacement_pack;
+pub mod replacer;
 pub mod ship_skin;
 pub mod texture;
+mod xxhash;
+pub mod zim;

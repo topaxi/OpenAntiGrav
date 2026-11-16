@@ -156,7 +156,7 @@ impl Ramp {
 
     /// Omega's circuit model colour, `FrontEndConstantFranelBlend`'s own
     /// pixel shader (`data00.psarc`, read as GCN, the `Shdr` at `0x323c` of
-    /// `15_anulpha_pass`'s copy, 2026-10-09):
+    /// `15_anulpha_pass`'s copy):
     /// `colourDiffAlpha + Constant1 * constantAmbientColour * refl`, with
     /// `refl = ReflectivityMin + ReflectivityScale * (1 - N.V)^ReflectivityPower`
     /// (`1 - N.V` clamped to 0..1), then fogged by the vertex's own factor.

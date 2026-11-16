@@ -12,6 +12,7 @@
 mod art;
 mod blender;
 mod format;
+mod loading;
 mod motion;
 mod props;
 mod schema;

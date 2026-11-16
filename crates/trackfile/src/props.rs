@@ -34,6 +34,9 @@ pub struct Trigger {
     pub max: [f32; 3],
     /// Its properties.
     pub props: Props,
+    /// The channel it sends when a craft enters it (`oag_emit`), `<id>/<name>`, one of
+    /// [`Track::channels`]'s. Needs no module: the race raises it itself.
+    pub emits: Option<String>,
 }
 
 fn refuse(what: &str, why: impl Into<String>) -> Error {
@@ -172,6 +175,7 @@ pub(crate) fn check(track: &Track) -> Result<(), Error> {
         check_one(&format!("spline path {i}"), p)?;
     }
     check_one("props", &track.props)?;
+    check_channels(track)?;
     if track.triggers.len() > MAX_TRIGGERS {
         return Err(refuse(
             "triggers",
@@ -184,6 +188,15 @@ pub(crate) fn check(track: &Track) -> Result<(), Error> {
     for (i, t) in track.triggers.iter().enumerate() {
         let what = format!("trigger {i} ({})", t.name);
         check_one(&what, &t.props)?;
+        if let Some(channel) = &t.emits {
+            check_channel(&what, "oag_emit", channel)?;
+            if !track.channels.contains(channel) {
+                return Err(refuse(
+                    &what,
+                    format!("oag_emit {channel:?} is not in the track's [channels] publishes"),
+                ));
+            }
+        }
         if !t
             .to_world
             .iter()
@@ -211,6 +224,42 @@ pub(crate) fn check(track: &Track) -> Result<(), Error> {
             "props",
             format!("{total} properties, a mod reads at most {MAX_PROPS}"),
         ));
+    }
+    Ok(())
+}
+
+fn check_channel(what: &str, field: &str, name: &str) -> Result<(), Error> {
+    oag_ext_abi::check_channel(name).map_err(|why| {
+        refuse(
+            what,
+            format!("{field} {name:?} is not a channel name ({why})"),
+        )
+    })
+}
+
+/// The channels a track publishes (`[channels]`) and the ones its animations start on.
+fn check_channels(track: &Track) -> Result<(), Error> {
+    for (i, name) in track.channels.iter().enumerate() {
+        check_channel("channels", "publishes", name)?;
+        let hash = oag_ext_abi::channel_key(name);
+        if track.channels[..i]
+            .iter()
+            .any(|other| other == name || oag_ext_abi::channel_key(other) == hash)
+        {
+            return Err(refuse(
+                "channels",
+                format!("{name:?} is listed twice or hashes like another channel"),
+            ));
+        }
+    }
+    for animation in track.art.iter().flat_map(|a| &a.animations) {
+        if let Some(channel) = &animation.on {
+            check_channel(
+                &format!("animation {:?}", animation.name),
+                "oag_on",
+                channel,
+            )?;
+        }
     }
     Ok(())
 }

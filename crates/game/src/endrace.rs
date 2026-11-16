@@ -423,7 +423,7 @@ fn load_hd_podium(
             grid,
             oag_hd::endrace::AUTHORED_GRID,
         ) {
-            log::info!("endrace podium: read from {label}");
+            log::debug!("endrace podium: read from {label}");
             return Some(layout);
         }
     }

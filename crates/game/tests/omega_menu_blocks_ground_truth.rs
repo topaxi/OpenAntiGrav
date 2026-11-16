@@ -36,6 +36,7 @@ fn shell(source: &std::path::Path) -> oag_game::boot::Shell {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     oag_game::boot::load_shell(&options)
         .expect("the front end boots")

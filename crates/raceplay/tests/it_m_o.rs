@@ -12,6 +12,9 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 mod perturb;
 
 mod maglock_ground_truth;
@@ -26,7 +29,9 @@ mod novice_jump_ground_truth;
 mod novice_respawn_ground_truth;
 mod off_track_rescue_ground_truth;
 mod omega_2048_era_craft_ground_truth;
+mod omega_2048_shield_colour_ground_truth;
 mod omega_assist_hud_ground_truth;
+mod omega_countdown_ground_truth;
 mod omega_font_scale_ground_truth;
 mod omega_hud_ground_truth;
 mod omega_lightmap_ground_truth;
@@ -36,6 +41,7 @@ mod omega_weapon_bodies_ground_truth;
 mod opponent_autopilot_sweep;
 mod opponent_fire_ground_truth;
 mod opponent_weapons_ground_truth;
+mod own_shield_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

@@ -138,11 +138,13 @@ the engine's own reader: 46,005 entries over the nine archives (`data00` 10,926,
   values), split-screen families, `duel_hud\`, and a **`2048_hud\` set** (the
   Vita's 26 file names plus `_HD` variants and `_VR` ones in `data08`) reached only
   through virtual dispatch. It composes whole on Omega and every atlas it names
-  resolves (`the_2048_hud_set_omega_also_ships_composes_whole`); **which race
-  selects it is not read**, so `Title::hud` stays one set per title (open).
+  resolves (`the_2048_hud_set_omega_also_ships_composes_whole`). **A race on a
+  `Data\Environments2048\` circuit draws it** (2026-11-12, `omega-2048-hud-laps`,
+  `RaceDefaults::circuit_lineages`, [below](#2048-mode-hud-and-laps-2026-11-12-omega-2048-hud-laps)); the
+  executable's selector (the Race Box's GAME MODE) is not read, the circuit's directory stands in.
 - **Nine atlases, all `.gnf`, all BC7**, under `Data\HUD\Textures\` (and
   `Data\FE\Images\voiceCom.gnf`). The XML names them `.gtf`/`.mip` (HD's spelling),
-  so `HudArt::texture_extension` is `.gnf` - none resolves under its authored
+  so the PS4 spelling (`oag_assets::texture_name`) is `.gnf` - none resolves under its authored
   name. `fury_hud` is 2048 square on Omega against HD's 1024 and its layout UVs
   reach 2010 against HD's 1005: the XML is authored for the atlas it ships.
   The rest are HD's sizes.
@@ -178,8 +180,48 @@ skin.
 
 **Cross-check against 2048: checked, differs.** 2048's race reads its
 `2048_hud` skin off `.gxt` atlases; Omega's played skin is the bare root HD
-set off `.gnf`. Omega also ships the `2048_hud` XML and it composes, so wiring
-it per circuit lineage is *checked, applies, not wired* (open, above).
+set off `.gnf`. Omega also ships the `2048_hud` XML and it composes; wired per circuit
+lineage since 2026-11-12 (below).
+
+## 2048 mode: HUD and laps (2026-11-12, `omega-2048-hud-laps`)
+
+**A race on a `Data\Environments2048\` circuit draws 2048's HUD and runs the original's lap counts.**
+`oag_omega::race::LINEAGES` (`oag_title::race::CircuitLineage`, read through
+`RaceDefaults::circuit_lineage`, the same key `effect_dir_by_circuit` uses) carries, per circuit family: the
+layouts (`oag_omega::hud::LAYOUTS_2048`, `Data\XML\2048_hud\*_HUD.xml`), the art (`ART_2048`: 2048's
+dialect over Omega's own readings), the layout grid and the laps. `oag_raceplay::hud::hud_roots` takes the
+lineage ahead of any `HUD Style` skin and the add-on campaign path; `oag_raceplay::catalogue::lineage_laps`
+resolves the count into `Setup::laps_override` at load, so a replay (which records the options) rebuilds
+with the same count.
+
+- **Grid.** Omega's copy of the set is authored for the Vita's 960x544, not for 1920x1080 (the reticle
+  placeholder is still `(-480, 272)`, atlases `.gxt` spelling); the original draws it scaled to the screen
+  (`LAP` at about x=30 at 1080p, 2x the Vita's `(15, 10)`). The lineage names the grid as
+  `Platform::Vita` and `load_hud` takes `Space::of` it. Omega's `2048HUD` font role resolves and draws at
+  the right size with no extra scale (the glyph run `LAP` is 90 px wide in the original's frame and ours).
+- **Laps.** The Race Box authors none (`racebox.xml`: `m_numOfLaps` is `0` on all nine `* 2048` entries, so
+  the count is the executable's). Measured on the original (the `wipeout_pc` port): `LAP 1/4` at C CLASS on
+  seven circuits, `LAP 1/5` at A CLASS on Sol (confidence 70, `gallery-omega-2048`), `LAP 1/4` at B CLASS on
+  Altima (one boot, confidence 55: the pair was refused on its name-crop check, which fired during the walk
+  and not on the HUD; the Race Box frame shows B CLASS selected). **A+ CLASS is unmeasured**: the one boot
+  stalled before the race, its Race Box frame reads C CLASS, so the walk's class presses had been lost.
+  The table is `[4, 4, 5, 5]`, A+ **chosen** equal to A. Single race only; the Time Trial and Speed Lap
+  counts of 2048 mode are not measured. The class mapping C, B, A, A+ to the ladder's venom, flash, rapier,
+  phantom is the ladder's order, assumed.
+- **Sway.** `ART_2048` inherits Omega's `sway` (`x_per_lean: -15`, itself HD's literal), which now acts on the 960-wide grid, so the slide on screen is twice HD's; 2048's own art records the same caveat. Unread.
+- **Sight.** The lock-on grid is simulation state: a 2048-era circuit locks in the Vita's 960x544 (the HUD's authored grid), in the view build and in `Sighting::without_view` (the `oag-server` build) alike, asserted in the ground-truth test.
+- **Not carried over from 2048's art**: `pickup_icon_uv` (the rectangles are in the Vita atlas's pixels and
+  Omega's `.gnf` is repainted) and the Pilot Assist icon, so a held weapon's icon and the assist plate draw
+  nothing in 2048 mode yet. The Zone and Time Trial roots are wired by name, not looked at.
+- **Frame** (`--race --track Data\Environments2048\altima\track.vex --ticks 100/400`, 1920x1080, Venom): `LAP 1/4`,
+  `TOTAL`, `CURRENT`, `POS 8/8`, the `100%` shield silhouette and the thrust bar are all drawn where the
+  original has them; ours sits about 8 px right of the original's labels (not explained; a candidate is the
+  shared safe-area slider's 1:1 inset).
+- **Tests**: `omega_hud_ground_truth::a_2048_era_circuit_draws_2048s_hud_and_an_hd_era_one_keeps_hds`,
+  `a_2048_era_circuit_runs_the_original_s_laps_per_class`,
+  `omega_2048_mode_hud_names_are_authored_by_its_layouts` (the first two fail with `circuit_lineages: &[]`).
+- **2048 cross-check: checked, differs.** 2048 (Vita) has no Race Box (`GAME MODE` is Omega's), its laps are
+  the event's `m_numOfLaps` (`SP.xml`), and its HUD is already this set; nothing to wire there.
 
 ## The menu backdrop (2026-09-30, `omega-menu-backdrop`)
 
@@ -289,11 +331,11 @@ measured, inherited from HD**: the field of view (1.0 radian; `FoV` 100 is unrea
 the flyer's units), pitch, the 24 s turntable and its start yaw. 2048's circuits are larger than
 HD's and overrun the frame a little at this pose.
 
-**Open**: the circuit names (`03 Track`, `altima`) - `CircuitNames::choose` takes a copy of the
-table that names all 38 listed circuits, and Omega's has none, so every circuit shows its id
-where a few (`PRO TOZO`) already have text; the emblem of a 2048 circuit; the page's white
+**Open**: the emblem of a 2048 circuit; the page's white
 backdrop, against which the rim-lit circuit loses its edge (the material is authored for a dark
-one); whether Omega's original ever shows this screen outside RACEBOX.
+one); whether Omega's original ever shows this screen outside RACEBOX. The circuit names are
+closed: see "Omega's Track Select names all 38 circuits" below (`--menu-page track-select` reads
+`ANULPHA PASS`).
 
 **2048, checked, applies, not wired.** 2048's own archives carry `fe/Track0N.vex` only for its
 DLC1 circuits (`Vineta_K`, `Moa_Therma`, `Chenghou_Project`, `Anulpha_Pass`, `zone_1..4`, under
@@ -321,13 +363,15 @@ have no ship or no handling stats").
 
 **What opens.** `oag_omega::race::TEAM_VARIANTS`: the twelve HD-era teams, `""`, `_c1`, `_n1` joined as a suffix, labelled with the
 models' own names (`Normal`, `Concept`, `Nitro`; **measured**: `normal` is at `hdships\<Team>`, `concept1` at `<Team>_c1` and
-`nitro` at `<Team>_n1`). That is three open cells per team, in the rows `nitro`, `concept1` and `normal`; the other six are padlocks (two
-`<Unlock>`-gated skins, `chrome`, `chrome_c1`, and the two PSVR models, which this build never offers),
-by `Team::hex_cells`' existing rule. `crates/raceplay/tests/omega_2048_era_craft_ground_truth.rs`
+`nitro` at `<Team>_n1`). Since 2026-11-14 the rows open by each model's own `<Unlock>` (HD's rule and rows, ported:
+[race-setup.md](race-setup.md#hd-era-model-unlocks)): a fresh profile opens `concept1` and `normal`, loyalty and
+campaign golds open `nitro`, `SKIN1`, `SKIN2`, `chrome` and `chrome_c1`, each racing its own livery folder; the
+two PSVR models stay padlocks (no directory of the variant table), by `Team::hex_cells`. `crates/raceplay/tests/omega_2048_era_craft_ground_truth.rs`
 now resolves every combined id's hull, `.rcsmodel` and tuning (24 more than before) and holds Feisar's
 ratings. `Tigron_x` and `Tigron` carry no `_c1`/`_n1` directory (their models all name one folder), so they sit outside the table
 and `Team::own_directory_variant` gives their screen the one row their own directory is: of the models sharing it
-(none is `<Unlock>`-gated) the one named `normal` opens (`Team::model_for_directory`; the first in file order was `chrome_c1`
+(none is `<Unlock>`-gated) the one named `normal` opens, and since 2026-11-14 their three skins
+(`SKIN1`, `SKIN2`, `chrome`, in their own livery folders) open beside it (`Team::model_for_directory`; the first in file order was `chrome_c1`
 with the wrong ratings), `Tigron_x` rated 10/7.5/7/7 and `Tigron` (the disc's "VanUber") 8.5/9/10/6.5 (pinned in the ground
 truth; walked 2026-10-14, one open cell each). **Chosen, not
 measured**: `opponents_match_player_variant` is `false` (HD's `true` was read off HD's executable, Omega's `Ship_Construct` is unread)
@@ -354,7 +398,11 @@ capture exists to recover that camera and model scale. The fourteen PS4 hulls fr
 radius 5.2 to 7.3 against HD's 6.1 to 7.3), and the `SHIP MODEL` frame sits where HD's does, so HD's authored origin `(1220, 412)` and
 `z=-24` frame them (`oag_title::FrontEnd::ship_preview_pose`, `Some` on Omega only; the rotations stay as authored and
 are HD's, `RotX 0.4 RotY -0.5`). The load report says so ("ship preview: pose borrowed from Wipeout HD"). HD's lens, pitch and slide
-are fits to RPCS3 frames and apply here unchanged. The hull overruns the frame by a few tens of pixels to the left at this pose, as HD's does.
+are fits to RPCS3 frames and apply here unchanged. The hull overruns the frame by a few tens of pixels to the left at this pose, as HD's did.
+**HD no longer draws this pose (2026-11-11)**: its screen update writes over the widget and fits the craft's depth to the model's `<FE length>`,
+and HD is drawn that way (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`). **Omega: checked, differs**: its update
+(`FUN_015a3b80`) carries the same fit and constants, then poses the item on other rest angles (`+0.4307`, `-0.4438`), a blended position and a
+scale that are not followed, so the borrowed pose stays; Omega's `<FE length>` (Feisar `3.8`) is read and unused.
 **Not drawn**: `ShipDesc` (the model's description string, authored per model with `teletype`), the `L1/R1` livery hint,
 `PadlockText1/2` (they hold unlock conditions this build keeps no state for).
 
@@ -476,11 +524,8 @@ shared with HD:
   as HD's endrace drops `RecordsCycle`) - **chosen, not measured**.
 - The HUD draws on an Omega race now (`omega-hud`, 2026-10-06, above).
 
-Still visible on Omega: circuit names read as ids (`01_Track`: the German
-`entries.xml` names only the four Zone circuits, `25_Track`..`28_Track`, the rest
-live elsewhere or under other ids); the three medal icons under the target row
-are in the wrong order (`Hexmedal_HD` is 976x549 on Omega against HD's 1024x768,
-and the crop is HD's); no flyer and a white backdrop on `grid-select` (`flyers:
+Still visible on Omega: the three medal icons under the target row
+drew bronze, silver, gold (fixed, see "The medal atlas"); no flyer and a white backdrop on `grid-select` (`flyers:
 None`); `Event 01/08` is an English literal on HD too; the Endrace screens still
 dispatch `title == HD` alone. The picker's `Svenska` x4 and `Portugus` are **the
 disc's own**: `definition.xml` really says `ID="Japanese" String="Svenska"` (and
@@ -619,6 +664,59 @@ reason. `StudioLiverpool.bik` remains genuinely absent under that name even
 in the corrected extraction, across all nine archives - not a reading
 artefact. The exact decode results and the full census were a scratch file, not kept.
 
+## The medal atlas (2026-11-05, `omega-medals`)
+
+The player's report: gold and bronze change places on `Cell Selection`'s `Target0/1/2 Medal`,
+silver is right. Neither of the two readings the thread opened with holds exactly: it is not an
+indexed field whose order differs in the XML, and it is not a vertical flip between decoders.
+
+- **The XML is HD's, to the digit** (confidence 95, read off `data09`'s `CellMode_Definition.xml`
+  by `omega_medal_crops_read_gold_silver_bronze_in_every_difficulty_block`): `Target0/1/2 Medal`
+  author `u=0`, `v=0/61/122`, 60x60, `TxtrWidth/TxtrHeight=60`, source `Hexmedal_HD.gtf`.
+  Census of every `.xml` in the nine Omega archives (base `data00`-`04`, patch `data05`, `07`-`09`) for `Hexmedal`: only `cellmode_definition.xml`
+  (the three `Target0/1/2 Medal`, 32 `Medal_x_y` with no crop, `MedalImageFury`/`MedalImageHD`)
+  and `endrace_definition.xml` with its `_demo` twin (`Target0/1/2 Image` at `v=0/61/122`, one
+  `Single Target Image`) name it.
+- **The atlas keeps HD's grid** (confidence 90, measured): `Hexmedal_HD.gnf` is 976x549 against
+  HD's 1024x768, which is 16 columns by 9 rows of HD's 61 px pitch (a 60 px frame and one clear
+  row), three difficulty blocks of 183 px. Through every tier and block the icon's opaque rows
+  stay inside rows 1..58 of its frame. `Hexmedal_HD.2x.gnf` is the same picture at 1952x1098;
+  both files exist twice (base `data00`, patch `data08`); all four decode to the same
+  per-tier mean colour in every block (to within a unit or two of 255).
+- **The stored order within a block is bronze, silver, gold from the top** (confidence 95,
+  mean colour of the opaque texels, first column frame, plain block: bronze rgb 196 174 135,
+  green over red 0.887; silver 204 209 207, red minus blue -3; gold 214 212 168, 0.989; the hook
+  and swirl blocks read the same way, see the test's output). **The blocks run plain, hook,
+  swirl from the top**, HD's authored `v` order. HD's `.gtf` sheet is reversed on load, which
+  puts gold at `v=0` there; Omega's `.gnf` is stored the other way round within a block and the
+  sheet leaves a `.gnf` as stored, so `v=0` landed on bronze and `v=122` on gold.
+- **A whole-atlas flip is refuted**: it would put the swirl block at `v=0`, and the shadPS4 frame
+  (`omega/menu-cell-select`, `AI DIFFICULTY (NOVICE)`) draws plain hexes in the target row, gold
+  at `1ST`, silver at `2ND`, bronze at `3RD`. So `Hexmedal_HD` is not an entry for
+  `FrontEnd::bottom_up_gnf` either: that reverses the blocks and the tiers together, putting the
+  swirl at Novice.
+- **The fix is title data** (`oag_title::Campaign::medal_tier_rows`, Omega `[2, 1, 0]`, HD and the
+  rest `None` = `[0, 1, 2]`), carried through `CellArt::medal_tier_rows` into `hd_medal_frame`,
+  the one crop both draws of the atlas use: `Target0/1/2 Medal` and the hex `Medal_x_y` badges.
+  `MedalImageFury`/`MedalImageHD` are not drawn (they author no crop), and `EndRace Results`'
+  `Target0/1/2 Image` never loads the atlas on either title (`oag_hd::endrace::EXTRA_TEXTURES`
+  omits it; Omega's end of race goes through the same `load_hd`), so the target row draws nothing
+  there and there is no third draw to correct.
+- **Measured against the capture**: over the target row's region of `omega/menu-cell-select`
+  (x 750-1690, y 855-925), mean absolute grey difference against the original 4.51 before and
+  2.19 after; per icon (1ST, 2ND, 3RD) 21.7, 1.7, 20.5 before and 1.4, 1.7, 1.1 after. Both
+  frames opened and read by eye: gold, silver, bronze left to right, at 4x on the crop. HD's
+  `menu-cell-select` still frame is byte-identical (same SHA-256) before and after.
+- **What stays unmeasured**: Skilled and Elite on Omega. The atlas keeps HD's block order and
+  Novice is plain on the capture, so hook is Skilled and swirl Elite by HD's capture
+  (`docs/ui/campaign-screens.md`): confidence 70, no Omega frame at those rungs. Whether the
+  original samples the 1x or the 2x file is unread (the `eboot.bin` is in Ghidra, the bridge was
+  down for this lane); both carry the same tier order, so it changes sharpness only.
+- **2048 against this** (census of every `psarc` of both Vita packages, base, patch and DLC:
+  `PCSF00007` and `PCSA00015`): **checked, differs**. 2048 ships no `Hexmedal` file and no hex
+  campaign screen; its medals are separate icons (`NewImages/medals/Icon_*_medal.gxt`,
+  `Post_Race_Medals.gxt`). Nothing of this carries across, and nothing of 2048's is wrong by it.
+
 ## Campaign: confirming a cell starts its race, 2026-09-30
 
 **Correction, 2026-09-30 (`omega-frontend-fixes`): the mouse walk below proved less than it
@@ -678,7 +776,38 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
   the screens a finished race (autopilot, 3 laps of `01_Track`, about 7,000
   ticks) shows the built-in results table and the next confirm returns to
   `Main Menu`, **not** `Cell Selection` as on HD.
-- **Omega draws Fury's flyer cards since 2026-10-27, and has no `Campaign Selection`**: `load_omega` keeps `selection_layout: None` (its chooser is three-way, 2048/HD/Fury, unmodelled) and reads `grid_layout_fury` and the cards; `RACE CAMPAIGN` opens `Grid Selection` directly, `Event 01/16`. See `docs/ui/campaign-screens.md`, "Omega: Fury's cards draw".
+- **Omega draws Fury's flyer cards since 2026-10-27 and its three-way `Campaign Selection` since 2026-11-05** (`omega-chooser`): `load_omega` reads the chooser (2048, HD, Fury, each target screen's grids) with the same `Chooser::read` HD uses; `RACE CAMPAIGN` opens it on 2048, HD opens `grid0` and Fury `grid8`, and 2048 stays on the chooser with a notice (its three grids are cell-less stubs the grid reader skips, its events are `Campaign2048_Definition.xml`'s map, unread). See `docs/ui/campaign-screens.md`, "Omega: `Campaign Selection`".
+- **Omega's Track Select names all 38 circuits since 2026-11-05**: 28 numbered circuits are keyed `NN_TRACK` in every copy of `entries.xml`, the ten of 2048 (`altima`, `arena`, ...) author `StringTableId="Track_Altima_0"` (`Track_Rockway_Stadium_0` for `arena`, `Track_Downtown_0` for `cathedral`, `Track_Empire_Climb_0` for `tower`) and no copy names them under their bare id, so `CircuitNames::choose` found no copy covering the list and every row read its id. `choose` now takes `(id, key)` pairs and `oag_raceplay::catalogue::Track::name_key` is the authored key; all four copies (`data00`, `data05`, `data08`, `data09`) name all 38, `data09`'s is chosen. Census, same reader: HD 28 of 28 named, no `StringTableId` anywhere (**checked, unchanged**); 2048 Vita 38 tracks, no `StringTableId`, no copy chosen by `choose` (what its own definitions and campaign file name a circuit by was read 2026-11-12, `vita-2048-circuit-names`: see "2048 Vita's circuit names" below). `omega_track_model_ground_truth::every_circuit_a_menu_reaches_has_a_name_not_an_id`.
+
+  Re-checked 2026-11-12, the lane `omega-circuit-names` (brief: "no copy names all 38, add a per-circuit fallback"): that was already fixed, so no fallback was written. The ground-truth test above passes, and `--menu-page track-select` on `data/extracted/ps4` reads `ANULPHA PASS`. **2048, checked, applies, not wired**: on 2048 Vita (`PCSA00015`) the same `choose` finds no copy of `languages/american/entries.xml` naming all 26 raceable circuits (`debug` loader line: "none of the 3 copy/copies names all 26 circuit(s); each one shows its id"), and the `circuits:` line beside it lists all 26 as `id (id)` (`square (square)` ... `Sol_2_R (Sol_2_R)`), so none of them is named. That open question was closed the same day, below.
+
+- **2048 Vita's circuit names (2026-11-12, `vita-2048-circuit-names`): ten of 26 named from the campaign file, sixteen keep their ids.** Census, USA package `PCSA00015` (base, patch 1.04's `data1`/`data2`, `dlc1`), `languages/american/entries.xml` in all three copies (241,385 / 241,573 / 242,632 bytes), the 26 being `data/plugins/tracks/Definition.xml`'s ten and the base package's `art/published/DLC1/plugins/tracks/Definition.xml`'s sixteen (the eight HD circuits and their `_R`):
+  - **No copy names any of the 26 by its bare id** (no `square`, no `Vineta_K`; only `MP_SQUARE_RACE_FLASH`-style sentences), and no `PI_Track` authors a `StringTableId` or any key (`grep` over every `.xml` of the four archives; the Vita executable carries no `StringTableId`). So a per-circuit fallback across copies names **zero**: the three copies are identical on every circuit key, and `CircuitNames::choose` is unchanged.
+  - **The ten of 2048's own** have their names in the table too (`Track_Unity_Square_0` `UNITY SQUARE`, `Track_Queens_Mall_0`, `Track_Metro_park_0`, `Track_Capital_Reach_0`, `Track_Empire_Climb_0`, `Track_Rockway_Stadium_0`, `Track_Subway_0`, `Track_Downtown_0`, `Track_Sol_0`, `Track_Altima_0`), but **no file links an id to such a key** (no `.xml` outside `entries.xml` mentions one; the keys are irregular: `Metro_park` against `Capital_Reach`). What the disc does author is `Data\xml\SP.xml`'s ten `TrackDefinition`s, whose only two fields are `M_TRACKNAME` (the `PI_Track` id, exact match 10 of 10) and `M_DISPLAYNAME` (the name, [`2048-campaign.md`](2048-campaign.md)). `oag_game::boot::roster::choose_circuit_names` now names, after the copy choice and only for a circuit it left unnamed, each track by that (`boot::campaign2048::name_circuits`) (`CircuitNames::name_if_absent`); **10 of 26 named, and each spelling equals the `Track_*_0` string** (a cross-check, not the link). The name is English-only on the disc; the `Track_*_0` strings are not read for other languages because no authored key reaches them.
+  - **The sixteen HD-lineage circuits** (`Vineta_K`, `Anulpha_Pass`, `Moa_Therma`, `Chenghou_Project`, `Metropia`, `Sebenco_Climb`, `Ubermall`, `Sol_2` and their `_R`) are named by the numbered keys (`01_TRACK` `VINETA K` ... `08_TRACK` `ANULPHA PASS`), but nothing authored links them: their `PI_Track` carries `soundregister` 1 to 8 and `FEModelLocation` `...\fe\track01` to `track08`, and both numbers agree with the name of `0N_TRACK` 8 of 8, while the other `FEModelLocation`s are not numbers (`talons_junction`, `modesto`) or are wrong (the four Zones all say `track01`), and the executable holds the format `%02d_Track`. That is an inferred link, so it is **not wired** and the sixteen keep their ids; the `debug` loader line lists them ("16 of 26 circuit(s) are named by no table or campaign file and show their id"). The 2048 v1.00 front end authored four literal `TouchButton String=` names (`Vineta K`, `Anulpha Pass`, `Moa Therma`, `Chenghou Project`) that patch 1.04 dropped; not used.
+  - **Read in Ghidra 2026-11-12 (`vita-2048-track-key`): the executable never makes that link**
+    ([`circuit-name-key.md`](../ghidra/functions/vita-2048-eu-v104/circuit-name-key.md); v1.04 and v1.00 base agree).
+    - `%02d_Track` is not a display key. It builds HD track *ids*: CRC32s of 24 HD numbers in `FUN_8100077c`, and the `-track <n>` debug option in `Game_Main`'s parser.
+    - The executable names a circuit by `StringTable_LookupString` (`0x8106b86e`) of the case-folded `PI_Track` `name` attribute. On a miss it returns the name as authored. Eleven functions that hold a track agree (confidence 80).
+    - `soundregister` (`+0x1c0`) and `FEModelLocation` (`+0x1e0`) are parsed (`PITrack_ParseValues`, `0x810c1f94`), but no name lookup reads them.
+    - A `<Location>\stringtable.xml` or `<plugin>\stringtable.xml` would join the lookup chain (`0x810663ae`). None ships in either region. No `<StringTable>` sits outside the language plugins, and no `entries.xml` has a `VINETA_K`-style key.
+    - So those sites would print `Vineta_K`, and `square` for 2048's own ten as well. What a player actually *sees* for the sixteen was open (about 50) and is answered in the next bullet: the original shows `VINETA K`: the ten's visible names come from `TrackDefinition` `m_displayName` (consumer unread), and the DLC grid draws photos, not text. A Vita3K still of a DLC-circuit label settles it.
+    - **Keying the rule:** our `CircuitNames` lookup matches keys case-insensitively and falls back to the id, which is the `PI_Track` rule read in the executable. The still below shows it is not the whole of what the original draws: ours is **not** done (next bullet).
+    - **Keying a nicer name:** `01_TRACK` ... `08_TRACK` are HD's own keys (HD's ids are `01_Track` ...), shipped unused. Keying the sixteen to them through `soundregister` or `trackNN` would be a **chosen stand-in, not measured**, and is a maintainer decision.
+  - **2048 <-> Omega: checked, differs.** Omega's `PI_Track` authors the key (`StringTableId="Track_Altima_0"`) and its HD-lineage circuits are `NN_Track` ids, so one copy names all 38 through `choose`. The executables agree: Omega's parser `FUN_014b1330` stores `StringTableId` at `+0x278`, and its display sites (`FUN_015c6e60`, `FUN_015c9860`) look up `StringTableId` if it is authored, else the name. That is Vita's rule plus one override that Vita's parser lacks ([`circuit-name-key.md`](../ghidra/functions/vita-2048-eu-v104/circuit-name-key.md), "Omega: checked, differs"). Vita authors neither; the shared part is that both end up on the same `Track_*_0` strings for the ten (Omega via the key, Vita via the campaign file's identical spelling). Omega's 38 and HD's 28 resolve as before (`omega_track_model_ground_truth::every_circuit_a_menu_reaches_has_a_name_not_an_id`, `hd_boot_ground_truth`: both pass). Test: `vita_2048_dlc_menus_ground_truth::the_ten_circuits_of_2048_show_their_names_and_the_rest_keep_their_ids` (red on main: `square` read `square`).
+  - **What a player sees, measured 2026-11-12 (`vita-2048-trackname-still`): the authored name as text, `VINETA K`, not the id.** Original: Vita3K, EU `PCSF00007` patch 1.04 with DLC1 (`data/extracted/vita/PCSF00007`), the maintainer's save copied into a private pref tree, muted, on its own weston and Xwayland. Stills under `data/reference/2048-circuit-names/` (960x544, the Vita's own grid), text read off the pixels by eye:
+    - **HD Campaign, Uplift group, Race event on Vineta K** (cell `grid0_3_1`, `track="Vineta_K"`): the **event card** title reads `VINETA K`, with the class glyph and the `TARGET (NOVICE)` page (`vineta-k-event-card-race.png`). The same name sits on the **mode card drawn over the race's loading backdrop** (`vineta-k-mode-card-over-load.png`) and on the **pause screen's card** (`vineta-k-pause.png`). The Speed Lap cell of the same circuit reads `VINETA K` too.
+    - **HD Campaign, Anulpha Pass** (`grid0_5_1`, `track="Anulpha_Pass"`): the event card reads `ANULPHA PASS` (`anulpha-pass-event-card.png`).
+    - **2048's own**, Single Player Campaign, Time Trial event on Metro Park: the event card reads `METRO PARK` over `TIME TRIAL` (`metro-park-event-card.png`). The AdHoc game lobby's circuit panel reads `UNITY SQUARE` over `COMBAT` (`unity-square-adhoc-lobby.png`), so a second screen names Unity Square, a circuit that `PI_Track` ids as `square`.
+    - **Fury Campaign, Blitzed group, a DLC2 circuit** (`grid8`, `track="Amphiseum"`): the Nitro Battle and the Speed Lap cards read `THE AMPHISEUM` (`the-amphiseum-nitro-battle-card.png`, `the-amphiseum-speed-lap-card.png`); the Elimination-or-Race card on `Modesto_Heights` reads `MODESTO HEIGHTS` (`modesto-heights-card.png`). **`THE AMPHISEUM` cannot come from the id `Amphiseum` by any transform** (underscore to space, capitals): it is the authored string, `entries.xml` `19_TRACK` / `20_TRACK` (`THE AMPHISEUM`; `17_TRACK` is `TALON'S JUNCTION` against the id `Talons_Junction`). So the id fallback is ruled out, and so is a pure re-spelling of the id. The names are looked up, by a key this lane did not read.
+    - The race HUD draws no circuit name (lap, position, clock only), and the load completed in under 6 s on a warm shader cache, so no loading-screen name was photographed. Nothing anywhere showed `Vineta_K` or `vineta_k` as text.
+    - Repeated on a second cold boot: `VINETA K` and `ANULPHA PASS` read the same (`*-boot2.png`). Text is deterministic, so two boots are the whole repeat. **The text read: confidence 95. That it is an authored `NN_TRACK`-family string and not the id re-spelled: 85 (Amphiseum). The key that selects it: unread.**
+    - **So the answer is the first branch of the lane's falsifier: the sixteen (and DLC2's four) are named through a path that `circuit-name-key.md` did not read.** The eleven `PI_Track`-name sites there would print `Vineta_K`; what is drawn is an authored string. Candidates for the key, none tested: the event card's title setter (a `PI_Cell` card, not one of the `PI_Track` sites) keys `NN_TRACK` by an index (`soundregister`, `FEModelLocation`'s `trackNN`, or the circuit's position in a list); or the lookup folds the id through a table this lane did not find. The forward and reverse numbering is the discriminator: `01_TRACK`..`08_TRACK` and `09_TRACK`..`16_TRACK` carry the same eight names, `13_TRACK_OLD` reads `VINETA K REVERSE`, and `17_TRACK`..`24_TRACK` are the four DLC2 circuits twice each. A card for a `_R` cell (`Talons_Junction_R`, `Amphiseum_R`, `Modesto_Heights_R` and `Tech_De_Ra_R` cells are in Fury's `grid_09` and later) would read `THE AMPHISEUM` again if the key is a circuit number, or something else if it is per-direction. That is the still that decides it. The AdHoc lobby and the pause card name circuits the same way as the event card, so the consumer is shared.
+    - **The fallback to the id is not what the original shows**: the thread bullet "ours already matches" is **false**. Ours (`oag-game data/extracted/vita/PCSF00007 --until card:0:grid0_3_1 --press start,cross,cross,cross`, the main checkout's debug build of 2026-11-12, not rebuilt in the lane's worktree) drew `Vineta_K` and `Anulpha_Pass` as the card titles, with a `RACE` sub-line and a Personal/Friends/Global tab strip that the original's HD cards do not carry (`ours-vineta-k-card.png`, `ours-anulpha-pass-card.png`). The ten match by construction (`SP.xml` `M_DISPLAYNAME`; ours reads `EMPIRE CLIMB` on Event 1, `ours-empire-climb-card.png`); the original's Empire Climb card was not photographed (the save is past it), and ours' Metro Park event could not be reached on a fresh profile, so no same-circuit pair exists for the ten, only the spelling rule.
+    - **Not wired by this lane.** Turning `Vineta_K` into `VINETA K` in `CircuitNames` is the cheapest fix that would match the still, but without the path it is a guess at the rule (`Amphiseum` reads `THE AMPHISEUM`, so a re-spelling of the id is wrong for at least one circuit; only four circuits were photographed). Next read: the card title setter, from the `grid0_3_1` event card back to its `Label` string, and a `_R` cell's card on Vita3K.
+    - **2048 <-> Omega: checked, differs.** Omega reaches `ANULPHA PASS` through authored keys it carries (`NN_TRACK`, `StringTableId`; `FUN_014b1330`), Vita reaches the same visible text by a path that is unread; no Omega original run of an HD-lineage card was made. The visible text agrees across the two titles.
+  - **The path, read 2026-11-12 (`vita-2048-card-title-key`, confidence 85): a static alias table.** The cards title a circuit by `StringTable_LookupString(TrackAlias_KeyForHash(crc32(track)))`, where `g_track_alias_table` (`0x814b1578`, 102 rows `{name, reversed, key}`) pairs each 2048 track name with an HD id per direction (`Vineta_K` `01_Track`, `Vineta_K_R` `09_Track`, `Amphiseum` `19_Track`, ...; no row gives `99_Track`). Sites: `CampaignEventCard_DrawCellPanel` (`0x8105021c`, called by the HD and Fury grid cell screens, `LoadingScreen_Draw` state 4 and `Callout_Item`), `CampaignEventCard_DrawPanel`'s no-event branch and the online game list's row (`FUN_810a27f8`). Not `soundregister`: DLC2's `Amphiseum` is `10` but `19_Track`. Full table, sites and the Russian per-direction difference: [`circuit-name-key.md`](../ghidra/functions/vita-2048-eu-v104/circuit-name-key.md), "The card's key: the track alias table". Omega has the same table at `0x01990120` (its card site not read); for its 28 `NN_Track` ids the alias is the identity, and its ten 2048 circuits stay on `StringTableId`, so the **checked, differs** below still holds for that path. **Wired in ours 2026-11-12 (`vita-2048-card-names-wire`)** on the event card of an HD or Fury cell and the online game list: `VINETA K`, `ANULPHA PASS`, `TALON'S JUNCTION` (a reverse, no `FE_REVERSE` word), 28 rows in `oag_2048::frontend::CARD_TRACK_ALIASES`; see `circuit-name-key.md`, "Ours".
+
 - **Not Omega's to fix here, seen on the walk:** (the HUD absence seen here was
   fixed 2026-10-06, `omega-hud`), (the 793 unresolved materials of `08_Track` quoted here
   were not re-measured; Anulpha's 81 were fixed 2026-10-27, below), and the
@@ -728,6 +857,28 @@ Checked: `omega/vineta-k` 48.19, unchanged (no material of the family); HD pairs
 **2048: checked, applies, not wired visually.** Vita's base `data.psarc` ships `cf_chevron_pulse` (16 materials in 2
 models) and `dlc1` 30, with the same names; the take-condition admits them and no 2048 pair shows them, so the draw is
 unseen. 2048's Vita materials carry a readable GXP program, which is the cheaper place to read the law than Omega's GCN.
+
+**Revised 2026-11-14 (`anulpha-tone`): the original is not flat, and the albedo law is wired.** The
+"flat road" was read off shadPS4 frames; the native-port original (the compare page's reference since
+2026-11-01) shows brushed grey plates with dark hex outlines and cyan-glowing chevron lanes. The GCN is now
+read: `cf_chevron_pulse_displacement2out` and the walls' and plates' `track_surface_displaced2out` light the
+albedo's alpha and tint the specular with its colour, as HD does, and the chevron adds an unlit
+`max(E.rgb, Colour * mix(E.rgb, W.rgb, E.a))` that is not HD's emissive (programs, addresses and before/after
+regions: [`hd-track-tone.md`](../rendering/hd-track-tone.md#2048-and-omega-2026-11-14-anulpha-tone)).
+**Ported** with 2048: `slots::LIT_ALPHA` is set on both titles; the cyan bars and purple stripes are gone
+(road plate dB/G +0.180 to -0.047). The chevron's mask is drawn with `Colour` held at zero (the authored
+value paints green the original never shows), and the cyan centre lanes, `cf_centre_plasma_pulse`, draw
+their `E.a * wave` and their own `Uvset1` coordinate, which the PS4 reader had refused (the lane sampled one
+texel): whole-frame mean grey 30.28 to **25.03**.
+
+### The texel decode is the sRGB curve (2026-11-14, `anulpha-tone`)
+
+**Ported from HD.** 3,115 of the 3,234 circuit pictures of `data01` and `data02` are `ChannelType::Srgb` GNF and
+the lightmap atlases `Unorm`, so the texture unit decodes the pictures with the sRGB curve; ours used the `2.2`
+power. `Looks::texels_srgb` selects `SceneStore::SrgbTexels` on Omega: every Omega race pair's mean grey fell or
+held (Metropia 35.36 to 34.63, the largest), census and table in
+[`hd-track-tone.md`](../rendering/hd-track-tone.md#omegas-texels-decode-with-the-srgb-curve-2026-11-14-anulpha-tone).
+**2048: checked, differs** (its programs square the texel, no sRGB unit).
 
 ### Vineta K's shadows: the lightmap is right, the display encode is the lead (2026-10-27, `omega-vineta-shadow`, negative result)
 
@@ -821,7 +972,7 @@ The three changes, each with what it rests on:
    fact.** 22 circuits use the `.final` spelling for the model, skeleton, clip,
    `.pvs`, audio and checkpoint files, four (`zone_1`..`zone_4`) use the plain
    one, and none ships both. The game tries the plain sibling first and the
-   `.final` one only when it is absent (`oag_mesh::mesh::rcs::sibling_name_cooked`),
+   `.final` one only when it is absent (`oag_mesh::mesh::rcs::siblings::Siblings::probe`, [rcsmodel-siblings.md](rcsmodel-siblings.md)),
    so no other title's lookup changes.
 3. **A PS4 `.rcsmodel` is 2048's container with 64-bit pointers.**
    - *Same container, told apart by header word `+0x04` - confidence 95:* 0 on
@@ -959,7 +1110,7 @@ read, see [2048-material-params.md](2048-material-params.md#what-scrolls-and-wha
 admitted by name and authored rate hashes, labelled inherited from HD in the load
 report (Omega's GCN is unread, so no program confirms `time` there); 11 materials
 on Anulpha Pass, up to 15 on Amphiseum, 0 on any `environments2048` circuit
-(`crates/render/tests/psp2_glow_ground_truth.rs`).
+(`crates/mesh/tests/psp2_glow_ground_truth.rs`).
 Frames at ticks 120, 180, 240 and 300, against a tick-300 frame from before the change (not kept). Before, the panels the glow layer lights are
 dull grey; after, they glow. The only pixels that differ from main's build at
 tick 300 are those surfaces (438 pixels over a threshold of 24, all inside one
@@ -1287,7 +1438,8 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   `LAvg` stepped toward it by at most `response / 60` a frame, an exposure
   `clamp((a + b LAvg) / LAvg, min, max)`, and a **cubic Hermite curve** from `(0, 0)`
   to `(t1, 1)` with end slopes set by the two angles, applied **per colour channel**
-  inside the 4x MSAA resolve. Bloom is added after it. Evidence, scores and what is
+  inside the 4x MSAA resolve. Bloom is added after it, from a four-level chain over the
+  curved frame, built from the circuit's `Bloom.*` keys and drawn since 2026-11-04 (its per-material mask is not). Evidence, scores and what is
   not read: [`ps4-omega-eu/tonemap.md`](../ghidra/functions/ps4-omega-eu/tonemap.md).
   The answer to "does Omega render differently by console" is: only in where the
   curve runs (the 4x MSAA resolve on a base PS4; a compute resolve with the same
@@ -1375,7 +1527,8 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   (79 sampler entries over Omega's circuit models, all of Altima's road) lists
   `track_a_floor_panel_df` ahead of its `DiffuseMap`; that file is a 1024x256
   single-channel `R16F` panel map, which `ModelTexture::from_gnf_form` does not
-  decode, so every road draw was unresolved and drew the lit colour alone. **It
+  decode (a signed distance field, decoded on
+  [panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md)), so every road draw was unresolved and drew the lit colour alone. **It
   was not a normal map** (the lead from `hd-finish-line-purple`): the road is not
   in the `track_albedo` census at all, and the census counts did not move.
   `Material::diffuse_texture` now takes the sampler named `DiffuseTexture`,
@@ -1386,6 +1539,136 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   causes, not taken apart. Altima, Mall and Tower join the census at 0 faults.
   2048: **checked, differs** - the Vita road is `fc16_phong_alphaspec_normal_emissive`
   with `track_a_floor_ds` as its `DiffuseMap` first, so its binding is unchanged.
+- **The `tarmac_*` road families draw the wrong coordinate set: Rockway Stadium's black road patch**
+  (`omega-arena-square`, 2026-11-12, confidence 85 for arena, 55 for the other seven circuits; fixed
+  below).
+  The patch seen around the craft on `arena` is the road, not a light or a shadow. Method: the
+  same pose on 2048's own arena (Vita) has a normal grey road; `OAG_SKIP_MATERIAL=road_a_ds`
+  removes the black and shows the floor under it; an unlit render (`OAG_ALBEDO_ONLY`, wired into
+  the psp2 build for the test) stays black, so the road's *picture* is dark, not its light; the
+  texture itself decodes to grey asphalt with a yellow line and lane dashes (`road_a_ds.gnf`,
+  4096 x 4096), so the coordinates are wrong. The road material is
+  `tarmac_markings_dirt_markingsnormal_emis` (and its siblings `tarmac_markings_dirt_markingsnormal`,
+  `tarmac_dirt`, `tarmac_dirt_emissive`): their vertex programs name `uvMarkings` and
+  `uv1_uvDirt` (`oag-rcs` `gcn_dump --summary`), and the vertex declaration of an arena road
+  submesh lists `uvMarkings` (half pair, offset 20), `lightmapUV` (24), `uv1_uvDirt` (four halves,
+  28) and `uv1` / `uvDirt` (both at 32), **no `Uv1`**. `own_diffuse_texcoord` therefore takes its
+  confidence-70 fallback, the first half pair that is not the lightmap's: `uvMarkings`, a unique
+  unwrap (u 0.79 to 0.99, v 0.01 to 0.68 over the whole 250-unit road, so 33 by 94 texels under
+  the craft: the texture's dark top-right strip). The real tiling set is `uv1_uvDirt`'s first pair
+  (u -44 to 41, v 0 to 1 on arena). **Probe** (a one-line local change, not committed: read
+  `uv1_uvDirt` at offset 28 as the diffuse coordinate): the road draws grey asphalt with the yellow
+  kerb line, lane dashes and the cyan edge line, as the original's frame does (whole-frame RMSE
+  to the original 0.272 to 0.229 on the compare pair, the HUDs excluded from neither).
+  **The declaration's own `uv1` entry is not the answer:** it sits at offset 32 with `uvDirt`, the
+  `.zw` pair of `uv1_uvDirt`; reading it as the diffuse coordinate draws a smeared, dash-less
+  surface (RMSE 0.077 from the offset-28 frame, read by eye against the original), so the
+  coordinate is `uv1_uvDirt`'s first pair at offset 28, not "the file's `uv1`" by name.
+  **Reach:** 661 submeshes over 8 of the 10 `environments2048` circuits (mall, tower, square,
+  park, cathedral, subway, arena, bridge; not altima, not sol) name `uv1_uvDirt` and no `Uv1`
+  (`crates/rcs/examples/psp2_uv_census.rs`); Omega's HD-era circuits do not. Subway's frame moves
+  with the probe (RMSE 0.073 between the two renders) toward the original's reddish rails;
+  Mall's barely (0.013), Square's not at all (its road is another family, below). The pixel
+  program's combine is read in "The `tarmac_*` combine" below.
+  2048: **checked, differs** - none of 2048's arena, square, altima or mall materials is a
+  `tarmac_*` family; its roads name `Uv1`, which is why 2048's own arena draws a normal road.
+  **Wired** (2026-11-12, `omega-tarmac-uv`): `VertexDecl::own_diffuse_texcoord` takes
+  `uv1_uvDirt` (`0x273a_b13e`, four halves) after a named `Uv1` and before the confidence-70
+  file-order rule, so the first pair at offset 28 is the diffuse coordinate; the declaration's own
+  `uv1` entry (offset 32) is not read. `diffuse_texcoord_is_fallback` no longer counts these.
+  Unit tests on an arena-shaped declaration (offsets 20, 24, 28, 32; red on `uvMarkings` before the
+  change). Ground truth, `crates/rcs/tests/psp2_flat_census_ground_truth.rs`: 661 submeshes name
+  `uv1_uvDirt` and no `Uv1`, **all of them `tarmac_*`** (122 in `data00`: mall, tower; 539 in `data04`:
+  arena, bridge, cathedral, park, square, subway), and for every one the reader's coordinates equal
+  a fresh decode of `uv1_uvDirt`'s first two halves off the vertex buffer. The range is not the
+  thread's "u -44 to 41, v 0 to 1" (that was one reading near the craft): the whole of arena's
+  `track.final.rcsmodel` road material `tarmac_markings_dirt_markingsnormal_emis` spans u -53.9 to
+  56.9, v -4.0 to 3.5, its sibling `tarmac_markings_dirt_markingsnormal` u -2.8 to 3.7, v -4.2 to 3.6;
+  the test asserts the road's u span exceeds 80 (`uvMarkings` spans 0.2). One road submesh (787
+  triangles) that drew flat on `uvMarkings` now reads a real coordinate (`omega_data04`'s flat pin
+  36,178 to 36,177). Compare pair `arena-2048` re-rendered on the branch (a private copy of the
+  pair, its recorded flags): whole-frame mean grey 49.25 to 35.30, RMSE to the original 0.261 to
+  0.216; mean RGB of three road boxes (1920 x 1080 pixels; left of the craft 280,500 340x180,
+  right 1350,560 400x200, ahead 720,330 400x160): original (86,122,114) (131,138,128)
+  (124,132,123), before (29,44,39) (163,172,166) (66,85,77), after (74,115,108) (139,147,137)
+  (95,129,120). The road is grey asphalt with the kerb line and dashes. The markings and dirt
+  layers are wired by `omega-road-markings` (next entry).
+  2048: **checked, differs, and the ground truth is unchanged**: the same census finds 0
+  `uv1_uvDirt` submeshes on every Vita archive (base, dlc1, dlc2, both patch archives) and every
+  Vita pin, `empire_climb_is_pinned`'s `own_fallback` 4,761 included, passes unchanged.
+- **The `tarmac_*` pixel programs combine four pictures: diffuse, then dirt, then markings, plus an
+  emissive** (`omega-road-markings`, 2026-11-12, confidence 85). Read from decoded GCN
+  (`gcn_dump <data00.psarc | data05.psarc> data/environments2048/shared/objectlibrary/materials/tarmac_markings_dirt_markingsnormal_emis.rcsmaterial --at 0x2e44`,
+  which now also prints `sample @<offset> reads API slot <n>` from `Program::sampled_slots`, the
+  usage-record placement `signed_textures` uses). Vertex program `@0x29c4` (60 instructions) writes
+  `param2 = uvMarkings`, `param3 = uv1_uvDirt.xy`, `param4 = uv1_uvDirt.zw`; the pixel program's
+  `attr1`, `attr2`, `attr3` are those three. The unlit program `@0x2e44` (86 instructions in `data00`,
+  94 in the patch `data05`; the combine is identical, the patch adds a `max(w, 0.5)` clamp on the
+  fade divide) samples API slot 0 (`DiffuseAlphaMap`) on `attr2.xy`, slot 2 (`Dirt`) on `attr3.xy`,
+  slot 1 (`Markings`) on `attr1.xy`, slot 3 (`EmissiveTexture`) on `attr2.xy`, and computes
+  `c = diffuse.rgb; c += dirt.a * (dirt.rgb - c); c += markings.a * (markings.rgb - c);
+  out = fog(emissive.rgb + constantAmbientColour * c)`. The lit programs (`@0x3f44`, 200
+  instructions in `data00`) take the same three coordinate sets for their sample (`attr2` normal and
+  diffuse and emissive, `attr1` markings and `MarkingsNormal`, `attr3` dirt), run the same two lerps
+  over the diffuse rgb in the same order (dirt first, markings on top, each weighted by its own
+  alpha), and use the diffuse alpha and the layers' alphas only to weight specular
+  (`MarkingsSpec`), which this reader does not draw. Sibling `tarmac_markings_dirt_markingsnormal`
+  (unlit 83 instructions) samples the same three slots without the emissive; `tarmac_dirt` samples
+  slots 0 and 1 (`Dirt`) only; `tarmac_dirt_emissive` adds the emissive. Their combines were read
+  by sample order and slot only, not instruction by instruction.
+  **Wired** (`omega-road-markings`, 2026-11-12): `oag_mesh::mesh::rcs::psp2::tarmac` admits
+  `tarmac_markings_dirt_markingsnormal` and `_emis` by name and by both samplers (`Markings`
+  `0x4a5bd928`, `Dirt` `0xc7aab177`); `SubMesh::markings_texcoords` / `dirt_texcoords` read
+  `uvMarkings` (offset 20) and `uv1_uvDirt.zw` (offset 32 on arena) from the record's own
+  declaration (census: all 661 submeshes agree with a fresh decode). The pictures ride the fifth
+  (markings) and sixth (dirt) bindings, the `EmissiveTexture` the fourth (added after the light at
+  the tiling pair, weighted by the glow entry's tint `x`), a glow-table entry of mode
+  `PROGRAM_TARMAC` (14) selects the combine in `shade.wesl`; the markings pair rides `texcoord2`
+  and the dirt pair `colour.xy` (`colour.zw` = 1, tint forced white on the mode) because the
+  vertex has no fourth pair. **Not wired:** `tarmac_dirt` and `tarmac_dirt_emissive`, the specular
+  weighting by `MarkingsSpec`, the roads' normal-map blend with `MarkingsNormal`.
+  **Result on `arena-2048`** (private copy of the pair, recorded flags, 1920 x 1080; mean RGB of
+  the three boxes): original (86,122,114) (131,138,128) (124,132,123); before this change
+  (74,115,108) (139,147,137) (95,129,120); after (72,111,105) (117,125,118) (83,114,107). The
+  dirt splat adds the crack and stain structure the original shows, but the road is **darker than
+  the original** in the right and ahead boxes (right was 8 over, is now 13 under; ahead was 29 under, is 41
+  under) and whole-frame RMSE moves 0.216 to 0.218: either the dirt's weight is too strong in our
+  domain (the splat is grey 33 to 132 with alpha mean 96/255, mixed here on gamma values) or the
+  original's diffuse is brighter than ours before the layers. **Isolated** (a temporary per-layer
+  weight and a linear-domain switch, not kept): dirt alone gives the whole move (boxes (72,111,105)
+  (117,125,118) (83,114,107)); markings alone change nothing in these three boxes (no painted symbol
+  there); dirt mixed in the linear domain gives (73,113,106) (122,130,121) (85,116,109), still under
+  the original's (86,122,114) (131,138,128) (124,132,123). **The programs do not square or root the
+  taps**: the unlit combine is plain `v_sub`/`v_mac` lerps on the sampled rgb (read in full, see
+  above), so a gamma-domain blend is not what the program asks; whether the hardware decodes the
+  `.gnf` as sRGB before the lerp is not read. The box 720,330 was already 29 red under before the
+  layers, so part of the gap is not the layers.
+  **Shipped state:** the markings layer and the emissive are on (neutral where there is no decal);
+  the **dirt layer is off by default**, switched on with `OAG_TARMAC_DIRT=1`
+  (`psp2::tarmac::DIRT_SWITCH`, the entry's tint `y` read by `shade.wesl`). **Open, precisely:** with
+  dirt on, arena's right and ahead boxes read darker than the original even with a linear-domain
+  mix. Next read: whether the hardware decodes the `.gnf` dirt and diffuse textures as sRGB before
+  the lerp (the T# format's number type, the sampler state), then the ahead box's pre-existing
+  29-red gap (box 720,330 reads (95,129,120) before any layer against the original's
+  (124,132,123)). The painted symbols (`KEEP CLEAR`,
+  arrows, dashes, in the atlas) are not seen in this frame. Confidence in the combine 85; in the
+  rendered match, none: not isolated further.
+- **Unity Square's road is not black; what it lacks is the panel emissive and the displacement**
+  (`omega-arena-square`, 2026-11-12, confidence 55). Square's road is
+  `road_alphaspec_normal_emissive_panelmap1` (and `_mask`), the family of Altima's road above; its
+  pixel program (428 instructions) reads `Cg_PanelDisplacement_1In1Depth`, `...SlopeWidth`,
+  `...Aspect`, the panel map, `DiffuseMap` and `EmissiveMap`. Ours draws the diffuse panels and the
+  baked sun shadow wedge (the original has the same wedge); the original also draws long cyan
+  glowing lines along the panel edges on Square and on Queens Mall, which ours does not. The
+  family's emissive texture (`track_a_floor_e.gnf`, 512 x 128) is one thin cyan-grey line, which
+  the panel displacement would stretch along the grooves: the lines are probably that layer. Ours
+  draws no such lines; which code path would draw this family's `EmissiveMap` (the
+  `glow.rs` sampler list names `EmissiveMap`, so the family may be admitted and drawn
+  without the displacement) was not read. Not isolated (no run draws the family's emissive alone).
+  **The program was read on 2026-11-16**
+  ([panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md)): the emissive
+  map is sampled at the ray-marched coordinate and added unscaled, so the lines are that layer
+  seen through the displacement (confidence 85 for the program; the picture not rendered).
 - **Omega's diffuse sun is its colour times `Lighting.Sun diffuse intensity`**
   ([sun-intensity.md](../ghidra/functions/ps4-omega-eu/sun-intensity.md),
   2026-10-19, confidence 80): authored 0.3 to 20, ignored until then. The
@@ -1420,6 +1703,11 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   one LSB up to polarity, four-, six- and eight-channel files do not decode yet.
   The ten `.bnk` in `data02`, which an extension-based census had counted
   as Wwise, are the old `SBlk` container. One Tech De Ra cue plays through the mixer to a WAV.
+  **How the executable names a cue is read** (`omega-wwise-sfx-re`, 2026-11-02): it posts
+  `<cue>[_PC]__<bank>`, so the start is `_321_NGP__Weapons_NGP` in `English(US)/Weapons_NGP.bnk`; the
+  sixteen 32-byte banks are legacy names it never loads
+  ([wwise-sound.md](../ghidra/functions/ps4-omega-eu/wwise-sound.md)). **The start plays** those two events
+  as their timelines (17 and 6 voices); no other effect does yet.
   **Particles play** (`omega-particles`, 2026-10-05): Omega keeps its effects in
   `Data\particles` and `Data\particles2048` (not `Data\Psys`), with `.gnf`
   sprites; a race reads `particles2048` on an `environments2048` circuit and
@@ -1502,7 +1790,7 @@ present, and its own list drops the 2048-era teams to that row.
 
 ### Vita 2048 against Omega's 2048-era craft: census (2026-10-06, `remix-labels`)
 
-`crates/source/tests/remix_2048_sources_ground_truth.rs` reads all twenty craft
+`crates/source/tests/two_title_2048_sources_ground_truth.rs` reads all twenty craft
 (five teams, four each) off `data/extracted/vita/PCSF00007` and
 `data/extracted/ps4`:
 
@@ -1538,7 +1826,7 @@ Both `AIRaceStats`/`AIControlStats` sets ship and read, every `PI_Track` has its
 `stats.xml`, and the field finishes on Vineta K, Talon's Junction, Ubermall
 (Phantom) and Amphiseum reversed with no respawn
 (`crates/raceplay/tests/omega_original_ai_ground_truth.rs`). The 2048-lineage laws are
-not wired: this project does not read Omega's 2048 campaign.
+not wired: the 2048 campaign map opens from the chooser ([omega-frontend.md](omega-frontend.md), "The 2048 map opens from the chooser") but the lineage laws are 2048's and Omega's races on it are the incomplete ones this page lists.
 
 ## Engine trail and flare (2026-10-16, `omega-exhaust`)
 
@@ -1579,8 +1867,8 @@ pointers - and decode through the same `psp2` reader. Verdict: **ported**, with
 asset names, node groups and material names are read off the data; the ribbon
 geometry, sprite flare law and boost reveal are HD's, **inherited, not measured
 on Omega**, and the load report says so. The flare's `2048_engine_additive`
-blend is chosen, not measured. The SPU engine light is off, chosen, not
-measured. Checked in a headless race (Feisar, `--autopilot`, ticks 420 and
+blend is chosen, not measured. The engine light is wired (EngineLightLaw, see
+[engine-light.md](../ghidra/functions/ps4-omega-eu/engine-light.md), "Wired"). Checked in a headless race (Feisar, `--autopilot`, ticks 420 and
 900): the nozzle glows and every rival's trail draws.
 
 ## Re-cooked, measured (2026-10-19, `asset-lineage-census`)
@@ -1614,6 +1902,12 @@ triangles, but not their vertices.
 
 Vertices / triangles / materials (submeshes in brackets). Omega's main model is
 `track.final.rcsmodel`; 2048 ships `track.rcsmodel`.
+
+**`arena` and `square` are the two circuits whose vertex data (293.7 and 295.9 MiB) passes
+wgpu's default 256 MiB buffer ceiling**, so ours cuts their vertex buffer in two on a device
+with that ceiling; 2048's own copies are 51 and 73 MiB. Census of every circuit, and the
+mechanism: [`vertex-buffers.md`](../rendering/vertex-buffers.md). 2048 cross-check: ported
+(2048's circuits all fit one buffer and draw as before).
 
 | circuit | Vita `track` | Omega `track.final` | tri Omega/Vita |
 | --- | --- | --- | --- |
@@ -1901,43 +2195,45 @@ strip law, the pair draws a line the pixel difference finds and the eye does not
 player size; the field stays `None` until the PS4 `HD_Leachbeam` material's samplers
 are read.
 
-**Adverts: the reader landed, the pass stays off (2026-10-26).** `gantry::build` now
-reads Omega's `321Go` files through the Vita/PS4 container (`mesh::rcs::psp2::build_with_vex`,
-the `.vex` supplying node motion): `321Go_StartFinish.vex` builds as 1530 triangles over 19
-submeshes, 19 draws textured from 5 of 5 materials, 19 moving on 19 animated nodes, and
-`321Go_Zone.vex` as 162 triangles over 16 submeshes, on Tech De Ra, Talon's Junction,
-Amphiseum and Vineta K alike (`start_gantry_omega_ground_truth.rs`; every slot's model each
-manifest names loads). Turning `adverts` on, then rendering Vineta K against the shadPS4
-start-grid capture (`data/reference/compare-page/omega/vineta-k/theirs.png`, same circuit,
-`FEISAR_C1`), gave this, read by eye on the card box:
+**Adverts: the pass is on, and plays `321Go_2048.vex` (2026-11-10, `omega-gantry`).** `gantry::build` reads Omega's `321Go`
+files through the Vita/PS4 container (`mesh::rcs::psp2::build_with_vex`, the `.vex` supplying node motion;
+`start_gantry_omega_ground_truth.rs`). The 2026-10-26 attempt turned `adverts` on and compared Vineta K against the shadPS4
+start-grid capture: placement matched (the track's own `billboard7/8` quads), the look did not. The countdown board drew a
+static red face because HD's digits are material curves (`curve_track::material_anim_tracks`) and the PS4 material
+container's curves are unread, and the side cards drew dark teal because `fx350_nomip` is a `.gnf` here. Now:
 
-- **Placement carries over from HD**: the centre board and both side cards stand on the
-  circuit's own `billboard7/8` quads at the original's positions and sizes, so no hand
-  placement was needed.
-- **The look does not.** The countdown board draws a static red face where the original
-  shows its blank teal one before the red `3`, and cannot count down: the GO-edge finder
-  reports `no drawn vertex rides an animated texture`, because HD's digits are material
-  curves (`curve_track::material_anim_tracks`) and the PS4 material container's curves are
-  unread. The unlit side cards draw dark teal with no logo where the original's are bright
-  with a logo (`fx350_nomip` is also a `.gnf` here, a spelling `FX350_TEXTURE` does not match).
-- Omega's track labels are `.../texturesps4/billboardN.gnf`, so `oag_render::gantry`'s
-  placeholder list and `mount()` also need `.gnf` spellings (they match `.tga`/`.gtf` only);
-  without them Omega reports `no start gantry: ... no billboard8 surface`. Not added: the
-  strip of unserved placeholders is unconditional and would remove the `?`/`7`/`8` icons from
-  Omega's grid with the pass still off.
+- `.gxt` and `.gnf` spellings are in `oag_render::gantry` (`is_slot_placeholder`, `mount`, `is_fx350_texture`: by stem).
+- `adverts` is HD's pass, inherited, with `gantry_boards` naming `321Go_2048.vex` (the node-driven board: frame 0 on tick 73, so
+  `GO` slides in on the release, chosen). The side cards show their logos on Vineta K.
+- The HD-lineage board `321Go_StartFinish.vex` **plays** (2026-11-10, `omega-billboards`): its digits ride UV keys
+  authored in the `.vex` `Mesh` nodes, not a curve in the `.rcsmodel` (`TexAnim_UpdateTransform`, `0x0172ba00`,
+  confidence 88; `docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys"). A Zone race shows `321Go_Zone.vex`.
+  `docs/rendering/start-gantry.md`, "Omega and 2048: the HD-lineage board counts down".
+- shadPS4 draws this card's face blank white throughout the countdown on Altima (Race Box, GAME MODE WipEout 2048,
+  `scripts/shadps4-omega-countdown.py`), so the digits and their phase are not measurable on it; the board's place is.
+  Evidence, numbers and the box: `docs/rendering/start-gantry.md`, "Omega and 2048".
+- **2048: ported**, the same Altima through `oag-game <PCSF00007>`; `park` ships no `billboard8.gxt` in the base package.
 
-So `adverts` stays `None`, as the brief required where the pair does not match. To finish:
-read the PS4 material curves (2048's and Omega's `.rcsmodel` carry them in a container
-`oag_rcs::rcsmodel::psp2` does not parse), add the `.gnf` spellings, then repeat the pair.
-**2048 (checked, applies, not wired):** its `data.psarc` ships the same `321Go_StartFinish.vex`
-and `321Go_Zone.vex` with its own bytes (`.gxt` textures) and the same branch builds them
-(`the_same_branch_reads_2048s_321go_files`); 2048 draws no card.
-
-**The plume's two flags: open.** `engine_light` and `front_faces_only` stay `false`.
+**The plume's two flags.** `front_faces_only` stays `false` (open). `engine_light` is wired, below.
 Omega's loader reads `EngineLightData.xml` the way HD's does (`FUN_0130e090`: `Distance`
 to `ship+0xbc`, `Radius` to `ship+0xc0`; the `hdships` files hold HD's range, `-0.4` to
 `1.2` and `1.0` to `2.0`, not 2048's `3`/`30`), and with the light on a grid still
-gains the warm cast the original's hull has at the nozzle; its consumer is unread.
+gains the warm cast the original's hull has at the nozzle. **The consumer is read
+(2026-11-16, confidence 85) and wired (lane `engine-light-wire`)**: `EngineFlare_SubmitVertexLight` appends one
+point light per craft to a 32-slot table, and each draw binds up to six as
+`DiffuseVertexLight<N>`. The colour is a constant picked by the craft: `(4, 10, 40)`,
+`(40, 10, 4)` on a Fury skin, `(3.0, 0.5, 0.1)` for a `GameVersion="2048"` team, and
+`(1.5, 0.1, 3.0)` over a mag strip in a 2048 mode
+([engine-light.md](../ghidra/functions/ps4-omega-eu/engine-light.md)). So HD's law is
+right for the `hdships` craft and wrong for the 2048-era ones, whose `3`/`30` light is
+red and dim, not white.
+**Confirmed live the same day** (native port, four boots): the table holds eight records
+of exactly those colours, the hull's own programs take the light
+(`(ambient + vertexLight + sun) * texture * vertexColour`), and the housing is lit on
+some frames and dark on others because the range is redrawn as `Radius +- 1.0`. The
+glow inside the nozzle is the flare model, not the light. A single captured frame is one
+draw of that flicker (same page, "Live check").
+Both are `Title` data now (`oag_omega::TITLE`'s `Flare`, lane `engine-light-wire`).
 `front_faces_only` changes nothing visible on either still, because the flame is not
 visible at these two ticks.
 
@@ -1953,6 +2249,263 @@ of HD's seven effect triggers is wired.
 so 2048 needs its own paths read off its own executable. The leach strip's texture
 names are **checked, differs** on both titles. See
 [`weapon-lineage.md`](../gameplay/weapon-lineage.md).
+
+## Where the WipEout 2048 mode pairs' error is (2026-11-16, `omega-2048-holistic`)
+
+The five worst 2048-mode grid pairs ([compare-page.md](../tools/compare-page.md), "WipEout 2048 mode") sit at 44 to
+50 whole-frame mean grey. Question asked: is one cause most of that, and can it be fixed across all five? **No.**
+Ours re-rendered from the pairs' own flags (`compare-rerender-ours.rerender` on copies) reproduces the stored scores
+to the hundredth.
+
+**The raw score is the wrong instrument here.** Edge correlation is about 0 on every pair, a per-channel affine fit
+removes 3 to 12 grey and its gains (0.15 to 0.56) are regression to the mean, and pixels much brighter in theirs
+and much brighter in ours carry about equal shares. Under that decorrelation, correct detail a few pixels out of phase
+scores worse: anisotropy 16x raises all five (Queens Mall 50.07 to 50.57, Metro Park 44.30 to 46.10), forcing
+MIP 0 raises all five (Metro Park to 49.17). A wrong-signed result on the raw score is not evidence against a fix.
+
+**Instrument used instead** (`scripts/compare-decompose.py`): each material family's pixels in ours are the pixels
+an `OAG_SKIP_MATERIAL=<family>` render changes by more than 25 grey after the frame gain the adaptive exposure adds
+is divided out; the own hull (`feisar2048`), `crowd`, `flag` and the HUD boxes are left out of every score (the
+livery and the crowd differ boot to boot in the port). Per region: `LF`, mean |blur(ours) - blur(theirs)| at sigma
+12; `bias`, ours minus theirs; `G`, Sobel gradient energy ours over theirs.
+
+| Pair | static LF | road family | road area, LF share, bias, G | sky LF share, bias | scenery LF share, bias |
+| --- | --- | --- | --- | --- | --- |
+| Queens Mall | 29.7 | `road_alphaspec_normal_emissive_panelmap1` | 27.5 %, 44 %, -18.0, 0.61 | 8 %, -50.7 | 47 %, -19.8 |
+| Sol (A class) | 34.0 | the same | 32.5 %, 51 %, -38.5, 0.24 | 19 %, -26.7 | 30 %, -9.4 |
+| Metro Park | 21.3 | `diffuse_normal_specular` (brick) | 29.3 %, 40 %, +18.6, 0.79 | 2 %, -12.8 | 59 %, -17.2 |
+| Empire Climb | 29.9 | `tarmac_*` | 54.5 %, 66 %, -7.5, 0.84 | 11 %, -66.6 | 34 %, -36.3 |
+| Capital Reach | 39.9 | `tarmac_*` | 36.6 %, 34 %, -5.5, 0.67 | 4 %, -32.5 | 62 %, +21.6 |
+
+Ranked, by what each would remove:
+
+1. **The track surface: 34 to 66 % of the static low-frequency error on every pair, but three families.** Over all
+   ten 2048-mode pairs the road is `tarmac_*` on five (Capital Reach, Empire Climb, Subway, Downtown, Arena),
+   `road_alphaspec_normal_emissive_panelmap1` on four (Queens Mall, Sol, Altima, Unity Square), brick on Metro Park.
+   So no one fix reaches all five pairs. Per family:
+   - `road_alphaspec_..._panelmap1` (Sol's road 38.5 dark, `G` 0.24): the original draws its panels **displaced**,
+     recessed with lit walls and bevel highlights, and a sky-blue sheen at grazing angles; ours draws flat panels with
+     outline lines. Forcing MIP 0 lifts Sol's road `G` only to 0.37 and Queens Mall's to 0.78, so the detail is in the
+     family's pixel program (428 instructions, `Cg_PanelDisplacement_1In1Depth`, `SlopeWidth`, `Aspect`; Queens Mall
+     authors `0.2, 4.0, 3.5, 1.8` in its four parameters), not in the texture chain. The largest single
+     family by error. Its `EmissiveMap` (`track_a_floor_e`, Queens Mall's cyan strips) is the same program.
+     **Read 2026-11-16 (`panelmap-re`,
+     [panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md); law 85 to 88, no live run):**
+     no vertex moves. The pixel program sphere-traces the view ray (10 samples) into a signed distance field, the
+     `R16F` panel map (`Depth` 3.5 and `SlopeWidth` 1.8 in hundredths of a texture height, `Aspect` the map's
+     width over height), and samples diffuse, normal and emissive at the shifted coordinate; the recessed parts
+     are the field's positive chevron strips, 14 % of the road. The four values above are `Blurrines`, `Aspect`,
+     `Depth`, `SlopeWidth`. The sheen is a fresnel reflection
+     `ReflectivityAmount * albedo.a * (ReflectivityMin + ReflectivityScale * (1 - N.V)^ReflectivityPower)` of a
+     baked, pre-blurred cube array the engine loads beside every circuit (`skyCube.gnf`, four blur levels, layout
+     decoded), plus a sun specular lobe under the same alpha; Sol authors a weight of 0.3 face-on and 2.35 at
+     `N.V` 0.2, which is its 38.5 grey. **Wired 2026-11-16** (`mesh::rcs::psp2::panel_map`, the page's
+     "Implemented where"): the march, the cube sheen and the emissive draw; the lobe's colour
+     (`Lighting.Sun specular colour * intensity`) is read by the race loader (`panelmap-sun`, 2026-11-16) and
+     draws almost nothing at the pairs' poses: 339 pixels move on Sol (largest step 7 grey), 527 on Queens Mall
+     (1), the road scores unchanged; a x100 probe shows the path live, a highlight under the camera's reflection
+     of the sun only. Road at 16x anisotropy, the before render's region masks: Sol `LF` 32.7 to 18.0, `bias` -32.4 to
+     +16.1, `G` 0.35 to 0.75; Queens Mall 30.7 to 14.5, -16.9 to +8.5, 0.71 to 0.85; Altima and Unity Square
+     within 1.1 grey and 0.03 `G`. **The sheen and the lobe are gated by the diffuse alpha** (`sheen-gloss-wire`,
+     the panel block reads `first.a`, not the red lane `texel.a` is on a PS4 slot word): Sol `LF` 17.0 to 8.8,
+     `bias` +13.8 to -3.0, `G` 0.74 to 0.79; Queens Mall `bias` +8.6 to -0.6, `LF` 14.7 to 15.5, `G` 0.85 to 0.83;
+     Altima and Unity Square within 0.3 grey. **2048: checked,
+     differs** (no panel map or `_disp` texture on the Vita archives; the displaced road is a PS4 addition).
+   - `tarmac_*` and the brick: anisotropy 16x takes the road's `G` from 0.84 to 1.07 (Empire Climb), 0.79 to 1.00
+     (Metro Park), 0.67 to 0.89 (Capital Reach) with `LF` unchanged: their sharpness gap is texture filtering, so
+     the port runs anisotropic filtering where the pairs record ours with `--anisotropy off`. **Settled 2026-11-16
+     (`port-aniso`), [below](#the-ports-anisotropy-2026-11-16-port-aniso): the game itself asks for 16x and the port
+     honours it, so the `omega` profile now renders ours at 16x** (the numbers above are that run). The dirt layer
+     (`OAG_TARMAC_DIRT=1`) moves no pair.
+2. **The scenery: 30 to 62 %, no single term.** A frame gain fitted to ours (a ceiling for any exposure, light or tone
+   term) removes 13 % of the static `LF` on Queens Mall and 27 % on Sol, and 0 to 1 % on Metro Park, Empire Climb
+   and Capital Reach; on Queens Mall and Sol it lifts road and sky and makes the scenery worse. Static colour ratios
+   (R/G, B/G) differ in sign from pair to pair. Empire Climb's scenery (-36) is the original's sun glare and lens
+   flare round the low sun (`Lighting.Use Lens Flare` 1 and its keys, unread here).
+3. **The sky: darker in ours on all five** (-13 to -67), 2 to 19 % of the static `LF`. `Lighting.Sky brightness`
+   (1.56 to 3.0 on these circuits) is read by nothing here. In the 1.07 eboot its registrar row writes
+   `Sky height offset`, `Sky scale` and `Sky brightness` at `+0x158`, `+0x15c` and `+0x160` of the object
+   `FUN_015eda20` fills (the `LEA RSI` before each key's `LEA RDX` at `0x015edcee` to `0x015edd43`; confidence 75 for
+   the offsets); the consumer was not found (the function has over 50 callers). Scaling the dome by it, linear or
+   gamma, moves the five by -2.4 to +4.6 raw grey with mixed signs: not wired.
+4. **The crowd sprites draw white**: Sol's stands +112 against the original, Queens Mall +57, Subway +68, Arena +64;
+   drawing no sprite at all takes Sol from 45.55 to 42.48. **Half read** (2026-11-16, `omega-crowd-shadowed`): the
+   `_shadow` materials are lit by their `Shadowed` and `Ambient` (below) and moved; the plain
+   `crowd_sprite_diffuse_normal_alpha`, which draws most of Sol's crowd pixels (46,650 under its own skip needle against the `_shadow` sprites' 3,376), declares neither and still draws white.
+   Crowds only reach the pairs that show stands.
+5. **Pose, Capital Reach only**: the Auricom banner sits about 480 px further left in ours at 1920 and the road lines
+   lean the other way: ours' grid slot or heading differs from the original's. Its scenery +21.6 is that, so this pair
+   cannot judge a render change until the pose is matched.
+
+**Closed negatives.** Exposure is not still ramping at the grab: the static bias is the same at ticks 30, 100 and 300
+(Queens Mall -20.8, -20.9, -21.2). A scalar specular fed from `Sun specular intensity` (ours reads HD's `Sun specular
+scale`, absent on every Omega file, so specular is 0) raises Queens Mall to 55.2 and Empire Climb to 53.2: Omega's
+RGB specular is not HD's scalar term and does not feed it (its colour reaches only the panel-map road's lobe). `Lighting.Ship diffuse brightness` (0.25 to 1, registered at
+`+0x164`, key `0x0188d117`) is read by nothing here, but the hull's bias does not follow it (Sol, at 1.0, is the
+brightest hull, +69), so it is not the hull's cause. **Measured live on the original (2026-11-16, `omega-hull-tone`,
+[hull-tone.md](../ghidra/functions/ps4-omega-eu/hull-tone.md))**: the hull does read it, as a separate neutral term worth about 20 %
+of Modesto's housing box at 0.25 (ours lacks it); it is not a scale on the hull, and the 1.8 to 2.4 times excess is in how ours' hull combines its diffuse terms (albedo, normal or the
+bound ambient: open, confidence 55), with an equal sun constant, no specular and no reflection on the box. The stored pair's two craft differ in part set (rear arc, pylons); the housing box is clear of them.
+
+**The crowd's law** (static, confidence 70; wired for the `_shadow` materials, `mesh::rcs::psp2::crowd`).
+`crowd_sprite_diffuse_normal_alpha_shadow` (Sol 128,452 triangles) and `crowd_diffuse_normal_shadow` (Arena 380,285,
+Altima 32,857) author `Shadowed` (`0x36997860`, `~crc32`) and `Ambient` (`0x735324ab`), per circuit: the sprite's Sol
+values are `0.12178` and `(0.777, 0.777, 0.777)`, Queens Mall's `Shadowed` is `0.497`, Arena's
+`crowd_diffuse_normal_shadow` is `0.4` with a coloured `Ambient` `(0.138, 0.071, 0.247)`. Ten of the sprite's fifteen
+pixel programs load `Shadowed`. The sun-lit one (`data00.psarc` `Shdr` `0x4224`, 122 instructions) ends, after an alpha
+test at 0.5:
+
+```text
+rgb = Shadowed * T.rgb * (Ambient + constantAmbientColour + liveLighting0diffuse * sat(N.L))
+out = fogColour + fog * (rgb - fogColour)
+```
+
+(`v_mul_f32 v6, s24, v6` and its two twins put `Shadowed` on the texel at `0x130` to `0x150`; `Ambient` is `s1..s3`,
+`constantAmbientColour` `s4..s6`, the sun `s8..s10`; `0x1c8` to `0x1fc` sum them). Its vertex-light twin `0x5064`
+multiplies the finished sum by `Shadowed` (`0x1ec` to `0x1f4`). `crowd_diffuse_normal_shadow`'s `0x3c84` (113
+instructions) has the same instruction shape: `Shadowed` loaded at `0xc8` and multiplied onto the three texel channels at
+`0x118` to `0x130`, `Ambient` `s1..s3`, `constantAmbientColour` `s4..s6`, the sun `s7..s9` (read as a shape, not
+instruction by instruction, so it carries the sprite's confidence, not more). Which permutation the race selects is not
+read; `Shadowed` is not a string in the eboot, so no engine code sets it by name.
+
+**What the wiring moved** (crowd-region bias, ours minus theirs in grey). Reproduce: on the build before the change run
+`uv run --with numpy --with pillow --with scipy python3 scripts/compare-decompose.py --pair data/reference/compare-page/omega/<pair>
+--work <dir> --binary <oag-game> --road road_alphaspec --crowd-mask <dir>/<pair>.npy` (it writes the mask: the pixels the
+`crowd` skip render changes by more than 25 grey, undilated), then again on the new build with the same `--crowd-mask`
+(the file is loaded, so both builds are scored on the same pixels; a darker crowd would otherwise shrink its own mask).
+Before the wiring (the `panelmap-wire` tip, 16x anisotropy) to after: Sol +117.6 to +103.3, Queens Mall +53.4 to +40.6,
+Subway +63.9 unchanged (it ships no `_shadow` sprite), Arena +62.2 to +15.1 (0.03 % of the frame, too small to judge).
+The per-material Sol numbers are the same score over the pixels one material's own skip render changes
+(`OAG_SKIP_MATERIAL=<file name>`; a one-off script, `--needle` cannot give them because `dynamic` removes the crowd
+from it), the `_shadow` mask taken from a debug build that drew that sprite flat magenta, which also showed those draws
+reach the branch: the `_shadow` sprites' 3,376 pixels go +160.0 to +57.6, the plain sprite's 46,650 go +121.5 to +116.6.
+
+**The plain sprite is the rest, and it is not this law.** `crowd_sprite_diffuse_normal_alpha` (Sol: 12 submeshes,
+780 triangles) and `crowd_diffuse_normal` author no parameter, and their programs
+(`0x41a4`, 112 instructions) declare no `Shadowed` or `Ambient`: `T * (constantAmbientColour + sun * sat(N.L))`, which
+is what ours' generic path computes. Still ours draws them white (bias +121.5 to +116.6 with the wiring), so the
+cause is in their inputs, not in a missing factor. **A diagnostic, not shipped**: giving the plain sprite the `_shadow`
+sprite's constants (`0.12178`, `0.777`) moves the whole-crowd bias to Sol +39.7, Queens Mall +6.4, Subway -13.2 and
+draws the dense rows coloured, as in the original. That is a stand-in until the plain's own constants (the
+`constantAmbientColour` and `liveLighting0diffuse` the original binds for these draws, or the normal-map `N.L`) are
+read.
+
+**2048 (Vita) crowd: checked, differs.** Vita's circuits (`data/art/published/environments/<circuit>/track.rcsmodel`,
+Sol, Queens Mall, Altima, Arena read with `psp2_material_dump`) draw their crowds through `fc06_lambert_alpha` and
+`fc08_effects_crowd` (technique names `CrowdGenShader_crowd_avatars_22x4SG`), not a `crowd_sprite_*` or `crowd_*` material,
+and none of those materials authors `Shadowed` or `Ambient` (the only parameters are `0x18a719bf`, `0xf139ff6d`,
+`0x906b67ba`, the crowd-bustle values). The law has no Vita counterpart to read.
+
+**2048 (Vita) lineage of the leading cause.** The road families are **checked, differs**: 2048's roads are
+`fc16_phong_alphaspec_normal_emissive` with `track_a_floor_ds` (above, "Altima's road drew flat pink") and carry no
+`tarmac_*` material (the tarmac section above), so neither Omega road program has a 2048 counterpart to read.
+
+## The port's anisotropy (2026-11-16, `port-aniso`)
+
+**Claim tested:** the native port samples track textures with anisotropic filtering at a level N read from its sampler
+creation. **True, N = 16, and it is the game's own request, not a setting of the port.**
+
+**Falsifier written first.** "The original requests anisotropy" would be false if no sampler built during the race load
+of a `tarmac_*` circuit (Empire Climb, 2048 mode) and of Metro Park (brick) carried an `Aniso*` filter or a `max_aniso`
+above 1x; "the capture had aniso" would be false if, in addition, the port's forced level was 0 (N = 1). Neither held.
+
+**What the port does** (`gpu/shadps4/video_core/texture_cache/sampler.cpp`, port commit `e56904d` read; the pairs were
+captured at `84690ed`: `sampler.cpp` and `amdgpu/resource.h` are byte-identical between the two, the settings reader
+differs by two HDR keys, and in `texture_cache.cpp` (442 lines changed, `GetSampler`'s file) and `vk_rasterizer.cpp` the
+only diff line naming a sampler, LOD bias or anisotropy is a `GarbageCollectSamplers();` call; the stored Metro Park
+`theirs.png` also sits at this boot's shipped sharpness, below). `Sampler::Sampler` sets `anisotropyEnable` when the game's
+S# has `xy_mag_filter` or `xy_min_filter` in {`AnisoPoint`, `AnisoLinear`}, or when the menu's forced level
+(`Gow3Settings::startup_anisotropy`, `gow3.ini` key `anisotropy`, 0 = the game's own) is above 1 on a filtered,
+mipmapped colour sampler. `maxAnisotropy = clamp(max(S# max_aniso, forced), 1, device maximum)`. The capture script's
+`gow3.ini` carries only `engine_fps` and `render_resolution`, so the forced level was 0 and every aniso sampler is the
+game's. The port's extra LOD bias is non-zero only with an upscaler (`SceneMipBias`, `vk_rasterizer.cpp:1675`); the
+pairs ran `upscaler none`, so it was 0 (the log's `extra` column is 0.0 on every sampler).
+
+**What the game asks** (`scripts/wipeout-pc-sampler-log.py`: the probe under `gdb`, a silent breakpoint on the sampler
+constructor, one line per unique S#, decoded with the S# layout of `resource.h`; port `e56904d` build, the Omega EU 1.07
+game folder; the boots are cold, on a fresh save, 2048 mode at C class, Feisar2048):
+
+| Boot | Unique samplers | `AnisoLinear` x16, mip Linear | of those with LOD bias +1.0 | Bilinear `max_aniso` 1x (mip None, Point or Linear) |
+| --- | --- | --- | --- | --- |
+| Metro Park 2048 (brick), boot 1 | 17 | 7 | 2 | 10 |
+| Metro Park 2048, boot 2 | 17 | 7 | 2 | 10 |
+| Empire Climb 2048 (`tarmac_*`) | 19 | 8 | 2 | 11 |
+| Vineta K, HD mode | 16 | 5 | 1 | 11 |
+
+The aniso samplers are always `AnisoLinear` mag and min, `mip Linear`, `max_aniso` field 4 (16x); the other samplers
+are `Bilinear` with `mip Point`/`None`/`Linear` and 1x (point-sampled lookups, render targets, depth compares). **No
+sampler anywhere has a negative LOD bias**: 0.0, and +1.0 (softer, not sharper) on 1 or 2 of each boot's aniso samplers. So the game's
+request is the whole story: there is no LOD sharpening hiding behind the filter. Confidence 85 that the road materials
+are among the aniso samplers (the A/B below shows it by the picture; which S# each material binds was not read, only
+that stripping the aniso samplers softens the road).
+
+**It is the filter that draws the road's sharpness.** The same boots with each S#'s `Aniso*` filter rewritten to
+`Point`/`Bilinear` by the breakpoint (`--strip`, so `anisotropyEnable` is false for that sampler), Laplacian standard
+deviation of a road crop on the grid frames before GO (relative units; three grid frames each):
+
+| Circuit (crop at 1920x1080) | as shipped | aniso stripped | stored pair `theirs.png` |
+| --- | --- | --- | --- |
+| Metro Park, brick (`800x90+700+400`) | 0.468 / 0.469 / 0.462 and, second boot, 0.467 / 0.464 / 0.464 | 0.284 / 0.289 / 0.278 | 0.456 |
+| Empire Climb, tarmac (`700x120+620+380`) | 0.454 / 0.456 / 0.455 | 0.276 / 0.278 / 0.279 | 0.383 (pose differs slightly) |
+| Vineta K, HD mode (`500x120+900+440`) | 0.432 / 0.436 | 0.303 / 0.303 | not stored at this crop |
+
+Stripping the filter takes about 40 % off the road crop's Laplacian deviation (0.46 to 0.28) and reads as the blurry far field of an
+unfiltered trilinear lookup (the frames were read by eye: brick courses and tarmac cracks vanish into a smear at the
+distance where the shipped frame still resolves them). Metro Park's stored `theirs.png` sits at the shipped value (0.456 against 0.462-0.469), so that pair was captured with the
+filter on; Empire Climb's stored frame (0.383) is another pose and is not an A/B, so its evidence is the live boots and
+the decomposition `G` numbers below. Two boots agree to 0.005 (Metro Park), seen once on the other two circuits.
+
+**Ours.** `oag_mesh::mesh_render` builds its sampler with one `anisotropy_clamp` from the `--anisotropy` setting (`crates/mesh/src/mesh_render.rs:1082`),
+a single level for the whole model, where the game asks 16x on 5 to 8 of its 16 to 19 sampler states (31 to 47 %) and 1x on the rest.
+The pairs' `omega` profile had it `off` (`compare-environment.toml` `[ours_defaults]`). Before and after, the same
+binary and pair, only `--anisotropy off` to `16x` in the recorded flags (`scripts/compare-decompose.py`, road family
+region; `LF` is unchanged to within 0.3 on every row, `G` is Sobel gradient energy ours / theirs):
+
+| Pair | road family | road `G` off | road `G` 16x | road `LF` off / 16x | raw mean grey off / 16x |
+| --- | --- | --- | --- | --- | --- |
+| Empire Climb | `tarmac_*` | 0.84 | **1.06** | 26.2 / 26.2 | 43.89 / 44.71 |
+| Capital Reach | `tarmac_*` | 0.68 | **0.91** | 27.7 / 27.5 | 46.86 / 47.12 |
+| Subway | `tarmac_*` | 0.70 | **0.82** | 21.4 / 21.8 | 35.79 / 35.86 |
+| Downtown | `tarmac_*` | 0.77 | **1.06** | 16.8 / 16.5 | 30.20 / 30.58 |
+| Metro Park | brick | 0.78 | **0.97** | 21.4 / 21.4 | 43.70 / 45.49 |
+| Queens Mall | `panelmap1` | 0.61 | 0.71 | 30.3 / 30.7 | 49.15 / 49.64 |
+| Sol (A class) | `panelmap1` | 0.27 | 0.35 | 32.5 / 32.7 | 43.42 / 43.63 |
+
+The five `tarmac_*`/brick pairs' road `G` goes from 0.68-0.84 to 0.82-1.06 with `LF` unchanged, the detail axis the
+filter owns; the two `panelmap1` pairs rise a little (their gap is the pixel program, not the filter). The raw mean grey
+rises on all seven, as the older note predicted (correct detail a few pixels out of phase scores worse on a frame whose
+edge correlation is about 0), so the raw score is not the test. The decomposition ran on the main checkout's debug
+binary (`6882828ba`), both settings on the same file.
+
+**Confidence:** 90 that the game requests 16x on mipmapped colour samplers and the port applies it (source read, then the live S# log, two boots on Metro Park and one each on Empire Climb and Vineta K); 85 that the road materials are among them (A/B by picture and by Laplacian deviation).
+
+**Decision.** `[platform.omega] anisotropy = "16x"` in `scripts/compare-environment.toml` (`scripts/compare_env.py` reads
+a platform-level `anisotropy` like `shadows`; `scripts/check-compare-environment.py` checks it, and that every other
+platform stays `off`). Ours is applied to every sampler of the model rather than only the 31 to 47 % the game asks it of; the
+other samplers are lightmaps, masks and point lookups of low frequency, so this is a superset that costs nothing the
+metric can see, and a per-sampler law is not wired. **Race grids only:** the `omega/` folder also holds front-end pairs (`menu-*`, `gap-*`); nothing there was measured, so
+`compare-rerender-ours.py` leaves a menu or loading pair's recorded `--anisotropy` as it is. **Ours at 16x slightly
+overshoots the original on Metro Park's brick crop** (Laplacian deviation 0.53 against 0.46 to 0.47), the road region's
+`G` being 0.97: the filter is closed, a small excess of high-frequency energy is left and not explained here.
+**Not changed:** the player-facing default (`--anisotropy`, the
+settings menu) stays the player's; whether Omega's `Title` data should default to 16x (the original's own request,
+like the HD LOD bias in `oag_hd::effects`) is a separate wiring item, named in the thread. Omega's looks carry no
+material LOD bias, consistent with the S# bias above. **The existing Omega pairs under `data/reference` still record
+`--anisotropy off`, and a recorded flag beats the settings file**, so `compare-rerender-ours.py` now sets a race pair's
+`--anisotropy` to the profile's level (`compare_env.profile_anisotropy_flags`, checked by
+`scripts/check-compare-environment.py`) and records it in `settings_readback`. Verified on an unedited copy of
+`metro-park-2048` in scratch: the new `ours.flags` carry `16x`, mean grey 43.70 to 45.49 and road crop deviation 0.354
+to 0.530, the same render as the hand-edited A/B above. The lead's step after this merges:
+`just compare-rerender-ours --only omega` (`--only` is a substring of the pair directory path, so it matches the
+`omega/` folder; menu and loading pairs keep their flags).
+
+**2048 cross-check: not checked (Vita).** These are Omega's samplers, and Omega's 2048-mode circuits, like its HD-mode
+circuit (Vineta K), all request 16x. The Vita 2048 sets its sampler state through GXM texture calls that were not read
+for a filter or an anisotropy level (the Vita eboot is in Ghidra and Vita3K runs it, so it is checkable); the `2048`
+profile keeps `off`, an unmeasured default. The decisive check: the filter and anisotropy arguments of the GXM texture
+init calls on a road material's draw, and whether Vita3K honours one (its anisotropic override setting). **Open:** which S# each road material binds (the material's `+0x20` state word
+`0x522800` is the likely key and was not mapped to the S#); the same A/B on the Zone and the remaining HD-mode
+circuits (only Vineta K was logged in HD mode).
 
 ## See also
 

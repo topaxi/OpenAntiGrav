@@ -9,6 +9,7 @@ use anyhow::Result;
 use crate::mesh::Model;
 
 mod blend;
+mod foliage;
 mod glow_mask;
 mod hull_lights;
 mod hull_points;
@@ -19,8 +20,11 @@ mod uniforms;
 
 mod texlod;
 pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
+pub use foliage::Foliage;
 pub use glow_mask::GlowMask;
-pub use hull_lights::{HULL_LIGHTS, HullLights, ge_byte, ge_channel, pack_hull_scale};
+pub use hull_lights::{
+    HULL_LIGHTS, HullLights, HullPassColour, ge_byte, ge_channel, pack_hull_scale,
+};
 pub use hull_points::{HULL_POINT_SLOTS, HullPoint, HullPointLights};
 pub use spu_light::{MAX_SPU_LIGHTS, RGBE_ROUND_TRIP, SpuLight, SpuLights};
 pub use stamp::Stamp;
@@ -28,13 +32,14 @@ pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIM
 pub use texlod::{PSP_TEXLOD_BIAS, PSP_TEXLOD_SLOPE, TextureDetail};
 use uniforms::Uniforms;
 mod prepass;
+mod specialise;
 mod velocity;
 mod vertex_layout;
 pub use prepass::Prepass;
 pub use uniforms::{
     CraftShadow, DEPTH_FORMAT, Fog, Light, QuakeWave, SCENE_SIZE, SCENE_STRIDE, Scene, ShadowMap,
-    ShadowMaps, ShadowReceiver, UNIFORMS_SIZE, UNIFORMS_STRIDE, Zone, ZoneSet, write_uniforms,
-    write_uniforms_raw,
+    ShadowMaps, ShadowReceiver, UNIFORMS_SIZE, UNIFORMS_STRIDE, Zone, ZoneRamp, ZoneSet,
+    write_uniforms, write_uniforms_raw,
 };
 pub use velocity::Velocity;
 pub(crate) use velocity::velocity_targets;
@@ -43,11 +48,16 @@ pub use vertex_layout::Texcoords;
 /// Headless capture, split into `crate::capture` so a pixel-returning entry
 /// point could be added there without pushing this file past its frozen
 /// size ceiling - see [`crate::capture`] for both functions' own docs.
-pub use crate::capture::{capture_from, capture_pixels_from};
+pub use crate::capture::{capture_from, capture_pixels_from, capture_pixels_through};
 
+pub mod chunks;
 pub mod cutout;
 pub mod deferred;
+mod geometry;
 pub use cutout::CutoutPipelines;
+pub use geometry::{Cursor, Geometry};
+mod draw_groups;
+pub use draw_groups::draw_cutout_then_transparent;
 
 mod target;
 pub use target::{fragment_options, is_linear_target, linear_constants};
@@ -56,18 +66,20 @@ mod anisotropy;
 pub use anisotropy::Anisotropy;
 
 mod pipeline_cache;
-pub use pipeline_cache::Scope as BuildCacheScope;
+pub use pipeline_cache::{Kept as KeptBuildCache, Scope as BuildCacheScope};
 
 mod shadow_map;
 pub use shadow_map::{
     COVERAGE_FORMAT, ENV_PROBE_FORMAT, ENV_PROBE_LAYERS, ENV_PROBE_SIZE, OCCLUSION_FORMAT,
-    OCCLUSION_LAYERS, SELF_SHADOW_FORMAT, SHADOW_DEPTH_FORMAT, SKY_PROBE_FORMAT, upload_sky_probe,
+    OCCLUSION_LAYERS, SELF_SHADOW_FORMAT, SH_PROBE_BYTES, SH_PROBE_ROW, SH_PROBE_ROWS,
+    SHADOW_DEPTH_FORMAT, SKY_PROBE_FORMAT, upload_sky_probe,
 };
-mod texture;
+pub(crate) mod texture;
 #[cfg_attr(target_arch = "wasm32", path = "mesh_render/texture_sink/web.rs")]
 mod texture_sink;
 pub use texture_sink::Scope as TextureSinkScope;
 pub(crate) use texture_sink::offer as offer_to_texture_sink;
+
 pub use texture_sink::without_scope as without_texture_sink;
 pub mod zone;
 
@@ -88,6 +100,18 @@ pub struct SolidSet {
     pub cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
 }
 
+/// The [`SolidSet`]s of a [`Velocity::Gated`] model again with the velocity target's
+/// write masked: what a frame draws with when nothing reads the velocity buffer.
+/// The same shaders and state as [`Built::pipeline`] and [`Built::culled`] but for
+/// that mask, so colour and depth are bit-identical.
+#[derive(Debug, Clone)]
+pub struct Unwritten {
+    /// As the unculled set (`Built::pipeline`, `Built::prepass`, ...).
+    pub base: SolidSet,
+    /// As [`Built::culled`].
+    pub culled: Option<SolidSet>,
+}
+
 /// Everything [`build`] hands back: geometry, texture bindings, and the three
 /// pipelines a `Model` draws through.
 #[derive(Debug)]
@@ -97,6 +121,9 @@ pub struct Built {
     /// The depth prepass pair, when [`build_with`] was asked for it - see
     /// [`Prepass`].
     pub prepass: Option<Prepass>,
+    /// Per entry of [`Model::draws`], whether it shades through [`Prepass::plain`]. Empty on a
+    /// model with no such pipeline.
+    pub plain_draws: Vec<bool>,
     /// Cutout pass: depth write on, no blending, `discard` below
     /// `shaders/alpha_test.wesl`'s `alpha_test_ref`. Draws [`Model::alpha_tested_draws`] as
     /// a second `set_pipeline` in the same render pass as `pipeline`, before
@@ -116,12 +143,16 @@ pub struct Built {
     pub cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
     /// The same opaque, prepass and cutout pipelines with back faces culled,
     /// for a draw whose [`crate::mesh::DrawCall::culled`] is set. `Some` only
-    /// for a model that records material state and has such a draw, built by a
-    /// caller that did not ask for [`build_with`]'s model-wide `cull_back`
-    /// (HD's track, whose materials author the cull in state bit 4 - see
-    /// [`crate::mesh::render_state::STATE_CULL`]). The pipelines above stay
+    /// for a model that records material state (HD's track, whose materials
+    /// author the cull in state bit 4 - see [`crate::mesh::render_state::STATE_CULL`])
+    /// or sets [`Model::per_batch_cull`] (a `.vex` circuit, whose batches author
+    /// it), and has such a draw, built by a caller that did not ask for
+    /// [`build_with`]'s model-wide `cull_back`. The pipelines above stay
     /// two-sided, for the draws that are not culled.
     pub culled: Option<SolidSet>,
+    /// The sets above again with the velocity write masked, for a
+    /// [`Velocity::Gated`] model - see [`Unwritten`].
+    pub unwritten: Option<Unwritten>,
     /// Blended pass: depth write off, the `blend` the caller passed to
     /// [`build`] - [`TRANSPARENT_BLEND`] for ordinary scene geometry. Draws
     /// [`Model::transparent_draws`] last, as a third `set_pipeline` in the
@@ -155,8 +186,14 @@ pub struct Built {
     /// [`stamp`]. `Some` only for a [`GlowMask::Stamped`] model, and indexed by
     /// `culled as usize` like [`Built::blend_pipeline`], one pair per blend class.
     pub stamp_pipeline: Option<Stamp>,
+    /// The depth and colour pair a circuit's blended foliage draws through under
+    /// `ScenerySort::Depth` - see [`foliage`]. `Some` only for a model with a draw that
+    /// [`Foliage::takes_part`], which is a Pulse or Pure circuit.
+    pub foliage: Option<Foliage>,
     pub bind_group: wgpu::BindGroup,
-    pub vertex_buffer: wgpu::Buffer,
+    /// The vertex buffers: one for a model that fits the device's `max_buffer_size`,
+    /// several cut by [`chunks::VertexChunks`] for one that does not.
+    pub geometry: Geometry,
     pub index_buffer: wgpu::Buffer,
     pub texture_binds: Vec<wgpu::BindGroup>,
     /// Group 1 as arrays, the same materials slot for slot, when the caller asked
@@ -418,8 +455,32 @@ pub fn build_with(
     if model.absorb_shell {
         constants.push(("absorb_shading", 1.0));
     }
+    if model.shield_shell {
+        constants.push(("shield_shading", 1.0));
+    }
+    if model.own_shield {
+        constants.push(("own_shield_shading", 1.0));
+    }
+    let present = specialise::slots_present(model);
+    constants.push(("slots_present", f64::from(present)));
+    constants.push((
+        "emissive_rows",
+        f64::from(specialise::emissive_rows(present)),
+    ));
     constants.extend(pipeline_cache::scope_constants());
     let constants = constants.as_slice();
+    // The plain half of a prepassed model's opaque list and what its shading is told.
+    let plain = prepass.then(|| specialise::plain_draws(model)).flatten();
+    let plain_constants = plain.as_ref().map(|plain| {
+        let mut constants = constants.to_vec();
+        constants.retain(|(name, _)| !matches!(*name, "slots_present" | "emissive_rows"));
+        constants.push(("slots_present", f64::from(plain.present)));
+        constants.push((
+            "emissive_rows",
+            f64::from(specialise::emissive_rows(plain.present)),
+        ));
+        constants
+    });
 
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("mesh"),
@@ -600,13 +661,23 @@ pub fn build_with(
     // The opaque pipeline, its depth prepass and the cutout pipelines, built
     // for one cull mode so a model whose draws mix single- and double-sided
     // (HD's track, from material state bit 4) gets a culling twin of each.
-    let solid_set = |primitive: wgpu::PrimitiveState| {
+    // `masked` builds the set with the velocity write masked (see [`Unwritten`]).
+    let masked_targets = velocity_targets(
+        wgpu::ColorTargetState {
+            format,
+            blend: None,
+            write_mask: glow.writes(),
+        },
+        velocity.target(true),
+    );
+    let solid_set = |primitive: wgpu::PrimitiveState, masked: bool| {
+        let targets = if masked { &masked_targets } else { &targets };
         let pipeline = pipeline_cache::cached_pipeline(
             shader,
             "vs_main",
             &vertex_buffers,
             fragment_entry,
-            &targets,
+            targets,
             primitive,
             Some(depth_stencil.clone()),
             multisample,
@@ -624,7 +695,7 @@ pub fn build_with(
                     fragment: Some(wgpu::FragmentState {
                         module: shader,
                         entry_point: Some(fragment_entry),
-                        targets: &targets,
+                        targets,
                         compilation_options: wgpu::PipelineCompilationOptions {
                             constants,
                             ..Default::default()
@@ -646,8 +717,9 @@ pub fn build_with(
                 layout: &pipeline_layout,
                 vertex_buffers: &vertex_buffers,
                 constants,
+                plain_constants: plain_constants.as_deref(),
                 velocity,
-                targets: &targets,
+                targets,
                 fragment_entry,
                 primitive,
                 multisample,
@@ -676,7 +748,7 @@ pub fn build_with(
                     blend: None,
                     write_mask: glow.blend_writes(),
                 },
-                velocity.target(false),
+                velocity.target(masked),
             )
         } else {
             targets.clone()
@@ -747,12 +819,12 @@ pub fn build_with(
             cutout_pipelines,
         }
     };
-    // Whether the draws decide for themselves: a PS3 model (it records material
-    // state) whose opaque or cutout draws carry `culled`, on a caller that did
-    // not ask for every draw culled. Pulse's `.vex` models carry `culled` and
-    // no material state, and stay on the model-wide `cull_back`.
+    // Whether the draws decide for themselves: a model whose draws' `culled` the
+    // loader says to honour (`Model::per_batch_cull`, a `.vex` circuit's batches) or
+    // a PS3 model (it records material state), whose opaque or cutout draws carry
+    // `culled`, on a caller that did not ask for every draw culled.
     let per_draw_cull = !cull_back
-        && !model.material_state.is_empty()
+        && (model.per_batch_cull || !model.material_state.is_empty())
         && model
             .draws
             .iter()
@@ -763,13 +835,19 @@ pub fn build_with(
         prepass,
         alpha_test_pipeline,
         cutout_pipelines,
-    } = solid_set(primitive);
-    let culled = per_draw_cull.then(|| {
-        solid_set(wgpu::PrimitiveState {
-            cull_mode: Some(wgpu::Face::Back),
-            ..primitive
-        })
+    } = solid_set(primitive, false);
+    crate::not_exiting()?;
+    let culling = wgpu::PrimitiveState {
+        cull_mode: Some(wgpu::Face::Back),
+        ..primitive
+    };
+    let culled = per_draw_cull.then(|| solid_set(culling, false));
+    crate::not_exiting()?;
+    let unwritten = (velocity == Velocity::Gated).then(|| Unwritten {
+        base: solid_set(primitive, true),
+        culled: per_draw_cull.then(|| solid_set(culling, true)),
     });
+    crate::not_exiting()?;
 
     // Third pipeline for `Model::transparent_draws` (list B): same shader
     // module, bind group layouts and vertex layout, blended instead of
@@ -877,6 +955,7 @@ pub fn build_with(
         make_pipeline("mesh blend (alpha over, two-sided)", Some(blend), false),
         make_pipeline("mesh blend (alpha over, culled)", Some(blend), true),
     ];
+    crate::not_exiting()?;
     let additive_pipeline = [
         make_pipeline(
             "mesh blend (additive, two-sided)",
@@ -885,10 +964,12 @@ pub fn build_with(
         ),
         make_pipeline("mesh blend (additive, culled)", Some(ADDITIVE_BLEND), true),
     ];
+    crate::not_exiting()?;
     let unblended_pipeline = [
         make_pipeline("mesh blend (none, two-sided)", None, false),
         make_pipeline("mesh blend (none, culled)", None, true),
     ];
+    crate::not_exiting()?;
     // One pair per *distinct* state the model's transparent draws name, in
     // first-seen order. A linear scan over a handful of entries rather than a
     // map: `wgpu::BlendState` is not `Hash`, the count is five on the widest
@@ -910,6 +991,7 @@ pub fn build_with(
         if authored_pipelines.iter().any(|(seen, _)| *seen == key) {
             continue;
         }
+        crate::not_exiting()?;
         let (state, writes_depth) = key;
         let label = format!("mesh blend (authored {state:?}, depth write {writes_depth})");
         let depth = if writes_depth {
@@ -940,20 +1022,50 @@ pub fn build_with(
         })
     });
 
-    let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("vertices"),
-        size: std::mem::size_of_val(&model.vertices[..]) as u64,
-        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
+    let foliage = (blend_entry == "fs_main_blend"
+        && model.transparent_draws.iter().any(Foliage::takes_part))
+    .then(|| {
+        foliage::pipelines(&foliage::Shared {
+            device,
+            shader,
+            layout: &pipeline_layout,
+            vertex_buffers: &vertex_buffers,
+            constants,
+            format,
+            multisample,
+            blend,
+            write_mask: glow.blend_writes(),
+            velocity_target: velocity_target.clone(),
+            depth_compare,
+        })
     });
+
+    let geometry = Geometry::new(device, model, device.limits().max_buffer_size)?;
+    if !geometry.is_whole() {
+        log::debug!(
+            "{}: {} vertices cut into {} buffers of at most {:.1} MiB (the device's max_buffer_size is {:.1} MiB)",
+            model.label,
+            model.vertices.len(),
+            geometry.buffer_count(),
+            geometry.largest_buffer() as f64 / (1 << 20) as f64,
+            device.limits().max_buffer_size as f64 / (1 << 20) as f64,
+        );
+    }
     let deferred = defer_uploads && oag_gpu::deferred_upload::active();
     if !deferred {
-        queue.write_buffer(&vertex_buffer, 0, bytemuck::cast_slice(&model.vertices));
+        geometry.write_all(queue, &model.vertices);
     }
 
+    let index_bytes = std::mem::size_of_val(&model.indices[..]) as u64;
+    anyhow::ensure!(
+        index_bytes <= device.limits().max_buffer_size,
+        "{}: {index_bytes} bytes of indices exceed the device's maximum buffer size of {}",
+        model.label,
+        device.limits().max_buffer_size
+    );
     let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("indices"),
-        size: std::mem::size_of_val(&model.indices[..]) as u64,
+        size: index_bytes,
         usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -1099,7 +1211,7 @@ pub fn build_with(
         .map(|(material, label)| material.bind_group(device, &texture_layout, label))
         .collect();
     let bindless = if bindless {
-        log::info!(
+        log::debug!(
             "{}: group 1 as binding arrays, {} material slots",
             model.label,
             materials.len()
@@ -1135,6 +1247,7 @@ pub fn build_with(
 
     Ok(Built {
         prepass,
+        plain_draws: plain.map_or_else(Vec::new, |plain| plain.draws),
         anim_bind,
         anim_buffer,
         node_anim_buffer,
@@ -1147,13 +1260,15 @@ pub fn build_with(
         alpha_test_pipeline,
         cutout_pipelines,
         culled,
+        unwritten,
         blend_pipeline,
         additive_pipeline,
         unblended_pipeline,
         authored_pipelines,
         stamp_pipeline,
+        foliage,
         bind_group,
-        vertex_buffer,
+        geometry,
         index_buffer,
         texture_binds,
         bindless,

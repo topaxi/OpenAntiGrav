@@ -256,12 +256,26 @@ fn same_circuit_offers_the_race_list_unfiltered() {
 /// entry for the whole title, or one beside every circuit.
 #[test]
 fn a_zone_palette_resolves_per_title_or_per_circuit() {
-    let title_wide = ZonePalette::TitleWide("/data/environments/zonemode.effectsettings");
+    let title_wide = ZonePalette::TitleWide {
+        entry: "/data/environments/zonemode.effectsettings",
+        zone_circuits: &["/data/environments/zone_1/track.vex"],
+        zone_circuit_entry: "/data/environments/zonemodedlc3.effectsettings",
+    };
     assert_eq!(
         title_wide.entry_for("/data/environments/talons_junction/track.vex"),
         Some("/data/environments/zonemode.effectsettings".to_string()),
-        "the circuit does not enter into it"
+        "an ordinary circuit takes the title-wide table"
     );
+    for zone_circuit in [
+        "/data/environments/zone_1/track.vex",
+        r"Data\Environments\Zone_1\Track.vex",
+    ] {
+        assert_eq!(
+            title_wide.entry_for(zone_circuit),
+            Some("/data/environments/zonemodedlc3.effectsettings".to_string()),
+            "a Zone circuit takes the second table, however the name is spelled ({zone_circuit})"
+        );
+    }
 
     let beside = ZonePalette::BesideCircuit("ZoneMode2048.effectSettings");
     assert_eq!(
@@ -336,6 +350,7 @@ const SOUNDS: SoundBanks = SoundBanks {
         origin: crate::Origin::Chosen,
     },
     crossfade: None,
+    wwise: None,
 };
 
 /// A fixture with both a native `team_variants` table and a `guest_roster` -
@@ -344,9 +359,12 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     track: "track.vex",
     team: r"Feisar2048\3",
     ship_dir: r"Data\art\published\Ships",
+    ship_hull: "Ship",
     handling_dir: r"Data\HandlingStats",
     effect_dir: r"Data\Psys",
     effect_dir_by_circuit: &[],
+    hull_by_track_type: &[],
+    circuit_lineages: &[],
     zone: ZoneCircuit::Prefixed("zone_"),
     zone_craft: ZoneCraft::PlayerShip,
     zone_team_step: ZoneTeamStep::Offered,
@@ -372,8 +390,11 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     zone_transition: None,
     zoom_ring: None,
     borrows_zoom_ring: false,
+    game_options: crate::race::GameOptions::NONE,
     zone_stage_textures: None,
+    zone_fallback: None,
     zone_sky: None,
+    detonator: None,
     team_variants: Some(&NATIVE),
     guest_roster: Some(&GUEST_ROSTER),
     // This fixture's own axis is `team_variants`' shape; nothing here
@@ -534,6 +555,22 @@ fn a_circuit_prefix_overrides_the_effect_directory_and_nothing_else_does() {
     );
 }
 
+#[test]
+fn a_track_type_forces_its_hull_stem_into_the_entry_name() {
+    let mut defaults = DEFAULTS;
+    defaults.hull_by_track_type = &[("Classic", r"VR\Ship")];
+    let stem = defaults.hull_for_track_type("classic");
+    assert_eq!(stem, Some(r"VR\Ship"), "any case, as the type is compared");
+    assert_eq!(defaults.hull_for_track_type("Race"), None);
+    assert_eq!(DEFAULTS.hull_for_track_type("Classic"), None);
+    assert_eq!(
+        defaults
+            .ships_for("Feisar")
+            .hull_entry_name("Feisar", false, stem),
+        format!(r"{}\Feisar\VR\Ship.vex", defaults.ship_dir)
+    );
+}
+
 const MATCHING: TeamVariants = TeamVariants {
     teams: &["Feisar", "EGX"],
     variants: &[
@@ -573,4 +610,34 @@ fn a_zone_team_step_is_offered_unless_skipped_and_full_only_when_measured() {
     assert!(!ZoneTeamStep::Skipped.full_ratings());
     assert!(!ZoneTeamStep::Offered.full_ratings());
     assert!(ZoneTeamStep::OfferedAtFullRatings.full_ratings());
+}
+
+/// A fallback holds back the circuits under its own-model directory, ignoring case and separators,
+/// and no others; one with no such directory holds back nothing. Both titles that ship a fallback
+/// carry one.
+#[test]
+fn a_zone_fallback_holds_back_only_the_circuits_that_keep_their_own_model() {
+    const TEXTURES: ZoneStageTextures = ZoneStageTextures {
+        general: "",
+        track: "t",
+        extension: ".gnf",
+        stages: 15,
+    };
+    const STAGES: ZoneStages = ZoneStages {
+        records: &[(0, "A")],
+    };
+    let held = ZoneFallback {
+        palette: ZonePalette::BesideCircuit("z"),
+        stage_textures: &TEXTURES,
+        stages: &STAGES,
+        own_model_under: Some(r"Data\Environments2048"),
+    };
+    assert!(held.holds_back(r"Data\Environments2048\bridge\track.vex"));
+    assert!(held.holds_back("/data/environments2048/bridge/track.vex"));
+    assert!(!held.holds_back(r"Data\environments\tech_de_ra\track.vex"));
+    let open = ZoneFallback {
+        own_model_under: None,
+        ..held
+    };
+    assert!(!open.holds_back(r"Data\Environments2048\bridge\track.vex"));
 }

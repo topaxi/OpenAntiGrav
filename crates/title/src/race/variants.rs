@@ -41,7 +41,7 @@ pub struct GuestRoster {
     /// The team ids, their variant suffixes and how they join.
     pub variants: &'static TeamVariants,
     /// The title whose roster this reships, by [`crate::Title::name`]. A race
-    /// remix that wants that title's craft and has no source for it falls back
+    /// a two-title race that wants that title's craft and has no source for it falls back
     /// to a title carrying this roster.
     pub reships: &'static str,
     /// The CRAFT TITLE entry's own name when [`Self::reships`] is *also*
@@ -57,7 +57,7 @@ pub struct GuestRoster {
     /// five 2048-era teams, whose `PI_Team` is declared in the same definition as the
     /// HD-era ones and has no craft of its own under the bare id. `false` leaves a
     /// declared guest team out of the list: 2048's HD-derived twelve are
-    /// reachable through RACE REMIX's craft title only, and what the original's
+    /// reachable through a two-title race page's craft title only, and what the original's
     /// own team list does with them is unmeasured.
     pub offered: bool,
     /// The speed classes this roster's teams author, slowest first, as their
@@ -181,6 +181,34 @@ impl VariantJoin {
     }
 }
 
+/// What separates a [`TeamVariant::suffix`] from a livery folder in a stored variant id.
+pub const LIVERY_SEPARATOR: char = '@';
+
+/// A stored variant id split into the [`TeamVariant::suffix`] it races out of and the livery
+/// folder it wears there, when it names one: `"_c1@livery4"` is `("_c1", Some("livery4"))`, a
+/// plain `"_c1"` is `("_c1", None)`.
+///
+/// Wipeout HD/Fury's and Omega's `PI_TeamModel`s pair a hull directory with a `texturelocation`
+/// (`SKIN1` is `Feisar` in `livery2`), so a model is a directory plus a livery. The plain suffix
+/// keeps the directory's own livery, so ids stored before liveries were a choice still read.
+#[must_use]
+pub fn split_livery(id: &str) -> (&str, Option<&str>) {
+    match id.split_once(LIVERY_SEPARATOR) {
+        Some((suffix, livery)) if !livery.is_empty() => (suffix, Some(livery)),
+        Some((suffix, _)) => (suffix, None),
+        None => (id, None),
+    }
+}
+
+/// The stored variant id of `suffix` worn in `livery`, [`split_livery`]'s inverse.
+#[must_use]
+pub fn livery_variant(suffix: &str, livery: Option<&str>) -> String {
+    match livery {
+        Some(livery) => format!("{suffix}{LIVERY_SEPARATOR}{livery}"),
+        None => suffix.to_string(),
+    }
+}
+
 /// A team's own alternate hull **file**, inside its own directory - see
 /// [`RaceDefaults::hull_variants`].
 ///
@@ -251,6 +279,17 @@ impl RaceDefaults {
             .map_or(self.effect_dir, |&(_, dir)| dir)
     }
 
+    /// The hull stem a circuit of `PI_Track` type `kind` forces on every craft
+    /// that races it, from [`Self::hull_by_track_type`] (case-insensitive, as the
+    /// original compares the attribute). `None` leaves the title's own hull.
+    #[must_use]
+    pub fn hull_for_track_type(&self, kind: &str) -> Option<&'static str> {
+        self.hull_by_track_type
+            .iter()
+            .find(|(declared, _)| declared.eq_ignore_ascii_case(kind))
+            .map(|&(_, stem)| stem)
+    }
+
     /// Which [`TeamVariants`] table a **bare** team id is offered variants
     /// from - this title's own [`Self::team_variants`], or
     /// [`Self::guest_roster`]'s, in that order. `None` when neither
@@ -289,9 +328,9 @@ impl RaceDefaults {
     /// Whether `team` can race `class`: `Some(false)` when its ladder is read
     /// and does not name the class, `None` when it is unread.
     ///
-    /// RACE REMIX hides a team that answers `Some(false)` - **chosen, not
+    /// A two-title race page hides a team that answers `Some(false)` - **chosen, not
     /// measured** (the class row is shared with every other page, so the
-    /// team row, which RACE REMIX already re-supplies when the craft title
+    /// team row, which a two-title race page already re-supplies when the craft title
     /// moves, is the one that narrows). An unread ladder hides nothing: the
     /// load names what the files do carry.
     #[must_use]
@@ -367,6 +406,7 @@ impl RaceDefaults {
             dir: self
                 .guest_for(team)
                 .map_or(self.ship_dir, |guest| guest.dir),
+            hull: self.ship_hull,
             zone: self.zone_craft,
             boost: self.boost,
         }

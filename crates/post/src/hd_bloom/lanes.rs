@@ -14,7 +14,7 @@
 //! reduction ladder): a view's chain runs to its end, in its own submission, before the
 //! next view's starts, so nothing in them outlives the view that wrote it.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 
 use super::{Chain, Pass, Target};
 
@@ -156,51 +156,6 @@ impl Lane {
     }
 }
 
-/// The seats' lanes, built when a split first asks for them, and how many builds that took
-/// (a lane forgotten and asked for again is built again, which a live count cannot show).
-#[derive(Debug, Default)]
-pub(super) struct SeatLanes(RefCell<Vec<Option<Lane>>>, Cell<u64>);
-
-impl SeatLanes {
-    pub(super) fn built(&self) -> usize {
-        self.0.borrow().iter().flatten().count()
-    }
-
-    pub(super) fn builds(&self) -> u64 {
-        self.1.get()
-    }
-
-    pub(super) fn clear(&self) {
-        self.0.borrow_mut().clear();
-    }
-
-    pub(super) fn retire(&self, seat: usize) {
-        if let Some(lane) = self.0.borrow_mut().get_mut(seat) {
-            lane.take();
-        }
-    }
-
-    pub(super) fn get_or_build(
-        &self,
-        seat: usize,
-        build: impl FnOnce() -> Lane,
-    ) -> std::cell::Ref<'_, Lane> {
-        {
-            let mut lanes = self.0.borrow_mut();
-            if lanes.len() <= seat {
-                lanes.resize_with(seat + 1, || None);
-            }
-            if lanes[seat].is_none() {
-                lanes[seat] = Some(build());
-                self.1.set(self.1.get() + 1);
-            }
-        }
-        std::cell::Ref::map(self.0.borrow(), |lanes| {
-            lanes[seat].as_ref().expect("built above")
-        })
-    }
-}
-
 /// One view of a split, as the chain runs over it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct View {
@@ -225,14 +180,15 @@ pub struct View {
 impl Chain {
     /// Runs the chain over one view of a split: its own half-size ladder, its own
     /// adaptation (the seat's lane), its glow clamped to its rectangle, and its resolve into
-    /// the same rectangle of `view`. **Call it once per view with its own encoder, and
-    /// submit each before the next** - the constants are written with the queue, which
-    /// lands before the submission that follows.
+    /// the same rectangle of `view`. **Call it once per view with its own encoder and its
+    /// own `queue`, its writes landing ahead of that encoder and behind the last view's**:
+    /// a submission each, or a log per view (`oag_gpu::writes`). The constants of two views
+    /// written straight to the queue would both land before one submission's commands.
     ///
     /// Reads no zoom streak (it holds the primary craft's pulse).
     pub fn run_view(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,

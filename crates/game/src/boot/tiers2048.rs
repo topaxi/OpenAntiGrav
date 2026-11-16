@@ -20,6 +20,7 @@
 
 use oag_raceplay::catalogue::Track;
 use oag_tables::race_campaign::{Cell, Grid, Medal, Mode};
+use oag_title::TrackAlias;
 use oag_ui::frontend::{EventCard, EventIcon, MapEvent, Tier};
 use oag_ui::language::{CircuitNames, StringTable};
 
@@ -74,10 +75,11 @@ pub(super) fn load(
     archives: &mut oag_assets::Archives,
     tracks: &[Track],
     names: &CircuitNames,
+    aliases: &[TrackAlias],
     strings: &StringTable,
     report: &mut Vec<String>,
 ) -> Vec<Tier> {
-    tiers(&read(archives, report), tracks, names, strings)
+    tiers(&read(archives, report), tracks, names, aliases, strings)
 }
 
 /// The cell called `name`, with the campaign and grid it is in.
@@ -109,6 +111,7 @@ pub fn tiers(
     grids: &[TierGrids],
     tracks: &[Track],
     names: &CircuitNames,
+    aliases: &[TrackAlias],
     strings: &StringTable,
 ) -> Vec<Tier> {
     grids
@@ -125,7 +128,15 @@ pub fn tiers(
                         .filter_map(move |cell| Some((index?, cell)))
                 })
                 .filter_map(|(index, cell)| {
-                    node(&tier.add_on.nodes, index, cell, tracks, names, strings)
+                    node(
+                        &tier.add_on.nodes,
+                        index,
+                        cell,
+                        tracks,
+                        names,
+                        aliases,
+                        strings,
+                    )
                 })
                 .collect(),
         })
@@ -138,9 +149,10 @@ fn node(
     cell: &Cell,
     tracks: &[Track],
     names: &CircuitNames,
+    aliases: &[TrackAlias],
     strings: &StringTable,
 ) -> Option<MapEvent> {
-    let (x, y) = nodes.step(grid, cell.grid_coords()?)?;
+    let (x, y) = nodes.node(grid, cell.grid_coords()?)?;
     let track = cell
         .track
         .as_deref()
@@ -158,15 +170,67 @@ fn node(
     }
     Some(MapEvent {
         name: cell.name.clone(),
-        x,
-        y,
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a canvas cell is under 401 across and 120 down"
+        )]
+        x: x as f32,
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a canvas cell is under 401 across and 120 down"
+        )]
+        y: y as f32,
         detail,
         requires: None,
         kind,
         forced_craft: None,
         refused_craft: Vec::new(),
-        card: card(cell, track, &circuit, kind, strings),
+        card: card(
+            cell,
+            track,
+            &card_title(cell, &circuit, aliases, strings),
+            kind,
+            strings,
+        ),
+        role: oag_title::MapRole::default(),
+        rank_gated: false,
+        rank_required: None,
     })
+}
+
+/// The name the title's alias table gives circuit `id`: the string table entry of
+/// the row's key, else the key itself. `None` where the table has no row, which
+/// is every circuit of a title with no table and 2048's own ten: the caller keeps
+/// the name its other screens use, because the original's own answer there
+/// (`99_Track` or a guess) is not read.
+#[must_use]
+pub fn alias_title(aliases: &[TrackAlias], id: &str, strings: &StringTable) -> Option<String> {
+    let key = oag_title::track_alias::key_for(aliases, id)?;
+    Some(
+        strings
+            .get(key)
+            .or_else(|| strings.find_ignoring_case(key))
+            .unwrap_or(key)
+            .to_string(),
+    )
+}
+
+/// The title of a cell's event card: [`alias_title`] of its circuit, else `circuit`.
+/// Not [`oag_raceplay::catalogue::label`]: the original draws a reverse's own
+/// entry without the `FE_REVERSE` word that label appends
+/// (`docs/ghidra/functions/vita-2048-eu-v104/circuit-name-key.md`, "The card's
+/// key: the track alias table").
+#[must_use]
+pub fn card_title(
+    cell: &Cell,
+    circuit: &str,
+    aliases: &[TrackAlias],
+    strings: &StringTable,
+) -> String {
+    cell.track
+        .as_deref()
+        .and_then(|id| alias_title(aliases, id, strings))
+        .unwrap_or_else(|| circuit.to_string())
 }
 
 /// The icon a cell's mode draws. **Chosen, not measured**: the four icons are
@@ -205,13 +269,14 @@ fn card(
     // The circuit's photo is a file of its own per circuit; a circuit driven
     // backwards shows its forward twin's.
     let photo = cell.track.as_deref().map(|id| {
-        let forward = id.strip_suffix("_R").unwrap_or(id);
+        let forward = id.trim_suffix("_R");
         format!(r"Data\FE\NewImages\trackscreens\{forward}.gtf")
     });
     let emblem = track.map(|track| format!(r"{}\fe\TrackSelectEmblem.gtf", track.location));
     EventCard {
         title: circuit.to_string(),
         kind_label: strings.get(kind_id).map(str::to_string),
+        mode_body: super::campaign2048::mode_body(strings, kind_id),
         has_objective: false,
         laps,
         class_icon: ordinal.filter(|_| has_class).and_then(class_icon),
@@ -285,12 +350,20 @@ pub fn closed(
     if unlock_all {
         return false;
     }
-    let medal_of: &dyn Fn(&str) -> Option<Medal> =
-        &crate::unlock::campaign_medal_of(records, title);
+    let medal_of: &dyn Fn(&str) -> Option<Medal> = &crate::unlock::campaign_medal_of(
+        records,
+        title,
+        oag_tables::race_campaign::MedalTiers::standard(),
+    );
     let open = !grid.locked
-        || grid.points_earned(medal_of) > 0
+        || grid.points_earned(oag_tables::race_campaign::MedalTiers::standard(), medal_of) > 0
         || grid.unlock_grid.as_deref().is_none_or(|target| {
-            oag_tables::race_campaign::grid_points_met(&tier.grids, target, medal_of)
+            oag_tables::race_campaign::grid_points_met(
+                &tier.grids,
+                oag_tables::race_campaign::MedalTiers::standard(),
+                target,
+                medal_of,
+            )
         });
     !open
 }

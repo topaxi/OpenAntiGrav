@@ -4,10 +4,11 @@
 //! (`glasstest`).
 //!
 //! Both already carry [`slots::ADD_SECOND`], because `Program::accumulates`
-//! sees a `MAD` whose addend is its own destination in each. Neither adds its
-//! second texture to the picture. This module leaves the bit and the textures
-//! as the skin pass bound them and gives each material its own glow-table entry
-//! with a [`Emissive::program`] mode, which `shade.wesl` reads.
+//! sees a `MAD` whose addend is its own destination in each (one compile of the
+//! billboard aside, below). Neither adds its second texture to the picture.
+//! This module leaves the textures as the skin pass bound them and gives each
+//! material its own glow-table entry with a [`Emissive::program`] mode, which
+//! `shade.wesl` reads.
 //!
 //! # `cf_vex_billboard` ([`PROGRAM_BILLBOARD`])
 //!
@@ -27,6 +28,15 @@
 //! earlier reading of this page had `0xb17204e5` as `k`: it is the glow tap's
 //! `u` scale (1.5 on the harimau card, 4.0 on one of Vineta K's side boards),
 //! and `0x21db4cba` multiplies the glow on every lane.
+//!
+//! **Metropia's and Chenghou Project's copy is an older compile with no `k`**
+//! (`@0x1360`, block #3, the start gantry's boards): the same taps and the same
+//! light, `out = t0 * g.a + g.rgb * (t0 * light)`, the output alpha the literal
+//! 1, and neither the parameter nor its multiply. Its last combine is `MAD
+//! H1.xyz, H1, H4.wwww, H4`, whose addend is not its destination, so
+//! `Program::accumulates` does not flag it and the slot arrives here without
+//! [`slots::ADD_SECOND`]. It is the same program with `k = 1`, and takes the
+//! bit here.
 //!
 //! # `glasstest` ([`PROGRAM_BW_GLASS`])
 //!
@@ -66,11 +76,11 @@ use super::{Report, Textures};
 const BILLBOARD_PICTURE: u32 = 0x3bdc_0403;
 /// The billboard's glow texture (`tv_glow`), unit 1.
 const BILLBOARD_GLOW: u32 = 0xa2d5_55b9;
-/// `u` scale of the glow tap.
+/// `aspect_ratio_U`: the `u` scale of the glow tap.
 const GLOW_U_SCALE: u32 = 0xb172_04e5;
-/// `v` scale of the glow tap.
+/// `aspect_ratio_V`: the `v` scale of the glow tap.
 const GLOW_V_SCALE: u32 = 0x287b_555f;
-/// What the glow sample is multiplied by, on every lane.
+/// `texture2overlaystrength`: what the glow sample is multiplied by, on every lane.
 const GLOW_K: u32 = 0x21db_4cba;
 /// The ambient colour the billboard's light starts from.
 const AMBIENT: u32 = 0x81db_67ea;
@@ -102,11 +112,12 @@ fn classify(
     let mut glass = GLASS_SAMPLERS;
     glass.sort_unstable();
     if samplers == billboard
-        && [GLOW_U_SCALE, GLOW_V_SCALE, GLOW_K, AMBIENT]
+        && [GLOW_U_SCALE, GLOW_V_SCALE, AMBIENT]
             .iter()
             .all(|&h| has(h))
     {
-        let k = value(GLOW_K)?;
+        // The compile with no `k` multiplies the glow by nothing.
+        let k = if has(GLOW_K) { value(GLOW_K)? } else { 1.0 };
         return Some(Emissive {
             tint: [k; 3],
             offset: 0.0,
@@ -142,7 +153,11 @@ pub(super) fn billboard_glass(
         let Some(word) = packed.get_mut(slot) else {
             continue;
         };
-        if *word & slots::ADD_SECOND == 0 || !seconds.get(slot).is_some_and(Option::is_some) {
+        if !seconds.get(slot).is_some_and(Option::is_some) {
+            continue;
+        }
+        // A lightmapped variant's second binding is the atlas, not the glow.
+        if *word & slots::SECOND_IS_LIGHTMAP != 0 {
             continue;
         }
         let Some(variant) = variants.get(slot).copied().flatten() else {
@@ -157,6 +172,13 @@ pub(super) fn billboard_glass(
         let Some(layer) = classify(&declared, &material.parameters) else {
             continue;
         };
+        // The glass is taken only where the generic pass flagged its accumulate; the
+        // billboard's compile without `k` is not flagged and takes the bit below.
+        let flagged = *word & slots::ADD_SECOND != 0;
+        if !flagged && (layer.program[0] != PROGRAM_BILLBOARD || slots::material_index(*word) != 0)
+        {
+            continue;
+        }
         let index = table.iter().position(|seen| *seen == layer).or_else(|| {
             (table.len() + 1 < EMISSIVE_LIMIT).then(|| {
                 table.push(layer);
@@ -168,6 +190,7 @@ pub(super) fn billboard_glass(
             continue;
         };
         *word = (*word & slots::ROLE_MASK)
+            | slots::ADD_SECOND
             | (u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT);
         if layer.program[0] == PROGRAM_BILLBOARD {
             report.billboard_multiplied += 1;
@@ -204,4 +227,55 @@ pub(super) fn second_uv(
             .then(|| mesh.second_texcoords(model_blob, submesh, stride).ok())
             .flatten()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn declared(parameters: &[u32]) -> rcsmaterial::Declared {
+        rcsmaterial::Declared {
+            parameters: parameters.to_vec(),
+            samplers: vec![(BILLBOARD_PICTURE, 0), (BILLBOARD_GLOW, 1)],
+            ..Default::default()
+        }
+    }
+
+    fn parameter(hash: u32, value: f32) -> rcsmodel::material::Parameter {
+        rcsmodel::material::Parameter {
+            hash,
+            value: [value, 0.0, 0.0, 0.0],
+            quads: 1,
+        }
+    }
+
+    /// The compile Metropia and Chenghou Project ship declares the scales and the
+    /// ambient and no `k`: the same billboard, its glow multiplied by nothing.
+    #[test]
+    fn a_billboard_compiled_without_k_is_the_billboard_with_k_one() {
+        let scales = [parameter(GLOW_U_SCALE, 4.0), parameter(GLOW_V_SCALE, 2.0)];
+        let layer = classify(&declared(&[GLOW_U_SCALE, GLOW_V_SCALE, AMBIENT]), &scales)
+            .expect("the interface without k is still the billboard's");
+        assert_eq!(layer.tint, [1.0; 3]);
+        assert_eq!(layer.scale, 2.0);
+        assert_eq!(layer.program, [PROGRAM_BILLBOARD, 4.0]);
+    }
+
+    /// Where the program declares `k`, the material's own value multiplies the glow,
+    /// and a material that authors none is left unclassified.
+    #[test]
+    fn a_billboard_that_declares_k_takes_the_authored_value() {
+        let with_k = declared(&[GLOW_U_SCALE, GLOW_V_SCALE, GLOW_K, AMBIENT]);
+        let mut parameters = vec![parameter(GLOW_U_SCALE, 1.0), parameter(GLOW_V_SCALE, 1.0)];
+        assert!(classify(&with_k, &parameters).is_none());
+        parameters.push(parameter(GLOW_K, 0.5));
+        let layer = classify(&with_k, &parameters).expect("the billboard");
+        assert_eq!(layer.tint, [0.5; 3]);
+    }
+
+    /// Without the ambient the interface is another program's.
+    #[test]
+    fn two_samplers_alone_are_not_a_billboard() {
+        assert!(classify(&declared(&[GLOW_U_SCALE, GLOW_V_SCALE]), &[]).is_none());
+    }
 }

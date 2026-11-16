@@ -37,6 +37,9 @@ fn capture(
         .arg("--screenshot")
         .arg(&shot)
         .env("OAG_SPLIT_RECORDING", recording)
+        // The frame the window's loop opens, whatever cores this machine has: without it a
+        // split's commands never wait for the frame's submit, the path equal cores take.
+        .env("OAG_SPLIT_FINISH", "1")
         .env("XDG_CONFIG_HOME", dir.join("config"))
         .env("XDG_STATE_HOME", dir.join("state"))
         .env("XDG_DATA_HOME", dir.join("data"))

@@ -1,8 +1,8 @@
 ---
 status: measure
-titles: [hd]
-updated: 2026-10-27
-summary: "Bit-4 back-face culling is wired on HD (12 pairs, none worse); open: frustum part, EdgeGeom short counts, Omega/2048 wiring"
+titles: [hd, 2048, omega]
+updated: 2026-10-31
+summary: "Bit-4 back-face culling is wired on HD (12 pairs, none worse); open: frustum part, EdgeGeom short counts, 2048 extra-mesh lead"
 difficulty: medium (40)
 ---
 
@@ -20,8 +20,9 @@ culls back faces per triangle" and "Wired per material".
   fewer (the SPU `EdgeGeom` cull's own frustum test, unread: `chunk-cull.md`, "What is not explained").
 - Open exceptions: the Amphiseum's additive `lightbarrierpanel_new_additive` (chunk 573) is absent with triangles in view; weapon pads
   (chunk 829, Talon's) are predicted drawn and absent.
-- 2048 and Omega: bit 4 censused (97 to 99 percent of materials carry it, `chunk-cull.md`), **checked, applies, not wired**: needs a
-  title rule (`Looks::material_render_state`) and the `psp2` builder filling `material_state`; no draw list to verify against.
+- ~~2048 and Omega~~ ported 2026-10-31 (cull bit only, inherited from HD): title rule + `psp2` builder fill + `Model::honour_cull`.
+  Effect is tiny (Vineta K 24 pixels). HD's chunk 1556 counterpart on 2048 is chunk 47 and faces the eye at HD's pose, so it is
+  still drawn; the maintainer's "extra meshes in 2048 Vineta K" is something else, open: locate it on a 2048 frame.
 
 ## Next Steps
 
@@ -30,5 +31,4 @@ culls back faces per triangle" and "Wired per material".
 2. Then the per-triangle frustum part (18 of the 30 census exceptions are boxes inside the frustum whose triangles all lie outside it):
    only worth wiring if a pair shows it; a GPU frustum clips them anyway.
 3. Read the `EdgeGeom` SPU cull (`data/extracted/ps3/spu-jobs/edgegeom-0x007f6d80.dis`) for the 349 short counts.
-4. Omega/2048: give `Looks::material_render_state` a rule and fill `material_state` in `rcs::psp2`, once a pair or a draw list says their
-   tracks cull on the bit (their blended pipelines key on `culled` already).
+4. ~~Omega/2048 cull wiring~~ done. Find the extra 2048 Vineta K mesh the maintainer sees (not culled by bit 4).

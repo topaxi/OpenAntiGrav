@@ -26,7 +26,7 @@ impl Menu {
     /// Walks into a page, keeping the stack - what activating a submenu row
     /// does, for a caller that arrived from a screen of its own rather
     /// than from the row: Wipeout 2048's front end opening this build's
-    /// race box or RACE REMIX from its own mode grid. BACK from the page
+    /// race box or a two-title race page from its own mode grid. BACK from the page
     /// then lands on whatever was under it, the way it would from the row.
     ///
     /// Returns whether the page exists.

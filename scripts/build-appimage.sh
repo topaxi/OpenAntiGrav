@@ -136,16 +136,20 @@ Build natively instead and mind the glibc floor this script prints."
     # mount, so build.rs is handed the hash `oag-game --version` prints.
     git_hash="$(git -C "$project_root" rev-parse --short=7 HEAD 2>/dev/null || true)"
     [[ -n $git_hash ]] && engine_args+=(-e "OAG_GIT_HASH=$git_hash")
+    build_date="$(git -C "$project_root" log -1 --format=%cs HEAD 2>/dev/null || true)"
+    [[ -n $build_date ]] && engine_args+=(-e "OAG_BUILD_DATE=$build_date")
     [[ -n ${OAG_VERSION_SUFFIX:-} ]] && engine_args+=(-e "OAG_VERSION_SUFFIX=$OAG_VERSION_SUFFIX")
-    # Only when set, so a baseline build's environment is the one it always had.
-    [[ -n $rustflags ]] && engine_args+=(-e "RUSTFLAGS=$rustflags")
+    # Always set, even empty: RUSTFLAGS replaces every config-file rustflags, so
+    # a host-only `.cargo/config.toml` in the mounted checkout (a mold linker
+    # the image does not have) cannot reach the container build.
+    engine_args+=(-e "RUSTFLAGS=$rustflags")
     [[ $engine == docker ]] && engine_args+=(--user "$(id -u):$(id -g)")
     # The icon step below runs the built binary in the same image.
     icon_args=(--rm -v "$project_root:/src" -w /src)
     [[ $engine == docker ]] && icon_args+=(--user "$(id -u):$(id -g)")
 
     "$engine" run "${engine_args[@]}" "$CONTAINER_IMAGE" \
-        bash -c 'ldd --version | head -1 && cargo build --profile dist -p oag-game'
+        bash -c 'ldd --version | head -1 && cargo build --profile dist -p oag-game --no-default-features --features extensions'
     binary="$container_target/dist/oag-game"
 elif (( skip_build )); then
     native_target="$project_root/target${target_cpu:+/cpu-$target_cpu}"
@@ -156,7 +160,7 @@ else
     # separate `release` and `dist` outputs there.
     native_target="$project_root/target${target_cpu:+/cpu-$target_cpu}"
     CARGO_TARGET_DIR="$native_target" RUSTFLAGS="$rustflags" \
-        cargo build --profile dist -p oag-game --manifest-path "$project_root/Cargo.toml"
+        cargo build --profile dist -p oag-game --no-default-features --features extensions --manifest-path "$project_root/Cargo.toml"
     binary="$native_target/dist/oag-game"
 fi
 
@@ -182,6 +186,12 @@ if (( strip_binary )); then
     # goes into the package loses its symbols.
     strip "$app_dir/usr/bin/oag-game"
 fi
+
+# The official mods ride inside the image, in `mods` beside the program, which
+# `oag_mod::mods_search_path` reads through `current_exe` (ADR-0083 decision 5).
+# A file shipped beside the AppImage would not reach a player who downloads the
+# one file.
+"$project_root/scripts/stage-official-mods.sh" "$app_dir/usr/bin/mods"
 
 install -m 755 "$project_root/packaging/appimage/AppRun" "$app_dir/AppRun"
 install -m 644 "$project_root/packaging/appimage/oag-game.desktop" \

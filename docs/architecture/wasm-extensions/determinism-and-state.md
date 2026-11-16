@@ -4,7 +4,7 @@
 [hooks.md](hooks.md), the overview and capability surface in [README.md](README.md).
 This page says how a mod's code can run inside the simulation without breaking what
 [determinism.md](../determinism.md) guarantees, where its state lives, what replays
-and network play need, and what the spike under `spikes/wasm-extensions/` measured.
+and network play need, and what was measured.
 
 Code citations are pinned to commit `b4b4cb3aa` (main, 2026-10-29) and name the
 function, so they survive drift.
@@ -43,7 +43,7 @@ exhaustion (fuel, stack, memory), and anything imported.
   - **wasmtime: `Config::cranelift_nan_canonicalization(true)`** rewrites every
     arithmetic NaN to the canonical `0x7fc00000` (`0x7ff8000000000000` for `f64`).
     It applies to Pulley too, since Pulley's bytecode comes from Cranelift.
-    Measured in the spike (below): on, every arithmetic NaN read `7fc00000` on both
+    Measured (see [Measurements](#measurements)): on, every arithmetic NaN read `7fc00000` on both
     engines; off, this x86 host made `ffc00000` and kept a payload (`7fe00001`).
     Bit operations (`neg`, `abs`, `copysign`, reinterpret) keep their payload with
     it on or off, as the specification says; they are exact everywhere already.
@@ -58,7 +58,7 @@ exhaustion (fuel, stack, memory), and anything imported.
 - **SIMD.** `relaxed_simd` is refused at load (its results are
   implementation-defined by design; it includes a fused multiply-add). Plain
   `simd128` is deterministic except NaN bits, which the canonicalisation also covers
-  for `v128`. **Start with SIMD refused** (the spike ran with it off) and allow
+  for `v128`. **Start with SIMD refused** (the measurements ran with it off) and allow
   `simd128` only after the conformance test passes with it.
 
 ## Fuel, not time
@@ -69,7 +69,14 @@ counts WebAssembly operations; the host sets a budget before each call
 (`Store::set_fuel`) and an exhausted budget traps `OutOfFuel`, which faults the mod
 deterministically ([hooks.md](hooks.md#the-shape-one-call-per-tick-events-in-commands-out)).
 
-Measured in the spike:
+The one call outside the tick is a guest's `oag_wants_race`
+([hooks.md](hooks.md#choosing-its-races-oag_wants_race-abi-1-revision-6)), made once at race load
+on a fresh instance under the same budget: a load cost, outside the per-tick figures, and
+deterministic for the same reason (fuel, no clock). Its answer is a function of the race
+description alone, so the same options decide the same modules on every machine; a trap or an
+exhausted budget there leaves the module out of the race, never a mid-race fault.
+
+Measured:
 
 - **The trap point is identical on Cranelift and Pulley.** A runaway loop stopped
   at iteration 47 under 1,000 units and 475 under 10,000, on both engines.
@@ -78,8 +85,8 @@ Measured in the spike:
 - **Fuel is checked at function entry and loop headers, not per instruction.**
   wasmtime's translator emits the check in `fuel_function_entry` and
   `translate_loop_header` (crate `wasmtime-internal-cranelift` 50.0.0,
-  `src/func_environ.rs`); between checks it only accumulates the cost. The spike
-  shows the consequence: the loop-free tick hook ran a whole race on budgets of 20
+  `src/func_environ.rs`); between checks it only accumulates the cost. Measured
+  consequence: the loop-free tick hook ran a whole race on budgets of 20
   and of 100 units without trapping (identically on both engines); a budget of 1
   trapped at entry. So the budget bounds loops and calls, and straight-line code may
   overrun it by its own length. Deterministic, but **the budget is not a precise
@@ -87,7 +94,7 @@ Measured in the spike:
 - **wasmtime's fuel count is not state.** Its per-operator costs are wasmtime's own
   (configurable through `Config::operator_cost`) and the browser has no equivalent,
   so a fuel total must never reach the state hash or a replay: only **the fault
-  edge** does (the mod's fault flag and the tick it faulted on). The spike hashed
+  edge** does (the mod's fault flag and the tick it faulted on). The measurement hashed
   its fuel total, which is fine for comparing two wasmtime engines and nothing
   more.
 - **The browser has no fuel.** For the web host to fault at the same tick, the same
@@ -108,23 +115,25 @@ Two more exhaustion cases:
   the same instrumentation pass: a call-depth counter that traps at a fixed depth
   well below any engine's native limit. Until it exists, a guest that recurses
   deeply is non-deterministic in principle.
+  The same failure, with the instance pool and mmap failures, is written up as a
+  machine-local fault in [the README](README.md#42-faults) (section 4.2).
 
 ## No threads, no clock, no WASI
 
 - **Threads.** The host's wasmtime is built without its `threads` feature, so a
-  module declaring shared memory fails to compile; the spike's host was built this
+  module declaring shared memory fails to compile; the measured host was built this
   way. Atomics and `wasi-threads` are refused by name.
 - **No clock, no files, no network, no environment.** The host gives the guest **no
   WASI at all**: the linker holds one import namespace, `oag`, and a module importing
   anything else fails to instantiate and is refused at load, naming the import. The
-  spike's guest imports exactly `oag.rng_next`.
+  measured guest imports exactly `oag.rng_next`.
 - **Randomness comes from the host.** The guest has no generator of its own and no
   entropy. `oag.rng_next` returns the next value of a host `oag_core::Rng`
   (`crates/core/src/rng.rs:28`, xoshiro128**, 16 bytes of state). **One stream per
   module** (README: a child stream seeded from the race seed and the module's mod
   id, so a stream survives another mod being added), stored beside the module's blob, so a mod drawing numbers never shifts the game's own stream
   (`World::rng`, `crates/gameplay/src/world.rs:309`), which AI and weapon rolls read.
-  (The spike shared its one toy stream; that is enough to show the draws are
+  (The toy shared one stream; that is enough to show the draws are
   deterministic, not to show the separation.)
 
 ## Mod state is a fixed-size blob in the race state
@@ -138,12 +147,12 @@ arrays, so a snapshot is one copy. A mod's state follows that rule:
   and its fault flag, in a fixed array in the simulation state:
   `[ModSlot; MAX_SIM_MODS]`. No `Vec`, no pointer, no host-side map.
 - **Where:** in `World` (`crates/gameplay/src/world.rs:304`) when it is gameplay
-  state every crate may read, or in `RaceSim` (`crates/raceplay/src/sim.rs:57`)
+  state every crate may read, or in `RaceSim` (`crates/raceplay/src/sim.rs:66`)
   beside the pad caches. Either way `Race::snapshot_sim` / `Race::restore_sim`
-  (`crates/raceplay/src/reconcile.rs:32`, `:49`) clone and restore it with
+  (`crates/raceplay/src/reconcile.rs:33`, `:50`) clone and restore it with
   everything else, which is what network rollback already uses.
 - **The guest's own memory is not state.** A rollback restores what the host owns,
-  never a guest's linear memory. The spike proved the failure: a guest keeping a
+  never a guest's linear memory. Measured failure: a guest keeping a
   counter in its own memory (`on_tick_leaky`) **diverged after a rollback with a
   persistent instance** (`d843aa8f6084fbca` straight against `102b878134e1409c`
   replayed), and matched with a fresh instance. So the host enforces it by
@@ -197,22 +206,25 @@ them would be wrong.
 inputs plus a state hash at an interval, our own format, verified by re-simulating.
 A mod's code is part of what re-simulates, so a replay must name it:
 
-- **Today the header has no mod field** (`oag_replay::Header`,
-  `crates/replay/src/header.rs:20`); `options` is an opaque string map for the
-  composition root and `build` is informational, never compared.
-- **Proposal (agreed with the README): a dedicated `mods` list in the header**:
-  each simulation module's mod id, version, the SHA-256 of its bytes, and its blob
-  layout version; not the opaque `options` map (`header.rs:58`), which `oag-replay`
-  never interprets. Playback refuses a replay whose modules are not present with
-  those exact hashes, by name; the stored state hashes still decide validity.
-  Nothing is released, so this edits format v1 in place rather than adding a v2.
+- **The header has a dedicated `mods` list** (`oag_replay::header::ModUse`, built
+  2026-11-16): each simulation module's mod id, version, module path, the SHA-256 of its
+  bytes, the ABI major and layout revision it ran under, its state bytes and the player's
+  `sim` picks (hashed, so a rebuild is handed the recorded ones); not the opaque `options`
+  map, which `oag-replay` never interprets. There is no separate "blob layout version": the
+  SHA-256 subsumes it. A rebuild runs exactly the listed modules
+  (`Options::recorded_mods`), and playback refuses a replay whose modules are not present
+  with those exact hashes, by name (`apply_recorded`); the stored state hashes still decide
+  validity. A vanilla race's header has no `mods` table, so its file is unchanged. Nothing is
+  released, so this edited format v1 in place rather than adding a v2.
 - **A tune travels in the header.** A replay re-simulates, so a hash of the tune is
   not enough: the `mods` entry also carries the tune bytes (at most 4 KiB per mod),
   and playback feeds them to `race-start` in place of the local save. Without
   them a machine with another tune, or none, could not reproduce the run.
-- **The phases decided on 2026-10-12** come first: in phase 2 a session with a
-  simulation mod is **modded** and records no replays or ghosts at all; the header
-  field is phase 3, once the conformance test below holds.
+- **[ADR-0091](../adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md) supersedes phase 2's "no replay"**: a modded
+  race records its input stream (a screenshot of it must be made again), and sets no ghost
+  and offers none to save. The conformance test below is still owed: a replay across
+  engines is unproven, and a host-local fault (README 4.2) desyncs a replay that
+  another machine does not fault, reported by hash.
 
 ## Network play
 
@@ -252,7 +264,7 @@ through a lobby is never auto-run").
   | A typical correction, 11 ticks | 0.66 ms | 0.80 ms | 0.83 ms |
   | The worst case, 30 ticks | 1.8 ms | 2.2 ms | 2.3 ms |
 
-  The guest's own work is on top: the spike's guest is a few hundred operations a
+  The guest's own work is on top: the toy guest is a few hundred operations a
   call, and a heavy module (a controller reading every craft) runs 3.4 times slower
   on Pulley than on Cranelift (the persistent-instance row).
 
@@ -280,7 +292,7 @@ through a lobby is never auto-run").
 - **`oag-server` links the host and no renderer** (rule 6), from phase 3, when the
   lobby carries module hashes: the host depends on nothing that draws.
 - **Behind a cargo feature** (the README's `extensions`). wasmtime with Cranelift
-  adds about 11.3 MB to a binary (spike, below).
+  adds about 11.3 MB to a binary ([Measurements](#measurements)).
 
 ## Web and iOS
 
@@ -300,13 +312,13 @@ through a lobby is never auto-run").
     serious reason shows up, such as the load-time rewrite proving unable to match.
 - **iOS.** No executable memory, so no Cranelift-to-native. Two options:
   - **Cranelift compiling to Pulley bytecode on the device** (no native code is
-    generated, which is what the spike's Pulley runs did on x86): one code path,
+    generated, which is what the Pulley runs did on x86): one code path,
     +11.4 MB.
   - **Runtime and Pulley only, +0.8 MB**, with modules precompiled to `.cwasm`
     elsewhere. A `.cwasm` is tied to the exact wasmtime version and configuration,
     so mods would ship per build; brittle.
 
-  Recommended: the first. Pulley costs 3.4 times Cranelift per call (spike).
+  Recommended: the first. Pulley costs 3.4 times Cranelift per call (measured).
 
   **Not checked on iOS.** `cargo check --target aarch64-apple-ios` of wasmtime 50
   (Pulley only, and with Cranelift) stops in a build script that needs Apple's
@@ -322,27 +334,19 @@ The claim that three engines agree is only as good as a test that runs one modul
 all three and compares. Proposed, as in the 2026-10-12 plan: a `#[test]` running the
 same guest and input trace on Cranelift and Pulley, plus a headless-browser run
 (`wasm-bindgen-test`), comparing the state hash at every tick, with **a NaN battery
-and a fuel-exhaustion case in it** (the spike's two), and the native Rust law as an
+and a fuel-exhaustion case in it** (the two measured here), and the native Rust law as an
 oracle where one exists (Pilot Assist on Pulse and Pure). It must also run on an
 AArch64 machine, where the default NaN differs.
 
-## The spike
+## Measurements
 
-`spikes/wasm-extensions/` is a standalone cargo project with its own `[workspace]`
-table: not a workspace member, its own lock file, and the repository's `Cargo.lock`
-untouched. Run it with `flock -o "$HOME/.cache/oag/gate.lock" ./run.sh` from that
-directory; its README carries the raw output.
-
-**What it is.** A one-dimensional toy race (`f32` only, a speed, a distance on a
-1,000-unit loop, four speed pads, throttle from `oag_core::Rng` seed 42, 36,000 ticks
-= ten minutes at 60 Hz), hashed with `oag_core::StateHasher`. The guest is "+5 % top
-speed per speed pad crossed, capped at +50 %", 1,654 bytes, compiled from Rust for
-`wasm32-unknown-unknown`, core WebAssembly only: a `pad-crossed` event and a
-`scale-thrust` command in miniature (the spike calls the pad edge as an export of its
-own, the same tick), with a 64-byte host-owned blob. Engine: wasmtime **50.0.0**
-(cranelift-codegen 0.137.0, pulley-interpreter 50.0.0), licence **Apache-2.0 WITH
-LLVM-exception** (read from the crate's own `Cargo.toml`), with fuel on, NaN
-canonicalisation on, SIMD and relaxed SIMD off, no `threads` feature, no WASI.
+**What it is.** A toy one-dimensional race (`f32` only, 36,000 ticks = ten minutes
+at 60 Hz, throttle from `oag_core::Rng` seed 42) hashed with `oag_core::StateHasher`,
+driving a 1,654-byte Rust guest ("+5 % top speed per speed pad crossed, capped at
++50 %", core WebAssembly only, a 64-byte host-owned blob). Engine: wasmtime
+**50.0.0** (cranelift-codegen 0.137.0, pulley-interpreter 50.0.0), licence
+**Apache-2.0 WITH LLVM-exception** (read from the crate's own `Cargo.toml`), with
+fuel on, NaN canonicalisation on, SIMD and relaxed SIMD off, no `threads`, no WASI.
 
 **Results** (2026-10-29, x86-64 Linux, rustc 1.99.0, load average about 2):
 
@@ -357,8 +361,7 @@ canonicalisation on, SIMD and relaxed SIMD off, no `threads` feature, no WASI.
 | NaN battery, canonicalisation on | Every arithmetic NaN `7fc00000` (`f64`: `7ff80000`) on both |
 | NaN battery, canonicalisation off | `ffc00000` and payload `7fe00001` on this x86 host, on both engines |
 
-**Per call and per tick** (release; wall clock measured by the spike itself, not by
-anything simulated):
+**Per call and per tick** (release; wall clock, not anything simulated):
 
 | | Cranelift | Pulley |
 | --- | --- | --- |

@@ -85,12 +85,16 @@ fn tick(
     projectiles.advance(
         TICK,
         world,
+        None,
         ships,
         None,
         None,
         stats,
         TriggerRadii::default(),
         "VENOM",
+        crate::projectile::FloorArms::SteerToRidePoint,
+        crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+        crate::projectile::PlasmaRelease::DisplayScaled,
     )[0]
 }
 

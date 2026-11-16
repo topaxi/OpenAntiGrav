@@ -78,8 +78,9 @@ fn an_hd_circuit_loads_its_own_probes() {
             return;
         };
         let line = loaded.report.iter().find(|l| l.contains(".probes"));
-        let found = loaded.probes.as_ref().map(oag_vex::probes::Probes::len);
+        let found = loaded.probes.hd.as_ref().map(oag_vex::probes::Probes::len);
         assert_eq!(found, Some(probes), "{track}: {line:?}");
+        assert!(loaded.probes.sh.is_none(), "{track}: HD binds no SH probes");
     }
 }
 
@@ -89,7 +90,7 @@ fn a_title_with_no_probes_loads_none() {
     let Some(loaded) = load(PULSE, None) else {
         return;
     };
-    assert!(loaded.probes.is_none());
+    assert!(loaded.probes.hd.is_none() && loaded.probes.sh.is_none());
     assert!(
         loaded.setup.spline.cage().is_some(),
         "Pulse's circuit runs the collision cage off its header flag"
@@ -109,7 +110,7 @@ fn every_circuit_loads_probes_and_none_of_its_surfaces_reflects_them() {
             return;
         };
         runs_no_cage(environment, &loaded);
-        let count = loaded.probes.as_ref().map(oag_vex::probes::Probes::len);
+        let count = loaded.probes.hd.as_ref().map(oag_vex::probes::Probes::len);
         assert!(count.is_some_and(|n| n >= 2), "{environment}: {count:?}");
         let tagged = |line: &&String| line.contains("reading the reflection probe");
         for line in loaded.report.iter().filter(tagged) {
@@ -144,7 +145,8 @@ fn a_2048_circuit_names_its_probes_as_another_layout() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    assert!(loaded.probes.is_none());
+    assert!(loaded.probes.hd.is_none());
+    assert!(loaded.probes.sh.is_none(), "2048 ships no .shprobes");
     let line = loaded.report.iter().find(|l| l.contains(".probes"));
     assert!(
         line.is_some_and(|l| l.contains("a different layout")),

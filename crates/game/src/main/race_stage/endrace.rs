@@ -34,6 +34,7 @@ use endrace_flow::{Flow, Which};
 #[path = "endrace_voice.rs"]
 mod endrace_voice;
 #[cfg(test)]
+#[path = "speaker_tests.rs"]
 mod speaker_tests;
 pub(crate) use endrace_voice::voice_for;
 
@@ -96,6 +97,19 @@ pub(crate) struct EndRaceRuntime {
     /// The place and medal lines this race's screens speak; `None` on a title
     /// whose triggers were not read (Wipeout HD/Fury).
     voice: endrace_voice::Speaker,
+    /// How the field table is rebuilt when the race's board is retaken (a craft crossed the line
+    /// after the person did), for the two tables that list the whole field.
+    field: Option<FieldFeed>,
+}
+
+/// What [`EndRaceRuntime::refresh_field`] needs beside the board: the grid's team column and
+/// which board the table shows.
+struct FieldFeed {
+    /// The team ids in slot order, in the shape the table's builder takes (`team_keys` for HD's
+    /// `Results`, `Race::slot_teams` for Pulse's people table).
+    roster: Vec<String>,
+    /// `Race::results_revision` of the board the table was built from.
+    revision: u32,
 }
 
 impl std::fmt::Debug for EndRaceRuntime {
@@ -227,6 +241,39 @@ impl EndRaceRuntime {
             flow,
             trophy,
             voice: endrace_voice::Speaker::new(voice),
+            field: None,
+        }
+    }
+
+    /// Arms [`Self::refresh_field`] for a race whose field table was built from `revision` of the
+    /// board with `roster` as its team column.
+    pub(crate) fn follow_board(&mut self, roster: Vec<String>, revision: u32) {
+        self.field = Some(FieldFeed { roster, revision });
+    }
+
+    /// Rebuilds the field table from `board` when it is a newer one than the table shows:
+    /// a craft that was `RACING` gets its time and place. Only the rows are replaced - the
+    /// headline, loyalty, voice, menu and flow were fixed at the finish and a screen the person
+    /// is on keeps its place. A no-op for every table that does not list the field.
+    pub(crate) fn refresh_field(&mut self, board: &oag_raceplay::scoreboard::Board, revision: u32) {
+        let Some(feed) = &mut self.field else {
+            return;
+        };
+        if feed.revision == revision {
+            return;
+        }
+        feed.revision = revision;
+        match &mut self.results {
+            ResultsModel::Hd(results) => {
+                results.rows = oag_game::results_tables::field_rows(Some(board), &feed.roster);
+            }
+            ResultsModel::PulsePeople(results) => {
+                if let Some(people) = oag_game::results_tables::people_rows(Some(board), &feed.roster)
+                {
+                    *results = people;
+                }
+            }
+            _ => {}
         }
     }
 
@@ -590,7 +637,11 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
         // own with its own `Line1` (`ZoneResults`, `EliminationResults`). What
         // reaches here is HD's field grid, whose own populate for those modes is
         // not read - see `oag_ui_screens::endrace::Headline::Unresolved`'s own doc.
-        oag_race::Mode::Zone | oag_race::Mode::Eliminator => Headline::Unresolved,
+        // HD's Detonator closes on `ER_ZDETONATOR_COM` over a score this build does
+        // not keep (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`).
+        oag_race::Mode::Zone | oag_race::Mode::Eliminator | oag_race::Mode::Detonator => {
+            Headline::Unresolved
+        }
     }
 }
 
@@ -607,25 +658,37 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
 /// per `docs/gameplay/race-modes.md#tournament`. `false` for every
 /// non-Tournament race, and for a Tournament's own last leg.
 #[must_use]
-pub(crate) fn menu_options(campaign: bool, tournament_next_leg: bool) -> Vec<MenuOption> {
+///
+/// **`watch_replay`** adds WATCH REPLAY after VIEW RESULTS AGAIN, for a race that was recorded
+/// and a dialect that can draw a row the disc does not author (Pulse's list; HD's blocks and
+/// 2048's buttons are the disc's own and have no such row).
+pub(crate) fn menu_options(
+    campaign: bool,
+    tournament_next_leg: bool,
+    watch_replay: bool,
+) -> Vec<MenuOption> {
     let leave = if campaign {
         MenuOption::ReturnToGrid
     } else {
         MenuOption::ReturnToMenu
     };
-    if tournament_next_leg {
+    let mut options = if tournament_next_leg {
         // `EndRaceMenu_PopulateOptions` adds `ER_NEXT_RACE` first and has no
         // `ER_RACE_AGAIN` mid-Tournament, so the cursor starts on the next
         // leg; a leave row first would end the tournament on a plain confirm.
         vec![MenuOption::NextRace, leave, MenuOption::ViewResultsAgain]
     } else {
         vec![leave, MenuOption::RaceAgain, MenuOption::ViewResultsAgain]
+    };
+    if watch_replay {
+        options.push(MenuOption::WatchReplay);
     }
+    options
 }
 
 /// Pulse's own Tournament standings, off this project's `oag_race::tournament`
 /// law: [`Board`](oag_raceplay::scoreboard::Board) for this leg's own finish
-/// order and leg points (`oag_race::tournament::points_for_finish`, the same
+/// order and leg points (`oag_race::tournament::points_for_place`, the same
 /// law already folded into the running totals a moment earlier -
 /// `crate::main::session::tournament::record_finished_leg` runs before
 /// `Session::build_endrace` in the same frame), and
@@ -650,7 +713,7 @@ pub(crate) fn tournament_results(
         .iter()
         .map(|row| TournamentRow {
             team_name: team_name(row.slot),
-            points: oag_race::tournament::points_for_finish(row.place, row.finished()),
+            points: oag_race::tournament::points_for_place(row.place, row.in_the_race()),
             player: row.player,
         })
         .collect();
@@ -771,7 +834,8 @@ pub(crate) fn loyalty_award(inputs: LoyaltyInputs) -> u32 {
             (15, 25)
         }
         oag_race::Mode::TimeTrial | oag_race::Mode::SpeedLap => (30, 50),
-        oag_race::Mode::Zone | oag_race::Mode::Eliminator => (10, 20),
+        // Pulse has no Detonator; a title that offers it pays HD's law instead.
+        oag_race::Mode::Zone | oag_race::Mode::Eliminator | oag_race::Mode::Detonator => (10, 20),
     };
     let lap_term = inputs.laps * lap_rate + inputs.perfect_laps * perfect_lap_rate;
     let kill_rate = if inputs.mode == oag_race::Mode::Eliminator {
@@ -833,6 +897,7 @@ mod tests {
     #[test]
     fn a_campaign_medal_picks_its_own_trophy_and_nothing_else_picks_one() {
         let rewards = |medal, campaign| oag_ui_screens::endrace::Rewards {
+ tier: None,
             medal,
             campaign,
             loyalty: None,

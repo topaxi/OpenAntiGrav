@@ -5,7 +5,7 @@
 //! Its own file rather than an inline `#[cfg(test)] mod`, per the 200-line
 //! rule in `scripts/check-file-size.py`.
 
-use super::{Scope, shared_shader_module};
+use super::{Kept, Scope, shared_shader_module};
 use crate::mesh::{Bounds, DrawCall, GpuVertex, Model};
 use crate::mesh_render::{self, Anisotropy};
 
@@ -17,6 +17,22 @@ pub(in crate::mesh_render) fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = wgpu::Instance::default();
     let adapter = oag_gpu::test_adapter::request(&instance)?;
     pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()
+}
+
+/// A device whose `max_buffer_size` is `ceiling`, or `None` where there is no adapter.
+pub(in crate::mesh_render) fn device_with_ceiling(
+    ceiling: u64,
+) -> Option<(wgpu::Device, wgpu::Queue)> {
+    let instance = wgpu::Instance::default();
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
+    pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        required_limits: wgpu::Limits {
+            max_buffer_size: ceiling,
+            ..wgpu::Limits::default()
+        },
+        ..Default::default()
+    }))
+    .ok()
 }
 
 fn vertex(position: [f32; 3]) -> GpuVertex {
@@ -36,6 +52,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
         glow: 0.0,
         texcoord2: [0.0, 0.0],
         tangent: 0,
+        depth_bias: 0.0,
     }
 }
 
@@ -88,8 +105,12 @@ pub(in crate::mesh_render) fn triangle_model() -> Model {
         glow_from_program: false,
         flame: None,
         absorb_shell: false,
+        shield_shell: false,
+        own_shield: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
+        per_batch_cull: false,
+        sky_reflection: None,
         alpha_test_ref: None,
         centre: [0.0, 0.0, 0.5],
         radius: 2.0,
@@ -300,14 +321,25 @@ fn lit_by_compiles_the_nova_curve_out_only_under_a_rig_that_never_takes_it() {
         "no scope, no constants"
     );
 
+    let authored =
+        mesh_render::Light::authored([0.0, 1.0, 0.0], [1.0; 3], [0.0; 3], [1.0; 3], [1.0; 3], 1.0);
     let scope = Scope::open();
-    scope.lit_by(&mesh_render::Light::stand_in().with_nova_prelit(1.4, 0.2, 1.5));
+    scope.lit_by(&authored.with_nova_prelit(1.4, 0.2, 1.5));
     assert_eq!(super::scope_constants(), Vec::new());
     drop(scope);
 
     let scope = Scope::open();
-    scope.lit_by(&mesh_render::Light::stand_in());
+    scope.lit_by(&authored);
     assert_eq!(super::scope_constants(), vec![("nova_prelit", 0.0)]);
+    drop(scope);
+
+    // A stand-in light has no rig at all, so that path goes as well.
+    let scope = Scope::open();
+    scope.lit_by(&mesh_render::Light::stand_in());
+    assert_eq!(
+        super::scope_constants(),
+        vec![("nova_prelit", 0.0), ("light_rig", 0.0)]
+    );
     drop(scope);
     assert_eq!(
         super::scope_constants(),
@@ -316,12 +348,26 @@ fn lit_by_compiles_the_nova_curve_out_only_under_a_rig_that_never_takes_it() {
     );
 }
 
-/// A PS3 model whose draw carries `culled` gets the culling twin of the opaque,
-/// prepass and cutout pipelines; a model without material state (Pulse's
-/// `.vex`, which authors `culled` on most batches) and one with no culled draw
-/// do not, so those stay on the model-wide `cull_back` and nothing else changes.
+/// A race with no Zone grade compiles the recolour out; a Zone race keeps the uniform deciding.
 #[test]
-fn only_a_model_with_state_and_a_culled_draw_builds_the_culling_twin() {
+fn zoned_compiles_the_recolour_out_only_outside_a_zone_race() {
+    let scope = Scope::open();
+    scope.zoned(true);
+    assert_eq!(super::scope_constants(), Vec::new());
+    drop(scope);
+
+    let scope = Scope::open();
+    scope.zoned(false);
+    assert_eq!(super::scope_constants(), vec![("zone_race", 0.0)]);
+}
+
+/// A PS3 model whose draw carries `culled` gets the culling twin of the opaque,
+/// prepass and cutout pipelines, and so does a `.vex` model whose loader said to
+/// honour its batches' own bit (`Model::per_batch_cull`); a `.vex` model left at
+/// the default and one with no culled draw do not, so those stay on the
+/// model-wide `cull_back` and nothing else changes.
+#[test]
+fn only_a_model_with_state_or_batch_cull_and_a_culled_draw_builds_the_culling_twin() {
     let Some((device, queue)) = device() else {
         eprintln!("no GPU adapter: skipping");
         return;
@@ -331,10 +377,104 @@ fn only_a_model_with_state_and_a_culled_draw_builds_the_culling_twin() {
     model.draws[0].culled = true;
     assert!(
         build_once(&device, &queue, &model).culled.is_none(),
-        "no material state: a `.vex` model keeps the model-wide switch"
+        "no material state and no per-batch cull: a `.vex` model keeps the model-wide switch"
     );
+    model.per_batch_cull = true;
+    assert!(
+        build_once(&device, &queue, &model).culled.is_some(),
+        "a `.vex` circuit whose title honours the batch bit gets the culling twin"
+    );
+    model.draws[0].culled = false;
+    assert!(
+        build_once(&device, &queue, &model).culled.is_none(),
+        "with no culled draw there is nothing for the twin to draw"
+    );
+    model.per_batch_cull = false;
+    model.draws[0].culled = true;
     model.material_state = vec![0x10];
     assert!(build_once(&device, &queue, &model).culled.is_some());
     model.draws[0].culled = false;
     assert!(build_once(&device, &queue, &model).culled.is_none());
+}
+
+/// Two builds a frame apart, each in its own [`Kept::build`], share the pipelines the first
+/// compiled, and nothing stays open on the thread between them.
+#[test]
+fn a_kept_cache_shares_pipelines_across_separate_builds_and_leaves_no_scope_open() {
+    let Some((device, queue)) = device() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let model = triangle_model();
+    let mut kept = Kept::default();
+
+    let first = kept.build(|| build_once(&device, &queue, &model));
+    let compiled = kept.pipelines();
+    assert!(compiled > 0, "the first build compiles into the kept cache");
+    assert!(
+        super::CACHE.with(|cell| cell.borrow().is_none()),
+        "no scope stays open between builds"
+    );
+    let second = kept.build(|| build_once(&device, &queue, &model));
+
+    assert_eq!(first.pipeline, second.pipeline);
+    assert_eq!(first.alpha_test_pipeline, second.alpha_test_pipeline);
+    assert_eq!(
+        kept.pipelines(),
+        compiled,
+        "the second build compiled nothing new"
+    );
+}
+
+/// Inside an open [`Scope`] a kept cache defers to it and is left untouched.
+#[test]
+fn a_kept_cache_defers_to_an_open_scope() {
+    let Some((device, queue)) = device() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let model = triangle_model();
+    let mut kept = Kept::default();
+
+    let scope = Scope::open();
+    kept.build(|| build_once(&device, &queue, &model));
+    let (_, _, in_scope) = scope.pipeline_counts();
+    drop(scope);
+
+    assert!(in_scope > 0, "the build went to the open scope");
+    assert_eq!(kept.pipelines(), 0, "and not to the kept cache");
+}
+
+/// A build stops between its pipeline sets once the process is exiting, instead of making the
+/// rest for a scene nobody will see (`oag_thread::gpu_workers`). The stop is process-wide and
+/// one-way, so this is the only test here that sets it (nextest runs each in a process of its
+/// own).
+#[test]
+fn a_build_ends_between_pipeline_sets_once_the_process_is_exiting() {
+    let Some((device, queue)) = device() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let model = triangle_model();
+    let _worker = oag_thread::gpu_workers::Guard::enter("pipeline-cache-test");
+    assert!(!oag_thread::gpu_workers::finish_within(
+        std::time::Duration::ZERO
+    ));
+    let error = mesh_render::build(
+        &device,
+        &queue,
+        &model,
+        FORMAT,
+        Anisotropy::Off,
+        1,
+        mesh_render::Depth::Scene,
+        mesh_render::TRANSPARENT_BLEND,
+        mesh_render::GlowMask::Protected,
+        mesh_render::Velocity::Write,
+        &mesh_render::zone::StageArt::NONE,
+        mesh_render::ShadowMaps::NONE,
+        mesh_render::ShadowReceiver::Never,
+    )
+    .expect_err("a build in a process that is exiting ends early");
+    assert!(error.to_string().contains("exiting"), "{error:#}");
 }

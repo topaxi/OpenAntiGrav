@@ -51,11 +51,10 @@ impl Race {
     ///
     /// # There is no residual: the craft is the right size, and the old gap was the projection
     ///
-    /// This comment used to record a further `~1.3x` gap and name
-    /// `1/0.75^2 = 1.7778` as the live hypothesis for it. **That is refuted, and
-    /// the constant here must not be widened to swallow anything.**
+    /// A further `~1.3x` gap (hypothesis `1/0.75^2 = 1.7778`) is
+    /// **refuted, and the constant here must not be widened to swallow anything.**
     ///
-    /// Measured 2026-08-09 by similarity registration on high-passed gradient
+    /// Measured by similarity registration on high-passed gradient
     /// magnitude - no brightness threshold anywhere in it - against 16 emulator
     /// frames: **craft-only boxes register at `0.9989`/`0.9985`/`0.9987` once the
     /// background is zeroed, so the mesh is correct to 0.15 %.** The old figure
@@ -118,7 +117,8 @@ impl Race {
     /// If `slot` is not a ship slot.
     #[must_use]
     pub fn ship_active(&self, slot: usize) -> bool {
-        self.sim.world.ships[slot].active
+        // In the world: a craft in a transit is not drawn (`crate::transit`).
+        self.sim.world.ships[slot].in_world()
     }
 
     /// The word a craft's hull-light scale is written to the model uniform as -
@@ -145,7 +145,7 @@ impl Race {
     fn hull_light_scale(&self, slot: usize) -> Option<[u8; 4]> {
         let at = self.ship_model_matrix_of(slot).w_axis;
         let at = oag_core::math::Vec3::new(at.x, at.y, at.z);
-        let course = self.sim.course.as_ref()?;
+        let course = self.sim.course.as_deref()?;
         // A craft no tick has located yet (a posed capture runs none, and a race's first frame is drawn before its first)
         // is found where it stands, as the next tick would; without it the scale falls to the default 255 and the hull
         // reads at full light inside a tunnel the original darkens (`scene-light.md`, "The scales"). Read only: the
@@ -185,6 +185,29 @@ impl Race {
             .at([at.x, at.y, at.z], seconds, [point, spot])
     }
 
+    /// The colour a craft's hull extra pass is drawn in, `0..=1`: white for every title but
+    /// Pulse, and on Pulse the light the craft stands in -
+    /// `oag_mesh::mesh_render::HullPassColour::at` under the craft's spline scale bytes
+    /// (`255` where the course has not located it) with its point and spot lights' share.
+    /// `seconds` is the scenery clock, as for [`Self::ship_hull_points`].
+    ///
+    /// # Panics
+    ///
+    /// If `slot` is not a ship slot.
+    #[must_use]
+    pub fn ship_shine_colour(&self, slot: usize, seconds: f32) -> [f32; 3] {
+        let Some(pass) = &self.view.hull_points.pass else {
+            return [1.0; 3];
+        };
+        let at = self.ship_model_matrix_of(slot).w_axis;
+        let [ambient, directional, point, spot] = self.hull_light_scale(slot).unwrap_or([255; 4]);
+        let points = self
+            .view
+            .hull_points
+            .accumulated([at.x, at.y, at.z], seconds, [point, spot]);
+        pass.at([ambient, directional], points)
+    }
+
     /// Where a craft's environment probes are blended: its body, one tick back.
     ///
     /// The original's SPU job takes the previous frame's position (one tick fits best
@@ -214,7 +237,7 @@ impl Race {
             .iter()
             .take(self.sim.world.ship_count as usize)
             .enumerate()
-            .filter(|(_, ship)| ship.active)
+            .filter(|(_, ship)| ship.in_world())
             .map(|(slot, _)| self.ship_model_matrix_of(slot))
             .collect()
     }

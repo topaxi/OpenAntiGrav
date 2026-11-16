@@ -64,7 +64,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/topaxi/OpenAntiGrav"
-rust-version = "1.97.1"
+rust-version = "1.100"
 
 [workspace.dependencies]
 oag-2048 = { path = "crates/2048" }
@@ -134,6 +134,18 @@ thiserror = "2"
 # GPU rendering and windowing.
 wgpu = "30.0.1"
 winit = "0.30"
+# Idle inhibition on a Wayland desktop (`oag_game::idle`): the protocol bound over winit's own
+# connection. Already in the lockfile through winit.
+wayland-backend = { version = "0.3", features = ["client_system", "dlopen"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
+# The live refresh of an X11 window's output (`oag_game::x11_refresh`): winit's monitor report
+# freezes after window creation on X11, so RandR is asked directly over a connection of our own.
+# Already in the lockfile through winit.
+# Held at 0.13: winit 0.30 takes 0.13, so 0.14 would be a second copy for nothing we use
+# (0.14 drops abstract unix socket connections, as libxcb did, and bumps its MSRV and
+# `raw-window-handle`; `docs/architecture/dependency-upgrades.md`).
+x11rb = { version = "0.13", default-features = false, features = ["randr"] }
 pollster = "1"
 
 # Diagnostics. Everything that used to be a bare `println!`/`eprintln!` note
@@ -169,19 +181,26 @@ re_rav1d = { version = "0.1.3", default-features = false, features = [
   "bitdepth_8",
 ] }
 clap = { version = "4", features = ["derive"] }
-chd = "0.3"
+chd = "0.4"
 # AES block cipher for the PS3 disc layer (CBC chained by hand in `oag-disc`) and the
 # Vita/PS4 package layers. MIT OR Apache-2.0, RustCrypto, pure Rust with AES-NI/ARMv8
 # acceleration picked at runtime. Not in the simulation crates.
-aes = "0.8"
+aes = "0.9"
 # Big-integer modular exponentiation for the PS4 package's two RSA-2048 key
 # unwraps (`oag-disc`'s `ps4_pkg`), two exponentiations per package. Already in the
 # lock file as a transitive dependency, so this adds no crate. MIT OR Apache-2.0.
+# Held at 0.4: 0.5 only splits the `rand` features, and `num-rational` (through
+# `av-data`, the AV1 decoder's) still takes 0.4, so 0.5 would be a second copy for
+# nothing (`docs/architecture/dependency-upgrades.md`).
 num-bigint = "0.4"
 bytemuck = "1"
 # Reads an author's own PNG beside a track manifest (ADR-0076); already in the
 # lockfile through resvg.
 png = "0.18"
+# Rasterises a mod's `.svg` icons at load (`oag_hud::svg`) and the window icon
+# (`oag_game::icon`). `text` stays off in both: no fontdb, no shaper, and a `<text>` node
+# draws nothing.
+resvg = { version = "0.49", default-features = false }
 
 # The MPEG decoder, for the container Wipeout HD keeps its music in. Reads how
 # long a track is, its channel count and its rate, and decodes it to PCM.
@@ -194,7 +213,7 @@ png = "0.18"
 #
 # **A library rather than our own.** `oag-formats` hand-rolls every *Wipeout*
 # format because nothing else will; MPEG is a published standard whose failure
-# mode is plausible-sounding noise, which is the same argument `miniz_oxide` and
+# mode is plausible-sounding noise, which is the same argument `flate2` and
 # `re_rav1d` are here on.
 #
 # Pure Rust with no C toolchain, the bar those two are held to. **MPL-2.0**,
@@ -202,7 +221,8 @@ png = "0.18"
 # own sources and leaves this workspace's `MIT OR Apache-2.0` untouched by
 # depending on it. `default-features = false` takes only the MP3 codec and
 # demuxer, leaving the other twenty-odd formats and the SIMD paths out.
-symphonia = { version = "0.6", default-features = false, features = ["mp3"] }
+symphonia = { version = "0.6", default-features = false, features = ["mp3", "flac", "vorbis", "ogg"] }
+opus-rs = "0.1"
 
 # The ATRAC9 decoder, for the Omega Collection's Wwise media: every `.wem` there
 # is ATRAC9 (`oag_formats::wwise::wem`). ADR-0024's order applies and puts a
@@ -219,15 +239,25 @@ symphonia = { version = "0.6", default-features = false, features = ["mp3"] }
 # four- and eight-channel files are measured there too.
 atrac9dec = "0.9"
 
-# Inflate, for the PS3 `.psarc` container. Pure Rust with no C toolchain, the
-# same bar `re_rav1d` is held to. `oag-formats` hand-rolls every *Wipeout*
-# format and the two checksums PNG needs, but deflate is a published standard
-# whose failure mode is silent garbage, so this one is not worth rewriting.
-# `default-features = false` drops `with-alloc`'s `simd` and the C-shim
-# feature; `with-alloc` is what provides `decompress_to_vec_zlib`.
-miniz_oxide = { version = "0.8", default-features = false, features = [
-  "with-alloc",
-] }
+# Inflate for every deflate and zlib stream we read: PSARC and WAD blocks
+# (`oag-formats`), `.vpk` entries and the PS4 package's PFSC sectors
+# (`oag-disc`). Pure Rust with no C toolchain, the same bar `re_rav1d` is held
+# to. `oag-formats` hand-rolls every *Wipeout* format and the two checksums PNG
+# needs, but deflate is a published standard whose failure mode is silent
+# garbage, so this one is not worth rewriting. The `zlib-rs` feature selects the
+# inflater: about 30 % faster than `miniz_oxide` on a whole HD PSARC read.
+# `default-features = false` only drops this edge's request for the
+# `miniz_oxide` backend; `png` asks for `flate2`'s default `rust_backend`, so
+# `flate2 -> miniz_oxide` 0.9 stays in the tree beside the 0.8 `png` uses (`cargo tree -i miniz_oxide`).
+# It is not the inflater in use: `flate2` compiles `miniz_oxide` in only when no
+# zlib backend feature is on, and `zlib-rs` implies one (`any_zlib`).
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+
+# zstd, for a texture pack's `.zim` pictures (`oag_texture::zim`): PPSSPP's own image format
+# compresses with it. Pure Rust, no C toolchain (the `zstd` crate the mod loader's `zip` pulls in
+# is a C library and native-only, which a texture decoder is not); `std` alone, since the
+# frame checksum is not worth `twox-hash`.
+ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
 
 # LZMA, for the Unity asset bundle container (`oag-unity`): the one compression
 # a track bundle uses that is not a handful of lines to hand-write. The same
@@ -246,12 +276,20 @@ glam = { version = "0.34", default-features = false, features = [
 unsafe_code = "deny"
 missing_debug_implementations = "warn"
 
+[workspace.lints.cargo]
+# Cargo's own check for a normal dependency nothing names. It does not look at
+# dev-dependencies or at a dependency only tests use, so `just check-unused-deps`
+# (cargo shear) stays.
+unused_dependencies = "warn"
+
 [workspace.lints.clippy]
-# Determinism hazards. Every one of these can silently change results between
-# targets or between runs; see docs/architecture/determinism.md.
-float_arithmetic = "allow"     # enabled per-module in sim crates, not globally
+# Float lints, all off: the simulation is float arithmetic by design, and the
+# float *methods* it may not call (libm, `mul_add`, the wall clock, `HashMap`)
+# are refused by each simulation crate's own `clippy.toml`; see
+# docs/architecture/determinism.md, "How this is enforced".
+float_arithmetic = "allow"
 suboptimal_flops = "allow"     # would suggest mul_add, which is contraction
-imprecise_flops = "allow"
+imprecise_flops = "allow"      # would suggest ln_1p, exp_m1 and hypot, which are libm
 
 [profile.release]
 debug = 1
@@ -528,6 +566,22 @@ opt-level = 2
 [profile.dev.package.oag-fx]
 opt-level = 2
 
+# The music path: ATRAC3+, ATRAC9, MP3 and Wwise decodes, the mixer and the
+# soundtrack's segment mixing, per-sample loops over whole songs.
+[profile.dev.package.oag-audio]
+opt-level = 2
+[profile.dev.package.oag-music]
+opt-level = 2
+[profile.dev.package.oag-sound]
+opt-level = 2
+
+# Every race's hulls, skins and shields, and every circuit's track file written
+# and read back: whole-disc walks in code that ran at opt-level 0.
+[profile.dev.package.oag-livery]
+opt-level = 2
+[profile.dev.package.oag-trackfile]
+opt-level = 2
+
 # The mesh pipeline and the post-processing chain were `oag-render`'s two
 # hottest modules; the ground-truth tests that decode a whole model and run a
 # pass over it keep the same opt-level they had there.
@@ -609,4 +663,14 @@ opt-level = 0
 [profile.quick.package.oag-mesh]
 opt-level = 0
 [profile.quick.package.oag-post]
+opt-level = 0
+[profile.quick.package.oag-audio]
+opt-level = 0
+[profile.quick.package.oag-music]
+opt-level = 0
+[profile.quick.package.oag-sound]
+opt-level = 0
+[profile.quick.package.oag-livery]
+opt-level = 0
+[profile.quick.package.oag-trackfile]
 opt-level = 0

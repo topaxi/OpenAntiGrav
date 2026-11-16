@@ -8,6 +8,7 @@ use super::*;
 mod instance;
 mod moving;
 mod pad_glow;
+mod pad_tint;
 mod scene_block;
 #[cfg(test)]
 pub(crate) use scene_block::Matrices;
@@ -30,6 +31,13 @@ pub(super) struct Drawable {
     /// The same four with back faces culled, for the draws that ask - see
     /// `mesh_render::Built::culled`.
     culled: Option<mesh_render::SolidSet>,
+    /// The sets above with the velocity write masked, for a drawable built
+    /// [`mesh_render::Velocity::Gated`] - see [`Self::set_velocity_read`].
+    unwritten: Option<mesh_render::Unwritten>,
+    /// Whether the frame being drawn reads the velocity buffer; set before each frame by
+    /// [`Self::set_velocity_read`]. `true` until told otherwise, so a drawable nobody
+    /// gates writes velocity as it always did.
+    velocity_read: std::sync::atomic::AtomicBool,
     blend_pipeline: [wgpu::RenderPipeline; 2],
     /// The other two recovered transparent blend classes. Selected per draw
     /// call, because a single model mixes them - see
@@ -42,6 +50,8 @@ pub(super) struct Drawable {
     /// The depth prepass pair, for the one drawable built with it - Wipeout
     /// HD's circuit. See `mesh_render::Prepass`.
     prepass: Option<mesh_render::Prepass>,
+    /// `mesh_render::Built::plain_draws`.
+    plain_draws: Vec<bool>,
     /// The index buffer with its triangles in reverse order, each triangle's
     /// own vertices untouched, for the prepass's shaded half - see
     /// `draw_lists`. `None` without a prepass.
@@ -49,11 +59,13 @@ pub(super) struct Drawable {
     /// The alpha-only glow-mask stamp for blended batches - see
     /// `mesh_render::Built::stamp_pipeline` and [`Self::draw_stamps`].
     stamp_pipeline: Option<mesh_render::Stamp>,
-    vertices: wgpu::Buffer,
-    /// The coordinates' own buffer, bound to slot 1, for a drawable built
-    /// [`mesh_render::Texcoords::Streamed`] - `None` for every other. See
-    /// [`Self::bind_vertices`].
-    texcoords: Option<wgpu::Buffer>,
+    /// The foliage depth and colour pair, for a circuit with list-B foliage - see
+    /// `mesh_render::Built::foliage`.
+    foliage: Option<mesh_render::Foliage>,
+    /// The vertex buffers (one unless the model outgrew the device's buffer ceiling), and
+    /// the streamed coordinates' buffers, for a drawable built
+    /// [`mesh_render::Texcoords::Streamed`]. See [`Self::geometry`].
+    geometry: mesh_render::Geometry,
     indices: wgpu::Buffer,
     uniforms: wgpu::Buffer,
     uniform_bind: wgpu::BindGroup,
@@ -105,7 +117,7 @@ pub(super) struct Drawable {
     node_anims_at: std::sync::atomic::AtomicU64,
     /// The craft pose and flap angles (as bits) a hull's shine pass last wrote its coordinates
     /// for, so a craft that has not moved since the last frame uploads nothing.
-    shine_pose: std::sync::Mutex<Option<[u32; 18]>>,
+    shine_pose: std::sync::Mutex<Option<[u32; 21]>>,
     /// The glow table's own buffer, binding 2 of the same group 3. Rewritten
     /// by [`Self::glow_weapon_pads`] only; every other drawable leaves what
     /// [`mesh_render::Emissives::of`] wrote at build time.
@@ -237,16 +249,19 @@ impl Drawable {
         let mesh_render::Built {
             pipeline,
             prepass,
+            plain_draws,
             alpha_test_pipeline,
             cutout_pipelines,
             culled,
+            unwritten,
             blend_pipeline,
             additive_pipeline,
             unblended_pipeline,
             authored_pipelines,
             stamp_pipeline,
+            foliage,
             bind_group: _placeholder,
-            vertex_buffer: vertices,
+            geometry,
             index_buffer: indices,
             texture_binds: textures,
             bindless,
@@ -304,17 +319,10 @@ impl Drawable {
             oag_gpu::deferred_upload::write_buffer(queue, &buffer, reversed);
             buffer
         });
-        let texcoords = (texcoords == mesh_render::Texcoords::Streamed).then(|| {
-            let coordinates: Vec<[f32; 2]> = model.vertices.iter().map(|v| v.texcoord).collect();
-            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("streamed texcoords"),
-                size: std::mem::size_of_val(&coordinates[..]) as u64,
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            oag_gpu::deferred_upload::write_buffer(queue, &buffer, coordinates);
-            buffer
-        });
+        let mut geometry = geometry;
+        if texcoords == mesh_render::Texcoords::Streamed {
+            geometry.stream_texcoords(device, queue, &model);
+        }
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("race uniforms"),
@@ -355,7 +363,7 @@ impl Drawable {
         model.release_texels();
         let model = std::sync::Arc::new(model);
         if oag_gpu::deferred_upload::active() {
-            mesh_render::deferred::defer_geometry(&vertices, &indices, &model);
+            mesh_render::deferred::defer_geometry(&geometry, &indices, &model);
         }
         Ok(Self {
             opaque_ranges,
@@ -367,16 +375,19 @@ impl Drawable {
             alpha_test_pipeline,
             cutout_pipelines,
             culled,
+            unwritten,
+            velocity_read: std::sync::atomic::AtomicBool::new(true),
             blend_pipeline,
             additive_pipeline,
             unblended_pipeline,
             authored_pipelines,
             stamp_pipeline,
+            foliage,
             prepass,
+            plain_draws,
             hidden: std::sync::Mutex::default(),
             reversed_indices,
-            vertices,
-            texcoords,
+            geometry,
             indices,
             uniforms,
             uniform_bind,
@@ -490,13 +501,46 @@ impl Drawable {
         *last_bound = Some(slot);
     }
 
+    /// The model's draws whose bounds meet the sphere `centre`, `radius`, across all three
+    /// lists. A moving draw is left out: its bounds describe where it was at time zero.
+    pub(super) fn draws_within(
+        &self,
+        centre: Vec3,
+        radius: f32,
+    ) -> impl Iterator<Item = &DrawCall> {
+        let model = &self.model;
+        [
+            &model.draws,
+            &model.alpha_tested_draws,
+            &model.transparent_draws,
+        ]
+        .into_iter()
+        .flatten()
+        .filter(move |draw| {
+            !draw.moving
+                && Vec3::from_array(draw.bounds.centre).distance(centre)
+                    <= radius + draw.bounds.radius
+        })
+    }
+
+    /// The bytes of vertex data this drawable's model holds.
+    #[cfg(test)]
+    pub(super) fn model_vertex_bytes(&self) -> usize {
+        std::mem::size_of_val(&self.model.vertices[..])
+    }
+
+    /// How many buffers the vertex data is cut into: one unless the model outgrew the
+    /// device's `max_buffer_size`.
+    #[cfg(test)]
+    pub(super) fn vertex_buffer_count(&self) -> usize {
+        self.geometry.buffer_count()
+    }
+
     /// Binds this drawable's vertex buffer - and its streamed coordinates,
-    /// when it has them - for the pipelines it built.
-    pub(super) fn bind_vertices(&self, pass: &mut wgpu::RenderPass<'_>) {
-        pass.set_vertex_buffer(0, self.vertices.slice(..));
-        if let Some(texcoords) = &self.texcoords {
-            pass.set_vertex_buffer(1, texcoords.slice(..));
-        }
+    /// when it has them - for the pipelines it built, and returns the cursor
+    /// its draws go through.
+    pub(super) fn bind_vertices(&self, pass: &mut wgpu::RenderPass<'_>) -> mesh_render::Cursor<'_> {
+        self.geometry.cursor(pass)
     }
 
     /// Rebuilds bind group 2 with `stage`'s four textures - see
@@ -517,6 +561,21 @@ impl Drawable {
     ) {
         self.fog_bind =
             mesh_render::zone::rebind(device, queue, &self.fog, &self.zone_rebind, stage);
+    }
+
+    /// Tells a gated drawable whether this frame's draws write the velocity buffer:
+    /// `false` swaps in the pipelines with the write masked (see
+    /// [`mesh_render::Velocity::Gated`]); a drawable that is not gated ignores it.
+    pub(super) fn set_velocity_read(&self, read: bool) {
+        self.velocity_read
+            .store(read, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Whether the last [`Self::set_velocity_read`] said the frame reads velocity.
+    #[cfg(test)]
+    pub(super) fn velocity_read(&self) -> bool {
+        self.velocity_read
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// A sphere, in model space, that holds every vertex: the centre of the
@@ -589,7 +648,7 @@ impl Drawable {
 
     pub(super) fn caster(&self, model: Mat4) -> oag_render::shadow::map::Caster<'_> {
         oag_render::shadow::map::Caster {
-            vertices: &self.vertices,
+            geometry: &self.geometry,
             indices: &self.indices,
             ranges: &self.opaque_ranges,
             model,
@@ -598,15 +657,22 @@ impl Drawable {
 
     /// Rewrites the Zone visualiser's lookup from `bands` levels, tinted by
     /// `tint` - or blanks it when `tint` is `None`, which is what a stage
-    /// with no authored `EQ colour tint` gets. See
-    /// `oag_mesh::mesh_render::zone::write_vis`, which this forwards to.
+    /// with no authored `EQ colour tint` gets. Writes nothing when the texels
+    /// equal `last`, what this drawable's lookup was last given (`None`: never
+    /// written), and leaves this frame's there. See
+    /// `oag_mesh::mesh_render::zone::write_vis_changed`, which this forwards to.
+    ///
+    /// Safe to skip because every view's writes land in the order the views were
+    /// prepared (`oag_gpu::writes`): the texture holds the last texels written.
+    /// Returns whether it wrote.
     pub(super) fn write_zone_vis(
         &self,
         queue: &dyn oag_gpu::writes::Writes,
         bands: &[f32],
         tint: Option<[u8; 3]>,
-    ) {
-        mesh_render::zone::write_vis(queue, &self.zone_vis, bands, tint);
+        last: &mut Option<mesh_render::zone::VisTexels>,
+    ) -> bool {
+        mesh_render::zone::write_vis_changed(queue, &self.zone_vis, bands, tint, last)
     }
 
     /// `prev_mvp` is the previous simulation tick's `view_projection * model`,
@@ -780,18 +846,36 @@ impl Drawable {
     /// and is placed entirely by them.
     #[track_caller]
     pub(super) fn write_node_anims(&self, queue: &dyn oag_gpu::writes::Writes, seconds: f32) {
+        self.write_node_anims_started(queue, seconds, &|_| None);
+    }
+
+    /// [`Self::write_node_anims`] for a model whose art can start on a channel
+    /// (`Keyed::on`): `started(channel)` is the clock reading at which the channel last
+    /// fired. A table that depends on it is a function of more than the clock, so such a
+    /// model is written every frame, not once per clock value; every other model keeps the
+    /// once-per-clock rule.
+    #[track_caller]
+    pub(super) fn write_node_anims_started(
+        &self,
+        queue: &dyn oag_gpu::writes::Writes,
+        seconds: f32,
+        started: &dyn Fn(oag_mesh::mesh::Start) -> Option<f32>,
+    ) {
         if self.model.anim_nodes.is_empty() {
             return;
         }
-        if !remember(&self.node_anims_at, seconds) {
+        let channel_driven = self.model.anim_nodes.iter().any(
+            |node| matches!(&node.transform, oag_mesh::mesh::Motion::Keyed(k) if k.on.is_some()),
+        );
+        if !channel_driven && !remember(&self.node_anims_at, seconds) {
             return;
         }
-        let anims = mesh_render::NodeAnims::sample(&self.model, seconds);
+        let head = mesh_render::NodeAnims::head_started(&self.model, seconds, started);
         oag_gpu::perfprobe::write_buffer(
             queue,
             &self.node_anims,
             self.offsets.node_anims,
-            bytemuck::bytes_of(&anims),
+            bytemuck::cast_slice(&head),
         );
     }
 
@@ -799,9 +883,8 @@ impl Drawable {
     /// uploads them: `uv' = uv * scale + offset`, the GE's own
     /// `TEXSCALE`/`TEXOFFSET` arithmetic.
     ///
-    /// Called only for the plume, and only on the frames it is visible. This
-    /// replaced environment-mapped generation (`oag_render::texgen`) on
-    /// 2026-08-10: the plume's compiled list is replayed under `TEXMAPMODE` 0
+    /// Called only for the plume, and only on the frames it is visible. Not
+    /// environment-mapped generation (`oag_render::texgen`): the plume's compiled list is replayed under `TEXMAPMODE` 0
     /// (settled live - mesh-draw.md, "The plume is replayed under
     /// `TEXMAPMODE` 0"), so the original reads the authored coordinates,
     /// through the keyframed transform `Loaded::boost_uv_transform` carries.
@@ -828,7 +911,7 @@ impl Drawable {
                 v
             })
             .collect();
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&transformed));
+        self.geometry.write(queue, 0, &transformed);
     }
 
     /// Swings this model's airbrake flaps to `left` and `right` radians.
@@ -865,12 +948,7 @@ impl Drawable {
             let Some(span) = flap.swung(&self.model.vertices, angle, moved) else {
                 continue;
             };
-            let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
-            queue.write_buffer(
-                &self.vertices,
-                span.start as u64 * stride,
-                bytemuck::cast_slice(moved),
-            );
+            self.geometry.write(queue, span.start as u32, moved);
         }
     }
 
@@ -912,109 +990,7 @@ impl Drawable {
             }
             out
         }));
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(tinted));
-    }
-
-    /// Recolours each weapon pad's own geometry by whether it currently hands
-    /// out a pickup - see [`oag_render::weapon_pad`] for the recovered
-    /// mechanism this reproduces. `ready[i]` pairs with this drawable's
-    /// `i`-th [`mesh::Model::node_vertex_ranges`] entry - positional, not by
-    /// name, for the reason that field's own doc comment gives.
-    ///
-    /// A no-op on a model with no weapon pads - every track and the sky -
-    /// since `ready` is empty there.
-    ///
-    /// **Also a no-op on a Wipeout HD model**, and that gate is the point of
-    /// [`mesh::Model::vertex_colour_is_light`] being read here rather than a
-    /// title enum. Two independent reasons, either sufficient:
-    ///
-    /// 1. The keyframe table is *Pulse's*, read out of the PSP executable at
-    ///    `0x08ac00c8` (see [`oag_render::weapon_pad`]). HD's own `Weapon Pad`
-    ///    does cycle, but through its own table at `0x008c26a0` and into the
-    ///    light bars' constant rather than the mesh - see
-    ///    [`Self::glow_weapon_pads`]. `ds_weaponup_cs.gtf` is a grey plate with
-    ///    a **red** cross on it, where Pulse's `weapon_under.tga` is neutral and
-    ///    takes its colour entirely from `pad+0x6c`.
-    /// 2. On an HD model `colour` is not a tint at all. It is the baked
-    ///    per-vertex light the fragment program **adds** inside its authored
-    ///    lighting sum - see `oag_mesh::mesh::rcs::emit`. Writing a palette
-    ///    entry there is not "the wrong colour", it is a different quantity.
-    ///
-    /// What HD does instead is unrecovered - see `docs/rendering/pads.md`. An
-    /// HD pad therefore draws its authored texture under the circuit's own
-    /// light rig, unarmed and armed alike, which is a visible absence rather
-    /// than an invented state.
-    pub(super) fn tint_weapon_pads(
-        &self,
-        queue: &dyn oag_gpu::writes::Writes,
-        seconds: f32,
-        ready: &[bool],
-        tinted: &mut Vec<mesh::GpuVertex>,
-    ) {
-        if self.model.vertex_colour_is_light {
-            return;
-        }
-        self.recolour_nodes(
-            queue,
-            ready.iter().map(|&is_ready| {
-                if is_ready {
-                    oag_render::weapon_pad::ready_colour(seconds)
-                } else {
-                    oag_render::weapon_pad::COOLDOWN_COLOUR
-                }
-            }),
-            tinted,
-        );
-    }
-
-    /// Rewrites each of this drawable's [`mesh::Model::node_vertex_ranges`]
-    /// entries to its own flat `colour`, one per iterator item, positional
-    /// and zipped the way [`Self::tint_weapon_pads`]' own doc comment
-    /// describes.
-    ///
-    /// Rewrites the *replacement* colour, not a multiply against the pad's
-    /// authored one - `pad+0x6c` overwrites the mesh's own GE colour command
-    /// every tick in the original (see `oag_render::weapon_pad`), and this
-    /// mirrors that shape for the speed pad's own, unrecovered override.
-    /// Always from `self.model.vertices`, never from the last frame's
-    /// buffer, for the same accumulation reason [`Self::deflect_airbrakes`]
-    /// gives.
-    ///
-    /// `tinted` is scratch the caller owns and this refills - see
-    /// `Scene::scratch`.
-    fn recolour_nodes(
-        &self,
-        queue: &dyn oag_gpu::writes::Writes,
-        colours: impl Iterator<Item = [f32; 3]>,
-        tinted: &mut Vec<mesh::GpuVertex>,
-    ) {
-        let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
-        // A Quake's bump rolling over a pad has to survive the pad's own
-        // rewrite from the authored vertices - see `Ripple::displace`.
-        let ripple = lock(&self.ripple);
-        for (range, colour) in self.model.node_vertex_ranges.iter().zip(colours) {
-            let span = range.start as usize..range.end as usize;
-            let Some(base) = self.model.vertices.get(span) else {
-                continue;
-            };
-            // Refilled rather than rebuilt - one pad's worth of vertices, and
-            // there is a pad's worth of them on every lap of every circuit
-            // every frame. See `Scene::scratch`.
-            tinted.clear();
-            tinted.extend(base.iter().zip(range.start..).map(|(v, index)| {
-                let mut out = *v;
-                out.colour = [colour[0], colour[1], colour[2], out.colour[3]];
-                if let Some(ripple) = ripple.as_ref() {
-                    ripple.displace(index, &mut out);
-                }
-                out
-            }));
-            queue.write_buffer(
-                &self.vertices,
-                u64::from(range.start) * stride,
-                bytemuck::cast_slice(tinted),
-            );
-        }
+        self.geometry.write(queue, 0, tinted);
     }
 
     /// Chooses this frame's child of each authored `LodGroup` for the
@@ -1063,7 +1039,7 @@ impl Drawable {
     ) -> oag_render::ghost::Hull<'_> {
         let model = &self.model;
         oag_render::ghost::Hull {
-            vertices: &self.vertices,
+            vertices: self.geometry.sole(),
             indices: &self.indices,
             textures: &self.textures,
             draws: (model.draws.iter())
@@ -1184,6 +1160,25 @@ pub(super) fn model_matrix_of(ship: &Ship) -> Mat4 {
 pub(super) fn shaken_model_matrix_of(ship: &Ship, shake: Mat4) -> Mat4 {
     Mat4::from_rotation_translation(display_orientation(ship), ship.physics.body.position)
         * shake
+        * Mat4::from_rotation_y(MODEL_YAW)
+        * Mat4::from_scale(Vec3::splat(oag_fx::exhaust::CRAFT_ROW_SCALE))
+}
+
+/// The model matrix of a hull posed at `target` rather than on a body: level on the target's
+/// frame, with [`model_matrix_of`]'s model-space yaw and scale. What a craft in a transit is
+/// drawn with for its own view (`crate::transit_camera`).
+#[cfg(feature = "view")]
+pub(super) fn posed_model_matrix(target: &oag_race::chase_rig::Target) -> Mat4 {
+    let forward = target.forward.normalize_or_zero();
+    let right = forward.cross(target.up).normalize_or_zero();
+    let up = right.cross(forward);
+    let frame = Mat4::from_cols(
+        right.extend(0.0),
+        up.extend(0.0),
+        (-forward).extend(0.0),
+        target.position.extend(1.0),
+    );
+    frame
         * Mat4::from_rotation_y(MODEL_YAW)
         * Mat4::from_scale(Vec3::splat(oag_fx::exhaust::CRAFT_ROW_SCALE))
 }
@@ -1387,6 +1382,7 @@ mod tests {
 pub(super) mod draw;
 mod occlusion;
 mod overlay;
+pub(crate) use overlay::TrackCull;
 mod ripple;
 mod stamp;
 

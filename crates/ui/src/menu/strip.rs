@@ -73,7 +73,10 @@ use super::{Entry, Menu, Page, Skin, reveal::Tab, skin::Strip};
 /// `choice` whose list the source turned out not to carry has no value to show
 /// and is still a choice, and a page of those must not silently become a strip.
 pub(super) fn suits(page: &Page) -> bool {
-    !page.entries.is_empty()
+    // The pause screen is a column on every title: HD authors it as a vertical stack of `Block`s
+    // and `List`s, not a `<HorizMenu>`.
+    page.id != super::definition::PAUSE_PAGE
+        && !page.entries.is_empty()
         && page.entries.iter().all(|entry| {
             matches!(
                 entry,
@@ -249,12 +252,7 @@ fn underline(
             numbers.underline_size.0 * sx,
             numbers.underline_size.1 * sy,
         ],
-        uv: [
-            cursor.x as f32,
-            cursor.y as f32,
-            cursor.width as f32,
-            cursor.height as f32,
-        ],
+        uv: cursor.sheet_rect([0.0, 0.0, cursor.width as f32, cursor.height as f32]),
         color: skin.normal(),
     });
 }

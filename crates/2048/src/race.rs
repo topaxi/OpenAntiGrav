@@ -44,9 +44,12 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     track: DEFAULT_TRACK,
     team: DEFAULT_TEAM,
     ship_dir: SHIP_DIR,
+    ship_hull: "Ship",
     handling_dir: HANDLING_DIR,
     effect_dir: EFFECT_DIR,
     effect_dir_by_circuit: &[],
+    hull_by_track_type: &[],
+    circuit_lineages: &[],
     zone: oag_title::ZoneCircuit::SameCircuit,
     zone_craft: oag_title::ZoneCraft::OwnShipAt {
         root: HD_SHIP_DIR,
@@ -80,7 +83,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     opponent_autopilot: oag_title::opponent_autopilot::BY_CLASS_AND_DIFFICULTY,
     // The campaign's events fly the original opponent (the maintainer's AI
-    // mode 3); race box and remix keep this project's driver.
+    // mode 3); race box and a two-title race keep this project's driver.
     original_opponent: true,
     original_driver: Some(&ORIGINAL_DRIVER),
     // Unread on this title: `data.psarc` is not extracted in this tree, so
@@ -98,11 +101,14 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_transition: None,
     zoom_ring: None,
     borrows_zoom_ring: false,
+    game_options: oag_title::race::GameOptions::NONE,
     zone_stage_textures: None,
+    zone_fallback: Some(ZONE_FALLBACK),
     // `None`: no Zone sky swap has been looked for on this title. HD/Fury's is
     // a named file its loader picks by a mode gate; nothing equivalent has been
     // read here.
     zone_sky: None,
+    detonator: Some(DETONATOR),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&GUEST_ROSTER),
     // 2048's own reskins are `team_variants`' own measured shape too - a
@@ -112,7 +118,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // The native roster's ladder, read off its five teams' `handlingstats.xml`
     // (`oag-tables`' `speed_ladder_ground_truth`). The title ships no race box -
     // racing is entered from the campaign event grid - so no menu authors a
-    // ladder; this one is the files'. `SUPERPHANTOM` is confined to RACE REMIX
+    // ladder; this one is the files'. `SUPERPHANTOM` is confined to a two-title race page
     // the way Pure's `VECTOR` is (chosen, not measured). The twelve HD teams
     // 2048 reships author four: see `GUEST_ROSTER`.
     //
@@ -123,7 +129,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     fresh_variant: None,
     speed_classes: Some(oag_title::SpeedClasses {
         names: oag_title::SpeedClasses::WIPEOUT_2048_LADDER,
-        remix_only: &[oag_title::SpeedClasses::SUPER_PHANTOM],
+        union_only: &[oag_title::SpeedClasses::SUPER_PHANTOM],
     }),
 };
 
@@ -454,6 +460,85 @@ pub const GUEST_ROSTER: oag_title::GuestRoster = oag_title::GuestRoster {
 /// `docs/formats/effectsettings.md`. So this is the only copy there is.
 pub const ZONE_PALETTE: &str = "ZoneMode2048.effectSettings";
 
+/// 2048's Detonator (the Fury pack): the same fourteen-stage law as HD's
+/// (`FUN_8117e9c2`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`, "The same law
+/// on 2048 and Omega"), the `0.7` camera its craft constructors write on mode `14`
+/// (`docs/ghidra/functions/vita-2048-eu-v104/camera.md`), and the grade
+/// `Environment_Load` picks: the circuit's own [`ZONE_PALETTE`] and, for HD's ported circuits
+/// with no environment tree of their own, HD/Fury's Detonator table out of the v1.04 patch
+/// (`data2.psarc`), the DLC3 revision on the four `zone_N`
+/// (`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`). The per-stage
+/// textures are `.gxt`, unwired here as Zone's are.
+pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
+    palette: Some(oag_title::ZonePalette::BesideCircuit(ZONE_PALETTE)),
+    fallback_palette: Some(oag_title::ZonePalette::TitleWide {
+        entry: "data/ZoneEnvironmentHDFury/DetonatorModeHDFury.effectSettings",
+        zone_circuits: HD_ZONE_CIRCUITS,
+        zone_circuit_entry: "data/ZoneEnvironmentHDFury/DetonatorModeHDFuryDLC3.effectSettings",
+    }),
+    stage_textures: None,
+    camera_scale: 0.7,
+};
+
+/// HD's four Zone circuits as the DLC packs ship them, the ones `Environment_Load` matches by
+/// the `Zone_1`..`Zone_4` substring and gives the `DLC3` table
+/// (`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`).
+const HD_ZONE_CIRCUITS: &[&str] = &[
+    "data/art/published/DLC1/environments/zone_1/track.vex",
+    "data/art/published/DLC1/environments/zone_2/track.vex",
+    "data/art/published/DLC1/environments/zone_3/track.vex",
+    "data/art/published/DLC1/environments/zone_4/track.vex",
+];
+
+/// What a Zone race takes on HD's ported circuits, which ship no `ZoneMode2048.effectSettings`:
+/// HD/Fury's title-wide table out of the v1.04 patch (`data2.psarc`), the `DLC3` revision on the
+/// four `zone_N`, and HD's two fifteen-entry texture sets as `.gxt`
+/// (`data/Tex/zoneMode<n>.gxt`, `zoneModeTrack<n>.gxt`). The circuits' materials declare HD's
+/// Zone variant (`zoneColourTint`, `zoneEffectInner`, `zoneTexInner`: 9,392 programs under
+/// `DLC1/environments`, none outside it), so it is HD's surface law on them.
+pub const ZONE_FALLBACK: &oag_title::ZoneFallback = &oag_title::ZoneFallback {
+    palette: oag_title::ZonePalette::TitleWide {
+        entry: "data/ZoneEnvironmentHDFury/ZoneModeHDFury.effectSettings",
+        zone_circuits: HD_ZONE_CIRCUITS,
+        zone_circuit_entry: "data/ZoneEnvironmentHDFury/ZoneModeHDFuryDLC3.effectSettings",
+    },
+    stage_textures: &oag_title::ZoneStageTextures {
+        general: "data/Tex/zoneMode",
+        track: "data/Tex/zoneModeTrack",
+        extension: ".gxt",
+        stages: 15,
+    },
+    stages: FALLBACK_ZONE_STAGES,
+    own_model_under: None,
+};
+
+/// The ladder that steps HD's fifteen-stage table on HD's ported circuits: HD's own
+/// fourteen-record zone-number table (`stage = 14 - i`), the thresholds the Zone HUD's class
+/// name walks at `0x8151f434` byte for byte ([`crate::hud::ZONE_SPEED_CLASSES`]).
+///
+/// **Inherited from HD, with one frame behind it.** The seventeen-record [`ZONE_STAGES`]
+/// would hold zone 5 on stage 2 (`Venom`, green); the original's frame on Vineta K at zone 5
+/// (`68-zone-5.png`) draws stage 4's `Flash` colours (yellow-green scene, purple rims). Which
+/// function writes the stage on these circuits is not read.
+pub const FALLBACK_ZONE_STAGES: &oag_title::ZoneStages = &oag_title::ZoneStages {
+    records: &[
+        (75, "IG_HUD_SUPSON"),
+        (60, "IG_HUD_MACH1"),
+        (50, "IG_HUD_SUBSON"),
+        (42, "IG_HUD_SUPZEN"),
+        (35, "MSC_ZEN"),
+        (27, "MSC_SPPHANTOM"),
+        (20, "Phantom"),
+        (16, "MSC_SPHANTOM"),
+        (12, "Rapier"),
+        (7, "MSC_SRAPIER"),
+        (5, "Flash"),
+        (3, "MSC_SFLASH"),
+        (2, "Venom"),
+        (0, "MSC_SVENOM"),
+    ],
+};
+
 pub const DEFAULT_TRACK: &str = r"Data\art\published\environments\altima\track.vex";
 
 /// The team whose `handlingstats.xml` a race uses by default.
@@ -516,12 +601,15 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
         ship_zone: r"Data\audio\sound\Ship_NGP_Zone.bnk",
         zone_infix: Some("ZONE_"),
     }),
+    wwise: None,
 };
 
-/// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
-/// table existed; the rest is HD's, inherited via Omega.
+/// The craft-body laws. The box mass, the wall point rate and the shield slot are read in this
+/// title's executable (`docs/ghidra/functions/vita-2048-eu-v104/craft-laws.md`); the steering
+/// ramp is Pulse's; the rest is HD's, inherited via Omega.
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
-    inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
+    // Both ship constructors pass `1.0` to the box builder (`0x811b975e`, `0x811c8a7c`).
+    inertia_mass: oag_title::pre_race::Sourced::measured(1.0),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     // HD's in-air `weight_distribution` torque, inherited via Omega: held off until HD's was
     // re-measured under player input (2026-10-20, `docs/physics/airborne-ground-truth.md`), then
@@ -541,18 +629,22 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
     // Zone's hover is not read on this title: Wipeout HD's `30`.
     bank_to_yaw_zone: oag_title::pre_race::Sourced::inherited(30.0, "Wipeout HD"),
-    wall_one_sided: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
-    wall_steer_away: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
-    // HD's measured body-local point rate, held at Pulse's textbook one (chosen) until this
-    // engine's AI flies it on 2048. Failing gates of the HD/2048/Omega AI set (28 tests) under an
-    // airborne pitch perturbation eps = -1e-2 -1e-3 -1e-4 -1e-5 0 1e-2 1e-3 1e-4 1e-5: off
-    // `1 0 1 1 0 0 0 0 0`, on `1 0 1 0 1 0 0 0 0`. Within the bar, but the eps = 0 run puts
-    // `the_field_finishes_tower`'s whole field a lap down at 300 s (292.3 s to finish without it),
-    // and the gate has no row to regenerate; the inherited air bias is held the same way.
-    wall_point_rate_body_local: oag_title::pre_race::Sourced::chosen(false),
+    // `Body_ResolveContact` (`0x811d3eaa`): the separating gate and the `5 * clamp(.., -20, 20)`
+    // yaw torque, as HD's.
+    wall_one_sided: oag_title::pre_race::Sourced::measured(true),
+    wall_steer_away: oag_title::pre_race::Sourced::measured(true),
+    // The wall resolver crosses the lever arm with the stored body-local rate unrotated
+    // (`0x811d3eaa`), where the craft-craft resolver rotates it to world first (`0x811d38f6`).
+    wall_point_rate_body_local: oag_title::pre_race::Sourced::measured(true),
+    body_linear_damping: oag_title::pre_race::Sourced::inherited(0.01, "Wipeout HD"),
+    body_angular_damping: oag_title::pre_race::Sourced::inherited(0.01, "Wipeout HD"),
     cage_from_track_header: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
     // Not read: the view matrix is Pulse's orthonormal look-at until measured.
     chase_view_sheared: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    // `Ship_SetShield` (`0x811bb524`) clamps to `stats + 0x98 + level * 4`; a campaign event's
+    // level is `1`, the Medium slot (`docs/formats/handling-stats.md`, "Which difficulty picks
+    // the shield slot").
+    shield_by_skill: oag_title::pre_race::Sourced::measured(true),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,
@@ -781,7 +873,8 @@ mod team_identity_tests {
 /// original picks on the mode id, read statically (confidence 80,
 /// `docs/ghidra/functions/vita-2048-eu-v104/countdown-voice.md`). The 240 Hz tick is read from the
 /// executable (85). **The 180 tick spacing and the thrust gate are Pulse's, lent: chosen, not
-/// measured**, so `origin` is `Chosen`. Both banks resolve by hash.
+/// measured**, so `origin` is `Chosen`. Both banks resolve by hash, to the cue the name table's
+/// `+0xc` field names (not its bucket), as the original's lookup returns it.
 pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoice {
     eliminator_bank: r"Data\audio\sound\speech.bnk",
     zone_bank: ZONE_ANNOUNCER.bank,
@@ -790,18 +883,13 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     hashed: true,
     event: Some(oag_title::CountdownEvent {
         bank: r"Data\audio\sound\Weapons_NGP.bnk",
-        // Two looping voices keyed on 150 and 155 ticks in and keyed off 900 ticks later (opcode
-        // 0x29), their pan swept by a modulator of +-180 degrees at 1 Hz (0x04), the second at 30
-        // degrees and the first in the rear half: none of it is in the mixer, and where it starts
-        // against `go` is unmeasured. Not played rather than played as one flat waveform.
-        ready: oag_title::StartCue::Unplayed {
-            name: "321_NGP",
-            why: "two looping voices keyed off after 3.75 s under a rotating pan modulator, which the \
-                  mixer has no model for, and its offset from go is unmeasured",
-        },
-        // Four arms picked uniformly (opcode 0x2e, mode 0), each one waveform: the flat pick.
+        // `321_NGP` is cue 70: three groups of beeps on delays 125, 205 and 205 ticks, a centre voice
+        // and a pair at 90 and 270 degrees (hard right on the pan law's rear edge, hard left).
+        ready: oag_title::StartCue::Plays("321_NGP"),
+        // `Go_NGP` is cue 68: one pair at 90 and 270 degrees keyed 100 ticks in.
         go: oag_title::StartCue::Plays("Go_NGP"),
     }),
+    event_every_mode: false,
     beat: Some("HBEAT"),
 };
 

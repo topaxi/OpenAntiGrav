@@ -307,14 +307,23 @@ Read 2026-10-30 (`pickup-fade-titles`); the static readings are labelled as such
 - **HD/Fury**: **ported 2026-10-30**. HD does carry this table (this corrects an earlier claim).
   `PTR_008a7800`'s pointee (`0x00920598`) holds the same 14 rows of 6 words with the same 13 words.
   `Hud_UpdatePickupBar`'s idle `0x5AFFFFFF` is the *nothing-held* value only. The fade's constants were
-  read: rate **1.5** (Pulse 1.2), cap `0.5`, `x3`, `pi`, `-25` the same; the hold, icon gate and
-  fade-out branch are inherited from Pulse. [hd-pickup-table.md](../ps3-hdfury-eu/hd-pickup-table.md).
-- **Omega**: **ported 2026-10-30**, rate inherited from HD, static. Same table at `0x0193f750`.
+  read: rate **1.5** (Pulse 1.2), cap `0.5`, `x3`, `pi`, `-25` the same; the hold (`0.1`), icon gate
+  (`0.4`) and fade-out branch were read and followed live on RPCS3 (2026-11-04), and are Pulse's, with
+  the same extra step on the first update after use. [hd-pickup-table.md](../ps3-hdfury-eu/hd-pickup-table.md).
+- **Omega**: **ported**, rate `1.5` read in `FUN_0125e9b0` (static, confidence 80, 2026-11-04; no live
+  value, shadPS4 has no memory readout). Same table at `0x0193f750`.
   [omega-pickup-table.md](../ps4-omega-eu/omega-pickup-table.md).
-- **2048**: **checked, applies, not wired** (static). The same table twice in the ELF (`0x8151f104`),
-  and `FUN_81154172` has the same fade with a `1.5` rate where Pulse has `1.2` (HD's rate is `1.5` too);
-  what draws it in the race HUD is unverified, the visible arc being `PickupBgFrame` with fixed
-  colours. Needs one Vita3K frame first.
+- **2048**: **checked, differs** (live, Vita3K, 2026-11-04). The same table twice in the ELF
+  (`0x8151f104`) and `FUN_81154172` has the same fade with a `1.5` rate, but the coloured backdrop is
+  never drawn: a held Rocket and a held Missile show the icon disc inside `PickupBgFrame`'s fixed grey
+  arc, with no tint.
   [pickup-backdrop.md](../vita-2048-eu-v104/pickup-backdrop.md).
 - **Pure**: **checked, differs** (live, USA disc). No `PickupBackground`; ten authored `<Model>` icons,
   never recoloured at runtime. [pickup-icons.md](../psp-pure-usa/pickup-icons.md).
+
+## Left unread
+
+A grant during the fade-out run-on (`Fade::advance` finishes the run-on and fades the new weapon in
+after it, from the decompile) and a natural pad grant on Pulse (the live run wrote `pickup+0x1bc`)
+stay unread; neither is reachable without driving the original through a pad and a fire at the right
+update. The extra update after use is on HD too (above).

@@ -13,7 +13,7 @@ use oag_gameplay::{Controller, PlayerInputs};
 /// How many views the split fields: two people side by side or above, then all four.
 const VIEWS: [usize; 2] = [2, 4];
 
-fn local_people(views: usize, zoom: bool) -> Race {
+pub(super) fn local_people(views: usize, zoom: bool) -> Race {
     let mut setup = setup_with(
         hulled_handling(),
         vec![upward_plane(-40.0, oag_physics::Surface::Wall)],

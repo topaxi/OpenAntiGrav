@@ -508,6 +508,63 @@ samples is a noise map, so the colour map has no correct slot to go in;
 putting it in the noise slot would be a plausible-looking substitution of the
 kind `CLAUDE.md` names. The load report says so on every HD race.
 
+## A longer ribbon: the TRAIL LENGTH setting (`trail-length`)
+
+An enhancement of this project's and a departure from the original, **off by default**.
+`[render_profiles.<title>] trail_length` (`oag_display::display::TrailLength`, menu row TRAIL
+LENGTH on the graphics Advanced page beside TRAIL ORDER, `--trail-length`) is `original` or `hd`.
+`original` keeps the PSP preset's ten samples and is byte-identical to a build without the row.
+`hd` keeps 54, Wipeout HD's ring ([engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md),
+"The per-trail block, from the live game": 54 samples of `0x50` bytes, one pushed per rendered frame).
+The row exists only where the ribbon is the PSP preset (Pulse, Pure); HD, Omega and 2048 draw their
+own 54-sample tube and the row is dropped (`Definition::drop_unavailable_trail_length`).
+
+How the preset's laws meet the longer ring (`oag_fx::exhaust`, `length.rs`):
+
+| Law | At `hd` |
+| --- | --- |
+| Sample spacing | unchanged: one sample a tick, so the ribbon is 5.4 times longer in world units at the same speed |
+| Head width, layer widths, colours, per-layer ramps | unchanged |
+| Taper (1.0 to 0.325), colour fade (`powf(1 - 0.1 a, 3.33)`), glow-stencil ramp, backward stretch | read at the *shape age* `a = age * 9 / 53`, so each curve runs over the whole ring and ends where the original's ends at ten |
+| Texture `u` step | the real age: the noise keeps its size along the ribbon |
+
+Reading the fade at the raw age instead would draw nothing past the ninth sample (the fade is
+0.0005 there), and the stretch would add about 20 units past the last sample; HD has no stretch.
+At ten samples the shape age is the age itself, exactly.
+
+Consequences a player sees, all of this setting and not of the original:
+
+- The ring must be full before the ribbon draws (the original's own gate), so after a change of
+  length, a race start or a respawn the ribbon is missing for 54 ticks (0.9 s) instead of ten.
+  A change of length restarts every ring.
+- A craft's trail-hit test (`centre_line`) reads the same ring, so where TRAIL HITS lends the
+  burst it tests against the longer line.
+- The chase camera sees the same head and a ribbon that stays bright and wide further back toward
+  the lens, off the bottom of the frame; a side view shows it five times as long.
+
+Held by `crates/fx/tests/trail_length.rs` (the original length's vertices pinned against values
+taken before the setting existed; the long ring has 53 segments a layer and a lit middle),
+`oag_raceplay`'s `trail_length` tests (the real tick fills a 54 ring in 54 ticks, a change restarts
+it, HD's tube ignores it) and `trail_order_ground_truth`'s
+`the_hd_trail_length_draws_a_longer_ribbon` (flag to frame: default equals `original`, `hd` differs).
+Whole-race captures of Pulse at `original` are byte-identical to the build before the setting.
+
+Reproducing the pictures (`oag-game`, `--no-audio`, 960x544, render scale 100, MSAA, blur and screen
+filter off, a private `XDG_*` profile):
+
+- Side view, same pose both runs: `oag-game pulse-psp-eu.chd --race --track 'Data\Environments\16_Track\track.vex'
+  --ticks 0 --pose=-118.39,-49.24,-702.05 --pose-boost 0.5 --pose-speed 120
+  --camera-pose=-58.39,-39.24,-732.05,-0.96,-0.16,0.2,0,1,0 --trail-length original|hd --screenshot out.png`.
+  The streak behind the nozzle is about 20 px long at `original` and about 100 px at `hd`, with
+  the same head width, until the circuit's geometry occludes it.
+- Off is the old build: the same `--race --autopilot --ticks 700` (and `760`) on a binary built
+  before the setting and on this one with no flag, compared with `cmp`; identical on Pulse, and on
+  Pure at 700.
+
+**Cross-title (CLAUDE.md).** Pure: ported, the same PSP-preset path (`Exhaust::Named`). 2048 and
+Omega: checked, differs - both already draw HD's 54-sample tube, so there is nothing to lengthen.
+HD: it is the source of the length.
+
 ## Open
 
 - Pure's executable is unread, so what binds its eight authored mounts, and what

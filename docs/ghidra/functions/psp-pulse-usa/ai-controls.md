@@ -198,7 +198,16 @@ Runs every tick, but its lane choice only on the `+0x360` tick.
 - **Contact push.** For each of the body's contacts with kind `1` (`body+0x170`
   stride `0x40`, count `body+0x370`): `driver+0x3b8 += 0.2` if the contact is on
   the craft's left (`dot(left, contact - pos) >= 0`), else `-= 0.2`. Clamped
-  `[-2, 2]`, decays `* 0.95` per tick.
+  `[-2, 2]`, decays `* 0.95` per tick. **Kind `1` is a craft-to-craft record**
+  (`Body_RecordPairContact`); a wall's kind-`0` record never pushes
+  (`bne v1,t3` at `0x08855238`, `t3 = 1`). The loop runs every tick, before the
+  round-robin test at `0x088552cc`. The record's point (`+0x10`) is the midpoint
+  of the two craft, so the push is away from the rival. **Measured live
+  2026-11-11** (`scripts/psp-ai-contact-field.py`): two opponents' pushes read
+  `-0.38`/`+0.38` the frame after a two-record contact and `-0.74`/`+0.74` after a
+  second, and the rail blend reads `0` on the frames after a pair contact.
+  Confidence **92** (was part of the planner's 80). What it does to the field:
+  [ai.md](../../../gameplay/ai.md#the-fields-contact-time-against-the-originals).
 - **The choice (on the `+0x360` tick).** Nine candidate lanes `-1, -0.75, ..., 1`.
   Each tick's scores start at zero and get two bumps
   (`Ai_AddLaneBump(centre, half_width, weight)`, a trapezoid: full `weight`

@@ -153,6 +153,17 @@ fn a_graded_omega_rig_keeps_its_prelit_combination() {
     assert_eq!(hd.prelit_bias, 0.0);
 }
 
+/// Omega's sun lobe colour survives a grade: `Light::authored` clears it.
+#[test]
+fn a_graded_omega_rig_keeps_its_sun_lobe_colour() {
+    let mut grade = grade();
+    grade.request_stage(1);
+    grade.commit();
+    grade.set_weight(1.0);
+    let omega = circuit_light().with_sun_specular([3.0, 2.0, 1.0]);
+    assert_eq!(grade.light(omega).sun_specular, [3.0, 2.0, 1.0, 0.0]);
+}
+
 /// A circuit with no authored rig is handed back untouched: a tint needs a
 /// direction to tint, and this file states none.
 #[test]
@@ -481,4 +492,116 @@ fn a_commit_starts_the_sphere_and_show_whole_settles_it() {
     grade.follow(40, 2.0, DT, [0.0; 3]);
     assert_eq!(grade.wavefront().previous, 0);
     assert_eq!(grade.blend().weight, 1.0);
+}
+
+/// Two stages' five Scene rim colours, curve and power, in `zonemodedlc3`'s
+/// spelling, over [`HD_THREE_STAGES`].
+fn arena_grade(arena: bool) -> ZoneGrade {
+    let mut text = HD_THREE_STAGES.to_string();
+    for (stage, name, k) in [(1, "Sub Venom", 1.0), (2, "Venom", 2.0)] {
+        for (key, value) in [
+            ("Scene.Near Colour", format!("{} 0 0", 0.1 * k)),
+            ("Scene.Base Colour", format!("{} 0 0", 0.2 * k)),
+            ("Scene.Base Colour Middle", format!("{} 0 0", 0.3 * k)),
+            ("Scene.Base Colour Highlight", format!("{} 0 0", 0.4 * k)),
+            (
+                "Scene.Base Colour Highlight Middle",
+                format!("{} 0 0", 0.5 * k),
+            ),
+            ("Scene.Aniso Curve", "0.5".to_string()),
+            ("Scene.Aniso Power", format!("{k}")),
+        ] {
+            text.push_str(&format!("\"{stage} {name}.{key}\"={value}\n"));
+        }
+    }
+    let table = EffectSettings::parse(&text).expect("it parses");
+    let texel = || {
+        Some(Arc::new(ModelTexture {
+            label: "stage".into(),
+            width: 1,
+            height: 1,
+            texels: oag_mesh::mesh::Texels::Rgba8(vec![255, 255, 255, 255]),
+            mip_count: None,
+        }))
+    };
+    ZoneGrade::new(
+        "zonemodedlc3.effectsettings".to_string(),
+        table,
+        None,
+        vec![texel(), texel(), texel()],
+        vec![texel(), texel(), texel()],
+    )
+    .expect("it names stages")
+    .with_arena(arena)
+}
+
+/// **The arena's ramps are stage `n` inside and `max(n - 1, 0)` outside, five
+/// points on every fourth texel**, as `Environment_UpdateStageBlend` builds them
+/// on a commit (`docs/ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md`).
+#[test]
+fn an_arena_grade_publishes_the_inner_and_outer_scene_ramps_and_their_powers() {
+    let mut grade = arena_grade(true);
+    grade.pin_stage(2);
+    let zone = grade.zone_uniform();
+    assert_eq!(zone.shape[0], 1.0, "a Zone arena compiles the aniso shape");
+    let points = |ramp: &mesh_render::ZoneRamp| -> Vec<f32> {
+        (0..5).map(|k| ramp.texels[4 * k][0]).collect()
+    };
+    assert_eq!(
+        points(&zone.aniso[0]),
+        [0.2, 0.4, 0.6, 0.8, 1.0],
+        "Scene inner, stage 2"
+    );
+    assert_eq!(
+        points(&zone.aniso[1]),
+        [0.1, 0.2, 0.3, 0.4, 0.5],
+        "Scene outer, stage 1"
+    );
+    assert_eq!(zone.aniso_power[..2], [2.0, 1.0]);
+    // No Track key is authored here, so its ramps add nothing.
+    assert_eq!(zone.aniso[2], mesh_render::ZoneRamp::default());
+    assert_eq!(zone.aniso_power[2..], [0.0, 0.0]);
+}
+
+/// A racing circuit keeps the rim shape whatever the table authors.
+#[test]
+fn a_circuit_grade_does_not_select_the_arena_shape() {
+    let mut grade = arena_grade(false);
+    grade.pin_stage(2);
+    assert_eq!(grade.zone_uniform().shape[0], 0.0);
+}
+
+/// A Detonator grade opens on stage 1 shown whole, steps on the completed lap with the stage
+/// below swept out by HD's sphere, and holds at the file's last stage.
+#[test]
+fn a_lap_staged_grade_steps_on_the_lap_and_sweeps_out_the_stage_below() {
+    let mut grade = hd_grade().with_lap_stages();
+    let origin = [1.0, 2.0, 3.0];
+
+    assert!(
+        grade.follow_laps(0, 500, origin),
+        "opening onto stage 1 is a step"
+    );
+    assert_eq!(grade.blend().current, 1);
+    assert_eq!(grade.blend().weight, 1.0, "the opening stage is whole");
+    assert_eq!(grade.wavefront().frames, u32::MAX, "no sphere in flight");
+    assert!(
+        !grade.follow_laps(0, 900, origin),
+        "the same lap does not step again"
+    );
+
+    // Lap 1 completed 10 ticks ago: stage 2, Venom, the sphere 10 frames out of stage 1.
+    assert!(grade.follow_laps(1, 10, origin));
+    assert_eq!(grade.blend().current, 2);
+    let law = oag_hd::race::ZONE_TRANSITION;
+    assert_eq!(grade.wavefront().previous, 1);
+    assert_eq!(grade.wavefront().frames, 10);
+    assert_eq!(grade.wavefront().radius, law.radius_after(10));
+    assert_eq!(grade.blend().weight, law.weight_after(10));
+    assert_eq!(grade.wavefront().origin, origin);
+
+    // Past the file's last stage the grade holds there.
+    grade.follow_laps(14, 0, origin);
+    assert_eq!(grade.blend().current, grade.last_stage());
+    assert!(grade.describe().contains("one stage per completed lap"));
 }

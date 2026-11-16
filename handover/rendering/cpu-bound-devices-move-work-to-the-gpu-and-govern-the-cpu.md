@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-27
-summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles/trails/shadow rays; governor landed on by default, self-check open"
+updated: 2026-11-10
+summary: "CPU-bound devices: GPU-driven draws parked, render bundles dropped, probe blend on the GPU; GPU particles and trails left; governor on"
 categories: [rendering, tooling]
 size: XL (35)
 difficulty: medium (30)
@@ -37,8 +37,16 @@ resolution controller (`crates/present/src/drs`), which does nothing while the G
 **Order amended 2026-10-27 (`prepare-view-breakdown`).** On the Deck, `prepare_view` (3.45 ms of 8.2) is
 uniform builds and CPU image blends, not culling: culling, LOD and sorting are under 0.05 ms on Anulpha,
 HD default and Pulse (`docs/rendering/frame-thread-cpu.md`, "What prepare_view spends on the Deck").
-Before lane 1 step 2 (compute culling), do two CPU lanes: the hull environment-probe blend (about
-0.9 ms on Anulpha) and scenery animation sampling (0.3 to 0.4 ms, every title). Measure with the
+Before lane 1 step 2 (compute culling), do two CPU lanes: ~~the hull environment-probe blend (about
+0.9 ms on Anulpha)~~ (landed 2026-11-10, `probe-blend`: one compute pass blends into the array the hull
+shader samples, `probes::mix`'s arithmetic done on the bits in integers, the array byte-exact on the Deck,
+Intel and NVIDIA; Deck `total` 6.37 to 6.04 ms at 800p, 8.44 to 7.96 at 1080p, 10.22 to 9.37 at 4K, the
+pass 140 us of the Deck's GPU for a full field; the 0.9 ms was already 0.3 at 800p after `prepare-view`;
+pictures identical on the Deck and NVIDIA, Intel inside its own run-to-run noise,
+`docs/rendering/frame-thread-cpu.md`, "The hull probe blend in a compute pass") and ~~scenery animation sampling~~ (landed 2026-11-10, `scenery-anim`: the node table
+uploads only its live head, ascending key times are bisected; 40 us (Pulse) and 98 us (HD) per frame on the
+desktop by perf, `record_us` -3 to -10%, pictures identical; the Deck is not re-measured, and what is left is cache misses on the boxed per-node
+transforms, `docs/rendering/frame-thread-cpu.md`, "Scenery node animation"). Measure with the
 frame-thread profile recipe in that section.
 
 1. **GPU-driven drawing** (opus). Indirect multi-draw per pass with a compute pass culling (PVS, frustum,
@@ -60,16 +68,35 @@ frame-thread profile recipe in that section.
    - **Parked, not dropped** (maintainer): the working implementation (feature check, `OAG_INDIRECT`
      switch, tests, byte-identical proof) is on the pushed branch `park/indirect-depth-prepass`,
      rebased on main at the time. Later steps (compute culling, colour passes) start from it.
+   - **Re-measured under an interleaved split, colour half prototyped (2026-11-04, lane
+     `indirect`)**, numbers in `docs/rendering/frame-thread-cpu.md` ("Re-measured under an
+     interleaved split"). The port to main (two depth runs per view, by cull mode) and a
+     measure-only colour half (`OAG_INDIRECT=colour`, slot as first instance, non-uniform
+     index) are byte-identical on HD, Pure and Pulse. Pure and Pulse circuits take the depth
+     path too: they have a prepass. In the shipped split (about 0.3 ms resolvable), depth
+     alone is inside the noise. The colour step is 0.08 to 0.30 ms under depth alone, at or
+     under the floor. The combination is +0.17 ms worse than none at 800p. The colour arm
+     costs 2 to 3% GPU on the Deck, so fps drops at 4K. Not worth shipping as built: on this
+     path the saving and the non-uniform index come together. The commits are `aa54e2afa`
+     (port) and `fc967bd1a` (colour), on the lane's branch.
+     Measure: the doc section's commands, `OAG_INDIRECT` in `0 1 colour`.
    - **Re-measure on Omega** (maintainer's idea, unmeasured): Omega's PS4 scenes may carry many more
      draws per pass than HD's, where the per-draw saving could outweigh the indirect validation's
      fixed per-pass cost again. First count draws per pass on an Omega race (the perf overlay's
      DRAWS line), then A/B the parked branch there, on the workstation and the Deck where Omega runs.
-2. **Render bundles for static scenery and the circuit** (sonnet). Record once, replay per frame
-   (`wgpu-levers-for-per-view-cpu-none-used-yet.md` in this directory). Measure against lane 1: if lane 1
-   already removes the cost, close this one with its number.
-   **Expect lane 1's result**: a bundle also cuts the race pass's `finish`, which the split finish
-   already moved to the worker. Before building it, check on the Deck whether the frame thread
-   waits on that worker for the race pass (`perf --tid`, the recipe in the doc section above).
+2. ~~**Render bundles for static scenery and the circuit**~~ **Measured and not built (2026-11-09,
+   `render-bundles`)**, numbers in `docs/rendering/frame-thread-cpu.md` ("Render bundles for the
+   circuit: measured, not built"). The frame thread does wait on the race pass's `finish`, but the
+   race pass has no static draws a bundle could keep: the circuit's solid list is culled per view
+   (PVS, chunks, frustum per draw, LOD) and repeats on 26 to 29 % of racing frames on HD Anulpha, 50 %
+   on Pulse. Skipping the circuit's solid lists outright saves at most 0.20 ms (HD one view) and 0.55
+   ms (HD two views) of notebook CPU at 800p, 0.07 to 0.08 ms on Pulse; a bundle keeps the driver's
+   share and the culling (about 45 %), so about 28 us a view on HD. Dropping the frustum test lifts
+   reuse to 60 to 70 % (HD) and 94 % (Pulse) for 48 % and 36 % more GPU draws. The only lists that
+   always repeat are the uncull'd `Mesh` drawables (hulls, about 35 draws each on HD). On the Deck (HD
+   Anulpha, two views) skipping the solid lists saves 1.67, 1.01 and 1.21 ms of frame-thread `total`
+   at 800p, 1080p and 4K; a bundle would get about 0.25 ms of that at 800p, and at 1080p and 4K the
+   frame is GPU-bound, so CPU saved there does not raise fps.
 3. **Particles on the GPU** (sonnet). Particle state in a storage buffer, advanced or extrapolated in the
    vertex shader (or compute) with one alpha uniform, so `.pob` effects, mist and clouds also draw between
    ticks. Shares its design with item 2 of `drawing-between-ticks-what-is-still-stepped.md`; land them
@@ -87,6 +114,35 @@ frame-thread profile recipe in that section.
    per change; a setting to turn it off; tests on the controller's state machine. Ties into
    `graphics-settings-resolve-from-intent-and-context.md` (blocked on the maintainer) only by not
    pre-empting it: the governor overrides at runtime, never rewrites saved settings.
+
+## Open from `prepare-view` (2026-11-05)
+
+Numbers in `docs/rendering/frame-thread-cpu.md`, "What is left of the frame thread on the Deck".
+
+- **The frame thread's system time**: 1.0 ms a frame at one view, 1.6 ms at two, on HD 800p, invisible
+  to a user-space profile (`perf_event_paranoid` 2, no sudo). Unattributed: command submissions, futex
+  waits on the finish channels, the scoped thread per later view per frame. Read it with a kernel
+  profile. Measure: `/proc/<pid>/task/<tid>/stat` fields 14 and 15 over 8 s of race.
+- **Why reclaiming on another core costs one view `scene` +0.25 and the acquire +0.15**: not the snatch
+  lock, the schedule, the sibling thread, glibc's arenas or the power budget
+  (`docs/rendering/frame-thread-cpu.md`, "What the reaper costs one view, and what it is not"). Leaving one
+  view to the next submit was a trade (HD +0.8 % fps on AC, p99 up on all three titles), reverted; the
+  rule waits on the pushed branch `park/reaper-one-view`. Worth another look only if the cause turns up or
+  battery proves a bigger gain. Measure: `OAG_REAP_THREAD=0/1`, HD 800p.
+- **A split's one submission, what is left** (`docs/rendering/split-screen.md`, "What is left"): the
+  frame's submit now drops most of the encoders, 10 % of the frame thread at two views against 2.1 %
+  before, because the reaper catches fewer; polling every 250 us read Pulse -0.10, Pure -0.11, HD
+  -0.06 at `present` +0.04, not kept. `Log::encode` is 3.3 to 3.6 %: a mapped write with no second
+  copy, or the log handed to a finishing thread. A view's scene pass is one `finish` that nothing
+  splits, which is what HD's frame thread still waits for. Pure four views at 1080p lost 1.5 fps with
+  `total` -1.7: a later GPU start is the suspect, not measured. Measure: two views, 800p, Deck,
+  `OAG_SPLIT_SUBMIT=views` as the base arm.
+- **Pulse's `write_shine`**: still 10.0 % of the frame thread in a split. Left: the first view's craft
+  maps (3.4 %), which upload a whole `GpuVertex` to change eight bytes; a streamed coordinate buffer as
+  the circuit's pass has would cut the copy. Measure: frame pointer build, Pulse two views, 800p.
+- **Why the Deck ran 4 % faster for one session** on the same binary, 2026-11-05 22:26 to 23:10. Until
+  known, compare only inside a session. Candidates: battery against docked and charging, whose change just after 23:07 matches the fast session's end (one same-binary run on each would settle it); in the slow session `steamwebhelper` read 19 % of a
+  core and gamescope and Xwayland 10 % each. Measure: per-process CPU from `top` during one run.
 
 ## Also open from the Deck lane (cheap, any time)
 
@@ -130,22 +186,30 @@ top of `park/indirect-depth-prepass` afterwards.
   not emulated as a series of `draw_indexed_indirect`; without it a backend may emulate it. Check the Deck's
   adapter reports it before trusting a multi-draw number.
 
-## Open: the governor does not undo a step that saved nothing (2026-10-27, `governor-unlocked`)
-
-`oag_present::governor` records what each shed saved (`saving`, `governor.rs` around line 179) but uses it only
-to decide when a restore fits (line 202). It never reverts a step whose saving was about zero, and it keeps
-shedding the next knob. The maintainer wants a step that did not help on this device undone and skipped for
-the rest of the session. The Deck logs show the need: on HD Anulpha (unlocked, limit 165) the sequence
-`shadows original` (CPU 7.35 ms), `model detail high` (6.55), `model detail original` (6.87 to 6.90)
-reads CPU 7.2 ms at level 2 against 6.9 at level 1, so the third step bought nothing, and the knob table in
-`docs/rendering/cpu-governor.md` already measures `lod`/`texture_detail` as no saving. To build: when the
-cooldown ends and the measured saving is under a floor (chosen, for example 0.05 ms or 1 % of the period,
-above the 0.1 ms run-to-run noise), restore that level and mark the knob skipped until the session ends
-(a `[bool; MAX_LEVEL]`), so the next shed jumps over it; tests on the state machine. Measure with
-`ab.sh 3 60 anulpha` as in the doc: the Deck, `ENABLE_GAMESCOPE_WSI=0`, `vsync off`, `frame_limit 165`,
-governor on against off; the target is the same fps with fewer knobs stepped down.
-
 ## Next Steps
 
-1. Lane 6 (governor) landed, on by default (maintainer, 2026-10-27); its self-check is the open item above.
-2. Lanes 1 to 5 open the next drive in order, each with its Deck before/after.
+1. Lane 6 (governor) landed, on by default (maintainer, 2026-10-27), and undoes a step that saved nothing and remembers skips per title, track and mode for the launch ([`cpu-governor.md`](../../docs/rendering/cpu-governor.md)).
+2. Lanes 1, 3, 4 and 5 open the next drive in order, each with its Deck before/after (lane 2, render bundles, was measured and dropped).
+3. Scenery animation sampling (`scenery-anim`, 2026-11-10) is done on the desktop; two items stay open:
+   - **Deck re-measure.** The Deck's 0.3 to 0.4 ms is from before the head upload and the key bisection.
+     Measure with the Deck recipe in `docs/rendering/frame-thread-cpu.md` ("What `prepare_view` spends
+     on the Deck": `perf record -g --call-graph fp`, the frame thread's samples under `write_scenery_anims`).
+   - **Flat per-model animation layout.** 43% of `AnimTransform::sample`'s remaining samples are cache
+     misses on each node's boxed constants. Measure the share with `perf annotate -l -s
+     '<oag_vex::vex::anim_transform::AnimTransform>::sample'` on a frame-pointer build of a Pulse bench
+     race (`just bench-render pulse`, wrapped in `perf record`); a flat layout would change the
+     `Motion::Vex` load path of every model.
+4. The hull probe blend (`probe-blend`, 2026-11-10) is a compute pass now; three items stay open:
+   - **Intel's HD hull pixels are not repeatable run to run** (older than the lane): the same binary's
+     `--screenshot` of HD Anulpha differs in 1 to 5 pixels by one level between runs on the Arrow Lake
+     iGPU, on the player's hull. NVIDIA and the Deck are stable, Pulse is stable on Intel. Measure:
+     `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json oag-game hdfury-ps3-eu-dec.iso --race
+     --mode single_race --seed 1 --autopilot --no-audio --size 1280x800 --ticks 600 --track
+     'Data\Environments\15_Anulpha_Pass\track.vex' --screenshot out.png`, three times, `sha256sum`.
+   - **A probe is still decoded on the frame thread when a craft first reaches it** (`probes::decode`,
+     0.3 % of the Deck's samples at 800p, about eight sections a second per craft). The block format
+     could be decoded in the same pass from the raw 12-byte blocks. Measure: a flat `perf record -e
+     cpu-clock:u` of the Deck run, `oag_vex::probes::decode`'s share.
+   - **The pass does all four taps of every texel**, 140 us of the Deck's GPU for a full field. A tap of
+     scale zero could be skipped, and the 2048 and Omega probe layout is not read at all, so those
+     titles blend nothing. Measure: `cargo run --release -p oag-render --example probe_blend_check`.

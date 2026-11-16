@@ -12,7 +12,7 @@ use oag_audio::{Bus, Mixer, VoiceId};
 use oag_core::Rng;
 
 use super::CueTables;
-use super::layers::{CueVoice, Program, Where, start};
+use super::layers::{self, CueVoice, Program, Where, start};
 use super::{Banks, Cue};
 
 /// A repeating cue's open handle: its list part-way through, and the voices it
@@ -92,6 +92,7 @@ impl Playing {
                 looping: layer.looping,
                 delay: offset,
                 angle: layer.angle,
+                rear: layers::RearPan::Front,
                 pitch: 1.0,
             })
             .collect();

@@ -366,7 +366,10 @@ fn a_chosen_copy_beats_the_served_table() {
         r#"<StringTable><entry id="16_TRACK" string="VINETA K"/>
                         <entry id="32_TRACK" string="VINETA K"/></StringTable>"#,
     );
-    let ids: Vec<String> = tracks.iter().map(|track| track.id.clone()).collect();
+    let ids: Vec<(String, String)> = tracks
+        .iter()
+        .map(|track| (track.id.clone(), track.name_key().to_string()))
+        .collect();
     let names = oag_ui::language::CircuitNames::choose(&[("DATA06".to_string(), chosen)], &ids)
         .expect("that copy names both circuits, case folded");
 
@@ -392,6 +395,7 @@ fn a_team_label_prefers_the_table_then_the_declared_name_then_the_folder() {
         location: format!(r"Data\Ships\{id}"),
         help_text: None,
         sound_register: None,
+        multiplayer: false,
         skins: Vec::new(),
         rating: None,
         models: Vec::new(),
@@ -458,6 +462,7 @@ fn track(id: &str, folder: &str, reversed: bool) -> (Track, String) {
             available_in_zone: false,
             unlock_grid: None,
             sound_register: None,
+            string_id: None,
             foreign: None,
         },
         if reversed {
@@ -509,4 +514,56 @@ fn an_entrys_soundregister_is_what_selects_its_name_voice() {
     // by the value it authors and not by a table kept here.
     assert_eq!(teams(PACK_MANIFEST)[0].sound_register, Some(11));
     assert_eq!(tracks(PACK_MANIFEST)[0].sound_register, Some(30));
+}
+
+/// `StringTableId` is the key a circuit's name is under when it is not the circuit's own id.
+#[test]
+fn a_circuit_reads_the_key_its_name_is_filed_under() {
+    let xml = r#"<Screen name="Top">
+        <PI_Track name="altima"><Values type="Race" StringTableId="Track_Altima_0" location="data\environments2048\altima"></Values></PI_Track>
+        <PI_Track name="01_Track"><Values type="Race" location="Data\Environments\01_Vineta_K"></Values></PI_Track>
+    </Screen>"#;
+    let tracks = tracks(xml);
+    assert_eq!(tracks[0].name_key(), "Track_Altima_0");
+    assert_eq!(tracks[1].name_key(), "01_Track");
+}
+
+/// Shaped like 2048's circuit plugin: the title's default first, then others, one reversed.
+const SHIPPING_DEFINITION: &str = r#"
+<Screen name="Top">
+  <PI_Track name="altima"><Values type="Race" location="Data\art\published\environments\altima"/></PI_Track>
+  <PI_Track name="tower"><Values type="Race" location="Data\art\published\environments\tower"/></PI_Track>
+  <PI_Track name="arena"><Values type="Race" location="Data\art\published\environments\arena"/></PI_Track>
+</Screen>
+"#;
+
+const ALTIMA: &str = r"Data\art\published\environments\altima\track.vex";
+const TOWER: &str = r"Data\art\published\environments\tower\track.vex";
+const ARENA: &str = r"Data\art\published\environments\arena\track.vex";
+
+#[test]
+fn a_source_without_the_default_circuit_opens_the_first_it_ships_in_the_titles_order() {
+    let tracks = tracks(SHIPPING_DEFINITION);
+    let held = [ARENA, TOWER];
+    assert_eq!(
+        circuit_to_open(ALTIMA, &tracks, |entry| held.contains(&entry)),
+        Some(TOWER.to_string()),
+        "tower is listed before arena, so it wins over the file order of the archive"
+    );
+}
+
+#[test]
+fn a_source_with_the_default_circuit_opens_it_even_when_others_are_listed_first() {
+    let tracks = tracks(SHIPPING_DEFINITION);
+    let held = [TOWER, ARENA];
+    assert_eq!(
+        circuit_to_open(ARENA, &tracks, |entry| held.contains(&entry)),
+        Some(ARENA.to_string())
+    );
+}
+
+#[test]
+fn a_source_with_no_circuit_at_all_opens_none() {
+    let tracks = tracks(SHIPPING_DEFINITION);
+    assert_eq!(circuit_to_open(ALTIMA, &tracks, |_| false), None);
 }

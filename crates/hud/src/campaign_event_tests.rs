@@ -61,3 +61,34 @@ fn a_race_with_no_event_draws_neither_line() {
     let text = drawn(oag_2048::hud::ART, false);
     assert_eq!(text, ["IG_HUD_LAP"]);
 }
+
+/// The `RaceXP` value is the running tally as `"%d"` (`Hud_UpdateXpLines`), and nothing without
+/// one: dropping the `race_xp` arm draws the authored empty string, the tally never reaching the
+/// screen.
+#[test]
+fn the_xp_value_is_the_running_tally() {
+    let layout = Layout::from_xml(XP_AND_OBJECTIVE);
+    let strings = strings();
+    let cx = Context {
+        art: oag_2048::hud::ART,
+        ..context(&layout, &strings)
+    };
+    let text = |race_xp| {
+        let readout = Readout {
+            campaign_event: true,
+            race_xp,
+            ..Readout::blank()
+        };
+        draw_list(&cx, &readout)
+            .hud_text
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(text(None), ["FE_XP", "IG_HUD_LAP"]);
+    assert_eq!(text(Some(0)), ["FE_XP", "0", "IG_HUD_LAP"]);
+    assert_eq!(text(Some(1250)), ["FE_XP", "1250", "IG_HUD_LAP"]);
+}

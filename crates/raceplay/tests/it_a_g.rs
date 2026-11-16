@@ -12,14 +12,19 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 mod add_on_circuits_ground_truth;
 mod field_capture_ground_truth;
+mod flyby_section_ground_truth;
 mod in_parallel;
 mod perturb;
 
 mod absorb_ground_truth;
 mod ai_clean_lap_board;
 mod ai_clean_lap_gate;
+mod ai_contact_duration_board;
 mod ai_contact_where;
 mod ai_dekonstruct_black_board;
 mod ai_dekonstruct_black_ground_truth;
@@ -27,19 +32,24 @@ mod ai_dekonstruct_symptoms_ground_truth;
 mod ai_fork_split_ground_truth;
 mod ai_look_sweep;
 mod ai_loss_attribution_board;
+mod ai_pair_contact_push_ground_truth;
 mod ai_plan_probe;
 mod ai_roll_ground_truth;
 mod ai_span_sweep;
+mod aiming_ground_truth;
 mod airtime_budget_ground_truth;
+mod arena_beneath_ground_truth;
 mod asset_layers_ground_truth;
 mod autopilot_cancel_ground_truth;
 mod autopilot_original_ground_truth;
+mod batch_cull_ground_truth;
 mod between_ticks_ground_truth;
 mod billboard_adverts_ground_truth;
 mod boost_plume_ground_truth;
 mod branch_progress_ground_truth;
 mod cage_effect_sweep;
 mod cage_sparks_ground_truth;
+mod campaign_replay_ground_truth;
 mod campaign_skill_scale_ground_truth;
 mod cannon_ground_truth;
 mod cannon_tilt_ground_truth;
@@ -51,10 +61,13 @@ mod countdown_voice_hd_ground_truth;
 mod craft_sticking_ground_truth;
 mod damage_fx_ground_truth;
 mod destroy_camera_ground_truth;
+mod detonator_ground_truth;
 mod difficulty_ground_truth;
 mod eliminator_finish_ground_truth;
+mod eliminator_pad_stamp_ground_truth;
 mod eliminator_pads_ground_truth;
 mod energy_turbo_ground_truth;
+mod engine_light_ground_truth;
 mod falloff_survey_ground_truth;
 mod fire_law_inherit_ground_truth;
 mod font_border_ground_truth;

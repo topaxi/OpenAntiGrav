@@ -100,6 +100,14 @@ fn the_two_player_hud_is_the_one_the_disc_authors() {
     assert_eq!(split.arcade.len() + split.elimination.len(), 4);
 }
 
+/// Omega's HUD always-on list is HD's, one definition: Omega's Eliminator authors `LapPanel2` too
+/// (`omega_hud_ground_truth`), so a list of its own would drift again the way a copy did.
+#[test]
+fn omega_draws_hds_always_on_widgets() {
+    assert_eq!(TITLE.hud_art.always_on, oag_hd::TITLE.hud_art.always_on);
+    assert!(TITLE.hud_art.always_on.contains(&"LapPanel2"));
+}
+
 /// Omega carries HD's grid hover, so its craft is held low on the grid and released after GO.
 /// Dropping the `launch_hover` wiring from `race.rs` leaves a craft that floats at its race height.
 #[test]
@@ -116,5 +124,83 @@ fn omega_carries_the_grid_hover_hd_does() {
             .expect("HD's")
             .grid_cap
             .value
+    );
+}
+
+#[test]
+fn omega_culls_by_the_material_state_bit_as_hd_does() {
+    assert!(TITLE.looks.material_render_state.applies_everywhere());
+    assert_eq!(
+        TITLE.looks.material_render_state.origin,
+        oag_title::Origin::InheritedFrom("Wipeout HD")
+    );
+}
+
+/// Omega names a loading screen: five features and six marks as `.gnf`, one styling, a still per
+/// mode and no clip. `loading: None` again fails here.
+#[test]
+fn omega_names_a_loading_screen_of_gnf_files() {
+    let loading = TITLE.loading.expect("Omega names a loading screen");
+    assert_eq!(loading.features.len(), 1);
+    let style = &loading.features[0];
+    assert_eq!(style.features.len(), 5);
+    assert!(style.mode_icons.is_empty(), "no .bik ships on Omega");
+    assert!(style.features.iter().all(|f| f.image.ends_with(".gnf")));
+    assert_eq!(loading.chrome.len(), 6);
+    assert!(loading.chrome.iter().all(|(_, e)| e.ends_with(".gnf")));
+    assert!(style.mode_stills.entry(Some(3)).is_some(), "single race");
+    assert_ne!(
+        style.mode_stills.entry(Some(5)),
+        style.mode_stills.entry(Some(8))
+    );
+    assert!(style.mode_stills.entry(Some(0xd)).is_none());
+    assert_eq!(
+        style.mode_stills.entries().count(),
+        6,
+        "five modes and single race"
+    );
+    assert!(loading.layout.is_some());
+}
+
+/// A 2048-era circuit (either slash, any case) is in the lineage that carries 2048's HUD set and
+/// laps; an HD-era circuit and the Zone circuits are in none.
+#[test]
+fn only_the_2048_era_circuits_are_in_the_2048_lineage() {
+    let race = TITLE.race;
+    let found = race
+        .circuit_lineage("Data/Environments2048/Altima/track.vex")
+        .expect("a 2048-era circuit");
+    assert_eq!(found.layouts.arcade, r"Data\XML\2048_hud\Arcade_HUD.xml");
+    assert_eq!(found.laps_by_class, Some([4, 4, 5, 5]));
+    assert_eq!(found.grid, Some(oag_title::Platform::Vita));
+    for hd in [
+        r"Data\environments\tech_de_ra\track.vex",
+        r"Data\environments\zone_1\track.vex",
+    ] {
+        assert!(race.circuit_lineage(hd).is_none(), "{hd}");
+    }
+}
+
+/// Omega's craft is posed from a borrowed pose, not framed by a fit, and a step plays HD's
+/// depth law on it: the settle's data is HD's own, one definition. Dropping the field leaves the
+/// craft cutting in at rest size with no settle.
+#[test]
+fn omega_plays_hds_ship_select_settle_on_its_borrowed_pose() {
+    let front_end = TITLE.front_end.expect("Omega's front end");
+    assert!(front_end.ship_preview_pose.is_some());
+    assert!(front_end.ship_preview_fit.is_none());
+    assert_eq!(
+        front_end.ship_preview_settle,
+        Some(oag_hd::frontend::SHIP_FIT)
+    );
+}
+
+/// Omega ships `SP.xml`'s event campaign under its own circuit directory; with the row gone
+/// `load_event` refuses the title and no event launch carries `xp_awards`.
+#[test]
+fn the_sp_event_campaign_resolves_circuits_under_environments_2048() {
+    assert_eq!(
+        TITLE.campaign.event_track_dir,
+        Some(r"Data\Environments2048")
     );
 }

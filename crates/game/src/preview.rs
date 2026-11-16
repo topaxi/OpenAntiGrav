@@ -23,8 +23,8 @@ use oag_core::math::{Mat4, Vec3, camera};
 use oag_display::space::Space;
 use oag_mesh::mesh::Model;
 use oag_mesh::mesh_render::{
-    Anisotropy, Built, CutoutPipelines, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowReceiver,
-    TRANSPARENT_BLEND, TexAnims, TransparentPipelines, UNIFORMS_SIZE, Velocity, build,
+    Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, Light, NodeAnims, Scene, ShadowReceiver,
+    TRANSPARENT_BLEND, TexAnims, UNIFORMS_SIZE, Velocity, build, draw_cutout_then_transparent,
     write_uniforms, write_uniforms_raw,
 };
 use oag_mesh::orbit::Orbit;
@@ -119,15 +119,19 @@ pub fn ship_entry(title: &oag_title::Title, location: &str, mode: oag_race::Mode
 
 /// The hull the race flies for `team` in `mode`, on a title whose Ship Select draws a front-end
 /// twin of it (`ship_FE.vex`, [`draws_hull`] false): the file the twin's airbrake flaps are seated
-/// from ([`seat_flaps`]). Named by the race's own entry rule, [`oag_livery::entry::ship_entry_name`].
+/// from ([`seat_flaps`]). Named by the race's own entry rule, [`oag_title::race::ShipPaths::hull_entry_name`].
 #[must_use]
 pub fn race_hull_entry(
     title: &oag_title::Title,
     team: &str,
     mode: oag_race::Mode,
 ) -> Option<String> {
-    (!draws_hull(title, oag_ui_screens::picker::Kind::Ship))
-        .then(|| oag_livery::entry::ship_entry_name(title.race.ships_for(team), team, mode, None))
+    (!draws_hull(title, oag_ui_screens::picker::Kind::Ship)).then(|| {
+        title
+            .race
+            .ships_for(team)
+            .hull_entry_name(team, mode == oag_race::Mode::Zone, None)
+    })
 }
 
 /// Seats a front-end hull's airbrake flaps where `race_entry`'s model has them at rest.
@@ -179,9 +183,8 @@ pub fn zone_hull_file(title: &oag_title::Title, mode: oag_race::Mode) -> Option<
 /// other title and any other Zone craft.
 ///
 /// Without it HD's and Omega's screen drew the team's own race hull in Zone, a craft the race
-/// does not fly. The Zone hull is shared geometry, so every team previews the same model; Omega's
-/// and 2048's per-team paint on it (`oag_livery`'s `zone_livery`) is not applied here, so those
-/// two preview the hull's default livery.
+/// does not fly. The Zone hull is shared geometry, so every team previews the same model, painted
+/// in the team's livery by [`variant::zone_folders`], the decision the race's hull build takes.
 #[must_use]
 pub fn zone_race_hull_entry(
     title: &oag_title::Title,
@@ -195,7 +198,12 @@ pub fn zone_race_hull_entry(
     (mode == oag_race::Mode::Zone
         && outside_the_team
         && draws_hull(title, oag_ui_screens::picker::Kind::Ship))
-    .then(|| oag_livery::entry::ship_entry_name(title.race.ships_for(team), team, mode, None))
+    .then(|| {
+        title
+            .race
+            .ships_for(team)
+            .hull_entry_name(team, mode == oag_race::Mode::Zone, None)
+    })
 }
 
 /// The orbit a capture frames a preview with: the fixed hull pose, or the
@@ -213,7 +221,7 @@ pub fn capture_orbit(hull_only: bool, kind: oag_ui_screens::picker::Kind) -> Orb
 ///
 /// HD's `ship.vex` carries one chunk with a stray vertex hundreds of units
 /// from the craft (a bound of 257 against a hull some 13 units long, checked
-/// 2026-10-08 on `Assegai`), and the bounding sphere the viewer frames from
+/// on `Assegai`), and the bounding sphere the viewer frames from
 /// then draws the craft as a speck. The 1st-to-99th percentile box of the
 /// vertex positions is the hull's own extent; the stray triangle is left in
 /// the mesh and simply sits outside the frame.
@@ -317,7 +325,7 @@ pub fn mode3d_view_projection(model: &oag_ui::screen::Model, space: Space) -> Op
     // The aspect is the grid's own, not the glass's: the PS2 draws 640x448 stretched to 16:9.
     let projection = camera::perspective(fov_y, space.size.0 / space.size.1, near, far);
     // The PS2 pressing's own OriginX/OriginY read negated relative to the
-    // PSP's - see this function's own doc - confirmed live 2026-09-28:
+    // PSP's - see this function's own doc - confirmed live:
     // applying the PSP sign to the PS2's raw values landed the outline
     // bottom-left of the panel instead of inside it.
     let sign = if space.size == Space::PS2.size {
@@ -529,7 +537,20 @@ pub fn fade_draw(draw: oag_ui::frontend::Draw, alpha: f32) -> oag_ui::frontend::
 ///
 /// The entry is missing, or will not decode as a mesh.
 pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> {
-    model_named(archives, entry).map(|(model, _)| model)
+    model_in(archives, entry, None)
+}
+
+/// [`model`] painted from another livery folder ([`psp2_scene::model_in`]).
+///
+/// # Errors
+///
+/// As [`model`].
+pub fn model_in(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    livery: Option<oag_livery::LiveryFolder<'_>>,
+) -> Result<Model> {
+    model_named_in(archives, entry, livery).map(|(model, _)| model)
 }
 
 /// [`model`], and the `.gtf` path of each texture slot in order - what a caller
@@ -543,6 +564,14 @@ pub fn model_named(
     archives: &mut oag_assets::Archives,
     entry: &str,
 ) -> Result<(Model, Vec<String>)> {
+    model_named_in(archives, entry, None)
+}
+
+fn model_named_in(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    livery: Option<oag_livery::LiveryFolder<'_>>,
+) -> Result<(Model, Vec<String>)> {
     let blob = archives
         .read_name(entry)
         .with_context(|| format!("reading the preview mesh {entry}"))?;
@@ -551,7 +580,7 @@ pub fn model_named(
     // is why this takes `Archives` rather than a blob. `build` below is the
     // PSP/PS2 path and cannot draw one.
     if oag_vex::vex::geometry_is_external(&blob) {
-        return ps3_model(archives, entry, &blob);
+        return ps3_model(archives, entry, &blob, livery);
     }
     let named = |model| (model, Vec::new());
     let model = oag_mesh::mesh::build(entry, &blob)
@@ -582,6 +611,7 @@ fn ps3_model(
     archives: &mut oag_assets::Archives,
     entry: &str,
     blob: &[u8],
+    livery: Option<oag_livery::LiveryFolder<'_>>,
 ) -> Result<(Model, Vec<String>)> {
     let sibling = oag_mesh::mesh::rcs::sibling_name(entry)
         .with_context(|| format!("{entry} names no .rcsmodel"))?;
@@ -591,17 +621,77 @@ fn ps3_model(
     // The `.gtf` requests come in texture-slot order, which is how a draw
     // names its texture.
     let mut textures = Vec::new();
-    let (mut model, report) =
-        oag_mesh::mesh::rcs::build_scene(entry, blob, &geometry, &mut |path| {
-            if path.to_ascii_lowercase().ends_with(".gtf") {
+    let mut reads = oag_livery::zone_livery::Reads::new(livery);
+    let (mut model, report) = oag_mesh::mesh::rcs::build_scene(
+        entry,
+        blob,
+        &geometry,
+        &mut |path| {
+            if oag_texture::decode::Container::of_name(path)
+                == Some(oag_texture::decode::Container::Gtf)
+            {
                 textures.push(path.to_string());
             }
-            archives.read_name(path).ok()
-        })
-        .with_context(|| format!("decoding the preview mesh {entry}"))?;
+            reads.read(archives, path)
+        },
+        // A menu preview draws into a gamma target, whose shaders decode with the plain power.
+        Default::default(),
+    )
+    .with_context(|| format!("decoding the preview mesh {entry}"))?;
     log::debug!("preview {entry}: {}", report.describe());
+    if let Some(line) = reads.describe(entry) {
+        log::debug!("preview {line}");
+    }
     model.keep_nearest();
     Ok((model, textures))
+}
+
+/// The light a front-end screen's models are drawn in, or `None` where the title lights them
+/// with the viewer's rig or the file does not read (the report says which).
+///
+/// The rig is the title's front-end `.envsettings` ([`oag_title::ModelLighting`]), through the
+/// reader a circuit's file takes, at the title's lit-output scale, times the front end's tone
+/// stage where the title has one: `oag_post::hd_bloom::exposure` at the front end's adapted
+/// luma (the Fury style's is read; the HD style's page is white and is taken at the clamp). The file's fog is not applied: with it the hull's box against the original's frame
+/// goes from 4.62 to 6.48 (`docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`,
+/// "The frame check").
+pub fn model_light(
+    archives: &mut oag_assets::Archives,
+    title: &oag_title::Title,
+    fury: bool,
+    report: &mut Vec<String>,
+) -> Option<Light> {
+    let lighting = title.front_end?.model_lighting?;
+    let file = if fury {
+        lighting.fury_file
+    } else {
+        lighting.hd_file
+    };
+    let Some(light) =
+        oag_raceplay::authored_light(archives, file, lighting.ps4, lighting.ps4, report)
+    else {
+        report.push(format!(
+            "{file}: not read; the front end's models draw with the stand-in rig"
+        ));
+        return None;
+    };
+    let halved = if title.looks.lit_output_halved.applies_everywhere() {
+        0.5
+    } else {
+        1.0
+    };
+    let exposure = lighting.tone.map_or(1.0, |tone| {
+        let adapted = if fury {
+            tone.adapted_fury
+        } else {
+            tone.clamp / tone.boost
+        };
+        oag_post::hd_bloom::exposure(adapted, tone.boost, tone.clamp, tone.maximum)
+    });
+    report.push(format!(
+        "{file}: front-end models lit by it, output scale {halved} x exposure {exposure:.3}"
+    ));
+    Some(light.with_output_scale(halved * exposure))
 }
 
 /// The source named by `source`, opened with `dlc`'s packs and the default cache, for a
@@ -785,11 +875,19 @@ impl Preview {
                 vertex.colour[channel] = base[channel] * by[channel];
             }
         }
-        queue.write_buffer(
-            &self.built.vertex_buffer,
-            0,
-            bytemuck::cast_slice(&self.model.vertices),
-        );
+        self.built.geometry.write_all(queue, &self.model.vertices);
+    }
+
+    /// Lights the model with `light` in place of `mesh.wesl`'s two-light stand-in, in the scene
+    /// block every draw binds. A model nothing lights keeps the stand-in.
+    #[must_use]
+    pub fn lit_by(self, queue: &wgpu::Queue, light: Light) -> Self {
+        let scene = Scene {
+            light,
+            ..Scene::off()
+        };
+        queue.write_buffer(&self.built.fog_buffer, 0, bytemuck::bytes_of(&scene));
+        self
     }
 
     /// Gives this preview the circuit model's own material, taken out of the
@@ -1016,11 +1114,7 @@ impl Preview {
         write_uniforms_raw(queue, &self.uniform_buffer, view_projection, model_matrix);
         if let Some(ramp) = &self.ramp {
             ramp.shade(&mut self.model.vertices, model_matrix);
-            queue.write_buffer(
-                &self.built.vertex_buffer,
-                0,
-                bytemuck::cast_slice(&self.model.vertices),
-            );
+            self.built.geometry.write_all(queue, &self.model.vertices);
         }
         self.render(
             device,
@@ -1102,7 +1196,7 @@ impl Preview {
         pass.set_bind_group(0, &self.bind_group, &[0]);
         pass.set_bind_group(2, &self.built.fog_bind, &[0]);
         pass.set_bind_group(3, &self.built.anim_bind, &[]);
-        pass.set_vertex_buffer(0, self.built.vertex_buffer.slice(..));
+        let mut cursor = self.built.geometry.cursor(&mut pass);
         pass.set_index_buffer(self.built.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
         let bind = |draw: &oag_mesh::mesh::DrawCall| {
@@ -1116,40 +1210,16 @@ impl Preview {
         pass.set_pipeline(&self.built.pipeline);
         for draw in &self.model.draws {
             pass.set_bind_group(1, bind(draw), &[]);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            cursor.draw(&mut pass, &draw.range);
         }
-        // One pipeline per alpha-test reference the model's batches ask for,
-        // switched only when it changes - see `mesh_render::cutout`.
-        let cutouts = CutoutPipelines {
-            default: &self.built.alpha_test_pipeline,
-            by_reference: &self.built.cutout_pipelines,
-        };
-        let mut cutout_set: Option<&wgpu::RenderPipeline> = None;
-        for draw in &self.model.alpha_tested_draws {
-            let cutout = cutouts.select(draw);
-            if !cutout_set.is_some_and(|set| std::ptr::eq(set, cutout)) {
-                pass.set_pipeline(cutout);
-                cutout_set = Some(cutout);
-            }
-            pass.set_bind_group(1, bind(draw), &[]);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
-        }
-        let pipelines = TransparentPipelines {
-            alpha_over: &self.built.blend_pipeline,
-            additive: &self.built.additive_pipeline,
-            unblended: &self.built.unblended_pipeline,
-            authored: &self.built.authored_pipelines,
-        };
-        let mut current: Option<&wgpu::RenderPipeline> = None;
-        for draw in &self.model.transparent_draws {
-            let pipeline = pipelines.select(draw);
-            if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                pass.set_pipeline(pipeline);
-                current = Some(pipeline);
-            }
-            pass.set_bind_group(1, bind(draw), &[]);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
-        }
+        draw_cutout_then_transparent(
+            &mut pass,
+            &mut cursor,
+            &self.model,
+            self.built.cutout_set(),
+            self.built.transparent_set(),
+            bind,
+        );
     }
 }
 

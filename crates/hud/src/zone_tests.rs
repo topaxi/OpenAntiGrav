@@ -53,6 +53,7 @@ fn a_rotation_is_read_in_either_spelling_and_reaches_the_draw() {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         },
     )]);
     // A widget with no angle stays an unrotated quad; one with an angle does not.
@@ -183,4 +184,61 @@ fn pulse_names_the_speed_class_off_the_zone_and_blanks_the_caption_from_zen() {
     assert_eq!(class(50).as_deref(), Some("MSC_ZEN"), "the Moa pair");
     assert!(text(34, 0).is_some(), "the caption is up below zone 35");
     assert_eq!(text(35, 0), None, "and gone from it");
+}
+
+/// 2048's HD-layout Zone line names the class off the zone on HD's fourteen thresholds and never
+/// blanks the caption: `FUN_811538c2`'s table, and the frame `68-zone-5.png` reads `FLASH` at zone 5.
+///
+/// Fails if `oag_2048::hud::ART` drops `zone_speed_classes` (no class at all, the gap the
+/// campaign frames showed), if it falls back to the grade's stage (which 2048's 17-record
+/// `*_CLASS` ladder would drive to a different name), or if a thresholds row drifts from HD's.
+#[test]
+fn the_2048_zone_hud_names_the_class_off_the_zone_on_hds_thresholds() {
+    let layout = Layout::from_xml(
+        r#"<Screen>
+             <Text name="SpeedClassTxt"><Values idstring="RC_SC" font="HUDSmall" x="0" y="0"/></Text>
+             <Text name="SpeedClass"><Values font="HUD" x="0" y="0"/></Text>
+           </Screen>"#,
+    );
+    let strings = oag_ui::language::StringTable::default();
+    let art = oag_2048::hud::ART;
+    let text = |zone: u32, widget: usize| {
+        text_for(
+            &layout.labels[widget],
+            &Readout {
+                zone,
+                zone_stage: 9,
+                ..Readout::blank()
+            },
+            &strings,
+            false,
+            true,
+            art.zone_speed_classes,
+            true,
+            false,
+            crate::Precision::Tenths,
+        )
+    };
+    let class = |zone| text(zone, 1);
+    assert_eq!(class(0), None, "not before the first zone, like `Zone`");
+    assert_eq!(class(1).as_deref(), Some("MSC_SVENOM"));
+    assert_eq!(class(2).as_deref(), Some("Venom"));
+    assert_eq!(class(4).as_deref(), Some("MSC_SFLASH"));
+    assert_eq!(class(5).as_deref(), Some("Flash"), "68-zone-5.png");
+    assert_eq!(class(34).as_deref(), Some("MSC_SPPHANTOM"));
+    assert_eq!(class(35).as_deref(), Some("MSC_ZEN"));
+    assert_eq!(class(74).as_deref(), Some("IG_HUD_MACH1"));
+    assert_eq!(class(75).as_deref(), Some("IG_HUD_SUPSON"));
+    assert_eq!(class(300).as_deref(), Some("IG_HUD_SUPSON"));
+    assert!(text(80, 0).is_some(), "no zone blanks the caption");
+    let hd = oag_hd::hud::ZONE_SPEED_CLASSES;
+    let ours = art.zone_speed_classes.expect("2048 names the class");
+    for zone in 1..=100 {
+        let rung = ours.rung(0, zone);
+        let hd_stage = (0..hd.ids.len() as u32)
+            .rev()
+            .find(|&s| oag_hd::race::ZONE_STAGES.stage_for(zone as u16) == Some(s))
+            .expect("HD's table covers every zone");
+        assert_eq!(ours.id_for(rung), hd.id_for(hd_stage), "zone {zone}");
+    }
 }

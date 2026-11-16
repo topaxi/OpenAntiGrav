@@ -430,6 +430,59 @@ already uses for every other `LoadXML` include. `Grid Selection`'s own copy
 of `Outline_x_y` authors no `FEGlobals->` reference at all, so its colour is
 unaffected by this fix and stays the authored default.
 
+### Pulse PS2: the hex cell textures need the `.mip` to `.pct` rewrite (commit `f1898a640`)
+
+The PS2 pressing drew both grid screens' lock icons with no hex cell shape under them: `hex_filled.mip` and `hex_outline.mip`
+never resolved, because `crates/game/src/campaign.rs` read them with `archives.read_name`, which tries only the PSP-declared name.
+They now go through `oag_pulse::read_image`, which retries the PS2 build's `.mip` to `.pct` rewrite every other Pulse texture load
+already gets. PSP output is unchanged. Nothing else on these two screens has been audited on PS2 beyond the selector position
+(below) and the ticker clip (above).
+
+## Pulse's medal hexagons filled from HD's atlas, 2026-11-12 (`oag.hd-medals`)
+
+With the official mod `oag.hd-medals` on and a Wipeout HD disc on the search path, `Medal_x_y`
+on Pulse's `Cell Selection` draws a frame of HD's `Hexmedal_HD` atlas in
+place of the tinted `hex_filled` swatch (`oag_ui_screens::campaign::MedalArt`, chosen by the
+mod's `[campaign-medals]`, `docs/tools/mods.md`). Mod off, or HD absent, draws the swatch:
+`cell-select`/`grid-select` stills are byte-identical to before. `Grid Selection`'s tier hexagons
+keep the swatch with the mod on too (2026-11-12, maintainer): HD's Grid Selection has no tier medal
+hexagons (`grid-select@N` stills, mod on against off: byte-identical).
+
+- **Frame choice.** Tier row and difficulty block are `hd_medal_frame`'s (60 px frames, 61 px row
+  pitch, 183 px block pitch, `DATA04`'s three-block copy read by
+  `oag_game::campaign::read_hd_texture`; block-to-difficulty mapping confidence 90, HD's
+  section above). A cell takes the block of its saved `best_difficulty`; one with none takes the middle
+  block, through `CellSelection::medal_block_at`, which HD's own Cell Selection calls too (one
+  rule). **Chosen, not measured**: Pulse's own default rung is medium.
+- **Placement.** The frame is drawn at the slot's `Outline_x_y` rect (32 x 32 layout units),
+  scaled 32/60, untinted, no offset: the same rect `tinted_medal_draw` fills with the swatch.
+  Measured on a 1440 x 816 still (`--menu-page cell-select`, same record file, mod off against
+  on, the top-left hexagon): the swatch's coloured extent is 92 x 80 px, the frame's 89 x 78, 2 px
+  in from the left edge and 1 px from the top. Both hexagons are flat-topped.
+- **Tiers.** Gold, silver and bronze rows read as pale yellow, grey-white and brown with the
+  title's own shading baked in, so no tint is applied.
+- **Omega, 2048.** Not wired: Omega's atlas is a `.gnf` with its own row order and the resolver
+  refuses a title that is not HD's dialect; 2048 ships none. Checked, differs.
+- **Capture caveat.** `--menu-page cell-select` on Pulse feeds the saved difficulty to the model
+  only when art is on (it chooses the block); with the swatch the still keeps its old
+  `Best  Bronze` row, where a live session reads `Bronze (Hard)`.
+
+### A mod's own atlas, 2026-11-13 (`[campaign-medals] source = { mod = ... }`)
+
+`MedalArt::Atlas` holds `rows` (the tier named by each row of a block), a frame size and a row
+pitch; a title's atlas is built by `Atlas::of_title` (HD's 60/61 px grid, `hd_medal_frame` shares
+`atlas_frame` with it) and a mod's by `Atlas::of_mod` (equal rows cut from the PNG, no gaps). The
+frame is picked by the tier's **name** against `rows`, so a mod's platinum draws its own row. It
+reaches the screens through `oag_game::campaign::medal_art::apply`, which is given the campaign
+that is open: a mod that carries campaigns draws its art on those campaigns only
+(`Installed::medals_for`; the disc's campaign keeps the swatches). Cell Selection only, as the
+HD atlas; Pulse's target rows beside the hexagons keep their colour swatches. Test:
+`a_mod_atlas_draws_the_row_its_tier_names_in_the_block_of_the_difficulty` (the frame),
+`a_mod_with_its_own_atlas_draws_it_on_its_own_campaigns_screens` (the wiring) and
+`a_mods_atlas_is_not_drawn_on_the_discs_campaign_or_another_mods` (the scope). Seen on
+`--menu-page cell-select=oag.example-campaign/night-run` with `example-campaign`'s own
+`ui/medals.png` (flat-topped hexagons, one pip per difficulty step).
+
 ## Captures
 
 `--menu-page grid-select` / `--menu-page cell-select`
@@ -1257,9 +1310,8 @@ over all 16 grids' fronts and backs (`omega_card_materials_read_their_coverage_c
 The base campaign's own cards on Omega (`--menu-page cell-select-hd`, `grid-select-hd`, the `01_Uplift` card) now draw their
 wordmark, edge stripes and sponsors strip through the same two rules; read once, **not compared with an original frame**: a large
 dark grey hull silhouette crosses the grid card, unverified against HD's own base card.
-**`campaign-select` still refuses on Omega on purpose**: its chooser lists three campaigns (2048,
-HD, Fury), our `CampaignSelection` models HD's two and drew raw widgets, so `load_omega` keeps
-`selection_layout: None` and a live session opens on `Grid Selection` over every grid as before.
+**`campaign-select` draws on Omega since 2026-11-05** (`omega-chooser`, "Omega: `Campaign Selection`" below); until then it refused
+because the chooser lists three campaigns and `CampaignSelection` modelled HD's two.
 HD's own base campaign on Omega (`cell-select-hd`) draws a grey card where the original's would sit and no
 red: the red back is Fury's art. Lineage, 2048's Fury DLC: **checked, differs**. 2048 ships no `CellMode_Definition.xml` and no `FlyerSelection` screen
 (its campaign is the touch map, `docs/formats/2048-frontend.md`); the screen shape here is Omega's own, which keeps HD's. Whether
@@ -2359,7 +2411,7 @@ here; the maintainer sees the dimming animate on the original, which would sit i
 **Omega: checked, applies, not wired.** Omega's executable (`/omega/eboot-ps4-omega-eu.bin`) carries the same
 `HDCampaignFlyerModel`/`FuryCampaignFlyerModel` strings plus `2048CampaignFlyerModel`, and `mov esi, 0xff505050`
 five times in each of `FUN_0151fb60` and `FUN_01520a10` (not decompiled to say which is the screen's update, so
-confidence 55 that it is the same dimming). `campaign-select` still refuses on Omega, so nothing is drawn there.
+confidence 55 that it is the same dimming). Drawn on Omega since 2026-11-05 ("Omega: `Campaign Selection`" below).
 
 `selection_shows` gives both cards to `flyer::render_list`, between the
 backdrop and the widgets, and `--menu-page campaign-select@1` selects `HD`.
@@ -2782,6 +2834,15 @@ on persist per campaign in `records.toml`, so the rule holds after a relaunch to
   Selection` opens on the campaign that grid belongs to and its `Grid Selection` on the grid). Opening a grid lands
   on the shared slot, which is that grid's last cell when it is the grid last left. **Not per-grid memory**: that was
   falsified against the original (rows A, B1) and the original's rule is kept where it was measured.
+- **A campaign of one grid skips `Grid Selection`** (maintainer ask, 2026-11-09): picking it opens that grid's `Cell
+  Selection` and `Back` there closes the campaign to the picker it came from (`CampaignStage::skips_grid_selection`:
+  one grid, no `Campaign Selection`, not the editor). It applies on every title and every source (mod campaigns, the
+  editor's saves; HD/Omega mods draw the HD screens with no chooser, so the same rule). A disc campaign never has one
+  grid (Pulse 16; HD/Fury 8 each behind `Campaign Selection`). The cursor memory needs nothing: the grid slot is
+  still filed on entry (`open_cell_selection`) but a one-grid campaign has no `Grid Selection` to land on it.
+  Tests: `campaign_cursor_ground_truth::a_one_grid_campaign_opens_on_its_cells_and_back_returns_to_the_picker`
+  (Pulse; also asserts the 16-grid campaign still opens `Grid Selection`) and
+  `campaign_stage::tests::only_a_lone_grid_without_a_chooser_skips_grid_selection` (the decision, any title).
 - Written when the campaign closes or launches a race (`session/campaign.rs`, `keep_cursor`) and when the process
   ends with a campaign screen open (`Session::keep_campaign_position`), never per move.
   **Off the render thread**: `records::save_in_background` clones the store and writes it on an `oag_thread::Task`
@@ -2818,7 +2879,7 @@ on persist per campaign in `records.toml`, so the rule holds after a relaunch to
   with a populated profile.
 - Tests: `crates/game/tests/campaign_cursor_ground_truth.rs` (real `--drive` sessions, two launches on one profile),
   `records::tests::the_campaign_cursor_is_kept_per_campaign_and_round_trips`, `campaign_stage::tests::the_kept_grid_is_found_by_name_and_a_missing_one_is_the_default`.
-  `--drive` reports a campaign screen as `screen=campaign`, `screen.id=selection|grid|cell`, `focus=<grid or cell name>`,
+  `--drive` reports a campaign screen as `screen=campaign`, `screen.id=selection|grid|cell`, `focus=<grid or cell name>` (on `selection`: the `campaignList` entry id, `FE_RC_FURY`, `FE_RC_HD`, `FE_RC`, and its index in the list; before 2026-11-05 `Fury`/`Hd` and 1/0),
   Pure's chain as `screen=pure-chain`, `screen.id=<step>`, `focus=<row>`.
 - Omega: **ported**, walked through `--drive` on `data/extracted/ps4` (slot `(3, 2)` filed under `wipeout: omega
   collection`, a relaunch reopens `Grid Selection`); HD: walked too (`grid9` kept, a relaunch lands on it; the grid kept
@@ -3756,15 +3817,14 @@ against the original at its box.
 | --- | --- | --- |
 | Panel corner marks | `<Bracket corner="true">` (`Colour` `HD_Grey`), `cell_brackets::draws` | drawn on both screens. **`corner2.gtf`'s own corner is bottom-left**: the shared draw had it top-left, which drew every top mark turned over on Cell Selection too (found on Ship Select at 8x; fixed for all three screens, `cell_brackets` doc) |
 | `▸` before SPEED/THRUST/HANDLING/SHIELD/LOYALTY and the RECORDS header | `arrowcolor` on an `unselectable` block, drawn in `NonSelectable_Arrow_HD.gtf` 21 units in, centred | drawn. **Art chosen from the file's name, place measured** (one frame, pixel-level match); the executable's draw for an unselectable block is unread (`Block_MakeSelectable` is the 32x32 `HD_options_arrow` selectable path) |
-| LOYALTY value | `Slide_4`/`Nobble_4`/`Label_4` and the records store's team total | `000` and the nobble at the bar's left end on a fresh profile (measured). A non-zero total's scale onto the bar and its digits is chosen (the stat bars' 0..100) |
+| LOYALTY value | `Slide_4`/`Nobble_4`/`Label_4` and the records store's team total | the total through `%03d` and the bar at `total / 100000` of the block, read off the update (`team-selection-loyalty.md`, 2026-11-13); a fresh profile prints `000` with the nobble at the bar's left end. Test: `hd_ship_select_shows_the_highlighted_teams_loyalty_total` |
 | `CIRCUIT LENGTH`/`RACE DISTANCE` `4.4KM`/`13.2KM` | measured off the circuit's own spline | already drawn: the pair recorded `race.track = 01_Vineta_K` (the environment directory) where HD's circuit id is `01_Track`, so the capture selected no circuit and kept the dash. `scripts/rpcs3-hd-menu-pair.py` fixed; a pair recorded before needs `ours.race.track` set to `01_Track` |
 
 Not done, with where it was looked for: the page `Squares` (empty `<Item>` in
 both files, filled by screen code that was not read); the circuit thumbnail is
 the `FlyByMovie` (`Loading_Icon.bik` authored, the environment's
 `fe/preview.bik` by code), which needs a streaming Bink widget in the picker;
-the `UnlockNobble0..4` hearts (two dim hearts beside `000` on Feisar) need the
-unlock thresholds scaled onto the bar; the `middle="true"` marks.
+the `UnlockNobble0..4` hearts (two dim hearts beside `000` on Feisar): the placing law is read (`team-selection-loyalty.md`) but the thresholds' source is not; the `middle="true"` marks.
 
 Omega: **ported**. Its Ship Select goes through the same `picker::hd` path and
 shows the corner marks, the arrow and `000` on a `--menu-page ship-select`
@@ -3849,12 +3909,11 @@ The seven `HexSelection` rows match `PI_TeamModel` file order (`chrome_c1`,
 `nitro`, `concept1`, `normal`, `SKIN1`, `SKIN2`, `chrome`): on the
 fresh-profile frame the only two rows with a ship icon rather than a padlock
 are the third and fourth, the two models with no `<Unlock>`. Confidence
-**70** (one frame, and the icon art is the widget's own). This build keeps
-its own three-variant axis (`""`, `_c1`, `_n1`, `oag_hd::race::TEAM_VARIANTS`)
-rather than widening to seven; each variant's stats come off the model racing
-out of that directory, preferring one with no `<Unlock>` - `Feisar_c1` is
-both `chrome_c1` and `concept1` - which is **chosen, not measured**
-(`oag_raceplay::catalogue::Team::model_for_directory`).
+**70** (one frame, and the icon art is the widget's own). Since 2026-11-14
+this build offers all seven, each when its own `<Unlock>` row holds, a
+re-liveried model by its directory suffix plus livery folder (`_c1@livery4`
+for `chrome_c1`): [race-setup.md](../formats/race-setup.md#hd-era-model-unlocks).
+A fresh profile opens exactly the two rows the frame shows.
 
 **The stat bar, measured off the settled frame**: each block is split where
 its nobble sits (`0.69`, `0.79`, `1.0` of the block for `070`, `080`, `100`);
@@ -4380,6 +4439,111 @@ Two smaller mouse dead ends on the same screens, fixed together:
   (`NavigationLegend::notice`), until the next input. The wording and the row are ours. A
   locked cell still shows nothing beyond its padlock.
 
+## Omega: `Campaign Selection`, 2026-11-05 (`omega-chooser`)
+
+`--menu-page campaign-select` draws on Omega, and RACE CAMPAIGN opens it. **One reader serves HD and Omega**: the screen's
+`campaignList`, `<Redirect>` and the target screens' `flyerlist` are read off the XML by `oag_ui_screens::campaign::selection::Chooser::read`
+(no title is named; `Campaign` is an index into the list), where the chooser used to be an `enum { Fury, Hd }` over `oag_hd` constants.
+`Screens::collect` still has no `<MiniText>` or conditional-`<Redirect>` arm; both are read off the raw tree for this one screen.
+
+| what | Omega's `CellMode_Definition.xml` (`data09`, 69,457 bytes) | HD's `DATA06` copy | confidence |
+| --- | --- | --- | --- |
+| `campaignList` | `FE_RC` (2048), `FE_RC_HD`, `FE_RC_FURY`: **2048 first, the default** (the frame shows its card selected) | `FE_RC_FURY`, `FE_RC_HD` | 90 |
+| redirect | `FE_RC` -> `Grid Selection 2048`, `FE_RC_HD` -> `Grid Selection`, `FE_RC_FURY` -> `Grid Selection Fury`; `<Default goto="To Be Done">` | the same two, no 2048 row | 90 |
+| `flyerlist` of each target | `grid16`..`grid18`, `grid0`..`grid7`, `grid8`..`grid15` | `grid0`..`grid7`, `grid8`..`grid15` | 95 |
+| medal and rank labels | HD counter `(1075, 710)`, Fury `(1395, 710)`, `RankItem` block (`CO_RANK` at `(885, 710)`, shield `Rank_Icon_Endrace.gtf` at `(905, 725)`) | HD `(1395, 710)`, Fury `(755, 710)` | 90 |
+| `<Flyer>` widgets | `2048CampaignFlyerModel` `x -0.55`, `RotY 1.3`, pivot `-0.7`; `HD...` `x -0.2`, `RotY 0`, pivot `0`; `Fury...` `x 0.2`, `RotY -1.3`, pivot `0.7`; all `OriginX 960`, `z -2.0`, `orthoScaleX 0.01443748`, `Y`/`Z` `0.01968749` | `OriginX 640`/`1280`, `z -70`, `orthoScale 0.75` | 95 |
+
+The authored widgets stand for one state: Omega's `HD` card authors `RotY 0` and a pivot of `0`. **Chosen, not measured**: a card that is not
+selected takes the turn and the pivot of the end card on its side (so `HD` beside a selected 2048 turns as Fury does, and stands where Fury's pivot puts it,
+centre about 22 world units right of the axis; the frame's is further right, below), the selected one faces the camera on its own pivot, and the swing moves the pivot with the
+yaw at the same `|delta| * 5` rate. Both campaigns' cards on HD are unchanged by this rule (an end card's own turn). The pair frame is the only Omega frame of
+this screen (2048 selected): the other two states are not captured.
+
+What draws, and what is chosen or missing (`omega/menu-campaign-select` pair, below): the title, the `CAMPAIGN MODES` subtitle and the `RANK` label as
+the pickers' `MiniText` headings (a square bullet and small text; HD's `GOLD MEDALS` label draws the same way now), the rank block when 2048 is selected
+(`RANK`, the shield, the number `0` and an empty experience bar: the rank is the player's, authored `99` is a placeholder, and a fresh profile has none; **chosen**),
+only the selected campaign's counter, the three cards, and the footer. The three `Caption*` widgets author Chinese strings (`反重力赛车2048`) and the frame draws none, so a
+literal the face cannot spell is not drawn (**chosen**, read off that frame; a Chinese-language profile, whose face has the glyphs, would draw them). The cards stand where the widgets' numbers put them scaled by `0.903`
+(`oag_title::Campaign::selection_card_scale`, fitted so the selected 2048 card is 837 by 717 px in the frame: **chosen, not measured**; the frame's 2048 card
+centre is 26 px right of where this puts it).
+**Fixed 2026-11-12 (`omega-campaign-card-art`): the 2048 card's art.** The banner, the `2048` wordmark and the roundel drew as striped hexagons, bare lettering boxes and a plain disc because the card's
+textures were sampled at rest. Every texture resolved and decoded all along (the card's ten `.gnf` slots, `2048_backing_scroll`, `2048_circle_scroll`, `2048_agrc_logo_text`, `2048_agrc_ship`, `2048_game_lines` among them); what was missing was the
+**UV keys**, which Omega's exporter writes into each `Mesh` node of the card's `.vex`, not into a material curve (`docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys"): the card went through
+`psp2::build_with_vex`, which does not read them, where billboards go through `psp2::build_billboard`. The navy banner is `2048_backing_scroll.gnf` (blended on its alpha, scrolled): at rest its V range 0.19 to 0.41 is the texture's transparent half, so only the hatching (`2048_game_lines`) behind it
+showed. The keys at the card's settled moment (`flyer::SETTLED_SECONDS`) put it on the navy half; the roundel's ring and fan (`2048_circle_scroll`) and lettering (`2048_agrc_logo_text`) come in with the same keys. `oag_game::flyer::CardSpec::keyed` turns the keys on, and `Campaign Selection`'s three cards set it
+(`oag_game::campaign`); `psp2_scene::model_named` takes it as a parameter. **The HD and Fury cards are keyed too, and their teal and red ring logos now draw** where the original's frame has them. Census (PS4 `Data/FE/Flyers`, `build_billboard` against `build_with_vex`): every PS4 flyer front authors UV keys (`01_uplift`..`09_Blitzed` two tracks, `10_Impact` 8, `11_Voltage` 11, `12_Turbulance` 3, `13_Vortex` 2, `14_Corruption` 3,
+`15_Nuked` 6, `16_Aftermath` 13; `2048_campaign` 4, `hd_campaign` 3, `fury_campaign` 2), every back one or two. **The grid cards are left unkeyed, on purpose**: the one original frame of a grid card is `omega/menu-grid-select` (`09_Blitzed`), which keyed and unkeyed draw pixel for pixel alike; the others change (`16_Aftermath` gains white shards across its panel, `11_Voltage` a light strip, `10_Impact` a patch of its panel) with no original frame to say which is right, so they stay as built until one is captured (open: pair a later grid and flip `CardSpec::keyed` for the grid cards).
+Pinned by `omega_campaign_screens_ground_truth::omegas_campaign_carries_fury_s_layout_and_every_card` (the banner's UVs, through the keys at the settled moment, all land on opaque texels; unkeyed none do) and `the_campaign_select_frame_shows_the_2048_banner` (the frame's banner box is 78 per cent navy through the real binary; 0 with `keyed` off on the campaign cards). Mean grey against `omega/menu-campaign-select` (`theirs.png`, ours rendered at this tree's `quick` build with the pair's flags; whole frame RMSE 0.386 to 0.350, mean grey 56.3 to 46.2): 2048 card box (x 192-997, y 195-905) RMSE 0.413 to 0.275, mean grey 69.3 to 32.3; banner (x 195-1000, y 265-515) 0.546 to 0.286, 119.2 to 31.4; roundel (x 290-650, y 455-800) 0.561 to 0.437, 112.8 to 71.7 (what is left is the card standing about 26 px left of the frame's and the roundel's ring a little small); HD and Fury box (x 1000-1520, y 200-1080) 72.1 to 72.5, unchanged, because its error is the open pose below, though the cards now carry their logos.
+**HD** (checked, applies, unchanged): HD's own `campaign-select` goes through the PS3 `.rcsmodel` path (`psp2::is_psp2` is false), which `keyed` never reaches; rendered with `keyed` on and off, the frames are identical.
+**Open, named:** (1) ~~the `2048_campaign` card's art draws wrong~~ (done, above); (2) the unselected cards stand about 45 px (HD) and 190 px (Fury) left of the frame's; (3) **2048 does not open a grid**: `grid_16`..`grid_18` are three `PI_Grid` stubs
+(`Campaign="2048"`, `FlyerName="flyer2048"`, no `RequiredPoints`, no cells), the grid reader skips them (`omega_campaign_launch_ground_truth`: sixteen of nineteen parse), and
+`Grid Selection 2048` redirects to `Cell Selection 2048`, whose events are `Campaign2048_Definition.xml`'s `FE3DCanvas`/`CanvasLabel` map, unread. Confirming the 2048 entry
+leaves the chooser and shows `OAG_CAMPAIGN_NOT_PLAYABLE` above the footer (ours; English and two machine translations, French lags) instead of drawing HD's
+cell screen with nothing in it. HD and Fury each open their own grid (`grid0`, `grid8`), Back returns to the entry (`campaign_cursor_ground_truth::omegas_chooser_opens_hd_and_fury_and_keeps_2048_on_the_chooser`).
+The turned cards' edge heights in the frame fit a yaw of about 0.7-0.85 rad (the right edge nearer by 1.4x), where the authored `RotY` is `1.3`: `RotY` is not radians here, as on `Grid Selection` (confidence 55, two cards read off one frame); ours turns by the authored 1.3.
+Measured: `omega/menu-campaign-select` (the original frame kept as `gap-campaign-select`, ours at the same size), mean grey distance 52.7 over the whole frame, 78.4 over the chooser's bracket (x 160-1755, y 170-950), 61.6 over its left 880 px and 99.1 over the right 715 (where HD and Fury stand); both images read. Lineage: **checked, applies** to HD (the same reader serves its `DATA06` chooser; `hd_flyer_ground_truth`, the HD pair
+and the old tests hold); 2048 Vita has no `CellMode_Definition.xml` (**checked, differs**).
+
+## HD and Omega `Grid Selection` on a touch screen, 2026-11-05
+
+A touch player could not leave the first grid: the pager's only pointer routes were the wheel and
+two arrow rects, and a finger's drag (`Pointer::drag`) was ignored.
+
+- **A vertical swipe steps between grids.** `GridSelection::hd_pointer` feeds each tick's drag to
+  a per-gesture `hd::Swipe`: swipe up is the next grid, swipe down the previous one, through the
+  same wrapping `step` the wheel and the pad call. It steps **once per gesture** however far the
+  finger goes, only when it travelled further along the page than across it, and forgets the
+  gesture at the lift (the lift tick carries the last of the drag). A page with one grid ignores it.
+  Direction and `hd::SWIPE_STEP_TRAVEL` (120 units of the screen's 1920x1080 grid, a ninth of the
+  page's height) are **chosen, not measured**: the original is played on a pad.
+- **A swipe never confirms the card.** `oag_game::pointer::Window` reports a finger past its tap
+  threshold as a drag with no position and no click, and the lift is `released` alone; a tap on
+  the card still confirms. Pinned by `oag_ui_screens::campaign::hd::tests` (`a_swipe_*`,
+  `one_long_swipe_steps_once_and_only_once`, `the_next_gesture_steps_again`, `a_tap_on_the_card_still_confirms`).
+- **Omega takes the same path.** `CampaignStage::is_hd` (`oag_game`'s `main/campaign_stage.rs`) is `CampaignDialect::draws_hd_screens`, true for
+  HD and Omega, and `campaign_pointer` hands both to `hd_pointer`: one change, no title branching.
+  Checked on the PS4 package: its `Grid Selection` authors the same two arrows at the same rects.
+
+**Why the arrows never served a touch player**, read off `hdfury-ps3-eu-dec.iso` and the PS4
+package (`CellMode_Definition.xml`):
+
+- `Flyer Left Arrow` is `x=710 y=540 32x64` and `Flyer Right Arrow` `x=1700 y=540 96x64`
+  (`src=Data\FE\Images\tilted_arrows.gtf`), and `hd_grid_targets` makes a target of each from
+  those authored sizes.
+- **The rects are fingertip-hostile**: 32x64 units of a 1080-unit-tall page is about 21x43 px (one scale, 2/3) on a
+  1280x800 screen. Neither overlaps the card (the card spans roughly x=770 to 1610 on HD), so the
+  card does not shadow them.
+
+### The flyer arrows draw and can be tapped (2026-11-06, `hd-grid-arrows`)
+
+- **Drawn**: `tilted_arrows.gtf` is in `OTHER_TEXTURES` (HD) and the loader's `.gtf` to `.gnf` sibling fallback reads Omega's
+  copy. The texture is one white 128x63 sheet with alpha; the left arrow is `U=0`, `TxtrWidth=32`, the right `U=32`,
+  `TxtrWidth=96`, so the colour is all tint.
+- **The colour is code, not data**: `FlyerSelection`'s per-frame update gives each arrow `0x646464` with alpha `0xFF`, or
+  `0x7F` when there is no page to go to (the left arrow on the first card, the right on the last); the authored
+  `Color="0xFF8AC0CA"` never reaches the screen. `oag_ui_screens::campaign::hd::flyer_arrow_color`, evidence and
+  addresses in `docs/ghidra/functions/ps3-hdfury-eu/flyer-selection-arrows.md`. Confidence 90. The earlier fitted constant
+  (`100,100,100` for both arrows) is gone.
+- **Against the frames** (`menu-grid-select`, the pair re-rendered with its recorded flags and 96 % Safe Area): HD's right
+  arrow box differs from the original's by 0.01 grey (3,079 px of arrow, the same count in both); the left arrow adds `50`
+  over the dark backdrop in both, but the original's sits under the flyer's particle glow, so its box (52.9 mean grey
+  difference) is the card art's error, not the arrow's. Omega's left arrow box goes from 25.5 to 11.3 and its right is
+  6.1; both are backdrop (the original's is 243 grey where ours is 255) and the open blend question on the ghidra page.
+- **Tap rect**: each arrow's tap rect is its drawn rect grown by `hd::ARROW_TAP_MARGIN` (64 units, 43 px at 2/3 scale) on every
+  side, so about 160x192 (left) and 224x192 units (right), and cut back at the card's own edge so a tap on the card still
+  confirms it. **Chosen, not measured**: the original is played on a pad and its click region is not read. With no card
+  drawn (Omega) the arrows still come first in the target list and win over the page-wide confirm band. Pinned by
+  `a_tap_beside_a_drawn_arrow_pages_the_grid`, `a_tap_on_the_card_still_confirms_it_beside_a_grown_arrow`,
+  `with_no_card_drawn_a_tap_beside_an_arrow_pages_rather_than_confirms`, and the swipe tests stay as they were.
+  `hd_pointer` has no hover path to preserve; the wheel and the swipe are untouched.
+- **Open**: the original dims an arrow with nothing to page to, which suggests its pad does not wrap at the ends of a range;
+  `GridSelection::step` wraps (chosen) and a dimmed arrow here still pages. Not changed.
+- **Omega**: ported (same arrow code in `FUN_01546a50`, three ranges where HD has two); frame blend differs, see the ghidra page.
+
+- `step` wraps and returns `Moved` even with one grid (the wheel and the arrows share this); the
+  swipe checks the count itself.
+
 ## Wipeout HD PSN: the campaign with no chooser, 2026-10-07
 
 Wipeout HD's PSN download (`NPEA00057` v3.00, no Fury) carries no `DATA06`, so it
@@ -4491,6 +4655,43 @@ hold 24 `Tournament` cells in the archive read, none walked).
 Not a gap (checked): what looked like an `ELIMINATOR` against `NitroBattle`
 mismatch on The Amphiseum was two different cells (`grid8_3_2` Elimination,
 `grid8_2_1` NitroBattle) reached by dropped presses, not a label bug.
+
+### Fury page content against the original, masked scorer (2026-11-05, `fury-menu-content`)
+
+`scripts/fury-menu-masked-score.py` scores a Fury menu pair with the animated backdrop excluded, because
+`theirs.png` carries RPCS3's 16-bit QUADS wrap (`docs/reverse-engineering/rpcs3-index-wrap.md`) and the
+backdrop there is wrong. Mask: warm pixels (`R - B >= 8`, `G >= 0.30 R`, `R >= 20`) of either frame, dilated
+5 px, frozen from the before pairs (`--freeze`) and reused for the after (`--mask`); covers 9.8 % (track), 13.3 % (ship),
+10.4 % (grid) of the frame; the circuit thumbnail's rectangle is never masked. Mean grey difference, before to after:
+
+| pair | whole frame | masked |
+| --- | --- | --- |
+| `hd/menu-track-select` | 12.67 to 10.49 | 10.61 to 8.20 (-22.7 %) |
+| `hd/menu-ship-select` | 11.04 to 11.04 | 5.28 to 5.28 |
+| `hd/menu-grid-select` | 8.47 to 7.92 | 4.08 to 3.47 (-14.9 %) |
+
+Re-rendering unchanged code reproduces every number to the last digit, so the floor is zero.
+
+- **Grid Selection**: `EventNum` goes through `cell_text::draw` (capitals, bold `Title` face, 150 grey, as Cell Selection
+  already does); `unlockboxbrackets`' `dot.gtf` fill and its `<Bracket>` corner marks draw (the panel round `12 MORE POINTS`);
+  `Flyer Left/Right Arrow` draw (`tilted_arrows.gtf` joined `oag_hd::campaign::OTHER_TEXTURES`, `dot.gtf` too) in
+  `100,100,100` where the screen authors `0xFF8AC0CA` (the recolouring is `FlyerSelection`'s own update, read since:
+  "The flyer arrows draw and can be tapped").
+- **Track Select records rows**: the rows author `color=HD_LightGrey` (resolved `0x7f646464`) and `textcolor=HD_Grey`.
+  The block fill dropped the colour's own alpha, and the label was always white. `oag_ui::menu::block::draw_fill` now
+  multiplies the colour's alpha into each pass and `BlockWidget::text_color` carries `TextColor`. Fill reads 38 where the
+  frame reads 26: **open**, one pass or one factor is still unread.
+- **Phase, not content**: the grid card art sweeps 2.54 to 3.47 masked over `SETTLED_SECONDS` 0.5..5.5 (period 4 s), so most of
+  the card's remaining error is which moment of its loop the capture caught. The circuit model is a turntable
+  (`TURN_SECONDS`, `YAW0`), same reading. Neither was tuned to one frame.
+- **Needs RE, not done**: Ship Select's hull (the lens 0.41, pitch 0.22, slide are fitted over the authored `RotX=0.4`; the
+  rotation convention is unread), the page `Squares` (an empty `<Item>`, count, art and colours in code), the Track Select
+  thumbnail (`FlyByMovie`, Bink), the NAVIGATION footer's glyph spacing on Grid Selection (ours 50 px wider between
+  entries), the ship hex column's lock states (the frame is a profile with Feisar and one more unlocked; ours unlocks
+  more, and `unlock_everything = false` changed no pixel).
+- **Omega** (HD's front end): **ported**, same code path. `omega/menu-grid-select` 16.54 to 15.82, `omega/menu-track-select`
+  19.30 to 19.10 mean grey, the other Omega menu pairs and `hd/menu-campaign-select`, `menu-cell-select` unchanged
+  to the digit (sibling `.gnf` for the new textures came through `gnf_sibling`).
 
 ### `Cell Selection`'s card, field, icons and brackets (2026-10-08, hd-cell-select)
 

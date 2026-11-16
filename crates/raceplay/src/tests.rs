@@ -11,17 +11,22 @@
 //! `race/` split - loading and its report, the race itself, the scene
 //! composition. The capture seam has no tests here at all.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 use super::*;
 use oag_vex::track;
 
 mod autopilot;
 mod between_ticks;
 mod bindless;
+mod blast_push;
 mod camera;
 mod campaign_event;
 mod cannon_draw;
 mod catch_up;
 mod cockpit_hit;
+mod contact_cues;
 mod correction;
 mod countdown;
 mod craft_cull;
@@ -31,20 +36,54 @@ mod cue_endings;
 mod cues;
 mod damage_fx;
 mod destroy_camera;
+mod destroyed_fire;
+mod disruptor_craft_fx;
+mod disruptor_launch;
+mod distance_reset;
 mod eliminator;
 mod energy_bar_delay;
 #[cfg(feature = "extensions")]
+mod extension_admit;
+#[cfg(feature = "extensions")]
+mod extension_ai_pickup;
+#[cfg(feature = "extensions")]
+mod extension_aiming;
+#[cfg(feature = "extensions")]
 mod extension_armor;
+mod extension_channels;
 #[cfg(feature = "extensions")]
 mod extension_examples;
+#[cfg(feature = "extensions")]
+mod extension_faults;
+#[cfg(feature = "extensions")]
+mod extension_names;
+#[cfg(feature = "extensions")]
+mod extension_odds;
+#[cfg(feature = "extensions")]
+mod extension_replay;
+
+#[cfg(feature = "extensions")]
+mod extension_picks;
+#[cfg(feature = "extensions")]
+mod extension_pickup_kinds;
+#[cfg(feature = "extensions")]
+mod extension_shaders;
+#[cfg(feature = "extensions")]
+mod extension_slipstream;
+#[cfg(feature = "extensions")]
+mod extension_sounds;
+#[cfg(feature = "extensions")]
+mod extension_view;
 mod extensions;
 mod field;
 mod hash;
 mod hd_effect_sprites;
+mod hd_plasma_effects;
 mod hd_sprite;
 mod headless;
 mod held_buttons;
 mod hit_sparks;
+mod incoming_warnings;
 mod laid_from_rear;
 mod leach_ball_draw;
 mod leach_beam;
@@ -58,10 +97,17 @@ mod multiplayer_time_trial;
 mod pads;
 mod people_grid;
 mod perfect_start;
+mod photo;
+mod photo_rewind;
+#[cfg(feature = "extensions")]
+mod portal_view;
+mod pure_absorb_bar;
+mod quake_armed;
 mod quake_lift;
 mod reconcile;
 mod reconcile_cost;
 mod reconcile_predict;
+mod replay_timeline_cost;
 mod repulser;
 pub(crate) mod respawn;
 mod roll_payout;
@@ -71,23 +117,35 @@ mod scene_blocks;
 mod scene_build;
 mod seat_view;
 mod second_person;
+mod shared_half;
 mod shield_flash;
+mod shield_hits;
+mod shine_writes;
 mod slot_hud;
 mod spawn;
 mod spectator_press;
+mod speed_plan_overlap;
 mod spline;
 mod split_bloom;
 mod split_blur;
 mod split_exposure;
+mod split_finish;
+mod split_frames;
 mod split_shadows;
 mod split_temporal;
 mod split_windows;
 mod sub_weapon;
 mod thrust_chase;
+mod timeline;
 mod title_effects;
 mod track_stages;
 mod trail_hits;
+mod trail_length;
 mod trail_order;
+mod transit;
+mod velocity_gate;
+mod vertex_chunks;
+mod viewer;
 mod viewpoint;
 mod weapons;
 mod windowed;
@@ -95,6 +153,8 @@ mod wreck_contact;
 mod wreck_finished;
 mod wreck_fx;
 mod wreck_voice;
+mod xp_edges;
+mod xp_feed;
 mod zoom;
 
 /// A model declaring `slots` texture slots of which the first `decoded` filled.
@@ -144,8 +204,12 @@ fn model(slots: usize, decoded: usize) -> Model {
 
         flame: None,
         absorb_shell: false,
+        shield_shell: false,
+        own_shield: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
+        per_batch_cull: false,
+        sky_reflection: None,
         alpha_test_ref: None,
         centre: [0.0; 3],
         radius: 1.0,
@@ -164,6 +228,15 @@ fn straight_track() -> AiTrack {
 
 /// [`straight_track`] with its own half-widths, left then right.
 pub(crate) fn straight_track_with_widths(left: f32, right: f32) -> AiTrack {
+    straight_track_in_sections(left, right, |_| 0)
+}
+
+/// [`straight_track_with_widths`] with the authored section of each control point, by index.
+pub(crate) fn straight_track_in_sections(
+    left: f32,
+    right: f32,
+    section: impl Fn(usize) -> u8,
+) -> AiTrack {
     let count = 8usize;
     let paths_at = track::HEADER_LEN + track::RESERVED_LEN;
     let junctions_at = paths_at + track::PATH_LEN;
@@ -189,6 +262,7 @@ pub(crate) fn straight_track_with_widths(left: f32, right: f32) -> AiTrack {
         // The four light-scale bytes (`+0x62..+0x65`): an open road, full light. Left at zero they would
         // read as a tunnel dark enough to black out a hull the course now locates wherever it stands.
         out[at + 0x62..at + 0x66].fill(255);
+        out[at + 0x60] = section(k);
     }
     track::parse(&out).expect("the synthetic track must parse")
 }
@@ -238,8 +312,14 @@ fn setup(handling: Handling) -> Setup {
         ps2_trail: false,
         // Pulse's own palette - these tests build a synthetic Pulse fixture.
         shield_palette: oag_render::shield::PULSE_PALETTE,
+        shield_targets: Vec::new(),
         // Pulse's own mechanism, same reasoning as `shield_palette` above.
         hd_plasma_blast: false,
+        disruptor_halo_law: None,
+        disruptor_craft_law: None,
+        plasma_blast_law: oag_pulse::race::WEAPON_MODELS
+            .plasma_blast_pulse
+            .map(|blast| blast.law),
         hd_bomb_blast: false,
         hd_missile_blast: false,
         bomb_shockwave_fades: false,
@@ -255,21 +335,28 @@ fn setup(handling: Handling) -> Setup {
         weapon_spark_anchors: Vec::new(),
         cockpit_hit_noise: None,
         wreck_anchors: Vec::new(),
+        wreck_shockwave: true,
         magstrip_wake: None,
         magstrip_pob: false,
         leach_strip: None,
+        missile_trail: None,
+        wingtip: None,
         destroy_stations: Vec::new(),
         finished_thrust: None,
         original_tables: None,
         intro_camera: None,
+        intro_voice: None,
         slot_teams: Vec::new(),
         sight: Sighting::default(),
         trail_sparks: false,
+        request: None,
         campaign_event: false,
         spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),
         handling,
         opponent_handling: Vec::new(),
+        weapon_counts: oag_weapons::counts::WeaponCounts::default(),
+        opponent_weapon_counts: Vec::new(),
         // Round numbers, chosen to make the geometry readable. None of these
         // claims to be the game's; a real race reads all seven off the disc.
         chase: ChaseParams {
@@ -317,6 +404,7 @@ fn setup(handling: Handling) -> Setup {
         // same path a model with no `Engine Flare` node takes. Sparks
         // likewise fall back to anchoring at the contact point.
         nozzles: vec![None; MAX_SHIPS],
+        muzzles: vec![None; MAX_SHIPS],
         engine_lights: vec![None; MAX_SHIPS],
         spu_vertex_lights: true,
         hull_points: oag_mesh::mesh_render::HullPointLights::none(),
@@ -337,6 +425,7 @@ fn setup(handling: Handling) -> Setup {
         // Same path: no title data, so no ladder, so nothing decodes.
         announcer: oag_sound::sfx::Announcer::default(),
         class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
+        rumble: oag_tables::rumble::Library::default(),
         // No title data here either, so no zone-to-stage ladder to fire the
         // class announcer against - the same "not this title" reason `zone`
         // above is `None`.
@@ -353,11 +442,22 @@ fn setup(handling: Handling) -> Setup {
         zoom_borrowed: false,
         weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        blast_push: oag_title::weapons::BlastPush::Posted,
+        leach_beams: 8,
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::Chosen,
         },
         autopilot_absorb_cancels: true,
         autopilot_pad_grants: false,
+        launch_normal_is_track_up: true,
+        floor_arms_steer_to_ride_point: true,
+        plasma_release_at_display_scale: true,
+        own_craft_box_hides_track: oag_title::weapons::OwnCraftBox::Falls,
+        reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
+        contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
+        opponent_fire: oag_title::weapons::OpponentFire::PULSE,
+        score_law: None,
+        flip_law: None,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
         speedup_pads: Vec::new(),
@@ -484,16 +584,18 @@ pub(super) fn race_with_a_grid_sighted(sight: Sighting) -> Race {
 pub(super) fn sighting_of(sights: &oag_title::hud::Sights) -> Sighting {
     Sighting {
         leach_law: sights.runs_leach_law(),
+        chase_gain: sights.chase_gain(),
         ..Sighting::default()
     }
 }
 
-/// Pulse's reticle (`pulse`) or Wipeout HD's, for a test that compares the two.
+/// Pulse's reticle (`pulse`) or one whose LeachBeam keeps the Missile's law (2048's
+/// concentric rings, whose own update is unread), for a test that compares the two.
 pub(super) fn title_sighting(pulse: bool) -> Sighting {
     sighting_of(if pulse {
         oag_pulse::hud::ART.sights
     } else {
-        oag_hd::hud::ART.sights
+        oag_2048::hud::ART.sights
     })
 }
 

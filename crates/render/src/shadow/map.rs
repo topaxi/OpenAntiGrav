@@ -274,8 +274,8 @@ impl Fit {
 /// cost more than the pass does.
 #[derive(Debug, Clone, Copy)]
 pub struct Caster<'a> {
-    /// The caster's vertex buffer, in [`GpuVertex`] layout.
-    pub vertices: &'a wgpu::Buffer,
+    /// The caster's vertex buffers, in [`GpuVertex`] layout.
+    pub geometry: &'a oag_mesh::mesh_render::Geometry,
     /// Its index buffer, `u32`.
     pub indices: &'a wgpu::Buffer,
     /// Which index ranges to draw - a model's opaque draw calls, so a hull
@@ -343,6 +343,11 @@ pub struct CraftCaster<'a> {
     pub fit: Fit,
     /// The craft's own geometry.
     pub caster: Caster<'a>,
+    /// Whether any surface in the picture can read this craft's square. The record is written
+    /// either way, so a craft left out keeps its rank and every other craft its square; only
+    /// its draw goes, and the receiver's own [`CRAFT_CULL_RADIUS`] test never reaches the
+    /// square left clear.
+    pub seen: bool,
 }
 
 /// The coverage atlas, the `mapped` tier's depth map, their caster pipelines
@@ -388,6 +393,8 @@ pub struct Map {
     depth_clear: [bool; DEPTH_LAYERS as usize],
     /// Passes recorded over both targets, so a test can tell a skipped clear from a recorded one.
     passes: u64,
+    /// A depth layer's caster slots, staged for its one write and kept between frames.
+    layer_bytes: Vec<u8>,
 }
 
 /// The most casters one pass holds: a full grid.
@@ -638,6 +645,7 @@ impl Map {
             atlas_clear: false,
             depth_clear: [false; DEPTH_LAYERS as usize],
             passes: 0,
+            layer_bytes: Vec::new(),
         }
     }
 
@@ -736,15 +744,18 @@ impl Map {
         // Past the cap the rest are dropped; the caller sizes its list to it.
         let casters = &casters[..casters.len().min(MAX_DEPTH_CASTERS)];
         let first = MAX_CASTERS + layer * MAX_DEPTH_CASTERS;
-        // One write for the layer: a slot per caster, each padded to the stride.
+        // One write for the layer: a slot per caster, each padded to the stride, staged
+        // in a list the map keeps.
         if !casters.is_empty() {
-            let mut bytes = vec![0u8; UNIFORM_STRIDE as usize * casters.len()];
+            let bytes = &mut self.layer_bytes;
+            bytes.clear();
+            bytes.resize(UNIFORM_STRIDE as usize * casters.len(), 0);
             for (slot, caster) in casters.iter().enumerate() {
                 let mvp = (matrix * caster.model).to_cols_array();
                 let at = UNIFORM_STRIDE as usize * slot;
                 bytes[at..at + 64].copy_from_slice(bytemuck::cast_slice(&mvp));
             }
-            queue.write_buffer(&self.uniforms, UNIFORM_STRIDE * first as u64, &bytes);
+            queue.write_buffer(&self.uniforms, UNIFORM_STRIDE * first as u64, bytes);
         }
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("shadow depth map"),
@@ -761,18 +772,20 @@ impl Map {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "shadow depth map");
         pass.set_pipeline(&self.depth_pipeline);
         for (slot, caster) in casters.iter().enumerate() {
             if caster.ranges.is_empty() {
                 continue;
             }
             pass.set_bind_group(0, &self.bind, &[slot_offset(first + slot)]);
-            pass.set_vertex_buffer(0, caster.vertices.slice(..));
+            let mut cursor = caster.geometry.cursor(&mut pass);
             pass.set_index_buffer(caster.indices.slice(..), wgpu::IndexFormat::Uint32);
             for range in caster.ranges {
-                pass.draw_indexed(range.clone(), 0, 0..1);
+                cursor.draw(&mut pass, range);
             }
         }
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     /// How many atlas and depth passes have been recorded; an empty one over a
@@ -860,11 +873,12 @@ impl Map {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "shadow map atlas");
         pass.set_pipeline(&self.pipeline);
         for (index, craft) in crafts.iter().enumerate() {
             // Nothing to draw (a drawable with every chunk filtered out holds
             // zero-size buffers, which have no slice to bind).
-            if craft.caster.ranges.is_empty() {
+            if craft.caster.ranges.is_empty() || !craft.seen {
                 continue;
             }
             let (x, y, side) = RANK_SQUARES[craft.rank.min(MAX_CASTERS - 1)];
@@ -874,12 +888,13 @@ impl Map {
             pass.set_viewport(x as f32, y as f32, side as f32, side as f32, 0.0, 1.0);
             pass.set_scissor_rect(x, y, side, side);
             pass.set_bind_group(0, &self.bind, &[slot_offset(index)]);
-            pass.set_vertex_buffer(0, craft.caster.vertices.slice(..));
+            let mut cursor = craft.caster.geometry.cursor(&mut pass);
             pass.set_index_buffer(craft.caster.indices.slice(..), wgpu::IndexFormat::Uint32);
             for range in craft.caster.ranges {
-                pass.draw_indexed(range.clone(), 0, 0..1);
+                cursor.draw(&mut pass, range);
             }
         }
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     /// The texture behind [`Self::view`].

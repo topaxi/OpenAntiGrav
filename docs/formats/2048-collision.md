@@ -3,9 +3,10 @@
 Every title before this one keeps its collision geometry inside the track's
 [`.vex`](vex.md) file, as nodes of five named classes -
 [collision.md](collision.md) is that format. **Wipeout 2048 authors no collision
-node instances at all** and ships a separate `track_col.col` beside each
-`track.vex`: a k-d tree over one triangle soup, with a surface byte per
-triangle.
+node instances** on its own circuits but one (`sol` authors a lone `Reset`
+node, see [below](#which-circuits-read-the-container-2026-11-03)) and ships a
+separate `track_col.col` beside each `track.vex`: a k-d tree over one triangle
+soup, with a surface byte per triangle.
 
 Read by `oag_vex::kdcol`, validated by
 `crates/vex/tests/kdcol_ground_truth.rs` over **all 26 files** the three EU
@@ -233,9 +234,52 @@ Reproducers: `crates/raceplay/tests/omega_race_ground_truth.rs`. See
 `SurfaceKind::ALL` order - never in the order a map happens to iterate, because
 a collider's index *is* its identity to
 `oag_physics::forces::Environment::self_collider` and that ordering feeds
-simulation state. `oag_raceplay::load` asks for the sibling file **only when
-the `.vex` answered with no collision at all**, so no other title's load changes
-shape.
+simulation state. When `oag_raceplay::load` reads the sibling file is the
+next section.
+
+### Which circuits read the container (2026-11-03)
+
+**The original reads `track_col.col` after every `track.vex`.** In the race
+load `FUN_8121bce2` (2048 EU v1.04), `Environment_Load` takes
+`%s\%strack%s.vex`, and then, at `0x8121bffe`, `bl 0x811902d4` returns the
+collision manager singleton (`DAT_8151faf4`); only when it is non-null does
+`0x8121c02a` format `%s\track_col%s.col` and `0x8121c034` hand it to
+`FUN_81190410`, which allocates in `TrackCollisionLoader.cpp` and builds a
+`KdTreeMeshShape` through `KdTree_Load` (`0x8118d134`). Nothing reads the
+`.vex`'s collision nodes before that call. The `.vex` nodes are built separately,
+through `FUN_8126f910`, a virtual node loader with no direct caller that calls
+`TrackCollision_MeshFromNode` behind a per-node flag (`*(node+200)+8 != 0`).
+**Confidence 75** that both are loaded for a race: the `.col` call is read at
+instruction level; whether the flag passes for a race's collision nodes was not
+followed.
+
+**The census** (2048 base, `dlc1`, `dlc2`, and Omega, every layout both ways,
+2026-11-03, a debug print at load): every circuit 2048 authored ships no
+`.vex` collision node, **except `sol`**, whose `.vex` carries one `Reset`
+node, `collision_reset` (991 triangles), and no ground. Its `track_col.col`
+holds 4,412 byte-2 floor, 512 mag floor, 5,727 wall, 126 byte-5 and 1,022
+byte-7 reset triangles. The re-shipped HD circuits (`Ubermall`,
+`Talons_Junction`, `Zone_1`-`4`, `Vineta_K`, `Anulpha_Pass`, `Moa_Therma`,
+`Metropia`, on 2048's DLC and in Omega's `Data\Environments`) author a full set
+of `.vex` collision nodes (Floor, Wall, Reset, TrackWall, some MagFloor) **and**
+ship a `.col` of the same surfaces.
+
+**What this engine does**: `oag_raceplay::load::surfaces` reads the sibling
+**when the `.vex` authors no ground** (no `Floor` or `MagFloor` node), and
+appends its nodes after the `.vex`'s own, so `sol` races on the `.col`'s ground
+with both reset volumes. Before 2026-11-03 it read the sibling only for a `.vex`
+with no collision at all, so `sol`'s lone `Reset` node kept the `.col` out:
+every craft fell from the grid into that volume and was put back, 153 times
+each in 12,000 ticks. The re-shipped HD circuits keep their `.vex` collision
+alone. **Checked, differs** from the original there: it reads both, and reading
+both here would double their floor and wall under the force law, so they are
+left as they raced before. A sweep of every 2048 and Omega layout both ways
+(lone Ace, VENOM, 3,000 ticks) changed on `sol` only.
+
+**Omega: ported.** Its `data\environments2048\sol\track.vex` carries the same
+lone `Reset` node and the same loader serves it. Reproducer:
+`crates/raceplay/tests/sol_ground_truth.rs` (both titles: a floor collider, and
+floor under every grid slot).
 
 **A reversed circuit's file is `track_col_reversed.col`** - the `_col` goes
 before the `_reversed`, beside `track_reversed.vex` - and `kdcol::sibling_name`

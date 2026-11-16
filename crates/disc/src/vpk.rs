@@ -356,22 +356,26 @@ fn read_entry(member: &mut Member, entry: &ZipEntry, offset: u64, len: u64) -> R
 fn inflate(member: &mut Member, entry: &ZipEntry) -> Result<Vec<u8>> {
     let start = member.data_start(entry)?;
     let packed = member.read_at(start, entry.packed as usize)?;
-    let out = miniz_oxide::inflate::decompress_to_vec_with_limit(&packed, entry.size as usize)
-        .map_err(|e| {
-            bad(
-                &member.path,
-                format!("{}: inflate failed: {:?}", entry.name, e.status),
-            )
-        })?;
-    if out.len() as u64 != entry.size {
+    let want = entry.size as usize;
+    let mut out = vec![0u8; want];
+    let mut inflater = flate2::Decompress::new(false);
+    let status = inflater
+        .decompress(&packed, &mut out, flate2::FlushDecompress::Finish)
+        .map_err(|e| bad(&member.path, format!("{}: inflate failed: {e}", entry.name)))?;
+    let got = inflater.total_out() as usize;
+    if status != flate2::Status::StreamEnd {
         return Err(bad(
             &member.path,
             format!(
-                "{} inflated to {} bytes, expected {}",
-                entry.name,
-                out.len(),
-                entry.size
+                "{}: inflate did not end within {want} bytes (produced {got})",
+                entry.name
             ),
+        ));
+    }
+    if got != want {
+        return Err(bad(
+            &member.path,
+            format!("{} inflated to {got} bytes, expected {want}", entry.name),
         ));
     }
     Ok(out)

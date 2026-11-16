@@ -42,13 +42,7 @@
 /// of adding it.
 #[must_use]
 pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
-    // Inside-pass timestamps and fragment counts only for `perfprobe::marks`, so a default build
-    // asks a device for exactly what it always did.
-    let probe = if cfg!(feature = "perf-probe") {
-        wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES | wgpu::Features::PIPELINE_STATISTICS_QUERY
-    } else {
-        wgpu::Features::empty()
-    };
+    let probe = probe_features();
     // The binding arrays are the `bindless` mesh variant's (`super::bindless`):
     // both or neither, since the variant needs the two together.
     let arrays = if adapter.features().contains(super::bindless::FEATURES) {
@@ -65,6 +59,29 @@ pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
         | arrays
 }
 
+/// Inside-pass timestamps and fragment counts, only for `perfprobe::marks`: a default build asks
+/// a device for exactly what it always did, so a timestamp in a pass could not even validate
+/// there, and a normal frame writes none.
+fn probe_features() -> wgpu::Features {
+    if cfg!(feature = "perf-probe") {
+        wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES | wgpu::Features::PIPELINE_STATISTICS_QUERY
+    } else {
+        wgpu::Features::empty()
+    }
+}
+
+/// Set once a [`device_descriptor`] met an adapter without `DownlevelFlags::BASE_VERTEX`.
+///
+/// Process-wide because a `wgpu::Device` carries no downlevel flags of its own; conservative when
+/// two adapters differ, which no run does.
+static BASE_VERTEX_MISSING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Whether an adapter this process asked a device of cannot draw with a base vertex.
+pub(super) fn base_vertex_missing() -> bool {
+    BASE_VERTEX_MISSING.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// The device descriptor every `request_device` in this workspace uses.
 ///
 /// One place that knows what this renderer wants of a device, rather than
@@ -74,11 +91,28 @@ pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
 /// have quietly decoded every HD texture back to RGBA8 with nothing to say so.
 /// A caller with a further requirement of its own spreads this and overrides
 /// that one field, as `oag_game::main::gpu` does with `memory_hints`.
+///
+/// **Notes an adapter that cannot draw with a non-zero base vertex** (OpenGL below 3.2, ES below
+/// 3.2): wgpu-core does not check the flag at `draw_indexed`, so a model whose vertex data is cut
+/// across buffers ([`super::geometry::Geometry`]) is refused at load instead, by
+/// [`base_vertex_missing`]. `docs/rendering/vertex-buffers.md`.
 #[must_use]
 pub fn device_descriptor<'a>(
     label: &'a str,
     adapter: &wgpu::Adapter,
 ) -> wgpu::DeviceDescriptor<'a> {
+    if !adapter
+        .get_downlevel_capabilities()
+        .flags
+        .contains(wgpu::DownlevelFlags::BASE_VERTEX)
+        && !BASE_VERTEX_MISSING.swap(true, std::sync::atomic::Ordering::Relaxed)
+    {
+        log::warn!(
+            "{}: this adapter cannot draw with a base vertex, so a circuit whose vertex data is \
+             larger than the device's maximum buffer size will not load",
+            adapter.get_info().name
+        );
+    }
     wgpu::DeviceDescriptor {
         label: Some(label),
         required_features: optional_features(adapter),
@@ -107,8 +141,37 @@ pub fn device_descriptor<'a>(
 /// adapter allows.
 #[must_use]
 pub fn required_limits(adapter: &wgpu::Adapter) -> wgpu::Limits {
-    super::bindless::with_limits(
+    let mut limits = super::bindless::with_limits(
         wgpu::Limits::default().using_resolution(adapter.limits()),
         adapter,
-    )
+    );
+    if let Some(side) = forced_texture_side() {
+        limits.max_texture_dimension_2d = limits.max_texture_dimension_2d.min(side);
+    }
+    limits
+}
+
+/// `OAG_MAX_TEXTURE_SIDE=<n>`: the device is made with `max_texture_dimension_2d` at most `n`,
+/// so a Steam Deck's 16,384 or a phone's 8,192 can be tried on a desktop adapter that allows
+/// more. Unset, or not a number, changes nothing.
+fn forced_texture_side() -> Option<u32> {
+    std::env::var("OAG_MAX_TEXTURE_SIDE")
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::probe_features;
+
+    #[test]
+    fn a_default_build_asks_for_no_timestamp_inside_a_pass() {
+        assert_eq!(
+            probe_features().is_empty(),
+            !cfg!(feature = "perf-probe"),
+            "the probe's device features belong to `perf-probe` alone"
+        );
+    }
 }

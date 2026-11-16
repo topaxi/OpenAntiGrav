@@ -35,7 +35,7 @@ pub(crate) fn entry_name(dir: &str, team: &str, mode: Mode) -> String {
     } else {
         ships::WRECK
     };
-    ships::entry_name_in(dir, team, stem)
+    oag_title::race::entry_name_in(dir, team, stem)
 }
 
 /// Loads a team's wreck, or says why there is none.

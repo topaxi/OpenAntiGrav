@@ -11,8 +11,7 @@
 //! three images. When a screen needs enough of them for the waste to show, the
 //! lookup below is already in pixels, so only this file has to change.
 
-use oag_texture::texture::Texture;
-use oag_texture::{gnf, gtf, gxt, ps2_texture};
+use oag_texture::decode::{Container, decode_as, decode_sniffed};
 use oag_vex::vex;
 
 /// One decoded image, from any of the four sources' texture formats.
@@ -33,33 +32,23 @@ struct Image {
 }
 
 impl Image {
-    /// Decodes whichever of the three formats this blob is.
+    /// Decodes whichever format this blob is: this project's own mask, then
+    /// [`oag_texture::decode::decode_sniffed`]'s order (`.mip`, `.pct`, `.gtf`,
+    /// `.gxt`, `.gnf`), whose error is the `.mip` reader's when nothing reads it.
     ///
-    /// The PSP is tried first and its error is the one reported, because a
-    /// `.mip` that will not parse is the far commoner failure and naming
-    /// another parser's complaint about it would send a reader the wrong way.
+    /// A blob reaches a sheet without the name it was resolved under, so the
+    /// container is read off its bytes. `boot::sprites`'s `gnf_sibling` decides
+    /// *whether* to hand a `.gnf` blob over and names the reason when it will not.
     ///
-    /// **The PS3 branch is why the report line used to say `1281x0`.** Wipeout
-    /// HD's front end names three `.gtf` textures, and with only the two PSP-era
-    /// parsers here the `.mip` one got there first, read a `.gtf`'s big-endian
-    /// header as a `.mip`'s little-endian one and came back with a zero-sized
-    /// texture - so all three failed, the sheet came out 1x1, and the error
-    /// blamed a format the file is not. [`oag_texture::gtf`] has decoded these
-    /// since well before the front end asked for one; nothing was missing but
-    /// the branch.
-    ///
-    /// **The Vita branch is [`Self::decode_gxt`]**, tried last for the same
-    /// reason `.gtf` is tried after the two PSP-era formats: 2048 is the one
-    /// title whose textures reach it, and every other title's blob fails it
-    /// immediately on the magic check.
-    ///
-    /// **The PS4 branch is [`Self::decode_gnf`]**, tried last of all - Omega
-    /// is the only title whose front end reaches it, and `boot::sprites`'s
-    /// own `gnf_sibling` already decides *whether* to hand a `.gnf` blob
-    /// here at all, reporting a precise reason (a genuinely tiled surface
-    /// this project has no formula for, or `Error::CorruptBlocks`) rather
-    /// than letting a doomed one fall through to this function's generic
-    /// `.mip`-parser error. See `docs/formats/gnf.md`.
+    /// **A `.gtf`'s rows are flipped here, because they run bottom-up and a
+    /// sheet is top-down.** Measured against a screenshot of the running game:
+    /// `Pilot_Assist_fury.gtf` decoded straight into a sheet draws the craft
+    /// inverted, and reversed it matches the original's own loading screen
+    /// exactly (`docs/formats/hd-loading.md`). Not in `oag_texture::decode`,
+    /// whose other consumers are 3D ones already right for the file's row order:
+    /// the row order is a property of the file, which way up a consumer wants it
+    /// is the consumer's. The Vita's `.gxt` and the PS4's `.gnf` are top-down as
+    /// decoded (`docs/formats/2048-hud.md`, `docs/formats/gnf.md`).
     fn decode(blob: &[u8]) -> Result<Self, String> {
         // This project's own art first: a magic check no game texture passes,
         // and the only branch whose complaint is not a `.mip`'s.
@@ -73,126 +62,33 @@ impl Image {
                 })
                 .map_err(|error| error.to_string());
         }
-        match Texture::parse(blob) {
-            Ok(t) => Ok(Self {
-                width: t.width,
-                height: t.height,
-                bits_per_pixel: t.bits_per_pixel,
-                rgba: t.to_rgba(),
-            }),
-            Err(psp) => match ps2_texture::parse(blob) {
-                Ok(t) => Ok(Self {
-                    width: t.width,
-                    height: t.height,
-                    bits_per_pixel: t.bits_per_pixel,
-                    rgba: t.to_rgba(),
-                }),
-                Err(_) => Self::decode_gtf(blob)
-                    .or_else(|| Self::decode_gxt(blob))
-                    .or_else(|| Self::decode_gnf(blob))
-                    .ok_or_else(|| psp.to_string()),
-            },
-        }
-    }
-
-    /// The PS3 branch, or `None` for a blob that is not a `.gtf` this build
-    /// draws.
-    ///
-    /// `None` rather than an error because the caller reports the *`.mip`*
-    /// parser's complaint for anything none of the three recognise, and a `.gtf`
-    /// error on a file that was never a `.gtf` is the misdirection this whole
-    /// function exists to avoid. A `.gtf` that parses and then will not
-    /// convert - the sky cubemaps [`oag_texture::gtf::Texture::to_rgba`]
-    /// refuses - takes the same route out, which is the honest one: the sheet
-    /// reports the image as undecoded rather than drawing a substitute for it.
-    fn decode_gtf(blob: &[u8]) -> Option<Self> {
-        let gtf = gtf::Gtf::parse(blob).ok()?;
-        let texture = gtf.only()?;
-        let rgba = texture.to_rgba(blob).ok()?;
-        Some(Self {
-            width: texture.width,
-            height: texture.height,
-            // Bits per *texel*, which for a block format means dividing the
-            // block's bytes over the sixteen texels it covers: DXT1 reads 4 and
-            // DXT45 reads 8, against 32 for straight ARGB. Reporting the block
-            // instead would put "128bpp" on the boot line, which is a true
-            // sentence about a unit nobody asked about. A log field; nothing
-            // reads it.
-            bits_per_pixel: {
-                let texels = if texture.format.is_block_compressed() {
-                    16
-                } else {
-                    1
-                };
-                u8::try_from(texture.format.unit_len() * 8 / texels).unwrap_or(u8::MAX)
-            },
-            // **Flipped, because a `.gtf`'s rows run bottom-up and a sheet is
-            // top-down.** Measured against a screenshot of the running game:
-            // `Pilot_Assist_fury.gtf` decoded straight into a sheet draws the
-            // craft inverted, and reversed it matches the original's own
-            // loading screen exactly. See `docs/formats/hd-loading.md`.
-            //
-            // **Here and not in [`oag_texture::gtf`]**, which is the part that
-            // took measuring. Every other consumer of that decoder is a *3D*
-            // one - `mesh::rcs::skin`, `mesh::sky_cube`,
-            // `race::assets`'s trail noise - and those are already right: the
-            // hull lettering on an HD craft reads the correct way up, which is
-            // the check `docs/formats/rcsmodel.md` used to confirm the texture
-            // coordinate in the first place. Their sampling convention and the
-            // file's row order already agree, so flipping the decoder would
-            // invert every one of them to fix one. The row order is a property
-            // of the file; which way up a consumer wants it is the consumer's.
-            rgba: rgba
-                .chunks_exact(usize::from(texture.width).max(1))
+        let picture = decode_sniffed(blob).map_err(|error| match error {
+            oag_texture::decode::Error::Parse(why) => why,
+            other => other.to_string(),
+        })?;
+        let (Ok(width), Ok(height)) = (u16::try_from(picture.width), u16::try_from(picture.height))
+        else {
+            return Err(decode_as(Container::Mip, blob).err().map_or_else(
+                || "a size a sheet cannot hold".to_string(),
+                |e| e.to_string(),
+            ));
+        };
+        let rgba = if picture.bottom_up {
+            picture
+                .rgba
+                .chunks_exact(usize::from(width).max(1) * 4)
                 .rev()
-                .flat_map(|row| row.iter().flatten().copied())
-                .collect(),
-        })
-    }
-
-    /// The Vita branch, or `None` for a blob that is not a `.gxt` this build
-    /// draws.
-    ///
-    /// **Not flipped**, unlike [`Self::decode_gtf`]'s PS3 texel rows: the
-    /// checkerboard-composited renders `gxt_ground_truth.rs` writes to
-    /// `data/shots/` came out the right way up as decoded -
-    /// `missile_reticule.gxt`'s crosshair sits above its dashed arc and
-    /// `hud_2048.gxt`'s warning triangle points up - so the Vita's own GXM
-    /// convention is top-down like a sheet already is, and no consumer here
-    /// has been checked against a running frame to say otherwise. See
-    /// `docs/formats/2048-hud.md`.
-    fn decode_gxt(blob: &[u8]) -> Option<Self> {
-        let parsed = gxt::Gxt::parse(blob).ok()?;
-        let texture = parsed.only()?;
-        let rgba = texture.to_rgba(blob).ok()?;
-        Some(Self {
-            width: texture.width,
-            height: texture.height,
-            // BC2 is 16 bytes per 4x4 block, 8 bits per texel.
-            bits_per_pixel: 8,
-            rgba: rgba.into_iter().flatten().collect(),
-        })
-    }
-
-    /// The PS4 branch, or `None` for a blob that is not a `.gnf` this build
-    /// draws.
-    ///
-    /// **Not flipped.** Checked directly against the boot report and
-    /// against `Data/fe/images/presents_finnish.gnf`, `wipeout_omega_logo.gnf`
-    /// and `hex_select.gnf` decoded to PNG (see `docs/formats/gnf.md`'s
-    /// "Tiling" section) - the wordmark, the localized "esittää" text and
-    /// the hexagon-select icon all read the right way up straight out of
-    /// [`gnf::Texture::decode`], unlike [`Self::decode_gtf`]'s PS3 rows.
-    fn decode_gnf(blob: &[u8]) -> Option<Self> {
-        let texture = gnf::Texture::parse(blob).ok()?;
-        let rgba = texture.decode(blob).ok()?;
-        Some(Self {
-            width: u16::try_from(texture.width).ok()?,
-            height: u16::try_from(texture.height).ok()?,
-            // BC7 is 16 bytes per 4x4 block, 8 bits per texel - the only
-            // surface format this build's `gnf::Texture::decode` reaches.
-            bits_per_pixel: 8,
-            rgba: rgba.into_iter().flatten().collect(),
+                .flatten()
+                .copied()
+                .collect()
+        } else {
+            picture.rgba
+        };
+        Ok(Self {
+            width,
+            height,
+            bits_per_pixel: picture.bits_per_pixel,
+            rgba,
         })
     }
 
@@ -220,6 +116,34 @@ impl Image {
         })
     }
 
+    /// The active texture pack's picture of this `.mip` in its place, with the disc's own
+    /// size, or the image as it is and `None`.
+    ///
+    /// Only a PSP `.mip` has a key (`oag_texture::replacer::mip`); with no pack on this is
+    /// one lock read. A picture too large for a sheet (`MAX_ATLAS_SIDE`) is left to the disc's.
+    fn replaced_by_pack(self, blob: &[u8]) -> (Self, Option<[u32; 2]>) {
+        let Some(picture) = oag_texture::replacer::mip(blob) else {
+            return (self, None);
+        };
+        let (Ok(width), Ok(height)) = (u16::try_from(picture.width), u16::try_from(picture.height))
+        else {
+            return (self, None);
+        };
+        if picture.width.max(picture.height) > oag_texture::replacer::MAX_ATLAS_SIDE {
+            return (self, None);
+        }
+        let logical = [u32::from(self.width), u32::from(self.height)];
+        (
+            Self {
+                width,
+                height,
+                bits_per_pixel: 32,
+                rgba: picture.rgba.clone(),
+            },
+            Some(logical),
+        )
+    }
+
     /// The decoded pixels, consuming the image: the sheet copies them out and
     /// nothing wants them twice.
     fn into_rgba(self) -> Vec<u8> {
@@ -236,6 +160,9 @@ impl Image {
 struct Staged {
     src: String,
     image: Image,
+    /// The disc's own pixel size when `image` is a texture pack's larger picture of it,
+    /// which is what [`Placed::width`] and [`Placed::height`] keep saying.
+    logical: Option<[u32; 2]>,
     quad_extent: Option<[f32; 2]>,
     quad_centre: Option<[f32; 2]>,
     blend: Option<vex::BlendClass>,
@@ -282,6 +209,9 @@ pub struct Sheet {
     /// order keeps the sheet byte-identical from one run to the next, which is
     /// what makes a screenshot comparable.
     placed: Vec<(String, Placed)>,
+    /// Texels per layout unit of the entries rasterised for one size (a vector icon);
+    /// an entry not listed is drawn at one texel per unit.
+    density: Vec<(String, f32)>,
 }
 
 impl Default for Sheet {
@@ -295,6 +225,7 @@ impl Default for Sheet {
             height: 1,
             rgba: vec![0, 0, 0, 0],
             placed: Vec::new(),
+            density: Vec::new(),
         }
     }
 }
@@ -357,17 +288,49 @@ impl Sheet {
         extra: Vec<DecodedImage>,
         report: &mut Vec<String>,
     ) -> Self {
+        Self::assemble(blobs, extra, false, report)
+    }
+
+    /// [`Self::build_with`], each `.mip` in `blobs` drawn from the active texture pack's picture
+    /// of it when it has one (`oag_texture::replacer::mip`).
+    ///
+    /// Only for a sheet whose every draw goes through [`Placed::sheet_rect`]: a replaced image
+    /// is larger than its [`Placed`] says, and a draw that adds a rect to `placed.x` as it was
+    /// would sample a corner of it. The race HUD and the front end's screens are that.
+    #[must_use]
+    pub fn build_replaced(
+        blobs: &[(String, Vec<u8>)],
+        extra: Vec<DecodedImage>,
+        report: &mut Vec<String>,
+    ) -> Self {
+        Self::assemble(blobs, extra, true, report)
+    }
+
+    fn assemble(
+        blobs: &[(String, Vec<u8>)],
+        extra: Vec<DecodedImage>,
+        replace: bool,
+        report: &mut Vec<String>,
+    ) -> Self {
         let mut decoded: Vec<Staged> = Vec::new();
 
         for (src, blob) in blobs {
             match Image::decode(blob) {
-                Ok(image) => decoded.push(Staged {
-                    src: src.clone(),
-                    image,
-                    quad_extent: None,
-                    quad_centre: None,
-                    blend: None,
-                }),
+                Ok(image) => {
+                    let (image, logical) = if replace {
+                        image.replaced_by_pack(blob)
+                    } else {
+                        (image, None)
+                    };
+                    decoded.push(Staged {
+                        src: src.clone(),
+                        image,
+                        logical,
+                        quad_extent: None,
+                        quad_centre: None,
+                        blend: None,
+                    });
+                }
                 Err(e) => report.push(format!("image {src}: {e}")),
             }
         }
@@ -386,6 +349,7 @@ impl Sheet {
                 Some(image) => decoded.push(Staged {
                     src,
                     image,
+                    logical: None,
                     quad_extent,
                     quad_centre,
                     blend,
@@ -429,11 +393,11 @@ impl Sheet {
 
         let mut rgba = vec![0u8; (width * height * 4) as usize];
         let mut placed = Vec::with_capacity(decoded.len());
-
         for (
             Staged {
                 src,
                 image: texture,
+                logical,
                 quad_extent,
                 quad_centre,
                 blend,
@@ -454,17 +418,30 @@ impl Sheet {
                     .copy_from_slice(&pixels[from..from + (w * 4) as usize]);
             }
 
-            report.push(format!("image {src}: {w}x{h}, {bits_per_pixel}bpp"));
+            let [logical_w, logical_h] = logical.unwrap_or([w, h]);
+            let scale = if logical.is_some() {
+                [w as f32 / logical_w as f32, h as f32 / logical_h as f32]
+            } else {
+                [1.0, 1.0]
+            };
+            if logical.is_some() {
+                report.push(format!(
+                    "image {src}: {w}x{h} from the texture pack, for the disc's {logical_w}x{logical_h}"
+                ));
+            } else {
+                report.push(format!("image {src}: {w}x{h}, {bits_per_pixel}bpp"));
+            }
             placed.push((
                 src,
                 Placed {
                     x,
                     y,
-                    width: w,
-                    height: h,
+                    width: logical_w,
+                    height: logical_h,
                     quad_extent,
                     quad_centre,
                     blend,
+                    scale,
                 },
             ));
         }
@@ -474,6 +451,7 @@ impl Sheet {
             height,
             rgba,
             placed,
+            density: Vec::new(),
         }
     }
 
@@ -491,20 +469,36 @@ impl Sheet {
     /// [`Self::build`] does.
     #[must_use]
     pub fn extended(&self, blobs: &[(String, Vec<u8>)], report: &mut Vec<String>) -> Self {
+        self.extended_with(blobs, Vec::new(), report)
+    }
+
+    /// [`Self::extended`], plus images somebody else already decoded (see
+    /// [`Self::build_with`]): an author's PNG, which no blob decoder here reads.
+    #[must_use]
+    pub fn extended_with(
+        &self,
+        blobs: &[(String, Vec<u8>)],
+        extra: Vec<DecodedImage>,
+        report: &mut Vec<String>,
+    ) -> Self {
         let fresh: Vec<(String, Vec<u8>)> = blobs
             .iter()
             .filter(|(src, _)| self.get(src).is_none())
             .cloned()
             .collect();
-        if fresh.is_empty() {
+        let extra: Vec<DecodedImage> = extra
+            .into_iter()
+            .filter(|image| self.get(&image.src).is_none())
+            .collect();
+        if fresh.is_empty() && extra.is_empty() {
             return self.clone();
         }
         // An empty sheet is one transparent texel with nothing placed in it,
         // so there is nothing to keep.
         if self.placed.is_empty() {
-            return Self::build(&fresh, report);
+            return Self::build_with(&fresh, extra, report);
         }
-        let below = Self::build(&fresh, report);
+        let below = Self::build_with(&fresh, extra, report);
         if below.placed.is_empty() {
             return self.clone();
         }
@@ -542,7 +536,26 @@ impl Sheet {
             height,
             rgba,
             placed,
+            density: self.density.clone(),
         }
+    }
+
+    /// This sheet with `src` marked as rasterised at `density` texels per layout unit.
+    #[must_use]
+    pub fn with_texel_density(mut self, src: &str, density: f32) -> Self {
+        self.density.retain(|(name, _)| name != src);
+        self.density.push((src.to_string(), density));
+        self
+    }
+
+    /// Texels per layout unit `src` was rasterised at; `None` for an entry that was not
+    /// (one texel per unit).
+    #[must_use]
+    pub fn texel_density(&self, src: &str) -> Option<f32> {
+        self.density
+            .iter()
+            .find(|(name, _)| name == src)
+            .map(|(_, density)| *density)
     }
 
     /// Where `src` sits, if it was loaded.
@@ -552,6 +565,13 @@ impl Sheet {
             .iter()
             .find(|(name, _)| name == src)
             .map(|(_, placed)| *placed)
+    }
+
+    /// Sheet pixels per pixel of the disc's own picture, on each axis, for `src`: `[1.0, 1.0]`
+    /// unless a texture pack drew it larger ([`Placed::scale`]).
+    #[must_use]
+    pub fn scale(&self, src: &str) -> [f32; 2] {
+        self.get(src).map_or([1.0, 1.0], |placed| placed.scale)
     }
 
     /// The alpha of one texel of `placed`, addressed as a fraction of the
@@ -572,8 +592,9 @@ impl Sheet {
         let texel = |fraction: f32, size: u32| -> u32 {
             ((fraction * size as f32).floor().max(0.0) as u32).min(size.saturating_sub(1))
         };
-        let x = placed.x + texel(u, placed.width);
-        let y = placed.y + texel(v, placed.height);
+        let [sx, sy] = placed.scale;
+        let x = placed.x + texel(u, (placed.width as f32 * sx) as u32);
+        let y = placed.y + texel(v, (placed.height as f32 * sy) as u32);
         if x >= self.width || y >= self.height {
             return None;
         }
@@ -593,11 +614,47 @@ impl Sheet {
     #[must_use]
     pub fn opaque_extent(&self, src: &str) -> Option<[f32; 4]> {
         let placed = self.get(src)?;
+        let [sx, sy] = self.scale(src);
+        let [x, y, width, height] = self.ink_within(
+            placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
+            |texel| texel[3] >= 128,
+        )?;
+        Some([
+            (x - placed.x as f32) / sx,
+            (y - placed.y as f32) / sy,
+            width / sx,
+            height / sy,
+        ])
+    }
+
+    /// The box of the texels `is_ink` accepts (RGBA8) inside `rect`, `[x, y, width, height]` in
+    /// sheet pixels, or `None` when there are none. `rect` is a sheet rectangle in whole texels:
+    /// a placement, or the source of one draw.
+    #[must_use]
+    pub fn ink_within(&self, rect: [f32; 4], is_ink: impl Fn([u8; 4]) -> bool) -> Option<[f32; 4]> {
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a texel rectangle inside the sheet, clamped to it"
+        )]
+        let texels = |from: f32, length: f32, limit: u32| -> (u32, u32) {
+            let first = (from.max(0.0) as u32).min(limit);
+            (first, ((from + length).max(0.0).ceil() as u32).min(limit))
+        };
+        let (x_from, x_to) = texels(rect[0], rect[2], self.width);
+        let (y_from, y_to) = texels(rect[1], rect[3], self.height);
         let mut bounds: Option<(u32, u32, u32, u32)> = None;
-        for row in 0..placed.height {
-            for column in 0..placed.width {
-                let at = (((placed.y + row) * self.width + placed.x + column) * 4 + 3) as usize;
-                if self.rgba.get(at).is_none_or(|alpha| *alpha < 128) {
+        for row in y_from..y_to {
+            for column in x_from..x_to {
+                let at = ((row * self.width + column) * 4) as usize;
+                let Some(&[r, g, b, a]) = self
+                    .rgba
+                    .get(at..at + 4)
+                    .map(|t| <&[u8; 4]>::try_from(t).unwrap_or(&[0; 4]))
+                else {
+                    continue;
+                };
+                if !is_ink([r, g, b, a]) {
                     continue;
                 }
                 bounds = Some(match bounds {

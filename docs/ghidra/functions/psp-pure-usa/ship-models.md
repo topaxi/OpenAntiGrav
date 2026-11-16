@@ -231,14 +231,66 @@ field passed - see HANDOVER.md, "The Ghidra bridge's `switch_program` can
 silently no-op." Land a `names.tsv` row and apply through `just apply-names`
 instead of a live rename.
 
-### `VR` is a whole alternate presentation set, and its meaning is not determined
+### What selects the VR hull: the circuit's `PI_Track` type is `Classic`
 
-The prefix recurs across the disc: `Data\Weapons\vr_bomb.vex`, `vr_mine.vex`,
-`vr_shield.vex`, `vr_shield_cockpit.vex`, `Data\Tex\EngineFlare\vr_engine_noise.mip`,
-`Data\Tex\vr_env.tga`, and a per-team `Data\Ships\<Team>\VR\Textures\vr_<team>_01_shinemap.tga`.
-Pulse carries exactly one member of that set (`%s\vr_shield_cockpit.vex`) and no
-`VR\` craft directory at all. The name is recovered; **what mode uses it is
-not**, and no path that selects it has been read.
+**Confidence 90** (the selector read in both the loader and the item parser, the table values read
+from memory, and the result matched against the original's own frame; the other consumer of the
+`VR` set, below, is a separate flag).
+
+`FUN_08927dac` (the same function that builds the hull) opens with a test on the *current
+circuit's* item, not on the team:
+
+```c
+bVar1 = (_DAT_00053580 != 0) && ((*(uint *)(_DAT_00053580 + 0xf8) & 2) != 0);
+if (bVar1)       FUN_088df8ec(path, 0x2765d4 /* %s\VR\Ship.vex */, team->location);
+else if (!phantom) FUN_088df8ec(path, 0x2765f4 /* %s\Ship.vex */, ...);
+else               ... 0x2765e4 /* %s\Phantom.vex */ ...
+```
+
+(`0x2765d4` etc. are base-relative; `+0x08804000` gives `0x08a7a5d4`.) The wreck instance
+(`param_1 + 0x9f4`) is then not built at all in that branch (`*(param_1 + 0x9f4) = 0`), the same for
+flag 4.
+
+- **`_DAT_00053580` is the current circuit's `PI_Track` item**: `FUN_0881cb30` stores
+  `*(*(track_list + 0x90) + index * 4)` into it.
+- **`+0xf8` is that item's type flags.** The `PI_Track` item parser, `FUN_088d8bfc`
+  (`0x088d8bfc`), reads `Values type`, zeroes `+0xf8`, then `strcasecmp`s the attribute against a
+  three-entry table of name pointers at `0x08ab0e1c` and stores the parallel value from
+  `0x08ab0e28`. Read with `read_memory`: the names are `Race`, `Classic`, `Zone` (`0x08a568c4`,
+  `0x08a568cc`, `0x08a568d4`), the values `1`, `2`, `4`. So `& 2` is **`type="Classic"`** and the
+  `& 4` branch is Zone.
+- **The disc's own data decides it**: `Data\Plugins\PI001\Definition.xml` declares exactly the four
+  `Data\ClassicsNS\01_Karbonis`..`04_Mandrashee` circuits `type="Classic"` (the other eight are
+  `Race`, the four Zone `Zone`). No class, mode or unlock enters it, so **every craft on the grid
+  flies the VR hull, the player's pick included**.
+- **Match against the original's frame.** `data/reference/compare-page/pure-psp/{manor-top,
+  mandrashee,sagarmartha,karbonis}`: the original's Feisar is a yellow-and-blue hull with a green
+  canopy, the shape of `Data\Ships\Feisar\VR\Ship.vex` (450 triangles, 1,222 vertices) and not of
+  `Ship.vex` (797 triangles). With the selector wired, the edge correlation of the hull box
+  (`x 188..300, y 172..272`, 480x272 frames) goes from 0.29 / 0.34 / 0.29 / 0.16 to 0.86 / 0.89 /
+  (0.28, 0.78 at a 4 px shift) / 0.63 on Manor Top / Mandrashee / Sagarmartha / Karbonis
+  ([compare-page.md](../../../tools/compare-page.md), "The Classic hull").
+
+**The skin is the file's own.** `VR\Ship.vex` carries its texture block (and the team's
+`VR\Textures\vr_<team>_01_shinemap.tga` shine map), so no `PI_ModelSkin` choice is involved; the
+race flies the VR hull's embedded paint.
+
+**A second, separate consumer of "VR": the circuit's `TrackStartup.xml`.** `FUN_08848bf8` (the
+circuit's startup-file reader, called from `FUN_08847a54`) sets the byte at `0x08a8f604` when
+`<LevelFx><VrFx Type="1"/>` is present (`VrFx` and `Type` are the strings at `0x08a47848` and
+`0x08a47850`). All four Classic circuits author it (`Karbonis`, `Manor Top` read), no `Race`
+circuit does. That byte switches `Data\Sound\ship_classic.bnk` / `weapons_classic.bnk` in place of
+`ship.bnk` / `weapons.bnk` (`FUN_08847a54`, branch on `DAT_0028b604`), `WO_QUAKE_VR` and
+`vr_Mine.vex` (`weapons-gfx.md`, `quake.md`). It is an **independent flag** that the Classic
+circuits happen to set together with the type: not wired here, named in the thread
+`pure-classic-league-vr-set`.
+
+**Cross-title check (CLAUDE.md, "A 2048 finding is checked against Omega"):** *checked, differs*.
+`PI_Track` `type` census over the plugin definitions the source reads: Pulse 24 `Race`; HD 28
+`Race` (its Zone circuits are a `zone` flag); Omega 38 `Race`; Pure 8 `Race`, 4 `Classic`, 4 `Zone`.
+No other title declares a `Classic` circuit, so only Pure's `hull_by_track_type` is non-empty. 2048
+(Vita package) was not opened by the same probe; its definition XML is byte-identical to Omega's
+(`docs/formats/omega-status.md`), so it reads the same, but that is inherited, not measured.
 
 ### `%s\VR\Phantom.vex` (`0x08a7cb64`) resolves nowhere, and there are two readings
 

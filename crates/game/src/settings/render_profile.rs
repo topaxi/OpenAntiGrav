@@ -293,6 +293,29 @@ pub struct RenderProfile {
     /// applies live.
     #[serde(default)]
     pub trail_order: oag_display::display::TrailOrder,
+    /// How the circuit's blended list (trees, translucent floor patches, glass) is sorted:
+    /// `original` or `depth`.
+    ///
+    /// **`original` is the default**: one queue key per mesh from its box centre, far to
+    /// near, no depth written (`Mesh_SubmitNode`), so the frame is byte-identical to a build
+    /// without the row. `depth` makes the foliage's solid texels occlude what draws after
+    /// them, so a nearer tree is over a farther one at any camera angle; chosen, not
+    /// measured. Only the titles whose circuit is the PSP preset offer it
+    /// (`Definition::drop_unavailable_scenery_sort` drops the row elsewhere). See
+    /// [`oag_display::display::ScenerySort`]. Read fresh every frame, so the row applies live.
+    #[serde(default)]
+    pub scenery_sort: oag_display::display::ScenerySort,
+    /// How long a craft's engine ribbon is: `original` (the PSP preset's ten samples) or `hd`
+    /// (Wipeout HD's 54, on the preset's own head width, fade and taper).
+    ///
+    /// **`original` is the default**: the frame is byte-identical to a build without the row.
+    /// `hd` is an enhancement of this project's and a departure from the original. Only the
+    /// titles whose ribbon is the PSP preset offer it (`Definition::drop_unavailable_trail_length`
+    /// drops the row elsewhere), and elsewhere the value is ignored. See
+    /// [`oag_display::display::TrailLength`]. Read fresh every frame, so the row applies live; a
+    /// change restarts the rings.
+    #[serde(default)]
+    pub trail_length: oag_display::display::TrailLength,
     /// What a played weather adds to the original's: `original` or `enhanced`
     /// (splashes where a drop meets the track, snow that settles).
     ///
@@ -452,6 +475,8 @@ impl Default for RenderProfile {
             model_detail: oag_mesh::mesh::ModelDetail::default(),
             texture_detail: oag_mesh::mesh_render::TextureDetail::default(),
             trail_order: oag_display::display::TrailOrder::default(),
+            scenery_sort: oag_display::display::ScenerySort::default(),
+            trail_length: oag_display::display::TrailLength::default(),
             weather: oag_display::display::Weather::default(),
         }
     }
@@ -484,7 +509,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 16] = [
+pub(super) const PROFILE_KEYS: [&str; 18] = [
     "render_scale",
     "render_scale_chosen",
     "target_fps",
@@ -500,6 +525,8 @@ pub(super) const PROFILE_KEYS: [&str; 16] = [
     "model_detail",
     "texture_detail",
     "trail_order",
+    "scenery_sort",
+    "trail_length",
     "weather",
 ];
 

@@ -35,6 +35,13 @@
 //! - `OAG_WATER_OFF=1` turns the HD water family's own readings off
 //!   (`water`, `ice`), so a frame can be taken before and after them.
 //!
+//! - `OAG_ALPHA_EMISSIVE_OFF=1` turns the emissive-in-alpha families' reading
+//!   off (`alpha_emissive`), for the same before and after.
+//!
+//! - `OAG_SPECULAR_PICTURE_OFF=1` leaves `dn_diffuse_specular_emiss` to the sampler order on
+//!   2048 and Omega (the specular map as the picture), and on every title draws its specular
+//!   unweighted by the map.
+//!
 //! Both match the material's own archive path
 //! (`data/environments/talons_junction/materials/clouds.rcsmaterial`) **or
 //! either of the two `.gtf` paths it names**, case-insensitively, so a needle
@@ -94,29 +101,8 @@ fn filter() -> &'static Filter {
 /// call sites in [`super`] stay one line - that file sits against the
 /// 1,000-line ceiling `scripts/check-file-size.py` enforces.
 pub(super) fn excludes(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh) -> bool {
-    let filter = filter();
-    if filter.skip.is_empty()
-        && filter.only.is_empty()
-        && filter.only_slots.is_empty()
-        && filter.skip_slots.is_empty()
-        && !filter.opaque_only
-    {
-        return false;
-    }
-    if !filter.only_slots.is_empty() && !filter.only_slots.contains(&mesh.material) {
-        return true;
-    }
-    if filter.skip_slots.contains(&mesh.material) {
-        return true;
-    }
     let material = model.materials.get(mesh.material as usize);
-    if filter.opaque_only && material.is_some_and(|m| m.blend() != rcsmodel::Blend::Opaque) {
-        return true;
-    }
-    if filter.skip.is_empty() && filter.only.is_empty() {
-        return false;
-    }
-    let paths: Vec<String> = material
+    let paths: Vec<&str> = material
         .into_iter()
         .flat_map(|m| {
             [
@@ -126,8 +112,52 @@ pub(super) fn excludes(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh) -> bool {
             ]
         })
         .flatten()
-        .map(str::to_ascii_lowercase)
         .collect();
+    excludes_paths(
+        mesh.material,
+        material.map(|m| m.blend() != rcsmodel::Blend::Opaque),
+        &paths,
+    )
+}
+
+/// [`excludes`] for a 2048 or Omega submesh: its material slot and every path its record
+/// names (the `.rcsmaterial` and the pictures). `translucent` is `None` where the submesh has
+/// no material, and the opaque-only filter keeps it as it does for a chunk with no row.
+pub(super) fn excludes_psp2(
+    slot: Option<usize>,
+    translucent: Option<bool>,
+    paths: &[&str],
+) -> bool {
+    excludes_paths(
+        u32::try_from(slot.unwrap_or(usize::MAX)).unwrap_or(u32::MAX),
+        translucent,
+        paths,
+    )
+}
+
+fn excludes_paths(slot: u32, translucent: Option<bool>, paths: &[&str]) -> bool {
+    let filter = filter();
+    if filter.skip.is_empty()
+        && filter.only.is_empty()
+        && filter.only_slots.is_empty()
+        && filter.skip_slots.is_empty()
+        && !filter.opaque_only
+    {
+        return false;
+    }
+    if !filter.only_slots.is_empty() && !filter.only_slots.contains(&slot) {
+        return true;
+    }
+    if filter.skip_slots.contains(&slot) {
+        return true;
+    }
+    if filter.opaque_only && translucent == Some(true) {
+        return true;
+    }
+    if filter.skip.is_empty() && filter.only.is_empty() {
+        return false;
+    }
+    let paths: Vec<String> = paths.iter().map(|p| p.to_ascii_lowercase()).collect();
     let matches = |needles: &[String]| {
         needles
             .iter()
@@ -144,6 +174,20 @@ pub(super) fn excludes(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh) -> bool {
 pub(super) fn water_off() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("OAG_WATER_OFF").is_some())
+}
+
+/// Whether the emissive-in-alpha families' reading is switched off
+/// (`OAG_ALPHA_EMISSIVE_OFF`): the before half of a before/after pair.
+pub(super) fn alpha_emissive_off() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("OAG_ALPHA_EMISSIVE_OFF").is_some())
+}
+
+/// Whether `dn_diffuse_specular_emiss`'s picture and specular map are left to the sampler
+/// order (`OAG_SPECULAR_PICTURE_OFF`): the before half of a before/after pair.
+pub(super) fn specular_picture_off() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("OAG_SPECULAR_PICTURE_OFF").is_some())
 }
 
 /// Whether every material's picture is replaced by a flat colour keyed by its

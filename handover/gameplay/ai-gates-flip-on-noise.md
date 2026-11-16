@@ -29,8 +29,9 @@ counts for every configuration and what changed in our AI:
   `ai_fork_split_ground_truth`, the HD/Omega/2048 original-field tests (hooked to
   `OAG_PERTURB`, each failed at most 2 of 9 scales), and, not hooked at all,
   `oag-game`'s `original_ai_ground_truth` Talon's field and `oag-net`'s Eliminator over the
-  wire (other crates; `tests/perturb` would need a home both reach). Unsettled, not
-  asserted: `06_Track` VENOM and `29_Track` RAPIER plans.
+  wire (other crates; `tests/perturb` would need a home both reach). The speed-plan pin
+  has no unsettled row left (2026-11-11: all 96 clean under 17 offsets, `docs/gameplay/ai.md`,
+  "A road under the line is a failure").
 - **Plan selection is the amplifier.** Whether `oag_ai::SpeedPlan::adapt` verifies a hull's plan
   decides whether a craft follows it, the reference at its yaw share (`0.77` for Triakis on
   Assegai's plan) or nothing; it flips on tiny trajectory changes. A graded fallback (verify the

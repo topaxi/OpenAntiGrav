@@ -76,3 +76,47 @@ fn a_state_with_no_row_keeps_the_last_one() {
     live.tick();
     assert!((live.group(7) - 0.68).abs() < 1e-6);
 }
+
+const REAR: &str = r#"<AudioConfig>
+  <RearOcclusion>
+    <Stereo max_frequency="14000.0"/>
+    <Surround max_frequency="24000.0"/>
+  </RearOcclusion>
+</AudioConfig>"#;
+
+fn mixer_law(audio: &Audio) -> Option<f32> {
+    audio.output().with_mixer(|mixer| mixer.rear_occlusion())
+}
+
+fn open_audio() -> Audio {
+    Audio::open(
+        &crate::settings::Settings::default(),
+        None,
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    )
+}
+
+/// Fails if the title's layout, the file's value or the circuit's switch stops reaching the mixer.
+#[test]
+fn the_rear_low_pass_reaches_the_mixer_only_for_a_title_that_names_it() {
+    let mut maps = Maps::parse(SAMPLE);
+    maps.rear = Maps::parse(REAR).rear();
+    let mut audio = open_audio();
+    audio.set_hd_mix(maps);
+    assert_eq!(
+        mixer_law(&audio),
+        None,
+        "a file with the element, a title that names none"
+    );
+    audio.set_rear_occlusion_layout(Some("Stereo"));
+    assert_eq!(mixer_law(&audio), Some(14_000.0));
+    audio.set_circuit_low_pass_off(true);
+    assert_eq!(mixer_law(&audio), None, "a circuit with its low-pass off");
+    audio.set_circuit_low_pass_off(false);
+    audio.set_rear_occlusion_layout(Some("Mono"));
+    assert_eq!(mixer_law(&audio), None, "a layout the file does not carry");
+    audio.set_rear_occlusion_layout(None);
+    assert_eq!(mixer_law(&audio), None);
+}

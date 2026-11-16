@@ -73,6 +73,11 @@ impl TrackRecord {
 pub struct Race<E: Extension> {
     tick: u64,
     crafts: [Option<CraftRecord>; MAX_CRAFTS],
+    tracking: [oag_ext_abi::Tracking; MAX_CRAFTS],
+    course_length: f32,
+    title: u32,
+    options: [u8; oag_ext_abi::OPTIONS_LEN],
+    aiming: oag_ext_abi::Aiming,
     events: Vec<Event>,
     state: Vec<u8>,
     track: Vec<u8>,
@@ -92,6 +97,11 @@ impl<E: Extension> Race<E> {
         Self {
             tick: 0,
             crafts: [None; MAX_CRAFTS],
+            tracking: [oag_ext_abi::Tracking::default(); MAX_CRAFTS],
+            course_length: 0.0,
+            title: 0,
+            options: [0; oag_ext_abi::OPTIONS_LEN],
+            aiming: oag_ext_abi::Aiming::default(),
             events: Vec::new(),
             state: vec![0; E::State::BYTES],
             track: Vec::new(),
@@ -103,6 +113,59 @@ impl<E: Extension> Race<E> {
     #[must_use]
     pub fn with_craft(mut self, slot: Slot, craft: CraftRecord) -> Self {
         self.crafts[slot.index()] = Some(craft);
+        self
+    }
+
+    /// Sets the course's length and where `slot` runs on it: its distance along the lap
+    /// (`None`: no fix yet) and its place.
+    #[must_use]
+    pub fn with_course(
+        mut self,
+        length: f32,
+        slot: Slot,
+        progress: Option<f32>,
+        place: u8,
+    ) -> Self {
+        self.course_length = length;
+        self.tracking[slot.index()] = oag_ext_abi::Tracking { progress, place };
+        self
+    }
+
+    /// Puts `slot` at `progress` along the lap (`None`: no fix), its place and the course's
+    /// length as they are: a craft flown on between two ticks of a test.
+    pub fn set_progress(&mut self, slot: Slot, progress: Option<f32>) -> &mut Self {
+        self.tracking[slot.index()].progress = progress;
+        self
+    }
+
+    /// Sets where `target` sits in `observer`'s frame, in world units ahead, to the right and
+    /// above: what [`Craft::aim_at`](crate::Craft::aim_at) reads.
+    #[must_use]
+    pub fn with_aim(
+        mut self,
+        observer: Slot,
+        target: Slot,
+        (forward, right, up): (f32, f32, f32),
+    ) -> Self {
+        self.aiming.set(
+            observer.index(),
+            target.index(),
+            oag_ext_abi::Aim::from_offset(forward, right, up),
+        );
+        self
+    }
+
+    /// The player's picks the module reads with `Observation::option`.
+    #[must_use]
+    pub fn with_options(mut self, options: [u8; oag_ext_abi::OPTIONS_LEN]) -> Self {
+        self.options = options;
+        self
+    }
+
+    /// Races a title: `title` is `oag_ext::title!("wipeout-hd")`.
+    #[must_use]
+    pub fn with_title(mut self, title: u32) -> Self {
+        self.title = title;
         self
     }
 
@@ -121,6 +184,26 @@ impl<E: Extension> Race<E> {
     /// Queues `event` for the next call.
     pub fn event(&mut self, event: Event) -> &mut Self {
         self.events.push(event);
+        self
+    }
+
+    /// Queues for the next call what the host would deliver for `command`, an
+    /// [`Command::Emit`] another extension's [`Race::tick`] returned, as sent by the mod
+    /// whose id is `sender` (`channel!` of it). Any other command is ignored.
+    pub fn hear(&mut self, sender: u32, command: &Command) -> &mut Self {
+        if let Command::Emit {
+            slot,
+            channel,
+            value,
+        } = *command
+        {
+            self.events.push(Event::Mod {
+                slot,
+                from: sender,
+                channel,
+                value,
+            });
+        }
         self
     }
 
@@ -152,6 +235,13 @@ impl<E: Extension> Race<E> {
             active,
             &self.events,
             &records,
+            &oag_ext_abi::Course {
+                length: self.course_length,
+                tracking: &self.tracking,
+                title: self.title,
+                aiming: Some(&self.aiming),
+                options: self.options,
+            },
             &self.state,
         );
         let status = crate::run::<E>(&mut io, &self.track);
@@ -172,5 +262,18 @@ impl<E: Extension> Race<E> {
         self.events.clear();
         self.tick += 1;
         commands
+    }
+}
+
+/// What `E` answers when the host asks whether it runs in `race`: the description goes through
+/// the host's writer and the export's body, as `oag_wants_race` would run it.
+#[must_use]
+pub fn wants_race<E: Extension>(race: &oag_ext_abi::RaceInfo) -> bool {
+    let mut io = Box::new([0_u8; IO_LEN]);
+    race.write(&mut io);
+    match crate::ask::<E>(&io) {
+        oag_ext_abi::RUN => true,
+        oag_ext_abi::SKIP => false,
+        other => panic!("oag_wants_race returned {other}"),
     }
 }

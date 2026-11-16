@@ -8,11 +8,10 @@
 //! normal, speed-preserving redirect, fall, detonate on a wall).
 
 use oag_core::math::Vec3;
-use oag_physics::ShipState;
-use oag_physics::params::Dimensions;
 use oag_tables::weapons::PlasmaStats;
 
 use super::KMH_PER_UNIT_PER_SECOND;
+use crate::Craft;
 
 /// Where a craft launches its plasma bolt from, and the speed it holds while
 /// charging.
@@ -34,31 +33,44 @@ use super::KMH_PER_UNIT_PER_SECOND;
 /// timer and round counter (Mine). **The schema.** The `<Stats>` carries no
 /// `spread`, the same absence as on the one-shot Missile.
 ///
-/// # Shared with the Rocket, so equally ours
+/// # The launch point
 ///
-/// Only the launch offset: the origin pushed forward by the hull's extent
-/// ([`super::launch`]'s choice, so the two cannot drift).
+/// The craft's weapon node, [`muzzle`].
 #[must_use]
-pub fn launch(
-    state: &ShipState,
-    dimensions: &Dimensions,
-    stats: &PlasmaStats,
-    class: &str,
-) -> Option<(Vec3, Vec3)> {
-    let (nose, forward) = muzzle(state, dimensions);
+pub fn launch<C: Craft>(craft: &C, stats: &PlasmaStats, class: &str) -> Option<(Vec3, Vec3)> {
+    let (nose, forward) = muzzle(craft);
     let speed = (stats.speed_for_named(class)? + stats.launch_speed) / KMH_PER_UNIT_PER_SECOND;
     Some((nose, forward * speed))
 }
 
 /// Where a bolt sits on the craft, and which way it points, right now. Split from
 /// [`launch`] because a charging bolt needs both every wind-up tick without
-/// re-resolving a speed (see [`CHARGE_SECONDS`]). The offset is [`super::launch`]'s.
+/// re-resolving a speed (see [`CHARGE_SECONDS`]).
+///
+/// **The hull's `Ship Muzzle` locator, through the craft's display scale
+/// (confidence 85, Assegai probed; `plasma.md`, "the head's matrix and node" and
+/// "the head after the release").** `Plasma_Init` seeds the bolt's own matrix from
+/// the craft's weapon node and `Plasma_Launch` releases it there: read at the draw
+/// hook, the bolt is 4.24 ahead of the craft's body on the last charging frame and
+/// 4.43, 4.62, 4.81 ... on the frames after, with no step back, while the craft's
+/// speed rose from 106 to 120 u/s. The node is the hull's authored locator
+/// (`(0, 0, 5.653)` model units on Assegai, per team) carried by the craft's
+/// world rows, which are [`LAUNCH_SPEED_SCALE`] long. A `.vex` hull is authored
+/// nose along model `+Z` and drawn half a turn about its up axis, so model `+Z`
+/// is the body's forward and model `+X` its left. A hull with no locator keeps
+/// the measured hold point [`MUZZLE_FORWARD`].
 #[must_use]
-pub fn muzzle(state: &ShipState, dimensions: &Dimensions) -> (Vec3, Vec3) {
-    let forward = state.body.forward();
-    let nose = state.body.position
-        + forward * oag_physics::wall::hull_extent(&state.body, dimensions, forward);
-    (nose, forward)
+pub fn muzzle<C: Craft>(craft: &C) -> (Vec3, Vec3) {
+    let body = &craft.physics().body;
+    let forward = body.forward();
+    let offset = match craft.muzzle() {
+        Some(local) => {
+            let scaled = local * LAUNCH_SPEED_SCALE;
+            forward * scaled.z + body.up() * scaled.y - body.right() * scaled.x
+        }
+        None => forward * MUZZLE_FORWARD,
+    };
+    (body.position + offset, forward)
 }
 
 /// How long a plasma bolt winds up on the nose before it flies, in seconds.
@@ -93,6 +105,41 @@ pub fn muzzle(state: &ShipState, dimensions: &Dimensions) -> (Vec3, Vec3) {
 /// fourteen including `Plasma_SpeedForClass`. The wind-up is three times shorter
 /// than the attribute suggests. See `plasma.md`.
 pub const CHARGE_SECONDS: f32 = 1.0;
+
+/// How far ahead of the craft's body a bolt is held and released on a hull with
+/// no `Ship Muzzle` locator (HD's hulls).
+///
+/// **Measured 2026-10-31, confidence 75, Assegai Venom only, at one hook.**
+/// `--probe plasma_fly` records the firing craft beside the bolt at the entry of
+/// `Plasma_Update`: there the bolt, not yet moved this frame, reads 2.23 units
+/// ahead of a craft that has (three boots agree to 0.05). At one instant the
+/// release point is the locator itself, 4.24 ahead on Assegai ([`muzzle`]); the
+/// 2.23 is that minus one craft step at 120 u/s, kept only as the stand-in for a
+/// hull that authors no node. This engine once pushed the bolt out by the hull's
+/// extent, 4.87 on that craft.
+pub const MUZZLE_FORWARD: f32 = 2.23;
+
+/// How much slower than its release speed a bolt leaves, until its first floor ride.
+///
+/// **Measured 2026-10-30, confidence 85** (`--probe plasma_fly`, Venom, Talon's
+/// Junction, Time Trial): released at `launch_kmh` 634.61, the first four records read
+/// 132.2 units/s = 475.9 km/h = 0.75 x that. It is the Rocket's law: the weapon-node
+/// matrix `Plasma_Launch` (`0x0885bf84`) takes carries the craft's display scale, so
+/// the direction row is 0.75 long. Not backed out of the matrix (the 16 floats are
+/// unread); the scale is [`super::rocket::LAUNCH_SPEED_SCALE`], same global.
+pub const LAUNCH_SPEED_SCALE: f32 = super::rocket::LAUNCH_SPEED_SCALE;
+
+/// How far above the floor a Plasma bolt rides: `g_ride_height` (`_DAT_002acf08`).
+///
+/// **Measured 2026-10-31, confidence 80, not read from Pulse's constant** (its value was
+/// never sampled; `plasma.md`). HD's and Omega's own `Plasma_Update` read a literal 4.0
+/// (`ps3-hdfury-eu/plasma.md`, the TOC constant `0x008a9fd8`), which agrees. `--probe plasma_fly` on the original puts the bolt's
+/// riding position 4.04 units along the floor normal above the floor this engine's
+/// collision world finds under it (five records, 4.04 to 4.05), where the Rocket's
+/// own literal is `3.0` ([`super::RIDE_HEIGHT`]). On a banked track the extra unit is
+/// 0.2 units sideways, which decides where a bolt meets the wall beside it. Missile and
+/// Shuriken read the same global and keep `3.0` until each is measured.
+pub const RIDE_HEIGHT: f32 = 4.0;
 
 #[cfg(test)]
 mod tests;

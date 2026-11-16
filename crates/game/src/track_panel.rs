@@ -171,3 +171,33 @@ pub fn draw_once(
         Err(why) => log::warn!("the track panel did not build ({why}); capturing without it"),
     }
 }
+
+/// The panel of a headless capture: the same overlay `RaceStage::draw_hud` draws, laid out
+/// against `window`'s own views on a multi-window race (`None` is the single window).
+pub fn draw_captured(
+    (device, queue, format): (&wgpu::Device, &wgpu::Queue, wgpu::TextureFormat),
+    assets: Option<Assets>,
+    (race, window): (&oag_raceplay::Race, Option<usize>),
+    (encoder, view, viewport): (
+        &mut wgpu::CommandEncoder,
+        &wgpu::TextureView,
+        (f32, f32, f32, f32),
+    ),
+) {
+    let (views, cut) = match window {
+        Some(index) => (race.window_drawn(index).len(), race.window_cut(index)),
+        None => (race.views_drawn(), race.cut()),
+    };
+    if let (Some(assets), Some(progress), true) = (assets, race.track_panel_progress(), views > 0) {
+        draw_once(
+            device,
+            queue,
+            format,
+            assets,
+            encoder,
+            view,
+            progress,
+            crate::hud_views::panel_viewport(views, cut, viewport),
+        );
+    }
+}

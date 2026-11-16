@@ -1,0 +1,16 @@
+# Wipeout Pulse and Pure rumble: plasma charges and discharges: a long swell.
+# Read through the fallback asset layer; a disc pattern of the same name wins, and a file
+# in overrides/<title>/Data/XML/Rumble/ replaces this one.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/rumble.tosd"
+version = "1.0.0"
+
+[pattern]
+type = "OneShot"
+class = "Game"
+priority = "High"
+
+[tracks]
+large = [200, 255, 255, 240, 220, 195, 170, 150, 130, 110, 95, 80, 65, 52, 40, 30, 20, 12, 6]
+small = [1, 1, 1, 1, 1, 0, 0, 0]

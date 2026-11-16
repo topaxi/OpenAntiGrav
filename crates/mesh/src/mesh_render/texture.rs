@@ -3,7 +3,7 @@
 //! Split out of `mesh_render.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`.
 
-use crate::mesh::{ModelTexture, Texels};
+use crate::mesh::{BlockFormat, ModelTexture, Texels};
 
 /// Downsamples `rgba` into a full mip chain by repeated 2x2 box filtering,
 /// down to a 1x1 level.
@@ -12,7 +12,7 @@ use crate::mesh::{ModelTexture, Texels};
 /// chase camera produces; without mips, minification aliases into shimmer
 /// that a single sample can't fix. Filtering happens on `Rgba8UnormSrgb`
 /// sample data, matching what the sampler itself blends between levels.
-pub(super) fn mip_chain(width: u32, height: u32, rgba: &[u8]) -> Vec<(u32, u32, Vec<u8>)> {
+pub(crate) fn mip_chain(width: u32, height: u32, rgba: &[u8]) -> Vec<(u32, u32, Vec<u8>)> {
     let mut levels: Vec<(u32, u32, Vec<u8>)> = vec![(width, height, rgba.to_vec())];
     loop {
         let (w, h, data) = levels.last().expect("levels is never empty");
@@ -349,6 +349,26 @@ fn upload_with(
             dropped_levels: skip as u32,
         });
     }
+    if let Texels::Blocks {
+        format: BlockFormat::R16Float,
+        levels,
+    } = &texture.texels
+    {
+        let bytes = levels.first()?;
+        let gpu = oag_gpu::texture::upload_2d(
+            device,
+            queue,
+            &texture.label,
+            wgpu::TextureFormat::R16Float,
+            (texture.width, texture.height),
+            bytes,
+        );
+        return Some(Placed {
+            view: gpu.create_view(&wgpu::TextureViewDescriptor::default()),
+            gpu_bytes: bytes.len() as u64,
+            dropped_levels: 0,
+        });
+    }
     let Texels::Blocks { format, levels } = &texture.texels else {
         let rgba = texture.rgba().expect("the other arm is Texels::Blocks");
         return upload_rgba(
@@ -490,6 +510,10 @@ pub(super) fn plan(texture: &ModelTexture, blocks: bool, limit: u32) -> Option<(
             let skip = first_fitting_level(texture.width, texture.height, levels.len(), limit, 1)?;
             Some((skip as u32, sum(&levels[skip..])))
         }
+        Texels::Blocks {
+            format: BlockFormat::R16Float,
+            levels,
+        } => Some((0, levels.first().map_or(0, |l| l.len() as u64))),
         Texels::Blocks { levels, .. } if blocks => {
             let skip = first_fitting_level(texture.width, texture.height, levels.len(), limit, 4)?;
             Some((skip as u32, sum(&levels[skip..])))

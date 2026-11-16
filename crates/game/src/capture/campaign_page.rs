@@ -21,11 +21,12 @@ pub(super) struct CampaignPage {
 /// Which Race Campaign screen a `--menu-page` name asks for, if either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CampaignKind {
-    /// **HD/Fury only.** `Campaign Selection`, ahead of `Grid` - see
+    /// `Campaign Selection`, ahead of `Grid` - see
     /// `crate::campaign_stage::Screen::Selection`'s own doc. Refused on
-    /// every other title, the same way [`campaign_page`] already refuses a
-    /// source with no campaign at all. `selected` is `0` for Fury (the
-    /// default) and `1` for `Wipeout HD`, spelled `campaign-select` and
+    /// a title whose screen file authors none, the same way [`campaign_page`]
+    /// already refuses a source with no campaign at all. `selected` is the
+    /// entry's position in the screen's `campaignList` (`0`, the default, is
+    /// Fury on HD and 2048 on Omega), spelled `campaign-select` and
     /// `campaign-select@1`.
     Selection { selected: usize },
     /// `hd_base` picks HD's base `grid0`..`grid7` over Fury's (the default,
@@ -136,7 +137,7 @@ impl FlyerShot {
     }
 }
 
-use crate::unlock::{to_campaign_difficulty, to_campaign_medal};
+use crate::unlock::{campaign_tier, to_campaign_difficulty};
 
 /// Draws `Campaign Selection`, `Grid Selection` on its first tier, or `Cell
 /// Selection` on that tier's own cells - the same shape
@@ -224,16 +225,37 @@ pub(super) fn campaign_page(
         }
         None => None,
     };
+    let with_words;
+    let strings = match custom.as_ref().map(|custom| &custom.words) {
+        Some(words) => {
+            let mut table = strings.clone();
+            crate::campaign::custom::layer_words(&mut table, words, None);
+            with_words = table;
+            &with_words
+        }
+        None => strings,
+    };
     let mut campaign = campaign;
     if let Some(custom) = &custom {
         campaign.grids.clone_from(&custom.grids);
         campaign.selection_layout = None;
-        campaign.grid_layout_fury = None;
+        campaign.chooser = None;
     }
     // No per-session tip rotation, the same gap `circuit_names` below has -
     // see `crate::campaign::static_footer_overlay`. Read before
     // `campaign.sprites` moves out below.
     let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces);
+    let tiers = custom.as_ref().map_or_else(
+        || oag_tables::race_campaign::MedalTiers::standard().clone(),
+        |custom| custom.tiers.clone(),
+    );
+    // The medal art a mod asks for, as `Session::open_campaign` resolves it live.
+    let medal_art = crate::campaign::medal_art::apply(
+        &crate::mods::Mods::load_for_profile()?.installed_for(title, &|_| true),
+        custom.as_ref(),
+        || crate::launcher::survey(&oag_source::source::candidates()),
+        &mut campaign.sprites,
+    );
     *sprites = campaign.sprites;
     let is_hd = crate::campaign::draws_hd_campaign(title);
     // A cell's own best saved medal, by `name` - see `records`' own doc
@@ -247,18 +269,33 @@ pub(super) fn campaign_page(
     let cell_model = |cells: Vec<oag_tables::race_campaign::Cell>, which: usize| {
         let build = |cells: Vec<oag_tables::race_campaign::Cell>| {
             let model = oag_ui_screens::campaign::CellSelection::with_medals(cells, &|name| {
-                records
-                    .campaign_medal(&campaign_title, name)?
-                    .best_medal
-                    .map(to_campaign_medal)
-            });
+                campaign_tier(records.campaign_medal(&campaign_title, name)?, &tiers)
+            })
+            .with_medal_art(medal_art.clone())
+            .with_tiers(tiers.clone());
+            // The earned rung picks the atlas block; the swatch ignores it, and a still of the
+            // swatch keeps drawing the row text it always did.
+            let model = if medal_art == oag_ui_screens::campaign::MedalArt::Swatch {
+                model
+            } else {
+                model.with_difficulty(&|name| {
+                    records
+                        .campaign_medal(&campaign_title, name)?
+                        .best_difficulty
+                        .map(to_campaign_difficulty)
+                })
+            };
             match &custom {
-                Some(custom) => model.with_fixed_locks(&|name| {
-                    custom.fixed_lock(
-                        name,
-                        &crate::unlock::campaign_medal_of(records, &campaign_title),
-                    )
-                }),
+                Some(custom) => model
+                    .with_fixed_locks(&|name| {
+                        custom.fixed_lock(
+                            name,
+                            &crate::unlock::campaign_medal_of(records, &campaign_title, &tiers),
+                        )
+                    })
+                    .with_tier_targets(&|name| {
+                        Some(custom.event(name)?.tier_targets.flat().to_vec())
+                    }),
                 None => model,
             }
         };
@@ -279,10 +316,16 @@ pub(super) fn campaign_page(
         model
     };
     let medal_of = |cell_name: &str| {
-        records
-            .campaign_medal(&campaign_title, cell_name)?
-            .best_medal
-            .map(to_campaign_medal)
+        campaign_tier(records.campaign_medal(&campaign_title, cell_name)?, &tiers)
+    };
+    // A mod campaign's grid asks for what its events can award, not the best tier everywhere.
+    let summarise = |grid: &oag_tables::race_campaign::Grid| {
+        let mut summary =
+            oag_ui_screens::campaign::GridSummary::from_grid_with_medals(grid, &tiers, &medal_of);
+        if let Some(custom) = &custom {
+            summary.max_points = custom.max_points(grid);
+        }
+        summary
     };
     // [`medal_of`]'s own sibling for `oag_ui_screens::campaign::CellSelection::with_difficulty`
     // - **HD only**, per that method's own doc; read unconditionally here
@@ -326,15 +369,19 @@ pub(super) fn campaign_page(
         kind,
         CampaignKind::Grid { hd_base: true, .. } | CampaignKind::Cell { hd_base: true, .. }
     );
-    let (hd_grids, hd_grid_layout) = match campaign.grid_layout_fury.as_ref().filter(|_| !base_hd) {
+    let wanted = if base_hd { "HD" } else { "Fury" };
+    let entry = campaign.chooser.as_ref().and_then(|chooser| {
+        chooser
+            .entries()
+            .iter()
+            .find(|entry| entry.tag() == Some(wanted))
+    });
+    let (hd_grids, hd_grid_layout) = match entry {
         // A mod campaign pages all of its own grids on the base layout.
         _ if custom.is_some() => (&campaign.grids[..], &campaign.grid_layout),
-        Some(layout) => (
-            campaign
-                .grids
-                .get(oag_hd::campaign::FURY_GRID_RANGE)
-                .unwrap_or(&[]),
-            layout,
+        Some(entry) => (
+            campaign.grids.get(entry.grids.clone()).unwrap_or(&[]),
+            &entry.layout,
         ),
         None => (
             campaign
@@ -357,12 +404,13 @@ pub(super) fn campaign_page(
                         oag_hd::campaign::SCREEN_ENTRY
                     );
                 };
-                let model =
-                    oag_ui_screens::campaign::selection::CampaignSelection::at(if selected == 0 {
-                        oag_ui_screens::campaign::selection::Campaign::Fury
-                    } else {
-                        oag_ui_screens::campaign::selection::Campaign::Hd
-                    });
+                let chooser = campaign.chooser.clone().with_context(|| {
+                    "this source has no Campaign Selection screen to read".to_string()
+                })?;
+                let model = oag_ui_screens::campaign::selection::CampaignSelection::at(
+                    chooser,
+                    oag_ui_screens::campaign::selection::Campaign::new(selected),
+                );
                 selected_campaign = Some(model.selected());
                 // No progress source in a still - `0` earned, the same
                 // fresh-profile reading `GridSelection::new`'s own bare
@@ -371,23 +419,29 @@ pub(super) fn campaign_page(
                 // total cell count never depends on a save file - so it is
                 // summed here the same way `CampaignStage::campaign_gold_medals`
                 // does live.
-                let total = |range: std::ops::Range<usize>| {
-                    campaign
-                        .grids
-                        .get(range)
-                        .unwrap_or(&[])
-                        .iter()
-                        .map(|grid| u32::try_from(grid.cells.len()).unwrap_or(u32::MAX))
-                        .sum::<u32>()
-                };
+                let gold: Vec<(u32, u32)> = model
+                    .chooser()
+                    .entries()
+                    .iter()
+                    .map(|entry| {
+                        let total = campaign
+                            .grids
+                            .get(entry.grids.clone())
+                            .unwrap_or(&[])
+                            .iter()
+                            .map(|grid| u32::try_from(grid.cells.len()).unwrap_or(u32::MAX))
+                            .sum::<u32>();
+                        (0, total)
+                    })
+                    .collect();
                 oag_ui_screens::campaign::selection::draw_list(
                     &model,
                     layout,
                     skin,
                     frame,
                     strings,
-                    (0, total(oag_hd::campaign::FURY_GRID_RANGE)),
-                    (0, total(oag_hd::campaign::HD_GRID_RANGE)),
+                    &gold,
+                    0,
                     backdrop,
                     false,
                     &|src| sprites.get(src),
@@ -400,14 +454,7 @@ pub(super) fn campaign_page(
             }
             CampaignKind::Grid { tier, .. } => {
                 let mut model = oag_ui_screens::campaign::GridSelection::new(
-                    hd_grids
-                        .iter()
-                        .map(|grid| {
-                            oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
-                                grid, &medal_of,
-                            )
-                        })
-                        .collect(),
+                    hd_grids.iter().map(&summarise).collect(),
                 );
                 model.set_index(tier);
                 flyer_name = model.selected().and_then(|grid| grid.flyer_name.clone());
@@ -445,11 +492,9 @@ pub(super) fn campaign_page(
                     &campaign_title,
                     true,
                 );
-                let grid_summary =
-                    grid.map_or(oag_ui_screens::campaign::GridSummary::empty(), |grid| {
-                        oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
-                            grid, &medal_of,
-                        )
+                let grid_summary = grid
+                    .map_or(oag_ui_screens::campaign::GridSummary::empty(), |grid| {
+                        summarise(grid)
                     });
                 oag_ui_screens::campaign::hd::hd_cell_draw_list(
                     &model,
@@ -465,8 +510,9 @@ pub(super) fn campaign_page(
                         next_flyer: hd_grids
                             .get(tier + 1)
                             .and_then(|grid| grid.flyer_name.as_deref()),
-                        fury: !base_hd && campaign.grid_layout_fury.is_some(),
+                        fury: !base_hd && campaign.chooser.is_some(),
                         track_emblems: &campaign.circuit_emblems,
+                        medal_tier_rows: title.campaign.medal_rows(),
                     },
                     backdrop,
                     false,
@@ -479,21 +525,15 @@ pub(super) fn campaign_page(
         match kind {
             CampaignKind::Selection { .. } => {
                 anyhow::bail!(
-                    "Campaign Selection is Wipeout HD/Fury's own screen - this source has none"
+                    "Campaign Selection is the screen of a title whose CellMode_Definition.xml authors one - this source has none"
                 );
             }
             CampaignKind::Grid { .. } => {
                 let model = oag_ui_screens::campaign::GridSelection::new(
-                    campaign
-                        .grids
-                        .iter()
-                        .map(|grid| {
-                            oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
-                                grid, &medal_of,
-                            )
-                        })
-                        .collect(),
-                );
+                    campaign.grids.iter().map(&summarise).collect(),
+                )
+                .with_medal_art(medal_art.clone())
+                .with_tiers(tiers.clone());
                 let mut model = model;
                 model.pulse_mut().set_seconds(pulse_seconds.unwrap_or(0.0));
                 oag_ui_screens::campaign::grid_draw_list(

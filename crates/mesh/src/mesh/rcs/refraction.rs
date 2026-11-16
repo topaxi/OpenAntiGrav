@@ -69,11 +69,11 @@ use super::{Report, Textures};
 /// The engine-bound screen-colour sampler.
 pub(super) const SCREEN_GRAB: u32 = 0x88a0_df95;
 /// `DiffuseTexture`.
-const DIFFUSE: u32 = 0x11cb_4f74;
+pub(super) const DIFFUSE: u32 = 0x11cb_4f74;
 /// The weight `W` of the grab: a float3 in the record.
-const WEIGHT: u32 = 0x7857_5769;
+pub(super) const WEIGHT: u32 = 0x7857_5769;
 /// `DiffuseColour`, which `cl_tunnelrefraction` multiplies its lit term by.
-const DIFFUSE_COLOUR: u32 = 0x512f_8e65;
+pub(super) const DIFFUSE_COLOUR: u32 = 0x512f_8e65;
 
 /// Whether a resolved program is a screen-grab refraction: it declares the
 /// engine-bound grab, the record binds no texture to it, and the program
@@ -91,6 +91,39 @@ fn reads_the_screen(
             .instructions
             .iter()
             .any(|i| i.is_texture() && u32::from(i.unit) == unit)
+}
+
+/// The glass's glow-table entry: `weight` is the record's `W`, `picture` whether the
+/// program weights the grab by the diffuse picture's alpha, `diffuse_colour` the
+/// constant a picture-less program tints its lit term with, and `picture_scale`
+/// the factor the program multiplies a picture-weighted grab by (`refraction.wesl`).
+pub(super) fn layer(
+    weight: [f32; 3],
+    picture: bool,
+    diffuse_colour: Option<f32>,
+    picture_scale: f32,
+) -> Emissive {
+    Emissive {
+        tint: weight,
+        offset: if picture {
+            1.0
+        } else {
+            diffuse_colour.unwrap_or(1.0)
+        },
+        scale: if picture { picture_scale } else { 2.0 },
+        rate: f32::from(u8::from(picture)),
+        program: [0.0; 2],
+    }
+}
+
+/// The entry's index in `table`, adding it when new; `None` when the table is full.
+pub(super) fn table_index(table: &mut Vec<Emissive>, layer: Emissive) -> Option<usize> {
+    table.iter().position(|seen| *seen == layer).or_else(|| {
+        (table.len() + 1 < EMISSIVE_LIMIT).then(|| {
+            table.push(layer);
+            table.len() - 1
+        })
+    })
 }
 
 /// Marks every screen-grab material's slot and gives it its table entry.
@@ -128,24 +161,13 @@ pub(super) fn refraction(
         // alpha; one that does not takes the grab doubled and tints its own
         // lit term by `DiffuseColour` instead.
         let picture = declared.samplers.iter().any(|&(h, _)| h == DIFFUSE);
-        let layer = Emissive {
-            tint: [weight.value[0], weight.value[1], weight.value[2]],
-            offset: if picture {
-                1.0
-            } else {
-                value_of(DIFFUSE_COLOUR).map_or(1.0, |p| p.value[0])
-            },
-            scale: if picture { 1.0 } else { 2.0 },
-            rate: f32::from(u8::from(picture)),
-            program: [0.0; 2],
-        };
-        let index = table.iter().position(|seen| *seen == layer).or_else(|| {
-            (table.len() + 1 < EMISSIVE_LIMIT).then(|| {
-                table.push(layer);
-                table.len() - 1
-            })
-        });
-        let Some(index) = index else {
+        let entry = layer(
+            [weight.value[0], weight.value[1], weight.value[2]],
+            picture,
+            value_of(DIFFUSE_COLOUR).map(|p| p.value[0]),
+            1.0,
+        );
+        let Some(index) = table_index(table, entry) else {
             report.refraction_unread += 1;
             continue;
         };

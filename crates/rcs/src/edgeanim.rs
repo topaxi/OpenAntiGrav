@@ -34,7 +34,7 @@
 //! monotonically increasing `baseFrame` sequence across all four clips this
 //! module was checked against; resolving it any other way does not.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 const BE: ByteOrder = ByteOrder::Big;
 

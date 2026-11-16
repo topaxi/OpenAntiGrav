@@ -19,7 +19,7 @@ them is any of these.
 | --- | --- | --- | --- |
 | `WO_PLASMA_LIGHTNING_EXPAND` | HD's plasma detonation (`WeaponExplosions_Start`) | absent | absent |
 | `WO_PLASMA_LIGHTNING_COLLAPSE` | HD, its other half, 1.3 s later | absent | absent |
-| `WO_TRAIL_HITSHIP`, `_RED` | HD's `Trail_HitShipEffect`; `oag_fx::exhaust::hd` | absent | absent |
+| `WO_TRAIL_HITSHIP`, `_RED` | HD's `Trail_HitShipEffect`; `oag_fx::exhaust::hd` | absent (HD's is lent with `graphics.trail_hits` on) | absent (same) |
 | `WO_LEACHBEAM_ABSORB` | HD's `LeachBall_Advance` | absent | absent |
 | `WO_MAGSTRIP_SPARKS`, `_ZONE` | 2048's ship constructor (`GameMode_IsHdLineage` false) | absent | absent |
 | `WO_SHIP_ENGINEFLARE` | the PS2's own authored flare | absent | **present on the disc, never requested** (`engine-trail.md`, "The engine flare is one quad") |
@@ -151,3 +151,173 @@ Pulse PSP and PS2 now draw it (`oag_raceplay::adverts`), and the load report's
 slots all name a model (Talon's Junction). It still fires, honestly, on a circuit with a
 **colour** slot and a quad for it (`05_Track`: three), because which advert a colour picks
 is a pool walk this project has not read. HD is not wired.
+
+## Trail-hit burst budget (2026-11-11)
+
+`graphics.trail_hits` lends HD's `WO_TRAIL_HITSHIP` to Pulse and Pure (above). A burst lives
+about 30 ticks, so a craft inside a rival's trail holds about 30 `oag_fx::psys::Stage`
+instances when it fires every tick (HD's measured rate), and the stage's 32 instances were
+all trail hits: a play with no free slot recycles the instance with the fewest live
+particles, which took detonations, absorb bursts and pickups. A maintainer report ("other
+effects stop playing when trail hits happen") started this.
+
+What changed, in `oag-fx` and `oag-raceplay`:
+
+1. **Trail hits are expendable** (`Stage::play_expendable`): they take a free instance or
+   recycle the oldest other trail hit, never another effect's. Any other play, and `attach`'s
+   reserve of six, count them as free. Red-to-green test:
+   `tests::trail_hits::a_detonation_started_while_trail_hits_stream_still_plays_to_completion`.
+2. **The lent burst fires every other tick** per owner and intruder pair, on the first tick
+   inside and every second one after (a maintainer ruling, "30-50 % fewer", on 2026-11-11).
+   A burst the title authors (HD, and 2048 and Omega with the setting on) keeps the measured
+   every-tick rate.
+3. **`MAX_INSTANCES` is 64**, from a measurement: `oag-game --race --mode single_race --seed
+   N --ticks 20000` on Pulse PSP EU, trail hits on (HD mounted as the lender), `OAG_MODS` an
+   empty directory, the stage temporarily at 256 instances with a peak counter in
+   `Stage::advance`, seeds 1 to 11. Peak instances that are not trail hits: 20, 27, 29, 23,
+   22, 18, 21, 16, 23, 22, 27 (the worst, 29, is one wrecked craft: 9 attached
+   `WO_SHIP_DEATH_SPARKS` and 9 `WO_SHIP_FXNODE_EXPLO`, over collision sparks, a quake and a
+   bomb ring). Peak including trail hits at the every-other rate: 46, 53, 48, 46, 47, 71, 93,
+   43, 87, 112, 52. A first set of runs with the default mods loaded (`oag.energy-turbo`,
+   `oag.wall-penalty`) peaked at 56 non-trail instances in one seed: two wrecked craft (19
+   attached of each wreck effect) over a rocket's flare, detonations and a leech beam. **The
+   stock figure is 29; 64 is sized for two wrecks plus the six-instance attach reserve
+   (about 55), the modded run's 56 being the observed instance of that.** The player's craft
+   held the throttle and did not steer; the opponents flew. Memory, from `size_of`: 26,784 B
+   an instance (1.7 MB for 64, 0.86 MB for 32), and three particle vertex buffers (additive,
+   alpha-over, underlay) of `MAX_INSTANCES * 256 * 6` 100-byte vertices: 28.1 MiB for 64,
+   14.1 MiB for 32.
+
+Staged look: `--trail-sparks --give rocket --hold cross --press square` at 760 and 820 ticks
+draws the fireball with the lent sparks on the craft at 32 and at 64 instances alike. The
+staged scene holds one craft's burst, about 15 instances, so it does not exercise the
+eviction; the red-to-green test above does.
+
+Not measured: a rocket volley from several craft at once (the `--give rocket` aid fires
+about 127 in flight, which no race reaches), and Pure. Checked against HD, 2048 and Omega:
+the stage and the expendable rule are title-blind, and their burst rate is unchanged.
+
+## Trail-hit burst colour
+
+With `graphics.trail_hits` on, the lent `WO_TRAIL_HITSHIP` is redrawn in the hue of the ribbon
+the craft was struck in, at the burst's own brightness (`oag_fx::psys::Tint`,
+`Race::trail_hit_tint`). **A derivation, not a measurement.** HD picks its burst by the ribbon's
+owner: `WO_TRAIL_HITSHIP` in a blue ribbon, `_RED` in a red one
+(`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, the call-site table: the variant byte is the owner's `+0x7d2c`).
+Pulse and Pure author no burst, so the lent one would otherwise be HD's regardless of their
+ribbon; this applies HD's rule to it.
+
+**The rule.**
+
+1. **The hue is the ribbon's visible colour**: the sum of the layers the platform draws, since the
+   three are drawn additively and the burst sits on the hull inside the ribbon
+   (`oag_fx::exhaust::TrailLaw::ribbon_colour`, computed from `LAYER_COLOUR`, nothing typed in).
+   PSP (every layer): (1.43, 0.86, 1.81), luma 1.05, chroma direction (0.44, -0.22, 0.87), violet.
+   PS2 (`PS2_FIRST_LAYER`, the deep blue layer is not submitted): (1.43, 0.82, 1.31), luma 0.99,
+   chroma direction (0.78, -0.29, 0.56), pink-white. The outer layer alone, (0, 0.03, 0.50), is
+   direction (-0.13, -0.06, 0.99), blue; it is not used because it is the rim of the ribbon, not
+   what the core shows.
+2. **Chroma swap, luminance kept.** Per vertex, `Y = 0.2126 R + 0.7152 G + 0.0722 B`, chroma
+   `c = rgb - Y`; the vertex becomes `Y + |c| * unit(target chroma)`. Luminance is unchanged by
+   construction, a white or grey vertex stays as it was (the white-hot core is not coloured), a
+   saturated one keeps its strength of colour. A channel that would go negative shrinks the chroma
+   rather than being clamped (a negative in an additive blend subtracts light). A plain multiply
+   by the ribbon colour would only darken the core.
+3. **Per instance**, set by `Stage::play_carried_expendable` and cleared when the slot is
+   claimed again, applied where the stage gathers vertices. Render side only; no simulation
+   state, determinism untouched.
+4. **Only a lent burst.** `EffectHandles::is_lent(TrailHitship)` gates it: HD, and 2048 and Omega
+   (which play their own with the setting on), draw the effect as authored. The Pulse and Pure
+   ribbon is one colour law for every craft, so the owner does not change the hue; the PSP and
+   PS2 laws differ.
+
+**Evidence, and the limit of it.** Tests: `psys::tint::tests` (white stays white, blue takes the
+target hue at equal luminance, no negative channel), `psys::carried::tests` (a tint recolours
+its own instance only and a recycled slot forgets it), `tests::trail_hits` (a lent burst is the
+ribbon's hue at the authored luminance; the PS2 law gives another hue; an authored burst is
+drawn in the same colours as its effect draws it) and, on the discs,
+`trail_hits_lent_ground_truth` (every coloured vertex of HD's real burst on a Pulse race points
+within 0.999 of the ribbon's chroma direction).
+
+**The change is small on the PSP, because the burst's vertex colours already point the
+ribbon's way.** Measured on the discs (`trail_hits_lent_ground_truth`'s scene, a craft tucked
+eight units into a rival's ribbon, the tint switched off for the measurement): of 792 vertices
+with any chroma, the mean chroma direction is (0.42, -0.21, 0.87) against the PSP ribbon's
+(0.44, -0.22, 0.87), and 756 sit within 0.99 of it; 36 do not (not inspected further). HD's palette ends (0.79, 0.43, 1.0), direction (0.46, -0.22, 0.86)
+(`engine-trail.md`, "The two emitters"). The burst is violet at the vertex, and only the
+display pipeline (additive stacking of hundreds of soft quads, bloom, clipping) makes its rim
+read cyan. So on the PSP the tint moves the outliers and the rim, and the PS2's pink-white
+ribbon is where it shows.
+
+Frames, Pulse PSP EU, seed 7, `--trail-sparks`, tick 200, 1440x816, HD as lender; the burst is
+74,597 pixels (frame with the setting off against on); a pixel counts when a channel moves by
+more than 8 levels:
+
+| pressing | pixels moved by the tint | share of the burst |
+| --- | --- | --- |
+| Pulse PSP | 4,617 | 6 % |
+| Pure PSP | 4,156 | 6 % |
+| Pulse PS2 | 24,433 | 33 % |
+| Pulse PSP, tint forced red (probe) | 60,370 | 81 % |
+
+On the PSP the moved pixels' mean goes from (144, 207, 246) to (171, 202, 244): cyan-white to
+lilac-white. On the PS2 the cyan-white rim and sparks turn pink-violet, to match its pink-white
+ribbon. The red probe recolours most of the burst (the rest is clipped to white), so no draw
+path escapes the tint; it is a probe, not shipped.
+
+**Open: which hue is "the ribbon".** The summed layers are a derivation from the authored
+colours. In a PSP frame at 700 ticks the plume around the hull reads blue overall (chroma
+direction (-0.14, -0.06, 0.99), the outer layer's own (-0.13, -0.06, 0.99)), though that sample
+includes the hull and the bloom, and the strip below the hull reads (0.16, -0.15, 0.98). If a
+player judges the ribbon blue, the outer layer is the other candidate; it is a one-line change in
+`TrailLaw::ribbon_colour`. Checked against HD, 2048 and Omega: not applicable, they author the
+burst and are never lent it; Pure draws Pulse's ribbon law (`oag_pure::race`), not measured
+separately.
+
+## Trail-hit burst reach
+
+With `graphics.trail_hits` on, the lent burst (Pulse and Pure) fires only where the ribbon is
+drawn at 10 % or more of its head's brightness. An enhancement of this project's: the original
+fires nothing here, and HD's own test (the whole tube) is unchanged. Before this the burst fired
+along the whole ten-sample ring, including the back half where the ribbon is drawn at under 10 %
+and the player sees no trail to be in.
+
+**The cut is derived from the fade law, not picked.** The ribbon's colour fade is
+`powf(1 - TRAIL_FADE_STEP * age, 1 / TRAIL_FADE_SHAPE)` (`oag_fx::exhaust::trail_fade_at`,
+`engine-trail` for the PSP bake), read at the preset's scaled age (`Exhaust::shape_age`). Solving
+it for the one constant `TRAIL_HIT_MIN_BRIGHTNESS = 0.1` gives `age = (1 - 0.1^0.3) / 0.1`, 4.99 of
+the original's nine segments (the fade is 0.18 at sample 4 and 0.099 at sample 5), so on a
+ten-sample ring the lit line is the head's first five segments, about 55 % of it. A longer ring
+(`set_trail_samples`, 54 samples) stretches the fade over the whole ring, so the cut scales with
+it (`Exhaust::trail_lit_age`) and stays at the same share of the line.
+
+**The line is truncated, not the answer filtered.** `nearest_on_polyline` ends the line at the cut
+(inside a segment, interpolated) and returns the position along it, so a craft beside the lit part
+is measured against the lit part, never against a faded tail that curves nearer. The same query
+feeds the hit test and the contact point the burst is placed from, so the burst cannot anchor in
+the tail. Leaving the lit part is leaving: the existing `trail_inside` and `trail_hit_rest`
+bookkeeping clears in the tail and the burst fires again on re-entry.
+
+**PS2 needs no cut of its own.** Both laws draw `layer colour x constant x trail_fade_at(shape
+age)`: the PSP's constant is the grey ramp (`Exhaust::layer_alphas`), the PS2's the GS colour scale
+(`PS2_GS_COLOUR_SCALE`), and the PS2 not submitting layer 0 (`TrailLaw::first_layer`) changes which
+layers are drawn, not the fade they share. The constant cancels in a ratio to the head's
+brightness, so the ratio is the same fade on both. (The GS clamps a vertex colour at 1.0 and the
+PS2's scale is 1.64, so its head is saturated and the ribbon looks lit slightly further back than
+10 % of the unclamped head; the cut stays on the fade's own ratio. **Chosen, not measured.**)
+
+**Evidence.** Tests: `oag_fx::exhaust::tests` (`the_lit_age_is_where_the_drawn_fade_reaches_the_floor`,
+`the_lit_age_scales_with_a_longer_ring`, `trail_nearest_stops_at_the_lit_end_of_the_ribbon`,
+`nearest_on_polyline_reports_the_position_along_the_line`) and `tests::trail_hits` in
+`oag-raceplay` (a contact in the faded tail fires nothing and one near the head fires; the cut sits
+at the fade's floor; head, tail, head clears and re-arms; an HD craft deep in the tube still hits).
+Count of lent bursts fired over a fixed race (Pulse PSP EU, `--race --mode single_race --seed N
+--ticks 6000 --hold cross`, HD mounted as the lender, a temporary counter on the spawn, the cut
+switched off by a temporary environment switch for the "before"): seeds 1 to 8, 8,868 bursts
+before, 5,326 after, 40 % fewer; the per-seed range is 29 % (seed 1) to 60 % (seed 2). The
+simulation trace is byte-identical either way (view state only; no simulation, determinism or
+hash change). The same counts on HD (seeds 1 to 3: 3,957, 3,725, 4,056), 2048 (seed 1, 3000 ticks:
+2,071) and Omega (seed 1, 2000 ticks: 1,641) are equal with and without the cut.
+
+**Checked against 2048 and Omega:** ported by construction, not by a second implementation: both
+draw HD's tube (`hd_trail_active`) and test it whole, and the counts above are unchanged on both.

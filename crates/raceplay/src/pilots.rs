@@ -46,10 +46,8 @@
 //! must not start doing the latter.** It reads the document, mutates only the
 //! array the edited axis names, and writes the rest of the file back byte for
 //! byte - a hand-authored comment above `commitment` survives a player nudging
-//! that same row in the menu. This is the maintainer's pick of the three ways
-//! out that were on the table - the other two were an editor confined to
-//! files it created itself, and a save-as that kept the original untouched
-//! and multiplied files; neither was taken.
+//! that same row in the menu. The alternatives, an editor confined to
+//! files it created itself and a save-as that multiplies files, were rejected.
 //!
 //! [`rename_pilot`] keeps the same promise for free and more strongly: it is
 //! a **move**, so the file arrives at its new name byte for byte because

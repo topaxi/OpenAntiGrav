@@ -3,27 +3,45 @@
 //! Both name their source outright: the title's own, or the mod's. Nothing is implied
 //! by the pickup being a mod's.
 
-use crate::{HudStr, Rgba, Weapon};
+use crate::{ModName, PICKUP_OTHER_FIRST, PICKUP_OTHER_LAST, PICKUP_OURS, Rgba, Weapon};
 
-/// The name of one of the mod's own `[icons]`, at most `MAX_HUD_TEXT` bytes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ModIcon(HudStr);
+/// What a craft holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Pickup {
+    /// Nothing.
+    #[default]
+    None,
+    /// One of the title's weapons.
+    Weapon(Weapon),
+    /// The reading mod's own pickup (`give-pickup`).
+    Ours,
+    /// Another mod's pickup, by that mod's kind in the race (below [`crate::MAX_PICKUP_KINDS`], in
+    /// module id order among the mods that declare a `[pickup]`). A module sees its own
+    /// kind as [`Self::Ours`], never as this.
+    Other(u8),
+}
 
-impl ModIcon {
-    /// The icon named `name`, if the name fits.
+impl Pickup {
+    /// Its code in a craft record.
     #[must_use]
-    pub fn new(name: &str) -> Option<Self> {
-        HudStr::new(name).map(Self)
+    pub const fn code(self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::Weapon(weapon) => weapon.code(),
+            Self::Ours => PICKUP_OURS,
+            Self::Other(kind) => PICKUP_OTHER_FIRST + kind,
+        }
     }
 
-    /// The name.
+    /// The pickup a code names, if any.
     #[must_use]
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-
-    pub(crate) const fn from_string(name: HudStr) -> Self {
-        Self(name)
+    pub fn from_code(code: u8) -> Option<Self> {
+        match code {
+            0 => Some(Self::None),
+            PICKUP_OURS => Some(Self::Ours),
+            PICKUP_OTHER_FIRST..=PICKUP_OTHER_LAST => Some(Self::Other(code - PICKUP_OTHER_FIRST)),
+            _ => Weapon::from_code(code).map(Self::Weapon),
+        }
     }
 }
 
@@ -33,7 +51,7 @@ pub enum Icon {
     /// The title's own icon sprite for a weapon. A title with no icon for it draws none.
     Title(Weapon),
     /// A PNG of the sending mod's `[icons]`.
-    Mod(ModIcon),
+    Mod(ModName),
 }
 
 /// Which colour a pickup's backdrop has.

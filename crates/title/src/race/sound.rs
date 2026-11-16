@@ -73,6 +73,48 @@ pub struct SoundBanks {
     /// [`None`] to read them from [`Self::ship`] / [`Self::ship_zone`] under
     /// the plain `xfship_<team>.xfx` names, which is what HD does.
     pub crossfade: Option<Crossfade>,
+    /// The race cues a title posts as Wwise events, or [`None`] where every
+    /// cue is a named cue in the banks above. Omega's: its fields above name
+    /// 32-byte stub banks, and its executable posts `<cue>[_PC]__<bank>`
+    /// (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`).
+    pub wwise: Option<&'static WwiseCues>,
+}
+
+/// The race cues a title plays as Wwise events: which bank each slot loads and
+/// which cue string the executable posts for each of this port's cues.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WwiseCues {
+    /// Each bank slot a cue names, and the archive entries its events are
+    /// looked up in, in order.
+    pub banks: &'static [WwiseBank],
+    /// This port's cue, by the name `oag_sound::sfx` gives it (Pulse's spelling,
+    /// `ROCKET`, `~ROCKETTVL`), to what the title does with it. A cue absent
+    /// from the list is unread.
+    pub cues: &'static [(&'static str, WwiseCue)],
+}
+
+/// One bank slot of a [`WwiseCues`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WwiseBank {
+    /// The slot's bank name, the suffix of every event it posts
+    /// (`Weapons_NGP`).
+    pub slot: &'static str,
+    /// The archive entries that hold the slot's events. An event's bank in its
+    /// name is a namespace, not always the file it is in.
+    pub entries: &'static [&'static str],
+}
+
+/// What a title does with one of this port's race cues.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WwiseCue {
+    /// Posted as `cue + "__" + slot` from a non-player emitter and
+    /// `cue + "_PC__" + slot` from the player's.
+    Posts {
+        cue: &'static str,
+        slot: &'static str,
+    },
+    /// Not played here: what it is and why, for the load report.
+    Unplayed { why: &'static str },
 }
 
 /// Where a circuit's own sound bank is looked for.

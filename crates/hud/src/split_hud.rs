@@ -5,7 +5,7 @@
 //! layout of its own ([`oag_title::hud::SplitLayouts`], HD's two views) that one
 //! is used. Everywhere else - Pulse and Pure at any count, HD at three to eight,
 //! every aspect the originals never drew - the layout comes from a TOML file of
-//! this project's (`schemas/v1/split-hud.tosd`), read through the asset layers so
+//! this project's (`schemas/v1/screen-layout.tosd`, `screen = "split-hud"`), read through the asset layers so
 //! a player's override beats it and the disc's authored one sits between.
 //!
 //! # What a file says
@@ -40,12 +40,8 @@
 use serde::Deserialize;
 
 use crate::draw::top_edge;
+use crate::screen_layout::{Anchor, SCHEMA_KIND, SCHEMA_MAJOR, Screen, pair};
 use crate::{Layout, Placement};
-
-/// The schema kind a split-HUD file declares in its `[toml-schema]` header.
-pub const SCHEMA_KIND: &str = "split-hud";
-/// The one schema major this build reads.
-pub const SCHEMA_MAJOR: u32 = 1;
 
 /// Most views a race shows, `oag_render::viewport::MAX_VIEWPORTS`.
 const MAX_VIEWS: u8 = 8;
@@ -59,6 +55,9 @@ pub enum Error {
     /// The `[toml-schema]` header names another kind, another major, or is malformed.
     #[error("{0}")]
     Header(#[from] oag_schema::Error),
+    /// The file's `screen` is another screen's: a loading layout is not a split HUD.
+    #[error("not a split-hud file: its `screen` is {0}")]
+    Screen(String),
     /// A value outside what a layout can mean.
     #[error("layout {rule}: {what}")]
     Invalid {
@@ -69,66 +68,10 @@ pub enum Error {
     },
 }
 
-/// A point of a rectangle: where a group is pinned.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Anchor {
-    /// Top left corner.
-    TopLeft,
-    /// Middle of the top edge.
-    Top,
-    /// Top right corner.
-    TopRight,
-    /// Middle of the left edge.
-    Left,
-    /// Centre.
-    Centre,
-    /// Middle of the right edge.
-    Right,
-    /// Bottom left corner.
-    BottomLeft,
-    /// Middle of the bottom edge.
-    Bottom,
-    /// Bottom right corner.
-    BottomRight,
-}
-
-impl Anchor {
-    /// The point as fractions of a rectangle's width and height.
-    #[must_use]
-    pub const fn fraction(self) -> [f32; 2] {
-        match self {
-            Self::TopLeft => [0.0, 0.0],
-            Self::Top => [0.5, 0.0],
-            Self::TopRight => [1.0, 0.0],
-            Self::Left => [0.0, 0.5],
-            Self::Centre => [0.5, 0.5],
-            Self::Right => [1.0, 0.5],
-            Self::BottomLeft => [0.0, 1.0],
-            Self::Bottom => [0.5, 1.0],
-            Self::BottomRight => [1.0, 1.0],
-        }
-    }
-}
-
-/// Exactly two numbers: a three-element array deserialises into `[f32; 2]` without
-/// complaint, which the schema rightly refuses.
-fn pair<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<[f32; 2]>, D::Error> {
-    match Option::<Vec<f32>>::deserialize(deserializer)? {
-        None => Ok(None),
-        Some(numbers) => match numbers.as_slice() {
-            &[a, b] => Ok(Some([a, b])),
-            other => Err(serde::de::Error::invalid_length(
-                other.len(),
-                &"two numbers",
-            )),
-        },
-    }
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct File {
+    screen: Option<Screen>,
     #[serde(rename = "toml-schema")]
     toml_schema: Option<oag_schema::Header>,
     #[serde(default)]
@@ -218,7 +161,7 @@ impl Rule {
     }
 }
 
-/// A parsed split-HUD file.
+/// A parsed split-HUD file (`screen = "split-hud"`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SplitHud {
     /// In file order; the first to answer a view wins.
@@ -237,6 +180,11 @@ impl SplitHud {
     /// or major, or a value is out of range.
     pub fn parse(text: &str) -> Result<Self, Error> {
         let file: File = toml::from_str(text)?;
+        match file.screen {
+            Some(Screen::SplitHud) => {}
+            Some(other) => return Err(Error::Screen(format!("\"{}\"", other.name()))),
+            None => return Err(Error::Screen("absent".into())),
+        }
         match oag_schema::check(file.toml_schema.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR) {
             Ok(()) => {}
             Err(missing @ oag_schema::Error::Missing { .. }) => log::warn!("split HUD: {missing}"),

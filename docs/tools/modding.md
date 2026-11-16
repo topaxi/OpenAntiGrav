@@ -121,9 +121,10 @@ just mods-list                                # what the search finds, and what 
 In the game, OPTIONS then MODS lists every mod it loaded: name, id, version, authors, licence
 (**NO LICENSE STATED** when you left it out) and the rows it added. A mod that failed to load is
 listed dimmed with the reason under it. On Pulse the main menu then ends with a GARAGE row (seen in a headless screenshot,
-`oag-game --menu-page main --screenshot out.png`). A row can only open a page the menu
-already has, or run an action from a closed list; a mod cannot add a page, a setting or a
-mode. Anything wrong (an unknown page, parent or string id) leaves the whole mod out and
+`oag-game --menu-page main --screenshot out.png`). A row can open a page the menu
+already has, or one of the mod's own `[[page]]`s, or run an action from a closed list; a mod
+has its own `mod.<id>.<key>` settings and picks from a closed set of queries, but cannot define a
+query or a mode ([mods](mods.md), [ADR-0082](../architecture/adr/0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md)). Anything wrong (an unknown page, parent or string id) leaves the whole mod out and
 the load report names it; the game still starts. `human` is `true` only when a person
 wrote or approved the text.
 

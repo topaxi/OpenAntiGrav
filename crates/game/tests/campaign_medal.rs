@@ -86,7 +86,7 @@ fn to_records_medal(medal: oag_tables::race_campaign::Medal) -> Medal {
     match medal {
         oag_tables::race_campaign::Medal::Gold => Medal::Gold,
         oag_tables::race_campaign::Medal::Silver => Medal::Silver,
-        oag_tables::race_campaign::Medal::Bronze => Medal::Bronze,
+        _ => Medal::Bronze,
     }
 }
 
@@ -97,7 +97,9 @@ fn a_zone_cells_medal_evaluates_persists_and_round_trips() {
     // 16 zones: bronze, only because the comparison is flipped for Zone -
     // the same guard case `race_campaign`'s own tests cover, evaluated here
     // through the exact path a real capture would use.
-    let medal = cell.evaluate_medal(16).expect("16 zones clears bronze");
+    let medal = cell
+        .evaluate_medal(16, oag_pulse::TITLE.campaign.counting_modes)
+        .expect("16 zones clears bronze");
     assert_eq!(medal, oag_tables::race_campaign::Medal::Bronze);
 
     let mut store = Store::default();
@@ -119,7 +121,7 @@ fn a_zone_cells_medal_evaluates_persists_and_round_trips() {
     assert_eq!(row.best_medal, Some(Medal::Bronze));
     assert_eq!(
         row.best_points,
-        Some(medal.points()),
+        Some(medal.points(oag_tables::race_campaign::MedalTiers::standard())),
         "records::Medal::points must agree with race_campaign::Medal::points"
     );
 
@@ -145,11 +147,13 @@ fn a_zone_cells_medal_evaluates_persists_and_round_trips() {
 fn a_head2head_cells_medal_is_win_or_nothing() {
     let cell = head2head_cell();
 
-    let first = cell.evaluate_medal(1).expect("1st place earns a medal");
+    let first = cell
+        .evaluate_medal(1, oag_pulse::TITLE.campaign.counting_modes)
+        .expect("1st place earns a medal");
     assert_eq!(first, oag_tables::race_campaign::Medal::Gold);
 
     assert_eq!(
-        cell.evaluate_medal(2),
+        cell.evaluate_medal(2, oag_pulse::TITLE.campaign.counting_modes),
         None,
         "2nd place in a two-craft race earns nothing"
     );
@@ -160,7 +164,9 @@ fn a_head2head_cells_medal_is_win_or_nothing() {
 #[test]
 fn a_gold_zone_run_persists_as_gold_not_bronze() {
     let cell = zone_cell();
-    let medal = cell.evaluate_medal(20).expect("20 zones is gold");
+    let medal = cell
+        .evaluate_medal(20, oag_pulse::TITLE.campaign.counting_modes)
+        .expect("20 zones is gold");
     assert_eq!(medal, oag_tables::race_campaign::Medal::Gold);
 
     let mut store = Store::default();

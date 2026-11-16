@@ -1,5 +1,8 @@
 //! What [`super::drain`] is asserted to do.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 use super::*;
 use crate::test_craft::World;
 

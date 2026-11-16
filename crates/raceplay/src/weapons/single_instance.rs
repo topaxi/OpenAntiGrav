@@ -17,6 +17,69 @@
 use super::*;
 
 impl Race {
+    /// Launches `slot`'s travelling wave, and says whether it left.
+    ///
+    /// `Weapon_FireQuake`'s own body: nothing when a wave is already up
+    /// (`q->active != 0`), when the table authors no Quake, or when the craft is
+    /// not located on the course yet. The cue is the press's, not this call's.
+    pub(crate) fn launch_quake(&mut self, slot: usize) -> bool {
+        if self.sim.world.quake.is_some() {
+            return false;
+        }
+        let Some(stats) = self
+            .sim
+            .weapons
+            .as_deref()
+            .and_then(oag_tables::weapons::WeaponStats::quake)
+        else {
+            return false;
+        };
+        let ship = &self.sim.world.ships[slot];
+        // Not yet located on the course: nowhere on the track's own spline to
+        // launch a travelling wave from. A moving craft clears it in a tick or two.
+        let Some(progress) = ship.standing.progress else {
+            return false;
+        };
+        // The direction sign: dot the firing craft's own forward against the
+        // track's own tangent where it stands, the dot product `Quake_Init` reads
+        // to pick which way the wave travels. `unwrap_or(1.0)` is the "forward,
+        // not stalled" default `Wave::launch` itself takes for an
+        // exactly-perpendicular dot.
+        let forward_dot_tangent = ship
+            .standing
+            .course_index
+            .and_then(|index| self.sim.course.as_deref()?.tangent(index as usize))
+            .map(|tangent| tangent.dot(ship.physics.body.forward()))
+            .unwrap_or(1.0);
+        self.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
+            slot as u8,
+            progress,
+            forward_dot_tangent,
+            &stats,
+        ));
+        true
+    }
+
+    /// Fires every craft's armed Quake press ([`Held::quake_armed`]) whose wave is
+    /// now free to launch, in slot order, and spends the pickup.
+    ///
+    /// `Weapons_DispatchFire` calls `Weapon_FireQuake` on every frame the request
+    /// bit is set, so the press fires on the first dispatch after the busy byte
+    /// clears: measured on Pulse PSP as the same dispatch that first
+    /// reads it clear, one frame after the last span's update. Ours runs before
+    /// `advance_quake` retires a wave, so a wave retired on tick N relaunches on
+    /// N+1. No cue: `QUAKELAUNCH` belongs to the press.
+    pub(crate) fn fire_armed_quakes(&mut self) {
+        for slot in 0..self.sim.world.ship_count as usize {
+            if !self.sim.world.ships[slot].pickup.quake_armed {
+                continue;
+            }
+            if self.launch_quake(slot) {
+                self.sim.world.ships[slot].pickup.take();
+            }
+        }
+    }
+
     /// One tick of the Quake's own travelling wave: advances it along the
     /// course, moves every craft's smoothed wave height, and applies the
     /// hit/slowdown to every craft whose height just passed the gate.
@@ -49,7 +112,7 @@ impl Race {
         let length = self
             .sim
             .course
-            .as_ref()
+            .as_deref()
             .map_or(0.0, |course| course.length());
         let mut wave = self.sim.world.quake;
         if let Some(live) = wave.as_mut()
@@ -70,7 +133,7 @@ impl Race {
             length,
             dt,
         );
-        let Some(course) = self.sim.course.as_ref() else {
+        let Some(course) = self.sim.course.as_deref() else {
             return;
         };
         let Some(mut wave) = wave else {
@@ -119,7 +182,7 @@ impl Race {
         // distance (`Wave::raw_lift`), unsmoothed as the original's is. Mines
         // only: the Bomb pool's own
         // update was not read for a Quake test, and one is not assumed. See
-        // `docs/ghidra/functions/psp-pulse-usa/mine.md`, 2026-09-16.
+        // `docs/ghidra/functions/psp-pulse-usa/mine.md`.
         let tripped: Vec<(usize, Vec3)> = self
             .sim
             .world
@@ -155,16 +218,21 @@ impl Race {
         if self.draws() {
             self.throw_hit_sparks(&hits, false);
         }
+        self.xp_weapon_hits(
+            &hits,
+            &[Some((wave.owner, oag_tables::weapons::Weapon::Quake)); MAX_SHIPS],
+        );
         for (slot, hit) in hits.iter().enumerate() {
             if hit.landed {
                 self.record_pending_hit(slot, wave.owner);
+                self.credit_hit_points(slot, wave.owner, hit.amount);
             }
         }
         self.sim.world.quake = Some(wave);
     }
 
-    /// One tick of the single LeachBeam link: age it, test it, drain it, retire
-    /// it.
+    /// One tick of every live LeachBeam link, in pool order: age it, test it,
+    /// drain it, retire it.
     ///
     /// A no-op with no beam in flight - see `Race::spend_pickup`'s own
     /// LeachBeam arm for what fires one, and
@@ -177,14 +245,66 @@ impl Race {
     /// last tick's stale reading" rule every other per-craft weapon update in
     /// this module follows.
     pub(crate) fn advance_leach_beam(&mut self) {
-        let Some(mut beam) = self.sim.world.leach_beam else {
-            return;
-        };
+        for at in 0..self.sim.world.leach_beams.len() {
+            if let Some(beam) = self.sim.world.leach_beams[at] {
+                self.advance_one_leach_beam(at, beam);
+            }
+        }
+    }
+
+    /// Whether the title's limit of LeachBeams is reached: a press now fires
+    /// nothing and still spends the pickup.
+    pub(crate) fn leach_beams_at_limit(&self) -> bool {
+        self.sim.world.leach_beams_live() >= usize::from(self.sim.leach_beams)
+    }
+
+    /// Arms `beam` in the first free pool entry, or hands nothing back when the
+    /// limit is reached (or the pool is full). The entry is the beam's index
+    /// until it retires.
+    pub(crate) fn arm_leach_beam(
+        &mut self,
+        beam: oag_weapons::projectile::leach_beam::Beam,
+    ) -> bool {
+        if self.leach_beams_at_limit() {
+            return false;
+        }
+        match self
+            .sim
+            .world
+            .leach_beams
+            .iter_mut()
+            .find(|entry| entry.is_none())
+        {
+            Some(entry) => {
+                *entry = Some(beam);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The course's length, or 0 with no course: what a LeachBeam's trip
+    /// folds the craft's track gap by, and the strip's wobble divides by.
+    pub(crate) fn leach_course_length(&self) -> f32 {
+        self.sim
+            .course
+            .as_deref()
+            .map_or(0.0, |course| course.length())
+    }
+
+    /// One tick of the beam in pool entry `at`.
+    fn advance_one_leach_beam(
+        &mut self,
+        at: usize,
+        mut beam: oag_weapons::projectile::leach_beam::Beam,
+    ) {
         let rules = self.sim.damage_rules();
+        let course_length = self.leach_course_length();
         let report = beam.advance(
             &mut self.sim.world.ships,
             self.sim.world.ship_count,
             rules,
+            course_length,
             self.sim.dt,
         );
         // A swallowed hit is the only thing that makes the target's shell
@@ -206,6 +326,7 @@ impl Race {
         // other hit - see `race::hit_sparks`.
         if report.landed {
             self.record_pending_hit(beam.target as usize, beam.owner);
+            self.credit_hit_points(beam.target as usize, beam.owner, report.asked);
             let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
             if let Some(hit) = hits.get_mut(beam.target as usize) {
                 hit.landed = true;
@@ -213,6 +334,6 @@ impl Race {
             #[cfg(feature = "view")]
             self.throw_hit_sparks(&hits, true);
         }
-        self.sim.world.leach_beam = if report.retired { None } else { Some(beam) };
+        self.sim.world.leach_beams[at] = if report.retired { None } else { Some(beam) };
     }
 }

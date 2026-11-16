@@ -106,6 +106,27 @@ pub const PSP2_SUN_DIFFUSE_COLOUR: &str = "Lighting.Sun diffuse colour";
 /// Authored 0.3 to 20 over Omega's 29 circuit files.
 pub const OMEGA_SUN_DIFFUSE_INTENSITY: &str = "Lighting.Sun diffuse intensity";
 
+/// Omega's `"Lighting.Ship diffuse brightness"`: the weight of a hull's spherical-harmonic
+/// ambient in the sun (`K`), authored 0.2 to 1.0 by all 38 circuit files
+/// (`docs/ghidra/functions/ps4-omega-eu/hull-tone.md`, "The bound constants"). 2048 registers the
+/// same key; HD's hull has no such weight.
+pub const OMEGA_SHIP_DIFFUSE_BRIGHTNESS: &str = "Lighting.Ship diffuse brightness";
+
+/// Its `(shadow)` twin (`Ks`), the weight inside the hull's own sun shadow; equal to
+/// [`OMEGA_SHIP_DIFFUSE_BRIGHTNESS`] in every circuit file that authors it, and absent from the
+/// four Zone files.
+pub const OMEGA_SHIP_DIFFUSE_SHADOW: &str = "Lighting.Ship diffuse brightness (shadow)";
+
+/// Omega's `"Lighting.Sun specular colour"`: an RGB term, where HD authors only the scalar
+/// [`SUN_SPECULAR_SCALE`]. The sun lobe of the panel-map road reads it times
+/// [`OMEGA_SUN_SPECULAR_INTENSITY`] (`docs/ghidra/functions/ps4-omega-eu/sun-intensity.md`,
+/// `013c2a7a`). 2048 authors the same key and has no consumer for it.
+pub const OMEGA_SUN_SPECULAR_COLOUR: &str = "Lighting.Sun specular colour";
+
+/// Omega's scalar the specular colour is multiplied by; its static default is `1.0`
+/// (`0x019404b0`).
+pub const OMEGA_SUN_SPECULAR_INTENSITY: &str = "Lighting.Sun specular intensity";
+
 /// `"Lighting.Prelit ambient colour scale"`. Three numbers: the scale in
 /// `prelit = scale * lightmap.rgb ^ power`, from the circuit's fragment
 /// microcode (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`).
@@ -125,6 +146,25 @@ pub const NOVA_PRELIT: &str = "Lighting.Nova prelit scale bias power";
 /// What [`NOVA_PRELIT`] is when a file omits it: the executable's static default
 /// `(1.4, 0.2, 1.5)` (`FUN_015c2dc0`, `0x01e3de80`), not the identity.
 pub const NOVA_PRELIT_DEFAULT: [f32; 3] = [1.4, 0.2, 1.5];
+
+/// Omega's `Bloom.*` block: the bright pass and the per-level blend of the chain behind
+/// the composite's `BloomTexture` (`docs/ghidra/functions/ps4-omega-eu/tonemap.md`, "The
+/// bloom chain"). Not HD's `HDR and Bloom.*` keys, which name a different chain.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BrightPass {
+    /// `Bright-pass threshold`.
+    pub threshold: f32,
+    /// `Bright-pass offset`.
+    pub offset: f32,
+    /// `Bright-pass scale`.
+    pub scale: f32,
+    /// `Bright-pass power`.
+    pub power: f32,
+    /// `Bright-pass alpha scale`.
+    pub alpha_scale: f32,
+    /// `Blend factors`, one per level, finest first.
+    pub blend_factors: [f32; 4],
+}
 
 /// The `Tonemap.*` (or `TonemapHDR.*`) block Omega authors: the ten keys the
 /// executable registers (`FUN_015c1f20`) under both prefixes. **Read, no
@@ -213,6 +253,14 @@ pub const BLOOM_GATE: &str = "Lighting.BloomGate";
 /// key in this block to its field, so each mapping here is a read, not a guess;
 /// see `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`.
 pub const BLOOM_ADAPTION_RATE: &str = "HDR and Bloom.Bloom adaption rate";
+
+/// `"Vignette.Inner radius"` (Omega). One number, a uv distance from the centre.
+/// `Environment_ApplyBloomVignette` (`FUN_01625490`) reads it at object `+0x278`.
+pub const VIGNETTE_INNER_RADIUS: &str = "Vignette.Inner radius";
+
+/// `"Vignette.Outer radius intensity"` (Omega). One number, the factor the
+/// picture reaches half a screen from the centre (object `+0x27c`).
+pub const VIGNETTE_OUTER_INTENSITY: &str = "Vignette.Outer radius intensity";
 
 /// `"HDR and Bloom.Bloom adaption boost"`. One number: scales adapted luminance
 /// in the gate's fade, `1 - min(adapted * boost * 0.25, 1)` (`0.25` an inline
@@ -371,6 +419,22 @@ impl EnvSettings {
             source_colour_end_b: key("Source color end b-coefficient")?,
             start_angle: key("Start angle")?,
             end_angle: key("End angle")?,
+        })
+    }
+
+    /// The [`BrightPass`] block under `prefix` (`"Bloom"`, `"BloomHDR"` or `"BloomVR"`), or
+    /// `None` unless all five scalars and four blend factors are present. `BloomHDR`
+    /// authors three factors, so it answers `None`.
+    #[must_use]
+    pub fn bright_pass(&self, prefix: &str) -> Option<BrightPass> {
+        let key = |leaf: &str| self.scalar(&format!("{prefix}.Bright-pass {leaf}"));
+        Some(BrightPass {
+            threshold: key("threshold")?,
+            offset: key("offset")?,
+            scale: key("scale")?,
+            power: key("power")?,
+            alpha_scale: key("alpha scale")?,
+            blend_factors: self.vec4(&format!("{prefix}.Blend factors"))?,
         })
     }
 

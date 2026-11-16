@@ -37,10 +37,12 @@ struct Constants {
     // extent; see `post::sub_rectangle`.
     uv_scale: vec2<f32>,
     uv_max: vec2<f32>,
-    // `Bloom::stamp_glow`: rectangles as fractions of the drawn rectangle, the colour, and
-    // `(count, value, opacity, pad)`. Zero for every other pass.
-    stamps: array<vec4<f32>, 10>,
-    stamp_colour: vec4<f32>,
+    // `Bloom::stamp_glow`: rectangles as fractions of the drawn rectangle, the drawn rectangle
+    // in target pixels `(x, y, width, height)`, each rectangle's mask byte `(value, pad, pad,
+    // pad)` and `(count, pad, pad, pad)`. Zero for every other pass.
+    stamps: array<vec4<f32>, 20>,
+    stamp_view: vec4<f32>,
+    stamp_values: array<vec4<f32>, 20>,
     stamp_meta: vec4<f32>,
 }
 
@@ -71,13 +73,13 @@ const WEIGHTS = array<u32, 11>(20u, 30u, 40u, 50u, 64u, 64u, 64u, 50u, 40u, 30u,
 // pass leaves at most 3, and the vertical pass turns 3 into `floor(3 * 64 /
 // 255) = 0`. The stamp's whole contribution is exactly zero in the original,
 // while a float chain carries it at 3.43 x 0.686 of the stamp. Measured against
-// PPSSPP's software renderer on 2026-10-02 (`docs/ghidra/functions/psp-pulse-usa/bloom.md`,
+// PPSSPP's software renderer (`docs/ghidra/functions/psp-pulse-usa/bloom.md`,
 // "Is ours stronger"): the bloom's mean-luma contribution outside the craft on
 // a racing straight was `0.33` in the original, `4.52` here as floats and
 // `0.37` truncated.
 //
 // **The tap's arithmetic is `(v * (w + 1)) >> 8`, not `floor(v * w / 255)`**:
-// measured on 2026-10-08 against the original's own scratch buffers (EDRAM
+// measured against the original's own scratch buffers (EDRAM
 // `0x132000` -> `0x110000`, `docs/ghidra/functions/psp-pulse-usa/bloom.md`,
 // "Racing strength against the original's own scratch buffers"): the vertical
 // pass reproduces the original's output byte for byte on 99 % of pixels with
@@ -101,24 +103,25 @@ fn fs_bright(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(vec3<f32>(bytes(texel.rgb) * alpha / 255u) / 255.0, 1.0);
 }
 
-// Pass 0 of `Bloom::stamp_glow`: the bright pass over rectangles alone, `colour * coverage * value`
-// where `coverage` is what `k` overlapping copies of alpha `opacity` leave of a pixel.
+// Pass 0 of `Bloom::stamp_glow`: the bright pass over rectangles alone, reading the target the
+// HUD was drawn into. The original draws the HUD into the framebuffer before the bright pass, so a
+// stamped pixel brightens with whatever the framebuffer holds there - the widget at its own alpha
+// over the scene showing through it - times the largest mask byte of the rectangles over it.
+// Outside every rectangle the mask is the scene's baseline, which the chain truncates to nothing.
 @fragment
 fn fs_stamp(in: VertexOutput) -> @location(0) vec4<f32> {
     let count = u32(constants.stamp_meta.x);
-    var k = 0.0;
+    var value = 0u;
     for (var i = 0u; i < count; i = i + 1u) {
         let r = constants.stamps[i];
         if in.uv.x >= r.x && in.uv.x < r.x + r.z && in.uv.y >= r.y && in.uv.y < r.y + r.w {
-            k = k + 1.0;
+            value = max(value, u32(constants.stamp_values[i].x));
         }
     }
-    if k == 0.0 {
-        return vec4<f32>(0.0, 0.0, 0.0, 1.0);
-    }
-    let coverage = 1.0 - pow(1.0 - constants.stamp_meta.z, k);
-    let value = u32(constants.stamp_meta.y);
-    return vec4<f32>(vec3<f32>(bytes(constants.stamp_colour.rgb * coverage) * value / 255u) / 255.0, 1.0);
+    let size = vec2<f32>(textureDimensions(source_tex));
+    let at = (constants.stamp_view.xy + in.uv * constants.stamp_view.zw) / size;
+    let texel = textureSampleLevel(source_tex, source_sampler, at, 0.0);
+    return vec4<f32>(vec3<f32>(bytes(texel.rgb) * value / 255u) / 255.0, 1.0);
 }
 
 // Passes 1 and 2: eleven taps at -5..+5 texels along `direction`.

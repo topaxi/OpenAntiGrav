@@ -52,6 +52,24 @@ pub enum Cue {
     /// confidence 82, the only one of the nine cues checked on a second title;
     /// the module doc's confidence-50 bet covers the rest.
     Collision,
+    /// A scrape: `.GRIND`, the player's craft only.
+    ///
+    /// `Ship_UpdateCollisionCues` (`0x000d8bd0`) starts it for a contact that is not nose-on and
+    /// over a small impulse, every other tick; no other craft grinds. Wipeout HD/Fury only
+    /// (`oag_title::contact_cue::ContactCues::Impulse`). It carries a [`ContactCue`]. Not in
+    /// [`Self::ALL`]: see [`Self::HD_CONTACT`].
+    /// `docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "`Ship_UpdateCollisionCues`".
+    Grind,
+    /// `.COLLSHIELD`: the player's [`Self::Collision`] while its slot's Shield runs.
+    ///
+    /// `Ship_UpdateCollisionCues` (`0x000d8bd0`) swaps the name on the Shield pickup's slot
+    /// bit; another craft plays `.COLLISIONS` whatever its shield. Wipeout HD/Fury only, and not
+    /// in [`Self::ALL`]: see [`Self::HD_CONTACT`].
+    /// `docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "`Ship_UpdateCollisionCues`".
+    CollisionShield,
+    /// `.GRINDSHIELD`: the player's [`Self::Grind`] while its slot's Shield runs. Wipeout
+    /// HD/Fury only; see [`Self::CollisionShield`].
+    GrindShield,
     /// A pickup absorbed into the pool, or Eliminator's lap refill.
     ///
     /// `Ship_PlayAbsorbFeedback` (`0x08840640`) plays an `ABSORB` sound once
@@ -699,6 +717,11 @@ impl Cue {
         Self::MedalBronze,
     ];
 
+    /// The contact cues only Wipeout HD/Fury's list-walking handlers have: loaded beside
+    /// [`Self::ALL`] on a title whose sequence tick walks cue variables, and on no other, so a
+    /// title without them reports no `.GRIND` it never had.
+    pub const HD_CONTACT: [Self; 3] = [Self::Grind, Self::CollisionShield, Self::GrindShield];
+
     pub const ALL: [Self; 43] = [
         Self::SpeedupPad,
         Self::Message,
@@ -746,6 +769,65 @@ impl Cue {
     ];
 }
 
+/// What a mod's `play-mod-sound` asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModSoundMode {
+    /// Once, from the craft.
+    Once,
+    /// A loop that follows the craft until a [`Self::Stop`].
+    Loop,
+    /// Ends the loop of the same sound and slot.
+    Stop,
+}
+
+/// One of a mod's own sounds asked for, and the craft it comes from: a per-tick output
+/// beside [`CueEvent`], never `World` state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModSoundEvent {
+    /// The mod that asked.
+    pub mod_id: String,
+    /// The sound's place in the mod's `[sounds]`, in name order.
+    pub index: u16,
+    /// The grid slot whose emitter plays it.
+    pub slot: u8,
+    /// Once, start a loop or stop one.
+    pub mode: ModSoundMode,
+}
+
+/// A loop of a mod's own sound that is wanted now: a `play-mod-sound` `Loop` no `Stop` has
+/// ended. What plays is brought to this set, so an event that was never heard (a tick re-run
+/// silently, a seek) leaves no loop running and none missing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModSoundLoop {
+    /// The mod that asked.
+    pub mod_id: String,
+    /// The sound's place in the mod's `[sounds]`, in name order.
+    pub index: u16,
+    /// The grid slot whose emitter plays it.
+    pub slot: u8,
+}
+
+/// What a contact cue's list is handed beside the perspective
+/// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "`Ship_UpdateCollisionCues`").
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ContactCue {
+    /// Cue variable 0: 0 small, 1 medium, 2 large.
+    pub severity: u8,
+    /// Cue variable 1.
+    pub surface: ContactSurface,
+    /// The request's volume, 0 to 1.
+    pub volume: f32,
+}
+
+/// What a contact met; cue variable 1 is `0` for [`Self::Craft`] and `1` for [`Self::Track`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContactSurface {
+    /// Another craft.
+    Craft,
+    /// The track: a wall, a floor or a step.
+    Track,
+}
+
 /// A cue and the craft that raised it.
 ///
 /// The slot is the original's own: `Sound_Play` takes an emitter first and
@@ -761,6 +843,9 @@ pub struct CueEvent {
     pub slot: u8,
     /// The world position a `oag_sound::sfx::Placement::Point` cue plays at, else [`None`].
     pub point: Option<Vec3>,
+    /// The severity, surface and volume a contact cue's list is handed, else [`None`] (every
+    /// cue but a title's impulse-law contact cues).
+    pub contact: Option<ContactCue>,
 }
 
 impl CueEvent {
@@ -771,6 +856,16 @@ impl CueEvent {
             cue,
             slot: u8::try_from(slot).unwrap_or(u8::MAX),
             point: None,
+            contact: None,
+        }
+    }
+
+    /// A contact cue from `slot`, with what its list is handed.
+    #[must_use]
+    pub fn contact(cue: Cue, slot: usize, contact: ContactCue) -> Self {
+        Self {
+            contact: Some(contact),
+            ..Self::new(cue, slot)
         }
     }
 
@@ -781,12 +876,7 @@ impl CueEvent {
             cue,
             slot: 0,
             point: Some(point),
+            contact: None,
         }
-    }
-
-    /// Whether the player raised it.
-    #[must_use]
-    pub fn is_player(self) -> bool {
-        self.slot == 0
     }
 }

@@ -14,11 +14,13 @@
 //! # What this file is the evidence for
 //!
 //! `zone_ground_truth.rs` proves a Zone race opens the right *circuit*. This
-//! one proves the escalation laid over it is the disc's: HD/Fury's
-//! `/data/environments/zonemode.effectsettings` reaches
-//! `oag_raceplay::Loaded` through a real race load, its fifteen stages are
-//! the file's own, and two adjacent stages produce two visibly different fogs
-//! whose numbers are the ones the file authors - not a pair this test made up.
+//! one proves the escalation laid over it is the disc's: on HD/Fury's Zone
+//! circuits `/data/environments/zonemodedlc3.effectsettings` reaches
+//! `oag_raceplay::Loaded` through a real race load (an ordinary circuit takes
+//! `zonemode.effectsettings`, `Environment_LoadRaceScene`'s split), its
+//! fifteen stages are the file's own, and two adjacent stages produce two
+//! visibly different fogs whose numbers are the ones the file authors - not a
+//! pair this test made up.
 //!
 //! # What is deliberately not asserted
 //!
@@ -41,16 +43,27 @@ fn image(name: &str) -> Option<PathBuf> {
 }
 
 fn load(mode: oag_race::Mode) -> Option<race::Loaded> {
+    load_on(mode, None)
+}
+
+fn load_on(mode: oag_race::Mode, track: Option<&str>) -> Option<race::Loaded> {
     let path = image("data/images/hdfury-ps3-eu-dec.iso")?;
     Some(
         race::load(&race::Options {
             source: path.display().to_string(),
             class: "VENOM".to_string(),
             mode,
+            track: track.map(str::to_string),
             ..race::Options::default()
         })
         .expect("loading the race"),
     )
+}
+
+/// Whether the load report names `entry` as the table the Zone colour grade came from.
+fn graded_from(loaded: &race::Loaded, entry: &str) -> bool {
+    let line = format!("{entry}: the Zone colour grade");
+    loaded.report.iter().any(|l| l.starts_with(&line))
 }
 
 /// **The table reaches a real race load**, with the ladder the file names, and
@@ -67,7 +80,7 @@ fn an_hd_zone_race_loads_the_titles_own_stage_table() {
     let grade = loaded
         .zone_grade
         .as_ref()
-        .expect("HD ships /data/environments/zonemode.effectsettings");
+        .expect("HD ships /data/environments/zonemodedlc3.effectsettings");
     // Fifteen stages, `0` through `14` - `Start` to `Supersonic`.
     assert_eq!(grade.last_stage(), 14);
     // **And the race opens on stage 1, not stage 0.** `Start` is the pre-race
@@ -167,11 +180,12 @@ fn two_stages_of_the_real_table_produce_two_different_fogs() {
     assert!(grade.commit());
     grade.set_weight(1.0);
     let sub_venom = grade.fog(Some(base)).expect("stage 1 authors its own");
-    // Straight out of `/data/environments/zonemode.effectsettings`:
-    // `"1 Sub Venom.Lighting.Fog colour"=0.000000 1.305882 1.800000 0.000000`
-    // and `"1 Sub Venom.Lighting.Fog density"=0.002100`.
-    assert_eq!(sub_venom.colour, [0.0, 1.305_882, 1.8]);
-    assert_eq!(sub_venom.density, 0.002_1);
+    // Straight out of `/data/environments/zonemodedlc3.effectsettings`, the
+    // table a `zone_N` circuit takes:
+    // `"1 Sub Venom.Lighting.Fog colour"=0.000000 1.733333 2.000000 0.000000`
+    // and `"1 Sub Venom.Lighting.Fog density"=0.002000`.
+    assert_eq!(sub_venom.colour, [0.0, 1.733_333, 2.0]);
+    assert_eq!(sub_venom.density, 0.002);
     assert_ne!(
         sub_venom.colour, start.colour,
         "a stage change has to be visible, or the table is doing nothing"
@@ -181,7 +195,7 @@ fn two_stages_of_the_real_table_produce_two_different_fogs() {
     // recovered cross-fade, on real data.
     grade.set_weight(0.5);
     let half = grade.fog(Some(base)).expect("still over zero density");
-    assert_eq!(half.colour, [0.0, 1.305_882 / 2.0, 0.9]);
+    assert_eq!(half.colour, [0.0, 1.733_333 / 2.0, 1.0]);
 }
 
 /// **A stage recolours the circuit's rig without aiming it.** The schema has no
@@ -200,8 +214,56 @@ fn a_stage_tints_the_circuits_own_light_rig() {
     grade.set_weight(1.0);
     let lit = grade.light(base);
     assert_eq!(lit.direction, base.direction, "the circuit aims the sun");
-    // `"1 Sub Venom.Lighting.Constant Ambient Colour"=1.500000 x3`.
-    assert_eq!(lit.ambient, [1.5, 1.5, 1.5]);
+    // `zonemodedlc3`'s `"1 Sub Venom.Lighting.Constant Ambient Colour"=1.100000 x3`.
+    assert_eq!(lit.ambient, [1.1, 1.1, 1.1]);
+}
+
+/// **On a Zone circuit the hull's sun is the DLC3 table's.** HD loads
+/// `zonemodedlc3.effectsettings` when the race's track id is `25_Track`..`28_Track`
+/// (`Environment_LoadRaceScene`, `0x003f4084`-`0x003f51b8`), and its stage 3 `Sun colour`
+/// is the `directionalLight0Colour` read live on RPCS3 in a `zone_1` race at `Sub Flash`:
+/// `(1.144, 1.091, 1.906)`. The base table authors `1 1 1` there, which is what this port
+/// fed until 2026-11-01 and why its Zone hull read darker and whiter than the original's.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_zone_circuit_lights_the_hull_with_the_dlc3_sun() {
+    let Some(loaded) = load(oag_race::Mode::Zone) else {
+        return;
+    };
+    assert!(
+        graded_from(&loaded, "/data/environments/zonemodedlc3.effectsettings"),
+        "a zone_N circuit takes the DLC3 table: {:?}",
+        loaded.report
+    );
+    let mut grade = loaded.zone_grade.expect("the table loads");
+    let base = loaded.light;
+    grade.request_stage(3);
+    grade.commit();
+    grade.set_weight(1.0);
+    let lit = grade.light(base);
+    // `"3 Sub Flash.Lighting.Sun colour"=1.143733 1.091405 1.906221 0.000000`.
+    assert_eq!(lit.sun, [1.143_733, 1.091_405, 1.906_221]);
+}
+
+/// **An ordinary circuit raced in Zone keeps the title-wide table.** The other half of
+/// `Environment_LoadRaceScene`'s split: a track id that is not `25_Track`..`28_Track`
+/// loads `zonemode.effectsettings`, whose stage 3 sun is `1 1 1`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_ordinary_circuit_in_zone_keeps_the_base_table() {
+    let Some(loaded) = load_on(oag_race::Mode::Zone, Some(oag_hd::race::DEFAULT_TRACK)) else {
+        return;
+    };
+    assert!(
+        graded_from(&loaded, "/data/environments/zonemode.effectsettings"),
+        "an ordinary circuit takes the base table: {:?}",
+        loaded.report
+    );
+    let mut grade = loaded.zone_grade.expect("the table loads");
+    grade.request_stage(3);
+    grade.commit();
+    grade.set_weight(1.0);
+    assert_eq!(grade.light(loaded.light).sun, [1.0, 1.0, 1.0]);
 }
 
 /// **Only Zone reads it.** A single race on the same title loads no grade at
@@ -377,7 +439,9 @@ fn open_2048() -> Option<oag_assets::Archives> {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_zone_shader_parameters_come_from_the_half_whose_textures_are_bound() {
-    let Some(loaded) = load(oag_race::Mode::Zone) else {
+    // On an ordinary circuit, which takes `zonemode.effectsettings`, the table
+    // the numbers below are quoted from; a `zone_N` circuit takes the DLC3 one.
+    let Some(loaded) = load_on(oag_race::Mode::Zone, Some(oag_hd::race::DEFAULT_TRACK)) else {
         return;
     };
     let mut grade = loaded.zone_grade.expect("the table loads");

@@ -83,8 +83,14 @@ fn load() -> Option<(Handling, Circuit, Vec<PadVolume>)> {
     .expect("parsing the global stats")
     .expect("the global file authors a <Global>");
     let (speedup, _, _) = global.class_named(CLASS).expect("VENOM's <GlobalClass>");
-    let handling =
-        handling_for(&stats, CLASS, speedup, global.special).expect("the team authors VENOM");
+    let handling = handling_for(
+        &stats,
+        CLASS,
+        speedup,
+        global.special,
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
+    )
+    .expect("the team authors VENOM");
     let cage = oag_trace::replay::cage_of(&blob).expect("16_Track runs the cage");
     // The magstrip locator's samples, resampled exactly as `oag-trace run` resamples them:
     // without them the hold never engages, and on the 1284 crossing, which is on a magstrip,

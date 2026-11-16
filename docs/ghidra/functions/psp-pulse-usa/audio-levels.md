@@ -1087,3 +1087,111 @@ per-buffer warning line). Nothing drops to silence or loops on itself - the
 same "quieter, not broken" shape every listening check on this thread has
 found, one step closer to the original's own -16.61 dBFS than before this
 port landed.
+
+## Our master limiter replaces the clamp (2026-11-03, ours, not the original)
+
+**The original clamps; we do not.** Everything above stands for the original:
+unity gain end to end into a 16-bit buffer that clamps
+(`Audio_Init_q` `0x089906e4`, `Audio_OutputThread_q` `0x0898ca54`). On the
+maintainer's direction ("clear and audible comes first", with a headphones
+report of crackle at 100 % volumes and many SFX) this port no longer reproduces
+that clamp. Per-cue volumes stay as authored; `oag_audio::limiter::Limiter`
+runs after the sum in `Mixer::render`. Where a reference is wanted, the modern
+originals (HD and Omega, Wwise master bus with headroom and a limiter) are the
+orientation, not the PSP.
+
+The limiter is stereo linked: a 2 ms look-ahead delay, a ceiling of 0.95, a
+moving-average ramp so the gain reaches its target as the peak leaves the delay
+line, a 25 ms hold (longer than a period of the lowest engine note, so the gain
+does not ride the waveform) and a linear 0.25 s release. The hard clamp stays
+behind it as a safety, and `Mixer::clipped` now counts what still reached it,
+which is zero.
+
+### Measured (30 s / 120 s of an autopilot grid race, 8 craft, volumes 100)
+
+`oag-game <image> --race --opponents --autopilot --seed 1 --screenshot f.png
+--ticks N --dump-audio f.wav`, spatial audio set per run, host load 30 to 40.
+Clipped means 16-bit samples at full scale in the WAV.
+
+| Run | before: clipped, RMS, loudest second | after: clipped, RMS, loudest second |
+| --- | --- | --- |
+| Pulse 30 s, headphones | 22,630 (0.79 %), -9.9, -7.2 dB | 0, -11.1, -9.1 dB |
+| Pulse 30 s, rear cue / auto here | 14,369 (0.50 %), -10.5, -7.9 dB | 0, -11.6, -9.5 dB |
+| Pulse 30 s, original | 15,354 (0.53 %), -10.4, -7.9 dB | 0, -11.4, -9.5 dB |
+| Pulse 120 s, headphones | 36,097 (0.31 %), -11.6, -6.9 dB | 0, -12.4, -9.1 dB |
+| Pulse 120 s, rear cue | 24,155 (0.21 %), -12.3, -7.8 dB | 0, -12.9, -9.5 dB |
+| HD 60 s, headphones | 44, -17.0, -13.6 dB | 0, -17.0, -13.9 dB |
+| HD 60 s, rear cue / original | 0, -17.2, -14.3 dB | 0, unchanged |
+
+Pulse's pre-limiter peak is 1.90 (rear cue) to 2.26 (headphones), so the
+loudest moments are pulled down by up to 7.5 dB. Over 30 s the gain was below
+0.94 for 29 % of frames, below 0.7 for 5.7 % and below 0.5 for under 0.1 %
+(headphones, 0.5 %), so a static master trim was not added at first: whole-mix RMS drops
+0.5 to 1.2 dB (added below, "Master trim"). HD has its own headroom and the limiter almost never acts.
+
+HRTF energy (`binaural::tests`, white and low-passed noise over a grid of
+directions): within 1.1 dB of the plain pan ahead and beside, 0.5 dB on a
+low-passed (engine-like) source everywhere, and quieter than the plain pan behind
+(white noise only). So the HRIR adds no gain; headphones peak about 1.5 dB above
+the other modes only because the decorrelated ears stack peaks differently. The
+rear cue is 2 dB under the HRTF behind on a low-passed source by design.
+Crossfade weights sum to 1 (by reading `Mixer::render`, not measured).
+
+### Master trim (2026-11-03, ours, not measured off the original)
+
+`Title::master_trim_db` (`oag_title::Title`, labelled chosen) scales the whole sum
+ahead of the limiter (`Mixer::set_master_trim`, separate from the player's master
+volume; `oag_game::sound::hold_race_song` sets it when a race arms). Pulse -6 dB,
+Pure -3 dB, 2048 -4 dB, HD and Omega 0 dB. Direction: clear and audible first, the modern
+originals' level as the orientation.
+
+Integrated loudness (`scripts/wav_loudness.py`, BS.1770-4 K-weighted, gated), 60 s
+(3,600 ticks) autopilot grid race, 8 craft, volumes 100, `--seed 1`, `--dump-audio`:
+
+| Title | Mode | before trim | after trim |
+| --- | --- | --- | --- |
+| Pulse (PSP EU) | rear cue | -10.9 LUFS | -16.0 |
+| Pulse | headphones | -10.8 | -15.7 |
+| Pulse | original | -10.7 | -15.8 |
+| Pure (PSP EU) | rear cue | -13.7 | -16.2 |
+| Pure | headphones | -13.7 | -16.2 |
+| 2048 (Vita) | rear cue | -12.3 | -14.4 |
+| 2048 | headphones | -12.9 | -15.4 |
+| HD (PS3 EU) | rear cue | -15.0 | unchanged |
+| HD | headphones | -14.9 | unchanged |
+| Omega (PS4 EU) | rear cue / headphones | -22.6 | unchanged |
+
+Pulse lands 0.7 to 1.0 dB under HD (within the 1.5 dB aimed at). A 120 s Pulse rear
+cue run reads -11.7 before and -17.0 after (the race thins out; HD 120 s not
+measured). Omega's 60 s reads 7.6 dB under HD with its race audio incomplete
+(`docs/formats/omega-status.md`), so it is left at 0 rather than trimmed up. 2048
+races from the decrypted extract (`data/extracted/vita/PCSF00007`) and was measured the same way: 2.7 dB
+(rear cue) and 2.0 dB (headphones) over HD untrimmed; -4 dB lands 0.6 over / 0.5 under HD. The limiter
+compresses, so the loudness moves less than the trim (-2.5 dB gave -13.6 / -14.5). The trim was
+picked at -5 dB first; the quake pair needed -6 (below).
+
+Limiter work, 60 s (2.88 M frames), frames with gain below 0.94 / below 0.7:
+
+| Run | before | after |
+| --- | --- | --- |
+| Pulse rear cue | 652,717 (22.7 %) / 98,231 (3.4 %) | 0 / 0 |
+| Pulse headphones | 824,749 (28.6 %) / 175,256 (6.1 %) | 4,166 (0.14 %) / 0 |
+| Pure rear cue | 113,301 (3.9 %) / 28,131 (1.0 %) | 24,608 (0.85 %) / 4,652 (0.16 %) |
+| Pure headphones | 132,083 (4.6 %) / 23,509 (0.8 %) | 14,691 (0.5 %) / 0 |
+| 2048 rear cue | 206,912 (7.2 %) / 157,135 (5.5 %) | 148,321 (5.2 %) / 84,824 (2.9 %) |
+| 2048 headphones | 233,652 (8.1 %) / 160,484 (5.6 %) | 148,924 (5.2 %) / 134,686 (4.7 %) |
+
+Pre-limiter peak: Pulse 1.90 / 2.26 -> 0.95 / 1.13 (rear cue / headphones).
+`sfx_weapon_ground_truth::a_quake_hit_is_louder_with_its_collision_pair` passes with the
+limiter on under Pulse's trim (it failed by 0.8 % at -5 dB and by 2 % untrimmed, because
+the limiter's hold and release duck the mix longer than the cue lasts). The pan test
+`sfx_ground_truth::the_whole_grid_is_audible_and_not_all_from_one_place` still fails with
+the limiter on (it subtracts two renders that do not share a limiter gain), so it keeps
+its `set_limiting(false)`.
+
+Cost (release, host load 42, `limiter::tests::limiter_cost`): 2.7 us per
+1024-frame callback when idle, 23.8 us while limiting.
+
+The realtime path renders through the same `Mixer::render` (nothing after it
+amplifies; the starved-buffer ramps only reduce), so the dump is what the
+device receives.

@@ -12,19 +12,27 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 mod in_parallel;
 mod perturb;
 mod pickup_icon_ground_truth;
 mod pilot_assist_ground_truth;
 mod pilot_assist_levels_ground_truth;
+mod plasma_blast_models_ground_truth;
 mod plasma_ground_truth;
+mod plasma_timing_ground_truth;
 mod portuguese_br_ground_truth;
+mod pose_track_ground_truth;
 mod posed_visibility_ground_truth;
 mod post_finish_ground_truth;
+mod projectile_cage_ground_truth;
 mod projectile_tilt_ground_truth;
 mod prompt_pilots;
 mod ps2_hud_sights_ground_truth;
 mod ps2_shield_ground_truth;
+mod psp2_refraction_only_ground_truth;
 mod psp2_sky_fog_ground_truth;
 mod psys_inventory_ground_truth;
 mod pulse_gantry_circuits_ground_truth;
@@ -39,12 +47,14 @@ mod race_finish_ground_truth;
 mod race_load_read_memo_ground_truth;
 mod ram_ground_truth;
 mod replay_ground_truth;
+mod replay_timeline_ground_truth;
 mod repulser_fork_ground_truth;
 mod repulser_guard_band_ground_truth;
 mod reset_zone_ground_truth;
 mod reversed_grid_ground_truth;
 mod rocket_floor_trace;
 mod rocket_launch_ground_truth;
+mod route_plan_board;
 
 mod pilot_schema;
 

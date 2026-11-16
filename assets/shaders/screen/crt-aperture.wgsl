@@ -128,7 +128,7 @@ fn screen_filter(uv: vec2<f32>, pixel: vec2<f32>) -> vec3<f32> {
         let h = screen.output_size.y;
         let wire_a = abs(pixel.y - h / 3.0);
         let wire_b = abs(pixel.y - 2.0 * h / 3.0);
-        let shadow = 1.0 - 0.35 * (smoothstep(1.5, 0.0, wire_a) + smoothstep(1.5, 0.0, wire_b));
+        let shadow = 1.0 - 0.35 * ((1.0 - smoothstep(0.0, 1.5, wire_a)) + (1.0 - smoothstep(0.0, 1.5, wire_b)));
         color *= shadow;
     }
 

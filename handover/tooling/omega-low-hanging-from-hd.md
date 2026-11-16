@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
-titles: [omega]
-updated: 2026-10-26
-summary: "Omega adverts: reader landed, pass off until PS4 material curves are read; plume flags, hit-effect triggers, Looks, shadows still open"
+titles: [omega, 2048]
+updated: 2026-11-10
+summary: "Omega and 2048 countdown boards play (UV keys read from the .vex); mode boards, plume flags, hit effects, Looks, shadows open"
 difficulty: hard (35)
 ---
 
@@ -21,6 +21,8 @@ Provenance rule for every entry: inherited from Wipeout HD unless Omega's own
 data proves it.
 
 ## Open
+
+- **2048 in the same lane, reuse HD's path (maintainer, 2026-11-09):** any Omega item that lands here is wired for 2048 too (`.gxt` spellings, 2048's own evidence), with "ported" on its doc page unless 2048 is shown to differ. HD/Fury definitely wires much of this already and 2048 may, so extend the existing HD/2048 path to Omega rather than building a parallel one.
 
 ### Landed by the wire lane (nothing left to do)
 
@@ -55,21 +57,25 @@ data proves it.
 
 ### Worth a lane now (tier B)
 
-4. **Adverts pass is off on Omega: the reader landed, the look did not.**
-   `gantry::build` reads Omega's `321Go_*.vex` through `mesh::rcs::psp2::build_with_vex`
-   (landed 2026-10-26, `start_gantry_omega_ground_truth.rs`). `adverts: None` stays
-   because the Vineta K start-grid pair against shadPS4 does not match: placement does,
-   the look does not. Open: (a) read the PS4 materials' texture curves (the countdown
-   digits; the GO-edge finder reports no animated texture), tier C, `crates/mesh` and
-   `oag_rcs::rcsmodel::psp2`; (b) add `.gnf` spellings of `billboard1-8` and `fx350_nomip`
-   to `oag_render::gantry` (`SLOT_PLACEHOLDER_TEXTURES`, `mount()`, `FX350_TEXTURE`), which
-   also strips Omega's `?` icons, so only together with the pass; (c) set `adverts` to HD's
-   values (inherited) and repeat the pair. Details: `docs/formats/omega-status.md`, "Adverts".
-5. **Engine light and front-face flags on the plume.** `crates/omega/src/lib.rs`
-   sets `engine_light: false` and `front_faces_only: false` ("Off, chosen, not
+4. **Adverts pass: the countdown boards play; three mode boards have no carrier.**
+   Landed 2026-11-10 (`omega-gantry`, `omega-billboards`): `321Go_2048.vex` by node motion, `321Go_StartFinish.vex` on HD's
+   clock off the UV keys its `.vex` `Mesh` nodes author (Omega `TexAnim_UpdateTransform` `0x0172ba00`, confidence 88;
+   the PS4 and Vita `.rcsmodel` carry no curve), and `321Go_Zone.vex` in a Zone race on both titles. Open: (a) the Zone
+   Battle, Detonator and 2048 Combat boards build and their substitution is read on both executables, but
+   the carrier is now `oag_title::adverts::Adverts::mode_gantries` (a per-mode `ModeGantry` table, `GantryMode` Zone, ZoneBattle, Detonator, Combat; Omega and 2048 list all they author), but `oag_race::Mode` has Zone only, so `gantry_mode` in `crates/raceplay/src/load/gantry_visibility.rs` selects Zone and the other boards wait for a `Mode` each (their assembly ticks are HD's Zone 210, chosen, not measured); (b) the digits' phase against the original is
+   unmeasured (shadPS4 draws the card blank white; Vita3K untried); (c) HD's race-manager windows run inherited, not re-read
+   on either executable; (d) a stippled triangle crosses the board's quad on 2048 (Tech De Ra), as on other 2048 surfaces
+   in the same frame. Lead, not chased: `omega-status.md` holds a chevron `offset` at its authored value because "the PS4
+   material curves are unread"; that motion may be a `.vex` UV key block too (`psp2::build_billboard` is the reader).
+   Details: `docs/rendering/start-gantry.md`, "Omega and 2048: the HD-lineage board counts down";
+   `docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys".
+5. **Engine light (wired, see `docs/ghidra/functions/ps4-omega-eu/engine-light.md`) and front-face flag on the plume.** `crates/omega/src/lib.rs`
+   sets `front_faces_only: false` (the engine light was `false` when this was written) ("Off, chosen, not
    measured, as on 2048"); HD sets both `true`. Omega reads `EngineLightData.xml`
    in `FUN_0130e090` (`Distance` to `ship+0xbc`, `Radius` to `ship+0xc0`); the
-   consumer of those two fields is unread. Needs it read, then a thrust frame
+   consumer of those two fields is unread. **Read 2026-11-13, not finished:** `FUN_0130e090` (`0x0130e090`) writes `+0xbc`/`+0xc0`; an
+   offset search (`+ 0xc0]`) is not selective (60 hits in the first 78k instructions, all other structs), so the consumer is
+   unread and both flags stay off. Needs it read, then a thrust frame
    pair, Omega against HD, on the same circuit. With the light on a grid still
    gains a warm cast at the nozzle; with `front_faces_only` on nothing changed at
    the two ticks checked, because the flame is not visible there.
@@ -117,13 +123,12 @@ data proves it.
   Zone is unmeasured on Omega.
 - **Pre-race flyby.** HD's is `Platforms::Only(&[Platform::Ps3])`; about 22
   `start_grid.vex` entries exist in Omega's archives; its timing is unread.
-- **Prompt glyphs** (`Prompts::UNREAD`), **loading screen** (`loading: None`) and
-  **fresh profile variant** (`None`, a product choice).
+- **Prompt glyphs** (`Prompts::UNREAD`) and **fresh profile variant** (`None`, a product
+  choice). The loading screen is wired (`docs/formats/omega-loading.md`).
 
 ## Next Steps
 
-1. Item 4: read the PS4 material curves, add the `.gnf` spellings, then repeat the
-   Vineta K pair and set `adverts`.
+1. Item 4: give Zone Battle, Detonator and Combat an `oag_race::Mode` (their boards are listed and tested), or measure the digits' phase on Vita3K.
 2. Item 6: read the call sites of the six functions above, in the order
    `ShipCollisionFx_Trigger`, `FUN_016f3ef0`, `FUN_01722810`.
 3. Item 5: read the consumer of `ship+0xbc`/`ship+0xc0`, then the thrust frame pair.

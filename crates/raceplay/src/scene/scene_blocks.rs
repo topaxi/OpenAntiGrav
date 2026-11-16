@@ -6,7 +6,9 @@
 //! `Scene::write_frame`): one `queue.write_buffer` instead of one per drawable. **A kind holds
 //! only drawables the frame wrote on every view**: the shield shells, the weapon models and the
 //! sky are never written, or written only while live, and keep a buffer of their own (holding
-//! [`mesh_render::Scene::off`], or what the live weapon last had).
+//! [`mesh_render::Scene::off`], or what the live weapon last had). The one exception is HD's
+//! absorb shell, which is written only while live but reads the craft's block, because its
+//! program needs the output scale, the fog and the clock that block carries.
 
 use super::*;
 
@@ -46,6 +48,12 @@ impl Scene {
             drawable.share_scene(device, blocks, SceneKind::Ship);
         }
         self.wrecks.share_scene(device, blocks);
+        // HD's absorb shell is a craft's own scene model (`ShipAbsorbShell_Load` links it under the craft), drawn by
+        // the programs that close on `MAD /2` with the fog lerp inside it, so it reads the craft's block: the
+        // output scale, the fog and the clock its texture scrolls on.
+        for drawable in self.absorb_shell.iter_mut().flatten() {
+            drawable.share_scene(device, blocks, SceneKind::Ship);
+        }
         for drawable in self.shine.iter_mut().flatten() {
             drawable.share_scene(device, blocks, SceneKind::Shine);
         }
@@ -127,6 +135,7 @@ impl Scene {
             &mut self.plasma_blast.hemisphere1,
             &mut self.plasma_blast.ball,
             &mut self.plasma_blast.shuriken,
+            &mut self.plasma_blast.missile_head,
             &mut self.bomb_blast.hemisphere,
             &mut self.bomb_blast.shockwave,
             &mut self.bomb_blast.repulser_field,
@@ -141,7 +150,7 @@ impl Scene {
         ] {
             share_all(device, blocks, pool);
         }
-        share_all(device, blocks, self.leach_ball.as_mut());
+        share_all(device, blocks, self.leach_ball.iter_mut());
     }
 
     /// The blocks of the view following the craft `race` is drawing, one kind each.
@@ -153,11 +162,11 @@ impl Scene {
         ship: &mesh_render::Scene,
         flame: &mesh_render::Scene,
     ) {
-        let blocks = &self.scene_blocks;
-        blocks.write(queue, block, SceneKind::Circuit, circuit);
-        blocks.write(queue, block, SceneKind::Ship, ship);
-        blocks.write(queue, block, SceneKind::Shine, &shine::shine_scene(ship));
-        blocks.write(queue, block, SceneKind::Flame, flame);
+        self.scene_blocks.write_view(
+            queue,
+            block,
+            [circuit, ship, &shine::shine_scene(ship), flame],
+        );
     }
 }
 

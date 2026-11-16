@@ -45,9 +45,9 @@ struct Uniforms {
     face_atlas: vec2<f32>,
     // The buttons atlas's own size in pixels, the same idiom as `face_atlas`
     // one field up - HD/Fury's `ps_buttons.fnt`/`PS_BUTTONS.fnt` once loaded,
-    // a 1x1 placeholder otherwise. Occupies the slot a plain `_padding` field
-    // held before this existed: WGSL still rounds `Uniforms` to 64 bytes
-    // either way, so this is a real field rather than appended bytes.
+    // a 1x1 placeholder otherwise. Fits in what would be `Uniforms` padding:
+    // WGSL rounds the struct to 64 bytes either way, so this is a real field
+    // rather than appended bytes.
     buttons_atlas: vec2<f32>,
     // The HUD stretch: x is output pixels per grid unit, y is 1 when the HUD
     // is drawn sharp-bilinear and 0 for everything else.
@@ -81,9 +81,8 @@ struct Instance {
     // like mode 3 (`Draw::GradientSprite`). Every mode is tested by
     // range rather than by an open-ended `>`, because a higher mode sorts
     // above every earlier one and an open-ended test would silently catch
-    // it too - the trap `is_face` used to have before `MODE_BUTTONS_ATLAS`
-    // existed to catch it: `mode > 3.5` alone would have counted every
-    // buttons-atlas quad as a face-atlas one.
+    // it too - the trap an `is_face` of `mode > 3.5` alone would have: it
+    // counts every buttons-atlas quad as a face-atlas one.
     @location(4) mode: f32,
     // Clockwise turn about the quad's own centre, in radians. Zero for
     // everything but the lock-on reticle's corner brackets, which are four
@@ -125,8 +124,45 @@ fn to_clip(pixels: vec2<f32>) -> vec4<f32> {
     return pixels_to_clip(pixels, uniforms.screen, uniforms.viewport);
 }
 
+// A `Draw::Triangles` triangle (mode 7): the instance carries three corners packed
+// by `Quad::triangle` in quad.rs. Vertices 0 to 2 are the corners and 3 to 5 repeat
+// corner 0, a degenerate triangle that draws nothing. Comes out as an ordinary sheet
+// quad's vertex (mode 1) with the corner's own colour.
+fn triangle_vertex(index: u32, instance: Instance) -> VertexOut {
+    let v = select(0u, index, index < 3u);
+    let p0 = instance.rect.xy;
+    let p1 = instance.rect.zw;
+    let p2 = instance.uv.xy;
+    let t0 = instance.uv.zw;
+    let t1 = instance.color.xy;
+    let t2 = instance.color.zw;
+    let c0 = instance.border.xyz;
+    let c1 = vec3<f32>(instance.border.w, instance.chamfer.x, instance.chamfer.y);
+    let c2 = vec3<f32>(instance.tile.x, instance.tile.y, instance.rotation);
+    let at = select(select(p0, p1, v == 1u), p2, v == 2u);
+    let sheet = select(select(t0, t1, v == 1u), t2, v == 2u);
+    let shade = select(select(c0, c1, v == 1u), c2, v == 2u);
+    // A solid triangle (mode 8) is an atlas fill: its colour rides in `color`, the atlas's solid
+    // texel in `uv.zw`.
+    let solid = instance.mode > 7.5;
+    var out: VertexOut;
+    out.position = to_clip(at);
+    out.uv = select(sheet / uniforms.sprites, t0 / uniforms.atlas, solid);
+    out.color = select(vec4<f32>(shade, 1.0), instance.color, solid);
+    out.border = out.color;
+    out.mode = select(1.0, 0.0, solid);
+    out.tile_rect = vec4<f32>(0.0);
+    out.tiles = vec2<f32>(0.0);
+    out.texel_pixels = vec2<f32>(1.0);
+    out.texture_size = select(uniforms.sprites, uniforms.atlas, solid);
+    return out;
+}
+
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
+    if instance.mode > 6.5 {
+        return triangle_vertex(index, instance);
+    }
     let corner = corner_of(index);
     // The **geometry** turns and the `uv` below does not, so this spins the
     // quad rather than the texture lookup - the difference between drawing one
@@ -139,8 +175,8 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     // that is not square: HD's `ZoneBG` is a 676x153 bar authored at a quarter
     // turn, and that order left it 676 wide and 153 tall with its art lying on
     // its side instead of standing it up as the 153x676 column it is. A square
-    // quad comes out the same either way, which is why the lock-on reticle -
-    // the only caller until 2026-08-31, and 8 pixels square - never showed it.
+    // quad comes out the same either way, which is why the lock-on reticle
+    // (8 pixels square) never showed it.
     //
     // The chamfers, before anything else touches the corners: they are a
     // change to where this vertex *is* on the quad, not a transform of the
@@ -241,7 +277,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
 
     // The vertex stage collapses a gradient (mode 3) to mode 0 before this
     // runs, so `in.mode` only ever reaches here as 0, 1, 2, 4 or 5 - tested
-    // by range, for the same reason the vertex stage now is (see
+    // by range, for the same reason the vertex stage is (see
     // `Instance::mode`'s own doc for the `is_face`/`is_buttons` trap this
     // guards against).
     let is_sheet = in.mode > 0.5 && in.mode < 2.5;
@@ -282,8 +318,8 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
 
     // **Premultiplied on the way out**, because the pipeline blends
     // premultiplied alpha - see `render.rs`'s colour target. `src.rgb * src.a`
-    // here is exactly the `SrcAlpha` factor the ROP used to apply, so every
-    // quad that was drawn before this existed composites identically.
+    // here is exactly the `SrcAlpha` factor a straight-alpha blend applies, so
+    // every ordinary quad composites as it would under one.
     //
     // An **additive** quad returns an alpha of zero instead, which leaves the
     // destination factor `1 - 0` at one: `src.rgb * src.a + dst.rgb`. That is

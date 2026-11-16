@@ -73,6 +73,14 @@ pub const CLASS_ABSORB: u32 = 0x3ee;
 /// `docs/ghidra/functions/ps3-hdfury-eu/cannon.md`.
 pub const CLASS_CANNON_FLASH: u32 = 0x3eb;
 
+/// Class ID of a `wingtip` node: the two locators (`wingtip_left`, `wingtip_right`) every Wipeout
+/// HD hull authors, each of which drives a contrail ribbon while a speed pad acts.
+///
+/// **From HD's executable.** `ShipWingtipVortices_RegisterClass` (`0x002db500`) loads `0x3ec`
+/// and stamps the importer name `ShipWingtipVortices_Importer.h`. All 39 HD `Locators.vex`
+/// carry exactly two. Confidence 85; see `docs/ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md`.
+pub const CLASS_WINGTIP: u32 = 0x3ec;
+
 /// One format version's class-ID assignments.
 ///
 /// `None` means not recovered. A decoder that needs one and finds `None` should
@@ -113,6 +121,8 @@ pub struct Classes {
     pub engine_flare: Option<u32>,
     /// The collision-spark locator on a ship.
     pub ship_collision_fx: Option<u32>,
+    /// The weapon node on a ship (`Ship Muzzle`): where a charging Plasma's head sits.
+    pub ship_muzzle: Option<u32>,
     /// The locator Wipeout HD plays its weapon-absorb burst at ([`CLASS_ABSORB`]).
     pub absorb: Option<u32>,
     /// The road-span table a Quake ripples - see [`crate::quake`].
@@ -166,6 +176,7 @@ pub const V6: Classes = Classes {
     airbrake: Some(super::CLASS_AIRBRAKE),
     engine_flare: Some(super::CLASS_ENGINE_FLARE),
     ship_collision_fx: Some(super::CLASS_SHIP_COLLISION_FX),
+    ship_muzzle: Some(super::CLASS_SHIP_MUZZLE),
     // Same reason as `track_wall_collision`: HD's registration, no Pulse file.
     absorb: Some(CLASS_ABSORB),
     quake: Some(crate::quake::CLASS_QUAKE),
@@ -282,6 +293,12 @@ pub const V4: Classes = Classes {
     airbrake: Some(0x377),
     engine_flare: Some(0x371),
     ship_collision_fx: Some(0x382),
+    // **`Ship Muzzle`**, `0x394`: every reachable Pure ship carries exactly one node of it,
+    // named `ship_muzzle`, with one `Mesh` child, and the live craft's `+0xe0` object is built by
+    // `ShipMuzzle_Importer` (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor").
+    // `crates/pure/tests/class_table_ground_truth.rs` re-derives it. Confidence **88**: exact
+    // name and structure on six of six ships and the live node read, not the registration's id.
+    ship_muzzle: Some(0x394),
     absorb: None,
     quake: None,
     // **`AmbientLight` and `DirectionalLight`**, generic Maya classes outside the
@@ -344,6 +361,7 @@ pub const V3: Classes = Classes {
     airbrake: None,
     engine_flare: None,
     ship_collision_fx: None,
+    ship_muzzle: None,
     absorb: None,
     quake: None,
     ambient_light: None,

@@ -15,7 +15,7 @@
 //! so a key cannot mean two things at once. [`Bindings::rebind`] therefore
 //! takes a key away from whatever button held it before handing it to the one
 //! being edited, rather than refusing the rebind: refusing would dead-end a
-//! player against eighteen keys and twelve buttons with no way to free one up
+//! player against nineteen keys and thirteen buttons with no way to free one up
 //! except backing out and finding the other row first. A button a rebind
 //! leaves with nothing is not a failure state - [`crate::keys::bound_keys`]'s
 //! own doc comment already calls that "a real answer rather than a failure",
@@ -38,7 +38,7 @@
 //! this crate depends on nothing serde-shaped, the same reason
 //! `oag_game::settings`'s `AnisotropyDef` mirror type does for one it does not
 //! own rather than deriving here. Every one of [`crate::keys::candidates`]'s
-//! eighteen names is always written, complete, the same convention
+//! nineteen names is always written, complete, the same convention
 //! `settings::load`'s own doc comment states for the rest of the file - so a
 //! button a rebind emptied stays empty across a restart instead of quietly
 //! reverting to its default the moment the key that used to own it goes
@@ -126,7 +126,7 @@ impl Bindings {
     /// or an addition. Returns the button `name` was taken from, when the
     /// steal actually moved it from somewhere else - `None` when `name` was
     /// already unbound or already `button`'s, or when `name` does not name one
-    /// of [`crate::keys::candidates`]'s eighteen keys, in which case nothing
+    /// of [`crate::keys::candidates`]'s nineteen keys, in which case nothing
     /// changes at all.
     pub fn rebind(&mut self, button: Button, name: &str) -> Option<Button> {
         let index = keys::candidates()

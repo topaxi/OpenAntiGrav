@@ -1,0 +1,16 @@
+# Wipeout Pulse and Pure rumble: the repulsor pulses: a short push.
+# Read through the fallback asset layer; a disc pattern of the same name wins, and a file
+# in overrides/<title>/Data/XML/Rumble/ replaces this one.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/rumble.tosd"
+version = "1.0.0"
+
+[pattern]
+type = "OneShot"
+class = "Game"
+priority = "Medium"
+
+[tracks]
+large = [255, 215, 160, 105, 60, 25]
+small = [1, 1, 0]

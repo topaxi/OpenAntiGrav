@@ -157,6 +157,40 @@ fn the_boots_own_music_discs_survey_finds_it() {
     );
 }
 
+/// The `.fft` beside the track `at9` parses at the size
+/// `16 + 4 * 12 * frames` and covers the track's length to within a second
+/// (`canvas-music-wave.md`, "The data").
+fn check_spectrum_sidecar(archives: &mut oag_assets::Archives, at9: &str, seconds: f64) {
+    let name = format!("{}.fft", at9.strip_suffix(".at9").expect("an .at9 track"));
+    let bytes = archives
+        .read_name(&name)
+        .unwrap_or_else(|error| panic!("{name}: {error}"));
+    let spectrum = oag_music::spectrum::Spectrum::parse(&bytes)
+        .unwrap_or_else(|error| panic!("{name}: {error}"));
+    assert!(
+        (f64::from(spectrum.seconds()) - seconds).abs() < 1.5,
+        "{name}: {} s of rows against a {seconds} s track",
+        spectrum.seconds()
+    );
+}
+
+/// The front end's own sidecar loads through the title's declared extension,
+/// and a title with none (Pulse) reads `None`.
+#[test]
+#[ignore = "needs game content in data/extracted/vita/PCSF00007"]
+fn the_front_ends_spectrum_loads_through_the_titles_axis() {
+    let Some(path) = source() else { return };
+    let spectrum = library::load_front_end_spectrum(&GameLibrary, &path.display().to_string())
+        .expect("reading the sidecar")
+        .expect("2048 declares one");
+    assert_eq!(spectrum.frames(), 9060, "docs: FEMusic is 9060 rows");
+    assert!(
+        (0..oag_music::spectrum::BANDS).any(|band| (0..spectrum.frames())
+            .any(|row| spectrum.sample_at(row as f32 / 30.0)[band] > 0.9)),
+        "a normalised track reaches 1.0 in some band"
+    );
+}
+
 /// All eleven `PI_Music` declarations resolve to a readable ATRAC9 track, and
 /// the Vita boot's own survey lists them: dropping `tracks` from
 /// `oag_2048::MUSIC`, or `Platform::Vita` from `Soundtrack::read`, empties it.
@@ -220,6 +254,10 @@ fn the_eleven_declared_race_tracks_are_listed_and_decode() {
             Some(entry.seconds),
             "{name}: the head and the whole entry disagree on its length"
         );
+    }
+
+    for (name, entry) in names.iter().zip(&entries) {
+        check_spectrum_sidecar(&mut archives, name, entry.seconds);
     }
 
     let cache = std::env::temp_dir().join("oag-2048-music-ground-truth");

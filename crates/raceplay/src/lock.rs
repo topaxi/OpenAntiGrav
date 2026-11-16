@@ -4,11 +4,10 @@
 //! The Missile and the LeachBeam fire at the craft their holder has *locked*,
 //! and a lock is not a property of geometry alone - it is a reticle held on a
 //! target for a time (`docs/ghidra/functions/psp-pulse-usa/lock-sight.md`). The
-//! law is [`oag_race::sight`], which is written over a screen position. Until
-//! 2026-10-14 the primary's reticle ran that law on the chase camera's
-//! projection and the shot read the reticle back, so the simulation read the
-//! view: a replay was exact only as far as the reticle it started from, and a
-//! server with no camera could not agree with its client about a lock.
+//! law is [`oag_race::sight`], which is written over a screen position. Running it on the chase camera's
+//! projection would make the simulation read the view: a replay would be exact
+//! only as far as the reticle it started from, and a server with no camera
+//! could not agree with its client about a lock.
 //!
 //! Now each person-flown slot owns a [`Sight`](oag_race::sight::Sight) in
 //! [`RaceSim`], advanced here by the same law off a projection through a

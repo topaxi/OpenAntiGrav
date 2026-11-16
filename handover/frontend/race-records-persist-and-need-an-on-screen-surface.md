@@ -36,7 +36,7 @@ table's `RACE TIME` footer:
 - `BEST MEDAL <tier>`, same highlighting rule, shown only when the row
   carries one. **Fed by a real race since 2026-09-14** for a race launched
   through `Cell Selection` - see
-  `handover/frontend/the-campaign-grid-draws-and-does-not-launch.md` - and
+  `handover/frontend/campaign-screens-what-is-left.md` - and
   still never for one launched any other way (the ordinary RACE page, RACE
   REMIX, `--race`), since none of those set `RaceStage::campaign_cell` at
   all.
@@ -102,7 +102,7 @@ hand - there is nothing in `assets/ui/menu.toml` letting them browse every
 circuit's stored bests from the menus. Scoped out on purpose: see "Next
 Steps" below.
 
-**Closed, 2026-09-14** - `handover/frontend/the-campaign-grid-draws-and-does-not-launch.md`
+**Closed, 2026-09-14** - `handover/frontend/campaign-screens-what-is-left.md`
 wired `RaceStage::campaign_medal` into `RaceStage::observation`, so
 `BEST MEDAL` now draws in a real session launched through `Cell Selection`.
 Still `None` for every other launch path (the ordinary RACE page, RACE
@@ -232,7 +232,7 @@ than overlapping it).
    starts drawing in a real session with no further change to
    `records.rs`/`scoreboard.rs` - both already carry the value end to end.~~
    **Done, 2026-09-14** - see
-   `handover/frontend/the-campaign-grid-draws-and-does-not-launch.md`;
+   `handover/frontend/campaign-screens-what-is-left.md`;
    `BEST MEDAL` now draws for a race launched through `Cell Selection`.
 6. Runtime-verify `Session::escape`'s capture site on a real desktop, per
    "Still open" above - this sandbox cannot deliver the keypress.

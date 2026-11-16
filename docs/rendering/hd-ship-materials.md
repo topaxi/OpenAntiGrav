@@ -712,6 +712,43 @@ materials; HD's nine add `diffuse_with_specular_from_alpha_n`, `diffuse` and a s
 textures: **checked, applies, not wired** (Omega's hulls build through the PS4 path, which has none of this; it ships
 no `.probes`, so the tint is moot there). 2048's is **not checkable** from its `.pkg` here (PFS-encrypted).
 
+**The Zone flame hangs on the Zone hull (2026-11-01, `hd-zone-exhaust`).** The maintainer saw the exhaust flare and trail
+misplaced in HD Zone races. `Locators.vex` (the trail's nozzle, `(0, 0.518, -7.005)`) already came from
+`/data/ships/zone`, but the flare model, whose `EF_Main` node origin is where the flame is baked
+(`oag_livery::flare::per_team`), came from the **player's team** directory: the origin was the team hull's
+(Assegai `(0.005, 0.011, -6.809)`), 0.51 up and 0.2 aft of the Zone nozzle, so the flame sat in the air aft of the
+tube mouth with the trail starting beyond it. The Zone directory ships its own `engineflare.vex` (`EF_Main` at
+`(0, 0.547, -6.525)`, 0.48 ahead of the locator, the same inside-the-nozzle rule Harimau shows, `engine-trail.md`
+"EngineFlare_PlaceShapes"); `oag_livery::entry::model_directory` now reads the flare from where the hull is read.
+Measured by eye on a 1440x816 render and RPCS3's Zone frame (`data/reference/hd-zone-material/original-zone3.png`):
+ours before, the glow ring floated about 70 px below the tube mouth; after, it sits in the mouth (about 12 px, the
+original's glow also fills the mouth). Pinned by `hd_engine_flare_ground_truth::a_zone_race_takes_its_flame_origin_from_the_zone_hull`.
+No pose-matched pair was made: the saved Zone state is a results screen and `Restart Race` did not reload in 120 s.
+The same fault one level over was closed 2026-11-01 (`hd-zone-livery-rest`), see "The rest of the Zone livery" below.
+Confidence 85 for the cause (origin numbers printed from the loaded liveries), 60 for the by-eye pixel offsets.
+Cross-title: Omega's `hdships/Zone` ships its own `engineflare.vex` and now loads it (locator-placed on the PS4 path,
+unchanged); 2048 is **not checkable** (PFS-encrypted `.pkg`).
+
+## The rest of the Zone livery (2026-11-01, `hd-zone-livery-rest`)
+
+Census (`read_name` of each stem in `Data\Ships\zone` against `Data\Ships\Assegai`, and `hdships\Zone` against
+`hdships\Assegai` on Omega). The Zone directory ships its own `EngineLightData.xml`, `shipshield.vex`/`.rcsmodel`,
+`AbsorbEffect.vex`/`.rcsmodel`, `shipwreck.vex`/`.rcsmodel`, `engineflare.vex` and `Locators.vex`, on both titles; no
+`zonewreck.vex` anywhere. The engine light is authored about the Zone hull: HD Zone `Distance` 1.3, Assegai 0.0 (`Radius` not
+compared). Sizes: HD shield shell 4,064 B Zone against 2,912 B Assegai; Omega 3,504 against 2,352.
+
+What moved: `oag_livery::entry::model_directory_with` picks the Zone directory for the engine light, the shield shell and the
+absorb shell (the team's file when the Zone directory ships none, with a report line saying so). Pinned by
+`hd_engine_flare_ground_truth::an_hd_zone_race_takes_its_light_and_shells_from_the_zone_directory` and the Omega twin (red
+when `lib.rs` keeps the team's: checked). Omega loads the shield shell only: its SPU vertex light is unread on the platform
+and its absorb-shell rule is off. **Not moved: the wreck.** The PS3/Vita livery branch loads no wreck at all
+(`wreck: None`); where a title's rule loads one (Pulse), Zone keeps the player's team directory, and Pure's Zone
+directory was not measured for it. **Open:** what the original does with the HD Zone wreck is unread.
+Hull brightness: a headless Zone frame (Assegai, VENOM, `--camera-view far`) over the hull's bounding box went 75.1 to 73.6
+mean (tick 300) and 87.6 to 87.1 (tick 900): slightly darker, about 1-2 % (not isolated per piece; plausibly the Zone light's `Distance` 1.3 placing the
+light 1.3 behind the flare node where the team's 0.0 sat on it). It does not lighten the hull, so it is not the maintainer's
+"too dark" cause; that was the stage table's file (see "Zone hull brightness" above). 2048: **not checkable** (PFS-encrypted).
+
 ## Hull normal maps (2026-10-20, `hd-hull-normals`)
 
 The lit hull programs (`diffuse_with_specular_from_alpha_n`, `_vcol`, `carbonfibre`, `nitro_body_new` and the Fury
@@ -775,11 +812,25 @@ lighting level and the probe colour, not the normal, are what still separate the
 whiter - **retracted: that reference was a `Write Color Buffers`-off capture, see "Hull brightness" below**, the bloom halo ours draws around the paint is not there). **Not claimed a match**; the claim is the data path:
 authored tangent, authored map, the program's own formula.
 
-**Zone hull brightness (the brief's item 5): not a clear data miss, left open.** Ours feeds the stage's authored
-`Sun colour` (`zonemode.effectsettings`, stage 3 `Sub Flash`: `1 1 1`; `zone_1/track.envsettings` authors
-`1.5 1.294 1.0`, which the stage replaces). The live `directionalLight0Colour` `(1.144, 1.091, 1.906)` equals neither
-and no stage authors it (the stage's `EQ colour tint` is `123 154 253`, `Sky horizon colour` `0.055 0.004 0.365`), so
-what composes it, a blend with a bluish term, is unread. Feeding the live number would be a hand-transcribed constant.
+**Zone hull brightness (the brief's item 5): ~~not a clear data miss, left open~~ - answered 2026-11-01
+(`hd-zone-hull-light`): it was a data miss, the wrong file.** Ours fed `zonemode.effectsettings`' stage 3 `Sun
+colour` (`1 1 1`). On a Zone circuit the original loads `zonemodedlc3.effectsettings` instead
+(`Environment_LoadRaceScene` compares the track id against `25_Track`..`28_Track`), and in Zone
+`directionalLight0Colour` is the stage table's `Sun colour` cross-faded between two stages
+(`Environment_UpdateStageBlend` `0x003dc35c`-`0x003dc4a8` into `0x00c815d0`, published by `Scene_PrepareFrame`
+under `g_ZoneEffectsActive`). DLC3's stage 3 authors `1.143733 1.091405 1.906221`, the live value to every printed
+digit. Confidence 88, evidence on
+[zone-palette-select.md](../ghidra/functions/ps3-hdfury-eu/zone-palette-select.md); wired through
+`oag_title::ZonePalette::TitleWide`'s `zone_circuit_entry`, pinned by
+`zone_grade_ground_truth::a_zone_circuit_lights_the_hull_with_the_dlc3_sun`. The whole stage table changes with it
+on the Zone circuits (fog, ambient, Scene/Track recolour, sky), not the sun alone. Measured on ours (headless,
+Assegai, VENOM, `--zone-stage 3`, `--camera-view far`, tick 300, 1440x816, held throttle): the hull's lit panels
+went from `(194.5, 196.7, 200.7)` to `(197.9, 199.0, 214.4)` mean RGB on the nose (60x40 box at 690,530) and
+`(161.1, 162.4, 159.5)` to `(164.0, 164.5, 171.0)` on the left wing: brighter by 1-2 % in red and green and 6-7 % in
+blue, a cool white where it was warm. Small, because the hull's ambient and probe terms carry most of its light. The
+road goes from blue-violet to grey with orange lines, as the original's Zone frame shows. **Whether the hull now
+matches the original's brightness is not measured**: that needs a `Write Color Buffers`-on, pose-matched Zone pair,
+which does not exist yet.
 
 **Cross-title.** Omega: **checked, applies, not wired.** `hdships/Zone` and the other hulls ship `*_N.gnf` normal maps
 (66 `_n.gnf` entries under `hdships/` in `data01.psarc`, `Zone_TP_1024_N.gnf` among them) beside the same hull
@@ -951,7 +1002,9 @@ the track is the scenery lane's. Hull box difference, Vineta K 11.25 to 10.90.
 **Read, measured, not wired: the diffuse `N.L` is unsaturated too.** The same `DP3` feeds `H3 = N.L * sunColour` unsaturated
 (`diffuse_vcol` alone has `DP3_SAT`), so a facet turned from the sun would be darker than its ambient. Wired, Vineta K's hull
 difference went 10.90 to 13.16 (worse) and Anulpha's 33.95 to 34.51, so the diffuse stays saturated. The original's self-shadow pass
-(front faces culled) zeroes most of the back-facing sun, which is the likely reason the negative term is rarely seen; not checked.
+(front faces culled) zeroes most of the back-facing sun, which is the likely reason the negative term is rarely seen; not checked. **Likely the same
+reading as the scenery's:** a consumer's source saturate (`src1_prec_mod = 4`, `docs/formats/rcsmaterial.md`, "Bit 24 is a source saturate") clamps an unsaturated
+`DP3`; whether the ship programs carry it is not censused.
 
 **Measured (the 13 HD compare pairs, Harimau classic on 12 circuits and Assegai_c1 on Talon's Junction).** The pixel metric on a hull is
 dominated by the silhouette: two captures of one state differ in camera (0.078 units on Anulpha Pass, about ten pixels at the hull), and the hull-box grey
@@ -1074,8 +1127,8 @@ lights off by it.
 
 **Wired.** `Race::hd_craft_engine_lights` is the engine light without the circuit's switch, bound into the craft's scene block
 (`ship_scene`, `oag_raceplay::scene::frame`); `Race::hd_engine_lights` (the track's) keeps the switch. Test:
-`weapon_light::tests::the_circuits_switch_does_not_reach_the_hull`. HD only: `engine_lights` exist only where a title's `Flare`
-sets `engine_light`.
+`weapon_light::tests::the_circuits_switch_does_not_reach_the_hull`. The switch is HD's alone: `engine_lights` exist where a title's `Flare`
+sets `engine_light` (HD, 2048, Omega), and only HD's circuits author the key.
 
 **Before and after** (1920x1080 pairs, `data/reference/compare-page/hd/<circuit>`, ours re-rendered with the pair's own flags on
 main and on this change; box `927,785 13x20`, the left bay wall above the shield band; mean RGB):
@@ -1091,8 +1144,8 @@ ours is about 1.3 times too bright, the same overshoot Talon's Junction already 
 (9.1, 16.0, 33.2)), so it belongs to the engine light's strength at the hull, not to this change (open: the light's `D` or
 the falloff exponent at the housing, or the vertex colours' multiplier).
 
-**Cross-title.** Omega and 2048 keep the engine light off (`engine_light: false` in their `Flare`, chosen), so neither finding reaches
-them. **Omega: not checkable** for the same reason as before: the evidence is a live read of a vertex buffer in main memory, and shadPS4 has no memory readout; whether Omega's circuits author the same `0` was not read. 2048 is not compared on the Vita. The case-blind Fury test
+**Cross-title.** Omega and 2048 now carry the engine light (`EngineLightLaw` in their `Flare`; ported, with their own law, see
+[Omega's engine-light page](../ghidra/functions/ps4-omega-eu/engine-light.md)). The circuit's switch is HD's mechanism only: `spu_vertex_lights_enabled` reads it on PS3 geometry and is `true` elsewhere. **Omega: not checkable** for the same reason as before: the evidence is a live read of a vertex buffer in main memory, and shadPS4 has no memory readout; whether Omega's circuits author the same `0` was not read. 2048 is not compared on the Vita. The case-blind Fury test
 applies to every title that reads it.
 
 ## The drawn hull is not the body: a per-frame shake from `ship+0x6b00` (2026-10-22, `hd-hull-bay`)
@@ -1129,3 +1182,65 @@ Still pairs draw it on neither side: ours uses `--no-hull-shake`, and the origin
 On Talon's Junction, re-captured that way, the craft
 offset is `(0, -9)` -> `(0, 0)` px and the craft difference 32.95 -> 10.84 ([hull-shake.md](../ghidra/functions/ps3-hdfury-eu/hull-shake.md)). Open: a live sample of `ship+0x6b00` for the lane masks and to
 confirm the fade input is speed. Cross-title: Omega and 2048 inherit HD's law; neither was read.
+
+## The nitro hull's picture was a ramp and a mask (2026-11-13, `fury-nitro-colours`)
+
+Every Fury Nitro hull (`<team>_n1`, all twelve) drew green and purple patches over its paint. The maintainer's report was "every
+team's nitro skin is the wrong colour", so the term was one every nitro hull shares: its two lit materials, `nitro_body_new` and
+`nitro_perspex_new`.
+
+**The model lists the wrong texture first.** Both materials' model tables begin with a texture their program does not use as a
+colour (`scripts/ps3-microcode.py fp-file`, the resolved blocks `0x3fd0` and `0x4250`, and `hd_material_probe_dump` over all
+twelve `_n1` hulls):
+
+| Hash | Unit | File (every team) | What the program does with it |
+| --- | ---: | --- | --- |
+| `0x2d5fc6a6` | 3 / 4 | `iridescence.gtf` | `TEX H1.xyz, -R3.wwww`: a ramp read at `-dot(V, N)`, scaled by a parameter and overlaid on the diffuse. A view-angle sheen like `0x94b2b285`, never a picture |
+| `0x3a7e591d` | 2 | `holographic_02_rich_glow.gtf` (perspex only) | `TEX R4.y, f[TC5]`: one channel, folded into the ramp's coordinate. A mask |
+| `0x1b2a3d71` | 0 | the team's own diffuse (`*_tp_nolivery.gtf`, `feisar_livery_nologos.gtf`, `assegai_concept_diffuse_nolivery.gtf`) | the lit paint: `TEX H0, R0 unit0` times the light |
+| `0x0617f872` | 1 | `*_livery_n.gtf` | the tangent-space normal (`hull_normal`) |
+
+`skin::picks` takes the first entry that is declared, sampled as a colour and not in `NOT_A_PICTURE`. The ramp and the mask were
+in neither list, so the body bound `iridescence.gtf` and the perspex bound the holographic mask as their picture, and the
+perspex (drawn blended over the whole hull) painted the rainbow. Second, with the picture moved off entry 0, the ordinal fallback
+`aux = entry 1` is the diffuse itself, which `emissive` would add back onto its own paint (`accumulates(1)` is the tangent
+arithmetic, as in Finding 1).
+
+**The fix** (`mesh::rcs::skin`, `emissive`; confidence 85 on the program reads, measured off the resolved blocks): both hashes
+join `NOT_A_PICTURE` (the table there carries the census: 24 and 12 binds, only these two files, no forward circuit binds
+either); where the entry the program declares at unit 1 binds `0x0617f872` and no traced alpha unit applies, that entry is the
+second binding, which `emissive` already refuses as a normal map. Both slots now read `lit_default`.
+
+**Measured** (ours, Talon's Junction grid, `--camera-view far`, the hull box 360 x 300, before and after on one binary
+difference): `ASSEGAI_N1`, `FEISAR_N1` and `HARIMAU_N1` lose the green and purple and show their own paint (Assegai blue and
+yellow, Feisar grey-olive, Harimau black and copper). `ASSEGAI_C1` and the classic `ASSEGAI` are **byte-identical** before and
+after (0 differing pixels in 1440 x 816). Pinned by
+`hd_hull_glow_role_ground_truth::every_nitro_hull_paints_its_diffuse_and_adds_no_second` (all twelve hulls: the picture is the
+file the program names at unit 0, no `ADD_SECOND`; it fails with the fix removed).
+
+**Not measured against the original.** A fresh RPCS3 profile pads every `_n1` row (nitro needs `grid8`, `docs/ui/campaign-screens.md`)
+and Ship Select draws a locked row as a black silhouette, so there is no original frame of a nitro hull yet; the claim "matches
+within a grey tolerance" is **open**. **Still open on the hull**: the iridescent overlay itself (`diffuse` overlaid with
+`ramp(-dot(V, N)) * 0.5637`, a hue that moves with the view) is not drawn, and the white wing rims on the `_n1` skins are a
+separate term (the `nitro_emissive_outlines` shell).
+
+**Other titles.** Fury: same disc, **ported**. **2048: ported** (2026-11-13, `w2048-fury-nitro`; the earlier "not applicable, no
+`_n1` directory" was wrong, the extraction had been read without looking at `hdships`). 2048 ships all twelve
+`hdships\<team>_n1` hulls in the **base package** (`data.psarc`; the 1.04 patch's `data2.psarc` re-ships them with 4x livery
+textures), not in the Fury pack (`dlc2.psarc` carries circuits and sound only: no `hdships` entry, no `nitro` material). Their
+`nitro_body_new` and `nitro_perspex_new` carry the same sampler hashes as HD (`0x2d5fc6a6`, `0x3a7e591d`, `0x1b2a3d71` at unit 0,
+`0x0617f872`), listed ramp and mask first, and the Vita binder (`mesh::rcs::psp2`, which does not use `skin::picks`) took the
+first path, so the hulls drew the ramp (black with green and purple, `Harimau_n1` an almost black silhouette). A sweep of every
+`.rcsmodel` in the five 2048 archives found the two hashes on `nitro_body`, `nitro_body_new`, `nitro_perspex_new` **and** on
+`detonator_bomb_normal`, `lightbarrierpanel` (ramp) and the `ship_damage` wreck shards (`nitro_perspex_debris*`), so the 2048 and
+Omega rule is keyed on the family (`skin::NITRO_FAMILIES`, `skin::NITRO_LOOKUPS`), not on the hash alone as HD's is; the weapon and
+the shards are untouched (no role measured there; the shards very probably share the bug, **open**). Pinned by
+`psp2_nitro_hull_ground_truth::every_2048_nitro_hull_paints_its_diffuse` (12 hulls, 24 materials; fails with the family keying
+removed). **Omega: ported** in the same binder: its `_n1` hulls use the same `nitro_body_new` / `nitro_perspex_new` names (13 hulls,
+27 materials in `data01`, `data03`, `data08` of the merged extraction), pinned by `every_omega_nitro_hull_paints_its_diffuse`; the
+earlier "differs by name" read only the DG/`_2` families, which are other materials. Seen in 2048: `--race --team Feisar_n1` on Vineta K
+shows the grey livery with its detail and `Harimau_n1` the black hull with its engine and plates, where before both were a flat
+ramp-dark hull. The white-violet wing rims are `nitro_emissive_outlines`, still the separate open term. **Offered?** 2048's own team
+list is its five 2048 teams; the twelve HD-derived teams, nitro included, are reachable through RACE REMIX's craft title only
+(`GUEST_ROSTER.offered = false`, `docs/formats/2048-dlc.md`), not gated on the Fury pack being mounted; whether the original offers
+`_n1` hulls in 2048 and behind which unlock is unmeasured (**open**).

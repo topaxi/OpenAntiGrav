@@ -44,10 +44,12 @@ use std::path::Path;
 
 pub mod at3;
 pub mod at9;
+pub mod file;
 pub mod mp3;
 pub mod omega;
 pub mod playlist;
 pub mod song_names;
+pub mod spectrum;
 pub mod wem;
 
 use anyhow::{Context, Result, bail};
@@ -317,20 +319,32 @@ fn decode(blob: &[u8], cache_dir: &Path) -> Result<Pcm> {
 /// # Errors
 ///
 /// An entry that will not read, and a decode that failed.
+///
+/// `prepared` is a title's [`omega::Prepared`] a caller kept from an earlier
+/// entry ([`prepare`]); `None` builds one for this entry alone.
 pub fn load_entry(
     title: &Title,
     archives: &mut Archives,
     at: u32,
     cache_dir: &Path,
+    prepared: Option<&omega::Prepared>,
 ) -> Result<Sound> {
     if let Some(state_tracks) = title.music.and_then(|music| music.state_tracks) {
-        let plan = omega::plan(archives, &state_tracks, false)?;
-        let song = plan
+        let fresh;
+        let prepared = match prepared {
+            Some(kept) => kept,
+            None => {
+                fresh = omega::prepare(archives, &state_tracks)?;
+                &fresh
+            }
+        };
+        let song = prepared
+            .plan
             .songs
             .iter()
             .find(|song| song.location == at)
             .with_context(|| format!("no playable song at location {at}"))?;
-        let pcm = omega::mix(archives, &state_tracks, song)
+        let pcm = omega::mix_with(archives, &state_tracks, song, Some(&prepared.bank))
             .with_context(|| format!("mixing {}", song.title))?;
         return Sound::new(pcm.samples, pcm.channels, pcm.sample_rate)
             .with_context(|| format!("location {at}"));
@@ -405,5 +419,68 @@ pub fn load_front_end(
     Ok(Some((name.to_string(), sound)))
 }
 
+/// The spectrum sidecar of the front end's music, for a title that ships one
+/// ([`oag_title::Music::spectrum_extension`]): the front-end entry name with its
+/// extension replaced.
+///
+/// `Ok(None)` for a title that declares none. A title that declares one and has
+/// no such entry is `Err`, so the caller can say so.
+///
+/// # Errors
+///
+/// A declared sidecar that is absent, will not read, or will not parse.
+pub fn load_front_end_spectrum(
+    title: &Title,
+    archives: &mut Archives,
+) -> Result<Option<spectrum::Spectrum>> {
+    let Some(music) = title.music else {
+        return Ok(None);
+    };
+    let (Some(front_end), Some(extension)) = (music.front_end, music.spectrum_extension) else {
+        return Ok(None);
+    };
+    let stem = front_end
+        .rsplit_once('.')
+        .map_or(front_end, |(stem, _)| stem);
+    let name = format!("{stem}.{extension}");
+    if archives.locate(&name).is_none() {
+        bail!("{name} is not in the archives");
+    }
+    let blob = archives
+        .read_name(&name)
+        .with_context(|| format!("reading {name}"))?;
+    spectrum::Spectrum::parse(&blob)
+        .map(Some)
+        .with_context(|| format!("parsing {name}"))
+}
+
+/// Decodes the ATRAC3+ archive entry `name` to PCM: a clip the game plays through its music
+/// player that is not part of the soundtrack (Pulse's pre-race voice-over).
+///
+/// # Errors
+///
+/// An entry that is not in the archives, will not read, or will not decode.
+pub fn load_named(archives: &mut Archives, name: &str, cache_dir: &Path) -> Result<Sound> {
+    let blob = archives
+        .read_name(name)
+        .with_context(|| format!("reading {name}"))?;
+    let pcm = decode(&blob, cache_dir).with_context(|| format!("decoding {name}"))?;
+    Sound::new(pcm.samples, pcm.channels, pcm.sample_rate).context(name.to_string())
+}
+
 #[cfg(test)]
 mod tests;
+
+/// The bank-driven title's playlist and bank, read once for a caller to keep
+/// across [`load_entry`] calls; `Ok(None)` for a title that has no bank.
+///
+/// # Errors
+///
+/// A definition or bank that will not read or parse.
+pub fn prepare(title: &Title, archives: &mut Archives) -> Result<Option<omega::Prepared>> {
+    title
+        .music
+        .and_then(|music| music.state_tracks)
+        .map(|state_tracks| omega::prepare(archives, &state_tracks))
+        .transpose()
+}

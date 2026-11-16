@@ -113,6 +113,9 @@ pub const KNOWN_SAMPLER_NAMES: &[&str] = &[
     "textureSpot1ShadowTex",
     "zoneAnisoPaletteOuter",
     "screenSpaceReflectionTex",
+    "Texture2_alpha_for_glow",
+    "texture1_alpha_for_reflect",
+    "TextureSpecular",
 ];
 
 /// Every parameter-name preimage `hd_param_names.rs`'s sweep of `EBOOT.elf`
@@ -227,6 +230,13 @@ pub const KNOWN_PARAMETER_NAMES: &[&str] = &[
     "min1",
     "Emissive",
     "SmokeScale1",
+    "glowtinrt",
+    "Glow_colour_strength",
+    "Glow_colour_strength1",
+    "Glow_colour_strength2",
+    "aspect_ratio_U",
+    "aspect_ratio_V",
+    "texture2overlaystrength",
 ];
 
 /// The uniform names Wipeout 2048's Vita material records author, recovered by
@@ -259,6 +269,7 @@ pub const KNOWN_PSP2_PARAMETER_NAMES: &[&str] = &[
     "speed_multipliaer",
     "time",
     "frameRate",
+    "glowtinrt",
 ];
 
 /// A Vita uniform-name hash's preimage, if [`KNOWN_PSP2_PARAMETER_NAMES`]

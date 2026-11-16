@@ -412,14 +412,14 @@ fn vector_loads_pures_own_tuning_and_not_venoms() {
         );
 
         // The pickup odds. `<Pickupodds class="Vector">` is authored beside the
-        // four, and `pickup::table_for` matches the name case-insensitively.
+        // four, and `pickups_for` matches the name case-insensitively.
         let weapons = vector
             .setup
             .weapons
             .as_ref()
             .expect("Pure authors a weapon table");
         assert!(
-            oag_weapons::pickup::table_for(weapons, "VECTOR").is_some(),
+            weapons.pickups_for("VECTOR").is_some(),
             "{label}: Pure authors <Pickupodds class=\"Vector\"> and it was not found"
         );
 
@@ -473,4 +473,201 @@ fn a_pulse_source_has_no_fifth_rung_and_says_so() {
         .expect("Pulse's ladder is measured");
     assert_eq!(ladder.names(), oag_title::SpeedClasses::PULSE_LADDER);
     assert!(!ladder.names().contains(&oag_title::SpeedClasses::VECTOR));
+}
+
+/// Pure's Plasma blast plays its own three models: `plasma_halo`,
+/// `plasma_hemisphere_noglow` and `plasma_hemisphere` resolve on the disc and
+/// the race carries Pure's law (2.0 s life, the 3.5 hemisphere drop). Fails if
+/// the title's `plasma_blast_pulse` row is dropped (nothing loads, no law).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pure_race_loads_its_own_plasma_blast_trio() {
+    for (label, image) in images() {
+        let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
+        let blast = &loaded.plasma_blast_models;
+        for (name, model) in [
+            ("plasma_halo", &blast.halo),
+            ("plasma_hemisphere_noglow", &blast.hemisphere2),
+            ("plasma_hemisphere", &blast.hemisphere1),
+            ("electric_halo2", &blast.disruptor_halo),
+            ("disruptor_effect", &blast.disruptor_craft),
+        ] {
+            assert!(
+                model.is_some(),
+                "{label}: {name} did not load: {:#?}",
+                loaded.report
+            );
+        }
+        assert!(
+            loaded.setup.disruptor_craft_law.is_some(),
+            "{label}: the on-craft Disruptor law is Pure's"
+        );
+        let law = loaded.setup.plasma_blast_law.expect("Pure's blast law");
+        assert_eq!(law.life, 2.0, "{label}");
+        assert_eq!(law.hemisphere_drop, 3.5, "{label}");
+        assert!(law.halo_hide_at.is_none(), "{label}");
+    }
+}
+
+/// Pure spawns its own weapon effects: every trigger the executable was read
+/// for (`psp-pure-usa/weapon-effects.md`, `plasma.md`) resolves to a decoded
+/// `Data\Psys` effect on the disc, the Missile, Mine and Bomb group as well as
+/// the Disruptor's head and explosion and the Bomb's glow. Fails if a name is
+/// dropped from Pure's table or no longer decodes.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pure_race_loads_the_effects_its_weapons_play() {
+    use oag_title::Trigger;
+    for (label, image) in images() {
+        let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
+        for (group, triggers) in [
+            ("Plasma", &[Trigger::PlasmaBlast, Trigger::PlasmaFlare][..]),
+            (
+                "Missile/Mine/Bomb",
+                &[
+                    Trigger::MissileFlare,
+                    Trigger::MissileBounce,
+                    Trigger::MissileExplo,
+                    Trigger::MineExplo,
+                    Trigger::BombGlow,
+                    Trigger::BombSmokering,
+                ][..],
+            ),
+            (
+                "Disruptor",
+                &[
+                    Trigger::DisruptorHead,
+                    Trigger::DisruptorExplo,
+                    Trigger::DisruptorLaunch,
+                ][..],
+            ),
+        ] {
+            for trigger in triggers {
+                let spec = oag_pure::TITLE
+                    .effect_on(*trigger)
+                    .unwrap_or_else(|| panic!("{label}: Pure's table has no {trigger:?}"));
+                assert!(
+                    loaded.setup.effects.get(spec.effect).is_some(),
+                    "{label}: {group} {trigger:?} ({}) did not decode: {:#?}",
+                    spec.effect,
+                    loaded.report
+                );
+            }
+        }
+    }
+}
+
+/// The pitch-input gate is a per-title craft law (`oag_title::craft_laws::CraftLaws::pitch_gate`):
+/// Pure's `Ship_UpdatePitch` (`0x0892caf8`) never calls `Ship_TestPitchAlignment`, so every Pure
+/// craft flies ungated, while Pulse (no `CraftLaws`) runs the gate (`docs/physics/pure-physics.md`,
+/// "Pitch is three code literals"; `docs/physics/airborne-ground-truth.md`). Checked on every slot
+/// of a full field at seating, which is when the speed plan simulates the craft, and again after
+/// a reset, which must keep the title's laws. Fails if the flag stops reaching the craft or
+/// either title's value moves.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pure_crafts_fly_without_the_pitch_gate_and_pulse_crafts_with_it() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut sources: Vec<(&str, PathBuf, bool)> = images()
+        .into_iter()
+        .map(|(label, image)| (label, image, false))
+        .collect();
+    let pulse = root.join("data/images/pulse-psp-usa.chd");
+    if pulse.exists() {
+        sources.push(("pulse-psp-usa", pulse, true));
+    } else {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            pulse.display()
+        );
+    }
+    for (label, image, gated) in sources {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            weapons_override: Some(false),
+            ..race::Options::default()
+        })
+        .unwrap_or_else(|e| panic!("{label}: loading its default race: {e:#}"));
+        let mut race = race::Race::start(loaded.setup);
+        let count = race.sim.world.ship_count as usize;
+        assert!(count > 1, "{label}: a single race seats a field");
+        for slot in 0..count {
+            assert_eq!(
+                race.sim.world.ships[slot].physics.pitch_gate, gated,
+                "{label}: slot {slot} pitch gate at seating"
+            );
+        }
+        for slot in 0..count {
+            let body = &race.sim.world.ships[slot].physics.body;
+            let pose = oag_gameplay::spawn::Pose {
+                position: body.position,
+                orientation: body.orientation,
+            };
+            race.sim.world.ships[slot].place_at(pose);
+            assert_eq!(
+                race.sim.world.ships[slot].physics.pitch_gate, gated,
+                "{label}: slot {slot} pitch gate after a reset"
+            );
+        }
+    }
+}
+
+/// The Classic league flies the `VR\Ship.vex` hull, every slot of the grid, and the Alpha league the
+/// plain `Ship.vex`. `Ship_LoadModel` builds `%s\VR\Ship.vex` off the circuit's `PI_Track` `type`
+/// (`Classic` is flag 2), not off the team (`docs/ghidra/functions/psp-pure-usa/ship-models.md`,
+/// "What selects the VR hull"). The assertion is on geometry: the two files are separate models with
+/// different triangle counts (Feisar's are 450 and 797), so a Classic race that dropped
+/// [`oag_title::RaceDefaults::hull_by_track_type`] loads the plain hull and fails here.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_classic_circuit_flies_the_vr_hull_on_every_slot_and_an_alpha_circuit_does_not() {
+    for (label, image) in images() {
+        let classic = load(&image, r"Data\ClassicsNS\01_Karbonis\track.vex");
+        let alpha = load(&image, r"Data\Environments\01_Vineta_K\track.vex");
+        assert_eq!(classic.liveries.len(), alpha.liveries.len(), "{label}");
+        let triangles = |loaded: &race::Loaded, team: &str| {
+            loaded
+                .liveries
+                .iter()
+                .find(|livery| livery.team == team)
+                .map(|livery| livery.hull.indices.len() / 3)
+        };
+        assert_eq!(
+            triangles(&classic, "Feisar"),
+            Some(450),
+            "{label}: Karbonis is not flying Feisar's VR\\Ship.vex"
+        );
+        assert_eq!(
+            triangles(&alpha, "Feisar"),
+            Some(797),
+            "{label}: Vineta K is not flying Feisar's Ship.vex"
+        );
+        for (slot, (c, a)) in classic.liveries.iter().zip(&alpha.liveries).enumerate() {
+            assert_eq!(c.team, a.team, "{label}: slot {slot} flies another team");
+            assert_ne!(
+                c.hull.indices.len(),
+                a.hull.indices.len(),
+                "{label}: slot {slot} ({}) draws the same hull on both leagues' circuits",
+                c.team
+            );
+        }
+        assert!(
+            classic
+                .report
+                .iter()
+                .any(|line| line.contains("a Classic circuit") && line.contains(r"VR\Ship")),
+            "{label}: the load report does not say the circuit forced the hull: {:#?}",
+            classic.report
+        );
+        assert!(
+            alpha
+                .report
+                .iter()
+                .all(|line| !line.contains("a Classic circuit")),
+            "{label}: an Alpha circuit reported a forced hull"
+        );
+    }
 }

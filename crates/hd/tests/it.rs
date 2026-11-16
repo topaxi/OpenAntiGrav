@@ -14,6 +14,7 @@ mod campaign_selection_ground_truth;
 mod endrace_screens_ground_truth;
 mod hd_psn_ground_truth;
 mod hd_title_ground_truth;
+mod hd_update_chain_ground_truth;
 mod start_gantry_hd_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into

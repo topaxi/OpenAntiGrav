@@ -45,21 +45,31 @@ pub mod hd_mix;
 pub mod library;
 pub mod settings;
 pub mod sfx;
+mod sfx_fade;
+mod spatial_route;
 
+pub mod folders;
 mod listings;
 mod menu_music;
+mod music_line;
 mod now_playing;
+pub mod pool;
+mod pre_race_voice;
+mod song_control;
 pub use now_playing::NowPlaying;
 pub mod probe;
 mod race_music;
+mod race_order;
 mod race_song;
 mod resume;
+pub mod shuffle;
 mod survey;
-use library::{Library, NoLibrary, load_entry, load_front_end};
+use library::{Library, NoLibrary, load_entry_kept, load_front_end};
 use listings::Listings;
 use race_music::PendingSwitch;
 pub use race_music::{MusicFetchWorker, RacePick};
 pub use resume::{RaceMusicState, Restored, Unusable};
+pub use shuffle::MusicOrder;
 
 /// A bus volume, as a percentage of unattenuated.
 ///
@@ -235,6 +245,9 @@ pub struct MusicDiscs {
     /// The answer of a survey still running, shared by every clone. See
     /// [`MusicDiscs::survey_in_background`].
     later: survey::Later,
+    /// Every source the race playlist may draw from, shared by every clone and
+    /// by the surveyed copy. See [`pool`].
+    pool: pool::Pool,
 }
 
 impl Default for MusicDiscs {
@@ -249,6 +262,7 @@ impl Default for MusicDiscs {
             library: &NoLibrary,
             listings: Listings::default(),
             later: survey::Later::default(),
+            pool: pool::Pool::default(),
         }
     }
 }
@@ -261,15 +275,21 @@ impl MusicDiscs {
     /// counterpart is missing collapses into "there is no counterpart".
     #[must_use]
     pub fn survey(booted: &str, library: &'static dyn Library) -> Self {
-        Self::survey_into(booted, library, Listings::default())
+        Self::survey_into(booted, library, Listings::default(), pool::Pool::default())
     }
 
-    /// [`Self::survey`] keeping its listings in `listings`.
-    fn survey_into(booted: &str, library: &'static dyn Library, listings: Listings) -> Self {
+    /// [`Self::survey`] keeping its listings in `listings` and its sources in `pool`.
+    fn survey_into(
+        booted: &str,
+        library: &'static dyn Library,
+        listings: Listings,
+        pool: pool::Pool,
+    ) -> Self {
         let _work = probe::work("the music survey");
         let mut discs = Self {
             library,
             listings,
+            pool,
             ..Self::default()
         };
         // Identified as whichever title it is, not as Pulse: Pulse's deny-list
@@ -278,6 +298,7 @@ impl MusicDiscs {
             return discs;
         };
         discs.booted = Some(layout.platform);
+        discs.pool.set_booted(title.name, layout.platform, booted);
         match layout.platform {
             Platform::Psp => discs.psp = Some(booted.to_string()),
             Platform::Ps2 => discs.ps2 = Some(booted.to_string()),
@@ -321,6 +342,34 @@ impl MusicDiscs {
         discs
     }
 
+    /// The sources the race playlist may draw from.
+    #[must_use]
+    pub fn pool(&self) -> &pool::Pool {
+        &self.pool
+    }
+
+    /// Applies the player's switches and folders and starts the scans for every
+    /// source beyond the booted disc, each on its own worker. Returns at once.
+    ///
+    /// Safe to call again with changed folders: a folder already scanned keeps
+    /// its scan.
+    pub fn start_pool(
+        &self,
+        switches: &std::collections::BTreeMap<String, bool>,
+        folders: &[pool::MusicFolder],
+        reader: &Arc<dyn folders::Reader>,
+    ) {
+        self.pool.configure(switches, folders);
+        self.pool.scan_folders(reader);
+        if self.pool.discs_unstarted() {
+            let waiting = self.clone();
+            self.pool
+                .scan_discs(self.library, self.listings.clone(), move || {
+                    waiting.wait_surveyed();
+                });
+        }
+    }
+
     /// Whether both releases are reachable, which is when the row is offered.
     #[must_use]
     pub fn both(&self) -> bool {
@@ -359,6 +408,13 @@ impl MusicDiscs {
     fn pick(&self, choice: MusicSource) -> Option<(&str, Platform)> {
         let discs = self.settled();
         discs.pick_here(choice)
+    }
+
+    /// How many times this run read and parsed a bank-driven title's music bank
+    /// (Omega's): once per source, however many tracks it plays.
+    #[must_use]
+    pub fn bank_reads(&self) -> u32 {
+        self.listings.bank_reads()
     }
 
     /// [`Self::pick`] on this value's own fields.
@@ -429,10 +485,15 @@ fn find_release(
 /// One per run, made in `main` before either way in (boot or `--race`).
 pub struct Audio {
     output: Output,
+    /// The default output as last seen, for `auto` SPATIAL AUDIO. See
+    /// [`spatial_route`].
+    route: spatial_route::Follow,
     /// HD's authored mix, when the booted title has one. See [`hd_mix`].
     hd: hd_mix::Hd,
     /// The race song held until the race leaves its countdown. See [`race_song`].
     song_hold: race_song::Hold,
+    /// The race-only music control's position; see [`music_line`].
+    music_line: music_line::Line,
     /// Where `--dump-audio` writes. `None` with a device attached, because
     /// [`Output::render_tick`] refuses to pull samples the hardware callback
     /// is already draining.
@@ -469,6 +530,10 @@ pub struct Audio {
     /// [`Bus::Music`]: the music runs for the session, this lasts one movie. See
     /// [`Audio::start_movie`].
     movie: Option<VoiceId>,
+    /// The pre-race flyby's voice-over. See [`pre_race_voice`].
+    pre_race_voice: pre_race_voice::PreRaceVoice,
+    /// The effects fade the pre-race flyby opens a race with. See [`sfx_fade`].
+    sfx_fade: sfx_fade::SfxFade,
     /// The voice playing under a race, distinct from [`Self::music`] (the menu's):
     /// [`Audio::start_race_music`] stops one before starting the other. `None`
     /// outside a race or with no decodable music.
@@ -484,6 +549,8 @@ pub struct Audio {
     /// is on. `None` until the first race starts one ([`Audio::race_music_pick`]);
     /// never reset by a visit to the menus.
     race_index: Option<usize>,
+    /// `MUSIC ORDER` and the deck a random order plays by.
+    race_order: race_order::RaceOrder,
     /// How many race songs have started this run: what the now-playing display re-triggers on
     /// ([`Audio::now_playing`]). A resume or a source swap of the same song does not count.
     song_serial: u32,
@@ -501,10 +568,16 @@ pub struct Audio {
     /// The menu voice's decoded sound, so leaving a race resumes it without
     /// re-reading the disc or re-running `ffmpeg`. `None` with no decodable menu music.
     menu_sound: Option<Arc<Sound>>,
+    /// The front end's spectrum sidecar, when the title ships one and it read.
+    menu_spectrum: Option<oag_music::spectrum::Spectrum>,
     /// The race's held voices and generator. `None` outside a race and when the
     /// banks did not load; made on the first tick with cues, so a silent source
     /// never allocates one.
     sfx: Option<sfx::SfxVoices>,
+    /// The seconds the race's engines have already been running, for the voices the next
+    /// [`Audio::race_tick`] creates: `0` for a race that is starting, the playhead for a rebuild
+    /// after a seek ([`Audio::rebuild_race_sfx`]).
+    engine_warm_ticks: u64,
     /// What [`Audio::start_race_music`] was last called with, so the
     /// advance-on-finish check in [`Audio::tick`] can fetch the next track
     /// without threading arguments through every caller. `None` outside a race.
@@ -593,6 +666,7 @@ impl std::fmt::Debug for Audio {
             .field("race_tracks", &self.race_tracks)
             .field("race_cache", &self.race_cache.is_some())
             .field("menu_sound", &self.menu_sound.is_some())
+            .field("menu_spectrum", &self.menu_spectrum.is_some())
             .field("race_context", &self.race_context.is_some())
             .field("race_prefetch", &self.race_prefetch)
             .field("race_job", &self.race_job)
@@ -635,10 +709,17 @@ impl Audio {
         if let Some(name) = output.device_name() {
             info!("audio: {name} at {} Hz", output.sample_rate());
         }
+        let route = if output.is_streaming() {
+            spatial_route::Follow::watching(oag_audio::RouteWatcher::new())
+        } else {
+            spatial_route::Follow::default()
+        };
         let audio = Self {
             output,
+            route,
             hd: hd_mix::Hd::default(),
             song_hold: race_song::Hold::default(),
+            music_line: music_line::Line::default(),
             dump: dump.map(|path| Dump {
                 path,
                 samples: Vec::new(),
@@ -648,14 +729,18 @@ impl Audio {
             music_from: None,
             held: Vec::new(),
             movie: None,
+            pre_race_voice: pre_race_voice::PreRaceVoice::default(),
+            sfx_fade: sfx_fade::SfxFade::default(),
             race_voice: None,
             race_from: None,
             race_index: None,
+            race_order: race_order::RaceOrder::new(settings.music_order),
             song_serial: 0,
             race_position: 0.0,
             race_tracks: 0,
             race_cache: None,
             menu_sound: None,
+            menu_spectrum: None,
             race_context: None,
             race_prefetch: None,
             race_job: None,
@@ -663,6 +748,7 @@ impl Audio {
             pending_restore: None,
             source_switch: None,
             sfx: None,
+            engine_warm_ticks: 0,
         };
         audio.apply(settings);
         audio
@@ -676,6 +762,8 @@ impl Audio {
     /// sliders reach `Audio_SetSfxFadeTarget`, a separate chain; see
     /// `MUSIC_MASTER_TRIM` for the evidence.
     pub fn apply(&self, settings: &crate::settings::Settings) {
+        self.reset_music_line();
+        let spatial = settings.spatial_audio.resolve(self.route.kind());
         // HD sets music and effects from its authored mix every tick, so only
         // the sliders are kept here. See `hd_mix`.
         self.hd.sliders.set([
@@ -686,13 +774,57 @@ impl Audio {
         self.output.with_mixer(|mixer| {
             if self.hd.live.is_none() {
                 mixer.set_bus_gain(Bus::Music, settings.music_volume.gain() * MUSIC_MASTER_TRIM);
-                mixer.set_bus_gain(Bus::Sfx, settings.sfx_volume.gain());
+                mixer.set_bus_gain(Bus::Sfx, self.sfx_fade.bus_gain(settings.sfx_volume.gain()));
             }
-            mixer.set_bus_gain(Bus::Speech, settings.speech_volume.gain());
+            mixer.set_bus_gain(
+                Bus::Speech,
+                self.sfx_fade
+                    .speech_bus_gain(settings.sfx_volume.gain(), settings.speech_volume.gain()),
+            );
             // Group volumes first, then the master, as the original's chain does.
             // See `settings::Audio::master_volume`.
             mixer.set_master_gain(settings.master_volume.gain());
+            mixer.set_spatial_mode(spatial);
         });
+        if spatial == oag_audio::SpatialMode::Headphones {
+            self.output.ensure_binaural();
+        }
+    }
+
+    /// Follows the default output: call once a tick. When it changes, the
+    /// output's remembered SPATIAL AUDIO value becomes the current one (see
+    /// [`crate::settings::Settings::recall_spatial`]) and the mixer is
+    /// re-pointed, which crossfades. Returns whether `settings` changed.
+    pub fn poll_route(&mut self, settings: &mut crate::settings::Settings) -> bool {
+        let Some(route) = self.route.poll() else {
+            return false;
+        };
+        let before = settings.spatial_audio;
+        if let Some(device) = route.device.clone() {
+            settings.recall_spatial(&device);
+        }
+        info!(
+            "audio: output is {:?} ({}); spatial audio {} -> {}",
+            route.kind,
+            route.device.as_deref().unwrap_or("unnamed"),
+            settings.spatial_audio,
+            settings.spatial_audio.resolve(route.kind),
+        );
+        self.apply(settings);
+        settings.spatial_audio != before
+    }
+
+    /// Follows `watcher`'s output instead of the platform's: the seam a test
+    /// drives with a mocked device.
+    pub fn watch_route(&mut self, watcher: oag_audio::RouteWatcher) {
+        self.route = spatial_route::Follow::watching(watcher);
+    }
+
+    /// The stable id of the active output, if the platform gave one: what a
+    /// SPATIAL AUDIO pick is remembered against.
+    #[must_use]
+    pub fn route_device(&self) -> Option<&str> {
+        self.route.device()
     }
 
     /// The output, and through it the mixer: the seam a cue goes through.
@@ -728,7 +860,7 @@ impl Audio {
         }
         let pick = self.race_music_pick();
         if let Some((index, loaded)) = self.cached_race_track(discs, choice, &pick) {
-            self.race_index = Some(index);
+            self.set_race_index(index);
             let seek = (self.race_position > 0.0).then_some(self.race_position);
             self.apply_fetched_race_track(index, Ok(Some(loaded)), seek);
             if self.race_voice.is_some() {
@@ -762,14 +894,25 @@ impl Audio {
             .map_or(0, |soundtrack| soundtrack.tracks.len())
     }
 
-    /// Stops the race playlist where it stands and resumes the menu voice.
-    ///
-    /// The position is saved to [`Self::race_position`] in the track's seconds
-    /// so the next [`Self::start_race_music`] resumes; [`Self::race_index`] is
-    /// untouched. The menu voice restarts from [`Self::menu_sound`] because
-    /// [`Self::start_music`] is idempotent and would do nothing. Silent when no
-    /// menu sound was ever loaded.
-    pub fn pause_race_music(&mut self) {
+    /// How many songs the race playlist holds right now: the booted soundtrack
+    /// (when it is switched on) and every other enabled source's songs found so
+    /// far. `booted` is [`Self::booted_soundtrack_len`].
+    fn playlist_len(discs: &MusicDiscs, booted: usize) -> usize {
+        pool::playlist_len(&discs.pool, booted)
+    }
+
+    /// [`Self::playlist_len`] for a test that cannot reach the private function.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn playlist_len_for_test(discs: &MusicDiscs, booted: usize) -> usize {
+        Self::playlist_len(discs, booted)
+    }
+
+    /// Stops the race playlist where it stands and leaves nothing sounding: a title's own pause
+    /// screen is silent (`docs/ui/photo-mode.md`, "What entering stops"). The position is saved
+    /// as in [`Self::pause_race_music`], so [`Self::start_race_music`] resumes it.
+    pub fn hold_race_music(&mut self) {
+        self.reset_music_line();
         if let Some(id) = self.race_voice.take() {
             self.race_position = self
                 .output
@@ -779,7 +922,17 @@ impl Audio {
         }
         self.race_from = None;
         self.race_context = None;
+    }
 
+    /// Stops the race playlist where it stands and resumes the menu voice.
+    ///
+    /// The position is saved to [`Self::race_position`] in the track's seconds
+    /// so the next [`Self::start_race_music`] resumes; [`Self::race_index`] is
+    /// untouched. The menu voice restarts from [`Self::menu_sound`] because
+    /// [`Self::start_music`] is idempotent and would do nothing. Silent when no
+    /// menu sound was ever loaded.
+    pub fn pause_race_music(&mut self) {
+        self.hold_race_music();
         if let Some(sound) = &self.menu_sound {
             self.music = self
                 .output
@@ -926,6 +1079,8 @@ impl Audio {
         self.poll_source_switch();
         self.poll_menu_job();
         self.poll_race_job();
+        self.poll_pre_race_voice();
+        self.tick_sfx_fade();
         self.hd_mix_tick(self.hd.state);
         if let Some(id) = self.race_voice
             && !self.output.with_mixer(|mixer| mixer.is_playing(id))
@@ -967,6 +1122,18 @@ impl Audio {
             "wrote {} ({frames} frames, {:.2} s at {rate} Hz)",
             dump.path.display(),
             frames as f32 / rate as f32
+        );
+        let (peak, limited, deepest, clipped, depth) = self.output.with_mixer(|m| {
+            (
+                m.peak(),
+                m.limited(),
+                m.deepest_limit(),
+                m.clipped(),
+                m.limit_depth_frames(),
+            )
+        });
+        println!(
+            "mix: pre-limiter peak {peak:.2}, limited {limited} frame(s), deepest gain {deepest:.3}, hard-clamped {clipped} sample(s), frames under gain 0.94/0.7/0.5: {depth:?}"
         );
         Ok(())
     }
@@ -1200,12 +1367,13 @@ fn load_track(
     platform: Platform,
     track: Track,
     cache_dir: &Path,
+    kept: &Listings,
 ) -> Result<Sound> {
     let _work = probe::work("a soundtrack track's read and decode");
     match platform {
         Platform::Ps2 => load_ps2_track(source, track.at as usize)?
             .with_context(|| format!("{source} carries no {PS2_MUSIC_PATH}")),
-        _ => load_entry(library, source, track.at, cache_dir),
+        _ => load_entry_kept(library, source, track.at, cache_dir, kept),
     }
 }
 

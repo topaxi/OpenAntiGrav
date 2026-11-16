@@ -16,6 +16,7 @@ pub mod gpu;
 pub mod pose_hold;
 pub mod pose_lean;
 mod race_bench;
+mod shot;
 mod spectrum;
 pub mod tick;
 use tick::advance_one_tick;
@@ -40,6 +41,8 @@ fn window_path(path: &std::path::Path, window: Option<usize>) -> std::path::Path
 /// What a headless capture should do before it draws.
 #[derive(Debug, Clone)]
 pub struct CaptureOptions {
+    /// What the screenshot's text and `--from-png` need beyond the race.
+    pub shot: crate::shot_meta::Context,
     /// The device the load streamed its textures through; `None` opens one.
     pub gpu: Option<gpu::CaptureGpu>,
     /// Where to write the PNG.
@@ -58,6 +61,10 @@ pub struct CaptureOptions {
     /// shows the results table: `--hold cross` drives into the first wall. See
     /// [`Race::set_autopilot`], a verification aid.
     pub autopilot: bool,
+    /// `--demo`: nobody is in the race ([`Race::fly_as_demo`]).
+    pub demo: bool,
+    /// `--wallpaper`: a demo nobody can press a button in, so its screen is not drawn.
+    pub wallpaper: bool,
     /// `--pilot-assist`: the player's Pilot Assist ([`Race::set_pilot_assist`]).
     pub pilot_assist: oag_physics::pilot_assist::Level,
     /// `--autopilot-pilot`: a named pilot, not the baseline. See [`Race::set_autopilot_pilot`].
@@ -83,6 +90,8 @@ pub struct CaptureOptions {
     /// Play this many ticks of the pre-race flyby first, held to the grid's first
     /// tick. See `race::intro_camera`.
     pub intro_ticks: u32,
+    /// Where the flyby's voice-over is read from. See [`crate::sound::prepare_intro_voice`].
+    pub music_discs: oag_sound::MusicDiscs,
     /// `--force-wreck TICK:SLOT`: that craft is destroyed at the end of that
     /// tick. See [`Race::force_destroy`].
     pub force_wreck: Option<(u32, usize)>,
@@ -245,12 +254,15 @@ pub struct CaptureOptions {
     /// With [`Self::pose_boost`]: the speed in units/s to advance the exhaust
     /// at, instead of `120`. `--pose-speed`.
     pub pose_speed: Option<f32>,
-    /// `--pose-hold`: put ship 0 back on its start pose before the frame is drawn. See
+    /// `--pose-hold`, `--pose-hold-ticks`: when ship 0 is put back on its start pose. See
     /// [`pose_hold`].
-    pub pose_hold: bool,
+    pub pose_hold: pose_hold::Hold,
     /// `--pose-lean`: ship 0's drawn lean and roll phase as the pose's trace row recorded them, put on
     /// after the ticks. See [`pose_lean`].
     pub pose_lean: Option<pose_lean::PoseLean>,
+    /// `--field-from`'s `steer_lean` / `roll_phase` columns: the opponents' drawn lean and roll phase
+    /// as the original's RAM held them, slots 1.. in order; `None` for a craft whose row has no columns.
+    pub field_lean: Vec<Option<pose_lean::PoseLean>>,
     /// `--field-warmup`: each craft's captured velocity, slot order, the player first. The
     /// exhaust of every craft is replayed on a straight path to its pose before the frame
     /// ([`Race::warm_up_field`]).
@@ -294,20 +306,26 @@ pub struct CaptureOptions {
     pub hud_safe_area: Option<u8>,
     /// `[display] dynamic_hud`, which only a title with a `Dynamic HUD` option obeys.
     pub dynamic_hud: oag_display::display::DynamicHud,
-    /// What casts a shadow in the captured frame: `--shadows`.
-    ///
-    /// Honoured the same way [`Self::motion_blur`] is, and here for the same
-    /// reason: two captures differing only by this flag are how the tier gets
-    /// compared against itself off. Unlike the blur it needs no primer frame -
-    /// a blob is placed from the tick's own pose, with no history.
+    /// `[display] ghost_ship_visible`, resolved by [`crate::settings::Display::ghost_ship_shown`].
+    pub ghost_visible: bool,
+    /// Whether the other people's multiplayer tags are drawn
+    /// ([`crate::settings::Display::multiplayer_tags_shown`]).
+    pub player_tags: bool,
+    /// The stored player name, which names seat 1 ([`crate::split_screen::name_first_seat`]).
+    pub player: crate::settings::Player,
+    /// What casts a shadow in the captured frame: `--shadows`. Unlike [`Self::motion_blur`] it needs
+    /// no primer frame, a blob being placed from the tick's own pose.
     pub shadows: oag_display::display::Shadows,
-    /// How far out authored `LodGroup`s switch in the captured frame -
-    /// `[render_profiles.<title>] model_detail`, or `--lod`'s preset.
+    /// How far authored `LodGroup`s switch out: `[render_profiles.<title>] model_detail`, or `--lod`.
     pub model_detail: oag_mesh::mesh::ModelDetail,
     /// `[render_profiles.<title>] texture_detail`, or `--texture-detail`.
     pub texture_detail: oag_mesh::mesh_render::TextureDetail,
     /// `[render_profiles.<title>] trail_order`, or `--trail-order`.
     pub trail_order: oag_display::display::TrailOrder,
+    /// `[render_profiles.<title>] scenery_sort`, or `--scenery-sort`.
+    pub scenery_sort: oag_display::display::ScenerySort,
+    /// `[render_profiles.<title>] trail_length`, or `--trail-length`.
+    pub trail_length: oag_display::display::TrailLength,
     /// `[render_profiles.<title>] weather`, or `--weather`.
     pub weather: oag_display::display::Weather,
     /// Whether the drawn hulls shake, `Race::set_hull_shake`; `--no-hull-shake` turns it off.
@@ -397,12 +415,14 @@ pub fn capture(
 ) -> Result<()> {
     let (width, height) = options.size;
     let title_name = loaded.title.name;
+    let mut shot_facts = shot::Facts::of(&loaded, options);
     let Loaded {
         shadows,
         shadow_hulls,
         setup,
-        hud,
+        mut hud,
         track_panel,
+        demo_overlay,
         track_model,
         behind_glass,
         liveries,
@@ -441,28 +461,24 @@ pub fn capture(
         ripples,
         track_stats,
         title,
+        campaign_2048_event,
         ..
     } = loaded;
     let mode = setup.mode;
+    let previous = options.previous_best.as_ref();
     let record_target = oag_hud::RecordTarget::new(
         setup.mode,
         &setup.class,
         track_stats.as_ref(),
-        options
-            .previous_best
-            .as_ref()
-            .and_then(|record| record.best_total_ticks),
-        options
-            .previous_best
-            .as_ref()
-            .and_then(|record| record.best_lap_ticks),
+        previous.and_then(|record| record.best_total_ticks),
+        previous.and_then(|record| record.best_lap_ticks),
     );
     let weapons_on = setup.weapons_on();
     // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
     // fallback when the flag was not given. See `main::stage::build_race_stage`.
     let difficulty = setup.difficulty;
     let mut race = Race::start(setup);
-    let start_pose = options.pose_hold.then(|| pose_hold::StartPose::of(&race));
+    let start_pose = options.pose_hold.start(&race);
     // With a field warm-up and no ticks to run, the player's boost is armed inside the warm-up so it rides the
     // warmed trail; `force_boost_state` would clear that trail for a straight one (`Race::warm_up_field`).
     let warmed_boost = options
@@ -476,40 +492,52 @@ pub fn capture(
     }
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,
     // applied by `NetPlay::join` below).
-    if options.net.is_some() {
+    if options.net.is_some() || options.demo {
     } else if options.window_layout.is_empty() {
         crate::split_screen::apply(&mut race, usize::from(options.players), options.cut);
     } else {
         crate::split_screen::apply_windows(&mut race, &options.window_layout);
     }
-    // After the people are seated: the driver is chosen by how many humans race, and the
-    // original's is single-human. Chosen before the split, a two-view capture flew it.
+    // After the people are seated: the driver depends on how many humans race (the original's: one).
     if options.net.is_none() {
-        crate::ai_choice::apply(
+        let (_, original) = crate::ai_choice::apply_noting(
             &mut race,
             options.ai_choice,
             crate::ai_choice::Source::Free(difficulty),
         );
+        shot_facts.note_ai(original);
     }
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_sight_fov(options.fov);
     race.set_model_detail(options.model_detail);
     race.set_texture_detail(options.texture_detail);
     race.set_trail_order(options.trail_order);
+    race.set_scenery_sort(options.scenery_sort);
+    race.set_trail_length(options.trail_length);
     race.set_weather(options.weather);
     race.set_dynamic_hud(options.dynamic_hud);
+    race.set_ghost_visible(options.ghost_visible);
+    race.set_player_tags(options.player_tags);
+    crate::split_screen::name_first_seat(&mut race, &options.player, &title.profile);
     race.set_hull_shake(options.hull_shake);
-    race.watch_laps(
-        &hud,
-        options
-            .previous_best
-            .as_ref()
-            .and_then(|record| record.best_lap_ticks),
-    );
+    let best_lap = previous.and_then(|r| r.best_lap_ticks);
+    race.watch_laps(&hud, best_lap);
     race.set_camera_view(options.camera_view);
-    race.set_control_scheme(options.scheme);
-    race.set_autopilot(options.autopilot);
-    race.set_pilot_assist(options.pilot_assist);
+    race.apply_launch(&oag_raceplay::Launch {
+        scheme: options.scheme,
+        difficulty,
+        autopilot: options.autopilot,
+        pilot_assist: options.pilot_assist,
+        original_ai: None,
+        campaign_skill: None,
+        skill_level: None,
+    });
+    campaign_2048_event
+        .iter()
+        .for_each(|event| race.arm_event_xp(event));
+    if options.demo {
+        crate::demo::hand_over(&mut race, &title.demo, options.window_layout.len());
+    }
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);
         if let Some(pilot) = options.autopilot_pilot {
@@ -524,9 +552,16 @@ pub fn capture(
         net.join(&mut race, title.name)?;
     }
     options.ghost.arm(&mut race)?;
+    shot_facts.arm(&mut race)?;
     if options.net.is_none() && options.intro_ticks > 0 && race.begin_intro() {
+        crate::sound::prepare_intro_voice(audio, &options.music_discs, &race);
         for _ in 0..options.intro_ticks {
             race.tick_intro(&oag_gameplay::PlayerInputs::none());
+            crate::sound::intro_cues(audio, &mut race);
+            crate::sound::flyby_tick(audio, &mut race);
+            // One audio step per flyby tick, as the race ticks below make, so a `--dump-audio`
+            // capture of a flyby is as long as the ticks it was given.
+            audio.tick();
         }
     }
     let mut held = HeldButtons::new(options.held);
@@ -574,7 +609,6 @@ pub fn capture(
     // **`Rgba8Unorm` on both paths now**, because every shader in this pipeline
     // writes gamma-space values and nothing may encode them again - see
     // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
-    //
     // `--presented` used to be `Rgba8UnormSrgb`; the window stopped encoding in
     // the same change, which made two captures of one frame differ by up to
     // 73/255. The non-sRGB twin keeps FSR 1 working (`remove_srgb_suffix`).
@@ -646,6 +680,7 @@ pub fn capture(
     );
     scene.attach_bloom_order(race.scenery_fx().bloom_under_hud());
     scene.attach_lens_flare(&device, &queue, format, race.scenery_fx().lens_flare());
+    scene.attach_mod_shaders(&device, &queue, race.mod_shaders());
     scene.prepare_ghost(
         &device,
         &queue,
@@ -890,6 +925,11 @@ pub fn capture(
     if let Some(lean) = options.pose_lean {
         lean.apply(&mut race);
     }
+    for (slot, lean) in options.field_lean.iter().enumerate() {
+        if let Some(lean) = lean {
+            lean.apply_to(&mut race, slot + 1);
+        }
+    }
     println!(
         "after {} tick(s): {}",
         race.sim.world.tick,
@@ -1069,12 +1109,15 @@ pub fn capture(
     // the rest read it, as the window's frame loop has them.
     let mut shared_work = false;
     for window in windows {
+        // The frame's work as the session's frame loop holds it, so a capture draws what a
+        // player sees whatever a split does with its submissions.
+        let frame_work = oag_gpu::split_finish::Frame::begin();
         let mut encoder = first_encoder.take().unwrap_or_else(|| {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("race capture window"),
             })
         });
-        // A split screen draws one scene per view, each submitted on its own: see
+        // A split screen draws one scene per view, in command buffers of its own: see
         // `Scene::render_viewports`. One view is the call below, untouched.
         let stats = if let Some(index) = window {
             // One window of a multi-window race: its seats cut up in it, the same call the
@@ -1241,39 +1284,33 @@ pub fn capture(
                 None,
             );
         }
-        // Where the HUD goes: the presentation target at the aspect rectangle when
-        // presented, else the native-size capture texture the scene drew into, so an
-        // ordinary `--screenshot` is byte-for-byte what it was.
+        // The HUD goes on the presentation target's aspect rectangle, else on the scene's texture.
         let (hud_view, hud_viewport) = match framebuffer.as_ref() {
             Some(framebuffer) => (framebuffer.output().clone(), rect),
             None => (view.clone(), viewport),
         };
+        crate::render::rasterise_hud_icons(&mut hud, hud_viewport, options.hud_safe_area);
         // Pure's glow lands before the panel and the HUD, so neither takes its haze
         // (`Looks::bloom_under_hud`); a no-op elsewhere.
         scene.composite_bloom_under_hud(&mut encoder, &hud_view, hud_viewport);
         // The track-description panel, over the flyby and fading out behind the chase view - the
         // same overlay `RaceStage::draw_hud` draws, ahead of the HUD as there, and on every
         // window of a multi-window race against that window's own views.
-        let (panel_views, panel_cut) = match window {
-            Some(index) => (race.window_drawn(index).len(), race.window_cut(index)),
-            None => (race.views_drawn(), race.cut()),
-        };
-        if let (Some(assets), Some(progress), true) = (
+        crate::track_panel::draw_captured(
+            (&device, &queue, format),
             track_panel.clone(),
-            race.track_panel_progress(),
-            panel_views > 0,
-        ) {
-            crate::track_panel::draw_once(
-                &device,
-                &queue,
-                format,
-                assets,
-                &mut encoder,
-                &hud_view,
-                progress,
-                crate::hud_views::panel_viewport(panel_views, panel_cut, hud_viewport),
-            );
-        }
+            (&race, window),
+            (&mut encoder, &hud_view, hud_viewport),
+        );
+        // An attract demo's screen, as the window draws it over a demo.
+        crate::demo_overlay::draw_once(
+            (&device, &queue, format),
+            demo_overlay
+                .as_ref()
+                .filter(|_| options.demo && !options.wallpaper),
+            (&mut encoder, &hud_view, hud_viewport),
+            race.sim.world.tick as f32 / 60.0,
+        );
         let scale = options.hud_scale;
         // Every window that holds a seat shows the board, as the window frame loop does
         // (`RaceStage::draw_end_screens`).
@@ -1301,7 +1338,8 @@ pub fn capture(
                 }
                 Err(why) => warn!("the scoreboard did not build ({why}); capturing without one"),
             },
-            None if !race.hud_shown() => {}
+            // A demo draws no HUD (measured on Pulse PSP), as the window's draw does not.
+            None if !race.hud_shown() || options.demo => {}
             None => match crate::hud_overlay::Overlay::new(&device, &queue, format, &hud, scale)
                 .map(|built| {
                     built.map(|mut o| {
@@ -1435,7 +1473,7 @@ pub fn capture(
                 depth_or_array_layers: 1,
             },
         );
-        queue.submit(Some(encoder.finish()));
+        frame_work.submit(&queue, encoder);
 
         let slice = readback.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| {});
@@ -1452,15 +1490,10 @@ pub fn capture(
         drop(mapped);
         readback.unmap();
 
-        // A screenshot is opaque. The frame's alpha channel is the bloom mask and
-        // not coverage - see `oag_mesh::capture::make_opaque` - so encoding it
-        // straight from the readback writes a fully transparent PNG.
+        // `shot_meta::encode` makes the frame opaque (the alpha is the bloom mask).
         oag_mesh::capture::dump_glow_mask_if_asked(width, height, &pixels)?;
-        oag_mesh::capture::make_opaque(&mut pixels);
-        let png = oag_texture::png::encode_rgba(width, height, &pixels);
         let path = window_path(&options.path, window);
-        std::fs::write(&path, png).with_context(|| format!("writing {}", path.display()))?;
-        println!("wrote {} ({width}x{height})", path.display());
+        shot_facts.write(&path, (width, height), &pixels, &race, &adapter.get_info())?;
     }
     scene.dump_offscreen_if_asked(&device, &queue)?;
     Ok(())

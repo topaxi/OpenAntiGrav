@@ -122,18 +122,6 @@ fn the_offset_glides_out_on_drawn_ticks_only() {
 /// off draws the craft where the replay left it.
 #[test]
 fn smoothing_changes_the_picture_and_not_the_hash() {
-    // Three races live on this stack at once; at opt-level 0 they outgrow the test thread's
-    // 2 MiB (it overflowed once the scenery plan grew, 2026-10-26), so the body runs on a
-    // thread of its own.
-    std::thread::Builder::new()
-        .stack_size(16 << 20)
-        .spawn(smoothing_changes_the_picture_and_not_the_hash_body)
-        .expect("spawning the test thread")
-        .join()
-        .expect("the test body panicked");
-}
-
-fn smoothing_changes_the_picture_and_not_the_hash_body() {
     let Scene {
         sc,
         mut client,
@@ -223,6 +211,9 @@ fn every_seat_camera_follows_its_own_craft() {
             for (slot, ship) in client.sim.world.ships.iter_mut().enumerate() {
                 ship.physics.body.position.z += 300.0 * slot as f32;
             }
+            // Far from the toy track the distance trigger would put them back; this
+            // test is about the camera.
+            client.sim.respawn_disabled.fill(true);
             for t in 0..120 {
                 client.tick(&sc.truth(START + t.min(59)));
             }

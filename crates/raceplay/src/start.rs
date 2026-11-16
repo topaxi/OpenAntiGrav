@@ -42,6 +42,8 @@ impl Race {
             #[cfg(feature = "view")]
             trail_sparks,
             #[cfg(feature = "view")]
+            request,
+            #[cfg(feature = "view")]
             campaign_event,
             seed,
             zone,
@@ -52,6 +54,8 @@ impl Race {
             collision,
             handling,
             opponent_handling,
+            weapon_counts,
+            opponent_weapon_counts,
             chase,
             #[cfg(feature = "view")]
             chase_close,
@@ -59,6 +63,7 @@ impl Race {
             internal,
             #[cfg(feature = "view")]
             nozzles,
+            muzzles,
             #[cfg(feature = "view")]
             engine_lights,
             #[cfg(feature = "view")]
@@ -83,6 +88,8 @@ impl Race {
             announcer,
             #[cfg(feature = "view")]
             class_announcer,
+            #[cfg(feature = "view")]
+            rumble,
             zone_stages,
             countdown_voice,
             countdown_beat,
@@ -101,9 +108,20 @@ impl Race {
             zoom_borrowed,
             weapon_pad_glow,
             leach_drain,
+            blast_push,
+            leach_beams,
             quake_hit,
             autopilot_absorb_cancels,
             autopilot_pad_grants,
+            launch_normal_is_track_up,
+            floor_arms_steer_to_ride_point,
+            plasma_release_at_display_scale,
+            own_craft_box_hides_track,
+            reset_triggers,
+            contact_cues,
+            opponent_fire,
+            score_law,
+            flip_law,
             speedup_pads,
             weapon_pads,
             weapons,
@@ -134,7 +152,15 @@ impl Race {
             #[cfg(feature = "view")]
             shield_palette,
             #[cfg(feature = "view")]
+            shield_targets,
+            #[cfg(feature = "view")]
             hd_plasma_blast,
+            #[cfg(feature = "view")]
+            plasma_blast_law,
+            #[cfg(feature = "view")]
+            disruptor_halo_law,
+            #[cfg(feature = "view")]
+            disruptor_craft_law,
             #[cfg(feature = "view")]
             hd_bomb_blast,
             #[cfg(feature = "view")]
@@ -164,20 +190,29 @@ impl Race {
             #[cfg(feature = "view")]
             wreck_anchors,
             #[cfg(feature = "view")]
+            wreck_shockwave,
+            #[cfg(feature = "view")]
             magstrip_wake,
             #[cfg(feature = "view")]
             magstrip_pob,
             #[cfg(feature = "view")]
             leach_strip,
             #[cfg(feature = "view")]
+            missile_trail,
+            #[cfg(feature = "view")]
+            wingtip,
+            #[cfg(feature = "view")]
             destroy_stations,
             #[cfg(feature = "view")]
             intro_camera,
+            #[cfg(feature = "view")]
+            intro_voice,
             slot_teams,
             sight,
             extensions,
             ..
         } = setup;
+        let score_pace = crate::score_pace::ScorePace::of(score_law, difficulty);
 
         // The mode gate, applied once at construction rather than on every tick,
         // because that is where the original applies it: `World_CollectNodeLists`
@@ -268,6 +303,7 @@ impl Race {
         let ship = &mut world.ships[0];
         ship.active = true;
         ship.handling = handling;
+        ship.weapon_counts = weapon_counts;
         ship.physics.body.mass = handling.physical.mass;
         ship.physics.body.inertia = inertia;
         ship.physics.hover_rig = rig;
@@ -295,27 +331,7 @@ impl Race {
         let full_grid = start_position.is_some()
             && (multiplayer_time_trial || (!no_opponents && (mode.has_opponents() || opponents)));
         // How many of the grid's other seven slots are actually driven.
-        // Every opponent-fielding mode except Head2Head fields all seven;
-        // Head2Head fields exactly one - see [`Mode::opponent_count`]'s own
-        // doc for the measurement. The `--opponents` escape hatch always
-        // asks for the full seven, matching what it did before this field
-        // existed.
-        let field_opponents = if multiplayer_time_trial {
-            // The people and nobody else, each on a grid slot of their own: person `k`
-            // takes seat `k`, the back row first. **Chosen, not measured**: the original has no
-            // such mode on the grid, and `grid.md`'s "a short grid packs to the back" is
-            // contradicted by the measured Head to Head field of two ([`grid_row`]).
-            people.min(GRID_SLOTS) - 1
-        } else if no_opponents {
-            0
-        } else if mode.field_is_fixed() {
-            // Head2Head: two craft, whoever flies them. A second person takes the
-            // one opponent's slot, so the people never meet an AI craft.
-            mode.opponent_count()
-        } else {
-            mode.opponent_count()
-                .max(if opponents { GRID_SLOTS - 1 } else { 0 })
-        };
+        let field_opponents = spawn::field_opponents(mode, people, no_opponents, opponents);
         // The override wins outright rather than being an offset from the grid
         // slot: it exists to put the craft at a position read off somewhere
         // else, and anything added to that would make the two disagree.
@@ -500,6 +516,11 @@ impl Race {
                 let opponent = &mut world.ships[ship_index];
                 opponent.active = true;
                 opponent.handling = handling;
+                opponent.weapon_counts = opponent_weapon_counts
+                    .get(ship_index)
+                    .copied()
+                    .flatten()
+                    .unwrap_or(weapon_counts);
                 opponent.physics.body.mass = handling.physical.mass;
                 opponent.physics.body.inertia = inertia;
                 opponent.physics.hover_rig = rig;
@@ -541,7 +562,11 @@ impl Race {
                 // The level scales how a pilot treats other craft and leaves
                 // the line it drives alone, so a shy pilot at novice is still
                 // shy rather than generically slow.
-                ai_pilots[slot as usize] = difficulty.temper(&entry.pilot);
+                ai_pilots[slot as usize] = crate::score_pace::ScorePace::temper_opponent(
+                    score_pace,
+                    difficulty,
+                    &entry.pilot,
+                );
                 pilot_names[slot as usize].clone_from(&entry.name);
                 // **The digest, into the world snapshot.** A pilot can come out
                 // of the player's own config directory, so two machines running
@@ -603,6 +628,11 @@ impl Race {
         } else {
             world.ship_count = 1;
         }
+        // Every slot's weapon node, the player's and the grid's alike: where a
+        // Plasma bolt charges and leaves from (`oag_weapons::projectile::plasma::muzzle`).
+        for (slot, ship) in world.ships.iter_mut().enumerate() {
+            ship.muzzle = muzzles.get(slot).copied().flatten();
+        }
 
         #[cfg(feature = "view")]
         if let Some(zone) = capture_hud.and_then(|hud| hud.zone) {
@@ -648,23 +678,24 @@ impl Race {
         let race = Self {
             sim: RaceSim {
                 extensions: crate::extensions::Extensions::new(extensions),
-                racing_line: line,
-                ai_order: order,
-                routes,
+                racing_line: Arc::new(line),
+                ai_order: order.into(),
+                routes: routes.into(),
                 // Built below, once the field is seated: see
                 // `Race::field_speed_plan`.
                 speed_plan: None,
                 plans_built: false,
                 plan_reference: None,
-                hull_plans: Vec::new(),
+                hull_plans: Arc::default(),
                 ship_plan: [None; oag_gameplay::MAX_SHIPS],
+                plan_steps: Arc::default(),
                 // **Degraded from the measured tuning**, never boosted toward it -
                 // see `oag_ai::Difficulty`. At the top level this is the
                 // measurement unchanged.
                 ai_tuning: difficulty.tune(&oag_ai::Tuning::default()),
-                ai_pilots,
+                ai_pilots: Arc::new(ai_pilots),
                 finished_thrust,
-                original_tables,
+                original_tables: original_tables.map(Arc::new),
                 original_ai: None,
                 race_seed: seed,
                 people,
@@ -677,9 +708,9 @@ impl Race {
                 autopilot_ours: false,
                 opponent_autopilot,
                 world,
-                collision,
-                spline,
-                course,
+                collision: Arc::new(collision),
+                spline: Arc::new(spline),
+                course: course.map(Arc::new),
                 // Only Zone reads these, so the other two modes carry `None` and the
                 // engine keeps its ordinary throttle path.
                 zone: zone.filter(|_| mode == Mode::Zone),
@@ -690,6 +721,7 @@ impl Race {
                 respawns_in_a_row: [0; oag_gameplay::MAX_SHIPS],
                 respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
                 respawns: [0; oag_gameplay::MAX_SHIPS],
+                jumps: [0; oag_gameplay::MAX_SHIPS],
                 last_respawn_cause: [None; oag_gameplay::MAX_SHIPS],
                 cage_reset: [false; oag_gameplay::MAX_SHIPS],
                 breadcrumbs,
@@ -708,9 +740,13 @@ impl Race {
                 wall_contact_ticks: [0; oag_gameplay::MAX_SHIPS],
                 wall_inbound_ticks: [0; oag_gameplay::MAX_SHIPS],
                 wall_damage: [0.0; oag_gameplay::MAX_SHIPS],
+                pair_damage: [0.0; oag_gameplay::MAX_SHIPS],
+                pair_contact_ticks: [0; oag_gameplay::MAX_SHIPS],
                 wall_racing_ticks: [0; oag_gameplay::MAX_SHIPS],
-                lost_ticks: [0; oag_gameplay::MAX_SHIPS],
+                beneath_ticks: [0; oag_gameplay::MAX_SHIPS],
+                beneath_wide: [false; oag_gameplay::MAX_SHIPS],
                 stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
+                distant_ticks: [0; oag_gameplay::MAX_SHIPS],
                 rescue_distance,
                 player_rescue_distance,
                 last_on_track,
@@ -729,39 +765,59 @@ impl Race {
                 physics_laws,
                 autopilot_engine,
                 weapon_pad_glow,
+                leach_beams: leach_beams.min(oag_weapons::projectile::leach_beam::POOL_SIZE as u8),
                 leach_drain,
+                blast_push,
                 quake_hit,
                 autopilot_absorb_cancels,
                 autopilot_pad_grants,
+                launch_normal_is_track_up,
+                floor_arms_steer_to_ride_point,
+                plasma_release_at_display_scale,
+                own_craft_box_hides_track,
+                reset_triggers,
+                contact_cues,
+                score_law,
+                score_pace,
+                flip_law,
+                fire_terms: crate::field::fire_terms(opponent_fire, weapon_ai.as_ref(), difficulty),
                 autopilot: false,
                 cues: Vec::new(),
+                mod_sounds: Vec::new(),
                 announcements: Vec::new(),
                 class_announcements: Vec::new(),
                 contact_cue_cooldown: [0.0; oag_gameplay::MAX_SHIPS],
+                contact_impulse: [crate::cues::ContactImpulse::default(); oag_gameplay::MAX_SHIPS],
+                wall_contact: [None; oag_gameplay::MAX_SHIPS],
                 // Every pad starts due for a real test. `Pad_Bind` zeroes the same
                 // cache at load, so the first tick measures rather than trusting a
                 // distance nothing has computed yet.
                 pad_distance: std::array::from_fn(|_| vec![0.0; speedup_pads.len()]),
-                speedup_pads,
+                speedup_pads: speedup_pads.into(),
                 // The same broadphase, and the same "due for a real test" start.
                 weapon_pad_distance: std::array::from_fn(|_| vec![0.0; weapon_pads.len()]),
                 // Every pad starts collectable. The original's `+0x1a0` is zero
                 // until something stamps it, and nothing stamps it at load.
                 weapon_pad_refresh_left: vec![0.0; weapon_pads.len()],
-                weapon_pads,
+                weapon_pads: weapon_pads.into(),
                 weapon_pad_current: [None; MAX_SHIPS],
                 weapon_pad_refresh,
-                weapon_pad_line,
-                pad_seeking: super::PadSeeking::for_mode(mode),
+                weapon_pad_line: weapon_pad_line.into(),
+                // A score Eliminator steers for no pad (`crate::score_pace`).
+                pad_seeking: if score_pace.is_some() {
+                    super::PadSeeking::Off
+                } else {
+                    super::PadSeeking::for_mode(mode)
+                },
                 fire_law: if weapon_ai.is_some() {
                     super::FireLaw::Original
                 } else {
                     super::FireLaw::Ours
                 },
-                weapon_ai,
-                weapons,
-                allowed_weapons,
-                class,
+                weapon_ai: weapon_ai.map(Arc::new),
+                weapons: weapons.map(Arc::new),
+                allowed_weapons: allowed_weapons.into(),
+                class: class.into(),
                 class_gravity_scale,
                 class_gravity_term,
                 start_boost,
@@ -771,15 +827,16 @@ impl Race {
                 barrel_rolls: true,
                 pad_current: [None; MAX_SHIPS],
                 pad_previous_position: [None; MAX_SHIPS],
+                xp: None,
                 scheme: ControlScheme::default(),
             },
             #[cfg(not(feature = "view"))]
-            view: RaceView {
+            view: Box::new(RaceView {
                 slot_teams,
                 ..RaceView::default()
-            },
+            }),
             #[cfg(feature = "view")]
-            view: RaceView {
+            view: Box::new(RaceView {
                 chase_params,
                 chase_far: chase,
                 chase_close,
@@ -791,24 +848,33 @@ impl Race {
                 // with no screen. `set_camera_view` is what applies the player's.
                 camera_view,
                 camera,
+                camera_jumps: 0,
+                transit_seats: [None; oag_gameplay::MAX_SHIPS],
                 poses: Default::default(),
                 correction: [Vec3::ZERO; MAX_SHIPS],
                 correction_smoothing: true,
                 hull_shake: std::array::from_fn(|_| None),
                 hull_shake_law: hull_shake,
                 hull_shake_on: true,
+                camera_shake_on: true,
+                player_tags_on: false,
                 seat: None,
                 person_names: Vec::new(),
                 contact: super::contact_fx::ContactFx::new(),
                 intro: intro_camera
                     .filter(|_| camera_override.is_none())
-                    .map(|(grid, rule)| super::intro_camera::IntroCamera::new(grid, rule)),
+                    .map(|(grid, rule)| {
+                        super::intro_camera::IntroCamera::new(grid, rule).with_voice(intro_voice)
+                    }),
                 camera_override,
                 capture_hud,
                 now_playing,
                 world_clock_offset,
                 gantry_seconds,
                 wreck_ended_tick: None,
+                restores: 0,
+                photo: None,
+                spectates_from_start: false,
                 finish_camera: (!destroy_stations.is_empty()).then(|| {
                     super::finish_camera::FinishCamera::new(
                         destroy_stations.clone(),
@@ -837,9 +903,19 @@ impl Race {
                 trail_sparks,
                 campaign_event,
                 trail_inside: [0; MAX_SHIPS],
+                trail_hit_rest: [0; MAX_SHIPS],
                 hd_flame: [exhaust::hd::Flame::new(); MAX_SHIPS],
                 hd_sprite: [exhaust::hd::Sprite::new(); MAX_SHIPS],
-                shield: [ShipShield::with_palette(shield_palette); MAX_SHIPS],
+                shield: std::array::from_fn(|slot| {
+                    ShipShield::with_palette(oag_render::shield::Palette {
+                        target: shield_targets
+                            .get(slot)
+                            .copied()
+                            .flatten()
+                            .unwrap_or(shield_palette.target),
+                        ..shield_palette
+                    })
+                }),
                 nozzles,
                 engine_lights,
                 spu_vertex_lights,
@@ -858,11 +934,14 @@ impl Race {
                 track_emitters,
                 announcer,
                 class_announcer,
+                rumble,
                 stage: psys::Stage::new(),
+                surfaces: Vec::new(),
                 scenery_fx: super::scenery_fx::SceneryFx::new(scenery_fx),
                 engine_flare: [None; MAX_SHIPS],
                 projectile_flare: [None; oag_weapons::projectile::MAX_PROJECTILES],
                 projectile_flare_orbit: [None; oag_weapons::projectile::MAX_PROJECTILES],
+                plasma_launch: super::plasma_launch::PlasmaLaunch::new(),
                 quake_effect: None,
                 repulser_effects: [[None; 4]; oag_weapons::projectile::repulser::POOL_SIZE],
                 repulser_fields: [None; oag_weapons::projectile::repulser::POOL_SIZE],
@@ -877,12 +956,17 @@ impl Race {
                 leach_strip: leach_strip.map(crate::leach_strip::Strip::new),
                 quake_point: None,
                 quake_surface: None,
-                leach_beam_effect: None,
+                leach_beam_effect: [None; oag_weapons::projectile::leach_beam::POOL_SIZE],
                 leach_charge_effect: [None; MAX_SHIPS],
-                leach_beam_ribbon: None,
+                leach_beam_ribbon: std::array::from_fn(|_| None),
                 leach_beam_rng: Rng::new(LEACH_BEAM_SEED),
                 rocket_smoke: crate::rocket_smoke::Smoke::new(),
-                leach_ball_elapsed: 0.0,
+                hd_missile_streaks: missile_trail
+                    .and_then(|trail| trail.blast_streak)
+                    .map(missile_blast::streaks::Streaks::new),
+                missile_smoke: missile_trail.map(crate::missile_smoke::Smoke::new),
+                wingtip: wingtip.map(crate::wingtip::Contrails::new),
+                leach_ball_elapsed: [0.0; oag_weapons::projectile::leach_beam::POOL_SIZE],
                 plasma_blasts: [None; blast_models::PLASMA_BLAST_SLOTS],
                 bomb_blasts: [None; bomb_blast::BOMB_BLAST_SLOTS],
                 hd_bomb_blasts: [None; bomb_blast::hd::SLOTS],
@@ -891,6 +975,11 @@ impl Race {
                 hd_missile_blasts: [None; missile_blast::SLOTS],
                 hd_missile_blast,
                 hd_plasma_blast,
+                plasma_blast_law,
+                disruptor_halo_law,
+                disruptor_halos: [None; blast_models::PLASMA_BLAST_SLOTS],
+                disruptor_craft_law,
+                disruptor_craft: [None; MAX_SHIPS],
                 pulse_laid_pose,
                 laid_pose_scaled,
                 screen_flash: if screen_flash {
@@ -899,7 +988,8 @@ impl Race {
                     quake_flash.then(|| oag_fx::flash::ScreenFlash::only(oag_fx::flash::QUAKE))
                 },
                 craft_flashes: Default::default(),
-                wreck_fx: super::wreck_fx::WreckFx::new(wreck_anchors),
+                wreck_fx: super::wreck_fx::WreckFx::new(wreck_anchors)
+                    .with_shockwave(wreck_shockwave),
                 destroy_camera: super::destroy_camera::DestroyCamera::new(
                     destroy_stations,
                     destroy_focus_rate,
@@ -917,6 +1007,7 @@ impl Race {
                 absorb_shell: Default::default(),
                 stage_rng: Rng::new(STAGE_SEED),
                 results: None,
+                results_revision: 0,
                 run_stats: results::RunStats::default(),
                 shield_was_up: false,
                 // Every bar starts at `0.0`, not `1.0`: the pool is `0.0` until
@@ -929,6 +1020,7 @@ impl Race {
                 }),
                 pair_spoil: [false; MAX_SHIPS],
                 split_gap: None,
+                incoming_raises: Vec::new(),
                 sight_screens: (sight.view_screen, sight.columns_screen),
                 sight: sight.view_sight(),
                 sight_state: sight::State::Absent,
@@ -937,21 +1029,25 @@ impl Race {
                 model_detail: oag_mesh::mesh::ModelDetail::default(),
                 texture_detail: oag_mesh::mesh_render::TextureDetail::default(),
                 trail_order: oag_display::display::TrailOrder::default(),
+                scenery_sort: oag_display::display::ScenerySort::default(),
                 weather: oag_display::display::Weather::default(),
                 boost_kick: 0.0,
                 boost_fov_kick: oag_display::display::BoostFovKick::DEFAULT,
                 flaps: [[0.0; 2]; MAX_SHIPS],
                 flap_graphics: setup.airbrake_graphics,
-            },
+            }),
             #[cfg(feature = "view")]
-            replay: replay::ReplayState::default(),
+            replay: replay::ReplayState::requested(request),
             quiet: false,
+            speed_plan_job: None,
             #[cfg(feature = "view")]
             journal: Default::default(),
             #[cfg(test)]
             last_controls: Default::default(),
             #[cfg(test)]
             pair_contacts: Vec::new(),
+            #[cfg(test)]
+            pair_impulses: Vec::new(),
         };
         // The free Turbo is granted at the release edge, not here - see
         // `Race::tick`'s own `COUNTDOWN_TICKS` check for the mode, full-slot

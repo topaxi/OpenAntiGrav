@@ -75,6 +75,12 @@ impl Formats {
     }
 
     fn probe_narrow(device: &wgpu::Device) -> Self {
+        // The probe reads its answer off error scopes, which on the web are
+        // promises the page's thread may not wait for (docs/tools/web.md, "The
+        // page's thread may not wait"); WebGPU has no adapter-specific formats.
+        if cfg!(target_arch = "wasm32") {
+            return Self::BASELINE;
+        }
         if std::env::var("OAG_FSR3_FORMATS").is_ok_and(|v| v == "baseline") {
             return Self::BASELINE;
         }

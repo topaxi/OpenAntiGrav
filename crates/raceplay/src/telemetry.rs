@@ -2,9 +2,7 @@
 //! test, and the HUD's readout.
 //!
 //! Split out of `race.rs` under the 1,000-line rule in
-//! `scripts/check-file-size.py`; a move, with no behaviour change. The
-//! [`Telemetry`] struct itself followed it out of the root on 2026-08-23, for
-//! the same reason and to the module it was always named for.
+//! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 use super::*;
 
@@ -136,9 +134,7 @@ impl Race {
         let mut readout = oag_hud::Readout {
             speed_kmh: ship.physics.body.linear_velocity.length() * oag_fx::exhaust::SPEED_TO_KMH,
             // The ship's own pool, which wall contact spends and absorbing a
-            // pickup pays back into - `oag_physics::damage`. (This comment said
-            // "nothing depletes this yet" until 2026-08-11, three subsystems
-            // after it stopped being true.)
+            // pickup pays back into - `oag_physics::damage`.
             shield: ship.physics.shield,
             shield_max: ship.handling.dimensions.shield,
             lap: if counted {
@@ -192,7 +188,9 @@ impl Race {
             } else {
                 [None; oag_race::MAX_RECORDED_LAPS]
             },
-            wrong_way: self.wrong_way_for(slot),
+            // Facing back is the move here: no frame of the original's flips shows the
+            // warning (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Ours").
+            wrong_way: self.sim.flip_law.is_none() && self.wrong_way_for(slot),
             zone: race.zone.into(),
             score: race.score,
             // The colour grade lives on `crate::Scene`, not on the
@@ -225,6 +223,9 @@ impl Race {
             shield_blink_phase_whole: hud.shield_blink_timer_whole,
             energy_bar_delay_fraction: hud.energy_bar_delay_fraction,
             pickup_announcing: hud.pickup_announce_left > 0.0,
+            pickup_fly: Some(hud.pickup_fly_travel),
+            pickup_pop: Some([1.0 + hud.pickup_pop[0], hud.pickup_pop[1]]),
+            race_xp: self.xp_tally().map(crate::xp_tally::XpTally::total),
             pickup_fade: hud.pickup_fade,
             thrust_chase_percent: hud.thrust_chase_percent,
             thrust_percent: ship.physics.thrust.max(0.0),
@@ -239,12 +240,17 @@ impl Race {
             time_trial_pace: None,
             head_to_head: self.head_to_head(slot),
             kill_tags: self.kill_tags(slot),
+            score_rows: self.sim.score_law.is_some()
+                && self.sim.world.mode() == oag_race::Mode::Eliminator,
+            race_line: self.race_line(slot),
+            player_tags: self.player_tags_for(slot),
             kill_target: if self.sim.world.mode() == oag_race::Mode::Eliminator {
                 self.sim.eliminator_kill_target
             } else {
                 0
             },
             messages: hud.messages.lines(),
+            incoming: hud.incoming.shown().clone(),
             time_gap: self
                 .view
                 .split_gap
@@ -347,7 +353,7 @@ impl Race {
             let cannon = self
                 .sim
                 .weapons
-                .as_ref()
+                .as_deref()
                 .and_then(oag_tables::weapons::WeaponStats::cannon)?;
             let rounds = match ship.pickup.cannon_rounds {
                 0 => cannon.rounds.max(0.0).round() as u32,
@@ -370,21 +376,58 @@ impl Race {
         let slots: Vec<usize> = (0..world.ship_count as usize)
             .filter(|&slot| world.ships[slot].active)
             .collect();
-        let kills: Vec<u32> = slots
+        let scored = self.sim.score_law.is_some();
+        let counts: Vec<u32> = slots
             .iter()
-            .map(|&slot| world.ships[slot].standing.kills)
+            .map(|&slot| {
+                let standing = &world.ships[slot].standing;
+                if scored {
+                    standing.whole_score()
+                } else {
+                    standing.kills
+                }
+            })
             .collect();
-        oag_hud::kill_tags::ranked(&kills)
+        oag_race::score::ranked(&counts)
             .into_iter()
             .filter_map(|row| {
                 let slot = slots[row];
                 Some(oag_hud::KillTag {
                     team: self.view.slot_teams.get(slot)?.clone(),
-                    kills: kills[row],
+                    count: counts[row],
                     player: slot == player,
                 })
             })
             .collect()
+    }
+
+    #[cfg(feature = "view")]
+    /// The Eliminator's race line: each craft's distance round the lap as a fraction, the
+    /// player's first. `None` outside an Eliminator and on a track with no closed ring.
+    ///
+    /// The fraction is [`oag_race::Standing::distance`] wrapped into one lap, so a craft still
+    /// behind the line on the grid reads just under 1 (`oag_hud::race_line`).
+    fn race_line(&self, player: usize) -> Option<oag_hud::RaceLine> {
+        let world = &self.sim.world;
+        if world.mode() != oag_race::Mode::Eliminator {
+            return None;
+        }
+        let course = self.sim.course.as_deref()?;
+        let length = course.length();
+        let fraction = |slot: usize| {
+            let distance = world.ships[slot].standing.distance(course);
+            (distance / length).rem_euclid(1.0)
+        };
+        let others = || {
+            (0..world.ship_count as usize)
+                .filter(|&slot| slot != player && world.ships[slot].active)
+        };
+        Some(oag_hud::RaceLine {
+            player: fraction(player),
+            player_turned: self.facing_back(player),
+            others: others().map(fraction).collect(),
+            others_turned: others().map(|slot| self.facing_back(slot)).collect(),
+        })
     }
 
     #[cfg(feature = "view")]
@@ -416,7 +459,7 @@ impl Race {
         if self.sim.world.mode() != oag_race::Mode::Head2Head {
             return None;
         }
-        let course = self.sim.course.as_ref()?;
+        let course = self.sim.course.as_deref()?;
         let world = &self.sim.world;
         let opponent = (0..world.ship_count as usize)
             .find(|&slot| slot != player && world.ships[slot].active)?;

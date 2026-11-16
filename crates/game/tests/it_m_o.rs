@@ -12,6 +12,9 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 mod mag_floor_scroll_ground_truth;
 mod magstrip_wire_2048_ground_truth;
 mod magstrip_wire_hd_ground_truth;
@@ -19,23 +22,32 @@ mod medal_message_ground_truth;
 mod menu_definition_settings;
 mod menu_graphics_advanced;
 mod menu_screen_filter;
+mod menu_screen_size;
 mod menu_sfx_ground_truth;
 mod menu_web_rows;
 mod mine_launch_audio_ground_truth;
 mod mine_texture_scroll_ground_truth;
+mod mod_shader_frame_ground_truth;
 mod mods_menu;
 mod mods_page;
+mod mods_pages;
 mod mods_switch;
 mod movie_access_units_ground_truth;
 mod movie_container_audio_ground_truth;
 mod movie_ground_truth;
 mod mp4_movie_ground_truth;
 mod mp_time_trial_ground_truth;
+mod music_order_row;
+mod music_pool_ground_truth;
 mod music_resume_ground_truth;
 mod now_playing_ground_truth;
+mod official_remix;
+mod omega_2048_map_ground_truth;
 mod omega_campaign_launch_ground_truth;
 mod omega_campaign_screens_ground_truth;
 mod omega_colour_template_ground_truth;
+mod omega_held_loops_ground_truth;
+mod omega_hull_sh_ambient_ground_truth;
 mod omega_menu_backdrop_ground_truth;
 mod omega_menu_blocks_ground_truth;
 mod omega_music_ground_truth;
@@ -74,3 +86,4 @@ fn every_test_file_is_listed() {
         );
     }
 }
+mod omega_event_xp_ground_truth;

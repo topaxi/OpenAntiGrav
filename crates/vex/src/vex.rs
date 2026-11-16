@@ -44,9 +44,7 @@
 //! Missing the scale makes every model a uniform wrong size, which looks like
 //! a units problem.
 
-use std::fmt;
-
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Bytes of file header before the node tree.
 pub const FILE_HEADER_LEN: usize = 16;
@@ -65,8 +63,8 @@ pub mod matrix;
 
 pub use matrix::{
     Anchored, IDENTITY, NodeChain, anchor_world, anim_anchors, class_world_transforms,
-    leaves_directions, multiply, transform, transform_direction, transform_point, world_transforms,
-    world_transforms_at,
+    leaves_directions, multiply, ship_muzzle, transform, transform_direction, transform_point,
+    world_transforms, world_transforms_at,
 };
 
 /// Class ID of a `Mesh` node (version 6 only; ask [`classes::for_version`]).
@@ -113,9 +111,10 @@ pub const CLASS_ANIM_TRANSFORM: u32 = 0x3c0;
 
 /// Class ID of a `LodGroup` node: an authored level of detail.
 ///
-/// Its `child_count` (`u32` at `+0x50`) and, when `2`, a switch-distance `f32`
-/// after it are authoring data the PSP binary never reads; see
-/// `docs/formats/vex.md`, "`LodGroup`: authored, but never switched at runtime".
+/// Its `child_count` (`u32` at `+0x50`) and the switch distances after it pick
+/// one child per frame by view depth (`LodGroup_SelectChild`); see
+/// `docs/formats/vex.md`, "`LodGroup`: authored tiers, switched per frame by
+/// view depth".
 pub const CLASS_LOD_GROUP: u32 = 0x2ee;
 
 /// Class ID of an `Engine Flare` node: the ship's exhaust. Its handler is in
@@ -229,82 +228,6 @@ pub fn nodes_by_class(nodes: &[Node], class_id: u32) -> impl Iterator<Item = &No
 /// Divisor for `s16` positions and the `f32` scale. The game's offline tool uses
 /// 32767; 32768 matches the hardware and the 0.003% difference is irrelevant.
 const POSITION_DIVISOR: f32 = 32768.0;
-
-/// Something wrong with a `.vex` file.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Error {
-    /// Fewer bytes than the file header needs.
-    TooShort {
-        /// Bytes supplied.
-        got: usize,
-    },
-    /// A format version this project has no class table for.
-    ///
-    /// An error rather than a fall back to version 6: the numberings share no
-    /// id, so the wrong table finds nothing and looks like an empty file.
-    UnknownVersion {
-        /// The version word the file declares.
-        version: u32,
-    },
-    /// A structure points outside the file.
-    OutOfBounds {
-        /// What was being read.
-        what: &'static str,
-        /// Where it would end.
-        end: usize,
-        /// Size of the file.
-        len: usize,
-    },
-    /// A vertex type this build does not handle: an unexplored asset class or a
-    /// decoding error, either worth hearing about loudly.
-    UnsupportedVertexType {
-        /// The value found.
-        vertex_type: u16,
-    },
-    /// A PS2 batch's VIF command stream did not walk.
-    Vif {
-        /// Offset of the batch header in the mesh payload.
-        at: usize,
-        /// What the walker said. Boxed to keep this enum small.
-        error: Box<crate::vif::Error>,
-    },
-    /// A PS2 batch's packet framing did not add up.
-    ///
-    /// Separate from [`Self::Vif`]: these checks decide whether the packet was
-    /// read as the right *kind* of thing (three lengths that must close, the
-    /// attribute set agreeing with the vertex type).
-    Packet {
-        /// Which check failed.
-        what: &'static str,
-        /// Offset of the batch header in the mesh payload.
-        at: usize,
-    },
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::TooShort { got } => {
-                write!(f, "need at least {FILE_HEADER_LEN} bytes, got {got}")
-            }
-            Self::UnknownVersion { version } => write!(
-                f,
-                "no class table for .vex version {version}; \
-                 known versions are 6 (Pulse), 4 and 3"
-            ),
-            Self::OutOfBounds { what, end, len } => {
-                write!(f, "{what} ends at {end} but the file is {len} bytes")
-            }
-            Self::UnsupportedVertexType { vertex_type } => {
-                write!(f, "unsupported GU vertex type {vertex_type:#06x}")
-            }
-            Self::Vif { at, error } => write!(f, "batch at {at}: {error}"),
-            Self::Packet { what, at } => write!(f, "batch at {at}: {what}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -528,6 +451,9 @@ pub struct Batch {
     /// decoded by [`is_additive_blend`](Self::is_additive_blend), confirmed on
     /// the PSP draw path only. The rest are undecoded.
     pub header_flags: u8,
+    /// The authored depth bias, `0..=9`: the original shifts the batch's depth range by `6 * bias`
+    /// (`mesh-draw.md`, "The per-batch depth bias is file data"). `0` on a PS2 VIF batch.
+    pub depth_bias: u8,
 }
 
 /// GU primitive type for a triangle list.
@@ -606,33 +532,17 @@ impl Node {
     }
 }
 
-/// Little-endian reads, for the parts of this module that are PSP and PS2 only.
-///
-/// The file header and node walk go through [`byte_order`] instead, because a
-/// PS3 `.vex` has those. It has no geometry: a PS3 `Mesh` node is a bounding-box
-/// pair and a reference into a `.rcsmodel`, so every batch, vertex and
-/// embedded-texture decoder below runs on little-endian files.
-///
-/// **That is a claim about these decoders, not the format**: [`anim_transform`]
-/// was once written little-endian on that strength, and HD's 5,518 nodes of the
-/// class all decoded to nothing.
-mod le {
-    use oag_formats::ByteOrder;
-
-    pub fn u16_at(data: &[u8], at: usize) -> u16 {
-        ByteOrder::Little.u16(data, at)
-    }
-
-    pub fn u32_at(data: &[u8], at: usize) -> u32 {
-        ByteOrder::Little.u32(data, at)
-    }
-
-    pub fn f32_at(data: &[u8], at: usize) -> f32 {
-        ByteOrder::Little.f32(data, at)
-    }
-}
-
-use le::{f32_at, u16_at, u32_at};
+// Little-endian reads, for the parts of this module that are PSP and PS2 only.
+//
+// The file header and node walk go through [`byte_order`] instead, because a
+// PS3 `.vex` has those. It has no geometry: a PS3 `Mesh` node is a bounding-box
+// pair and a reference into a `.rcsmodel`, so every batch, vertex and
+// embedded-texture decoder below runs on little-endian files.
+//
+// **That is a claim about these decoders, not the format**: [`anim_transform`]
+// was once written little-endian on that strength, and HD's 5,518 nodes of the
+// class all decoded to nothing.
+use oag_bytes::le;
 
 /// Which way round a file's words are, from its own magic: `VEXX` on the PSP and
 /// PS2, `XXEV` on the PS3 (the same exporter on a big-endian host). A file with
@@ -710,8 +620,7 @@ fn name_at(data: &[u8], at: usize, header_size: usize) -> Option<String> {
 
 /// Reads a NUL-terminated string out of a payload, at a fixed offset.
 fn cstr_at(payload: &[u8], at: usize) -> Option<String> {
-    let bytes = payload.get(at..)?;
-    let text = bytes.split(|&b| b == 0).next()?;
+    let text = oag_bytes::cstr_at_or_end(payload, at)?;
     if text.is_empty() {
         return None;
     }
@@ -788,8 +697,11 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
 mod batch_flags;
 pub use batch_flags::BlendClass;
 
+mod error;
+pub use error::Error;
+
 mod external;
-pub use external::geometry_is_external;
+pub use external::{external_mesh_hash, external_mesh_tex_transforms, geometry_is_external};
 
 mod mesh_header;
 pub use mesh_header::{
@@ -808,7 +720,8 @@ pub use anim_transform::{
 
 mod textures;
 pub use textures::{
-    EmbeddedTexture, texture_asset_path, texture_row_bytes, texture_row_stride, textures,
+    EmbeddedTexture, StoredTexture, stored_textures, texture_asset_path, texture_row_bytes,
+    texture_row_stride, textures,
 };
 
 /// One keyframe track of a mesh's texture-transform block: key times paired
@@ -950,7 +863,7 @@ impl TexTransform {
 /// ([`mesh_tex_transforms`] returns all); most animated meshes have one.
 #[must_use]
 pub fn mesh_tex_transform(payload: &[u8]) -> Option<TexTransform> {
-    mesh_tex_transform_at(payload, 0)
+    mesh_tex_transform_at(payload, MATERIALS_AT, 0)
 }
 
 /// Every material's texture-transform block, in material order.
@@ -963,11 +876,17 @@ pub fn mesh_tex_transforms(payload: &[u8]) -> Vec<Option<TexTransform>> {
     if payload.len() < 0x30 {
         return Vec::new();
     }
-    let material_count = usize::from(u16_at(payload, 2));
+    let material_count = usize::from(
+        le::u16_at(payload, 2).expect("the length check above covers the 0x30-byte header"),
+    );
     (0..material_count)
-        .map(|i| mesh_tex_transform_at(payload, i))
+        .map(|i| mesh_tex_transform_at(payload, MATERIALS_AT, i))
         .collect()
 }
+
+/// Where a mesh payload's material array starts when the geometry is in the
+/// file. An external-geometry payload ([`external`]) starts it four bytes on.
+const MATERIALS_AT: usize = 0x30;
 
 /// One material's block; layout in [`mesh_tex_transforms`], field map in
 /// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`.
@@ -980,26 +899,30 @@ pub fn mesh_tex_transforms(payload: &[u8]) -> Vec<Option<TexTransform>> {
 /// non-mesh payloads (a `Skycube` is a Mesh payload) parse this far, and
 /// arbitrary bytes often read as a plausible block. Both predicates agree on
 /// everything measured, per `crates/render/tests/authored_uv_ground_truth.rs`.
-fn mesh_tex_transform_at(payload: &[u8], material_index: usize) -> Option<TexTransform> {
-    if payload.len() < 0x30 {
+fn mesh_tex_transform_at(
+    payload: &[u8],
+    materials_at: usize,
+    material_index: usize,
+) -> Option<TexTransform> {
+    if payload.len() < materials_at {
         return None;
     }
-    let material_count = usize::from(u16_at(payload, 2));
+    let material_count = usize::from(le::u16_at(payload, 2)?);
     if material_index >= material_count {
         return None;
     }
     // The engine's gate.
-    let material = 0x30 + material_index * 0x14;
-    if material + 2 > payload.len() || u16_at(payload, material) & 0x10 == 0 {
+    let material = materials_at + material_index * 0x14;
+    if material + 2 > payload.len() || le::u16_at(payload, material)? & 0x10 == 0 {
         return None;
     }
-    let base = 0x30 + material_count * 0x14;
+    let base = materials_at + material_count * 0x14;
     let block = base + material_index * 0x40;
     if block + 0x30 > payload.len() {
         return None;
     }
-    let offset_count = usize::from(u16_at(payload, block));
-    let scale_count = usize::from(u16_at(payload, block + 2));
+    let offset_count = usize::from(le::u16_at(payload, block)?);
+    let scale_count = usize::from(le::u16_at(payload, block + 2)?);
     if offset_count == 0 && scale_count == 0 {
         return None;
     }
@@ -1008,28 +931,31 @@ fn mesh_tex_transform_at(payload: &[u8], material_index: usize) -> Option<TexTra
     // `16_Track`'s two-material hologram panels (material 1 resolves to real keys
     // off the array base and noise off its own block).
     let track = |count: usize, times_rel: usize, values_rel: usize| {
-        let times_at = base + u32_at(payload, block + times_rel) as usize;
-        let values_at = base + u32_at(payload, block + values_rel) as usize;
+        let times_at = base + le::u32_at(payload, block + times_rel)? as usize;
+        let values_at = base + le::u32_at(payload, block + values_rel)? as usize;
         if times_at + count * 2 > payload.len() || values_at + count * 4 > payload.len() {
             return None;
         }
         Some(TexTransformTrack {
             times: (0..count)
-                .map(|i| u16_at(payload, times_at + i * 2))
-                .collect(),
+                .map(|i| le::u16_at(payload, times_at + i * 2))
+                .collect::<Option<_>>()?,
             values: (0..count)
                 .map(|i| {
                     let at = values_at + i * 4;
-                    (u16_at(payload, at) as i16, u16_at(payload, at + 2) as i16)
+                    Some((
+                        le::u16_at(payload, at)? as i16,
+                        le::u16_at(payload, at + 2)? as i16,
+                    ))
                 })
-                .collect(),
+                .collect::<Option<_>>()?,
         })
     };
-    let loop_word = u32_at(payload, block + 0x2c);
+    let loop_word = le::u32_at(payload, block + 0x2c)?;
     Some(TexTransform {
         offset: track(offset_count, 0x04, 0x10)?,
         scale: track(scale_count, 0x08, 0x14)?,
-        seconds_per_key: f32::from_bits(u32_at(payload, block + 0x0c)),
+        seconds_per_key: f32::from_bits(le::u32_at(payload, block + 0x0c)?),
         loop_seconds: f32::from_bits(loop_word),
         step: loop_word & 1 != 0,
     })
@@ -1043,15 +969,24 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
         return Err(Error::TooShort { got: payload.len() });
     }
 
+    let header_u16 = |at: usize| {
+        le::u16_at(payload, at).expect("the loop condition keeps a 0x40-byte header in range")
+    };
+    let header_f32 = |at: usize| {
+        le::f32_at(payload, at).expect("the loop condition keeps a 0x40-byte header in range")
+    };
+
     // File offsets from the payload start (the loader relocates them to pointers).
-    let list_offset = u32_at(payload, if batch_list == 0 { 4 } else { 8 }) as usize;
+    let list_offset = le::u32_at(payload, if batch_list == 0 { 4 } else { 8 })
+        .expect("the length check above covers the 0x30-byte header")
+        as usize;
     let terminator = if batch_list == 0 { 1u16 } else { 2 };
 
     let mut out = Vec::new();
     let mut at = list_offset;
 
     while at + 0x40 <= payload.len() {
-        let pass_mask = u16_at(payload, at);
+        let pass_mask = header_u16(at);
         if pass_mask & terminator == 0 {
             break;
         }
@@ -1059,13 +994,13 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
         let flags = payload[at + 3];
         let header_size = if flags & 0x40 != 0 { 0x80 } else { 0x40 };
 
-        let use_alternate = u16_at(payload, at + 6) != 0;
-        let vertex_count = usize::from(u16_at(payload, at + if use_alternate { 6 } else { 4 }));
+        let use_alternate = header_u16(at + 6) != 0;
+        let vertex_count = usize::from(header_u16(at + if use_alternate { 6 } else { 4 }));
         let primitive_type = payload[at + if use_alternate { 9 } else { 8 }];
-        let vertex_type = u16_at(payload, at + 0x0a);
-        let payload_size = usize::from(u16_at(payload, at + 0x0c));
-        let alternate_offset = usize::from(u16_at(payload, at + 0x0e));
-        let scale = f32_at(payload, at + 0x10);
+        let vertex_type = header_u16(at + 0x0a);
+        let payload_size = usize::from(header_u16(at + 0x0c));
+        let alternate_offset = usize::from(header_u16(at + 0x0e));
+        let scale = header_f32(at + 0x10);
 
         // A PS2 batch's payload is a VIF packet, with float bounds already in
         // position space. See `is_vif_batch`.
@@ -1079,9 +1014,9 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             }
             let corner = |off: usize| {
                 [
-                    f32_at(payload, at + off),
-                    f32_at(payload, at + off + 4),
-                    f32_at(payload, at + off + 8),
+                    header_f32(at + off),
+                    header_f32(at + off + 4),
+                    header_f32(at + off + 8),
                 ]
             };
             let vertices = vif_vertices(
@@ -1129,6 +1064,7 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             (vertices, (corner(0x18), corner(0x20)))
         };
 
+        let depth_bias = batch_flags::depth_bias(vertex_type, pass_mask, payload[at + 0x29]);
         out.push(Batch {
             pass_mask,
             material_index: payload[at + 2],
@@ -1136,9 +1072,10 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             vertex_type,
             scale,
             vertices,
-            declared_vertex_count: u16_at(payload, at + 4),
+            declared_vertex_count: header_u16(at + 4),
             bounds,
             header_flags: flags,
+            depth_bias,
         });
 
         // `payload_size` covers the vertex data only.
@@ -1153,6 +1090,7 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
 }
 
 fn decode_vertex(data: &[u8], at: usize, layout: &VertexLayout, scale: f32) -> Vertex {
+    let in_range = "the batch's vertices were checked against their stride";
     let p = at + layout.position;
     let component = |o: usize| f32::from(i16::from_le_bytes([data[o], data[o + 1]]));
 
@@ -1172,13 +1110,16 @@ fn decode_vertex(data: &[u8], at: usize, layout: &VertexLayout, scale: f32) -> V
             f32::from(data[at + o]) / 128.0,
             f32::from(data[at + o + 1]) / 128.0,
         ],
-        TexcoordFormat::F32 => [f32_at(data, at + o), f32_at(data, at + o + 4)],
+        TexcoordFormat::F32 => [
+            le::f32_at(data, at + o).expect(in_range),
+            le::f32_at(data, at + o + 4).expect(in_range),
+        ],
     });
 
     let colour = layout.colour.map(|(o, format)| {
         let raw = match format.size() {
-            2 => u32::from(u16_at(data, at + o)),
-            _ => u32_at(data, at + o),
+            2 => u32::from(le::u16_at(data, at + o).expect(in_range)),
+            _ => le::u32_at(data, at + o).expect(in_range),
         };
         format.to_rgba(raw)
     });
@@ -1282,16 +1223,20 @@ pub fn vif_vertices(
     if base + VIF_REGION_HEADER + VIF_TAG_LEN > payload.len() {
         return Err(packet("region header runs past the payload"));
     }
-    let size = u32_at(payload, base) as usize;
+    let size = le::u32_at(payload, base).expect("the region header check above") as usize;
     // Three exact framing checks: region length + 16 is the declared payload, the
     // DMA tag's quadword count spans the packet, the vertex type repeats.
     if size + VIF_REGION_HEADER != payload_size {
         return Err(packet("packet length disagrees with the batch header"));
     }
-    if u32_at(payload, base + 4) != u32::from(vertex_type) {
+    if le::u32_at(payload, base + 4).expect("the region header check above")
+        != u32::from(vertex_type)
+    {
         return Err(packet("packet vertex type disagrees with the batch header"));
     }
-    let qwc = (u32_at(payload, base + VIF_REGION_HEADER) & 0xffff) as usize;
+    let qwc = (le::u32_at(payload, base + VIF_REGION_HEADER)
+        .expect("the region header check above")
+        & 0xffff) as usize;
     if VIF_TAG_LEN + qwc * 16 != size {
         return Err(packet("DMA tag quadword count disagrees with the packet"));
     }
@@ -1421,28 +1366,24 @@ fn emit_vif_chunk(
         Format::Bits32,
         "normal array has the wrong shape",
     )?;
+    let in_packet = |at: usize| {
+        le::f32_at(payload, at)
+            .expect("`check` kept every array inside the packet, which ends inside the payload")
+    };
     let positions = start + position.data.start;
     let position_stride = 4 * position.components;
 
     for i in 0..count {
         let p = positions + i * position_stride;
         out.push(Vertex {
-            position: [
-                f32_at(payload, p),
-                f32_at(payload, p + 4),
-                f32_at(payload, p + 8),
-            ],
+            position: [in_packet(p), in_packet(p + 4), in_packet(p + 8)],
             normal: normal.map(|o| {
                 let n = o + i * 12;
-                [
-                    f32_at(payload, n),
-                    f32_at(payload, n + 4),
-                    f32_at(payload, n + 8),
-                ]
+                [in_packet(n), in_packet(n + 4), in_packet(n + 8)]
             }),
             texcoord: texcoord.map(|o| {
                 let t = o + i * 8;
-                [f32_at(payload, t), f32_at(payload, t + 4)]
+                [in_packet(t), in_packet(t + 4)]
             }),
             colour: colour.map(|o| {
                 let c = o + i * 4;

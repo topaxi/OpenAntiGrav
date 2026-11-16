@@ -3,7 +3,7 @@
 //! quads show.
 //!
 //! **What the original does, read off a live PPSSPP frame** (Pulse PSP,
-//! Talon's Junction, 2026-10-06, `docs/ghidra/functions/psp-pulse-usa/billboards.md`):
+//! Talon's Junction, `docs/ghidra/functions/psp-pulse-usa/billboards.md`):
 //! the GE list renders twice into a 128 x 128 offscreen buffer (`FBPTR`
 //! `0x04154000`, width `0x80`, viewport scale 64) before the scene pass samples
 //! that buffer on two of the track's quads. The advert's matrix there is the
@@ -53,9 +53,9 @@ pub struct Card {
     /// Whether a track quad samples the target wrapping, the title's
     /// [`oag_title::adverts::Adverts::wrap`].
     pub wrap: bool,
-    /// Whether the target is a 5-6-5 colour card in linear light, the title's
-    /// [`oag_title::adverts::Adverts::card_565`].
-    pub card_565: bool,
+    /// What the target stores of a card's colour, the title's
+    /// [`oag_title::adverts::Adverts::card_store`].
+    pub card_store: oag_title::adverts::CardStore,
     /// The gantry's clock and board-window cull, on the card that is slot 8 of
     /// a title that draws it as one; `None` for an advert, which runs on the
     /// scenery clock.
@@ -206,7 +206,7 @@ pub(super) fn card_from(
         view_projection,
         size: spec.target,
         wrap: spec.wrap,
-        card_565: spec.card_565,
+        card_store: spec.card_store,
         timeline: None,
     })
 }
@@ -216,6 +216,9 @@ struct CardGpu {
     timeline: Option<crate::gantry::CardTimeline>,
     drawable: Drawable,
     view_projection: Mat4,
+    /// Whether the card's uniforms are in its buffer: its own camera, an identity model
+    /// and no motion, the same on every frame, so they are written once.
+    uniforms_written: std::cell::Cell<bool>,
     colour: wgpu::TextureView,
     wrap: bool,
     #[cfg(test)]
@@ -234,6 +237,9 @@ pub(super) struct Cards {
     rebound: usize,
     #[cfg(test)]
     wrapped: usize,
+    /// How many uniform writes [`Cards::render`] has made, all cards together.
+    #[cfg(test)]
+    uniform_writes: std::cell::Cell<usize>,
     depth: wgpu::TextureView,
     velocity: wgpu::TextureView,
 }
@@ -324,10 +330,14 @@ impl Cards {
                 queue,
                 card.model,
                 FORMAT,
-                if card.card_565 {
-                    oag_gpu::formats::SceneStore::Packed565
-                } else {
-                    oag_gpu::formats::SceneStore::Computed
+                match card.card_store {
+                    oag_title::adverts::CardStore::Rgba8 => oag_gpu::formats::SceneStore::Computed,
+                    oag_title::adverts::CardStore::R5G6B5Linear => {
+                        oag_gpu::formats::SceneStore::Packed565
+                    }
+                    oag_title::adverts::CardStore::R5G6B5Gamma => {
+                        oag_gpu::formats::SceneStore::Packed565Gamma
+                    }
                 },
                 anisotropy,
                 1,
@@ -351,6 +361,7 @@ impl Cards {
                 timeline: card.timeline,
                 drawable,
                 view_projection: card.view_projection,
+                uniforms_written: std::cell::Cell::new(false),
                 colour: target.create_view(&wgpu::TextureViewDescriptor::default()),
                 wrap: card.wrap,
                 #[cfg(test)]
@@ -365,6 +376,8 @@ impl Cards {
             rebound: 0,
             #[cfg(test)]
             wrapped: 0,
+            #[cfg(test)]
+            uniform_writes: std::cell::Cell::new(0),
             depth,
             velocity,
         })
@@ -424,12 +437,16 @@ impl Cards {
             let seconds = card.timeline.as_ref().map_or(seconds, |timeline| {
                 timeline.apply(&card.drawable, gantry_clock(timeline))
             });
-            card.drawable.write(
-                queue,
-                card.view_projection,
-                Mat4::IDENTITY,
-                card.view_projection,
-            );
+            if !card.uniforms_written.replace(true) {
+                card.drawable.write(
+                    queue,
+                    card.view_projection,
+                    Mat4::IDENTITY,
+                    card.view_projection,
+                );
+                #[cfg(test)]
+                self.uniform_writes.set(self.uniform_writes.get() + 1);
+            }
             card.drawable.write_anims(queue, seconds);
             card.drawable.write_node_anims(queue, seconds);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -443,7 +460,7 @@ impl Cards {
                         // purpose: a lit billboard material (`billboarddiffuse`,
                         // `cf_vex_billboard`) gates the shader's stand-in specular by the texel's
                         // alpha, so an opaque clear blows the board out to white on those
-                        // circuits (2026-10-18, docs/rendering/start-gantry.md).
+                        // circuits (docs/rendering/start-gantry.md).
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                             store: wgpu::StoreOp::Store,
@@ -471,8 +488,10 @@ impl Cards {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            oag_gpu::perfprobe::marks::mark(&mut pass, "advert card");
             card.drawable
                 .draw(&mut pass, ViewBlock::NONE, None, None, None, None);
+            oag_gpu::perfprobe::marks::close(&mut pass);
         }
     }
 }

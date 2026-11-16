@@ -82,11 +82,12 @@ pub const MAX_TICKS: usize = 1 << 20;
 ///
 /// [`button::ANY`] is deliberately absent: it is synthesised from the others by
 /// [`oag_gameplay::input::Input::begin_frame`] and is not a thing a pad has.
-const SCRIPTABLE: [(&str, Button); 12] = [
+const SCRIPTABLE: [(&str, Button); 13] = [
     ("cross", Button::Cross),
     ("circle", Button::Circle),
     ("square", Button::Square),
     ("triangle", Button::Triangle),
+    ("flip", Button::Flip),
     ("up", Button::Up),
     ("down", Button::Down),
     ("left", Button::Left),

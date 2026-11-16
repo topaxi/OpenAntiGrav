@@ -38,6 +38,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     elimination: layouts::ELIMINATION,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_Pulse.toml"),
+    player_tags: Some(layouts::MP_TAG),
     skins: &[],
 };
 
@@ -51,13 +52,13 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // The layouts name `.mip` and this disc carries `.mip`. The PS2 pressing's
     // `.pct` rewrite is `crate::read_image`'s job and applies to every source.
-    texture_extension: None,
     always_on: ALWAYS_ON,
     raster: true,
     ink_aligned_text: false,
     half_unit_glyph_quads: false,
     lit_alpha: None,
     text_shadow: None,
+    text_outline_alpha: None,
     // Four instances of one corner-bracket model plus the closed box at the
     // middle, bound by `HudSight_Bind` (`0x0881b604`) in this order - which is
     // also the order `sight::BRACKET_ROTATIONS` is indexed by. See
@@ -145,6 +146,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             table_crossings: 21,
         },
     }),
+    incoming_warnings: true,
     runtime: None,
     lap_one_shift: Some(oag_title::hud::LapOneShift {
         widgets: &["LapOf", "Lap Outof"],
@@ -180,9 +182,19 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         centre: [240, 136],
         stamp: "SpeedBar",
     }),
+    // Measured at the draw call on PPSSPP, `docs/ghidra/functions/psp-pulse-usa/shield.md`, "The
+    // absorb flash at the draw call": the fill's stencil replace with reference `0xff`.
+    absorb_glow: Some(oag_title::hud::AbsorbGlow {
+        fill: "ShieldBar",
+        value: 0xff,
+    }),
     // Nobody has read a sway in this title's `Hud_Update`: the HUD stays fixed.
     sway: None,
-    safe_area: None,
+    // The disc authors no `Safe Area Setting` (`docs/formats/hd-hud.md`, "SCREEN SIZE on every
+    // title"), so the shared slider stands in, drawn 1:1 until the player moves it.
+    safe_area: Some(oag_title::pre_race::Sourced::chosen(
+        oag_title::hud::SafeArea::SHARED,
+    )),
     // `Additional_Definition.xml`'s `List name="Dynamic HUD" global="Dynamic HUD"
     // Default="FE_DEFAULT"` on the PSP discs (USA and EU), read off the disc; the PS2 executable
     // carries the string and the same menu is assumed (one definition for both pressings). What

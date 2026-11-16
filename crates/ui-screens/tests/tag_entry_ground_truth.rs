@@ -84,3 +84,62 @@ fn the_profile_tag_screen_resolves_off_the_real_disc() {
     assert_eq!(geometry.tag_input.length, 3);
     assert_eq!(geometry.cells.len(), 3);
 }
+
+/// The title is drawn so it can be read: Pulse authors it black for its light page
+/// (`FEGlobals->TitleColor`) and the panel the prompt draws it over is dark. The old draw
+/// put black glyphs on that panel.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_name_and_tag_titles_read_on_the_prompts_panel() {
+    use oag_ui::frontend::Draw;
+    let Some(path) = image() else { return };
+    let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pulse::TITLE)
+        .expect("the archives open");
+    let globals = skin_globals(&mut archives);
+    let xml = tag_input_entry(&mut archives);
+    let skin = oag_ui::menu::Skin::new(
+        oag_pulse::FRONT_END.menu.expect("Pulse has a menu skin"),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    let luminance = |c: [f32; 4]| {
+        let lin = |v: f32| {
+            if v <= 0.03928 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2])
+    };
+    for widget in ["Name", "Tag"] {
+        let geometry = oag_ui_screens::tag_entry::geometry(&xml, &globals, widget)
+            .expect("the widget is on this disc");
+        let labels = oag_ui_screens::tag_entry::Labels {
+            title: "TITLE".to_string(),
+            confirm: "OK".to_string(),
+            hint: String::new(),
+        };
+        let draws =
+            oag_ui_screens::tag_entry::TagEntry::new(labels, geometry, "ABC", "").draw(&skin);
+        let Draw::Fill { color: panel, .. } = draws[1] else {
+            panic!("the second draw is the panel");
+        };
+        let ink = draws
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text { text, color, .. } if text == "TITLE" => Some(*color),
+                _ => None,
+            })
+            .expect("the title is drawn");
+        let (hi, lo) = (
+            luminance(ink).max(luminance(panel)),
+            luminance(ink).min(luminance(panel)),
+        );
+        let ratio = (hi + 0.05) / (lo + 0.05);
+        assert!(
+            ratio >= 4.5,
+            "{widget}: title {ink:?} on panel {panel:?} is {ratio:.2}:1"
+        );
+    }
+}

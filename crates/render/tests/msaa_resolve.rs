@@ -49,6 +49,7 @@ fn triangle_model() -> Model {
             glow: 0.0,
             texcoord2: [0.0, 0.0],
             tangent: 0,
+            depth_bias: 0.0,
         },
         GpuVertex {
             quake: 0.0,
@@ -66,6 +67,7 @@ fn triangle_model() -> Model {
             glow: 0.0,
             texcoord2: [0.0, 0.0],
             tangent: 0,
+            depth_bias: 0.0,
         },
         GpuVertex {
             quake: 0.0,
@@ -83,6 +85,7 @@ fn triangle_model() -> Model {
             glow: 0.0,
             texcoord2: [0.0, 0.0],
             tangent: 0,
+            depth_bias: 0.0,
         },
     ];
     Model {
@@ -134,8 +137,12 @@ fn triangle_model() -> Model {
 
         flame: None,
         absorb_shell: false,
+        shield_shell: false,
+        own_shield: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
+        per_batch_cull: false,
+        sky_reflection: None,
         alpha_test_ref: None,
         centre: [0.0, 0.0, 0.0],
         radius: 2.0,
@@ -164,7 +171,7 @@ fn render_and_resolve(
     let mesh_render::Built {
         pipeline,
         bind_group: _placeholder,
-        vertex_buffer,
+        geometry,
         index_buffer,
         texture_binds,
         fog_bind,
@@ -299,7 +306,7 @@ fn render_and_resolve(
         // buffer `build` initialises: this test is about MSAA resolve, not
         // animation, and an identity transform draws the authored UVs.
         pass.set_bind_group(3, &anim_bind, &[]);
-        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        pass.set_vertex_buffer(0, geometry.sole().slice(..));
         pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         pass.set_bind_group(1, &texture_binds[0], &[]);
         for draw in &model.draws {

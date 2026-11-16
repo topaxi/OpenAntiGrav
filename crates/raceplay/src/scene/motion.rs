@@ -27,6 +27,9 @@ pub(super) struct MotionState {
     /// [`Race::camera_cuts`] as of the last promotion: a change is a cut, and the blur must not
     /// read the jump as motion.
     cuts: u32,
+    /// [`Race::viewer_restores`] as of the last promotion: a change is a seek, where every
+    /// pose jumped, so nothing measures against the frame before it.
+    restores: u32,
     prev: Snapshot,
     cur: Snapshot,
 }
@@ -37,7 +40,10 @@ pub(super) const MAX_HISTORIES: usize = 8;
 /// How many histories a scene holds: the windows' and then one per seat of a split, so a view
 /// of a split (or of a window cut into several) has a camera history of its own that no window's
 /// can alias.
-pub(super) const HISTORY_COUNT: usize = 2 * MAX_HISTORIES;
+pub(super) const HISTORY_COUNT: usize = 2 * MAX_HISTORIES + 1;
+
+/// The secondary view's history: it never reads one, and no seat's may take its writes.
+pub(super) const PORTAL_HISTORY: usize = HISTORY_COUNT - 1;
 
 /// The history of the split-screen view that follows `slot`: seats are unique across a race, so
 /// the views of one window and the views of a plain split never share one.
@@ -107,6 +113,8 @@ pub(super) struct Snapshot {
     pub(super) plasma_balls: Vec<Mat4>,
     /// A live Shuriken blade's own, same terms.
     pub(super) shurikens: Vec<Mat4>,
+    /// A live Missile's heads, same terms.
+    pub(super) missile_heads: Vec<Mat4>,
     /// The Mine's own, same terms as [`Self::rockets`].
     pub(super) mines: Vec<Mat4>,
     /// The Bomb's own, same terms.
@@ -134,6 +142,7 @@ impl Snapshot {
             rockets: race.rocket_model_matrices(),
             plasma_balls: race.plasma_ball_model_matrices(),
             shurikens: race.shuriken_model_matrices(),
+            missile_heads: race.missile_head_model_matrices(),
             mines: race.mine_model_matrices(),
             bombs: race.bomb_model_matrices(),
             cannon_rounds: race.cannon_model_matrices(cannon),
@@ -169,15 +178,30 @@ impl FrameKey {
 }
 
 impl MotionState {
-    /// Folds this frame in and returns the snapshot to measure against.
-    pub(super) fn advance(
+    /// Folds this frame in and returns the snapshot to measure against, borrowed from the
+    /// state rather than copied: hold it no longer than the frame that reads it.
+    pub(super) fn advance<'c>(
+        cell: &'c std::cell::RefCell<Option<Self>>,
+        race: &Race,
+        cannon: &CannonDraw,
+        projection: Mat4,
+        view_projection: Mat4,
+        drawn: usize,
+    ) -> std::cell::Ref<'c, Snapshot> {
+        Self::fold(cell, race, cannon, projection, view_projection, drawn);
+        std::cell::Ref::map(cell.borrow(), |state| {
+            &state.as_ref().expect("`fold` leaves a state").prev
+        })
+    }
+
+    fn fold(
         cell: &std::cell::RefCell<Option<Self>>,
         race: &Race,
         cannon: &CannonDraw,
         projection: Mat4,
         view_projection: Mat4,
         drawn: usize,
-    ) -> Snapshot {
+    ) {
         let mut state = cell.borrow_mut();
         match state.as_mut() {
             // A scene's first frame measures against itself: zero velocity,
@@ -187,10 +211,10 @@ impl MotionState {
                 *state = Some(Self {
                     key: FrameKey::of(race),
                     cuts: race.viewed_camera_cuts(),
+                    restores: race.viewer_restores(),
                     prev: now.clone(),
-                    cur: now.clone(),
+                    cur: now,
                 });
-                now
             }
             Some(state) if state.key != FrameKey::of(race) => {
                 let now = Snapshot::take(race, cannon, projection, view_projection, drawn);
@@ -202,19 +226,26 @@ impl MotionState {
                 // travel across it. The craft and the projectiles keep their own previous
                 // matrices: they did move.
                 let cuts = race.viewed_camera_cuts();
-                if cuts != state.cuts {
+                // **A seek is not motion either**, for anything: the viewer put the whole race
+                // at another tick, so the frame it lands on measures against itself and the
+                // next one blurs as the race does.
+                let restores = race.viewer_restores();
+                if restores != state.restores {
+                    state.restores = restores;
+                    state.cuts = cuts;
+                    state.prev = state.cur.clone();
+                } else if cuts != state.cuts {
                     state.cuts = cuts;
                     state.prev.view_projection = state.cur.view_projection;
                     state.prev.projection = state.cur.projection;
                     state.prev.shake = state.cur.shake;
                     state.prev.camera_translation = state.cur.camera_translation;
                 }
-                state.prev.clone()
             }
             // The same tick re-rendered at the same alpha - a capture's
             // bench repeat, a paused race above 60 Hz - keeps measuring
             // against the same previous pose.
-            Some(state) => state.prev.clone(),
+            Some(_) => {}
         }
     }
 }
@@ -552,18 +583,19 @@ impl super::Scene {
 
     /// Encodes the motion blur over the finished frame, `false` when the
     /// pass is absent or off. `views` are the frame, the velocity attachment
-    /// and the depth attachment. `lens_motion` is
+    /// and the depth attachment; `blur` is the tier, its shutter and its tap
+    /// count. `lens_motion` is
     /// [`Race::lens_screen_motion`], which the pass takes out of every
     /// velocity it reads.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn encode_motion_blur(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         views: [&wgpu::TextureView; 3],
         viewport: (f32, f32, f32, f32),
-        strength: f32,
+        blur: oag_display::display::MotionBlur,
         lens_motion: Mat4,
         timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
     ) -> bool {
@@ -585,7 +617,8 @@ impl super::Scene {
                 sample_count: self.msaa.samples(),
                 size: (size.width, size.height),
                 viewport,
-                strength,
+                strength: blur.shutter(),
+                taps: blur.taps(),
                 lens_motion,
             },
             timestamps,
@@ -624,6 +657,19 @@ mod advance_tests {
         Race::start(Setup::headless(oag_race::Mode::TimeTrial, 1))
     }
 
+    /// [`MotionState::advance`]'s snapshot, copied out so a test can advance again while
+    /// it holds the last one.
+    fn advance(
+        cell: &std::cell::RefCell<Option<MotionState>>,
+        race: &Race,
+        cannon: &CannonDraw,
+        projection: Mat4,
+        view_projection: Mat4,
+        drawn: usize,
+    ) -> Snapshot {
+        MotionState::advance(cell, race, cannon, projection, view_projection, drawn).clone()
+    }
+
     fn at(x: f32) -> Mat4 {
         Mat4::from_translation(Vec3::new(x, 0.0, 0.0))
     }
@@ -631,14 +677,14 @@ mod advance_tests {
     /// One frame at `x` after the world has ticked once more.
     fn frame(cell: &std::cell::RefCell<Option<MotionState>>, race: &mut Race, x: f32) -> Snapshot {
         race.tick(&oag_gameplay::PlayerInputs::none());
-        MotionState::advance(cell, race, &CannonDraw::default(), Mat4::IDENTITY, at(x), 1)
+        advance(cell, race, &CannonDraw::default(), Mat4::IDENTITY, at(x), 1)
     }
 
     #[test]
     fn the_camera_of_the_previous_tick_is_what_the_blur_measures_against() {
         let cell = std::cell::RefCell::new(None);
         let mut race = race();
-        let first = MotionState::advance(
+        let first = advance(
             &cell,
             &race,
             &CannonDraw::default(),
@@ -661,7 +707,7 @@ mod advance_tests {
     fn a_cut_measures_no_camera_travel() {
         let cell = std::cell::RefCell::new(None);
         let mut race = race();
-        MotionState::advance(
+        advance(
             &cell,
             &race,
             &CannonDraw::default(),
@@ -676,7 +722,7 @@ mod advance_tests {
         race.sim.respawns[0] += 1;
         race.tick(&oag_gameplay::PlayerInputs::none());
         let zoomed = Mat4::from_scale(Vec3::new(2.0, 2.0, 1.0));
-        let prev = MotionState::advance(&cell, &race, &CannonDraw::default(), zoomed, at(101.0), 1);
+        let prev = advance(&cell, &race, &CannonDraw::default(), zoomed, at(101.0), 1);
         assert_eq!(
             prev.view_projection,
             at(101.0),
@@ -699,7 +745,7 @@ mod advance_tests {
         let race = race();
         // Without a flyby the key is the world's tick.
         assert_eq!(race.motion_tick(), race.sim.world.tick);
-        MotionState::advance(
+        advance(
             &cell,
             &race,
             &CannonDraw::default(),
@@ -707,7 +753,7 @@ mod advance_tests {
             at(0.0),
             1,
         );
-        let same = MotionState::advance(
+        let same = advance(
             &cell,
             &race,
             &CannonDraw::default(),
@@ -728,7 +774,7 @@ mod advance_tests {
         let mut race = race();
         race.tick(&oag_gameplay::PlayerInputs::none());
         race.set_draw_alpha(0.25);
-        MotionState::advance(
+        advance(
             &cell,
             &race,
             &CannonDraw::default(),
@@ -737,7 +783,7 @@ mod advance_tests {
             1,
         );
         race.set_draw_alpha(0.5);
-        let prev = MotionState::advance(
+        let prev = advance(
             &cell,
             &race,
             &CannonDraw::default(),
@@ -751,7 +797,7 @@ mod advance_tests {
             "a new alpha inside one tick is a new frame to measure from"
         );
         race.set_draw_alpha(0.75);
-        let prev = MotionState::advance(
+        let prev = advance(
             &cell,
             &race,
             &CannonDraw::default(),

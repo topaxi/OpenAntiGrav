@@ -39,6 +39,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 import compare_menu as cm  # noqa: E402
+import pcsx2_state  # noqa: E402
 
 BINARY = ROOT / "target/debug/oag-game"
 #: A recorded path that no longer exists: a lane's scratch directory or a reaped worktree.
@@ -58,6 +59,21 @@ def resolve_flags(flags, pair_dir):
                 problems.append("%s: no %s in the pair directory" % (f, Path(f).name))
         out.append(f)
     return out, problems
+
+
+def ps2_world_clock_flags(rec, flags):
+    """`flags` with `--world-clock-offset` added for a Pulse PS2 grid pair recorded without it.
+
+    A PS2 pair's animated surfaces (Orcus' neon strips cycle magenta, cyan, yellow) run on the original's world clock, not on ours' tick count; the
+    value comes from the state file and the grab bracket (`docs/tools/compare-page.md`, "The Orcus neon strips are the world animation clock").
+    Mutates `rec["ours"]` to record it."""
+    if rec["profile"] != "pulse-ps2" or "--world-clock-offset" in flags:
+        return flags
+    offset = pcsx2_state.record_world_clock_offset(rec, ROOT)
+    if offset is None:
+        return flags
+    rec["ours"]["world_clock_offset_s"] = offset
+    return flags + ["--world-clock-offset", "%.3f" % offset]
 
 
 def rerender(pj, binary):
@@ -89,6 +105,7 @@ def rerender(pj, binary):
     if "--field-from" in flags and "--world-clock-offset" in flags and orig.get("world_clock_offset_s") is not None \
             and orig.get("race_clock_s") is not None and rec["profile"] == "pulse-psp":
         flags[flags.index("--world-clock-offset") + 1] = "%.3f" % (orig["world_clock_offset_s"] + orig["race_clock_s"])
+    flags = ps2_world_clock_flags(rec, flags)
     # A race shot's pickup row (the running Autopilot's icon and countdown): pairs recorded before 2026-10-26 draw none.
     # The countdown is the timer the pair script read at the stop (`autopilot_timer_at_stop_s`); it runs when the
     # newer `held_pickup.autopilot_running` says so or, in an older record, the provenance's `autopilot.armed`.
@@ -104,12 +121,13 @@ def rerender(pj, binary):
     if rec["profile"] == "hd-fury" and "--gantry-seconds" in flags and orig.get("gantry_seconds") is not None and lag is not None:
         flags[flags.index("--gantry-seconds") + 1] = "%.6f" % ce.gantry_pin(orig["gantry_seconds"], lag)
     plat = ce.platform(rec["profile"])
+    flags = ce.profile_anisotropy_flags(flags, plat, rec.get("kind"))
     # Pairs recorded before the profile held the exposure (2048) drew an adapting one; hold it as the profile says.
     if "--hold-exposure" not in flags:
         flags += ce.exposure_hold_flags(plat["ours"])
     # Pairs recorded before the profile carried Pilot Assist (2048, 2026-10-29) drew no indicator, where every original frame
     # of the title draws it; a menu pair has no race to assist.
-    if "pilot_assist" in plat["ours"] and "--pilot-assist" not in flags and rec.get("kind") != "menu":
+    if "pilot_assist" in plat["ours"] and "--pilot-assist" not in flags and rec.get("kind") not in ("menu", "loading"):
         flags += ["--pilot-assist", plat["ours"]["pilot_assist"]]
     # The pair scripts record the flags after the disc image (`base[2:]`): the image is the pair's `--image`, else its
     # profile's, the same rule the scripts apply.
@@ -122,7 +140,7 @@ def rerender(pj, binary):
         # selection a picker highlights) are put back too: without them a picker draws the title's first team.
         safe_area = ce.recorded_safe_area(rec)
         ce.write_ours_settings(plat, tmp / "profile", safe_area)
-        if rec.get("kind") == "menu":
+        if rec.get("kind") in ("menu", "loading"):
             style = rec["ours"].get("front_end_style")
             # a pair records prose for a title with no styling choice ("the disc's own"): only HD's two values are a setting
             cm.extra_settings(tmp / "profile", style if style in ("HD", "FURY") else None, rec["ours"].get("race"),
@@ -132,6 +150,10 @@ def rerender(pj, binary):
                                              else "no value recorded for this pair: the profile's %d%%" % plat["ours"]["hud_safe_area"])
         shot = tmp / "ours.png"
         env = dict(os.environ, **ce.ours_env(tmp / "profile"))
+        if rec.get("kind") in ("menu", "loading"):
+            # The same rule as `compare_menu.render_ours`: the original's fresh profile holds no downloaded pack.
+            (tmp / "no-dlc").mkdir()
+            env["OAG_DLC"] = str(tmp / "no-dlc")
         done = subprocess.run([str(binary), image] + flags + ["--screenshot", str(shot)], env=env, cwd=ROOT,
                               capture_output=True, text=True, timeout=600)
         if done.returncode != 0 or not shot.exists():
@@ -154,6 +176,8 @@ def rerender(pj, binary):
     old = rec.get("overlap") or {}
     rec["previous_ours"] = {"overlap": old, "binary": rec["ours"].get("binary"), "rendered_at": rec["ours"].get("rendered_at")}
     rec["ours"]["flags"] = flags
+    if "anisotropy" in (rec["ours"].get("settings_readback") or {}) and rec.get("kind") not in ("menu", "loading"):
+        rec["ours"]["settings_readback"]["anisotropy"] = plat["ours"]["anisotropy"]
     rec["ours"]["image"] = image
     rec["ours"]["binary"] = ce.binary_record(binary)
     rec["ours"]["rendered_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
@@ -237,6 +261,12 @@ def rewrite_manifests(d):
     `menus*.toml` rows at their old numbers)."""
     for toml in sorted(d.glob("*.toml")):
         dirs = [str((toml.parent / e["original"]).parent) for e in tomllib.loads(toml.read_text()).get("entry", [])]
+        hand_made = [p for p in dirs if not (Path(p) / "pair.json").is_file()]
+        if hand_made:
+            # A pair with no pair.json has no recorded flags to re-render or metrics to write; rebuilding the
+            # manifest from pair.json files would drop it, so the hand-written manifest stays as it is.
+            print("kept %s as written: %d pair(s) without pair.json" % (toml.name, len(hand_made)))
+            continue
         if dirs:
             ce.manifest(toml, dirs)
 

@@ -6,6 +6,45 @@
 
 use super::*;
 
+/// Whether the trail-hit burst plays on a title whose original never shows it
+/// (`graphics.trail_hits`, off by default: an enhancement of this project's).
+///
+/// A lender is used only where the craft's title has no `WO_TRAIL_HITSHIP` of its own
+/// (`oag_title::Title::effect_on(Trigger::TrailHitship)` is `None`: Pulse and Pure). 2048 and Omega
+/// author it but their originals never fire it (`oag_title::Effects::trail_hits_native`), so they
+/// play their own only with this on. HD plays its own whatever this holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum TrailHits {
+    /// No burst but HD's own: nothing on Pulse and Pure, and 2048's and Omega's own are dropped.
+    #[default]
+    Off,
+    /// Play the burst off `lender`, a source whose title authors it (found by the composition
+    /// root); `None` when this machine has none, which the loader report says.
+    On {
+        /// The source to read the effect from.
+        lender: Option<String>,
+    },
+}
+
+/// Whether the wingtip contrails are laid on a title whose original has none
+/// (`graphics.wingtip_contrails`, off by default: an enhancement of this project's).
+///
+/// A lender is used only where the craft's title carries no contrails of its own
+/// (`oag_title::Title::wingtip` is `None`: Pulse and Pure); HD, 2048 and Omega lay theirs whatever
+/// this holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum WingtipContrails {
+    /// Only the titles that carry them.
+    #[default]
+    Off,
+    /// Lay them off `lender`, a source whose title carries them (found by the composition root);
+    /// `None` when this machine has none, which the loader report says.
+    On {
+        /// The source to read the config and the texture from.
+        lender: Option<String>,
+    },
+}
+
 /// What to load, and which of it to draw.
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -14,11 +53,11 @@ pub struct Options {
     /// Where the craft, HUD and grid roster load from, or `None` for
     /// `source` - today's behaviour, unchanged.
     ///
-    /// **The one thing a Race Remix adds.** `source` still supplies the track
+    /// **The one thing a two-title race adds.** `source` still supplies the track
     /// and everything that goes with it - collision, environment, pads,
     /// weapon tuning; `craft_source`, when it names a different release,
     /// supplies the livery, HUD, exhaust/flare and boost plume instead. See
-    /// [`oag_source::remix::Remix`].
+    /// [`oag_source::pair::SourcePair`].
     pub craft_source: Option<String>,
     /// Directories to look in for downloadable content (`oag_source::dlc`), mounted
     /// behind `source`'s own archives.
@@ -49,22 +88,41 @@ pub struct Options {
     /// Finds more of them on the load thread ([`crate::extensions::Finder`]); `None`
     /// looks for none.
     pub find_extensions: Option<crate::extensions::Finder>,
+    /// The simulation modules a recording ran (`Header::mods`), when this load rebuilds one:
+    /// the race runs exactly these, with their recorded picks, and not the others the mods
+    /// that are on offer. `None` is an ordinary race; `Some` of nothing is a recording of a
+    /// vanilla race. Set by [`Self::apply_replay`].
+    pub recorded_mods: Option<Vec<oag_replay::header::ModUse>>,
+    /// Opens the texture packs the player has on, on the load thread
+    /// ([`crate::texture_pack::Finder`]); `None` draws the disc's own textures.
+    pub find_texture_packs: Option<crate::texture_pack::Finder>,
     /// The ring the player's `graphics.boost_zoom` borrows, handed in by the composition
     /// root (the one place that may name HD's); `None` is off. Used only where
     /// `oag_title::RaceDefaults::borrows_zoom_ring`.
     pub boost_zoom: Option<&'static oag_title::ZoomRing>,
+    /// The player's `graphics.trail_hits`: whether a craft flying in a rival's engine trail plays
+    /// a title's trail-hit burst on a title that has none of its own (Pulse and Pure).
+    /// Off by default. See [`TrailHits`].
+    pub trail_hits: TrailHits,
+    /// The player's `graphics.wingtip_contrails`: whether a title with none of its own lays HD's
+    /// wingtip contrails after a speed pad. Off by default. See [`WingtipContrails`].
+    pub wingtip_contrails: WingtipContrails,
+    /// The player's `graphics.own_shield`: whether a title offered it (`oag_title::Looks::own_shield`:
+    /// Pulse and Pure) draws our own HD/Fury-style shield in place of the disc's. Off by default.
+    pub own_shield: bool,
+    /// The player's `graphics.own_rockets`: whether a title offered it (`oag_title::Looks::own_rockets`:
+    /// Pulse and Pure) draws our own rocket effect in place of the disc's flare and blasts. Off by
+    /// default. See `crate::own_rockets`.
+    pub own_rockets: bool,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///
     /// **`None` rather than a constant, for the reason [`Self::track`] gives
     /// and one more of its own.** `--team`'s help has promised since it landed
     /// that leaving it out takes the value "from the source's own title, the
-    /// same way `--track` does" - and until 2026-08-18 the track half of that
-    /// refactor had landed and the team half had not, so every title was served
-    /// `oag_pulse::race::DEFAULT_TEAM`. It worked on HD only because a PSARC
-    /// folds case: `Data\Ships\Assegai\handlingstats.xml` normalises onto the
-    /// `assegai` the manifest actually stores. Finding S3 of that day's review,
-    /// and the reason `oag_title::RaceDefaults::team` existed with no reader.
+    /// same way `--track` does" - so a title is never served `oag_pulse::race::DEFAULT_TEAM`, which would work
+    /// on HD only because a PSARC folds case (`Data\Ships\Assegai\handlingstats.xml`
+    /// normalises onto the `assegai` the manifest stores).
     ///
     /// Resolved by [`load`] once the source is open and its title known, from
     /// [`oag_title::RaceDefaults::team`], and the choice is reported.
@@ -95,6 +153,13 @@ pub struct Options {
     /// Applied to slot 0 alone, like [`Self::hull_variant`] and for the same
     /// reason: nothing offers an opponent a paint job of their own.
     pub skin: Option<String>,
+    /// The livery folder the **player's** craft is painted from, where its model names one other
+    /// than its directory's own: Wipeout HD/Fury's and Omega's `texturelocation` (`livery2` for
+    /// `SKIN1`), the part after [`oag_title::race::LIVERY_SEPARATOR`] of a stored variant id.
+    /// Every texture the hull names under its own livery folder is read from this one instead
+    /// (`oag_livery::LiveryFolder`). `None` is the hull's own. Slot 0 alone, like
+    /// [`Self::skin`]: an opponent flying the player's variant keeps the directory's livery.
+    pub livery: Option<String>,
     /// The team ids the *opponents* may fly, in the caller's own order.
     ///
     /// The caller supplies them because they come off the player's own disc -
@@ -137,8 +202,7 @@ pub struct Options {
     pub seat_picks: Vec<SeatPick>,
     /// Whether a Wipeout 2048 Zone race draws its own `trackZone.rcsmodel`.
     ///
-    /// The game turns it on (2026-10-19, when `fc01_dummy`'s road was read as
-    /// the circuit's fog colour); [`Options::default`] keeps it off so a
+    /// The game turns it on (`fc01_dummy`'s road reads as the circuit's fog colour); [`Options::default`] keeps it off so a
     /// library caller that names no Zone model gets the ordinary circuit.
     pub zone_model: bool,
     /// Whether a Pulse hull's `0x2000` extra pass is built at all
@@ -172,6 +236,15 @@ pub struct Options {
     /// Applied by degrading the measured tuning rather than by boosting a weak
     /// one, and it never reads the player - see [`oag_ai::Difficulty`].
     pub difficulty: oag_ai::Difficulty,
+    /// The original's integer difficulty (`g_skill_level`: `0` Easy, `1` Medium, `2` Hard) the
+    /// race flies at, where it has a rung of its own (a campaign cell's); `None` takes
+    /// [`oag_ai::Difficulty::level`] of [`Self::difficulty`].
+    ///
+    /// It picks every craft's shield pool out of `<Misc>`'s three slots
+    /// (`oag_tables::handling::Misc::shield_for`). The original reads one global for the
+    /// player and the opponents alike (`docs/formats/handling-stats.md`, "Which difficulty
+    /// picks the shield slot").
+    pub skill_level: Option<u8>,
     /// Which mode's rules the race runs under.
     ///
     /// Also selects the HUD layout: a Zone run draws `Zone_HUD.xml`, the other
@@ -206,6 +279,10 @@ pub struct Options {
     /// that package's [`oag_title::AddOn::hud`] in place of the title's own, for the modes it
     /// lists. Set by the campaign map's cell launch (`Session::launch_tier_cell`).
     pub add_on_campaign: Option<String>,
+    /// The race is an event of a campaign (an original's cell, a downloadable one's, a mod's, a
+    /// 2048 event). What a simulation module is told about its race
+    /// (`oag_ext_abi::RACE_CAMPAIGN`); nothing else reads it.
+    pub campaign: bool,
     /// The kill count that ends an Eliminator event, or `None` for
     /// [`Mode::ELIMINATOR_KILL_TARGET_DEFAULT`].
     ///
@@ -218,6 +295,9 @@ pub struct Options {
     /// it is: a campaign loader would fill it in per cell instead of leaving
     /// it `None`.
     pub eliminator_kill_target: Option<u32>,
+    /// A campaign cell's score target. A score Eliminator takes this and never the `KILLS`
+    /// pick above, which another title's kill count may have stored.
+    pub eliminator_score_target: Option<u32>,
     /// Laps this race ends after, overriding [`Mode::laps_target`]'s own
     /// per-class table - or `None` for that table's own answer, which is
     /// every caller outside the campaign.
@@ -314,7 +394,7 @@ pub struct Options {
     pub people: u8,
     /// The class has no controller that defines how to fly it
     /// (`oag_ai::coverage`): the race fields no opponents and says so. Set by
-    /// the race box, RACE REMIX and the command line; a campaign launch leaves
+    /// the race box, a two-title race page and the command line; a campaign launch leaves
     /// it `false` because its own controller (the original's) is chosen by the
     /// tables its title authors for the class.
     pub no_driver_for_class: bool,
@@ -338,8 +418,9 @@ pub struct Options {
     /// what keeps that assertion pointed at the weapon it is about, rather than
     /// weakening it to "whatever the pad handed over".
     ///
-    /// It changes nothing about a real race: every caller that does not set it
-    /// gets [`SEED`], which is the fixed value the field replaced.
+    /// A caller that does not set it gets [`SEED`]. The front end sets a fresh seed per
+    /// race (`oag_game::race_seed`), so only `--race`, headless runs and tests ride the fixed
+    /// one.
     pub seed: Option<u64>,
     /// Put the craft here instead of on its grid slot.
     ///
@@ -376,6 +457,9 @@ pub struct Options {
     /// the original showed, and only a replicated camera replicates *how it was
     /// framed*. `None` uses the chase camera as always.
     pub camera: Option<CameraOverride>,
+    /// The race is an attract demo: nobody in it. The title's demo screen is read for it
+    /// ([`Loaded::demo_overlay`]).
+    pub demo: bool,
 }
 
 /// The two capture aids [`Options::pose`] and [`Options::camera`] carry.
@@ -440,6 +524,11 @@ pub struct Setup {
     /// See [`Options::trail_sparks`] - a draw-path verification aid.
     #[cfg(feature = "view")]
     pub trail_sparks: bool,
+    /// The launch request the options described, resolved, which a recording of the race writes
+    /// into its header so the file can rebuild it ([`Options::replay_setup`]). `None` for a
+    /// setup built by hand.
+    #[cfg(feature = "view")]
+    pub request: Option<oag_replay::header::Setup>,
     /// Whether the race is an event of the title's own single-player campaign: 2048's
     /// `SP.xml`, set by [`load_event`](super::load_event) and by nothing else. It is what the HUD
     /// reads as "an event object exists" - [`oag_hud::Readout::campaign_event`]. A DLC circuit
@@ -498,11 +587,26 @@ pub struct Setup {
     /// each title's palette carries and which parts are measured.
     #[cfg(feature = "view")]
     pub shield_palette: oag_render::shield::Palette,
+    /// Each slot's authored settled shield colour (`Livery::shield_colour`),
+    /// which replaces `shield_palette.target` for that slot's shell. Empty or
+    /// `None` where the craft's shell authors none.
+    #[cfg(feature = "view")]
+    pub shield_targets: Vec<Option<[f32; 4]>>,
     /// Whether a Plasma detonation plays HD's three-model scale ease rather than
     /// Pulse's baked anim-time scrub: `plasma_blast_hd.is_some()`. The two are
     /// read off different executables and do not unify (`blast_models`).
     #[cfg(feature = "view")]
     pub hd_plasma_blast: bool,
+    /// The constants Pulse's and Pure's shared three-model blast runs:
+    /// `plasma_blast_pulse`'s law, `None` where the title has no such blast.
+    #[cfg(feature = "view")]
+    pub plasma_blast_law: Option<oag_title::weapons::PlasmaBlastLaw>,
+    /// Pure's Disruptor explosion halo, `None` where there is none.
+    #[cfg(feature = "view")]
+    pub disruptor_halo_law: Option<oag_title::weapons::DisruptorHalo>,
+    /// Pure's on-craft Disruptor effect, `None` where there is none.
+    #[cfg(feature = "view")]
+    pub disruptor_craft_law: Option<oag_title::weapons::DisruptorCraftFx>,
     /// Whether a Bomb detonation plays HD's own blast object rather than Pulse's
     /// two eased models: `bomb_blast_hd.is_some()`. See `bomb_blast::hd`.
     #[cfg(feature = "view")]
@@ -572,6 +676,10 @@ pub struct Setup {
     /// effects spawn - see `race::wreck_fx`.
     #[cfg(feature = "view")]
     pub wreck_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
+    /// Whether the title throws the big blast (and its shockwave) when a wreck's state times
+    /// out: its table names [`Trigger::WreckExplosion`]. See `race::wreck_fx`.
+    #[cfg(feature = "view")]
+    pub wreck_shockwave: bool,
     /// Each slot's `arc_anchor_point` in its hull's model space, when the title
     /// builds the HD-lineage magstrip arc wake (`Some`); a slot whose hull
     /// authors none is `None` and draws no wake. See `race::magstrip_wake`.
@@ -583,6 +691,14 @@ pub struct Setup {
     /// Each slot's `arc_anchor_point` for HD's LeachBeam strip, `Some` when drawn.
     #[cfg(feature = "view")]
     pub leach_strip: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
+    /// The Missile's ribbon config where the title draws them and the texture
+    /// loaded, else `None`: see [`crate::missile_smoke`].
+    #[cfg(feature = "view")]
+    pub missile_trail: Option<oag_title::weapons::MissileTrail>,
+    /// The wingtip contrails' config and each slot's locators where the race draws them and the
+    /// texture loaded, else `None`: see [`crate::wingtip`].
+    #[cfg(feature = "view")]
+    pub wingtip: Option<crate::wingtip::WingtipDraw>,
     /// The circuit's authored cameras, where the player's camera stands once
     /// their craft is destroyed - see `race::destroy_camera`. Empty off Pulse.
     #[cfg(feature = "view")]
@@ -595,6 +711,10 @@ pub struct Setup {
         oag_vex::grid_camera::GridCamera,
         &'static oag_title::pre_race::PreRace,
     )>,
+    /// The archive entry of the circuit's flyby voice-over, where the title plays one and the
+    /// disc holds it - see [`Race::intro_voice_entry`].
+    #[cfg(feature = "view")]
+    pub intro_voice: Option<String>,
     /// The team id each grid slot flies (`Feisar`), for the HUD's per-craft
     /// rows - the Eliminator's kill column. Ids, not names: the string table
     /// turns one into the name a player reads at draw time. Empty where a
@@ -610,6 +730,12 @@ pub struct Setup {
     /// the player, on every title; `None`, or an empty list, is the player's [`Self::handling`], as every opponent
     /// flew before.
     pub opponent_handling: Vec<Option<Handling>>,
+    /// The player's rocket and mine counts, from the same `handlingstats.xml` as
+    /// [`Self::handling`] (`oag_weapons::counts`).
+    pub weapon_counts: oag_weapons::counts::WeaponCounts,
+    /// Each grid slot's own counts, from the file [`Self::opponent_handling`] read; `None`,
+    /// or an empty list, is the player's [`Self::weapon_counts`].
+    pub opponent_weapon_counts: Vec<Option<oag_weapons::counts::WeaponCounts>>,
     /// How far and how fast the airbrake flaps move, from the same document.
     ///
     /// Separate from [`Self::handling`] because it is per *team* rather than
@@ -656,8 +782,14 @@ pub struct Setup {
     /// flare inside the fuselage.
     #[cfg(feature = "view")]
     pub nozzles: Vec<Option<Vec3>>,
-    /// Wipeout HD's engine light per slot - `EngineLightData.xml` and the
-    /// flare locator's Z axis - or `None` on every other title and on a
+    /// Each slot's `Ship Muzzle` locator in its hull's model space, indexed like
+    /// [`Self::nozzles`] and read in both halves (`load::muzzle`): the weapon node a
+    /// Plasma bolt charges on and leaves from (`oag_gameplay::world::Ship::muzzle`),
+    /// and where its head draws while it charges. `None` for a hull that authors
+    /// none or a version whose class id is unread.
+    pub muzzles: Vec<Option<Vec3>>,
+    /// The engine light per slot (HD, 2048, Omega) - `EngineLightData.xml` and the
+    /// flare locator's Z axis - or `None` on a title with no engine light law and on a
     /// craft that ships neither. Indexed like [`Self::nozzles`], which
     /// carries the locator's position. See [`crate::engine_light`].
     #[cfg(feature = "view")]
@@ -744,6 +876,11 @@ pub struct Setup {
     /// has one.
     #[cfg(feature = "view")]
     pub class_announcer: oag_sound::sfx::ClassAnnouncer,
+    /// The pad rumble patterns the event map fires, out of this title's archive
+    /// (`oag_input::rumble::map::pattern_names`). Empty where the title ships
+    /// none (Pulse and Pure): such a race rumbles nothing.
+    #[cfg(feature = "view")]
+    pub rumble: oag_tables::rumble::Library,
     /// This title's own zone-number-to-speed-class ladder, when it is recovered - the same
     /// [`oag_title::ZoneStages`] [`crate::zone_grade::ZoneGrade`] carries, copied here so
     /// [`Self::class_announcer`] can be triggered off the same edge without reaching into the
@@ -787,6 +924,12 @@ pub struct Setup {
     /// When a locked LeachBeam moves energy,
     /// `oag_title::weapons::Weapons::leach_drain`.
     pub leach_drain: oag_title::weapons::LeachDrain,
+    /// How a weapon blast's push reaches a craft,
+    /// `oag_title::weapons::Weapons::blast_push`.
+    pub blast_push: oag_title::weapons::BlastPush,
+    /// How many LeachBeams may be live at once,
+    /// `oag_title::weapons::Weapons::leach_beams`.
+    pub leach_beams: u8,
     /// How a Quake's wave reaches a craft, `oag_title::weapons::Weapons::quake_hit`.
     pub quake_hit: oag_title::weapons::QuakeHit,
     /// Whether an absorb press cancels a running Autopilot,
@@ -795,6 +938,34 @@ pub struct Setup {
     /// Whether a weapon pad grants a craft whose Autopilot runs,
     /// `oag_title::weapons::Weapons::autopilot_pad_grants`.
     pub autopilot_pad_grants: bool,
+    /// Whether a Rocket, Missile, Shuriken or Plasma bolt is born carrying the located track's
+    /// up rather than the craft's, `oag_title::weapons::Weapons::launch_normal_is_track_up`.
+    pub launch_normal_is_track_up: bool,
+    /// Whether the projectiles' floor arms are Pulse's decompiled laws,
+    /// `oag_title::weapons::Weapons::floor_arms_steer_to_ride_point`.
+    pub floor_arms_steer_to_ride_point: bool,
+    /// Whether a Plasma bolt leaves at the craft's display scale,
+    /// `oag_title::weapons::Weapons::plasma_release_at_display_scale`.
+    pub plasma_release_at_display_scale: bool,
+    /// What the firing craft's box does to its projectiles' first probes,
+    /// `oag_title::weapons::Weapons::own_craft_box_hides_track`.
+    pub own_craft_box_hides_track: oag_title::weapons::OwnCraftBox,
+    /// Which ways a craft is put back are on, and the numbers they fire on:
+    /// `oag_race::recovery::ResetTriggers::PULSE` with the title's
+    /// `oag_title::Title::reset_enables` applied.
+    pub reset_triggers: oag_race::recovery::ResetTriggers,
+    /// How a craft's contact with the track or another craft is heard,
+    /// `oag_title::Title::contact_cues`.
+    pub contact_cues: oag_title::contact_cue::ContactCues,
+    /// Which terms the opponents' fire-or-absorb decision rolls by,
+    /// `oag_title::weapons::Weapons::opponent_fire`.
+    pub opponent_fire: oag_title::weapons::OpponentFire,
+    /// What an Eliminator is won on, `None` for kills: `oag_title::Title::eliminator` with the
+    /// opponents' scale resolved for this race's difficulty.
+    pub score_law: Option<oag_race::ScoreLaw>,
+    /// The Eliminator flip, `None` outside an Eliminator and on a title without one:
+    /// `oag_title::Title::eliminator_flip`.
+    pub flip_law: Option<oag_physics::flip::FlipLaw>,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*
@@ -847,7 +1018,9 @@ pub struct Setup {
     /// speed-pad tunables come from, stamped onto the pad by the original's
     /// `WeaponPads_TestCraft` - see [`oag_tables::handling::WeaponPad`], which
     /// records why it is a debounce rather than a respawn. Zero when the global
-    /// file could not be read.
+    /// file could not be read, and in an Eliminator on a title that never stamps a
+    /// pad there (`oag_title::weapons::Weapons::pads_stamp_in_eliminator`): the pad
+    /// stays armed.
     pub weapon_pad_refresh: f32,
     /// Where [`Options::pose`] asked for the craft to start, already resolved
     /// against the spline. `None` uses the ordinary spawn.
@@ -882,8 +1055,10 @@ pub struct Loaded {
     /// loader had a thread to spare: the web build's load worker runs
     /// [`crate::Race::start`] (the AI's speed plans, 0.65 s for an HD circuit
     /// in the browser) so the page's thread does not (docs/tools/web.md,
-    /// "Threads"). `None` from [`crate::load`]; the scene build starts one
-    /// itself then.
+    /// "Threads"). Natively the load worker starts one on a forked circuit when
+    /// asked to learn the speed plans ahead ([`crate::LoadWorker::spawn`]'s
+    /// `plan_ahead`).
+    /// `None` from [`crate::load`]; the scene build starts one itself then.
     pub started: Option<Box<crate::Race>>,
     /// Which title the source turned out to be.
     ///
@@ -898,6 +1073,10 @@ pub struct Loaded {
     /// The track's title rather than `craft_title`: a render profile is about
     /// how expensive the *scene* is, and the circuit is the scene.
     pub title: &'static oag_title::Title,
+    /// The archive entry of the circuit the race was built on: what `Options::track` named, or
+    /// the title's default, or the first circuit the source ships when the default is not in
+    /// it. A Zone race carries the zone variant. `foreign:<id>` for a foreign track.
+    pub circuit: String,
     /// Which console the track's own source is for, carried out of [`load`]
     /// the same way `title` is and for the same reason: `--race` has no
     /// other way to know it, and `crate::settings::profile_key` needs both
@@ -910,6 +1089,9 @@ pub struct Loaded {
     /// `None` elsewhere and when a part of it would not read - the load report says which. See
     /// [`crate::track_panel`].
     pub track_panel: Option<crate::track_panel::Assets>,
+    /// The screen an attract demo draws over its race: `Some` for an [`Options::demo`] race of a
+    /// title that authors one, when it read. See [`crate::demo_overlay`].
+    pub demo_overlay: Option<crate::demo_overlay::Assets>,
     /// The circuit's own `stats.xml`, for the HUD's `RECORD` readout. `None`
     /// off Pulse's PSP disc, or when the file did not read - the load report
     /// says which.
@@ -932,7 +1114,7 @@ pub struct Loaded {
     /// One hull, plume, nozzle and spark-anchor set per grid slot, each off
     /// its own team's directory. Slot 0 is the player's.
     ///
-    /// Per slot rather than one shared model since 2026-08-15: the eight teams
+    /// Per slot rather than one shared model: the eight teams
     /// the disc declares are eight *different* hulls (845 to 1,497 triangles),
     /// not one hull repainted, so a shared model was visibly one team's ship
     /// eight times over. See [`oag_livery`], which also records which half
@@ -1003,12 +1185,12 @@ pub struct Loaded {
     /// [`mesh_render::Light::stand_in`] for every title that authors none,
     /// which is all of them but Wipeout HD.
     pub light: mesh_render::Light,
-    /// The circuit's baked environment probes (`track.probes`, Wipeout HD), which a hull's
-    /// ambient is blended from - see [`crate::env_probes`]. `None` where the circuit ships
-    /// none, which is every title but HD, and where the file did not read (the load
-    /// report says which).
+    /// The circuit's baked probes, which a hull's ambient is blended from: HD's `track.probes`
+    /// or Omega's `track.shprobes` - see [`crate::env_probes::Baked`]. Empty where the circuit
+    /// ships none (every other title, Omega's Zone circuits), and where a file did not read
+    /// (the load report says which).
     #[cfg(feature = "view")]
-    pub probes: Option<oag_vex::probes::Probes>,
+    pub probes: crate::env_probes::Baked,
     /// The circuit's authored distance fog, out of its `.envsettings`.
     ///
     /// Wipeout HD's, and `None` everywhere else: Pulse fogs through the
@@ -1161,6 +1343,10 @@ pub struct Loaded {
 pub struct Loaded {
     pub setup: Setup,
     pub title: &'static oag_title::Title,
+    /// The archive entry of the circuit the race was built on: what `Options::track` named, or
+    /// the title's default, or the first circuit the source ships when the default is not in
+    /// it. A Zone race carries the zone variant. `foreign:<id>` for a foreign track.
+    pub circuit: String,
     pub platform: oag_disc::Platform,
     pub report: Vec<String>,
 }
@@ -1179,6 +1365,14 @@ pub struct Campaign2048Progress {
     pub objectives: Option<oag_2048::campaign::EventObjectives>,
     /// The event's opponent AI over the title's defaults; `None` keeps this project's driver.
     pub ai: Option<oag_title::original_driver::EventAi>,
+    /// The disc's `XPAwards.xml`, read where `SP.xml` is; `None` when the package lacks it.
+    pub xp_awards: Option<oag_tables::xp::Awards>,
+    /// The title's own `XPRanks.xml`, which ranks the profile's total on the end-of-race page.
+    pub xp_ranks: Option<oag_tables::xp::Ranks>,
+    /// Which `XPAwards.xml` column this event's kind pays: race and Speed Lap events the `race`
+    /// column, Elimination `elim`, Zone `zone`. **Chosen, not measured**: the original's mode to
+    /// column map is unread.
+    pub xp_column: oag_tables::xp::Column,
 }
 
 /// [`Setup::headless`]: the disc-free minimum, for the headless-sim binary.

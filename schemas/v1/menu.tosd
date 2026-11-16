@@ -63,6 +63,69 @@ type = "array"
 itemtype = "types.condition"
 minlength = 2
 
+# `values_from = "<fixed name>"` or `{ query = "<name>", of = "<setting key>" }` (ADR-0082). The
+# query's name and that `of` names a choice row's setting stay the loader's.
+[types.values-from-query]
+type = "table"
+
+[types.values-from-query.query]
+type = "string"
+
+[types.values-from-query.of]
+type = "string"
+optional = true
+
+# The second setting a query reads: `craft_title` on `tracks_of`, `class` on `teams_of`,
+# `team` on `variants_of` (the loader refuses one on another query).
+[types.values-from-query.craft_title]
+type = "string"
+optional = true
+
+[types.values-from-query.class]
+type = "string"
+optional = true
+
+[types.values-from-query.team]
+type = "string"
+optional = true
+
+# `launch = { ... }` on a `launch_race` row: the setting each input of the race is read
+# from. An input left out is the booted title's own.
+[types.launch]
+type = "table"
+
+[types.launch.track_title]
+type = "string"
+optional = true
+
+[types.launch.track]
+type = "string"
+optional = true
+
+[types.launch.craft_title]
+type = "string"
+optional = true
+
+[types.launch.team]
+type = "string"
+optional = true
+
+[types.launch.variant]
+type = "string"
+optional = true
+
+[types.launch.mode]
+type = "string"
+optional = true
+
+[types.launch.class]
+type = "string"
+optional = true
+
+[types.launch.difficulty]
+type = "string"
+optional = true
+
 [types.entry]
 type = "table"
 
@@ -85,6 +148,10 @@ optional = true
 type = "string"
 optional = true
 
+[types.entry.launch]
+type = "types.launch"
+optional = true
+
 [types.entry.setting]
 type = "string"
 optional = true
@@ -95,6 +162,11 @@ itemtype = "string"
 optional = true
 
 [types.entry.values_from]
+oneof = ["string", "types.values-from-query"]
+optional = true
+
+# A choice row's value while nothing is saved for it (read for `mod.<id>.<key>` rows).
+[types.entry.default]
 type = "string"
 optional = true
 

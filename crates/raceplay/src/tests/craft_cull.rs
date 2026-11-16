@@ -5,7 +5,7 @@ use super::scene_build::{bare_scene_of, livery, test_gpu};
 use super::*;
 use oag_display::display::{Fov, MotionBlur, Shadows};
 
-fn target(device: &wgpu::Device) -> wgpu::TextureView {
+pub(super) fn target(device: &wgpu::Device) -> wgpu::TextureView {
     device
         .create_texture(&wgpu::TextureDescriptor {
             label: Some("craft cull test target"),
@@ -18,7 +18,9 @@ fn target(device: &wgpu::Device) -> wgpu::TextureView {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         })
         .create_view(&Default::default())

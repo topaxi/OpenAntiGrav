@@ -108,3 +108,83 @@ fn blocks_are_aligned_and_do_not_overlap() {
         crate::drawable::SceneBlocks::view(1)
     );
 }
+
+/// A view's four blocks go out as one write, and each reads back as the scene it was given.
+/// Write them with four `SceneBlocks::write` calls instead and the log holds four writes; leave
+/// a kind unused and its block is not written (two runs around it).
+#[test]
+fn a_views_four_blocks_are_one_write() {
+    use crate::drawable::{SceneBlocks, SceneKind};
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let scene_with = |seconds: f32| mesh_render::Scene {
+        time: [seconds; 4],
+        ..mesh_render::Scene::off()
+    };
+    let scenes = [
+        scene_with(1.0),
+        scene_with(2.0),
+        scene_with(3.0),
+        scene_with(4.0),
+    ];
+    let block = SceneBlocks::view(3);
+    let write = |used: &[SceneKind]| {
+        let mut blocks = SceneBlocks::new(&device, &queue);
+        for &kind in used {
+            blocks.mark_used(kind);
+        }
+        let log = std::cell::RefCell::new(oag_gpu::writes::Log::default());
+        blocks.write_view(
+            &log,
+            block,
+            [&scenes[0], &scenes[1], &scenes[2], &scenes[3]],
+        );
+        let writes = log.borrow().len();
+        log.borrow_mut().replay(&queue);
+        (blocks, writes)
+    };
+    let (blocks, writes) = write(&SceneBlocks::VIEW_KINDS);
+    assert_eq!(writes, 1, "four adjacent blocks, one write");
+    for (kind, scene) in SceneBlocks::VIEW_KINDS.into_iter().zip(&scenes) {
+        let read = blocks.read(&device, &queue, 3, kind);
+        assert_eq!(read.time, scene.time, "{kind:?}");
+        assert_eq!(
+            bytemuck::bytes_of(&read),
+            bytemuck::bytes_of(scene),
+            "{kind:?}"
+        );
+    }
+    let (blocks, writes) = write(&[SceneKind::Circuit, SceneKind::Shine, SceneKind::Flame]);
+    assert_eq!(writes, 2, "a run either side of the unused kind");
+    assert_eq!(
+        blocks.read(&device, &queue, 3, SceneKind::Ship).time,
+        mesh_render::Scene::off().time,
+        "the unused kind's block keeps Scene::off"
+    );
+    assert_eq!(
+        blocks.read(&device, &queue, 3, SceneKind::Shine).time,
+        [3.0; 4]
+    );
+}
+
+/// HD's absorb shell reads the craft's scene block, where the program's closing `/2`
+/// (`Light::output_scale`), the fog and the texture's scroll clock live: left on the
+/// drawable's own block (`Scene::off`) the shell draws at twice the original's strength,
+/// unfogged, on a frozen texture. Drop the shell's loop in `share_scene_blocks` and it
+/// keeps no kind.
+#[test]
+fn the_absorb_shell_reads_the_craft_scene_block() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut scene = bare_scene(&device, &queue);
+    scene.give_a_shell_for_tests(&device);
+    assert_eq!(
+        scene.shell_scene_kind_for_tests(),
+        None,
+        "a fresh copy has no kind"
+    );
+    scene.share_scene_blocks_for_tests(&device);
+    assert_eq!(scene.shell_scene_kind_for_tests(), Some(SceneKind::Ship));
+}

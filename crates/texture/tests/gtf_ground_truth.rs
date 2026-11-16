@@ -605,12 +605,71 @@ fn the_huds_own_textures_decode() {
 /// Talon's Junction the zenith is deep blue (mean `(78, 123, 165)`), the nadir
 /// blank white and the four sides pale horizon (`204..217` red). Read level-major,
 /// the "faces" would be slices of one image and not separate that way.
+///
+/// **Each face starts on a 128-byte boundary, and the sides of every sky a race
+/// draws meet.** The 8 cubemaps with a mip chain pad each of their first five
+/// faces by 72 bytes; read unpadded, face `n` slides sideways and Sol 2's sky
+/// showed a hard-edged band (`docs/formats/gtf.md`, "Each face starts on a
+/// 128-byte boundary"). The picture-free check is the seams: around the horizon
+/// ring `+Z, +X, -Z, -X` (faces 4, 0, 5, 1) one face's last column is the next
+/// face's first.
+///
+/// The seams are asserted on what a race draws: every circuit's `sky.gtf` but
+/// the four Zone arenas', whose race draws `ZoneSky.gtf` instead (both from
+/// `oag_hd`). The arenas' own skies are dead art and are not in this layout
+/// (`docs/formats/gtf.md`, "The Zone arenas' skies are another layout"); they
+/// and the probes are printed.
 #[derive(Default)]
 struct CubemapFaces {
     cubemaps: usize,
     decoded: usize,
     refused: usize,
     skies: usize,
+    mip_chained: usize,
+    /// The worst side seam of every decoded cubemap, by path; asserted on the
+    /// skies a race draws ([`drawn_skies`], [`SEAM_BOUND`]), printed for the rest.
+    seams: Vec<(String, f64)>,
+}
+
+/// The ring of side faces, each one's right edge meeting the next one's left:
+/// `mesh::sky_cube`'s face table (the OpenGL basis) walked around `+Y`.
+const SIDE_RING: [usize; 5] = [4, 0, 5, 1, 4];
+
+/// The worst side seam a drawn sky may show, as the mean absolute difference
+/// per channel across the two edge columns.
+///
+/// Measured: the twelve circuit skies read 0.70 (Amphiseum) to 6.76
+/// (`02_track`), Sol 2 2.62, `ZoneSky.gtf` 3.44; Sol 2 read unaligned is 39.21.
+const SEAM_BOUND: f64 = 8.0;
+
+/// The `.gtf` paths a race draws as its sky: each circuit's own, the Zone
+/// arenas' replaced by the one Zone sky.
+fn drawn_skies() -> Vec<String> {
+    let zone_arena = |dir: &str| {
+        oag_hd::race::ZONE_TRACKS
+            .iter()
+            .any(|track| track.contains(&format!("/{dir}/")))
+    };
+    oag_hd::names::ENVIRONMENTS
+        .iter()
+        .filter(|dir| !zone_arena(dir))
+        .map(|dir| format!("/data/environments/{dir}/sky.gtf"))
+        .chain(std::iter::once(oag_hd::race::ZONE_SKY.to_owned()))
+        .collect()
+}
+
+/// Mean absolute RGB difference between `left`'s last column and `right`'s
+/// first, on two `width`-square faces.
+fn seam(left: &[[u8; 4]], right: &[[u8; 4]], width: usize) -> f64 {
+    let rows = left.len() / width;
+    let total: u64 = (0..rows)
+        .map(|row| {
+            let a = left[row * width + width - 1];
+            let b = right[row * width];
+            (0..3).map(|c| u64::from(a[c].abs_diff(b[c]))).sum::<u64>()
+        })
+        .sum();
+    total as f64 / (rows * 3) as f64
 }
 
 impl CubemapFaces {
@@ -639,7 +698,25 @@ impl CubemapFaces {
             return;
         }
         self.decoded += 1;
+        // The last face's chain ends where the declared data does: no tail.
+        assert_eq!(
+            texture.face_range(5, texture.mip_levels - 1).end,
+            texture.data.end,
+            "{path}: the faces do not tile the data"
+        );
+        if texture.mip_levels > 1 {
+            self.mip_chained += 1;
+        }
         let (width, height) = texture.level_size(0);
+        {
+            let face = |i: usize| faces[i].as_ref().expect("checked").as_slice();
+            let worst = SIDE_RING
+                .windows(2)
+                .map(|pair| seam(face(pair[0]), face(pair[1]), width as usize))
+                .fold(0.0, f64::max);
+            println!("  seam {worst:6.2}  {path}");
+            self.seams.push((path.to_owned(), worst));
+        }
         let means: Vec<[u64; 3]> = faces
             .iter()
             .map(|f| {
@@ -698,9 +775,27 @@ impl CubemapFaces {
             decoded,
             refused,
             skies,
+            mip_chained,
+            seams,
         } = self;
-        println!("{cubemaps} cubemaps, {decoded} decoded, {refused} refused, {skies} skies");
+        println!(
+            "{cubemaps} cubemaps, {decoded} decoded, {refused} refused, {skies} skies, \
+             {mip_chained} with a mip chain"
+        );
         assert_eq!(cubemaps, 23, "the disc's own count");
+        assert_eq!(mip_chained, 8, "the disc's own count");
         assert!(skies >= 8, "only {skies} circuit skies found");
+        let drawn = drawn_skies();
+        assert_eq!(drawn.len(), 13, "twelve circuit skies and the Zone sky");
+        for path in &drawn {
+            let Some((_, worst)) = seams.iter().find(|(p, _)| p.eq_ignore_ascii_case(path)) else {
+                panic!("{path}: a drawn sky is not on the disc");
+            };
+            assert!(
+                *worst <= SEAM_BOUND,
+                "{path}: a side seam differs by {worst:.2} a channel, over {SEAM_BOUND}: \
+                 a face is read from the wrong offset"
+            );
+        }
     }
 }

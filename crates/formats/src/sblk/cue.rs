@@ -192,9 +192,15 @@ impl Bank<'_> {
 
     /// The cue whose name hashes to `hash`, on a [hashed](Bank::is_hashed) bank.
     /// The table is [`Bank::cue_count`] records of [`HASHED_ENTRY_LEN`] bytes
-    /// from `+0x14` of the name block: `{u32 hash, u16 cue, u16 next, u32, u32}`.
-    /// The scan is linear and ignores the collision chain `next`: an exact
-    /// 32-bit match is the lookup.
+    /// from `+0x14` of the name block: `{u32 hash, u16 bucket, u16 next, u16 cue, u16}`.
+    /// The u16 after the hash is the hash **bucket** (`hash % cue_count`, the
+    /// chain head's slot), not the cue; the cue is the u16 at `+8` of the entry
+    /// (record `+0xc`), as `Scream_FindCueByName`'s lookup (`FUN_813529f2` on the
+    /// v1.04 Vita executable) returns it. Reading the bucket as the cue was this
+    /// reader's mistake until 2026-11-02: it put three unrelated names on one cue
+    /// and left a third of the cues unnamed, in `speech.bnk` and every other
+    /// bank (`docs/formats/2048-audio.md`). The scan is linear and ignores the
+    /// collision chain `next`: an exact 32-bit match is the lookup.
     #[must_use]
     pub fn cue_by_hash(&self, hash: u32) -> Option<u16> {
         if !self.is_hashed() || self.flags & super::HAS_NAME_TABLE == 0 {
@@ -204,7 +210,7 @@ impl Bank<'_> {
         (0..usize::from(self.cue_count)).find_map(|n| {
             let at = HASHED_FIRST + n * HASHED_ENTRY_LEN;
             let entry = block.get(at..at + HASHED_ENTRY_LEN)?;
-            let cue = self.order.u16(entry, 4);
+            let cue = self.order.u16(entry, 8);
             (self.order.u32(entry, 0) == hash && cue < self.cue_count).then_some(cue)
         })
     }
@@ -213,7 +219,7 @@ impl Bank<'_> {
     /// hashes, each with the hash its record carries.
     ///
     /// The name block's records are 16 bytes from `+0x10` (`{u32 name offset,
-    /// u32 hash, u16 cue, u16 next, u32 index}`, [`Bank::cue_by_hash`] reading
+    /// u32 hash, u16 bucket, u16 next, u16 cue, u16}`, [`Bank::cue_by_hash`] reading
     /// the same table four bytes in) and the string pool starts at the offset
     /// the block's `+0x0c` gives, NUL-terminated names at each record's offset.
     /// Not every record has a name: a record whose offset leaves the pool, or
@@ -242,7 +248,7 @@ impl Bank<'_> {
                 (!name.is_empty()).then(|| {
                     (
                         name.to_string(),
-                        self.order.u16(entry, 8),
+                        self.order.u16(entry, 12),
                         self.order.u32(entry, 4),
                     )
                 })

@@ -1,8 +1,8 @@
 ---
 status: measure
-titles: [hd, 2048, pure]
-updated: 2026-10-19
-summary: "HD's ready-to-go spacing is inherited, not measured (RaceManager+0x1958 unread); 2048 needs a Vita3K cue log"
+titles: [hd, 2048, pure, omega]
+updated: 2026-11-02
+summary: "2048 start cues corrected and playing; HD spacing inherited; Omega plays its own <cue>__Weapons_NGP events, spacing lent"
 ---
 
 # Each title's own countdown: what is left
@@ -15,7 +15,13 @@ summary: "HD's ready-to-go spacing is inherited, not measured (RaceManager+0x195
 
 **Landed:** Pure's `ready`/`go` measured on PSP USA (`oag_title::CountdownVoice::origin`); HD plays `ready`,
 `HBEAT` and `go` from located triggers (the start beat is new); 2048 plays `ready`, `HBEAT` and `go` in a named
-mode and `Go_NGP` in a campaign event; Omega checked (Wwise events, no `< 0x17` split).
+mode and `321_NGP` and `Go_NGP` in an event; **2026-11-02 (`countdown-voice`)**: 2048's hashed name lookup returned the hash bucket, not the cue, so its
+start played other cues (`ready` was `rockets`'s cue); corrected to the record's `+0xc` field, the way
+`Scream_FindCueByName` does, and 2048's named start is now HD's shape (`ready` into `321_GO`'s 3.00 s pair, the
+three-group `HBEAT`, `go` cue 3). Omega checked: the bare names are no event, but the executable posts
+`<cue>[_PC]__<bank>`, and `_321_NGP__Weapons_NGP` / `Go_NGP__Weapons_NGP` are in `English(US)/Weapons_NGP.bnk`
+(2026-11-02, `omega-wwise-sfx-re`, [wwise-sound.md](../../docs/ghidra/functions/ps4-omega-eu/wwise-sound.md)).
+Ours still plays nothing there.
 
 ## Open
 
@@ -24,20 +30,25 @@ mode and `Go_NGP` in a campaign event; Omega checked (Wwise events, no `< 0x17` 
   unread. The `Sound_PlayNamedCue` run timed out, and the race manager's phase did not read (the singleton slot at
   `0x008a6814` did not resolve). `INIT_GO` and `launch.bnk`'s `LAUNCHSEQ` start no cue of the start and are
   unplayed.
-- **2048's `321_NGP`** (an event's `ready`) is authored and not played: two looping voices keyed off 3.75 s
-  later under a +-180 degree pan sweep at 1 Hz. It needs a key-off schedule and a pan modulator in the mixer and
-  a rear-half pan, and its start offset against `go` measured (it outlives a 3.0 s spacing by 1.4 s, so the
-  spacing is probably not Pulse's there). A Vita3K cue-start log would settle the spacing for both of 2048's
-  starts. Multiplayer events (CRC ids too) play the named pair here.
+- **2048's campaign start plays `321_NGP` and `Go_NGP`** (`event-countdown-2048`): the rear-edge pan
+  (`pan_of_angle_to_rear_edge`, 90 degrees only, asked for by the countdown cues alone) was wired and
+  `COUNTDOWN_VOICE.event` is `StartCue::Plays`. No LFO is needed (the earlier reading was `PLASMA`'s). Multiplayer
+  events (CRC ids too) play the named pair here. A Vita3K cue-start log would measure the ready-to-go spacing for
+  both starts.
+- **Every other 2048 hashed lookup was on the bucket too** (the crossfade engine, the circuits' emitters, and the
+  perfect-lap noise of 2026-10-05, probably): re-listen-free check by WAV render after the correction, and
+  reconsider the "2048's own SFX stay name-table-only" scoping once each trigger is read
+  ([2048-xfx.md](../../docs/formats/2048-xfx.md)).
 - **Pure**: Zone and Eliminator banks and the EU pressing were not run; Pure's update runs at 30 Hz, so `go`
   against the release has 2 frame resolution.
-- **Omega**: `_321_NGP` and `Go_NGP` are Wwise events posted on every non-demo mode; nothing maps Wwise events to
-  cues.
+- **Omega**: the start posts `_321_NGP__Weapons_NGP` (243270081) and `Go_NGP__Weapons_NGP` (744083536) on every
+  non-demo mode; both resolve to embedded ATRAC9 media in `English(US)/Weapons_NGP.bnk` (13 and 6 candidates,
+  with action delays 400/1,300/2,150 ms). **Played since 2026-11-02** as the events' timelines; open: the
+  Ready-to-Go spacing is Pulse's (a live wipeout_pc run past GO would time it).
 - Not heard by a human; checks are WAV renders and cue logs.
 
 ## Next Steps
 
 1. Read `RaceManager+0x1958` (the countdown length) and where it is set; or rerun
    `scripts/hd-countdown-cues.py --which named` with the phase read fixed (1 hour).
-2. Vita3K cue-start log on 2048 for both starts (half a day), then the mixer key-off and pan modulator for
-   `321_NGP`.
+2. Vita3K cue-start log on 2048 for both starts (half a day).

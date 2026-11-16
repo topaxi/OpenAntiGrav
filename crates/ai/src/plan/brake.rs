@@ -13,6 +13,7 @@
 
 use oag_physics::Raycaster;
 
+use super::driven::Driven;
 use super::{Course, Craft, Run, SpeedPlan, forward_speed};
 use crate::Tuning;
 
@@ -79,20 +80,51 @@ impl Decel {
     }
 }
 
+/// A craft's braking on a course, as [`calibrate`] measured it: the same for
+/// every search of that craft there.
+#[derive(Debug, Clone)]
+pub(super) struct Calibration {
+    pub(super) decel: Decel,
+    /// The physics steps measuring it took.
+    pub(super) steps: u64,
+    /// The run-up from the grid at full throttle.
+    pub(super) run_up: Driven,
+}
+
+impl Calibration {
+    pub(super) fn measure<R: Raycaster + ?Sized>(
+        course: &Course<'_, R>,
+        craft: &Craft,
+        tuning: &Tuning,
+        yaw: f32,
+    ) -> Self {
+        let mut run_up = Driven::default();
+        let (decel, steps) = calibrate(course, craft, tuning, yaw, &mut run_up);
+        Self {
+            decel,
+            steps,
+            run_up,
+        }
+    }
+}
+
 /// Accelerates from the grid, brakes hard, and bins what it saw. Returns the
-/// table and the physics steps it took.
+/// table and the physics steps it took, and leaves the run-up in `known`.
 pub(super) fn calibrate<R: Raycaster + ?Sized>(
     course: &Course<'_, R>,
     craft: &Craft,
     tuning: &Tuning,
     yaw: f32,
+    known: &mut Driven,
 ) -> (Decel, u64) {
     let mut steps = 0u64;
     let mut run: Run = SpeedPlan::start_run(craft);
+    known.begin(run);
     let mut fastest = run;
     let mut top = 0.0f32;
     for _ in 0..RUN_UP {
-        let tick = course.tick(&mut run, craft, tuning, yaw, |_, _| (1.0, 0.0));
+        let (tick, lived) = course.lived(&mut run, craft, tuning, yaw, |_| (1.0, 0.0));
+        known.push(lived, &run);
         steps += 1;
         if tick.failure.is_some() {
             break;

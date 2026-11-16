@@ -60,6 +60,7 @@ fn shell(image: &Path) -> (boot::Shell, oag_assets::Archives) {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let (shell, archives, _title) =
         boot::load_shell(&options).expect("HD's front end is wired; see ADR-0025");
@@ -308,18 +309,16 @@ fn the_walked_chain_is_the_picker_and_the_logo_and_says_what_it_dropped() {
     }
 }
 
-/// The one movie step names a `.bik`, and the widget on the screen names one
-/// too.
+/// The logo step plays the reel its screen's widget names, and on Fury that is
+/// Fury's own reel.
 ///
-/// **They are not the same file, and that is the disc's.** `DATA00`'s
-/// `skin.xml` - the copy this build's archive order serves - names
-/// `StudioLiverpool_fury.bik`, while the chain constant is `DATA06`'s spelling
-/// of the plain reel. Both exist and both decode; which one a PS3 plays folds
-/// into which of the six skins is live, which is unread. Pinned so the
-/// divergence is visible rather than discovered again.
+/// `DATA00`'s `skin.xml`, the live copy (`docs/formats/hd-frontend.md`, "`DATA00`'s
+/// copy is the live one"), names `StudioLiverpool_fury.bik`; the chain constant is
+/// the base game's plain reel, played only where the loaded skin names none the
+/// source holds. Both decode.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_logo_step_and_the_logo_widget_both_name_a_bik() {
+fn the_logo_step_plays_the_reel_the_live_skin_names() {
     let Some(image) = image() else { return };
     let (shell, mut archives) = shell(&image);
 
@@ -336,6 +335,20 @@ fn the_logo_step_and_the_logo_widget_both_name_a_bik() {
         .by_name(oag_hd::frontend::states::STUDIO_LOGO)
         .expect("the skin carries the screen");
     let widget = screen.movies.first().expect("with a movie widget on it");
+    assert_eq!(
+        widget.entry_name(oag_ui::screen::DEFAULT_REGION),
+        oag_hd::frontend::names::STUDIO_LOGO_MOVIE_FURY
+    );
+    assert_ne!(
+        widget.sound,
+        Some(false),
+        "the logo widget authors no sound=\"false\", so the reel is heard"
+    );
+    assert_eq!(
+        shell.movie_name.as_deref(),
+        Some(oag_hd::frontend::names::STUDIO_LOGO_MOVIE_FURY),
+        "the Fury disc's boot plays Fury's reel"
+    );
     // `entry_name` leaves a `src` that already names its container alone, which
     // is what `MOVIE_EXTENSIONS` gaining `.bik` bought: appending `.PMF` here
     // would ask for `StudioLiverpool_fury.bik.PMF`, which is nothing at all.
@@ -413,7 +426,7 @@ fn the_front_end_font_is_a_big_endian_fnt_and_it_is_the_one_loaded() {
     let blob = archives.read_name(name).expect("HD's body face reads");
     assert_eq!(
         oag_texture::fnt::byte_order(&blob),
-        Some(oag_formats::ByteOrder::Big),
+        Some(oag_bytes::ByteOrder::Big),
         "a PS3 .fnt is the PSP layout with its words the other way round"
     );
     assert_eq!(&blob[..4], b"TNF\x01", "the magic is a swapped word");

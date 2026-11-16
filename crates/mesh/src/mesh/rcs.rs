@@ -30,6 +30,7 @@
 
 use anyhow::{Context, Result, bail};
 use oag_core::math::{Mat4, Vec3};
+use oag_gpu::formats::SceneStore;
 use oag_rcs::rcsmodel;
 use oag_vex::vex;
 
@@ -47,44 +48,13 @@ mod report;
 
 pub use report::Report;
 
-/// The `.rcsmodel` entry name beside a `.vex` one.
-///
-/// A path rewrite rather than a lookup, because that is how the disc pairs
-/// them: `/data/ships/assegai/ship.vex` sits beside
-/// `/data/ships/assegai/ship.rcsmodel`, and every pair on the disc is spelled
-/// that way. Returns `None` for a name that does not end in `.vex`, since there
-/// is then no pairing rule to apply.
+/// The `.rcsmodel` entry name beside a `.vex` one: the plain model of
+/// [`siblings::Siblings::plain`], for the callers that read nothing else (a
+/// ship's hull, a weapon, a preview). `None` for a name that does not end in
+/// `.vex`, since there is then no pairing rule to apply.
 #[must_use]
 pub fn sibling_name(vex_name: &str) -> Option<String> {
-    let stem = vex_name.strip_suffix(".vex").or_else(|| {
-        // The game's own spelling is case-insensitive in both containers, and a
-        // PSP-shaped name reaches here through `oag_hd`'s tables.
-        vex_name
-            .len()
-            .checked_sub(4)
-            .filter(|&at| vex_name[at..].eq_ignore_ascii_case(".vex"))
-            .map(|at| &vex_name[..at])
-    })?;
-    Some(format!("{stem}.rcsmodel"))
-}
-
-/// The Omega Collection's spelling of [`sibling_name`]: `<stem>.final.rcsmodel`.
-///
-/// **Its circuits ship their baked outputs under a `.final` infix** -
-/// `Data\environments\tech_de_ra\track.vex` sits beside
-/// `track.final.rcsmodel`, `track.final.rcsskeleton`, `track.final.rcsanimclip`
-/// and `track.final.pvs`, and `track.rcsmodel` does not exist. Measured over
-/// the whole PS4 package pair: all 22 of its own and 2048-derived circuits
-/// (and every `track_reversed` one) use the `.final` spelling, and the four
-/// `zone_N` circuits use the plain one - never both in one directory. So a
-/// caller that tries [`sibling_name`] first and this second can never read the
-/// wrong file, and every other title, none of which ships a `.final` name, is
-/// untouched.
-#[must_use]
-pub fn sibling_name_cooked(vex_name: &str) -> Option<String> {
-    let plain = sibling_name(vex_name)?;
-    let stem = plain.strip_suffix(".rcsmodel")?;
-    Some(format!("{stem}.final.rcsmodel"))
+    siblings::Siblings::plain(vex_name).map(|set| set.model)
 }
 
 /// The `.rcsmodel` beside `name`, when this `.vex` needs one and the archive
@@ -129,7 +99,12 @@ pub fn sibling_geometry(spec: &str, name: &str, data: &[u8]) -> Option<Vec<u8>> 
 /// # Errors
 ///
 /// As [`build_scene`].
-pub fn scene_from(spec: &str, name: &str, data: &[u8]) -> Result<Option<(Model, Report)>> {
+pub fn scene_from(
+    spec: &str,
+    name: &str,
+    data: &[u8],
+    store: SceneStore,
+) -> Result<Option<(Model, Report)>> {
     if !oag_vex::vex::geometry_is_external(data) {
         return Ok(None);
     }
@@ -142,9 +117,13 @@ pub fn scene_from(spec: &str, name: &str, data: &[u8]) -> Result<Option<(Model, 
     let Ok(geometry) = archive.read_entry(&sibling) else {
         return Ok(None);
     };
-    let (model, report) = build_scene(name, data, &geometry, &mut |path| {
-        archive.read_entry(path).ok()
-    })?;
+    let (model, report) = build_scene(
+        name,
+        data,
+        &geometry,
+        &mut |path| archive.read_entry(path).ok(),
+        store,
+    )?;
     Ok(Some((model, report)))
 }
 
@@ -184,6 +163,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
     None
 }
 
+mod alpha_emissive;
 mod billboard_glass;
 mod chevron_pulse;
 mod cutout;
@@ -200,6 +180,7 @@ mod refraction;
 mod snow_rock;
 mod static_hologram;
 mod twin_blend;
+mod uv_overlay;
 pub use pads::{build_pads, build_weapon_pads};
 mod bounds;
 mod glass_sheen;
@@ -208,6 +189,7 @@ mod ice;
 mod probe_lit;
 pub mod psp2;
 mod rim_glow;
+pub mod siblings;
 mod skin;
 mod vertex_scroll;
 mod water;
@@ -291,6 +273,11 @@ fn surface(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh, tables: &Model) -> Su
     // extra surface too.
     if mesh.is_track() {
         roles |= slots::ZONE_TRACK;
+    }
+    // And the other: a chunk the original's Zone race draws on its plain
+    // program (`slots::ZONE_PLAIN`).
+    if mesh.zone_plain() {
+        roles |= slots::ZONE_PLAIN;
     }
     // Same fallback rule, same reason - see `mesh::vertex::GpuVertex::specular_exponent`.
     let specular_exponent = material_specular_exponent
@@ -550,6 +537,7 @@ fn emit(
             .unwrap_or([0.0, 0.0, 0.0]);
         let light = vertex_light.and_then(|c| c.get(k));
         out.vertices.push(GpuVertex {
+            depth_bias: 0.0,
             position: p.to_array(),
             // Zero means the file gave none, and `face_normals` derives it.
             normal,
@@ -704,13 +692,14 @@ pub fn build(
     data: &[u8],
     model_blob: &[u8],
     textures: Textures<'_>,
+    store: SceneStore,
     pick: fn(vex::classes::Classes) -> Option<u32>,
 ) -> Result<(Model, Report)> {
     build_with_options(
         label,
         data,
         model_blob,
-        Setup::Decode(textures),
+        Setup::Decode(textures, store),
         pick,
         false,
         View::Main,
@@ -792,7 +781,9 @@ fn build_with_options(
         material_anim,
         anim_tracks,
     } = match setup {
-        Setup::Decode(textures) => material_setup(&model, model_blob, textures, &mut report),
+        Setup::Decode(textures, store) => {
+            material_setup(&model, model_blob, textures, store, &mut report)
+        }
         Setup::Copy(from) => MaterialSetup::of(from),
     };
     out.pad_masks = mag_emissive;
@@ -830,6 +821,7 @@ fn build_with_options(
         .enumerate()
         .filter(|(_, n)| n.class_id == class_id)
     {
+        crate::not_exiting()?;
         report.nodes += 1;
         let Some((hash, min, max)) = node_geometry(&data[node.payload()], order) else {
             continue;

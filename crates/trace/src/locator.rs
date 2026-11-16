@@ -13,7 +13,7 @@ use oag_vex::pads::PadVolume;
 use oag_vex::{track, vex};
 
 use crate::replay::Options;
-use crate::{load_ai, read_track_blob, resample};
+use crate::track_dump::{load_ai, read_track_blob, resample};
 
 /// A track's spline, resampled the same way `resample` always is - dropping
 /// which path each sample came from, which the locator has no use for.

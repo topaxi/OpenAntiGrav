@@ -5,7 +5,13 @@
 impl super::super::Scene {
     /// Samples both animation mechanisms of every piece of scenery off the one
     /// clock and uploads them.
-    pub(super) fn write_scenery_anims(&self, queue: &dyn oag_gpu::writes::Writes, seconds: f32) {
+    pub(super) fn write_scenery_anims(
+        &self,
+        queue: &dyn oag_gpu::writes::Writes,
+        seconds: f32,
+        race: &crate::Race,
+    ) {
+        let started = |start| race.channel_started(start);
         for drawable in [
             Some(&self.track),
             self.sky.as_ref(),
@@ -20,7 +26,7 @@ impl super::super::Scene {
             // The scenery that *moves* rides the same clock as the scenery
             // that scrolls, so `--anim-seconds` aims both at once and a race
             // runs both off the tick.
-            drawable.write_node_anims(queue, seconds);
+            drawable.write_node_anims_started(queue, seconds, &started);
         }
     }
 }

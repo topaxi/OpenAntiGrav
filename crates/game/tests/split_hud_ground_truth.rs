@@ -213,17 +213,15 @@ fn hd_loaded(views: u8) -> Option<race::Loaded> {
 
 /// HD authors a two-player split HUD and a two-view race draws it: player `i`'s
 /// own layout in view `i`, and nothing is read for any other count.
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hd_draws_its_own_authored_split_layouts_in_a_two_view_race() {
-    let (Some(one), Some(two)) = (hd_loaded(1), hd_loaded(2)) else {
-        return;
-    };
+fn hd_draws_its_own_authored_split_layouts_in_a_two_view_race(
+    one: &race::Loaded,
+    two: &race::Loaded,
+) {
     assert!(
         one.hud.split.is_none(),
         "a one-view race reads no split layout"
     );
-    let hud = two.hud;
+    let hud = &two.hud;
     let split = hud.split.as_ref().expect("HD ships the split layouts");
 
     // Both are the disc's, whole, and the second is the first moved down half the
@@ -297,13 +295,11 @@ fn hd_draws_its_own_authored_split_layouts_in_a_two_view_race() {
 /// first moved right half the screen (960), each sits in its own column of the 1920x1080
 /// grid, the reticle is view-relative to a 960x1080 view, and each view's text lands in its
 /// own column. A horizontal cut and every other view count read the family they always did.
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hd_draws_its_own_vert_layouts_in_a_vertically_cut_two_view_race() {
+fn hd_draws_its_own_vert_layouts_in_a_vertically_cut_two_view_race(
+    two: &race::Loaded,
+    three: &race::Loaded,
+) {
     use oag_render::viewport::Cut;
-    let (Some(two), Some(three)) = (hd_loaded(2), hd_loaded(3)) else {
-        return;
-    };
     assert!(
         three.hud.split.is_none(),
         "a vertical cut means nothing but for two views: three read no authored layout"
@@ -417,27 +413,20 @@ fn hd_draws_its_own_vert_layouts_in_a_vertically_cut_two_view_race() {
 /// draws, which in a two-view race is the authored split layout: if that names its
 /// sight sprites differently from the title's table, HD draws no reticle in a split
 /// and nothing else notices.
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hd_draws_a_reticle_in_its_authored_split_view() {
-    hd_reticle_in_split_view(oag_render::viewport::Cut::Horizontal);
+fn hd_draws_a_reticle_in_its_authored_split_view(loaded: &race::Loaded) {
+    hd_reticle_in_split_view(loaded, oag_render::viewport::Cut::Horizontal);
 }
 
 /// The same for the left-and-right cut, which reads the `vert_` layouts: the arcade one
 /// includes the whole-screen `HUD_sights.xml` (the horizontal one has `splitscreen_sights.xml`)
 /// and the reticle's view is 960x1080, so its centre could land in the wrong column.
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hd_draws_a_reticle_in_its_authored_vertical_split_view() {
-    hd_reticle_in_split_view(oag_render::viewport::Cut::Vertical);
+fn hd_draws_a_reticle_in_its_authored_vertical_split_view(loaded: &race::Loaded) {
+    hd_reticle_in_split_view(loaded, oag_render::viewport::Cut::Vertical);
 }
 
-fn hd_reticle_in_split_view(cut: oag_render::viewport::Cut) {
-    let Some(loaded) = hd_loaded(2) else {
-        return;
-    };
-    let hud = loaded.hud;
-    let mut race = race::Race::start(loaded.setup);
+fn hd_reticle_in_split_view(loaded: &race::Loaded, cut: oag_render::viewport::Cut) {
+    let hud = &loaded.hud;
+    let mut race = race::Race::start(loaded.setup.clone());
     oag_game::split_screen::apply(&mut race, 2, cut);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
@@ -449,7 +438,7 @@ fn hd_reticle_in_split_view(cut: oag_render::viewport::Cut) {
     let mut drawn = [false; 2];
     for _ in 0..200 {
         race.tick(&PlayerInputs::none());
-        let views = draws(&race, &hud);
+        let views = draws(&race, hud);
         for (i, view) in views.iter().enumerate() {
             let Some(sight) = view.readout.sight else {
                 continue;
@@ -928,10 +917,7 @@ fn pulse_pure_and_2048_draw_a_vertical_two_view_race_from_the_tall_rule() {
 /// `PositionOf` as "no gap label is authored", which was a name miss. Fails if a layout
 /// stops authoring the gap label, or starts authoring Pulse's name, which is when the readout
 /// can be wired.
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hd_authors_the_bar_both_places_and_the_gap_label_by_its_own_name() {
-    let Some(two) = hd_loaded(2) else { return };
+fn hd_authors_the_bar_both_places_and_the_gap_label_by_its_own_name(two: &race::Loaded) {
     let split = two.hud.split.as_ref().expect("HD ships the split layouts");
     for layout in &split.layouts {
         assert!(layout.fill("HeadToHeadBar").is_some());
@@ -953,12 +939,9 @@ fn hd_authors_the_bar_both_places_and_the_gap_label_by_its_own_name() {
 /// (the maintainer's 2026-10-16 report: the second window drew the horizontal HUD). One
 /// load, then each window's draw reads the rows family or HD's `vert_` columns by its own
 /// cut, and each slot's reticle projects into its own view's grid.
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hd_a_two_h_two_v_race_draws_each_window_its_own_family() {
-    let Some(loaded) = hd_loaded(2) else { return };
-    let hud = loaded.hud;
-    let mut race = race::Race::start(loaded.setup);
+fn hd_a_two_h_two_v_race_draws_each_window_its_own_family(loaded: &race::Loaded) {
+    let hud = &loaded.hud;
+    let mut race = race::Race::start(loaded.setup.clone());
     let layout =
         oag_game::split_screen::parse_window_seats("2h,2v", oag_render::viewport::Cut::Horizontal)
             .expect("the layout parses");
@@ -994,4 +977,21 @@ fn hd_a_two_h_two_v_race_draws_each_window_its_own_family() {
             );
         }
     }
+}
+
+/// The HD split HUD claims over the three loads they need (one, two and three
+/// views); each claim that runs a race starts its own from a clone of the
+/// two-view setup.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_split_hud_claims_over_one_load_per_view_count() {
+    let (Some(one), Some(two), Some(three)) = (hd_loaded(1), hd_loaded(2), hd_loaded(3)) else {
+        return;
+    };
+    hd_draws_its_own_authored_split_layouts_in_a_two_view_race(&one, &two);
+    hd_draws_its_own_vert_layouts_in_a_vertically_cut_two_view_race(&two, &three);
+    hd_draws_a_reticle_in_its_authored_split_view(&two);
+    hd_draws_a_reticle_in_its_authored_vertical_split_view(&two);
+    hd_authors_the_bar_both_places_and_the_gap_label_by_its_own_name(&two);
+    hd_a_two_h_two_v_race_draws_each_window_its_own_family(&two);
 }

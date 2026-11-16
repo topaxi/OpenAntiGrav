@@ -53,10 +53,21 @@ impl Motion {
     /// [`oag_rcs::rig::NodeMotion::sample`] shares.
     #[must_use]
     pub fn sample(&self, seconds: f32) -> [f32; 16] {
+        self.sample_started(seconds, &|_| None)
+    }
+
+    /// [`Self::sample`] for a model whose channel-started animations (`Keyed::on`) read
+    /// `started`: when each channel last fired, on the same clock as `seconds`.
+    #[must_use]
+    pub fn sample_started(
+        &self,
+        seconds: f32,
+        started: &dyn Fn(Start) -> Option<f32>,
+    ) -> [f32; 16] {
         match self {
             Self::Vex(transform) => transform.sample(seconds),
             Self::Rig(motion) => motion.sample(seconds),
-            Self::Keyed(motion) => motion.sample(seconds),
+            Self::Keyed(motion) => motion.sample(motion.clock(seconds, started)),
         }
     }
 }
@@ -88,22 +99,47 @@ impl Model {
     /// dropped, which freezes them at whatever the table still holds.
     #[must_use]
     pub fn sample_anim_nodes(&self, seconds: f32) -> Vec<[f32; 16]> {
+        self.sample_anim_nodes_started(seconds, &|_| None)
+    }
+
+    /// [`Self::sample_anim_nodes`] with the channels that start animations:
+    /// `started(channel)` is the clock reading at which the channel last fired.
+    #[must_use]
+    pub fn sample_anim_nodes_started(
+        &self,
+        seconds: f32,
+        started: &dyn Fn(Start) -> Option<f32>,
+    ) -> Vec<[f32; 16]> {
         let mut out: Vec<[f32; 16]> = Vec::with_capacity(self.anim_nodes.len());
+        self.sample_anim_nodes_after(seconds, started, &mut out);
+        out
+    }
+
+    /// [`Self::sample_anim_nodes_started`] appended to `out`, whose entries before the call are
+    /// left alone: a node's parent is found `out.len()` entries earlier than its own slot, so a
+    /// caller can put the table's identity slot 0 in front.
+    pub fn sample_anim_nodes_after(
+        &self,
+        seconds: f32,
+        started: &dyn Fn(Start) -> Option<f32>,
+        out: &mut Vec<[f32; 16]>,
+    ) {
+        let base = out.len();
+        out.reserve(self.anim_nodes.len().min(NODE_ANIM_LIMIT - 1));
         for node in self.anim_nodes.iter().take(NODE_ANIM_LIMIT - 1) {
-            let local = node.transform.sample(seconds);
+            let local = node.transform.sample_started(seconds, started);
             // A parent always precedes its child in `anim_nodes`, because
             // `vex::nodes` is a pre-order walk and the slots are assigned in
             // that order - so the parent's world matrix is already resolved.
             let parent = node
                 .parent
-                .and_then(|p| out.get(p).copied())
+                .and_then(|p| out.get(base + p).copied())
                 .unwrap_or(vex::IDENTITY);
             out.push(vex::multiply(
                 &vex::multiply(&local, &node.static_above),
                 &parent,
             ));
         }
-        out
     }
 }
 

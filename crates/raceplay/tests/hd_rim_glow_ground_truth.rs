@@ -37,9 +37,13 @@ fn build(image: &Path, path: &str) -> mesh::Model {
     let geometry = archives
         .read_name(&sibling)
         .expect("an .rcsmodel beside it");
-    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archives.read_name(name).ok()
-    })
+    let (model, _) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archives.read_name(name).ok(),
+        Default::default(),
+    )
     .expect("the scene builds");
     model
 }
@@ -112,7 +116,7 @@ fn the_plasma_head_earns_rim_edge_and_its_inline_sphere_reads_a_real_uv() {
 
 /// The Plasma explosion's ring and halo each earn their own clock-scroll bit
 /// (and none of the rim bits), off their own `UV_offset` programs; the
-/// sphere's lit program matches neither and keeps the plain path.
+/// sphere's lit program earns `PLASMA_SPHERE`.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn the_explosion_ring_and_halo_earn_their_clock_scroll_bits() {
@@ -137,13 +141,65 @@ fn the_explosion_ring_and_halo_earn_their_clock_scroll_bits() {
             assert_eq!(r & (slots::RIM_GLOW | slots::RIM_EDGE), 0, "{path}: {r:#x}");
         }
     }
-    for r in roles(&build(&image, "/data/weapons/hd_plasma_sphere.vex")) {
+    // The sphere's lit program is the one shape with three samplers: it earns its own
+    // pair, compared under the four weapon bits like the ring and the halo.
+    let sphere = roles(&build(&image, "/data/weapons/hd_plasma_sphere.vex"));
+    assert!(!sphere.is_empty());
+    for r in sphere {
         assert_eq!(
-            r & (slots::CLOCK_SCROLL_RING | slots::CLOCK_SCROLL_HALO),
-            0,
-            "the sphere is a lit program: {r:#x}"
+            r & slots::WEAPON_PROGRAM_BITS,
+            slots::PLASMA_SPHERE,
+            "the sphere: {r:#x}"
         );
     }
+    for (path, bit) in [
+        ("/data/weapons/hd_plasma_ring.vex", slots::CLOCK_SCROLL_RING),
+        ("/data/weapons/hd_plasma_halo.vex", slots::CLOCK_SCROLL_HALO),
+    ] {
+        for r in roles(&build(&image, path)) {
+            assert_eq!(r & slots::WEAPON_PROGRAM_BITS, bit, "{path}: {r:#x}");
+        }
+    }
+}
+
+/// The ring's and the halo's programs take their colour off the vertex, which neither
+/// chunk declares: the ring's two inline fields (violet, alpha 0 at the rim to 0.85) and
+/// the halo's one (violet and clear at the rim, white and opaque at the centre) ride the
+/// vertex. Without them the ring drew white at full alpha and the halo white.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_explosion_ring_and_halo_carry_their_inline_vertex_colours() {
+    let Some(image) = image() else { return };
+    let range = |path: &str| {
+        let model = build(&image, path);
+        assert!(!model.vertices.is_empty(), "{path}");
+        model
+            .vertices
+            .iter()
+            .fold(([f32::MAX; 4], [f32::MIN; 4]), |(mut lo, mut hi), v| {
+                let c = [v.colour[0], v.colour[1], v.colour[2], v.sun_mask];
+                for i in 0..4 {
+                    lo[i] = lo[i].min(c[i]);
+                    hi[i] = hi[i].max(c[i]);
+                }
+                (lo, hi)
+            })
+    };
+    let (lo, hi) = range("/data/weapons/hd_plasma_ring.vex");
+    assert!(
+        lo[1] < 0.2 && hi[1] > 0.9,
+        "the ring's green runs {lo:?}..{hi:?}"
+    );
+    assert!(
+        lo[3] == 0.0 && (hi[3] - 0.855).abs() < 0.01,
+        "its alpha {lo:?}..{hi:?}"
+    );
+    let (lo, hi) = range("/data/weapons/hd_plasma_halo.vex");
+    assert!(
+        lo[1] < 0.25 && hi[1] == 1.0,
+        "the halo's green runs {lo:?}..{hi:?}"
+    );
+    assert!(lo[3] == 0.0 && hi[3] == 1.0, "its alpha {lo:?}..{hi:?}");
 }
 
 /// The Bomb's detonation models: the fireball and its white core earn
@@ -277,4 +333,49 @@ fn the_missile_explosion_programs_earn_their_pairs() {
             }
         }
     }
+}
+
+/// The Missile's flying head is the LeachBall's own model (`Missile.cpp`'s
+/// constructor loads `HD_missile_ball_bloomring`, whose materials are the
+/// ball's): a race on HD loads it into the head pool and says so, and its
+/// sphere takes the same rim glow with an emissive ring.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_missile_head_loads_off_the_disc_and_glows_like_the_leach_ball() {
+    let Some(image) = image() else { return };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        track: Some("/data/environments/talons_junction/track.vex".to_string()),
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading the race");
+    assert!(
+        loaded.plasma_blast_models.missile_head.is_some(),
+        "the head model did not load"
+    );
+    assert!(
+        loaded.report.iter().any(|line| {
+            line.contains("HD_missile_ball_bloomring.vex")
+                && line.contains("a missile's head is this model, not a billboard")
+        }),
+        "the loader report names the head: {:?}",
+        loaded
+            .report
+            .iter()
+            .filter(|line| line.contains("missile"))
+            .collect::<Vec<_>>()
+    );
+    let roles = roles(&build(
+        &image,
+        "/data/weapons/hd_missile_ball_bloomring.vex",
+    ));
+    assert_eq!(roles.len(), 2, "the sphere and the ring");
+    assert_eq!(
+        roles.iter().filter(|r| *r & slots::RIM_GLOW != 0).count(),
+        1,
+        "exactly the sphere takes the rim glow: {roles:x?}"
+    );
 }

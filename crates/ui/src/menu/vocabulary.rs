@@ -13,12 +13,6 @@
 pub enum Action {
     /// Leave the menus and start a race with whatever the race pages hold.
     LaunchRace,
-    /// Leave the menus and start a race whose track and craft may name
-    /// different titles - whatever the `remix` page holds. Its own action
-    /// rather than a second meaning for `LaunchRace`, since the two pages
-    /// store their picks under different settings keys (`remix.*` against
-    /// `race.*`) and a shared action would have to guess which page fired it.
-    LaunchRemix,
     /// Close the game.
     Quit,
     /// Writes the pilot editor's current axis edit to disk. See
@@ -62,6 +56,9 @@ pub enum Action {
     /// ([`super::CUSTOM_CAMPAIGN_ROW`] and the campaign's key). Never written in
     /// a menu file: the picker exists only when a mod adds a campaign.
     OpenCustomCampaign,
+    /// The campaign picker's NEW CAMPAIGN row: opens the campaign editor over the
+    /// title's `Cell Selection` (`oag_game::campaign::editor`).
+    OpenCampaignEditor,
     /// The MULTIPLAYER page's LOCAL MULTIPLAYER row: starts the multiplayer flow, which seats
     /// the people ("press a button to join"), lays out the windows and goes on to the RACE
     /// page and Track and Ship Select - see `oag_ui_screens::join` and
@@ -81,6 +78,33 @@ pub enum Action {
     OnlineCreate,
     /// The ONLINE page's JOIN GAME row: Ship Select, then the lobby's list of rooms.
     OnlineJoin,
+    /// The OPTIONS page's PLAYER NAME row: opens the name entry on the stored name
+    /// (`crate::main::session::player_name` in `oag-game`).
+    EditPlayerName,
+    /// The OPTIONS page's PLAYER TAG row, on titles that use a tag.
+    EditPlayerTag,
+    /// The pause menu's PHOTO MODE row: resumes the parked race into the one photo mode
+    /// (`crate::main::session::photo` in `oag-game`). The row is on the page only while a
+    /// race with one view is parked ([`super::Menu::offer`]).
+    PhotoMode,
+    /// The pause menu's RESTART RACE row: the parked race again from the grid, on the options
+    /// it ran with (`crate::main::session::pause_menu` in `oag-game`).
+    RestartRace,
+    /// The pause menu's QUIT RACE row: leaves the parked race for the front end, or for the
+    /// campaign cell it was launched from.
+    QuitRace,
+    /// The REPLAYS page's WATCH row: opens the replay the REPLAY row is on in the viewer
+    /// (`crate::main::session::replays` in `oag-game`).
+    WatchReplay,
+    /// The REPLAYS page's KEEP row: copies an automatic replay into the player's own folder,
+    /// where the ring never reaches it.
+    KeepReplay,
+    /// The REPLAYS page's DELETE row: removes the replay the REPLAY row is on.
+    DeleteReplay,
+    /// The MODS page's SETTINGS row: opens the settings page of the mod the MOD row is on
+    /// (its `menu.toml`'s `settings`, [`super::Definition::mod_settings`]). On the page only
+    /// while that mod has one.
+    OpenModSettings,
 }
 
 impl Action {
@@ -89,7 +113,6 @@ impl Action {
     pub fn name(self) -> &'static str {
         match self {
             Self::LaunchRace => "launch_race",
-            Self::LaunchRemix => "launch_remix",
             Self::Quit => "quit",
             Self::SavePilot => "save_pilot",
             Self::NewPilot => "new_pilot",
@@ -97,12 +120,22 @@ impl Action {
             Self::DeletePilot => "delete_pilot",
             Self::OpenCampaign => "open_campaign",
             Self::OpenCustomCampaign => "open_custom_campaign",
+            Self::OpenCampaignEditor => "open_campaign_editor",
             Self::OpenMultiplayerLocal => "multiplayer_local",
             Self::HostLan => "lan_host",
             Self::JoinLan => "lan_join",
             Self::OpenOnline => "online_open",
             Self::OnlineCreate => "online_create",
             Self::OnlineJoin => "online_join",
+            Self::EditPlayerName => "edit_player_name",
+            Self::EditPlayerTag => "edit_player_tag",
+            Self::PhotoMode => "photo_mode",
+            Self::RestartRace => "restart_race",
+            Self::QuitRace => "quit_race",
+            Self::WatchReplay => "watch_replay",
+            Self::KeepReplay => "keep_replay",
+            Self::DeleteReplay => "delete_replay",
+            Self::OpenModSettings => "open_mod_settings",
         }
     }
 
@@ -122,7 +155,6 @@ impl Action {
     pub fn parse(name: &str) -> Option<Self> {
         match name {
             "launch_race" => Some(Self::LaunchRace),
-            "launch_remix" => Some(Self::LaunchRemix),
             "quit" => Some(Self::Quit),
             "save_pilot" => Some(Self::SavePilot),
             "new_pilot" => Some(Self::NewPilot),
@@ -130,22 +162,31 @@ impl Action {
             "delete_pilot" => Some(Self::DeletePilot),
             "open_campaign" => Some(Self::OpenCampaign),
             "open_custom_campaign" => Some(Self::OpenCustomCampaign),
+            "open_campaign_editor" => Some(Self::OpenCampaignEditor),
             "multiplayer_local" => Some(Self::OpenMultiplayerLocal),
             "lan_host" => Some(Self::HostLan),
             "lan_join" => Some(Self::JoinLan),
             "online_open" => Some(Self::OpenOnline),
             "online_create" => Some(Self::OnlineCreate),
             "online_join" => Some(Self::OnlineJoin),
+            "edit_player_name" => Some(Self::EditPlayerName),
+            "edit_player_tag" => Some(Self::EditPlayerTag),
+            "photo_mode" => Some(Self::PhotoMode),
+            "restart_race" => Some(Self::RestartRace),
+            "quit_race" => Some(Self::QuitRace),
+            "watch_replay" => Some(Self::WatchReplay),
+            "keep_replay" => Some(Self::KeepReplay),
+            "delete_replay" => Some(Self::DeleteReplay),
+            "open_mod_settings" => Some(Self::OpenModSettings),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 15] {
+    pub fn all() -> [Self; 24] {
         [
             Self::LaunchRace,
-            Self::LaunchRemix,
             Self::Quit,
             Self::SavePilot,
             Self::NewPilot,
@@ -153,12 +194,22 @@ impl Action {
             Self::DeletePilot,
             Self::OpenCampaign,
             Self::OpenCustomCampaign,
+            Self::OpenCampaignEditor,
             Self::OpenMultiplayerLocal,
             Self::HostLan,
             Self::JoinLan,
             Self::OpenOnline,
             Self::OnlineCreate,
             Self::OnlineJoin,
+            Self::EditPlayerName,
+            Self::EditPlayerTag,
+            Self::PhotoMode,
+            Self::RestartRace,
+            Self::QuitRace,
+            Self::WatchReplay,
+            Self::KeepReplay,
+            Self::DeleteReplay,
+            Self::OpenModSettings,
         ]
     }
 }
@@ -239,6 +290,11 @@ pub enum ValueSource {
     /// the reason [`Self::FrontEndStyles`] is; a title that lists none has the row dropped
     /// (`Definition::drop_unavailable_hud_style`).
     HudStyles,
+    /// The values of the title's `Safe Area Setting` slider (`oag_title::hud::SafeArea`), in
+    /// percent, lowest first: HD's own 80 to 100 in steps of 2, and the shared slider of the
+    /// titles whose disc authors none. Supplied rather than spelled so the row's range is the
+    /// title's data.
+    SafeAreas,
     /// The teams this source offers, from its own plugin definition and from
     /// any `crate::dlc` mounted behind it.
     ///
@@ -262,12 +318,6 @@ pub enum ValueSource {
     /// of its own - see `oag_title::RaceDefaults::guest_roster` and
     /// `session::menus::Session::craft_title_choices`.
     CraftTitles,
-    /// The circuits the *currently chosen* `TRACK TITLE` offers - unlike
-    /// [`Self::Tracks`], resupplied every time `remix.track_title` changes
-    /// rather than fixed for the session.
-    RemixTracks,
-    /// [`Self::RemixTracks`]' sibling for `CRAFT TITLE`'s roster.
-    RemixTeams,
     /// Which of the *booted* title's own teams `race.team` names carries more
     /// than one selectable directory - Wipeout 2048's own five and Wipeout
     /// HD/Fury's twelve, both today. See
@@ -288,9 +338,9 @@ pub enum ValueSource {
     /// `oag_title::SpeedClasses` was added to close.
     ///
     /// The ordinary RACE page offers **this title's** ladder and no other's.
-    /// RACE REMIX unions them instead - see [`Self::RemixSpeedClasses`].
+    /// A `speed_classes_union` row unions them instead - see [`Self::SpeedClassesUnion`].
     SpeedClasses,
-    /// [`Self::SpeedClasses`]' sibling for RACE REMIX: every speed class any
+    /// [`Self::SpeedClasses`]' sibling for a page that mixes titles: every speed class any
     /// title whose source this machine can currently open authors, as one
     /// ladder.
     ///
@@ -299,15 +349,11 @@ pub enum ValueSource {
     /// the same way [`Self::Titles`] does. A machine holding one disc offers
     /// that disc's ladder; a class whose title is not on this machine is not
     /// offered at all, rather than shown and then unable to load.
-    RemixSpeedClasses,
-    /// RACE REMIX's AI DIFFICULTY: the four tiers, plus a `none` option the row
+    SpeedClassesUnion,
+    /// The AI difficulties: the four tiers, plus a `none` option the row
     /// is pinned to when the chosen class has no controller
     /// (`oag_ai::coverage`), labelled with the reason.
-    RemixAiDifficulty,
-    /// [`Self::RaceVariant`]'s sibling for RACE REMIX's craft-side `TEAM` -
-    /// scoped to whichever title `CRAFT TITLE` picked rather than to the
-    /// title this process booted from.
-    RemixVariant,
+    AiDifficulties,
     /// Every pilot the in-game editor's roster currently holds - the four
     /// built-ins plus whatever `crate::pilots::directory` has, in
     /// `crate::pilots::Roster`'s own order.
@@ -327,8 +373,8 @@ pub enum ValueSource {
     /// [`Self::PilotAxes`] currently hold, as a set of selectable numbers
     /// within `crate::pilots::limit`'s range for that axis.
     ///
-    /// Resupplied whenever the `PILOT` or `AXIS` row moves, the same idiom
-    /// [`Self::RemixTracks`] uses for `TRACK TITLE` - a menu whose PILOT row
+    /// Resupplied whenever the `PILOT` or `AXIS` row moves, the same idiom a
+    /// `tracks_of` row follows for its title - a menu whose PILOT row
     /// just changed should show that pilot's own bounds on the very next
     /// frame, not the previous one's.
     PilotAxisLow,
@@ -345,6 +391,11 @@ pub enum ValueSource {
     /// if the list will not read: a title that names no such list has the row
     /// dropped instead (`Definition::drop_rows_picked_on_screen`).
     KillTargets,
+    /// The score targets the race box's `TARGET` row offers, the steps of the disc's own
+    /// `Eliminations` slider (`oag_game::boot::RaceSetup::score_targets`). Empty, and the row
+    /// dropped, on a title whose Eliminator ends on kills
+    /// (`Definition::drop_rows_picked_on_screen`).
+    ScoreTargets,
     /// The two states of the race box's `WEAPONS` row, off the disc's own
     /// `Weapons` list: stored as its `On`/`Off`, shown as its `FE_ON`/`FE_OFF`
     /// strings (`oag_game::boot::RaceSetup::weapon_choices`). Empty only if the
@@ -359,6 +410,12 @@ pub enum ValueSource {
     /// dimmed value with the reason for a mod that cannot be switched (the built-in, a
     /// candidate that never opened). Re-supplied each time the MOD row moves.
     ModSwitch,
+    /// A template row that expands to one row per music source
+    /// ([`super::Definition::expand_rows`]; `oag_sound::pool`). Never supplied as a list.
+    MusicPool,
+    /// The recorded races under the data directory, `saved/` then `auto/`, newest first: the
+    /// REPLAYS page's REPLAY row, whose detail lines are the file's (`oag_game::replays`).
+    Replays,
 }
 
 impl ValueSource {
@@ -385,25 +442,26 @@ impl ValueSource {
             Self::MusicSources => "music_sources",
             Self::FrontEndStyles => "front_end_styles",
             Self::HudStyles => "hud_styles",
+            Self::SafeAreas => "safe_areas",
             Self::Teams => "teams",
             Self::Titles => "titles",
             Self::CraftTitles => "craft_titles",
-            Self::RemixTracks => "remix_tracks",
-            Self::RemixTeams => "remix_teams",
             Self::SpeedClasses => "speed_classes",
-            Self::RemixSpeedClasses => "remix_speed_classes",
-            Self::RemixAiDifficulty => "remix_ai_difficulty",
+            Self::SpeedClassesUnion => "speed_classes_union",
+            Self::AiDifficulties => "ai_difficulties",
             Self::RaceVariant => "race_variant",
-            Self::RemixVariant => "remix_variant",
             Self::Pilots => "pilots",
             Self::PilotAxes => "pilot_axes",
             Self::PilotAxisLow => "pilot_axis_low",
             Self::PilotAxisHigh => "pilot_axis_high",
             Self::ScreenFilters => "screen_filters",
             Self::KillTargets => "kill_targets",
+            Self::ScoreTargets => "score_targets",
             Self::Weapons => "weapons",
             Self::Mods => "mods",
             Self::ModSwitch => "mod_switch",
+            Self::MusicPool => "music_pool",
+            Self::Replays => "replays",
         }
     }
 
@@ -421,26 +479,133 @@ impl ValueSource {
             "music_sources" => Some(Self::MusicSources),
             "front_end_styles" => Some(Self::FrontEndStyles),
             "hud_styles" => Some(Self::HudStyles),
+            "safe_areas" => Some(Self::SafeAreas),
             "teams" => Some(Self::Teams),
             "titles" => Some(Self::Titles),
             "craft_titles" => Some(Self::CraftTitles),
-            "remix_tracks" => Some(Self::RemixTracks),
-            "remix_teams" => Some(Self::RemixTeams),
             "speed_classes" => Some(Self::SpeedClasses),
-            "remix_speed_classes" => Some(Self::RemixSpeedClasses),
-            "remix_ai_difficulty" => Some(Self::RemixAiDifficulty),
             "race_variant" => Some(Self::RaceVariant),
-            "remix_variant" => Some(Self::RemixVariant),
+            "speed_classes_union" => Some(Self::SpeedClassesUnion),
+            "ai_difficulties" => Some(Self::AiDifficulties),
             "pilots" => Some(Self::Pilots),
             "pilot_axes" => Some(Self::PilotAxes),
             "pilot_axis_low" => Some(Self::PilotAxisLow),
             "pilot_axis_high" => Some(Self::PilotAxisHigh),
             "screen_filters" => Some(Self::ScreenFilters),
             "kill_targets" => Some(Self::KillTargets),
+            "score_targets" => Some(Self::ScoreTargets),
             "weapons" => Some(Self::Weapons),
             "mods" => Some(Self::Mods),
             "mod_switch" => Some(Self::ModSwitch),
+            "music_pool" => Some(Self::MusicPool),
+            "replays" => Some(Self::Replays),
             _ => None,
         }
     }
+}
+
+/// The closed set of lists a `values_from` table may ask for, with an optional argument:
+/// `values_from = { query = "tracks_of", of = "<setting key>" }` (ADR-0082).
+///
+/// `of` names the setting whose current value is the argument; empty means the booted title.
+/// A mod cannot define a query, only choose one, so a typo is a load error and a mod cannot
+/// invent behaviour for a list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Query {
+    /// Every title this machine can open a source for.
+    TitlesAvailable,
+    /// The circuits of the title `of` names, or the custom tracks when it names CUSTOM.
+    TracksOf,
+    /// The teams of the title `of` names, as a craft title offers them (ADR-0035's guest
+    /// roster folded in), narrowed to the ones that author the `class` setting's class.
+    TeamsOf,
+    /// The craft variants of the title `of` names, for the team its `team` setting holds
+    /// (the title's first team without one).
+    VariantsOf,
+    /// The speed classes of every available title, merged.
+    SpeedClassesUnion,
+    /// The AI difficulties.
+    AiDifficulties,
+    /// The custom circuits the player holds.
+    CustomTracks,
+}
+
+impl Query {
+    /// Every query, in documentation order.
+    pub const ALL: [Self; 7] = [
+        Self::TitlesAvailable,
+        Self::TracksOf,
+        Self::TeamsOf,
+        Self::VariantsOf,
+        Self::SpeedClassesUnion,
+        Self::AiDifficulties,
+        Self::CustomTracks,
+    ];
+
+    /// The spelling used in the definition file.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::TitlesAvailable => "titles_available",
+            Self::TracksOf => "tracks_of",
+            Self::TeamsOf => "teams_of",
+            Self::VariantsOf => "variants_of",
+            Self::SpeedClassesUnion => "speed_classes_union",
+            Self::AiDifficulties => "ai_difficulties",
+            Self::CustomTracks => "custom_tracks",
+        }
+    }
+
+    /// Parses a definition file's spelling.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|query| query.name() == name)
+    }
+
+    /// Whether `of` means anything to this query. The others answer the same list
+    /// wherever they are asked.
+    #[must_use]
+    pub fn takes_of(self) -> bool {
+        matches!(self, Self::TracksOf | Self::TeamsOf | Self::VariantsOf)
+    }
+
+    /// The second setting a query with an `of` may read, by the key it is written under:
+    /// `tracks_of` takes the `craft_title` a CUSTOM track must race with, `teams_of` the
+    /// `class` its teams must author, `variants_of` the `team` whose variants it lists.
+    #[must_use]
+    pub fn companion(self) -> Option<&'static str> {
+        match self {
+            Self::TracksOf => Some("craft_title"),
+            Self::TeamsOf => Some("class"),
+            Self::VariantsOf => Some("team"),
+            _ => None,
+        }
+    }
+
+    /// The supply key a query with an empty `of` answers through: the lists the booted title
+    /// already gets under their fixed names.
+    #[must_use]
+    pub fn booted_source(self) -> Option<ValueSource> {
+        match self {
+            Self::TitlesAvailable => Some(ValueSource::Titles),
+            Self::TracksOf => Some(ValueSource::Tracks),
+            Self::TeamsOf => Some(ValueSource::Teams),
+            Self::VariantsOf => Some(ValueSource::RaceVariant),
+            Self::SpeedClassesUnion => Some(ValueSource::SpeedClassesUnion),
+            Self::AiDifficulties => Some(ValueSource::AiDifficulties),
+            Self::CustomTracks => None,
+        }
+    }
+}
+
+/// A `values_from` table that names a query with an argument the fixed names cannot say.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueryRef {
+    /// Which list.
+    pub query: Query,
+    /// The setting key whose value is the argument; never empty here (an empty `of` is one of
+    /// the fixed names' lists).
+    pub of: String,
+    /// The setting key [`Query::companion`] names, when the row gives one.
+    pub companion: Option<String>,
 }

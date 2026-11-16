@@ -9,6 +9,8 @@ mod lightmapped;
 
 use std::sync::Arc;
 
+use oag_gpu::formats::SceneStore;
+
 use oag_rcs::{rcsmaterial, rcsmodel};
 
 use super::super::{ModelTexture, TextureSlots};
@@ -43,6 +45,7 @@ pub(super) fn skin(
     model: &rcsmodel::Model,
     picks: &[Pick],
     textures: Textures<'_>,
+    store: SceneStore,
     report: &mut Report,
 ) -> (TextureSlots, TextureSlots) {
     let mut cache: std::collections::HashMap<String, Option<Arc<ModelTexture>>> =
@@ -114,11 +117,11 @@ pub(super) fn skin(
                                         .and_then(|blob| ModelTexture::from_gtf(path, &blob))
                                 })
                                 .as_ref()?;
-                            scale_alpha(map, colour, usage).map(Arc::new)
+                            scale_alpha(map, colour, usage, store).map(Arc::new)
                         })
                         .clone()
                 });
-                match alpha.or_else(|| constant_diffuse(material, false).map(Arc::new)) {
+                match alpha.or_else(|| constant_diffuse(material, false, store).map(Arc::new)) {
                     Some(colour) => {
                         report.constant_diffuse += 1;
                         skins.push(Some(colour));
@@ -126,7 +129,7 @@ pub(super) fn skin(
                     None => skins.push(None),
                 }
             }
-            None => match constant_diffuse(material, true) {
+            None => match constant_diffuse(material, true, store) {
                 Some(colour) => {
                     report.constant_diffuse += 1;
                     skins.push(Some(Arc::new(colour)));
@@ -147,7 +150,7 @@ pub(super) fn skin(
                         .or_insert_with(|| {
                             let map = textures(path)
                                 .and_then(|blob| ModelTexture::from_gtf(path, &blob))?;
-                            picture_tint::tinted(&map, tint).map(Arc::new)
+                            picture_tint::tinted(&map, tint, store).map(Arc::new)
                         })
                         .clone();
                     if baked.is_some() {
@@ -195,9 +198,9 @@ const DIFFUSE: u32 = 0x515e_298e;
 /// constant is black on Sebenco Climb and Tech de Ra, so the glass is its
 /// reflection alone (`mesh::rcs::window_glass`), weighted by the normal map's
 /// alpha, which rides this constant's picture ([`AlphaUse::Gate`]). The pipe family reads it times a
-/// map's alpha instead ([`ALPHA_DIFFUSE`]); `metallic`, `dc_metallic` and
-/// `mesh_colour_constant` end `MAD H0.xyz, light, C, specular` with their own
-/// `C`, and `dc_constantglow`/`cf_constantcolourglow` are fog over a constant
+/// map's alpha instead ([`ALPHA_DIFFUSE`]); `metallic` and `dc_metallic` end
+/// `MAD H0.xyz, light, C, specular` with their own `C`, `mesh_colour_constant` is
+/// `ds_booth_glass`'s program with its own `C` (`mesh::rcs::window_glass`), and `dc_constantglow`/`cf_constantcolourglow` are fog over a constant
 /// and nothing else. Other families that carry `0x7611a2d8` use it in other
 /// places (the pads) and are left out until read.
 const DIFFUSE_PARAMETER: &[(&str, u32)] = &[
@@ -226,26 +229,45 @@ const DIFFUSE_PARAMETER: &[(&str, u32)] = &[
 /// `listed_only` drops the `diffuse` fallback: a slot that names a picture its
 /// program does not sample (the engine-bound lightmap entry of a family whose
 /// variant has no lightmap) takes its constant only if its family is traced.
-fn constant_diffuse(material: &rcsmodel::Material, listed_only: bool) -> Option<ModelTexture> {
+fn constant_diffuse(
+    material: &rcsmodel::Material,
+    listed_only: bool,
+    store: SceneStore,
+) -> Option<ModelTexture> {
     let family = super::emissive::family(material);
+    let hash = diffuse_hash(family, listed_only)?;
+    let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
+    Some(constant_picture(
+        hash,
+        [value[0], value[1], value[2]],
+        store,
+    ))
+}
+
+/// The parameter [`DIFFUSE_PARAMETER`] names for `family`, else [`DIFFUSE`]
+/// unless `listed_only`. Shared with the 2048-lineage builder
+/// (`psp2`), which reads the same parameter off Omega's material record.
+pub(super) fn diffuse_hash(family: &str, listed_only: bool) -> Option<u32> {
     let listed = DIFFUSE_PARAMETER
         .iter()
         .find_map(|&(name, hash)| (name == family).then_some(hash));
-    let hash = if listed_only {
-        listed?
+    if listed_only {
+        listed
     } else {
-        listed.unwrap_or(DIFFUSE)
-    };
-    let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
-    let byte = raw_to_texel;
-    Some(crate::mesh_render::offer_to_texture_sink(
-        ModelTexture::rgba8(
-            format!("constant diffuse {hash:08x}"),
-            1,
-            1,
-            vec![byte(value[0]), byte(value[1]), byte(value[2]), 255],
-            None,
-        ),
+        Some(listed.unwrap_or(DIFFUSE))
+    }
+}
+
+/// `value`, a raw shader constant, as the one-texel picture the light is
+/// multiplied by: encoded with [`raw_to_texel`] for `store`.
+pub(super) fn constant_picture(hash: u32, value: [f32; 3], store: SceneStore) -> ModelTexture {
+    let byte = |c| raw_to_texel(c, store);
+    crate::mesh_render::offer_to_texture_sink(ModelTexture::rgba8(
+        format!("constant diffuse {hash:08x}"),
+        1,
+        1,
+        vec![byte(value[0]), byte(value[1]), byte(value[2]), 255],
+        None,
     ))
 }
 
@@ -253,8 +275,8 @@ fn constant_diffuse(material: &rcsmodel::Material, listed_only: bool) -> Option<
 /// program-computed diffuse (a constant, or a constant times a map's alpha)
 /// has to be bound as, because the albedo binding decodes sRGB and the RSX
 /// multiplies raw 8-bit values.
-fn raw_to_texel(c: f32) -> u8 {
-    (c.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0).round() as u8
+fn raw_to_texel(c: f32, store: SceneStore) -> u8 {
+    (store.texel_encode(c) * 255.0).round() as u8
 }
 
 /// `Texture1`'s sampler name hash, the one unit 0 of the lightmapped blocks.
@@ -275,14 +297,31 @@ const TEXTURE1: u32 = 0x3bdc_0403;
 /// over), and lights the constant alone. So its picture is the constant with
 /// the map's alpha as coverage, which `mesh::rcs::window_glass` weights the
 /// reflection by.
-const ALPHA_DIFFUSE: &[(&str, u32, AlphaUse)] = &[
+///
+/// `mesh_colour_constant` (Metropia's wire-mesh floor) names its map `Normal`
+/// (`0xd9d6922d`), not `Texture1`: its lit block writes the unit-0 texel's alpha
+/// as the output alpha (`MOV H0.w, R0`, `@0x3e`) and gates the reflection by it,
+/// so the wires are the map's alpha over the constant (`docs/formats/rcsmaterial.md`,
+/// "Metropia: the lattice floor").
+const ALPHA_DIFFUSE: &[(&str, u32, u32, AlphaUse)] = &[
     (
         "m_diffuse_normal_constantspecular",
         0x7611_a2d8,
+        TEXTURE1,
         AlphaUse::Product,
     ),
-    ("ds_booth_glass", 0x7611_a2d8, AlphaUse::Gate),
+    ("ds_booth_glass", 0x7611_a2d8, TEXTURE1, AlphaUse::Gate),
+    (
+        "mesh_colour_constant",
+        0x02ab_9f07,
+        NORMAL_SAMPLER,
+        AlphaUse::Gate,
+    ),
 ];
+
+/// The sampler name hash a `mesh_colour_constant` material's alpha map is bound under
+/// (`Normal`, `docs/formats/2048-material-params.md`).
+const NORMAL_SAMPLER: u32 = 0xd9d6_922d;
 
 /// What a family's program does with `Texture1`'s alpha beside its constant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -299,14 +338,17 @@ enum AlphaUse {
 /// names both.
 fn alpha_diffuse(material: &rcsmodel::Material) -> Option<(&str, [f32; 4], AlphaUse)> {
     let family = super::emissive::family(material);
-    let (hash, usage) = ALPHA_DIFFUSE
-        .iter()
-        .find_map(|&(name, hash, usage)| (name == family).then_some((hash, usage)))?;
+    let (hash, sampler, usage) =
+        ALPHA_DIFFUSE
+            .iter()
+            .find_map(|&(name, hash, sampler, usage)| {
+                (name == family).then_some((hash, sampler, usage))
+            })?;
     let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
     let path = material
         .samplers
         .iter()
-        .find(|(h, _)| *h == TEXTURE1)?
+        .find(|(h, _)| *h == sampler)?
         .1
         .as_deref()?;
     Some((path, value, usage))
@@ -315,7 +357,12 @@ fn alpha_diffuse(material: &rcsmodel::Material) -> Option<(&str, [f32; 4], Alpha
 /// `map`'s alpha times `colour`, as the grey-to-colour picture the program
 /// computes per texel (unorm bytes, opaque); or, for [`AlphaUse::Gate`],
 /// `colour` with the map's alpha kept as the texel's own.
-fn scale_alpha(map: &ModelTexture, colour: [f32; 4], usage: AlphaUse) -> Option<ModelTexture> {
+fn scale_alpha(
+    map: &ModelTexture,
+    colour: [f32; 4],
+    usage: AlphaUse,
+    store: SceneStore,
+) -> Option<ModelTexture> {
     let texels = map.to_rgba()?;
     let mut out = Vec::with_capacity(texels.len());
     for texel in texels.as_chunks::<4>().0 {
@@ -323,13 +370,13 @@ fn scale_alpha(map: &ModelTexture, colour: [f32; 4], usage: AlphaUse) -> Option<
         match usage {
             AlphaUse::Product => {
                 for c in &colour[..3] {
-                    out.push(raw_to_texel(alpha * c));
+                    out.push(raw_to_texel(alpha * c, store));
                 }
                 out.push(255);
             }
             AlphaUse::Gate => {
                 for c in &colour[..3] {
-                    out.push(raw_to_texel(*c));
+                    out.push(raw_to_texel(*c, store));
                 }
                 out.push(texel[3]);
             }
@@ -367,6 +414,8 @@ fn is_picture(material: &rcsmodel::Material, hash: u32) -> bool {
 /// | `0x35281c78` | 37 | `blue_metal_facing_ramp.gtf`, and nothing else | 88 |
 /// | `0x994bbcf1` | 27 | `blue_metal_facing_ramp.gtf`, `tunnel_fx_facingramp.gtf` | 88 |
 /// | `0x94b2b285` | 1 | `dc_iridescent_gradient.gtf` | 85 |
+/// | `0x2d5fc6a6` | 24 | `iridescence.gtf` and nothing else: one per `_n1` hull's `nitro_body_new` and one per `nitro_perspex_new` (12 hulls). The program samples it at a scalar (`-dot(V, N)`, `TEX H1.xyz, -R3.wwww unit3` after `DP3 R3.w, -R2, R3`), the coordinate `0x94b2b285` is traced at; no circuit binds it (16 forward circuits) | 85 |
+/// | `0x3a7e591d` | 12 | `holographic_02_rich_glow.gtf` and nothing else, on `nitro_perspex_new` only. Read one channel wide at `TC5` (`TEX R4.y, f[TC5] unit2`) and folded into the ramp's coordinate, never a colour; no circuit binds it | 80 |
 /// | `0x739a786e` | 20 | `ds_floor_n_rh`, `ds_pit_box_n`, `ds_wall_n` | 88 |
 /// | `0x20c3e476` | 64 | `blue_metal_spec`, `tunnel_fx_spec`, `tunnel_fx_lights_spec` | 85 |
 /// | `0x48f37f5a` (`NormalMap`) | 5 distinct (family, path) | `ds_solarwall_n`, `tracknormal`, `aadc_build_g_window_n`, `jd_chenghou_windowtrans_01_n` - only ever a `*_n*.gtf` (`hd_sampler_hash_binds.rs`, all 28 circuits and the ships) | 85 |
@@ -424,6 +473,8 @@ const NOT_A_PICTURE: &[u32] = &[
     0x3528_1c78,
     0x994b_bcf1,
     0x94b2_b285,
+    NITRO_LOOKUPS[0],
+    NITRO_LOOKUPS[1],
     0x739a_786e,
     0x20c3_e476,
     0x48f3_7f5a,
@@ -431,6 +482,21 @@ const NOT_A_PICTURE: &[u32] = &[
     0xeddf_202a,
     0xb1f2_a176,
 ];
+
+/// The two sampler hashes of the Fury Nitro hull's lit materials that are
+/// lookups, not pictures: `0x2d5fc6a6` (`iridescence`, a facing ramp) and
+/// `0x3a7e591d` (`holographic_02_rich_glow`, a one-channel mask), both rows of
+/// [`NOT_A_PICTURE`]'s table. Wipeout HD binds the table by hash alone; the
+/// Vita and PS4 binder (`psp2`) applies these two only under
+/// [`NITRO_FAMILIES`], because 2048 and Omega bind the same hashes on a weapon
+/// and on wreck shards, where no role is measured
+/// (`docs/rendering/hd-ship-materials.md`, "The nitro hull's picture was a
+/// ramp and a mask").
+pub(super) const NITRO_LOOKUPS: [u32; 2] = [0x2d5f_c6a6, 0x3a7e_591d];
+
+/// The material families the Nitro hull is painted with, whose
+/// [`NITRO_LOOKUPS`] are not the picture.
+pub(super) const NITRO_FAMILIES: [&str; 3] = ["nitro_body", "nitro_body_new", "nitro_perspex_new"];
 
 /// Which of a material's sampler entries this renderer binds, out of however
 /// many it has.
@@ -584,9 +650,11 @@ pub(super) fn picks(
             // (`glass_texture_customr`) or its glow mask (`glass_2nduv_reflect_glow`). See
             // `window_glass::picture`.
             if let Some(entry) = super::window_glass::picture(material, &declared) {
+                // Beside it, the map the family's specular is multiplied by, where it has one.
+                let aux = super::window_glass::specular_map(material, &declared).unwrap_or(entry);
                 return Pick {
                     albedo: Some(entry),
-                    aux: Some(entry),
+                    aux: Some(aux),
                 };
             }
             // An entry only counts when it supplies a `.gtf`: an entry the
@@ -639,6 +707,12 @@ pub(super) fn picks(
                 _ => None,
             }
             .filter(|&i| Some(i) != albedo)
+            // The nitro hull lists its diffuse where the ordinal fallback
+            // looks, so without this the second binding is the picture itself
+            // and `emissive` would add it back onto its own paint. The entry
+            // the program's unit 1 declares is its normal map, which
+            // `emissive` refuses as a glow.
+            .or(index_of(1).filter(|&i| material.samplers[i].0 == super::emissive::NITRO_NORMAL))
             .or(default.aux);
             Pick { albedo, aux }
         })
@@ -1123,6 +1197,36 @@ mod tests {
     // to `ModelTexture::from_gtf`, which this module now delegates to.
     use super::super::super::{BlockFormat, Texels};
 
+    /// A program-computed constant is baked with the title's own curve, so the
+    /// shader's decode reads it back. Half grey: HD's sRGB gives 188, the `2.2`
+    /// power 186 and 2048's square root 180. Fails with the fixed power on HD.
+    #[test]
+    fn a_raw_value_is_encoded_with_the_titles_curve() {
+        assert_eq!(raw_to_texel(0.5, SceneStore::Encoded), 188);
+        assert_eq!(raw_to_texel(0.5, SceneStore::Computed), 186);
+        assert_eq!(raw_to_texel(0.5, SceneStore::Squared), 180);
+    }
+
+    /// Byte, decode, raw value, encode: the byte comes back within one level on
+    /// every title.
+    #[test]
+    fn a_raw_value_round_trips_through_the_shaders_decode() {
+        for store in [
+            SceneStore::Encoded,
+            SceneStore::Computed,
+            SceneStore::Squared,
+        ] {
+            for byte in (0..=255u32).step_by(5) {
+                let raw = store.texel_decode(byte as f32 / 255.0);
+                let back = i32::from(raw_to_texel(raw, store));
+                assert!(
+                    (back - byte as i32).abs() <= 1,
+                    "{store:?}: {byte} -> {back}"
+                );
+            }
+        }
+    }
+
     fn declared(samplers: &[(u32, u32)]) -> rcsmaterial::Declared {
         rcsmaterial::Declared {
             parameters: Vec::new(),
@@ -1233,7 +1337,13 @@ mod tests {
             (path == "a.gtf").then(|| blob.clone())
         };
         let mut report = Report::default();
-        let (skins, _) = skin(&model, &picks, &mut load, &mut report);
+        let (skins, _) = skin(
+            &model,
+            &picks,
+            &mut load,
+            SceneStore::default(),
+            &mut report,
+        );
 
         assert_eq!(loads, 1, "one read of the archive, not one per slot");
         let first = skins[0].as_ref().expect("slot 0 is textured");

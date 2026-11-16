@@ -7,3 +7,7 @@
 // are literals in the microcode, not material parameters, so this is a flag
 // rather than a parameter set.
 override absorb_shading: f32 = 0.0;
+
+// A shield shell's draw is multiplied by its vertex colour, which carries the
+// shield's `ShieldColour`; see `oag_mesh::mesh::Model::shield_shell`.
+override shield_shading: f32 = 0.0;

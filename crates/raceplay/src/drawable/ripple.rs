@@ -30,13 +30,8 @@ impl Drawable {
         let Some(ripple) = slot.as_mut() else {
             return;
         };
-        let stride = std::mem::size_of::<GpuVertex>() as u64;
         ripple.update(wave, &self.model.vertices, scratch, |first, vertices| {
-            queue.write_buffer(
-                &self.vertices,
-                u64::from(first) * stride,
-                bytemuck::cast_slice(vertices),
-            );
+            self.geometry.write(queue, first, vertices);
         });
     }
 }

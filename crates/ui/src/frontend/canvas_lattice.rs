@@ -57,16 +57,20 @@ const HEIGHT_RATIO: f32 = 0.555_555_6;
 const COMPOSITE_SAMPLE_OFFSET: f32 = 0.25;
 /// Translation row of the final matrix (`+0x5ec90`), live at the title.
 const TRANSLATION: [f32; 2] = [-9.560_32, 4.651_63];
+/// The view [`TRANSLATION`] is the camera of, as an offset right and down of
+/// the reset camera (`super::canvas_camera::Camera::scrolled`): the title's
+/// scroll position of `(-3000, -1500)`.
+pub const BAKED_VIEW: (f32, f32) = (3000.0, 1500.0);
 
 /// The two outlined triangles in `canvasTexture.gxt`, in atlas pixels: apex
 /// up, then apex down (`DAT_81732ac0..aec` times 2048).
-const ATLAS_UP: [[f32; 2]; 3] = [[14.0, 122.0], [107.0, 122.0], [60.0, 40.0]];
-const ATLAS_DOWN: [[f32; 2]; 3] = [[60.0, 40.0], [107.0, 122.0], [155.0, 40.0]];
+pub(super) const ATLAS_UP: [[f32; 2]; 3] = [[14.0, 122.0], [107.0, 122.0], [60.0, 40.0]];
+pub(super) const ATLAS_DOWN: [[f32; 2]; 3] = [[60.0, 40.0], [107.0, 122.0], [155.0, 40.0]];
 /// The cell's corners for each type, in the same order as the atlas triangles
 /// (`DAT_81732c38`, `DAT_81732c20`).
 const HALF_DY: f32 = CELL_DY / 2.0;
-const CORNERS_UP: [[f32; 2]; 3] = [[-0.5, HALF_DY], [0.5, HALF_DY], [0.0, -HALF_DY]];
-const CORNERS_DOWN: [[f32; 2]; 3] = [[-0.5, -HALF_DY], [0.0, HALF_DY], [0.5, -HALF_DY]];
+pub(super) const CORNERS_UP: [[f32; 2]; 3] = [[-0.5, HALF_DY], [0.5, HALF_DY], [0.0, -HALF_DY]];
+pub(super) const CORNERS_DOWN: [[f32; 2]; 3] = [[-0.5, -HALF_DY], [0.0, HALF_DY], [0.5, -HALF_DY]];
 
 fn barycentric(p: [f32; 2], tri: &[[f32; 2]; 3]) -> [f32; 3] {
     let d = (tri[1][1] - tri[2][1]) * (tri[0][0] - tri[2][0])
@@ -80,10 +84,11 @@ fn barycentric(p: [f32; 2], tri: &[[f32; 2]; 3]) -> [f32; 3] {
     [a, b, 1.0 - a - b]
 }
 
-/// Where the lattice's own pixel at world `p` reads the atlas, in atlas
-/// pixels: the cell containing `p`, the triangle it is textured with, and the
-/// barycentric carry from corners to atlas triangle.
-fn atlas_at(p: [f32; 2]) -> Option<[f32; 2]> {
+/// The cell containing world point `p` on the lattice plane, `(col, row)`, and
+/// where its pixel there reads the atlas, in atlas pixels: the triangle the
+/// cell is textured with and the barycentric carry from corners to atlas
+/// triangle.
+pub(super) fn cell_at(p: [f32; 2]) -> Option<((i32, i32), [f32; 2])> {
     let row = (p[1] / CELL_DY).round();
     let local_y = p[1] - row * CELL_DY;
     let col0 = (p[0] / CELL_DX).floor();
@@ -97,16 +102,20 @@ fn atlas_at(p: [f32; 2]) -> Option<[f32; 2]> {
         let local = [p[0] - col * CELL_DX, local_y];
         let w = barycentric(local, corners);
         if w.iter().all(|&weight| weight >= -1e-4) {
-            return Some([
-                w[0] * atlas[0][0] + w[1] * atlas[1][0] + w[2] * atlas[2][0],
-                w[0] * atlas[0][1] + w[1] * atlas[1][1] + w[2] * atlas[2][1],
-            ]);
+            return Some((
+                (col as i32, row as i32),
+                [
+                    w[0] * atlas[0][0] + w[1] * atlas[1][0] + w[2] * atlas[2][0],
+                    w[0] * atlas[0][1] + w[1] * atlas[1][1] + w[2] * atlas[2][1],
+                ],
+            ));
         }
     }
     None
 }
 
-fn bilinear(rgba: &[u8], width: u32, height: u32, at: [f32; 2]) -> [f32; 3] {
+/// The atlas texel at `at` (atlas pixels), bilinear, `[r, g, b, a]` in 0 to 255.
+pub(super) fn bilinear(rgba: &[u8], width: u32, height: u32, at: [f32; 2]) -> [f32; 4] {
     let x = (at[0] - 0.5).clamp(0.0, (width - 1) as f32);
     let y = (at[1] - 0.5).clamp(0.0, (height - 1) as f32);
     let (x0, y0) = (x.floor(), y.floor());
@@ -116,7 +125,7 @@ fn bilinear(rgba: &[u8], width: u32, height: u32, at: [f32; 2]) -> [f32; 3] {
         let ty = (ty as u32).min(height - 1);
         f32::from(rgba[((ty * width + tx) * 4) as usize + channel])
     };
-    let mut out = [0.0; 3];
+    let mut out = [0.0; 4];
     for (channel, value) in out.iter_mut().enumerate() {
         let top = texel(x0, y0, channel) * (1.0 - fx) + texel(x0 + 1.0, y0, channel) * fx;
         let bottom =
@@ -139,7 +148,7 @@ fn plane_matrix() -> (f32, f32, f32) {
 }
 
 /// The lattice plane point under the centre of screen pixel `(px, py)`.
-fn world_at(px: u32, py: u32) -> [f32; 2] {
+pub(super) fn world_at(px: u32, py: u32) -> [f32; 2] {
     let offset = COMPOSITE_SAMPLE_OFFSET;
     let (ax, bx, by) = plane_matrix();
     let half = [VIEWPORT[0] as f32 / 2.0, VIEWPORT[1] as f32 / 2.0];
@@ -151,7 +160,7 @@ fn world_at(px: u32, py: u32) -> [f32; 2] {
 }
 
 /// The composite's square-root encode of one channel (0 to 255 in, out).
-fn composite_encode(channel: f32) -> u8 {
+pub(super) fn composite_encode(channel: f32) -> u8 {
     ((channel / 255.0).clamp(0.0, 1.0).sqrt() * 255.0).round() as u8
 }
 
@@ -167,8 +176,10 @@ pub fn bake(atlas: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity((VIEWPORT[0] * VIEWPORT[1] * 4) as usize);
     for py in 0..VIEWPORT[1] {
         for px in 0..VIEWPORT[0] {
-            let rgb = atlas_at(world_at(px, py))
-                .map_or([255.0; 3], |at| bilinear(atlas, width, height, at));
+            let rgb = cell_at(world_at(px, py)).map_or([255.0; 3], |(_, at)| {
+                let texel = bilinear(atlas, width, height, at);
+                [texel[0], texel[1], texel[2]]
+            });
             out.extend(rgb.map(composite_encode));
             out.push(255);
         }

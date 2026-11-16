@@ -13,9 +13,11 @@ that buffer (progressive decode was turned down for that reason).
 | --- | --- | --- |
 | Music survey (which releases exist; a PSP or PS2 boot lists its soundtrack and opens every image on the search path to find the other one) | `music-survey` (`MusicDiscs::survey_in_background`) | nothing; the discs read as "not known yet" until it lands |
 | Front-end music and HD's mix tables (`Audio::start_music`) | `menu-music` (`menu_music::MenuJob`) | starts the loop on the tick it lands; a race already started keeps it for after the race |
-| A race's first track at launch (`Session::launch_race`) | `race-music` (`MusicFetchWorker`) | `finish_race_music` applies it, or a later tick does |
+| A race's first track at launch (`Session::launch_race`) | `race-music` (`MusicFetchWorker`), none when the track is already in `race_cache` (`Audio::race_music_fetch`) | `finish_race_music` applies it, or a later tick does; a cached track is applied by `start_race_music` at the hand-off with no fetch |
 | `start_race_music` (`--race`, a resume from the menus) | `race-music`, unless the track is already decoded | a decoded track (the usual resume) starts at once from `race_cache` |
 | Next track (prefetch) and a track boundary | `race-music` | the prefetch is handed over at the boundary, never joined |
+| The music pool: other titles' discs (`oag_sound::pool`) | `music-discs`, apart from the survey | nothing; the MUSIC page's rows fill in as it lands |
+| A configured music folder (`oag_sound::folders`) | `music-folder`, one per folder, detached | nothing; a status (`SCANNING`, a count, `SLOW OR NO ANSWER`, the error) the MUSIC page polls |
 | `MUSIC SOURCE` switch | `menu-source` / `race-source` | applies a held sound at once, else polls |
 | A saved place (`Audio::restore_race_music`) | the race's `race-music` fetch | checks it on the spot only if the listing is already known; otherwise the fetch checks it and logs the verdict |
 
@@ -112,7 +114,105 @@ clock has to move.
   survey worker too, but the launcher's load itself (archives, front end) still opens the
   same source on the frame thread inside one stalled frame. That is the load's, not the
   music's.
-- **A menu-launched race whose track is already decoded** still fetches it again on the
-  `race-music` worker (`Session::launch_race` always spawns one). Off the frame thread, so
-  only a wasted decode.
-- **Omega's `load_entry`** re-reads the bank and re-plans for each track, on the worker.
+## Landed 2026-11-02
+
+- **A menu-launched race on a track already in `race_cache`** spawns no `MusicFetchWorker`
+  and decodes nothing: `Audio::race_music_fetch` returns `None`. Ground truth
+  (`music_resume_ground_truth.rs`, `*_second_launch_decodes_nothing`, Pulse PSP and HD):
+  the first launch is a fetch, the second is none and its hand-off does no music work on
+  the calling thread. The Deck count of `read and decode on race-music` lines is not
+  re-measured (the Deck was not offered).
+- **Omega's music bank is read and parsed once per run.** `Listings` keeps an
+  `oag_music::omega::Prepared` (the playlist and the bank's bytes) beside the listings;
+  `load_entry` takes it from there, and `mix_with` reads an embedded stem out of the kept
+  bytes. Ground truth: `omega_reads_its_music_bank_once_across_tracks` (two tracks,
+  `MusicDiscs::bank_reads() == 1`). 2048 and HD carry `state_tracks: None` and list their
+  tracks by name (`declared_names`, a directory read, no bank): **checked, differs**.
+
+## The music pool (landed 2026-11-02)
+
+OPTIONS > AUDIO > MUSIC lists every soundtrack source this machine can open, each on or off:
+the booted disc (on by default), each other title's disc image found on the search path (one
+row per title and platform, off; the first image found stands for it) and each folder under `[audio] music_folders` in `settings.toml` (off
+unless its `enabled` is set). Switches persist in `[audio] music_switches`, keyed by a stable
+source id (`disc:<title slug>:<platform>`, `folder:<path>`); an id absent from the table
+takes the default. The page has one on/off row per source (label left, ON or OFF right, the image's or folder's
+full path under the selected row), made from one template row in `menu.toml` by
+`Definition::expand_rows`, so pad, mouse and touch work as on every other choice row. With
+fewer than two sources the page and the MUSIC row that opens it are left out.
+Adding a folder from the menu needs a text input widget and is open.
+
+**What a race plays.** The playlist is one numbered list: the booted soundtrack in its own
+order first (when the booted disc is on), then every other enabled source's songs, discs
+before folders, discs in id order, a folder's files in path order. A song is `Loaded::from =
+None`, the same as the PSP front end's loop, so `MUSIC SOURCE` never moves it. With only the
+booted disc on the list is the booted soundtrack, `playlist_len` equals its length, and every
+`RacePick` resolves as before (`tests::pool::with_only_the_booted_disc_on_the_playlist_is_the_booted_soundtrack`).
+The booted title's other pressing is not a row: choosing between the two encodes of one
+soundtrack stays the `MUSIC SOURCE` row's job and keeps its seek-across-encodes behaviour. A
+different title found on two images of one platform (HD's encrypted and decrypted image, Pure EU
+and USA) is one row, from the first image found; a title on two platforms is two rows
+(`WIPEOUT X (PSP)`, `WIPEOUT X (PS2)`) and contributes its songs once, from the first enabled
+row in id order, so no song plays from two encodes.
+
+**Music order.** `[audio] music_order` is `sequential` (default, as the disc's `Music Order` list
+defaults) or `random`, one row, `MUSIC ORDER`, on the AUDIO page for every title. It is not on the MUSIC
+page, which is left out of the tree with a single source. Sequential is the numbered list above. Random
+plays a deck (`oag_sound::shuffle::Shuffle`): every song once in a shuffled order, then a fresh shuffle
+that never opens on the song that just ended, so no song repeats before all have played. Next and
+previous walk it; previous goes back through what played (and starts the song over when nothing earlier
+is remembered), and going forward replays that trail before the deck is touched again. The deck follows
+the playlist as it changes: a scan that lands adds its songs to the round at random places, a source
+switched off drops its songs. The first song of a run under Random is drawn from the whole playlist on
+the fetch worker (the length is not known earlier), never the PS2 menu's own track. A saved place from
+`music.toml` is the song just played and the rest of the round is every other song. The fetch ahead is
+the deck's `peek_next`, so the boundary reuses it as before.
+
+The shuffle is presentation randomness: it has its own `oag_core::Rng`, seeded by the host from the
+clock (`Audio::seed_music_shuffle`; tests use the fixed default), and nothing in `World`, the state hash
+or the race's `Rng` touches it. It orders the race playlist only: a menu plays its authored loop (the
+PSP's `frontend1.at3`, HD's mix, the PS2's track 0), which is not a playlist, so the setting does not
+change menu music. Applies from the next song on; the song playing goes on.
+
+**Menus.** The front end's music is unchanged: it is the disc's authored loop (the PSP's
+`frontend1.at3`, HD's mix tables, the PS2's track 0), and the pool does not replace authored
+data. The pool feeds the race playlist only.
+
+**Never on the frame thread.** The disc scan and each folder scan are their own workers, so a
+hung mount cannot delay the booted disc's survey or its music (`wait_surveyed` gates only the
+survey). A scan with no answer after 20 s reads `SLOW OR NO ANSWER`, and moves to its count if
+it answers later; its thread is detached, never joined, so it cannot hold the menus or the
+process's exit. A race whose booted disc is off waits up to 8 s on its own worker for a scan
+still running, then plays what is listed. A song that will not read or decode (a mount that
+went away) is logged and passed over for the next one, up to four, so the song playing and the
+rest of the playlist are untouched. A folder plays `.mp3`, `.flac`, `.ogg`/`.oga` (Vorbis) and `.opus`
+(`oag_music::file::EXTENSIONS`), decoded in process on every target. `symphonia` 0.6 reads MP3, FLAC,
+Vorbis and the Ogg container (MPL-2.0); it has no Opus decoder, so Opus packets come out of its Ogg
+reader and into `opus-rs` (BSD-3-Clause, pure Rust, no C, builds for wasm, Android, Windows and macOS).
+`opus-decoder` (MIT/Apache) was tried first and panics on a plain 20 ms stereo CELT packet in a debug
+build (a `u8` shift overflow in its anti-collapse mask), so it was dropped. The Opus path applies the
+stream's pre-skip and the Ogg reader's end trim; a half-second fixture decodes to exactly 24,000
+frames, about 26-31 dB SNR against libopus (lossy 24 kbit/s). Opus with more than two channels is
+refused by name. WAV is not read.
+
+**The folder cache.** `folders::Disk` keeps, per walked folder, each directory's modification
+time with its songs and subfolders in `<audio cache dir>/music-folder-<hash>.tsv`; a later walk
+stats a directory and reuses its entry when the time is unchanged, and lists only the
+directories that moved (a change below a directory moves only that directory's time).
+
+Measured on the host's two NFS shares (2026-11-02, `Disk::list` called directly, a cold walk
+then a cached one; hidden entries and a NAS's `@eaDir` metadata folders are skipped, which is
+why the counts are the songs and not the `find` count that includes one folder named after every
+song):
+
+| Share | Songs | Cold walk | Cached walk | Remembered listing usable after |
+| --- | --- | --- | --- | --- |
+| Beatport | 3,328 | 30.5 s | 0.31 s | 12 ms |
+| Music | 16,199 | 49.6 s | 7.0 s | 117 ms |
+
+`FolderScan::start` returns in under 100 microseconds in every case, a share that does not
+exist fails in 20 ms, and a scan with no answer after 20 s reads `SLOW OR NO ANSWER` until it
+answers. From the second run on, the previous run's listing is offered as the folder's songs at
+once (`Reader::remembered`, read from the cache file on the worker) while the walk checks it,
+and a walk that then fails keeps that listing: a race with the booted disc off does not wait
+for a slow mount it has already listed.

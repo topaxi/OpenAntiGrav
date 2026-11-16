@@ -21,13 +21,19 @@ impl Session {
     /// own doc. A source with no campaign at all logs why and leaves the
     /// menus exactly as they were.
     pub(crate) fn open_campaign(&mut self) {
+        self.open_campaign_screens(false);
+    }
+
+    /// [`Self::open_campaign`], or the campaign editor over the same screens.
+    pub(super) fn open_campaign_screens(&mut self, editing: bool) {
         let Some(mut archives) = self.open_title_archives("RACE CAMPAIGN") else {
             return;
         };
-        if self
-            .shell
-            .as_ref()
-            .is_some_and(|shell| shell.title.campaign.list_entry.is_some())
+        if !editing
+            && self
+                .shell
+                .as_ref()
+                .is_some_and(|shell| shell.title.campaign.list_entry.is_some())
         {
             self.open_pure_chain(archives);
             return;
@@ -79,6 +85,14 @@ impl Session {
             .custom_campaign
             .as_ref()
             .and_then(|key| shell.custom_campaigns.get(key).cloned());
+        if let Some(custom) = &custom {
+            oag_game::campaign::custom::layer_words(
+                &mut strings,
+                &custom.words,
+                self.settings.language.as_deref(),
+            );
+        }
+        let installed = shell.custom_campaigns.clone();
         if let Some(key) = &self.custom_campaign
             && custom.is_none()
         {
@@ -129,13 +143,29 @@ impl Session {
                     }
                     campaign.grids.clone_from(&custom.grids);
                     campaign.selection_layout = None;
-                    campaign.grid_layout_fury = None;
+                    campaign.chooser = None;
+                }
+                // The editor builds its own grid, one slot at a time: the disc's tiers are
+                // not its to show.
+                let editor = editing
+                    .then(|| self.editor_for(campaign.cell_layout.hex_slots(), &campaign.grids))
+                    .flatten();
+                if editing {
+                    campaign.grids.clear();
+                    campaign.selection_layout = None;
+                    campaign.chooser = None;
                 }
                 // The extended sheet - `hex_filled.mip`/`hex_outline.mip`,
                 // neither of which `Skin.xml`'s own sheet carries - has to
                 // reach the renderer once before anything drawn from it is
                 // on screen, the same upload `PickerStage::take_sheet` does
                 // for a slideshow's own stills.
+                let medal_art = oag_game::campaign::medal_art::apply(
+                    &installed,
+                    custom.as_ref(),
+                    || oag_game::launcher::survey(&oag_source::source::candidates()),
+                    &mut campaign.sprites,
+                );
                 self.renderer_set_sprites(&campaign.sprites);
                 let phases = self.selector_phases;
                 if let Stage::Menu(menu_stage) = &mut self.stage {
@@ -144,9 +174,9 @@ impl Session {
                         campaign.grid_layout,
                         campaign.cell_layout,
                         campaign.selection_layout,
-                        campaign.grid_layout_fury,
+                        campaign.chooser,
                         campaign.cell_help,
-                        campaign.nav_legend,
+                        super::player_name::tagged(campaign.nav_legend, &self.settings.player, title_ref),
                         campaign.ticker,
                         strings,
                         campaign.sprites,
@@ -159,6 +189,8 @@ impl Session {
                         custom,
                     );
                     stage.resume_selector(phases);
+                    stage.set_medal_art(medal_art);
+                    stage.editor = editor;
                     menu_stage.campaign = Some(stage);
                 }
             }
@@ -192,7 +224,10 @@ impl Session {
     /// screen that reads the disc on every opening rather than keeping it from
     /// boot - see [`Self::open_campaign`]. `None` (logged, as `what` could not
     /// be shown) with no source chosen yet or one that will not open.
-    pub(crate) fn open_title_archives(&self, what: &str) -> Option<oag_assets::Archives> {
+    pub(crate) fn open_title_archives(&mut self, what: &str) -> Option<oag_assets::Archives> {
+        if let Some(archives) = self.take_menu_archives() {
+            return Some(archives);
+        }
         let options = self.race_options.as_ref()?;
         let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
             &options.dlc,
@@ -231,6 +266,10 @@ impl Session {
         let Some(campaign) = stage.campaign.as_mut() else {
             return;
         };
+        if campaign.editor.is_some() {
+            self.tick_campaign_editor(pointer);
+            return;
+        }
         let mut events = match &mut campaign.screen {
             Screen::Selection(model) => model.update(self.controls.buttons_mut()),
             Screen::Grid(model) => model.update(self.controls.buttons_mut()),
@@ -248,6 +287,13 @@ impl Session {
     /// `Confirm` on **either** input, and gating only inside `update` would
     /// leave a mouse two-tap launching a cell the pad cannot.
     pub(crate) fn handle_campaign(&mut self, event: Event) {
+        if event == Event::Back
+            && matches!(&self.stage, Stage::Menu(stage)
+                if stage.campaign.as_ref().is_some_and(|campaign| campaign.editor.is_some()))
+        {
+            self.editor_back();
+            return;
+        }
         let nav = self.campaign_nav(event);
         self.play_navs(nav);
         // Whatever cell was just confirmed, read out here and acted on
@@ -256,6 +302,10 @@ impl Session {
         // which cannot start while `stage`/`campaign` still borrow `self.stage`.
         let mut confirmed_cell = None;
         let mut confirmed_difficulty = None;
+        // A campaign the chooser offers whose grids this source does not carry.
+        let mut campaign_unplayable = false;
+        let mut open_map = false;
+        let has_map = self.shell.as_ref().is_some_and(|shell| shell.map.is_some());
         {
             let Stage::Menu(stage) = &mut self.stage else {
                 return;
@@ -266,11 +316,13 @@ impl Session {
             // A refusal line lasts until the player does anything else.
             campaign.notice = None;
             match (&campaign.screen, event) {
-                // **HD only** - `Campaign Selection` ahead of `Grid
+                // `Campaign Selection` (HD and Omega) ahead of `Grid
                 // Selection`. See `crate::campaign_stage`'s own module doc.
                 (Screen::Selection(model), Event::Confirmed) => {
                     let chosen = model.selected();
-                    campaign.open_grid_selection(chosen);
+                    // The 2048 campaign is the 2048 map, not HD's grids.
+                    open_map = has_map && campaign.is_map_campaign(chosen);
+                    campaign_unplayable = !open_map && !campaign.open_grid_selection(chosen);
                 }
                 (Screen::Selection(_), Event::Back) => {
                     keep_cursor(&mut self.records, &mut self.selector_phases, campaign);
@@ -297,7 +349,7 @@ impl Session {
                         warn!("grid {index} has no cells - staying on Grid Selection");
                     }
                 }
-                // **HD only, when `Campaign Selection` was read at all**:
+                // **When `Campaign Selection` was read at all** (HD, Omega):
                 // `Grid Selection`'s own `Back` returns to it rather than
                 // closing the campaign outright. Every other title, and an
                 // HD source missing `DATA06`'s own copy of the screen, keeps
@@ -334,6 +386,10 @@ impl Session {
                         confirmed_difficulty = confirmed_cell.as_ref().map(|_| model.difficulty());
                     }
                 }
+                (Screen::Cell { .. }, Event::Back) if campaign.skips_grid_selection() => {
+                    keep_cursor(&mut self.records, &mut self.selector_phases, campaign);
+                    stage.campaign = None;
+                }
                 (Screen::Cell { .. }, Event::Back) => campaign.back_to_grid_selection(),
                 // `DifficultyChanged` is HD-only, ours, and needs nothing
                 // from the composition root - `CellSelection::cycle_difficulty`
@@ -351,6 +407,15 @@ impl Session {
                 (_, Event::DifficultyChanged) => {}
             }
         }
+        if open_map {
+            self.open_hosted_map();
+        }
+        if campaign_unplayable {
+            self.campaign_notice(
+                "OAG_CAMPAIGN_NOT_PLAYABLE",
+                "THIS CAMPAIGN CANNOT BE PLAYED IN THIS BUILD YET",
+            );
+        }
         if let Some(cell) = confirmed_cell {
             self.launch_campaign_cell(cell, confirmed_difficulty);
         }
@@ -364,7 +429,7 @@ impl Session {
         cell: &oag_tables::race_campaign::Cell,
         // A cross-disc mod campaign event's circuits (ADR-0077), in place of
         // this source's.
-        other_disc: Option<&oag_game::remix::Catalogue>,
+        other_disc: Option<&oag_game::title_lists::Catalogue>,
         // A mod campaign event's own track file, which is its only circuit.
         track_file: Option<&oag_game::campaign::custom::TrackFile>,
     ) -> Option<Result<oag_game::campaign::launch::CellPlan, Refusal>> {
@@ -438,11 +503,16 @@ impl Session {
             .zip(self.shell.as_ref())
             .and_then(|(key, shell)| shell.custom_campaigns.get(key))
             .and_then(|custom| {
-                Some((custom.records_title.clone(), custom.event(&cell.name)?.clone()))
+                Some((
+                    custom.records_title.clone(),
+                    custom.tiers.clone(),
+                    custom.words.clone(),
+                    custom.event(&cell.name)?.clone(),
+                ))
             });
         let extras = match custom
             .as_ref()
-            .map(|(_, event)| self.resolve_custom_event(event))
+            .map(|(_, _, _, event)| self.resolve_custom_event(event))
             .transpose()
         {
             Ok(extras) => extras,
@@ -461,7 +531,7 @@ impl Session {
             .map(|(_, catalogue)| catalogue);
         let track_file = custom
             .as_ref()
-            .and_then(|(_, event)| event.track_file.clone());
+            .and_then(|(_, _, _, event)| event.track_file.clone());
         let Some(plan) = self.plan_cell(&cell, other_disc, track_file.as_ref()) else {
             return;
         };
@@ -483,6 +553,8 @@ impl Session {
                 return;
             }
         };
+        // Opened on the menus' worker, read before `shell` is borrowed.
+        let (fedata, shared) = self.menu_campaign_reads();
         let Some(shell) = self.shell.as_ref() else {
             return;
         };
@@ -543,6 +615,13 @@ impl Session {
             }
         }
         race_options.eliminator_kill_target = plan.eliminator_kill_target;
+        // A score Eliminator's cell authors its target per rung, `SPElimination_UpdateTarget`'s
+        // `cell+0xd4 + difficulty * 4` (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`).
+        race_options.eliminator_score_target = cell
+            .nitro_elimination_target_for_difficulty(
+                difficulty.unwrap_or(oag_tables::race_campaign::Difficulty::Easy),
+            )
+            .and_then(|target| u32::try_from(target).ok());
         race_options.laps_override = plan.laps_override;
         let leg_entries = plan.leg_entries;
         // `AI_ResolveSkillScale`'s campaign-cell branch
@@ -553,20 +632,30 @@ impl Session {
         // every leg at the position its first track's own curve gives -
         // chosen, not measured, on the multi-leg case only.
         // `race_options` is out of `self` until just below, so the source is
-        // handed over rather than read back off `self` (which read `None`
-        // here and so never resolved a cell's skill, until 2026-10-12).
+        // handed over rather than read back off `self` (which reads `None`
+        // here and so would never resolve a cell's skill).
         let ours = extras
             .as_ref()
             .is_some_and(|e| e.ai == oag_game::campaign::custom::Ai::Ours);
         let ai_skill_scale = difficulty.filter(|_| !ours && other_disc.is_none() && track_file.is_none()).and_then(|rung| {
             let location = shell.track(mode, &first_track)?.location.clone();
-            self.resolve_campaign_ai_skill_scale(&cell, rung, &location, &race_options.source)
+            self.resolve_campaign_ai_skill_scale(
+                &cell,
+                rung,
+                &location,
+                &race_options.source,
+                fedata.as_ref(),
+                shared.as_ref(),
+            )
         });
         self.race_options = Some(race_options);
         self.campaign_cell = Some(cell);
-        self.campaign_custom = custom.zip(extras).map(|((records_title, event), extras)| {
+        self.campaign_custom = custom.zip(extras).map(|((records_title, tiers, words, event), extras)| {
             oag_game::campaign::custom::Launch {
                 records_title,
+                tiers,
+                words,
+                tier_targets: event.tier_targets.clone(),
                 ai: event.ai,
                 level: event.level,
                 pilot: extras.pilot,
@@ -649,11 +738,23 @@ impl Session {
         rung: oag_tables::race_campaign::Difficulty,
         location: &str,
         source: &str,
+        fedata: Option<&std::sync::Arc<std::sync::Mutex<oag_assets::Archive>>>,
+        shared: Option<&crate::picker_stage::SharedArchives>,
     ) -> Option<f32> {
         let entry = format!(r"{location}\stats.xml");
-        let spec = oag_assets::source::archive_spec(source, oag_pulse::archives::FEDATA);
-        let blob = match oag_assets::Archive::open(&spec) {
-            Ok(mut archive) => archive.read_name(&entry).ok(),
+        let spec = fedata_spec(source);
+        // The menus' worker opened `FEData.wad` ahead (about 30 ms on the Deck, on the frame
+        // that launches a cell otherwise); the open here is for where it did not.
+        let opened = match fedata {
+            Some(archive) => Ok(oag_thread::lock(archive)
+                .ok()
+                .and_then(|mut archive| archive.read_name(&entry).ok())),
+            None => oag_assets::Archive::open(&spec)
+                .map(|mut archive| archive.read_name(&entry).ok())
+                .map_err(|_| ()),
+        };
+        let blob = match opened {
+            Ok(blob) => blob,
             // HD keeps each circuit's `stats.xml` in its own archives
             // (`/data/environments/<dir>/stats.xml`, seventeen of them) and
             // reads it through the same `%s\stats.xml` format string; its
@@ -662,24 +763,34 @@ impl Session {
             // Easy and `3.48` at Hard, which this reproduces
             // (`docs/ghidra/functions/ps3-hdfury-eu/ai-controls.md`). Read
             // there only for a title whose campaign flies the original's own
-            // opponent, so no other title's campaign tuning moves.
-            Err(_) if self.shell.as_ref()?.title.race.original_opponent => {
-                oag_assets::Archives::open(source, self.shell.as_ref()?.title)
+            // opponent, so no other title's campaign tuning moves. Through the
+            // menus' archives where the worker opened them.
+            Err(()) if self.shell.as_ref()?.title.race.original_opponent => match shared {
+                Some(archives) => oag_thread::lock(archives)
                     .ok()?
                     .read_name(&entry)
-                    .ok()
-            }
-            Err(_) => return None,
+                    .ok(),
+                None => oag_assets::Archives::open(source, self.shell.as_ref()?.title)
+                    .ok()?
+                    .read_name(&entry)
+                    .ok(),
+            },
+            Err(()) => return None,
         };
         let stats = blob.and_then(|blob| oag_tables::track_stats::from_blob(&blob).ok());
         oag_tables::track_stats::resolve_skill_scale(cell, rung, stats.as_ref())
     }
 }
 
+/// The PSP titles' `FEData.wad` on `source`: where a circuit's `stats.xml` is read from.
+pub(super) fn fedata_spec(source: &str) -> String {
+    oag_assets::source::archive_spec(source, oag_pulse::archives::FEDATA)
+}
+
 /// A mod campaign event's extras, checked against what this machine has.
 pub(super) struct Extras {
     /// The other disc's source and circuits, for a cross-disc event.
-    other_disc: Option<(String, oag_game::remix::Catalogue)>,
+    other_disc: Option<(String, oag_game::title_lists::Catalogue)>,
     /// The preset team, by the id this source spells it with.
     team: Option<String>,
     /// The opponents' teams, grid slot 1 first.
@@ -744,7 +855,7 @@ impl Session {
                         )
                     })
                     .ok_or_else(|| format!("the circuit is on {slug}, and no disc of it is here"))?;
-                let catalogue = oag_game::remix::catalogue(&candidate.source)
+                let catalogue = oag_game::title_lists::catalogue(&candidate.source)
                     .map_err(|e| format!("{slug}: {e:#}"))?;
                 Some((candidate.source.clone(), catalogue))
             }

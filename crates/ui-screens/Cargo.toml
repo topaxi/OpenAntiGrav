@@ -17,13 +17,13 @@ oag-pulse.workspace = true
 oag-pure.workspace = true
 oag-race.workspace = true
 oag-tables.workspace = true
+oag-title.workspace = true
 oag-ui.workspace = true
 
 [lints]
 workspace = true
 
 [dev-dependencies]
-oag-ai.workspace = true
 oag-assets.workspace = true
 oag-testdata.workspace = true
 

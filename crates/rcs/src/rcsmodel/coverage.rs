@@ -4,7 +4,7 @@
 //! a fair seam: this is an audit *of* the parser rather than part of it, and
 //! nothing else in the module calls it.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 use super::{
     HEADER_LEN, MATERIAL_LEN, Model, SUBMESH_LEN, SURFACE_BASE, SURFACE_COUNT, SURFACE_LEN,

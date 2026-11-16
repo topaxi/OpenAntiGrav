@@ -17,3 +17,15 @@ pub mod capture;
 pub mod mesh;
 pub mod mesh_render;
 pub mod orbit;
+
+/// Ends a build once the process is exiting, so closing the window on the loading screen does not
+/// wait out the rest of a model or scene build for a race nobody will see
+/// (`oag_thread::gpu_workers`). Called between a build's pipeline sets and per placed node; the
+/// browser build never sets it.
+pub(crate) fn not_exiting() -> anyhow::Result<()> {
+    anyhow::ensure!(
+        !oag_thread::gpu_workers::stopping(),
+        "the process is exiting"
+    );
+    Ok(())
+}

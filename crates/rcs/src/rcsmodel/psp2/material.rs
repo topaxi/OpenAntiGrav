@@ -128,7 +128,7 @@
 //! own entries all land on headers whose name pointer resolves to
 //! `.rcsmaterial` text on both (527 of 527 checked on the circuit), and the
 //! scan-based texture discovery resolves a `.gxt` on 83.1% of materials
-//! corpus-wide (`crates/formats/tests/psp2_rcsmodel_material_ground_truth.rs`).
+//! corpus-wide (`crates/rcs/tests/psp2_rcsmodel_ground_truth.rs`).
 //! **60** on ordinal-first being the right choice of texture when several are
 //! found - HD's own reading needed the sampler-name hash to answer that
 //! question correctly, and this reading does not have one. **90** on the
@@ -205,9 +205,9 @@ pub struct Material {
     /// byte extent, in ascending address order - see the module doc for why
     /// this is a scan rather than a decoded sampler array.
     pub textures: Vec<String>,
-    /// The `.gnf` bound to the material's **`lightmap` sampler**, by the
-    /// sampler's own name hash - a PS4 material only; `None` on every Vita
-    /// one, whose sampler table is not read (see [`read`]).
+    /// The `.gnf` (PS4) or `.gxt` (Vita) bound to the material's **`lightmap` sampler**, by the
+    /// sampler's own name hash. On the Vita it is the entry of the sampler table
+    /// ([`Self::samplers`]) named by `LIGHTMAP_SAMPLER`.
     ///
     /// Also one of [`Self::textures`], last in its ranking. A submesh's
     /// declaration carries `lightmapUV` if and only if its material has one of
@@ -494,14 +494,11 @@ fn params_at(cpu: &[u8], header_at: usize) -> Vec<Param> {
 }
 
 fn cstr_at(cpu: &[u8], at: usize) -> Option<String> {
-    if at >= cpu.len() {
+    let text = oag_bytes::cstr_at(cpu, at)?;
+    if text.is_empty() {
         return None;
     }
-    let end = (at..cpu.len()).find(|&k| cpu[k] == 0)?;
-    if end == at {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&cpu[at..end]).into_owned())
+    Some(String::from_utf8_lossy(text).into_owned())
 }
 
 /// Byte-slice suffix comparison, deliberately not `str`-based: [`cstr_at`]
@@ -513,9 +510,11 @@ fn ends_with_ci(s: &str, suffix: &str) -> bool {
     sb.len() >= xb.len() && sb[sb.len() - xb.len()..].eq_ignore_ascii_case(xb)
 }
 
-fn u32_at(cpu: &[u8], at: usize) -> Option<u32> {
-    cpu.get(at..at + 4)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+/// Whether a string starts at `at`: the byte before it is `0`, or it is the section's first.
+/// A word that merely holds an address inside a longer path would otherwise read back as a
+/// truncated path no material names.
+fn starts_a_string(cpu: &[u8], at: usize) -> bool {
+    at == 0 || at.checked_sub(1).and_then(|i| cpu.get(i)) == Some(&0)
 }
 
 /// Every distinct `.gxt` path a word-aligned pointer inside `[from, to)`
@@ -526,6 +525,7 @@ fn textures_in(cpu: &[u8], from: usize, to: usize) -> Vec<String> {
     let mut at = from;
     while at + 4 <= to {
         if let Some(target) = u32_at(cpu, at)
+            && starts_a_string(cpu, target as usize)
             && let Some(path) = cstr_at(cpu, target as usize)
             && ends_with_ci(&path, ".gxt")
             && !out.contains(&path)
@@ -615,13 +615,18 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
                 .copied()
                 .unwrap_or_else(|| header_at.saturating_add(TAIL_SCAN_LIMIT));
             let textures = textures_in(cpu, header_at + HEADER_LEN, next);
+            let samplers = samplers_at(cpu, header_at);
+            let lightmap = samplers
+                .iter()
+                .find(|(hash, _)| *hash == crate::rcsmaterial::LIGHTMAP_SAMPLER)
+                .map(|(_, path)| path.clone());
             Material {
                 name,
                 technique,
                 textures,
-                lightmap: None,
+                lightmap,
                 params: params_at(cpu, header_at),
-                samplers: samplers_at(cpu, header_at),
+                samplers,
                 state: cpu
                     .get(header_at + VITA_STATE..header_at + VITA_STATE + 2)
                     .map(|b| u16::from_le_bytes([b[0], b[1]])),
@@ -631,6 +636,8 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
 }
 
 mod ps4_params;
+
+use oag_bytes::le::{u32_at, u64_at};
 
 /// Bytes from the start of a PS4 sampler entry to its texture pointer.
 const PS4_SAMPLER_POINTER: usize = 0x18;
@@ -718,11 +725,6 @@ fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> (Vec<String>, Option<S
         found.into_iter().map(|(_, _, path)| path).collect(),
         lightmap.map(|(_, path)| path),
     )
-}
-
-fn u64_at(cpu: &[u8], at: usize) -> Option<u64> {
-    cpu.get(at..at + 8)
-        .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
 }
 
 /// Where a PS4 file states its material count: a 64-bit word at this offset of

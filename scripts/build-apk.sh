@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the Android APK: oag-game as a NativeActivity cdylib, no Java, no game
-# content. Output: target/apk/OpenAntiGrav-<version>-android-arm64.apk
+# content (the official mods ride along as assets). Output: target/apk/OpenAntiGrav-<version>-android-arm64.apk
 #
 #   scripts/build-apk.sh [--version V] [--debug] [--arm64-only]
 #
@@ -69,7 +69,11 @@ if [ "$x86" = auto ] && rustup target list --installed 2>/dev/null | grep -qx x8
     ndk_targets+=(-t x86_64)
     mkdir -p "$stage/lib/x86_64"
 fi
-cargo ndk "${ndk_targets[@]}" -P "$api" build -p oag-game --example oag_android --features android "${cargo_profile[@]}"
+# A shipped app has no --seed/--give (the dev-cli feature). OAG_APK_DEV_CLI=1 builds the
+# perf-test app scripts/android-race-phases.sh drives with --seed.
+features=android,extensions
+[ -z "${OAG_APK_DEV_CLI:-}" ] || features+=,dev-cli
+cargo ndk "${ndk_targets[@]}" -P "$api" build -p oag-game --example oag_android --no-default-features --features "$features" "${cargo_profile[@]}"
 so="$root/target/aarch64-linux-android/$profile/examples/liboag_android.so"
 "$llvm_strip" --strip-all -o "$stage/lib/arm64-v8a/liboag_android.so" "$so"
 if [ "$x86" = yes ]; then
@@ -124,13 +128,24 @@ cat > "$stage/AndroidManifest.xml" <<MANIFEST
 </manifest>
 MANIFEST
 
+# The official mods (assets/mods/official, ADR-0083), as assets plus an index of
+# `size sha256 path` lines: the NDK lists an asset folder's files, never its subfolders, so
+# the game copies what the index names to <files dir>/assets/mods/official on the first
+# launch of a build (oag_mobile::packaged). Fails when none is staged, as the other targets do.
+assets="$stage/assets"
+mkdir -p "$assets"
+"$root/scripts/stage-official-mods.sh" "$assets/official-mods"
+(cd "$assets/official-mods" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | while IFS= read -r file; do
+    printf '%s %s %s\n' "$(stat -c %s "$file")" "$(sha256sum "$file" | cut -d' ' -f1)" "$file"
+done) > "$assets/official-mods.index"
+
 base="$out/base.apk"
 flat="$stage/flat"
 mkdir -p "$flat"
 "$build_tools/aapt2" compile --dir "$res" -o "$flat"
 "$build_tools/aapt2" link -I "$android_jar" --manifest "$stage/AndroidManifest.xml" \
     --min-sdk-version "$api" --target-sdk-version 34 -o "$base" --auto-add-overlay "$flat"/*.flat
-(cd "$stage" && zip -q -D "$base" lib/*/liboag_android.so)
+(cd "$stage" && zip -q -r -D "$base" lib/*/liboag_android.so assets)
 
 aligned="$out/aligned.apk"
 rm -f "$aligned"

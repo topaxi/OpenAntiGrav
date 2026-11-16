@@ -132,7 +132,14 @@ fn the_inherited_table_is_hds_pair_for_every_blended_name_the_two_titles_share()
         true,
         "start_grid_laser_da".to_string(),
     );
-    assert_eq!(family, Family::from([laser]));
+    // And every material named `2048_shipshield_old` is blended on one picture, `shieldhexagonal_alpha`:
+    // the per-team shield shell, HD's `hexagonalshield_rich` role.
+    let shell = (
+        "2048_shipshield_old".to_string(),
+        true,
+        "shieldhexagonal_alpha".to_string(),
+    );
+    assert_eq!(family, Family::from([laser, shell]));
     let derived: Vec<(String, u16, u16)> = names
         .into_iter()
         .filter_map(|name| {

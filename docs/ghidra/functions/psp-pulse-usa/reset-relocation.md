@@ -202,13 +202,18 @@ Departures, each recorded in the module:
 - `place_at` zeroes the angular velocity, which `Ship_PlaceAndLaunch` leaves
   alone.
 
+Ported 2026-11-03: the player's shield charge (`Race::reset` pays
+`min(5, shield - 1)` through the shared damage gate, so a weapons-off race halves
+it and a running Shield pickup absorbs it; an AI craft pays nothing; mode 6's
+fixed `10` has no counterpart here), and the distance trigger (`0x08841cec`,
+`RespawnCause::Distance`: 200 units from the located spline sample for 30 ticks,
+every craft), which enters the same relocation. The invented `LostCircuit` and
+`OffTrack` dwells are retired.
+
 Not ported:
-- The player's shield charge (`Ship_SetState(3)`, shield.md).
 - The Eliminator's state-8 return, which reads the same ring.
-- This project's invented dwells (`LostCircuit`, `Beneath`, `Stalled`,
-  `OffTrack`). They stand in for the original's distance trigger
-  (`0x08841cec`), which enters the same state, but their rescues are measured
-  against the old pose.
+- This project's invented `Beneath` and `Stalled` dwells (not distance
+  triggers); their rescues are measured against the old at-rest racing-line pose.
 
 **2048 and Omega: not checkable here.** This is a Pulse executable reading,
 and neither title's reset was opened in this pass.

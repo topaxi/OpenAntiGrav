@@ -90,3 +90,17 @@ fn the_relocation_is_the_width_midpoint_five_up_launched_down_the_track() {
     assert!((relocation.velocity - forward * 73.0).length() < 1e-4);
     assert!(forward.x > 0.99, "faces down the track: {forward:?}");
 }
+
+#[test]
+fn a_craft_emerges_where_a_reset_would_put_it_without_the_drop() {
+    let spline = Spline::from_track(&crate::tests::straight_track_with_widths(4.0, 12.0));
+    let point = Vec3::new(20.0, 4.0, 0.0);
+    let reset = relocate(&spline, point, 73.0).expect("a spline");
+    let out = emerge(&spline, point, 73.0).expect("a spline");
+    // The hover lift's 3 off the surface, the height a craft flies at.
+    assert!((out.pose.position.y - 3.0).abs() < 1e-4, "{:?}", out.pose);
+    let dropped = reset.pose.position - out.pose.position;
+    assert!((dropped - Vec3::new(0.0, RESET_LIFT, 0.0)).length() < 1e-4);
+    assert_eq!(out.pose.orientation, reset.pose.orientation);
+    assert_eq!(out.velocity, reset.velocity);
+}

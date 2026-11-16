@@ -11,9 +11,11 @@
 
 mod airtime_arc_ground_truth;
 mod autopilot_ramp_pose_walk;
+mod body_damping_pose_walk_ground_truth;
 mod camera_lean_ground_truth;
 mod collision_cage_ground_truth;
 mod crest_pitch_pose_walk;
+mod dekonstruct_takeoff_ground_truth;
 mod force_term_pose_walk_ground_truth;
 mod height_miss_census;
 mod hover_contact_ground_truth;

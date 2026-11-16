@@ -67,7 +67,7 @@
 //! *is* exercised (7.1% of words set bit 15), so a PVRTC-I decoder would be wrong
 //! on 7% of this corpus's words.
 
-use crate::gxt::twiddle;
+use crate::gxt::Twiddle;
 
 /// Bytes one word occupies: [`WORD_SIDE`] x [`WORD_SIDE`] texels at 4 bits each.
 pub const WORD_LEN: usize = 8;
@@ -392,6 +392,122 @@ fn quad(p: Word, q: Word, r: Word, s: Word) -> [[[u8; 4]; WORD_SIDE]; WORD_SIDE]
     out
 }
 
+/// A word with its two colours already unpacked, so the four quads that read it
+/// do not each unpack it again.
+#[derive(Clone, Copy, Default)]
+struct Unpacked {
+    word: Word,
+    a: [i32; 4],
+    b: [i32; 4],
+}
+
+impl Unpacked {
+    fn new(word: Word) -> Self {
+        let a = colour_a(word.colour);
+        let b = colour_b(word.colour);
+        Self {
+            word,
+            a: [a.r, a.g, a.b, a.a],
+            b: [b.r, b.g, b.b, b.a],
+        }
+    }
+}
+
+/// One colour's four channels as lanes, so each step below is one vector
+/// operation. Every value stays far inside `i32`, so the wrapping forms never
+/// wrap; they keep the loops free of overflow checks.
+type Lanes = [i32; 4];
+
+fn lanes(f: impl Fn(usize) -> i32) -> Lanes {
+    [f(0), f(1), f(2), f(3)]
+}
+
+/// Widens interpolated five-bit channels (and the four-bit alpha in lane 3) to
+/// eight bits, as [`interpolate`] does.
+fn widen(v: Lanes) -> Lanes {
+    [
+        (v[0] >> 6).wrapping_add(v[0] >> 1),
+        (v[1] >> 6).wrapping_add(v[1] >> 1),
+        (v[2] >> 6).wrapping_add(v[2] >> 1),
+        (v[3] >> 4).wrapping_add(v[3]),
+    ]
+}
+
+/// [`interpolate`] with a colour's channels as lanes, writing
+/// `[row][column]`: the same integer steps.
+fn interpolate_lanes(p: Lanes, q: Lanes, r: Lanes, s: Lanes) -> [[Lanes; WORD_SIDE]; WORD_SIDE] {
+    let q_minus_p = lanes(|k| q[k].wrapping_sub(p[k]));
+    let s_minus_r = lanes(|k| s[k].wrapping_sub(r[k]));
+    let mut hp = lanes(|k| p[k].wrapping_mul(WORD_SIDE as i32));
+    let mut hr = lanes(|k| r[k].wrapping_mul(WORD_SIDE as i32));
+
+    let mut out = [[[0i32; 4]; WORD_SIDE]; WORD_SIDE];
+    for column in 0..WORD_SIDE {
+        let step = lanes(|k| hr[k].wrapping_sub(hp[k]));
+        let mut result = lanes(|k| hp[k].wrapping_mul(4));
+        for row in &mut out {
+            row[column] = widen(result);
+            result = lanes(|k| result[k].wrapping_add(step[k]));
+        }
+        hp = lanes(|k| hp[k].wrapping_add(q_minus_p[k]));
+        hr = lanes(|k| hr[k].wrapping_add(s_minus_r[k]));
+    }
+    out
+}
+
+/// The modulation weight, in eighths, and whether alpha is punched through, for
+/// each 2-bit code, in a word whose modulation is interpolated (`[0]`) or not
+/// (`[1]`).
+///
+/// Only a quad with no hard transition reaches this table; see [`quad`] for the
+/// tagged values the transition adds.
+const WEIGHTS: [[(i32, bool); 4]; 2] = [
+    [(0, false), (4, false), (4, true), (8, false)],
+    [(0, false), (3, false), (5, false), (8, false)],
+];
+
+/// [`quad`] for the quad with no hard transition, which is nearly all of them:
+/// every texel is the blend of the two interpolated colours by its own
+/// modulation, and the 8x8 modulation grid [`quad`] fills reduces to the 2x2 of
+/// each word's bits that fall in its central 4x4.
+fn smooth_quad(
+    p: &Unpacked,
+    q: &Unpacked,
+    r: &Unpacked,
+    s: &Unpacked,
+) -> [[[u8; 4]; WORD_SIDE]; WORD_SIDE] {
+    let upscaled_a = interpolate_lanes(p.a, q.a, r.a, s.a);
+    let upscaled_b = interpolate_lanes(p.b, q.b, r.b, s.b);
+    let words = [p, q, r, s];
+
+    let mut out = [[[0u8; 4]; WORD_SIDE]; WORD_SIDE];
+    for row in 0..WORD_SIDE {
+        for column in 0..WORD_SIDE {
+            let owner =
+                words[usize::from(row >= WORD_SIDE / 2) * 2 + usize::from(column >= WORD_SIDE / 2)];
+            let (local_row, local_column) = ((row + 2) % WORD_SIDE, (column + 2) % WORD_SIDE);
+            let code = (owner.word.modulation >> (2 * (local_row * WORD_SIDE + local_column))) & 3;
+            let (weight, punch_through) =
+                WEIGHTS[usize::from(owner.word.colour & 1 == 0)][code as usize];
+            let (a, b) = (&upscaled_a[row][column], &upscaled_b[row][column]);
+            // Both operands are non-negative, so the shift is the division.
+            let blend = |k: usize| {
+                (a[k]
+                    .wrapping_mul(8 - weight)
+                    .wrapping_add(b[k].wrapping_mul(weight))
+                    >> 3) as u8
+            };
+            out[row][column] = [
+                blend(0),
+                blend(1),
+                blend(2),
+                if punch_through { 0 } else { blend(3) },
+            ];
+        }
+    }
+    out
+}
+
 /// Decodes one `PVRTII4BPP` surface to straight RGBA8, row-major.
 ///
 /// `data` is the level's texels alone, [`WORD_LEN`] bytes per 4x4 word in
@@ -409,17 +525,22 @@ pub fn decode_ii_4bpp(data: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4
     let words_y = surface_h / WORD_SIDE;
     let mut surface = vec![[0u8; 4]; surface_w.checked_mul(surface_h)?];
 
-    let word_at = |x: usize, y: usize| -> Word {
-        let index = twiddle(x as u32, y as u32, words_x as u32, words_y as u32) as usize;
-        let at = index * WORD_LEN;
-        let Some(bytes) = data.get(at..at + WORD_LEN) else {
-            return Word::default();
-        };
-        Word {
-            modulation: u32::from_le_bytes(bytes[0..4].try_into().expect("four bytes")),
-            colour: u32::from_le_bytes(bytes[4..8].try_into().expect("four bytes")),
+    // Every word, untwiddled and unpacked once, in raster order.
+    let order = Twiddle::new(words_x as u32, words_y as u32);
+    let mut words = Vec::with_capacity(words_x * words_y);
+    for y in 0..words_y {
+        for x in 0..words_x {
+            let at = order.index(x, y) * WORD_LEN;
+            words.push(Unpacked::new(match data.get(at..at + WORD_LEN) {
+                Some(bytes) => Word {
+                    modulation: u32::from_le_bytes(bytes[0..4].try_into().expect("four bytes")),
+                    colour: u32::from_le_bytes(bytes[4..8].try_into().expect("four bytes")),
+                },
+                None => Word::default(),
+            }));
         }
-    };
+    }
+    let word_at = |x: usize, y: usize| &words[y * words_x + x];
 
     // Each iteration decodes the 4x4 texels *between* four words, so the quad
     // grid is offset half a word from the word grid and wraps at both edges.
@@ -430,25 +551,33 @@ pub fn decode_ii_4bpp(data: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4
             let (qx, qy) = (quad_x, py);
             let (rx, ry) = (px, quad_y);
             let (sx, sy) = (quad_x, quad_y);
-            let texels = quad(
+            let (p, q, r, s) = (
                 word_at(px, py),
                 word_at(qx, qy),
                 word_at(rx, ry),
                 word_at(sx, sy),
             );
+            // Bit 15 of the quad's top-left word: the hard transition.
+            let texels = if p.word.colour & (1 << 15) == 0 {
+                smooth_quad(p, q, r, s)
+            } else {
+                quad(p.word, q.word, r.word, s.word)
+            };
 
+            // Each word receives the 2x2 corner of the quad nearest it: the
+            // quad's top-left to P's bottom-right, and so on round.
             let half = WORD_SIDE / 2;
-            for row in 0..half {
-                for column in 0..half {
-                    let mut place = |wx: usize, wy: usize, dr: usize, dc: usize, texel| {
-                        let y = wy * WORD_SIDE + row + dr;
-                        let x = wx * WORD_SIDE + column + dc;
-                        surface[y * surface_w + x] = texel;
-                    };
-                    place(px, py, half, half, texels[row][column]);
-                    place(qx, qy, half, 0, texels[row][column + half]);
-                    place(rx, ry, 0, half, texels[row + half][column]);
-                    place(sx, sy, 0, 0, texels[row + half][column + half]);
+            let corners = [
+                (px, py, half, half, 0, 0),
+                (qx, qy, half, 0, 0, half),
+                (rx, ry, 0, half, half, 0),
+                (sx, sy, 0, 0, half, half),
+            ];
+            for (wx, wy, dr, dc, from_row, from_column) in corners {
+                for row in 0..half {
+                    let at = (wy * WORD_SIDE + row + dr) * surface_w + wx * WORD_SIDE + dc;
+                    surface[at..at + half]
+                        .copy_from_slice(&texels[from_row + row][from_column..from_column + half]);
                 }
             }
         }

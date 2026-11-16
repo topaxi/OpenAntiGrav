@@ -64,6 +64,11 @@ The capture tool is `scripts/rpcs3-hd-hull-light.py` (`team`, `flare`,
   - the Assegai wings and pods still read a little low in luma (0.29-0.40 against 0.59-0.62).
 - **The white wing rims on the `_n1` skins** are not the SPU term: they stay
   with the craft binding removed. Whether the original shows them is unread.
+  The green and purple patches that sat under them were the nitro materials'
+  ramp and mask drawn as pictures; fixed (hd-ship-materials.md, "The nitro
+  hull's picture was a ramp and a mask"). Open there: no original nitro frame
+  exists (every `_n1` row is padlocked on a fresh RPCS3 profile), and the
+  iridescent overlay itself is not drawn.
 
 ## Next Steps
 

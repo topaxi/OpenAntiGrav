@@ -71,14 +71,20 @@ wholly outside one of the six planes). Draws are joined to surfaces by the surfa
 
 ## 2048 / Omega
 
-Same word, no draw list: **checked, applies, not wired.** The state word is the shared `.rcsmodel` material record (Vita
-header `+0x12`, PS4 `+0x22`; the same 17 values as HD's). Census of state bit 4 (2026-10-27, `oag-rcs`
+**Ported (2026-10-31, `psp2-backface-cull`), cull bit only.** The state word is the shared `.rcsmodel` material record (Vita
+header `+0x12`, PS4 `+0x22`; the same 17 values as HD's). Census of state bit 4 (`oag-rcs`
 `hd_lineage_blend_ground_truth::state_bit_4_census_on_omega_and_2048`): Omega's five base archives 4,751 of 4,918, 5,804 of
 5,871, 8,503 of 8,565, 286 of 289 and 13,568 of 13,722 materials; 2048 22,483 of 22,994 (97 to 99 percent, HD's 1,523 of
 1,531 matched surfaces is the same shape). No 2048 or Omega draw list exists (shadPS4 gives no memory readout, and its race
-shots are untrusted), so that these titles' tracks cull on the bit is read off the format, not measured: `Looks::unread`
-leaves `honour_render_state` off for both and the `psp2` builder does not fill `material_state`. Wiring is a title rule plus
-that builder, open in the thread.
+shots are untrusted), so culling on the bit is **inherited from HD's measured law** (`Origin::InheritedFrom("Wipeout HD")`),
+not measured on either. Both titles set `Looks::material_render_state`; the `psp2` builder fills `Model::material_state`
+beside each texture slot; the loader calls `Model::honour_cull` (the cull half only: the coverage and depth-write bits stay
+unread there).
+Check: 2048 Vineta K carries the bit on at least 90 percent of materials and draws
+(`psp2_backface_cull_ground_truth`). HD's chunk 1556 counterpart is chunk 47 (same x and z extent, 20 triangles): from HD's
+start-grid eye it faces the eye in 2048's file, so it is **not** culled away at that pose. Re-rendered pairs: Vineta K 24
+pixels differ, Empire Climb 360, Mall 5; mean grey unchanged (18.66, 25.94, 23.51). The visible 2048 wall-top artefact is
+not this slab. Winding is the same sense as HD's (nothing of the road or walls vanishes; Omega Vineta K frame checked).
 
 ## Names applied
 

@@ -15,6 +15,9 @@ use super::*;
 /// The shield bar's and the other bars' memory, plus a split view's reticle.
 #[derive(Clone, Debug, Default)]
 pub(super) struct SlotHud {
+    /// Each other craft's multiplayer-tag fade as this view sees it, `0..=1`
+    /// (`oag_hud::player_tags::step_fade`). Display only.
+    pub(super) tag_fade: [f32; oag_gameplay::MAX_SHIPS],
     /// `Hud_UpdateEnergyBar`'s `hud+0x118`: the shield percentage as of the
     /// previous tick. Seeded `0.0`.
     pub(super) shield_flash_prev: f32,
@@ -44,6 +47,15 @@ pub(super) struct SlotHud {
     /// 2048's `hud+0x228`: seconds of the grant announcement left
     /// ([`oag_hud::Readout::pickup_announcing`]).
     pub(super) pickup_announce_left: f32,
+    /// How far 2048's `PickupParent` has flown along y since the announcement ended, in layout
+    /// pixels: `dt * 1800.0` a frame (`Hud_UpdatePickupIcon`). `0.0` while announcing or holding
+    /// nothing. Unclamped; the draw stops at the slot ([`oag_hud::Readout::pickup_fly`]).
+    pub(super) pickup_fly_travel: f32,
+    /// 2048's pop-in, as `[hud+0x220 - 1, hud+0x224]`: the icon's width above its table width,
+    /// `9` falling to `0`, and its height over its table height, `0` rising to `1`
+    /// ([`oag_hud::Readout::pickup_pop`]). Only the frame where nothing is held and the height
+    /// has run out re-arms it, so a swap of one held weapon for another does not pop again.
+    pub(super) pickup_pop: [f32; 2],
     /// The held pickup's backdrop and icon fade ([`oag_hud::Readout::pickup_fade`]).
     pub(super) pickup_fade: oag_hud::pickup_fade::Fade,
     /// The look of the mod pickup last held, kept so its fade-out after use draws what its
@@ -71,6 +83,12 @@ pub(super) struct SlotHud {
     /// slots. Set for every slot by `Race::watch_laps`, fed only for the slots a
     /// person on this machine flies.
     pub(super) lap_watch: Option<super::lap_messages::LapWatch>,
+    /// The incoming-weapon warnings ([`oag_hud::incoming`]); only the viewer's own slot is
+    /// ever raised.
+    pub(super) incoming: oag_hud::incoming::Warnings,
+    /// Whether this title raises them ([`oag_title::HudArt::incoming_warnings`]). Set by
+    /// `Race::watch_laps`, which is where a loaded race meets the title's art.
+    pub(super) incoming_enabled: bool,
 }
 
 /// 2048's `EnergyBarDelay` factor, `Hud_UpdateEnergyBar`'s own `0.1`, applied
@@ -87,6 +105,18 @@ const THRUST_CHASE_FALL_PER_SECOND: f32 = 100.0;
 /// How long the pickup grant announcement stays up: `Hud_UpdatePickupIcon`'s `1.0` stored at
 /// `hud+0x228` when the held weapon changes (`0x3f800000`).
 pub(super) const PICKUP_ANNOUNCE_SECONDS: f32 = 1.0;
+
+/// The speed of the grant's fly to the slot along y, layout pixels a second: the `0x44e10000`
+/// (1800.0) `Hud_UpdatePickupIcon` multiplies `dt` by.
+pub(super) const PICKUP_FLY_PIXELS_PER_SECOND: f32 = 1800.0;
+
+/// The width multiplier's start above its rest value of `1`, and its fall per second
+/// (`Hud_UpdatePickupIcon`: `10.0` and `70.0`).
+const POP_WIDE_START: f32 = 9.0;
+const POP_WIDE_PER_SECOND: f32 = 70.0;
+/// The height multiplier's rise per second when held, and its fall when nothing is.
+const POP_HIGH_RISE_PER_SECOND: f32 = 7.0;
+const POP_HIGH_FALL_PER_SECOND: f32 = 10.0;
 
 impl SlotHud {
     /// One tick of every bar, in the order the original's update runs them:
@@ -151,7 +181,9 @@ impl SlotHud {
 impl SlotHud {
     /// One frame of `Hud_UpdatePickupIcon`'s announcement timer: a change of the held weapon to
     /// a new one arms it, the same frame takes `dt` off, and nothing held clears the memory so
-    /// the next grant announces even if it is the same weapon again.
+    /// the next grant announces even if it is the same weapon again. On the frame the timer
+    /// reaches zero, and every frame after, the icon flies on: the distance grows by
+    /// `dt * 1800.0`.
     fn advance_pickup_announcement(&mut self, held: Option<oag_tables::weapons::Weapon>, dt: f32) {
         if held != self.pickup_held_prev {
             self.pickup_held_prev = held;
@@ -161,6 +193,19 @@ impl SlotHud {
         }
         self.pickup_announce_left = if held.is_some() {
             (self.pickup_announce_left - dt).max(0.0)
+        } else {
+            0.0
+        };
+        if held.is_some() {
+            self.pickup_pop[0] = (self.pickup_pop[0] - dt * POP_WIDE_PER_SECOND).max(0.0);
+            self.pickup_pop[1] = (self.pickup_pop[1] + dt * POP_HIGH_RISE_PER_SECOND).min(1.0);
+        } else if self.pickup_pop[1] > 0.0 {
+            self.pickup_pop[1] = (self.pickup_pop[1] - dt * POP_HIGH_FALL_PER_SECOND).max(0.0);
+        } else {
+            self.pickup_pop = [POP_WIDE_START, 0.0];
+        }
+        self.pickup_fly_travel = if held.is_some() && self.pickup_announce_left <= 0.0 {
+            self.pickup_fly_travel + dt * PICKUP_FLY_PIXELS_PER_SECOND
         } else {
             0.0
         };
@@ -190,6 +235,7 @@ impl Race {
     pub(super) fn advance_slot_huds(&mut self) {
         let primary = self.player_slot();
         let viewed = self.viewport_count();
+        let mut raises = std::mem::take(&mut self.view.incoming_raises);
         for slot in 0..MAX_SHIPS {
             if slot != primary && slot >= viewed {
                 continue;
@@ -202,15 +248,26 @@ impl Race {
             let thrust = ship.physics.thrust.clamp(0.0, 100.0);
             let absorbing = self.absorb_window_active(slot);
             let held = self.held_for_hud(slot);
-            let look = self.sim.extensions.pickup_look(slot);
+            let look = match held {
+                Some(oag_tables::weapons::Weapon::Extension(kind)) => {
+                    self.sim.extensions.pickup_look(slot, kind)
+                }
+                _ => None,
+            };
             let acting = ship.physics.pilot_assist.acting;
             let (shown, dt) = (self.pilot_assist_shown(slot), self.sim.dt);
             let hud = &mut self.view.huds[slot];
             hud.advance(percent, fraction, thrust, absorbing, held, dt);
-            if held == Some(oag_tables::weapons::Weapon::Extension) && look.is_some() {
+            if look.is_some() {
                 hud.pickup_look = look;
             }
             hud.assist_indicator.advance(shown, acting, dt);
+            if slot == primary {
+                for icon in raises.drain(..) {
+                    hud.incoming.raise(icon);
+                }
+            }
+            hud.incoming.advance(dt);
         }
     }
 }
@@ -265,7 +322,7 @@ pub(super) fn flash_step(timer: f32, current: f32, dt: f32, dropped: bool) -> (f
 /// and the next blink resumes from that phase rather than starting fresh.
 /// Wraps to `0.0` once it exceeds `1.0`, the same up-counting shape
 /// [`shield_flash_step`] uses for `hud+0x11c`. See
-/// `docs/ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-the-absorb-flash-2026-09-25`.
+/// `docs/ghidra/functions/psp-pulse-usa/shield.md` ("HUD_UpdateEnergyBar: the absorb flash").
 pub(super) fn shield_blink_step(timer: f32, blinking: bool, dt: f32) -> f32 {
     if !blinking {
         return timer;

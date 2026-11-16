@@ -30,7 +30,7 @@ use crate::session::menus::combine_variant;
 ///
 /// **Split off from `main` because the boot is loaded differently here.** A
 /// window defers the movies onto a worker and covers the wait with the loading
-/// screen (`boot::MediaWorker`); none of these legs has anywhere to show that,
+/// screen (`boot::worker::MediaWorker`); none of these legs has anywhere to show that,
 /// and a capture must not race a worker for the frames it is about to draw, so
 /// every one of them takes the whole boot in one blocking `boot::load` exactly
 /// as the game always did. The body below is that former part of `main`,
@@ -51,6 +51,7 @@ pub(crate) fn run_windowless(
     }
     if cli.original_menu {
         loaded.frontend.set_extra_tiles(Vec::new());
+        loaded.frontend.hide_pad_focus();
     }
     // A language chosen on an earlier run skips the picker. Reported either
     // way: silently not asking is indistinguishable from a broken picker, and
@@ -92,6 +93,7 @@ pub(crate) fn run_windowless(
                 records::Medal::Silver | records::Medal::Bronze => EarnedTier::Pass,
             })
     });
+    boot::reveals2048::refresh(&mut loaded.frontend, &options.source, &saved, &title_name);
     boot::tiers2048::refresh_locks(
         &mut loaded.frontend,
         loaded.title,
@@ -194,6 +196,24 @@ pub(crate) fn run_windowless(
                     )
             });
         }
+        progress.load_stage = cli.loading_stage;
+        let card = cli.loading_card.as_deref().and_then(|spec| {
+            let (name, page) = match spec.rsplit_once(':') {
+                Some((name, page)) if page.parse::<usize>().is_ok() => {
+                    (name, page.parse().unwrap_or(0))
+                }
+                _ => (spec, 0),
+            };
+            // A capture has no save: the events the map gates open as if the first were passed.
+            loaded.frontend.refresh_campaign_progress(|earned| {
+                (earned == "2048 - Event 1").then_some(oag_ui::frontend::EarnedTier::Pass)
+            });
+            let card = loaded.frontend.launch_event_card(name, page);
+            if card.is_none() {
+                log::warn!("--loading-card: no launchable event {name:?}; drawing no card");
+            }
+            card
+        });
         let assets = loading::Assets::load(
             &options.source,
             &loaded.strings,
@@ -213,6 +233,33 @@ pub(crate) fn run_windowless(
                 phase,
                 live: (cli.loading_live && phase == loading::Phase::Race)
                     .then(|| race_options.clone()),
+                mode: (phase == loading::Phase::Race)
+                    .then(|| loading::executable_mode(race_options.mode))
+                    .flatten(),
+                movies: cli
+                    .cache
+                    .clone()
+                    .unwrap_or_else(oag_source::cache::default_cache_dir),
+                draw: cli.loading_draw,
+                track: race_options
+                    .foreign_track
+                    .as_deref()
+                    .filter(|path| oag_raceplay::foreign::is_track_file(path))
+                    .and_then(|path| {
+                        let loading = oag_trackfile::read_loading(path)
+                            .map_err(|why| log::warn!("{}: [loading]: {why}", path.display()))
+                            .ok()??;
+                        Some(loading::TrackLoading::read(
+                            path.parent().unwrap_or_else(|| std::path::Path::new("")),
+                            &loading,
+                        ))
+                    }),
+                safe_area: loaded
+                    .title
+                    .hud_art
+                    .safe_area_scale(settings.graphics.hud_safe_area),
+                title_font: loaded.title_font.clone(),
+                card,
                 renderer: settings.graphics.renderer.clone(),
                 aspect: settings.display.aspect,
             },
@@ -231,7 +278,7 @@ pub(crate) fn run_windowless(
             loaded,
             video_format,
             &capture::Options {
-                give: give_weapon(cli.give.as_deref())?,
+                give: give_weapon(cli.give())?,
                 autopilot: cli.driver.autopilot,
                 pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                 autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
@@ -246,6 +293,11 @@ pub(crate) fn run_windowless(
                 held: button_mask(cli.hold.as_deref()),
                 pressed: button_mask(cli.press.as_deref()),
                 press_until_reached: cli.press_until_reached,
+                map_presses: cli
+                    .map_presses
+                    .as_deref()
+                    .map(|list| list.split(',').map(|name| button_mask(Some(name))).collect())
+                    .unwrap_or_default(),
                 scheme,
                 trace: cli.trace,
                 race: Some(race_options),
@@ -259,6 +311,7 @@ pub(crate) fn run_windowless(
                 menu_picker_seconds: cli.menu_args.menu_picker_seconds,
                 menu_picker_step_seconds: cli.menu_args.menu_picker_step_seconds,
                 menu_model_seconds: cli.menu_args.menu_model_seconds,
+                menu_movie_frame: cli.menu_args.menu_movie_frame,
                 menu_prompt: cli.menu_args.menu_prompt.clone(),
                 presented: cli.presented,
                 // The clone is overridden rather than `settings` itself, so
@@ -505,6 +558,14 @@ fn field_warmup_velocities(cli: &Cli) -> Result<Option<Vec<oag_core::math::Vec3>
     }
 }
 
+/// `--field-from`'s recorded lean and roll phase per opponent, empty without the flag.
+fn field_lean(cli: &Cli) -> Result<Vec<Option<oag_game::race_capture::pose_lean::PoseLean>>> {
+    match cli.field_from.as_deref() {
+        Some(path) => Ok(super::pose::field_from_csv(path)?.leans()),
+        None => Ok(Vec::new()),
+    }
+}
+
 /// `--pose-spark`: the contact sparks a posed capture throws before its frame.
 fn pose_sparks(cli: &Cli) -> Result<Vec<oag_raceplay::ContactSeed>> {
     cli.pose_spark
@@ -539,6 +600,13 @@ fn pose_lean(cli: &Cli) -> Result<Option<oag_game::race_capture::pose_lean::Pose
     }
 }
 
+/// How a `--race` run was reached beyond its options: a server's race, or a shot to remake.
+#[derive(Default)]
+pub(crate) struct RaceRoute {
+    pub(crate) net: Option<oag_game::net_play::NetPlay>,
+    pub(crate) restage: Option<std::sync::Arc<oag_replay::ShotRecord>>,
+}
+
 /// Loads a track and a ship and either captures one frame or opens a window.
 ///
 /// **The settings apply here too**, even though this route never opens a menu
@@ -547,10 +615,6 @@ fn pose_lean(cli: &Cli) -> Result<Option<oag_game::race_capture::pose_lean::Pose
 /// performance overlay that the same file was setting for every other route -
 /// and the overlay is most wanted exactly here, where a track is on screen.
 /// Nothing on this path writes the file back.
-///
-/// This paragraph sat on `write_trace` until finding G5 of the 2026-08-18
-/// review - fused onto that function's own docs, leaving this one
-/// undocumented and that one describing something it does not do.
 pub(crate) fn run_race(
     cli: &Cli,
     options: race::Options,
@@ -558,8 +622,9 @@ pub(crate) fn run_race(
     anisotropy: Anisotropy,
     mut audio: oag_sound::Audio,
     music_discs: oag_sound::MusicDiscs,
-    net: Option<oag_game::net_play::NetPlay>,
+    route: RaceRoute,
 ) -> Result<()> {
+    let RaceRoute { net, restage } = route;
     // `--event` resolves a Wipeout 2048 campaign event onto `options` before
     // loading - see `race::load_event`'s own doc comment for what it
     // overrides and why this is a second entry point rather than a new
@@ -644,9 +709,10 @@ pub(crate) fn run_race(
         // fallback order matters - read here only to look a row up, never to
         // write one back. See `oag_game::race_capture::CaptureOptions::previous_best`'s own doc
         // for why this capture never calls `oag_game::records::save`.
-        let key = oag_game::records::Key::new(
+        let key = oag_game::records::Key::raced(
             loaded.title.name,
-            options.track.as_deref().or(Some(loaded.title.race.track)),
+            options.track.as_deref(),
+            &loaded.circuit,
             loaded.setup.mode.name(),
             &loaded.setup.class,
         );
@@ -656,13 +722,16 @@ pub(crate) fn run_race(
             record: cli.ghost.record_ghost.clone().map(|path| {
                 let team = loaded.liveries.first().map_or("", |l| l.team.as_str());
                 let mut header = oag_game::ghosts::header(&key, team, loaded.setup.seed);
-                header.options = oag_game::ghosts::race_options(
+                header.options = race::Launch {
                     scheme,
-                    loaded.setup.difficulty,
-                    cli.driver.autopilot,
-                    cli.driver.pilot_assist.unwrap_or_default(),
-                    give_weapon(cli.give.as_deref()).ok().flatten(),
-                );
+                    difficulty: loaded.setup.difficulty,
+                    autopilot: cli.driver.autopilot,
+                    pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
+                    original_ai: None,
+                    campaign_skill: None,
+                    skill_level: None,
+                }
+                .to_table();
                 (path, header)
             }),
         };
@@ -670,9 +739,15 @@ pub(crate) fn run_race(
         oag_game::race_capture::capture(
             loaded,
             &oag_game::race_capture::CaptureOptions {
+                shot: oag_game::shot_meta::Context {
+                    restage,
+                    render: oag_game::shot_meta::render_table(&render_profile),
+                },
                 gpu,
-                give: give_weapon(cli.give.as_deref())?,
+                give: give_weapon(cli.give())?,
                 autopilot: cli.driver.autopilot,
+                demo: cli.demo.mode().is_some(),
+                wallpaper: cli.demo.mode() == Some(true),
                 pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                 autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
                 autopilot_skill: cli.driver.autopilot_skill,
@@ -683,6 +758,7 @@ pub(crate) fn run_race(
                 force_shake: crate::args::force_shake(cli.force_shake.as_deref())?,
                 force_boost_kick: crate::args::force_boost_kick(cli.force_boost_kick.as_deref())?,
                 intro_ticks: cli.intro.intro_ticks,
+                music_discs: music_discs.clone(),
                 force_wreck: crate::args::force_at_slot(cli.wreck.force_wreck.as_deref(), "wreck")?,
                 force_hit: crate::args::force_at_slot(cli.wreck.force_hit.as_deref(), "hit")?,
                 force_wall_slide: crate::args::force_at_slot(
@@ -719,6 +795,7 @@ pub(crate) fn run_race(
                         title,
                         cli.wreck.campaign_cell.as_deref(),
                     )?,
+                    counting_modes: title.campaign.counting_modes,
                     ..Default::default()
                 },
                 path,
@@ -744,10 +821,15 @@ pub(crate) fn run_race(
                 hud_scale: settings.graphics.hud_scale,
                 hud_safe_area: settings.graphics.hud_safe_area,
                 dynamic_hud: settings.display.dynamic_hud,
+                ghost_visible: settings.display.ghost_ship_shown(title),
+                player_tags: settings.display.multiplayer_tags_shown(title),
+                player: settings.player.clone(),
                 shadows: render_profile.shadows,
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,
                 trail_order: render_profile.trail_order,
+                scenery_sort: render_profile.scenery_sort,
+                trail_length: render_profile.trail_length,
                 weather: render_profile.weather,
                 hull_shake: !cli.no_hull_shake,
                 camera_jitter: cli.camera_jitter,
@@ -755,8 +837,12 @@ pub(crate) fn run_race(
                 pose_boost: cli.pose_boost,
                 pose_intensity: cli.pose_intensity,
                 pose_speed: cli.pose_speed,
-                pose_hold: cli.pose_hold,
+                pose_hold: oag_game::race_capture::pose_hold::Hold::from_flags(
+                    cli.pose_hold,
+                    cli.pose_hold_ticks,
+                ),
                 pose_lean: pose_lean(cli)?,
+                field_lean: field_lean(cli)?,
                 field_warmup: field_warmup_velocities(cli)?,
                 pose_sparks: pose_sparks(cli)?,
                 presented: cli.presented.then_some(oag_game::race_capture::Presented {
@@ -800,7 +886,7 @@ pub(crate) fn run_race(
         hints::esc_quits(&hint_strings)
     );
 
-    let give = give_weapon(cli.give.as_deref())?;
+    let give = give_weapon(cli.give())?;
 
     let event_loop = crate::new_event_loop()?;
     // Poll rather than Wait: the simulation runs whether or not input arrives.
@@ -818,6 +904,9 @@ pub(crate) fn run_race(
         // `--race` never shows the loading screen, so there is no
         // transition to time.
         measure_race_load: None,
+        demo: None,
+        demo_limit: None,
+        replay_png: None,
         give,
         // A network race starts on the server's clock: no flyby to wait through.
         no_intro: cli.intro.no_intro || net.is_some(),

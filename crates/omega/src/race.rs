@@ -11,7 +11,7 @@
 //! - its collision is a `track_col.col` in 2048's container with a 19-byte
 //!   k-d node in place of 24 ([`oag_vex::kdcol::NodeLayout::Packed`]);
 //! - its geometry is a `track.final.rcsmodel` (the `.final` infix is Omega's;
-//!   `oag_mesh::mesh::rcs::sibling_name_cooked`) in 2048's `.rcsmodel`
+//!   `oag_mesh::mesh::rcs::siblings::Spelling::Cooked`) in 2048's `.rcsmodel`
 //!   container with 64-bit pointers, whose materials name `.gnf` textures;
 //! - a craft is `hdships\<team>\Ship.vex` beside `ship.rcsmodel` and
 //!   `handlingstats.xml`, the same three files 2048's HD-derived roster has.
@@ -58,6 +58,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // tree. **Not [`oag_title::race::SHIP_DIR`]** - that constant is
     // `Data\Ships`, the path Pulse/Pure/HD share and Omega does not.
     ship_dir: SHIP_DIR,
+    ship_hull: "Ship",
     // **Measured.** `hdships\ag_systems\handlingstats.xml` is there and
     // `oag_tables::handling` reads it unmodified, so the handling file sits
     // beside the hull, as it does for every title but 2048's native roster.
@@ -74,6 +75,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // already names.
     effect_dir: r"Data\particles",
     effect_dir_by_circuit: &[(r"Data\environments2048\", r"Data\particles2048")],
+    hull_by_track_type: &[],
+    circuit_lineages: LINEAGES,
     // **Zero-fabrication placeholder, not a finding.** `SameCircuit` is the
     // one `ZoneCircuit` variant that names no path at all - 2048's own shape,
     // picked here only because it requires inventing nothing. Omega's Zone
@@ -95,8 +98,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     sounds: SOUND_BANKS,
     zone_announcer: None,
     eliminator_skin: None,
-    // Chosen, not measured: Pulse's start voice lent to this title, from its mode's speech bank.
-    // Omega's own start is Wwise events (`_321_NGP`, `Go_NGP`) this loader cannot play.
+    // Omega's own start events, Pulse's spacing lent; the `Go` cue event also times the song's
+    // start (`now_playing_ground_truth`).
     countdown_voice: Some(COUNTDOWN_VOICE),
     // The same grid clamp as HD's, read in Omega's own craft update; see `LAUNCH_HOVER`.
     launch_hover: Some(&LAUNCH_HOVER),
@@ -120,8 +123,26 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_transition: None,
     zoom_ring: None,
     borrows_zoom_ring: false,
+    // `FE_GHOST`, the list on the Time Trial and Speed Lap pause screens (`crate::pause_menu`), is
+    // the ghost ship's visibility, as on HD; no other of the three options is authored here.
+    game_options: oag_title::race::GameOptions {
+        ship_visible: true,
+        auto_load: false,
+        multiplayer_tags: false,
+    },
     zone_stage_textures: None,
+    zone_fallback: Some(ZONE_FALLBACK),
     zone_sky: None,
+    // The same stage law as HD's and 2048's (`FUN_012a0fc0`); Omega draws no Zone grade
+    // yet, so Detonator's (`Data/zoneenvironmenthdfury/DetonatorModeHDFury*.effectSettings`,
+    // shipped) is not drawn either. The camera scale is HD's, **inherited from HD**: Omega's
+    // craft constructor was not read for it.
+    detonator: Some(&oag_title::Detonator {
+        palette: None,
+        fallback_palette: None,
+        stage_textures: None,
+        camera_scale: 0.7,
+    }),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&ERA_2048_ROSTER),
     hull_variants: None,
@@ -129,12 +150,31 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     speed_classes: None,
 };
 
+/// The 2048-era circuits (`Data\Environments2048\`) are raced under 2048's rules: its HUD set,
+/// its layout grid and its Race Box lap counts.
+///
+/// **Measured on the original** (the `wipeout_pc` port, Race Box, `GAME MODE` WipEout 2048,
+/// `docs/tools/compare-page.md`, "Omega"): the HUD reads `LAP 1/4` at C CLASS on seven circuits
+/// and `LAP 1/5` at A CLASS on Sol; the HUD is 2048's, laid out on the Vita's 960x544 grid and
+/// scaled to 1920x1080. **Chosen, not measured**: that the circuit's directory stands in for
+/// the Race Box's `GAME MODE`, and A+'s count (equal to A's). B reads 4 on one boot, confidence 55.
+/// The Race Box authors no lap count (`racebox.xml`'s `m_numOfLaps` is `0` for every 2048-mode
+/// entry), so the numbers are the executable's own.
+pub const LINEAGES: &[oag_title::race::CircuitLineage] = &[oag_title::race::CircuitLineage {
+    prefix: r"Data\environments2048\",
+    layouts: crate::hud::LAYOUTS_2048,
+    art: crate::hud::ART_2048,
+    grid: Some(oag_title::Platform::Vita),
+    laps_by_class: Some([4, 4, 5, 5]),
+}];
+
 /// The twelve HD-era teams that ship a model per Fury variant, spelled as
 /// `Data\plugins\teams\Definition.xml`'s own `PI_Team` locations are. **Not**
 /// `Tigron` and `Tigron_x`: their `PI_TeamModel`s all name one directory
 /// (`hdships\Tigron_x`, `hdships\Tigron`), and neither ships a `_c1` or `_n1`
-/// beside it. **Duplicated from `oag_hd::race::TEAMS`**, not borrowed (a title
-/// package depends on no other); the ground truth checks every combined id
+/// beside it. **Duplicated from `oag_hd::race::TEAMS`**, not borrowed (a
+/// title reads its lineage parent's data only where its own files confirm it is the same, so
+/// far the HUD's always-on list, ADR-0090); the ground truth checks every combined id
 /// against Omega's own archive.
 pub const HD_ERA_TEAMS: [&str; 12] = [
     "AG_Systems",
@@ -286,6 +326,112 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
         origin: oag_title::Origin::Measured,
     },
     crossfade: None,
+    wwise: Some(&WWISE_CUES),
+};
+
+/// The bank slot `Weapons_NGP` (patch `DAT_021aaa4c`).
+const WEAPONS: &str = "Weapons_NGP";
+/// The bank slot `Speech_NGP` (patch `DAT_021aaa50`).
+const SPEECH: &str = "Speech_NGP";
+/// Slot 0, `Ship_NGP`, which `SoundManager_Construct` loads without a global.
+const SHIP: &str = "Ship_NGP";
+
+const fn posts(cue: &'static str, slot: &'static str) -> oag_title::WwiseCue {
+    oag_title::WwiseCue::Posts { cue, slot }
+}
+
+const NEVER_POSTED: oag_title::WwiseCue = oag_title::WwiseCue::Unplayed {
+    why: "the bank keeps a legacy event of this name, but the executable holds no such cue string and posts none",
+};
+
+/// Omega's race cues as the 1.07 executable posts them: each launcher, impact
+/// and pickup queues a cue string on its emitter's group with a bank slot
+/// (`SoundGroup_PlayCue`, inlined), and the post names the event
+/// `<cue>[_PC]__<slot>`. The cue each row names is the string stored at the
+/// request's `+0x68` in the function the evidence page lists, its slot the
+/// global read beside it; every posted event is in the bank's own listing.
+/// `docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`.
+pub const WWISE_CUES: oag_title::WwiseCues = oag_title::WwiseCues {
+    banks: &[
+        oag_title::WwiseBank {
+            slot: WEAPONS,
+            entries: &[r"Data\audio\sound\English(US)\Weapons_NGP.bnk"],
+        },
+        oag_title::WwiseBank {
+            slot: SHIP,
+            entries: &[r"Data\audio\sound\Ship_NGP.bnk"],
+        },
+        oag_title::WwiseBank {
+            slot: SPEECH,
+            entries: &[
+                r"Data\audio\sound\English(US)\Speech_NGP.bnk",
+                r"Data\audio\sound\English(US)\frontend.bnk",
+            ],
+        },
+    ],
+    cues: &[
+        ("SPEEDUPPAD", posts("Pad_General", WEAPONS)),
+        ("MESSAGE", posts("MESSAGE", WEAPONS)),
+        ("TURBO", posts("NGP_Turbo", WEAPONS)),
+        ("ABSORB", posts("NGP_Absorb", WEAPONS)),
+        ("shieldactive", posts("shieldactive", SPEECH)),
+        ("autopilot_eng", posts("autopilot_eng", SPEECH)),
+        ("disengaging", posts("disengaging", SPEECH)),
+        ("MINELAUNCH", posts("MINELAUNCH", WEAPONS)),
+        ("PLASMA", posts("NGP_Plasma", WEAPONS)),
+        ("PLASMAHITWALL", posts("NGP_PlasmaHitWall", WEAPONS)),
+        ("PLASMAHITSHIP", posts("NGP_PlasmaHitShip", WEAPONS)),
+        ("ROCKET", posts("ROCKET", WEAPONS)),
+        ("ROCKEXPLWALL", posts("ROCKEXPLWALL", WEAPONS)),
+        ("ROCKEXPLSHIP", posts("ROCKEXPLSHIP", WEAPONS)),
+        ("MISSILE", posts("NGP_MissileFire", WEAPONS)),
+        ("MISSILEEXPWALL", posts("MISSILEEXPWALL", WEAPONS)),
+        ("CANNON", posts("NGP_Cannonfire", WEAPONS)),
+        ("CANNONEXPLWALL", posts("CANNONEXPLWALL", WEAPONS)),
+        ("CANNONEXPLSHIP", posts("CANNONEXPLSHIP", WEAPONS)),
+        ("QUAKELAUNCH", posts("QUAKELAUNCH", WEAPONS)),
+        ("QUAKEHIT", posts("QUAKEHIT", WEAPONS)),
+        ("LEACH", posts("NGP_LEACH", WEAPONS)),
+        ("LEACHFAIL", posts("NGP_LEACHFAIL", WEAPONS)),
+        ("LEACHENERGY", posts("NGP_LEACHENERGY", WEAPONS)),
+        ("SHURIKEN", posts("SHURIKEN", WEAPONS)),
+        ("REPULSOR", posts("REPULSOR", WEAPONS)),
+        (
+            ".COLLISIONS",
+            oag_title::WwiseCue::Unplayed {
+                why: "posted as `_COLLISIONS_1` or `_COLLSHIELD` on the ship slot with a kept handle (`0x0130b100`); the choice and the loop flags are unread",
+            },
+        ),
+        (
+            "MISSILEEXPSHIP",
+            oag_title::WwiseCue::Unplayed {
+                why: "the missile's impact (`0x0137d1e0`) names only `MISSILEEXPWALL`; which cue a ship hit posts is unread",
+            },
+        ),
+        ("SHURIKENEXPL", NEVER_POSTED),
+        ("SHURIKENHIT", NEVER_POSTED),
+        ("REPULSORHIT", NEVER_POSTED),
+        (
+            "~ENGINE",
+            oag_title::WwiseCue::Unplayed {
+                why: "the engine is a set of `~Ship<class>_<band>` cues (`LowAcc_%d`, `HighDec_G_%d`, ...) picked by team and acceleration band and steered by `CONTROLLERID_*` game parameters (`0x0130b8c0`); none of it is read",
+            },
+        ),
+        // Held: the executable keeps the post's playing id and stops it with no
+        // fade on release (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`,
+        // "Held loops").
+        ("~SHIELD", posts("_SHIELD", WEAPONS)),
+        ("~AUTOPILOT", posts("_AUTOPILOT", WEAPONS)),
+        ("~BLOWUP", posts("_NGP_ShipDeath", WEAPONS)),
+        ("~ROCKLOCK", posts("_NGP_MissileLock", WEAPONS)),
+        ("~PLASMATVL", posts("_NGP_Plasmatvl", WEAPONS)),
+        ("~ROCKETTVL", posts("_ROCKETTVL", WEAPONS)),
+        ("~MISSILETVL", posts("_NGP_MissileTravel", WEAPONS)),
+        ("~QUAKETRAVEL", posts("_QUAKETRAVEL", WEAPONS)),
+        ("~LEACHATTACH", posts("_NGP_LEACHATTACH", WEAPONS)),
+        ("~SHURIKENTRAVEL", posts("_SHURIKENTRAVEL", WEAPONS)),
+        ("~magstrip01", posts("_magstrip01", SHIP)),
+    ],
 };
 
 /// Where Omega's original opponent differs from Pulse's, read off the base
@@ -378,10 +524,13 @@ pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
     oag_title::team::team("Tigron_x", "tigron"),
 ];
 
-/// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
-/// table existed; the in-air `weight_distribution` pitch torque is HD's, inherited (Omega and 2048 take HD's laws where unmeasured).
+/// The craft-body laws. The box mass, the wall point rate and the shield slot are read in this
+/// title's executable (`docs/ghidra/functions/ps4-omega-eu/craft-laws.md`); the steering ramp is
+/// Pulse's; the rest is HD's, inherited (Omega and 2048 take HD's laws where unmeasured).
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
-    inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
+    // Both ship constructors store the folded mass-`1.0` tensor `(17.333, 24, 17.333)`
+    // (`0x0130affe`, `0x0130f666`).
+    inertia_mass: oag_title::pre_race::Sourced::measured(1.0),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     air_pitch_bias: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     pitch_gate: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
@@ -397,12 +546,23 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
     // Zone's hover is not read on this title: Wipeout HD's `30`.
     bank_to_yaw_zone: oag_title::pre_race::Sourced::inherited(30.0, "Wipeout HD"),
-    wall_one_sided: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
-    wall_steer_away: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
-    wall_point_rate_body_local: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+    // `Body_ResolveContact` (`0x0131fe60`): the separating gate, the `5 * clamp(.., -20, 20)`
+    // yaw torque and the unrotated body-local rate, all three as HD's.
+    wall_one_sided: oag_title::pre_race::Sourced::measured(true),
+    wall_steer_away: oag_title::pre_race::Sourced::measured(true),
+    wall_point_rate_body_local: oag_title::pre_race::Sourced::measured(true),
+    // Omega's own: its integrator (`FUN_013463f0`) takes `v * dt * body+0x4b0` off the velocity
+    // at `0x013467d9` and reads `body+0x4ac` for the angular twin, and its body constructors
+    // store a packed `0.01, 0.01` at `+0x4ac` (`0x012e529b`, `0x01331a26`, `0x0133680e`). Read,
+    // no live value (`docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`). Confidence 80.
+    body_linear_damping: oag_title::pre_race::Sourced::measured(0.01),
+    body_angular_damping: oag_title::pre_race::Sourced::measured(0.01),
     cage_from_track_header: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
     // Not read: the view matrix is Pulse's orthonormal look-at until measured.
     chase_view_sheared: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    // `Ship_SetShield` (`0x012f3360`) clamps to `stats + 0x98 + skill * 4`
+    // (`docs/formats/handling-stats.md`, "Which difficulty picks the shield slot").
+    shield_by_skill: oag_title::pre_race::Sourced::measured(true),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,
@@ -416,6 +576,55 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
         },
         "Wipeout HD",
     )),
+};
+
+/// What a Zone race takes on an HD-lineage circuit, which ships no table of its own: HD/Fury's
+/// title-wide one (`Data/zoneenvironmenthdfury`, the `DLC3` revision on the four `zone_N`) and its
+/// two fifteen-entry texture sets as `.gnf`, the same shape as 2048's
+/// (`oag_2048::race::ZONE_FALLBACK` on the other title). The stage ladder is HD's fourteen
+/// records, **inherited from HD**: Omega's Zone HUD table and its stage writer are not read.
+///
+/// The ten `Data\Environments2048` circuits are held back: each ships its own `ZoneMode2048`
+/// table and a `trackZone.rcsmodel` whose flat `Zone_ColourN` look this build does not draw
+/// (`oag_raceplay::load`'s Zone-model gate passes a PS4 one over), so a grade without it would
+/// tint a circuit the original draws another way.
+pub const ZONE_FALLBACK: &oag_title::ZoneFallback = &oag_title::ZoneFallback {
+    palette: oag_title::ZonePalette::TitleWide {
+        entry: "Data/zoneenvironmenthdfury/ZoneModeHDFury.effectSettings",
+        zone_circuits: &[
+            r"Data\environments\zone_1\track.vex",
+            r"Data\environments\zone_2\track.vex",
+            r"Data\environments\zone_3\track.vex",
+            r"Data\environments\zone_4\track.vex",
+        ],
+        zone_circuit_entry: "Data/zoneenvironmenthdfury/ZoneModeHDFuryDLC3.effectSettings",
+    },
+    stage_textures: &oag_title::ZoneStageTextures {
+        // Omega ships no `zoneMode<n>` set, only `zoneModeTrack<n>.gnf` (15 files).
+        general: "",
+        track: "Data/tex/zoneModeTrack",
+        extension: ".gnf",
+        stages: 15,
+    },
+    stages: &oag_title::ZoneStages {
+        records: &[
+            (75, "IG_HUD_SUPSON"),
+            (60, "IG_HUD_MACH1"),
+            (50, "IG_HUD_SUBSON"),
+            (42, "IG_HUD_SUPZEN"),
+            (35, "MSC_ZEN"),
+            (27, "MSC_SPPHANTOM"),
+            (20, "Phantom"),
+            (16, "MSC_SPHANTOM"),
+            (12, "Rapier"),
+            (7, "MSC_SRAPIER"),
+            (5, "Flash"),
+            (3, "MSC_SFLASH"),
+            (2, "Venom"),
+            (0, "MSC_SVENOM"),
+        ],
+    },
+    own_model_under: Some(r"Data\Environments2048"),
 };
 
 #[cfg(test)]
@@ -449,16 +658,24 @@ mod team_identity_tests {
     }
 }
 
-/// The start-of-race voice's banks: the Zone bank is the one the Zone announcer reads, Eliminator
-/// reads the ordinary speech bank. Timing lent from Pulse, chosen, not measured - see
-/// `oag_title::CountdownVoice`.
+/// The start of every race but the demo: the Wwise events `_321_NGP__Weapons_NGP` and
+/// `Go_NGP__Weapons_NGP`, the name the executable posts for its cues `_321_NGP` and `Go_NGP` on the
+/// speech manager's (non-player) group, out of the bank its `Weapons_NGP` slot loads
+/// (`docs/ghidra/functions/ps4-omega-eu/wwise-sound.md`, "The countdown, end to end"). The spacing of
+/// the two is Pulse's, lent: chosen, not measured. The named-mode banks are unused (no mode plays a
+/// named pair).
 pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoice {
     eliminator_bank: r"Data\audio\sound\speech.bnk",
     zone_bank: r"Data\audio\sound\speech.bnk",
     origin: oag_title::Origin::Chosen,
     tick: oag_title::SequenceTick::Unknown,
     hashed: false,
-    event: None,
+    event: Some(oag_title::CountdownEvent {
+        bank: r"Data\audio\sound\English(US)\Weapons_NGP.bnk",
+        ready: oag_title::StartCue::Plays("_321_NGP__Weapons_NGP"),
+        go: oag_title::StartCue::Plays("Go_NGP__Weapons_NGP"),
+    }),
+    event_every_mode: true,
     beat: None,
 };
 

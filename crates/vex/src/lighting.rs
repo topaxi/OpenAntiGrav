@@ -78,7 +78,7 @@
 //! 8-bit GE colour register.
 
 use crate::vex::{self, Node};
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Length of an `AmbientLight`/`DirectionalLight` payload.
 pub const AMBIENT_OR_DIRECTIONAL_PAYLOAD_LEN: usize = 0x10;

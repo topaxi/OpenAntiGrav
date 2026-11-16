@@ -48,7 +48,7 @@
 /// **Authored**, confidence 92 the same cap `2048-frontend.md` puts on every
 /// claim read straight out of the disc's own XML. Read directly off
 /// `data/plugins/frontend/NEWGUI/Definition.xml` in `PSP2/data.psarc`
-/// (`data/extracted/vita/PCSF00007/base`), 2026-09-20 - not transcribed from
+/// (`data/extracted/vita/PCSF00007/base`) - not transcribed from
 /// the docs page's own prose, which quotes the shared `140x140` size and the
 /// button names but not their individual `x`/`y`; those were re-read from the
 /// archive for this type rather than guessed from the size alone.
@@ -96,8 +96,9 @@ pub struct TouchFrontEnd {
     pub home: &'static [TouchButton],
     /// The screen `Team_Definition.xml` nests the ship preview inside:
     /// `<Screen name="team" type="team2048">`, itself under a `teamshell`
-    /// wrapper.
-    pub team_screen: &'static str,
+    /// wrapper. `None` on a title whose touch front end is the campaign map
+    /// alone (Omega ships no such screen).
+    pub team_screen: Option<&'static str>,
     /// That screen's own `<Model name="ShipModel">` origin, `(OriginX,
     /// OriginY)` in the same 960x544 space [`TouchButton`]'s coordinates
     /// share. Authored: `<Values OriginX="1400" OriginY="264" ...>`.
@@ -110,7 +111,7 @@ pub struct TouchFrontEnd {
     /// touch idiom, not the `oag_ui_screens::picker::Layout` dialect `race_box`
     /// names), so that field would be inert either way. See
     /// `docs/formats/2048-frontend.md`'s "Team selection is 3D too".
-    pub team_model_origin: (f32, f32),
+    pub team_model_origin: Option<(f32, f32)>,
     /// The screen `<FE3DCanvas>` lives inside: `newFEshell`, nested inside its
     /// own `<TouchScroll name="FeShellTouchScroll">`.
     ///
@@ -127,6 +128,11 @@ pub struct TouchFrontEnd {
     /// stops being true the moment a label moves. Naming the screen instead
     /// lets a caller walk the real `<CanvasLabel>` list and play the data.
     pub canvas_screen: &'static str,
+    /// The definition file holding [`Self::canvas_screen`] when the front-end
+    /// root does not include it. `None` on 2048, whose root includes every
+    /// `NEWGUI` document; Omega's map is the one screen of its front end that
+    /// is not in `Skin.xml`'s includes, so the boot reads this entry itself.
+    pub canvas_definition: Option<&'static str>,
     /// The atlas `<CanvasLabel>` UV coordinates index into:
     /// `Data\FE\NewImages\canvasTexture.gxt`.
     ///
@@ -141,6 +147,9 @@ pub struct TouchFrontEnd {
     /// session (`cargo run -p oag-assets --example psarc_list -- ...
     /// canvasTexture` -> `data/FE/NewImages/canvasTexture.gxt`).
     pub canvas_texture: &'static str,
+    /// Where a single-player event sits on that canvas: its map step scaled to
+    /// a lattice cell, with one grid and no offset.
+    pub map_nodes: crate::NodeMap,
 }
 
 #[cfg(test)]
@@ -187,10 +196,16 @@ mod tests {
             width: 140.0,
             height: 140.0,
         }],
-        team_screen: "team",
-        team_model_origin: (1400.0, 264.0),
+        team_screen: Some("team"),
+        team_model_origin: Some((1400.0, 264.0)),
         canvas_screen: "newFEshell",
+        canvas_definition: None,
         canvas_texture: r"Data\FE\NewImages\canvasTexture.gxt",
+        map_nodes: crate::NodeMap {
+            scale: (4, 2),
+            bias: (55, 25),
+            group_offsets: &[(0, 0)],
+        },
     };
 
     /// Every button on `GameModeChoice` shares one icon size, which is what

@@ -263,8 +263,10 @@ literals.
 bit 31 says: see
 [the compression rule](../ghidra/functions/psp-pulse-usa/wad-subsystem.md#compression).
 Implemented and verified against all 6,053 compressed entries across both PS2
-archives. The game also supports zlib behind that bit, but no shipped archive
-sets it.
+archives. The game also supports zlib behind that bit. No base-disc archive sets it,
+but Pure's PSN DLC packs do (187 of 192 entries in Gamma);
+`oag_formats::wad::Compression::Zlib` decodes it. See
+[DLC packs](dlc-pack.md#pures-packs-decrypt-with-an-external-key-table).
 
 ### What are the remaining blob types?
 

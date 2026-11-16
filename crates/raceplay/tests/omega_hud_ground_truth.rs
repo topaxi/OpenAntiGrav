@@ -13,8 +13,8 @@
 //!
 //! What this fails on: pointing `oag_omega::hud` back at the unread placeholder
 //! (the layouts then stop composing to the counts below), dropping
-//! `texture_extension` (the `.gtf`/`.mip` spellings the XML authors never
-//! resolve on this disc), or reversing the rows of a HUD atlas (they are
+//! the platform spelling (`Archives::read_texture`: the `.gtf`/`.mip` spellings
+//! the XML authors never resolve on this disc), or reversing the rows of a HUD atlas (they are
 //! top-down, unlike the front end's eight `bottom_up_gnf` images).
 
 use std::collections::BTreeSet;
@@ -105,9 +105,7 @@ fn stem(reference: &str) -> &str {
 }
 
 fn resolved(archives: &mut oag_assets::Archives, reference: &str) -> Option<Vec<u8>> {
-    let extension = oag_omega::TITLE.hud_art.texture_extension?;
-    let rewritten = oag_title::hud::replace_extension(reference, extension);
-    archives.read_name(&rewritten).ok()
+    archives.read_texture(reference).ok().map(|(_, blob)| blob)
 }
 
 #[test]
@@ -190,8 +188,8 @@ fn hud_atlases_are_hds_picture_in_the_row_order_the_sheet_draws() {
         let blob = resolved(&mut archives, reference).expect("resolves");
         let texture = oag_texture::gnf::Texture::parse(&blob).expect("parses");
         let ours = texture.decode(&blob).expect("decodes");
-        let hd_blob = hd
-            .read_name(&oag_hd::hud::texture_entry(reference))
+        let (_, hd_blob) = hd
+            .read_texture(reference)
             .unwrap_or_else(|e| panic!("HD {reference}: {e}"));
         let gtf = oag_texture::gtf::Gtf::parse(&hd_blob).expect("HD parses");
         let theirs = gtf
@@ -356,11 +354,7 @@ fn the_2048_hud_set_omega_also_ships_composes_whole() {
         assert!(c.missing.is_empty(), "{root}: missing {:?}", c.missing);
         assert!(c.layout.skipped.is_empty(), "{root}: skipped");
         for r in c.layout.textures() {
-            let named = archives.read_name(r).is_ok();
-            let as_gnf = archives
-                .read_name(&oag_title::hud::replace_extension(r, ".gnf"))
-                .is_ok();
-            if !named && !as_gnf {
+            if archives.resolve_texture(r).is_none() {
                 unresolved.insert(r.to_string());
             }
         }
@@ -483,4 +477,251 @@ fn the_patch_and_base_copies_of_each_atlas_agree_at_the_base_level() {
         .read_path("Data/HUD/Textures/HUD_Components_01.gnf")
         .expect("patch copy");
     assert_eq!(served, patched);
+}
+
+/// **Omega authors HD's Eliminator lap hexagon, so sharing `oag_hd::hud::ALWAYS_ON` (which
+/// carries `LapPanel2`) draws it.** `HUD_Elim_lap_counters.xml` ships in the base package
+/// (`data00.psarc`, not the patch), the same size as HD's file with the same place on screen and
+/// the atlas UVs doubled for `fury_hud`'s 2048 square, and `LapPanel2` is composed by the
+/// default Eliminator root, its two split-screen pairs and by no other root, retro skins
+/// included - so the shared list moves no other mode's frame, as on HD.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn the_eliminator_lap_hexagon_is_authored_by_omegas_eliminator_roots_alone() {
+    let Some(mut archives) = open() else { return };
+    let source = omega().expect("opened above");
+    let path = "Data/XML/HUD_Elim_lap_counters.xml";
+    let mut serving = Vec::new();
+    let mut bytes = Vec::new();
+    for dir in ["omega-eu", "omega-eu-patch"] {
+        for n in 0..16 {
+            let file = source.join(dir).join(format!("uroot/data{n:02}.psarc"));
+            let Ok(mut archive) = oag_assets::psarc::Archive::open_file(&file) else {
+                continue;
+            };
+            if let Ok(blob) = archive.read_path(path) {
+                serving.push(format!("{dir}/data{n:02}"));
+                bytes = blob;
+            }
+        }
+    }
+    assert_eq!(
+        serving,
+        ["omega-eu/data00"],
+        "the base package serves it alone"
+    );
+    assert_eq!(bytes.len(), 1482);
+    if let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") {
+        let mut hd = oag_hd::open(&image.display().to_string()).expect("opening the HD disc");
+        let mut read = |path: &str| hd.read_name(path).ok();
+        let hd_root = oag_hd::TITLE.hud.elimination;
+        let hd_layout = oag_hud::compose(hd_root, &mut read)
+            .expect("HD's Eliminator composes")
+            .layout;
+        let theirs = hd_layout.sprite("LapPanel2").expect("HD authors it");
+        let ours = composed(&mut archives, oag_omega::TITLE.hud.elimination).layout;
+        let ours = ours.sprite("LapPanel2").expect("Omega authors it");
+        assert_eq!(ours.rect, theirs.rect, "the same place and size on screen");
+        assert_eq!(
+            ours.uv.map(|v| v / 2.0),
+            theirs.uv,
+            "the same patch of an atlas twice the size"
+        );
+    }
+
+    let split = oag_omega::hud::SPLIT;
+    let vertical = split.vertical.expect("Omega ships the vertical cut");
+    let skinned = oag_omega::TITLE.hud.skins.iter().flat_map(|skin| {
+        let h = skin.layouts;
+        [h.arcade, h.elimination, h.time_trial, h.speed_lap, h.zone]
+    });
+    let roots: Vec<&str> = modes()
+        .into_iter()
+        .chain(skinned)
+        .chain(split.arcade)
+        .chain(split.elimination)
+        .chain(vertical.arcade)
+        .chain(vertical.elimination)
+        .collect();
+    let authors: BTreeSet<&str> = roots
+        .into_iter()
+        .filter(|root| {
+            composed(&mut archives, root)
+                .layout
+                .sprite("LapPanel2")
+                .is_some()
+        })
+        .collect();
+    let expected: BTreeSet<&str> = std::iter::once(oag_omega::TITLE.hud.elimination)
+        .chain(split.elimination)
+        .chain(vertical.elimination)
+        .collect();
+    assert_eq!(authors, expected);
+}
+
+/// An Omega Eliminator draws the lap hexagon: the shared always-on list reaches the draw list, so
+/// an art without `LapPanel2` draws one sprite fewer. Dropping `LapPanel2` from
+/// `oag_hd::hud::ALWAYS_ON`, or Omega's `always_on` going back to its own copy, fails this.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn an_omega_eliminator_draws_the_lap_hexagon() {
+    let Some(source) = omega() else { return };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: source.display().to_string(),
+        mode: oag_race::Mode::Eliminator,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("an Omega Eliminator loads");
+    let context = loaded.hud.context().expect("the layout parses");
+    let readout = oag_raceplay::Race::start(loaded.setup).readout();
+    let with = oag_hud::draw_list(&context, &readout);
+    let others: &'static [&'static str] = Box::leak(
+        context
+            .art
+            .always_on
+            .iter()
+            .copied()
+            .filter(|name| *name != "LapPanel2")
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    );
+    let art: &'static oag_title::HudArt = Box::leak(Box::new(oag_title::HudArt {
+        always_on: others,
+        ..*context.art
+    }));
+    let hexagonless = oag_hud::draw_list(&oag_hud::Context { art, ..context }, &readout);
+    assert_eq!(
+        with.sprites.len() - hexagonless.sprites.len(),
+        1,
+        "`LapPanel2`, the hexagon round the lap number"
+    );
+}
+
+fn load_on(track: &str, class: &str) -> oag_raceplay::Loaded {
+    let source = omega().expect("checked by the caller");
+    oag_raceplay::load(&oag_raceplay::Options {
+        source: source.display().to_string(),
+        track: Some(track.to_string()),
+        class: class.to_string(),
+        mode: oag_race::Mode::SingleRace,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("an Omega race loads")
+}
+
+const ALTIMA_2048: &str = r"Data\Environments2048\altima\track.vex";
+const TECH_DE_RA: &str = r"Data\environments\tech_de_ra\track.vex";
+
+/// **A race on a 2048-era circuit draws 2048's HUD** (`LAP`, `TOTAL`, `CURRENT`, `POS`, the shield
+/// `%`), laid out on the Vita's 960x544 grid, where a race on an HD-era circuit keeps HD's root.
+/// Dropping `LINEAGES` from `oag_omega::race::DEFAULTS`, or the lineage test in `hud_roots`,
+/// fails the first half; the second half is the control.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn a_2048_era_circuit_draws_2048s_hud_and_an_hd_era_one_keeps_hds() {
+    if omega().is_none() {
+        return;
+    }
+    let lineage = load_on(ALTIMA_2048, "venom");
+    let layout = lineage.hud.layout.as_ref().expect("the layout composes");
+    assert!(
+        layout.label("RaceXPTxt").is_some(),
+        "the 2048_hud set authors the XP line, HD's root does not"
+    );
+    assert_eq!(lineage.hud.art, oag_omega::hud::ART_2048);
+    assert_eq!(
+        lineage.hud.space,
+        oag_display::space::Space::of(oag_disc::Platform::Vita),
+        "the set is authored for 960x544"
+    );
+    assert!(lineage.hud.art.total_time_hundredths && lineage.hud.art.shield_percent);
+    // The build without a view (`oag-server`) must lock on in the grid the client does.
+    let without_view = |track: &str| {
+        oag_raceplay::Sighting::without_view(oag_disc::Platform::Ps4, oag_omega::TITLE, track)
+    };
+    assert_eq!(lineage.setup.sight, without_view(ALTIMA_2048));
+    assert_eq!(lineage.setup.sight.lock_screen, [960.0, 544.0]);
+
+    let hd = load_on(TECH_DE_RA, "venom");
+    let layout = hd.hud.layout.as_ref().expect("the layout composes");
+    assert!(layout.label("RaceXPTxt").is_none());
+    assert_eq!(hd.hud.art, oag_omega::TITLE.hud_art);
+    assert_eq!(hd.setup.sight, without_view(TECH_DE_RA));
+    assert_eq!(hd.setup.sight.lock_screen, [1920.0, 1080.0]);
+    assert_eq!(
+        hd.hud.space,
+        oag_display::space::Space::of(oag_disc::Platform::Ps4)
+    );
+}
+
+/// **The race the Race Box starts on a 2048-era circuit runs 2048's lap counts**: the original
+/// reads `LAP 1/4` at C CLASS (seven circuits) and `LAP 1/5` at A CLASS (Sol), where the engine's
+/// table gives 3 and 4 for the rungs this project maps them to. Measured rungs only: C and A.
+/// An HD-era circuit keeps the engine's table.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn a_2048_era_circuit_runs_the_original_s_laps_per_class() {
+    if omega().is_none() {
+        return;
+    }
+    let laps_of = |track: &str, class: &str| {
+        let loaded = load_on(track, class);
+        oag_raceplay::Race::start(loaded.setup).readout().laps
+    };
+    assert_eq!(laps_of(ALTIMA_2048, "venom"), 4, "C CLASS");
+    assert_eq!(laps_of(ALTIMA_2048, "rapier"), 5, "A CLASS");
+    assert_eq!(
+        laps_of(TECH_DE_RA, "venom"),
+        3,
+        "HD's own circuits keep the engine's table"
+    );
+    assert_eq!(laps_of(TECH_DE_RA, "rapier"), 4);
+}
+
+/// Every widget name `ART_2048` and the 2048 lineage carry is authored by Omega's own copy of
+/// the `2048_hud` set, so the inheritance is a name that matches, not one that matches nothing.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_2048_mode_hud_names_are_authored_by_its_layouts() {
+    let Some(mut archives) = open() else { return };
+    let h = oag_omega::hud::LAYOUTS_2048;
+    let mut names = BTreeSet::new();
+    for root in [h.arcade, h.elimination, h.time_trial, h.speed_lap, h.zone] {
+        let c = composed(&mut archives, root);
+        assert!(c.missing.is_empty(), "{root}: missing {:?}", c.missing);
+        names.extend(c.layout.sprites.iter().map(|s| s.name.clone()));
+        names.extend(c.layout.labels.iter().map(|l| l.name.clone()));
+    }
+    let art = oag_omega::hud::ART_2048;
+    let mut wanted: Vec<&str> = art.always_on.to_vec();
+    if let oag_title::hud::Sights::Concentric {
+        seeking, locked, ..
+    } = art.sights
+    {
+        wanted.extend(seeking.iter());
+        wanted.extend(locked.iter());
+    }
+    let missing: Vec<&&str> = wanted.iter().filter(|n| !names.contains(**n)).collect();
+    assert!(missing.is_empty(), "not authored by Omega: {missing:?}");
+}
+
+/// **Omega's 2048 mode draws 2048's radar round the craft** (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`):
+/// its `2048_hud\Arcade_HUD.xml` includes `HUD_half_radar.xml`, whose `Radar` and `PlayerDot` sit at
+/// `(480, 439)` in the 544-line space, and the bind (`FUN_012d1590`) never hides either. Dropping
+/// either name from `ART_2048.always_on` fails this.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_2048_mode_draws_the_half_radar_round_the_craft() {
+    let Some(mut archives) = open() else { return };
+    let layout = composed(&mut archives, r"Data\XML\2048_hud\Arcade_HUD.xml").layout;
+    let radar = layout.sprite("Radar").expect("Radar");
+    assert_eq!(radar.rect, [381.75, 439.0, 197.25, 54.0]);
+    assert_eq!(radar.uv, [8.0, 1676.0, 752.0, 208.0]);
+    let dot = layout.sprite("PlayerDot").expect("PlayerDot");
+    assert_eq!(dot.rect, [464.25, 433.0, 31.5, 12.0]);
+    for name in ["Radar", "PlayerDot"] {
+        assert!(oag_omega::hud::ART_2048.always_on.contains(&name), "{name}");
+    }
 }

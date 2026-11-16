@@ -339,6 +339,15 @@ fn the_renderer_row_says_a_restart_is_needed() {
     //
     // `display.hud_style` is the fifth, on the same terms: the skin is resolved when the
     // race loads (`race::Options::hud_style`), so a race running keeps its own.
+    //
+    // `graphics.trail_hits` is the sixth, on the same terms: the lent burst is read when the
+    // race loads (`race::Options::trail_hits`), so a race running keeps its own.
+    //
+    // `graphics.wingtip_contrails` is the seventh: the lent config and texture are read when the
+    // race loads (`race::Options::wingtip_contrails`).
+    //
+    // `graphics.own_shield` is the eighth, on the same terms (`race::Options::own_shield`),
+    // and `graphics.own_rockets` the ninth (`race::Options::own_rockets`).
     let deferred: Vec<&str> = definition
         .pages
         .iter()
@@ -353,7 +362,11 @@ fn the_renderer_row_says_a_restart_is_needed() {
             "graphics.renderer",
             "graphics.msaa",
             "graphics.boost_fov_kick",
-            "graphics.boost_zoom"
+            "graphics.boost_zoom",
+            "graphics.trail_hits",
+            "graphics.wingtip_contrails",
+            "graphics.own_shield",
+            "graphics.own_rockets"
         ]
     );
 }

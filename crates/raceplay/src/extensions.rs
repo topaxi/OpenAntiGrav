@@ -13,7 +13,7 @@
 //!   `clear-shield` (zeroes it), all landing at the call, before the step.
 //! - **The call**: [`Race::tick_extensions`], between `advance_cannons` and the people's
 //!   steps (phase C of `hooks.md`). Modules run in id order; each sees the same events.
-//! - **Command**: `scale-thrust{slot, factor}`, `factor` in `[0, 1]`, **multiplied** into
+//! - **Command**: `scale-thrust{slot, factor}`, `factor` in `[0, 2]` (`MAX_THRUST_FACTOR`; below 1 slows, above 1 is the mod's own engine scale), **multiplied** into
 //!   `Ship::pending_thrust_scale`, which this tick's step consumes for a person's craft
 //!   (`player_step.rs`) and an AI craft (`field.rs`) alike. Multiplied, not assigned, so a
 //!   Leach Beam drain armed at the end of the last tick is kept.
@@ -29,17 +29,58 @@
 
 use std::sync::Arc;
 
+mod admit;
+pub use admit::{admit, sources_for_race};
+mod channel;
+mod identity;
+#[cfg(feature = "extensions")]
+mod on;
 mod route;
 #[cfg(feature = "extensions")]
 mod shield;
+#[cfg(feature = "extensions")]
+mod sound;
 mod track;
+#[cfg(feature = "extensions")]
+mod view_pass;
 
+pub use channel::Declared;
+pub use identity::{check_recorded, preflight_recorded, restrict_to};
 pub use track::{Track, TrackProps};
 
 /// The most simulation modules one race runs. Chosen.
 pub const MAX_SIM_MODS: usize = 4;
 
 /// Reads a module's bytes, on the load thread.
+/// One of a mod's `[icons]`: its name, its path in the mod (a report names the file) and a
+/// reader for its bytes, a PNG or an SVG by the path's extension.
+#[derive(Clone)]
+pub struct IconSource {
+    /// The key in `[icons]`.
+    pub name: String,
+    /// The file's path inside the mod.
+    pub path: String,
+    /// Reads the file.
+    pub read: Reader,
+}
+
+impl std::fmt::Debug for IconSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IconSource")
+            .field("name", &self.name)
+            .field("path", &self.path)
+            .finish_non_exhaustive()
+    }
+}
+
+impl IconSource {
+    /// Whether the file is a vector drawing.
+    #[must_use]
+    pub fn is_svg(&self) -> bool {
+        self.path.to_ascii_lowercase().ends_with(".svg")
+    }
+}
+
 pub type Reader = Arc<dyn Fn() -> Result<Vec<u8>, String> + Send + Sync>;
 
 /// Where a [`Source`] runs.
@@ -76,6 +117,8 @@ impl Scope {
 pub struct Source {
     /// The mod's id; modules run in the order these sort.
     pub mod_id: String,
+    /// The mod's `[mod] version`, which a replay records beside the module's hash.
+    pub version: String,
     /// The module's path in the mod, for the load report.
     pub module: String,
     /// `[mod] titles`, lowercased and hyphenated: the module runs only on these; empty
@@ -85,8 +128,12 @@ pub struct Source {
     pub api: u32,
     /// `[extension] memory_pages`.
     pub memory_pages: u32,
-    /// `[extension] state_bytes`.
+    /// `[extension] state_bytes`: 0 when the manifest declares none and the module's own
+    /// `oag_state_len` says.
     pub state_bytes: u32,
+    /// `[extension] drives_ai_pickup`: the engine raises no `pickup-fire` for an AI craft
+    /// holding the mod pickup; the module decides and clears it itself.
+    pub drives_ai_pickup: bool,
     /// Where it runs.
     pub scope: Scope,
     /// Reads the module.
@@ -94,16 +141,127 @@ pub struct Source {
     /// The mod's own text for a language: its `strings/<language>.toml` over its
     /// `strings/english.toml`, by string id (the same files its menu rows use).
     pub strings: StringsReader,
-    /// The mod's `[icons]`: name and a reader for the PNG.
-    pub icons: Vec<(String, Reader)>,
+    /// The mod's `[icons]`.
+    pub icons: Vec<IconSource>,
     /// The mod's `[effects]`, in name order: name and the TOML's path in the mod. A
-    /// module's `fire-mod-effect` names one by its place in this list.
+    /// module's `fire-mod-effect` names one by its key; the load reads them in this order.
     pub effects: Vec<(String, String)>,
+    /// The mod's `[shaders]`, in name order: name and the file's path in the mod. A
+    /// module's draws and an effect file name one by its key.
+    pub shaders: Vec<(String, String)>,
+    /// The mod's `[sounds]`, in name order: name and the WAV's path in the mod. A
+    /// module's `play-mod-sound` names one by its key.
+    pub sounds: Vec<(String, String)>,
     /// Reads any file of the mod by its path (an effect's TOML and PNGs).
     pub files: Files,
     /// The mod's `[pickup]`: the look of the pickup it hands out. A mod without one that
     /// sends `give-pickup` or `pickup-roll` is faulted for the race, naming the table.
     pub pickup: Option<oag_tables::pickup_look::PickupLook>,
+    /// The mod's `[pickup.titles.<title>]` looks, each over [`Self::pickup`].
+    pub pickup_titles: Vec<(String, oag_tables::pickup_look::PickupLook)>,
+    /// The mod's `[[pickup.odds]]`: the weapon pads draw its pickup with these.
+    pub pickup_odds: Vec<oag_tables::pickup_look::OddsRow>,
+    /// The player's picks on the mod's own choice rows, as indices
+    /// (`oag_ext_abi::OPTIONS_AT`), read by `Observation::option`.
+    pub options: Picks,
+    /// The mod's `[channels]`.
+    pub channels: Declared,
+}
+
+/// How many choice rows' picks a module is given ([`Source::options`]).
+pub const OPTIONS: usize = oag_ext_abi::OPTIONS_LEN;
+
+/// A module's picks on its choice rows, split by the row's `scope`
+/// (`docs/architecture/wasm-extensions/hooks.md`, "Picks: sim and view"). A `sim` row's pick
+/// reaches the simulation tick and is part of the race's identity; a `view` row's pick reaches
+/// only the call whose outputs are drawn, and stays on this device.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Picks {
+    /// What the simulation tick reads: a `sim` row's pick, and a `view` row's own default.
+    pub sim: [u8; OPTIONS],
+    /// What the view call reads: every row's pick, `view` rows included.
+    pub view: [u8; OPTIONS],
+    /// Bit `n` set: row `n` is a `view` row.
+    pub view_rows: u8,
+}
+
+impl Picks {
+    /// These picks with every `sim` row set to the recorded one in `sim` (a row past its end
+    /// keeps its own): what a rebuild hands a module in place of this machine's settings. A
+    /// `view` row stays this machine's.
+    #[must_use]
+    pub fn with_sim_picks(mut self, sim: &[u8]) -> Self {
+        for (row, &pick) in sim.iter().enumerate().take(OPTIONS) {
+            if self.view_rows >> row & 1 == 0 {
+                self.sim[row] = pick;
+                self.view[row] = pick;
+            }
+        }
+        self
+    }
+
+    /// Every row a `sim` row, read the same by both calls.
+    #[must_use]
+    pub fn all_sim(picks: [u8; OPTIONS]) -> Self {
+        Self {
+            sim: picks,
+            view: picks,
+            view_rows: 0,
+        }
+    }
+
+    /// Whether a view call would read anything the simulation call does not.
+    #[must_use]
+    pub fn differs(&self) -> bool {
+        self.sim != self.view
+    }
+
+    /// The `(row, pick)` pairs that belong to the race's identity: a `sim` row off index 0.
+    pub fn identity(&self) -> impl Iterator<Item = (usize, u8)> + '_ {
+        self.sim
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|&(row, pick)| pick != 0 && self.view_rows >> row & 1 == 0)
+    }
+}
+
+/// A `draw-beam` of this tick: an output, never hashed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Beam {
+    /// The craft it starts at.
+    pub from: usize,
+    /// The craft it ends at.
+    pub to: usize,
+    /// Straight-alpha `RGBA` in `0..=1`.
+    pub rgba: [f32; 4],
+    /// Half its width in world units.
+    pub half_width: f32,
+    /// The shader, by its place in the sending mod's `[shaders]`.
+    pub shader: Option<u16>,
+}
+
+/// A `portal-view` of this tick: an output, never hashed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PortalRequest {
+    /// The entrance's progress on the lap, in track units.
+    pub entrance: f32,
+    /// Where the exit is: a ring point from a progress, or a trigger's, on a fork's route
+    /// when the trigger stands on one. `None` for a progress off the lap or a trigger the
+    /// track lacks or that is off the course: the request asks for nothing.
+    pub exit: Option<crate::transit::Exit>,
+    /// How far the surface reaches from the entrance's centre, in world units.
+    pub radius: f32,
+    /// When the texture is drawn.
+    pub update: oag_ext_abi::ViewUpdate,
+    /// A new value draws a snapshot again.
+    pub generation: u8,
+}
+
+/// A wire colour as straight-alpha `RGBA` in `0..=1`.
+#[cfg(feature = "extensions")]
+fn unit(rgba: oag_ext_abi::Rgba) -> [f32; 4] {
+    [rgba.r, rgba.g, rgba.b, rgba.a].map(|c| f32::from(c) / 255.0)
 }
 
 /// Reads a file of a mod by its path in the mod, on the load thread.
@@ -115,6 +273,18 @@ pub type Strings = std::collections::BTreeMap<String, String>;
 /// Reads a mod's [`Strings`] for the game's language (`None`: English alone), on the
 /// load thread. A language the mod ships no file for gives English's.
 pub type StringsReader = Arc<dyn Fn(Option<&str>) -> Strings + Send + Sync>;
+
+impl Source {
+    #[cfg(feature = "extensions")]
+    /// The look of the mod's pickup on `title`: its row for the title, else `[pickup]`.
+    fn look_for(&self, title: &str) -> Option<oag_tables::pickup_look::PickupLook> {
+        self.pickup_titles
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(title))
+            .map(|(_, look)| look.clone())
+            .or_else(|| self.pickup.clone())
+    }
+}
 
 impl std::fmt::Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -170,6 +340,8 @@ pub struct Prepared {
     /// Whether a track module is among them: the load then builds the host title's
     /// rain for it ([`Self::has_track_module`]).
     track_module: bool,
+    /// Each module as a replay names it, in module order.
+    uses: Vec<oag_replay::header::ModUse>,
     /// The track as the modules read it.
     #[cfg(feature = "extensions")]
     region: track::Region,
@@ -179,6 +351,28 @@ pub struct Prepared {
     /// Each module's mod's `[pickup]`, in module order.
     #[cfg(feature = "extensions")]
     pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
+    /// Each module's `[extension] drives_ai_pickup`, in module order.
+    #[cfg(feature = "extensions")]
+    drives_ai: Vec<bool>,
+    /// Each module's mod's `[channels]` publishes, in module order.
+    #[cfg(feature = "extensions")]
+    publishes: Vec<Vec<(u32, String)>>,
+    /// Each module's [`Source::options`], in module order.
+    #[cfg(feature = "extensions")]
+    options: Vec<Picks>,
+    /// The keys of each module's mod's `[icons]`, `[shaders]`, `[effects]` and `[sounds]`,
+    /// in module order.
+    #[cfg(feature = "extensions")]
+    names: Vec<on::Names>,
+    /// Each module whose mod declares `[[pickup.odds]]` (the weapon pads draw its pickup
+    /// with them), in module order, with its rows and the race's title.
+    #[cfg(feature = "extensions")]
+    odds: Vec<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
+    /// The race's title as the observation's key (`oag_ext_abi::channel_key` of its slug).
+    #[cfg(feature = "extensions")]
+    title: u32,
+    /// The track's triggers that send a channel: with no module too.
+    beacons: channel::Beacons,
 }
 
 impl Prepared {
@@ -203,6 +397,7 @@ pub fn prepare(
     language: Option<&str>,
     report: &mut Vec<String>,
 ) -> Prepared {
+    let beacons = channel::Beacons::new(&track.props.triggers);
     let sources: Vec<&Source> = sources
         .iter()
         .filter(|s| s.titles.is_empty() || s.titles.iter().any(|t| t.eq_ignore_ascii_case(title)))
@@ -220,12 +415,18 @@ pub fn prepare(
                 ),
             );
         }
-        Prepared::default()
+        Prepared {
+            beacons,
+            ..Prepared::default()
+        }
     }
     #[cfg(feature = "extensions")]
     {
         if sources.is_empty() {
-            return Prepared::default();
+            return Prepared {
+                beacons,
+                ..Prepared::default()
+            };
         }
         let region = match track::encode(track) {
             Ok(region) => region,
@@ -237,7 +438,10 @@ pub fn prepare(
                         track.name
                     ),
                 );
-                return Prepared::default();
+                return Prepared {
+                    beacons,
+                    ..Prepared::default()
+                };
             }
         };
         let mut sorted = sources;
@@ -245,7 +449,14 @@ pub fn prepare(
         let mut modules = Vec::new();
         let mut strings = Vec::new();
         let mut pickups = Vec::new();
+        let mut drives_ai = Vec::new();
+        let mut publishes = Vec::new();
+        let mut options = Vec::new();
+        let mut names = Vec::new();
+        let mut odds = Vec::new();
+        let mut pickup_mods = 0;
         let mut track_module = false;
+        let mut uses = Vec::new();
         for source in sorted {
             let label = format!("mod {}: {}", source.mod_id, source.module);
             if modules.len() == MAX_SIM_MODS {
@@ -255,6 +466,12 @@ pub fn prepare(
                         "{label} left out: a race runs at most {MAX_SIM_MODS} simulation modules"
                     ),
                 );
+                continue;
+            }
+            if source.look_for(title).is_some()
+                && let Err(why) = on::pickup_kind(pickup_mods)
+            {
+                push(report, format!("{label} left out: {why}"));
                 continue;
             }
             if source.api != oag_ext_abi::ABI {
@@ -276,25 +493,41 @@ pub fn prepare(
             match (source.read)()
                 .map_err(|e| format!("cannot be read: {e}"))
                 .and_then(|wasm| {
-                    oag_modhost::Module::compile(&wasm, limits).map_err(|e| e.to_string())
+                    let sha256 = identity::sha256_hex(&wasm);
+                    oag_modhost::Module::compile(&wasm, limits)
+                        .map(|module| (module, sha256))
+                        .map_err(|e| e.to_string())
                 }) {
-                Ok(module) => {
+                Ok((module, sha256)) => {
+                    log::debug!(
+                        "{label}: runs on the {} engine",
+                        oag_modhost::engine_name().unwrap_or("unbuilt")
+                    );
                     push(
                         report,
                         format!(
-                            "{label}: {} loaded, {} state bytes, {} fuel a tick; the race is MODDED and records no replay",
+                            "{label}: {} loaded, {} state bytes, {} fuel a tick; the race is MODDED and its replay names the module",
                             match source.scope {
                                 Scope::Rules => "simulation module",
                                 Scope::Track(_) => "track module",
                             },
-                            source.state_bytes,
+                            module.limits().state_bytes,
                             oag_modhost::FUEL_PER_TICK
                         ),
                     );
                     track_module |= matches!(source.scope, Scope::Track(_));
+                    if !source.pickup_odds.is_empty() {
+                        odds.push((modules.len(), source.pickup_odds.clone(), title.to_string()));
+                    }
+                    pickup_mods += usize::from(source.look_for(title).is_some());
+                    uses.push(identity::used(source, sha256, module.limits().state_bytes));
                     modules.push((source.mod_id.clone(), module));
                     strings.push((source.strings)(language));
-                    pickups.push(source.pickup.clone());
+                    pickups.push(source.look_for(title));
+                    drives_ai.push(source.drives_ai_pickup);
+                    publishes.push(channel::publishes(&source.channels));
+                    options.push(source.options);
+                    names.push(on::Names::of(source));
                 }
                 Err(e) => push(report, format!("{label} left out: {e}")),
             }
@@ -302,17 +535,37 @@ pub fn prepare(
         Prepared {
             modules,
             track_module,
+            uses,
             region,
             strings,
             pickups,
+            drives_ai,
+            publishes,
+            options,
+            names,
+            odds,
+            title: oag_ext_abi::channel_key(&title.to_ascii_lowercase()),
+            beacons,
         }
     }
 }
 
-/// The PNGs of the `[icons]` of every mod that is on for this race (`title`, and
-/// `foreign_track` for a track module), decoded for the HUD's sheet under the keys
-/// [`mod_icon_src`] gives. Read on the load thread with the rest of the load. One that
-/// is missing or does not decode draws nothing, and `report` names it.
+/// The icons of the mods that are on for a race.
+#[cfg(feature = "view")]
+#[derive(Debug, Default, Clone)]
+pub struct ModIcons {
+    /// The PNGs, decoded.
+    pub raster: Vec<oag_hud::sprite::DecodedImage>,
+    /// The SVGs, parsed; rasterised once the HUD knows the size of the slot they draw in
+    /// ([`oag_hud::Assets::rasterise_vector_icons`]).
+    pub vector: Vec<oag_hud::svg::VectorIcon>,
+}
+
+/// The `[icons]` of every mod that is on for this race (`title`, and `foreign_track` for
+/// a track module), under the keys [`mod_icon_src`] gives: a PNG decoded for the HUD's
+/// sheet, an SVG parsed. Read on the load thread with the rest of the load. One that is
+/// missing or does not decode or parse draws nothing, and `report` names the file and
+/// the reader's error.
 #[cfg(feature = "view")]
 #[must_use]
 pub fn mod_icons(
@@ -320,32 +573,53 @@ pub fn mod_icons(
     title: &str,
     foreign_track: Option<&std::path::Path>,
     report: &mut Vec<String>,
-) -> Vec<oag_hud::sprite::DecodedImage> {
+) -> ModIcons {
     #[cfg(not(feature = "extensions"))]
     {
         let _ = (sources, title, foreign_track, report);
-        Vec::new()
+        ModIcons::default()
     }
     #[cfg(feature = "extensions")]
     {
         let mut seen = std::collections::BTreeSet::new();
-        let mut out = Vec::new();
+        let mut out = ModIcons::default();
         for source in for_race(sources, title, foreign_track) {
             if !seen.insert(source.mod_id.clone()) {
                 continue;
             }
-            for (name, read) in &source.icons {
-                let label = format!("mod {}: icon {name}", source.mod_id);
-                match read().and_then(|bytes| decode_png(&bytes)) {
-                    Ok((width, height, rgba)) => out.push(oag_hud::sprite::DecodedImage {
-                        src: mod_icon_src(&source.mod_id, name),
-                        width,
-                        height,
-                        rgba,
-                        quad_extent: None,
-                        quad_centre: None,
-                        blend: None,
-                    }),
+            for icon in &source.icons {
+                let (name, path) = (&icon.name, &icon.path);
+                let label = format!("mod {}: icon {name} ({path})", source.mod_id);
+                let src = mod_icon_src(&source.mod_id, name);
+                let bytes = match (icon.read)() {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        push(report, format!("{label} left out: {e}; draws nothing"));
+                        continue;
+                    }
+                };
+                if icon.is_svg() {
+                    match oag_hud::svg::VectorIcon::parse(src, &bytes) {
+                        Ok(vector) => out.vector.push(vector),
+                        Err(e) => push(report, format!("{label} left out: {e}; draws nothing")),
+                    }
+                    continue;
+                }
+                match decode_png(&bytes) {
+                    Ok((width, height, rgba)) => {
+                        // Where the art is on the canvas, for the pickup's slot
+                        // (`oag_hud::pickup::mod_icon_draw`); `hud-icon` ignores it.
+                        let art = art_box(width, height, &rgba);
+                        out.raster.push(oag_hud::sprite::DecodedImage {
+                            src,
+                            width,
+                            height,
+                            rgba,
+                            quad_extent: art.map(|(extent, _)| extent),
+                            quad_centre: art.map(|(_, centre)| centre),
+                            blend: None,
+                        });
+                    }
                     Err(e) => push(report, format!("{label} left out: {e}; draws nothing")),
                 }
             }
@@ -368,6 +642,30 @@ pub(crate) fn for_race<'a>(
             s.titles.is_empty() || s.titles.iter().any(|t| t.eq_ignore_ascii_case(title))
         })
         .filter(move |s| s.scope.runs_on(foreign_track))
+}
+
+/// The box of the pixels a PNG draws (alpha above 16): its size and where its middle is
+/// from the canvas's, in pixels, y down. `None` for an image with nothing drawn.
+#[cfg(all(feature = "view", feature = "extensions"))]
+pub(crate) fn art_box(width: u32, height: u32, rgba: &[u8]) -> Option<([f32; 2], [f32; 2])> {
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (u32::MAX, u32::MAX, 0, 0);
+    for (i, pixel) in rgba.as_chunks::<4>().0.iter().enumerate() {
+        if pixel[3] <= 16 {
+            continue;
+        }
+        let (x, y) = (i as u32 % width, i as u32 / width);
+        (min_x, min_y) = (min_x.min(x), min_y.min(y));
+        (max_x, max_y) = (max_x.max(x), max_y.max(y));
+    }
+    if min_x > max_x || min_y > max_y || width == 0 || height == 0 {
+        return None;
+    }
+    let extent = [(max_x - min_x + 1) as f32, (max_y - min_y + 1) as f32];
+    let centre = [
+        (min_x + max_x + 1) as f32 * 0.5 - width as f32 * 0.5,
+        (min_y + max_y + 1) as f32 * 0.5 - height as f32 * 0.5,
+    ];
+    Some((extent, centre))
 }
 
 /// A PNG as RGBA8: `(width, height, pixels)`.
@@ -419,6 +717,18 @@ fn push(report: &mut Vec<String>, line: String) {
     report.push(line);
 }
 
+/// The kind the `held`-th pickup-declaring mod gets: for the test of the cap.
+#[cfg(all(test, feature = "extensions"))]
+pub(crate) fn pickup_kind_for_tests(held: usize) -> Result<oag_tables::weapons::ModKind, String> {
+    on::pickup_kind(held)
+}
+
+/// Faults module `index` as a refused reply does: for tests.
+#[cfg(all(test, feature = "extensions"))]
+pub(crate) fn fault_for_tests(race: &mut crate::Race, index: usize) {
+    on::fault(&mut race.sim, index, "a test faulted it".into());
+}
+
 /// The race-wide outputs of `set-weather`, `set-sun` and `grade-sky` this tick. Each is
 /// its own identity when unsent, so a race without a module draws the vanilla frame.
 /// Two modules sending the same command: the later module in id order wins (chosen).
@@ -454,10 +764,66 @@ pub struct Report {
     pub fuel_peak: u64,
     /// Fuel a call may use.
     pub fuel_budget: u64,
+    /// The guest's linear memory in bytes after the last call that ran.
+    pub memory_bytes: u64,
+    /// The most linear memory any call this race ended with.
+    pub memory_peak: u64,
+    /// The memory the manifest allows: `memory_pages` in bytes. Not a reservation.
+    pub memory_cap: u64,
+    /// The state blob's length in bytes: the manifest's `state_bytes`.
+    pub state_bytes: u64,
     /// The last call's wall time, microseconds.
     pub call_us: f32,
     /// The tick the module faulted on, and why; it has not run since.
     pub faulted: Option<(u64, String)>,
+}
+
+/// Events a cap dropped over the race, per kind. A report, never hashed: it is a count of
+/// what was dropped, and the drop itself is deterministic (sorted order, fixed caps), so
+/// every machine drops the same events at the same tick.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Drops {
+    /// Modules' `mod` events past `MAX_MOD_EVENTS` in a tick.
+    pub mod_events: u64,
+    /// The track's `mod` events past `MAX_TRACK_EVENTS` in a tick.
+    pub track_events: u64,
+    /// Engine events past `MAX_EVENTS` (after the `mod` events) in a tick.
+    pub engine_events: u64,
+}
+
+#[cfg(feature = "extensions")]
+impl Drops {
+    /// Adds one tick's drops, saying so in the log the first time each kind drops.
+    pub(super) fn note(&mut self, tick: u64, mods: usize, track: usize, engine: usize) {
+        let kinds = [
+            (
+                &mut self.mod_events,
+                mods,
+                "module",
+                oag_ext_abi::MAX_MOD_EVENTS,
+            ),
+            (
+                &mut self.track_events,
+                track,
+                "track",
+                oag_ext_abi::MAX_TRACK_EVENTS,
+            ),
+            (
+                &mut self.engine_events,
+                engine,
+                "engine",
+                oag_ext_abi::MAX_EVENTS,
+            ),
+        ];
+        for (total, dropped, kind, cap) in kinds {
+            if dropped > 0 && *total == 0 {
+                log::warn!(
+                    "mods: {dropped} {kind} events past the cap of {cap} a tick dropped at tick {tick} (counted in Extensions::drops; later drops are not logged)"
+                );
+            }
+            *total += dropped as u64;
+        }
+    }
 }
 
 /// The race's simulation modules: their state (hashed) and their reports (not).
@@ -465,16 +831,31 @@ pub struct Report {
 pub struct Extensions {
     #[cfg(feature = "extensions")]
     on: on::On,
+    /// Each module as a replay names it, in module order.
+    uses: Vec<oag_replay::header::ModUse>,
+    /// The track's triggers that send a channel.
+    beacons: channel::Beacons,
+    /// When each channel last fired (`channel`).
+    fired: Vec<(u32, f32, u64)>,
 }
 
 impl Extensions {
+    /// This tick's `portal-view` of `slot`, as a guest changing what it asks would leave it.
+    #[cfg(all(test, feature = "extensions"))]
+    pub(crate) fn set_portal_view(&mut self, slot: usize, request: PortalRequest) {
+        self.on.portal_views[slot] = Some(request);
+    }
+
     /// The state for the modules `prepared` holds, blobs zeroed.
     #[must_use]
     pub fn new(prepared: Prepared) -> Self {
         #[cfg(not(feature = "extensions"))]
         {
-            let _ = prepared;
-            Self::default()
+            Self {
+                uses: prepared.uses,
+                beacons: prepared.beacons,
+                fired: Vec::new(),
+            }
         }
         #[cfg(feature = "extensions")]
         {
@@ -484,9 +865,24 @@ impl Extensions {
                     prepared.region,
                     prepared.strings,
                     prepared.pickups,
-                ),
+                    prepared.drives_ai,
+                    prepared.publishes,
+                    prepared.odds,
+                )
+                .with_title(prepared.title)
+                .with_options(&prepared.options)
+                .with_names(prepared.names),
+                uses: prepared.uses,
+                beacons: prepared.beacons,
+                fired: Vec::new(),
             }
         }
+    }
+
+    /// The modules as a replay names them, in module order.
+    #[must_use]
+    pub fn uses(&self) -> &[oag_replay::header::ModUse] {
+        &self.uses
     }
 
     /// Whether any module runs in this race: the race is MODDED.
@@ -502,17 +898,54 @@ impl Extensions {
         }
     }
 
-    /// A weapon pad just drew `weapon`: whether a module's `pickup-roll` turns this grant
-    /// into the mod's own pickup. Counts the grant. `false` in every race without one.
-    pub(super) fn rolls(&mut self, weapon: oag_tables::weapons::Weapon) -> bool {
+    /// The weights a weapon pad draws each mod's own pickup with in `class`, one row per
+    /// mod that declares them, in kind order: none in every race without one, and none
+    /// for a module that has faulted.
+    pub(super) fn pickup_odds(
+        &self,
+        class: &str,
+    ) -> Vec<(oag_tables::weapons::Weapon, oag_tables::weapons::PickupOdds)> {
         #[cfg(feature = "extensions")]
         {
-            self.on.rolls(weapon)
+            self.on.pickup_odds(class)
         }
         #[cfg(not(feature = "extensions"))]
         {
-            let _ = weapon;
-            false
+            let _ = class;
+            Vec::new()
+        }
+    }
+
+    /// The centre of the track file's trigger volume `index`, for a move to it: `None`
+    /// where the track has none (or this build has no `extensions` feature).
+    pub(super) fn trigger_centre(&self, index: usize) -> Option<oag_core::math::Vec3> {
+        #[cfg(feature = "extensions")]
+        {
+            let trigger = self.on.region.triggers.get(index)?;
+            Some(oag_core::math::Vec3::from_array(trigger.centre()))
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = index;
+            None
+        }
+    }
+
+    /// A weapon pad just drew `weapon`: the mod whose `pickup-roll` turns this grant into
+    /// its own pickup, if any. Counts the grant. `None` in every race without one.
+    pub(super) fn rolls(
+        &mut self,
+        slot: usize,
+        weapon: oag_tables::weapons::Weapon,
+    ) -> Option<oag_tables::weapons::ModKind> {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.rolls(slot, weapon)
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = (slot, weapon);
+            None
         }
     }
 
@@ -532,17 +965,21 @@ impl Extensions {
         }
     }
 
-    /// The look of `slot`'s held mod pickup this tick, for the HUD to keep while the pickup
-    /// fades out after its use. Never hashed.
+    /// The look of `slot`'s held mod pickup of `kind` this tick, for the HUD to keep while
+    /// the pickup fades out after its use. Never hashed.
     #[must_use]
-    pub fn pickup_look(&self, slot: usize) -> Option<oag_tables::pickup_look::PickupLook> {
+    pub fn pickup_look(
+        &self,
+        slot: usize,
+        kind: oag_tables::weapons::ModKind,
+    ) -> Option<oag_tables::pickup_look::PickupLook> {
         #[cfg(feature = "extensions")]
         {
-            self.on.pickup_look(slot)
+            self.on.pickup_look(slot, kind)
         }
         #[cfg(not(feature = "extensions"))]
         {
-            let _ = slot;
+            let _ = (slot, kind);
             None
         }
     }
@@ -597,20 +1034,50 @@ impl Extensions {
     }
 
     /// Which of the track's triggers `slot` is inside this tick: any point of its
-    /// sweep (`Race::pad_sweep`) in the box. Tested only while a module runs.
-    pub(super) fn test_triggers(&mut self, slot: usize, sweep: &[oag_core::math::Vec3]) {
+    /// sweep (`Race::pad_sweep`) in the box. The modules' events are tested only while a
+    /// module runs; a trigger that sends a channel is tested always, and raises it for the
+    /// modules (next tick) and for `oag_on` animations (`tick` is when it fired).
+    pub(super) fn test_triggers(&mut self, slot: usize, sweep: &[oag_core::math::Vec3], tick: u64) {
+        for channel in self.beacons.entered(slot, sweep) {
+            self.note_fired(channel, 1.0, tick);
+            #[cfg(feature = "extensions")]
+            self.on.mail_from_track(slot, channel);
+        }
         #[cfg(feature = "extensions")]
         self.on.test_triggers(slot, sweep);
+    }
+
+    /// The module owning the mod pickup of `kind` decides when an AI craft uses it, so the
+    /// engine raises no `pickup-fire` for one (`[extension] drives_ai_pickup`).
+    pub(super) fn guest_drives_ai_pickup(&self, kind: oag_tables::weapons::ModKind) -> bool {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.guest_drives_ai_pickup(kind)
+        }
         #[cfg(not(feature = "extensions"))]
-        let _ = (slot, sweep);
+        {
+            let _ = kind;
+            false
+        }
+    }
+
+    /// Whether a `pickup-fire` is raised for `slot` and not yet delivered.
+    #[cfg(all(test, feature = "extensions"))]
+    pub(crate) fn fire_raised(&self, slot: usize) -> bool {
+        self.on.fires.iter().any(|fires| fires & (1 << slot) != 0)
     }
 
     /// The mod's own pickup's fire (`absorbed == false`) or absorb, raised for the module.
-    pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
+    pub(super) fn pickup_used(
+        &mut self,
+        slot: usize,
+        kind: oag_tables::weapons::ModKind,
+        absorbed: bool,
+    ) {
         #[cfg(feature = "extensions")]
-        self.on.pickup_used(slot, absorbed);
+        self.on.pickup_used(slot, kind, absorbed);
         #[cfg(not(feature = "extensions"))]
-        let _ = (slot, absorbed);
+        let _ = (slot, kind, absorbed);
     }
 
     /// `slot`'s mod engine scale for this tick's step, reset to `1.0` as it is taken:
@@ -655,6 +1122,10 @@ impl Extensions {
     /// The modules' state into the race hash: nothing at all when no module runs.
     pub(super) fn hash_into(&self, hasher: &mut oag_core::hash::StateHasher) {
         #[cfg(feature = "extensions")]
+        if self.any() {
+            self.beacons.hash_into(hasher);
+        }
+        #[cfg(feature = "extensions")]
         self.on.hash_into(hasher);
         #[cfg(not(feature = "extensions"))]
         let _ = hasher;
@@ -687,6 +1158,32 @@ impl Extensions {
         self.on.slot_blob(index)
     }
 
+    /// The events the caps dropped so far: all zero in a race that stays inside them.
+    #[must_use]
+    pub fn drops(&self) -> Drops {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.drops
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            Drops::default()
+        }
+    }
+
+    /// The loops of their own sounds the modules hold, by mod id.
+    #[must_use]
+    pub fn sound_loops(&self) -> Vec<oag_gameplay::cue::ModSoundLoop> {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.sound_loops()
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            Vec::new()
+        }
+    }
+
     /// Each module's numbers after the last tick, in id order.
     #[must_use]
     pub fn reports(&self) -> Vec<Report> {
@@ -704,17 +1201,112 @@ impl Extensions {
 impl crate::Race {
     /// Phase C: each module's `tick`, its commands into this tick's step. With no
     /// module, returns at once and touches nothing.
-    pub(super) fn tick_extensions(&mut self, inputs: &oag_gameplay::PlayerInputs) {
+    pub(super) fn tick_extensions(&mut self, inputs: &oag_gameplay::PlayerInputs, transited: u32) {
         #[cfg(feature = "extensions")]
         {
-            on::tick(&mut self.sim, inputs);
+            on::tick(&mut self.sim, inputs, transited);
+            self.run_motion();
+            #[cfg(feature = "view")]
+            self.run_warnings();
             let gave = self.sim.extensions.take_shield_gives();
             for slot in (0..oag_gameplay::MAX_SHIPS).filter(|slot| gave & (1 << slot) != 0) {
                 self.shield_activate(slot);
             }
         }
         #[cfg(not(feature = "extensions"))]
-        let _ = inputs;
+        let _ = (inputs, transited);
+    }
+
+    /// The call's `raise-warning`s, in module then reply order, onto the viewer's HUD. A
+    /// module that faulted this call raises none.
+    #[cfg(all(feature = "extensions", feature = "view"))]
+    fn run_warnings(&mut self) {
+        let warnings = std::mem::take(&mut self.sim.extensions.on.warnings);
+        for (module, slot, look) in warnings {
+            if !on::faulted(&self.sim, module) {
+                self.raise_mod_warning(slot, look);
+            }
+        }
+    }
+
+    /// The call's `transit` and `probe-clearance` commands, in module then reply order: a
+    /// transit the race refuses ([`Race::begin_transit`]) faults its module, but for a craft
+    /// an earlier module's transit took first, which is dropped; a probe's answer waits for
+    /// the next call's `clearance` event.
+    #[cfg(feature = "extensions")]
+    fn run_motion(&mut self) {
+        let motion = std::mem::take(&mut self.sim.extensions.on.motion);
+        for (index, command) in motion {
+            if on::faulted(&self.sim, index) {
+                continue;
+            }
+            // Not moved by a module: a craft that may not use its pickup (a wreck), and one
+            // an earlier module took out of the world in this call, which no observation
+            // could have shown the later one.
+            if let oag_ext_abi::Command::Transit { slot, .. } = command
+                && (!self.may_use_pickup(slot.index())
+                    || self.sim.world.ships[slot.index()].transit.is_some())
+            {
+                continue;
+            }
+            match command {
+                oag_ext_abi::Command::Transit {
+                    slot,
+                    ticks,
+                    distance,
+                    exit_factor,
+                } => {
+                    if let Err(why) = self.begin_transit(slot.index(), ticks, distance, exit_factor)
+                    {
+                        on::fault(&mut self.sim, index, format!("transit refused: {why}"));
+                    }
+                }
+                oag_ext_abi::Command::ProbeClearance {
+                    slot,
+                    distance,
+                    radius,
+                } => {
+                    let answer = self.clearance(slot.index(), distance, radius);
+                    self.sim.extensions.on.clearance[index][slot.index()] = Some(answer);
+                }
+                oag_ext_abi::Command::FireModEffectAhead {
+                    slot,
+                    effect,
+                    distance,
+                } => {
+                    let own = self.sim.extensions.on.slots[index]
+                        .names
+                        .effect(effect.as_str());
+                    if let Some(own) = own {
+                        self.fire_effect_ahead(index, slot.index(), own, distance);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// `fire-mod-effect-ahead`: the effect, queued for the view at the middle of the road
+    /// `distance` ahead of `slot`'s craft. A distance that does not resolve, or a road with
+    /// no spline there, draws nothing.
+    #[cfg(feature = "extensions")]
+    fn fire_effect_ahead(
+        &mut self,
+        module: usize,
+        slot: usize,
+        own: u16,
+        distance: oag_ext_abi::Distance,
+    ) {
+        let Ok((exit, _)) = self.exit_ahead(slot, distance) else {
+            return;
+        };
+        let Some((_, up, at, _)) = self.road_frame(exit) else {
+            return;
+        };
+        self.sim
+            .extensions
+            .on
+            .fire_effect_at(module, slot, own, at, up);
     }
 
     /// The modules' `fire-effect`s, each at its craft's nozzle (the hull's back end),
@@ -724,6 +1316,114 @@ impl crate::Race {
     pub(super) fn draw_extension_effects(&mut self) {
         for (slot, fired) in self.sim.extensions.take_effects() {
             self.play_fired(slot, &fired);
+        }
+    }
+
+    /// `slot`'s view's `screen-fill` this tick as straight-alpha `RGBA` in `0..=1`, or
+    /// `None` with none (and in a race without a module).
+    #[must_use]
+    pub fn extension_fill(&self, slot: usize) -> Option<[f32; 4]> {
+        #[cfg(feature = "extensions")]
+        {
+            let (rgba, shader) = (*self.sim.extensions.on.fill.get(slot)?)?;
+            (shader.is_none() && rgba.a > 0).then(|| unit(rgba))
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            None
+        }
+    }
+
+    /// `slot`'s view's `screen-fill` this tick where a shader draws it: the sending mod, the
+    /// shader's place in its `[shaders]`, the colour. A wash of alpha 0 still runs: the
+    /// shader says what the colour means.
+    #[cfg(feature = "view")]
+    #[must_use]
+    pub(crate) fn extension_shaded_fill(&self, slot: usize) -> Option<(&str, u16, [f32; 4])> {
+        #[cfg(feature = "extensions")]
+        {
+            let on = &self.sim.extensions.on;
+            let (rgba, shader) = (*on.fill.get(slot)?)?;
+            let (module, shader) = shader?;
+            Some((on.module_id(module), shader, unit(rgba)))
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            None
+        }
+    }
+
+    /// This tick's `draw-beam`s, with the sending mod.
+    #[cfg(feature = "view")]
+    pub(crate) fn extension_beams(&self) -> impl Iterator<Item = (&str, Beam)> {
+        #[cfg(feature = "extensions")]
+        {
+            let on = &self.sim.extensions.on;
+            on.beams
+                .iter()
+                .map(|(module, beam)| (on.module_id(*module), *beam))
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            std::iter::empty()
+        }
+    }
+
+    /// This tick's `portal-view` for `slot`'s view.
+    #[cfg(feature = "view")]
+    pub(crate) fn extension_portal_view(&self, slot: usize) -> Option<PortalRequest> {
+        #[cfg(feature = "extensions")]
+        {
+            self.sim.extensions.on.portal_views[slot]
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            None
+        }
+    }
+
+    /// This tick's `set-shader-param`s for `slot`'s view: mod, shader place, scalar, value.
+    #[cfg(feature = "view")]
+    pub(crate) fn extension_shader_params(
+        &self,
+        slot: usize,
+    ) -> impl Iterator<Item = (&str, u16, u8, f32)> {
+        #[cfg(feature = "extensions")]
+        {
+            let on = &self.sim.extensions.on;
+            on.shader_params
+                .iter()
+                .filter(move |sent| sent.slot == slot)
+                .map(|sent| {
+                    (
+                        on.module_id(sent.module),
+                        sent.shader,
+                        sent.index,
+                        sent.value,
+                    )
+                })
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            std::iter::empty()
+        }
+    }
+
+    /// `slot`'s view's `fov-offset` this tick, degrees: `0.0` with none.
+    #[must_use]
+    pub fn extension_fov_offset(&self, slot: usize) -> f32 {
+        #[cfg(feature = "extensions")]
+        {
+            self.sim.extensions.on.fov.get(slot).copied().unwrap_or(0.0)
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            0.0
         }
     }
 
@@ -746,705 +1446,25 @@ impl crate::Race {
         self.sim.extensions.state(index)
     }
 
-    /// Whether a simulation module runs in this race (MODDED: no replay, README 4.4).
+    /// The world-clock reading at which `start.channel` (`oag_ext_abi::channel_key`) last
+    /// fired, with `start.value` if it names one (any value if not), the clock the scenery's animations ride: `None` before it has fired.
+    #[cfg(feature = "view")]
+    #[must_use]
+    pub fn channel_started(&self, start: oag_mesh::mesh::Start) -> Option<f32> {
+        let tick = self.sim.extensions.last_fired(start.channel, start.value)?;
+        Some(tick as f32 / 60.0 + self.flyby_seconds() + self.world_clock_offset())
+    }
+
+    /// Whether a simulation module runs in this race (MODDED: no ghost, no lap record; the
+    /// input recording is kept and names the modules, README 4.4).
     #[must_use]
     pub fn is_modded(&self) -> bool {
         self.sim.extensions.any()
     }
-}
 
-#[cfg(feature = "extensions")]
-mod on {
-    use oag_ext_abi::{Command, Event, MAX_EVENTS, Pickup};
-
-    use crate::extension_effects::Fired;
-    use oag_modhost::{Module, Observation};
-
-    use super::Report;
-    use crate::extension_pickup::pickup;
-    use crate::sim::RaceSim;
-
-    #[derive(Debug, Clone)]
-    pub(super) struct Slot {
-        mod_id: String,
-        module: Module,
-        pub(super) blob: Vec<u8>,
-        faulted: Option<(u64, String)>,
-        fuel_used: u64,
-        fuel_peak: u64,
-        call_us: f32,
-    }
-
-    #[derive(Debug, Clone, Default)]
-    pub(super) struct On {
-        pub(super) slots: Vec<Slot>,
-        /// One bit per slot that touched a wall since the last call: the event buffer,
-        /// at most one `wall-contact` per craft per tick, raised in slot order.
-        walls: u32,
-        /// Each slot's engine scale above 1.0 for this tick's step
-        /// (`Environment::extension_thrust`), set at the call and taken by the step.
-        pub(super) boost: [f32; oag_gameplay::MAX_SHIPS],
-        /// The module that owns the mod pickup kind (its index plus one, 0 for none):
-        /// the first to give, clear or roll it. Another module doing so faults.
-        owner: u8,
-        /// The `pickup-roll` rule (weapon, every) and how many grants of that weapon
-        /// it has counted.
-        roll: Option<(oag_tables::weapons::Weapon, u8)>,
-        rolled: u32,
-        /// `pickup-fire` / `pickup-absorbed` raised since the last call, one bit a slot.
-        fires: u32,
-        absorbs: u32,
-        /// The track as the modules read it.
-        region: super::track::Region,
-        /// Each speed pad's race-wide `scale-pad`, held until replaced.
-        pad_scale: Vec<f32>,
-        /// Each slot's `scale-pad` this tick.
-        slot_pad_scale: [f32; oag_gameplay::MAX_SHIPS],
-        /// What weapons asked of each slot since the last call (a hit a Shield absorbed
-        /// included) and the weapon of the first: the `hit` event's buffer, raised after
-        /// the call like `walls`.
-        hit_amount: [f32; oag_gameplay::MAX_SHIPS],
-        hit_weapon: [Option<oag_tables::weapons::Weapon>; oag_gameplay::MAX_SHIPS],
-        /// One bit per slot a `give-shield` started this tick, for the shell's rise
-        /// (an output, never hashed).
-        pub(super) gave: u32,
-        /// The speed pad and the weapon pad each slot entered since the last call.
-        speed_entered: [Option<u16>; oag_gameplay::MAX_SHIPS],
-        weapon_entered: [Option<u16>; oag_gameplay::MAX_SHIPS],
-        /// The triggers each slot is inside now, and was inside at the last call: the
-        /// difference is the `trigger-enter` and `trigger-exit` events.
-        inside: [u64; oag_gameplay::MAX_SHIPS],
-        reported: [u64; oag_gameplay::MAX_SHIPS],
-        /// Each slot's `prefer-route` this tick (`super::route`), held for the step.
-        pub(super) prefer: super::route::Preferred,
-        /// Outputs, never hashed: this tick's `hud-*` commands, and the
-        /// `fire-effect`s the view has still to draw.
-        pub(super) hud: Vec<(usize, Command)>,
-        /// Each module's own text, in the race's language.
-        strings: Vec<super::Strings>,
-        /// Each module's `[pickup]`, in module order.
-        pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
-        pub(super) effects: Vec<(usize, crate::extension_effects::Fired)>,
-        /// The race-wide outputs of this tick.
-        pub(super) sky: super::Sky,
-    }
-
-    impl On {
-        /// The `hud-*` commands of `slot` as the HUD's own vocabulary. A later command for
-        /// the same element replaces an earlier one (modules run in id order).
-        #[cfg(feature = "view")]
-        pub(super) fn hud_outputs(&self, slot: usize, tick: u64) -> oag_hud::ext_draws::Outputs {
-            use oag_ext_abi::{Anchor as A, HudElement as E, Rgba};
-            use oag_hud::ext_draws::{Anchor, BarExtra, Element, Item, Outputs, What};
-            let element = |e: E| match e {
-                E::Speed => Element::Speed,
-                E::Thrust => Element::Thrust,
-                E::Energy => Element::Energy,
-                E::Pickup => Element::Pickup,
-                E::Position => Element::Position,
-                E::Lap => Element::Lap,
-                E::Time => Element::Time,
-            };
-            let index = |e: E| element(e) as usize;
-            let colour = |Rgba { r, g, b, a }: Rgba| [r, g, b, a].map(|c| f32::from(c) / 255.0);
-            let anchor = |a: A| match a {
-                A::TopLeft => Anchor::TopLeft,
-                A::Top => Anchor::Top,
-                A::TopRight => Anchor::TopRight,
-                A::Left => Anchor::Left,
-                A::Center => Anchor::Center,
-                A::Right => Anchor::Right,
-                A::BottomLeft => Anchor::BottomLeft,
-                A::Bottom => Anchor::Bottom,
-                A::BottomRight => Anchor::BottomRight,
-            };
-            let mut out = Outputs {
-                tick,
-                slot: slot as u8,
-                ..Outputs::default()
-            };
-            for &(module, command) in self
-                .hud
-                .iter()
-                .filter(|(_, c)| c.slot().map(|s| s.index()) == Some(slot))
-            {
-                match command {
-                    Command::HudTint {
-                        element: e, rgba, ..
-                    } => out.tint[index(e)] = Some(colour(rgba)),
-                    Command::PickupLook { .. } => {
-                        out.pickup_look = crate::extension_pickup::from_command(
-                            &command,
-                            &self.slots[module].mod_id,
-                        );
-                    }
-                    Command::HudShake {
-                        element: e,
-                        amplitude,
-                        ..
-                    } => out.shake[index(e)] = amplitude,
-                    Command::HudBarExtra {
-                        element: e,
-                        extra,
-                        rgba,
-                        ..
-                    } => {
-                        out.bar_extra[index(e)] = Some(BarExtra {
-                            extra,
-                            color: colour(rgba),
-                        });
-                    }
-                    Command::HudText {
-                        place,
-                        rgba,
-                        text,
-                        own,
-                        ..
-                    } => {
-                        let shown = if own {
-                            super::resolve_string(self.strings.get(module), text.as_str())
-                        } else {
-                            Some(text.as_str().to_owned())
-                        };
-                        out.items.extend(shown.map(|shown| Item {
-                            anchor: anchor(place.anchor),
-                            x: f32::from(place.x),
-                            y: f32::from(place.y),
-                            scale: place.scale(),
-                            color: colour(rgba),
-                            what: What::Text(shown),
-                        }));
-                    }
-                    Command::HudIcon {
-                        place,
-                        rgba,
-                        sprite,
-                        own,
-                        ..
-                    } => out.items.push(Item {
-                        anchor: anchor(place.anchor),
-                        x: f32::from(place.x),
-                        y: f32::from(place.y),
-                        scale: place.scale(),
-                        color: colour(rgba),
-                        what: if own {
-                            What::ModIcon(super::mod_icon_src(
-                                &self.slots[module].mod_id,
-                                sprite.as_str(),
-                            ))
-                        } else {
-                            What::Icon(sprite.as_str().to_owned())
-                        },
-                    }),
-                    _ => {}
-                }
-            }
-            out
-        }
-
-        /// The look of `slot`'s mod pickup this tick ([`crate::extension_pickup::resolve`]).
-        pub(super) fn pickup_look(
-            &self,
-            slot: usize,
-        ) -> Option<oag_tables::pickup_look::PickupLook> {
-            crate::extension_pickup::resolve(&self.hud, slot, self.owner, &self.pickups, |m| {
-                &self.slots[m].mod_id
-            })
-        }
-
-        pub(super) fn new(
-            modules: Vec<(String, Module)>,
-            region: super::track::Region,
-            strings: Vec<super::Strings>,
-            pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
-        ) -> Self {
-            Self {
-                slots: modules
-                    .into_iter()
-                    .map(|(mod_id, module)| Slot {
-                        blob: vec![0; module.limits().state_bytes as usize],
-                        mod_id,
-                        module,
-                        faulted: None,
-                        fuel_used: 0,
-                        fuel_peak: 0,
-                        call_us: 0.0,
-                    })
-                    .collect(),
-                walls: 0,
-                hit_amount: [0.0; oag_gameplay::MAX_SHIPS],
-                hit_weapon: [None; oag_gameplay::MAX_SHIPS],
-                gave: 0,
-                boost: [1.0; oag_gameplay::MAX_SHIPS],
-                owner: 0,
-                roll: None,
-                rolled: 0,
-                fires: 0,
-                absorbs: 0,
-                pad_scale: vec![1.0; region.speed_pads],
-                region,
-                slot_pad_scale: [1.0; oag_gameplay::MAX_SHIPS],
-                speed_entered: [None; oag_gameplay::MAX_SHIPS],
-                weapon_entered: [None; oag_gameplay::MAX_SHIPS],
-                inside: [0; oag_gameplay::MAX_SHIPS],
-                reported: [0; oag_gameplay::MAX_SHIPS],
-                prefer: super::route::Preferred::default(),
-                hud: Vec::new(),
-                strings,
-                pickups,
-                effects: Vec::new(),
-                sky: super::Sky::default(),
-            }
-        }
-
-        #[cfg(test)]
-        pub(super) fn slot_blob(&self, index: usize) -> Vec<u8> {
-            self.slots[index].blob.clone()
-        }
-
-        pub(super) fn rolls(&mut self, weapon: oag_tables::weapons::Weapon) -> bool {
-            let Some((rolled, every)) = self.roll else {
-                return false;
-            };
-            if weapon != rolled {
-                return false;
-            }
-            self.rolled += 1;
-            self.rolled.is_multiple_of(u32::from(every))
-        }
-
-        pub(super) fn pad_factor(&self, slot: usize, pad: usize) -> f32 {
-            if self.slots.is_empty() {
-                return 1.0;
-            }
-            self.pad_scale.get(pad).copied().unwrap_or(1.0) * self.slot_pad_scale[slot]
-        }
-
-        pub(super) fn pad_entered(&mut self, slot: usize, pad: usize, weapon: bool) {
-            if self.slots.is_empty() {
-                return;
-            }
-            let entered = if weapon {
-                &mut self.weapon_entered
-            } else {
-                &mut self.speed_entered
-            };
-            entered[slot] = u16::try_from(pad).ok();
-        }
-
-        pub(super) fn test_triggers(&mut self, slot: usize, sweep: &[oag_core::math::Vec3]) {
-            if self.slots.is_empty() || self.region.triggers.is_empty() {
-                return;
-            }
-            self.inside[slot] = self
-                .region
-                .triggers
-                .iter()
-                .enumerate()
-                .filter(|(_, b)| sweep.iter().any(|p| b.contains(p.to_array())))
-                .fold(0, |mask, (i, _)| mask | 1 << i);
-        }
-
-        pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
-            if absorbed {
-                self.absorbs |= 1 << slot;
-            } else {
-                self.fires |= 1 << slot;
-            }
-        }
-
-        /// Folds a step's weapon hits into the `hit` event buffer: per slot the amounts
-        /// sum and the first weapon stays. A hit with no weapon (nothing asked) adds
-        /// nothing.
-        pub(super) fn weapon_hits(&mut self, hits: &[oag_weapons::projectile::WeaponHit]) {
-            if self.slots.is_empty() {
-                return;
-            }
-            for (slot, hit) in hits.iter().enumerate().take(oag_gameplay::MAX_SHIPS) {
-                if let Some(weapon) = hit.weapon.filter(|_| hit.amount > 0.0) {
-                    self.hit_amount[slot] += hit.amount;
-                    self.hit_weapon[slot].get_or_insert(weapon);
-                }
-            }
-        }
-
-        pub(super) fn wall_contact(&mut self, slot: usize) {
-            if !self.slots.is_empty() {
-                self.walls |= 1 << slot;
-            }
-        }
-
-        pub(super) fn hash_into(&self, hasher: &mut oag_core::hash::StateHasher) {
-            if self.slots.is_empty() {
-                return;
-            }
-            hasher.write_u32(self.slots.len() as u32);
-            hasher.write_u32(self.walls);
-            for (amount, weapon) in self.hit_amount.iter().zip(&self.hit_weapon) {
-                hasher.write_f32(*amount);
-                hasher.write_u8(weapon.map_or(0, |weapon| weapon as u8 + 1));
-            }
-            for boost in self.boost {
-                hasher.write_f32(boost);
-            }
-            hasher.write_u8(self.owner);
-            match self.roll {
-                None => hasher.write_u8(0),
-                Some((weapon, every)) => {
-                    hasher.write_u8(weapon as u8 + 1);
-                    hasher.write_u8(every);
-                }
-            }
-            hasher.write_u32(self.rolled);
-            hasher.write_u32(self.fires);
-            hasher.write_u32(self.absorbs);
-            for scale in self.pad_scale.iter().chain(&self.slot_pad_scale) {
-                hasher.write_f32(*scale);
-            }
-            for entered in self.speed_entered.iter().chain(&self.weapon_entered) {
-                hasher.write_u32(entered.map_or(0, |pad| u32::from(pad) + 1));
-            }
-            for mask in self.inside.iter().chain(&self.reported) {
-                hasher.write_u64(*mask);
-            }
-            self.prefer.hash_into(hasher);
-            for slot in &self.slots {
-                hasher.write(&slot.blob);
-                match &slot.faulted {
-                    None => hasher.write_u8(0),
-                    Some((tick, _)) => {
-                        hasher.write_u8(1);
-                        hasher.write_u64(*tick);
-                    }
-                }
-            }
-        }
-
-        pub(super) fn reports(&self) -> Vec<Report> {
-            self.slots
-                .iter()
-                .map(|slot| Report {
-                    mod_id: slot.mod_id.clone(),
-                    fuel_used: slot.fuel_used,
-                    fuel_peak: slot.fuel_peak,
-                    fuel_budget: slot.module.limits().fuel,
-                    call_us: slot.call_us,
-                    faulted: slot.faulted.clone(),
-                })
-                .collect()
-        }
-    }
-
-    /// `play-cue`'s sounds as the engine's cues.
-    fn cue(cue: oag_ext_abi::Cue) -> oag_gameplay::cue::Cue {
-        use oag_ext_abi::Cue as Abi;
-        use oag_gameplay::cue::Cue;
-        match cue {
-            Abi::SpeedupPad => Cue::SpeedupPad,
-            Abi::Turbo => Cue::Turbo,
-            Abi::Collision => Cue::Collision,
-            Abi::Absorb => Cue::Absorb,
-            Abi::Shield => Cue::Shield,
-            Abi::ShieldActive => Cue::ShieldActive,
-        }
-    }
-
-    /// `fire-effect`'s effects as the title's triggers.
-    fn effect(effect: oag_ext_abi::Effect) -> oag_title::effects::Trigger {
-        use oag_title::effects::Trigger;
-        match effect {
-            oag_ext_abi::Effect::CollisionSpark => Trigger::CollisionSpark,
-            oag_ext_abi::Effect::HitSpark => Trigger::HitSpark,
-        }
-    }
-
-    /// The observation's craft records: copies of the world, never a pointer into it.
-    fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<oag_ext_abi::Craft> {
-        sim.world
-            .ships
-            .iter()
-            .enumerate()
-            .map(|(slot, ship)| {
-                let person = sim.world.person_flown(slot);
-                let fire_held = person
-                    && inputs
-                        .get(slot)
-                        .buttons
-                        .is_held(oag_gameplay::input::Button::Square);
-                // Racing and past the start: a craft on the grid has no thrust yet.
-                let racing = ship.physics.craft_state == oag_physics::damage::CraftState::Racing
-                    && !oag_race::RaceState::thrust_gated(sim.world.tick);
-                oag_ext_abi::Craft {
-                    pickup: ship.pickup.weapon.map_or(Pickup::None, pickup),
-                    person,
-                    fire_held,
-                    racing,
-                    shielded: ship.physics.shield_pickup_timer > 0.0,
-                    lap: u8::try_from(ship.standing.lap).unwrap_or(u8::MAX),
-                    laps_target: sim
-                        .world
-                        .laps_target()
-                        .map_or(0, |n| u8::try_from(n).unwrap_or(u8::MAX)),
-                    shield: ship.physics.shield,
-                    shield_max: ship.handling.dimensions.shield,
-                    speed_kmh: ship.physics.body.linear_velocity.length()
-                        * oag_core::math::SPEED_TO_KMH,
-                }
-            })
-            .collect()
-    }
-
-    /// `give-pickup`, `clear-pickup` and `pickup-roll` from module `index`: the first
-    /// module to send one owns the mod pickup kind for the race, and another one sending
-    /// one faults. A race without weapons gives nothing and rolls nothing.
-    fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
-        let tick = sim.world.tick;
-        let on = &mut sim.extensions.on;
-        let me = index as u8 + 1;
-        if on.owner != 0 && on.owner != me {
-            let owner = on.slots[usize::from(on.owner - 1)].mod_id.clone();
-            let module = &mut on.slots[index];
-            if module.faulted.is_none() {
-                let why = format!("the mod pickup belongs to mod {owner}");
-                log::warn!(
-                    "mod {}: {why}, at tick {tick}; off for the rest of the race",
-                    module.mod_id
-                );
-                module.faulted = Some((tick, why));
-            }
-            return;
-        }
-        let hands_out = matches!(
-            command,
-            Command::GivePickup { .. } | Command::PickupRoll { .. }
-        );
-        if hands_out && on.pickups[index].is_none() {
-            let module = &mut on.slots[index];
-            if module.faulted.is_none() {
-                let why = "it hands out its own pickup but its oag-mod.toml has no [pickup] table \
-                           (icon and colour, each naming its source)";
-                log::warn!(
-                    "mod {}: {why}, at tick {tick}; off for the rest of the race",
-                    module.mod_id
-                );
-                module.faulted = Some((tick, why.to_string()));
-            }
-            return;
-        }
-        on.owner = me;
-        if !sim.weapons_on {
-            return;
-        }
-        let extension = oag_tables::weapons::Weapon::Extension;
-        match command {
-            // The slot's `last` stays what it was: the repeat rule is about the title's
-            // own weapons.
-            Command::GivePickup { slot } => {
-                let pickup = &mut sim.world.ships[slot.index()].pickup;
-                if pickup.weapon.is_none() {
-                    pickup.weapon = Some(extension);
-                }
-            }
-            Command::ClearPickup { slot } => {
-                let pickup = &mut sim.world.ships[slot.index()].pickup;
-                if pickup.weapon == Some(extension) {
-                    pickup.take();
-                }
-            }
-            Command::PickupRoll { weapon, every } => {
-                let weapon = crate::extension_pickup::weapon(weapon);
-                let on = &mut sim.extensions.on;
-                if on.roll != Some((weapon, every)) {
-                    on.roll = Some((weapon, every));
-                    on.rolled = 0;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    /// What happened since the last call, per slot in slot order: a wall contact, a
-    /// fire, an absorb, the speed pad and the weapon pad entered, the triggers left and
-    /// the triggers entered (each in index order). Past `MAX_EVENTS` the rest are
-    /// dropped.
-    fn events(on: &On) -> Vec<Event> {
-        (0..oag_gameplay::MAX_SHIPS)
-            .filter_map(oag_ext_abi::Slot::new)
-            .flat_map(|slot| {
-                let i = slot.index();
-                let bit = |mask: u32| mask & slot.bit() != 0;
-                let (inside, before) = (on.inside[i], on.reported[i]);
-                let triggers = |mask: u64| (0..64_u16).filter(move |t| mask & (1 << t) != 0);
-                [
-                    bit(on.walls).then_some(Event::WallContact { slot }),
-                    bit(on.fires).then_some(Event::PickupFire { slot }),
-                    bit(on.absorbs).then_some(Event::PickupAbsorbed { slot }),
-                    on.speed_entered[i].map(|pad| Event::SpeedPad { slot, pad }),
-                    on.weapon_entered[i].map(|pad| Event::WeaponPad { slot, pad }),
-                    on.hit_weapon[i].and_then(|weapon| match pickup(weapon) {
-                        Pickup::Weapon(weapon) => Some(Event::Hit {
-                            slot,
-                            amount: on.hit_amount[i],
-                            weapon,
-                        }),
-                        _ => None,
-                    }),
-                ]
-                .into_iter()
-                .flatten()
-                .chain(
-                    triggers(before & !inside)
-                        .map(move |trigger| Event::TriggerExit { slot, trigger }),
-                )
-                .chain(
-                    triggers(inside & !before)
-                        .map(move |trigger| Event::TriggerEnter { slot, trigger }),
-                )
-            })
-            .take(MAX_EVENTS)
-            .collect()
-    }
-
-    pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {
-        if sim.extensions.on.slots.is_empty() {
-            return;
-        }
-        let crafts = crafts(sim, inputs);
-        let tick = sim.world.tick;
-        let active = sim
-            .world
-            .ships
-            .iter()
-            .enumerate()
-            .fold(0_u32, |mask, (slot, ship)| {
-                mask | u32::from(ship.active) << slot
-            });
-        let on = &mut sim.extensions.on;
-        // A boost the step never took (a craft that did not step) does not carry over.
-        on.boost = [1.0; oag_gameplay::MAX_SHIPS];
-        on.slot_pad_scale = [1.0; oag_gameplay::MAX_SHIPS];
-        let events = events(on);
-        on.walls = 0;
-        on.hit_amount = [0.0; oag_gameplay::MAX_SHIPS];
-        on.hit_weapon = [None; oag_gameplay::MAX_SHIPS];
-        on.fires = 0;
-        on.absorbs = 0;
-        on.speed_entered = [None; oag_gameplay::MAX_SHIPS];
-        on.weapon_entered = [None; oag_gameplay::MAX_SHIPS];
-        on.reported = on.inside;
-        on.prefer = super::route::Preferred::default();
-        on.hud.clear();
-        on.sky = super::Sky::default();
-        // This tick's alone: a tick that draws nothing (a replayed one, a server's) drops
-        // them rather than piling them up.
-        on.effects.clear();
-        let region = on.region.clone();
-        let observation = Observation {
-            tick,
-            active,
-            events: &events,
-            crafts: &crafts,
-            track: &region.bytes,
-            speed_pads: region.speed_pads,
-            routes: region.routes,
-        };
-        let mut commands = Vec::new();
-        // Every module's checked commands, in id order: applied once all have run, so
-        // each saw the same observation.
-        let mut applied = Vec::new();
-        for (index, slot) in on.slots.iter_mut().enumerate() {
-            if slot.faulted.is_some() {
-                slot.fuel_used = 0;
-                continue;
-            }
-            // Timed for the overlay only; nothing simulated reads it.
-            let started = web_time::Instant::now();
-            let outcome = slot
-                .module
-                .tick(&observation, &mut slot.blob, &mut commands);
-            slot.call_us = started.elapsed().as_secs_f32() * 1.0e6;
-            let cost = match outcome {
-                Ok(cost) => {
-                    applied.extend(commands.drain(..).map(|command| (index, command)));
-                    cost
-                }
-                Err((fault, cost)) => {
-                    log::warn!(
-                        "mod {}: {fault} at tick {tick}; off for the rest of the race",
-                        slot.mod_id
-                    );
-                    slot.faulted = Some((tick, fault.to_string()));
-                    cost
-                }
-            };
-            slot.fuel_used = cost.fuel_used;
-            slot.fuel_peak = slot.fuel_peak.max(cost.fuel_used);
-        }
-        for (index, command) in applied {
-            match command {
-                // Below 1.0 the Leach Beam's path, multiplied so a drain is kept; above it
-                // the mod's own engine scale, multiplied so two modules compose. Both are
-                // consumed by this tick's step.
-                Command::ScaleThrust { slot, factor } if factor <= 1.0 => {
-                    sim.world.ships[slot.index()].pending_thrust_scale *= factor;
-                }
-                Command::ScaleThrust { slot, factor } => {
-                    let boost = &mut sim.extensions.on.boost[slot.index()];
-                    *boost = (*boost * factor).min(oag_ext_abi::MAX_THRUST_FACTOR);
-                }
-                Command::ShieldDelta { slot, amount } => {
-                    super::shield::delta(sim, slot.index(), amount)
-                }
-                // Race-wide and held: the later module in id order wins.
-                Command::ScalePad { pad, factor } => {
-                    sim.extensions.on.pad_scale[usize::from(pad)] = factor;
-                }
-                // Per slot, this tick: two modules compose, bounded as a factor is.
-                Command::ScaleSlotPads { slot, factor } => {
-                    let scale = &mut sim.extensions.on.slot_pad_scale[slot.index()];
-                    *scale = (*scale * factor).min(oag_ext_abi::MAX_PAD_FACTOR);
-                }
-                Command::PlayCue { slot, cue } => {
-                    sim.cues.push(oag_gameplay::cue::CueEvent::new(
-                        self::cue(cue),
-                        slot.index(),
-                    ));
-                }
-                Command::FireEffect { slot, effect } => sim
-                    .extensions
-                    .on
-                    .effects
-                    .push((slot.index(), Fired::Title(self::effect(effect)))),
-                Command::FireModEffect { slot, index: own } => {
-                    let mod_id = sim.extensions.on.slots[index].mod_id.clone();
-                    sim.extensions
-                        .on
-                        .effects
-                        .push((slot.index(), Fired::Own { mod_id, index: own }));
-                }
-                Command::PickupLook { .. }
-                | Command::HudTint { .. }
-                | Command::HudShake { .. }
-                | Command::HudBarExtra { .. }
-                | Command::HudText { .. }
-                | Command::HudIcon { .. } => sim.extensions.on.hud.push((index, command)),
-                Command::SetWeather { strength, .. } => {
-                    sim.extensions.on.sky.rain = Some(strength);
-                }
-                Command::SetSun { intensity } => sim.extensions.on.sky.sun = intensity,
-                Command::GradeSky { grey } => sim.extensions.on.sky.grey = grey,
-                Command::GiveShield { slot } => super::shield::give(sim, slot.index()),
-                Command::HoldShield { slot } => super::shield::hold(sim, slot.index()),
-                Command::ClearShield { slot } => {
-                    sim.world.ships[slot.index()].physics.shield_pickup_timer = 0.0;
-                }
-                Command::GivePickup { .. }
-                | Command::ClearPickup { .. }
-                | Command::PickupRoll { .. } => pickup_command(sim, index, command),
-                Command::PreferRoute { slot, route } => {
-                    sim.extensions.on.prefer.set(slot.index(), route);
-                }
-            }
-        }
+    /// The simulation modules this race runs, as a replay names them.
+    #[must_use]
+    pub fn mods_used(&self) -> &[oag_replay::header::ModUse] {
+        self.sim.extensions.uses()
     }
 }

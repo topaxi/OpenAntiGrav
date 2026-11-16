@@ -26,7 +26,7 @@
 //! # The medal law lives here, who won does not
 //!
 //! [`Cell::evaluate_medal`] reimplements `Cell_EvaluateMedal` (a three-way
-//! threshold compare, direction flipped for `Zone`/`Elimination`),
+//! threshold compare, direction flipped for the modes the title names),
 //! [`Medal::points`] `Cell_MedalPoints`, and [`grid_points_met`]
 //! `Unlock_GridPointsMet` (a grid's [`Grid::points_earned`] against its
 //! `required_points`). They do **not** decide which cell a race ran against or
@@ -56,6 +56,8 @@ use crate::handling::SpeedClass;
 
 mod difficulty;
 pub use difficulty::{Difficulty, DifficultyTargets, MedalTargets};
+mod tiers;
+pub use tiers::{Medal, MedalTier, MedalTiers, TiersError, evaluate_targets};
 mod unlock;
 pub use unlock::grid_points_met;
 
@@ -268,16 +270,15 @@ pub struct Grid {
 }
 
 impl Grid {
-    /// The most a grid can earn: `3 * cells.len()`, since `Cell_MedalPoints(cell,
-    /// 0)` is always `3`. `Grid_PointsPossible` (`0x088c0570`) computes it the
-    /// same way; the ground-truth test checks 24/30/36/42/48 across the sixteen
-    /// grids.
+    /// The most a grid can earn: the best tier's points for every cell, which on the standard
+    /// list is `3 * cells.len()` since `Cell_MedalPoints(cell, 0)` is always `3`.
+    /// `Grid_PointsPossible` (`0x088c0570`) computes it the same way; the ground-truth test
+    /// checks 24/30/36/42/48 across the sixteen grids.
     #[must_use]
-    pub fn max_points(&self) -> u32 {
-        // Every cell is worth 3 at best.
+    pub fn max_points(&self, tiers: &MedalTiers) -> u32 {
         u32::try_from(self.cells.len())
             .unwrap_or(u32::MAX)
-            .saturating_mul(3)
+            .saturating_mul(tiers.best_points())
     }
 }
 
@@ -450,10 +451,10 @@ impl Cell {
     /// section). `None` without a nitro triple.
     ///
     /// **One number, not a [`MedalTargets`] triple**, and no sibling forges one:
-    /// that would invent data the disc does not author. How the executable turns
-    /// it into a medal is **not measured** (same page, "what is not
-    /// determined"), so a caller wiring an `Elimination`/`NitroBattle` medal must
-    /// answer that first; [`Cell::evaluate_medal`] does not.
+    /// that would invent data the disc does not author. It is the score the race
+    /// ends on, not a medal threshold (`SPElimination_UpdateTarget`); the medal
+    /// is the finishing place against the cell's own `1`/`2`/`3`
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`).
     #[must_use]
     pub fn nitro_elimination_target_for_difficulty(&self, difficulty: Difficulty) -> Option<i64> {
         let (novice, skilled, elite) = self.nitro_elimination_targets?;
@@ -464,23 +465,16 @@ impl Cell {
         })
     }
 
-    /// Whether this cell's medal law is one this build has not measured:
-    /// an `Elimination` or `NitroBattle` cell on Wipeout HD/Fury, whose
-    /// `gold`/`silver`/`bronze` and every [`Cell::difficulty_targets`] rung are
-    /// the dummy `1`/`2`/`3` and whose real target is the single
-    /// [`Cell::nitro_elimination_targets`] number per rung (`200`..`300` on an
-    /// `Elimination` cell, `12`..`26` on a `NitroBattle` one). Neither the unit
-    /// (kills or score points) nor the way one number becomes a tier is
-    /// measured (`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`, "what
-    /// is not determined"), so [`Cell::evaluate_medal_for_difficulty`] awards
-    /// nothing for it rather than gold for one kill against the dummy `1`.
-    /// Pulse's `Eliminator` cells keep their kill target in `gold` and carry no
-    /// nitro triple, so they are not affected.
+    /// Whether this is an HD/Fury or Omega `Elimination` cell whose race ends on the
+    /// [`Cell::nitro_elimination_targets`] score, not on the kill count in `gold`.
+    ///
+    /// Such a cell authors `gold`/`silver`/`bronze` and every [`Cell::difficulty_targets`] rung
+    /// as `1`/`2`/`3`: place thresholds (`PI_Cell_EvaluateMedalForValue`, `<=`), not a kill
+    /// target (`docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`). Pulse's `Eliminator`
+    /// cells keep their kill target in `gold` and carry no nitro triple.
     #[must_use]
-    pub fn medal_law_is_unmeasured(&self) -> bool {
-        let nitro_mode = matches!(&self.mode, Mode::Elimination)
-            || matches!(&self.mode, Mode::Other(name) if name == "NitroBattle");
-        nitro_mode
+    pub fn ends_on_nitro_score(&self) -> bool {
+        matches!(&self.mode, Mode::Elimination)
             && self
                 .nitro_elimination_targets
                 .is_some_and(|t| t != (1, 1, 1))
@@ -488,27 +482,19 @@ impl Cell {
 
     /// `Cell_EvaluateMedal` (`0x088bf620`): a three-way threshold compare of
     /// `value` against this cell's gold/silver/bronze targets. `value` is a
-    /// finishing position (`Race`/`Tournament`/`Head2Head`), a time in
+    /// finishing position (`Race`/`Tournament`/`Head2Head`, and an HD/Omega
+    /// `Elimination` cell: its place on the score board), a time in
     /// centiseconds (`Time Trial`/`Speed Lap`), a zone count (`Zone`) or a kill
-    /// count (`Elimination`); the caller supplies it.
+    /// count (a Pulse `Elimination`); the caller supplies it.
     ///
-    /// **Not meaningful for `Elimination`/`NitroBattle` on an HD/Fury cell with
-    /// [`Cell::nitro_elimination_targets`]**: its flat targets and every
-    /// [`Cell::difficulty_targets`] rung are dummy `1`/`2`/`3` there (checked
-    /// against `DATA00.PSARC`'s eight Fury grids,
-    /// `crates/hd/tests/campaign_grids_ground_truth.rs`'s
-    /// `eliminationfamily_cells_carry_a_real_nitro_triple_and_a_dummy_flat_one`).
-    /// What replaces it is unmeasured; see
-    /// [`Cell::nitro_elimination_target_for_difficulty`]. Left unchanged because
-    /// Pulse's `Eliminator` cells keep the kill target in the flat `gold` field
-    /// (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`) and are pinned by
-    /// ground-truth tests.
-    ///
-    /// **The comparison direction flips for `Zone` and `Elimination`.** Other
-    /// modes want a *lower* value (`<=`: better position or faster time); these
-    /// counting modes want a *higher* one (`>=`). Without the flip, 16 zones
-    /// against `20`/`17`/`15` would score gold (`16 <= 20`) when it clears only
-    /// bronze (`16 >= 15`, `16 < 17`). The tests cover each wrong direction.
+    /// **The comparison direction is the title's: `counting` is
+    /// `oag_title::Campaign::counting_modes`.** A mode named there wants a
+    /// *higher* value (`>=`, a count to reach); every other mode wants a *lower*
+    /// one (`<=`: a better position or a faster time). Pulse flips `Zone` and
+    /// `Elimination`; HD and Omega flip `Zone` and `Detonator`, so their
+    /// `Elimination` cell's `1`/`2`/`3` read as gold for 1st, silver for 2nd and
+    /// bronze for 3rd. Without the flip, 16 zones against `20`/`17`/`15` would
+    /// score gold (`16 <= 20`) when it clears only bronze (`16 >= 15`, `16 < 17`).
     ///
     /// `None` when no tier is met, or when `value` means "no result yet": the
     /// original's unset `u32` register `0xFFFF_FFFF`, or **any non-positive
@@ -516,74 +502,32 @@ impl Cell {
     /// **chosen, not measured**: no mode measures a negative, and it stops a
     /// negative "time" scoring gold.
     #[must_use]
-    pub fn evaluate_medal(&self, value: i64) -> Option<Medal> {
-        self.evaluate_medal_for_difficulty(value, Difficulty::Medium)
+    pub fn evaluate_medal(&self, value: i64, counting: &[&str]) -> Option<Medal> {
+        self.evaluate_medal_for_difficulty(value, Difficulty::Medium, counting)
     }
 
     /// [`Cell::evaluate_medal`] against one rung of
-    /// [`Cell::targets_for_difficulty`]; `evaluate_medal(v)` is
-    /// `evaluate_medal_for_difficulty(v, Difficulty::Medium)`. **Which
-    /// difficulty the executable's award path compares against is not
-    /// measured**: `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s
-    /// medal-law section finds the targets selected by a `GameState` difficulty
-    /// index but not the comparison consumer. The caller supplies the rung.
+    /// [`Cell::targets_for_difficulty`]; `evaluate_medal(v, c)` is
+    /// `evaluate_medal_for_difficulty(v, Difficulty::Medium, c)`. The rung the
+    /// executable compares against is `g_GameState+0xdc`, the one the cell was
+    /// launched at (`PI_Cell_EvaluateMedalForValue`). The caller supplies it.
     #[must_use]
     pub fn evaluate_medal_for_difficulty(
         &self,
         value: i64,
         difficulty: Difficulty,
+        counting: &[&str],
     ) -> Option<Medal> {
-        if value <= 0 || value == 0xFFFF_FFFF || self.medal_law_is_unmeasured() {
+        if value <= 0 || value == 0xFFFF_FFFF {
             return None;
         }
         let targets = self.targets_for_difficulty(difficulty);
-        let flipped = matches!(self.mode, Mode::Zone | Mode::Elimination);
-        for (tier, target) in [
-            (Medal::Gold, targets.gold),
-            (Medal::Silver, targets.silver),
-            (Medal::Bronze, targets.bronze),
-        ] {
-            let met = if flipped {
-                value >= target
-            } else {
-                value <= target
-            };
-            if met {
-                return Some(tier);
-            }
-        }
-        None
-    }
-}
-
-/// The medal tier [`Cell::evaluate_medal`] (`Cell_EvaluateMedal`, `0x088bf620`)
-/// produces: ordinal `0 = gold`, `1 = silver`, `2 = bronze`.
-///
-/// [`Ord`] follows declaration order, so the *smaller* value is the *better*
-/// medal (the original's "0 is best"). **Not the in-race HUD's tier ordinal**,
-/// which runs `0 = BRONZE .. 3 = RECORD` and is unread; see
-/// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "what is not
-/// determined".
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Medal {
-    /// The best tier; declared first for [`Ord`].
-    Gold,
-    /// The middle tier.
-    Silver,
-    /// The worst tier a race can still be awarded.
-    Bronze,
-}
-
-impl Medal {
-    /// `Cell_MedalPoints` (`0x088bf530`): gold 3, silver 2, bronze 1. With
-    /// [`Medal::Gold`] it is what any cell is worth at best, always `3`.
-    #[must_use]
-    pub fn points(self) -> u32 {
-        match self {
-            Self::Gold => 3,
-            Self::Silver => 2,
-            Self::Bronze => 1,
-        }
+        let flipped = counting.contains(&self.mode.as_str());
+        evaluate_targets(
+            &[targets.gold, targets.silver, targets.bronze],
+            value,
+            flipped,
+        )
     }
 }
 

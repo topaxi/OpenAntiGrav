@@ -144,14 +144,44 @@ fn bank_blob(archives: &mut Archives, st: &StateTracks) -> Result<Vec<u8>> {
 ///
 /// A definition or bank that will not read or parse.
 pub fn plan(archives: &mut Archives, st: &StateTracks, check_media: bool) -> Result<Plan> {
+    let blob = bank_blob(archives, st)?;
+    plan_with(archives, st, &blob, check_media)
+}
+
+/// What a run keeps of the bank between tracks: the playlist it resolves and
+/// the bank's bytes, which [`mix_with`] reads an embedded stem out of.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Prepared {
+    /// The playlist, resolved without the media check ([`plan`]'s `false`).
+    pub plan: Plan,
+    /// The bank file, read once.
+    pub bank: Vec<u8>,
+}
+
+/// Reads the definition and the bank once and resolves the playlist.
+///
+/// # Errors
+///
+/// As [`plan`].
+pub fn prepare(archives: &mut Archives, st: &StateTracks) -> Result<Prepared> {
+    let bank = bank_blob(archives, st)?;
+    let plan = plan_with(archives, st, &bank, false)?;
+    Ok(Prepared { plan, bank })
+}
+
+fn plan_with(
+    archives: &mut Archives,
+    st: &StateTracks,
+    blob: &[u8],
+    check_media: bool,
+) -> Result<Plan> {
     let xml = String::from_utf8(
         archives
             .read_name(st.declared_in)
             .with_context(|| format!("reading {}", st.declared_in))?,
     )
     .context("the music definition is not UTF-8")?;
-    let blob = bank_blob(archives, st)?;
-    let bank = Bank::parse(&blob).map_err(|e| anyhow!("{}: {e}", st.bank))?;
+    let bank = Bank::parse(blob).map_err(|e| anyhow!("{}: {e}", st.bank))?;
     let lib = Library::new(vec![bank]);
     let group = name_hash(st.track_group);
     let mut plan = Plan::default();
@@ -255,13 +285,31 @@ pub fn front_end(archives: &mut Archives, st: &StateTracks) -> Result<Option<Son
 /// A stem that will not read or decode, or one that is not stereo at the
 /// same rate as the first.
 pub fn mix(archives: &mut Archives, st: &StateTracks, song: &Song) -> Result<Pcm> {
-    let bank_data = if song.embedded.contains(&true) {
-        Some(bank_blob(archives, st)?)
-    } else {
+    mix_with(archives, st, song, None)
+}
+
+/// [`mix`] with the bank's bytes already read (a [`Prepared::bank`]); `None`
+/// reads them when an embedded stem needs them.
+///
+/// # Errors
+///
+/// As [`mix`].
+pub fn mix_with(
+    archives: &mut Archives,
+    st: &StateTracks,
+    song: &Song,
+    kept: Option<&[u8]>,
+) -> Result<Pcm> {
+    let read;
+    let bank_data = if !song.embedded.contains(&true) {
         None
+    } else if let Some(kept) = kept {
+        Some(kept)
+    } else {
+        read = bank_blob(archives, st)?;
+        Some(read.as_slice())
     };
     let bank = bank_data
-        .as_deref()
         .map(|blob| Bank::parse(blob).map_err(|e| anyhow!("{}: {e}", st.bank)))
         .transpose()?;
     let mut blobs: Vec<std::borrow::Cow<'_, [u8]>> = Vec::new();

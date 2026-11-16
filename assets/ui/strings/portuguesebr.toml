@@ -22,8 +22,6 @@ OAG_MENU_RACE_CAMPAIGN = { text = "CAMPANHA DE CORRIDA", human = false }
 OAG_MENU_RACE_CAMPAIGN_SUBTITLE = { text = "O modo história: suba na grade do torneio", human = false }
 OAG_MENU_RACEBOX = { text = "RACEBOX", human = false }
 OAG_MENU_RACEBOX_SUBTITLE = { text = "Monte sua própria corrida", human = false }
-OAG_MENU_REMIX = { text = "REMIX", human = false }
-OAG_MENU_REMIX_SUBTITLE = { text = "Misture pistas e naves de todos os títulos que você tem", human = false }
 OAG_MENU_MULTIPLAYER = { text = "MULTIJOGADOR", human = false }
 OAG_MENU_MULTIPLAYER_SUBTITLE = { text = "Corra com outras pessoas, neste computador e, mais tarde, em rede", human = false }
 OAG_MENU_MULTIPLAYER_SHARING = { text = "MULTIJOGADOR E COMPARTILHAMENTO", human = false }
@@ -145,16 +143,14 @@ OAG_RACE_SPEED_CLASS = { text = "CLASSE", human = false }
 OAG_RACE_WEAPONS = { text = "ARMAS", human = false }
 OAG_RACE_AI_DIFFICULTY = { text = "DIFICULDADE DA IA", human = false }
 OAG_RACE_KILLS = { text = "ABATES", human = false }
+OAG_RACE_TARGET = { text = "ALVO", human = false }
 OAG_RACE_TEAM = { text = "EQUIPE", human = false }
 OAG_RACE_VARIANT = { text = "VARIANTE", human = false }
 OAG_RACE_TRACK = { text = "PISTA", human = false }
 OAG_RACE_START = { text = "INICIAR", human = false }
-OAG_REMIX_PAGE_TITLE = { text = "REMIX DE CORRIDA", human = false }
-OAG_REMIX_TRACK_TITLE = { text = "TÍTULO DA PISTA", human = false }
-OAG_REMIX_NO_DRIVER = { text = "SEM OPONENTES: NENHUM PILOTO PARA ESTA CLASSE", human = false }
-OAG_REMIX_CRAFT_TITLE = { text = "TÍTULO DA NAVE", human = false }
-OAG_REMIX_CUSTOM = { text = "PERSONALIZADO", human = false }
-OAG_REMIX_CUSTOM_CHECKING = { text = "ainda verificando este arquivo", human = false }
+OAG_RACE_NO_DRIVER = { text = "SEM OPONENTES: NENHUM PILOTO PARA ESTA CLASSE", human = false }
+OAG_CUSTOM_TRACKS = { text = "PERSONALIZADO", human = false }
+OAG_CUSTOM_TRACKS_CHECKING = { text = "ainda verificando este arquivo", human = false }
 OAG_RECORDS_PAGE_TITLE = { text = "RECORDES DE CORRIDA", human = false }
 OAG_OPTIONS_PAGE_TITLE = { text = "OPÇÕES", human = false }
 OAG_OPTIONS_DISPLAY = { text = "TELA", human = false }
@@ -172,14 +168,20 @@ OAG_DISPLAY_ASPECT_RATIO = { text = "PROPORÇÃO DA TELA", human = false }
 OAG_DISPLAY_FRONT_END_STYLE = { text = "ESTILO DOS MENUS", human = false }
 OAG_DISPLAY_HUD_STYLE = { text = "ESTILO DO HUD", human = false }
 OAG_DISPLAY_DYNAMIC_HUD = { text = "HUD DINÂMICO", human = false }
+OAG_DISPLAY_GHOST_SHIP_VISIBLE = { text = "NAVES FANTASMA VISÍVEIS", human = false }
+OAG_DISPLAY_AUTO_LOAD_GHOST = { text = "CARREGAR FANTASMA AUTOMATICAMENTE", human = false }
+OAG_DISPLAY_MULTIPLAYER_TAGS = { text = "NOMES NO MULTIJOGADOR", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }
 OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS = { text = "PAUSAR AO PERDER O FOCO", human = false }
 OAG_DISPLAY_FRAME_LIMIT = { text = "LIMITE DE QUADROS", human = false }
+OAG_DISPLAY_SCREEN_SIZE = { text = "TAMANHO DA TELA", human = false }
 OAG_DISPLAY_BRIGHTNESS = { text = "BRILHO", human = false }
 OAG_DISPLAY_GAMMA = { text = "GAMA", human = false }
 OAG_GRAPHICS_RENDERER = { text = "RENDERIZADOR", human = false }
 OAG_GRAPHICS_RENDER_SCALE = { text = "ESCALA DE RENDERIZAÇÃO", human = false }
 OAG_GRAPHICS_TARGET_FPS = { text = "FPS ALVO", human = false }
+OAG_GRAPHICS_TARGET_FPS_DEFAULT = { text = "PADRÃO (%s)", human = false }
+OAG_DISPLAY_FRAME_LIMIT_REFRESH_RATE = { text = "TAXA DE ATUALIZAÇÃO (%s)", human = false }
 OAG_GRAPHICS_MINIMUM_RESOLUTION = { text = "RESOLUÇÃO MÍNIMA", human = false }
 OAG_GRAPHICS_RECONSTRUCTION = { text = "RECONSTRUÇÃO", human = false }
 OAG_GRAPHICS_UPSCALER_SHARPNESS = { text = "NITIDEZ DO UPSCALER", human = false }
@@ -190,6 +192,8 @@ OAG_GRAPHICS_SHADOWS = { text = "SOMBRAS", human = false }
 OAG_GRAPHICS_MODEL_DETAIL = { text = "DETALHE DOS MODELOS", human = false }
 OAG_GRAPHICS_TEXTURE_DETAIL = { text = "DETALHE DAS TEXTURAS", human = false }
 OAG_GRAPHICS_TRAIL_ORDER = { text = "ORDEM DO RASTRO", human = false }
+OAG_GRAPHICS_SCENERY_SORT = { text = "ORDEM DO CENÁRIO", human = false }
+OAG_GRAPHICS_TRAIL_LENGTH = { text = "COMPRIMENTO DO RASTRO", human = false }
 OAG_GRAPHICS_WEATHER = { text = "CLIMA", human = false }
 OAG_GRAPHICS_SCREEN_FILTER = { text = "FILTRO DE TELA", human = false }
 OAG_GRAPHICS_SCREEN_FILTER_STRENGTH = { text = "INTENSIDADE DO FILTRO DE TELA", human = false }
@@ -198,6 +202,10 @@ OAG_GRAPHICS_CAMERA_VIEW = { text = "VISÃO DA CÂMERA", human = false }
 OAG_GRAPHICS_FIELD_OF_VIEW = { text = "CAMPO DE VISÃO", human = false }
 OAG_GRAPHICS_BOOST_FOV_KICK = { text = "IMPULSO DO CAMPO DE VISÃO NO TURBO", human = false }
 OAG_GRAPHICS_BOOST_ZOOM = { text = "ZOOM DO TURBO", human = false }
+OAG_GRAPHICS_TRAIL_HITS = { text = "ACERTOS NO RASTRO", human = false }
+OAG_GRAPHICS_WINGTIP_CONTRAILS = { text = "RASTROS DAS ASAS", human = false }
+OAG_GRAPHICS_OWN_SHIELD = { text = "ESCUDO PRÓPRIO", human = false }
+OAG_GRAPHICS_OWN_ROCKETS = { text = "FOGUETES PRÓPRIOS", human = false }
 OAG_GRAPHICS_CPU_GOVERNOR = { text = "REGULADOR DE CPU", human = false }
 OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "INDICADOR DE DESEMPENHO", human = false }
 OAG_GRAPHICS_ADVANCED = { text = "AVANÇADO", human = false }
@@ -206,6 +214,13 @@ OAG_AUDIO_SFX_VOLUME = { text = "VOLUME DE SFX", human = false }
 OAG_AUDIO_ANNOUNCER_VOLUME = { text = "VOLUME DO LOCUTOR", human = false }
 OAG_AUDIO_MASTER_VOLUME = { text = "VOLUME GERAL", human = false }
 OAG_AUDIO_MUSIC_SOURCE = { text = "FONTE DA MÚSICA", human = false }
+OAG_AUDIO_MUSIC_ORDER = { text = "ORDEM DAS MÚSICAS", human = false }
+OAG_AUDIO_SPATIAL_AUDIO = { text = "ESPACIALIZAÇÃO DO ÁUDIO", human = false }
+OAG_AUDIO_SPATIAL_AUTO = { text = "AUTOMÁTICO", human = false }
+OAG_AUDIO_MUSIC = { text = "MÚSICA", human = false }
+OAG_MUSIC_PAGE_TITLE = { text = "MÚSICA", human = false }
+OAG_MUSIC_SOURCE_ROW = { text = "FONTE", human = false }
+OAG_MUSIC_SCANNING = { text = "PROCURANDO", human = false }
 OAG_CONTROLS_THRUST = { text = "PROPULSÃO", human = false }
 OAG_CONTROLS_STEER_LEFT = { text = "VIRAR À ESQUERDA", human = false }
 OAG_CONTROLS_STEER_RIGHT = { text = "VIRAR À DIREITA", human = false }
@@ -213,11 +228,13 @@ OAG_CONTROLS_PITCH_UP = { text = "INCLINAR PARA CIMA", human = false }
 OAG_CONTROLS_PITCH_DOWN = { text = "INCLINAR PARA BAIXO", human = false }
 OAG_CONTROLS_AIRBRAKE_LEFT = { text = "FREIO AÉREO ESQUERDO", human = false }
 OAG_CONTROLS_AIRBRAKE_RIGHT = { text = "FREIO AÉREO DIREITO", human = false }
+OAG_CONTROLS_ELIMINATOR_FLIP = { text = "VIRADA NA ELIMINATÓRIA", human = false }
 OAG_CONTROLS_CAMERA_VIEW = { text = "VISÃO DA CÂMERA", human = false }
 OAG_CONTROLS_SIDESHIFT = { text = "DESLOCAMENTO LATERAL", human = false }
 OAG_CONTROLS_TRIGGERS = { text = "GATILHOS", human = false }
 OAG_CONTROLS_PILOT_ASSIST = { text = "ASSISTÊNCIA AO PILOTO", human = false }
 OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "SENSIBILIDADE DOS GATILHOS", human = false }
+OAG_CONTROLS_RUMBLE = { text = "VIBRAÇÃO", human = false }
 OAG_CONTROLS_TOUCH_GO_ZONES = { text = "ZONAS DE FREIO DO GO", human = false }
 OAG_CONTROLS_TOUCH_SCHEME = { text = "ESQUEMA DE TOQUE", human = false }
 OAG_CONTROLS_TOUCH_OPACITY = { text = "OPACIDADE DOS CONTROLES", human = false }
@@ -272,6 +289,8 @@ OAG_LOADING_COUNTS_CONVERTED = { text = "{done} / {total} convertidos", human = 
 OAG_LOADING_COUNTS_CACHED_SUFFIX = { text = ", {cached} já no cache", human = false }
 OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} com falha", human = false }
 OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "O MODO DESTE EVENTO AINDA NÃO PODE SER CORRIDO NESTA VERSÃO", human = false }
+OAG_MEDAL_AWARD = { text = "MEDALHA %s CONCEDIDA", human = false }
+OAG_CAMPAIGN_NOT_PLAYABLE = { text = "ESTA CAMPANHA AINDA NÃO PODE SER JOGADA NESTA VERSÃO", human = false }
 OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "O CIRCUITO DESTE EVENTO NÃO ESTÁ NESTE DISCO", human = false }
 OAG_CAMPAIGN_EVENT_UNAVAILABLE = { text = "ESTE EVENTO NÃO PODE SER CORRIDO COM O QUE ESTA MÁQUINA TEM", human = false }
 OAG_MENU_CAMPAIGN_PICKER = { text = "CAMPANHAS", human = false }
@@ -292,8 +311,10 @@ OAG_MODS_ADDS = { text = "ADICIONA", human = false }
 OAG_MODS_NO_LICENSE = { text = "SEM LICENÇA INFORMADA", human = false }
 OAG_MODS_LICENSE_FILE = { text = "VEJA %s", human = false }
 OAG_MODS_NOTHING = { text = "NADA", human = false }
+OAG_MODS_TEXTURE_PACK = { text = "TEXTURAS", human = false }
 OAG_MODS_BUILT_IN = { text = "INTEGRADO", human = false }
 OAG_MODS_ENABLED = { text = "ATIVADO", human = false }
+OAG_MODS_SETTINGS = { text = "CONFIGURAÇÕES", human = false }
 OAG_MODS_ON = { text = "LIGADO", human = false }
 OAG_MODS_OFF = { text = "DESLIGADO", human = false }
 OAG_MODS_TURNED_OFF = { text = "NADA, DESLIGADO", human = false }
@@ -303,9 +324,171 @@ OAG_MODS_LEFT_OUT = { text = "DEIXADO DE FORA", human = false }
 OAG_MODS_NEEDS = { text = "PRECISA DE", human = false }
 OAG_MODS_NEEDS_OFF = { text = "%s, DESLIGADO", human = false }
 OAG_MODS_NEEDS_MISSING = { text = "%s, AUSENTE", human = false }
+OAG_MODS_NEEDS_DISC = { text = "DISCO DE %s", human = false }
+OAG_MODS_SENDS = { text = "ENVIA", human = false }
+OAG_MODS_HEARS = { text = "OUVE", human = false }
+OAG_MODS_NO_ONE_SENDS = { text = "NINGUEM ENVIA", human = false }
 OAG_PAUSE_OWNED = { text = "JOGADOR %s PAUSOU - QUALQUER UM PODE RETOMAR EM %s", human = false }
 OAG_PAUSE_OPEN = { text = "JOGADOR %s PAUSOU - QUALQUER UM PODE RETOMAR", human = false }
 OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSADO - QUALQUER UM PODE RETOMAR", human = false }
 OAG_COUNTDOWN_GO = { text = "VAI", human = false }
 
+# Photo mode: the pause menu's row and the screen over the picture.
+OAG_MENU_PHOTO_MODE = { text = "MODO FOTO", human = false }
+OAG_MENU_PHOTO_MODE_SUBTITLE = { text = "Mova a câmera pela corrida e salve uma imagem", human = false }
+OAG_PHOTO_CAMERA = { text = "CÂMERA", human = false }
+OAG_PHOTO_INTERNAL = { text = "INTERNA", human = false }
+OAG_PHOTO_CLOSE = { text = "PRÓXIMA", human = false }
+OAG_PHOTO_TRACK = { text = "PISTA", human = false }
+OAG_PHOTO_HUD = { text = "HUD", human = false }
+OAG_PHOTO_ON = { text = "LIGADO", human = false }
+OAG_PHOTO_OFF = { text = "DESLIGADO", human = false }
+OAG_PHOTO_TAKE = { text = "TIRAR FOTO", human = false }
+OAG_PHOTO_BACK = { text = "VOLTAR", human = false }
+OAG_PHOTO_STICK = { text = "ANALÓGICO", human = false }
+OAG_PHOTO_ROTATE = { text = "GIRAR", human = false }
+OAG_PHOTO_ZOOM_TILT = { text = "ZOOM, INCLINAR", human = false }
+OAG_PHOTO_PAN = { text = "PANORÂMICA", human = false }
+OAG_PHOTO_RESET = { text = "REDEFINIR", human = false }
+OAG_PHOTO_SHIP = { text = "NAVE", human = false }
+OAG_PHOTO_HELP = { text = "OCULTAR AJUDA", human = false }
+OAG_PHOTO_SAVED = { text = "FOTO SALVA", human = false }
+OAG_PHOTO_FAILED = { text = "FOTO NÃO SALVA", human = false }
+OAG_PHOTO_EFFECTS = { text = "EFEITOS", human = false }
+OAG_PHOTO_EXPOSURE = { text = "EXPOSIÇÃO", human = false }
+OAG_PHOTO_SATURATION = { text = "SATURAÇÃO", human = false }
+OAG_PHOTO_SPEED_BLUR = { text = "BORRÃO VELOCIDADE", human = false }
+OAG_PHOTO_DEPTH = { text = "PROF. DE CAMPO", human = false }
+OAG_PHOTO_APERTURE = { text = "ABERTURA", human = false }
+OAG_PHOTO_FOCUS = { text = "FOCO", human = false }
+OAG_PHOTO_PANEL_KEYS = { text = "ANALÓGICO CIMA BAIXO LINHA    ESQUERDA DIREITA ALTERAR", human = false }
+OAG_REPLAY_CRAFT = { text = "NAVE", human = false }
+OAG_REPLAY_HUD = { text = "HUD", human = false }
+OAG_REPLAY_SCRUB = { text = "NAVEGAR", human = false }
+OAG_REPLAY_JOG = { text = "AJUSTAR", human = false }
+OAG_PHOTO_PAD_KEYS = { text = "ANALÓGICO DIREITO CIMA BAIXO ZOOM    ESQUERDA DIREITA INCLINAR", human = false }
+OAG_PHOTO_SCRUB_KEYS = { text = "L2 / R2 NAVEGAR    R2 TOTAL REPRODUZIR", human = false }
+OAG_PHOTO_REWIND = { text = "VOLTAR NO TEMPO", human = false }
+OAG_PHOTO_PLAY = { text = "REPRODUZIR", human = false }
+OAG_PHOTO_MOTION_BLUR = { text = "BORRÃO DE MOVIMENTO", human = false }
+OAG_PHOTO_SHUTTER = { text = "OBTURADOR", human = false }
+OAG_PHOTO_PROGRESS = { text = "TIRANDO FOTO", human = false }
+OAG_PHOTO_CANCELLED = { text = "FOTO CANCELADA", human = false }
+OAG_PHOTO_ANY_INPUT = { text = "QUALQUER BOTÃO CANCELA", human = false }
+OAG_PHOTO_FREE = { text = "LIVRE", human = false }
+OAG_PHOTO_WALK = { text = "ANDAR", human = false }
+OAG_PHOTO_SLIDE_LIFT = { text = "LADO, SUBIR", human = false }
+OAG_PHOTO_ZOOM_ROLL = { text = "ZOOM, GIRAR", human = false }
+OAG_PHOTO_FREE_KEYS = { text = "ANALÓGICO DIREITO OU ARRASTAR OLHAR    RODA AVANÇAR", human = false }
+OAG_PHOTO_DRAG = { text = "ARRASTAR", human = false }
+OAG_PHOTO_LOOK = { text = "OLHAR", human = false }
+OAG_PHOTO_MOVE = { text = "MOVER", human = false }
+
 OAG_MENU_RESET_TO_DEFAULT = { text = "RESTAURAR O PADRÃO", human = false }
+
+# The player name and tag: the OPTIONS rows and the entry screens' titles.
+OAG_OPTIONS_PLAYER_NAME = { text = "NOME DO JOGADOR", human = false }
+OAG_OPTIONS_PLAYER_TAG = { text = "TAG DO JOGADOR", human = false }
+OAG_PLAYER_NAME_TITLE = { text = "DIGITE SEU NOME", human = false }
+OAG_PLAYER_TAG_TITLE = { text = "DIGITE SUA TAG", human = false }
+
+# The REPLAYS page and the replay viewer (ADR-0087).
+OAG_MENU_REPLAYS = { text = "REPLAYS", human = false }
+OAG_MENU_REPLAYS_SUBTITLE = { text = "Assista, guarde ou apague as corridas que você gravou", human = false }
+OAG_REPLAYS_PAGE_TITLE = { text = "REPLAYS", human = false }
+OAG_REPLAYS_ROW = { text = "REPLAY", human = false }
+OAG_REPLAYS_WATCH = { text = "ASSISTIR", human = false }
+OAG_REPLAYS_KEEP = { text = "GUARDAR", human = false }
+OAG_REPLAYS_DELETE = { text = "APAGAR", human = false }
+OAG_REPLAYS_NONE = { text = "NENHUM AINDA", human = false }
+OAG_REPLAYS_NONE_WHY = { text = "TODA CORRIDA QUE VOCÊ PILOTA É GRAVADA AQUI", human = false }
+OAG_REPLAYS_NONE_OFF = { text = "GRAVAÇÃO DESLIGADA: [REPLAY] RECORD NO ARQUIVO DE CONFIGURAÇÕES", human = false }
+OAG_REPLAYS_CIRCUIT = { text = "CIRCUITO", human = false }
+OAG_REPLAYS_MODE = { text = "CORRIDA", human = false }
+OAG_REPLAYS_FINISH = { text = "CHEGADA", human = false }
+OAG_REPLAYS_DATE = { text = "DATA", human = false }
+OAG_REPLAYS_SIZE = { text = "TAMANHO", human = false }
+OAG_REPLAYS_NOTE = { text = "NOTA", human = false }
+OAG_REPLAYS_SAVED = { text = "GUARDADO", human = false }
+OAG_REPLAYS_TAKEN_OVER = { text = "ASSUMIDO EM %s", human = false }
+OAG_REPLAYS_NOT_FINISHED = { text = "NÃO TERMINADA", human = false }
+OAG_REPLAYS_NOT_VERIFIED = { text = "MODO NÃO VERIFICADO", human = false }
+OAG_REPLAYS_OTHER_TITLE = { text = "GRAVADO EM %s: ABRA ESSE DISCO", human = false }
+OAG_REPLAYS_NEWER = { text = "GRAVADO POR UMA VERSÃO MAIS NOVA", human = false }
+OAG_REPLAYS_DAMAGED = { text = "ARQUIVO DANIFICADO", human = false }
+OAG_REPLAYS_NO_SETUP = { text = "NÃO PODE SER RECONSTRUÍDO: SEM PEDIDO DE LANÇAMENTO", human = false }
+OAG_REPLAYS_NOT_THE_RACE = { text = "NÃO É A CORRIDA QUE FOI GRAVADA", human = false }
+OAG_REPLAYS_REFUSED = { text = "NÃO PODE SER RECONSTRUÍDO AQUI: %s", human = false }
+OAG_REPLAY_OPENING = { text = "ABRINDO REPLAY", human = false }
+OAG_REPLAY_MISMATCH = { text = "ESTE REPLAY FOI GRAVADO EM UMA VERSÃO ANTERIOR E DEIXA DE CORRESPONDER EM %s", human = false }
+OAG_REPLAY_STOPPED = { text = "PARA AQUI: ESTA VERSÃO NÃO CONSEGUE RECONSTRUIR O RESTO", human = false }
+OAG_REPLAY_PLAY = { text = "REPRODUZIR", human = false }
+OAG_REPLAY_PAUSE = { text = "PAUSAR", human = false }
+OAG_REPLAY_EXIT = { text = "SAIR", human = false }
+OAG_REPLAY_PHOTO = { text = "FOTO", human = false }
+OAG_REPLAY_SPEED = { text = "VELOCIDADE", human = false }
+OAG_REPLAY_SKIP = { text = "5 SEG", human = false }
+OAG_REPLAY_ENDED = { text = "FIM DO REPLAY", human = false }
+OAG_ENDRACE_WATCH_REPLAY = { text = "ASSISTIR REPLAY", human = false }
+OAG_REPLAY_POSE_VIEW = { text = "VISTA DE POSES: AS NAVES ESTÃO ONDE FORAM GRAVADAS. SEM HUD, ARMAS OU EFEITOS", human = false }
+OAG_SHOT_NOT_OURS = { text = "ESSE ARQUIVO NÃO É UM REPLAY NEM UMA CAPTURA DE TELA DESTE JOGO", human = false }
+OAG_SHOT_NO_STREAM = { text = "ESTA CAPTURA NÃO PODE SER ASSISTIDA: %s", human = false }
+OAG_SHOT_NO_REASON = { text = "ELA NÃO TRAZ O REGISTRO DOS COMANDOS", human = false }
+OAG_SHOT_OTHER_HASH = { text = "ESTA VERSÃO NÃO REPRODUZ ESTA CAPTURA EXATAMENTE: O QUE VOCÊ VÊ PODE DIFERIR", human = false }
+OAG_REPLAY_POSE_END = { text = "FIM DA TRILHA DE POSES: ELA GUARDA NO MÁXIMO UMA HORA", human = false }
+
+# The campaign editor.
+OAG_MENU_CAMPAIGN_EDITOR = { text = "NOVA CAMPANHA", human = false }
+OAG_MENU_CAMPAIGN_EDITOR_SUBTITLE = { text = "Coloque eventos na grade hexagonal e salve como uma campanha", human = false }
+OAG_EDITOR_TITLE = { text = "EDITOR DE CAMPANHA", human = false }
+OAG_EDITOR_FIELD_MODE = { text = "MODO", human = false }
+OAG_EDITOR_FIELD_CIRCUIT = { text = "CIRCUITO", human = false }
+OAG_EDITOR_FIELD_CLASS = { text = "CLASSE DE VELOCIDADE", human = false }
+OAG_EDITOR_FIELD_TEAM = { text = "EQUIPE", human = false }
+OAG_EDITOR_FIELD_AI = { text = "ADVERSÁRIOS", human = false }
+OAG_EDITOR_TEAM_CHOOSE = { text = "O JOGADOR ESCOLHE", human = false }
+OAG_EDITOR_EMPTY = { text = "ESPAÇO VAZIO", human = false }
+OAG_EDITOR_PLACED = { text = "EVENTOS", human = false }
+OAG_EDITOR_ACTION_NAME = { text = "NOME", human = false }
+OAG_EDITOR_ACTION_SAVE = { text = "SALVAR CAMPANHA", human = false }
+OAG_EDITOR_ACTION_CLEAR = { text = "LIMPAR ESPAÇO", human = false }
+OAG_EDITOR_SAVED = { text = "SALVA - ESTÁ NA PÁGINA DE CAMPANHAS", human = false }
+OAG_EDITOR_NEEDS_EVENT = { text = "COLOQUE UM EVENTO PRIMEIRO", human = false }
+OAG_EDITOR_NAME_TITLE = { text = "DÊ UM NOME À CAMPANHA", human = false }
+OAG_EDITOR_SAVE_FAILED = { text = "NÃO FOI POSSÍVEL SALVAR A CAMPANHA", human = false }
+OAG_EDITOR_HINT_PLACE = { text = "CRUZ COLOCA UM EVENTO", human = false }
+OAG_EDITOR_LEGEND_CLEAR = { text = "Limpar espaço", human = false }
+OAG_EDITOR_LEGEND_NAME = { text = "Nome", human = false }
+OAG_EDITOR_DEFAULT_NAME = { text = "MINHA CAMPANHA", human = false }
+OAG_EDITOR_MODE_RACE = { text = "CORRIDA", human = false }
+OAG_EDITOR_MODE_TIME_TRIAL = { text = "CONTRA O RELÓGIO", human = false }
+OAG_EDITOR_MODE_SPEED_LAP = { text = "VOLTA RÁPIDA", human = false }
+OAG_EDITOR_MODE_ZONE = { text = "ZONA", human = false }
+OAG_EDITOR_MODE_ELIMINATOR = { text = "ELIMINADOR", human = false }
+OAG_EDITOR_MODE_HEAD_TO_HEAD = { text = "FRENTE A FRENTE", human = false }
+OAG_EDITOR_AI_ORIGINAL = { text = "ORIGINAL", human = false }
+OAG_EDITOR_AI_OURS = { text = "NOSSO", human = false }
+OAG_EDITOR_FIELD_DIFFICULTY = { text = "DIFICULDADE", human = false }
+OAG_EDITOR_FIELD_PROGRESSION = { text = "PROGRESSÃO", human = false }
+OAG_EDITOR_FIELD_SEED = { text = "SEMENTE", human = false }
+OAG_EDITOR_FIELD_CLASS_FROM = { text = "CLASSE DE", human = false }
+OAG_EDITOR_FIELD_CLASS_TO = { text = "CLASSE ATÉ", human = false }
+OAG_EDITOR_HINT_SAVE = { text = "START SALVA", human = false }
+OAG_EDITOR_KEY_SELECT = { text = "SELECT", human = false }
+OAG_EDITOR_KEY_TRIANGLE = { text = "TRIÂNGULO", human = false }
+OAG_EDITOR_KEY_START = { text = "START", human = false }
+OAG_EDITOR_ACTION_FILL = { text = "PREENCHER GRADE", human = false }
+OAG_EDITOR_ACTION_SETTINGS = { text = "AJUSTES", human = false }
+OAG_EDITOR_ACTION_EVENT = { text = "CAMPOS DO EVENTO", human = false }
+OAG_EDITOR_SEED_TITLE = { text = "DIGITE UMA SEMENTE", human = false }
+OAG_EDITOR_FILLED = { text = "GRADE PREENCHIDA PELA SEMENTE", human = false }
+OAG_EDITOR_LEGEND_FILL = { text = "Preencher grade", human = false }
+OAG_EDITOR_DIFFICULTY_EASY = { text = "FÁCIL", human = false }
+OAG_EDITOR_DIFFICULTY_MEDIUM = { text = "MÉDIO", human = false }
+OAG_EDITOR_DIFFICULTY_HARD = { text = "DIFÍCIL", human = false }
+OAG_EDITOR_PROGRESSION_FLAT = { text = "CONSTANTE", human = false }
+OAG_EDITOR_PROGRESSION_RAMP = { text = "CRESCENTE", human = false }
+
+[untranslated]
+ids = [
+]

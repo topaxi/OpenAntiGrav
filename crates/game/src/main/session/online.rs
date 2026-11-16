@@ -39,6 +39,18 @@ use crate::stage::Stage;
 
 use super::Session;
 
+/// The name the lobby's name field opens on: the shared player name (the lobby's keys are lower
+/// case), else what the last connection went by, else the login name.
+fn lobby_name(saved: &str, player: &crate::settings::Player) -> String {
+    if let Some(name) = player.name() {
+        name.to_ascii_lowercase()
+    } else if !saved.is_empty() {
+        saved.to_string()
+    } else {
+        super::lan::player_name()
+    }
+}
+
 /// How often the room list is asked for again while it is on screen. **Chosen.**
 const REFRESH: Duration = Duration::from_millis(1000);
 
@@ -122,11 +134,8 @@ impl Session {
             lobby: None,
             address: saved.address,
             hash: saved.hash,
-            name: if saved.name.is_empty() {
-                super::lan::player_name()
-            } else {
-                saved.name
-            },
+            name: lobby_name(&saved.name, &self.settings.player),
+            // See `lobby_name`.
             editions,
             team: String::new(),
             pick_sent: false,
@@ -144,9 +153,9 @@ impl Session {
                 .shell
                 .as_ref()
                 .map_or_else(String::new, |s| s.platform.to_string()),
-            content: oag_game::mods::Mods::load(&self.settings.mods.disabled)
+            content: oag_game::mods::Mods::load(&self.settings.mods)
                 .ok()
-                .map_or(0, |mods| mods.content_fingerprint()),
+                .map_or(0, |mods| mods.content_fingerprint(&self.settings.mod_settings)),
             build: oag_net::BUILD_VERSION.to_string(),
         }
     }
@@ -1025,6 +1034,19 @@ impl Session {
                 .map(|(track, name)| (track.entry_name().to_string(), name.clone()))
                 .collect()
         });
+        // The game list titles a circuit by the title's alias table where it has a row
+        // (`oag_game::boot::tiers2048::alias_title`); the room form keeps the picker's names.
+        let list_labels: Vec<(String, String)> = self.shell.as_ref().map_or_else(Vec::new, |shell| {
+            let aliases = shell.title.front_end.map_or(&[][..], |front_end| front_end.card_track_aliases);
+            shell
+                .tracks
+                .iter()
+                .map(|(track, name)| {
+                    let title = oag_game::boot::tiers2048::alias_title(aliases, &track.id, &shell.strings);
+                    (track.entry_name().to_string(), title.unwrap_or_else(|| name.clone()))
+                })
+                .collect()
+        });
         let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &mut self.stage) else {
             return;
         };
@@ -1049,7 +1071,7 @@ impl Session {
             match screen_rows {
                 Some(Rows::Rooms(rooms)) => {
                     oag_game::online_screen::fill_list(screen, &rooms, &shell.strings, &|entry| {
-                        track_labels
+                        list_labels
                             .iter()
                             .find(|(known, _)| known == entry)
                             .map(|(_, name)| name.clone())
@@ -1131,4 +1153,37 @@ impl Session {
 enum Rows {
     Rooms(Vec<oag_net::wire::online::RoomInfo>),
     Room(oag_net::wire::online::Snapshot, bool),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lobby_name;
+    use crate::settings::Player;
+
+    fn player(name: &str) -> Player {
+        Player {
+            name: name.into(),
+            tag: String::new(),
+        }
+    }
+
+    #[test]
+    fn the_lobby_name_field_opens_on_the_stored_player_name() {
+        assert_eq!(lobby_name("", &player("Zoe-7")), "zoe-7");
+    }
+
+    #[test]
+    fn the_player_name_wins_over_the_name_the_last_connection_used() {
+        assert_eq!(lobby_name("bob", &player("Zoe")), "zoe");
+    }
+
+    #[test]
+    fn with_no_player_name_the_last_connections_name_is_kept() {
+        assert_eq!(lobby_name("bob", &player("")), "bob");
+    }
+
+    #[test]
+    fn with_no_player_name_the_login_name_is_the_default() {
+        assert_eq!(lobby_name("", &player("")), super::super::lan::player_name());
+    }
 }

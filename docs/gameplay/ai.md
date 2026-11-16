@@ -1163,7 +1163,7 @@ campaign) keeps the absorb.
 switch keys on it: the race box's `AI DIFFICULTY` row (`assets/ui/menu.toml`,
 setting `ai.difficulty`) offers all four by these names, Elite the default. A
 title's own `Easy`/`Medium`/`Hard` exist only as campaign rungs and reach only
-the original's pack shuffle (`oag_game::ai_choice::free_level`: Novice easy,
+the original's pack shuffle (`oag_ai::Difficulty::level`: Novice easy,
 Skilled and Elite medium, Ace hard, chosen).
 
 **One later change this sweep does not cover (2026-10-26, `autopilot-wire`):** a craft
@@ -1891,12 +1891,53 @@ first, so a reader never sees a plan missing that used to be there. (Until
 2026-10-14 `start` learned it at once, which made every race-starting test pay
 for it: see the test-data budget in `docs/architecture/workspace-layout.md`.) A
 test shows the plans are the same whether asked for before the first tick or at
-it. **A fork
+it.
+
+**Off the frame thread (2026-10-31).** A menu launch calls `Race::begin_speed_plans`
+once the race is fully set up (after `ai_choice::apply`): the plans are learned by
+the same function (`speed_plan::learn_speed_plans`) on a copy of the simulation on a
+`speed-plans` thread, the hand-over from the loading screen waits for
+`Race::speed_plans_ready`, and the first tick adopts them
+(`ensure_speed_plans`, 25 us). Callers that build a race another
+way (headless, `--race`, tests, a mid-race autopilot) keep the lazy path. Bit-identity:
+`speed_plan_ground_truth::plans_learned_ahead_are_the_plans_the_first_tick_learns`
+(Outpost 7, RAPIER: the ring plan, every slot's plan and 120 ticks of state hashes
+equal). Measured in `docs/rendering/frame-thread-cpu.md`.
+
+**Started on the race-load thread, overlapped (2026-10-31, `speed-plan-overlap`).**
+On a forked circuit the job starts as soon as the circuit is read: the race-load
+thread runs `Race::start` (natively too, as the web worker always did) and
+`Race::begin_speed_plans_ahead`, so the plans learn beside the scene build and its
+warm-up instead of after them. A fork reads the plans whichever driver flies, so
+nothing the launch decides later can make the job unwanted. A circuit without a
+fork waits for the launch's own `begin_speed_plans`, which knows whether anything
+reads them (the original driver alone does not). Not for a launch whose seats or
+race are changed afterwards: split seating or a network host's race
+(`plan_ahead` in `Session::launch_race`). The job is keyed on its **plan inputs**
+(`speed_plan::PlanInputs`: per grid slot the handling, the physics state, the line
+index, active and person-flown), no longer the state hash, which the launch's
+setters move without touching a plan: a mod event's pilot writes `driver.pilot`,
+the original driver only decides whether a plan is read. The hand-over's
+`begin_speed_plans` keeps a job that still fits and starts a new one when an input
+moved (a second person seated), so the relearn stays behind the loading screen; the
+first-tick relearn and its warning remain only for a race changed after the
+hand-over. `tests::speed_plan_overlap::a_job_started_on_the_load_thread_survives_the_launch`
+runs the menus' setters over an early job.
+
+The learner itself runs in three stages (`speed_plan::learn_speed_plans`): the
+ring plan (it picks the reference); then every route's plan and every other hull's
+ring copy at once, a thread each (neither reads the other); then every hull's copy
+of each route plan, which needs that route's plan. Until then the routes were
+learned one after another and the hulls after them. Results are written back in
+route and hull order; `tests::speed_plan_overlap` checks the overlapped learner
+equal to the serial one (every plan, the reference, `ship_plan`, `plan_steps`) on
+Pulse `07_Track` and 2048 `altima` RAPIER. **A fork
 always learns them**, though the original reads no plan: a route is offered to
 the coin only if its plan verified, and the route plans are learned on the ring
 plan's reference hull, so skipping them would change which way an original
 opponent goes round a fork. That cost stays on forked circuits (Pulse `05_Track`,
-`07_Track` and others) and is open. Release start (`--race --ticks 1`, load 10 to
+`07_Track` and others) and is open; learning a route's plan on its driven stretch
+only was measured and not adopted ([below](#a-routes-plan-learned-on-its-driven-stretch-only-built-measured-not-adopted-2026-10-31)). Release start (`--race --ticks 1`, load 10 to
 20, three runs each), `--ai ours` (the old cost) against `--ai original`:
 Pulse `16_Track` 2.4 to 2.9 s against 0.65 s, HD's default track 6.7 to 8.1 s
 against 1.5 s.
@@ -4326,6 +4367,79 @@ elsewhere - the field takes only about 30 per cent of the track's speed
 pads, which looked like the next thing worth fixing. **It was not** - see
 [pads](#pads-built-measured-removed) below.
 
+#### Mistakes are never into a tight corner (2026-11-03, `pure-ai-measured-laws`)
+
+`Driver::blunder` does not roll within `TIGHT_REACH` (200 units) of a sample the speed plan
+passed a wall closely (`SpeedPlan::tight_within`). These are the corners `plan_slack` already
+holds to the plan's line, because there the line is the only one known to fit at the plan's
+speed. A missed braking point there has no recovery short of the wall. Ace (mistake rate `0`)
+and seed `0` are unchanged by construction: Pure Ace's eight races are byte-identical with
+the rule. Novice, Skilled and Elite move on every title with a plan.
+
+**Why: Wipeout Pure's speed pair.** Pure's engine does not double and its grounded drag is
+half Pulse's, both measured ([pure-physics.md](../physics/pure-physics.md#the-noise-bar)).
+On it the Novice field hit the walls far more than with the pair undone. The noise bar
+(twelve airborne pitch torques, eight seeds, `opponent_autopilot_sweep::races_others`,
+field alone) gave walls `562 -> 752` (median, `k = 10`) and end-of-run shield
+`90.8 -> 88.6` (`k = 8`). An ablation set one Novice knob to Ace's value at a time, on four
+torques. Walls, mean of four, speed pair undone against on:
+
+| Knob at Ace's value | Pair undone | Pair on |
+| --- | ---: | ---: |
+| none | `580` | `760` |
+| `grip_believed` | `1388` | `2042` |
+| `turn_allowed` | `560` | `695` |
+| `reaction_ticks` | `610` | `695` |
+| `pace_share` | `1280` | `1507` |
+| `mistakes` (none) | `429` | `321` |
+
+Only removing mistakes removes the gap. An instrumented run (eight seeds, unperturbed) then
+showed:
+
+- The mistake count is the same: `1721` with the pair undone, `1751` with it on.
+- A Pure mistake gains less speed (`4.3` against `9.4` u/s over its 30 ticks), but costs more.
+- Walls in the 150 ticks after a mistake ends: `325` with the pair undone, `482` with it on.
+  Walls with another craft within 12 units barely move (`121` against `149`).
+- The brake is saturated on `33,067` ticks of those windows with the pair undone and
+  `40,562` with it on: the craft cannot shed the overshoot in time.
+
+Shorter mistakes (15 or 20 ticks) or coasting through them lowered both states about
+equally and left most of the gap. Skipping the roll near a tight corner closed most of it:
+on four torques the gap went from `180` walls to `52`.
+
+**Measured with the rule** (twelve torques, eight seeds, Pure Novice, field alone):
+
+| Comparison | Walls, median | End-of-run shield | Per-lap shield | Lap | Sweep A (ours) / B (the original's driver) |
+| --- | --- | --- | --- | --- | --- |
+| Pair undone, no rule -> pair on, rule | `562 -> 598` (p `0.41`, `k = 2`) | `90.8 -> 89.2` (p `0.053`, `k = 5`) | `92.5 -> 90.9` (p `0.042`, `k = 5`) | `49.8 -> 55.2` s (the acceleration) | `54 -> 52.5` (p `0.77`) / `16.5 -> 40` (p `< 0.001`, `k = 5`) |
+| Pair on: no rule -> rule | `752 -> 598` (better) | `88.6 -> 89.2` | `90.8 -> 90.9` | `54.1 -> 55.2` s (p `0.019`, `k = 3`) | `74 -> 52.5` / `65.5 -> 40` |
+| Residual: pair undone -> on, both with the rule | `520 -> 598` (p `0.067`, `k = 4`) | `90.0 -> 89.2` | `91.9 -> 90.9` | `50.4 -> 55.2` s | `48 -> 52.5` (p `0.5`) / `15.5 -> 40` (p `< 0.001`, `k = 8`) |
+
+Unperturbed, eight seeds: walls `678 -> 508`, end-of-run shield `88.9 -> 90.8`, per-lap
+shield `91.8 -> 92.6`, no wreck either way. None of our driver's metrics is past the
+`P < 0.01` hold line against the pair-undone base, apart from the lap. The lap is the measured
+half acceleration, and the rule's own `+1.1` s is p `0.019`. Sweep B is past it: those are
+stints flown by the original's driver (`oag_ai::original`), which this engine does not tune,
+so its rise is the speed pair acting on that driver. Against the pair-on base the rule
+lowers B too (`65.5 -> 40`).
+
+**On Pulse the rule makes Novice cleaner and a little slower.** Measured on four torques
+(`0`, `1e-5`, `-1e-4`, `3e-4`), four seeds on each of the twelve circuits, so 48 races a
+sample (`opponent_autopilot_sweep::races_pulse`, field alone):
+
+| Metric | Before (four samples) | With the rule |
+| --- | --- | --- |
+| Race walls | `70945`-`76938` | `59076`-`66275` (every sample below every base sample) |
+| Respawns | `7`-`68` | `8`-`54` |
+| Wrecks | `0`-`2` | `0`-`1` |
+| Per-lap shield | `77.5`-`78.7` | `78.8`-`80.5` |
+| End-of-run shield | `67.1`-`68.1` | `69.4`-`71.7` |
+| Lap | `50.05`-`50.54` s | `50.41`-`50.83` s |
+
+The Pulse lone-craft gate (`race_ground_truth`) printed byte-identical output before and
+after: twelve of twelve clean. Not measured: Skilled and Elite on any title, and every level
+on HD, Omega and 2048. Their gates pass.
+
 ### Pads: built, measured, removed
 
 The field crosses only about **30 per cent** of a real circuit's speed pads,
@@ -4922,13 +5036,13 @@ pickup, so in a race the two are the same tick.
 | The controller steers back toward its line, brakes for a corner, is damped by its own turn rate | `oag-ai`'s own tests, against a synthetic circle and straight | yes |
 | Curvature reads `1/radius` on a circle | `line::tests::curvature_approximates_one_over_the_radius` | yes |
 | Every opponent is stepped with controls a driver chose | `race::tests::the_opponents_are_driven_rather_than_parked` | yes |
-| A grid of eight leaves the line, goes the right way, and is still on the track after ten seconds | `race_ground_truth::the_ai_drives_the_field_along_the_track` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
-| Two runs of one race stay identical, drivers included | `race_ground_truth::a_driven_field_replays_identically` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
-| The field is placed, and being further round earns a better place | `race_ground_truth::the_field_is_placed_by_how_far_round_it_is` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
+| A grid of eight leaves the line, goes the right way, and is still on the track after ten seconds | `race_field_ground_truth::the_ai_drives_the_field_along_the_track` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
+| Two runs of one race stay identical, drivers included | `race_field_ground_truth::a_driven_field_replays_identically` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
+| The field is placed, and being further round earns a better place | `race_field_ground_truth::the_field_is_placed_by_how_far_round_it_is` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
 | Seven seeded drivers hold seven different parts of the corridor, and the field strings out | `oag-ai`'s `closed_loop::a_field_of_seeded_drivers_does_not_drive_one_line` and `..._strings_out`, on the oval with an invented corridor | yes |
 | A seeded driver stays inside the corridor, and the same seed drives the same race | `oag-ai`'s `closed_loop::a_seeded_driver_stays_inside_the_corridor`, `the_same_seed_drives_the_same_race` | yes |
 | The drift is smooth, bounded, and different per seed | `noise::tests`, five of them | yes |
-| The field spreads across the **disc's own** corridor, both sides of the line | `race_ground_truth::the_field_spreads_across_the_ai_corridor` | **no** - needs a disc image. **Run and passing as of 2026-08-11**: seven craft spread **16.6 units** across a corridor with 10.5 to spare either side of the line. |
+| The field spreads across the **disc's own** corridor, both sides of the line | `race_field_ground_truth::the_field_spreads_across_the_ai_corridor` | **no** - needs a disc image. **Run and passing as of 2026-08-11**: seven craft spread **16.6 units** across a corridor with 10.5 to spare either side of the line. |
 | The differential holds a corner the steering alone cannot, and does not ring | `closed_loop::a_differential_holds_a_corner_the_steering_alone_cannot` and `..._does_not_ring`, on a 60-unit oval with the airbrake fixture | yes |
 | And stays out of the way where the craft could already make the corner | `closed_loop::a_differential_barely_touches_a_corner_the_craft_can_already_make` | yes |
 | The differential brakes the side the nose is turning toward, is dead inside its deadband, waits for the loop to run out of lock, and never acts on corner exit | four tests in `driver::tests` | yes |
@@ -4964,7 +5078,7 @@ pickup, so in a race the two are the same tick.
 | A driver fires at a craft ahead and inside its cone, and not at one beside it, out of range, at point-blank, or round a corner | six tests in `driver::tests` | yes |
 | A trigger-happy driver fires sooner than a cautious one, and a provoked one sooner than it did calm | two tests in `driver::tests` | yes |
 | **An opponent's rocket is owned by the slot that fired it** | `race::tests::an_opponents_rocket_is_owned_by_the_slot_that_fired_it` | yes |
-| **The aiming gates actually open on real geometry** | `race_ground_truth::an_opponent_fires_at_a_craft_ahead_on_a_real_circuit` | **no** - needs a disc image. **Run and passing 2026-08-11**: 159 rockets from six of seven opponents in two minutes. |
+| **The aiming gates actually open on real geometry** | `race_field_ground_truth::an_opponent_fires_at_a_craft_ahead_on_a_real_circuit` | **no** - needs a disc image. **Run and passing 2026-08-11**: 159 rockets from six of seven opponents in two minutes. |
 | A pilot file round-trips, and one with an impossible commitment, a reversed range, an unknown key or a bad lean is rejected **by name** | six tests in `pilots::tests` | yes |
 | The roster is sorted by name rather than by the filesystem, and a file may replace a built-in | two tests in `pilots::tests` | yes |
 | Two pilots differing in one number digest differently, and no built-in digests to zero | two tests in `pilots::tests` | yes |
@@ -5431,7 +5545,69 @@ original's own is 85 s, and the gap is still the AI not cheating). No original l
 this tree to compare the solo laps against; the Eliminator's 85 s is the only
 original timing there is.
 
+### What a build does not drive twice (2026-11-11)
+
+A build drives the same craft from the same grid pose many times: the brake
+calibration's run-up, each learning pass, the verification after it, and all
+of that again for the trough search and the hardening. Verification laps
+were half of a build's physics steps (Pulse `07_Track` RAPIER: 166,665 of
+328,295; 2048 `altima`: 121,912 of 218,704).
+
+A tick of any of those runs is a pure function of the run's state and of the
+throttle and brake the plan asks for, and every run starts in the same state.
+So a later run repeats an earlier one tick for tick for as long as its plan
+asks the same at every tick and answers every failure the same way. Each run
+now keeps a record (`crates/ai/src/plan/driven.rs`): per tick what the plan
+was asked with (line index, forward speed, airborne), what it answered, and
+what the tick did; plus the run's state every 15 ticks, the checkpoints a
+learning pass already kept. The next run asks its own plan again at each
+recorded tick, which costs no physics, reads back the stretch that agrees,
+and drives on from the last checkpoint inside it.
+
+- **A verification after a learning pass** reads back the pass's surviving
+  run up to the first tick the finished plan asks differently, usually where
+  a lowering on the second lap moved a target the first lap had read. A
+  failure the pass drove through (a forgiven wall) or answered with a rescue
+  is one a verification answers the same way, so the read-back goes through
+  it.
+- **A learning pass after a failed verification**, and an adaptation's first
+  pass, read back the verification up to its first failure, with its
+  checkpoints and its trace.
+- **The first pass of a search** reads back the calibration's full-throttle
+  run-up, and **the trough search** takes the whole-window search's
+  calibration instead of measuring it again.
+
+The steps a read-back tick would have cost are added to the report as if
+driven, so step budgets fall where they fell and every plan, report and step
+count is unchanged. Three checks hold that:
+
+1. `oag_ai::plan::Course::drive_again` drives every run in full. The plans
+   learned both ways are asserted equal in `oag-ai`
+   (`reading_a_run_back_learns_the_plan_driving_it_again_does`) and, for whole
+   fields, on Pulse `07_Track` and 2048 `altima`
+   (`crates/raceplay/src/tests/speed_plan_overlap.rs`).
+2. A rescued tick on a checkpoint tick leaves two checkpoints, before and
+   after the rescue, and a rewind can land on the first. No field measured
+   does it, so `a_rewind_onto_the_mark_before_a_rescue_is_not_read_back_as_rescued`
+   builds the case by hand.
+3. The whole of what a race learns (every plan, report and step count) printed
+   before and after the change is byte-identical on five fields; numbers in
+   [`workspace-layout.md`](../architecture/workspace-layout.md), "What the
+   second `speed-plan` pass measured".
+
+Physics steps driven fell 23 % on `07_Track` RAPIER and 28 % on `altima`
+RAPIER, process CPU 15 % and 18 %. **2048 and Omega**: the plan is this
+project's own and reads no title data, so there is nothing to port; the
+measurement above covers a 2048 field, and Omega races learn through the same
+code.
+
 ### Plans that do not verify
+
+**Since 2026-11-11 (lane `ace-walls`) all 96 verify**, each under every
+perturbation offset tried: see [the next section](#a-road-under-the-line-is-a-failure-2026-11-11).
+With the body damping (2026-11-12) one row fails one offset of the 17, `01_Track` PHANTOM at
+`-3.5e-4`, measured on the tree before and after the long-landing answer below alike.
+What follows is the set as it stood before.
 
 `crates/raceplay/tests/speed_plan_ground_truth.rs` pins the exact set, at the
 title-default team: **91 of 96** layout-class plans verify clean (87 until
@@ -5445,6 +5621,299 @@ and prints `06_Track` VENOM (clean under 3 of the nine perturbation offsets) and
 9, from 0 of 9 before the hover escape off a wall,
 [airborne-ground-truth.md](../physics/airborne-ground-truth.md#the-1595-crest-residual-is-a-hover-escape-off-a-wall-2026-10-20-pulse-air-pitch))
 and `29_Track` RAPIER (8 of 9) without a verdict.
+
+#### 06_Track RAPIER with the body damping (2026-11-12)
+
+When Pulse began to fly its body damping ([body-damping.md](../physics/body-damping.md)),
+`06_Track` RAPIER left the clean set: its plan verified on 2 of the 5 gate builds. Across all 17
+scales of `perturb::BOUND_OFFSETS` and `perturb::HELD_OUT`, **15 of 17 clean undamped against 11
+of 17 damped**. Each failing verification met the walls at samples 1232-1242, after the gap at
+1196-1200, and those walls stayed in the plan's `unresolved` list in clean builds both ways.
+
+**What the failing builds did (lane `speed-plan-06-rapier`).** The verification's flying lap
+from sample 1185 to 1245, one build per offset, unperturbed scale, damped:
+
+| | clean build (offset `2e-3`) | failing build (offset `0`) |
+| --- | --- | --- |
+| run-up 1185-1195 | not held, ceiling 41.6 at 1189-1195 | **held** from 1104-1159 to 1196, no ceiling |
+| speed at the lip (1195) | 38-41 u/s | 76 u/s |
+| landing | sample 1214, nose down (pitch -0.73), 18 u/s after it | sample 1225 at 102 u/s |
+| offset across the line at 1225 (corridor right bound 0.0) | +3.1 | +3.0, then +6.3 to +6.9 by 1232-1244 |
+| ceilings 1225-1233 | 65-68 | 16 (the floor), braking from 80 |
+| walls | none | 1236-1244, every tick |
+
+The run-up is held (`SpeedPlan::hold_run_up`, `crates/ai/src/plan.rs`) because a learning pass
+falls short into the gap after braking on it: every such fall in the 17 builds took off at
+34-37.5 u/s. (The whole-window search also holds 1155-1212 off a stall in the pit whose
+"takeoff" it reads at 3.3 u/s inside the gap: a misattribution, left as it is.) A held sample has no ceiling, so the hold turned "too slow at the lip" into full
+throttle, and the craft took off at 72-89 u/s. Lowering after the landing could not help (the
+craft is braking from 80 into a ceiling of 16 within ten samples), and the lowering skips held
+samples, so the site ran out of tries and was forgiven. Whether a build failed turned on how
+long a run-up the hold had covered: 45 ticks (1188/1192-1196) verified, 90 ticks back to
+1104-1159 mostly did not.
+
+**The answer: a long landing slows the held run-up** (`crates/ai/src/plan/landing.rs`,
+**chosen, not measured**). A wall on the ground, or after a hop shorter than `FELL_SECONDS`,
+whose trace holds a flight in the last 45 ticks that crossed a gap the line crosses and took
+off from a run-up with a held sample in it, is `Cause::LandedLong`. It lowers each held
+sample of that run-up once, to 0.96 of the slowest the craft did there (or of its ceiling if
+lower), and keeps the hold, so a corner after the landing still does not brake through the
+run-up. A fall short off a held sample with a ceiling raises that ceiling by the same step,
+so the two causes meet in the window between short (at most 37.5) and long (about 72 and up).
+The step is flat, not `lower`'s steepening one, and is taken once per sample per failure: the
+lip sample holds about twelve ticks of the run, and a per-tick step took its ceiling from 52
+to 30 in one failure, so the standing lap fell short (2 of 17 builds until that was fixed).
+
+| `06_Track` RAPIER, damped | before | after |
+| --- | --- | --- |
+| offsets clean, one build each (unperturbed scale) | 11 of 17 | **17 of 17** |
+| offsets clean, majority of the five gate scales | 12 of 17 | **17 of 17** |
+| builds clean, 17 offsets x 5 gate scales | 54 of 85 | **85 of 85** |
+| unperturbed build: verify failures, unresolved | 22, `[(1234, Wall), (1232, Wall)]` | 0, `[(1241, Wall), (1242, Wall)]` |
+| unperturbed build: flying lap, ticks | 1,705 | 1,703 |
+
+The learning pass still gives up on a wall at 1233-1245 in 7 of the 17 unperturbed builds (it
+spends the site's tries on the post-landing lowerings first, then on the run-up), and their
+verification is clean anyway: the forgiven site is listed, the plan verifies. All eight slices
+run under each of the 17 offsets on main and after (`OAG_PERTURB`, the loop under "The five Pulse rows" below, all eight slices): only
+`06_Track` RAPIER, FLASH and VENOM print a different first build at any offset, and every other
+row prints the same steps, lap, unresolved list and tight count at every offset. FLASH went from
+83 to 85 of 85 builds clean, VENOM stayed 85 of 85. One row is unclean at one offset both before
+and after: `01_Track` PHANTOM at `-3.5e-4` (builds `[true, true, false, false, false]`, the same
+plan both ways), so the pin's "every offset" holds for 95 rows. The AI determinism references did
+not move,
+`ai_dekonstruct_symptoms_ground_truth` printed the same lines, and the lone-craft gate stayed
+all twelve clean (`06_Track` 35.3 s to 35.0 s). **2048 and Omega**: the plan is this project's
+own and reads no title data, so the change runs on every title's plans. Where it fires there
+was not traced (only the eight Pulse slices were); the two pins that build them,
+`the_2048_square_ring_plan_brakes_for_the_corner_it_ran_wide_of` and its Omega twin, still pass.
+
+Reproduce: one build per offset, as `speed_plan_ground_truth::slice` builds it but with
+`perturb::apply_at(&mut setup, 0.0, offset)` over the 17 offsets, and `probe::verify` for the
+rows; or the gate sweep below with `OAG_PERTURB`.
+
+### A road under the line is a failure (2026-11-11)
+
+Lane `ace-walls`. Three changes to what a learning pass counts and how it
+answers, all in `crates/ai/src/plan.rs`, all **chosen, not measured** (the plan
+is this project's own). They close the five Pulse rows above and 2048's and
+Omega's `square`.
+
+1. **`Failure::Beneath`.** A craft on the ground further under its line point
+   than the race's own beneath rescue (`oag_race::recovery::BENEATH_LINE`, 15
+   units along the sample's up, never on an unsupported sample) for that
+   rescue's dwell (`RESCUE_TICKS`, 90 ticks) fails the plan, **if it left the
+   line's corridor to get there**: it was outside the corridor when it was
+   last on the road, or at any tick of the flight since. The race passes both
+   numbers (`Course::beneath`, `Course::beneath_ticks`).
+2. **`Cause::LeftTheRoad`.** That failure lowers the ceilings over the
+   lookback before the flight that took the craft there, not over the last
+   45 ticks, which it spent on the road it found. Where the line itself
+   crosses a gap in that flight (a takeoff run-up or an unsupported sample)
+   the old jump answers apply: hold the run-up if the plan braked on it, put
+   the craft back if it was at full throttle. And for every failure, a run-up
+   is held only where the line crosses a gap.
+3. **The trace keeps the road a craft left.** A learning pass's trace was the
+   last 135 to 270 ticks. A craft the race rescues four seconds into a fall
+   had no grounded tick left in it, so the lowering found nothing to lower.
+   It now never drops the last 45 ticks the craft spent on its road, however
+   long it has been in the air or under the line since.
+
+#### 2048 and Omega `square`, before and after
+
+Re-measured on main after the craft-law change of 2026-11-11 (inertia mass
+1.0, body-local wall point rate) and before any change here: the picture of
+[2026-10-31](#2048-square-the-ring-plan-never-sees-the-corner-it-runs-wide-at)
+held. 2048, FLASH, the verification's flying lap, reference hull, seed 1
+(`route_verify_probe` with `OAG_ROUTE_PROBE_RING=1`):
+
+| | before | after |
+| --- | --- | --- |
+| speed through ring 577-641 | 153-156 u/s, no ceiling | 137-141 u/s, ceilings 139-150 |
+| offset across the line (right bound 5.7-8.1) | 3.8 growing to 14.9 at sample 639, then off the edge | peaks at 12.8 at sample 637, on the road |
+| flight | from sample 639, lands 20-22 units under the line | none |
+| ticks on the ground 15+ under the line | 594 of the next 597 | 0 |
+| wall-contact ticks at 1592-1671 | 544 | 0 |
+| flying lap | 3,505 ticks | 2,970 ticks |
+
+The craft is still up to 5 units past the corridor's right bound through the
+corner (the driver's steering reaches -0.7 to -0.9 there, not full lock); it
+stays on the road.
+
+Ring plans, both titles, four classes, verification failures (wall ticks,
+plus rescues) and flying lap in ticks:
+
+| | VENOM | FLASH | RAPIER | PHANTOM |
+| --- | --- | --- | --- | --- |
+| 2048 before | 12, 3,687 | 544, 3,505 | 540, 3,212 | 558, 3,002 |
+| 2048 after | 0, 3,707 | 0, 2,970 | 0, 2,648 | 0, 2,427 |
+| Omega before | 4, 3,600 | 4, 3,198 | 342 + 1 rescue, no lap | 353 + 1 rescue, no lap |
+| Omega after | 0, 3,616 | 0, 3,209 | 0, 2,795 | 0, 2,505 |
+
+VENOM's scrape at 3388-3391 went with changes 2 and 3 (it was still there
+with change 1 alone; which of the two is not separated). **2048 and Omega: ported.** One rule, both measured, each
+pinned: `the_2048_square_ring_plan_brakes_for_the_corner_it_ran_wide_of` and
+`the_omega_square_ring_plan_brakes_for_the_corner_it_ran_wide_of`
+(`speed_plan_ground_truth.rs`, PHANTOM, the majority of the five gate scales).
+
+#### The five Pulse rows
+
+`29_Track` PHANTOM was the one row no build verified. Its flying lap takes
+the left-hander at samples 2180-2250 at 200 u/s after a dip, drifts from 8.8
+units left of the line to 16 right of it against a right bound of 11, leaves
+the road at 2252 and falls 530 units; the race's airborne rescue fires 238
+ticks later, at 2433. The trace held 135 to 270 ticks, so by then it often
+held no tick of the road, the lowering moved nothing and the site ran out of
+tries (change 3). `14_Track` PHANTOM
+(1327) and `29_Track` RAPIER (2405) are the same rescue, reached on fewer
+builds.
+
+Each row built 85 times: the five gate scales under each of the nine
+`perturb::BOUND_OFFSETS` and the eight `perturb::HELD_OUT` (`OAG_PERTURB`).
+Builds that verified clean, and offsets whose majority did:
+
+| row | before, builds | before, offsets | after, builds | after, offsets |
+| --- | --- | --- | --- | --- |
+| `06_Track` VENOM | 29 of 85 | 3 of 17 | 79 of 85 | 17 of 17 |
+| `06_Track` RAPIER | 59 | 15 | 74 | 17 |
+| `14_Track` PHANTOM | 73 | 17 | 85 | 17 |
+| `29_Track` RAPIER | 61 | 15 | 85 | 17 |
+| `29_Track` PHANTOM | 0 | 0 | 85 | 17 |
+
+The other 91 rows print the same steps, lap and tight samples as before, and
+no row's majority is unclean under any of the 17 offsets. So the pin's
+`NOT_CLEAN` is empty and its unsettled list is gone. `06_Track`'s gap landing
+(1229-1237) is still what its 6 and 11 unclean builds fail on; since 2026-11-12 the landing has
+its own answer ([above](#06_track-rapier-with-the-body-damping-2026-11-12)).
+
+```sh
+for o in 0 2e-3 -2e-5 3e-6 -5e-4 5e-5 -3e-6 7e-4 -7e-6 \
+         1.5e-3 -1.5e-5 2.5e-6 -3.5e-4 4.5e-5 -4.5e-6 9e-4 -9e-6; do
+  OAG_PERTURB=$o OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay \
+    --run-ignored all --success-output final --no-fail-fast \
+    -E 'test(speed_plan_ground_truth::speed_plan_)'
+done
+```
+
+#### What was tried and not kept
+
+- **Change 1 with no dwell and no corridor test** (fail on the first tick
+  under the line). `square` verified, and 2048's `arena` (all four classes, at
+  4555) and `sol` (three classes, at 4422) stopped verifying. `sol`'s line
+  crosses a dip a craft climbs out of in under 90 ticks. `arena`'s line runs
+  over a deck from sample 4560 to 4790 and the craft drive the road 21 units
+  under it, centred in a corridor 12 units either side; that road comes back
+  up to the line by itself
+  ([what is there](#the-races-beneath-rescue-asks-the-same-2026-11-16)).
+- **The dwell alone.** `sol` verified again, `arena` did not: 250 samples is
+  longer than 90 ticks at any speed a plan drives.
+- **The corridor test on the last tick before the craft is under the line.**
+  At PHANTOM the flight off `square`'s corner carries the craft over samples
+  whose corridor it is inside: 2048's player hull verified on 3 of 5 scales
+  and Omega's on 1 of 5. Kept through the flight, 5 of 5 on both.
+- **A longer trace for everything** (360 to 720 ticks). `29_Track` and
+  `14_Track` came out as above, and `06_Track` VENOM fell from 29 to 17 clean
+  builds of 85 (RAPIER 59 to 55). A hypothesis for why, not checked: a longer
+  trace also completes the run-up a hold is judged on, and a held run-up is
+  the wrong answer to `06_Track`'s gap, which clears at about 60 u/s and
+  lands in the wall at 1238 from 90.
+- **The gap rule of change 2 alone** moved no Pulse row.
+
+#### No layout got worse
+
+`route_verify_probe`, seed 1, four classes, before and after:
+
+| census | rows | clean before | clean after | got worse |
+| --- | --- | --- | --- | --- |
+| ring plans (every Pulse layout, Omega's and 2048's circuits) | 172 | 162 | 171 | 0 |
+| route plans (every forked circuit) | 184 | 142 | 159 | 0 |
+
+The ring row still unclean is 2048 `sol` FLASH, unchanged
+([the gap at 3553-3620](#floors-in-the-speed-plan-2026-10-11)). Of the ring
+rows, 157 are identical; besides `square` and the five Pulse rows, 2048
+`cathedral` PHANTOM learns a different clean plan (flying lap 2,435 to 2,398
+ticks). `OAG_ROUTE_PROBE_RING` now also probes every Pulse layout by catalogue
+id (`OAG_ROUTE_BOARD_ONLY=pulse-id/29_Track`).
+
+**The race's own beneath rescue fired on 2048 `arena`.** It was found on the
+way and fixed [below](#the-races-beneath-rescue-asks-the-same-2026-11-16).
+
+#### The race's beneath rescue asks the same (2026-11-16)
+
+Lane `arena-rescue`. `Race::beneath_too_long` (`crates/raceplay/src/respawn.rs`)
+now counts a craft under its line only if it **left the line's corridor to get
+there**. That is the plan's own latch, shared as `oag_ai::Line::outside_the_corridor`:
+the craft was outside the corridor when it was last on the ground and not
+beneath the line, or at any tick of the flight since. It is kept per slot as
+`RaceSim::beneath_wide`, which is hashed and cleared on every reseat. **Chosen,
+not measured**: the original has no beneath rescue, and its distance trigger
+does not reach 21 units.
+
+**What `arena` actually is.** The earlier reading said the line "runs 21 units
+over a flat road". It does not. A cast down from the line point at ring samples
+4560-4790 meets four things, all the full width of the corridor:
+
+- an upward floor 4 units down, the deck the line runs on;
+- a downward-facing `Wall` surface 13 down, the deck's underside;
+- the lower road 25 down;
+- at 4560-4580, a ceiling 14 up.
+
+At 4520 the road dives (normal 0.6 along up), at 4530 the floor is 32 down,
+and at 4800 a ramp (normal 0.4) brings the lower road back up to the line by
+4810. So the line jumps a gap onto a deck. Every craft follows the dive
+instead, drives the lower road under the deck inside the corridor, and
+rejoins. The samples are supported because the deck is there.
+
+**Candidate rejected: measuring depth against the surface under the line
+point.** The surface under the line point is the deck, and a craft on the
+lower road is 21 under it. That rule would fire exactly as before.
+
+**With the trigger off, nothing else catches the field there.** Fields of
+seven, seed 1, Ace, every class, on 2048 and Omega: no Distance, Stalled, Cage,
+Airborne or Reset respawn. Every craft not wrecked finishes. So the lower road
+is a road, not a pit.
+
+Census (`arena_beneath_ground_truth::beneath_census_all_titles`, `OAG_SWEEP`,
+`OAG_TITLE`, `OAG_SWEEP_CLASS`): every Pulse layout, 2048's ten circuits and
+Omega's ten `environments2048` circuits, four classes, field of seven, seed 1.
+Before the change it recorded every respawn by cause, line index and tick, and
+for each `Beneath` respawn the latch the new rule would have read:
+
+| | `Beneath` respawns | had left the corridor |
+| --- | --- | --- |
+| 2048 and Omega `arena` | 134 | 0 |
+| everywhere else (Pulse `05_Track`, `23_Track`; 2048 and Omega `square`, `park`) | 83 | 83 |
+
+The test "outside the corridor on the tick before" would not do: 2048 and
+Omega `square`'s rescues are mostly inside the corridor by then.
+
+After the change, all 168 non-`arena` rows are identical: ticks to the flag,
+laps, every respawn (cause, index, tick), and the field's bodies bit for bit.
+Only the race hash moves, because the latch enters it. A field of seven at
+Ace, `Beneath` respawns per lap (laps 1..n) before, then shields:
+
+| | before, per lap | after | mean shield at each lap's end, before / after | at the end, before / after |
+| --- | --- | --- | --- | --- |
+| 2048 VENOM (3 laps) | 6, 2, 4 | 0 | 85.7 86.2 93.1 / 104.4 82.1 85.7 | 79.8 / 85.5 |
+| 2048 FLASH (4) | 6, 1, 3, 2 | 0 | 87.9 95.5 83.4 83.4 / 96.7 86.4 83.8 83.2 | 68.2 / 70.3 |
+| 2048 RAPIER (4) | 6, 2, 4, 2 | 0 | 107.0 88.4 86.7 88.4 / 106.4 91.7 90.1 80.1 | 92.3 / 84.2 |
+| 2048 PHANTOM (5) | 5, 1, 4, 2, 2 | 0 | 98.7 73.4 64.5 64.4 76.0 / 101.1 92.9 82.3 86.2 80.4 | 52.0 / 79.5 |
+| Omega VENOM (4) | 6, 2, 4, 1 | 0 | 64.3 68.2 64.2 77.7 / 70.5 73.1 56.8 61.6 | 44.4 / 52.8 |
+| Omega FLASH (4) | 6, 2, 4, 2 | 0 | 83.6 75.1 76.5 75.1 / 84.7 75.7 66.0 52.1 | 76.4 / 44.7 |
+| Omega RAPIER (5) | 6, 2, 4, 2, 3 | 0 | 79.4 73.0 78.3 71.4 68.5 / 80.5 88.8 80.6 71.4 73.3 | 69.3 / 70.8 |
+| Omega PHANTOM (5) | 5, 2, 3, 2, 3 | 0 | 89.5 89.5 83.1 75.4 72.4 / 89.4 78.9 77.9 70.9 73.8 | 72.3 / 73.6 |
+
+Craft that did not finish after the change were wrecked, not stuck: one each
+in 2048 FLASH and Omega FLASH and VENOM. Pinned by
+`arena_beneath_ground_truth`: eight `arena` rows assert zero `Beneath`, and
+Pulse `05_Track` FLASH still has its two pit rescues (339 and 349). The unit
+pair is `an_opponent_on_the_ground_well_below_its_line_is_lost_after_the_dwell`
+and `an_opponent_under_its_line_inside_the_corridor_all_along_is_not_lost`.
+**2048 and Omega: ported**, one rule, both measured.
+
+Still open: the field never takes the line's jump onto the deck at 4520-4560.
+It follows the road's dive instead (a driver or plan matter, not the
+rescue's).
 
 ### What it costs
 
@@ -5462,7 +5931,8 @@ to ten ticks' worth.
 
 ### Still open
 
-- The five unverified plans.
+- ~~The five unverified plans.~~ All 96 verify
+  ([2026-11-11](#a-road-under-the-line-is-a-failure-2026-11-11)).
 - A reset-volume respawn loop seen once in the field: `29_Track` VENOM, one
   craft put back at sample 45 every 46 ticks, 61 times - the rescue pose
   lands in a reset volume. Race rules, not the plan.
@@ -5558,7 +6028,7 @@ unchanged, so `race_ground_truth`'s twelve circuits read exactly as before.
 - Respawns 1 and 1.
 - A plan build costs a second search wherever the first verifies: median
   steps on Pulse and HD at VENOM go from about 11,500 to 23,093 (maximum
-  70,390). A course whose old plan does not verify (2048 `sol` and its
+  70,390). A course whose old plan does not verify (2048 `sol` before its floor was loaded, 2026-11-03, and its
   routes) costs exactly what it did. 2048's and Omega's other layouts were not
   timed.
 - Every AI ground truth passes with no bound or baseline moved, and
@@ -5686,14 +6156,28 @@ All of it is **chosen, not measured**.
 
 **Still open, by how much a player sees it:**
 
-- **2048 `sol`.** Every opponent hits a `ResetZone` about 65 ticks from the
-  grid. It is put back at its last on-track sample at standstill and hits it
-  again about 68 ticks later, never completing a lap: 176 respawns in 12,000
-  ticks for each craft. The first exit is the driver's. The player's own
-  autopilot, which is the same driver, flies off the edge at about 20 s, where
-  the road bends left while the craft is in the air (no plan verifies there,
-  so it drives the corner model). The loop is the rescue placement: the same
-  family as the `29_Track` reversed loop above. A human is not measured.
+- **2048 `sol`** (re-measured 2026-11-03). The loop above was not the
+  driver: `sol` had **no floor**. Its `.vex` authors a lone `Reset` node, which
+  kept `track_col.col` out of the load, so every craft fell from the grid into
+  that volume ([2048-collision.md](../formats/2048-collision.md#which-circuits-read-the-container-2026-11-03)).
+  With the floor the ring plan verifies (VENOM, 44,448 steps, 180 lowerings,
+  lap 3,770 ticks), and what is left is one **gap in the road at ring samples
+  3553-3620**, after a speed pad at about 3530 and before route 2's split at
+  about 3648, so every way round crosses it. A craft clears it from about 170
+  u/s at the lip: the verifier reaches 173, cruising at 129.4 u/s down the
+  approach; a field craft on the same `feisar2048\3` handling cruises at 124-125
+  (127.6 as a plain seed-0 driver) and reaches 166-169, then falls about 75
+  units into the `.vex`'s reset volume. Spline flag bit 0 ("lay no crumb") runs
+  from line sample 3384 to 3647, so the original's relocation puts the craft
+  back at about 3274 and it meets the lip at the same speed: the rescue is the
+  original's, the miss is the driver's. A one-off test held a constant air
+  pitch on every airborne tick of the lap (`steer_y`, positive nose up) in
+  place of the trim: the Ace field's respawns summed 95 with the trim, 79 at
+  0, 45 at +0.5, 34 at +1 and 33 at -1, and both signs cleared and fell from
+  lips of 167-169 u/s. **No sign effect**: the gap is marginal and any change
+  in air pitch reshuffles who clears it. Which held pitch over 3553-3620 alone
+  clears it, if any, is not measured.
+  Omega's `sol` (HD hulls) already laps at Elite and Ace with 0-5 respawns.
 - **Pulse `06_Track` VENOM**, on the corner model, crawls at 15-33 u/s over
   samples 1100-1200. Its gap at 1196 clears near 60 u/s; from 90 u/s the craft
   lands drifting right into the wall at 1238, and too slow it stalls in the
@@ -5753,8 +6237,9 @@ is ported. See [the 2048 page](../ghidra/functions/vita-2048-eu-v104/ai-branch-c
     on the ring's line and plan;
   - each route has its own speed plan, and **a route whose plan does not lap
     clean and contact-free is not offered to the coin** (its share stays on the
-    ring): `07_Track`'s centre ramp parks our craft at route sample 196 without
-    a wall touch, so 07's route is never taken;
+    ring): `07_Track`'s route parks our craft under the ring's bridge without
+    a wall touch, so 07's route is never taken ([where each undriven route
+    fails](#where-each-undriven-route-fails-its-verification-2026-10-31));
   - across the stretch where a route is still within 8 units of the ring, its
     corridor is held to 1 unit either side of its line: a Novice on the far
     side of path 1's corridor rode the ring's take-off ramp and met the divider
@@ -5771,8 +6256,13 @@ is ported. See [the 2048 page](../ghidra/functions/vita-2048-eu-v104/ai-branch-c
 Which routes are driven (Ace, VENOM, 2026-10-05): Pulse 05 and 14 yes, 07 no;
 Omega's copy of `altima` both.
 2048: every route on `square`, `park`, `tower`, `mall`, `bridge`, `arena`,
-`subway` and `altima`; none on `cathedral` (both verify with failures) or `sol`
-(no route laps, and the ring's own plan does not verify there either).
+`subway` and `altima`; none on `cathedral` (both fail only their standing start,
+[below](#where-each-undriven-route-fails-its-verification-2026-10-31)) or `sol`
+(no route laps, and the ring's own plan does not verify there either; measured while `sol` loaded no floor, its routes not re-measured since: [`sol`](#floors-in-the-speed-plan-2026-10-11)).
+Re-measured 2026-10-31 at Elite over four classes and seeds 1-3 (`route_plan_board`):
+the same except `square`, whose ring plan verifies at no class and whose routes 1-3
+verify only at RAPIER and in two of three PHANTOM seeds; Pulse's reversed
+`07_Track` forks too and its route never verifies.
 
 Measured on the result: a full field on `05_Track` over a race decided 17 times
 for the ring and 24 for the route; on 2048's `altima` over three laps, 13/7 at
@@ -5785,6 +6275,265 @@ loss on the route (`ai_dekonstruct_black_ground_truth.rs`).
 **Not ported**: 2048's per-circuit override (circuit record `+0x150`), its
 per-craft construction coin and its own re-commit; pad-seeking while on a route
 (the pads sit on ring indices).
+
+### A route's plan learned on its driven stretch only: built, measured, not adopted (2026-10-31)
+
+**Today's law stands**: a route's plan is learned over a whole lap of its line
+(the ring from the merge round to the split, then the route), from the merge at
+rest, though a craft only follows it from the switch (`SWITCH_SAMPLES` = 320 short
+of the split, or the first sample of the pre-fork path if that is later) to the
+merge. What a route plan's `steps` count (`oag_ai::plan::Report::steps`): the brake
+calibration, every learning tick including rewound ones, and every verification
+tick, for both searches where the whole-window one verified; verification is not
+bounded by `ROUTE_PLAN_BUDGET`, which is how Pulse `07_Track` (Outpost 7)'s
+unlappable centre ramp spends 131,456 steps at VENOM (65,600 to 131,200 on its
+reversed layout, which forks too). Each other hull then adapts each route plan
+over the whole lap again.
+
+**What was built** (lane `route-plan-trim`, in its branch history; ours, chosen):
+the reference route plan learned only from 120 samples before the switch to 120
+past the merge, seeded with the ring plan's ceilings outside it; the craft starting
+from the reference's own state on its ring plan's flying lap where it reaches that
+point; the ring's line up to the switch and from the merge, the route's line
+between (the two lines a racing craft is moved between); braking calibrated on
+the route line as before. A circuit with no ring plan (2048 `square`, `sol`) keeps
+the whole-lap path.
+
+**Cost** (reference route plans per circuit, all its routes summed, mean over
+four classes x seeds 1-3; the stretch column includes the one arrival run the
+routes share; release, the `route_plan_board` sweep, Elite, load 1.2-9; Outpost 7's
+131,456 is `07_Track` at VENOM alone, the row is the mean over classes):
+
+| circuit | main | stretch | ratio |
+| --- | ---: | ---: | ---: |
+| Pulse `05_Track` | 17,882 | 8,324 | 0.47 |
+| Pulse `07_Track` | 126,487 | 56,240 | 0.44 |
+| Pulse `14_Track` | 24,589 | 7,395 | 0.30 |
+| 2048 `altima` | 78,292 | 16,114 | 0.21 |
+| 2048 `bridge` | 180,705 | 27,576 | 0.15 |
+| 2048 `mall` | 160,088 | 38,465 | 0.24 |
+| Omega `altima` | 72,212 | 16,134 | 0.22 |
+
+Over the whole board the reference route plans fell from 19.3 M to 8.6 M steps
+(0.45x); with the hulls' copies, which stayed whole-lap, 38.5 M to 29.9 M (0.78x).
+2048 `cathedral`'s two routes verified at every class (none do today) and a full
+field drove them: 390 traversals, wrecked craft 9 to 5 over the twelve races.
+
+**Why it was not adopted**:
+
+- **de Konstruct Black** (`ai_dekonstruct_black_ground_truth`, Pulse `05_Track`
+  forward, PHANTOM) destroyed 3, 2 and 3 craft against main's 0, 1 and 1: seed 1
+  over its bound of 2. Its bound is fragile: main itself destroys 5, 4, 5 and 5
+  (seed 3 hitting 3) under `OAG_PERTURB` of +-1e-5 and +-2e-5, and the stretch
+  build 6, 3, 4, 4; 25 against 21 craft over the same 15 runs. A gate that fails
+  is still a regression, and a bound may only fall.
+- **The route itself drove worse there**: the reference hull on 05's route at
+  PHANTOM, alone and forced down it, 594.0 to 607.3 ticks a traversal with 4 to 8
+  wall ticks; a full field's wall ticks on it 145 to 308 (seed 1).
+- **Per-route solo rows moved both ways** (113 better, 89 worse of 726), inside the
+  spread a 1e-5 gravity perturbation of main alone gives (243 better, 276 worse);
+  summed, traversal ticks -0.15 % and wall ticks 1,131 to 976. **Field wall ticks
+  on the routes rose outside that spread** on 2048 `altima` (main 435, perturbed
+  429-442, stretch 625), `arena` (248, 228-255, 430) and Pulse `14_Track` (783,
+  736-756, 945); `subway`'s rise (578 to 781) is inside its (490-1,100).
+- **2048 `altima` PHANTOM**, a craft forced down route 0 unperturbed fell into a
+  rescue-placement loop on the ring near sample 1,550 (34 rescues; the family of
+  `sol`'s and the `29_Track` reversed loop above), which main never reached in
+  six perturbed runs and the stretch build reached in one of four.
+
+**Three findings that hold whatever the learner**:
+
+- **A route copy for another hull must not be adapted on the stretch alone.**
+  Every hull's copy on Pulse `14_Track` PHANTOM verified clean on its stretch
+  without lowering anything and then scraped the approach wall at route samples
+  2678-2720 in a lone race (0 to 60 and 90 wall ticks at Ace). The whole-lap
+  adaptation lowers that approach to 143-156 u/s against 168-188; the learner
+  steers without the plan and the race's driver with it, so a stretch-clean copy
+  is not race-clean.
+- **A synthetic arrival is not enough**: starting the stretch at the ring plan's
+  speed on the route's line flipped 2048 `arena`'s routes clean or not with the
+  lead-in's length (120 samples: route 2 failed at the switch; 320: route 1 did).
+- **The player's autopilot flies the original's driver**, which reads no plan: a
+  measurement of the plans has to set `Race::set_autopilot_tuning`, as
+  `route_plan_board` now does.
+
+The measuring command (`crates/raceplay/tests/route_plan_board.rs`):
+
+```sh
+OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_OUT=board.tsv \
+  cargo nextest run --release -p oag-raceplay --run-ignored all \
+  --no-capture route_plan_board
+```
+
+### Where each undriven route fails its verification (2026-10-31)
+
+Lane `route-coverage`, a measurement: nothing a race does changed. The tool is
+`route_verify_probe` in `crates/raceplay/tests/route_plan_board.rs`. It learns a
+route's reference plan exactly as the race does (`Race::probe_route_plan`: the ring
+plans first, for their reference hull, then `SpeedPlan::build_within` on the
+route's line) and replays the plan's final verification tick by tick
+(`oag_ai::plan::probe::verify`, the same loop as `SpeedPlan::verify`). Each
+failure is printed with its line index read as **ring** (the ring from the merge
+round to 320 samples short of the split, which a racing craft drives on the
+ring's line), **lead-in** (the last 320 ring samples, where a racing craft is
+already on the route's line) or **route** (the route's own samples). Options:
+`OAG_ROUTE_PROBE_STAGES=<tick>` re-steps one tick stage by stage
+(`probe::stages`), `OAG_ROUTE_PROBE_STUCK=<ticks>` counts no progress as a stall,
+`OAG_ROUTE_PROBE_FLOOR=a..b` maps the surfaces under the line,
+`OAG_ROUTE_PROBE_RING` probes the ring's own plan. `route_original_probe` forces
+the route on slot 0 under the autopilot, which flies the ported original driver.
+Release, seed 1, Elite unless said, load 1.3-2.1:
+
+```sh
+OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_ONLY=pulse/07_Track \
+  OAG_ROUTE_BOARD_SEEDS=1 cargo nextest run --release -p oag-raceplay \
+  --run-ignored all --no-capture route_verify_probe
+```
+
+**The census** (every forked circuit of every title, four classes, seed 1; 168
+route plans, 3.5 minutes): 122 verify clean. Of the 46 that do not, 16 fail only
+on a lap-1 rescue on the ring stretch (all and only `cathedral`'s two routes, 2048
+and Omega, every class), 8 are Pulse `07_Track` both ways, 12 are `sol` (with no floor loaded; 2026-11-03), and 10 are
+`square`.
+
+#### `cathedral`'s two routes are offered (2026-10-31, lane `cathedral-route-start`)
+
+`route_clean` (`crates/raceplay/src/speed_plan.rs`) no longer fails a route plan for
+a rescue on the verification's standing lap at a line index below `kept - 320`
+(`routes::SWITCH_SAMPLES`), the ring stretch before the lead-in. The verification
+lists them (`oag_ai::plan::Report::verify_standing_rescues`, read only here); a
+flying-lap rescue is still a failure and clears the lap time. **Chosen, not
+measured**: the race's own rescue pose at the merge is unmeasured. Census, seed 1,
+every forked circuit, four classes (`route_verify_probe`, release, 7 minutes): the
+only plans with a clean verification except for standing-lap rescues are the 16
+`cathedral` ones (8 on 2048, 8 on Omega, one rescue each, lap-1 index 0-3); the
+verdict can change nowhere else, so no other route or ring plan changes a bit.
+2048 and Omega: one table, one rule, **ported** (both measured).
+
+#### Pulse `07_Track` (Outpost 7): the route runs into the ring's bridge
+
+The route (spline path 1, 992 samples) is a lower road. Over it the ring (path 0,
+the excluded sibling for a craft that drew the route) climbs a `MagFloor` ramp from
+route sample 195, crosses a bridge about 26 units up and comes back down at sample
+792. The ramp foot and its supports stand **in the middle of the lower road, on the
+route's own line**: the authored racing-line offset of path 1 is 0 there and its AI
+corridor is about -33 to +27 wide, while the structure is about 18 units wide
+(ramp foot offsets -8 to +4 at samples 196-208, wedges -10 to +8 at 252-269 and -14
+to +4 at 716-731, the descending ramp's foot -2 to +8 at 784-792; a cast through
+the hull's reach every 2 units across the corridor). Beside it the road is clear.
+
+What the forward VENOM verification does, tick by tick:
+
+1. Ticks 2175-2184, route samples 193-201: the craft rides onto the ramp foot at
+   121 u/s on full throttle (the plan's target there is 718, nothing limits it),
+   climbing 31-37 u/s, and slows to 76 u/s.
+2. Tick 2185, sample 201: **the magstrip hold pulls it down through the ramp.** The
+   step's `forces::evaluate` moves the body -3.89 in Y and zeroes its climb. The
+   hold ran at blend 1 on the route's own track sample (the lower road, flat
+   normal), section height 7.85 against a measured 3.88 off the ramp's `MagFloor`
+   hit: a mismatch of 3.97, under `HEIGHT_MISMATCH_LIMIT` (5.0), so the section
+   wins over the ray (`maglock::Hold::from_sections`). The craft is now under the
+   ramp's sheet, inside the structure.
+3. Ticks 2186-2246: it drives on the lower road inside the structure to route
+   sample 264 (line index 2488).
+4. From tick 2246: **parked, at speed.** A `Wall` face 4.65 units ahead of the centre
+   (the wedge's back, normal (0.79, 0.61, 0), facing away from the craft) is met by
+   `wall::pre_integration_clip`'s ray every tick, which puts the body back 0.9 of
+   the overshoot, exactly one tick's travel (2.04 units at 122 u/s), and leaves the
+   velocity alone. No hull probe touches the wall, so there is no contact; the
+   forward speed reads 112 to 128 u/s, so the stall test (under 4 u/s) never fires;
+   and `NEVER_STUCK` turns the progress test off. Nothing fails, and the run sits
+   there until the verification's own cap (8 x the line's 3,216 samples = 25,728
+   ticks): `verify_failures` 0, `verify_contacts` 0, `verify_respawns` 0, lap
+   `None`. That cap is 25,728 of the 131,456 steps this route plan costs at VENOM.
+
+Every class parks at the same face: forward at sample 264 at 126 (VENOM), 148
+(FLASH), 180 (RAPIER) and 220 u/s (PHANTOM); reversed at 267 at 124-219 u/s. With a
+probe-only no-progress rule (`OAG_ROUTE_PROBE_STUCK=120`) the craft is put past it,
+and the far structure fails too: forward, wall contact at 713-724 (the far wedge,
+26-177 u/s) and 756-791 (under the descending ramp, 10-84 u/s) at VENOM to RAPIER;
+reversed, 8,429 wall ticks pinned at 193-194 at 8-10 u/s (VENOM; 110 at FLASH) and
+contact or a rescue at 716-788. Its speed plan is not the input that fails it:
+nothing in the plan slows the craft before the ramp, and the hold pulls it down
+at any speed that rides the foot inside the 5-unit band.
+
+**The ported original driver gets further, for a reason of ours.** Forced down the
+route on slot 0 under the autopilot (`route_original_probe`, VENOM), it rides the
+ramp, crosses the bridge, takes off near route 400, lands near 510 and drives on.
+The player's track sample is the nearest of every path (`player_step`), so its hold
+follows the ring's ramp; an opponent's is its own line's (`field.rs`,
+`ai_sample_for`), as the original's is (`Craft_UpdateLapProgress`, `0x08842a18`,
+locates with the AI's excluded path, which is path 0 here,
+[ai-branch-choice.md](../ghidra/functions/psp-pulse-usa/ai-branch-choice.md#who-honours-the-excluded-path)).
+It then meets the far wedge at route 715 on every lap, is thrown to offset +20 and
+crawls at 9-11 u/s for about 6 s, and on lap 4 it is eliminated there.
+
+**Verdict**: not drivable on its authored line with today's physics, at any class.
+The magstrip hold and the clip are both recovered laws, and the route's track
+sample is the one the original's locate would give. Taken together, that says
+the original's opponents would be snapped under the ramp too whenever they ride
+its foot, and a shipped game would park half its field on Outpost 7. That is
+implausible, so the likelier reading is a gap in our chain of hold, locate and
+line: the original's opponents may never ride the foot (a lateral law of theirs
+we do not have), or its hold or locate differs from ours there. **A hypothesis,
+confidence 35**: nobody has watched an original opponent take this road. A line
+of ours beside the structures avoids all four faces, but it is chosen, not
+measured, and waits on that capture.
+
+The 2026-10-05 note had the craft "parked at route sample 196, about 15 u/s". That
+was before `wall::pre_integration_clip` landed (2026-10-06); 196 is the snap site.
+
+#### 2048 and Omega `cathedral`: only the standing start fails
+
+Both routes, every class, both titles: `verify_failures` 0, `verify_contacts` 0,
+a completed flying lap (2,402 to 4,090 ticks), and `verify_respawns` 1, which is
+the whole failure. That one rescue is on lap 1 at line index 0-3, the merge, 4-17
+u/s after the standing start: at the merge the road is above the line point
+(+2.13 at route 0's merge, ring 1436; route 1 merges at ring 612 and the road is
+still +0.32 above the line two samples on, at ring 614),
+with a reset volume 12.6 and 7.0 below. The craft is placed at rest inside the
+road, its probes find nothing below, it falls for 32 ticks and the reset volume
+rescues it. No racing craft is ever at rest there, and the stretch it drives on
+the route (from the lead-in to the merge) has no failure on either lap. The route
+plans are drivable; only the verification's start is wrong. **Omega**: checked,
+applies. Its re-shipped copy fails the same way at the same indices.
+
+`route_clean` (`crates/raceplay/src/speed_plan.rs`) asks for `verify_respawns == 0`
+over both laps. A flying-lap rescue already counts in `verify_failures` and clears
+the lap time, so dropping lap-1 rescues before the lead-in from that test changes,
+at seed 1, exactly these 16 reference plans and no other. The other hulls' copies
+(`hull_routes_for`, `SpeedPlan::adapt`) start at rest at the same merge and are
+judged by the same `route_clean`, so they would follow. Today they are never
+learned, since the reference is `None`; after the change they cost their adaptation
+steps, which the cost board has to count.
+
+#### 2048 `square`: the ring plan never sees the corner it runs wide at
+
+Its ring plan (`OAG_ROUTE_PROBE_RING`) and its routes fail at the same two sites,
+all on the ring:
+
+- **FLASH, RAPIER, PHANTOM**: 576-612 wall ticks, all at samples 1591-1671 at 0-52
+  u/s. The cause is 950 samples earlier: through 577-641 the craft runs wide at
+  153-156 u/s with no plan limit (ceiling infinite), its offset growing from 5.6
+  to 14.4 while the corridor's right bound shrinks from 7.1 to 5.5, steering
+  -0.55 to -0.82. At 641 it leaves the edge, falls about 20 units onto a lower
+  level and lands within the rescue distance. **Nothing counts as a failure**:
+  no wall, no rescue, not off the line by distance. It then drives the lower level
+  20 units below its line and grinds the walls at 1592 on. The learner lowers the
+  ceilings there, 1,092 to 1,660 times, to the 16 u/s floor, and cannot help.
+- **VENOM**: 5 wall ticks over the two laps at 3392-3405, 148-162 u/s, left
+  unresolved after 14 lowerings.
+
+**Closed 2026-11-11**: the plan counts that lower level as a failure and both
+sites verify at every class, on both titles
+([above](#a-road-under-the-line-is-a-failure-2026-11-11)).
+
+`route=0`'s lead-in shares the first site. These are on the reference hull
+(`RaceSim::plan_reference`, `Race::probe_ring_plan`). **Omega**: checked, applies.
+Its re-shipped `square` fails at the same two sites (3389-3406 and 1591-1674), with a
+different split by class: VENOM 15 and FLASH 4 wall ticks at 3389-3406 only;
+RAPIER and PHANTOM add the 1591-1674 site, with rescues and no completed lap. `sol`
+is out of scope.
 
 ## Each title's craft laws (2026-10-09)
 
@@ -6013,10 +6762,11 @@ ratio of the yaw ceilings. **Ours, chosen, not measured.**
 2. **Every other distinct hull re-learns it** (`SpeedPlan::adapt`): the reference's
    ceilings and takeoff run-ups kept, the braking re-measured on this hull, the plan
    verified as it stands, then up to four whole-window learning passes that lower only
-   where this hull fails. Each route plan is adapted the same way. A hull's copies are
-   built on a thread each natively (`par_map`; one after another on the web, whose race
-   already starts on a worker) and written back in slot order, so the race is the same
-   either way.
+   where this hull fails. Each route plan is adapted the same way. A hull's ring copy
+   is built on a thread each natively beside the route plans, and its route copies on
+   a thread each once those are in (`par_map`, `par_join`; one after another on the
+   web, whose race already starts on a worker), written back in slot order, so the race
+   is the same either way.
 3. **Followed where it verifies**: no wall on either verification lap and a flying lap
    completed without a rescue. A rescue from the grid is allowed, the underpowered case
    the search itself accepts; without that, Triakis at `01_Track` RAPIER fell back to
@@ -6418,6 +7168,192 @@ puts it back before that jump at about 86 u/s.
 Whether the original's relaunched craft clears this jump is not measured.
 
 
+## Craft-to-craft bumps cost the field energy
+
+**Since 2026-11-11 a bump charges both unshielded racing hulls `0.035 * |p|`** (halved with weapons off), the
+original's law measured live on Pulse PSP
+([contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#measured-2026-11-11-an-unshielded-craft-to-craft-bump-charges-the-energy-pool),
+confidence 92), through `oag_physics::damage::apply_pair`. The AI pays it as the player does; nothing exempts a
+rival. `Race::pair_shield_lost_of` counts what bumps took per slot, beside `wall_shield_charged_of`.
+
+**What it did to the de Konstruct board** (`ai_dekonstruct_black_ground_truth.rs`, `ai_dekonstruct_black_board`,
+`OAG_SWEEP=1 OAG_SEEDS=23`, seven Aces, the player parked, 18,000 ticks, weapons on; the charge switched off
+against on, same tree). Craft destroyed over seeds 1-23, forward plus reversed:
+
+| class | no charge | charge | forward | reversed |
+| --- | ---: | ---: | --- | --- |
+| VENOM | 4 | 6 | 3 -> 2 | 1 -> 4 |
+| FLASH | 6 | 9 | 2 -> 2 | 4 -> 7 |
+| RAPIER | 19 | 34 | 8 -> 14 | 11 -> 20 |
+| PHANTOM | 33 | 72 | 13 -> 33 | 20 -> 39 |
+| total | 62 | 121 | | |
+
+That is systematic, not seed spread: the faster classes double. One frozen cell moved (VENOM seed 3 reversed,
+bound 0 -> 1: slot 7 dies with walls 5.0, bumps 13.6, the rest weapons). The lone-Ace gate
+(`race_ground_truth`) races one craft and cannot see it.
+
+**Where the energy goes.** Over seeds 1-8 the field lost 6,681 pool units to bumps in 181,828 charged
+(slot, tick) touches, about **15 per craft per five-minute race** against a pool of about 100. Mean `|p|` per
+touch (one charge per pair per tick): VENOM 0.66, FLASH 0.97, RAPIER 1.21, PHANTOM 1.44. The original's one
+natural-contact control (one state, Talon's Junction, Venom, weapons off) averaged about 0.5 per **ring record**;
+with about 1.96 records per (tick, hull) and the first carrying 1/1.061 of the energy (Result 5's staged runs),
+that is about **0.9 per tick's first record**, the figure comparable to ours. So per touch our VENOM field is at or
+below the original, not above it (a different circuit, and the 1.96 is pooled over all runs, not per slot). A
+per-tick log on 05_Track at VENOM, seed 3, shows the shape: two craft meet at tick 347 (`|p|` 6.3, 0.22 each),
+then ride side by side pressing for 20 and more ticks at about `0.06` a tick (`|p|` about 1.7). Charging every
+tick of a sustained contact is faithful (the wall leg's graze is the same,
+[shield.md](../ghidra/functions/psp-pulse-usa/shield.md)). What the data points at is **how often and how long our
+field stays in contact**: 181,828 charged touches over 64 races is about 400 ticks per craft per race. Whether the
+original's field holds contact that long was measured afterwards: it does not, and the reason is in
+[the field's contact time against the original's](#the-fields-contact-time-against-the-originals). That our
+resolver's sustained-contact impulse runs high is not supported by these numbers. **The board above flies this
+project's driver** (it never calls `Race::use_original_ai`), not the original driver every race with opponents
+flies by default ([which AI flies](#which-ai-flies-2026-10-13)).
+
+## The field's contact time against the original's
+
+**Measured 2026-11-11 (lane `ai-contact-duration`).** The maintainer's play report: "They clump together, I see
+it while playing often in the beginning of a race." **Our field holds craft-to-craft contact about twice as long
+as the original's, in long side-by-side episodes the original never has, and the original's driver has two
+rules that separate touching craft which ours did not run** (both wired since, [below](#the-two-rules-what-keeps-the-originals-craft-apart)). Confidence 85 for the comparison (eight VENOM boots of the
+original on two circuits, six of 30 s and two of 3 min, against six seeds of ours per cell), 92 for the two
+rules (instruction level plus live).
+
+### The two rules (what keeps the original's craft apart)
+
+Both are in the driver, not the resolver. A craft-to-craft contact appends kind-`1` records to each body's ring
+(`Body_RecordPairContact`, [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md)); a wall
+appends kind `0`.
+
+1. **`Ai_PlanLane` pushes the lane away from a touching craft, and only from a craft.** The loop at
+   `0x08855224..0x088552b8` walks `body+0x170` for `body+0x370` records and skips every record whose kind word is
+   not `1` (`lw v1,0x0(a2)`; `bne v1,t3` with `t3 = 1` at `0x08855204`). For each kind-`1` record it adds `0.2`
+   to `driver+0x3b8` when `dot(left, record+0x10 - pos) >= 0`, else subtracts `0.2`; every tick, not only on the
+   round-robin tick. **Wall records never push.** `record+0x10` is the midpoint of the two craft (live: racers 5
+   and 6 at `x = -670.07` and `-660.34`, the record's point at `-665.20`), so the push is away from the rival.
+   Live, the two craft of one contact read push `-0.38`/`+0.38` the next frame (two records each, times the
+   `0.95` decay) and `-0.74`/`+0.74` after the second, then decay: their lane targets fan out by most of the
+   corridor.
+2. **`Ai_SnapToLane` drops the rail on any record, a craft's included** (`body+0x370 != 0`,
+   [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md#ai_snaptolane-0x088542e4-the-rail)). Live,
+   the rail blend (`driver+0x48`) read `0` on 85 to 100 % of each AI's pair-contact frames (seen on the two
+   Talon's runs that read the drivers; `--lean` does not) and climbs back at `0.6`
+   a second, so after a bump the rail is off for over a second while the push moves the lane.
+
+**Ours runs both, wired 2026-11-11.** `oag_raceplay::original_ai`'s contact summary takes walls for the rail
+drop only (`touching`), and `Race::resolve_craft_pairs` adds each resolved pair to both slots' summary: side `+1`
+when `dot(left, point - position) >= 0` with `point` the pair's midpoint (`oag_physics::pair::PairContact::point`,
+the record's `+0x10`), else `-1`, and `touching`. The next tick's planner pushes `0.2` per count and the rail
+drops. **One count per pair a tick**: the original appends about `1.96` kind-`1` records per (tick, hull), and what
+makes the second is unread ([contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md), Result 5),
+so the push is about half the original's per contact tick until it is. The player's driver is unchanged (its
+planner zeroes the push, its rail ignores contact). Before this, the summary was built from the step's
+`WallResponse` alone: walls fed the push (which the original never does) and the rail drop, and a resolved pair
+fed nothing, so two rivals side by side kept the rail at full blend and pressed. Pinned by
+`ai_pair_contact_push_ground_truth` (`oag-raceplay`): two opponents forced side by side push their lane targets
+apart, against an undisturbed run of the same seed.
+
+**Other titles.** HD/Fury: the same loop and kind test, read statically (`Ai_PlanLane`, `lwz r0,0x0(r9)`;
+`cmpwi cr7,r0,0x1`; `bne` at `0x00101c64..0x00101c6c`, records at body `+0x220` stride `0x50`, count `+0x4a0`;
+[ps3-hdfury-eu/ai-controls.md](../ghidra/functions/ps3-hdfury-eu/ai-controls.md#the-planner)), so wired.
+2048: the same (`ldr r1,[r7,#0x210]`; `cmp r1,#0x1`; `bne` at `0x8119cce8..0x8119ccee`, count body `+0x410`,
+point at record `+0x218`; [vita-2048-eu-v104/ai-controls.md](../ghidra/functions/vita-2048-eu-v104/ai-controls.md#the-planner)),
+wired. Omega: inherited from 2048 and HD, not read (the loop is inlined in `AI_UpdateCraft`, and the v107
+import's function boundaries do not match the documented `0x012c0480`, so the kind test was not located).
+Pure: no push in its sibling driver; its rail drops on a non-zero count at `*(craft+0x8b4) + 0x3b0`, which is
+the count `Body_RecordPairContact` (`0x0893403c`, kind `1`) and `Body_RecordContact` (`0x08933fb8`, kind `0`)
+both increment, so a pair contact drops Pure's rail too (static, confidence 75;
+[psp-pure-usa/ai-controls.md](../ghidra/functions/psp-pure-usa/ai-controls.md#the-rail-position-only)). Wired the same way.
+
+### The numbers
+
+The same scenario on both sides: Pulse PSP, Single Race, weapons on (`g_weapons_enabled` `0x08b30fa8` read `1`),
+seven opponents, the player parked on the grid (no input; never the Autopilot), the original at
+`g_skill_level` `0` (the profile's AI difficulty, read live) and ours on the original driver at level `0`
+(`Difficulty::Novice`, skill the load's ambient value; the two skill scales were not compared). A **contact
+tick** is a tick an opponent has at least one craft-to-craft contact: on the original, at least one kind-`1`
+record in its ring at the `AiManager_Update` stop (`0x08834b14`, before any driver reads the ring); in ours, the
+slot in at least one resolved pair (`Race::pair_contact_ticks_of`). The two agree on a separating pair: the
+original's `Body_ResolveContactPair` returns before `Body_RecordPairContact` when the pair separates faster
+than `0.5`, and `oag_physics::pair::resolve` returns `None` at the same gate, so neither counts that tick. Counted from GO (the first frame an opponent
+moves faster than 5 u/s). Per opponent, mean over the field:
+
+| Circuit, class | Original, first 30 s (boots) | Original, 3 min (one boot) | Ours, first 30 s (seeds 1-6) | Ours, 3 min |
+| --- | --- | ---: | ---: | ---: |
+| Talon's Junction White (`16_Track`), VENOM | 36.9, 81.1, 11.1, 14.3 (mean 35.9) | 151.3 | 96.8 | 287.8 |
+| de Konstruct White (`05_Track` reversed), VENOM | 24.0, 72.3, 57.9, 12.3 (mean 41.6) | 120.7 | 60.1 | 242.3 |
+| de Konstruct Black (`05_Track`), VENOM | not captured | - | 52.7 | 262.2 |
+| Talon's Junction White, RAPIER | not captured | - | 92.4 | 413.3 |
+| de Konstruct White, RAPIER | 4.6, 3.7 (class not confirmed by a read, below) | - | 89.8 | 293.6 |
+
+The first 30 s spread widely on both sides (ours per seed on Talon's VENOM: 25 to 177), so the start alone is
+about 1.5 to 2.7 times the original; over three minutes it is twice. **The shape differs more than the total.**
+A contact episode is a run of consecutive contact ticks of one opponent:
+
+| | Longest episode | Episodes of 60 ticks or more |
+| --- | ---: | --- |
+| Original, 30 s runs (6 at VENOM, both circuits) | 69 (one pair, once); else 19 to 48 | 2 craft once, in 6 runs |
+| Original, 3 min, Talon's / de Konstruct White (one boot each) | 40 / 56 | none |
+| Ours, 3 min, Talon's VENOM, seeds 1-6 | 93 to 343 | 4 to 14 per race, holding 440 to 1,652 ticks |
+| Ours, 3 min, de Konstruct White VENOM | 83 to 195 | 2 to 8 per race |
+| Ours, 3 min, de Konstruct Black VENOM | 73 to 254 | 4 to 15 per race |
+
+The original's craft touch and part within a second; ours ride side by side for one to six seconds, several
+times a race. That is the clumping a player sees.
+
+**The rules, tried in ours (an uncommitted experiment, not wired).** Pair contacts fed into the push (side by
+`dot(left, point - pos)`, one or two counts per pair-tick for the original's one or two records) and into the
+rail drop, walls into the rail drop only. Same scenario, seeds 1-6, VENOM, per opponent first 30 s / 3 min:
+Talon's 96.8/287.8 became 60.6/188.6 (one count) and 52.6/160.8 (two); de Konstruct White 60.1/242.3 became
+35.8/142.8 and 33.3/162.9; de Konstruct Black 52.7/262.2 became 35.0/122.5 and 53.0/143.6. The longest episodes
+fell to 40 to 206 ticks with 0 to 8 of 60 or more per race. So the two rules close most of the gap, not all of
+it: ours with them still sits 1.0 to 1.4 times the original's three-minute count and keeps some long episodes.
+At Ace on RAPIER and PHANTOM (16,000 ticks) the count halved too, while craft destroyed stayed within seed noise
+(23 against 25 and 21 over 36 races: at Ace the wrecks are mostly weapons).
+
+**The wrecks the bump charge added were this project's driver.** The 62 -> 121 board above never switches the
+original driver on; with it (Novice, VENOM and RAPIER, 3 min, 36 races, a wreck latched per tick) no opponent was destroyed, and at Ace
+(RAPIER, PHANTOM, 16,000 ticks) 23 in 36 races, most by weapons. This project's driver at Ace in the same harness
+holds contact longer still (Talon's VENOM 109.3 in the first 30 s).
+
+**Not measured.** Lateral spacing as a distance (contact time stands in for it); the original on de Konstruct
+Black and at a confirmed faster class (the RAPIER walk pressed the class row but no read confirmed the class:
+the opponents' mean speed read 107.8 u/s against 99.5 on VENOM); the original at Ace (`g_skill_level` 2); what
+holds ours' remaining long episodes (the pair resolver's separating gate and positional correction are already
+the original's, `oag_physics::pair`; the original's second ring record per pair-tick is unread,
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md), Result 5).
+
+**After the wire (one count per pair-tick).** `ai_contact_duration_board`, seeds 1-6, 10,800 ticks after GO,
+original driver at Novice, per opponent first 30 s / 3 min, before -> after:
+
+| Circuit, class | Before | After | Original, 3 min |
+| --- | --- | --- | ---: |
+| Talon's Junction White, VENOM | 96.8 / 287.8 | 60.6 / 188.6 | 151.3 |
+| de Konstruct White, VENOM | 60.1 / 242.3 | 35.8 / 142.8 | 120.7 |
+| de Konstruct Black, VENOM | 52.7 / 262.2 | 35.0 / 122.5 | not captured |
+| Talon's Junction White, RAPIER | 92.4 / 413.3 | 45.5 / 231.3 | not captured |
+| de Konstruct White, RAPIER | 89.8 / 293.6 | 42.3 / 114.5 | not captured |
+| de Konstruct Black, RAPIER | 61.2 / 224.2 | 28.1 / 103.5 | not captured |
+
+The VENOM rows reproduce the experiment above to the digit. The longest episode per race fell from 73-343 to
+44-162 ticks on the VENOM cells, with 0-8 of 60 ticks or more per race (was 2-15); Talon's RAPIER keeps one
+739-tick episode on one seed (2,077 before). No opponent was destroyed on any cell, before or after (original
+driver). This project's driver (`OAG_AI=ours`) is untouched by the wire: its board reproduces to the digit,
+with 16 destroyed on Talon's RAPIER and none elsewhere, before and after.
+
+On Omega's Amphiseum reversed (Flash, `omega_original_ai_ground_truth`) the push moved the field's history: two
+respawns, both after a weapon hit (slot 3 hit at tick 5459, off at 5497; slot 7 hit at 8477 on the descent with
+no craft contact, the wall at 8516 at 213 u/s, a stall against it, off at 8569). The second is 92 ticks after its
+hit, past the test's 60, so that circuit's window is 100. Taking walls out of the push alone leaves one respawn
+(slot 3, 38 ticks after a hit).
+
+**Reproducing.** The original: `scripts/psp-ai-contact-field.py --restart --lean --frames 2300` on a weapons-on
+Single Race (`psp-drive.py menu --single-race --weapons-on --unlock [--track-down 8]`), then `--summary <log>
+--window 1800` (or `10800`); one stop a frame at `AiManager_Update`, about 19 frames a second with `--lean`. Ours:
+`OAG_SWEEP=1 OAG_SEEDS=6 OAG_CLASSES=venom OAG_TICKS=10800 cargo nextest run -p oag-raceplay --run-ignored all
+--no-capture -E 'test(ai_contact_duration_board)'` (`OAG_AI=ours`, `OAG_DIFFICULTY=ace`, `OAG_LEVEL` as its
+docs say).
+
 ## Tuning sweep tables
 
 The evidence behind `oag_ai::Tuning`'s swept constants, moved here from the
@@ -6669,3 +7605,9 @@ without banking the higher corner speed it permits (`v = omega_steer / (k - C)`,
 which `pace::corner_target` does not do) is pure loss. `1.0` is not an
 endorsement of the latch: it is the value that changes no behaviour until the
 differential becomes a plan.
+
+### Evidence moved from raceplay comments (dated measurements)
+
+- **The route's mouth (2026-10-05, `fork_trace`):** on `05_Track` a Novice holding the far side of the route's corridor rode the ring's take-off ramp at route sample 112, flew a second, and met the divider at 161, every lap; an Ace field lost two craft there. `narrow_the_mouth` (`crates/raceplay/src/routes.rs`) answers it.
+- **Airborne craft are not scored against the routes (2026-10-05):** scoring a craft that is airborne between two routes flipped it between them every tick across `05_Track`'s first jump (328 switches in one five-minute run).
+- **A stall without a wall touch is neither failure nor respawn (2026-10-05):** `07_Track`'s centre ramp does this to our craft; a route that stalls clean without completing its verification lap gets no plan.

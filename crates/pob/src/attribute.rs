@@ -21,7 +21,7 @@
 //! instance `+0x54`, which `ParticleSystem_InitParticle` multiplies into a newborn's
 //! life (`oag_fx::psys::playback`, 2026-10-04).
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 use super::{Channel, Result, parse_channel};
 

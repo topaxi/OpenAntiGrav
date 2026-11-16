@@ -3,7 +3,7 @@
 //! `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Grid0..Grid14:
 //! what the gate actually evaluates".
 
-use super::{Grid, Medal};
+use super::{Grid, Medal, MedalTiers};
 
 impl Grid {
     /// `Grid_PointsEarned` (`0x088c048c`): the sum of `Cell_MedalPoints(cell,
@@ -15,11 +15,15 @@ impl Grid {
     /// `oag_ui_screens::campaign::GridSummary::from_grid` gives the rest of a grid's
     /// own numbers.
     #[must_use]
-    pub fn points_earned(&self, medal_of: &dyn Fn(&str) -> Option<Medal>) -> u32 {
+    pub fn points_earned(
+        &self,
+        tiers: &MedalTiers,
+        medal_of: &dyn Fn(&str) -> Option<Medal>,
+    ) -> u32 {
         self.cells
             .iter()
             .filter_map(|cell| medal_of(&cell.name))
-            .map(Medal::points)
+            .map(|medal| tiers.points(medal))
             .sum()
     }
 }
@@ -52,11 +56,12 @@ impl Grid {
 #[must_use]
 pub fn grid_points_met(
     grids: &[Grid],
+    tiers: &MedalTiers,
     target: &str,
     medal_of: &dyn Fn(&str) -> Option<Medal>,
 ) -> bool {
     grids
         .iter()
         .find(|grid| grid.name.eq_ignore_ascii_case(target))
-        .is_some_and(|grid| grid.points_earned(medal_of) >= grid.required_points)
+        .is_some_and(|grid| grid.points_earned(tiers, medal_of) >= grid.required_points)
 }
