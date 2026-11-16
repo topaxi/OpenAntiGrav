@@ -509,6 +509,38 @@ fn a_sample_point_behind_two_walls_is_scrubbed_twice() {
     );
 }
 
+/// The frame's largest single contact is reported beside the sum, with its normal
+/// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "Who fills them: the ring walk").
+/// Ten contacts here, so the largest is strictly between a tenth of the sum and the sum.
+#[test]
+fn the_largest_contact_impulse_is_reported_beside_the_sum() {
+    let mut world = CollisionWorld::new();
+    push_quad(&mut world, 1.5, Surface::Wall, 0);
+    push_quad(&mut world, 1.6, Surface::Wall, 1);
+
+    let mut state = ship_at(1.0, 0.0);
+    state.body.linear_velocity = Vec3::new(0.0, 0.0, 40.0);
+
+    let response = resolve(&mut state, &handling(), &Environment::default(), &world);
+
+    assert_eq!(response.resolved_count, 10, "{response:?}");
+    assert!(response.impulse_largest > 0.0, "{response:?}");
+    assert!(
+        response.impulse_largest < response.impulse_sum,
+        "one of ten contacts is less than their sum: {response:?}"
+    );
+    assert!(
+        response.impulse_largest * 10.0 >= response.impulse_sum,
+        "the largest of ten is at least their mean: {response:?}"
+    );
+    let normal = response.impulse_largest_normal;
+    assert!((normal.length() - 1.0).abs() < 1e-5, "{normal:?}");
+    assert!(
+        normal.x.abs() > 0.99,
+        "a wall facing the ship's side: {normal:?}"
+    );
+}
+
 /// A wall wound away from the ship is a back face and produces nothing.
 /// `Collision_BoxAgainstMesh` (`0x08815cd4`) skips a sample point unless `dot(boxCentre - s, n) >
 /// 0` with no flip anywhere (this module once flipped, making every wall two-sided). The pair

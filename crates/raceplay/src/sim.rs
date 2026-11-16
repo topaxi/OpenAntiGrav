@@ -432,6 +432,8 @@ pub struct RaceSim {
     /// Which ways a craft is put back are on, and their numbers - see
     /// [`Setup::reset_triggers`].
     pub(super) reset_triggers: oag_race::recovery::ResetTriggers,
+    /// How a craft's contact is heard - see [`Setup::contact_cues`].
+    pub(super) contact_cues: oag_title::contact_cue::ContactCues,
     /// The opponents' decision terms, resolved for this race's difficulty - see
     /// [`Setup::opponent_fire`].
     pub(super) fire_terms: oag_ai::weapon_ai::Law,
@@ -583,6 +585,9 @@ pub struct RaceSim {
     /// never re-arm. Render-side state, and out of the hash for the same
     /// reason. See [`Race::tick`], where the two are set side by side.
     pub(super) contact_cue_cooldown: [f32; oag_gameplay::MAX_SHIPS],
+    /// Each craft's contact bookkeeping under `ContactCues::Impulse`. Simulation bookkeeping
+    /// like [`Self::contact_cue_cooldown`], and outside the hash for the same reason.
+    pub(super) contact_impulse: [crate::cues::ContactImpulse; oag_gameplay::MAX_SHIPS],
     /// This tick's wall contact per craft, for the pad: the contact's size and
     /// its side, `None` with no contact. A per-tick output beside
     /// [`Self::cues`], out of the hash; see [`Race::wall_contact_of`].

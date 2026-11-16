@@ -106,11 +106,13 @@ mod feed {
                     cue,
                     slot: 0,
                     point: None,
+                    contact: None,
                 },
                 Scope::World => CueEvent {
                     cue,
                     slot: 0,
                     point: Some(oag_core::math::Vec3::ZERO),
+                    contact: None,
                 },
             };
             feed.event(&event, 0);
@@ -126,6 +128,7 @@ mod feed {
                 cue: oag_gameplay::cue::Cue::Rocket,
                 slot: 3,
                 point: None,
+                contact: None,
             },
             0,
         );

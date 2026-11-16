@@ -125,6 +125,10 @@ Two structural facts to expect, both different from every other binary here:
   sound with: `XFadeSystem_AddCrossFader` and its update path, the ship-side
   cache and instance, and `Ship_UpdateEngineCrossfade`, the per-tick writer of
   four input channels (three of four terms recovered, one unidentified).
+- [collision-cues.md](collision-cues.md) - `Ship_UpdateCollisionCues`: what a
+  contact's impulse has to be before `.COLLISIONS` or `.GRIND` starts, the
+  severity and surface it hands the cue, the volume law, the Shield's swap, and
+  the live captures that agree; 2048 and Omega carry the same law.
 - [cue-variables.md](cue-variables.md) - the four cue variables a command list
   reads (listener perspective, severity, surface) and who writes them, the
   rest of the grain opcodes HD's banks use, `SPEEDUPPAD`'s list and call path,

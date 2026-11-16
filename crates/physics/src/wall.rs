@@ -232,6 +232,16 @@ pub struct WallResponse {
     /// The input to [`crate::damage::contact_damage`], and the one field here that
     /// physics writes for gameplay rather than for a debug view.
     pub impulse_sum: f32,
+    /// The largest single `|p|` among the contacts that add to [`Self::impulse_sum`] (strictly
+    /// greater wins, so the earliest of equals).
+    ///
+    /// **Reporting only**, not read by physics and not hashed: what the original's ring walk
+    /// keeps per frame for a craft's collision and grind sounds
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "Who fills them: the ring walk").
+    pub impulse_largest: f32,
+    /// The contact normal of [`Self::impulse_largest`]'s contact; zero when there was none.
+    /// Reporting only, like it.
+    pub impulse_largest_normal: Vec3,
     /// The most inbound `normal_speed` across this frame's contacts, as a positive
     /// magnitude; `0.0` if [`Self::impact`] is `false`.
     ///
@@ -375,6 +385,10 @@ pub fn resolve<R: Raycaster + ?Sized>(
         impact |= applied.normal_speed < 0.0;
         impact_speed = impact_speed.max(-applied.normal_speed);
         response.impulse_sum += applied.impulse_magnitude;
+        if applied.impulse_magnitude > response.impulse_largest {
+            response.impulse_largest = applied.impulse_magnitude;
+            response.impulse_largest_normal = contact.normal;
+        }
 
         if deepest.is_none_or(|(d, _)| contact.depth > d.depth) {
             deepest = Some((*contact, friction));

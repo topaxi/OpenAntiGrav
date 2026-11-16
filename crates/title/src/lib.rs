@@ -32,6 +32,7 @@ pub mod adverts;
 pub mod autopilot_engine;
 pub mod boot;
 pub mod campaign;
+pub mod contact_cue;
 pub mod craft_laws;
 pub mod demo;
 pub mod effects;
@@ -168,6 +169,9 @@ pub struct Title {
     pub weapon_pad_glow: &'static weapon_pad::WeaponPadGlow,
     /// Which of the ways a craft is put back this title has. See [`recovery::ResetEnables`].
     pub reset_enables: recovery::ResetEnables,
+    /// How a craft's contact with the track or another craft is heard. See
+    /// [`contact_cue::ContactCues`].
+    pub contact_cues: contact_cue::ContactCues,
     /// The curve from the SFX slider and the flyby fade to the effects bus. See
     /// [`group_volume::GroupVolumeLaw`]. A title whose mix is authored (HD and its lineage) keeps
     /// the bus to that mix and reads `Linear`.

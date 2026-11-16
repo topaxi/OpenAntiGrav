@@ -142,6 +142,9 @@ pub const TITLE: &Title = &Title {
     photo_shot: Some(oag_title::photo::Accumulation::WIPEOUT_2048),
     // 2048's own recovery is unread; HD's, which runs Pulse's.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout HD"),
+    // Its executable carries HD's impulse law (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`,
+    // "Lineage"); not switched on, because its race cues are a flat pick.
+    contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
     // 2048's authored mix owns the buses.
     effects_volume_law: oag_title::pre_race::Sourced::chosen(
         oag_title::group_volume::GroupVolumeLaw::Linear,

@@ -446,7 +446,7 @@ impl Race {
             return;
         }
         sparks.cooldown[slot][node] = oag_gameplay::cue::COLLISION_COOLDOWN;
-        if self.draws() {
+        if self.draws() && self.sim.contact_cues == oag_title::contact_cue::ContactCues::Rearmed {
             self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                 oag_gameplay::cue::Cue::Collision,
                 slot,

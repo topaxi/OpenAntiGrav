@@ -949,6 +949,9 @@ pub struct Setup {
     /// `oag_race::recovery::ResetTriggers::PULSE` with the title's
     /// `oag_title::Title::reset_enables` applied.
     pub reset_triggers: oag_race::recovery::ResetTriggers,
+    /// How a craft's contact with the track or another craft is heard,
+    /// `oag_title::Title::contact_cues`.
+    pub contact_cues: oag_title::contact_cue::ContactCues,
     /// Which terms the opponents' fire-or-absorb decision rolls by,
     /// `oag_title::weapons::Weapons::opponent_fire`.
     pub opponent_fire: oag_title::weapons::OpponentFire,

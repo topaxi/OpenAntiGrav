@@ -414,21 +414,203 @@ fn hd_s_explosion_and_launch_cues_play_their_layered_voices(banks: &Banks) {
     absorb.sort_unstable();
     assert_eq!(absorb, vec![0, 30, 330]);
 
-    // The census: every one-shot hud, ship and weapons cue plays a timeline but
-    // `.COLLISIONS`, whose severity the game computes from state not read.
+    // The census: every one-shot hud, ship and weapons cue plays a timeline,
+    // `.COLLISIONS` too now that the contact's severity and surface are handed to it, and so do
+    // the three contact cues only HD has (which are not in `Cue::ALL`).
+    let plays_timeline = |c: &Cue| {
+        banks
+            .report
+            .iter()
+            .find(|l| l.starts_with(&format!("sfx: {} ->", c.name())))
+            .is_some_and(|l| l.contains("plays its timeline"))
+    };
     let flat: Vec<&str> = Cue::ALL
         .into_iter()
+        .chain(Cue::HD_CONTACT)
         .filter(|c| c.walks_variables())
-        .filter(|c| {
-            banks
-                .report
-                .iter()
-                .find(|l| l.starts_with(&format!("sfx: {} ->", c.name())))
-                .is_some_and(|l| !l.contains("plays its timeline"))
-        })
+        .filter(|c| !plays_timeline(c))
         .map(Cue::name)
         .collect();
-    assert_eq!(flat, vec![".COLLISIONS"]);
+    assert_eq!(flat, Vec::<&str>::new());
+    assert!(
+        !Cue::ALL.iter().any(|c| Cue::HD_CONTACT.contains(c)),
+        "the three HD-only contact cues are loaded beside Cue::ALL, not in it"
+    );
+}
+
+/// The identity of a waveform as the mixer's sound shows it: its frames and its rate.
+type Waveform = (usize, u32);
+
+/// A waveform of `bank` as the mixer's sound shows it.
+fn waveform_of(bank: &oag_formats::sblk::Bank, sound: &oag_formats::sblk::Sound) -> Waveform {
+    use oag_formats::sblk;
+    let data = bank.waveform(sound).expect("the waveform is in the bank");
+    let pcm = if sound.is_adpcm() {
+        sblk::decode_adpcm(sblk::adpcm_played(data))
+    } else {
+        sblk::decode_pcm16(data)
+    };
+    (pcm.len(), sound.sample_rate())
+}
+
+/// The key-on commands the cue `name` and its children bind in `bank`. A command is one cue's
+/// own: two cues may key the same waveform data, never the same command.
+fn commands_of(bank: &oag_formats::sblk::Bank, name: &str) -> std::collections::BTreeSet<usize> {
+    let record = bank.cue_named(name).expect("the cue is in the bank");
+    bank.cue_tree_sounds(&record)
+        .iter()
+        .map(|sound| sound.command)
+        .collect()
+}
+
+/// The key-on commands and waveforms the bank authors for the cue `name` handed `variables`, as
+/// the walk of its list reaches them, over every alternate combination.
+fn authored(
+    bank: &oag_formats::sblk::Bank,
+    name: &str,
+    variables: [i8; 4],
+) -> (
+    std::collections::BTreeSet<usize>,
+    std::collections::BTreeSet<Waveform>,
+) {
+    use oag_formats::sblk::timeline::{GLOBAL_SLOTS, WalkModel};
+    let record = bank.cue_named(name).expect("the cue is in the bank");
+    let model = WalkModel {
+        goto_markers: true,
+        globals: Some([0; GLOBAL_SLOTS]),
+        tail_waits: true,
+        cue_variables: Some(variables),
+        ..WalkModel::default()
+    };
+    let walks = bank
+        .cue_timelines_sampled(&record, model, u64::from(record.index))
+        .expect("the combinations are enumerable");
+    let grains: Vec<_> = walks.iter().flat_map(|walk| &walk.grains).collect();
+    (
+        grains.iter().map(|grain| grain.sound.command).collect(),
+        grains
+            .iter()
+            .map(|grain| waveform_of(bank, &grain.sound))
+            .collect(),
+    )
+}
+
+/// The waveforms 40 plays of `cue` handed `variables` start.
+fn contact_plays(
+    banks: &Banks,
+    cue: Cue,
+    variables: [i8; 4],
+) -> std::collections::BTreeSet<Waveform> {
+    let mut rng = Rng::new(21);
+    let mut heard = std::collections::BTreeSet::new();
+    for _ in 0..40 {
+        let started = banks
+            .contact_voices(cue, variables, &mut rng)
+            .unwrap_or_else(|| panic!("{} at {variables:?} built no timeline", cue.name()));
+        assert!(
+            !started.is_empty(),
+            "{} at {variables:?} plays no voice",
+            cue.name()
+        );
+        heard.extend(
+            started
+                .iter()
+                .map(|v| (v.sound.frames(), v.sound.sample_rate())),
+        );
+    }
+    heard
+}
+
+/// HD's contact cues play the child the contact's severity and surface select
+/// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "`Ship_UpdateCollisionCues`";
+/// `cue-variables.md`, "The collision family"): every block of cue variables the game can hand
+/// builds, and plays the waveforms of the child the bank authors for it and no other's.
+fn hd_s_contact_cues_play_the_child_their_severity_and_surface_select(
+    banks: &Banks,
+    ship: &oag_formats::sblk::Bank,
+) {
+    let of = |name: &str| commands_of(ship, name);
+    let only = |cue: Cue, variables, children: &[&str]| {
+        let wanted: std::collections::BTreeSet<usize> =
+            children.iter().flat_map(|&name| of(name)).collect();
+        let (commands, waveforms) = authored(ship, cue.name(), variables);
+        assert!(
+            !commands.is_empty() && commands.is_subset(&wanted),
+            "{} at {variables:?} walks commands outside {children:?}: {commands:?}",
+            cue.name()
+        );
+        // What the engine plays is what that walk reaches.
+        let heard = contact_plays(banks, cue, variables);
+        assert!(
+            heard.is_subset(&waveforms),
+            "{} at {variables:?} plays waveforms its walk does not reach: {heard:?}",
+            cue.name()
+        );
+    };
+
+    only(Cue::Collision, [2, 0, 2, 0], &["c_CShipShipL"]);
+    only(Cue::Collision, [1, 0, 2, 0], &["c_CShipShipL"]);
+    only(Cue::Collision, [0, 0, 1, 0], &["c_CShipShipM"]);
+    only(Cue::Collision, [0, 1, 1, 0], &["c_CShipWallS"]);
+    only(Cue::Collision, [1, 1, 1, 0], &["c_CShipWallM"]);
+    only(Cue::Collision, [2, 1, 2, 0], &["c_CShipWallL"]);
+    for (severity, size) in [(0, "S"), (1, "M"), (2, "L")] {
+        only(
+            Cue::Grind,
+            [severity, 0, 0, 0],
+            &[&format!("c_GShipShip{size}")],
+        );
+        only(
+            Cue::Grind,
+            [severity, 1, 0, 0],
+            &[&format!("c_GShipWall{size}")],
+        );
+    }
+
+    // The shield's crackle: the small pair, whose children switch on the perspective.
+    let small: std::collections::BTreeSet<usize> = ["c_GS_Small", "c_CS_Small"]
+        .iter()
+        .flat_map(|&name| of(name))
+        .collect();
+    let (commands, waveforms) = authored(ship, Cue::CollisionShield.name(), [0, 1, 1, 0]);
+    assert!(commands.is_subset(&small), "{commands:?}");
+    for name in ["c_GS_Small", "c_CS_Small"] {
+        assert!(
+            commands.iter().any(|command| of(name).contains(command)),
+            "nothing of {name} is walked"
+        );
+    }
+    for name in ["c_GS_Medium", "c_CS_Medium", "c_GS_Large", "c_CS_Large"] {
+        let others: std::collections::BTreeSet<usize> =
+            of(name).difference(&small).copied().collect();
+        assert!(
+            commands.is_disjoint(&others),
+            "{name} is walked at severity 0"
+        );
+    }
+    let heard = contact_plays(banks, Cue::CollisionShield, [0, 1, 1, 0]);
+    assert!(heard.is_subset(&waveforms), "{heard:?}");
+
+    // Every block the game can hand a contact cue builds and plays at least one voice.
+    let blocks = |perspectives: &'static [i8]| {
+        (0..=2).flat_map(move |severity| {
+            (0..=1).flat_map(move |surface| {
+                perspectives
+                    .iter()
+                    .map(move |&perspective| [severity, surface, perspective, 0])
+            })
+        })
+    };
+    for (cue, perspectives) in [
+        (Cue::Collision, &[1, 2][..]),
+        (Cue::CollisionShield, &[1]),
+        (Cue::Grind, &[0]),
+        (Cue::GrindShield, &[0]),
+    ] {
+        for variables in blocks(perspectives) {
+            assert!(!contact_plays(banks, cue, variables).is_empty());
+        }
+    }
 }
 
 /// The bend is read at 100 % on HD's walked cues: `PLASMAHITWALL`'s voices detune
@@ -455,4 +637,19 @@ fn hd_s_race_cues_play_the_lists_the_bank_authors() {
     hd_s_speedup_pad_is_a_body_and_two_rear_whooshes_for_the_player_and_one_for_others(&banks);
     hd_s_explosion_and_launch_cues_play_their_layered_voices(&banks);
     hd_s_plasma_hit_wall_detunes_from_play_to_play(&banks);
+    let ship = hd_ship_bank(&path);
+    hd_s_contact_cues_play_the_child_their_severity_and_surface_select(
+        &banks,
+        &oag_formats::sblk::Bank::parse(&ship).expect("the ship bank parses"),
+    );
+}
+
+/// The bytes of HD's ship sound bank, `shiphd.bnk`.
+fn hd_ship_bank(path: &std::path::Path) -> Vec<u8> {
+    let opened =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening the source");
+    let entry = opened.title.race.sounds.ship;
+    let mut archives = opened.archives;
+    archives.read_name(entry).expect("the ship bank reads")
 }

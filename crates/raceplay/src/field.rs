@@ -955,7 +955,7 @@ impl Race {
             // hands an opponent a Shield yet - the same gap the shell bulge
             // below records - so the silent branch is unreachable here rather
             // than suppressed.
-            self.raise_contact_cue(slot, evaluated.wall.impact, false);
+            self.raise_wall_cue(slot, &evaluated.wall, false);
             // The wall counters, on the same footing as the roll ones below:
             // bookkeeping, outside `state_hash`, and the only thing in this
             // project that can see the standard an Ace is held to - lapping
@@ -1302,6 +1302,14 @@ impl Race {
                     // unshielded craft-to-craft bump charges the energy pool", Result 5).
                     touched[a] = true;
                     touched[b] = true;
+                    // The impulse law hears the pair's impulse on both hulls. The original's
+                    // pair record writes no normal, so the angle reads whatever the ring slot
+                    // held before: zero on a craft whose slot no track contact has used
+                    // (collision-cues.md, "A pair record has no normal"). The stale normal
+                    // that slot otherwise holds is not modelled.
+                    for slot in [a, b] {
+                        self.note_contact_impulse(slot, contact.impulse, true, 0.0);
+                    }
                     // The original driver reads the record next tick: its lane
                     // planner pushes away from the rival and its rail lets go.
                     for slot in [a, b] {

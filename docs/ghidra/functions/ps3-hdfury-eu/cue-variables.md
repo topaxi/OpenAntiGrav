@@ -350,6 +350,11 @@ hud, ship and weapons cues (`CueTables::walks_variables`; held cues and `~ENGINE
   (modulators), `0x29` (key off), a nonzero `0x1a` wait, and a variable outside the handler's four. None of the one-shot
   cues walked above has one.
 
+**2026-11-16, lane `hd-impact`: the collision family is wired.** What computes the severity and
+the surface is read ([collision-cues.md](collision-cues.md)), `.COLLISIONS` no longer keeps a flat
+pick for a contact, and `.GRIND`, `.COLLSHIELD` and `.GRINDSHIELD` (row 6 of the audit) play. The
+"Severity and surface stay 0" bullet above describes the engine before that.
+
 ## Lineage
 
 - **2048: checked, applies in shape, not wired.** `weapons.bnk` (79 cues) and `shipHD.bnk` (100 cues) carry `0x22` guards

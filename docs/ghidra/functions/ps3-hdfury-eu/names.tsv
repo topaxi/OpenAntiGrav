@@ -993,3 +993,6 @@
 0x00116308	function	BeamPath_PointAt	90	weapons.md
 0x000d0398	function	Craft_GetTrackGap	85	weapons.md
 0x001178f8	function	BeamPath_RebuildUnwobbled	75	weapons.md
+0x000d8bd0	function	Ship_UpdateCollisionCues	90	collision-cues.md
+0x000d8910	function	Ship_RecordContactImpulse	78	collision-cues.md
+0x000e6fd8	function	Ship_SpawnContactFx	80	ship-collision-fx.md

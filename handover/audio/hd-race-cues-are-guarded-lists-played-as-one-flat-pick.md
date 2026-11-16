@@ -1,13 +1,18 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-15
-summary: "HD's one-shot race cues now play their walked lists; open: held cues need a runner, collision severity, 0x04/0x1c/0x26, cockpit view, front-end bend"
+updated: 2026-11-16
+summary: "HD's one-shot race cues now play their walked lists; open: held cues need a runner, 0x04/0x1c/0x26, cockpit view, front-end bend"
 size: M (45)
 difficulty: medium (55)
 ---
 
 # HD's race cues are guarded lists, played as one flat pick
+
+**2026-11-16 (lane `hd-impact`):** the collision family (`.COLLISIONS`, `.GRIND`, `.COLLSHIELD`,
+`.GRINDSHIELD`) is wired from its own law; its leftovers are in
+[hd-collisions-flatten-a-severity-tree.md](hd-collisions-flatten-a-severity-tree.md). Mentions of
+the collision severity as open below are the state before.
 
 2026-11-15, lane `hd-sound-audit` measured it; lane `hd-cue-walk` wired rows 1, 3 and 4 (below). The maintainer
 plays HD/Fury in RPCS3 and hears HD's sound as wrong in places, `SPEEDUPPAD` first. The

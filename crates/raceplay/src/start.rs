@@ -118,6 +118,7 @@ impl Race {
             plasma_release_at_display_scale,
             own_craft_box_hides_track,
             reset_triggers,
+            contact_cues,
             opponent_fire,
             score_law,
             flip_law,
@@ -774,6 +775,7 @@ impl Race {
                 plasma_release_at_display_scale,
                 own_craft_box_hides_track,
                 reset_triggers,
+                contact_cues,
                 score_law,
                 score_pace,
                 flip_law,
@@ -784,6 +786,7 @@ impl Race {
                 announcements: Vec::new(),
                 class_announcements: Vec::new(),
                 contact_cue_cooldown: [0.0; oag_gameplay::MAX_SHIPS],
+                contact_impulse: [crate::cues::ContactImpulse::default(); oag_gameplay::MAX_SHIPS],
                 wall_contact: [None; oag_gameplay::MAX_SHIPS],
                 // Every pad starts due for a real test. `Pad_Bind` zeroes the same
                 // cache at load, so the first tick measures rather than trusting a
