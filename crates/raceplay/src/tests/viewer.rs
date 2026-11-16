@@ -136,7 +136,11 @@ fn a_viewer_started_at_a_tick_opens_paused_there() {
     let (viewer, mut race) = unbegun(replay);
     let mut viewer = Box::new((*viewer).starting_at(start));
     viewer.begin(&mut race).expect("the launch settings");
-    assert_eq!(viewer.state(), State::Opening, "nothing is shown before the start is built");
+    assert_eq!(
+        viewer.state(),
+        State::Opening,
+        "nothing is shown before the start is built"
+    );
     let mut moved = Moved::Still;
     while moved == Moved::Still {
         moved = viewer.update(&mut race);

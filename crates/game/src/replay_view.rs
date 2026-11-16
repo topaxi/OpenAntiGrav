@@ -32,7 +32,11 @@ pub mod strings {
 /// dropped screenshot that did not open says. The text wraps inside nine tenths of the width.
 #[must_use]
 pub fn notice_draw(grid: (f32, f32), text: &str) -> Vec<Draw> {
-    let height = LINE * 3.0 + 10.0;
+    let width = grid.0 * 0.9;
+    let lines = (text.chars().count() as f32 * CHAR_WIDTH / width)
+        .ceil()
+        .max(1.0);
+    let height = LINE * lines + 10.0;
     let top = (grid.1 - height) / 2.0;
     vec![
         Draw::Fill {
@@ -47,7 +51,7 @@ pub fn notice_draw(grid: (f32, f32), text: &str) -> Vec<Draw> {
             border: None,
             align: Align::Centre,
             text: text.to_string(),
-            wrap_width: Some(grid.0 * 0.9),
+            wrap_width: Some(width),
         },
     ]
 }
@@ -99,6 +103,8 @@ const WARNING: [f32; 4] = [0.85, 0.35, 0.05, 0.9];
 const TEXT: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const SCALE: f32 = 0.75;
 const LINE: f32 = 9.5;
+/// What a character of the viewer's text is wide at [`SCALE`], for sizing a band to its text.
+const CHAR_WIDTH: f32 = 4.7;
 
 /// Where a chip sits on the overlay grid `grid` (width, height): `[x, y, w, h]`. The chips are a
 /// row across the top, centred, between the lap box and the position of every title's HUD; the
@@ -257,7 +263,7 @@ pub fn draw_list(
     .take(KEY_LINES)
     .collect();
     for (i, line) in lines.iter().enumerate() {
-        let width = line.chars().count() as f32 * 4.7 + 12.0;
+        let width = line.chars().count() as f32 * CHAR_WIDTH + 12.0;
         let y = first[1] + CHIP_HEIGHT + 2.0 + LINE * i as f32;
         list.push(Draw::Fill {
             rect: [centre - width / 2.0, y, width, LINE + 2.0],

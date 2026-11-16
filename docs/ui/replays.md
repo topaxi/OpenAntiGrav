@@ -200,6 +200,63 @@ HD's blocks and 2048's buttons are the disc's own and have no such row, and Pure
 end-of-race menu, so on those the REPLAYS page is the way in. **Chosen, not measured.** A row on a
 dialect that cannot draw it would be a cursor stop with nothing on it.
 
+## A screenshot opens the viewer
+
+Maintainer's request, 2026-11-16: a screenshot of ours (`docs/formats/shot-png.md`) opens replay
+mode on its race, positioned at the point of the shot. The `oaGs` chunk is a replay file cut at the
+shot's tick, so it goes through the viewer above and nothing new draws the race
+(`session::shot_open`, `replays::open_viewer`; `oag_raceplay::viewer::Viewer::starting_at`).
+
+- **Where it opens: paused on the shot's last tick, state `ended`.** The stream stops at the shot,
+  so the picture on screen is the shot's frame (the HUD, the craft and the camera are the race's at
+  that tick; the viewer's chips and bar are over it). The "END OF REPLAY" banner is not drawn on
+  that tick, since it would cover the picture the player came for; it is drawn once the playhead
+  has moved. Until the opening pass has built that far (about a second of a 700-tick shot, longer
+  for a long run) the viewer says OPENING REPLAY. CROSS or a click on PLAY plays the race from tick
+  0 (as at any end of a replay), the bar seeks back, CIRCLE or EXIT leaves for **the main menu**
+  (a shot is no row of the REPLAYS list).
+- **The way in, on the command line:** `oag-game --replay-png FILE.png [DISC]` starts the game
+  and opens the file as soon as the main menu is up (the disc is found as for any run; the flag
+  refuses `--race`, `--screenshot`, `--from-png`). `--from-png` stays the headless re-render.
+- **The way in, on the window:** dropping the file on the window while the **main menu** (the
+  front end's top page, nothing over it) or an **attract demo** (not a wallpaper, which ignores
+  input) is up. A demo is left as any input leaves it, then the viewer loads. A drop anywhere else
+  (a race being driven, the loading screen, any page below the main menu, a prompt, the launcher
+  but for its own disc-key drop) is ignored. winit's Wayland backend reports no drops, so on a
+  Wayland session a drop needs the X11 backend (the same limit as the launcher's disc drop); the
+  command line always works.
+- **A refusal is shown, and nothing leaves the screen.** Everything is decided before the load
+  starts, so a refused drop leaves the menu or the demo where it was with an orange band over it
+  (`replay_view::notice_draw`) that a click, a tap, a button or a key dismisses (the press is
+  spent, so it does not also act on the row beneath it) or that goes after eight seconds:
+  not a PNG of ours; a PNG of ours with no stream (the text's `no_stream_because` is shown, so a
+  Race End Photo says it was taken past the recording); a shot taken on another title (names it:
+  open that disc); a header that cannot be rebuilt; **simulation modules this machine lacks or has
+  another build of, by name** (`oag_raceplay::extensions::preflight_recorded`, from the modules on
+  offer and their bytes, with nothing compiled). What only the load can find (the rebuilt race is
+  not the recorded one at tick 0, a module whose compiled layout differs) comes back to the main
+  menu with the same band. The shot's own state hash is compared the first time the race stands on
+  its tick; a build that does not reproduce it says so in the band (`OAG_SHOT_OTHER_HASH`).
+- **Evidence:** `replay_viewer_ground_truth::a_dropped_screenshot_opens_the_viewer_on_its_tick_and_a_refused_one_says_why`
+  (`--drive`, no window: the `drop` step calls the window's own `Session::file_dropped`): a
+  `--race --screenshot` shot of 300 ticks opens with `replay_at=300/300/300` and the state `hash`
+  of the shot, the refusals are the band's text, a drop on the RACEBOX page loads nothing, CROSS
+  plays and CIRCLE returns to the main page.
+  `a_dropped_screenshot_is_ignored_in_a_race_and_taken_in_a_demo`: no viewer and no band after a
+  drop mid-race; a drop in a `--demo` ends the demo and opens the viewer. Viewer unit tests:
+  `tests::viewer::a_viewer_started_at_a_tick_opens_paused_there` and
+  `..._started_at_the_end_...`.
+- **Fixed on the way:** a `--race --screenshot` shot's header carried neither the opponent driver
+  it flew (`[options] ai`) nor the circuit the load had chosen, so a viewer that rebuilt the race
+  by the session's loader flew this project's driver and desynced at the first stored hash (tick
+  60), where the headless `--from-png` (which re-applies the command line's defaults) matched.
+  The capture now notes the driver in the header (`race_capture::shot::Facts::note_ai`) and the
+  load records the circuit it settled on (`Setup::request.track`).
+- **Checked against the other title of the pair:** the viewer and the drop are title-agnostic;
+  **ported** by construction, not run on 2048 or Omega (their `--race` shots re-simulate in
+  `replay_ground_truth`; Omega's racing is incomplete, `omega-status.md`). A shot from another
+  title is refused with that title's name rather than switching disc: the session boots one title.
+
 ## Per title
 
 Each title: a Time Trial flown by the Autopilot, 1,794 to 2,401 ticks, recorded through the menus

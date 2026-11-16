@@ -76,7 +76,20 @@ A shot of an unmodded race, remade in a checkout that has those mods, runs none 
 Photo is past the end of the recorded input (the recording stops at the finish) and has no stream
 either; its text says so.
 
+## Opening a shot in the viewer
+
+`oag-game --replay-png FILE.png`, or the file dropped on the window over the main menu or an
+attract demo, opens the stream in the replay viewer, paused on the shot's tick with the state hash
+the shot was taken at checked: [replays](../ui/replays.md#a-screenshot-opens-the-viewer). The
+viewer rebuilds the race by the session's own loader from the header, so a header must name
+everything the race was flown with: **a `--race --screenshot` shot's header now carries
+`[options] ai` (the original driver's request, when it flew) and `[setup] track` (the circuit the
+load settled on when none was named)**. Shots made before that change open in the viewer only
+when the race had no opponents or flew this project's driver on the default circuit; the
+headless `--from-png` re-applies the command line's defaults and is unaffected.
+
 ## Evidence
+
 
 - `crates/raceplay/tests/replay_ground_truth.rs`, `a_shot_survives_its_png_and_resimulates`: a
   shot at tick 1,237 (off the hash grid) of a pad-flown race on **Pulse and HD (and Pure, 2048)**

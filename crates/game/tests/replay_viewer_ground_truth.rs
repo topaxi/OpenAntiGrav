@@ -718,3 +718,205 @@ fn the_viewer_follows_craft_scrubs_and_hides_its_hud_on_the_new_keys() {
     }
     assert!(compared > 300, "only {compared} ticks in common");
 }
+
+impl Profile {
+    /// A screenshot of a `--race` run on `image` with `args`, headless, written to `name.png` in
+    /// this profile. `mods` leaves the checkout's default mods on (the examples' simulation
+    /// modules run); otherwise none does.
+    fn shoot(&self, image: &Path, args: &[&str], mods: bool, name: &str) -> PathBuf {
+        let shot = self.dir.join(format!("{name}.png"));
+        let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
+        command
+            .arg(image)
+            .args(["--no-audio", "--race", "--size", "320x180", "--screenshot"])
+            .arg(&shot)
+            .args(args)
+            .env("XDG_CONFIG_HOME", self.dir.join("config"))
+            .env("XDG_DATA_HOME", self.dir.join("data"))
+            .env("XDG_STATE_HOME", self.dir.join("state"))
+            .env("OAG_TRACKS", self.dir.join("no-tracks"))
+            .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+            .env_remove("WAYLAND_DISPLAY")
+            .env_remove("DISPLAY");
+        if !mods {
+            command.env("OAG_MODS", self.dir.join("no-mods"));
+        }
+        let output = command.output().expect("running oag-game");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        shot
+    }
+}
+
+/// `png` without its `oaGs` chunk: the text says there is a stream, the file has none.
+fn without_stream(png: &[u8]) -> Vec<u8> {
+    let mut out = png[..8].to_vec();
+    let mut at = 8;
+    while at < png.len() {
+        let len = u32::from_be_bytes(png[at..at + 4].try_into().expect("a length")) as usize;
+        let end = at + 12 + len;
+        if &png[at + 4..at + 8] != b"oaGs" {
+            out.extend_from_slice(&png[at..end]);
+        }
+        at = end;
+    }
+    out
+}
+
+fn notices(states: &[Value]) -> Vec<&str> {
+    let mut seen: Vec<&str> = states
+        .iter()
+        .filter_map(|state| text(state, "notice"))
+        .collect();
+    seen.dedup();
+    seen
+}
+
+const SHOT_ARGS: [&str; 7] = [
+    "--mode",
+    "single_race",
+    "--class",
+    "venom",
+    "--hold",
+    "cross",
+    "--ticks",
+];
+
+/// A screenshot dropped on the main menu opens the viewer on its race, paused on the shot's tick
+/// with the state hash the shot was taken at; every file that cannot open says why over the menu
+/// and leaves it where it was; and a drop on a page below the main menu does nothing.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
+fn a_dropped_screenshot_opens_the_viewer_on_its_tick_and_a_refused_one_says_why() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let profile = Profile::new("shot-drop");
+    let tick = "300";
+    let args: Vec<&str> = SHOT_ARGS.iter().copied().chain([tick]).collect();
+    let plain = profile.shoot(&image, &args, false, "plain");
+    let modded_args: Vec<&str> = args
+        .iter()
+        .copied()
+        .chain(["--give", "extension"])
+        .collect();
+    let modded = profile.shoot(&image, &modded_args, true, "modded");
+    let bytes = std::fs::read(&plain).expect("the shot");
+    let found = oag_game::shot_meta::read(&bytes).expect("it reads back");
+    let record = found.record.expect("a --race shot carries its stream");
+    assert_eq!(record.tick, 300);
+    let wanted_hash = format!("{:016x}", record.hash);
+    // The same race without its stream, and a file that is not a PNG at all.
+    std::fs::write(profile.dir.join("no-stream.png"), without_stream(&bytes)).expect("writing it");
+    std::fs::write(profile.dir.join("not-a-shot.txt"), "hello").expect("writing it");
+    let modded_record = oag_game::shot_meta::read(&std::fs::read(&modded).expect("the shot"))
+        .expect("it reads back")
+        .record
+        .expect("a stream");
+    let modded_names: Vec<String> = modded_record
+        .replay
+        .header
+        .mods
+        .iter()
+        .map(|used| used.id.clone())
+        .collect();
+
+    let shots = profile.dir.join("shots");
+    std::fs::create_dir_all(&shots).expect("a directory");
+    // Each refused drop is followed by `key`, which dismisses its notice (and is spent by it).
+    let refused = |file: &str| {
+        format!("drop DIR/{file}; ticks 3; screenshot DIR/shots/{file}.notice.png; key; ticks 3; ")
+    };
+    let mut script = format!(
+        "boot; {}{}",
+        refused("not-a-shot.txt"),
+        refused("no-stream.png")
+    );
+    if !modded_names.is_empty() {
+        script += &refused("modded.png");
+    }
+    // A page below the main menu ignores the drop.
+    script += "select racebox; press cross; until page=race; drop DIR/plain.png; ticks 30; \
+               expect stage=menu; expect page=race; press circle; until page=main within 100; ticks 5; ";
+    // The main menu opens it; CROSS plays it from the start; CIRCLE leaves for the main menu.
+    script += "drop DIR/plain.png; until stage=race within 4000; until replay=ended within 3000; \
+               ticks 10; screenshot DIR/shots/at-the-shot.png; press cross; until replay=playing within 100; \
+               ticks 30; press circle; until stage=menu within 400; expect page=main; quit";
+    let (status, states) = profile.drive(&image, &script, &[]);
+    assert!(status.success());
+
+    let seen = notices(&states);
+    let wants = if modded_names.is_empty() { 2 } else { 3 };
+    assert_eq!(seen.len(), wants, "{seen:?}");
+    assert!(seen[0].contains("NOT A SCREENSHOT"), "{}", seen[0]);
+    assert!(seen[1].contains("INPUT STREAM"), "{}", seen[1]);
+    if let Some(name) = modded_names.first() {
+        assert!(
+            seen[2].contains(name.as_str()),
+            "the module is named: {}",
+            seen[2]
+        );
+    }
+    let at_shot = states
+        .iter()
+        .rfind(|state| text(state, "replay") == Some("ended"))
+        .expect("the viewer opened");
+    assert_eq!(
+        text(at_shot, "replay_at"),
+        Some("300/300/300"),
+        "paused on the shot's tick"
+    );
+    assert_eq!(
+        text(at_shot, "hash"),
+        Some(wanted_hash.as_str()),
+        "the race on screen is the shot's, to the bit"
+    );
+    assert!(
+        states
+            .iter()
+            .any(|state| text(state, "replay") == Some("playing")),
+        "CROSS plays it from the start"
+    );
+}
+
+/// A drop in a race that is being driven is ignored, and one in an attract demo ends the demo and
+/// opens the shot's viewer.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
+fn a_dropped_screenshot_is_ignored_in_a_race_and_taken_in_a_demo() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let profile = Profile::new("shot-drop-race");
+    let args: Vec<&str> = SHOT_ARGS.iter().copied().chain(["200"]).collect();
+    let plain = profile.shoot(&image, &args, false, "plain");
+    let (status, states) = profile.drive(
+        &image,
+        &format!("{TO_THE_RACE} drop DIR/plain.png; ticks 60; expect stage=race; quit"),
+        &[],
+    );
+    assert!(status.success());
+    assert!(
+        states
+            .iter()
+            .all(|state| text(state, "replay").is_none() && text(state, "notice").is_none()),
+        "a race being driven never saw the drop"
+    );
+    let (status, states) = profile.drive(
+        &image,
+        "until demo=running within 8000; drop DIR/plain.png; \
+         until replay=ended within 4000; ticks 5; quit",
+        &["--demo"],
+    );
+    assert!(status.success());
+    let at_shot = states
+        .iter()
+        .rfind(|state| text(state, "replay") == Some("ended"))
+        .expect("the demo gave way to the viewer");
+    assert_eq!(text(at_shot, "replay_at"), Some("200/200/200"));
+    assert!(text(at_shot, "demo").is_none(), "no demo behind the viewer");
+    let _ = plain;
+}

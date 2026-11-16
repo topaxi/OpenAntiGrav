@@ -14,7 +14,19 @@ Landed: [the format page](../../docs/formats/shot-png.md). Photo mode, `--race -
 drive script's `screenshot` write the `iTXt` `oag` text and the `oaGs` chunk; `--png-info` prints
 the text and `--from-png` re-simulates, checks the hash and draws the frame.
 
+Landed 2026-11-16 (lane `png-replay`): a shot opens in the replay viewer, paused on its tick, by
+`--replay-png FILE` or a drop on the window over the main menu or an attract demo, refusals shown
+over the screen ([replays](../../docs/ui/replays.md#a-screenshot-opens-the-viewer)); a `--race`
+shot's header now names the opponent driver and the circuit, which the viewer needs.
+
 ## Open
+
+- **Viewer follow-ups.** A drop is not reported by winit's Wayland backend (X11, Windows and macOS
+  only); a shot from another title is refused with its name rather than switching disc (the
+  session boots one title); a shot of a race flown with DLC packs mounted is opened with the packs
+  this machine has mounted, and a mismatch shows as the tick-zero refusal rather than naming the
+  pack (the same gap as the DLC item below); a `--race` shot's `[setup]` still lacks the team and
+  hull variant the loader chose (the rebuild chooses the same default).
 
 - **The HUD row is not in the text.** A photo taken with its HUD off (the default) is re-rendered
   with the HUD by `--from-png`. Add `shot.hud` to `Meta` (photo mode knows it) and a capture option
