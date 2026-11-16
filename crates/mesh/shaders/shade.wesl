@@ -1255,7 +1255,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             let p = spec_row.y * (1.0 - 0.75 * min(1.0, blur));
             let lobe = pow(clamp(dot(r, scene.light.direction), 0.0, 1.0), p)
                 * 0.06981317 / max(0.06981317, 0.17453294 * min(1.0, blur));
-            let gloss = texel.a;
+            let gloss = first.a;
             var weight = vec3<f32>(1.0);
             if row_scale.w > 0.5 {
                 weight = material_sample(MATERIAL_SIXTH_MAP, in.texcoord).rgb;

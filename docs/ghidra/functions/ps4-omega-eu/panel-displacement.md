@@ -387,7 +387,10 @@ entries) ships no file whose name carries `panelmap`, `panel_df` or `PanelDispla
 road is `fc16_phong_AlphaSpec_Normal_Emissive` over `Track_A_Floor_DS`/`_N`/`_E`, with no
 `_disp` textures: the displaced road is a PS4 addition. The Vita program's reflection and
 specular terms were not read (GXP operands, [gxp.md](../../../formats/gxp.md)), so whether
-2048's own road has an alpha-gated sheen is open and not answered by this page.
+2048's own road has an alpha-gated sheen is open and not answered by this page. **Checked, applies, not
+wired** for the lane: 2048 reads through the same `mesh::rcs::psp2` slot word (no alpha lane), so any
+2048 term that `shade.wesl` multiplies by `texel.a` (the generic specular's `specular_mask`) reads the
+diffuse's red there; which Vita programs gate by the diffuse alpha is unread (GXP operands).
 
 Omega's HD-mode circuits carry sibling families this page did not read:
 `Diffuse_Normal_Specular_PanelMap`, `..._PanelMap2In`, `D_S_N_CustomR_PanelMap(2In)` (Vineta
@@ -452,10 +455,17 @@ What is chosen, not measured, or left out:
   the fragment stage has no free sampled-texture slot for a cube array, so the sky binding HD's
   glass already reads carries it.
 - **The fresnel takes the mapped normal**, not the doubled-bitangent `N2` (open above).
-- **The gate is the wrong lane** (found 2026-11-16, `sheen-re`, not yet fixed on this page's
-  date): `specular` and `sky_reflection` multiply by `texel.a`, which on this draw is the diffuse
-  sample's red, where the program's is its alpha ("Live", "What it settles"). The fix is the
-  panel branch reading the diffuse sample's fourth lane.
+- **The gate is the diffuse alpha, wired** (`sheen-gloss-wire`, 2026-11-16): the `if panel` block reads
+  `first.a`, the diffuse sample at the marched coordinate, for `specular` and `sky_reflection`. It had read
+  `texel.a`, which is `coverage[(slots >> 3) & 3]`, and `mesh::rcs::psp2` builds the slot word as 0 or
+  `SECOND_IS_LIGHTMAP` with no alpha lane (`slots::DEFAULT` is only OR-ed in on the HD path, `skin::roles`), so
+  lane 0 was the diffuse's red. The slot word is not changed: that would move every Omega and 2048 material
+  that reads `texel.a`. Road at 16x, `compare-decompose.py --road road_alphaspec`, before to after: Sol `LF`
+  17.0 to 8.8, `bias` +13.8 to -3.0, `G` 0.74 to 0.79; Queens Mall `LF` 14.7 to 15.5, `bias` +8.6 to -0.6, `G`
+  0.85 to 0.83; Altima `LF` 24.7 to 24.9, `bias` +6.4 to +6.7, `G` 1.01 to 1.02; Unity Square `LF` 16.1 to
+  16.2, `bias` -14.3 to -14.4, `G` 0.81 to 0.82 (their sheen is nearly all masked by a low alpha). Test:
+  `mesh/tests/omega_panel_map_lit_path.rs`, `the_sheen_is_gated_by_the_diffuse_alpha_not_its_red` (a bright red
+  with no alpha reflects nothing; fails on `texel.a`).
 - **The lip blend is left out** (inert, above), and the lighting is the generic Omega nova path:
   the `0.75 + 0.25 ...` shadow-light factor is not drawn.
 - **The sun lobe's colour is wired** (2026-11-16, `panelmap-sun`): `envsettings_light` fills

@@ -2306,7 +2306,10 @@ Ranked, by what each would remove:
      (1), the road scores unchanged; a x100 probe shows the path live, a highlight under the camera's reflection
      of the sun only. Road at 16x anisotropy, the before render's region masks: Sol `LF` 32.7 to 18.0, `bias` -32.4 to
      +16.1, `G` 0.35 to 0.75; Queens Mall 30.7 to 14.5, -16.9 to +8.5, 0.71 to 0.85; Altima and Unity Square
-     within 1.1 grey and 0.03 `G`. **2048: checked,
+     within 1.1 grey and 0.03 `G`. **The sheen and the lobe are gated by the diffuse alpha** (`sheen-gloss-wire`,
+     the panel block reads `first.a`, not the red lane `texel.a` is on a PS4 slot word): Sol `LF` 17.0 to 8.8,
+     `bias` +13.8 to -3.0, `G` 0.74 to 0.79; Queens Mall `bias` +8.6 to -0.6, `LF` 14.7 to 15.5, `G` 0.85 to 0.83;
+     Altima and Unity Square within 0.3 grey. **2048: checked,
      differs** (no panel map or `_disp` texture on the Vita archives; the displaced road is a PS4 addition).
    - `tarmac_*` and the brick: anisotropy 16x takes the road's `G` from 0.84 to 1.07 (Empire Climb), 0.79 to 1.00
      (Metro Park), 0.67 to 0.89 (Capital Reach) with `LF` unchanged: their sharpness gap is texture filtering, so
