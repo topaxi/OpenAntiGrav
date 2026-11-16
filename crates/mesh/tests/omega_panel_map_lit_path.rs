@@ -56,14 +56,10 @@ fn texture(label: &str, texels: &[[u8; 4]]) -> Option<Arc<ModelTexture>> {
     }))
 }
 
-/// A 4x4 panel map holding one half-float value everywhere.
+/// A 4x4 panel map holding `0.25` everywhere when `value` is positive, else `-0.25`.
 fn field(value: f32) -> Option<Arc<ModelTexture>> {
-    // IEEE half bits of the few values used here.
-    let bits: u16 = match value {
-        v if v == 0.25 => 0x3400,
-        v if v == -0.25 => 0xb400,
-        _ => unreachable!("not a fixture value"),
-    };
+    // IEEE half bits of the two values used here, `+-0.25`.
+    let bits: u16 = if value > 0.0 { 0x3400 } else { 0xb400 };
     Some(Arc::new(ModelTexture {
         label: "panel map".into(),
         width: 4,
