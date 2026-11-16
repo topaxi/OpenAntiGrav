@@ -1,10 +1,10 @@
-//! Omega's crowd sprites draw lit by their `Shadowed` and `Ambient` (`mesh::rcs::psp2::crowd`).
+//! Omega's `_shadow` crowds draw lit by their `Shadowed` and `Ambient` (`mesh::rcs::psp2::crowd`).
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content; run with `just test-data`.
 //!
 //! Builds the `environments2048` circuits that show stands and holds that every vertex of a
-//! `crowd_sprite_*` material that authors `Shadowed` (the `_shadow` twin; the plain one authors
-//! neither parameter on the disc and keeps the generic reading) carries the glow-table entry of [`PROGRAM_CROWD`] with the
+//! `crowd_*` material that authors `Shadowed` (the `_shadow` twins; the plain ones author neither
+//! parameter on the disc and keep the generic reading) carries the glow-table entry of [`PROGRAM_CROWD`] with the
 //! material's authored `Ambient` as its tint and `Shadowed` as its second program lane (both
 //! read straight from the `.rcsmodel` here, not through the builder). Remove the builder's
 //! `crowd::plan` call and every count here reads zero.
@@ -65,7 +65,7 @@ fn circuit(name: &str, path: &str) {
             .name
             .rsplit(['/', '\\'])
             .next()
-            .is_some_and(|f| f.to_ascii_lowercase().starts_with("crowd_sprite_"))
+            .is_some_and(|f| f.to_ascii_lowercase().starts_with("crowd_"))
             && material.param(name_hash("Shadowed")).is_some()
     };
     let mut authored: Vec<(u32, [u32; 3])> = Vec::new();
@@ -112,4 +112,10 @@ fn sols_stands_are_lit_by_shadowed_and_ambient() {
 #[ignore = "needs data/extracted/ps4/omega-eu"]
 fn queens_malls_stands_are_lit_by_shadowed_and_ambient() {
     circuit("mall", "data/environments2048/mall/track.final.rcsmodel");
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn rockway_stadiums_stands_are_lit_by_shadowed_and_ambient() {
+    circuit("arena", "data/environments2048/arena/track.final.rcsmodel");
 }

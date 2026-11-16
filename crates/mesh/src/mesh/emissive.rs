@@ -109,7 +109,7 @@ pub const PROGRAM_TARMAC: f32 = 14.0;
 /// following this one. See `super::rcs::psp2`'s `panel_map`.
 pub const PROGRAM_PANEL_MAP: f32 = 15.0;
 
-/// [`Emissive::program`]'s mode for Omega's `crowd_sprite_diffuse_normal_alpha[_shadow]`: the light
+/// [`Emissive::program`]'s mode for Omega's `crowd_sprite_diffuse_normal_alpha_shadow` and `crowd_diffuse_normal_shadow`: the light
 /// sum is `tint + ambient + sun * sat(N.L)` (the tint is the material's `Ambient`) and the lit
 /// picture is multiplied by `program[1]`, its `Shadowed`. See `super::rcs::psp2`'s `crowd`.
 pub const PROGRAM_CROWD: f32 = 16.0;

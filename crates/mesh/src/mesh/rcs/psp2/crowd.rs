@@ -1,10 +1,12 @@
-//! Omega's crowd sprites: `crowd_sprite_diffuse_normal_alpha` and its `_shadow` twin.
+//! Omega's `_shadow` crowd materials: `crowd_sprite_diffuse_normal_alpha_shadow` and
+//! `crowd_diffuse_normal_shadow`.
 //!
 //! Their lit pixel program ends `Shadowed * T * (Ambient + constantAmbientColour + sun *
 //! sat(N.L))` (`docs/formats/omega-status.md`, "The crowd's law", confidence 70): the material
 //! authors `Shadowed` (`0.12178`) as a factor on the whole picture and `Ambient` (`0.777`) as a
-//! term inside the bracket. The generic lit path reads neither, which draws the stands about
-//! eight times too bright.
+//! term inside the bracket. The generic lit path reads neither, which draws these stands too
+//! bright. The plain `crowd_sprite_diffuse_normal_alpha` and `crowd_diffuse_normal` programs
+//! declare neither uniform and are not admitted (`gcn_dump` of both materials' `Shdr` tables).
 //!
 //! Carried by a glow-table entry of mode [`PROGRAM_CROWD`]: `tint` is `Ambient`, `program[1]`
 //! is `Shadowed`. The fragment stage replaces the light sum for the draw and multiplies the
@@ -22,8 +24,8 @@ const SHADOWED: u32 = 0x3699_7860;
 const AMBIENT: u32 = 0x7353_24ab;
 
 const FAMILIES: [&str; 2] = [
-    "crowd_sprite_diffuse_normal_alpha",
     "crowd_sprite_diffuse_normal_alpha_shadow",
+    "crowd_diffuse_normal_shadow",
 ];
 
 /// Per material, the glow-table slot (entry index plus one) it was admitted with.
@@ -134,9 +136,12 @@ mod tests {
     #[test]
     fn only_the_two_families_that_author_both_parameters_are_admitted() {
         let both = [(SHADOWED, vec![0.1]), (AMBIENT, vec![0.7; 3])];
-        assert!(entry(&material("crowd_sprite_diffuse_normal_alpha", &both)).is_some());
+        for family in FAMILIES {
+            assert!(entry(&material(family, &both)).is_some(), "{family}");
+        }
+        assert!(entry(&material("crowd_sprite_diffuse_normal_alpha", &both)).is_none());
         assert!(entry(&material("crowd_diffuse_normal", &both)).is_none());
         let one = [(SHADOWED, vec![0.1])];
-        assert!(entry(&material("crowd_sprite_diffuse_normal_alpha", &one)).is_none());
+        assert!(entry(&material("crowd_sprite_diffuse_normal_alpha_shadow", &one)).is_none());
     }
 }

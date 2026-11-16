@@ -119,7 +119,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // The row of the emissive table this vertex names, read once for every test below.
     let row_scale = emissive_scale((in.slots >> 24u) & 63u);
     let row_tint = emissive_tint((in.slots >> 24u) & 63u);
-    // **Omega's crowd sprites** (`Emissive::program` mode 16, `mesh::rcs::psp2::crowd`): the light
+    // **Omega's `_shadow` crowds** (`Emissive::program` mode 16, `mesh::rcs::psp2::crowd`): the light
     // is `Ambient + constantAmbientColour + sun * sat(N.L)` and the lit picture is times `Shadowed`.
     let crowd_lit = row_scale.z > 15.5 && row_scale.z < 16.5;
     let n = normalize(in.normal);
@@ -480,7 +480,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             authored = scene.light.ambient + scene.light.sun * ndl;
             sun_light = scene.light.sun * ndl;
         }
-        // The crowd sprite's sum: no prelit or vertex-light term, the material's `Ambient` added.
+        // The `_shadow` crowd's sum: no prelit or vertex-light term, the material's `Ambient` added.
         if crowd_lit {
             authored = row_tint.rgb + scene.light.ambient + sun_diffuse;
             sun_light = sun_diffuse;
