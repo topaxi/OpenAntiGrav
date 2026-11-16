@@ -443,6 +443,78 @@ What did not work, so nobody repeats it:
 5. Then the housing's sun term (the owed shadow read, with more frames a state), and the reflection after that: adding the
    reflection first moves the housing the wrong way.
 
+### Wired (lane `hull-vcol-wire`)
+
+`oag_rcs::gcn::input_is_factor` reads a material file's programs for `VertexColour1`: a vertex program that fetches it and
+exports the fetched registers unchanged to a parameter, and the pixel program listed after it (a file lists each vertex
+program directly before the pixel program it feeds) reading that parameter's three lanes only as multiplicands (`mul`,
+`mac`, `mad`, `fma`, first two sources), the lanes tracked until their register is written again, with one of those pixel
+programs reading `liveLighting0diffuse`. `psp2::hull_colour`
+runs it on each PS4 material that has a colour stream and emits `colour = rgb / 255` (UNORM, raw, alpha 1) with
+`sun_mask = factor_sun_mask(1.0)` on its lit submeshes that are not twin-blend, lightmapped, tarmac or ice. No shader
+change. Confidence 85 for the wiring (the recipe above is the evidence), 70 for "every admitted family multiplies it the way
+`diffuse_vcol` does" (the reader decides off program shape, not names).
+
+**Census** (`omega_vertex_colour_factor_ground_truth`, every `.rcsmaterial` in a `ships` directory of both base and patch
+archives, stems without the `_1`/`_2` variant suffix). The rule has a third clause the first reading lacked: a pixel
+program that takes the scene's light (`liveLighting0diffuse`) must be among the factor-only ones, or the colour is a factor
+on a flat texture and not on a light (`leacheffectmat` and `2048_ship_zonevertexcolour_emissive*` pass the multiplicand
+test and have no light; without the clause they were admitted). **Take it as a factor on the light (24):** `carbonfibre`,
+`diffuse_vcol`, `diffuse_with_specular_from_alpha_n_vcol`, `diffuse_with_specular_from_alpha_vcol`, `ship_lod_vcol`,
+`debris`, `fighter_version`, `ship_main_livery`, `nitro_perspex_new`, the `detonator_*` hull families (`basicalpha_vcol`,
+`diffuse_vcol`, `diffuse_with_specular_from_alpha_n_vcol`, `ship`, `zoneship_basic`), and ten `2048_*` ones
+(`2048_ship_paint_*`, `2048_ship_plastic`, `2048_ship_tech`, `2048_ship_carbon_fibre_shiny[_lod]`, `2048_ship_zonevertexcolour`,
+`2048_nitro_ships`). **Fetch it and do not (32), so left white:** the shields, trails, flames, holograms and engine flares
+(`*shield*`, `trail_test*`, `flame_test`, `jet_test`, `hexagonalshield*`, `holographic_projector*`, `2048_engine*`,
+`2048_magnetic_shield`, `*absorbinternal`), the two unlit colour materials above, and `nitro_body_new`, `colourtest`,
+`2048_ship_zonefacing`. Built over every `.rcsmodel` Omega ships, the materials that reach a drawn submesh are the hull
+families above (Feisar `c1`: three of its five materials, 13 of 16 submeshes, `omega_hull_vertex_colour_ground_truth`;
+`2048_ship_paint_shiny_final` 575 submeshes and `diffuse_with_specular_from_alpha_n_vcol` 470 lead) and, outside the ships,
+one submesh each of `vertexcolourandtexture` and `vertexcolourandtexturealpha` (lit by their own programs). The unlit effect
+materials (`basic_vertexemissive`, the HD bomb glows) are not admitted.
+
+**`carbonfibre` takes the factor (checked, confidence 70).** Its vertex program `0x17e4` fetches slot 4 into `v20..v22` and
+exports `exp param2 v20, v21, v22` (`@1ec`, the same shape as `diffuse_vcol` `0x1964`); the shadow-variant vertex `0x27c4`
+does the same. Its lit pixel programs (`0x1ea4`, `0x2fc4`) interpolate `attr2.xyz` and multiply it into the three lanes of
+the diffuse sample (`@2ac`, `@2f0`, `@32c`, `v_mad_mixlo_f16 d, attr2.c, sample.c, 0`; the `2x - 1` sample at `s[24:31]` is
+the normal map); each product then feeds an opcode our table does not name (`VOP2 op 53`, `@2c4`, `@308`, `@334`) before the
+fog lerp (`@348`-`@368`, `s16`-`s18`). That the second multiply is by the light is read from shape, not from the opcode name,
+which is why 70 and not higher. Every one of its six vertex/pixel pairs passes the reader.
+
+**Boxes** (1920x1080 `ours.png` of the stored `omega/modesto-heights` pair's own flags, tick 100, Feisar `c1`; linear means
+as in "The measurement"; engine light off and colour off against on are the same binary with a local environment switch
+that is not in the tree, as in the earlier knockouts):
+
+| Box | Original | Colour off, engine light off | **Colour on, engine light off** | Shipped before | Shipped now |
+| --- | --- | --- | --- | --- | --- |
+| housing `(890,690)-(1010,800)` | `(0.045, 0.057, 0.049)` | `(0.097, 0.102, 0.075)` | **`(0.068, 0.074, 0.054)`** | `(0.158, 0.126, 0.084)` | `(0.084, 0.077, 0.055)` |
+| hull body `(820,560)-(1100,860)` | `(0.064, 0.082, 0.078)` | `(0.087, 0.112, 0.097)` | **`(0.069, 0.092, 0.082)`** | `(0.109, 0.118, 0.099)` | `(0.074, 0.093, 0.082)` |
+| floor `(1140,650)-(1260,800)` | moves with time | `(0.113, 0.353, 0.363)` | `(0.112, 0.354, 0.364)` | `(0.112, 0.350, 0.360)` | `(0.112, 0.353, 0.364)` |
+
+The engine-light-off column pair is the lane's acceptance (the prediction above held to the third decimal: housing
+`(0.068, 0.074, 0.054)`, body `(0.069, 0.092, 0.082)`); "shipped" is what a player sees, with the engine light on. The floor
+moves by at most `0.002` (1.3 %), the stored track draw within its own frame-to-frame drift.
+
+Second pairs, hull body `(820,560)-(1100,860)` of the stored `omega/the-amphiseum` and `omega/moa-therma` frames, Feisar `c1`,
+shipped state, before to now (original): **the Amphiseum** `(0.123, 0.132, 0.144)` to `(0.065, 0.087, 0.103)`
+(`(0.102, 0.121, 0.135)`); **Moa Therma** `(0.059, 0.051, 0.039)` to `(0.040, 0.041, 0.032)` (`(0.162, 0.153, 0.131)`). Both
+fall as Modesto's does. On both the hull ends below the original (Amphiseum `0.64, 0.72, 0.76` of it, from
+`1.2, 1.1, 1.1`; Moa Therma `0.25, 0.27, 0.25`, from `0.36, 0.33, 0.30`), so on those two circuits the terms ours still lacks
+(the housing sun term, the reflection) are no longer hidden by the over-bright colour. The hull crops (ours before, ours
+after, the original) show the round fittings beside the housing block shaded into the body, as the original's flat-probe
+state did, where they were white discs.
+
+**HD and 2048 are pixel-identical.** `hd-race/talons-pack` (HD) and `2048-vita/modesto-heights` (Vita), main against this
+build, `max |difference| = 0` over every pixel. Neither title reaches `psp2::hull_colour`: HD multiplies the colour already
+(`skin::light_inputs`), and the Vita decoder (`vertex_colour1()`) accepts the PS4 type only.
+
+**Open.** `shade.wesl`'s `colour_factor` arm also multiplies the specular by the colour (HD's law); the Omega pixel program
+adds the specular after the product and leaves it unmultiplied (`@790`-`@798`, above). It is not changed here (no shader
+edit in this lane); the share is small at the dark panels but it is a difference. The housing's sun term (the owed read) and
+the reflection stand as in "Recipe" 5. The admitted families beyond Feisar's three (`2048_ship_*`, `debris`,
+`fighter_version`, `ship_main_livery`, the `detonator_*` ones) were not rendered: they take the colour by the same program
+reading and nothing else.
+
 ### Cross-title
 
 - **2048: checked, differs on the file, not wired.** (Wired on Omega above, including its ten 2048-lineage circuits, which ship

@@ -8,7 +8,7 @@
 //!
 //! Which materials do this comes from their own programs ([`oag_rcs::gcn::input_is_factor`]): the
 //! vertex program exports the input and the pixel program after it reads that parameter only as a
-//! multiplicand. The marker rides `sun_mask` ([`crate::mesh::factor_sun_mask`]) and `shade.wesl`'s
+//! multiplicand, and one of those pixel programs takes the scene's light. The marker rides `sun_mask` ([`crate::mesh::factor_sun_mask`]) and `shade.wesl`'s
 //! `colour_factor` arm is the product, the one HD's hull already takes.
 //!
 //! **PS4 only.** 2048's programs are GXP, whose operands nothing reads (`docs/formats/gxp.md`).

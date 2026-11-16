@@ -25,17 +25,21 @@ pub struct Factor {
     pub reading: usize,
     /// Of those, ones that read every lane only as a multiplicand.
     pub factor_only: usize,
+    /// Of those, ones that take the scene's light (`liveLighting0diffuse`): the colour is a
+    /// factor on a light, not on a flat texture.
+    pub lit: usize,
 }
 
 impl Factor {
-    /// Every fetching program exports it, at least one pixel program reads it, and every
-    /// pixel program that reads it reads it as a factor.
+    /// Every fetching program exports it, at least one pixel program reads it, every
+    /// pixel program that reads it reads it as a factor, and one of them is lit.
     #[must_use]
     pub fn is_factor(&self) -> bool {
         self.fetching > 0
             && self.exporting == self.fetching
             && self.reading > 0
             && self.factor_only == self.reading
+            && self.lit > 0
     }
 }
 
@@ -62,7 +66,9 @@ pub fn input_is_factor(file: &[u8], name: &str) -> Factor {
                     && program.reads_attribute(param)
                 {
                     found.reading += 1;
-                    found.factor_only += usize::from(program.attribute_is_only_a_factor(param));
+                    let factor = program.attribute_is_only_a_factor(param);
+                    found.factor_only += usize::from(factor);
+                    found.lit += usize::from(factor && program.names_constant(LIGHT));
                 }
             }
             Stage::Other(_) => {}
@@ -71,7 +77,18 @@ pub fn input_is_factor(file: &[u8], name: &str) -> Factor {
     found
 }
 
+/// The constant every lit pixel program of a hull or track reads its sun colour from.
+const LIGHT: &str = "liveLighting0diffuse";
+
 impl Program<'_> {
+    /// Whether the reflection declares a constant called `name`.
+    #[must_use]
+    pub fn names_constant(&self, name: &str) -> bool {
+        self.reflection
+            .as_ref()
+            .is_ok_and(|r| r.constants.iter().any(|c| c.name == name))
+    }
+
     /// The parameter a vertex program exports the input `name` to, when three exported lanes
     /// are the registers it was fetched into.
     #[must_use]
