@@ -118,7 +118,9 @@ Classified from `data/scratch/*/*.log` on 2026-10-09 (confidence 70: logs, not a
   attach leaves a demo first. A race left idle is safe: 5 minutes parked in a running race stayed in the race.
 - **Pad crosstalk: possible, seen once (confidence 40).** RPCS3 booted and walked with `OAG_RPCS3_PAD_NAME`
   set to a name its profile does not contain, so evdev binding is not by name alone and another member's pad
-  could be read. Not observed as a fault. Each member's pad is still named per lane by `scripts/emu-env.sh`.
+  could be read. Not observed as a fault, and not re-tested when seats landed. Each member's pad is still named per lane
+  by `scripts/emu-env.sh` (`OAG seat N pad rpcs3` under `OAG_PAD_SEAT=N`). SDL emulators (the wipeout_pc port, shadPS4) are
+  isolated by seat instead of by name: `docs/tools/compare-page.md`, "Pad seats".
 - Not found: a copied-config press drop, safe-area or profile differences.
 
 ## Save states and the other ways to reach a state
