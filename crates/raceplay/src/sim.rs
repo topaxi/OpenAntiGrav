@@ -332,6 +332,12 @@ pub struct RaceSim {
     /// its driver's line. See [`RESCUE_TICKS`] and [`BENEATH_LINE`]. Slot 0's
     /// entry is never written.
     pub(super) beneath_ticks: [u32; oag_gameplay::MAX_SHIPS],
+    /// Whether each opponent left its line's corridor to get where it is: set
+    /// on the ground outside the corridor, kept through a flight that started
+    /// there, read only while it is beneath its line. A craft under its line
+    /// inside the corridor all along is on the road the corridor is over, not
+    /// on one under the circuit. Slot 0's entry is never written.
+    pub(super) beneath_wide: [bool; oag_gameplay::MAX_SHIPS],
     /// How many consecutive ticks each opponent has spent stopped while asking to
     /// move. See [`STALL_TICKS`].
     ///

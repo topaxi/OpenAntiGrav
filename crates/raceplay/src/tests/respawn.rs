@@ -615,34 +615,61 @@ fn a_shielded_scrape_bulges_the_shell_and_throws_no_sparks() {
     );
 }
 
+/// The half-width of the corridor [`opponent_beneath`] gives a supported line.
+const CORRIDOR: f32 = 12.0;
+
 /// Puts opponent 1 `depth` below its own line point along the sample's up,
-/// on the ground, and returns the race. The fixture has no floor under its
-/// line, so every sample reads as a gap; `supported` rebuilds the line without
-/// that mask, which is what a line over road is.
-fn opponent_beneath(depth: f32, supported: bool) -> Race {
+/// `across` along the sample's lateral, on the ground, and returns the race.
+/// The fixture has no floor under its line, so every sample reads as a gap;
+/// `supported` rebuilds the line without that mask and with a corridor
+/// [`CORRIDOR`] either side, which is what a line over road is. The corridor
+/// latch is cleared, so whether the craft left its corridor is the caller's.
+fn opponent_beneath(depth: f32, across: f32, supported: bool) -> Race {
     let mut race = race_with_a_grid();
     race.tick(&PlayerInputs::none());
     if supported {
         let line = &race.sim.racing_line;
-        let rebuilt = oag_ai::Line::new((0..line.len()).map(|i| line.point(i)).collect());
+        let frames = (0..line.len())
+            .map(|i| oag_ai::Frame {
+                lateral: race.ai_sample(i).map_or(Vec3::ZERO, |s| {
+                    Vec3::from_array(s.lateral).normalize_or_zero()
+                }),
+                left: -CORRIDOR,
+                right: CORRIDOR,
+            })
+            .collect();
+        let rebuilt =
+            oag_ai::Line::with_corridor((0..line.len()).map(|i| line.point(i)).collect(), frames);
         race.sim.racing_line = Arc::new(rebuilt);
     }
-    let index = race.sim.world.ships[1].driver.index as usize;
-    let sample = *race.ai_sample(index).expect("a grid race has samples");
-    let up = -Vec3::from_array(sample.down).normalize_or_zero();
-    let ship = &mut race.sim.world.ships[1];
-    ship.physics.craft_state = oag_physics::CraftState::Racing;
-    ship.physics.time_airborne = 0.0;
-    ship.physics.body.position = race.sim.racing_line.point(index) - up * depth;
+    place_opponent(&mut race, depth, across);
+    race.sim.beneath_wide[1] = false;
     race
 }
 
-/// **A craft driving a road under its own line is lost**, though it is close
-/// to the line point: `05_Track` forward's pit under the upper road, 30-80
-/// units down and inside the distance trigger. See [`BENEATH_LINE`].
+/// Moves opponent 1 to `depth` below and `across` its own line point.
+fn place_opponent(race: &mut Race, depth: f32, across: f32) {
+    let index = race.sim.world.ships[1].driver.index as usize;
+    let sample = *race.ai_sample(index).expect("a grid race has samples");
+    let up = -Vec3::from_array(sample.down).normalize_or_zero();
+    let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
+    let point = race.sim.racing_line.point(index);
+    let ship = &mut race.sim.world.ships[1];
+    ship.physics.craft_state = oag_physics::CraftState::Racing;
+    ship.physics.time_airborne = 0.0;
+    ship.physics.body.position = point - up * depth + lateral * across;
+}
+
+/// **A craft that ran wide onto a road under its own line is lost**, though
+/// it is close to the line point: `05_Track` forward's pit under the upper
+/// road, 30-80 units down and inside the distance trigger. It is on the
+/// ground outside its corridor first, then under the line. See
+/// [`BENEATH_LINE`].
 #[test]
 fn an_opponent_on_the_ground_well_below_its_line_is_lost_after_the_dwell() {
-    let mut race = opponent_beneath(BENEATH_LINE + 5.0, true);
+    let mut race = opponent_beneath(0.0, CORRIDOR + 8.0, true);
+    assert!(!race.beneath_too_long(1));
+    place_opponent(&mut race, BENEATH_LINE + 5.0, CORRIDOR + 8.0);
     assert!(race.beneath_the_line(1));
     for _ in 0..RESCUE_TICKS - 1 {
         assert!(
@@ -656,17 +683,36 @@ fn an_opponent_on_the_ground_well_below_its_line_is_lost_after_the_dwell() {
     );
 }
 
+/// **A craft under its line that never left the corridor is on the corridor's
+/// own road**: 2048's and Omega's `arena` run the line over a deck the field
+/// drops under, onto a road that climbs back up to it. Not a rescue, however
+/// long it stays there; the same craft having left the corridor first is the
+/// test above.
+#[test]
+fn an_opponent_under_its_line_inside_the_corridor_all_along_is_not_lost() {
+    let mut race = opponent_beneath(0.0, 0.0, true);
+    assert!(!race.beneath_too_long(1));
+    place_opponent(&mut race, BENEATH_LINE + 6.0, 0.0);
+    assert!(race.beneath_the_line(1));
+    for _ in 0..RESCUE_TICKS * 3 {
+        assert!(
+            !race.beneath_too_long(1),
+            "a craft inside its corridor was rescued from the road under the line"
+        );
+    }
+}
+
 /// The controls: a craft a little below its line (a dip, the hover), one in
 /// the air under it (a jump), and one under a line that arcs over a gap (it
 /// landed early) are not beneath it.
 #[test]
 fn a_craft_slightly_below_airborne_or_under_a_gap_is_not_beneath_its_line() {
-    let race = opponent_beneath(BENEATH_LINE - 5.0, true);
+    let race = opponent_beneath(BENEATH_LINE - 5.0, 0.0, true);
     assert!(!race.beneath_the_line(1));
-    let mut race = opponent_beneath(BENEATH_LINE + 5.0, true);
+    let mut race = opponent_beneath(BENEATH_LINE + 5.0, 0.0, true);
     race.sim.world.ships[1].physics.time_airborne = 0.5;
     assert!(!race.beneath_the_line(1));
-    let race = opponent_beneath(BENEATH_LINE + 5.0, false);
+    let race = opponent_beneath(BENEATH_LINE + 5.0, 0.0, false);
     assert!(
         race.sim
             .racing_line

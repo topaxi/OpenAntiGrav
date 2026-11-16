@@ -73,10 +73,19 @@ fn both_recovery_dwells_move_the_race_hash() {
     );
 
     race.sim.stalled_ticks[1] += 1;
+    let after_stalled = race.sim.state_hash();
     assert_ne!(
-        after_lost,
-        race.sim.state_hash(),
+        after_lost, after_stalled,
         "the stopped-on-the-circuit dwell was invisible to the gate"
+    );
+
+    // What the first dwell counts depends on whether the craft left its
+    // corridor, so the latch is state on the same terms.
+    race.sim.beneath_wide[1] = !race.sim.beneath_wide[1];
+    assert_ne!(
+        after_stalled,
+        race.sim.state_hash(),
+        "the corridor latch was invisible to the gate"
     );
 }
 

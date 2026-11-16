@@ -92,6 +92,11 @@ impl RaceSim {
         for dwell in self.beneath_ticks {
             hasher.write_u32(dwell);
         }
+        // What the beneath dwell counts depends on it, so it moves which tick
+        // a craft is put back on as the dwell does.
+        for wide in self.beneath_wide {
+            hasher.write_u8(u8::from(wide));
+        }
         // The second dwell, on the same terms: a stall counter one tick out moves
         // which tick a craft is put back on, and a respawn moves everything after
         // it.

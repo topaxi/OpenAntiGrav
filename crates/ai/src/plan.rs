@@ -550,7 +550,7 @@ pub enum Failure {
     /// there: it ran wide onto another road, which the race rescues a craft
     /// from. A craft under its line inside its corridor all along is where
     /// the line's road is, as far as a speed can tell (2048 `arena`'s line
-    /// runs 21 units over its road for 250 samples). **Chosen, not measured**
+    /// runs over a deck the field drives 21 units under, for 230 samples). **Chosen, not measured**
     /// (`docs/gameplay/ai.md`, "A road under the line is a failure").
     Beneath,
 }
@@ -632,7 +632,9 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
         if !under && self.beneath.is_finite() {
             // On the road the craft is wide or it is not; in the air it stays
             // wide if it took off wide, wherever the flight carries it.
-            let outside = self.outside_the_corridor(&run.state, index);
+            let outside = self
+                .line
+                .outside_the_corridor(index, run.state.body.position);
             run.wide = outside || (run.wide && run.state.time_airborne > 0.0);
         }
         let beneath = under && run.wide;
@@ -685,15 +687,6 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
             return false;
         };
         (self.line.point(index) - state.body.position).dot(sample.normal()) > self.beneath
-    }
-
-    /// Whether the craft is further across its line than the corridor there
-    /// reaches; never on a line with no corridor.
-    fn outside_the_corridor(&self, state: &ShipState, index: usize) -> bool {
-        self.line.aim(index, 0.0).corridor.is_some_and(|frame| {
-            let offset = (state.body.position - self.line.point(index)).dot(frame.lateral);
-            offset < frame.left || offset > frame.right
-        })
     }
 }
 

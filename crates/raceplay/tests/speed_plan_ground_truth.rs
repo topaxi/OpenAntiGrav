@@ -239,8 +239,8 @@ fn ring_plan_verifies(source: &std::path::Path, track: &str, class: &str) -> boo
 /// line, which it then drives for 900 samples to a wall. The plan counts that
 /// road as a failure and brakes for the corner (`docs/gameplay/ai.md`, "A road
 /// under the line is a failure"). PHANTOM is the class that takes off
-/// furthest from where it lands. `arena`'s line runs 21 units over its own
-/// road for 250 samples with the craft inside its corridor, which is not one.
+/// furthest from where it lands. `arena`'s line runs over a deck the craft
+/// drive 21 units under, inside its corridor, which is not one.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn the_2048_square_ring_plan_brakes_for_the_corner_it_ran_wide_of() {

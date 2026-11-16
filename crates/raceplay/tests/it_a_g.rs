@@ -38,6 +38,7 @@ mod ai_roll_ground_truth;
 mod ai_span_sweep;
 mod aiming_ground_truth;
 mod airtime_budget_ground_truth;
+mod arena_beneath_ground_truth;
 mod asset_layers_ground_truth;
 mod autopilot_cancel_ground_truth;
 mod autopilot_original_ground_truth;
