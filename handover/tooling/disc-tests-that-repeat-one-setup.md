@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-16
-summary: "Disc tests that repeat one walk, load or sim: fold the PSP2 model walks first (about 100 CPU-s), then magstrip, omega_held_loops and split_hud"
+summary: "Disc tests repeating one walk, load or sim: PSP2 model walks 90-130 CPU-s (needs maintainer yes); magstrip, omega_held_loops, split_hud next"
 size: S (30)
 difficulty: medium (30)
 ---
@@ -39,7 +39,7 @@ merging. Estimates carry confidence 30 on the rubric.
 
 ## Ranked groups
 
-### 1. The PSP2 model walks: `psp2_rcsmodel_ground_truth.rs` (6 tests) and `psp2_rcsmodel_material_ground_truth.rs` (4 tests)
+### 1. The PSP2 model walks (needs the maintainer's yes, redundancy thread item 1): `psp2_rcsmodel_ground_truth.rs` (6 tests) and `psp2_rcsmodel_material_ground_truth.rs` (4 tests)
 
 - **Setup:** each test walks every `.rcsmodel` of the three 2048 packages
   (`PACKAGES`, both files) and decodes each with `psp2::parse`. The first file's
@@ -50,20 +50,22 @@ merging. Estimates carry confidence 30 on the rubric.
   `every_submesh_closes_on_its_own_counts`, `positions_decode...`,
   `normals_decode...`, `tangents_are_orthogonal...` (the first file), and
   `texcoords_decode...`, `every_material_resolves...`,
-  `every_submesh_names_a_material...` (the second). About 100 s summed.
+  `every_submesh_names_a_material...` (the second). About 128 s summed (about 81 s and 47 s).
   `a_circuit_is_world_space_and_a_craft_is_not` (line 247) walks the same set
   and was not in the log.
 - **Saving:** one walk per file instead of one per test. About 8-9 extra walks
   at 15 s each. Estimate **90-130 CPU-s** (reading: a walk is most of each
   test's time, because the checks are arithmetic on the decoded values).
 - **Recipe:**
-  1. Move the second file's checks into `psp2_rcsmodel_ground_truth.rs` (one
-     file, one `PACKAGES`, one `survey`), or make both use one `survey`
-     shared through a `mod` in the same binary. Two files means two walks; a
-     merge must be one binary.
-  2. Make the walk one `#[test]` per claim family, each calling `survey` once
-     with its own closure, or one `#[test]` that calls it once with all
-     closures. Keep the messages: each claim keeps its own `assert!` text.
+  1. Nextest runs each `#[test]` in its own process, so a walk is saved only
+     when one test calls `survey` once for all its claims. A `mod` shared by
+     two test functions does not help. Put the second file's checks into
+     `psp2_rcsmodel_ground_truth.rs` (one `PACKAGES`, one `survey`) and delete
+     the copy in the material file.
+  2. Make one `#[test]` per file that calls `survey` once with a closure that
+     runs every claim, or one `#[test]` for both files. Each claim keeps its
+     own `assert!` text. The count of walks falls from 10 to 1 or 2; a
+     per-claim test would keep the walks and so would not save anything.
   3. Keep the census numbers (`Survey`) asserted in the one walk, as now.
 - **Tail:** a merged walk is one 15 s pass plus the checks. Under the 43 s
   slowest test in the log.
@@ -80,17 +82,26 @@ Read the code this time. Four facts:
 - **A double load in one test.** `every_craft_visits_a_strip...` (line 120)
   starts with `if load().is_none() { return; }` (line 121). That loads the full
   HD race just to skip. Then `fly(false, None)` (line 124) calls `load()` again
-  (line 68). The same pattern is in `magstrip_wire_2048_ground_truth.rs` (line
-  135). `rg` finds these two sites only. **Fix:** probe
-  `oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso").is_none()` instead.
-  That is a one-line change, and it saves one HD load per test that does it.
-- **`every_craft` is one of the hum test's flights.** The hum test's `render`
-  closure (near line 180) calls `fly(drop_edges, Some(&mut audio))`, with
-  `drop_edges` false and then true. The `every_craft` flight is the same race
-  with no audio, so its `Log` is the one `render(false)` already builds. **Fold**
-  the strip-visit asserts into the hum test on that log, then delete
-  `every_craft`. Saves one load and one 2,400-tick flight, about **11 s** (its
-  time in the log).
+  (line 68). `magstrip_wire_2048_ground_truth.rs` line 135 has the same guard
+  over a 2048 load, with `fly` loading again. A `rg` for any loader called as a
+  `.is_none()` guard finds only these two (the `trackstartup` `image()` hits are
+  path probes, not loads). **Fix:** probe the image path
+  (`oag_testdata::image(...)`) instead. One-line change in each file, saving one
+  race load per test.
+- **`every_craft` could fold into the hum test's `render(false)` flight.** The
+  hum test's `render` closure (near line 178) calls `fly(drop_edges, Some(&mut audio))`,
+  with `drop_edges` false and then true. `fly` builds `log.starts`/`stops` from
+  `race.pending_cues()` before any drain, on both the audio and no-audio paths
+  (lines 75-84). `race_tick_keeping` (`crates/game/src/sound.rs`, line 188) drops
+  cues only from the audio input (`keep`), and `note_song` writes the readout,
+  not the sim. So the `Log` should match. **Not confirmed**: the redundancy
+  thread's step, one run that prints both logs and compares them, is still the
+  proof. If they match, fold the strip-visit asserts into the hum test's
+  `render(false)` log and delete `every_craft`. Saves one load and one
+  2,400-tick flight, about **11 s** (its time in the log).
+- **The hum test also loads the race a third time** (line 153, `load()` only to
+  read the voices). Fold that voice check into the `render` closure's first
+  race if `fly` can hand it back, or accept it as one load.
 - **The rumble runs share one simulation.** `rumble_run` (line 252) calls
   `race.tick` every tick, whatever the token. `paused_from` only passes a flag
   to `Rumbler::tick` (line 288), so the sim keeps running. `Rumbler::tick` takes
@@ -130,7 +141,7 @@ Read the code this time. Four facts:
   (line 101) and `a_later_views_reticle_follows_its_own_slots_lock` (line 177).
   Same four-player race, one load each. **Fold** the two: the draw checks, then
   the reticle check on the same `race`. Saves one load.
-- **`hd_loaded(2)`** (line 200) is loaded in five tests: `hd_draws_its_own_authored_split_layouts`
+- **`hd_loaded(2)`** (line 200) is loaded in six tests: `hd_draws_its_own_authored_split_layouts`
   (line 219, with `hd_loaded(1)`), `hd_draws_a_reticle_in_its_authored_split_view`
   (line 422) and `..._vertical_split_view` (line 431), both through
   `hd_reticle_in_split_view` (line 436), `hd_authors_the_bar_both_places...`
@@ -140,8 +151,8 @@ Read the code this time. Four facts:
   horizontal-cut reticle, the bar, and the two-by-two checks. The vertical
   reticle needs its own cut on the same load (its `cut` argument), so it can
   join the shared test too.
-- **Saving:** four HD two-view loads, one four-player load. Estimate
-  **12-18 CPU-s** (reading).
+- **Saving:** five HD two-view loads, one four-player load. Estimate
+  **12-18 CPU-s** (reading: six calls become one load, five saved).
 - **Tail:** the merged HD test runs several check functions on one load. Its
   time is the load plus those draws; measure it against 43 s.
 - **Risk:** the reticle check mutates the race's lock state. It must run last
@@ -174,9 +185,10 @@ Read the code this time. Four facts:
   test's asserts on `loaded.campaign_2048_event` before `Race::start(loaded.setup)`;
   then run the second test's race. The merged cost is about the second test
   plus the first's `oag_omega::open` and table read, not the sum of the two.
-- **Saving:** one event load, about 15-19 CPU-s (reading).
-- **Tail:** about 25 s, under 43 s. The earlier concern that merging would make
-  a new slowest test was wrong.
+- **Saving:** one event load, estimate **5-19 CPU-s**. The share of the first
+  test's 19 s that is the load is not measured.
+- **Tail:** estimate 25-37 s (to measure), under 43 s if it holds. Merging would make
+  a new slowest test; measure it.
 - **Risk:** low. The first test's asserts read only the `progress` and the
   Omega table. Keep the table check before the race runs.
 
@@ -215,9 +227,13 @@ Read the code this time. Four facts:
 ### Checked, not a merge: already solved or a different setup
 
 - **`hd_water_ground_truth.rs` (17 tests, 32 s) and `hd_lightmapped_albedo_ground_truth.rs`
-  (10 tests, 15 s):** they read through `archive_cache`, which the 2026-10-07
-  pass added (`test-data-tail-is-now-decode-and-sim-sweeps.md`'s first item). The repeat that
-  is left is a circuit build per test, which is the redundancy thread's item 4.
+  (10 tests, 15 s): open, not solved.** They read through `archive_cache`
+  (`crates/mesh/tests/archive_cache/mod.rs`, line 67), a `thread_local!` cache.
+  Nextest runs each test in its own process, so the cache only removes repeats
+  inside one test. Each test still re-reads its archives, and the same Vineta
+  and Sebenco `.vex` files are read by several tests. Each test is 1-2 s, so the
+  saving is small per test. The circuit builds are the redundancy thread's
+  item 4.
 - **`trackfile_ground_truth.rs` (22 `race::load` calls):** each per-image test
   exports and reads back its own circuits, so the loads are not one setup
   across tests. `a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically`
