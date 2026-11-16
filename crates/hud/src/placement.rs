@@ -123,7 +123,8 @@ pub(super) fn place_mut(draw: &mut Draw, p: &Placement) -> bool {
         | Draw::FuryBackdrop(_)
         | Draw::SceneBackdrop(_)
         | Draw::GlowText { .. }
-        | Draw::Triangles(_) => false,
+        | Draw::Triangles(_)
+        | Draw::SolidTriangles { .. } => false,
     }
 }
 

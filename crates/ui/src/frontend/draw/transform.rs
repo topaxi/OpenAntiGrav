@@ -30,7 +30,8 @@ impl Draw {
             | Self::Sprite { color, .. }
             | Self::RotatedSprite { color, .. }
             | Self::TiledSprite { color, .. }
-            | Self::BlendedSprite { color, .. } => Some(color),
+            | Self::BlendedSprite { color, .. }
+            | Self::SolidTriangles { color, .. } => Some(color),
             // The left edge's, which is the one a caller reading "the colour"
             // of a rule that fades in from the left would expect. Fading
             // both edges is [`Self::fade`]'s job, not this accessor's.
@@ -124,6 +125,12 @@ impl Draw {
             Self::Triangles(triangles) => {
                 for corner in triangles.iter_mut().flatten() {
                     corner.at = [about(corner.at[0], origin.0), about(corner.at[1], origin.1)];
+                }
+            }
+            Self::SolidTriangles { triangles, color } => {
+                color[3] *= alpha;
+                for point in triangles.iter_mut().flatten() {
+                    *point = [about(point[0], origin.0), about(point[1], origin.1)];
                 }
             }
             // A movie and the point-cloud pass have no alpha channel to fade

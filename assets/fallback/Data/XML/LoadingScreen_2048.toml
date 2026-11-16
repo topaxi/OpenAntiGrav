@@ -1,0 +1,61 @@
+# Wipeout 2048: the race load's box, as `LoadingScreen_Draw` kind 4 (0x812830c8) draws it.
+# Read by oag_hud::loading_layout through the asset layers (docs/architecture/asset-layers.md): this
+# fallback copy answers only when no archive and no player override names the same path, and a file
+# of the same name in overrides/wipeout-2048/Data/XML/ replaces it whole.
+#
+# MEASURED off the executable and two frames of a Vita3K run (docs/ghidra/functions/vita-2048-eu-v104/
+# race-load.md, "The box, the bar and the meter"; confidence 85-90): every number is the operand in
+# front of a draw call, in the 960x544 grid. Colour roles are `Skin.xml` globals: ink = Blue2048,
+# accent = White2048. The event card behind this box is the front end's own painter (the game draws
+# it), not a layout element.
+
+screen = "loading"
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/screen-layout.tosd"
+version = "1.0.0"
+
+[[layout]]
+name = "race-load"
+grid = [960, 544]
+
+[[layout.element]]            # the percentage box, 70 by 70 at (16, 16) in Blue2048  [0x81282ff6, 90]
+id = "box"
+draw = "fill"
+at = [16, 16]
+size = [70, 70]
+colour = "ink"
+
+[[layout.element]]            # the rule, 338 by 4 at (86, 82); a plain fill, it does not grow  [90]
+id = "rule"
+draw = "fill"
+at = [86, 82]
+size = [338, 4]
+colour = "ink"
+
+[[layout.element]]            # FE_LOADINGDOT, face default, scale 1.0, left at (105, 30)  [90]
+id = "caption"
+draw = "text"
+source = "caption-word"
+scale = 1.0
+at = [105, 30]
+colour = "ink"
+
+[[layout.element]]            # "%d%%" of floor(shown / 166 * 100), scale 0.6, centred on (51, 38)  [90]
+id = "percent"
+draw = "text"
+source = "load-percent"
+scale = 0.6
+at = [51, 38]
+align = "centre"
+colour = "accent"
+
+[[layout.element]]            # the seven-triangle meter: centres x = 895 - 30 i, y = 475, odd ones 14 lower,
+id = "meter"                  # outer radius 28 u, inner 14 u p - 1  [0x8105d4a8, 85]
+draw = "meter"
+at = [895, 475]
+size = [28, 14]
+tile = 30
+gap = 14
+fill = "progress"
+colour = "ink"

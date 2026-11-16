@@ -301,6 +301,7 @@ pub const PROGRESSION: oag_title::loading::Progression = oag_title::loading::Pro
     milestones: &[0.4, 0.5, 0.75, 0.95],
     rate: 0.1,
     columns: 166.0,
+    rules: oag_title::loading::Rules::HD,
 };
 
 /// The base game's style, as `OPT_FE_STYLE`'s own first entry spells it.

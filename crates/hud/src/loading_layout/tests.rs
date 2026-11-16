@@ -82,6 +82,13 @@ fn a_refused_file_names_what_is_wrong() {
         .contains("`string_id` and `text`")
     );
     assert!(refused(element("draw = \"corners\"\n")).contains("needs `rect`"));
+    assert!(refused(element("draw = \"fill\"\nat = [0, 0]\n")).contains("needs `size`"));
+    assert!(
+        refused(element(
+            "draw = \"meter\"\nat = [0, 0]\nsize = [1, 1]\ntile = 3\n"
+        ))
+        .contains("needs `gap`")
+    );
     assert!(
         refused(element(
             "draw = \"corners\"\nrect = [0, 0, 1, 1]\nasset = \"corner\"\nsize = [1, 1]\n"

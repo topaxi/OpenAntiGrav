@@ -202,6 +202,17 @@ pub enum Draw {
     /// corner to corner. 2048's campaign map raises lattice cells with it
     /// (`canvas_wave`).
     Triangles(Vec<[Corner; 3]>),
+    /// Solid-colour triangles, each three screen points, all in one colour.
+    ///
+    /// What a [`Self::Fill`] cannot say: a shape with no axis-aligned edge. The race load's
+    /// seven-triangle meter is rings of them (`FrontEnd_DrawLoadingMeter`,
+    /// `docs/ghidra/functions/vita-2048-eu-v104/race-load.md`).
+    SolidTriangles {
+        /// Each triangle's three corners, in the screen's space.
+        triangles: Vec<[[f32; 2]; 3]>,
+        /// Colour, RGBA.
+        color: [f32; 4],
+    },
     /// A sprite spun about its own centre.
     ///
     /// **A separate variant rather than a `rotation` on [`Self::Sprite`]**: the

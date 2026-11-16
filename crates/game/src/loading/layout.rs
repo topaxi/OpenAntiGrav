@@ -241,6 +241,7 @@ impl Screen {
     fn source_text(&self, source: &str, phase: Phase, progress: &Progress) -> Option<String> {
         match source {
             "caption" => Some(self.heading_text(phase, progress)),
+            "caption-word" => self.caption.clone(),
             "feature.title" => self.feature_title.clone(),
             "feature.heading" => self.feature_heading.clone(),
             "feature.text" => self.tip().map(str::to_string),
@@ -251,6 +252,7 @@ impl Screen {
                 .clone()
                 .filter(|_| !self.caption_leads(progress)),
             "step" => step_line(phase, &self.strings),
+            "load-percent" => self.fill_percent().map(|percent| format!("{percent}%")),
             _ => None,
         }
     }
@@ -268,6 +270,13 @@ impl Screen {
         } else {
             0.0
         }
+    }
+
+    /// The readout of a stage-driven bar whose title reads a percentage: the original's
+    /// `(int)(shown / 166 * 100)`, and 100 once the load is over. `None` without a bar.
+    fn fill_percent(&self) -> Option<u32> {
+        let fill = self.fill.as_ref()?;
+        Some(if self.fade > 0 { 100 } else { fill.percent() })
     }
 
     /// The whole screen, from the layout file; the ground alone when the title names none
@@ -436,6 +445,29 @@ impl Screen {
                         });
                     }
                 }
+            }
+            Kind::Fill => out.push(Draw::Fill {
+                rect: frame.rect(x, y, element.size[0], element.size[1]),
+                color: colour,
+            }),
+            Kind::Meter => {
+                // The original's fraction here is the exact shown count, not the lit column.
+                let fraction = match (&self.fill, self.fade > 0) {
+                    (_, true) => 1.0,
+                    (Some(fill), false) => fill.exact_fraction(),
+                    (None, false) => 0.0,
+                };
+                let [cx, cy] = frame.point(x, y);
+                let safe = frame.safe;
+                let meter = oag_ui::loading_meter::Meter {
+                    at: [cx, cy],
+                    pitch: element.tile * safe,
+                    outer: element.size[0] * safe,
+                    inner: element.size[1] * safe,
+                    drop: element.gap * safe,
+                };
+                // One step of the original's counter is a draw at 30 a second.
+                out.push(meter.draw(fraction, self.frames / 2, colour));
             }
             Kind::Clip => {
                 // A video quad has no alpha to fade with, and nothing is drawn until the

@@ -89,6 +89,47 @@ pub struct Progression {
     pub rate: f32,
     /// Columns across the bar, which scales every fraction above.
     pub columns: f32,
+    /// The three places two titles' loaders differ in how they chase a target.
+    pub rules: Rules,
+}
+
+/// How a title's loader moves the shown count toward its targets.
+///
+/// Wipeout HD and Wipeout 2048 run the same class (`LoadingScreen`) and differ in three
+/// places, each read from the executable: HD doubles the rate when a target is raised, 2048
+/// rescales it by the gap; HD steps every frame, 2048 once per 1/30 s; HD's rate returns to
+/// its base on reaching a target, 2048's race manager freezes the rate it has reached as the
+/// one it returns to (`docs/ghidra/functions/vita-2048-eu-v104/race-load.md`, "The meter's law").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rules {
+    /// What raising a target does to the rate.
+    pub raise: Raise,
+    /// Frames of the screen's own 60 Hz a step lasts: `1` steps every frame, `2` is one
+    /// step per 1/30 s.
+    pub frames_per_step: u8,
+    /// Whether the load's last stage freezes the rate it reached as the rate a clamp
+    /// returns to. `false` returns to [`Progression::rate`] for good.
+    pub freezes_rate: bool,
+}
+
+impl Rules {
+    /// Wipeout HD's: double on a raise, a step a frame, back to the base rate.
+    pub const HD: Self = Self {
+        raise: Raise::Double,
+        frames_per_step: 1,
+        freezes_rate: false,
+    };
+}
+
+/// What a raised target does to the rate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Raise {
+    /// The rate doubles (HD, `0x002b2c60`).
+    Double,
+    /// The rate is multiplied by `(old gap + new gap) / new gap`, so the bar still reaches
+    /// the new target in the time it had left for the old one plus the extra distance
+    /// (2048, `LoadingScreen_SetCeiling`).
+    Rescale,
 }
 
 impl Progression {

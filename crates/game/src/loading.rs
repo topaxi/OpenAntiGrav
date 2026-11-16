@@ -782,3 +782,5 @@ mod layout_tests;
 mod tests;
 #[cfg(test)]
 mod track_tests;
+#[cfg(test)]
+mod vita_tests;

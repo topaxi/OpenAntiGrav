@@ -86,6 +86,13 @@ pub enum Draw {
     Dots,
     /// The mode's video clip: `source`, `at`, `size`.
     Clip,
+    /// A solid rectangle: `at`, `size`, `colour`.
+    Fill,
+    /// Wipeout 2048's row of seven breathing triangles, filling in from the left with the
+    /// load: `at` (the right-most one's centre), `size` (outer and inner radius), `tile` (the
+    /// pitch between centres), `gap` (how much lower an odd one sits), `fill = "progress"`,
+    /// `colour`.
+    Meter,
 }
 
 #[derive(Debug, Deserialize)]
@@ -173,7 +180,8 @@ pub struct Element {
     /// A literal.
     pub text: Option<String>,
     /// What the screen supplies: `caption`, `feature.title`, `feature.heading`,
-    /// `feature.text`, `mode-icon`.
+    /// `feature.text`, `mode-icon`, `load-percent`, `caption-word` (the caption without the
+    /// circuit's name).
     pub source: Option<String>,
     /// Text: the wrap width.
     pub wrap: Option<f32>,
@@ -358,6 +366,16 @@ impl Element {
                 need(file.source.is_some(), "source")?;
                 need(file.at.is_some(), "at")?;
                 need(file.size.is_some(), "size")?;
+            }
+            Draw::Fill => {
+                need(file.at.is_some(), "at")?;
+                need(file.size.is_some(), "size")?;
+            }
+            Draw::Meter => {
+                need(file.at.is_some(), "at")?;
+                need(file.size.is_some(), "size")?;
+                need(file.tile.is_some(), "tile")?;
+                need(file.gap.is_some(), "gap")?;
             }
         }
         let scale = file.scale.unwrap_or(1.0);

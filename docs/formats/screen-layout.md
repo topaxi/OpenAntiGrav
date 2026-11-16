@@ -55,14 +55,17 @@ frame is every number under `x' = 960 + (x - 960) * 0.96` at the save's 96 %).
 | `corners` | `rect` `[x0, y0, x1, y1]`, `asset`, `size`, `back`; `colour` | four brackets. The art is an `L`; a bracket on the right edge is drawn mirrored across and one on the top edge mirrored down, and a bracket on the right or bottom edge is pulled `back` from its edge (RPCS3 frame; `LoadingScreen_DrawCorner`) |
 | `dots` | `asset`, `at`, `columns`, `rows`, `tile`; `fill = "progress"`, `colour`, `unlit` | a grid of tiles, the left `floor(fraction * columns)` columns in `colour` and the rest in `unlit` |
 | `clip` | `source = "mode-icon"`, `at`, `size` | the mode's video clip, once it has a picture; not while the screen fades |
+| `fill` | `at`, `size`; `colour` | a solid rectangle |
+| `meter` | `at`, `size` `[outer, inner]`, `tile`, `gap`; `fill = "progress"`, `colour` | Wipeout 2048's row of seven breathing triangles (`oag_ui::loading_meter`): `at` is the right-most centre, `tile` the pitch to the next one leftwards, `size` the outer and inner circumradius, `gap` how much lower an odd one sits. Hollow at the start, filling from the left with the exact fraction of the bar's law |
 
 **Roles, not paths.** `asset` is a role the title's art table names (`rule`, `corner`, `dot`, `square`,
 `title-arrow`, `subtitle-arrow`), `@feature`, the feature's picture, or `@mode-icon`, the still of the race's mode
 (Omega). `colour` is `ink`, `accent`,
 `trough` or `ground`, the four `FEGlobals` the original's constructor reads
 (`HD_Grey`, `HD_Blue`, `HD_LightGrey`, `HD_BG`). `source` is what the screen supplies this frame:
-`caption`, `feature.title`, `feature.heading`, `feature.text`, `counts`, `percentage`, `current`, `step`
-(the last four only while something is counted), `mode-icon`.
+`caption`, `caption-word` (the caption alone, without the circuit), `feature.title`, `feature.heading`,
+`feature.text`, `counts`, `percentage`, `current`, `step` (the last four only while something is counted),
+`load-percent` (`(int)(shown / columns * 100)` of a stage-driven bar, 100 once the load is over), `mode-icon`.
 
 **An element whose asset, source or string the title does not resolve is skipped**, never replaced by a
 stand-in. A title whose layout file is absent or refused draws the ground alone and says so in the loader
