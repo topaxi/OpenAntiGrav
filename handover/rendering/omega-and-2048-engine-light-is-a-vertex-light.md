@@ -1,10 +1,10 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [omega, 2048]
 updated: 2026-11-16
-summary: "Engine light law read on Omega 1.07 and 2048 (vertex light, colour by era, Fury skin, mag strip); open: wiring, live check (port needs rebuild)"
-size: M (55)
-difficulty: medium (45)
+summary: "Wired on Omega/2048 as Title data; open: strength vs the original (six-light cap, fragment combine), live check"
+size: S (35)
+difficulty: medium (50)
 ---
 
 # Omega's and 2048's engine light is HD's light with two more colours and a wider reach
@@ -33,41 +33,38 @@ which is what `crates/mesh/shaders/spu_light.wesl` already computes at exponent 
 
 ## Open
 
-- **Not wired on Omega or 2048.** `engine_light` is `false` in both titles' `Flare`
-  (`crates/omega/src/lib.rs`, `crates/2048/src/lib.rs`).
-- **No live value.** The native port does not start (`libfmt.so.9`, `libZydis.so.4.1`,
-  `libZycore.so.1.5` are gone from the host; it needs a rebuild of its source tree). The
-  read recipe is on the Omega page, "Live check".
-- **Omega's shader side is inherited from 2048's program**, by constant name and record layout.
-- **Unread:** the 21 other producers of the light table (weapons, effects, one more light per ship in
-  the ship's own render), what arms the transition tint's input, 2048's writers of the two ship flags
-  and its mag-strip gate (`FUN_81000930(0x8153fc40, -1)`), 2048's jitter ranges, and whether HD
-  scales its jitter by `1 - blend`.
-- **Jitter on Omega is 0.2 in position and 1.0 in range** (HD: 0.1 each), confidence 75. On an HD-era
-  craft that is a range of 0 to 3 units redrawn every flare update: a visible flicker. Check it
-  against a short capture before trusting it.
-- **Stale comment:** `oag_title::flare::Authored::engine_light`'s doc says the Vita consumer is unread
-  and that the light floods white on HD's law; the wire lane rewrites it.
+Wired 2026-11-16 (lane `engine-light-wire`): `oag_title::flare::EngineLightLaw` is `Title` data on HD, Omega
+and 2048; `oag_raceplay::engine_light::record` places it; the base is the 2048 era by roster directory,
+the Fury skin by `hd_trail_red`, the strip by `mag_floor_fx::Shown::on` on a gated circuit (Omega: a
+`circuit_lineages` circuit, 2048: all). 2048's strip gate is closed as read: `FUN_81000930(0x8153fc40, -1)`
+is `GameMode_IsHdLineage`. Results and per-box numbers: `docs/ghidra/functions/ps4-omega-eu/engine-light.md`,
+"Wired". HD is pixel-identical on `hd/the-amphiseum`.
+
+- **Strength against the original is not closed.** The hue is right (Amphiseum's orange rim on housing, vents
+  and fins; Moa Therma's blue), but three of four housing boxes read worse in MAE because ours is brighter:
+  Modesto Heights' original housing is near-black where ours rims orange, Moa Therma's blue is stronger and
+  wider. Candidates, none tested: the original binds at most six lights per draw by bounds overlap (ours sums
+  every light); the Omega/2048 fragment combine of the vertex light is unread (ours is HD's `SVC1` add before
+  the albedo); one original frame's wander may sit anywhere in `Radius` +- 1; our hull's ambient is paler
+  than the original's before any light.
+- **Queens Mall's floor pool is barely visible** (floor red 162 -> 167 against the original's 179): the
+  original's own pool is not a clear disc either on the stored frame; a boosted craft would show it.
+- **Wander flicker not checkable.** Ours flickers by a mean 3.5 to 6.1 (0-255) in the housing box between
+  consecutive ticks; the stored pairs hold one original frame, so the original's flicker is unknown. Omega's
+  0.2 / 1.0 stays as read (confidence 75).
+- **No live value.** The native port was not run for this lane. The recipe is on the Omega page, "Live check".
+- **Unread:** the 21 other producers of the light table, what arms the transition tint's input (the tint is
+  not wired), 2048's jitter ranges (inherited from Omega), whether HD scales its jitter by `1 - blend`, whether
+  2048's `hdships` roster has `ship+0x73fd` clear, and `vr_fury` on Omega (the Fury test is the `_c1`/`_n1`/`detonator`
+  suffix).
 
 ## Next Steps
 
-1. Turn `Authored::engine_light: bool` into data: the three bases with their gains, the mag-strip
-   colour and gain scale, the jitter sizes (HD 0.1/0.1, Omega 0.2/1.0, 2048 inherited from Omega) and
-   whether the jitter scales by `1 - blend`. HD keeps its values; Omega and 2048 take the table above.
-2. Pick the base per craft: Fury skin as HD does today (`RaceView::hd_trail_red`'s flag), the 2048 era
-   from the roster (`oag_omega::race::ERA_2048_ROSTER`; on 2048, a native `Ships\` craft against an
-   `hdships\` one), the mag-strip colour from the craft's instantaneous mag-floor contact, on 2048-mode
-   circuits only (`RaceDefaults::circuit_lineages`).
-3. Reuse `oag_raceplay::engine_light` and the `spu_lights` scene block; bind them to track and hull on
-   both titles. The original caps a draw at six lights chosen in table order by bounds overlap; ours
-   sums every light, which is the same picture while fewer than seven reach a draw.
-4. Tests that fail if the law is dropped: one per base (a 2048-era craft's record is
-   `(3.0, 0.5, 0.1)` with range 30 +- 1, a `concept1` hull's is `(40, 10, 4)`, a classic hull's is
-   `(4, 10, 40)`), one for the mag-strip swap, and `crates/tables/tests/enginelight_ground_truth.rs`
-   extended to Omega's and 2048's files (`3.0f` / `30.0f` on all twenty 2048-era craft).
-5. Pairs to re-render: `omega/the-amphiseum` and `omega/modesto-heights` (expected warm nozzle and
-   housing, the craft there is a Fury-skin hull if the walk picked `concept1`), a 2048-mode Omega pair
-   such as `omega/queens-mall-2048` (expected a dim red pool on the floor behind each craft), and
-   `2048-vita/moa-therma` (blue means a classic `hdships` hull or a mag-strip start; check which).
-   Boxes: the nozzle housing and the floor directly behind the craft.
-6. Live check when the port is rebuilt, before or after wiring: the recipe on the Omega page.
+1. Read the six-light pick's effect: render the Amphiseum and Modesto pairs with the table capped at six in
+   table order by bounds overlap (`FUN_0165b890`) against the sum, and see whether the housing moves toward the
+   original.
+2. Read Omega's or 2048's fragment program for the vertex light's use (`DiffuseVertexLight0diffuse`,
+   `scripts/vita-gxp.py`, `scripts/vita-usse.py`): is it added before the albedo as on HD, or scaled?
+3. Live check on the rebuilt native port: the recipe on the Omega page, one run; confirms the wander and the
+   base per craft.
+4. Wire the transition tint once its arming input is read.

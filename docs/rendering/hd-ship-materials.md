@@ -1144,8 +1144,8 @@ ours is about 1.3 times too bright, the same overshoot Talon's Junction already 
 (9.1, 16.0, 33.2)), so it belongs to the engine light's strength at the hull, not to this change (open: the light's `D` or
 the falloff exponent at the housing, or the vertex colours' multiplier).
 
-**Cross-title.** Omega and 2048 keep the engine light off (`engine_light: false` in their `Flare`, chosen), so neither finding reaches
-them. **Omega: not checkable** for the same reason as before: the evidence is a live read of a vertex buffer in main memory, and shadPS4 has no memory readout; whether Omega's circuits author the same `0` was not read. 2048 is not compared on the Vita. The case-blind Fury test
+**Cross-title.** Omega and 2048 now carry the engine light (`EngineLightLaw` in their `Flare`; ported, with their own law, see
+[Omega's engine-light page](../ghidra/functions/ps4-omega-eu/engine-light.md)). The circuit's switch is HD's mechanism only: `spu_vertex_lights_enabled` reads it on PS3 geometry and is `true` elsewhere. **Omega: not checkable** for the same reason as before: the evidence is a live read of a vertex buffer in main memory, and shadPS4 has no memory readout; whether Omega's circuits author the same `0` was not read. 2048 is not compared on the Vita. The case-blind Fury test
 applies to every title that reads it.
 
 ## The drawn hull is not the body: a per-frame shake from `ship+0x6b00` (2026-10-22, `hd-hull-bay`)
