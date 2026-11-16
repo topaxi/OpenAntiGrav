@@ -338,10 +338,7 @@ mod tests {
     fn a_fury_engine_at_rest_is_forty_ten_four() {
         let law = law_of(&oag_hd::TITLE);
         let craft = Craft { fury: true, ..REST };
-        assert_eq!(
-            colour(light(law, 0.0, 1.0), craft),
-            [40.0, 10.0, 4.0, 1.0]
-        );
+        assert_eq!(colour(light(law, 0.0, 1.0), craft), [40.0, 10.0, 4.0, 1.0]);
         let at = record(Mat4::IDENTITY, Vec3::ZERO, light(law, 0.0, 1.0), craft).unwrap();
         assert_eq!(at.position, [0.0, 0.0, 0.0, 1.0]);
     }
@@ -389,12 +386,7 @@ mod tests {
         for title in [&oag_omega::TITLE, &oag_2048::TITLE] {
             let mut craft = light(law_of(title), 3.0, 30.0);
             craft.era_2048 = true;
-            assert_eq!(
-                colour(craft, REST),
-                [3.0, 0.5, 0.1, 30.0],
-                "{}",
-                title.name
-            );
+            assert_eq!(colour(craft, REST), [3.0, 0.5, 0.1, 30.0], "{}", title.name);
             let fury = Craft { fury: true, ..REST };
             assert_eq!(colour(craft, fury)[..3], [3.0, 0.5, 0.1], "{}", title.name);
         }

@@ -62,8 +62,8 @@ pub(super) fn load(
         // Said once per craft: a title that ships the file but whose light is
         // not read is an absence, not a silent skip.
         report.push(format!(
-            "{team}: this title ships EngineLightData.xml but its SPU vertex light is the \
-             PS3's and unread on this platform - no engine light (chosen, not measured)"
+            "{team}: this title ships EngineLightData.xml but its engine light law is unread - \
+             no engine light"
         ));
         return None;
     };
@@ -100,14 +100,21 @@ pub(super) fn load(
         ));
         return None;
     };
-    report.push(format!(
-        "{name}: engine light Distance {} behind the flare node along its Z axis {:?}, \
-         Radius {} (EngineFlare_SubmitSpuLight, renderer.md, confidence 85)",
-        data.distance, axis, data.radius
-    ));
     let era_2048 = law
         .era_2048
         .is_some_and(|era| era.roster_dir.eq_ignore_ascii_case(roster_dir));
+    report.push(format!(
+        "{name}: engine light Distance {} behind the flare node along its Z axis {:?}, \
+         Radius {}, {} (EngineFlare_Submit*Light, confidence 85)",
+        data.distance,
+        axis,
+        data.radius,
+        if era_2048 {
+            "2048-era base"
+        } else {
+            "HD-era base"
+        }
+    ));
     Some(EngineLight {
         law,
         era_2048,

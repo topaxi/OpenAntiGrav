@@ -138,7 +138,9 @@ fn some_light_is(started: &Started, base: [f32; 3]) -> bool {
 
 /// Player craft first: slot 0's authored light and the era it resolved to.
 fn player_era(started: &Started) -> bool {
-    started.authored[0].expect("the player's engine light").era_2048
+    started.authored[0]
+        .expect("the player's engine light")
+        .era_2048
 }
 
 #[test]
@@ -146,15 +148,22 @@ fn player_era(started: &Started) -> bool {
 fn an_omega_2048_era_craft_on_a_2048_circuit_casts_the_wide_dim_red_light_and_the_strip_gate_is_open()
  {
     let Some(source) = omega() else { return };
-    let run = started(source, r"Data\Environments2048\mall\track.vex", r"Feisar2048\3");
+    let run = started(
+        source,
+        r"Data\Environments2048\mall\track.vex",
+        r"Feisar2048\3",
+    );
     assert!(player_era(&run));
     let player = run.authored[0].unwrap();
     assert_eq!((player.data.distance, player.data.radius), (3.0, 30.0));
-    assert!(player.strip_circuit, "a 2048-lineage circuit opens the strip gate");
     assert!(
-        run.craft.iter().any(|light| {
-            colour(light) == ERA_2048 && (29.0..=31.0).contains(&light.colour[3])
-        }),
+        player.strip_circuit,
+        "a 2048-lineage circuit opens the strip gate"
+    );
+    assert!(
+        run.craft
+            .iter()
+            .any(|light| { colour(light) == ERA_2048 && (29.0..=31.0).contains(&light.colour[3]) }),
         "the player's light is (3.0, 0.5, 0.1) at range 30 +- 1: {:?}",
         run.craft.iter().map(|l| l.colour).collect::<Vec<_>>()
     );
@@ -166,7 +175,11 @@ fn an_omega_2048_era_craft_on_a_2048_circuit_casts_the_wide_dim_red_light_and_th
 #[ignore = "needs data/extracted/ps4"]
 fn an_omega_fury_craft_on_an_hd_circuit_casts_the_tight_warm_light_and_the_strip_gate_is_shut() {
     let Some(source) = omega() else { return };
-    let run = started(source, r"Data\Environments\amphiseum\track.vex", "FEISAR_C1");
+    let run = started(
+        source,
+        r"Data\Environments\amphiseum\track.vex",
+        "FEISAR_C1",
+    );
     assert!(!player_era(&run));
     let player = run.authored[0].unwrap();
     assert!(
@@ -196,7 +209,10 @@ fn a_2048_native_craft_is_the_wide_dim_red_light_and_the_strip_gate_is_open() {
         r"Data\art\published\environments\mall\track.vex",
         r"Feisar2048\3",
     );
-    assert!(player_era(&run), "the native Ships\\ roster is the 2048 era");
+    assert!(
+        player_era(&run),
+        "the native Ships\\ roster is the 2048 era"
+    );
     assert!(run.authored[0].unwrap().strip_circuit);
     assert!(some_light_is(&run, ERA_2048));
 }
@@ -210,9 +226,6 @@ fn a_2048_hd_derived_craft_is_the_blue_hd_era_light() {
         r"Data\art\published\DLC1\environments\Moa_Therma\track.vex",
         "Feisar",
     );
-    assert!(
-        !player_era(&run),
-        "the hdships roster is not the 2048 era"
-    );
+    assert!(!player_era(&run), "the hdships roster is not the 2048 era");
     assert!(some_light_is(&run, CLASSIC));
 }
