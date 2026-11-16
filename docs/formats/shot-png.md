@@ -1,0 +1,88 @@
+# A screenshot's own description (`iTXt` `oag` and `oaGs`)
+
+Ours (maintainer's request, 2026-11-16): every PNG the engine writes of a race carries what is
+needed to make the shot again. A bug report about a render is a photo-mode shot, and the file says
+which title, race, camera and settings it was and holds the pilot's input stream. **Chosen, not
+measured**: nothing here is an original's format. Code: `oag_game::shot_meta` (text and chunks),
+`oag_replay::shot` (the `oaGs` payload), `oag_texture::png` (chunk writer and walker),
+`oag_raceplay::replay::resimulate` (the re-drive).
+
+Written by photo mode (`~/.local/share/oag/photos/`), `oag-game --race --screenshot`, and a drive
+script's `screenshot`. The chunks sit between `IDAT` and `IEND`; a decoder that does not know them
+skips them (both are ancillary), and the picture is the ordinary RGBA one.
+
+## The `iTXt` chunk, keyword `oag`
+
+UTF-8, uncompressed, TOML text (`oag-game --png-info FILE` prints it). Sections:
+
+| Section | Holds |
+| --- | --- |
+| `format` | `1`; the layout of this text |
+| `[shot]` | `tick`, `state_hash`, `width`, `height`, `source` (`photo mode`, `screenshot`, `drive script`), `stream`, and `no_stream_because` when there is none |
+| `[title]` | `name`, `serial` (the disc's, which names the pressing), `platform` |
+| `[race]` | `track` (the archive entry, never a path), `mode`, `class`, `team`, `seed` |
+| `[camera]` | `lens`, `eye`, `forward`, `up`, `fov_deg`: the free lens included; absent for a shot with no camera of its own |
+| `[craft]` | position and rotation quaternion of the framed craft |
+| `[render]` | the title's render profile as the settings file spells it (scale, MSAA, reconstruction, motion blur, ...) |
+| `[gpu]` | adapter, backend, driver, driver info |
+| `[[mods]]` | the enabled mods' ids and versions (photo mode) |
+| `[build]` | the short commit (baked at build time, `oag_net::GIT_HASH`) and the crate version |
+| `[reproduce]` | `exact` (`oag-game --from-png`) and `flags`: the `oag-game` command line that draws this race and camera without the stream, in the shape of a compare-page pair's `ours.flags` |
+
+**Nothing private is written**: no player name or tag, no filesystem path (the disc image is a
+positional argument and is dropped from a screenshot's recorded command line, as is every other
+argument that holds a path). The flags of a photo are synthesised (`--pose` puts the craft at its
+position on the track's own heading, so a craft that was not flying along the circuit is only
+approximated); the stream is what is exact.
+
+## The `oaGs` chunk
+
+`o` ancillary, `a` private, `G` reserved bit set, `s` safe to copy: a tool that edits the picture
+may keep it. Data:
+
+```text
+u8 version (1), u64 tick, u64 state hash, then a replay file, raw-deflated
+```
+
+All integers little-endian. The replay is [the replay file](replay-file.md) (ADR-0055), cut at the
+shot's tick, with no ghost and no pose track: its `HEAD` is the launch request, seed and options, `INPT`
+the human slots' inputs to that tick (the AI reproduces itself from the seed), `EVNT` the
+between-tick changes, `HASH` the stored hash a second. The hash at the shot's tick is its own field,
+because a shot is rarely on a stored one. About 0.6 KB for 400 ticks (the throttle held), 5 to 6 KB
+for 1,237 ticks of a pad flown by the AI driver (`bytes/tick` 6.8 in `replay_ground_truth`).
+
+A shot made while photo mode was **rewound** carries the stream to the tick the race on screen
+stood at (the rewind holds the run), and the hash of that state; a shot of a race that records no
+input stream (a simulation mod runs in it: ADR-0087 decision 7) writes the text alone and says why
+in `no_stream_because`.
+
+## Reading it back
+
+`oag-game --png-info FILE`: the text and a line on the stream.
+`oag-game --from-png FILE [--screenshot OUT] [DISC]`: rebuilds the recorded race
+(`Options::apply_replay`), drives the recorded inputs to the tick in place of a held button, prints
+`from-png: state hash at tick N: MATCH` or `MISMATCH` with both hashes, and draws the frame from the
+camera the text names at the file's size. **The disc must be the title's, with the same DLC and
+mods** (a simulation mod makes a race unrecordable, and DLC packs change the race and are not in
+the text: `resimulate` takes their directories, the CLI mounts the settings'). The re-render draws
+the HUD; a photo taken with its HUD row off (the default) differs from it there.
+
+## Evidence
+
+- `crates/raceplay/tests/replay_ground_truth.rs`, `a_shot_survives_its_png_and_resimulates`: a
+  shot at tick 1,237 (off the hash grid) of a pad-flown race on **Pulse and HD (and Pure, 2048)**
+  goes into a PNG, comes back byte for byte, and re-simulates on a race rebuilt from the record alone
+  to the same hash; a changed stored hash or a changed input before the shot is a mismatch.
+- `crates/game/tests/photo_mode_ground_truth.rs`,
+  `a_photo_carries_its_race_and_resimulates_to_the_hash_it_was_taken_at`: two real photo-mode shots
+  on Pulse (the throttle held, no autopilot): at the pause (tick 402) and after a rewind (tick 90).
+  Both read back and re-simulate to their hashes.
+- CLI: `--race --screenshot` on Pulse (700 ticks, throttle held) and HD (900 ticks), then
+  `--from-png`: `MATCH` on both, and the re-rendered pixels equal the original's (only the text
+  chunk differs, for the flags).
+
+## Checked against the other lineage
+
+2048 and Omega: **ported**, the chunks are written by the shared capture and photo code on every
+title; the raceplay ground truth runs 2048, the CLI run covers Pulse and HD (Omega's racing is
+incomplete: `omega-status.md`).
