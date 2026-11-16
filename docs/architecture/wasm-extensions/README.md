@@ -453,23 +453,25 @@ file, the committed module):
 Fuel (`tests::extension_examples`, a full grid): 14,443 on the loud tick, 10,499 after.
 
 
-### And a language other than Rust: JavaScript through Javy (2026-10-30)
+### And a language other than Rust: JavaScript through Javy (2026-10-30, ported to ABI 1 revision 6 on 2026-11-16)
 
-**Outcome: it runs, inside the rules, without widening the host, at about 80 % of the fuel
-budget for the smallest mod.** The example is `oag.wall-penalty-js`
+**Outcome: it runs, inside the rules, without widening the host, at 55 % to 95 % of the fuel
+budget for the smallest mod** (about 80 % in the first measurement, before the port below). The example is `oag.wall-penalty-js`
 (`assets/mods/examples/wall-penalty-js/`), a port of Wall Penalty; it lives on the engine branch
 `wasm-javy`, never merged into `wasm-extensions`. Tool: Javy 9.1.0 (tag `v9.1.0`, `d9b6139`), built
 from source (a release binary was not fetched). Measured with `oag-modhost` (wasmtime 50, the
-host's own engine configuration), 2026-10-30:
+host's own engine configuration), 2026-10-30; the right column was measured again on
+2026-11-16 after the port (wasmtime `=50.0.2`, Javy 9.1.0 again, the module rebuilt for ABI 1
+revision 6), the first column with the current Rust module:
 
 | | Rust `wall-penalty` | JavaScript `wall-penalty-js` |
 | --- | --- | --- |
-| Module size | 627 bytes | 1,367,899 bytes (Javy's static module: QuickJS plus its runtime) |
+| Module size | 3,903 bytes (627 on 2026-10-30, before the SDK grew) | 1,371,786 bytes (Javy's static module: QuickJS plus its runtime; 1,367,899 on 2026-10-30) |
 | Imports of Javy's raw output | none | 9, all `wasi_snapshot_preview1`: `environ_get`, `environ_sizes_get`, `clock_time_get`, `fd_close`, `fd_fdstat_get`, `fd_read`, `fd_seek`, `fd_write`, `proc_exit`. **After the shim: none** |
 | Exports of the raw output | | `memory`, `cabi_realloc`, `config-schema`, `_start`, and the WIT functions (kebab-case, no arguments, no result). The ABI wants `oag_abi`, `oag_io`, `tick() -> u32`: the shim adds them |
-| Fuel a tick (`FUEL_PER_TICK` 200,000) | 663 peak, 524 mean over a 900-tick race | 154,772 with nothing to do, 167,679 peak in the same race, 177,753 peak across a 3,600-tick 12-craft field, **227,994 in a random stress (up to 8 cursed slots at once: out of fuel)**. An empty `jsTick` costs 29,792; one `Javy.IO.readSync` about 30,000; the work between them is QuickJS bytecode at roughly 350 fuel an operation |
-| Call time, debug host, mean | 19 us | 89 us (the instance is fresh every tick: 22 pages, one memory image) |
-| Compile at race load | negligible | about 1.1 s of Cranelift (release probe), once per race, on the loading thread |
+| Fuel a tick (`FUEL_PER_TICK` 200,000) | 1,141 peak, 571 mean over a 900-tick race (663 and 524 on 2026-10-30) | **110,770 with nothing to do, 121,833 peak in the same race, 131,543 peak across a 12-craft field, 188,451 in the worst case (all 8 slots cursed and puffing at once: 16 commands).** On 2026-10-30: 154,772, 167,679, 177,753, 227,994 (out of fuel). The same module ported without changing its shape ran 178,615 empty, 191,319 on a contact tick and **out of fuel at tick 2,665 of the 12-craft field** (see "The port") |
+| Call time, debug host, mean | 27 us (19 us) | 105 us in a race, 83 us bare (89 us): the instance is fresh every tick, 22 pages, one memory image |
+| Compile at race load | negligible | about 2.0 s of Cranelift on a debug host at load average 13 (1.1 s on a release probe, 2026-10-30; not repeated in release), once per race, on the loading thread |
 | Memory | 2 pages | 22 pages at instantiation, none grown in a tick (`memory_pages = 24`) |
 
 Findings, in the order the question was asked:
@@ -483,29 +485,51 @@ Findings, in the order the question was asked:
   the plugin with `RUSTFLAGS="-C target-feature=-simd128"` and embedding it in a rebuilt CLI
   removes it (a stock `javy` binary cannot be used).
 - **The shim, in the guest.** `wall-penalty-js/tools/shim.py` rewrites the module's text form
-  (`wasm-dis`, then `wasm-as`): each WASI import becomes a function inside the module. Standard input
-  is the host's I/O buffer, taken once from the module's own allocator by `oag_io` (a block the
-  runtime will not use); standard output is one byte stream whose first `state_bytes` land on the
-  state blob and the rest on the reply (the buffer's 1,024-byte gap between them is not written).
-  Standard output is line buffered, so a `0x0A` byte splits a write (a count of 10 did): the stream
-  is appended by byte. `clock_time_get` is 0, `environ_*` are empty, the rest are errors or `unreachable`.
+  (`wasm-dis`, then `wasm-as`): each WASI import becomes a function inside the module. Every offset
+  comes from `crates/ext-abi` (`tools/abi.py` reads it), so a layout change reaches the shim on the next
+  build. Standard input is a compact observation the shim builds from the host's I/O buffer, which
+  `oag_io` takes once from the module's own allocator (a block the runtime will not use): the active
+  mask, the event count, the state blob, then each event's kind and slot. Standard output is one byte
+  stream in three segments: the first `state_bytes` land on the state blob, the next on the reply's
+  string pool (a command that names a string, here `sputter`, carries `OWN_FLAG` over the name's pool
+  offset), the rest on the reply (the buffer's gaps between them are not written). Standard output is
+  line buffered, so a `0x0A` byte splits a write (a count of 10 did): the stream is appended by byte.
+  `clock_time_get` is 0, `environ_*` are empty, the rest are errors or `unreachable`.
   No capability is added: no import, no persistent instance, nothing the Rust module could not do.
   The JavaScript can use only what Javy gives it: no memory access, so no way to read the buffer except
   through those streams.
-- **Start-up per tick.** The host re-instantiates every tick; Javy's snapshot already holds the
-  initialised QuickJS heap, so instantiation itself is cheap (it costs no fuel; the whole
-  instantiate, `oag_io`, `tick` is about 60 us on a release engine). What a tick costs is the call: 30,000 fuel
-  to enter and leave QuickJS, about 30,000 to read, 40,000 or more to write, and the logic.
+- **Start-up per tick.** The host re-instantiates every tick; Javy's snapshot holds the initialised
+  QuickJS *runtime* (instantiation costs no fuel; the whole instantiate, `oag_io`, `tick` is about 60 us
+  on a release engine), but **not the script's top level: that runs again on every tick** and is billed.
+  The 2026-10-30 floor of about 115,000 was never only the streams. Measured on 2026-11-16 with
+  one thing at a time in a script (`function jsTick() {}` is the base): an empty `jsTick` 29,842;
+  `Javy.IO.readSync` of 88 bytes about 18,000; `Javy.IO.writeSync` of 220 bytes about 20,500 (about 7
+  fuel a byte, so the size of a stream matters little); a top-level `const n = 1;` about 1,400; one
+  `new Uint8Array(88)` about 5,400; a seven-step `charCodeAt` loop about 16,000; an empty slot in a loop
+  of eight 1,800. The shape of the port: a script written as the first one was (a dozen named
+  constants, a `DataView`, a table built at the top) paid about 70,000 a tick before its first
+  statement ran. The ported script has no top-level constant (the ABI's numbers sit in `// abi NAME = n`
+  comments, which `just check-extensions` compares with the ABI crate), no `DataView` (the 0.25 factor is
+  its four bytes) and one `Uint8Array.set` for the pool. A script that never runs its top level per tick
+  would save it all: see "Open" in the thread.
+- **The port.** Merging `main` into the branch changed the wire: events are 16 bytes and the state starts
+  at byte 544 (was 8 and 288), a command that names a string points into a pool, and a module declares
+  `oag_state_len`. Ported as it stood (the same 560-byte read and a reply of 220 bytes) the module's empty
+  tick cost 178,615 against 155,014 for the 2026-10-30 module run on today's host, and the 12-craft field
+  ran out of fuel at tick 2,665. Serving a compact observation (88 bytes) saved only 5,000 of it; the
+  top-level constants were the rest. The same module now costs 110,770.
 - **Determinism.** Same bits every run: the build is byte-reproducible (the same SHA-256 twice), and the
-  JavaScript module returns the Rust module's state and commands on 20,000 random observations
-  (`crates/modhost/tests/javascript_module.rs` runs 3,000) and flies its race tick for tick
+  JavaScript module returns the Rust module's state and commands on 20,000 random observations,
+  wall contacts mixed with other events (`crates/modhost/tests/javascript_module.rs` runs 3,000;
+  `OAG_JS_DIFFERENTIAL_TICKS=20000` runs the rest) and flies its race tick for tick
   (`wall_penalty_ground_truth`). `Math.random` is the snapshot's, so identical every tick; `Date.now` is 0.
   JavaScript numbers are `f64`: a script that computes a command's factor in `f64` and casts to
   `f32` is deterministic (IEEE) but the SDK's "no `f64` that feeds a command" rule cannot be enforced on it.
 
-**Verdict on the claim:** a JavaScript mod runs, but only a light one. The fixed floor (about 115,000
-of 200,000) leaves room for a few hundred bytecode operations, so Wall Penalty fits with a thin margin
-and any mod that loops over craft or builds text does not. The smallest changes that would give a
+**Verdict on the claim:** a JavaScript mod runs, but only a light one. The fixed floor (about 110,000
+of 200,000, most of it the script's own top level, the streams and QuickJS's entry) leaves room for a few
+hundred bytecode operations, so Wall Penalty fits (188,451 at its worst) and any mod that loops over craft
+or builds text does not. The smallest changes that would give a
 JavaScript mod room, **none made here (the maintainer's decision)**:
 
 1. **A per-module fuel budget.** `[extension] fuel = n` in the manifest, clamped to a host ceiling
