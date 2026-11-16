@@ -197,6 +197,24 @@ is labelled chosen), not checked chunk by chunk.
 
 ## Against this port
 
+**Wired (2026-11-16, `zone-pad-wire`).** `oag_rcs::rcsmodel::Mesh::zone_plain` (`RENDER_ZONE_PLAIN`,
+`0x0e00`) is carried per chunk as `slots::ZONE_PLAIN` (bit 30 of the vertex `slots` word: the glow
+index is six bits for its 64 entries, so the seventh was never set). `shade.wesl` gives such a chunk,
+in a Zone race only, no Zone surface and no Zone glow, the stage's `ambient + sat(N.L) * sun` as its
+light (no lightmap, no baked vertex light, no occlusion mask; a program fed no light keeps its
+picture) and the plain variant of every program whose Zone variant drops a term (the wave, the
+chevron pulse, the alpha glow). Off a Zone race nothing moves: a Time Trial frame at the same pose is
+pixel-identical before and after. Tests: `moa_therma_zone_plain_chunks_are_its_pads_and_signs`
+(`oag-rcs`, 12/8/22), `moa_therma_marks_the_zone_plain_chunks_and_only_them` (`oag-mesh`, the carrier
+on the built model) and `a_zone_plain_chunk_draws_its_own_albedo_under_the_stage_ambient`
+(`zone_recolour.rs`, the pixel). Picture, Moa Therma at `--pose=-335.5,8.11,-401.77,0` against the
+original's frame at the settled pose: the pad plate's non-cyan pixels average 171/180/184 (original
+148/158/161; before the change 220/228/229 with a white bar), 21 % of the box (original 17 %, before
+7 %). Open on the same page's list: the Track fog, the start gantry's card, weapon pads with WEAPONS
+OFF, the unflagged Zone surface's own lightmap term.
+
+The earlier state of this section, for the record:
+
 - Ours sent every chunk through the Zone surface in a Zone race
   (`shade.wesl`, `zone_weight`), pads included: the pad plate became
   `zoneTex * Track.Texture Colour + rim terms`, the road's look. The white bar
@@ -230,7 +248,12 @@ permutation-word mechanism is not in Omega's executable: `strings` over its
 page describes is HD's render-block halfword, which only the PS3 model
 carries.
 
-**Not checked: Omega's HD-lineage circuits in Zone.** Omega re-ships Moa
+**Checked, inert (2026-11-16): Omega's HD-lineage circuits in Zone.** One Omega Zone frame of Tech
+de Ra (`--mode zone`, 1280x720, tick 5) and one of the 2048-lineage `bridge` are byte-identical
+before and after `slots::ZONE_PLAIN`: `zone_on` is 0 there. The flag is carried by the PS3 `.rcsmodel`
+reader only.
+
+**Was not checked: Omega's HD-lineage circuits in Zone.** Omega re-ships Moa
 Therma with `Speedup_Material*.rcsmaterial` and the `zoneModeTrack<n>`
 textures, and its executable names `zoneColourTint` and `zoneTexInner`, so it
 has an HD-shaped Zone surface for those circuits. How it selects a pad's

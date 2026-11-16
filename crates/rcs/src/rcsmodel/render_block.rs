@@ -97,6 +97,19 @@ pub const RENDER_BEHIND_GLASS: u16 = 1 << 4;
 /// it, and 5 chunks of the main view.
 pub const RENDER_ALTERNATE_FOG: u16 = 1 << 5;
 
+/// Bits 9, 10 and 11 of [`Mesh::render_flags`]: **in a Zone race this chunk
+/// keeps its plain material program** instead of the Zone surface.
+///
+/// Bit 9 is the speed pads (418 chunks disc-wide), bit 10 the weapon pads (208)
+/// and bit 11 the 315 signs, billboards and screens. `Scene_DrawOpaqueChunkBucket`
+/// (`0x00401760`) builds the permutation word `ZoneMode | Sun` for a chunk
+/// without these and `Sun` alone for one with any of them, and the same mask is
+/// in all seven draw consumers. A Zone frame carries no lightmap or baked
+/// vertex light, so a flagged chunk is lit by the stage's ambient and sun
+/// alone. Confidence 90, from
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`.
+pub const RENDER_ZONE_PLAIN: u16 = 0x0e00;
+
 /// Reads the flags halfword of the record a chunk header at `at` names.
 ///
 /// Zero - no flags, the Scene set - for a chunk whose word is zero, which is
@@ -131,6 +144,17 @@ impl Mesh {
     #[must_use]
     pub fn is_track(&self) -> bool {
         self.render_flags & RENDER_TRACK != 0
+    }
+
+    /// Whether a Zone race draws this chunk with its plain material program
+    /// instead of the Zone surface - any of bits 9 to 11 of
+    /// [`Self::render_flags`], see [`RENDER_ZONE_PLAIN`].
+    ///
+    /// Per chunk: 30 of the 646 material slots that serve a flagged chunk also
+    /// serve unflagged ones.
+    #[must_use]
+    pub fn zone_plain(&self) -> bool {
+        self.render_flags & RENDER_ZONE_PLAIN != 0
     }
 
     /// Whether this chunk belongs to the behind-the-glass target rather than

@@ -110,7 +110,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // the entry's scale and `offset` the animation-table row its offset names, which plays
     // the material's own curve. Laid here into the chunk's unused second pair because the
     // table is a vertex-stage binding and the coordinate is linear in `uv`.
-    let chevron_entry = (in.slots >> 24u) & 127u;
+    let chevron_entry = (in.slots >> 24u) & 63u;
     // 2048's and Omega's centre lane takes the entry without `LIT_ALPHA` (`program[1]` 2).
     if ((in.slots & 2147483648u) != 0u || emissive_scale(chevron_entry).w > 1.5)
         && chevron_entry != 0u

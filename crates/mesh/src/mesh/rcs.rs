@@ -274,6 +274,11 @@ fn surface(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh, tables: &Model) -> Su
     if mesh.is_track() {
         roles |= slots::ZONE_TRACK;
     }
+    // And the other: a chunk the original's Zone race draws on its plain
+    // program (`slots::ZONE_PLAIN`).
+    if mesh.zone_plain() {
+        roles |= slots::ZONE_PLAIN;
+    }
     // Same fallback rule, same reason - see `mesh::vertex::GpuVertex::specular_exponent`.
     let specular_exponent = material_specular_exponent
         .get(slot)

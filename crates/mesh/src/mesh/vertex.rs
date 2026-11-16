@@ -539,15 +539,29 @@ pub mod slots {
     /// [`material_index`] masks the top bit off.
     pub const LIT_ALPHA: u32 = 1 << 31;
 
+    /// This chunk's render-block flags say a Zone race keeps its plain material
+    /// program: `oag_rcs::rcsmodel::Mesh::zone_plain`, bits 9 to 11 of the
+    /// chunk's flags (`oag_rcs::rcsmodel::RENDER_ZONE_PLAIN`).
+    ///
+    /// **Per chunk, like [`ZONE_TRACK`]**, so two chunks of one material can
+    /// differ. Bit 30, above the index: the glow table holds
+    /// [`EMISSIVE_LIMIT`](super::rcs::EMISSIVE_LIMIT) (64) entries, so the index
+    /// is six bits ([`MATERIAL_MASK`]) and the seventh was never set.
+    pub const ZONE_PLAIN: u32 = 1 << 30;
+
+    /// The bits of the glow-table index, [`MATERIAL_SHIFT`] up: six, for the 64
+    /// entries a model holds.
+    pub const MATERIAL_MASK: u32 = 0x3f;
+
     /// The mask covering every role bit - the low half of the word plus
-    /// [`LIT_ALPHA`], with [`MATERIAL_SHIFT`]'s index excluded.
-    pub const ROLE_MASK: u32 = ((1 << MATERIAL_SHIFT) - 1) | LIT_ALPHA;
+    /// [`LIT_ALPHA`] and [`ZONE_PLAIN`], with [`MATERIAL_SHIFT`]'s index excluded.
+    pub const ROLE_MASK: u32 = ((1 << MATERIAL_SHIFT) - 1) | LIT_ALPHA | ZONE_PLAIN;
 
     /// This material's [`Model::emissive`](super::Model::emissive) index plus
     /// one, or `0` where it has no entry.
     #[must_use]
     pub const fn material_index(packed: u32) -> u32 {
-        (packed >> MATERIAL_SHIFT) & 0x7f
+        (packed >> MATERIAL_SHIFT) & MATERIAL_MASK
     }
 
     /// Which channel of that texture the alpha is, in bits 3 and 4.

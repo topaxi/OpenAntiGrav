@@ -93,6 +93,14 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     in.slots = raw.slots & slots_present;
     let rig_on = select(0.0, scene.light.enabled, light_rig != 0.0);
     let zone_on = select(0.0, scene.zone.enabled, zone_race != 0.0);
+    // **A chunk a Zone race draws on its plain program** (`slots::ZONE_PLAIN`, the speed and weapon
+    // pads, signs and screens; `docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`): none of
+    // the Zone surface, the program's own variants, and the stage's ambient and sun as its only
+    // light. `zone_program` is `zone_on` for every other chunk: the tests below that say "the Zone
+    // variant of this program does not declare X" ask about the program, which a plain chunk
+    // does not run.
+    let zone_plain = zone_on != 0.0 && (in.slots & 1073741824u) != 0u;
+    let zone_program = select(zone_on, 0.0, zone_plain);
     // The `bindless` variant: this draw's slot of each group 1 array, under the
     // names the per-draw variant binds them by - see `bindings.wesl`.
     @if(bindless) {
@@ -108,8 +116,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         return holo_billboard(in);
     }
     // The row of the emissive table this vertex names, read once for every test below.
-    let row_scale = emissive_scale((in.slots >> 24u) & 127u);
-    let row_tint = emissive_tint((in.slots >> 24u) & 127u);
+    let row_scale = emissive_scale((in.slots >> 24u) & 63u);
+    let row_tint = emissive_tint((in.slots >> 24u) & 63u);
     let n = normalize(in.normal);
     // **HD's pads** (`slots::PAD_NE`): the `_ne` texel replaces the vertex
     // normal in the program's own `N.L` and `N.H` below, and its alpha gates
@@ -133,7 +141,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // (sixth) before the frame, and the rock (fifth) into the snow below. Both normals and the
     // rock are read at the diffuse coordinate times the entry's scale (the rock's; the snow's
     // normal at the coordinate itself).
-    let snow_entry = (in.slots >> 24u) & 127u;
+    let snow_entry = (in.slots >> 24u) & 63u;
     let snow = snow_entry != 0u && row_scale.z > 3.5
         && row_scale.z < 4.5;
     var snow_mask = 0.0;
@@ -444,6 +452,14 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             authored = ambient_term + scene.light.sun * ndl;
             sun_light = scene.light.sun * ndl;
         }
+        // **A plain chunk in a Zone frame** is an `Ambient` permutation: the frame has no
+        // lightmap and no baked vertex light on any draw (`EnvSettings+0x4b0` is cleared), so
+        // `albedo * (stage ambient + sat(N.L) * stage sun)`, with no occlusion mask. A program
+        // fed no scene light (`emissive`) keeps drawing its picture.
+        if zone_plain && !emissive {
+            authored = scene.light.ambient + scene.light.sun * ndl;
+            sun_light = scene.light.sun * ndl;
+        }
     }
 
     // **Which texture is the picture and which is the coverage, off the
@@ -530,7 +546,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // `authored` is built.
         picture = vec4<f32>(encode(in.colour.rgb), picture.a);
     } else if (in.slots & 4194304u) != 0u {
-        let ice_slot = (in.slots >> 24u) & 127u;
+        let ice_slot = (in.slots >> 24u) & 63u;
         let deep = decode(row_tint.rgb);
         let cyan = decode(emissive_tint(ice_slot + 1u).rgb);
         let pale = decode(emissive_tint(ice_slot + 2u).rgb);
@@ -549,7 +565,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // tint `x` (the vertex block's literal). The colour taps are decoded and the wipe read
     // raw (chosen, not measured); the product is put back in the domain `picture` is
     // decoded from below.
-    let twin_entry = (in.slots >> 24u) & 127u;
+    let twin_entry = (in.slots >> 24u) & 63u;
     if twin_entry != 0u && row_scale.z > 5.5 && row_scale.z < 6.5 {
         let wipe_uv = vec2<f32>(
             in.lightmap_texcoord.x + row_tint.x * scene.time.x,
@@ -569,7 +585,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     //
     // over the albedo, dirt first. The vertex colour carries the dirt pair here, so the tint
     // below is white on this mode. The taps are mixed in the domain `picture` is sampled in.
-    let tarmac_entry = (in.slots >> 24u) & 127u;
+    let tarmac_entry = (in.slots >> 24u) & 63u;
     let tarmac = tarmac_entry != 0u && row_scale.z > 13.5 && row_scale.z < 14.5;
     if tarmac {
         let dirt = material_sample(MATERIAL_SIXTH_MAP, in.colour.xy);
@@ -589,7 +605,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // `B` and `R` the next entry's tint `x`, `y`, `z` and offset. The colour taps are decoded
     // and the clouds' alpha read raw (chosen, not measured); the sum rides `mag_glow` below.
     var uv_overlay = vec3<f32>(0.0);
-    let overlay_entry = (in.slots >> 24u) & 127u;
+    let overlay_entry = (in.slots >> 24u) & 63u;
     if overlay_entry != 0u && row_scale.z > 12.5 && row_scale.z < 13.5 {
         let values = emissive_tint(overlay_entry + 1u);
         let clock_now = scene.time.x;
@@ -616,7 +632,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // diffuse's alpha stays the unscrolled tap's, and the lightning is added after the shell's
     // `ShieldColour` multiply below, as the program does not tint it.
     var shield_lightning = vec3<f32>(0.0);
-    let lightning_entry = (in.slots >> 24u) & 127u;
+    let lightning_entry = (in.slots >> 24u) & 63u;
     if lightning_entry != 0u && row_scale.z > 10.5 && row_scale.z < 11.5 {
         let row = row_tint;
         let clock_now = scene.time.x;
@@ -635,7 +651,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // rate its offset and `shift` its scale. The program adds the picture itself unlit
     // as well (`out = P * (light + 1)`), which `mag_glow` carries below.
     var cell_picture = vec3<f32>(0.0);
-    let cell_entry = (in.slots >> 24u) & 127u;
+    let cell_entry = (in.slots >> 24u) & 63u;
     let is_cell = (in.slots & 131072u) != 0u && cell_entry != 0u
         && row_scale.y > 2.5 && row_scale.y < 3.5;
     if is_cell {
@@ -652,7 +668,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // the environment map times the batch's own texture's alpha, bound second and read at
     // the batch's authored coordinate - the `GU_SRC_ALPHA` the original's ordinary pass
     // blends this pass's result by (`BLENDMODE 0x2a`, read off a recorded GE list of Pure).
-    let mask_entry = (in.slots >> 24u) & 127u;
+    let mask_entry = (in.slots >> 24u) & 63u;
     if mask_entry != 0u && row_scale.z > 4.5 && row_scale.z < 5.5 {
         picture = vec4<f32>(picture.rgb * material_sample(MATERIAL_LIGHTMAP, in.lightmap_texcoord.xy).a, picture.a);
     }
@@ -710,7 +726,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // UV set feeding that interpolator is the one this renderer carries as
     // `texcoord` is unestablished. Only `v` moves, so a mismatch shows as a
     // glow tiled wrongly across the surface rather than as a missing one.
-    let glow_slot = (in.slots >> 24u) & 127u;
+    let glow_slot = (in.slots >> 24u) & 63u;
     let glow_tint_offset = row_tint;
     let glow_scale = row_scale;
     let ramp_sun = scene.light.sun * ndl;
@@ -851,7 +867,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // colour in the entry's tint. The mask is the unit-0 alpha; a `dn_diffuse_specular_emiss` entry (second lane set) binds its SpecularTexture third, read in the specular below. The Zone
     // variants of these programs do not declare the colour, so a Zone race adds nothing.
     if glow_program > 11.5 && glow_program < 12.5 {
-        emissive_add = first.a * glow_tint_offset.rgb * (1.0 - zone_on);
+        emissive_add = first.a * glow_tint_offset.rgb * (1.0 - zone_program);
     }
     let pad_glow = pad_ne_texel.a * glow_tint_offset.rgb * select(0.0, 1.0, pad_ne) + emissive_add;
 
@@ -882,7 +898,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // combine below, stay off. The condition is a branch and not a mix so the
     // Time Trial picture is untouched to the byte.
     var mag_glow = decode(cell_picture) + uv_overlay;
-    if (in.slots & 131072u) != 0u && !is_cell && zone_on == 0.0 {
+    if (in.slots & 131072u) != 0u && !is_cell && zone_program == 0.0 {
         let e = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         let w = material_sample(MATERIAL_WAVE_MAP, in.texcoord * glow_scale.x + vec2<f32>(scene.time.x * glow_scale.y),
         );
@@ -906,7 +922,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // 2048's and Omega's centre lane (the entry's `program[1]` 2) lights its colour and takes the
     // same entry without `LIT_ALPHA`.
     let chevron = ((in.slots & 2147483648u) != 0u || row_scale.w > 1.5) && glow_program > 2.5
-        && glow_program < 3.5 && zone_on == 0.0;
+        && glow_program < 3.5 && zone_program == 0.0;
     var chevron_surface = vec3<f32>(0.0);
     var chevron_glow = vec3<f32>(0.0);
     if chevron {
@@ -945,11 +961,11 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // **A surface the Zone grade is switched off for** (`ZONE_EXEMPT_RATE`): the
     // glow-table entry its material index names says so. Applied to the three
     // mix weights and not to the `enabled` branch below, which has to stay uniform.
-    let zone_entry = (in.slots >> 24u) & 127u;
+    let zone_entry = (in.slots >> 24u) & 63u;
     let zone_weight = select(
         zone_on,
         0.0,
-        zone_entry != 0u && row_scale.y > 3.5 && row_scale.y < 7.5,
+        zone_plain || (zone_entry != 0u && row_scale.y > 3.5 && row_scale.y < 7.5),
     );
     var zone_linear = vec3<f32>(0.0);
     var zone_gamma = vec3<f32>(0.0);
@@ -1052,7 +1068,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // **A pane's specular** is weighted by `1 - a` alone (`pane_clear`, below): the traced
         // `glass_texture_customr` program has no alpha gloss term, so the generic gloss-in-alpha
         // mask must not weight it a second time.
-        let pane_entry = (in.slots >> 24u) & 127u;
+        let pane_entry = (in.slots >> 24u) & 63u;
         if pane_entry != 0u
             && row_scale.y > 8.5
             && row_scale.y < 9.5
@@ -1094,7 +1110,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // light, as the original's gamma-nibble-7 units 4 and 5 give it
         // (`docs/rendering/hd-ship-materials.md`, "Hull brightness").
         var probe_reflection = vec3<f32>(0.0);
-        let probe_entry = (in.slots >> 24u) & 127u;
+        let probe_entry = (in.slots >> 24u) & 63u;
         if uniforms.env_layer > 0.5 && probe_entry != 0u && row_scale.y > 7.5 {
             let r = reflect(-to_eye, n_hull);
             let probe = textureSampleLevel(
@@ -1121,7 +1137,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         var sky_reflection = vec3<f32>(0.0);
         var pane_cover = 1.0;
         var pane_clear = 1.0;
-        let sky_entry = (in.slots >> 24u) & 127u;
+        let sky_entry = (in.slots >> 24u) & 63u;
         if sky_entry != 0u && row_scale.y > 8.5 && row_scale.y < 9.5 {
             let r = reflect(-to_eye, n);
             let sky = textureSampleLevel(sky_probe_tex, shadow_sampler, env_probe_uv(r), 0.0).rgb;
@@ -1370,7 +1386,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // is the glow entry's `offset`. Left out, named: the paraboloid
     // reflection term, which this renderer has no probe for.
     var mag_floor = shaded_or_sheen;
-    if (in.slots & 262144u) != 0u && zone_on == 0.0 {
+    if (in.slots & 262144u) != 0u && zone_program == 0.0 {
         let grid = textureSample(albedo, albedo_sampler, in.texcoord).r;
         let ramp = textureSample(lightmap, albedo_sampler, ramp_uv).rgb;
         let loop_light = in.colour.rgb;
@@ -1759,7 +1775,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     shadow_exempt = select(
         0.0,
         1.0,
-        ramp_sheen || ((in.slots & 262144u) != 0u && zone_on == 0.0),
+        ramp_sheen || ((in.slots & 262144u) != 0u && zone_program == 0.0),
     );
     if !(rim_glow_on || rim_edge_on) {
         // **Only where the colour returned is still the generic combine's**, which is
@@ -1770,7 +1786,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // `shadowed` falls back to its multiply for them. Their own `ShadowToAlpha`
         // programs are unread.
         let generic_combine = !ramp_sheen
-            && !((in.slots & 262144u) != 0u && zone_on == 0.0)
+            && !((in.slots & 262144u) != 0u && zone_program == 0.0)
             && (in.slots & 524288u) == 0u
             && flame_shading == 0.0
             && absorb_shading == 0.0;
