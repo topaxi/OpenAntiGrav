@@ -45,6 +45,8 @@ pub(super) struct Recording {
     /// edge in.
     last_lap: u32,
     last_start: Option<u64>,
+    /// Whether a lap of this run can be a ghost: off in a MODDED race.
+    ghosts: bool,
     /// The quickest lap this run has driven, and where it sat.
     best: Option<(GhostInfo, GhostLap)>,
     /// Whether [`Self::best`] changed since the last
@@ -75,13 +77,12 @@ impl Race {
     /// the caller needs to rebuild this race; its slots are replaced by the
     /// slots a person flies here.
     ///
-    /// A MODDED race ([`Self::is_modded`]) records nothing: a simulation mod's race
-    /// has no replay in this phase (`docs/architecture/wasm-extensions/README.md` 4.4).
+    /// A MODDED race ([`Self::is_modded`]) records its inputs like any other, and its header
+    /// names each simulation module ([`Header::mods`]) so a rebuild runs the same ones or is
+    /// refused by name. It sets no ghost and offers none to save: a module changes the run, so
+    /// no lap of it is a lap to race against (`docs/architecture/wasm-extensions/README.md`, 4.4).
     pub fn start_recording(&mut self, mut header: Header) {
-        if self.is_modded() {
-            log::info!("replay: not recorded, a simulation mod runs in this race");
-            return;
-        }
+        header.mods = self.mods_used().to_vec();
         header.slots = self
             .sim
             .world
@@ -101,6 +102,7 @@ impl Race {
             base: self.sim.world.tick,
             last_lap: standing.lap,
             last_start: standing.lap_start_tick,
+            ghosts: !self.is_modded(),
             best: None,
             best_unsaved: false,
         });
@@ -223,7 +225,7 @@ impl Race {
     /// tick and the state hash here. `run` is the recording to cut when the race is not the one
     /// making it (photo mode's rewind sets the live recording aside and moves the race on screen
     /// through its past); `None` takes this race's own. `None` back when there is no recording:
-    /// a race nobody armed, or a modded one.
+    /// a race nobody armed.
     ///
     /// Reads the state hash and never writes anything the tick reads.
     #[must_use]
@@ -317,6 +319,7 @@ impl Race {
         let crossed = standing.lap_start_tick != recording.last_start;
         let completed = crossed && standing.lap > recording.last_lap;
         if completed
+            && recording.ghosts
             && let (Some(start), Some(end)) = (recording.last_start, standing.lap_start_tick)
             && let Some(lap) = recording.slice(start, end)
         {

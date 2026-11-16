@@ -70,6 +70,10 @@ pub fn sources_for_race(
         options.find_extensions.as_ref(),
         report,
     );
+    let found = match &options.recorded_mods {
+        Some(recorded) => super::restrict_to(found, recorded),
+        None => found,
+    };
     admit(
         found,
         title,

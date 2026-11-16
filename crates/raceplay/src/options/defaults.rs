@@ -19,6 +19,7 @@ impl Default for Options {
             foreign_track: None,
             extensions: Vec::new(),
             find_extensions: None,
+            recorded_mods: None,
             find_texture_packs: None,
             boost_zoom: None,
             trail_hits: TrailHits::Off,

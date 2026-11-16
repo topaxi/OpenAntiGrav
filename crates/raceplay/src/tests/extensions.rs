@@ -86,6 +86,7 @@ pub(super) mod on {
         .unwrap();
         Source {
             mod_id: id.to_string(),
+            version: "1.0.0".to_string(),
             module: "test.wasm".to_string(),
             titles: Vec::new(),
             api: 1,
@@ -1105,6 +1106,7 @@ mod triggers {
         .unwrap();
         Source {
             mod_id: "test.triggers".to_string(),
+            version: "1.0.0".to_string(),
             module: "test.wasm".to_string(),
             titles: Vec::new(),
             api: 1,

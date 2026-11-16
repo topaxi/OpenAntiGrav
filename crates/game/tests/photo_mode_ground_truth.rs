@@ -1329,6 +1329,7 @@ fn a_photo_carries_its_race_and_resimulates_to_the_hash_it_was_taken_at() {
             &record,
             &source,
             &[Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/dlc")],
+            &[],
         )
         .expect("re-simulates");
         println!(

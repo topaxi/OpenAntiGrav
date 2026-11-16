@@ -79,6 +79,50 @@ pub struct Header {
     /// [`Self::ticks`], for the same reason.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finish: Option<Finish>,
+    /// The simulation modules the race ran, in the order they ran. Empty for a vanilla race,
+    /// and for a file written before the table existed; a rebuild runs exactly these and
+    /// refuses a machine that has others (`docs/architecture/wasm-extensions/determinism-and-state.md`,
+    /// "Replays").
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mods: Vec<ModUse>,
+}
+
+/// A simulation module a recorded race ran: what a reader needs to find the same module again
+/// and to refuse a different one by name.
+///
+/// **The module's SHA-256 is the identity**; it subsumes the blob layout, which lives in the
+/// module's code. `abi`, `revision` and `state_bytes` say which layout the file was recorded
+/// against, so a refusal can name what moved.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ModUse {
+    /// The mod's id.
+    pub id: String,
+    /// The mod's `[mod] version`, which also covers the manifest tables the module's race reads
+    /// (pickup odds, memory pages).
+    pub version: String,
+    /// The module's path inside the mod. With [`Self::id`] this is the entry's key: a mod can
+    /// ship a rules module and a track module.
+    pub module: String,
+    /// SHA-256 of the module's bytes, as sixty-four lower-case hex digits.
+    pub sha256: String,
+    /// The ABI major the module was run under.
+    pub abi: u32,
+    /// The ABI layout revision the module was run under.
+    pub revision: u32,
+    /// The module's state blob length in bytes.
+    pub state_bytes: u32,
+    /// The player's `sim` picks on the mod's choice rows, by row; they are hashed, so a rebuild
+    /// is handed these and not the local settings.
+    pub picks: Vec<u8>,
+}
+
+impl ModUse {
+    /// `id (module)`: how a refusal names this entry.
+    #[must_use]
+    pub fn label(&self) -> String {
+        format!("{} ({})", self.id, self.module)
+    }
 }
 
 /// A seed as the `i64` TOML can hold: the same 64 bits. A file with a small seed reads as it
@@ -230,6 +274,7 @@ impl Header {
             fork: None,
             ticks: 0,
             finish: None,
+            mods: Vec::new(),
         }
     }
 }

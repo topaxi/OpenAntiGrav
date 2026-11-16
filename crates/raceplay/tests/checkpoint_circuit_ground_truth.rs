@@ -43,6 +43,7 @@ fn checkpoint_circuit() -> Option<(race::extensions::Source, std::path::PathBuf)
     let file = module.local_path(&track.track).expect("a folder mod");
     let source = race::extensions::Source {
         mod_id: module.manifest.id.clone(),
+        version: module.manifest.version.to_string(),
         module: track.module,
         titles: module.manifest.titles.clone(),
         api: extension.api,
@@ -429,6 +430,7 @@ fn preferring(slot: Option<u8>) -> race::extensions::Source {
     .unwrap();
     race::extensions::Source {
         mod_id: "test.prefer".into(),
+        version: "1.0.0".to_string(),
         module: "test.wasm".into(),
         titles: Vec::new(),
         api: oag_ext_abi::ABI,

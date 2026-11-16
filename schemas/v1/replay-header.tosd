@@ -154,6 +154,38 @@ optional = true
 type = "integer"
 optional = true
 
+# A simulation module the race ran (docs/architecture/wasm-extensions/determinism-and-state.md,
+# "Replays"). Absent for a vanilla race. The sha256 is the module's identity.
+[types.mod]
+type = "table"
+
+[types.mod.id]
+type = "string"
+
+[types.mod.version]
+type = "string"
+
+[types.mod.module]
+type = "string"
+
+[types.mod.sha256]
+type = "string"
+pattern = "^[0-9a-f]{64}$"
+
+[types.mod.abi]
+type = "integer"
+
+[types.mod.revision]
+type = "integer"
+
+[types.mod.state_bytes]
+type = "integer"
+
+# The player's sim picks on the mod's choice rows, by row.
+[types.mod.picks]
+type = "array"
+itemtype = "integer"
+
 [elements]
 
 [elements.toml-schema]
@@ -216,4 +248,10 @@ optional = true
 
 [elements.finish]
 type = "types.finish"
+optional = true
+
+# The simulation modules the race ran, in the order they ran.
+[elements.mods]
+type = "array"
+itemtype = "types.mod"
 optional = true

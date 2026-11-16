@@ -88,6 +88,11 @@ pub struct Options {
     /// Finds more of them on the load thread ([`crate::extensions::Finder`]); `None`
     /// looks for none.
     pub find_extensions: Option<crate::extensions::Finder>,
+    /// The simulation modules a recording ran (`Header::mods`), when this load rebuilds one:
+    /// the race runs exactly these, with their recorded picks, and not the others the mods
+    /// that are on offer. `None` is an ordinary race; `Some` of nothing is a recording of a
+    /// vanilla race. Set by [`Self::apply_replay`].
+    pub recorded_mods: Option<Vec<oag_replay::header::ModUse>>,
     /// Opens the texture packs the player has on, on the load thread
     /// ([`crate::texture_pack::Finder`]); `None` draws the disc's own textures.
     pub find_texture_packs: Option<crate::texture_pack::Finder>,

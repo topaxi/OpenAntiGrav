@@ -182,6 +182,7 @@ impl Pending {
             // Filled at launch (`oag_game::mod_extensions::attach`), from the mods on then.
             extensions: Vec::new(),
             find_extensions: None,
+            recorded_mods: None,
             // Filled at launch (`oag_game::texture_pack::attach`), from the packs on then.
             find_texture_packs: None,
             // Passed straight through like `track` above, `None` included:

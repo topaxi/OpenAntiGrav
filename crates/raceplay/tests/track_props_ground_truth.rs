@@ -118,6 +118,7 @@ fn module(id: &str, body: &str) -> race::extensions::Source {
     .unwrap();
     race::extensions::Source {
         mod_id: id.into(),
+        version: "1.0.0".to_string(),
         module: "test.wasm".into(),
         titles: Vec::new(),
         api: oag_ext_abi::ABI,
