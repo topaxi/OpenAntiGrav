@@ -9,8 +9,8 @@ difficulty: easy (60)
 
 # 2048's race load is not the screen HD draws
 
-HD's and Omega's loading screens are done (`docs/formats/hd-loading.md`, `docs/formats/omega-loading.md`). 2048 draws
-none of its own (`oag_2048::TITLE.loading` is `None`). What the original draws is now fully read and confirmed against
+HD's and Omega's loading screens are done (`docs/formats/hd-loading.md`, `docs/formats/omega-loading.md`). 2048's race
+load is built (below). What the original draws is now fully read and confirmed against
 three Vita3K captures: `docs/ghidra/functions/vita-2048-eu-v104/race-load.md` (operands, tables, the meter's law with
 live numbers) and `docs/formats/2048-loading.md` (the summary). Omega is closed: its state 5 has no caller
 (`docs/ghidra/functions/ps4-omega-eu/loading-screen-start.md`), so this is a 2048-only build.
@@ -30,8 +30,14 @@ by drawing the box and meter over the ground with a `debug` loader line. What is
    (`CampaignEventCard_DrawCellPanel`), and the multiplayer "waiting for" page.
 4. Which loader step each `LoadingScreen_SetCeiling` caller is (this build's stages 1 to 3 stand for 0.75, 0.95, 0.98),
    `mode+0x188` (the divisor of the race manager's rate), and a real Vita's draw rate.
-5. The backdrop: the original draws the blurred campaign map behind the card; a launch here draws the `White2048` ground.
-6. The session hand-over (`follow_launch` to `Stage::race_loading`) was checked by the compiler and by a capture that
+5. **Restart and next race**: `0x8115f09a` (the `InGame Restart` and next-race path) calls `LoadingScreen_Start(4)` then
+   `SetRate(0.5)`; RACE AGAIN on a campaign event is not routed through the card hand-over, so it draws the box and
+   meter over the ground with no card.
+6. **The header's second line**: the original's card reads `OFFENSIVE WEAPONS ONLY` (a Queens Mall event with
+   offensive weapons) where our front end's card, which this load draws, reads the kind word (`RACE`). A front-end card
+   finding: which string the original puts there is unread.
+7. The backdrop: the original draws the blurred campaign map behind the card; a launch here draws the `White2048` ground.
+8. The session hand-over (`follow_launch` to `Stage::race_loading`) was checked by the compiler and by a capture that
    presses Launch on the real front end (`--loading-card`); a windowed campaign launch was not watched.
 
 ## Next Steps
