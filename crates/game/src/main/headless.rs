@@ -887,6 +887,7 @@ pub(crate) fn run_race(
         measure_race_load: None,
         demo: None,
         demo_limit: None,
+        replay_png: None,
         give,
         // A network race starts on the server's clock: no flyby to wait through.
         no_intro: cli.intro.no_intro || net.is_some(),

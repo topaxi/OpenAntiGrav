@@ -46,6 +46,8 @@ pub(crate) mod frame_timing;
 pub(crate) mod lifecycle;
 #[path = "session/replays.rs"]
 pub(crate) mod replays;
+#[path = "session/shot_open.rs"]
+mod shot_open;
 #[path = "session/rumble.rs"]
 mod rumble;
 #[path = "session/phases.rs"]
@@ -437,6 +439,13 @@ pub(crate) struct Session {
     pub(crate) demo: demo::State,
     /// The replay viewer while a recording is being watched (`session::replays`).
     pub(crate) viewer: Option<replays::Active>,
+    /// The line over the screen that says why a dropped screenshot did not open
+    /// (`session::shot_open`).
+    pub(crate) notice: Option<shot_open::Notice>,
+    /// The screenshot `--replay-png` names, until the main menu is up to open it.
+    pub(crate) shot_cli: Option<std::path::PathBuf>,
+    /// A screenshot's viewer is loading: a failure then is told to the player, not listed.
+    pub(crate) shot_pending: bool,
     /// Whether the menus open on the REPLAYS page: set by leaving the viewer and by a recording
     /// the rebuild refused.
     pub(crate) return_to_replays: bool,

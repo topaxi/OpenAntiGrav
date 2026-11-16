@@ -819,6 +819,7 @@ fn run(mut cli: Cli) -> Result<()> {
         measure_race_load: cli.measure.measure_race_load,
         demo: cli.demo.mode(),
         demo_limit: cli.demo.limit(),
+        replay_png: cli.shot.replay_png.clone(),
         give,
         no_intro: cli.intro.no_intro,
         dev: cli.dev.dev(cli.driver.people())?,

@@ -129,6 +129,12 @@ pub(crate) struct Watching {
     pub(crate) path: PathBuf,
     /// The setup the circuit's load produced, for the viewer's own race.
     pub(crate) setup: Option<oag_raceplay::Setup>,
+    /// The tick and state hash of the screenshot this recording was cut from: the viewer opens
+    /// paused on that tick (`session::shot_open`).
+    pub(crate) shot: Option<(u64, u64)>,
+    /// Whether the file was dropped on the window or named on the command line rather than
+    /// picked from the REPLAYS list: leaving the viewer returns to the main menu.
+    pub(crate) dropped: bool,
 }
 
 /// The viewer while a recording is being watched.
@@ -150,6 +156,12 @@ pub(crate) struct Active {
     /// The playhead was moved by a trigger or the right stick on the last tick, so the sound is
     /// rebuilt when it stops rather than on every frame of the scrub.
     scrubbing: bool,
+    /// The tick and state hash of the screenshot the viewer was opened from, until the first
+    /// time the race stands on that tick and the hash has been compared.
+    pub(crate) shot: Option<(u64, u64)>,
+    /// Whether the viewer was opened from a screenshot, which leaving it returns to the main
+    /// menu from rather than to the REPLAYS page.
+    pub(crate) from_shot: bool,
     own: StringTable,
     english: StringTable,
 }
@@ -168,7 +180,10 @@ impl Active {
             speed: viewer.speed(),
             // The banner names the last second that agreed, the end of what can be played.
             mismatch: viewer.stops_matching().then_some(built).flatten(),
-            at_end: matches!(state, State::Ended | State::Stopped | State::PoseEnded),
+            // A shot's own last tick is where the viewer opened, not the end of anything: the
+            // banner would cover the picture the player came for.
+            at_end: matches!(state, State::Ended | State::Stopped | State::PoseEnded)
+                && !(self.from_shot && !viewer.playing() && viewer.start() == Some(viewer.at())),
             pose_view: matches!(state, State::PoseView | State::PoseEnded),
             track_short: viewer.pose_track_is_short(),
         }
@@ -193,16 +208,29 @@ pub(crate) fn open_viewer(
     stage: &mut crate::race_stage::RaceStage,
     watching: Watching,
 ) -> anyhow::Result<Active> {
-    let Watching { replay, path, setup } = watching;
+    let Watching {
+        replay,
+        path,
+        setup,
+        shot,
+        dropped,
+    } = watching;
     let setup = setup.context("the race's setup was not kept")?;
     let viewer = Viewer::open(setup, *replay).map_err(|e| {
         let why = match &e {
             OpenError::Desync(_) => page::TICK_ZERO.to_string(),
             OpenError::Start(start) => format!("{start:#}"),
         };
-        refused.insert(path.clone(), why);
+        // A screenshot is no row of the list: its refusal is told to the player at once.
+        if shot.is_none() {
+            refused.insert(path.clone(), why);
+        }
         anyhow::anyhow!("{} cannot be rebuilt here: {e}", path.display())
     })?;
+    let viewer = match shot {
+        Some((tick, _)) => viewer.starting_at(tick),
+        None => viewer,
+    };
     viewer.begin(&mut stage.race)?;
     // Nothing the race does while it is watched is a result: the finish and the exit are not
     // captured, and it is never parked behind the menus.
@@ -216,6 +244,8 @@ pub(crate) fn open_viewer(
         pose_view: false,
         hud: true,
         scrubbing: false,
+        shot,
+        from_shot: shot.is_some() || dropped,
         own: oag_ui::strings::project_table(language),
         english: oag_ui::strings::project_table(None),
     })
@@ -264,6 +294,27 @@ impl Session {
         let replay = std::fs::read(path)
             .map_err(|e| e.to_string())
             .and_then(|bytes| Replay::from_bytes(&bytes).map_err(|e| e.to_string()))?;
+        let options = self.replay_options(&replay)?;
+        self.return_to_replays = true;
+        self.start_watching(
+            options,
+            Watching {
+                replay: Box::new(replay),
+                path: path.to_path_buf(),
+                setup: None,
+                shot: None,
+                dropped: false,
+            },
+        )
+    }
+
+    /// The options that load the race `replay` was recorded in, over the disc and packs the
+    /// session has open and the mods that are on.
+    ///
+    /// # Errors
+    ///
+    /// Why it cannot be rebuilt here: no disc is open, or the header does not name a race.
+    pub(crate) fn replay_options(&self, replay: &Replay) -> Result<oag_raceplay::Options, String> {
         let home = self
             .race_options
             .as_ref()
@@ -303,17 +354,26 @@ impl Session {
             &self.settings.mod_settings,
             false,
         );
+        Ok(options)
+    }
+
+    /// Parks nothing and starts loading the race `options` describes for the viewer to watch
+    /// `watching` over.
+    ///
+    /// # Errors
+    ///
+    /// Why the load could not start.
+    pub(crate) fn start_watching(
+        &mut self,
+        options: oag_raceplay::Options,
+        watching: Watching,
+    ) -> Result<(), String> {
         if let Some(parked) = self.suspended_race.take() {
             crate::race_build::drop_off_thread(parked);
         }
         self.pending_event = None;
         let mode = options.mode;
-        self.watching = Some(Watching {
-            replay: Box::new(replay),
-            path: path.to_path_buf(),
-            setup: None,
-        });
-        self.return_to_replays = true;
+        self.watching = Some(watching);
         self.start_race_loading(options, mode, None, false)
             .map_err(|e| {
                 self.watching = None;
@@ -490,6 +550,15 @@ impl Session {
         active.pose_view = matches!(state, State::PoseView | State::PoseEnded);
         let at = viewer.at();
         let normal = viewer.speed() == 16;
+        // A screenshot's viewer standing on the shot's tick for the first time: the race on
+        // screen is compared with the hash the shot was taken at.
+        let reached = match active.shot {
+            Some((tick, hash)) if moved == Moved::Seeked && at == tick => {
+                active.shot = None;
+                Some((stage.race.sim.state_hash(), hash))
+            }
+            _ => None,
+        };
         match moved {
             // The race at its own speed sounds as a race does; at any other speed the effects
             // are muted, and back at 1X they are rebuilt (`oag_game::sound::viewer_step`).
@@ -523,16 +592,19 @@ impl Session {
             active.muted = false;
             oag_game::sound::rebuild(&mut self.audio, &mut stage.race, at);
         }
+        if let Some((found, shot)) = reached {
+            self.shot_reached(found, shot);
+        }
     }
 
     /// Leaves the viewer for the REPLAYS page. Nothing was recorded, so nothing is written; the
     /// race is dropped, never parked.
     pub(crate) fn leave_viewer(&mut self) {
-        if self.viewer.take().is_none() {
+        let Some(closed) = self.viewer.take() else {
             return;
-        }
+        };
         info!("replays: the viewer closed");
-        self.return_to_replays = true;
+        self.return_to_replays = !closed.from_shot;
         self.audio.pause_race_music();
         self.save_race_music();
         self.audio.stop_race_sfx();

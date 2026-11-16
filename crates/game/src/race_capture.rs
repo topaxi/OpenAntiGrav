@@ -415,7 +415,7 @@ pub fn capture(
 ) -> Result<()> {
     let (width, height) = options.size;
     let title_name = loaded.title.name;
-    let shot_facts = shot::Facts::of(&loaded, options);
+    let mut shot_facts = shot::Facts::of(&loaded, options);
     let Loaded {
         shadows,
         shadow_hulls,
@@ -498,14 +498,14 @@ pub fn capture(
     } else {
         crate::split_screen::apply_windows(&mut race, &options.window_layout);
     }
-    // After the people are seated: the driver is chosen by how many humans race, and the
-    // original's is single-human. Chosen before the split, a two-view capture flew it.
+    // After the people are seated: the driver depends on how many humans race (the original's: one).
     if options.net.is_none() {
-        crate::ai_choice::apply(
+        let (_, original) = crate::ai_choice::apply_noting(
             &mut race,
             options.ai_choice,
             crate::ai_choice::Source::Free(difficulty),
         );
+        shot_facts.note_ai(original);
     }
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_sight_fov(options.fov);

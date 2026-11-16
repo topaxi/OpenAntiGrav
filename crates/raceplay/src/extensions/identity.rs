@@ -55,6 +55,41 @@ pub fn restrict_to(sources: Vec<Source>, recorded: &[ModUse]) -> Vec<Source> {
         .collect()
 }
 
+/// [`check_recorded`] ahead of a load: why the race `options` describes (a rebuild of a
+/// recording, [`Options::recorded_mods`](crate::Options::recorded_mods)) would not run the
+/// recorded modules, from the modules on offer and their bytes alone, with nothing compiled. A
+/// module's compiled layout (state bytes) is taken as recorded here and checked by the load.
+///
+/// # Errors
+///
+/// As [`check_recorded`], for a missing module, another build or other picks.
+pub fn preflight_recorded(options: &crate::Options) -> Result<(), String> {
+    let Some(recorded) = &options.recorded_mods else {
+        return Ok(());
+    };
+    #[cfg(feature = "extensions")]
+    let running: Vec<ModUse> = {
+        let found = super::gather(
+            &options.extensions,
+            options.find_extensions.as_ref(),
+            &mut Vec::new(),
+        );
+        restrict_to(found, recorded)
+            .iter()
+            .filter_map(|source| {
+                let want = recorded
+                    .iter()
+                    .find(|m| m.id == source.mod_id && m.module == source.module)?;
+                let bytes = (source.read)().ok()?;
+                Some(used(source, sha256_hex(&bytes), want.state_bytes))
+            })
+            .collect()
+    };
+    #[cfg(not(feature = "extensions"))]
+    let running: Vec<ModUse> = Vec::new();
+    check_recorded(recorded, &running)
+}
+
 /// Why a race that runs `running` is not the one `recorded` ran, every difference named, or
 /// `Ok` when they are the same modules in the same order.
 ///

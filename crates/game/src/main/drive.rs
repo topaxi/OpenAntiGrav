@@ -287,6 +287,10 @@ impl Driver {
                 }
             }
             Step::Screenshot(path) => self.screenshot(path)?,
+            Step::Drop(path) => {
+                self.session.file_dropped(path);
+                self.frame(None)?;
+            }
             Step::Quit => {}
         }
         Ok(())
@@ -390,6 +394,7 @@ fn state_of(session: &mut Session) -> State {
     }
     (state.replay, state.replay_at) = session.replay_names();
     (state.replay_follow, state.replay_hud) = session.replay_view_names();
+    state.notice = session.notice.as_ref().map(|notice| notice.text().to_string());
     if let Stage::Race(stage) = &session.stage {
         state.photo = Some(session.photo_lens_name().to_string());
         state.photo_fx = session.photo_fx_name();

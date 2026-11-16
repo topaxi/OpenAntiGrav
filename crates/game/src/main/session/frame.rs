@@ -346,7 +346,15 @@ impl Session {
             );
             // And the pointer's, on the same latch terms: one take per tick,
             // in window pixels until a stage says which grid it draws in.
-            let pointer = self.pointer.take();
+            let mut pointer = self.pointer.take();
+            // A notice over the screen takes the press that dismisses it, so the screen under it
+            // does not also act on it.
+            self.tick_notice(&mut pointer);
+            // `--replay-png` opens its screenshot as soon as the main menu is up, ahead of an
+            // attract demo that would start on the same tick.
+            if self.tick_shot_cli() {
+                break;
+            }
             // The attract demo: an untouched main menu starts one, input ends it. Before the
             // stage's own tick so the press that ends a demo is not also read by the menu it
             // returns to.

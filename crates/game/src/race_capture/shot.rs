@@ -10,6 +10,7 @@ use crate::shot_meta::{self, Meta};
 
 /// What a capture knows of its race that the race itself does not hold.
 pub(super) struct Facts {
+    launch: Launch,
     context: crate::shot_meta::Context,
     title: &'static str,
     platform: String,
@@ -41,12 +42,20 @@ impl Facts {
         );
         header.options = launch.to_table();
         Self {
+            launch,
             context: options.shot.clone(),
             title: loaded.title.name,
             platform: loaded.platform.to_string(),
             circuit: loaded.circuit.clone(),
             header,
         }
+    }
+
+    /// What the original opponent driver was asked, which the header must carry for a rebuild
+    /// (the viewer, `--from-png`'s verification) to fly the same opponents.
+    pub(super) fn note_ai(&mut self, original: Option<oag_raceplay::OriginalAi>) {
+        self.launch.original_ai = original;
+        self.header.options = self.launch.to_table();
     }
 
     /// Starts the recording the frame's stream is cut from, unless one is running.

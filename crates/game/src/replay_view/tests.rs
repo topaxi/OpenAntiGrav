@@ -201,3 +201,20 @@ fn what_the_screen_draws_stays_in_the_top_band_inside_the_chip_row() {
     let keys_end = first[1] + CHIP_HEIGHT + 2.0 + LINE * (KEY_LINES - 1) as f32 + LINE + 2.0;
     assert!(bar[1] > keys_end, "the bar is under the last line of keys");
 }
+
+#[test]
+fn a_notice_is_a_band_across_the_middle_with_its_text_wrapped_inside_the_width() {
+    let list = notice_draw(GRID, "NOT A SCREENSHOT");
+    let [x, y, w, h] = match &list[0] {
+        Draw::Fill { rect, .. } => *rect,
+        other => panic!("the band comes first, got {other:?}"),
+    };
+    assert_eq!((x, w), (0.0, GRID.0));
+    assert!(y > 0.0 && y + h < GRID.1, "inside the picture");
+    assert!((y + h / 2.0 - GRID.1 / 2.0).abs() < 0.5, "centred");
+    assert_eq!(texts(&list), ["NOT A SCREENSHOT"]);
+    assert!(matches!(
+        &list[1],
+        Draw::Text { wrap_width: Some(wrap), .. } if *wrap < GRID.0
+    ));
+}

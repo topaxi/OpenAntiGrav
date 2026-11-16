@@ -1115,7 +1115,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             trail_sparks: options.trail_sparks,
             #[cfg(feature = "view")]
-            request: Some(options.replay_setup()),
+            request: Some(options.replay_setup_on(&track)),
             #[cfg(feature = "view")]
             campaign_event: false,
             seed: options.seed.unwrap_or(SEED),

@@ -825,6 +825,7 @@ impl Session {
                         Ok(active) => {
                             self.viewer = Some(active);
                             self.return_to_replays = false;
+                            self.shot_pending = false;
                         }
                         Err(e) => join_error = Some(e),
                     }
@@ -1093,7 +1094,10 @@ impl Session {
                     self.restore_race_options();
                 }
                 // A recording that would not load is listed dimmed with why.
-                if let Some(watching) = self.watching.take() {
+                if self.shot_pending {
+                    self.shot_failed(&format!("{e:#}"));
+                    self.watching = None;
+                } else if let Some(watching) = self.watching.take() {
                     self.replay_refused.insert(watching.path, format!("{e:#}"));
                 }
                 return self.open_menus();

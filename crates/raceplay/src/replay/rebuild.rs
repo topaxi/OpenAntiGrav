@@ -66,6 +66,22 @@ impl Options {
         Ok(())
     }
 
+    /// [`Self::replay_setup`] with `circuit`, the entry the load settled on, as the track when
+    /// none was named, so a rebuild from the header does not depend on the default being the
+    /// same one. A Zone race's entry is the zone variant of the circuit named and a foreign
+    /// track has no archive entry: both keep what was named.
+    #[must_use]
+    pub fn replay_setup_on(&self, circuit: &str) -> oag_replay::header::Setup {
+        let mut setup = self.replay_setup();
+        if setup.track.is_none()
+            && self.mode != oag_race::Mode::Zone
+            && !circuit.starts_with("foreign:")
+        {
+            setup.track = Some(circuit.to_string());
+        }
+        setup
+    }
+
     /// The request a race loaded with these options is recorded under.
     #[must_use]
     pub fn replay_setup(&self) -> oag_replay::header::Setup {

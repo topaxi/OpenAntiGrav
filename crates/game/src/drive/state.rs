@@ -171,6 +171,10 @@ pub struct State {
     /// `on` or `off`: whether the watched race's HUD is drawn.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replay_hud: Option<String>,
+    /// The line a refused screenshot drop shows over the screen, until it times out or is
+    /// dismissed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notice: Option<String>,
     /// The end-of-race screen on top, `photo` for `Race End Photo` and `other` for the rest,
     /// on `stage=race` once the race has ended with an end-of-race flow built.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -249,6 +253,7 @@ impl State {
             "replay_at" => one(self.replay_at.clone()),
             "replay_follow" => one(self.replay_follow.clone()),
             "replay_hud" => one(self.replay_hud.clone()),
+            "notice" => one(self.notice.clone()),
             "endrace" => one(self.endrace.clone()),
             "demo" => one(self.demo.clone()),
             "hud" => one(self.hud.clone()),
@@ -308,6 +313,7 @@ impl State {
                 | "replay_at"
                 | "replay_follow"
                 | "replay_hud"
+                | "notice"
                 | "endrace"
                 | "demo"
                 | "hud"

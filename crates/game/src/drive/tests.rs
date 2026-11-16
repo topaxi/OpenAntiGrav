@@ -36,7 +36,7 @@ fn screen(focus: usize, step: Option<(&'static str, &'static str)>, rows: Vec<Ro
 #[test]
 fn a_script_parses_every_step_with_its_line() {
     let script = Script::parse(
-        "until stage=menu within 99  # boot\nselect \"LAUNCH RACE\"; press cross down\nset race.mode=time_trial\nticks 5\nscreenshot a.png\nexpect page!=race\nquit",
+        "until stage=menu within 99  # boot\nselect \"LAUNCH RACE\"; press cross down\nset race.mode=time_trial\nticks 5\nscreenshot a.png\ndrop \"a b.png\"\nexpect page!=race\nquit",
     )
     .unwrap();
     let kinds: Vec<String> = script
@@ -44,7 +44,8 @@ fn a_script_parses_every_step_with_its_line() {
         .iter()
         .map(|(n, s)| format!("{n}:{s}"))
         .collect();
-    assert_eq!(kinds.len(), 8);
+    assert_eq!(kinds.len(), 9);
+    assert_eq!(kinds[6], "6:drop a b.png");
     assert_eq!(kinds[0], "1:until stage=menu within 99");
     assert_eq!(kinds[1], "2:select \"LAUNCH RACE\" within 1800");
     assert!(matches!(&script.steps[2].1, Step::Press(b) if b == &[Button::Cross, Button::Down]));

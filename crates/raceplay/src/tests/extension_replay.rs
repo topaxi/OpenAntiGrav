@@ -185,3 +185,47 @@ fn a_rebuild_runs_the_recorded_modules_with_the_recorded_picks_and_no_others() {
         "a vanilla recording keeps none"
     );
 }
+
+/// The refusal a dropped screenshot gets before anything is loaded: the same differences
+/// `check_recorded` names, read off the modules on offer and their bytes with nothing compiled.
+/// Fails if a missing module or another build is let through to the load.
+#[cfg(feature = "extensions")]
+#[test]
+fn the_preflight_refuses_a_missing_module_and_another_build_by_name() {
+    use crate::Options;
+    use crate::extensions::preflight_recorded;
+
+    let source = on::module("test.keep", "i32.const 0");
+    let race = grid(on::prepared(std::slice::from_ref(&source)));
+    let recorded = race.mods_used().to_vec();
+    assert_eq!(recorded.len(), 1);
+    let offered = |extensions: Vec<crate::extensions::Source>, recorded| Options {
+        extensions,
+        recorded_mods: Some(recorded),
+        ..Options::default()
+    };
+
+    let unmodded = Options::default();
+    assert_eq!(
+        preflight_recorded(&unmodded),
+        Ok(()),
+        "no recording to hold it to"
+    );
+    assert_eq!(
+        preflight_recorded(&offered(vec![source.clone()], recorded.clone())),
+        Ok(()),
+        "the recorded module, offered"
+    );
+    let missing = preflight_recorded(&offered(Vec::new(), recorded.clone())).unwrap_err();
+    assert!(
+        missing.contains("test.keep") && missing.contains("does not load it"),
+        "{missing}"
+    );
+    let mut other = recorded;
+    other[0].sha256 = "0".repeat(64);
+    let build = preflight_recorded(&offered(vec![source], other)).unwrap_err();
+    assert!(
+        build.contains("test.keep") && build.contains("another build"),
+        "{build}"
+    );
+}
