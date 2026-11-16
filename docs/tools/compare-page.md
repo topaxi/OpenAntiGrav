@@ -528,15 +528,27 @@ their own identity and tells that agent's emulators to look at nothing else (`sc
 |---|---|---|
 | Pad names (`scripts/uinput-pads.py`) | `OAG seat N pad A`, `B`, ... | `OAG test pad A (Microsoft X-Box 360 pad)` |
 | USB ids | vendor `045E`, product `4F00 + N` (`4F01`..`4FFF`) | `045E:028E` (what `oag-game`'s split-screen walk reads through gilrs) |
-| SDL emulator (the port, shadPS4) | `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=0x045e/0x4f0N` plus `SDL_GAMECONTROLLERCONFIG` with an Xbox-360 layout for that id (`pad_seat.sdl_env`) | nothing added |
+| SDL emulator (the port, shadPS4) | `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=0x045e/0x4f0N` plus `SDL_GAMECONTROLLERCONFIG` with an Xbox-360 layout for that id (`pad_seat.sdl_env`) | `...EXCEPT=0x045e/0x028e` (the original pads only: a seated agent's pad, and RPCS3's DualShock-3 ones, stay invisible) |
 | RPCS3 (evdev handler, by name) | `OAG seat N pad rpcs3`, DualShock-3 ids; `OAG_RPCS3_PAD_NAME` still wins; `scripts/emu-env.sh` writes the name into the private input profile | `OpenAntiGrav Virtual Pad` |
 | PCSX2, Vita3K (X key events, no pad) | `pad_seat.sdl_blind_env`: `...IGNORE_DEVICES_EXCEPT=0x0000/0x0000`, so they see no pad of any seat | same (always applied) |
 | A driver refuses to start when | its own seat's pad already exists | an original-id pad exists (as before) |
 | Sway runtime dir of a `Rig` | `/tmp/oag-omega[-port]-<lane>-sN` | `/tmp/oag-omega[-port]-<lane>` |
 
 Run each agent's drivers with its own `OAG_PAD_SEAT` (the lead hands out the numbers), and give each its own scratch directory
-and display. A driver started without a seat behaves exactly as before, including when another agent's seat pad exists, except
-that an SDL emulator then still sees every pad.
+and display. A driver started without a seat behaves as before and is not disturbed by another agent's seat pad: it still refuses
+when an original-id pad exists, and its SDL emulator sees only the original ids.
+
+**Re-checking an emulator's SDL** (after an update, or for one not yet probed): make pads on two seats and ask the library
+what a program with each seat's environment sees. `--lib` takes any `libSDL3.so.0`, such as the ones RPCS3 and PCSX2 bundle.
+
+```sh
+mkfifo a b; (sleep 300 > a &); (sleep 300 > b &)
+OAG_PADS=1 OAG_PAD_SEAT=1 setsid uv run --with evdev python3 scripts/uinput-pads.py < a &
+OAG_PADS=1 OAG_PAD_SEAT=2 setsid uv run --with evdev python3 scripts/uinput-pads.py < b &
+python3 -I scripts/pad_seat.py probe --all            # no hint: every pad
+python3 -I scripts/pad_seat.py probe --seat 1 --lib /opt/rpcs3/usr/lib/libSDL3.so.0   # only "OAG seat 1 pad"
+echo quit > a; echo quit > b                          # the pads vanish
+```
 
 **What was measured (2026-11-16, confidence 90 for SDL3, the system's 3.4.20 and the copies bundled with RPCS3 and PCSX2).**
 `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` filters both the gamepad and the joystick lists (a ctypes probe with seat 1's and seat 2's
@@ -552,7 +564,7 @@ gamepad API (`SDL_GetGamepads`, `SDL_OpenGamepad`), so the hint reaches it: two 
 both were on the "PRESS ANY BUTTON TO START" title): one press on seat 1's pad took only the seat-1 port to MAIN MENU, a second
 moved only its highlight from CAMPAIGN to RACEBOX; a press on seat 2's pad then took only the seat-2 port to MAIN MENU, and two more
 moved only its highlight to ONLINE while seat 1 stayed on RACEBOX. Judged on the full frames, since the title and menu
-backgrounds animate. A single-seat run of `wipeout-pc-omega-pair.py` (no seat) still reached the grid and passed its seven parity checks.
+backgrounds animate. The seated runs used a scratch harness that calls the pair driver's `Rig` (sway, port, pad), not its `main()`. A single-seat run of `wipeout-pc-omega-pair.py` (no seat) still reached the grid and passed its seven parity checks.
 
 ## 2048 (Vita) pairs (2026-10-22, `pairs-2048`)
 

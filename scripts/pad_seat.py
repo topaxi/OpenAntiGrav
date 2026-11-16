@@ -18,7 +18,12 @@ A seat gives one agent's pads their own identity and tells that agent's emulator
     if own_pads(s): sys.exit("seat %s already has a pad" % s)
     env = {**os.environ, **sdl_env(s)}
 
-`docs/tools/compare-page.md`, "Pad seats", has the operating notes.
+`docs/tools/compare-page.md`, "Pad seats", has the operating notes and how to re-check an emulator's SDL:
+
+    python3 -I scripts/pad_seat.py probe [--seat N | --blind | --all] [--lib /path/to/libSDL3.so.0]
+
+lists the gamepads and joysticks an SDL program started with that seat's environment sees (default: the seat in
+`OAG_PAD_SEAT`; `--all` sets no hint).
 """
 
 import os
@@ -77,15 +82,14 @@ def except_value(vendor, product):
 
 
 def sdl_env(seat_no):
-    """The environment that makes an SDL emulator see this seat's pads only. Empty for None: the original pads
-    are what an unconfigured SDL program already sees."""
-    if seat_no is None:
-        return {}
+    """The environment that makes an SDL emulator see this seat's pads only. For None that is the original
+    pads (`045E:028E`), so an unseated driver never picks up a seated agent's pad; SDL has a built-in mapping
+    for those ids, so no mapping is added."""
     vendor, product = ids(seat_no)
-    return {
-        "SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT": except_value(vendor, product),
-        "SDL_GAMECONTROLLERCONFIG": mapping(seat_no),
-    }
+    env = {"SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT": except_value(vendor, product)}
+    if seat_no is not None:
+        env["SDL_GAMECONTROLLERCONFIG"] = mapping(seat_no)
+    return env
 
 
 def sdl_blind_env():
@@ -133,3 +137,46 @@ def own_pads(seat_no):
     product id, or for None any original Xbox-360-shaped pad (another run's, or a real one)."""
     vendor, product = ids(seat_no)
     return [name for name, v, p in _devices() if (v, p) == (vendor, product)]
+
+
+def probe(argv):
+    """Print what an SDL3 program with a seat's environment sees: `probe [--seat N | --blind | --all] [--lib PATH]`."""
+    import ctypes
+
+    lib, mode, i = "libSDL3.so.0", ("seat", seat()), 0
+    while i < len(argv):
+        if argv[i] == "--lib":
+            lib, i = argv[i + 1], i + 2
+        elif argv[i] == "--seat":
+            mode, i = ("seat", int(argv[i + 1])), i + 2
+        elif argv[i] in ("--blind", "--all"):
+            mode, i = (argv[i][2:], None), i + 1
+        else:
+            raise SystemExit("usage: pad_seat.py probe [--seat N | --blind | --all] [--lib PATH]")
+    os.environ.update({"seat": lambda n: sdl_env(n), "blind": lambda n: sdl_blind_env(), "all": lambda n: {}}[mode[0]](mode[1]))
+    sdl = ctypes.CDLL(lib)
+    sdl.SDL_Init.argtypes = [ctypes.c_uint32]
+    sdl.SDL_Init.restype = ctypes.c_bool
+    sdl.SDL_GetGamepads.restype = sdl.SDL_GetJoysticks.restype = ctypes.POINTER(ctypes.c_uint32)
+    sdl.SDL_GetGamepadNameForID.restype = sdl.SDL_GetJoystickNameForID.restype = ctypes.c_char_p
+    if not sdl.SDL_Init(0x2000 | 0x200):
+        raise SystemExit("SDL_Init failed")
+    import time
+
+    time.sleep(0.5)
+    sdl.SDL_UpdateJoysticks()
+    for label, fetch, name in (("gamepads", sdl.SDL_GetGamepads, sdl.SDL_GetGamepadNameForID),
+                               ("joysticks", sdl.SDL_GetJoysticks, sdl.SDL_GetJoystickNameForID)):
+        count = ctypes.c_int(0)
+        found = fetch(ctypes.byref(count))
+        print("%s (%s): %s" % (label, os.environ.get("SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT", "no hint"),
+                               [name(found[n]).decode() for n in range(count.value)]))
+
+
+if __name__ == "__main__":
+    import sys
+
+    if sys.argv[1:2] == ["probe"]:
+        probe(sys.argv[2:])
+    else:
+        raise SystemExit("usage: pad_seat.py probe [--seat N | --blind | --all] [--lib PATH]")
