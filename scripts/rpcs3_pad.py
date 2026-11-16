@@ -51,6 +51,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import emu_guard  # noqa: E402
+import pad_seat  # noqa: E402
 
 UINPUT = "/dev/uinput"
 UINPUT_GROUP = "input"
@@ -69,8 +70,10 @@ VENDOR = 0x054C
 PRODUCT = 0x0268
 #: `OAG_RPCS3_PAD_NAME` gives a member's virtual pad its own name, so two members'
 #: RPCS3 instances (each with its own input profile naming its own pad) never
-#: bind each other's device.
-DEVICE_NAME = os.environ.get("OAG_RPCS3_PAD_NAME", "OpenAntiGrav Virtual Pad")
+#: bind each other's device. With `OAG_PAD_SEAT=N` and no explicit name the pad is
+#: "OAG seat N pad rpcs3" (`scripts/pad_seat.py`). Its ids stay DualShock 3, which no
+#: seat's SDL hint (`0x045e/0x4f0N`) lets an SDL emulator see.
+DEVICE_NAME = pad_seat.rpcs3_name(pad_seat.seat())
 
 BUTTONS = {
     "cross": "BTN_SOUTH",

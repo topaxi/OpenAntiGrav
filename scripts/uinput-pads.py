@@ -15,14 +15,19 @@ Commands, one per line: `a|b|c|... press BUTTON`, `a|b|c|... hold BUTTON SECONDS
 BUTTON is one of cross circle square triangle start select up down left right.
 
 Needs write access to /dev/uinput (the `input` group). The devices exist system-wide
-while the script runs, so run it only against your own Xvfb session, and stop it by
-its PID when done: both pads vanish with it.
+while the script runs: stop it by its PID when done, and both pads vanish with it.
+
+`OAG_PAD_SEAT=N` gives the pads a seat's name ("OAG seat N pad A") and USB product id (`scripts/pad_seat.py`), so
+that an SDL emulator started with `pad_seat.sdl_env(N)` sees this seat's pads and no other agent's. Unset, the pads
+keep the original ids (045E:028E), which is what `oag-game` reads through gilrs.
 """
 import os
 import subprocess
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pad_seat  # noqa: E402
 from evdev import AbsInfo, UInput
 from evdev import ecodes as e
 
@@ -42,7 +47,7 @@ HAT = {
 }
 
 
-def make(name):
+def make(name, vendor, product):
     stick = AbsInfo(0, -32768, 32767, 16, 128, 0)
     trigger = AbsInfo(0, 0, 255, 0, 0, 0)
     hat = AbsInfo(0, -1, 1, 0, 0, 0)
@@ -56,15 +61,14 @@ def make(name):
             (e.ABS_Z, trigger), (e.ABS_RZ, trigger), (e.ABS_HAT0X, hat), (e.ABS_HAT0Y, hat),
         ],
     }
-    return UInput(cap, name=name, vendor=0x045E, product=0x028E, version=0x110, bustype=e.BUS_USB)
+    return UInput(cap, name=name, vendor=vendor, product=product, version=0x110, bustype=e.BUS_USB)
 
 
 def main():
     count = min(8, max(1, int(os.environ.get("OAG_PADS", "2"))))
-    pads = {
-        letter: make(f"OAG test pad {letter.upper()} (Microsoft X-Box 360 pad)")
-        for letter in "abcdefgh"[:count]
-    }
+    seat = pad_seat.seat()
+    vendor, product = pad_seat.ids(seat)
+    pads = {letter: make(pad_seat.pad_name(seat, letter), vendor, product) for letter in "abcdefgh"[:count]}
     time.sleep(1.5)
     for line in sys.stdin:
         parts = line.split()
