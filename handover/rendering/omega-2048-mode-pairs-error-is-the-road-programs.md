@@ -44,8 +44,9 @@ a correct detail fix can raise it).
      `bias` went past zero to +16.1. Suspects, in order: the cube's orientation (the unflipped probe scored `bias`
      +10.0, near better, mid worse: not settled on one pair; check on a second circuit with a visible sun, the page's
      open item), the fresnel's `N2`, the cube read at mip `2 + k` into a 512x256 map.
-   - **The march moves 0.3 % of Sol's pixels** at this pose (no-march probe: `G` 0.77 against 0.75): at grazing
-     angles the ray meets a channel wall within a fraction of a texel. Judge on a pose that looks down at the road.
+   - **The march reshapes Sol's strips** (3.3 % of the frame moves by more than 8 levels) but does not raise road
+     `G` (no-march probe 0.77 against 0.75): the `G` rise is the sheen's. Compare the strips' lit far wall by eye
+     on a pose that looks down at the road.
    - **Queens Mall's cyan lines** in the pair sit on the edge of a deep trench, not on the panel-map road; ours draws
      none. Find the material there (`psp2_material_dump` at that world point) before adding anything.
    - Unity Square's road `G` 0.83 to 0.80; the shadow-light factor `0.75 + 0.25 ...` and the lip blend are not drawn.

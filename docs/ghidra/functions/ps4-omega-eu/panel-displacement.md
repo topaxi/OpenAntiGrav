@@ -337,8 +337,9 @@ reflection, so its own masks move):
 By eye on Sol the sheen lands where the original's does (the far half, at grazing angles), and the
 near road overshoots toward grey-blue: mean colour of a near patch (45, 32, 34) % in the original,
 (48, 40, 43) % ours. Two probes on Sol: without the march the road scores `LF` 19.3, `bias` +18.0,
-`G` 0.77 (the march moves 0.3 % of the frame's pixels at this pose: at these grazing angles the ray
-meets a channel's wall within a fraction of a texel); with the lookup's `z` unflipped the road
+`G` 0.77: the march reshapes the recessed strips (3.3 % of the frame's pixels move by more than 8
+levels, 1.3 % by more than 25; a debug render of the shift shows it across every strip), but the
+road's gradient ratio comes from the sheen, not from the march; with the lookup's `z` unflipped the road
 scores `LF` 16.0, `bias` +10.0, `G` 0.76, near better and right-hand mid worse, so the orientation
 is not settled by this pair and the page's flip stands. Queens Mall's cyan lines in the pair sit on
 the edge of a deep trench, not on the panel-map road: which material draws them is open.
