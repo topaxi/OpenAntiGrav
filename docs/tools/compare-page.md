@@ -1342,6 +1342,44 @@ with a gap.** `vita-2048-pair.py --zone-capture SECONDS` (with `--walk`) flies a
   stop` and boot again. A Vita3K left running by an earlier run makes the next `--walk` attach to it ("already running", hull shake not patched): stop it first.
   `oag-game` takes a negative `--camera-pose` or `--pose` only as `--flag=VALUE`; `--camera-pose` refuses `--pose-from`.
 
+## Omega Zone pairs (2026-11-17, `zone-pair-omega`)
+
+`scripts/wipeout-pc-omega-pair.py pair --zone` (the `wipeout_pc` native port; shadPS4 race shots stay untrusted). Two pairs in `omega/`:
+`zone-vineta-k-z5` (an HD-lineage circuit, WipEout HD mode) and `zone-capital-reach-2048-z5` (`Data\Environments2048\bridge`, 2048 mode).
+
+**The state.** RACEBOX, RACE TYPE four Rights (Single Race, Time Trial, Speed Lap, Eliminator or Combat, **Zone**; the same count in both GAME MODEs),
+Track Select (the HD list is the Race Box's own: Vineta K, Anulpha Pass ... Tech De Ra; 2048 mode's is Altima, Rockway Stadium, Capital Reach ...), Ship Select
+(no Downs: the cursor opens on the first team), loading, START RACE. 2048 mode needs two taps of cross on the intro, 2.5 s apart. The Zone ship **flies
+itself with no input**: on Vineta K it held the line for 60 to 70 s (zone 5 from a score near 5300, zone 6 near 7300, then a crash to the results screen);
+on Tech De Ra it hit the first wall at a score near 1100 and sat there at zone 1, so that circuit was not paired (an HD-lineage circuit that survives was
+taken instead; open: a steered run). A Capital Reach run reached zone 5 in both boots.
+
+**Freezing instead of pausing.** The port has no pause, and the race state is not located in RAM, so the script `SIGSTOP`s the `gow3-probe` process
+`--zone-wait` (56 s) after the START RACE tap, grabs the frame twice 0.4 s apart (RMSE 0.00000 on every capture: the glass holds the last drawn frame),
+reads the player's racer row through `/proc/<pid>/mem` (the script is an ancestor of the port, so Yama allows it) and `SIGCONT`s. The caller reads the zone
+number, score and shield off `theirs.png` and runs the command again with `--zone-state ZONE,SCORE,SHIELD`, which renders ours at tick 0 on that pose
+(`--pose`, `--hud-state`, `--mode zone`). 2048's Zone HUD prints no score, so that pair carries score 0 and only the zone and the shield are the original's.
+
+**The pose (confidence 85).** Racer row 0 (patch Ghidra `0x01a7ae00`, runtime `0x800000000 + 0xa7ae00`, `patch-v107-addresses.md`): `+0x10` position (xyz, w 1.0),
+`+0x20` up, `+0x30` forward, `+0x40` the third axis, all unit and mutually orthogonal to 1e-4. Checked against ours rather than assumed: at the row's position
+ours' track gives an up equal to `+0x20` (dot 0.9997) and a forward equal to `+0x30` (0.998) on Vineta K, and the forward agreement in the pair is 0.99995 on
+Capital Reach, where the game-state mode word at `0x0201280c` does **not** read a mode id (it reads 1017715749 in 2048 mode; it reads 6, Zone, in HD mode), so
+the row is validated by the track there. The camera is not located: ours draws the title's chase view at the pose, and the row is the sim's state while the
+frame is the last one presented (at most one frame, about 1 unit, apart; recorded as bounded, not measured).
+
+**Repeats.** Vineta K: two cold boots, both zone 5 (score 5900 and 5911, shield 23 both), poses 22 units apart, whole-frame RMSE between the two original
+frames 0.142. Capital Reach: two cold boots, both zone 5 (shield 49 and 50), RMSE 0.237 (the scenery windows animate). Confidence 70 (two boots each).
+
+**What differs (read on both `side.png`).** *Vineta K, zone 5:* the original is a dark green road with yellow-green lane lines and walls and an orange sunset sky
+with a lens glow, a silver hull, and the Zone ladder with `FLASH` and `SUB-RAPIER` captions; ours has a pale blue-white road, a teal cloudy sky with violet
+towers, a dark brown hull, a `PERFECT ZONE` caption and no ladder captions. RMSE 0.340, edge correlation 0.01, mean grey 74.3: the HD-style Zone grade ours
+wired in `19f18c1b6` is not the original's zone 5 look on this circuit. *Capital Reach:* the expected gap. The original draws 2048's flat Zone look (a red and green
+road, magenta and violet skyline, cyan and yellow window panels); ours draws the ordinary daytime circuit with no grade (held back) and only the word `ZONE`.
+RMSE 0.427, edge correlation -0.01, mean grey 69.2. Ours' camera also sits nearer the wall than the original's. **2048 and Omega cross-check: checked, differs in part.** The `zone-dlc-vineta-k-z5` pair of 2048's own Vineta K DLC (Vita3K, zone 5, FLASH
+stage) shares the yellow-green walls and lane lines and the stage name with Omega's Vineta K at zone 5, but its road is grey (Omega's dark green) and its sky violet
+(Omega's orange); the two frames are at different places on the circuit, so the sky is a view-direction difference as much as a grade one and the road colour is the
+reading that stands (one frame each, confidence 40). The racer-row offsets are Omega's patch eboot only; 2048 is a separate executable (not checkable from this lane).
+
 ## Menu pairs: HD/Fury and Omega front-end screens (2026-10-26, `menu-pairs-hd-omega`)
 
 A front-end screen is a still, so a menu pair has no pose, camera or race clock. What makes it a pair is the same screen,
