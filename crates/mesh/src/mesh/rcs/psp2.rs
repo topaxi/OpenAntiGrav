@@ -220,6 +220,9 @@ pub struct Report {
     /// `Constant1` times their map's alpha, the map's rgb a normal
     /// (`psp2::alpha_product`).
     pub alpha_product_materials: usize,
+    /// Omega materials with no colour texture whose GCN program multiplies the light by a
+    /// `diffuse` constant, drawn as that constant (`constant_diffuse`).
+    pub constant_diffuse_materials: usize,
     /// Materials of `diffuse_normal_specular_emmissive_alpha` that add `Texture2Alpha^2 * Constant1`
     /// after the light (`psp2::emissive_add`), Vita only.
     pub emissive_add_materials: usize,
@@ -459,6 +462,14 @@ impl Report {
                 self.alpha_product_materials
             )
         };
+        let constant_diffuse = if self.constant_diffuse_materials == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} material(s) draw the constant their program multiplies the light by",
+                self.constant_diffuse_materials
+            )
+        };
         let uv_keys = if self.uv_keyed_meshes == 0 {
             String::new()
         } else {
@@ -469,7 +480,7 @@ impl Report {
         };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}{tarmac}{alpha_emissive}{lightning}{refraction}{uv_keys}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{constant_diffuse}{emissive_add}{tarmac}{alpha_emissive}{lightning}{refraction}{uv_keys}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -1153,18 +1164,23 @@ fn bind_textures(
                     }
                 }
                 (None, None) => {
-                    let Some(colour) = refused_here
+                    let lighting_colour = refused_here
                         .then(|| constant_colour(material, rule.as_ref()?.colour?))
-                        .flatten()
-                    else {
+                        .flatten();
+                    if let Some(colour) = lighting_colour {
+                        report.constant_colour_materials += 1;
+                        report.inherited_lighting_only +=
+                            usize::from(rule.as_ref().is_some_and(|r| r.inherited));
+                        (std::sync::Arc::new(colour), None)
+                    } else if let Some(colour) = ps4.then(|| constant_diffuse(material)).flatten()
+                    {
+                        report.constant_diffuse_materials += 1;
+                        (std::sync::Arc::new(colour), None)
+                    } else {
                         let why = unbound_without_picture(material, refused_here);
                         log::trace!("psp2 material {index} unbound ({why:?}): {}", material.name);
                         return Err(why);
-                    };
-                    report.constant_colour_materials += 1;
-                    report.inherited_lighting_only +=
-                        usize::from(rule.as_ref().is_some_and(|r| r.inherited));
-                    (std::sync::Arc::new(colour), None)
+                    }
                 }
             };
             let path = path.unwrap_or("constant colour");
@@ -1442,6 +1458,33 @@ fn constant_colour(material: &psp2::material::Material, colour: u32) -> Option<M
             vec![channel(0), channel(1), channel(2), 255],
             None,
         ),
+    ))
+}
+
+/// Omega's families whose GCN pixel programs sample no colour texture and end
+/// `light * diffuse + specular` with the material's own constant (`metallic`'s
+/// `DiffuseColour`, `diffuse_spec_constant`'s `diffuse`), read with `gcn_dump` on
+/// Amphiseum's two (`docs/formats/rcsmaterial.md`, "Omega's constant diffuse
+/// families"). The constants themselves are [`super::skin`]'s table, the same
+/// parameters HD's microcode reads. Other rows of that table are HD's and stay
+/// unwired here until their GCN programs are read.
+const CONSTANT_DIFFUSE_FAMILIES: [&str; 2] = ["metallic", "diffuse_spec_constant"];
+
+/// The one-texel picture of `material`'s constant diffuse, encoded for Omega's
+/// scene (its `.gnf` texels decode with the sRGB curve, so a program-computed
+/// colour is bound as the curve's inverse, as `skin::constant_picture` does for HD).
+fn constant_diffuse(material: &psp2::material::Material) -> Option<ModelTexture> {
+    let family = lighting_only::family(material);
+    if !CONSTANT_DIFFUSE_FAMILIES.contains(&family.as_str()) {
+        return None;
+    }
+    let hash = super::skin::diffuse_hash(&family, false)?;
+    let value = material.param(hash)?;
+    let channel = |i: usize| value.get(i).copied();
+    Some(super::skin::constant_picture(
+        hash,
+        [channel(0)?, channel(1)?, channel(2)?],
+        oag_gpu::formats::SceneStore::SrgbTexels,
     ))
 }
 
