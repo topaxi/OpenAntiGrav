@@ -21,7 +21,11 @@ use super::menus::combine_variant;
 
 impl Session {
     /// Acts on the front end's request, with the menus already open.
-    pub(crate) fn follow_launch(&mut self, launch: Option<Launch>) {
+    pub(crate) fn follow_launch(
+        &mut self,
+        launch: Option<Launch>,
+        card: Option<oag_ui::frontend::LaunchedCard>,
+    ) {
         match launch {
             None => {}
             Some(Launch::Event(name)) => {
@@ -29,6 +33,7 @@ impl Session {
                 debug!("Launch 2048: starting campaign event {name:?}");
                 self.keep_event_cursor(&name);
                 self.pending_event = Some(name);
+                self.pending_card = card;
                 if let Err(e) = self.launch_race() {
                     log::error!("cannot start the campaign event: {e:#}");
                 }

@@ -3,7 +3,7 @@
 Functions in `eboot.elf` (WipEout 2048, Vita, `PCSF00007` patch v1.04), image base `0x81000000`. Every name here is
 applied from [names.tsv](names.tsv). This page continues [loading-screen.md](loading-screen.md) (the class, its kinds
 and the call-site census) with what that page left unread, and replaces its "not read" list. The format-side page is
-[2048-loading.md](../../../formats/2048-loading.md). **Not implemented**: `oag_2048::TITLE.loading` is `None`.
+[2048-loading.md](../../../formats/2048-loading.md). **Implemented** since lane `vita-race-load-wire` except the items under "Open" on [2048-loading.md](../../../formats/2048-loading.md): `oag_2048::TITLE.loading` is `Some`.
 
 Lane `vita-race-load-re`, 2026-11-16. Static reading in Ghidra, then three captures of a campaign race load on
 Vita3K (Queens Mall, `2048 - Event 2`, the maintainer's save) with the screen's own fields read out of the guest's

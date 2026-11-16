@@ -227,3 +227,24 @@ fn a_triangle_fills_its_area_with_the_corners_colours() {
         "the colour fades from the red corner, got {far}"
     );
 }
+
+/// A `Draw::SolidTriangles` triangle is a flat fill of its colour inside its three corners and
+/// nothing outside them.
+#[test]
+fn a_solid_triangle_fills_its_area_in_its_one_colour() {
+    let list = [Draw::SolidTriangles {
+        triangles: vec![[[200.0, 100.0], [280.0, 100.0], [200.0, 180.0]]],
+        color: [1.0, 0.0, 0.0, 1.0],
+    }];
+    let Some(frame) = frame_with(&list, &white_sheet()) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    assert!(red(&frame, 206, 106) > 240, "inside, next to the corner");
+    assert!(
+        red(&frame, 235, 115) > 240,
+        "inside, away from every corner: one flat colour"
+    );
+    assert_eq!(red(&frame, 270, 170), 0, "beyond the hypotenuse");
+    assert_eq!(red(&frame, 190, 90), 0, "outside the bounding box");
+}

@@ -79,7 +79,9 @@ impl Session {
         let Stage::Frontend(stage) = &self.stage else {
             return;
         };
+        let mut card = None;
         let launch = if stage.frontend.is_finished() {
+            card = stage.frontend.launched_card();
             Some(stage.frontend.launch().cloned())
         } else if stage.frontend.left_map() {
             None
@@ -90,7 +92,7 @@ impl Session {
             self.stage = Stage::Menu(menu);
         }
         if let Some(launch) = launch {
-            self.follow_launch(launch);
+            self.follow_launch(launch, card);
         }
     }
 }

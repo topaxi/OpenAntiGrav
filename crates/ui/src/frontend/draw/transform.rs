@@ -30,7 +30,8 @@ impl Draw {
             | Self::Sprite { color, .. }
             | Self::RotatedSprite { color, .. }
             | Self::TiledSprite { color, .. }
-            | Self::BlendedSprite { color, .. } => Some(color),
+            | Self::BlendedSprite { color, .. }
+            | Self::SolidTriangles { color, .. } => Some(color),
             // The left edge's, which is the one a caller reading "the colour"
             // of a rule that fades in from the left would expect. Fading
             // both edges is [`Self::fade`]'s job, not this accessor's.
@@ -126,6 +127,12 @@ impl Draw {
                     corner.at = [about(corner.at[0], origin.0), about(corner.at[1], origin.1)];
                 }
             }
+            Self::SolidTriangles { triangles, color } => {
+                color[3] *= alpha;
+                for point in triangles.iter_mut().flatten() {
+                    *point = [about(point[0], origin.0), about(point[1], origin.1)];
+                }
+            }
             // A movie and the point-cloud pass have no alpha channel to fade
             // and are never part of a page; a text's glow stamp follows its glyph quads, which
             // moved with the text.
@@ -133,6 +140,35 @@ impl Draw {
             | Self::FuryBackdrop(_)
             | Self::SceneBackdrop(_)
             | Self::GlowText { .. } => {}
+        }
+    }
+
+    /// Moves this draw `dx` along x, leaving its size and colour. The race load's card slides
+    /// with it.
+    pub fn shift_x(&mut self, dx: f32) {
+        match self {
+            Self::Fill { rect, .. }
+            | Self::ChamferedFill { rect, .. }
+            | Self::GradientFill { rect, .. }
+            | Self::Sprite { rect, .. }
+            | Self::RotatedSprite { rect, .. }
+            | Self::TiledSprite { rect, .. }
+            | Self::BlendedSprite { rect, .. }
+            | Self::GradientSprite { rect, .. }
+            | Self::Video { rect, .. }
+            | Self::GlowStamp { rect, .. } => rect[0] += dx,
+            Self::Text { x, .. } | Self::FacedText { x, .. } => *x += dx,
+            Self::Triangles(triangles) => {
+                for corner in triangles.iter_mut().flatten() {
+                    corner.at[0] += dx;
+                }
+            }
+            Self::SolidTriangles { triangles, .. } => {
+                for point in triangles.iter_mut().flatten() {
+                    point[0] += dx;
+                }
+            }
+            Self::FuryBackdrop(_) | Self::SceneBackdrop(_) | Self::GlowText { .. } => {}
         }
     }
 

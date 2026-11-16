@@ -789,6 +789,17 @@ impl Renderer {
                 Draw::Triangles(triangles) => {
                     self.quads.extend(triangles.iter().map(Quad::triangle));
                 }
+                Draw::SolidTriangles { triangles, color } => {
+                    let solid = [
+                        self.atlas.solid.x as f32 + 0.5,
+                        self.atlas.solid.y as f32 + 0.5,
+                    ];
+                    self.quads.extend(
+                        triangles
+                            .iter()
+                            .map(|corners| Quad::solid_triangle(corners, *color, solid)),
+                    );
+                }
                 Draw::TiledSprite {
                     rect,
                     uv,

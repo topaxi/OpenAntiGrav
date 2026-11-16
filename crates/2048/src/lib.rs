@@ -20,10 +20,9 @@
 //!   gap: 2048 authors no `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary
 //!   anywhere, a touch-icon grid over a persistent scene instead
 //!   ([`oag_title::FrontEnd::touch`]).
-//! - [`Title::loading`] is `None`: a real gap rather than a structural one. The
-//!   executable's race load is `LoadingScreen` kind 4 (the mode's event card or a
-//!   controls still, and a `Blue2048` percentage box), read and not built; the HD
-//!   feature screen (kind 7) it also carries is started by no call site. See
+//! - [`Title::loading`] is kind 4 of the executable's `LoadingScreen` class: the launched
+//!   event's card behind a `Blue2048` percentage box and a seven-triangle meter ([`loading`]);
+//!   the HD feature screen (kind 7) it also carries is started by no call site. See
 //!   `docs/formats/2048-loading.md`. [`Title::music`] is `Some` since 2026-09-25:
 //!   `data/audio/sound/frontend.bnk`, the bank this thread's own evidence
 //!   first pointed at, turned out to carry no name table at all (so it
@@ -63,8 +62,10 @@ use oag_title::{ArchiveCandidates, Platform, Title};
 pub mod campaign;
 pub mod frontend;
 pub mod hud;
+pub mod loading;
 pub mod main_menu;
 pub mod race;
+pub mod tips;
 
 /// Wipeout 2048, as the asset layer needs to know it.
 pub const TITLE: &Title = &Title {
@@ -178,7 +179,7 @@ pub const TITLE: &Title = &Title {
     rear_occlusion: None,
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
-    loading: None,
+    loading: Some(&loading::LOADING),
     music: Some(MUSIC),
     // Invented like the other four - and 2048 is the one title where that
     // is worth a second look: its `data/FE/Images/cursor.gxt` turned out to

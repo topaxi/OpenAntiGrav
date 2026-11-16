@@ -372,6 +372,7 @@ impl Session {
             crate::race_build::drop_off_thread(parked);
         }
         self.pending_event = None;
+        self.pending_card = None;
         let mode = options.mode;
         self.watching = Some(watching);
         self.start_race_loading(options, mode, None, false)

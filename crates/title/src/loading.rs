@@ -67,6 +67,79 @@ pub struct Loading {
     /// layout this build chose, in the PSP's 480x272 grid
     /// (`docs/formats/screen-layout.md`).
     pub layout: Option<&'static str>,
+    /// The game tips the race load shows beside the event's card, when the title has them.
+    /// See [`GameTips`].
+    pub game_tips: Option<GameTips>,
+}
+
+/// One game tip: a picture, a title and a body, named by ids and a texture stem.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GameTip {
+    /// The texture's stem in [`GameTips::dir`].
+    pub texture: &'static str,
+    /// The string id of the title.
+    pub title: &'static str,
+    /// The string id of the body; `None` on a row the executable draws by another routine.
+    pub body: Option<&'static str>,
+}
+
+/// The class of an event, as a tip pick reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TipClass {
+    /// A lap race.
+    Race,
+    /// A zone event.
+    Zone,
+    /// A combat event.
+    Combat,
+    /// A speed lap.
+    SpeedLap,
+    /// A time trial.
+    TimeTrial,
+}
+
+/// A title's game tips: the table and the pick's list of rows
+/// (`GameTip_Pick`, `docs/ghidra/functions/vita-2048-eu-v104/race-load.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GameTips {
+    /// Where the pictures are, spelled as the front end spells every `Src=`.
+    pub dir: &'static str,
+    /// The `?` mark's stem in [`Self::dir`].
+    pub question_mark: &'static str,
+    /// The string id of the panel's header.
+    pub header: &'static str,
+    /// Every row.
+    pub rows: &'static [GameTip],
+    /// The rows every load may draw.
+    pub always: &'static [u8],
+    /// The row of each class, in [`TipClass`] order: race, zone, combat, speed lap, time trial.
+    pub class_rows: [u8; 5],
+    /// The extra row a combat event draws from.
+    pub combat_row: u8,
+    /// The row an offline event draws from.
+    pub offline_row: u8,
+}
+
+impl GameTips {
+    /// The rows the pick draws from for an event of `class`, in the executable's order. **No
+    /// weapon-pad rows**: they depend on the event's active weapon pads, which no event card
+    /// carries yet.
+    #[must_use]
+    pub fn candidates(&self, class: TipClass) -> Vec<u8> {
+        let mut rows = self.always.to_vec();
+        if class == TipClass::Combat {
+            rows.push(self.combat_row);
+        }
+        rows.push(self.offline_row);
+        rows.push(self.class_rows[class as usize]);
+        rows
+    }
+
+    /// A picture's entry name, `.gtf` as the front end spells every texture.
+    #[must_use]
+    pub fn entry(&self, stem: &str) -> String {
+        format!("{}{stem}.gtf", self.dir)
+    }
 }
 
 /// How a progression bar fills: a first target, the loader's milestones, and the
@@ -89,6 +162,47 @@ pub struct Progression {
     pub rate: f32,
     /// Columns across the bar, which scales every fraction above.
     pub columns: f32,
+    /// The three places two titles' loaders differ in how they chase a target.
+    pub rules: Rules,
+}
+
+/// How a title's loader moves the shown count toward its targets.
+///
+/// Wipeout HD and Wipeout 2048 run the same class (`LoadingScreen`) and differ in three
+/// places, each read from the executable: HD doubles the rate when a target is raised, 2048
+/// rescales it by the gap; HD steps every frame, 2048 once per 1/30 s; HD's rate returns to
+/// its base on reaching a target, 2048's race manager freezes the rate it has reached as the
+/// one it returns to (`docs/ghidra/functions/vita-2048-eu-v104/race-load.md`, "The meter's law").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rules {
+    /// What raising a target does to the rate.
+    pub raise: Raise,
+    /// Frames of the screen's own 60 Hz a step lasts: `1` steps every frame, `2` is one
+    /// step per 1/30 s.
+    pub frames_per_step: u8,
+    /// Whether the load's last stage freezes the rate it reached as the rate a clamp
+    /// returns to. `false` returns to [`Progression::rate`] for good.
+    pub freezes_rate: bool,
+}
+
+impl Rules {
+    /// Wipeout HD's: double on a raise, a step a frame, back to the base rate.
+    pub const HD: Self = Self {
+        raise: Raise::Double,
+        frames_per_step: 1,
+        freezes_rate: false,
+    };
+}
+
+/// What a raised target does to the rate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Raise {
+    /// The rate doubles (HD, `0x002b2c60`).
+    Double,
+    /// The rate is multiplied by `(old gap + new gap) / new gap`, so the bar still reaches
+    /// the new target in the time it had left for the old one plus the extra distance
+    /// (2048, `LoadingScreen_SetCeiling`).
+    Rescale,
 }
 
 impl Progression {

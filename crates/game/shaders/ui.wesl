@@ -142,16 +142,19 @@ fn triangle_vertex(index: u32, instance: Instance) -> VertexOut {
     let at = select(select(p0, p1, v == 1u), p2, v == 2u);
     let sheet = select(select(t0, t1, v == 1u), t2, v == 2u);
     let shade = select(select(c0, c1, v == 1u), c2, v == 2u);
+    // A solid triangle (mode 8) is an atlas fill: its colour rides in `color`, the atlas's solid
+    // texel in `uv.zw`.
+    let solid = instance.mode > 7.5;
     var out: VertexOut;
     out.position = to_clip(at);
-    out.uv = sheet / uniforms.sprites;
-    out.color = vec4<f32>(shade, 1.0);
+    out.uv = select(sheet / uniforms.sprites, t0 / uniforms.atlas, solid);
+    out.color = select(vec4<f32>(shade, 1.0), instance.color, solid);
     out.border = out.color;
-    out.mode = 1.0;
+    out.mode = select(1.0, 0.0, solid);
     out.tile_rect = vec4<f32>(0.0);
     out.tiles = vec2<f32>(0.0);
     out.texel_pixels = vec2<f32>(1.0);
-    out.texture_size = uniforms.sprites;
+    out.texture_size = select(uniforms.sprites, uniforms.atlas, solid);
     return out;
 }
 

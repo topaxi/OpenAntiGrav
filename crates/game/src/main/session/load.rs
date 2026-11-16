@@ -662,6 +662,7 @@ impl Session {
         // build, when `plan_ahead` (nothing will change who flies which craft: not a
         // network host's race, not split seating): `Race::begin_speed_plans` at the
         // hand-over keeps the job when the race still fits it.
+        let card = self.pending_card.take();
         let worker = match self.pending_event.take() {
             Some(event) => race::LoadWorker::spawn_event(options, event, label, sink, plan_ahead),
             None => race::LoadWorker::spawn(options, label, sink, plan_ahead),
@@ -719,6 +720,7 @@ impl Session {
                 .hud_art
                 .safe_area_scale(self.settings.graphics.hud_safe_area),
             track_loading.as_ref(),
+            card,
         )?;
         Ok(())
     }

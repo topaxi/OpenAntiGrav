@@ -205,6 +205,18 @@ pub(crate) struct Cli {
     #[arg(long, requires = "loading_screen")]
     pub(crate) loading_live: bool,
 
+    /// With `--loading-screen` on Wipeout 2048, draw the race load of a campaign event
+    /// launched from its card: `EVENT` or `EVENT:PAGE` (the card's page when Launch was
+    /// pressed, 0 the first), e.g. `2048 - Event 2`. `--ticks` is the load's age at 60 Hz and
+    /// `--loading-stage` how far the loader has got.
+    #[arg(long, value_name = "EVENT[:PAGE]", requires = "loading_screen")]
+    pub(crate) loading_card: Option<String>,
+
+    /// With `--loading-screen`, the load stage reported to the bar from the first tick (0 to 4):
+    /// the stated counterpart of `--loading-live`'s real stages.
+    #[arg(long, default_value_t = 0, requires = "loading_screen")]
+    pub(crate) loading_stage: u8,
+
     /// With `--loading-screen`, the seed the feature is drawn with (default 0). The
     /// original draws a feature at random each time the screen goes up
     /// (`LoadingScreen_Construct`, `Libc_Rand`), so a capture that sits beside one of its frames

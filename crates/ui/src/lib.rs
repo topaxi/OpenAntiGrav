@@ -16,6 +16,7 @@ pub mod font;
 pub mod frontend;
 pub mod kinetic;
 pub mod language;
+pub mod loading_meter;
 pub mod menu;
 pub mod placeholder;
 pub mod pointer;

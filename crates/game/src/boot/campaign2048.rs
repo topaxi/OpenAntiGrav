@@ -405,6 +405,21 @@ pub(super) fn card_tabs(strings: &StringTable) -> oag_ui::frontend::CardTabs {
     }
 }
 
+/// The mode page's paragraph for the event whose kind word is `kind_id`
+/// (`CampaignEventCard_DrawModePage`: `Tut_Event_Zone_1`, `_Combat_1`, `_Race_1`,
+/// `_Speed_Lap_1`, `_Time_Trial_1`), resolved.
+pub(super) fn mode_body(strings: &StringTable, kind_id: &str) -> Option<String> {
+    let id = match kind_id {
+        "IG_HUD_RACE" => "Tut_Event_Race_1",
+        "Speed Lap" => "Tut_Event_Speed_Lap_1",
+        "Time Trial" => "Tut_Event_Time_Trial_1",
+        "Zone" => "Tut_Event_Zone_1",
+        "FE_GAMEMODE_ELIM" => "Tut_Event_Combat_1",
+        _ => return None,
+    };
+    strings.get(id).map(str::to_string)
+}
+
 /// What one event's card says, off the same instances the map already read.
 fn event_card(
     doc: &oag_2048::campaign::Document,
@@ -534,6 +549,7 @@ fn event_card(
         tabs: card_tabs(strings),
         title: track.map(|track| track.display_name).unwrap_or_default(),
         kind_label: strings.get(kind_id).map(str::to_string),
+        mode_body: mode_body(strings, kind_id),
         pass_label: strings.get("FE_PASS").map(str::to_string),
         has_objective: objective.is_some(),
         objective: objective.and_then(|objective| {

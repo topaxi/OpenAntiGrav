@@ -57,6 +57,8 @@ pub struct LoadingOptions {
     pub track: Option<crate::loading::TrackLoading>,
     /// The title's `Title`-role face, when it has one.
     pub title_font: Option<oag_ui::font::Atlas>,
+    /// The card the race was launched from, drawn behind the box on a title that does.
+    pub card: Option<oag_ui::frontend::LaunchedCard>,
     /// Which adapter to draw with, from `[graphics] renderer`.
     pub renderer: oag_display::display::Renderer,
     /// The shape the game is drawn in, from `[display] aspect`.
@@ -109,6 +111,10 @@ pub fn loading(
         screen.feature_slot()
     );
     screen.set_safe_area(options.safe_area);
+    if let Some(card) = options.card.clone() {
+        screen.set_card(card, assets.game_tips.as_ref(), options.draw);
+    }
+    screen.set_load_stage(options.progress.load_stage);
     // The title's sheet, or the one with the track's own picture under it.
     let own_sheet = options.track.as_ref().and_then(|track| track.sheet(assets));
     if let Some(track) = &options.track {

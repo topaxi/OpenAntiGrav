@@ -119,8 +119,8 @@ pub use campaign_map::{CampaignMap, EarnedTier, EventIcon, HEX_SELECT, MapEvent,
 pub use campaign_reveal::Reveal;
 pub use campaign_tiers::Tier;
 pub use event_card::{
-    CARD_TEXTURES, CardCraft, CardRestriction, CardState, CardTabs, CardTrophy, CardWeapons,
-    EventCard,
+    Backdrop, CARD_TEXTURES, CardCraft, CardPaint, CardRestriction, CardState, CardTabs,
+    CardTrophy, CardWeapons, EventCard, GameTip, LaunchedCard,
 };
 pub(crate) use faces::{font_line_height, lighten};
 /// The reel's frame counts and every state name: `oag_pulse::frontend`.

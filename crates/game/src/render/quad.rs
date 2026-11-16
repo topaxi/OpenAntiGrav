@@ -112,6 +112,10 @@ pub(super) const MODE_SPRITE_GRADIENT: f32 = 6.0;
 /// the quad's six vertices then draw it once and a degenerate copy.
 pub(super) const MODE_TRIANGLE: f32 = 7.0;
 
+/// One solid-colour triangle - [`super::Draw::SolidTriangles`]. Packed by
+/// [`Quad::solid_triangle`]; `ui.wesl` draws it as an atlas fill of its colour.
+pub(super) const MODE_TRIANGLE_SOLID: f32 = 8.0;
+
 impl Quad {
     /// The triangle `corners` as one instance. Packing, which `ui.wesl`'s
     /// `triangle_vertex` mirrors: `rect` holds positions 0 and 1, `uv` position 2
@@ -129,6 +133,30 @@ impl Quad {
             rotation: c.color[2],
             chamfer: [b.color[1], b.color[2]],
             tile: [c.color[0], c.color[1]],
+        }
+    }
+}
+
+impl Quad {
+    /// The solid triangle `corners` in `color`, sampling the atlas's solid texel `solid`
+    /// (sheet-free: the same patch [`Renderer::push_solid`] fills with). Packing, which
+    /// `ui.wesl`'s `triangle_vertex` mirrors: `rect` holds positions 0 and 1, `uv` position 2
+    /// then the texel, `color` the colour.
+    pub(super) fn solid_triangle(
+        corners: &[[f32; 2]; 3],
+        color: [f32; 4],
+        solid: [f32; 2],
+    ) -> Self {
+        let [a, b, c] = corners;
+        Self {
+            rect: [a[0], a[1], b[0], b[1]],
+            uv: [c[0], c[1], solid[0], solid[1]],
+            color,
+            border: color,
+            mode: MODE_TRIANGLE_SOLID,
+            rotation: 0.0,
+            chamfer: [0.0, 0.0],
+            tile: [0.0, 0.0],
         }
     }
 }

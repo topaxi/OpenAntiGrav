@@ -80,7 +80,7 @@ minlength = 1
 
 [types.element.draw]
 type = "string"
-allowedvalues = ["image", "text", "label", "corners", "dots", "clip"]
+allowedvalues = ["image", "text", "label", "corners", "dots", "clip", "fill", "meter"]
 
 [types.element.at]
 type = "types.pair"
