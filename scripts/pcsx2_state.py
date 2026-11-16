@@ -62,8 +62,9 @@ def _plausible_body(ram, body):
     return pos
 
 
-def crafts(path):
-    """Every craft-shaped struct in the state: `[(craft, body, position)]`."""
+def crafts(path, cache_tolerance=CACHE_TOLERANCE):
+    """Every craft-shaped struct in the state: `[(craft, body, position)]`. `cache_tolerance` is how far the cached basis may trail the
+    body's: a craft at speed in a turn trails by about 0.0135 (a Zone frame at zone 5), a resting one by under 5e-3."""
     ram = _ram(path)
     found = []
     for craft in range(RAM_LO, len(ram) - 0x200, 4):
@@ -76,16 +77,16 @@ def crafts(path):
         if not all(all(math.isfinite(x) for x in v) for v in axes + cached):
             continue
         if all(abs(sum(x * x for x in v) - 1.0) < 1e-3 for v in axes) and all(
-            any(max(abs(a - b) for a, b in zip(c, ax)) < CACHE_TOLERANCE for ax in axes) for c in cached
+            any(max(abs(a - b) for a, b in zip(c, ax)) < cache_tolerance for ax in axes) for c in cached
         ):
             found.append((craft, body, pos))
     return found
 
 
-def player_craft(path):
+def player_craft(path, cache_tolerance=CACHE_TOLERANCE):
     """`(craft, body, position)` of the player's craft, or `None`."""
     ram = _ram(path)
-    candidates = {body: (craft, body, pos) for craft, body, pos in crafts(path)}
+    candidates = {body: (craft, body, pos) for craft, body, pos in crafts(path, cache_tolerance)}
     for rig in range(RAM_LO, len(ram) - 0x870, 4):
         (body,) = struct.unpack_from("<I", ram, rig + CAMERA_BODY)
         if body not in candidates:

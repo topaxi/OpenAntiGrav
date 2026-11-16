@@ -54,6 +54,10 @@ CLOCK_TOLERANCE_S = 0.1
 #: as 4.25 s (255 ticks)**. That is not our countdown (272 ticks, 4.53 s, measured on Pulse PSP); the PS2's own is unmeasured
 #: beyond this. The 0.19 s this replaces was read off a state where the two clocks were not compared at one instant.
 CLOCK_HUD_OFFSET_S = 4.25
+#: How far a flying craft's cached basis may trail its body's (`pcsx2_state.crafts`): 0.0135 at zone 5 on Talon's Junction White, 10x the resting bound.
+ZONE_CACHE_TOLERANCE = 0.05
+#: The game's `Aspect Ratio` option, 1 = 16:9 (`docs/ghidra/functions/ps2-pulse-eu/camera.md`).
+WIDESCREEN_OPTION = 0x00284FE8
 
 
 def run(cmd, **kw):
@@ -115,6 +119,187 @@ def grab_with_clock(slot, dest, clock_address, timeout=30.0):
     sys.exit("no GS screenshot within %.0f s" % timeout)
 
 
+def wait_state_written(path, timeout=60.0):
+    """A state PINE is writing: it appears, grows, and is a readable zip holding the EE RAM when it is whole."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        time.sleep(0.5)
+        try:
+            if path.exists() and "eeMemory.bin" in zipfile.ZipFile(path).namelist():
+                return
+        except (zipfile.BadZipFile, OSError):
+            pass
+    sys.exit("savestate %s never became a complete zip" % path)
+
+
+def zone_capture(args, pair, out):
+    """A Zone frame, phase 1. A Zone craft is at speed, so a grab of a VM that runs on (the race pair's) would put the picture and the
+    state's pose several units apart. Here the VM is paused on the loaded frame, the GS screenshot is requested (F8, which a paused VM
+    holds until it presents) and one frame is advanced (F7): the file is of that frame. A state is then saved with the VM still
+    paused, so the pose and camera `--zone` reads out of its EE RAM are the screenshot's own frame to the one frame the presented
+    picture can trail the RAM by (not measured; `presented_lag` in the pair)."""
+    drive = load_drive()
+    serial = args.serial
+    states = Path(drive.STATE_DIR)
+    states.mkdir(parents=True, exist_ok=True)
+    shutil.copy(args.state, states / ("%s.01.p2s" % serial))
+    pine, kb = drive.Pine(slot=args.slot), drive.Keyboard()
+    if not drive.set_paused(pine, kb, False):
+        sys.exit("could not run the VM before the load")
+    pine.loadstate(1)
+    time.sleep(0.4)
+    if not drive.set_paused(pine, kb, True):
+        sys.exit("could not pause the VM on the loaded frame")
+    # The game's own `Aspect Ratio` option (`DAT_00284fe8`, camera.md) is 4:3 on a card that never set it, and the projection follows it a frame
+    # later: write 16:9 and run four frames, as `pcsx2-pulse-walk.py` does before it saves a grid state.
+    pine.write32(WIDESCREEN_OPTION, 1)
+    if not drive.advance_frames(pine, kb, 4):
+        sys.exit("could not advance the four frames after the Aspect Ratio write")
+    frame0 = pine.read32(drive.FRAME_COUNTER)
+    before = drive.newest_snapshot()
+    kb.focus()
+    kb.down("F8")
+    time.sleep(0.15)
+    kb.up("F8")
+    time.sleep(0.4)
+    pair.check("the paused VM holds the screenshot request until a frame is presented", drive.newest_snapshot() == before,
+               "no file after F8 on a paused VM")
+    kb.tap("F7", hold=0.05, after=0.3)
+    raw = out / "theirs-gs.png"
+    deadline = time.monotonic() + 15.0
+    while time.monotonic() < deadline:
+        latest = drive.newest_snapshot()
+        if latest and latest != before and os.path.getsize(latest) > 0:
+            drive._wait_until_written(latest)
+            shutil.move(latest, raw)
+            break
+        time.sleep(0.05)
+    else:
+        sys.exit("no GS screenshot after the frame advance")
+    frame1 = pine.read32(drive.FRAME_COUNTER)
+    pair.check("one frame advanced for the screenshot", frame1 - frame0 == 1, "frame counter %d -> %d" % (frame0, frame1))
+    if not drive.set_paused(pine, kb, True):
+        sys.exit("the VM is not paused after the grab")
+    src = states / ("%s.02.p2s" % serial)
+    src.unlink(missing_ok=True)
+    pine.savestate(2)
+    wait_state_written(src)
+    shutil.copy(src, out / "state-grab.p2s")
+    (out / "zone-capture.json").write_text(json.dumps({
+        "state": str(args.state), "frame_counter_at_pause": frame0, "frame_counter_at_grab": frame1,
+        "gs_screenshot_size": ce.image_size(raw), "serial": serial}, indent=2) + "\n")
+    print("wrote %s and %s: read the zone, score, speed and shield off the HUD, then run with --zone" % (raw, out / "state-grab.p2s"))
+    print("capture checks: %s" % ("ok" if not pair.failed() else "MISMATCH " + "; ".join(c["name"] for c in pair.failed())))
+
+
+def zone_build(args, pair, plat, out, image, ini_unused=None):
+    """A Zone frame, phase 2: ours at tick 0 on the grabbed frame's pose and camera, with the HUD's zone, score, speed and shield
+    written into the race (`--hud-state`'s last fields) so the readout and the colour grade read the zone the original was on."""
+    src = (args.zone_from or out).resolve()
+    state = src / "state-grab.p2s"
+    raw = src / "theirs-gs.png"
+    if not state.exists() or not raw.exists():
+        sys.exit("--zone needs the --zone-capture output (state-grab.p2s, theirs-gs.png) in %s" % src)
+    if src != out:
+        for name in ("state-grab.p2s", "theirs-gs.png", "zone-capture.json"):
+            shutil.copy(src / name, out / name)
+    shown = [float(x) for x in args.zone.split(",")]
+    zone, score = int(shown[0]), int(shown[1])
+    kmh = shown[2] if len(shown) > 2 else 0.0
+    shield = shown[3] if len(shown) > 3 else 100.0
+    capture = json.loads((src / "zone-capture.json").read_text())
+    pair.rec["original"]["state"] = {"file": str(args.state), "mode": "zone", "player_slot": "1 of 1 (Zone has no opponents)",
+                                     "class": "read off the HUD", "grab_state": "state-grab.p2s (saved with the VM paused on the screenshot's frame)"}
+    pair.rec["original"]["capture"] = capture
+    pair.rec["original"]["hud"] = {"zone": zone, "score": score, "kmh": kmh, "shield_percent": shield,
+                                   "source": "read off the original's frame by eye (Pulse PS2's Zone counters are not located in RAM)"}
+    found = pcsx2_state.player_craft(state, cache_tolerance=ZONE_CACHE_TOLERANCE)
+    if found is None:
+        pair.check("player craft", False, "no craft with a camera rig in %s" % state)
+        pair.finish()
+    craft, body, pos = found
+    pair.rec["original"]["gs_screenshot_size"] = ce.image_size(raw)
+    w, h = plat["output"]
+    run(["magick", raw, "-filter", "Lanczos", "-resize", "%dx%d!" % (w, h), out / "theirs.png"])
+    pair.rec["original"]["resize"] = "one Lanczos resize from %dx%d to %dx%d" % (*pair.rec["original"]["gs_screenshot_size"], w, h)
+    pair.check_size("original", out / "theirs.png")
+    gs_aspect = pair.rec["original"]["gs_screenshot_size"]
+    pair.check("GS screenshot aspect equals the output aspect", abs(gs_aspect[0] / gs_aspect[1] - w / h) < 0.01,
+               "%dx%d against %dx%d" % (gs_aspect[0], gs_aspect[1], w, h))
+    ram = zipfile.ZipFile(state).read("eeMemory.bin")
+    vec = lambda a: struct.unpack_from("<3f", ram, a)
+    right, up, fwd = vec(body), vec(body + 0x10), vec(body + 0x20)
+    cam = pcsx2_state.camera(state, pos)
+    if cam is None:
+        pair.check("camera", False, "no camera object (fov, perspective and world matrix agreeing, within 25 units of the craft) in the state")
+        pair.finish()
+    pair.rec["original"]["camera"] = {k: (list(v) if isinstance(v, tuple) else v) for k, v in cam.items()}
+    pair.rec["original"]["camera"]["source"] = "grab state EE RAM, camera object at %#x" % cam["address"]
+    wide = 10 / 7 * 4 / 3
+    pair.check("the state's game option is Aspect Ratio 16:9 (projection aspect 10/7 * 4/3)", abs(cam["aspect"] - wide) < 0.01,
+               "projection aspect %.4f, the 4:3 option reads %.4f, 16:9 reads %.4f" % (cam["aspect"], 10 / 7, wide))
+    row = {"dt": 0.02, "grounded": 1, "speed": 0.0}
+    for name, v in (("right", right), ("up", up), ("fwd", fwd), ("pos", pos)):
+        for a, x in zip("xyz", v):
+            row["%s_%s" % (name, a)] = x
+    axes = (cam["right"], cam["up"], cam["back"])
+    for r, name in enumerate(("right", "up", "fwd")):
+        for c, a in enumerate("xyz"):
+            row["cam_%s_%s" % (name, a)] = axes[c][r]
+    for i, a in enumerate("xyz"):
+        row["cam_pos_" + a] = cam["eye"][i]
+    to_craft = [p - e for p, e in zip(pos, cam["eye"])]
+    look = [-x for x in cam["back"]]
+    cosine = sum(a * b for a, b in zip(to_craft, look)) / math.hypot(*to_craft)
+    pair.check("the camera's look direction (minus its backward axis) points at the craft", cosine > 0.97,
+               "cosine %.4f, eye %.2f units from the craft" % (cosine, math.hypot(*to_craft)))
+    csv = out / "state-row.csv"
+    ce.write_trace_row(csv, row)
+    theirs = {"pos": list(pos), "fwd": list(fwd), "vel": [0, 0, 0]}
+    pair.rec["original"]["craft"] = hex(craft)
+    cp.build(pair, args, "zone", "savestate_restore", str(args.state),
+             {"value": 1, "unit": "frames", "basis": "assumed",
+              "what": "state saved with the VM paused on the screenshot's own frame (F8 held, one F7); the picture can still trail the RAM by one frame"})
+    pair.caveat("the original's frame is PCSX2's GS screenshot of one paused, frame-advanced frame and its pose and camera come from a state "
+                "saved on that same frame; whether the presented picture trails the RAM by one frame is unmeasured. The craft is at speed, so "
+                "ours (a posed capture runs no tick) has no velocity: its exhaust and trail are not the original's")
+    scratch = Path(os.environ["XDG_CONFIG_HOME"]).parent
+    ce.write_ours_settings(plat, scratch)
+    flags = ce.ours_flags(plat) + ["--mode", "zone", "--class", args.zone_class]
+    world = pcsx2_state.world_clock(state)
+    pair.check("the world meshes' animation clock (g_ingame + 0x40) was read", world is not None, "%s" % (world,))
+    if world is not None:
+        pair.rec["original"]["world_clock_s"] = world
+        pair.rec["ours"]["world_clock_offset_s"] = world
+        flags += ["--world-clock-offset", "%.3f" % world]
+    team = args.team or "Assegai"
+    flags += ["--team", team]
+    entry = "Data\\Environments\\%s\\track%s.vex" % (args.track, "_reversed" if args.reversed else "")
+    hud = "1,1,0,0,%.1f,%.2f,0,%d,%d,%.2f" % (kmh, shield, zone, score, args.zone_seconds)
+    base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0, "--camera-fov", "%.4f" % cam["fov_deg"],
+            "--hud-state", hud] + flags
+    if args.zone_stage is not None:
+        base += ["--zone-stage", args.zone_stage]
+    pair.rec["ours"].update({"mode": "zone", "class": args.zone_class, "team": team, "layout": "reversed" if args.reversed else "forward",
+                             "ticks": 0, "flags": [str(c) for c in base[2:]] + ["--ticks", 0],
+                             "camera": "the original's own eye, orientation and field (grab state RAM)"})
+    run(base + ["--ticks", 0, "--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
+    ours_csv = out / "ours-trace.csv"
+    run(base + ["--ticks", 1, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
+    got, bad = ce.read_back(plat, scratch)
+    pair.rec["ours"]["settings_readback"] = got
+    for b in bad:
+        pair.check("ours settings", False, b)
+    pair.check("ours settings read back", not bad, "%d keys equal the profile" % (len(got) - len(bad)))
+    pair.check_pose(theirs, ce.pose_of(ce.csv_row(ours_csv, 0)))
+    pair.check_size("ours", out / "ours.png")
+    run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
+    if args.meta:
+        pair.rec["meta"] = json.loads(args.meta)
+    pair.finish()
+    print("wrote", out / "side.png")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--slot", type=int, required=True, help="the instance's PINE slot")
@@ -131,6 +316,17 @@ def main():
                     help="how far the state's heading may be from the layout file's own start (the player sits in grid slot 8 "
                          "and a grid that bends puts slot 8 off the first slot's heading); the other layout must still be worse")
     ap.add_argument("--meta", default="")
+    ap.add_argument("--zone-capture", action="store_true",
+                    help="a Zone frame, phase 1: load --state, pause on the loaded frame, take PCSX2's GS screenshot of the next paused "
+                         "frame (F8 then one frame advance), save a state of that same frame and stop. Read the HUD off theirs-gs.png")
+    ap.add_argument("--zone", metavar="ZONE,SCORE[,KMH[,SHIELD_PCT]]",
+                    help="a Zone frame, phase 2: ours at tick 0 on the grabbed frame's pose and camera with the HUD's zone, score, speed "
+                         "and shield as read off the original's frame by eye (Pulse PS2's Zone counters are not located in RAM). "
+                         "Needs --zone-from DIR, the --zone-capture output directory (default: --out)")
+    ap.add_argument("--zone-from", type=Path, help="with --zone: the directory --zone-capture wrote (default --out)")
+    ap.add_argument("--zone-class", default="venom", help="with --zone: the `--class` ours is run with (the Zone HUD's class name is the zone's)")
+    ap.add_argument("--zone-seconds", type=float, default=0.0, help="with --zone: seconds into the zone for ours' Zone clock (not readable off the frame)")
+    ap.add_argument("--zone-stage", type=int, help="with --zone: pin ours' Zone colour grade to this stage (default: the engine's own for the zone)")
     cp.add_arguments(ap)
     args = ap.parse_args()
     data = os.environ.get("OAG_PCSX2_DATA")
@@ -159,6 +355,12 @@ def main():
     pair.rec["original"]["state"] = {"file": str(args.state), "sidecar_circuit": sidecar.get("circuit"),
                                      "mode": "single_race", "player_slot": "8 of 8 (sidecar)", "class": "venom (assumed)"}
 
+    if args.zone_capture:
+        zone_capture(args, pair, out)
+        return
+    if args.zone:
+        zone_build(args, pair, plat, out, image)
+        return
     found = pcsx2_state.player_craft(args.state)
     if found is None:
         pair.check("player craft", False, "no craft with a camera rig in %s" % args.state)
