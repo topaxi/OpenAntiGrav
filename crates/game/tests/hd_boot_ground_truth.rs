@@ -339,6 +339,11 @@ fn the_logo_step_plays_the_reel_the_live_skin_names() {
         widget.entry_name(oag_ui::screen::DEFAULT_REGION),
         oag_hd::frontend::names::STUDIO_LOGO_MOVIE_FURY
     );
+    assert_ne!(
+        widget.sound,
+        Some(false),
+        "the logo widget authors no sound=\"false\", so the reel is heard"
+    );
     assert_eq!(
         shell.movie_name.as_deref(),
         Some(oag_hd::frontend::names::STUDIO_LOGO_MOVIE_FURY),

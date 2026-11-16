@@ -98,7 +98,7 @@ fn values_children_carry_their_parents_attributes() {
     let screens = Screens::from_xml(SAMPLE);
     let movie = screens.by_name("LogoFMV").unwrap().movies[0].clone();
     assert_eq!(movie.src, r"Data\Movies\Intro");
-    assert!(movie.sound);
+    assert_eq!(movie.sound, Some(true));
     assert!(movie.autostart);
     assert!(movie.autoredirect);
     assert!(!movie.repeat);
@@ -142,9 +142,10 @@ fn a_screen_keeps_every_movie_widget_it_declares() {
         .iter()
         .find(|m| m.entry_name("EU") == r"Data\Movies\WoFMVNew_EU.PMF")
         .expect("the second boot movie's widget");
-    assert!(found.sound);
-    assert!(
-        !screen.movies[2].sound,
+    assert_eq!(found.sound, Some(true));
+    assert_eq!(
+        screen.movies[2].sound,
+        Some(false),
         "a sound=\"false\" widget behind others still mutes its own movie"
     );
     assert_eq!(screens.with_movies().count(), 1);

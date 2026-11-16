@@ -33,8 +33,12 @@ pub struct Movie {
     /// A base name with **no extension** on the PSP. On the PS2 it carries its
     /// own - see [`Movie::entry_name`].
     pub src: String,
-    /// Whether the movie has sound.
-    pub sound: bool,
+    /// The `sound` attribute, `None` where the widget does not author one.
+    ///
+    /// Only an authored `sound="false"` mutes: Pulse's and Pure's widgets spell it
+    /// out either way, and Wipeout HD's `Studio Logo` widget carries no `sound`
+    /// and its reel plays with its audio.
+    pub sound: Option<bool>,
     /// Play as soon as the screen is entered.
     pub autostart: bool,
     /// Loop.
@@ -90,7 +94,7 @@ impl Movie {
     pub(super) fn from_node(node: &Node) -> Self {
         Self {
             src: node.value("src").unwrap_or_default().to_string(),
-            sound: node.flag("sound").unwrap_or(false),
+            sound: node.flag("sound"),
             autostart: node.flag("autostart").unwrap_or(false),
             repeat: node.flag("repeat").unwrap_or(false),
             autoredirect: node.flag("autoredirect").unwrap_or(false),
