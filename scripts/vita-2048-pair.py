@@ -46,6 +46,7 @@ import argparse
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -209,6 +210,110 @@ def scan_original_pose(pid, near, tol=6.0):
     return sorted(((n, pos, rows) for (pos, rows), n in found.items()), reverse=True)
 
 
+def scan_hull_matrices(pid):
+    """Every drawn-hull matrix in Vita3K's guest memory (rows left, up, forward scaled by the hull scale `0.75`, a zero fourth column, then the
+    position), wherever the craft is: `scan_original_pose` needs ours' position to look near, a mid-race Zone frame has none. Returns
+    `[(count, position, rows)]`, most frequent first (the renderer keeps a copy per draw, so the current frame's copies outnumber a stale one);
+    a candidate is orthonormal up to the scale. Needs numpy and a Vita3K that is this process's child; the caller stops the process first."""
+    import numpy as np
+    mem = open("/proc/%d/mem" % pid, "rb", 0)
+    found = {}
+    chunk = 1 << 24
+    for line in open("/proc/%d/maps" % pid):
+        span, perms = line.split()[:2]
+        lo, hi = (int(v, 16) for v in span.split("-"))
+        if not perms.startswith("rw") or not HOST_WINDOW[0] <= lo < HOST_WINDOW[1]:
+            continue
+        for start in range(lo, hi, chunk * 4 - 64):
+            try:
+                mem.seek(start)
+                data = mem.read(min(chunk * 4, hi - start))
+            except OSError:
+                continue
+            f = np.frombuffer(data[: len(data) // 4 * 4], dtype="<f4")
+            if len(f) < 32:
+                continue
+            with np.errstate(invalid="ignore", over="ignore"):
+                sq = f * f
+                n0 = sq[:-2] + sq[1:-1] + sq[2:]
+                m_len = len(f) - 15
+                cand = np.where((abs(n0[:m_len] - 0.5625) < 0.09) & (f[3:3 + m_len] == 0.0) & (f[7:7 + m_len] == 0.0)
+                                & (f[11:11 + m_len] == 0.0))[0]
+            for i in cand:
+                m = f[i:i + 15]
+                rows = m[:12].reshape(3, 4)
+                pos = m[12:15]
+                if not np.all(np.isfinite(m)) or np.any(abs(pos) > 20000):
+                    continue
+                lengths = np.linalg.norm(rows[:, :3], axis=1)
+                if np.any(abs(lengths - 0.75) > 0.06) or np.any(abs(lengths - lengths[0]) > 1e-3):
+                    continue
+                unit = rows[:, :3] / lengths[:, None]
+                if np.any(abs(unit @ unit.T - np.eye(3)) > 0.02):
+                    continue
+                key = (tuple(round(float(v), 4) for v in pos), tuple(round(float(v), 4) for v in rows[:, :3].ravel()))
+                found[key] = found.get(key, 0) + 1
+    return sorted(((n, pos, rows) for (pos, rows), n in found.items()), reverse=True)
+
+
+#: The Feisar HD close chase block (`<ExternalCameraClose pos_height 3.7 pos_length -11 lookat_height -4 lookat_length 25`, read off ours' own
+#: load report) times the craft scale 0.75 (`docs/formats/handling-stats.md`, "The two `ExternalCamera` blocks across titles"): the eye is 2.775 up
+#: and 8.25 back of the craft, the look-at point 3 below it and 18.75 ahead. The spring (only the eye is sprung) is not applied.
+CHASE_CLOSE = {"eye_up": 2.775, "eye_back": 8.25, "look_up": -3.0, "look_ahead": 18.75, "fov": 60.0}
+
+
+def rigid_chase_camera(pos, rows):
+    """`--camera-pose` numbers (eye, forward, up) and the fov of the close chase camera at rest behind a craft at `pos` with `rows` (left, up,
+    forward, any scale): the original's camera follows the body, which ours' `--pose-from` frame does not (its camera follows the spline)."""
+    def unit(v):
+        n = sum(x * x for x in v) ** 0.5
+        return [x / n for x in v]
+    up, fwd = unit(rows[3:6]), unit(rows[6:9])
+    c = CHASE_CLOSE
+    eye = [p + u * c["eye_up"] - f * c["eye_back"] for p, u, f in zip(pos, up, fwd)]
+    aim = [p + u * c["look_up"] + f * c["look_ahead"] for p, u, f in zip(pos, up, fwd)]
+    look = unit([a - e for a, e in zip(aim, eye)])
+    return eye + look + up, c["fov"]
+
+
+def zone_hud_up(path):
+    """A Zone race's HUD is on screen: the white SCORE caption at the top centre (a Zone race draws no LAP or TOTAL block)."""
+    if mean_luma(path) > 0.55:
+        return False
+    return sum(1 for v in crop_bytes(path, "300x80+330+15") if v >= 235) >= 120
+
+
+def zone_capture(s, pid, out, seconds, interval):
+    """Frozen samples of a Zone race in flight: every `interval` seconds the guest is stopped (SIGSTOP), the window grabbed and the hull
+    matrices read in the same stop, then it is continued. Returns the sample records, one `zone-frames/NNN.png` + `NNN.json` each.
+    A stop is a jump in the host clock the guest reads, so the game's own clock runs slower than the wall clock; the frames' zone numbers are
+    read off the frames, never off the time."""
+    import signal
+    frames = out / "zone-frames"
+    frames.mkdir(parents=True, exist_ok=True)
+    t0 = time.monotonic()
+    samples = []
+    i = 0
+    while time.monotonic() - t0 < seconds:
+        os.kill(pid, signal.SIGSTOP)
+        t_stop = time.monotonic()
+        try:
+            png = s.drive.screenshot(s.display, s.wid, frames / ("%03d.png" % i))
+            hulls = scan_hull_matrices(pid)
+        finally:
+            os.kill(pid, signal.SIGCONT)
+        rec = {"index": i, "wall_s": round(t_stop - t0, 2), "frozen_s": round(time.monotonic() - t_stop, 2),
+               "hulls": [{"count": n, "position": list(pos), "rows_left_up_forward_scaled": list(rows)} for n, pos, rows in hulls[:12]],
+               "hulls_found": len(hulls)}
+        (frames / ("%03d.json" % i)).write_text(json.dumps(rec, indent=1))
+        print("zone sample %d at %.1f s: %d hull matrices, frozen %.1f s%s" % (
+            i, rec["wall_s"], len(hulls), rec["frozen_s"], ", top at %s x%d" % (hulls[0][1], hulls[0][0]) if hulls else ""), file=sys.stderr)
+        samples.append(rec)
+        i += 1
+        time.sleep(interval)
+    return samples
+
+
 def pose_delta(ours_pos, ours_rows, theirs_pos, theirs_rows):
     """Original minus ours: position (units), heading (degrees, + is left turn seen from above) and pitch (degrees, + nose up) of the
     forward row. Rows are (left, up, forward), any scale."""
@@ -347,6 +452,21 @@ def tile_highlighted(path, tile):
     return int(r) > 190 and int(g) < 130 and int(b) < 60
 
 
+def popup_up(path):
+    """The map's orange tutorial box ("NEW RANK - SCORE XP TO RANK UP ...", top right, a few seconds after the HD map first draws) is on
+    screen; a tap while it is up only dismisses it, so a node tapped under it was never opened (the first Zone walk, 2026-11-16)."""
+    r, g, b = pixel(path, 600, 100)
+    return r > 190 and 60 < g < 130 and b < 60
+
+
+def dismiss_popup(s):
+    for _ in range(3):
+        if not popup_up(s.shot("walk-popup.png")):
+            return
+        s.tap((150, 150))
+        time.sleep(1.5)
+
+
 #: Where the map puts the selected node once its card is closed again (Fury Talons Junction, Modesto Heights; HD Anulpha Pass: 533, 330 to 335).
 RECENTRED_NODE = (533, 333)
 
@@ -356,7 +476,7 @@ def find_node(s, args, near=None):
     (the Fury map, and the HD map past its first grid, re-centres on a node each time a card closes, so a remembered point lands on
     its neighbour: a Speed Lap card where the Race card was; `docs/tools/compare-page.md`, "Real events for the substituted 2048 pairs")."""
     if not args.node_template:
-        return tuple(args.node)
+        return tuple(args.node_recentred) if near is not None and args.node_recentred else tuple(args.node)
     shot = s.shot("walk-map.png")
     out = subprocess.run(["python3", str(HERE / "vita-2048-map-node.py"), str(shot), str(args.node_template), "--peaks", "4"],
                          capture_output=True, text=True, check=True).stdout.split("\n")
@@ -433,6 +553,9 @@ def boot_and_walk(s, args):
             sys.exit("no grid cell record races %r in the guest's memory: nothing renamed" % old)
     time.sleep(3.0)
     hop_to_grid(s, args.hop)
+    if args.game_mode in ("hd", "fury"):
+        time.sleep(3.0)
+        dismiss_popup(s)
     s.tap(find_node(s, args))
     time.sleep(3.0)
     if args.game_mode in ("hd", "fury"):
@@ -442,6 +565,7 @@ def boot_and_walk(s, args):
         time.sleep(3.0)
         s.tap(CONFIRM)
         time.sleep(3.0)
+        dismiss_popup(s)
         s.tap(find_node(s, args, near=RECENTRED_NODE))
         time.sleep(3.0)
     s.tap(CONFIRM)  # Play
@@ -461,7 +585,7 @@ def boot_and_walk(s, args):
         s.tap(CONFIRM)
         time.sleep(1.5)
         frame = s.shot("walk-hud.png")
-        if hud_up(frame):
+        if hud_up(frame) or (args.zone_capture and zone_hud_up(frame)):
             return
     sys.exit("STALLED waiting for the HUD after the flyby; last frame %s" % (s.frames / "walk-hud.png"))
 
@@ -636,6 +760,149 @@ def run(cmd, **kw):
     return subprocess.run([str(c) for c in cmd], check=True, **kw)
 
 
+def zone_main(args, out, pair, plat, profile_dir, which, env):
+    """The Zone pair: the original is walked into a Zone race and flown (it needs no input), sampled in flight (`zone_capture`), and ours is
+    drawn at tick 0 on the original's hull matrix with `--hud-state ...,ZONE,SCORE,...` and `--zone-stage`, the way `rpcs3-hd-pair.py --zone`
+    does. Two invocations: `--zone-capture SECONDS` (with `--walk`) leaves `zone-frames/`; the frame with the zone wanted is read by eye, and
+    `--zone ZONE,SCORE[,STAGE] --zone-frame N` (with `--zone-from DIR` to reuse a capture) builds the pair from it."""
+    if not args.track:
+        sys.exit("a Zone pair needs --track (ours races the circuit the original's Zone event is on)")
+    src = (args.zone_from or out).resolve()
+    meta_path = src / "zone-capture.json"
+    if args.zone_capture:
+        if not args.walk:
+            sys.exit("--zone-capture needs --walk: the guest's memory is only open to a Vita3K this script launched")
+        s = Session(args.display, out / "frames")
+        boot_and_walk(s, args)
+        samples = zone_capture(s, args.vita_pid, out, args.zone_capture, args.zone_interval)
+        meta_path = out / "zone-capture.json"
+        meta_path.write_text(json.dumps({"hull_shake": args.hull_shake, "track_rename": args.track_rename, "samples": len(samples), "game_mode": args.game_mode, "node": list(args.node),
+                                         "emulator": dict(plat["emulator"])}, indent=1))
+        print("wrote %d samples under %s; read them, then rerun with --zone ZONE,SCORE --zone-frame N --zone-from %s" % (
+            len(samples), out / "zone-frames", out), file=sys.stderr)
+        if not args.zone:
+            return
+        src = out
+    if args.zone_frame is None:
+        sys.exit("--zone wants --zone-frame N (the sample under zone-frames/ whose HUD shows the zone)")
+    cap = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+    zbits = args.zone.split(",")
+    zone_n, zone_score = int(zbits[0]), int(zbits[1])
+    stage = zbits[2] if len(zbits) > 2 else None
+    sample = json.loads((src / "zone-frames" / ("%03d.json" % args.zone_frame)).read_text())
+    if not sample["hulls"]:
+        sys.exit("sample %03d has no hull matrix: pick another" % args.zone_frame)
+    # the guest's memory also holds hull matrices that never move (a parked model, a menu craft) and show up at the same place in every
+    # sample: the craft is the most frequent candidate that no other sample repeats
+    seen = {}
+    for other in sorted((src / "zone-frames").glob("*.json")):
+        if other.name != "%03d.json" % args.zone_frame:
+            for c in json.loads(other.read_text())["hulls"]:
+                seen[tuple(round(v, 1) for v in c["position"])] = seen.get(tuple(round(v, 1) for v in c["position"]), 0) + 1
+    moving = [c for c in sample["hulls"] if not seen.get(tuple(round(v, 1) for v in c["position"]))]
+    if args.zone_hull is not None:
+        hull = sample["hulls"][args.zone_hull]
+    elif moving:
+        hull = moving[0]
+    else:
+        sys.exit("every hull candidate of sample %03d repeats in another sample (static): pick another sample" % args.zone_frame)
+    shutil.copyfile(src / "zone-frames" / ("%03d.png" % args.zone_frame), out / "theirs.png")
+    pair.rec["original"]["emulator"] = dict(plat["emulator"])
+    pair.rec["original"]["hull_shake"] = (
+        {"state": "patched out", "camera_tripod_shake": "on", **cap["hull_shake"]} if cap.get("hull_shake") else "on")
+    if cap.get("track_rename"):
+        pair.rec["original"]["track_rename"] = {**cap["track_rename"], "method": "write to /proc/<pid>/mem of the 0x18-byte track name of each grid cell "
+                                                "record (Locked byte at -1, NUL padded, `FUN_810bbfce` +0xea) before the first node was tapped; the "
+                                                "event is a substituted one: the HD Campaign's Vineta K Zone cell, flown on the circuit written there"}
+    pair.rec["original"]["zone"] = {
+        "zone": zone_n, "score": zone_score, "stage_pinned": stage, "sample": args.zone_frame,
+        "source": "read off the original's own HUD in the grabbed frame (2048's Zone counters are not located in RAM)"}
+    pair.rec["original"]["pose_read"] = {
+        "position": hull["position"], "rows_left_up_forward_scaled": hull["rows_left_up_forward_scaled"], "copies": hull["count"],
+        "other_candidates": sample["hulls"][1:], "hulls_found": sample["hulls_found"], "wall_s": sample["wall_s"],
+        "method": "the guest stopped (SIGSTOP) for the grab and the scan of its memory (/proc/<pid>/mem) for drawn-hull matrices "
+                  "(orthonormal rows scaled 0.75, a zero fourth column, then the position); the most frequent is used"}
+    pair.rec["original"]["frozen_s"] = sample["frozen_s"]
+    pair.check("a hull matrix was read in the grabbed frame's stop", True, "%d candidates, the top one seen %d times" % (sample["hulls_found"], hull["count"]))
+    pair.check("the frame shows a Zone race's HUD (the SCORE caption)", zone_hud_up(out / "theirs.png"), "white pixels in the caption box")
+    pair.check_equal("original window size", ce.image_size(out / "theirs.png"), list(plat["output"]))
+    pair.caveat("Zone state read off the original's HUD by eye (zone %d, score %d), not from RAM; ours runs no ticks, so every effect that needs "
+                "history (exhaust, trail) starts cold and the speed readout shows 0; the "
+                "original's camera is not read; the guest was stopped for the grab, so its own clock lags the wall clock" % (zone_n, zone_score))
+    if args.zone_camera == "chase":
+        pair.caveat("ours' camera is its own chase camera at its rest position behind the posed craft; the original's camera is not read and is sprung")
+    pair.caveat("Pilot Assist's indicator is drawn on neither frame although the profile pins it on: the original's setting was not read for this pair")
+    cp.build(pair, args, "zone", "cold_boot",  None,
+             {"value": 0, "unit": "ticks", "basis": "not measured on Vita3K: the guest is stopped at the grab and the matrix read in the same stop, "
+              "so the pose is the one the last submitted frame was drawn from; the picture on the glass may be one frame older",
+              "what": "picture against the hull matrix"})
+    ours_trace = out / "ours-trace.csv"
+    run([args.oag_game, args.source, "--race"] + which + ["--ticks", 1, "--no-audio", "--no-hull-shake", "--trace-out", ours_trace],
+        stdout=subprocess.DEVNULL, env=env)
+    pose_csv = out / "original-pose.csv"
+    write_pose_csv(ours_trace, (hull["position"], hull["rows_left_up_forward_scaled"]), pose_csv)
+    pair.rec["ours"]["ticks"] = 0
+    pair.rec["ours"]["event"] = args.track
+    pair.rec["ours"]["binary"] = ce.binary_record(args.oag_game)
+    base = [args.oag_game, args.source, "--race"] + which + ["--ticks", 0] + ce.ours_flags(plat)
+    hud = ["--hud-state", "1,1,0,0,0,%g,0,%d,%d,0" % (args.zone_shield, zone_n, zone_score)]
+    if stage is not None:
+        hud += ["--zone-stage", stage]
+    if args.zone_camera == "rigid":
+        import math
+        import rpcs3_place
+        pos, rows = hull["position"], hull["rows_left_up_forward_scaled"]
+        theirs_fwd = [v / math.dist(rows[6:9], (0, 0, 0)) for v in rows[6:9]]
+        theirs_up = [v / math.dist(rows[3:6], (0, 0, 0)) for v in rows[3:6]]
+        # `--pose x,y,z,yaw` takes its attitude from the nearest spline sample plus the yaw, so the original's pitch and roll off the spline are
+        # not carried; the yaw is solved against ours' own attitude there, the way `rpcs3-hd-pair.py` does
+        track = args.track
+        scratch = out / "ours-profile"
+        (scratch / "profile").mkdir(parents=True, exist_ok=True)
+        for sub in ("cfg", "data", "state"):
+            (scratch / "profile" / sub).mkdir(exist_ok=True)
+        spline_fwd, spline_up = rpcs3_place.our_attitude(args.oag_game, args.source, track, list(pos), scratch)
+        cross = (spline_fwd[1] * theirs_fwd[2] - spline_fwd[2] * theirs_fwd[1], spline_fwd[2] * theirs_fwd[0] - spline_fwd[0] * theirs_fwd[2],
+                 spline_fwd[0] * theirs_fwd[1] - spline_fwd[1] * theirs_fwd[0])
+        yaw0 = math.degrees(math.atan2(sum(a * b for a, b in zip(spline_up, cross)), sum(a * b for a, b in zip(spline_fwd, theirs_fwd))))
+        best = None
+        for cand in (yaw0, -yaw0):
+            fwd, up = rpcs3_place.our_attitude(args.oag_game, args.source, track, list(pos) + [cand], scratch)
+            agree = sum(a * b for a, b in zip(fwd, theirs_fwd))
+            if best is None or agree > best[1]:
+                best = (cand, agree, up)
+        yaw, agree, our_up = best
+        tilt = math.degrees(math.acos(max(-1.0, min(1.0, sum(a * b for a, b in zip(theirs_up, our_up))))))
+        pair.rec["ours"]["yaw_deg"] = yaw
+        pair.rec["ours"]["forward_agreement"] = agree
+        pair.rec["ours"]["uncarried_tilt_deg"] = tilt
+        print("yaw %.3f deg, forward agreement %.6f, uncarried tilt %.2f deg" % (yaw, agree, tilt), file=sys.stderr)
+        pair.check("ours' hull points along the original's (forward agreement)", agree > 0.99, "dot %.5f, yaw %.2f deg" % (agree, yaw))
+        cam, fov = rigid_chase_camera(pos, rows)
+        flags = ["--pose=%.4f,%.4f,%.4f,%.4f" % (pos[0], pos[1], pos[2], yaw), "--camera-pose=" + ",".join("%.5f" % v for v in cam),
+                 "--camera-fov", "%g" % fov] + hud
+        pair.rec["ours"]["camera"] = {"kind": "rigid close chase camera derived from the hull matrix", **CHASE_CLOSE,
+                                      "note": "the original's camera is not read; the spring is not applied"}
+        pair.caveat("ours' camera is the close chase rig placed rigidly behind the original's hull (eye 2.775 up and 8.25 back, look-at 3 below "
+                    "and 18.75 ahead, fov 60), not the original's own camera, which is not read: the original's eye is sprung; the hull's pitch and "
+                    "roll off the spline are not carried (%.1f degrees between the two ups)" % tilt)
+    else:
+        flags = ["--pose-from", pose_csv, "--pose-hold"] + hud
+    pair.rec["ours"]["flags"] = [str(c) for c in base[2:] + flags]
+    run(base + flags + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL, env=env)
+    got, bad = ce.read_back(plat, profile_dir)
+    pair.rec["ours"]["settings_readback"] = got
+    for b in bad:
+        pair.check("ours settings", False, b)
+    pair.check("ours settings read back", not bad, "%d keys equal the profile" % (len(got) - len(bad)))
+    pair.check_size("ours", out / "ours.png")
+    run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
+    if args.meta:
+        pair.rec["meta"] = json.loads(args.meta)
+    pair.finish()
+    print("wrote", out / "side.png")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, required=True)
@@ -650,6 +917,9 @@ def main():
                     help="ours' `--team` id; the DLC's HD Campaign flies the HD-derived roster (`Feisar`, under `hdships`), not 2048's own `feisar2048`")
     ap.add_argument("--node", type=int, nargs=2, default=DEFAULT_NODE, metavar=("X", "Y"),
                     help="the event's node on the campaign map, in the 960x544 window")
+    ap.add_argument("--node-recentred", type=int, nargs=2, default=None, metavar=("X", "Y"),
+                    help="with a DLC campaign and no --node-template: where the node is once the craft was confirmed and the map re-centred on it "
+                         "(HD Uplift's Vineta K Zone: 527 297, read off a frame of the same boot layout)")
     ap.add_argument("--node-template", type=Path, default=None,
                     help="a crop of the node's icon (`vita-2048-map-node.py`): the node is found in a fresh frame before each tap instead of at --node")
     ap.add_argument("--load-wait", type=float, default=20.0, help="with a DLC campaign: seconds to wait out the load before the HUD taps (a loaded machine needs more)")
@@ -675,6 +945,20 @@ def main():
                          "no open cell races. A pair made so is a substituted event, not an authored one (recorded as `original.track_rename`)")
     ap.add_argument("--skip-craft-offset", action="store_true",
                     help="do not measure the hull offset (a craft with no yellow livery and no --nose-original): recorded as not measured")
+    ap.add_argument("--zone", metavar="ZONE,SCORE[,STAGE]",
+                    help="a Zone pair: ours renders at tick 0 on the original's hull matrix with this zone number and score read off the grabbed "
+                         "frame's HUD, and with STAGE the colour-grade stage pinned (`--zone-stage`); needs --zone-frame (and --track)")
+    ap.add_argument("--zone-capture", type=float, default=0.0, metavar="SECONDS",
+                    help="with --walk and a Zone event: sample the race in flight for this long into `zone-frames/` (frame, hull matrices)")
+    ap.add_argument("--zone-interval", type=float, default=5.0, help="seconds between two samples (the guest runs between them)")
+    ap.add_argument("--zone-camera", choices=("rigid", "chase"), default="chase",
+                    help="with --zone: `chase` (default) poses ours' craft on the original's exact hull matrix and keeps ours' own chase camera; `rigid` "
+                         "puts the close chase rig at rest behind a craft posed by position and yaw only (the matrix's tilt off the spline is dropped); "
+                         "the original's own camera is not read either way")
+    ap.add_argument("--zone-shield", type=float, default=100.0, help="with --zone: the shield percent the HUD shows, read off the grabbed frame")
+    ap.add_argument("--zone-hull", type=int, default=None, help="with --zone: use this candidate of the sample's list instead of the first moving one")
+    ap.add_argument("--zone-frame", type=int, default=None, help="with --zone: the sample whose HUD shows the zone")
+    ap.add_argument("--zone-from", type=Path, default=None, help="with --zone: reuse the samples of an earlier --zone-capture run in this directory")
     ap.add_argument("--walk", action="store_true", help="boot and walk from the title to the HUD (else Vita3K is on a race already)")
     ap.add_argument("--display", type=int, default=int(os.environ.get("OAG_VITA3K_DISPLAY", 0)) or None)
     ap.add_argument("--socket", default=None, help="weston's socket name (with --walk, if the display is not up)")
@@ -715,9 +999,17 @@ def main():
     args.hull_shake = None
     args.vita_pid = None
     args.track_rename = None
+    if args.zone or args.zone_capture:
+        if args.mode == "single_race":
+            args.mode = "zone"
+        if args.autopilot is None:
+            args.autopilot = "off"  # a Zone race is flown by the game's own Zone rules; no Autopilot pickup is armed
     which = ["--track", args.track, "--mode", args.mode] if args.track else ["--event", args.event]
     which += ["--team", args.team] if args.team else []
     env = {**os.environ, **ce.ours_env(profile_dir)}
+    if args.zone or args.zone_capture:
+        zone_main(args, out, pair, plat, profile_dir, which, env)
+        return
     ours_trace = None
     if args.read_pose:
         if not args.walk:
