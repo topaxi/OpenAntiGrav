@@ -352,7 +352,7 @@ and 2.2 times its excess there (550,931). Ours' range at that tick was not recor
 says is bounded: ours' brightest is brighter than the original's brightest. Ours' unlit hull is
 already 1.5 to 1.9 times the original's in the housing box (`(66, 63, 73)` against `(35, 43, 42)`),
 and the light multiplies the same texture and vertex colour, so the excess is the size the hull's
-own over-brightness predicts; it is not shown to be that and nothing else (confidence 55).
+own over-brightness predicts; it is not shown to be that and nothing else (confidence 55). The hull's tone was then decomposed live (lane `omega-hull-tone`, [hull-tone.md](hull-tone.md)): the unlit excess is a factor common to ours' ambient and sun terms, not the light's.
 
 **Queens Mall, the 2048-era light (85).** 20 shipped frames against 10 with the producer off, floor
 box `(1140, 650)-(1260, 800)`: `(176.1, 125.0, 84.9)` against `(172.5, 125.2, 85.6)`, a rise of
