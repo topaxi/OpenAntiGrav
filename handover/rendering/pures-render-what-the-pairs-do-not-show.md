@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [pure, pulse]
-updated: 2026-10-26
+updated: 2026-11-17
 summary: "Pure render: canopy, sky, effect names, flare, chrome-map pass and bloom closed; 250 light scale, Modesto light, HUD open"
 difficulty: medium (30)
 ---
@@ -87,6 +87,14 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
    `shipshield.vex`; ours draws the shared `Data\Weapons\shield.vex`. Not compared on a frame.
 8. **`TEXFUNC` 0 and the alpha weight.** The base pass reads `TEXFUNC 0` (`TCC` RGB), and the texture's alpha
    still reaches the `SRC_ALPHA` blend, measured by the CLUT edit. Recorded, not explained.
+9. **Zone (2026-11-17, `zone-pair-pure`: Pro Tozo zones 8 and 9, `docs/tools/compare-page.md`, "Zone pairs: Wipeout Pure").** Ours' Zone
+   camera is the Close rest rig (11.64 units from the body); the original's eye was 7.48 units from the body (2.2 up, 7.1 back) in both
+   states (158 and 208 units/s), with the fov at 81.5 and 85.6 degrees where ours holds 60: a speed spring or a fixed Zone rig is open
+   (no at-rest Zone read; confidence 55, one boot). Ours is brighter (mean grey 220/194 against 176/143: the original's wall bands are
+   black with a pink-violet bloom), draws a shadow under the hull the original does not, and no blue engine glow. Whether the original
+   changes palette between zones at one fixed place was not tested; ours' `--zone-stage` is a no-op on Pure. The Zone craft's hull in the
+   original is not identified (ours flies Assegai, Pure's default; `Data\Ships\Zone_01` exists). Unpaired: `02_Zone`, `03_Zone`, `04_Zone`.
+   The Zone counters' RAM addresses (zone, score, zone seconds) are not located. A second cold boot of the same Zone race has not been made.
 
 ## Next Steps
 

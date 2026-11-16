@@ -7,7 +7,7 @@
         --port $OAG_PPSSPP_PORT --out data/scratch/<lane>/pairs/vineta --track 01_Vineta_K \\
         --state data/saves/pure-psp/<state>.ppst --class vector --team Feisar
 
-The Pure counterpart of `psp-pulse-pair.py`, shorter because it has no field, Zone or run-to-clock modes. Everything is
+The Pure counterpart of `psp-pulse-pair.py`, shorter because it has no field or run-to-clock modes; `--zone` is the Zone frame (below). Everything is
 read out of the loaded state's own RAM at its first `Ship_UpdateCraft` stop (`0x0892d214`, `a0` craft, `a1` body):
 
 - the craft's basis, position and velocity from the body (`+0x00`, `+0x30`, `+0x180`; Pure's body is Pulse's shifted by
@@ -20,9 +20,17 @@ Ours takes the craft's pose (`--pose-from`) and builds its own chase camera: Pur
 length 0.995, third axis not perpendicular to the second), and a camera matrix fed to ours is re-orthonormalised by its
 `look_at`, which draws the pitch 5.71 degrees wrong (camera.md, "The view matrix is a shear"). So the camera is not fed;
 ours' own rig (`chase_view_sheared`) draws it and the pair checks ours' eye against the original's read one.
+
+`--zone ZONE,SCORE` makes the pair a Zone frame, from a state saved while the Autopilot flew a Zone race
+(`scripts/psp-pure-zone-state.py`): ours renders at tick 0 (`--mode zone`) on the original's craft pose, with the zone number and
+score passed through `--hud-state` and the Autopilot countdown read from the pickup record. Pure's Zone counters are not located in
+RAM (no address is documented), so the zone and the score are read off the original's HUD by eye and given here; the zone clock is
+written as 0 and recorded as a caveat. The original's camera at Zone speed is sprung, so the close-eye and the hull-offset checks
+are recorded as numbers, not gated, and the fov gate drops its at-rest speed term.
 """
 
 import argparse
+import json
 import math
 import os
 import struct
@@ -51,6 +59,11 @@ CLOSE_DISTANCE = 11.643
 #: How many stops the presented frame lags the stop it is taken at: Pulse's measurement (`psp-presented-lag.py`), inherited
 #: here unmeasured. A resting craft cannot tell: the pose is the same at both stops; the clock differs by one tick.
 PRESENTED_LAG = 1
+#: The player's Autopilot pickup record of a Zone race flown on the Autopilot: its running byte `+0x154` and its timer `+0x15c`
+#: (`docs/ghidra/functions/psp-pure-usa/autopilot.md`). Its address belongs to the state (the `autopilot_record` of the state's
+#: `.json` sidecar, `psp-pure-zone-state.py`; `--autopilot-record` overrides); a load restores it.
+#: The HUD's km/h is the body's speed in units a second times this (Pulse's factor, `psp-pulse-pair.py`; checked here against the HUD).
+SPEED_TO_KMH = 3.6
 
 
 def track_vex(track):
@@ -177,11 +190,18 @@ def read_pose(dbg):
     return {"craft": craft, "body": body, "right": rows[0:3], "up": rows[4:7], "fwd": rows[8:11], "pos": pos, "vel": vel}
 
 
-def read_tripod(dbg):
+def read_tripod(dbg, craft=None):
+    """The active tripod at `Camera_CopyTripodToView`. With `craft`, also that craft's body pose read at the same stop (`body`): the
+    tripod is the tick AFTER the pose `read_pose` reads at `Ship_UpdateCraft`'s entry, so a moving craft's eye is measured against this one."""
     g = stop_at(dbg, CAMERA_COPY_TRIPOD)
     tripod = dbg.read_u32(g["a0"] + 0x40)
     m = struct.unpack("<21f", dbg.read(tripod, 84))
-    return {"address": tripod, "right": m[0:3], "up": m[4:7], "fwd": m[8:11], "neg_eye": m[12:15], "fov": m[20]}
+    out = {"address": tripod, "right": m[0:3], "up": m[4:7], "fwd": m[8:11], "neg_eye": m[12:15], "fov": m[20]}
+    if craft:
+        body = dbg.read_u32(craft + BODY_POINTER)
+        rows = struct.unpack("<12f", dbg.read(body, 48))
+        out["body"] = {"right": rows[0:3], "up": rows[4:7], "fwd": rows[8:11], "pos": struct.unpack("<3f", dbg.read(body + 0x30, 12))}
+    return out
 
 
 def read_clock(dbg):
@@ -211,6 +231,12 @@ def main():
     ap.add_argument("--hull-differs", default="", metavar="CAVEAT",
                     help="the original draws another hull than ours here (the Classic league): skip the hull-offset gate and record this text as a caveat")
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
+    ap.add_argument("--zone", default="", metavar="ZONE,SCORE",
+                    help="a Zone frame: the zone number and score the original's HUD shows in the state (read by eye, no RAM address is "
+                         "documented). Ours renders at tick 0 in --mode zone with them")
+    ap.add_argument("--autopilot-record", type=lambda v: int(v, 0), default=None,
+                    help="with --zone: the Autopilot pickup record's address (default: the state's sidecar `autopilot_record`)")
+    ap.add_argument("--zone-kmh", type=float, default=None, help="with --zone: the km/h the original's HUD shows (default: body speed * 3.6)")
     cp.add_arguments(ap)
     args = ap.parse_args()
     if "OAG_SHOT_DISPLAY" not in os.environ or "DISPLAY" not in os.environ:
@@ -219,6 +245,10 @@ def main():
         sys.exit("--home (or PP_HOME) must name the instance's own HOME")
     if not os.environ.get("XDG_CONFIG_HOME", "").startswith(str(ce.MAIN / "data" / "scratch")):
         sys.exit("XDG_CONFIG_HOME must be a directory under data/scratch/<lane>/: oag-game persists settings there")
+    zone = None
+    if args.zone:
+        zone_number, zone_score = (int(v) for v in args.zone.split(","))
+        zone = {"zone": zone_number, "score": zone_score}
     pair = ce.Pair(args.platform, args.out)
     plat = pair.plat
     out = args.out.resolve()
@@ -231,7 +261,8 @@ def main():
     pair.rec["ours"]["binary"] = ce.binary_record(args.oag_game)
     profile_dir = Path(os.environ["XDG_CONFIG_HOME"]).parent
     ce.write_ours_settings(plat, profile_dir)
-    flags = ce.ours_flags(plat) + ["--mode", facts.get("mode", "time_trial"), "--class", args.klass]
+    mode = "zone" if zone else facts.get("mode", "time_trial")
+    flags = ce.ours_flags(plat) + ["--mode", mode, "--class", args.klass]
     if args.team:
         flags += ["--team", args.team]
 
@@ -243,8 +274,8 @@ def main():
               "--serial", SERIAL, "--stop-at", hex(SHIP_UPDATE_CRAFT)])
     dbg = Debugger(args.port)
     pose0 = read_pose(dbg)
-    tripod = read_tripod(dbg)
-    _, clock_at = read_clock(dbg)
+    tripod = read_tripod(dbg, pose0["craft"] if zone else None)
+    clock_at = None if zone else read_clock(dbg)[1]
     # The clock is read at the state's own first stop, where the frame on screen is the one before it: load again (a load is
     # bit-identical run to run, psp-state.py), read the clock at the address found above and take the picture there.
     set_window(960, 544)
@@ -254,8 +285,16 @@ def main():
     dbg = Debugger(args.port)
     time.sleep(args.toast_wait)
     pose1 = read_pose(dbg)
-    clock = dbg.read_f32(clock_at)
+    clock = 0.0 if zone else dbg.read_f32(clock_at)
     dt = dbg.read_f32(pose1["craft"] + 0x1C8)
+    if zone:
+        sidecar = Path(args.state + ".json")
+        record = args.autopilot_record or (int(json.loads(sidecar.read_text()).get("autopilot_record", "0"), 0) if sidecar.exists() else 0)
+        if not record:
+            sys.exit("--zone needs the Autopilot record's address: --autopilot-record, or `autopilot_record` in %s" % sidecar)
+        autopilot = {"record": hex(record), "running": dbg.read_u8(record + 0x154), "timer_s": dbg.read_f32(record + 0x15C)}
+    else:
+        autopilot = None
     wid, wx, wy, ww, wh = set_window(*plat["output"])
     pair.check_equal("original window size", [ww, wh], list(plat["output"]))
     shot = out / "window.png"
@@ -263,9 +302,14 @@ def main():
     shot.replace(out / "theirs.png")
     shown = clock - PRESENTED_LAG * dt
     clock = shown
-    pair.rec["original"]["race_clock_at_stop_s"] = shown + PRESENTED_LAG * dt
-    pair.rec["original"].update({"race_clock_s": clock, "frame_dt_s": dt, "race_clock_address": "%#x" % clock_at,
-                                 "presented_lag_ticks": PRESENTED_LAG})
+    if zone:
+        pair.rec["original"].update({"frame_dt_s": dt, "presented_lag_ticks": PRESENTED_LAG, "autopilot_at_stop": autopilot,
+                                     "zone_hud_read_by_eye": zone})
+        pair.rec["original"]["speed_units_s"] = math.hypot(*pose0["vel"])
+    else:
+        pair.rec["original"]["race_clock_at_stop_s"] = shown + PRESENTED_LAG * dt
+        pair.rec["original"].update({"race_clock_s": clock, "frame_dt_s": dt, "race_clock_address": "%#x" % clock_at,
+                                     "presented_lag_ticks": PRESENTED_LAG})
     cp.build(pair, args, "scenery", "savestate_restore", args.state,
              {"value": PRESENTED_LAG, "unit": "ticks", "basis": "inherited from Pulse PSP, unmeasured on Pure",
               "what": "picture"})
@@ -275,15 +319,33 @@ def main():
     eye = [-v for v in tripod["neg_eye"]]
     eye_body = body_frame([e - p for e, p in zip(eye, pose0["pos"])], pose0)
     dist = math.dist(eye, pose0["pos"])
-    pair.check("the original's camera is the Close chase view (11.643 units from the body, 3.0 up, 11.25 back)",
-               abs(dist - CLOSE_DISTANCE) < 0.1 and abs(eye_body[1] - 3.0) < 0.05 and abs(eye_body[2] + 11.25) < 0.1,
-               "eye in the body frame (right, up, fwd) = (%.3f, %.3f, %.3f), %.3f from the body" % (*eye_body, dist))
+    eye_text = "eye in the body frame (right, up, fwd) = (%.3f, %.3f, %.3f), %.3f from the body" % (*eye_body, dist)
+    if zone:
+        tb = tripod["body"]
+        tick_eye = body_frame([e - p for e, p in zip(eye, tb["pos"])], tb)
+        tick_dist = math.dist(eye, tb["pos"])
+        pair.rec["original"]["eye_body_frame"] = {
+            "at_the_tripods_own_stop": {"right": tick_eye[0], "up": tick_eye[1], "fwd": tick_eye[2], "distance": tick_dist},
+            "against_the_pose_one_tick_earlier": {"right": eye_body[0], "up": eye_body[1], "fwd": eye_body[2], "distance": dist},
+            "body_advance_between_the_two_stops": math.dist(pose0["pos"], tb["pos"]),
+            "close_rest": [0.0, 3.0, -11.25], "close_distance": CLOSE_DISTANCE}
+        pair.caveat("the original's camera at Zone speed is sprung: eye in the body frame (right, up, fwd) = (%.3f, %.3f, %.3f), %.3f from "
+                    "the body, read against the body at the tripod's own stop (against the pose one tick earlier: %s; the body moved %.2f units "
+                    "between the stops); Close at rest is (0, 3.000, -11.250), %.3f. Ours keeps its own Close chase rig, so the two cameras "
+                    "differ by the spring" % (*tick_eye, tick_dist, eye_text.split("= ")[1], math.dist(pose0["pos"], tb["pos"]), CLOSE_DISTANCE))
+    else:
+        pair.check("the original's camera is the Close chase view (11.643 units from the body, 3.0 up, 11.25 back)",
+                   abs(dist - CLOSE_DISTANCE) < 0.1 and abs(eye_body[1] - 3.0) < 0.05 and abs(eye_body[2] + 11.25) < 0.1, eye_text)
     fov = tripod["fov"]
     pair.rec["original"]["fov_deg"] = fov
     pair.rec["original"]["camera"] = {"pos": eye, "right": tripod["right"], "up": tripod["up"], "fwd": tripod["fwd"],
                                       "source": "*(controller+0x40) at 0x08849970, camera.md"}
-    pair.check("the original's fov is the authored 60 at rest (no speed term read for Pure)", abs(fov - 60.0) < 0.05 and
-               math.hypot(*pose0["vel"]) < 1.0, "fov %.4f, speed %.3f units/s" % (fov, math.hypot(*pose0["vel"])))
+    if zone:
+        pair.check("the original's fov is a plausible lens (read from the tripod, fed to ours as it is)", 40.0 <= fov <= 110.0,
+                   "fov %.4f, speed %.3f units/s" % (fov, math.hypot(*pose0["vel"])))
+    else:
+        pair.check("the original's fov is the authored 60 at rest (no speed term read for Pure)", abs(fov - 60.0) < 0.05 and
+                   math.hypot(*pose0["vel"]) < 1.0, "fov %.4f, speed %.3f units/s" % (fov, math.hypot(*pose0["vel"])))
     pair.check_size("original", out / "theirs.png")
     pair.check("no emulator notification over the original's frame", not ce.toast_over_frame(out / "theirs.png"),
                "PPSSPP's green banner covers the top-left")
@@ -302,15 +364,29 @@ def main():
         values["cam_pos_" + a] = v
     ce.write_trace_row(csv, values)
 
-    ticks = args.ours_ticks if args.ours_ticks is not None else ce.go_tick() + ce.tenths_matched_ticks(clock)
-    pair.rec["ours"]["ticks"] = ticks
-    pair.rec["ours"]["race_clock_s"] = (ticks - ce.go_tick()) / 60
-    pair.check("race clock phase", abs((ticks - ce.go_tick()) / 60 - clock) <= 0.05,
-               "original %.2f s, ours %.2f s (ticks %d, GO at tick %d)" % (clock, (ticks - ce.go_tick()) / 60, ticks, ce.go_tick()))
+    if zone:
+        ticks = 0
+        pair.rec["ours"]["ticks"] = 0
+    else:
+        ticks = args.ours_ticks if args.ours_ticks is not None else ce.go_tick() + ce.tenths_matched_ticks(clock)
+        pair.rec["ours"]["ticks"] = ticks
+        pair.rec["ours"]["race_clock_s"] = (ticks - ce.go_tick()) / 60
+        pair.check("race clock phase", abs((ticks - ce.go_tick()) / 60 - clock) <= 0.05,
+                   "original %.2f s, ours %.2f s (ticks %d, GO at tick %d)" % (clock, (ticks - ce.go_tick()) / 60, ticks, ce.go_tick()))
     base = [args.oag_game, image, "--race", "--track", track_vex(args.track), "--pose-from", csv, "--pose-tick", 0, "--no-camera",
             "--pose-hold", "--camera-fov", "%.4f" % fov, "--camera-view", "close", "--ticks", ticks] + flags
+    if zone:
+        kmh = args.zone_kmh if args.zone_kmh is not None else math.hypot(*pose0["vel"]) * SPEED_TO_KMH
+        hud = "1,1,0,0,%.2f,100,0,%d,%d,0" % (kmh, zone["zone"], zone["score"])
+        base += ["--hud-state", hud]
+        if autopilot["running"] and autopilot["timer_s"] > 0:
+            base += ["--hud-autopilot", "%.4f" % autopilot["timer_s"]]
+        pair.rec["ours"]["hud_state"] = hud
+        pair.caveat("Zone state imposed on ours: zone %d and score %d read off the original's HUD by eye (Pure's Zone counters are not "
+                    "located in RAM), %.1f km/h; the zone clock is written as 0, ours runs no ticks (no exhaust or trail history), and the "
+                    "shield is drawn full" % (zone["zone"], zone["score"], kmh))
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]]
-    pair.rec["ours"].update({"mode": facts.get("mode", "time_trial"), "class": args.klass, "team": args.team or "default",
+    pair.rec["ours"].update({"mode": mode, "class": args.klass, "team": args.team or "default",
                              "camera": "ours' own Close chase rig, not fed (Pure's tripod is sheared)"})
     if pair.failed():
         pair.finish()
@@ -321,9 +397,13 @@ def main():
     spawn = ce.pose_of(ce.csv_row(probe_csv, 0))
     start = math.dist(spawn["pos"], pose0["pos"])
     heading = ce.vec_angle(spawn["fwd"], pose0["fwd"])
-    pair.check("the circuit is the original's: ours' own spawn is within 25 units of its grid pose, facing the same way",
-               start <= 25 and heading <= 90, "%.1f units, %.1f deg" % (start, heading))
     pair.rec["ours"]["spawn_probe"] = {"start_distance": start, "heading_deg": heading}
+    if zone:
+        # A Zone state is mid-circuit, so ours' own spawn says nothing; the posed craft's height over the road in ours' trace does.
+        pair.rec["ours"]["spawn_probe"]["note"] = "informational: the state is mid-circuit"
+    else:
+        pair.check("the circuit is the original's: ours' own spawn is within 25 units of its grid pose, facing the same way",
+                   start <= 25 and heading <= 90, "%.1f units, %.1f deg" % (start, heading))
     if pair.failed():
         pair.finish()
     run(base + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL, env=env)
@@ -337,9 +417,15 @@ def main():
     ours_row = ce.csv_row(ours_csv, ticks)
     pair.check_pose(ce.pose_of(ce.csv_row(csv, 0)), ce.pose_of(ours_row), fov, fov)
     pair.check_size("ours", out / "ours.png")
+    if zone:
+        pair.rec["ours"]["posed_row"] = {k: v for k, v in ours_row.items() if k in ("height", "spline", "speed", "grounded", "zone")}
     off = craft_offset(out / "theirs.png", out / "ours.png")
     pair.rec["craft_offset_px"] = off
-    if args.hull_differs:
+    if zone:
+        pair.rec["craft_offset_px"]["gated"] = False
+        pair.caveat("hull offset recorded, not gated: the original's camera is sprung at Zone speed (dx %+d, dy %+d px, edge correlation %.3f)"
+                    % (off["dx"], off["dy"], off["ncc_at_best"]))
+    elif args.hull_differs:
         # The offset search assumes both sides draw one hull; with a different one it reads noise (Karbonis: +7 px, edge correlation 0.09).
         # The camera is still held by the eye and fov checks above, and the pair says so.
         pair.caveat(args.hull_differs)
@@ -351,7 +437,6 @@ def main():
                    % (off["ncc_at_best"], off["dx"], off["dy"], off["ncc_at_zero"]))
     run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
     if args.meta:
-        import json
         pair.rec["meta"] = json.loads(args.meta)
     pair.finish()
     print("wrote", out / "side.png")
