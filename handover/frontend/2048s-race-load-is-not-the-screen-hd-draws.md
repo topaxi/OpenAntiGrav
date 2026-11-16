@@ -40,6 +40,8 @@ by drawing the box and meter over the ground with a `debug` loader line. What is
 8. The session hand-over (`follow_launch` to `Stage::race_loading`) was checked by the compiler and by a capture that
    presses Launch on the real front end (`--loading-card`); a windowed campaign launch was not watched.
 
+- **The race-load compare pairs are hand-made (no `pair.json`)**, so `just compare-rerender-ours` rewrites `compare-page/race-load-2048.toml` with no entries and the page build fails; restore it from `data/reference` after a re-render until the pairs carry a `pair.json` (a `--loading-screen` capture path in `scripts/compare-rerender-ours.py`).
+
 ## Next Steps
 
 1. The attract still, with the demo's load (item 1 above, an afternoon at most).
