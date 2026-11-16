@@ -299,7 +299,7 @@ fn sh_table(
     });
     for (craft, sh, k, ks) in rows {
         let mut row = [0.0f32; SH_PROBE_ROW * 4];
-        for (texel, rgb) in row.chunks_exact_mut(4).zip(sh) {
+        for (texel, rgb) in row.as_chunks_mut::<4>().0.iter_mut().zip(sh) {
             texel[..3].copy_from_slice(rgb);
         }
         row[(SH_PROBE_ROW - 1) * 4..].copy_from_slice(&[*k, *ks, 1.0, 0.0]);

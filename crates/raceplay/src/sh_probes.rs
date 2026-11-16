@@ -40,7 +40,12 @@ impl HullSh {
     fn row_of(&self, taps: Taps) -> [f32; TEXELS * 4] {
         let coefficients = self.probes.blend(taps);
         let mut row = [0.0; TEXELS * 4];
-        for (texel, rgb) in row.chunks_exact_mut(4).zip(coefficients.chunks_exact(3)) {
+        for (texel, rgb) in row
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(coefficients.as_chunks::<3>().0)
+        {
             texel[..3].copy_from_slice(rgb);
         }
         row[(TEXELS - 1) * 4..].copy_from_slice(&[self.k, self.ks, 1.0, 0.0]);

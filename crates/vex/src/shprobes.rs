@@ -104,11 +104,13 @@ impl ShProbes {
             });
         }
         let records = body[..count * RECORD]
-            .chunks_exact(RECORD)
+            .as_chunks::<RECORD>()
+            .0
+            .iter()
             .map(|record| {
                 let mut floats = [0.0f32; FLOATS];
-                for (out, word) in floats.iter_mut().zip(record.chunks_exact(4)) {
-                    *out = f32::from_le_bytes([word[0], word[1], word[2], word[3]]);
+                for (out, word) in floats.iter_mut().zip(record.as_chunks::<4>().0) {
+                    *out = f32::from_le_bytes(*word);
                 }
                 floats
             })
