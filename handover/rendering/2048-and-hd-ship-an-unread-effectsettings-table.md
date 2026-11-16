@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [hd, 2048]
-updated: 2026-09-15
+updated: 2026-11-16
 summary: "Two narrow Zone render questions remain after the tint consumer was found to be fogColour; see the thread's Open"
 categories: [rendering, tooling]
 ---
@@ -277,6 +277,15 @@ same index - which is also why the HUD's class name and the circuit's grade can
 no longer disagree.
 
 ## Open
+
+- **2026-11-16 (`zone-visual-2048-omega`): the Zone surface is wired on 2048's and Omega's HD-lineage
+  circuits and reads Zone, but the road is the wrong colour.** The per-submesh Track/Scene bit is
+  bit 0 of the loaded `.rcsmaterial`'s `+0x60` word (`FUN_813b9670`, `0x813b9670`) and its source is
+  unread, so every chunk draws the `Scene` group. Also open: the Zone sky swap
+  (`data/Tex/zoneSky.gxt`/`.gnf`), 2048's stage writer on these circuits (HD's ladder is inherited
+  off one frame), lightmap shading left on the Zone surface (the original's is flat), Omega's
+  `Environments2048` `trackZone` models. See
+  `docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`, "2026-11-16".
 
 - **2026-08-31, the Zone shader's own inputs are traced and the recolour
   draws.** `Environment_UpdateStageBlend` (`0x003da540`) turns out to write

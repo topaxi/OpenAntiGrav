@@ -78,6 +78,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         multiplayer_tags: true,
     },
     zone_stage_textures: None,
+    zone_fallback: None,
     // `None` on the same terms as the table above: Pulse ships no Zone
     // effectSettings and no located Zone sky.
     zone_sky: None,

@@ -392,6 +392,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     borrows_zoom_ring: false,
     game_options: crate::race::GameOptions::NONE,
     zone_stage_textures: None,
+    zone_fallback: None,
     zone_sky: None,
     detonator: None,
     team_variants: Some(&NATIVE),
@@ -609,4 +610,34 @@ fn a_zone_team_step_is_offered_unless_skipped_and_full_only_when_measured() {
     assert!(!ZoneTeamStep::Skipped.full_ratings());
     assert!(!ZoneTeamStep::Offered.full_ratings());
     assert!(ZoneTeamStep::OfferedAtFullRatings.full_ratings());
+}
+
+/// A fallback holds back the circuits under its own-model directory, ignoring case and separators,
+/// and no others; one with no such directory holds back nothing. Both titles that ship a fallback
+/// carry one.
+#[test]
+fn a_zone_fallback_holds_back_only_the_circuits_that_keep_their_own_model() {
+    const TEXTURES: ZoneStageTextures = ZoneStageTextures {
+        general: "",
+        track: "t",
+        extension: ".gnf",
+        stages: 15,
+    };
+    const STAGES: ZoneStages = ZoneStages {
+        records: &[(0, "A")],
+    };
+    let held = ZoneFallback {
+        palette: ZonePalette::BesideCircuit("z"),
+        stage_textures: &TEXTURES,
+        stages: &STAGES,
+        own_model_under: Some(r"Data\Environments2048"),
+    };
+    assert!(held.holds_back(r"Data\Environments2048\bridge\track.vex"));
+    assert!(held.holds_back("/data/environments2048/bridge/track.vex"));
+    assert!(!held.holds_back(r"Data\environments\tech_de_ra\track.vex"));
+    let open = ZoneFallback {
+        own_model_under: None,
+        ..held
+    };
+    assert!(!open.holds_back(r"Data\Environments2048\bridge\track.vex"));
 }

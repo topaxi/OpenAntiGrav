@@ -821,7 +821,7 @@ fn zone_stage_art(
             let slot = archives
                 .read_name(&name)
                 .ok()
-                .and_then(|blob| oag_mesh::mesh::ModelTexture::from_gtf(&name, &blob))
+                .and_then(|blob| oag_mesh::mesh::ModelTexture::from_container(&name, &blob))
                 .map(std::sync::Arc::new);
             if slot.is_some() {
                 decoded += 1;
@@ -844,7 +844,26 @@ fn zone_stage_art(
         art
     };
     let track = load("track", &|stage| textures.track_entry(stage));
-    let general = load("general", &|stage| textures.general_entry(stage));
+    let general = if textures.general.is_empty() {
+        // The title ships no general set. HD's fifteen are byte-identical flat whites
+        // ([`oag_title::ZoneStageTextures`]), so a scene chunk's surface is its `Scene.Texture
+        // Colour` flat: inherited from HD, not measured on this title.
+        report.push(
+            "no per-stage Zone general set on this title: scene chunks bind a flat white, as \
+             HD's own set measures (inherited)"
+                .to_string(),
+        );
+        let white = std::sync::Arc::new(oag_mesh::mesh::ModelTexture::rgba8(
+            "zone general (flat white)".to_string(),
+            1,
+            1,
+            vec![255; 4],
+            None,
+        ));
+        textures.stages().map(|_| Some(white.clone())).collect()
+    } else {
+        load("general", &|stage| textures.general_entry(stage))
+    };
     (track, general)
 }
 
@@ -853,6 +872,15 @@ fn zone_stage_art(
 /// **Inferred, not measured** - see [`zone_grade`] for the three sources that
 /// converge on it. A recovered trigger would replace this, not adjust it.
 const ZONE_OPENING_STAGE: u32 = 1;
+
+/// The table a circuit with none of its own takes: [`oag_title::ZoneFallback`], or Detonator's.
+#[derive(Clone, Copy)]
+struct Fallback {
+    palette: oag_title::ZonePalette,
+    textures: Option<&'static oag_title::ZoneStageTextures>,
+    stages: Option<&'static oag_title::ZoneStages>,
+    held_back: bool,
+}
 
 pub(super) fn zone_grade(
     archives: &mut oag_assets::Archives,
@@ -870,7 +898,12 @@ pub(super) fn zone_grade(
     let (palette, fallback, stage_textures, zone_stages) = match mode {
         oag_race::Mode::Zone => (
             race.zone_palette,
-            None,
+            race.zone_fallback.map(|f| Fallback {
+                palette: f.palette,
+                textures: Some(f.stage_textures),
+                stages: Some(f.stages),
+                held_back: f.holds_back(track),
+            }),
             race.zone_stage_textures,
             race.zone_stages,
         ),
@@ -885,41 +918,54 @@ pub(super) fn zone_grade(
             }
             (
                 detonator.palette,
-                detonator.fallback_palette,
+                detonator.fallback_palette.map(|palette| Fallback {
+                    palette,
+                    textures: detonator.stage_textures,
+                    stages: None,
+                    held_back: false,
+                }),
                 detonator.stage_textures,
                 None,
             )
         }
         _ => return None,
     };
-    let palette = palette?;
-    let mut name = palette.entry_for(track)?;
-    let mut in_play = palette;
-    let blob = match archives.read_name(&name) {
-        Ok(blob) => blob,
-        Err(_) => {
-            let fallback_entry = fallback.and_then(|f| Some((f, f.entry_for(track)?)));
-            match fallback_entry.and_then(|(f, entry)| {
-                let blob = archives.read_name(&entry).ok()?;
-                Some((f, entry, blob))
-            }) {
-                Some((f, entry, blob)) => {
-                    report.push(format!(
-                        "{name}: not in the archive set; the title-wide {entry} grades this circuit"
-                    ));
-                    name = entry;
-                    in_play = f;
-                    blob
-                }
-                None => {
-                    report.push(format!(
-                        "{name}: not in the archive set - the {} race keeps the circuit's own \
-                         colours",
-                        mode.fallback_label().to_lowercase()
-                    ));
-                    return None;
-                }
-            }
+    let mut stage_textures = stage_textures;
+    let mut zone_stages = zone_stages;
+    let own = palette.and_then(|p| Some((p, p.entry_for(track)?)));
+    let own_blob = own
+        .as_ref()
+        .and_then(|(_, name)| archives.read_name(name).ok());
+    let (name, in_play, blob) = match (own, own_blob) {
+        (Some((palette, name)), Some(blob)) => (name, palette, blob),
+        (own, _) => {
+            let missing = own.map_or_else(|| "no table of its own".to_string(), |(_, n)| n);
+            let Some(f) = fallback.filter(|f| !f.held_back) else {
+                report.push(format!(
+                    "{missing}: not in the archive set - the {} race keeps the circuit's own \
+                     colours",
+                    mode.fallback_label().to_lowercase()
+                ));
+                return None;
+            };
+            let Some((entry, blob)) = f
+                .palette
+                .entry_for(track)
+                .and_then(|entry| Some((entry.clone(), archives.read_name(&entry).ok()?)))
+            else {
+                report.push(format!(
+                    "{missing}: not in the archive set - the {} race keeps the circuit's own \
+                     colours",
+                    mode.fallback_label().to_lowercase()
+                ));
+                return None;
+            };
+            report.push(format!(
+                "{missing}: not in the archive set; the title-wide {entry} grades this circuit"
+            ));
+            stage_textures = f.textures;
+            zone_stages = f.stages.or(zone_stages);
+            (entry, f.palette, blob)
         }
     };
     let text = match String::from_utf8(blob) {

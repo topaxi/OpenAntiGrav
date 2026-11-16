@@ -68,6 +68,7 @@ mod web_picker_table;
 mod window_flyby_ground_truth;
 mod zone_announcer_ground_truth;
 mod zone_craft_ground_truth;
+mod zone_fallback_ground_truth;
 mod zone_grade_ground_truth;
 mod zone_ground_truth;
 mod zone_hover_sweep;

@@ -131,6 +131,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         multiplayer_tags: false,
     },
     zone_stage_textures: None,
+    zone_fallback: Some(ZONE_FALLBACK),
     zone_sky: None,
     // The same stage law as HD's and 2048's (`FUN_012a0fc0`); Omega draws no Zone grade
     // yet, so Detonator's (`Data/zoneenvironmenthdfury/DetonatorModeHDFury*.effectSettings`,
@@ -575,6 +576,55 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
         },
         "Wipeout HD",
     )),
+};
+
+/// What a Zone race takes on an HD-lineage circuit, which ships no table of its own: HD/Fury's
+/// title-wide one (`Data/zoneenvironmenthdfury`, the `DLC3` revision on the four `zone_N`) and its
+/// two fifteen-entry texture sets as `.gnf`, the same shape as 2048's
+/// (`oag_2048::race::ZONE_FALLBACK` on the other title). The stage ladder is HD's fourteen
+/// records, **inherited from HD**: Omega's Zone HUD table and its stage writer are not read.
+///
+/// The ten `Data\Environments2048` circuits are held back: each ships its own `ZoneMode2048`
+/// table and a `trackZone.rcsmodel` whose flat `Zone_ColourN` look this build does not draw
+/// (`oag_raceplay::load`'s Zone-model gate passes a PS4 one over), so a grade without it would
+/// tint a circuit the original draws another way.
+pub const ZONE_FALLBACK: &oag_title::ZoneFallback = &oag_title::ZoneFallback {
+    palette: oag_title::ZonePalette::TitleWide {
+        entry: "Data/zoneenvironmenthdfury/ZoneModeHDFury.effectSettings",
+        zone_circuits: &[
+            r"Data\environments\zone_1\track.vex",
+            r"Data\environments\zone_2\track.vex",
+            r"Data\environments\zone_3\track.vex",
+            r"Data\environments\zone_4\track.vex",
+        ],
+        zone_circuit_entry: "Data/zoneenvironmenthdfury/ZoneModeHDFuryDLC3.effectSettings",
+    },
+    stage_textures: &oag_title::ZoneStageTextures {
+        // Omega ships no `zoneMode<n>` set, only `zoneModeTrack<n>.gnf` (15 files).
+        general: "",
+        track: "Data/tex/zoneModeTrack",
+        extension: ".gnf",
+        stages: 15,
+    },
+    stages: &oag_title::ZoneStages {
+        records: &[
+            (75, "IG_HUD_SUPSON"),
+            (60, "IG_HUD_MACH1"),
+            (50, "IG_HUD_SUBSON"),
+            (42, "IG_HUD_SUPZEN"),
+            (35, "MSC_ZEN"),
+            (27, "MSC_SPPHANTOM"),
+            (20, "Phantom"),
+            (16, "MSC_SPHANTOM"),
+            (12, "Rapier"),
+            (7, "MSC_SRAPIER"),
+            (5, "Flash"),
+            (3, "MSC_SFLASH"),
+            (2, "Venom"),
+            (0, "MSC_SVENOM"),
+        ],
+    },
+    own_model_under: Some(r"Data\Environments2048"),
 };
 
 #[cfg(test)]

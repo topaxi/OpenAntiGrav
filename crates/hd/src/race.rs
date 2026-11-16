@@ -107,6 +107,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         multiplayer_tags: false,
     },
     zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
+    zone_fallback: None,
     zone_sky: Some(ZONE_SKY),
     detonator: Some(DETONATOR),
     team_variants: Some(&TEAM_VARIANTS),

@@ -34,7 +34,6 @@ use anyhow::Result;
 
 use oag_core::math::{Mat4, Vec3};
 use oag_rcs::rcsmodel::psp2;
-use oag_texture::gxt;
 
 use super::Textures;
 use crate::mesh::{Bounds, DrawCall, Flap, GnfForm, GpuVertex, Model, ModelTexture};
@@ -89,24 +88,6 @@ pub fn is_psp2(model_blob: &[u8]) -> bool {
         .is_some_and(|b| u32::from_le_bytes(b.try_into().expect("four bytes")) == psp2::MAGIC)
 }
 
-/// Decodes one material's diffuse `.gxt`, or `None` for a blob that will not
-/// parse as one or names a texture this build cannot decode.
-///
-/// **A `.gxt` that will not decode draws nothing rather than something** - the
-/// same rule [`super::skin::decode_texture`] applies to a Wipeout HD `.gtf`.
-fn decode_gxt_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
-    let parsed = gxt::Gxt::parse(blob).ok()?;
-    let texture = parsed.only()?;
-    let rgba = texture.to_rgba(blob).ok()?;
-    Some(ModelTexture::rgba8(
-        label.to_string(),
-        u32::from(texture.width),
-        u32::from(texture.height),
-        rgba.into_iter().flatten().collect(),
-        None,
-    ))
-}
-
 /// Decodes a material's diffuse texture in whichever container its path names.
 ///
 /// **Offered to the texture sink** ([`crate::mesh_render::TextureSinkScope`]),
@@ -126,7 +107,7 @@ fn decode_texture_form(path: &str, blob: &[u8]) -> Option<(ModelTexture, Option<
         Some(oag_texture::decode::Container::Gnf) => {
             ModelTexture::from_gnf_form(path, blob).map(|(texture, form)| (texture, Some(form)))
         }
-        _ => decode_gxt_texture(path, blob).map(|texture| (texture, None)),
+        _ => ModelTexture::from_gxt(path, blob).map(|texture| (texture, None)),
     }
 }
 

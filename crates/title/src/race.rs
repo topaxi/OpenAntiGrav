@@ -325,6 +325,10 @@ pub struct RaceDefaults {
     /// escalates. See [`ZoneStageTextures`]. `None` where not located, every title
     /// but HD/Fury.
     pub zone_stage_textures: Option<&'static ZoneStageTextures>,
+    /// What a Zone race takes on a circuit whose own environment tree carries no Zone table: the
+    /// ported circuits of another title. See [`ZoneFallback`]. `None` where the title's Zone
+    /// table is title-wide ([`Self::zone_palette`]'s `TitleWide`) or not located.
+    pub zone_fallback: Option<&'static ZoneFallback>,
     /// The entry name of the cubemap a Zone race draws **instead of** the circuit's
     /// own `sky.gtf`.
     ///
@@ -410,7 +414,8 @@ pub struct RaceDefaults {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ZoneStageTextures {
     /// The entry name each "general" texture is numbered under, without the
-    /// stage number or the extension.
+    /// stage number or the extension; empty where the title ships no such set
+    /// (Omega), in which case the loader binds the flat white HD's set measured as.
     pub general: &'static str,
     /// The same for the "track" set, the one that carries the art.
     pub track: &'static str,
@@ -537,6 +542,44 @@ pub struct Detonator {
     /// mode uses: HD's craft constructors write `0.7` on mode `14`
     /// (`docs/ghidra/functions/ps3-hdfury-eu/camera.md`).
     pub camera_scale: f32,
+}
+
+/// What a title's Zone race takes on a circuit that ships no Zone table of its own.
+///
+/// 2048's `Environment_Load` reads the circuit's own `ZoneMode2048.effectSettings` and, for a
+/// circuit with no environment tree (HD's ported circuits), HD/Fury's title-wide table instead
+/// (`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`). Those circuits'
+/// materials carry HD's Zone variants (`zoneColourTint`, `zoneEffectInner`, `zoneTexInner`), so
+/// the per-stage textures that feed them come with the fallback table and a circuit on its own
+/// table draws no Zone surface.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ZoneFallback {
+    /// The table a ported circuit takes when [`RaceDefaults::zone_palette`]'s file is not in the
+    /// archive set.
+    pub palette: ZonePalette,
+    /// The per-stage texture sets the fallback table's surface samples.
+    pub stage_textures: &'static ZoneStageTextures,
+    /// The zone-number ladder that steps the fallback table's fifteen stages, which is not
+    /// [`RaceDefaults::zone_stages`]'s (that one grades the circuit's own table).
+    pub stages: &'static ZoneStages,
+    /// A directory whose circuits keep their own Zone model and table and take none of this: a
+    /// race on one draws no Zone grade where this build does not draw that model. Matched
+    /// ignoring case and separators. `None` where no circuit is held back.
+    pub own_model_under: Option<&'static str>,
+}
+
+impl ZoneFallback {
+    /// Whether the circuit `track` (its `.vex` entry name) is one this fallback does not grade.
+    #[must_use]
+    pub fn holds_back(&self, track: &str) -> bool {
+        let fold = |name: &str| {
+            name.trim_start_matches(['/', '\\'])
+                .replace('\\', "/")
+                .to_ascii_lowercase()
+        };
+        self.own_model_under
+            .is_some_and(|dir| fold(track).starts_with(&fold(dir)))
+    }
 }
 
 /// Where a title keeps its `.effectSettings` stage table, the per-stage colour

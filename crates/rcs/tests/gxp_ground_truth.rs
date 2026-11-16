@@ -199,6 +199,8 @@ struct Collected {
     versions: BTreeMap<(u8, u8), usize>,
     disagreed: Vec<String>,
     wide_shadow_maps: usize,
+    /// Programs declaring `zoneColourTint`, by the directory of the entry that holds them.
+    zone_dirs: BTreeMap<String, usize>,
     /// Instruction words per class, over both code blocks of every program.
     classes: BTreeMap<usse::Class, usize>,
     /// Words no layout matches.
@@ -239,6 +241,10 @@ fn the_gxp_corpus_decodes_closes_and_declares_what_it_binds() {
             seen.disagreed
                 .push(format!("{label}: flags {:#010x}", program.flags));
         }
+        if program.parameter("zoneColourTint").is_some() {
+            let key = label.rsplit_once('/').map_or(label, |(d, _)| d).to_string();
+            *seen.zone_dirs.entry(key).or_default() += 1;
+        }
         if let Some(p) = program.parameter("shadowMap")
             && p.components != 1
         {
@@ -253,7 +259,26 @@ fn the_gxp_corpus_decodes_closes_and_declares_what_it_binds() {
     the_fragment_bit_agrees_with_what_each_program_declares(&seen);
     the_shadow_term_is_a_single_channel_sampler_beside_the_lightmap(&survey, &seen);
     every_instruction_word_belongs_to_a_class(&seen);
+    hds_zone_variant_is_declared_by_the_hd_lineage_circuits_alone(&seen);
 }
+
+/// HD's Zone variant (`zoneColourTint`) is declared by the materials of HD's ported circuits and
+/// by nothing else, which is what scopes 2048's `zone_fallback` to them
+/// (`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`, "2026-11-16").
+fn hds_zone_variant_is_declared_by_the_hd_lineage_circuits_alone(seen: &Collected) {
+    let total: usize = seen.zone_dirs.values().sum();
+    assert_eq!(total, ZONE_COLOUR_TINT_PROGRAMS);
+    for dir in seen.zone_dirs.keys() {
+        assert!(
+            dir.starts_with("data/art/published/DLC1/environments/"),
+            "{dir} declares zoneColourTint outside the DLC circuits"
+        );
+    }
+    assert_eq!(seen.zone_dirs.len(), 17);
+}
+
+/// Programs declaring `zoneColourTint`, over the three packages.
+const ZONE_COLOUR_TINT_PROGRAMS: usize = 9_392;
 
 /// Every container on the disc decodes, and every closure check holds.
 ///

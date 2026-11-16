@@ -112,6 +112,7 @@ const TITLE: &Title = &Title {
         borrows_zoom_ring: false,
         game_options: oag_title::race::GameOptions::NONE,
         zone_stage_textures: None,
+        zone_fallback: None,
         zone_sky: None,
         detonator: None,
         // Unread here too: nothing in this crate resolves a team's variant.
