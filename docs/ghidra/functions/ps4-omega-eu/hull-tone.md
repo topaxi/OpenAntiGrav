@@ -297,12 +297,26 @@ is `(0.153, 0.157, 0.113)` (blue `0.72` of green) against the original's `(0.071
 track pixels are untouched, and every difference in the frame is on the eight craft. **The axes of the basis are not
 discriminated by the box**: the coefficients vary only some 10 to 20 % across directions around a 1.0 to 1.4 DC term, so a swap
 of `y` and `z` moves the housing by under the read's noise; the order is the static read's (88). The brightness is unchanged
-and still the open sun-term read above.
+and still the open sun-term read above; the next paragraph says what the wiring did to its share.
 
-**Ours' constant-ambient knockouts above are not reproducible in this tree**: with the sun zeroed on the hull only, the constant
-ambient `(0.31, 0.26, 0.71)` through the hull path measures `(0.043, 0.038, 0.146)` on the housing, not `(0.016, 0.015, 0.052)`:
-the post-tonemap box is not additive in its terms (the blue of ambient alone exceeds the full box's), so a share read off such a
-knockout is good only to a factor of about three. Judge the ambient on the whole box and on the hue, as above.
+**The ambient share, by the page's own method** (engine light off; the hull's sun term zeroed only on draws that name a row,
+so the track keeps its sun: the floor box moves `0.114 -> 0.106` red and by under 2 % in green and blue):
+
+| Housing `(890,690)-(1010,800)` | Constant ambient (before) | SH ambient (after) | Original |
+| --- | --- | --- | --- |
+| ambient alone (hull sun off) | `(0.016, 0.015, 0.052)` (reproduces the stored decomposition) | `(0.014, 0.020, 0.026)` | `(0.010, 0.011, 0.012)` |
+| increment on the whole frame (shipped minus ambient off) | `(0.023, 0.021, 0.063)` | `(0.019, 0.026, 0.032)` | `(0.010, 0.011, 0.012)` (`K = Ks = 0` against shipped) |
+| sun only (ambient off) | `(0.078, 0.076, 0.043)` | same | `(0.025, 0.022, 0.008)` |
+
+So the claim's second half is **half true**: the blue cast halves (`0.052 -> 0.026` alone) and the red falls 12 to 18 %, but the
+green rises (`+35 %`) and ours' ambient is still `1.4, 1.8, 2.1` times the original's alone and `1.9, 2.3, 2.7` times by the
+increment, not the `(0.010, 0.011, 0.012)` the recipe expected. The spine reads the same way (`(0.0335, 0.0301, 0.0861)`
+before, `(0.0265, 0.0349, 0.0439)` after as an increment, against the original's `(0.023, 0.026, 0.023)`). **That is the same
+order as the sun term's `2.7` to `3.5` times, and both are on the dark body panels**: with the original's own ambient law in
+ours, a common factor on those panels (the albedo: texel times vertex colour, or the lit normal) is at least as likely as a
+sun-only cause. The earlier "albedo is about equal" (Read 2 above) compared the *constant* ambient's share with a predicted
+`0.25 * SH`, which this read replaces; it should be redone with these numbers (confidence 55: the basis' axes are unverified
+and move the ambient by 10 to 20 %, and the `K = Ks = 0` states drift 25 %).
 
 ### Cross-title
 
