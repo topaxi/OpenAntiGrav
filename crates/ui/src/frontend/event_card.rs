@@ -175,6 +175,9 @@ enum Page {
     Mode,
 }
 
+/// Counts the lines a text wraps to at a scale and a width.
+pub type LineCount<'a> = &'a dyn Fn(&str, f32, f32) -> usize;
+
 /// What the card's picture slot shows.
 #[derive(Debug, Clone, Copy)]
 pub enum Backdrop<'a> {
@@ -200,7 +203,7 @@ pub struct CardPaint<'a> {
     globals: &'a std::collections::HashMap<String, String>,
     placements: &'a [(String, Placed)],
     bold: f32,
-    lines: Option<&'a dyn Fn(&str, f32, f32) -> usize>,
+    lines: Option<LineCount<'a>>,
 }
 
 impl std::fmt::Debug for CardPaint<'_> {
@@ -245,11 +248,7 @@ impl LaunchedCard {
     /// mode page (the card then turns to it); `lines` counts the lines a text wraps to at a
     /// scale and width, which the mode page centres its body with.
     #[must_use]
-    pub fn paint<'a>(
-        &'a self,
-        mode_page: bool,
-        lines: Option<&'a dyn Fn(&str, f32, f32) -> usize>,
-    ) -> CardPaint<'a> {
+    pub fn paint<'a>(&'a self, mode_page: bool, lines: Option<LineCount<'a>>) -> CardPaint<'a> {
         let page = if mode_page {
             CardPaint::card_pages(&self.event).len()
         } else {
