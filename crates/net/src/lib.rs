@@ -36,6 +36,7 @@ pub mod link;
 pub mod lobby;
 pub mod online;
 pub mod race;
+pub mod redial;
 pub mod serve;
 pub mod stats;
 #[cfg(feature = "client")]

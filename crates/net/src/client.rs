@@ -97,6 +97,9 @@ pub enum Phase {
     /// A new link has said hello to a race already running; waiting for the welcome and the
     /// start ([`Client::reconnect`]).
     Reconnecting,
+    /// The link closed under a race the server has not ended, and why: the seat may still be
+    /// held for this client, so [`crate::redial::Redial`] dials again. The race stands still.
+    Lost(String),
     /// Over, and why.
     Over(String),
 }
@@ -468,11 +471,16 @@ impl Client {
                 Err(e) => log::warn!("net: {e}"),
             }
         }
-        if !matches!(self.phase, Phase::Over(_))
+        if !matches!(self.phase, Phase::Over(_) | Phase::Lost(_))
             && let Some(why) = self.link.closed()
         {
-            self.phase = Phase::Over(format!("the connection closed: {why}"));
+            self.phase = Phase::Lost(format!("the connection closed: {why}"));
         }
+    }
+
+    /// Ends the race on this end for `why`: a client that could not get its seat back.
+    pub fn give_up(&mut self, why: &str) {
+        self.phase = Phase::Over(why.to_string());
     }
 
     fn stash(&mut self, confirmed: Confirmed) {

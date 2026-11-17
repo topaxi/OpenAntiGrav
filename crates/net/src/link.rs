@@ -105,10 +105,23 @@ struct Queues {
     reliable: VecDeque<Vec<u8>>,
 }
 
+/// Cuts a [`Loopback`] connection for both ends: each reports [`Link::closed`], sends nothing
+/// and reads nothing more, the way a dropped network link does.
+#[derive(Clone, Debug)]
+pub struct Cutter(Arc<std::sync::atomic::AtomicBool>);
+
+impl Cutter {
+    /// Cuts the connection.
+    pub fn cut(&self) {
+        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 /// One end of an in-process connection. [`Loopback::pair`] makes both.
 pub struct Loopback {
     inbox: Arc<Mutex<Queues>>,
     outbox: Arc<Mutex<Queues>>,
+    cut: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Loopback {
@@ -117,16 +130,29 @@ impl Loopback {
     pub fn pair() -> (Self, Self) {
         let a = Arc::new(Mutex::new(Queues::default()));
         let b = Arc::new(Mutex::new(Queues::default()));
+        let cut = Arc::new(std::sync::atomic::AtomicBool::new(false));
         (
             Self {
                 inbox: a.clone(),
                 outbox: b.clone(),
+                cut: cut.clone(),
             },
             Self {
                 inbox: b,
                 outbox: a,
+                cut,
             },
         )
+    }
+
+    /// A handle that cuts this connection from outside, once its ends are boxed away.
+    #[must_use]
+    pub fn cutter(&self) -> Cutter {
+        Cutter(self.cut.clone())
+    }
+
+    fn is_cut(&self) -> bool {
+        self.cut.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     fn with<T>(queues: &Mutex<Queues>, f: impl FnOnce(&mut Queues) -> T) -> T {
@@ -138,19 +164,29 @@ impl Loopback {
 
 impl Link for Loopback {
     fn send_datagram(&mut self, bytes: Vec<u8>) {
-        Self::with(&self.outbox, |q| q.datagrams.push_back(bytes));
+        if !self.is_cut() {
+            Self::with(&self.outbox, |q| q.datagrams.push_back(bytes));
+        }
     }
     fn recv_datagram(&mut self) -> Option<Vec<u8>> {
+        if self.is_cut() {
+            return None;
+        }
         Self::with(&self.inbox, |q| q.datagrams.pop_front())
     }
     fn send_reliable(&mut self, bytes: Vec<u8>) {
-        Self::with(&self.outbox, |q| q.reliable.push_back(bytes));
+        if !self.is_cut() {
+            Self::with(&self.outbox, |q| q.reliable.push_back(bytes));
+        }
     }
     fn recv_reliable(&mut self) -> Option<Vec<u8>> {
+        if self.is_cut() {
+            return None;
+        }
         Self::with(&self.inbox, |q| q.reliable.pop_front())
     }
     fn closed(&self) -> Option<String> {
-        None
+        self.is_cut().then(|| "the link was cut".to_string())
     }
     fn max_datagram(&self) -> usize {
         1_200
