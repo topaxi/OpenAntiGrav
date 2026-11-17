@@ -65,8 +65,9 @@ unfair latency, etc.)."
      operator command to delist a room and ban a host (and list bans), a log of who hosted
      what and when, and a reason shown to a banned host. The ban list lives with the lobby
      (a file on the server for version one).
-   Where accounts sit relative to the roadmap ("Not covered": accounts are outside it)
-   is the maintainer's call.
+   **Decided 2026-11-17 (maintainer): the key pair per player is enough for version one,**
+   accepted with its known weakness (a banned player can make a new key). Accounts stay
+   outside the roadmap.
 8. **Strings and screens.** The lobby's room list gets the mark and a short explanation;
    rows need `string_id` and English text (CLAUDE.md, `just check-strings`).
 
