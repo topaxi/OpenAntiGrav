@@ -18,9 +18,10 @@ use oag_ui::menu::{Choice, Menu};
 
 use super::{Entry, Folder, Head};
 
-/// What [`Context::refused`] holds for a recording whose rebuild is not the recorded race: the
-/// tick-zero hash disagreed. Worded by [`words::NOT_THE_RACE`].
-pub const TICK_ZERO: &str = "tick-zero";
+/// What [`Context::refused`] holds for a recording whose rebuild is not the recorded race (the
+/// tick-zero hash disagreed) and which has no pose track to play instead. Worded by
+/// [`words::NO_POSE_TRACK`].
+pub const NO_POSE_TRACK: &str = "no-pose-track";
 
 /// The page, and the row that holds which file the page is about. Never persisted.
 pub const PAGE: &str = "replays";
@@ -73,11 +74,12 @@ pub mod words {
         "OAG_REPLAYS_NO_SETUP",
         "CANNOT BE REBUILT: NO LAUNCH REQUEST",
     );
-    /// Why a file cannot be played: the race it rebuilds is not the recorded one. The tick-zero
-    /// hash disagrees: another mode this build does not rebuild, a pack or track this machine
-    /// lacks, a roster that changed.
-    pub const NOT_THE_RACE: (&str, &str) =
-        ("OAG_REPLAYS_NOT_THE_RACE", "NOT THE RACE THAT WAS RECORDED");
+    /// Why a file cannot be played: the race it rebuilds is not the recorded one and it has no
+    /// pose track to show instead.
+    pub const NO_POSE_TRACK: (&str, &str) = (
+        "OAG_REPLAYS_NO_POSE_TRACK",
+        "NOT THE RACE THAT WAS RECORDED, AND NO POSE TRACK TO SHOW",
+    );
     /// Why a file cannot be played: it opened and failed otherwise; `%s` is the reason.
     pub const REFUSED: (&str, &str) = ("OAG_REPLAYS_REFUSED", "CANNOT BE REBUILT HERE: %s");
 }
@@ -177,8 +179,8 @@ fn unusable(entry: &Entry, cx: &Context<'_>) -> Option<String> {
         Head::Damaged => return Some(cx.say(words::DAMAGED)),
     };
     if let Some(why) = cx.refused.get(&entry.path) {
-        return Some(if why == TICK_ZERO {
-            cx.say(words::NOT_THE_RACE)
+        return Some(if why == NO_POSE_TRACK {
+            cx.say(words::NO_POSE_TRACK)
         } else {
             cx.say(words::REFUSED).replace("%s", why)
         });

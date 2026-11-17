@@ -54,9 +54,11 @@ pub enum OpenError {
     /// The race could not be started from the header's settings.
     #[error("the replay's race cannot be started: {0:#}")]
     Start(anyhow::Error),
-    /// The race started is not the recorded one: a tick-zero [`Desync`].
-    #[error(transparent)]
-    Desync(#[from] Desync),
+    /// The race started is not the recorded one (a tick-zero [`Desync`]) and the file carries no
+    /// pose track to play instead: [`Timeline::open`] opens such a file in POSE VIEW when it has
+    /// one.
+    #[error("{0}, and the file carries no pose track to play instead")]
+    NoPoseTrack(Desync),
 }
 
 /// Why a seek did not arrive.
@@ -186,9 +188,15 @@ impl Timeline {
     /// stands at tick 0 and [`Self::prefix`] says how far it may go, as a video player's
     /// buffered bar does.
     ///
+    /// A race that is not the recorded one at tick 0 opens with an empty verified prefix when the
+    /// file has a pose track, as a recording that desyncs on its first stored hash does at its
+    /// last agreeing one: [`Self::pass`] is [`Pass::Desynced`] at tick 0, the prefix is tick 0
+    /// alone, and the viewer plays the recorded poses (ADR-0087, decision 4).
+    ///
     /// # Errors
     ///
-    /// [`OpenError`]: the race cannot be started, or it is not the recorded one.
+    /// [`OpenError`]: the race cannot be started, or it is not the recorded one and the file has
+    /// no pose track to go on with.
     pub fn open(setup: Setup, replay: Replay) -> Result<Self, OpenError> {
         Self::open_within(setup, replay, KEYFRAME_CEILING)
     }
@@ -199,8 +207,24 @@ impl Timeline {
     ///
     /// As [`Self::open`].
     pub fn open_within(setup: Setup, replay: Replay, ceiling: usize) -> Result<Self, OpenError> {
-        let probe = start_recorded(setup.clone(), &replay.header).map_err(OpenError::Start)?;
-        Verifier::new(&replay, probe.sim.state_hash())?;
+        let mut probe = start_recorded(setup.clone(), &replay.header).map_err(OpenError::Start)?;
+        if let Err(desync) = Verifier::new(&replay, probe.sim.state_hash()) {
+            if !replay
+                .pose_track
+                .as_ref()
+                .is_some_and(|track| track.last_tick() > 0)
+            {
+                return Err(OpenError::NoPoseTrack(desync));
+            }
+            probe.ensure_speed_plans();
+            let shared = Shared::new(ceiling, Pass::Desynced(desync));
+            {
+                let mut built = shared.built();
+                built.keyframes.push(0, probe.snapshot_sim());
+                built.prefix = Some(0);
+            }
+            return Ok(Self::over_recording(probe, shared, replay));
+        }
         let replay = Arc::new(replay);
         let shared = Shared::new(ceiling, Pass::Running);
         let pass = Task::spawn("oag-timeline", {
@@ -227,6 +251,17 @@ impl Timeline {
             .keyframes
             .push(race.sim.world.tick, race.snapshot_sim());
         Self::over(Race::start(setup), shared, race.sim.world.tick)
+    }
+
+    /// A timeline over `replay` with no pass running: `shared` already holds all there is.
+    fn over_recording(probe: Race, shared: Arc<Shared>, replay: Replay) -> Self {
+        Self {
+            replay: Some(Arc::new(replay)),
+            shared,
+            probe,
+            at: 0,
+            pass: None,
+        }
     }
 
     /// A timeline whose keyframes are `shared`, moved by `probe`.

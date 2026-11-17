@@ -88,7 +88,7 @@ impl Viewer {
     /// # Errors
     ///
     /// [`OpenError`]: the race cannot be started from the header, or it is not the recorded one
-    /// (a tick-zero mismatch).
+    /// (a tick-zero mismatch) and the file has no pose track to play instead.
     pub fn open(setup: crate::Setup, replay: Replay) -> Result<Self, OpenError> {
         let timeline = Box::new(Timeline::open(setup, replay.clone())?);
         Ok(Self {
