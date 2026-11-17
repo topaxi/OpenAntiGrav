@@ -568,8 +568,8 @@ impl World {
     /// Whether a person flies `slot`, and so the player step runs for it.
     ///
     /// Every slot [`Self::human_slots`] names whose craft is on the grid, and
-    /// [`Self::primary_slot`] always - the fallback slot is stepped as a player
-    /// even when nobody is marked human, which is what a race with no human in
+    /// [`Self::primary_slot`] unless its person is [`Controller::Away`] - the fallback slot
+    /// is stepped as a player even when nobody is marked human, which is what a race with no human in
     /// it (an attract demo, a headless run that never touched the controllers)
     /// has always done. With the default grid this is `slot == 0`, so asking it
     /// where the code used to say "slot 0" or "not slot 0" changes nothing.

@@ -67,7 +67,9 @@ impl Evaluations {
 /// The single-player reading: `evaluations.wall` is the primary slot's `wall`,
 /// so a caller that flew one craft and read its [`Evaluated`] off the tick
 /// keeps compiling and keeps meaning the same thing. A caller that wants
-/// another slot says so with [`Evaluations::get`].
+/// another slot says so with [`Evaluations::get`]. Tests only: with the primary slot's person away
+/// no step ran for it, so the library reads a slot through [`Evaluations::get`].
+#[cfg(test)]
 impl std::ops::Deref for Evaluations {
     type Target = Evaluated;
 
