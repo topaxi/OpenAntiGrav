@@ -160,6 +160,11 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // **2048's own sea** (kind 6, `mesh::rcs::psp2::water`): the generic lit path with a
     // scrolled normal map and Phong highlight, so none of the HD families' branches apply.
     let vita_water = water_raw > 5.5;
+    // **2048's `fc17` water** (kinds 7 and 8, `mesh::rcs::psp2::water`): kind 6's frame and light
+    // with `Watercolour` for the colour (the entry's tint) and `SpecularColour` for the highlight,
+    // no gloss from the map's alpha; kind 8, the blended edge, also takes the alpha chain below.
+    let vita_fc17 = water_raw > 6.5;
+    let vita_edge = water_raw > 7.5;
     let water = select(water_raw, 0.0, vita_water);
     let n = normalize(in.normal);
     // **Omega's panel-map road** (`Emissive::program` mode 15, `mesh::rcs::psp2::panel_map`): the
@@ -797,6 +802,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         picture = vec4<f32>(encode(linear), picture.a);
         coverage = vec4<f32>(decode(vec3<f32>(first.r)).r * holo.z);
     }
+    if vita_fc17 {
+        picture = vec4<f32>(row_tint.rgb, picture.a);
+    }
     let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
 
     // **The glass sheen's combine**, block #7 of `etched_glass_tech`
@@ -1228,7 +1236,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             let gloss = material_sample(MATERIAL_PAD_MASK, water_tap_uv(water_entry, water_raw, 0u, in.texcoord)).a;
             let reflected = reflect(-to_eye, n_lit);
             let facing = clamp(dot(reflected, scene.light.direction), 0.0, 1.0);
-            specular = scene.light.sun * (pow(facing, row_scale.x) * gloss * mask * rig_on * in.lit);
+            let highlight = select(vec3<f32>(1.0), water_specular_colour(water_entry), vita_fc17);
+            specular = scene.light.sun * (pow(facing, row_scale.x) * select(gloss, 1.0, vita_fc17) * mask * rig_on * in.lit)
+                * highlight;
         }
 
         // **The reflection probe**, on the hull materials whose `IBL` variant declares it
@@ -1564,9 +1574,15 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         flame = vec4<f32>(flame_rgb, flame_alpha * in.colour.a);
     }
 
+    // **The blended water edge's alpha** (kind 8; `fc17_..._wateredge_vertexcol` fragment `@27` to
+    // `@29`): `x = a * vc.x`, `alpha = vc.y * (Opacity - x) + x`, `a` the first tap's alpha,
+    // `vc` `VertexColour1` (the vertex's second coordinate pair), `Opacity` the entry's offset.
+    let edge_map = material_sample(MATERIAL_PAD_MASK, water_tap_uv(water_entry, water_raw, 0u, in.texcoord)).a;
+    let edge_x = edge_map * in.lightmap_texcoord.z;
+    let edge_alpha = in.lightmap_texcoord.w * (row_tint.w - edge_x) + edge_x;
     let shaded = vec4<f32>(
         mix(plain_rgb, authored_rgb, rig_on * in.lit),
-        texel.a * in.colour.a,
+        select(texel.a * in.colour.a, edge_alpha, vita_edge),
     );
     // **The facing-ramp combine replaces the generic rig entirely**, the
     // same shape `flame` below already takes: block #7 computes its own

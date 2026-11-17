@@ -97,6 +97,7 @@ mod psp_slope_lod;
 mod rcs_siblings_ground_truth;
 mod velocity_target;
 mod vertex_buffer_census_ground_truth;
+mod vita_fc17_edge_lit_path;
 mod weapon_pad_order_ground_truth;
 mod zone_recolour;
 

@@ -105,6 +105,16 @@ pub const fn is_drawn(law: Water) -> bool {
 /// families are 1 to 4, `vex_water`'s `enhanced` is 5.
 pub const VITA_SEA_KIND: f32 = 6.0;
 
+/// `program[1]` of a 2048 `fc17` water entry: kind 6's frame and light with `Watercolour` for
+/// the colour and `SpecularColour` for the highlight, no gloss from the map's alpha
+/// (`docs/rendering/water.md`, "2048 (Vita)").
+pub const VITA_WATER_KIND: f32 = 7.0;
+
+/// `program[1]` of the blended `fc17` edge: [`VITA_WATER_KIND`]'s colour and the alpha chain
+/// `mix(a * vc.x, Opacity, vc.y)`, `a` the map's alpha, `vc` `VertexColour1`; `Opacity` rides the
+/// header's `offset`.
+pub const VITA_EDGE_KIND: f32 = 8.0;
+
 /// What a classified water slot is drawn as.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Reading {
@@ -186,6 +196,20 @@ impl Tap {
                 weight: 0.0,
                 ..second
             },
+        ]
+    }
+
+    /// `fc17`'s water: one tap at `(u, v + Speed * t)` (the vertex program adds
+    /// `Speed * time` to `uv1.y`), and a second of weight zero.
+    #[must_use]
+    pub const fn vita_water(speed: f32) -> [Self; 2] {
+        let [first, second] = Self::vita_sea();
+        [
+            Self {
+                scroll: [0.0, speed],
+                ..first
+            },
+            second,
         ]
     }
 
@@ -791,6 +815,18 @@ mod tests {
         assert_eq!(tap.at([0.25, 0.5], 10.0), [0.25 + 0.5, 0.5]);
         assert_eq!((tap.weight, none.weight), (1.0, 0.0));
         assert_eq!(SEA_SCROLL, 0.05);
+    }
+
+    /// `fc17` scrolls `v` by `Speed * t` and leaves `u` alone (primary 34 adds the product to
+    /// `uv1`'s second lane); fc15 scrolls `u` by the literal. Swap the axes and the sheet drifts
+    /// the wrong way.
+    #[test]
+    fn the_fc17_water_is_one_tap_at_v_plus_speed_times_time() {
+        let [tap, none] = Tap::vita_water(0.05062);
+        let at = tap.at([0.25, 0.5], 10.0);
+        assert_eq!(at[0], 0.25);
+        assert!((at[1] - (0.5 + 0.5062)).abs() < 1e-6, "{at:?}");
+        assert_eq!((tap.weight, none.weight), (1.0, 0.0));
     }
 
     fn param(hash: u32, value: [f32; 4]) -> oag_rcs::rcsmodel::material::Parameter {
