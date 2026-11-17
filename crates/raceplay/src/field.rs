@@ -741,6 +741,10 @@ impl Race {
         // The campaign's original field, when on: its round robin advances
         // once a tick before any driver, as `AiManager_Update` does.
         let lane_slot = self.original_ai_begin_tick();
+        #[cfg(feature = "view")]
+        {
+            self.view.field_sparks.walls = [None; oag_gameplay::MAX_SHIPS];
+        }
         for slot in 0..self.sim.world.ship_count as usize {
             // A craft a person flies is stepped by `Race::tick`'s player step,
             // not here. With one person in slot 0 this skips slot 0, which the
@@ -931,6 +935,10 @@ impl Race {
                 &*self.sim.collision,
                 self.sim.dt,
             );
+            #[cfg(feature = "view")]
+            if self.draws() {
+                self.view.field_sparks.walls[slot] = Some(evaluated.wall);
+            }
             let reset_contact = self.reset_zone_contact(slot, &env, position);
             let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
             let cage = oag_gameplay::cage::pass(

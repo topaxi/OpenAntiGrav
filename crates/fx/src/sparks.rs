@@ -104,9 +104,41 @@ pub fn severity(impact_speed: f32) -> f32 {
     clamped_intensity(impact_speed) * SEVERITY_SLOPE + SEVERITY_FLOOR
 }
 
+/// Under this the attached spark's strength is cut to zero (`0x002d9cf0`..`0x002d9d00`).
+pub const ATTACHED_CUTOFF: f32 = 0.1;
+
+/// The strength of Wipeout HD's attached collision spark for a craft moving at `speed` that
+/// takes a contact of `impulse`: `min(speed * 0.0125, 1) + min(impulse * 0.0125, 1)`, none under
+/// [`ATTACHED_CUTOFF`] (`ShipCollisionFx_Trigger` kinds 0 and 3, `0x002d9c7c`..`0x002d9d00`;
+/// `docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`, "kind 0 and kind 3"). Pulse's
+/// burst keeps [`severity`].
+///
+/// The result goes where [`severity`]'s does, the `scale` of [`crate::psys::System::ignite`].
+/// That the original's scale block slot 5 is that field is **chosen, not measured**.
+#[must_use]
+pub fn attached_strength(speed: f32, impulse: f32) -> f32 {
+    let x = clamped_intensity(speed) + clamped_intensity(impulse);
+    if x < ATTACHED_CUTOFF { 0.0 } else { x }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_attached_strength_is_cut_under_a_tenth_and_both_terms_saturate() {
+        assert_eq!(attached_strength(0.0, 0.0), 0.0);
+        assert_eq!(
+            attached_strength(4.0, 3.0),
+            0.0,
+            "0.05 + 0.0375 is under 0.1"
+        );
+        assert_eq!(attached_strength(8.0, 0.0), 0.1, "exactly the cutoff stays");
+        assert_eq!(attached_strength(40.0, 40.0), 1.0);
+        assert_eq!(attached_strength(1e6, 1e6), 2.0);
+        assert_eq!(attached_strength(1e6, 0.0), 1.0);
+        assert_eq!(attached_strength(-5.0, 80.0), 1.0);
+    }
 
     #[test]
     fn severity_is_floored_and_saturates() {

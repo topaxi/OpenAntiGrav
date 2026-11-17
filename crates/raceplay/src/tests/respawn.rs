@@ -463,7 +463,7 @@ fn spark_setup(blob: &[u8]) -> Setup {
     setup
 }
 
-fn push_toward_wall(race: &mut Race) {
+pub(crate) fn push_toward_wall(race: &mut Race) {
     let body = &mut race.sim.world.ships[0].physics.body;
     body.position = Vec3::new(20.0, -39.7, 0.0);
     body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);

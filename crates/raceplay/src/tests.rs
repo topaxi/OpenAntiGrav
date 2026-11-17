@@ -76,6 +76,7 @@ mod extension_sounds;
 mod extension_view;
 mod extensions;
 mod field;
+mod field_sparks;
 mod hash;
 mod hd_effect_sprites;
 mod hd_plasma_effects;

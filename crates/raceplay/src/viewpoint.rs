@@ -412,6 +412,16 @@ impl Race {
         self.view.viewpoints.drawing.set(extra);
     }
 
+    /// The eye of every extra view, from the camera of the last tick.
+    pub(super) fn viewpoint_eyes(&self) -> impl Iterator<Item = Vec3> + '_ {
+        self.view
+            .viewpoints
+            .cams
+            .iter()
+            .flatten()
+            .map(|cam| cam.current.inverse().w_axis.truncate())
+    }
+
     /// The player's own view again. See [`Self::set_viewpoint`].
     pub fn reset_viewpoint(&self) {
         self.view.viewpoints.drawing.set(None);

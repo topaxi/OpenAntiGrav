@@ -29,6 +29,41 @@ pub(super) struct Touch<'a> {
     pub(super) pair: Option<PairContact>,
 }
 
+/// What an attached spark does this tick, from what touched its craft: the one rule the seat's
+/// own spark and an opponent's share (`Ship_UpdateEntity`, `0x000ebf8c`..`0x000ebfb8`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Attach {
+    /// A wall record restarts it.
+    StartWall,
+    /// A craft-to-craft record restarts it.
+    StartPair,
+    /// Nothing asked for it this tick and it was running: it stops.
+    Release,
+    /// Left as it is.
+    Hold,
+}
+
+/// The rule: a wall record (`wall_impact`, with a resolved contact) or, failing that, a pair
+/// record starts an attached spark that is not running and is not under a Shield; the first tick
+/// with neither stops a running one. A Shield does not stop a running spark here, only its start.
+pub(super) fn attach_rule(
+    attached: bool,
+    shielded: bool,
+    wall_impact: bool,
+    wall_touching: bool,
+    pair: bool,
+) -> Attach {
+    if !attached && !shielded && wall_impact && wall_touching {
+        Attach::StartWall
+    } else if !attached && !shielded && pair {
+        Attach::StartPair
+    } else if attached && !wall_touching && !pair {
+        Attach::Release
+    } else {
+        Attach::Hold
+    }
+}
+
 /// The effects one seat's wall hits raise.
 #[derive(Debug)]
 pub(super) struct ContactFx {
@@ -172,32 +207,37 @@ impl ContactFx {
         // the whole design: sparks are the hull being hurt and the hull is not
         // being hurt. See `docs/.../shield-pickup.md`.
         let shielded = ship.physics.shield_pickup_timer > 0.0;
-        let can_fire = !shielded
-            && if attached_effect {
-                // Ignite once per contact, not once per cooldown: re-arming
-                // would leave a chattering scrape with no sparks for up to
-                // `COLLISION_COOLDOWN` at a time, which a burst never suffers
-                // because it has already finished by then.
-                evaluated.wall.impact && !self.attached
-            } else {
-                evaluated.wall.impact && self.cooldown <= 0.0
-            };
+        let rule = attached_effect.then(|| {
+            attach_rule(
+                self.attached,
+                shielded,
+                evaluated.wall.impact,
+                evaluated.wall.resolved.is_some(),
+                pair.is_some(),
+            )
+        });
         // A craft-to-craft contact restarts the attached spark exactly as a wall record does
         // (`docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`, "who owns the looping
         // spark"). Only where the effect is attached: a burst title's pair contact is thrown by
         // the hit-spark locators instead (`Race::throw_contact_spark`).
-        let pair_fire = if attached_effect && !shielded && !self.attached && !can_fire {
-            pair
-        } else {
-            None
+        //
+        // Ignite once per contact, not once per cooldown: re-arming would leave a chattering
+        // scrape with no sparks for up to `COLLISION_COOLDOWN` at a time, which a burst never
+        // suffers because it has already finished by then.
+        let can_fire = match rule {
+            Some(rule) => rule == Attach::StartWall,
+            None => !shielded && evaluated.wall.impact && self.cooldown <= 0.0,
         };
+        let velocity = ship.physics.body.linear_velocity;
+        let pair_fire = pair.filter(|_| rule == Some(Attach::StartPair));
         if let Some(pair) = pair_fire {
             let (anchor_model, up_model) = nearest_locator(collision_fx, model_matrix, pair.point);
             self.anchor = Some(anchor_model);
             self.anchor_up = Some(up_model);
             if let Some(effect) = effect.as_deref() {
-                self.sparks
-                    .ignite(effect, pair.point, sparks::severity(pair.impulse));
+                let strength = sparks::attached_strength(velocity.length(), pair.impulse);
+                self.sparks.ignite(effect, pair.point, strength);
+                self.sparks.carry(effect, velocity);
             }
             self.ignitions += 1;
             self.cooldown = oag_gameplay::cue::COLLISION_COOLDOWN;
@@ -225,11 +265,22 @@ impl ContactFx {
             self.anchor = Some(anchor_model);
             self.anchor_up = Some(up_model);
             if let Some(effect) = effect.as_deref() {
-                self.sparks.ignite(
-                    effect,
-                    surface,
-                    sparks::severity(evaluated.wall.impact_speed),
-                );
+                if attached_effect {
+                    // HD's law: the craft's speed and the record's impulse, and the craft's
+                    // velocity carried (`ship-collision-fx.md`, "kind 0 and kind 3").
+                    let strength = sparks::attached_strength(
+                        velocity.length(),
+                        evaluated.wall.impulse_largest,
+                    );
+                    self.sparks.ignite(effect, surface, strength);
+                    self.sparks.carry(effect, velocity);
+                } else {
+                    self.sparks.ignite(
+                        effect,
+                        surface,
+                        sparks::severity(evaluated.wall.impact_speed),
+                    );
+                }
             }
             // `Camera_ArmShake`'s own severity is the *raw* clamp
             // `Ship_DispatchCollisionFx` passes it, not the spark's
@@ -273,7 +324,7 @@ impl ContactFx {
         //
         // A pair contact counts as a contact: the original's flag is set by any record that
         // asks for the spark, a hull pair's included (`0x000ebf8c`..`0x000ebfb8`).
-        if self.attached && evaluated.wall.resolved.is_none() && pair.is_none() {
+        if rule == Some(Attach::Release) {
             self.sparks.stop();
             self.attached = false;
         }
@@ -300,7 +351,7 @@ impl ContactFx {
 
 /// The `Ship Collision Fx` locator nearest `point` as (position, `+Y`), model space; with none
 /// authored, `point` mapped into model space aimed along world up.
-fn nearest_locator(
+pub(super) fn nearest_locator(
     collision_fx: &[oag_livery::SparkAnchor],
     model_matrix: Mat4,
     point: Vec3,

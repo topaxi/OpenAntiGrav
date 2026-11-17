@@ -84,6 +84,9 @@ pub struct RaceView {
     /// Each craft's craft-to-craft contact of this tick, set by `resolve_craft_pairs` and read
     /// by the seat's [`ContactFx`](super::contact_fx::ContactFx) the same tick.
     pub(super) pair_contacts: [Option<super::contact_fx::PairContact>; MAX_SHIPS],
+    /// The attached collision spark of every craft no person flies, on a title that authors it
+    /// looping. See [`FieldSparks`](super::field_sparks::FieldSparks).
+    pub(super) field_sparks: super::field_sparks::FieldSparks,
     /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
     pub(super) camera_override: Option<CameraOverride>,
     /// The HUD's race state imposed on the primary readout. See [`crate::CaptureHud`].

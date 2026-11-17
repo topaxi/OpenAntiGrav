@@ -219,6 +219,8 @@ pub mod extension_sounds;
 pub mod extensions;
 mod field;
 #[cfg(feature = "view")]
+mod field_sparks;
+#[cfg(feature = "view")]
 pub mod finish_camera;
 mod finished_thrust;
 mod flip;
