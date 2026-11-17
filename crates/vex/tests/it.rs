@@ -16,6 +16,7 @@ mod wad_walk;
 
 mod alpha_test_reference_ground_truth;
 mod batch_position_gap_ground_truth;
+mod caustic_pass_ground_truth;
 mod cloud_ground_truth;
 mod collision_ground_truth;
 mod grid_camera_ground_truth;

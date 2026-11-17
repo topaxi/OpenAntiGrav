@@ -275,6 +275,7 @@ impl Scene {
             track: &self.track,
             sky: self.sky.as_ref(),
             track_shine: self.track_shine.as_ref().map(shine::TrackShine::parts),
+            track_caustic: self.caustic_frame(),
             sections: self.visibility.as_ref().map(|v| &v.sections),
             ghost: self.ghost.pipeline(),
             attachments: &self.attachment_views,
@@ -288,6 +289,9 @@ pub(super) struct Recorder<'a> {
     track: &'a Drawable,
     sky: Option<&'a Drawable>,
     track_shine: Option<(&'a Drawable, &'a [usize])>,
+    /// The caustic pass's frame this frame: its drawable, the circuit draws it redraws, and the
+    /// index of its first draw.
+    track_caustic: Option<(&'a Drawable, &'a [usize], usize)>,
     sections: Option<&'a DrawSections>,
     ghost: Option<&'a oag_render::ghost::Pipeline>,
     attachments: &'a motion::Attachments,
@@ -525,7 +529,28 @@ impl<'a> Recorder<'a> {
                             chunks,
                             frustum,
                         };
-                        stats.add(shine.draw_track_shine(render, block, self.track, sources, cull));
+                        stats.add(shine.draw_track_shine(
+                            render,
+                            block,
+                            self.track,
+                            (sources, 0),
+                            cull,
+                        ));
+                    }
+                    if let Some((caustic, sources, first)) = self.track_caustic {
+                        let cull = TrackCull {
+                            sections: self.sections,
+                            set,
+                            chunks,
+                            frustum,
+                        };
+                        stats.add(caustic.draw_track_shine(
+                            render,
+                            block,
+                            self.track,
+                            (sources, first),
+                            cull,
+                        ));
                     }
                 }
                 TrackStage::Blended => {

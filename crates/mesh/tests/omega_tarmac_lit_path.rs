@@ -102,6 +102,7 @@ fn model(mode: f32, markings: &[[u8; 4]], dirt: &[[u8; 4]], markings_u: f32, dir
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),
+        caustic: oag_mesh::mesh::caustic_pass::Caustic::default(),
         vertex_colour_is_light: false,
         stamps_glow: false,
         glow_by_texel: false,

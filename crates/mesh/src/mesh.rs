@@ -154,6 +154,10 @@ pub struct Model {
     /// authors none, which is every model but a Pulse hull. Only the `.vex`
     /// path fills it.
     pub shine_draws: Vec<DrawCall>,
+    /// The **caustic pass**'s draws: every batch whose header flags carry `0x04`, with what the
+    /// pass needs of its mesh node (`caustic_pass`). Only the `.vex` path fills it; empty for all
+    /// but Vostok Reef's PS2 circuit files.
+    pub caustic: caustic_pass::Caustic,
     /// Whether [`GpuVertex::colour`] holds a **baked light** rather than a tint.
     ///
     /// True only for a Wipeout HD `.rcsmodel`, whose fragment programs *add*
@@ -350,6 +354,7 @@ impl Model {
             material_variants: Vec::new(),
             material_anim: Vec::new(),
             shine_draws: Vec::new(),
+            caustic: caustic_pass::Caustic::default(),
 
             vertex_colour_is_light: false,
             stamps_glow: false,
@@ -411,6 +416,7 @@ pub use flap::Flap;
 mod batch_placement;
 pub use batch_placement::{BatchPlacement, batch_placements};
 
+pub mod caustic_pass;
 pub mod rcs;
 pub mod shine_pass;
 pub mod ship_skin;
@@ -698,6 +704,7 @@ fn build_class(
     let mut alpha_tested_draws: Vec<DrawCall> = Vec::new();
     let mut transparent_draws: Vec<DrawCall> = Vec::new();
     let mut shine_draws: Vec<DrawCall> = Vec::new();
+    let mut caustic_draws: Vec<caustic_pass::CausticDraw> = Vec::new();
     // Beside `textures` only for the extra pass's alpha-weighted slots - see
     // `shine_pass::masked_slot`.
     let mut lightmaps: TextureSlots = Vec::new();
@@ -983,6 +990,13 @@ fn build_class(
                             ..draw.clone()
                         });
                     }
+                    if batch.draws_in_caustic_pass() {
+                        caustic_draws.push(caustic_pass::CausticDraw {
+                            draw: draw.clone(),
+                            origin: [to_world[12], to_world[13], to_world[14]],
+                            scale: vex::mesh_caustic_scale(payload).unwrap_or(0),
+                        });
+                    }
                     out.push(draw);
                 }
             }
@@ -1044,6 +1058,10 @@ fn build_class(
         alpha_tested_draws,
         transparent_draws,
         shine_draws,
+        caustic: caustic_pass::Caustic {
+            draws: caustic_draws,
+            frames: Vec::new(),
+        },
         textures,
         lightmaps,
         pad_masks: Vec::new(),

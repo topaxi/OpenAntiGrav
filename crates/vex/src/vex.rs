@@ -706,7 +706,8 @@ pub use external::{external_mesh_hash, external_mesh_tex_transforms, geometry_is
 mod mesh_header;
 pub use mesh_header::{
     LAYER_DEFAULT, LAYER_EARLY, LAYER_EXHAUST, LAYER_REFLECTION_FIRST, LAYER_SCENE, Material,
-    list_b_layer, mesh_box_centre, mesh_first_vertex_type, mesh_layer, mesh_materials,
+    list_b_layer, mesh_box_centre, mesh_caustic_scale, mesh_first_vertex_type, mesh_layer,
+    mesh_materials,
 };
 
 mod attributes;

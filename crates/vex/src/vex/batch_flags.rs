@@ -80,6 +80,14 @@ impl Batch {
         }
     }
 
+    /// Whether the batch is drawn a second time in Pulse's **caustic pass**
+    /// (`Mesh_CompileBatchSet` sorts on `header_flags & 0x04`; `docs/ghidra/functions/psp-pulse-usa/caustic-pass.md`).
+    /// On the discs only Vostok Reef's PS2 circuit files carry it (`docs/rendering/water.md`).
+    #[must_use]
+    pub fn draws_in_caustic_pass(&self) -> bool {
+        self.header_flags & 0x04 != 0
+    }
+
     /// Whether this batch is alpha-tested rather than blended.
     #[must_use]
     pub fn is_alpha_tested(&self) -> bool {

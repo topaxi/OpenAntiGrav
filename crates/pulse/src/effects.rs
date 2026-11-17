@@ -116,6 +116,12 @@ pub const LOOKS: &Looks = &Looks {
         on: PSP,
         origin: Origin::Measured,
     },
+    // The caustic pass: the law is the PSP executable's (`caustic-pass.md`) and only the PS2
+    // disc's Vostok Reef carries a flagged batch, so the PS2 draws it by the PSP's law.
+    track_caustic: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     // GE lights, glow mask, quake: `scene-light.md`, `docs/rendering/glow-mask.md`.
     measured_draws: Rule {
         on: PSP,

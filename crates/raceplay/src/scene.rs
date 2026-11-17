@@ -31,6 +31,7 @@ mod queries;
 mod record;
 #[cfg(test)]
 pub(crate) use record::{TRACK_STAGES, TrackStage, track_blended};
+mod caustic;
 mod ribbons;
 mod scene_blocks;
 mod scratch;
@@ -222,6 +223,8 @@ pub struct Scene {
     wrecks: wreck::Wrecks,
     /// The circuit's own extra pass - see [`shine::TrackShine`].
     track_shine: Option<shine::TrackShine>,
+    /// Pulse's caustic pass over the circuit - see [`caustic::TrackCaustic`].
+    track_caustic: Option<caustic::TrackCaustic>,
     /// This frame's animation clock, in seconds: set where the frame reads it,
     /// read where the circuit's extra pass samples its animated nodes.
     anim_clock: std::cell::Cell<f32>,
@@ -731,6 +734,17 @@ impl Scene {
             zone_art,
             shadow_maps,
         )?;
+        let track_caustic = caustic::TrackCaustic::build(
+            device,
+            queue,
+            &track_model,
+            format,
+            store,
+            anisotropy,
+            sample_count,
+            zone_art,
+            shadow_maps,
+        )?;
         crate::stages::checkpoint()?;
         if let Some(unit) = oag_mesh::mesh::debug_tint_requested() {
             let colours = track_model.debug_tint_blended(unit);
@@ -1177,6 +1191,7 @@ impl Scene {
             shine,
             wrecks,
             track_shine,
+            track_caustic,
             anim_clock: std::cell::Cell::new(0.0),
             absorb_shell,
             rockets,

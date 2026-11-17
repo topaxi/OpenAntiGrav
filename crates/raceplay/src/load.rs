@@ -8,6 +8,8 @@ mod audio;
 mod cameras;
 #[cfg(feature = "view")]
 pub mod campaign;
+#[cfg(feature = "view")]
+mod caustic;
 mod closing_report;
 mod code_laws;
 #[cfg(feature = "view")]
@@ -1431,6 +1433,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
         track_shine
     };
+    #[cfg(feature = "view")]
+    caustic::attach(
+        &mut loaded,
+        &mut archives,
+        title,
+        vex_geometry && options.water != oag_display::display::Water::Off,
+    );
     #[cfg(feature = "view")]
     pulse_psp::finish(
         &mut loaded,

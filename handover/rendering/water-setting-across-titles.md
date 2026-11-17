@@ -13,7 +13,7 @@ difficulty: medium (55)
 2026-11-17, lane `water-re` (measure). The recovered laws, the census and the
 confidence scores are in [water.md](../../docs/rendering/water.md) and
 [caustic-pass.md](../../docs/ghidra/functions/psp-pulse-usa/caustic-pass.md).
-This thread is the plan. Steps 1 (HD's taps, without the planar term), 2 (the setting) and 10 (own-design `enhanced` on Pulse and Pure, with the row hidden where nothing changes) have landed.
+This thread is the plan. Steps 1 (HD's taps, without the planar term), 2 (the setting), 10 (own-design `enhanced` on Pulse and Pure, with the row hidden where nothing changes) and Pulse PS2's caustic pass have landed.
 
 ## The maintainer's request
 
@@ -149,7 +149,7 @@ map.**
   edge program is unread.
 - Pure's caustic frames on Vineta K are unread; the caustic bit is unread on
   Pure's version-4 batches.
-- Pulse's caustic pass is read on the PSP code only and reached only by PS2
+- Pulse's caustic pass is read on the PSP code only (PS2 executable checked, ported; a PCSX2 frame open) and reached only by PS2
   disc data or the PSP download pack.
 - Blue Ridge's embedded `Water` texture is bound by no batch; unread.
 
