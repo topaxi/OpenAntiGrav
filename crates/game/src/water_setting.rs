@@ -7,21 +7,11 @@
 
 use oag_display::display::Water;
 
-/// The title whose law `value` borrows, or `None` for `off` and `original`.
-fn lender(value: Water) -> Option<&'static oag_title::Title> {
-    match value {
-        Water::Off | Water::Original => None,
-        Water::Hd => Some(oag_hd::TITLE),
-        Water::Vita2048 => Some(oag_2048::TITLE),
-        Water::Omega => Some(oag_omega::TITLE),
-    }
-}
-
 /// Whether the water row offers `value` on `title`. `present` says whether a
 /// title's disc image (by [`oag_title::Title::slug`]) is on this machine.
 #[must_use]
 pub fn offered(value: Water, title: &oag_title::Title, present: &dyn Fn(&str) -> bool) -> bool {
-    match lender(value) {
+    match oag_source::title::water_lender(value) {
         None => true,
         Some(lender) => lender.slug() != title.slug() && present(&lender.slug()),
     }

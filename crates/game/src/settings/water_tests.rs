@@ -51,9 +51,7 @@ fn an_unknown_water_value_falls_back_to_original_and_keeps_its_neighbours() {
 
 #[test]
 fn the_menu_seed_carries_the_stored_water_value() {
-    let (title, platform) = known_profiles()
-        .find(|(title, _)| title.name == "Wipeout Pulse")
-        .expect("Pulse is a known title");
+    let (title, platform) = known_profiles().next().expect("a title is known");
     let mut settings = Settings::default();
     settings
         .render_profiles
