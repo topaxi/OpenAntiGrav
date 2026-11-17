@@ -21,6 +21,12 @@ Each line says what it would become once accepted.
   reconnected, the HUD shows a fake **Autopilot** pickup with a countdown of 2 to 3
   seconds while the craft is handed back (the exact length is to be chosen). A pickup
   the player held before the disconnect is held again, usable, once that autopilot ends.
+  Two rules (maintainer, 2026-11-17): the countdown is cancelled by a deliberate input from
+  the returning person (a thrust press, an airbrake past half, the stick past half, or absorb;
+  not in the first quarter second), at once, as a journaled input; and nothing about being
+  away may pay, so the AI holding an away seat flies at no more than half thrust, collects and
+  fires no pickup, and the hand-back flies at the same cap with no Autopilot boost (chosen, not
+  measured; `net_ground_truth::an_away_craft_loses_time_against_the_opponent_driver`).
 - **3 accepted**: one race, one process.
 - **4 accepted**: the wire is frozen at the first public deployment; builds race together on an equal simulation fingerprint.
 - **5 accepted**: one small flat-traffic VPS through V3.

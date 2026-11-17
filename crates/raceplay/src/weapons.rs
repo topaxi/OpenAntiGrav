@@ -58,6 +58,9 @@ pub(crate) const REAR_ANCHOR_BACK: f32 = 4.875;
 /// past a few thousand is.
 pub(super) const SIGHT_FAR: f32 = 10_000.0;
 
+/// How long into a hand-back an input is not yet a deliberate cancel.
+const HAND_BACK_GRACE_SECONDS: f32 = 0.25;
+
 impl Race {
     /// A beam locked from `owner` onto `target`, on this title's drain cadence
     /// (`oag_title::weapons::Weapons::leach_drain`): every tick on Pulse, once
@@ -143,6 +146,32 @@ impl Race {
         self.sim.may_use_pickup(slot)
     }
 
+    /// A returning person's deliberate input takes the craft back at once: a thrust press, an
+    /// airbrake pulled past half, or the stick past half either way. Absorb cancels too
+    /// (`spend_pickup_under_autopilot`). Ignored for the first quarter second, so the input the
+    /// person was already holding when the link came back does not end the countdown the same
+    /// tick. The input is in the journal, so both ends and a replay cancel on the same tick.
+    /// Thresholds **chosen, not measured**.
+    fn cancel_hand_back_on_input(&mut self, slot: usize, snapshot: &InputSnapshot) {
+        let ship = &mut self.sim.world.ships[slot];
+        if !ship.handback
+            || ship.autopilot_timer <= 0.0
+            || ship.autopilot_timer > crate::replay::HAND_BACK_SECONDS - HAND_BACK_GRACE_SECONDS
+        {
+            return;
+        }
+        let deliberate = snapshot
+            .buttons
+            .is_pressed(oag_gameplay::input::Button::Cross)
+            || snapshot.airbrake_left > 0.5
+            || snapshot.airbrake_right > 0.5
+            || snapshot.stick_x.abs() > 0.5;
+        if deliberate {
+            ship.autopilot_timer = 0.0;
+            ship.handback = false;
+        }
+    }
+
     /// Ends the use in progress of every craft that may not use its pickup: a mine
     /// cluster part laid, a Cannon magazine part fired, an armed Quake press.
     ///
@@ -185,6 +214,7 @@ impl Race {
     /// **While the craft's Autopilot runs, neither button reaches the pickup.**
     /// See [`Self::spend_pickup_under_autopilot`].
     pub(super) fn spend_pickup(&mut self, slot: usize, snapshot: &InputSnapshot) {
+        self.cancel_hand_back_on_input(slot, snapshot);
         let fire = snapshot
             .buttons
             .is_pressed(oag_gameplay::input::Button::Square);
