@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [all]
-updated: 2026-11-11
+updated: 2026-11-17
 summary: "Lobby: takeover re-send, spectate, chat, invite-only, quick match unbuilt; remote runs only Pulse; recorded pad stream owed (item 9)"
 ---
 
@@ -14,7 +14,7 @@ tested locally; nothing has been deployed or tried over a real network.
 
 ## Open
 
-1. ~~The remote test~~ (done 2026-10-16, "Measured over the internet" in the doc): UDP 60000-60010 reach the host with nothing to open, two clients raced a lean Pulse over the internet with 0 bad hashes and returned to the room. Open still: only Pulse and only `--max-ticks` endings were run remotely (HD/Omega/2048 and their memory on a 1 GB host are not; the finish line and all six titles ran on localhost, part 7), ~~and the host was IPv6-only, so a v4-only player path is untested~~ (2026-11-11: a client given the remote host's IPv4 address raced a two-person weapons race against the dual-stack `[::]` server, 0 bad hashes; `docs/networking/README.md`, "A shot's first appearance". The lobby itself was not run over IPv4, only the race server).
+1. ~~The remote test~~ (done 2026-10-16, "Measured over the internet" in the doc): UDP 60000-60010 reach the host with nothing to open, two clients raced a lean Pulse over the internet with 0 bad hashes and returned to the room. Open still: only Pulse and only `--max-ticks` endings were run remotely (HD/Omega/2048 are not; their memory was measured on localhost on 2026-11-17, 32 to 36 MB a race process for Pulse, HD and Omega, 2048 loaded only, `docs/networking/server-roadmap.md`, "Performance"; the finish line and all six titles ran on localhost, part 7), ~~and the host was IPv6-only, so a v4-only player path is untested~~ (2026-11-11: a client given the remote host's IPv4 address raced a two-person weapons race against the dual-stack `[::]` server, 0 bad hashes; `docs/networking/README.md`, "A shot's first appearance". The lobby itself was not run over IPv4, only the race server).
 2. ~~**The menu screens.**~~ Landed 2026-10-16 (`docs/networking/online-lobby.md` part 8). Landed 2026-10-16 (`online-menus-titles`): the owner's ROOM SETTINGS and MAX PLAYERS, a typed port and IPv6 literal, a live walk on Pure, HD, 2048 and Omega, the pointer on Pure and HD. Kick landed 2026-10-19 (item 6). Open: the Omega sub-pages that are not settings (friends, invite-only; the settings rows landed, item 4).
 3. ~~The build at join~~ (landed 2026-10-16, part 6 of the doc): a hello of another build is refused by name. Open still: `--online-create` hardcodes AI fill off, which only matters in modes without opponents.
 4. ~~**Settings Omega has and `RaceParams` lacks**~~ Landed 2026-10-19 (`docs/networking/online-lobby.md` part 9): laps, barrel rolls, Pilot Assist allowed (a level per seat) and the zone target travel through the wire, the lobby, `race::prepare` and the room screen on every title. Open: the eliminations target (not a kill count; an Eliminator room uses the mode's own), and a live pointer click on the new rows on each title.
@@ -57,6 +57,7 @@ one's slot-0 input stream alone and in a pack, on `pulse-psp-usa.chd`.
 
 ## Next Steps
 
+0. The reconnect, the takeover re-send, the refusal flake and the containers item are sized as versions in [the server roadmap thread](online-server-roadmap.md); pick them up there.
 
 1. ~~The ONLINE screens~~ landed; follow-ups are in item 2 above.
 2. The extraction omits Omega's guest roster (2048-era craft need a hull variant in `RaceParams`) and anything DLC; if the server grows either, the extractor's plan grows with it (`oag_net::extract::plan`).

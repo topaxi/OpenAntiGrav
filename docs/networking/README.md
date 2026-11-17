@@ -5,7 +5,8 @@
 > server"). Milestone M8 is otherwise ahead: no web client. Weapons are predicted simulation (ADR-0071). The transport is
 > [ADR-0070](../architecture/adr/0070-the-network-transport-is-webtransport.md); the
 > prediction is [ADR-0069](../architecture/adr/0069-remote-craft-are-predicted-in-one-timeline-and-corrected-on-a-threshold.md),
-> still Proposed.
+> still Proposed. What to build next on the server, in three versions with their hosting, is
+> a proposal of 2026-11-17: [the server roadmap](server-roadmap.md).
 
 ## Scope: two separate things
 
@@ -883,6 +884,10 @@ maintainer's decision (2026-10-13); a public server would present a CA-signed on
   client whose race starts at a different tick-0 hash.
 
 ## Hosting model
+
+**Measured since (2026-11-17):** a race process costs 32 to 36 MB and loads in under a second on
+Pulse, HD and Omega, so the per-room process below is affordable on a 1 GB host
+([the server roadmap](server-roadmap.md#performance-measured-2026-11-17-localhost)).
 
 **Chosen, not measured.** Direction from the maintainer discussion of 2026-10-14.
 `oag-server` already runs one race per process; the online lobby (item 3's "separate small lobby") was built as a first spike on 2026-10-16 ([online-lobby.md](online-lobby.md), part 5); the warm loop is not.
