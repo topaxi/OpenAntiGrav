@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-17
-summary: "Water setting row and load hook landed, every value draws the constant reading; HD sea taps next, then the planar reflection"
+summary: "Setting landed; HD seas draw their scrolled taps under original (no planar term); next the RPCS3 sea pair and planar reflection"
 categories: [rendering, frontend]
 size: XL (60)
 difficulty: medium (55)
@@ -13,7 +13,7 @@ difficulty: medium (55)
 2026-11-17, lane `water-re` (measure). The recovered laws, the census and the
 confidence scores are in [water.md](../../docs/rendering/water.md) and
 [caustic-pass.md](../../docs/ghidra/functions/psp-pulse-usa/caustic-pass.md).
-This thread is the plan. Step 2 (the setting) has landed; no law is drawn yet.
+This thread is the plan. Steps 1 (HD's taps, without the planar term) and 2 (the setting) have landed.
 
 ## The maintainer's request
 
@@ -139,20 +139,32 @@ it is one look or one per circuit.
 
 Ranked. Hours are for one member on an idle machine.
 
-1. **HD sea without the planar term** (`oag-wire`, opus, 6 to 8 h). Classify
-   `reflectplane_dc_seawater` by program facts; draw `(ambient + sun N.L) *
-   ColourConstant + specular` with both scrolled taps; give Amphiseum's `water`
-   and Vineta K's `water_test_2`/`water_noref` their taps (the scale and rate
-   table in water.md) and the sky-paraboloid reflection `window_glass` already
-   samples. Acceptance: a ground-truth check inside `hd_water_ground_truth`'s
-   existing walk pinning the classified chunk counts per circuit (Moa Therma
-   31, Ubermall 13 and 7, Chenghou 3, Modesto 5, Amphiseum 2, Vineta K 2 and
-   3); unit tests that fail if `0.05`, `1.15` or the opposite `u` sign is
-   dropped; two `--screenshot` frames 2 s apart on Moa Therma differ on the
-   sea and are identical off it; the `hd/moa-therma`-style pair at a sea pose
-   moves toward the RPCS3 frame; 2048 and Omega recorded as checked, applies,
-   not wired, or wired through `psp2` in the same lane (Omega work backports
-   to 2048).
+1. **LANDED (`water-hd`): HD sea without the planar term.** `mesh::rcs::water` classifies
+   the sea, Amphiseum's pool and Vineta K's two seas by program facts and, under a law
+   that draws the taps (`Reading::Taps`: `original` on HD, and `hd`), lays a
+   `PROGRAM_WATER` block (colour, reflection weight, specular, one entry per `Tap`), binds
+   the normal map third and `water_noref`'s second map fourth, and sets the chunk's frame
+   to `TangentFrame::Raw`; `shade.wesl` and `water.wesl` draw it. `off` keeps the old
+   reading to the vertex. Pinned: chunk counts per direction in `hd_water_ground_truth`
+   (Moa Therma 31/31, Ubermall 13/7, Chenghou 3/3, Modesto 5/5, Amphiseum 2/2, Vineta K
+   2+3 both ways), `mesh::rcs::water::tests` (`0.05`, `1.15`, the opposite `u`). Frames and
+   what a player sees: water.md, "What this engine draws today". **Still open from it:**
+   - **The RPCS3 pair at a sea pose.** No HD compare pair frames water and the October
+     Moa Therma state no longer loads. Rebuild it (`scripts/emu-hd-timetrial-state.sh
+     <lane> ...` for Moa Therma, recipes in emulator-recipes.md), drive to a sea view
+     (camera `210,40,-380` over the `-z` sea is ours), `rpcs3-hd-pair.py`, then
+     `rerender` the pair with `graphics.water` `off` and `original` and quote a sea crop.
+   - **`is_drawn(Water::Hd)` is still false**, deliberately: `hd` is never offered on HD
+     (it is HD's `original`), and on Pulse, Pure, 2048 and Omega nothing draws the HD law
+     until lane 8, so flipping it would offer a choice that changes nothing. Lane 8 flips
+     it with the borrower's wiring.
+   - **Under `off`, the non-lightmapped seas add `DiffuseTexture1` as a glow** (a normal
+     map; `CIRCUIT_SURFACE_MAP_SAMPLERS` refuses only `DiffuseTexture`). Kept, since `off`
+     must stay today's look; the taps replace it.
+   - `water_noref`'s own glint (`sat(a * 0x697f57e3)`, power `0x2a2dc10b`): the generic
+     specular stands in.
+   - 2048 and Omega: checked, applies, not wired (water.md, "Lineage"): their seas draw
+     through `psp2`, which has no tap reader, and the literals are unread in GXP and GCN.
 2. **LANDED: the setting and `off`.** `oag_display::display::Water`;
    `graphics.water` in `RenderProfile`; the WATER row in `menu.toml`
    (`OAG_GRAPHICS_WATER`); `oag_game::water_setting` (`offered`, `resolve`,
@@ -167,8 +179,8 @@ Ranked. Hours are for one member on an idle machine.
    route (`capture.rs`) read no setting yet; 
    **Each choice is hidden until its law is drawn:** `mesh::rcs::water::is_drawn(law)`
    is the one flag; `water_setting::offered` also requires it, so today the row
-   holds `off` and `original` only, and `original` equals today's look until
-   lane 1. Lane 1 flips `Hd`, lane 5 `Vita2048`, lane 6 `Omega` (and adds the
+   holds `off` and `original` only; on HD `original` draws the taps. Lane 8 flips
+   `Hd` (lane 1 drew the law on HD only), lane 5 `Vita2048`, lane 6 `Omega` (and adds the
    `Reading` variant) when its law is drawn; the menu test
    `with_every_lender_present_only_drawn_laws_are_offered` then grows its list.
    A saved `hd`/`2048`/`omega` resolves to `original` until then.
