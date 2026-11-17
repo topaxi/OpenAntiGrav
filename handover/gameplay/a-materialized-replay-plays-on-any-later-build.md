@@ -1,5 +1,5 @@
 ---
-status: parked
+status: measure
 titles: [all]
 updated: 2026-11-17
 summary: "Forward-compatible replays: POSE VIEW plays hulls only; a materialized replay would add craft state, weapons, events, HUD and camera"
