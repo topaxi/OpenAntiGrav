@@ -552,10 +552,10 @@ pub(super) fn water(
                 bound.second_maps[slot] = second;
                 // The programs build their frame from the chunk's own tangent and
                 // `B = cross(N, T) * w` (vertex block 3, `MUL o[TC0].xyz, N x T, v[2].w`).
-                if let Some(frame) = material_tangent.get_mut(slot) {
-                    if !frame.carried() {
-                        *frame = TangentFrame::Raw;
-                    }
+                if let Some(frame) = material_tangent.get_mut(slot)
+                    && !frame.carried()
+                {
+                    *frame = TangentFrame::Raw;
                 }
                 report.water_taps_drawn += 1;
                 continue;
