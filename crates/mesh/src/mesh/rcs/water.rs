@@ -327,11 +327,20 @@ fn taps_of(
     }
 }
 
-/// The consecutive glow-table entries of one tapped water slot.
+/// The three consecutive glow-table entries of one tapped water slot, kept to three because
+/// the table is shared with every other family and a circuit's weapon pads copy an entry
+/// each after it (`pads::each_node_its_own_glow`).
+///
+/// - The sea and the pool: the header (`ColourConstant`, the reflection weight, the specular
+///   power), then one entry per [`Tap`] (`tint` the `u` and `v` scale and the `u` scroll,
+///   `offset` the `v` scroll, `scale` the weight); the sea's `SpecularColour` rides the two
+///   tap entries' `program` lanes (`r`, `g`, then `b`).
+/// - Vineta K: the header's `tint` is the three tap weights, then the three taps' scales
+///   (one per axis pair, the program scales both axes alike) and their scrolls.
 ///
 /// `water_noref`'s reflection weight differs by variant: the lightmapped block (`@0x3870`,
 /// declares the lightmap) multiplies by the second map's alpha `a`, the other (`@0x24b0`)
-/// by `0.2 a + 0.4`; `offset` 0 and 1 say which.
+/// by `0.2 a + 0.4`; the header's `offset` 0 and 1 say which.
 fn entries(
     material: &rcsmodel::Material,
     family: Family,
@@ -339,46 +348,75 @@ fn entries(
     lightmapped: bool,
 ) -> Option<Vec<Emissive>> {
     let rgb = |v: [f32; 4]| [v[0], v[1], v[2]];
-    let (colour, reflectivity, power, specular) = match family {
-        Family::Sea => (
-            rgb(parameter(material, COLOUR_CONSTANT)?),
-            0.0,
-            parameter(material, SPECULAR_POWER)?[0],
-            rgb(parameter(material, SPECULAR_COLOUR)?),
-        ),
-        Family::Sky => (
-            rgb(parameter(material, COLOUR_CONSTANT)?),
-            parameter(material, REFLECTIVITY)?[0],
-            0.0,
-            [0.0; 3],
-        ),
-        Family::LitColour => ([0.0; 3], 1.0, 0.0, [0.0; 3]),
-        Family::Glint => ([0.0; 3], f32::from(u8::from(!lightmapped)), 0.0, [0.0; 3]),
-    };
-    let mut out = vec![
-        Emissive {
-            tint: colour,
-            offset: reflectivity,
-            scale: power,
-            rate: 0.0,
-            program: [PROGRAM_WATER, family.kind()],
-        },
-        Emissive {
-            tint: specular,
-            offset: f32::from(u8::try_from(taps.len()).ok()?),
-            scale: 0.0,
-            rate: 0.0,
-            program: [0.0; 2],
-        },
-    ];
-    out.extend(taps.iter().map(|tap| Emissive {
-        tint: [tap.scale[0], tap.scale[1], tap.scroll[0]],
-        offset: tap.scroll[1],
-        scale: tap.weight,
+    let header = |tint: [f32; 3], offset: f32, scale: f32| Emissive {
+        tint,
+        offset,
+        scale,
         rate: 0.0,
-        program: [0.0; 2],
-    }));
-    Some(out)
+        program: [PROGRAM_WATER, family.kind()],
+    };
+    match family {
+        Family::Sea | Family::Sky => {
+            let [first, second] = taps else {
+                return None;
+            };
+            let (head, specular) = match family {
+                Family::Sea => (
+                    header(
+                        rgb(parameter(material, COLOUR_CONSTANT)?),
+                        0.0,
+                        parameter(material, SPECULAR_POWER)?[0],
+                    ),
+                    rgb(parameter(material, SPECULAR_COLOUR)?),
+                ),
+                _ => (
+                    header(
+                        rgb(parameter(material, COLOUR_CONSTANT)?),
+                        parameter(material, REFLECTIVITY)?[0],
+                        0.0,
+                    ),
+                    [0.0; 3],
+                ),
+            };
+            let tap = |tap: &Tap, program: [f32; 2]| Emissive {
+                tint: [tap.scale[0], tap.scale[1], tap.scroll[0]],
+                offset: tap.scroll[1],
+                scale: tap.weight,
+                rate: 0.0,
+                program,
+            };
+            Some(vec![
+                head,
+                tap(first, [specular[0], specular[1]]),
+                tap(second, [specular[2], 0.0]),
+            ])
+        }
+        Family::LitColour | Family::Glint => {
+            let [a, b, c] = taps else {
+                return None;
+            };
+            let uniform = |t: &Tap| t.scale[0] == t.scale[1] && t.scroll[0] == t.scroll[1];
+            if !(uniform(a) && uniform(b) && uniform(c)) {
+                return None;
+            }
+            let reflection = match family {
+                Family::Glint => f32::from(u8::from(!lightmapped)),
+                _ => 1.0,
+            };
+            let row = |tint: [f32; 3]| Emissive {
+                tint,
+                offset: 0.0,
+                scale: 0.0,
+                rate: 0.0,
+                program: [0.0; 2],
+            };
+            Some(vec![
+                header([a.weight, b.weight, c.weight], reflection, 0.0),
+                row([a.scale[0], b.scale[0], c.scale[0]]),
+                row([a.scroll[0], b.scroll[0], c.scroll[0]]),
+            ])
+        }
+    }
 }
 
 /// Lays `block` into the table as consecutive entries (sharing an identical block
@@ -677,15 +715,24 @@ mod tests {
             curve: None,
         };
         let block = entries(&material, Family::Sea, &Tap::sea(), true).expect("authored");
-        assert_eq!(block.len(), 4);
+        assert_eq!(block.len(), 3);
         assert_eq!(block[0].program, [PROGRAM_WATER, 1.0]);
         assert_eq!((block[0].tint, block[0].scale), ([0.08, 0.12, 0.13], 75.0));
-        assert_eq!((block[1].tint, block[1].offset), ([0.5, 0.5, 0.3], 2.0));
-        let second = &block[3];
+        assert_eq!((block[1].program, block[2].program[0]), ([0.5, 0.5], 0.3));
         assert_eq!(
-            (second.tint, second.offset),
-            ([-1.15, 1.15, 1.15 * 0.05], 0.0)
+            (block[2].tint, block[2].offset, block[2].scale),
+            ([-1.15, 1.15, 1.15 * 0.05], 0.0, 1.0)
         );
+        let vineta = [
+            Tap::vineta(1.0, 1.0, 0.5),
+            Tap::vineta(2.0, 2.0, 0.5),
+            Tap::vineta(4.0, 1.2914, 1.0),
+        ];
+        let block = entries(&material, Family::LitColour, &vineta, false).expect("three taps");
+        assert_eq!(block.len(), 3);
+        assert_eq!(block[0].tint, [0.5, 0.5, 1.0]);
+        assert_eq!(block[1].tint, [1.0, 2.0, 4.0]);
+        assert_eq!(block[2].tint, [0.05, 0.1, 0.05 * 1.2914]);
     }
 
     fn param(hash: u32, value: [f32; 4]) -> oag_rcs::rcsmodel::material::Parameter {

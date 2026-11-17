@@ -75,8 +75,8 @@ fn vineta_k_start_line_binds_its_light_bars_in_the_authored_azure() {
 
 /// The sea sheet (`water_test_2`, chunks 6 and 23 each way) carries render flag
 /// `0x10`: the original draws it only into its behind-the-glass target, so the
-/// main view leaves it out (`hd_behind_glass_ground_truth`). Its shading, lit
-/// vertex colour (`slots::ICE` with the water rate), is the reading for that
+/// main view leaves it out (`hd_behind_glass_ground_truth`). Its shading (lit
+/// vertex colour under `off`, its taps under `original`) is the reading for that
 /// target and reaches no main-view vertex.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
@@ -84,8 +84,8 @@ fn vineta_k_sea_sheet_is_behind_the_glass_not_in_the_main_view() {
     let Some((model, report)) = build("/data/environments/01_vineta_k/track.vex") else {
         return;
     };
-    // The material is still read (the count is per material); its chunks are not built.
-    assert_eq!(report.water_lit_colour, 1);
+    // The material is still read and classified (two chunks); its chunks are not built.
+    assert_eq!(report.water_chunks.lit_colour, 2);
     assert!(report.behind_glass > 0);
     assert!(
         model.vertices.iter().all(|v| v.slots & slots::ICE == 0),

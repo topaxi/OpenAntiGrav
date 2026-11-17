@@ -14,7 +14,7 @@ import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encode, encoded_out, linear_out};
 import package::shading_modes::{colour_is_light, light_rig, nova_prelit, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
-import package::water::{water_kind, water_normal, water_tap_uv};
+import package::water::{water_kind, water_normal, water_specular_colour, water_tap_uv};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
 import package::types::{VertexOutput};
 import package::zone::{zone_aniso, zone_base_term, zone_glow, zone_sample, zone_set};
@@ -1203,11 +1203,11 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             * select(vec3<f32>(1.0), in.colour.rgb, colour_factor)
             * select(1.0, 0.0, no_specular);
         // The sea's own specular: `sun * SpecularColour * sat(N.H)^SpecularPower * sat(8 N.L)`
-        // times the bake's sun mask (`@0x2d`..`@0x5b` of its lit block), the colour in the next
-        // entry and the power in `scale`. The pool and `water_test_2` have none; `water_noref`
+        // times the bake's sun mask (`@0x2d`..`@0x5b` of its lit block), the colour in the tap
+        // entries' `program` lanes and the power in `scale`. The pool and `water_test_2` have none; `water_noref`
         // keeps the generic glint.
         if water > 0.5 && water < 3.5 {
-            specular = scene.light.sun * emissive_tint(water_entry + 1u).rgb
+            specular = scene.light.sun * water_specular_colour(water_entry)
                 * (pow(ndh, row_scale.x) * ndl_spec * mask * rig_on * select(0.0, 1.0, water < 1.5));
         }
 
@@ -1283,7 +1283,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         if water > 1.5 {
             let r = reflect(-to_eye, n_lit);
             let sky = probe_tint(textureSampleLevel(sky_probe_tex, shadow_sampler, env_probe_uv(r), 0.0).rgb);
-            let gate = material_sample(MATERIAL_WAVE_MAP, in.texcoord + water_tap_uv(water_entry, 2u, in.texcoord)).a;
+            let gate = material_sample(MATERIAL_WAVE_MAP, in.texcoord + water_tap_uv(water_entry, water, 2u, in.texcoord)).a;
             let glint_weight = select(gate, 0.2 * gate + 0.4, row_tint.w > 0.5);
             let weight = select(select(in.colour.rgb, vec3<f32>(glint_weight), water > 3.5), vec3<f32>(row_tint.w), water < 2.5);
             sky_reflection = sky * weight;
