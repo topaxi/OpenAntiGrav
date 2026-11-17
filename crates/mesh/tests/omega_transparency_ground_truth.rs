@@ -558,9 +558,22 @@ fn the_2048_dlc_and_patch_circuits_bind_every_texture_they_name() {
     assert!(n >= 4, "the DLC circuits were found: {n}");
     only_by_design("2048 DLC and patch", &unbound);
     // The DLC circuits' seas are HD's `reflectplane_dc_seawater` and `dc_seawater`, two taps
-    // each: not 2048's one-tap law, so none is classified as it.
+    // each: not 2048's one-tap law, so none is classified as it. The patch re-ships Park, whose
+    // four `fc17` batches are the base circuit's.
+    let park = psp2::water::Census {
+        submeshes: 4,
+        drawn: 4,
+        fc17_drawn: 4,
+        ..Default::default()
+    };
     assert!(
-        seas.iter().all(|(_, sea)| *sea == Default::default()),
+        seas.iter().all(|(path, sea)| {
+            *sea == if path.contains("/environments/park/") {
+                park.clone()
+            } else {
+                Default::default()
+            }
+        }),
         "{seas:?}"
     );
 }
