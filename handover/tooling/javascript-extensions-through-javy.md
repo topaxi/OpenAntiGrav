@@ -1,7 +1,7 @@
 ---
 status: parked
 titles: [all]
-updated: 2026-11-16
+updated: 2026-11-17
 summary: "Wall Penalty in JS via Javy ported to main on javy-rebase: 1.37 MB, 111k-188k of 200k fuel (was 155k-228k); maintainer reviews before any merge"
 categories: [gameplay]
 size: M (40)
@@ -33,8 +33,11 @@ of the branch.
 The fuel headroom is the blocker. Options, none chosen:
 
 1. The script's top level runs again on every tick and is billed (a top-level `const` about 1,400
-   fuel, a `Uint8Array` about 5,400): a Javy build that evaluates the script inside the Wizer
-   snapshot, or a custom plugin (NOTES 1c), would remove that and QuickJS's 30k entry cost.
+   fuel, a `Uint8Array` about 5,400). **Measured and planned, 2026-11-17**: a guest of our own
+   (the script evaluated inside the snapshot, the I/O buffer mapped, no Javy) costs 421 fuel
+   for an empty tick function and 13,426 for Wall Penalty with nothing to do, with no host
+   change. The plan is `docs/architecture/wasm-extensions/javy-plugin-plan.md`; the thread
+   to build it is [javascript-runtime-fuel-floor.md](javascript-runtime-fuel-floor.md).
 2. A per-module fuel budget declared in `oag-mod.toml`.
 3. A compiled-module cache: fixes the 1 s to 2 s load only, unrelated to fuel.
 
@@ -42,4 +45,5 @@ The fuel headroom is the blocker. Options, none chosen:
 
 1. Maintainer reviews `javy-rebase` (engine and the `assets/mods/examples` branch of the same
    name) and reopens or drops the thread.
-2. If reopened: measure option 1 before building 2 or 3.
+2. If reopened: build option 1 from its plan before deciding on 2 or 3; with the floor gone,
+   option 2 may not be needed.

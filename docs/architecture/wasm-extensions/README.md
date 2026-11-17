@@ -12,6 +12,7 @@ and the maintainer's examples walked end to end. The engine half is beside it:
 `file:line`, and where the one guest call per tick sits) and
 [determinism-and-state.md](determinism-and-state.md) (floats, fuel, the state
 blob, the hash, replays, network play, web and iOS, the measurements).
+[javy-plugin-plan.md](javy-plugin-plan.md) is the plan for a JavaScript guest's fuel floor.
 Where this page and those two disagree, they own the engine facts and this page
 is to be corrected.
 
@@ -547,6 +548,13 @@ JavaScript mod room, **none made here (the maintainer's decision)**:
 4. **`wasm_simd(true)`** would let a stock Javy binary load. Fixed-width SIMD is deterministic and the
    engine canonicalises NaN, but section 4.1 disabled it to keep the subset small; the rebuilt
    plugin makes it unnecessary.
+
+**The floor since measured apart, and a plan to remove it (2026-11-17):**
+[javy-plugin-plan.md](javy-plugin-plan.md). A prototype guest that evaluates the script
+inside the snapshot and maps the I/O buffer into JavaScript costs 421 fuel for an empty tick
+function (29,842 here) and 13,426 for Wall Penalty with nothing to do (110,770 here), with no
+host change, and still equals the Rust module on the differential and ground-truth tests.
+Not built; the numbers in this section are the Javy build's.
 
 TypeScript typings of the ABI (`types/oag-abi.d.ts`: every offset, length and code as a literal type,
 and the event, craft, command and reply records) are generated from `crates/ext-abi/src/lib.rs` by
