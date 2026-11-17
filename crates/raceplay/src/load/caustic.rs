@@ -8,11 +8,17 @@ use oag_mesh::mesh::caustic_pass::{self, FRAMES};
 
 use super::Loaded;
 
-/// Reads one frame as a model texture: through `oag_pulse::read_image`, which finds the PS2
-/// disc's `.pct` under the `.mip` name.
+/// Reads one frame as a model texture: by its `.mip` name, then the PS2 disc's `.pct` rewrite of it
+/// (`Texture_FindOrLoad`).
 fn frame(archives: &mut oag_assets::Archives, index: usize) -> Result<Arc<ModelTexture>, String> {
     let name = caustic_pass::frame_name(index);
-    let blob = oag_pulse::read_image(archives, &name).map_err(|e| format!("{name}: {e}"))?;
+    let blob = archives
+        .read_name(&name)
+        .or_else(|first| {
+            oag_formats::wad::ps2_texture_name(&name)
+                .map_or(Err(first), |ps2| archives.read_name(&ps2))
+        })
+        .map_err(|e| format!("{name}: {e}"))?;
     let picture = oag_texture::decode::decode_sniffed(&blob).map_err(|e| format!("{name}: {e}"))?;
     Ok(Arc::new(ModelTexture {
         label: name,
