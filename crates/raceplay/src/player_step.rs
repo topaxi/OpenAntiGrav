@@ -46,13 +46,13 @@ impl Evaluations {
     }
 
     /// The primary slot's step: the craft the camera and the full-screen HUD
-    /// follow. Always present - the primary slot is stepped as a player whoever
-    /// the controllers say flies it.
+    /// follow. Present unless its person is away ([`oag_gameplay::Controller::Away`]), when the
+    /// driver flies it and no player step ran.
     #[must_use]
     pub fn primary(&self) -> &Evaluated {
         self.slots[self.primary]
             .as_ref()
-            .expect("the primary slot is always stepped as a player")
+            .expect("the primary slot is stepped as a player unless its person is away")
     }
 
     /// Every slot that was stepped, in slot order.

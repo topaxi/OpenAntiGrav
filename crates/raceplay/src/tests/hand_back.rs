@@ -192,3 +192,27 @@ fn a_deliberate_input_takes_the_craft_back_after_a_short_grace() {
     };
     assert!(!cancels(drift, 30), "inside the deadzone");
 }
+
+/// A one-person room whose only person goes away: the craft is flown by the driver below
+/// racing pace, not stepped as the player, and the view stays on it.
+#[test]
+fn a_lone_person_who_goes_away_is_not_stepped_as_the_player() {
+    let mut race = two_people(Some(0), true);
+    race.sim.world.controllers[1] = Controller::Ai;
+    assert!(race.sim.world.person_flown(0));
+    assert!(race.set_away(0));
+    assert_eq!(race.sim.world.controllers[0], Controller::Away);
+    assert_eq!(race.sim.world.primary_slot(), 0, "the view stays on their craft");
+    assert!(!race.sim.world.person_flown(0), "the driver flies it");
+    let mut held = PlayerInputs::none();
+    held.set(0, oag_gameplay::InputSnapshot::EMPTY);
+    for _ in 0..600 {
+        race.tick(&held);
+    }
+    assert!(
+        race.sim.world.ships[0].physics.body.position.x.abs() > 1.0,
+        "a driver moved the craft that no input was holding"
+    );
+    assert!(race.hand_back(0));
+    assert!(race.sim.world.person_flown(0), "the person flies it again");
+}
