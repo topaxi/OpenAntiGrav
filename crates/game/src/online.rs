@@ -19,9 +19,20 @@ use web_time::{Duration, Instant};
 
 use crate::net_play::Connect;
 
-/// What the lobby said that ends a race from outside it: the room closed under this person
-/// (its host left, or was banned). Shared with the race's [`crate::net_play::NetPlay`].
-pub type LobbyWord = Arc<Mutex<Option<String>>>;
+/// What passes between the thread that keeps the lobby link and the race
+/// ([`crate::net_play::NetPlay`]) in a `--online` run.
+#[derive(Debug, Default)]
+pub struct LobbyLine {
+    /// The lobby closed the room under this person (its host left, or was banned), and why:
+    /// said from outside the race, it ends the race.
+    pub closed: Mutex<Option<String>>,
+    /// This machine hosts the race and has not yet told the lobby how it ended: a process
+    /// that is about to exit waits a moment for this, so the room gets its board.
+    pub unreported: std::sync::atomic::AtomicBool,
+}
+
+/// A [`LobbyLine`] as its two ends hold it.
+pub type LobbyWord = Arc<LobbyLine>;
 
 /// This machine as the race host of a room it owns on a lobby: the listener the lobby probed,
 /// the thread that runs each race the lobby sends, and what the lobby is told about it
@@ -96,8 +107,10 @@ impl Hosting {
     }
 
     /// Every tick: a race the lobby sent is started, the lobby is told when it is up (and once a
-    /// second after, the sign of life it expects) and when it is over.
-    pub fn pump(&mut self, lobby: &mut LobbyClient) {
+    /// second after, the sign of life it expects) and when it is over. Whether an end was
+    /// reported in this call.
+    pub fn pump(&mut self, lobby: &mut LobbyClient) -> bool {
+        let mut reported = false;
         if let Some((room, job)) = lobby.take_launch() {
             log::debug!("online: hosting room {room}'s race: {:?}", job.params);
             let source = self.source.clone();
@@ -117,6 +130,7 @@ impl Hosting {
                     println!("online: the hosted race is over: {}", ended.reason);
                     lobby.host_over(room, &ended.reason, ended.board);
                     self.up = None;
+                    reported = true;
                 }
             }
         }
@@ -126,6 +140,7 @@ impl Hosting {
             lobby.host_up(*room);
             *told = Instant::now();
         }
+        reported
     }
 
     /// The host's player left the race: its seats are told and the race ends.
@@ -222,12 +237,14 @@ pub fn run(plan: &Plan) -> Result<Connect> {
             bail!("no race within {GIVE_UP:?}");
         }
         if let Some(hosting) = &mut hosting {
-            hosting.pump(&mut lobby);
+            let _ = hosting.pump(&mut lobby);
         }
         if let Some(handoff) = lobby.take_handoff() {
             let addr = race_addr(&plan.addr, &handoff, hosting.as_ref());
             println!("online: the race is on {addr}");
             let word = LobbyWord::default();
+            word.unreported
+                .store(hosting.is_some(), std::sync::atomic::Ordering::Relaxed);
             keep_lobby_open(lobby, hosting, word.clone());
             return Ok(Connect {
                 addr,
@@ -336,12 +353,16 @@ fn keep_lobby_open(mut lobby: LobbyClient, mut hosting: Option<Hosting>, word: L
         .spawn(move || {
             let mut note = String::new();
             while lobby.poll().is_ok() {
-                if let Some(hosting) = &mut hosting {
-                    hosting.pump(&mut lobby);
+                if let Some(hosting) = &mut hosting
+                    && hosting.pump(&mut lobby)
+                {
+                    word.unreported
+                        .store(false, std::sync::atomic::Ordering::Relaxed);
                 }
                 if let Some(reason) = lobby.left.take() {
                     println!("online: the lobby closed the room: {reason}");
                     *word
+                        .closed
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(reason);
                 }

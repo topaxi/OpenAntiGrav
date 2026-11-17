@@ -1,0 +1,175 @@
+//! A race hosted by a player's game and listed by the lobby: real processes, a real
+//! `oag-server lobby` and a real circuit on localhost (ADR-0092).
+//!
+//! One `oag-game --online --online-create --online-host --net-bot` makes a room whose race it
+//! runs itself; the lobby checks its signed offer and its port and lists the room; a second
+//! `oag-game --online` finds the room in the list, joins it and is handed the host's own
+//! address. The claims: both race Pulse's circuit 01 (one lap) to the finish with no bad hash
+//! and the lobby, which ran no race, is told the result; a host that is killed ends the race
+//! for the guest with the lobby's reason; a host whose key is on the lobby's ban file is
+//! refused with the ban's reason.
+//!
+//! The games are spawned by `net_rejoin_ground_truth::Lab` (`CARGO_BIN_EXE_oag-game`), so this
+//! module is in nextest's `gpu-vram` group like that one.
+
+use std::path::Path;
+
+use crate::net_rejoin_ground_truth::{Lab, Proc, image};
+
+const HOST_ARGS: [&str; 3] = ["--online-host", "--online-host-port", "0"];
+
+/// The hosting port `who`'s log names.
+fn hosting_port(lab: &Lab, who: &str) -> Option<String> {
+    let text = lab.read(who);
+    let rest = text.split("online: hosting on UDP port ").nth(1)?;
+    Some(rest.split(',').next()?.trim().to_string())
+}
+
+/// `a` hosts a room and `b` joins it from the list; both are racing.
+fn hosted_race(lab: &Lab) -> (Proc, Proc) {
+    let a = lab.client_with("a", true, &HOST_ARGS);
+    lab.wait("the lobby to list the hosted room", 90, |lab| {
+        lab.read("a")
+            .contains("online: room 1 (player-hosted): 1 in it")
+    });
+    let b = lab.client_with("b", false, &[]);
+    lab.wait("both to be racing", 180, |lab| {
+        ["a", "b"]
+            .iter()
+            .all(|who| lab.progress(who).is_some_and(|(tick, _, _)| tick >= 300))
+    });
+    (a, b)
+}
+
+#[test]
+#[ignore = "needs a disc image"]
+fn a_player_hosts_a_listed_room_and_a_guest_races_them_to_the_finish() {
+    let Some(image) = image() else {
+        return;
+    };
+    let lab = Lab::new("hosted", image, 20_000);
+    let (mut a, mut b) = hosted_race(&lab);
+    // The guest found the room in the lobby's list and was handed the host's own listener,
+    // which is not a port of the lobby's.
+    let port = hosting_port(&lab, "a").expect("the host says its port");
+    let guest = lab.read("b");
+    assert!(
+        guest.contains("online: room 1 (player-hosted): 2 in it"),
+        "the guest is in the marked room"
+    );
+    assert!(
+        guest.contains(&format!("online: the race is on 127.0.0.1:{port}")),
+        "the guest dials the host: {port}"
+    );
+    let lobby = lab.read("lobby");
+    assert!(
+        lobby.contains("host-log: key "),
+        "the registration is logged"
+    );
+    assert!(
+        lobby.contains("host-log: room 1 races on its host's machine"),
+        "the launch went to the host"
+    );
+    assert!(
+        !lobby.contains("lobby: room 1 races:"),
+        "the lobby ran no race of its own"
+    );
+    for (who, game) in [("a", &mut a), ("b", &mut b)] {
+        let status = game.finish(200);
+        assert!(
+            status.is_some_and(|s| s.success()),
+            "{who} ran to the end:\n{}",
+            tail(&lab.read(who))
+        );
+        let (_, ok, bad) = lab.progress(who).expect("its hashes are logged");
+        assert_eq!((bad, ok > 1500), (0, true), "{who}: ok {ok} bad {bad}");
+        assert!(
+            lab.read(who)
+                .contains("the server's board matches this client's"),
+            "{who}'s board is the host's"
+        );
+    }
+    lab.wait("the lobby to be told the result", 20, |lab| {
+        lab.read("lobby")
+            .contains("host-log: room 1's hosted race is over: every person has finished")
+    });
+}
+
+#[test]
+#[ignore = "needs a disc image"]
+fn a_killed_host_ends_the_race_for_the_guest_with_the_lobbys_reason() {
+    let Some(image) = image() else {
+        return;
+    };
+    let lab = Lab::new("hosted-killed", image, 20_000);
+    let (mut a, mut b) = hosted_race(&lab);
+    a.kill();
+    let status = b.finish(60);
+    let guest = lab.read("b");
+    assert!(
+        status.is_some(),
+        "the guest's race ended by itself:\n{}",
+        tail(&guest)
+    );
+    assert!(
+        guest.contains(
+            "online: the lobby closed the room: the host left: a player-hosted race ends with \
+             its host"
+        ),
+        "the guest is told why:\n{}",
+        tail(&guest)
+    );
+    let (_, _, bad) = lab.progress("b").expect("its hashes are logged");
+    assert_eq!(bad, 0, "the guest's hashes up to the end");
+    assert!(
+        lab.read("lobby")
+            .contains("host-log: room 1's host went quiet"),
+        "the lobby noticed the silence"
+    );
+}
+
+#[test]
+#[ignore = "needs a disc image"]
+fn a_host_whose_profile_key_is_on_the_ban_file_is_refused_with_the_reason() {
+    let Some(image) = image() else {
+        return;
+    };
+    // The key the game will find in its profile, made the way the game makes it.
+    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("hosted-banned-key");
+    let _ = std::fs::remove_dir_all(&scratch);
+    let key = oag_game::identity::load_or_create_at(&scratch.join("identity.toml"))
+        .expect("a key is made");
+    let bans = scratch.join("bans.txt");
+    let hex: String = key.public().iter().map(|b| format!("{b:02x}")).collect();
+    std::fs::write(&bans, format!("key {hex} altered a race\n")).expect("the ban file");
+    let bans = bans.display().to_string();
+    let lab = Lab::with_lobby_args("hosted-banned", image, 20_000, &["--ban-file", &bans]);
+    let profile = lab.dir.join("a").join("config").join("oag");
+    std::fs::create_dir_all(&profile).expect("the profile");
+    std::fs::copy(scratch.join("identity.toml"), profile.join("identity.toml")).expect("the key");
+    let mut a = lab.client_with("a", true, &HOST_ARGS);
+    let status = a.finish(120);
+    let log = lab.read("a");
+    assert!(
+        status.is_some_and(|s| !s.success()),
+        "the banned host does not get a room:\n{}",
+        tail(&log)
+    );
+    assert!(
+        log.contains("Banned") && log.contains("you may not host on this lobby: altered a race"),
+        "it is told why:\n{}",
+        tail(&log)
+    );
+    assert!(
+        !lab.read("lobby").contains("hosts room"),
+        "nothing was listed"
+    );
+}
+
+fn tail(log: &str) -> &str {
+    let from = log.len().saturating_sub(2000);
+    let from = (from..log.len())
+        .find(|&i| log.is_char_boundary(i))
+        .unwrap_or(log.len());
+    &log[from..]
+}

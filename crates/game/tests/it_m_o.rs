@@ -41,6 +41,7 @@ mod mp_time_trial_ground_truth;
 mod music_order_row;
 mod music_pool_ground_truth;
 mod music_resume_ground_truth;
+mod net_hosted_ground_truth;
 mod net_play_rejoin;
 mod net_rejoin_ground_truth;
 mod now_playing_ground_truth;

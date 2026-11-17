@@ -879,7 +879,7 @@ impl Session {
                 lost = Some(format!("{}: {why}", self.online_say("OAG_ONLINE_LOST", "THE LOBBY CLOSED")));
             }
             if let Some(hosting) = &mut online.hosting {
-                hosting.pump(lobby);
+                let _ = hosting.pump(lobby);
             }
             // The room closed under a race that is being flown (its host left, or was banned):
             // the race ends with the lobby's reason, and the menus show it when they reopen.

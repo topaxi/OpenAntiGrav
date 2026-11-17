@@ -100,6 +100,11 @@ pub struct NetPlay {
     lobby: RefCell<Option<crate::online::LobbyWord>>,
 }
 
+/// How long an exiting `--online` host waits to tell the lobby how its race ended. Chosen: the
+/// host thread lets the last ticks reach its seats for a second before it reports.
+#[cfg(not(target_arch = "wasm32"))]
+const REPORT_WAIT: Duration = Duration::from_secs(4);
+
 /// How long after the lobby says the room closed the race is ended here if its host has not
 /// ended it itself. Chosen: a host that leaves in order sends its own end and the final ticks
 /// first, and those are the better ending.
@@ -451,6 +456,7 @@ impl NetPlay {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(word) = self.lobby.borrow().as_ref()
             && let Some(reason) = word
+                .closed
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .take()
@@ -835,6 +841,21 @@ impl Drop for NetPlay {
     fn drop(&mut self) {
         if self.over().is_none() {
             self.leave("the client closed");
+        }
+        // A `--online` run that hosted the race is about to exit: the lobby is told how the
+        // race ended first, so the room gets its board instead of losing its host.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(word) = self.lobby.borrow().as_ref() {
+            use std::sync::atomic::Ordering;
+            let asked = Instant::now();
+            let hosted = word.unreported.load(Ordering::Relaxed);
+            while word.unreported.load(Ordering::Relaxed) && asked.elapsed() < REPORT_WAIT {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            if hosted {
+                // The report is queued on the lobby link; give it the moment to leave.
+                std::thread::sleep(Duration::from_millis(300));
+            }
         }
         // A game that is going down on a panic keeps the record: it is what the next one
         // rejoins from.
