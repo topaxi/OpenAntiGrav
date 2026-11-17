@@ -68,8 +68,23 @@ Compression (nothing in a `.oagr` is compressed today; the screenshot chunk in
   more worth having. `ruzstd` is already in the workspace (texture packs), so zstd adds no
   dependency.
 
+- **A file that fails at tick 0 never reaches POSE VIEW.** `Viewer::open`
+  (`crates/raceplay/src/viewer.rs:92`) returns `OpenError` on a tick-zero mismatch
+  (`Timeline::open`), so the pose-track fallback ADR-0087 decision 4 describes only runs for a file
+  whose verified prefix is at least one tick. After any state-hash layout change (2026-11-16,
+  `e29fef265`) every older file is refused outright, pose track or not. Decided 2026-11-17
+  (maintainer): **yes, open such a file in POSE VIEW from tick 0, if it can recover**: the header
+  still builds the race (track, craft, seats) on this build and the file carries a `POSE` chunk. A
+  file without one, or whose header no longer loads, is refused as today, naming why.
+
 ## Next Steps
 
+0. POSE VIEW from tick 0 (sonnet `oag-wire`, 1 to 2 h, wire lane): a tick-zero mismatch with a
+   `POSE` chunk and a loadable header opens in POSE VIEW with the build-mismatch notice ADR-0087
+   names; without one, the refusal stays and says which is missing. Acceptance: a test that rewrites
+   a fresh recording's tick-0 hash (with and without its `POSE` chunk, `file::tests` already renames
+   chunks and redoes the checksum) and asserts the viewer opens in POSE VIEW and seeks, or refuses
+   by name.
 1. Compression measurement (sonnet `oag-docs` or `oag-perf`, about 30 min, measure lane): zstd at
    a few levels (3, 9, 19), gzip -9 and xz -9 over each chunk of a real `.oagr` (`INPT`, `HASH`,
    `POSE`, the whole file), on all five titles, at Venom and Phantom, from the cost sweep's Autopilot
