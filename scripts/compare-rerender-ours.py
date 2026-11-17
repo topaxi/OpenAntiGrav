@@ -106,6 +106,11 @@ def rerender(pj, binary):
             and orig.get("race_clock_s") is not None and rec["profile"] == "pulse-psp":
         flags[flags.index("--world-clock-offset") + 1] = "%.3f" % (orig["world_clock_offset_s"] + orig["race_clock_s"])
     flags = ps2_world_clock_flags(rec, flags)
+    # Any pair whose record holds the offset it was made with (`ours.world_clock_offset_s`) but whose flags lost it keeps the
+    # original's scenery phase on a re-render.
+    recorded = (rec.get("ours") or {}).get("world_clock_offset_s")
+    if recorded is not None and "--world-clock-offset" not in flags:
+        flags += ["--world-clock-offset", "%.3f" % recorded]
     # A race shot's pickup row (the running Autopilot's icon and countdown): pairs recorded before 2026-10-26 draw none.
     # The countdown is the timer the pair script read at the stop (`autopilot_timer_at_stop_s`); it runs when the
     # newer `held_pickup.autopilot_running` says so or, in an older record, the provenance's `autopilot.armed`.
