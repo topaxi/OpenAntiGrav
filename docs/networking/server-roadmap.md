@@ -14,6 +14,20 @@ Background: [networking](README.md), [the online lobby](online-lobby.md).
 
 Each line says what it would become once accepted.
 
+**Answered 2026-11-17 (maintainer):**
+
+- **1 accepted**: the input journal is the session.
+- **2 accepted, with the hand-back shown as a pickup**: once a returning player is
+  reconnected, the HUD shows a fake **Autopilot** pickup with a countdown of 2 to 3
+  seconds while the craft is handed back (the exact length is to be chosen). A pickup
+  the player held before the disconnect is held again, usable, once that autopilot ends.
+- **3 accepted**: one race, one process.
+- **4 open**: explained to the maintainer, answer pending.
+- **5 accepted**: one small flat-traffic VPS through V3.
+- **6 accepted, a CA certificate for a host name**, probably from Let's Encrypt.
+- **7 open**: explained to the maintainer, answer pending.
+- **8 accepted provisionally**: explained, confirmation pending.
+
 1. **The input journal is the session.** A race is its `RaceParams`, its seat table and
    the append-only list of confirmed ticks. Whoever holds those can resume it: a player
    whose link dropped, a restarted race process, a spectator. No state ever crosses the
