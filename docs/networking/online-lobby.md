@@ -536,6 +536,43 @@ From here the round trip is about 10 ms.
   reader reports the close, and a poll reads the close before it drains the queue.
 - Everything was removed from the host afterwards (processes killed by pid, files deleted, listing checked).
 
+### Measured over the internet (2026-11-17)
+
+The same deploy and the same measurements as above, a month later, on `main` at `f442d0dc5` (which has the `net-v1`
+limits: a seat buffers under 120 future inputs, one resend answer a second, a silent race child stopped after 5 s).
+The remote host is the same kind (x86-64, 1 core, about 1 GB, shared with other services) and was reached by its **host
+name**, which resolves to the host's own IPv4 and IPv6 addresses (no CDN in between, `server-roadmap.md`, "The
+connection path and network floods"). The server was the musl build (zig 0.17.1 from the `ziglang` wheel as the C
+compiler) with the same lean Pulse (PSP, EU) extraction (184 MB), run as in the deploy steps with `--max-ticks 1800`.
+From here the round trip is about 10 ms.
+
+- **Race.** Six pairs of `oag-game --online --net-bot` clients (a lobby, a room, a 3 s countdown, a child on 60001, each
+  seat by token) through the host name on UDP 60000 and 60001: four pairs over **IPv6** (the client picks the AAAA
+  record first when this machine has IPv6, shown with `strace` as `sendto` to `AF_INET6`) and two over the host's
+  **IPv4 literal** (a name cannot be forced to IPv4 from here). **0 bad hashes in all twelve clients**, all six rooms
+  freed their slot at `--max-ticks reached` (the client prints "back in the room" in only some runs because it exits at
+  its own `--ticks`; the lobby log is the record). The lobby log has no warning, refusal or limit line over the six races.
+- **Network** (steady state from tick 300, per client): QUIC rtt 9.1 to 17.9 ms (mostly 10-11), loss 0.0 %, jitter 0.0 to
+  11 ms (a client with 7-11 ms in two of twelve, the rest 0 to 6), rx 50.1 KB/s and tx 8.1 to 10.3 KB/s, 0 to 6
+  corrections a minute (cumulated over a 30 s race, so coarse). The first second stalls as in October (confirm latency
+  about 0.9 s at tick 30). IPv4 and IPv6 rows are the same within the spread.
+- **Against October** (rtt 9.3-16.8 ms, rx 49 KB/s, tx 10 KB/s, 0-2 corrections a minute, loss 0.0 %): the same row for
+  row, so the limits cost nothing measurable on a well-behaved pair. rx is 2 % higher and tx slightly lower; the
+  corrections range is wider because the October figure was read from the periodic lines, not cumulated.
+- **Server cost** (2 people, no opponents, weapons on): the race child 8.1 to 9.0 MB resident and 11 to 15 % of the one
+  core averaged over the race (peaks of 26 to 43 % while it loads), the lobby 2.5 to 3.4 MB and 1 % (October: 9.5 MB,
+  15-20 %; 6 MB, 1-4 %). Sampled with `top` every 5 s on the host.
+- **A name behind the CDN proxy does not reach the game ports.** A client pointed at a CDN-proxied name on port 60000
+  prints `Error: connecting to <proxied name>:60000: no answer in 5s` after 5.1 and 5.4 s (two tries).
+- **Client build.** The clients were debug-profile builds with `debug-assertions` off. With them on, a client in any
+  online race panics at about tick 30 in `debug_assert_eq!(recording.base + recording.poses.len() as u64, tick + 1)`
+  (`crates/raceplay/src/replay/recording.rs`, the end of the lap recorder), both seats, on a local lobby on localhost too (12 vs 13
+  there, 33 vs 68 against the remote host): a hypothesis (not read out of the code, about 55 %) is that the recorder
+  assumes contiguous ticks and the online client, which stalls and replays ticks, does not give it that. Not a network
+  finding; the simulation hashes are unaffected (0 bad). A release build never evaluates the assertion.
+- Everything was removed from the host afterwards (the one lobby killed by pid, its directory and a stray pid file deleted,
+  the home listing checked).
+
 ### Tests
 
 - `wire::online` and `online::rooms` unit tests (round trips, every rule above).

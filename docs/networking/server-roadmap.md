@@ -609,17 +609,27 @@ A title's memory per room is not a trigger: no title measured needs more than 40
    there is harmless.
 5. **Matchmaking** (quick match) is a lobby rule and adds no machine.
 
-### The connection path and network floods (unverified, 2026-11-17)
+### The connection path and network floods (measured, 2026-11-17)
 
-The remote host's web side sits behind an HTTP CDN proxy. Which path the game's
-WebTransport traffic took in the 2026-10-16 internet test is **not verified**. That test
-reached UDP 60000-60010 "with nothing to open" and connected by certificate hash
-(`online-lobby.md`, "Measured over the internet"), which is the shape of a direct
-connection to the host's own address. An HTTP CDN proxy does not forward arbitrary UDP
-ports; forwarding them needs a UDP-capable proxy product, usually on an expensive plan
-(from memory, not looked up).
+The remote host's web side sits behind an HTTP CDN proxy. The game's WebTransport
+traffic does **not** go through it: it is a direct connection to the host's own address.
+Measured on 2026-11-17 (`online-lobby.md`, "Measured over the internet (2026-11-17)"):
 
-If the path is direct:
+- The host name the clients connect to resolves to the host's own IPv4 and IPv6
+  addresses, and neither is in the CDN's published ranges. The names of the web side
+  resolve into the CDN's ranges instead.
+- Six pairs of game clients raced a lobby on that name (four over IPv6, which the client
+  picks first when the machine has IPv6) and on the host's IPv4 address (two), with 0 bad
+  hashes. UDP 60000 and 60001 arrive on both families.
+- A client pointed at a CDN-proxied name (`<proxied name>:60000`) never connects: it prints
+  `Error: connecting to <proxied name>:60000: no answer in 5s`, twice, after 5.1 and 5.4 s. The
+  proxy does not forward UDP 60000-60010, as expected from an HTTP proxy.
+
+So the "path is direct" case below applies, and the per-address caps see real player
+addresses. Still open: whether the provider filters volumetric floods (not probed; a
+flood against a shared host was not sent).
+
+The consequences of a direct path:
 
 - **The host's own address is public.** Every player connects to it, so the CDN does not
   hide the host, and a volumetric flood against the game ports reaches it unfiltered.
@@ -631,10 +641,6 @@ If the path is direct:
   players; the VPS provider's own network filtering (often included); a UDP-capable proxy
   or game-traffic relay in front of the race ports. A relay costs latency and, behind it,
   the caps need the client's address passed through.
-
-**To verify at the next deployment** (nothing is deployed on 2026-11-17; one minute):
-resolve the host name the clients connect to and compare the addresses with the CDN's
-published ranges and the host's own address.
 
 ### Where to host: price first, then ease
 
