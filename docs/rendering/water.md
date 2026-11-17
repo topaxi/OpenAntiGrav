@@ -185,6 +185,15 @@ fragment: n1 = 2 tex(DiffuseTexture,  A).ag - 1
 exact `~crc32` preimages (the last three are in the engine's own parameter
 table, [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md)).
 
+**The frame and the light, read 2026-11-17 (`water-hd`, confidence 85).** The tangent is
+the chunk's own attribute `0xdbe5f417` (four unsigned bytes, decoded `2x - 1`), and the
+vertex block builds `B = cross(N, T) * w` with `w` raw (`MUL o[TC0].xyz, N x T, v[2].w`),
+the frame `oag_mesh` calls `TangentFrame::Raw`. Each tap's `z` is rebuilt as
+`sqrt(1 - x^2 - y^2)` (`RSQ`/`RCP`, `@0x0c`..`@0x1b`). The lightmapped variant (Moa
+Therma's slots, block `@0x3560`) lights by the bake (`pow(lightmap, 0x002c73e8) *
+0x8670f0be`) plus `sun * sat(N.L)` in place of `constantAmbientColour`, and its specular
+carries the bake's alpha as the sun mask, the generic HD lightmapped light.
+
 Authored values:
 
 | Circuit | `ColourConstant` | `Reflectivity` | `SpecularColour` | `SpecularPower` |
@@ -233,6 +242,16 @@ scroll (vertex block 3, confidence 85): with `s = 0.05 t`, three taps at
 | --- | --- | --- |
 | `water_test_2` | 1, 2, 4 | 1, 2, 1.2914 |
 | `water_noref` | 1.4, 2.14, 7.164 | 0.3, 0.2, 0.1 |
+
+Re-read 2026-11-17 (`water-hd`, `water_noref` vertex block 3 and fragment blocks
+`@0x3870`, `@0x24b0`; `water_test_2` block `@0x1d60`, confidence 85): the scroll adds
+`0.05 t * rate_i` to **both** axes of `uv * scale_i`; the three taps of `waves2` are decoded
+`2x - 1` on all three channels and summed as `t3 + (t1 + t2) / 2` (two `MAD /2`), then
+put through the same `T`, `B = cross(N, T) * w`, `N` frame as the sea. `water_noref` reads
+its second map (`0x65f5d93c`) at `uv` plus the third tap; its alpha `a` weights the sky
+reflection, `probeTint(sky) * a` in the lightmapped block `@0x3870` (`@0x5c`) and
+`probeTint(sky) * (0.2 a + 0.4)` in the plain block `@0x24b0` (`@0x3e`, `@0x56`), and
+`sat(a * 0x697f57e3)` tints its sun glint.
 
 Amphiseum's `water` (fragment block 2, confidence 85) builds the same two taps
 as the sea, in the fragment program (`u + 0.05 t` and `1.15 (-u + 0.05 t)`),
@@ -304,10 +323,10 @@ the place to start.
 | --- | --- | --- |
 | Pulse, Pure water textures | the texture, with any authored texture-offset track | nothing known |
 | Pulse Vostok Reef caustics | nothing | the whole pass |
-| HD `water_test_2`, `water_noref` | lit vertex colour, or black plus fog (`mesh::rcs::water`) | the wave normals, their scroll and the sky reflection |
+| HD `water_test_2`, `water_noref` | under `original`: the three scrolled taps through the chunk's frame, `water_test_2` lit vertex colour plus vertex colour times the sky reflection, `water_noref` the sky reflection times `a` (or `0.2 a + 0.4`) plus the generic glint (`mesh::rcs::water`, `PROGRAM_WATER`); under `off`, lit vertex colour or black plus fog | `water_noref`'s own glint (`sat(a * 0x697f57e3)`, power `0x2a2dc10b`) |
 | HD `sebenco_ice` | the three-colour lerp (`mesh::rcs::ice`) | bump-perturbed facing, own specular |
-| HD `reflectplane_dc_seawater` | the generic reading; `mesh::rcs::emissive` refuses its normal map as a glow (`CIRCUIT_SURFACE_MAP_SAMPLERS`). No water-specific path, and not judged on a frame in this lane | the colour constant as the law states it, both taps, the scroll, specular, the planar reflection |
-| HD `water` (Amphiseum) | generic | the taps and the sky reflection |
+| HD `reflectplane_dc_seawater` | under `original`: `light * ColourConstant + sun * SpecularColour * sat(N.H)^SpecularPower * sat(8 N.L)` over the two scrolled taps, through the chunk's frame (`mesh::rcs::water`); under `off`, the generic reading, where the non-lightmapped slots (Ubermall, Chenghou, Modesto's plain slot) add `DiffuseTexture1`, a normal map, as a glow | the planar reflection (`Reflectivity * R`) |
+| HD `water` (Amphiseum) | under `original`: the two taps, `light * ColourConstant + Reflectivity * probeTint(sky)`; under `off`, generic | nothing known |
 | 2048 and Omega seas | the constant colour times light, flat (`psp2::lighting_only`, `gxp::sampler_use`) | normals, scroll, specular, reflection |
 | Refraction target (Vineta K glass) | drawn on HD, 2048 and Omega | n/a; it is the pattern the reflection target follows |
 
@@ -318,15 +337,30 @@ and its `refractProject` (`mesh_render::uniforms`, `oag_raceplay`'s
 (`mesh::rcs::vertex_scroll`), `Mesh::render_flags`, and the 2048 name-tag split
 (`psp2::refraction_only`).
 
+**What a player sees (2026-11-17, `water-hd`, headless `--screenshot`, 1280x720).** Moa
+Therma's sea, a grey sheet before (the normal map painted as a picture), is a dark teal
+plane whose fine ripples drift, with the sun's highlight only where the half vector
+lines up; with no planar reflection it is matte. Two frames 2 s apart (ticks 300 and
+420, camera `210,40,-380` looking down the `-z` sea, `--pose-hold`) differ on 389,342
+pixels of the sea (mean 2.9 levels); off the sea the differences are the before pair's
+own (the HUD clock, the sky traffic) plus a halo of 21,823 pixels outside a
+40-level skip mask, 96% of them one level and at most 11, which follows the sea's
+moving highlight (the bloom is the likely carrier; no switch isolates it). Vineta K's
+open sea from above was a black sheet under `off`; under `original` it is a rippled sea
+reflecting the sky with a sun glint. Ubermall's pool panels change by little. No RPCS3
+frame of a sea pose exists (the compare page's HD pairs are start-line frames and the
+October Moa Therma state no longer loads), so the look is not yet measured against the
+original.
+
 ## Lineage, per finding
 
 | Finding | 2048 | Omega | HD |
 | --- | --- | --- | --- |
-| Sea law (two taps, planar reflection) | checked, applies on its HD circuits, not wired | checked, applies, not wired | measured here |
+| Sea law (two taps, planar reflection) | checked, applies on its HD circuits (`reflectplane_dc_seawater` declares `screenSpaceReflectionTex` and `time`), not wired: its draw goes through `psp2`, which classifies by the GXP program's interface and has no tap reader; the `0.05` and `1.15` literals are not checked in the GXP | checked, applies (HD's interface exactly), not wired: same `psp2` path, the literals unread in the GCN program | taps drawn without the planar term (`mesh::rcs::water`) |
 | Reflect set (bit 3 / `wohdmeshreflect`) | checked, applies (name tag, 353 and 52), not wired | checked, applies (268 and 73), not wired | measured here |
 | 2048 own water (`fc15`/`fc17`) | measured here | **checked, differs**: replaced by `reflectplane_*` | not applicable |
-| Amphiseum `water` | not checked (the Vita's Amphiseum shows no water material by name) | checked, differs (cube probe) | measured here |
-| Vineta K scroll table | checked, differs (`dc_seawater`) | checked, applies (`water_test_2_castnoshipshadows`), `water_noref` replaced by `temp_water`, not wired | measured here |
+| Amphiseum `water` | not checked (the Vita's Amphiseum shows no water material by name) | checked, differs (cube probe) | drawn (`mesh::rcs::water`) |
+| Vineta K scroll table | checked, differs (`dc_seawater`) | checked, applies (`water_test_2_castnoshipshadows`), `water_noref` replaced by `temp_water`, not wired | drawn (`mesh::rcs::water`) |
 | Pulse caustic pass | not applicable | not applicable | HD ships `data/tex/caustics/` and `wo_underwater_godrays.pob`; consumer not looked for |
 
 ## Open

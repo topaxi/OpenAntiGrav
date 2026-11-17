@@ -164,6 +164,11 @@ fn the_report_names_both_kinds_of_absence() {
         water_lit_colour: 0,
         water_glint_only: 0,
         water_law: oag_display::display::Water::Original,
+        water_chunks: crate::mesh::rcs::WaterChunks::default(),
+        water_taps_drawn: 0,
+        water_taps_unread: 0,
+        water_taps_blocked: 0,
+        water_glow_replaced: 0,
         isolated: 0,
         behind_glass: 0,
     };

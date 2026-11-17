@@ -337,7 +337,9 @@ pub(super) fn build_pad_class(
         model_blob,
         textures,
         store,
-        oag_display::display::Water::default(),
+        // The pads' model draws no water, and the glow table is shared: `off` lays no
+        // tapped-water entries, so the room goes to each pad's own copy below.
+        oag_display::display::Water::Off,
         &mut report,
     );
     out.textures = skins;

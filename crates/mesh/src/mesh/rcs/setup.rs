@@ -291,16 +291,20 @@ pub(super) fn material_setup(
     }
     super::mag_wave::merge(&mut mag_emissive, hull_maps);
     // Water reads its picture as a normal map and has none to paint.
-    super::water::water(
+    // Its taps bind the normal map third and `water_noref`'s second map fourth.
+    let water = super::water::water(
         model,
         &material_variants,
         textures,
         &mut skins,
         &mut material_slots,
         &mut emissive,
+        &mut material_tangent,
         water_law,
         report,
     );
+    super::mag_wave::merge(&mut mag_emissive, water.normal_maps);
+    super::mag_wave::merge(&mut wave_maps, water.second_maps);
     // The hulls that read the reflection probe claim a slot's glow index last: ice ORs its
     // index into whatever the slot holds, so a tag laid earlier would be corrupted, and every
     // other family above keeps the slot it took (a tagged slot is counted, not overwritten).

@@ -114,6 +114,12 @@ pub const PROGRAM_PANEL_MAP: f32 = 15.0;
 /// picture is multiplied by `program[1]`, its `Shadowed`. See `super::rcs::psp2`'s `crowd`.
 pub const PROGRAM_CROWD: f32 = 16.0;
 
+/// [`Emissive::program`]'s mode for HD's scrolled-tap water (`super::rcs::water`): the
+/// normal is the weighted sum of the third binding read at the entry's taps, `program[1]` the
+/// family. The entry carries the colour, reflection weight and specular power, the next one
+/// the specular colour and the tap count, then one entry per tap.
+pub const PROGRAM_WATER: f32 = 17.0;
+
 /// [`Emissive::program`]'s mode for 2048's plain `diffuse_normal_specular_emmissive`: the third
 /// binding's **alpha**, unsquared, times the entry's tint, added like [`PROGRAM_EMISSIVE_ADD`].
 pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;

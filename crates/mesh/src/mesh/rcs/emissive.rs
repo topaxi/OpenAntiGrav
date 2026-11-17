@@ -150,7 +150,8 @@ pub(super) const NITRO_NORMAL: u32 = 0x0617_f872;
 /// disc whose added texture decodes to a normal map.
 ///
 /// What refusing does *not* do is draw the normal map in its own role: that
-/// still wants the tangent frame `mesh.wesl` has no input for, and the pads'
+/// wants the family's own reading (the seas have it under a law that draws their
+/// taps, `super::water`), and the pads'
 /// own `_ne`-alpha-gated term is a separate open question on
 /// `docs/rendering/pads.md`. Nothing added is an honest absence; a normal
 /// map added as a glow was not.

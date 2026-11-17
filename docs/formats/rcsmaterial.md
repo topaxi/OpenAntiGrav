@@ -2908,7 +2908,10 @@ d              = n (n.w) - w                             w = unit vector to the 
 
 `water_noref` declares no `constantAmbientColour` and reads no vertex colour: with the reflection taken out it is **black plus
 a glint plus fog**. Reading `water_test_2` the same way gives lit vertex colour with no picture. Both are now drawn that
-way (`mesh::rcs::water`, report "water material(s) whose picture is a normal map"); **the reflection is not drawn**.
+way under `graphics.water` `off` (`mesh::rcs::water`, report "water material(s) whose picture is a normal map"). Under
+`original` the taps, the frame and the sky reflection are drawn: [water.md](../rendering/water.md), "HD/Fury: Vineta K and
+Amphiseum" (2026-11-17), which also corrects `water_noref`'s formula above for its lightmapped block (`@0x3870` weights the
+reflection by `a` alone; `0.2 a + 0.4` is block `@0x24b0`'s).
 
 ### What the reflection is: not established (confidence 40 that it is a sky panorama; do not wire)
 
