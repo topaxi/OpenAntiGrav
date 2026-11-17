@@ -36,7 +36,10 @@ impl Room {
         table.insert("room_people".to_string(), self.people.to_string());
         let assists: Vec<&str> = self.assists.iter().map(|level| level.name()).collect();
         table.insert("room_assists".to_string(), assists.join(","));
-        table.insert("room_barrel_rolls".to_string(), self.barrel_rolls.to_string());
+        table.insert(
+            "room_barrel_rolls".to_string(),
+            self.barrel_rolls.to_string(),
+        );
         if let Some(zone) = self.zone_target {
             table.insert("room_zone_target".to_string(), zone.to_string());
         }
@@ -56,9 +59,7 @@ impl Room {
         let Some(people) = table.get("room_people") else {
             return Ok(None);
         };
-        let people = people
-            .parse()
-            .map_err(|_| unknown("room_people", people))?;
+        let people = people.parse().map_err(|_| unknown("room_people", people))?;
         let mut assists = Vec::new();
         for name in table
             .get("room_assists")

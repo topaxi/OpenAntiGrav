@@ -794,6 +794,17 @@ impl Session {
                     let title = self.shell.as_ref().map_or("", |shell| shell.title.name);
                     if let Err(e) = net.begin_join(&mut race_stage.race, title) {
                         join_error = Some(e);
+                    } else if self.settings.replay.record && oag_game::replays::SAVES {
+                        // The confirmed run, rebuilt as the room's race (the room is in the
+                        // header). Armed after `begin_join`: the tick-zero hash is the
+                        // prepared state both ends proved.
+                        match net.replay_options() {
+                            Ok(options) => {
+                                race_stage.replay_header.options = options;
+                                race_stage.arm_auto_replay();
+                            }
+                            Err(e) => join_error = Some(e),
+                        }
                     }
                 } else if let Some(run) = self.demo.loading.take() {
                     // An attract demo: the race a player would have, with nobody in it. The

@@ -125,10 +125,14 @@ pub fn prepare(race: &mut Race, params: &RaceParams) -> Result<()> {
 /// What `params` holds fixed beyond [`options`], for [`Race::apply_room`] and a recording's header.
 #[must_use]
 pub fn room(params: &RaceParams) -> oag_raceplay::replay::Room {
-    let people = params.people.min(u8::try_from(oag_gameplay::MAX_PLAYERS).unwrap_or(u8::MAX));
+    let people = params
+        .people
+        .min(u8::try_from(oag_gameplay::MAX_PLAYERS).unwrap_or(u8::MAX));
     oag_raceplay::replay::Room {
         people,
-        assists: (0..usize::from(people)).map(|seat| seat_assist(params, seat)).collect(),
+        assists: (0..usize::from(people))
+            .map(|seat| seat_assist(params, seat))
+            .collect(),
         barrel_rolls: !params.no_barrel_rolls,
         zone_target: zone_target(params),
     }
@@ -141,8 +145,12 @@ pub fn room(params: &RaceParams) -> oag_raceplay::replay::Room {
 ///
 /// A difficulty or control scheme this build does not know.
 pub fn replay_options(params: &RaceParams) -> Result<std::collections::BTreeMap<String, String>> {
-    let difficulty = oag_ai::Difficulty::from_name(&params.difficulty)
-        .ok_or_else(|| anyhow!("the server's difficulty {:?} is unknown here", params.difficulty))?;
+    let difficulty = oag_ai::Difficulty::from_name(&params.difficulty).ok_or_else(|| {
+        anyhow!(
+            "the server's difficulty {:?} is unknown here",
+            params.difficulty
+        )
+    })?;
     let launch = oag_raceplay::replay::Launch {
         scheme: scheme(params)?,
         difficulty,

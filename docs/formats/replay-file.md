@@ -85,7 +85,7 @@ and split-screen beyond the one setup [the timeline's page](../architecture/repl
 proves (two people, Pulse); multi-window
 races (`seat_picks`); Race Remix (`craft_source`); DLC and
 foreign tracks (`dlc`, `foreign_track`); campaign events (`grid_teams`); capture aids (`pose`,
-`field`, `hud`); network races (a client records nothing). A modded race records, and its `[[mods]]` names the modules. None of these is in `[setup]` yet. [The viewer](../ui/replays.md) lists a mode outside the table as MODE NOT
+`field`, `hud`); network races beyond the section below. A modded race records, and its `[[mods]]` names the modules. None of these is in `[setup]` yet. [The viewer](../ui/replays.md) lists a mode outside the table as MODE NOT
 VERIFIED and tries it: Zone, Eliminator and Head to Head with one person each reproduced 752
 ticks on Pulse through WATCH.
 
@@ -234,6 +234,34 @@ the other four.
 **A restart or a quit** drops the race, and its recording with it. `Race::recorded` is valid at any
 tick (the open segment is closed in a copy), so writing the file before the drop is the session's:
 `restart_parked_race` and `quit_parked_race` build or drop the race, and neither touches the track.
+
+## An online race's recording
+
+A client of an online room records only the ticks the server confirmed: a predicted tick is rewound
+by every correction, so the recorder is paused for it (`Race::pause_recording`, `Race::tick_confirmed`).
+The file's inputs, hashes and `POSE` track are therefore the server's run, and a hit the client
+predicted as a miss is in it at the server's tick. Three additions make that file watchable and
+comparable:
+
+- **The room is in `[options]`** (`oag_raceplay::replay::Room`, keys `room_people`, `room_assists`,
+  `room_barrel_rolls`, `room_zone_target`; `oag_net::race::replay_options` writes them with the
+  launch keys). A room's people are `Controller::Remote`, which the state hash reads, and the
+  rebuild seats `slots` as local; `Race::apply_room` is the one call `prepare` and the rebuild both
+  make. Without the keys the rebuild disagrees at tick 0.
+- **`Replay::fingerprint`** (`oag_replay::fingerprint`) hashes what the run is made of: title, circuit,
+  mode, class, seed, tick rate, slots, `[options]`, mods, the tick-zero hash, every stored hash, every
+  seat's inputs and the events; not the team, build, finish, ghost or pose track. Two clients of one
+  race are equal over the ticks both confirmed (`fingerprint_through`). The client keeps it
+  locally at the end of the race (`NetPlay::replay_fingerprint`); sending the server's own is a wire
+  change (`PROTOCOL` 2).
+
+Proved by `net_ground_truth::a_predicting_clients_recording_is_the_confirmed_run_and_re_drives`
+(Pulse; corrections happen, the viewer's own rebuild reaches the recorded tick-zero hash, a full-tick
+re-drive of the confirmed inputs draws the pose track the client kept, the two clients' fingerprints
+are equal) and `fingerprint::tests`. Not yet recorded: a seat's retirement (`oag_net::race::retire`)
+is not an `EVNT` entry, so a recording that spans one does not re-drive past it. **Checked against
+the other titles**: the room, the fingerprint and the recording are title-agnostic code; only Pulse
+is exercised.
 
 ## Checked against the other title of the pair
 

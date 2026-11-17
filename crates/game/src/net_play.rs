@@ -65,6 +65,9 @@ pub struct NetPlay {
     log: RefCell<(Stats, Instant)>,
     /// Whether the board has been printed at the end.
     board_printed: Cell<bool>,
+    /// The fingerprint of this client's recording of the finished race
+    /// ([`oag_replay::Replay::fingerprint`]), taken once when the race is over.
+    fingerprint: Cell<Option<u64>>,
     /// Whether this client's board has been compared with the server's.
     board_checked: Cell<bool>,
     /// The name of the person in each seat (an online lobby's room), given to the race so its
@@ -138,6 +141,7 @@ impl Pending {
             due: Cell::new(None),
             log: RefCell::new((Stats::default(), Instant::now())),
             board_printed: Cell::new(false),
+            fingerprint: Cell::new(None),
             board_checked: Cell::new(false),
             names: RefCell::new(Vec::new()),
             overlay: RefCell::new((Collector::new(), None)),
@@ -320,6 +324,11 @@ impl NetPlay {
         self.log_second(race);
         if self.over().is_some() && !self.board_printed.replace(true) {
             print_board(race);
+            self.fingerprint
+                .set(race.recorded().map(|run| run.fingerprint()));
+            if let Some(fingerprint) = self.fingerprint.get() {
+                log::debug!("net: this client's recording of the race is {fingerprint:#018x}");
+            }
         }
         self.check_server_board(race);
         ticks
@@ -374,6 +383,24 @@ impl NetPlay {
             self.due.set(Some(due.max(now - dt) + dt));
             self.step(race, device);
         }
+    }
+
+    /// The `options` table a recording of this room's race carries: what `prepare` applied, so
+    /// the file rebuilds as the room's race and not a local one.
+    ///
+    /// # Errors
+    ///
+    /// A difficulty or control scheme this build does not know.
+    pub fn replay_options(&self) -> Result<std::collections::BTreeMap<String, String>> {
+        oag_net::race::replay_options(&self.welcome.params)
+    }
+
+    /// The fingerprint of this client's recording of the finished race, kept locally: equal to
+    /// the server's own once the server sends it, so the replay is the real run (the
+    /// server-confirmed ticks, which is all a predicting client records).
+    #[must_use]
+    pub fn replay_fingerprint(&self) -> Option<u64> {
+        self.fingerprint.get()
     }
 
     /// Why the race is over, once the server has ended it or the link has gone.

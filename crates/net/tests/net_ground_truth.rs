@@ -193,8 +193,14 @@ fn a_predicting_clients_recording_is_the_confirmed_run_and_re_drives() {
             shown.sim.state_hash()
         })
         .unwrap_or_else(|why| panic!("client {n}: the viewer's re-drive diverges: {why:?}"));
-        let again = shown.recorded().and_then(|r| r.pose_track).expect("pose track");
-        let kept = replay.pose_track.as_ref().expect("the client kept a pose track");
+        let again = shown
+            .recorded()
+            .and_then(|r| r.pose_track)
+            .expect("pose track");
+        let kept = replay
+            .pose_track
+            .as_ref()
+            .expect("the client kept a pose track");
         assert_eq!(kept.crafts(), again.crafts(), "client {n}");
         assert_eq!(kept.last_tick(), again.last_tick(), "client {n}");
         for slot in 0..kept.crafts() {
