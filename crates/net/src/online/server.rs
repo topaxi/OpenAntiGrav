@@ -8,20 +8,30 @@
 //! race, and everyone is back in their room when it ends. Chosen, not measured.
 
 use std::collections::BTreeMap;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 use anyhow::Result;
 use web_time::{Duration, Instant};
 
 use super::race_proc::{Handle, Runner, Status};
 use super::rooms::{ClientId, Config as RoomsConfig, Rooms};
+use crate::limits::LogLimit;
 use crate::link::Link;
 use crate::wire::online::{Edition, Message, RaceJob, Refusal};
 use crate::wire::{Control, PROTOCOL};
-use crate::wt::{Identity, Listener, WtLink};
+use crate::wt::{Identity, LinkLimits, Listener, WtLink};
 
 /// How long a new connection has to say hello. Chosen.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Connections the lobby keeps at once, joining or joined, by default. Chosen, not measured: a
+/// lobby link costs about 2.6 MiB at its worst (`docs/networking/server-roadmap.md`, "Bounds
+/// and limits"), so 64 stay inside a 1 GB host with the race beside them.
+pub const MAX_CONNECTIONS: usize = 64;
+
+/// Connections one address may hold at once, by default. Chosen: a household or a LAN party
+/// behind one NAT, with room for a full race of twelve to reconnect.
+pub const MAX_PER_ADDRESS: usize = 16;
 
 /// What the service is built from.
 #[derive(Debug, Clone)]
@@ -32,6 +42,10 @@ pub struct Config {
     pub cert_names: Vec<String>,
     /// The rooms' rules and the titles served.
     pub rooms: RoomsConfig,
+    /// Connections held at once; the next is refused by name ([`MAX_CONNECTIONS`]).
+    pub max_connections: usize,
+    /// Connections one address may hold at once ([`MAX_PER_ADDRESS`]).
+    pub max_per_address: usize,
 }
 
 struct Pending {
@@ -41,6 +55,9 @@ struct Pending {
 
 struct Connected {
     link: Box<dyn Link>,
+    ip: IpAddr,
+    /// One warning a second about this person's messages.
+    log: LogLimit,
     token: String,
 }
 
@@ -65,6 +82,10 @@ pub struct Server {
     race: Option<Running>,
     next_client: ClientId,
     started: Instant,
+    max_connections: usize,
+    max_per_address: usize,
+    /// One warning a second about refused connections.
+    refusals: LogLimit,
 }
 
 /// A fresh 128-bit token, hex.
@@ -85,7 +106,7 @@ impl Server {
     /// The address could not be bound.
     pub fn bind(config: Config, runner: Box<dyn Runner>) -> Result<Self> {
         let identity = Identity::self_signed(&config.cert_names)?;
-        let listener = Listener::bind(config.listen, &identity)?;
+        let listener = Listener::bind(config.listen, &identity, LinkLimits::LOBBY)?;
         Ok(Self {
             listener,
             identity,
@@ -96,6 +117,9 @@ impl Server {
             race: None,
             next_client: 1,
             started: Instant::now(),
+            max_connections: config.max_connections,
+            max_per_address: config.max_per_address,
+            refusals: LogLimit::default(),
         })
     }
 
@@ -149,8 +173,36 @@ impl Server {
     }
 
     fn accept(&mut self) {
-        while let Some(link) = self.listener.accept() {
-            log::info!("lobby: connection from {}", link.peer());
+        while let Some(mut link) = self.listener.accept() {
+            log::debug!("lobby: connection from {}", link.peer());
+            let ip = link.peer().ip();
+            let held = self.joining.len() + self.clients.len();
+            let held_by_ip = self
+                .joining
+                .iter()
+                .filter(|p| p.link.peer().ip() == ip)
+                .count()
+                + self.clients.values().filter(|c| c.ip == ip).count();
+            if held >= self.max_connections || held_by_ip >= self.max_per_address {
+                let what = if held >= self.max_connections {
+                    format!(
+                        "this lobby holds {} connections already",
+                        self.max_connections
+                    )
+                } else {
+                    format!(
+                        "{} connections from your address already",
+                        self.max_per_address
+                    )
+                };
+                self.refusals
+                    .warn(|| format!("lobby: refused {ip}: {what}"));
+                link.send_lobby(&Message::Rejected {
+                    code: Refusal::Full,
+                    text: what,
+                });
+                continue;
+            }
             self.joining.push(Pending {
                 link,
                 since: Instant::now(),
@@ -222,11 +274,14 @@ impl Server {
             })
             .flatten();
         if let Some(id) = taken {
-            log::info!("lobby: {name:?} took over their session");
+            log::debug!("lobby: {name:?} took over their session");
+            let ip = link.peer().ip();
             self.clients.insert(
                 id,
                 Connected {
                     link: Box::new(link),
+                    ip,
+                    log: LogLimit::default(),
                     token: token_in.to_string(),
                 },
             );
@@ -239,14 +294,17 @@ impl Server {
             Err((code, text)) => link.send_lobby(&Message::Rejected { code, text }),
             Ok(()) => {
                 self.next_client += 1;
+                let ip = link.peer().ip();
                 self.clients.insert(
                     id,
                     Connected {
                         link: Box::new(link),
+                        ip,
+                        log: LogLimit::default(),
                         token: token(),
                     },
                 );
-                log::info!("lobby: {:?} joined as client {id}", self.rooms.name(id));
+                log::debug!("lobby: {:?} joined as client {id}", self.rooms.name(id));
                 self.welcome(id);
             }
         }
@@ -295,17 +353,17 @@ impl Server {
             if let Some(client) = self.clients.get_mut(&id) {
                 gone = client.link.closed();
                 while let Some(message) = client.link.recv_lobby() {
-                    incoming.push(message);
+                    match message {
+                        Ok(message) => incoming.push(message),
+                        Err(e) => client.log.warn(|| format!("lobby: client {id}: {e}")),
+                    }
                 }
             }
             for message in incoming {
-                match message {
-                    Ok(message) => self.rooms.handle(id, message),
-                    Err(e) => log::warn!("lobby: client {id}: {e}"),
-                }
+                self.rooms.handle(id, message);
             }
             if let Some(why) = gone {
-                log::info!("lobby: client {id} left: {why}");
+                log::debug!("lobby: client {id} left: {why}");
                 self.clients.remove(&id);
                 self.rooms.disconnect(id);
             }

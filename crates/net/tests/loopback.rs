@@ -466,3 +466,97 @@ fn a_hundred_resend_requests_in_a_second_get_one_answer() {
     }
     assert_eq!(answers, 1);
 }
+
+fn silent_links(host: &mut Host, n: usize) -> Vec<Loopback> {
+    (0..n)
+        .map(|_| {
+            let (server_end, mine) = Loopback::pair();
+            host.join(Box::new(server_end));
+            mine
+        })
+        .collect()
+}
+
+#[test]
+fn hundreds_of_silent_connections_are_bounded_and_the_expected_seat_still_joins() {
+    let params = params(1);
+    let mut host = Host::new(headless(&params), params);
+    host.expect_seats(vec![("ann".into(), "token-ann".into())]);
+    let _silent = silent_links(&mut host, 300);
+    host.poll();
+    assert!(
+        host.joining() <= oag_net::host::MAX_JOINING,
+        "{} connections wait",
+        host.joining()
+    );
+    let (server_end, mut mine) = Loopback::pair();
+    host.join(Box::new(server_end));
+    mine.send_control(&oag_net::wire::Control::Hello {
+        protocol: oag_net::wire::PROTOCOL,
+        name: "ann".into(),
+        team: String::new(),
+        token: "token-ann".into(),
+    });
+    host.poll();
+    assert_eq!(host.seat_names(), vec![Some("ann".to_string())]);
+}
+
+#[test]
+fn a_connection_that_never_says_hello_is_dropped_after_the_hello_timeout() {
+    let params = params(1);
+    let mut host = Host::new(headless(&params), params);
+    host.set_hello_timeout(std::time::Duration::from_millis(50));
+    let _silent = silent_links(&mut host, 10);
+    host.poll();
+    assert_eq!(host.joining(), 10);
+    std::thread::sleep(std::time::Duration::from_millis(120));
+    host.poll();
+    assert_eq!(host.joining(), 0);
+}
+
+struct Captured;
+
+static CAPTURED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+impl log::Log for Captured {
+    fn enabled(&self, _: &log::Metadata) -> bool {
+        true
+    }
+    fn log(&self, record: &log::Record) {
+        CAPTURED
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(format!("{}", record.args()));
+    }
+    fn flush(&self) {}
+}
+
+#[test]
+fn ten_thousand_malformed_datagrams_from_one_seat_log_at_most_a_line_a_second() {
+    let _ = log::set_logger(&Captured);
+    log::set_max_level(log::LevelFilter::Warn);
+    let params = params(1);
+    let mut host = Host::new(headless(&params), params);
+    let mut mine = raw_seat(&mut host);
+    host.start(0);
+    CAPTURED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clear();
+    let started = std::time::Instant::now();
+    for _ in 0..10_000 {
+        mine.send_datagram(vec![0xFF; 5]);
+    }
+    host.poll();
+    let lines = CAPTURED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .filter(|line| line.starts_with("net: seat 0:"))
+        .count();
+    let seconds = usize::try_from(started.elapsed().as_secs()).unwrap_or(usize::MAX);
+    assert!(
+        (1..=seconds + 1).contains(&lines),
+        "{lines} lines in {seconds} s"
+    );
+}

@@ -106,6 +106,8 @@ pub fn run(args: &Args) -> Result<()> {
                 titles,
                 seed: args.seed,
             },
+            max_connections: oag_net::online::server::MAX_CONNECTIONS,
+            max_per_address: oag_net::online::server::MAX_PER_ADDRESS,
         },
         Box::new(runner),
     )?;

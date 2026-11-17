@@ -53,6 +53,8 @@ fn config() -> Config {
             countdown_ms: 100,
             ..RoomsConfig::default()
         },
+        max_connections: oag_net::online::server::MAX_CONNECTIONS,
+        max_per_address: oag_net::online::server::MAX_PER_ADDRESS,
     }
 }
 
@@ -75,8 +77,12 @@ struct Lab {
 
 impl Lab {
     fn new(runner: Box<dyn oag_net::online::race_proc::Runner>) -> Self {
+        Self::with_config(config(), runner)
+    }
+
+    fn with_config(config: Config, runner: Box<dyn oag_net::online::race_proc::Runner>) -> Self {
         Self {
-            server: Server::bind(config(), runner).expect("binds"),
+            server: Server::bind(config, runner).expect("binds"),
             people: Vec::new(),
         }
     }
@@ -716,4 +722,202 @@ fn a_removed_member_is_told_why_and_refused_back() {
         lab.people[a2].refused.take().map(|(c, _)| c),
         Some(Refusal::Kicked)
     );
+}
+
+/// Dials the lobby the way a stranger would, without joining through the lab.
+fn dial_lobby(lab: &Lab, name: &str) -> LobbyClient {
+    let link = oag_net::wt::connect(&lab.server.local_addr().to_string(), lab.server.cert_hash())
+        .expect("connects");
+    LobbyClient::connect(Box::new(link) as Box<dyn Link>, name, &[edition()], "")
+}
+
+/// Pumps the lab and `extras` until every extra was refused, then checks the people who had
+/// joined are still served: one makes a room.
+fn extras_are_refused_and_the_first_are_still_served(
+    lab: &mut Lab,
+    extras: &mut [LobbyClient],
+    joined: usize,
+) {
+    let started = std::time::Instant::now();
+    while !extras.iter().all(|e| e.refused.is_some()) {
+        assert!(started.elapsed() < Duration::from_secs(30), "no refusal");
+        lab.pump();
+        for extra in extras.iter_mut() {
+            let _ = extra.poll();
+        }
+    }
+    for extra in extras.iter() {
+        let (code, text) = extra.refused.clone().expect("refused");
+        assert_eq!(code, Refusal::Full, "{text}");
+        assert!(!extra.welcomed());
+    }
+    assert_eq!(
+        lab.server.connected(),
+        joined,
+        "the extras were never seated"
+    );
+    lab.people[0].create(settings());
+    lab.until("a joined person's room", |lab| lab.people[0].room.is_some());
+}
+
+#[test]
+fn one_address_may_hold_only_its_cap_of_lobby_connections_and_the_others_are_still_served() {
+    let mut cap = config();
+    cap.max_per_address = 4;
+    let mut lab = Lab::with_config(cap, thread_runner(10));
+    for i in 0..4 {
+        lab.join(&format!("p{i}"));
+    }
+    let mut extras: Vec<LobbyClient> = (0..20)
+        .map(|i| dial_lobby(&lab, &format!("x{i}")))
+        .collect();
+    extras_are_refused_and_the_first_are_still_served(&mut lab, &mut extras, 4);
+}
+
+#[test]
+fn the_lobby_holds_only_its_cap_of_connections_whatever_their_addresses() {
+    let mut cap = config();
+    cap.max_connections = 3;
+    let mut lab = Lab::with_config(cap, thread_runner(10));
+    for i in 0..3 {
+        lab.join(&format!("p{i}"));
+    }
+    let mut extras: Vec<LobbyClient> = (0..20)
+        .map(|i| dial_lobby(&lab, &format!("x{i}")))
+        .collect();
+    extras_are_refused_and_the_first_are_still_served(&mut lab, &mut extras, 3);
+}
+
+fn transport_pair() -> (
+    oag_net::wt::Listener,
+    oag_net::wt::WtLink,
+    oag_net::wt::WtLink,
+    oag_net::wt::WtLink,
+    oag_net::wt::WtLink,
+) {
+    use oag_net::wt::{Identity, LinkLimits, Listener, connect};
+    let identity = Identity::self_signed(&[]).expect("certificate");
+    let mut listener = Listener::bind(
+        "127.0.0.1:0".parse().expect("addr"),
+        &identity,
+        LinkLimits::LOBBY,
+    )
+    .expect("binds");
+    let addr = listener.local_addr().to_string();
+    let mut first = connect(&addr, identity.hash()).expect("connects");
+    first.send_reliable(vec![1]);
+    let mut second = connect(&addr, identity.hash()).expect("connects");
+    second.send_reliable(vec![2]);
+    let mut served = Vec::new();
+    let started = std::time::Instant::now();
+    while served.len() < 2 {
+        assert!(started.elapsed() < Duration::from_secs(10), "no sessions");
+        if let Some(mut link) = listener.accept() {
+            let who = loop {
+                if let Some(bytes) = link.recv_reliable() {
+                    break bytes[0];
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            };
+            served.push((who, link));
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    served.sort_by_key(|(who, _)| *who);
+    let mut served = served.into_iter().map(|(_, link)| link);
+    (
+        listener,
+        first,
+        served.next().expect("first"),
+        second,
+        served.next().expect("second"),
+    )
+}
+
+#[test]
+fn a_peer_that_never_reads_is_closed_at_the_send_queue_limit_and_the_other_is_still_served() {
+    let (_listener, _idle, mut idle_server, mut good, mut good_server) = transport_pair();
+    for _ in 0..400 {
+        idle_server.send_reliable(vec![0; 64 << 10]);
+    }
+    let why = idle_server.closed().expect("the queue passed its limit");
+    assert!(why.contains("does not drain"), "{why}");
+    good_server.send_reliable(vec![7; 100]);
+    let started = std::time::Instant::now();
+    let got = loop {
+        if let Some(bytes) = good.recv_reliable() {
+            break bytes;
+        }
+        assert!(started.elapsed() < Duration::from_secs(5), "not served");
+        std::thread::sleep(Duration::from_millis(1));
+    };
+    assert_eq!(got, vec![7; 100]);
+    assert!(good_server.closed().is_none());
+}
+
+#[test]
+fn a_flood_of_datagrams_is_cut_to_the_budget_and_the_other_peer_is_still_served() {
+    use oag_net::wt::{DATAGRAM_BURST, DATAGRAM_RATE};
+    let (_listener, mut flooder, mut flooded, mut good, mut good_server) = transport_pair();
+    let started = std::time::Instant::now();
+    let mut received = 0u32;
+    for n in 0..3_000u32 {
+        flooder.send_datagram(n.to_le_bytes().to_vec());
+        if n % 20 == 19 {
+            std::thread::sleep(Duration::from_millis(1));
+            while flooded.recv_datagram().is_some() {
+                received += 1;
+            }
+        }
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    while flooded.recv_datagram().is_some() {
+        received += 1;
+    }
+    let allowed = DATAGRAM_BURST + DATAGRAM_RATE * (started.elapsed().as_secs() as u32 + 1);
+    assert!(
+        received <= allowed,
+        "{received} datagrams passed, {allowed} allowed"
+    );
+    assert!(received >= 50, "the budget starved the peer: {received}");
+    good.send_datagram(vec![9]);
+    let t = std::time::Instant::now();
+    loop {
+        if good_server.recv_datagram() == Some(vec![9]) {
+            break;
+        }
+        assert!(t.elapsed() < Duration::from_secs(5), "not served");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+#[test]
+fn sessions_nobody_takes_are_bounded_and_the_listener_keeps_accepting() {
+    use oag_net::wt::{Identity, LinkLimits, Listener, connect};
+    let identity = Identity::self_signed(&[]).expect("certificate");
+    let mut listener = Listener::bind(
+        "127.0.0.1:0".parse().expect("addr"),
+        &identity,
+        LinkLimits::LOBBY,
+    )
+    .expect("binds");
+    let addr = listener.local_addr().to_string();
+    let mut held = Vec::new();
+    for _ in 0..300 {
+        held.push(connect(&addr, identity.hash()).expect("connects"));
+    }
+    std::thread::sleep(Duration::from_millis(1_000));
+    let mut taken = 0;
+    while listener.accept().is_some() {
+        taken += 1;
+    }
+    assert!(taken <= 256, "{taken} sessions queued");
+    assert!(taken > 0);
+    let mut later = connect(&addr, identity.hash()).expect("connects");
+    later.send_reliable(vec![1]);
+    let started = std::time::Instant::now();
+    while listener.accept().is_none() {
+        assert!(started.elapsed() < Duration::from_secs(5), "not accepted");
+        std::thread::sleep(Duration::from_millis(1));
+    }
 }

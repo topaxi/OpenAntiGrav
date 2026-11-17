@@ -245,7 +245,8 @@ impl Runner for ThreadRunner {
                     let mut host = Host::new(race, job.params.clone());
                     let identity = Identity::self_signed(&[]).map_err(|e| format!("{e:#}"))?;
                     let mut listener =
-                        Listener::bind(listen, &identity).map_err(|e| format!("{e:#}"))?;
+                        Listener::bind(listen, &identity, crate::wt::LinkLimits::RACE)
+                            .map_err(|e| format!("{e:#}"))?;
                     let _ = tx.send(Status::Up {
                         port: listener.local_addr().port(),
                         cert_hash: identity.hash(),

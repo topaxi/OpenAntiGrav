@@ -31,6 +31,7 @@ pub mod extract;
 pub mod host;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod lan;
+pub mod limits;
 pub mod link;
 pub mod lobby;
 pub mod online;
