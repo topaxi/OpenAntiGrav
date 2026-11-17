@@ -75,6 +75,10 @@ pub struct SamplerUse {
     /// ambient and fog colours, where there is exactly one: the constant the
     /// surface takes its colour from when its samplers are lighting only.
     pub colour_uniform: Option<String>,
+    /// Every uniform the ambient-only permutation declares besides the ambient and fog colours,
+    /// in sorted order: [`Self::colour_uniform`] when there is one, the pair a blended water
+    /// edge declares (`Opacity`, `Watercolour`) when there are two.
+    pub ambient_uniforms: Vec<String>,
     /// Whether a vertex program of the file declares the engine's `time` uniform: the
     /// surface scrolls with the clock (`fc15`/`fc17_effects_vscroll_water`).
     pub time_scrolled: bool,
@@ -140,6 +144,7 @@ pub fn sampler_use(data: &[u8]) -> Option<SamplerUse> {
     colours.sort_unstable();
     colours.dedup();
     let colour_uniform = (colours.len() == 1).then(|| colours[0].to_string());
+    let ambient_uniforms = colours.iter().map(|n| (*n).to_string()).collect();
     let time_scrolled = super::programs(data)
         .into_iter()
         .filter_map(|(_, p)| p.ok())
@@ -149,6 +154,7 @@ pub fn sampler_use(data: &[u8]) -> Option<SamplerUse> {
         ambient_samplers,
         lighting_only,
         colour_uniform,
+        ambient_uniforms,
         time_scrolled,
     })
 }

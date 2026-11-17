@@ -98,9 +98,18 @@ fn altimas_sea_draws_its_law_under_original_and_nothing_under_off() {
     };
     let (on, on_report) = build(oag_display::display::Water::Original);
     let (off, off_report) = build(oag_display::display::Water::Off);
-    assert_eq!((on_report.sea.drawn, off_report.sea.drawn), (5, 0));
-    assert_eq!(off_report.sea.submeshes, 5, "classified either way");
-    assert_eq!(on.emissive.len(), off.emissive.len() + 3);
+    assert_eq!((on_report.sea.drawn, off_report.sea.drawn), (10, 0));
+    assert_eq!(off_report.sea.submeshes, 10, "classified either way");
+    assert_eq!(
+        (on_report.sea.fc17_drawn, on_report.sea.edge_drawn),
+        (5, 5),
+        "the blended edge's five batches"
+    );
+    assert_eq!(
+        on.emissive.len(),
+        off.emissive.len() + 6,
+        "two blocks of three"
+    );
     let sea = on
         .emissive
         .iter()
@@ -113,6 +122,26 @@ fn altimas_sea_draws_its_law_under_original_and_nothing_under_off() {
         })
         .expect("the sea's header entry");
     assert_eq!(sea.scale, 250.0, "Altima's SpecularPower");
+    let edge = on
+        .emissive
+        .iter()
+        .find(|e| {
+            e.program
+                == [
+                    oag_mesh::mesh::PROGRAM_WATER,
+                    oag_mesh::mesh::rcs::VITA_EDGE_KIND,
+                ]
+        })
+        .expect("the edge's header entry");
+    assert_eq!(
+        edge.offset, 1.0,
+        "the edge's Opacity rides the header's offset"
+    );
+    assert_eq!(edge.scale, 250.0, "the edge's SpecularPower");
+    assert_ne!(
+        edge.tint, [0.0; 3],
+        "Watercolour is not authored: the pond's colour stands in"
+    );
     assert_eq!(on.vertices.len(), off.vertices.len());
 }
 
@@ -450,31 +479,42 @@ fn the_2048_circuits_bind_no_more_lookups_than_the_known_gap() {
         ..
     } = walk;
     println!("{n} circuit model(s), {faulty} drawn colour slot(s) that are not pictures");
-    the_2048_seas_are_the_fc15_batches(&walk.seas);
+    the_2048_seas_are_the_fc15_and_fc17_batches(&walk.seas);
     assert!(n > 4, "2048's circuits were found: {n}");
     assert!(faulty <= VITA_FAULTS, "{faulty} > {VITA_FAULTS}");
     only_by_design("2048", &unbound);
 }
 
 /// 2048's own seas, by the programs' declared interface (`psp2::water`): the batches of
-/// `fc15_effects_vscroll_water`, counted per circuit and all drawn. Drop
-/// `Plan`'s classification or the `build_circuit` law and every count here falls to zero. The
-/// other circuits' seas (`fc17_*`, `reflectplane_*`, pictures) are not this law and stay 0.
-fn the_2048_seas_are_the_fc15_batches(seas: &[(String, psp2::water::Census)]) {
-    const FC15: [(&str, usize); 4] = [("altima", 5), ("mall", 3), ("tower", 4), ("square", 4)];
+/// `fc15_effects_vscroll_water` and of the two `fc17` materials, counted per circuit and all
+/// drawn. Drop `Plan`'s classification or the `build_circuit` law and every count here falls to
+/// zero. The other circuits' seas (`reflectplane_*`, pictures) are not these laws and stay 0.
+fn the_2048_seas_are_the_fc15_and_fc17_batches(seas: &[(String, psp2::water::Census)]) {
+    // (circuit, fc15 batches, fc17 batches of which the blended edge)
+    const WANT: [(&str, usize, usize, usize); 5] = [
+        ("altima", 5, 5, 5),
+        ("mall", 3, 0, 0),
+        ("tower", 4, 0, 0),
+        ("square", 4, 0, 0),
+        ("park", 0, 4, 0),
+    ];
     for (path, sea) in seas {
         let circuit = path.rsplit('/').nth(1).unwrap_or(path);
-        let want = FC15
+        let (pond, fc17, edge) = WANT
             .iter()
-            .find(|(name, _)| {
+            .find(|(name, ..)| {
                 *name == circuit && path.contains("/environments/") && !path.contains("DLC")
             })
-            .map_or(0, |&(_, n)| n);
-        assert_eq!(sea.submeshes, want, "{path}: {sea:?}");
-        assert_eq!(sea.drawn, want, "{path}: {sea:?}");
+            .map_or((0, 0, 0), |&(_, pond, fc17, edge)| (pond, fc17, edge));
+        assert_eq!(sea.submeshes, pond + fc17, "{path}: {sea:?}");
+        assert_eq!(sea.drawn, pond + fc17, "{path}: {sea:?}");
+        assert_eq!(sea.fc17_drawn, fc17, "{path}: {sea:?}");
+        assert_eq!(sea.edge_drawn, edge, "{path}: {sea:?}");
         assert_eq!(sea.left_flat, 0, "{path}: {sea:?}");
     }
-    assert_eq!(seas.iter().map(|(_, s)| s.drawn).sum::<usize>(), 16);
+    assert_eq!(seas.iter().map(|(_, s)| s.drawn).sum::<usize>(), 25);
+    assert_eq!(seas.iter().map(|(_, s)| s.fc17_drawn).sum::<usize>(), 9);
+    assert_eq!(seas.iter().map(|(_, s)| s.edge_drawn).sum::<usize>(), 5);
 }
 
 /// 2048's DLC circuits and the patch's re-shipped ones, the two DLC packages and the two patch

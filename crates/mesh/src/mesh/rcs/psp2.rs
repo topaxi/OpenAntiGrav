@@ -557,6 +557,15 @@ fn build_planned(
                 (Some(_), Some(&markings), Some(&[u, v])) => (markings, [u, v, 1.0, 1.0]),
                 _ => (texcoord2, colour),
             };
+            // The blended water edge's alpha chain reads `VertexColour1.x` and `.y`
+            // (`psp2::water`); they ride the second coordinate pair, which that material's
+            // vertices use for nothing else.
+            let texcoord2 = match submesh.vita_vertex_colour1.get(i) {
+                Some(&[x, y, ..]) if sea.edge(submesh.material) => {
+                    [f32::from(x) / 255.0, f32::from(y) / 255.0]
+                }
+                _ => texcoord2,
+            };
             let (colour, sun_mask) = match submesh.colours.get(i) {
                 Some(&bytes) if hull_factor => hull_colour::vertex(bytes),
                 Some(&[r, g, b, a]) if nova_vertex => (

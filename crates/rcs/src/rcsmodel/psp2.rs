@@ -480,6 +480,12 @@ pub struct SubMesh {
     /// Empty on a submesh whose declaration names neither (on the PS4 only the flyer shell's
     /// reflection is measured to carry one).
     pub colours: Vec<[u8; 4]>,
+    /// `VertexColour1` on the Vita (four unsigned normalised bytes, type `4`), one RGBA per
+    /// vertex, from the record's own declaration; empty on the PS4 and where the declaration
+    /// names none. [`Self::colours`] never carries it on the Vita (`vertex_colour1` is the PS4's
+    /// type), and it is not a baked light: 2048's blended water edge reads `.x` and `.y` as the
+    /// two lanes of its alpha chain (`docs/rendering/water.md`, "2048 (Vita)").
+    pub vita_vertex_colour1: Vec<[u8; 4]>,
     /// Bytes per vertex, derived from the buffer's own length rather than read
     /// from a field - see [`Model::parse`].
     pub stride: usize,
@@ -980,6 +986,20 @@ fn one(
             colours.push([file[at], file[at + 1], file[at + 2], file[at + 3]]);
         }
     }
+    let mut vita_vertex_colour1 = Vec::new();
+    if let Some(off) = own
+        .filter(|_| !ps4)
+        .and_then(|decl| decl.attribute(vertex_decl::VERTEX_COLOUR1_HASH))
+        .filter(|a| a.components == 4 && a.gxm_type == vertex_decl::VITA_UBYTE4_NORM)
+        .map(|attr| usize::from(attr.offset))
+        && stride >= off + 4
+    {
+        vita_vertex_colour1.reserve_exact(vertex_count);
+        for v in 0..vertex_count {
+            let at = vertex_at + v * stride + off;
+            vita_vertex_colour1.push([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+        }
+    }
     Some(SubMesh {
         record,
         mesh: None,
@@ -997,6 +1017,7 @@ fn one(
         non_finite_texcoords,
         tangents,
         colours,
+        vita_vertex_colour1,
         stride,
     })
 }

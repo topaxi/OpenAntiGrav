@@ -21,7 +21,7 @@ map is the sky"), [the 2048 pass page](../ghidra/functions/vita-2048-eu-v104/ref
 | HD/Fury sea (`reflectplane_dc_seawater`) | flat colour, two wave-normal taps, sun diffuse and specular, **planar reflection** | taps scroll `u + 0.05 t` and `-u + 0.05 t` | `screenSpaceReflectionTex` through `reflectProject`, fed by chunks with render flag bit 3: a 960 x 540 R5G6B5 target drawn under the main camera mirrored about y = -25 (Moa Therma, read live) | 85 (program), 88 (which chunks), 90 (target, camera, constants) |
 | HD Vineta K (`water_test_2`, `water_noref`) | vertex colour times light, three wave taps | three scales and rates per material | `paraboloidReflectionTex` (the sky) | 90 |
 | HD Amphiseum (`water`) | flat colour, two wave taps | as the sea, in the fragment program | `paraboloidReflectionTex` | 85 |
-| 2048 own circuits (`fc15`/`fc17_effects_vscroll_water`) | flat colour, **one** wave normal map (RGB, through the tangent frame), sun diffuse and Phong specular weighted by the map's alpha | `u + 0.05 t` | none | 85 (`fc15`), 60 (`fc17`: colour and specular read, alpha unread) |
+| 2048 own circuits (`fc15`/`fc17_effects_vscroll_water`) | flat colour, **one** wave normal map (RGB, through the tangent frame), sun diffuse and Phong specular weighted by the map's alpha | `u + 0.05 t` (`fc15`); `v + Speed t` (`fc17`) | none | 85 (`fc15`), 85 (`fc17` colour, specular, scroll, alpha chain), 75 (which lanes feed it, below) |
 | 2048 HD circuits | HD's programs, recompiled | as HD | Moa Therma and Ubermall: planar | 80 |
 | Omega 2048 circuits (`reflectplane_mid`, `_edge`, `_pond`, ...) | two wave normal maps, sun specular, Fresnel-weighted **planar reflection** | `Speed` parameter (0.5 on Altima) | `screenSpaceReflectionTex`, fed by `wohdmeshreflect` meshes | 75 |
 | Omega HD circuits | HD's materials | as HD | as HD; Amphiseum reads a cube instead | 75 |
@@ -388,19 +388,56 @@ on that stand-in; the engine's own `specular x0.00` line is the absent key, not 
 Whether the `time` uniform is in seconds is not recorded (our clock is). The literal of `@1` (`sa18.x`, `2.0039` in
 `f16`) and `c15.y` (1) are not traced to a register by name; the shape is unambiguous.
 
-**fc17, read as far as the colour and the specular, alpha open (confidence 60).**
-`fc17_effects_vscroll_wateredge_vertexcol` (state 61, blended; Altima's lavender
-sheets, Park's `fc17_effects_vscroll_water`) shares fc15's decode, frame, `N.L` and
-Phong exactly (`@1` to `@21`), then: `colour = (ambient + diffuse N.L) * Watercolour`,
-`+ spec * liveLighting0specular * SpecularColour` (`@22` to `@24`, **no alpha
-gloss**), the fog lerp (`@25`, `@26`), and an alpha chain over `Opacity` (`sa0.x`), the
-map's alpha `pa2.w` and two interpolants, `pa0.w` and `pa4.w`
-(`@27` `pa0.x = t.a * pa0.w`, `@28` `pa2.x = Opacity - t.a * pa0.w`, `@29`
-`pa0.w = pa4.w * pa2.x + pa0.x`). Which vertex output `pa0.w` and `pa4.w` carry
-(the vertex colour's alpha and a coordinate lane) is not traced, so the alpha, and so
-the blend, is unread. The vertex program adds `Speed`-scaled time to the
-coordinate. **Until that is read fc17 stays the normal map drawn as a picture** (the
-lavender sheet on Altima, counted in `VITA_FAULTS`).
+**fc17, read whole (2026-11-17, `water-fc17`).**
+`fc17_effects_vscroll_wateredge_vertexcol` (Altima's lavender sheets, state 61, blended)
+and `fc17_effects_vscroll_water` (Park's sea, state 124, opaque) share fc15's decode,
+frame, `N.L` and Phong exactly (`@1` to `@21`), then: `colour = (ambient + diffuse N.L)
+* Watercolour`, `+ pow(sat(R.L), SpecularPower) * liveLighting0specular * SpecularColour`
+(`@22` to `@24`, **no alpha gloss** and a material specular colour, unlike fc15), the fog
+lerp (`@25`, `@26`). Confidence 85 on those.
+
+- **Scroll.** Secondary 2 and 3 compute `Speed * time`, primary 34 adds it to `uv1`'s
+  **second** lane (`add pa12.-y`): the coordinate is `(u, v + Speed t)`, `Speed` the
+  material's own parameter (Altima's edge 0.05062, Park 0.05). fc15 scrolls `u` by a
+  literal `0.05`.
+- **Alpha, edge only.** `@27` to `@29` read `x = a * pa0.w`, `alpha = pa4.w * (Opacity - x)
+  + x`, that is **`alpha = vc.y * Opacity + (1 - vc.y) * a * vc.x`**, `a` the map's alpha,
+  `Opacity` the material's parameter (1.0 on Altima). Park's program ends `mul pa0.xyzw,
+  pa0.xyz0, c15.y`: it has no `Opacity` or vertex colour, its alpha is never read (opaque).
+- **Which lanes feed `pa0.w` and `pa4.w` (confidence 75).** The vertex program's outputs,
+  by their `o` registers (`scripts/vita-usse.py disasm` on program #2, the plain
+  permutation, and #4, the vertex-lit one): `o4..o7` = (`B.xyz`, **`VertexColour1.x`**,
+  primary 33 `mov o6.-y, pa16.-x`, read before primary 40 overwrites `pa16`), `o8..o11` =
+  (`V.xyz`, **`VertexColour1.y`**, primary 41 `or.u32 o11, pa17`), `o12..o15` = (`N.xyz`,
+  fog, primaries 19 to 24), `o16/o17` the scrolled coordinate, `o18..o20` `T`. In the
+  fragment the groups appear as `pa0` (`B`, so `pa0.w` = vc.x), `pa4` (`V`, so `pa4.w` =
+  vc.y), `pa6` (`N` and the fog lerp's `pa6.w`), `pa8` (`T`), the same roles `@2` to `@11`
+  and `@26` use them in. **Both permutations agree** (#4's groups are `B`+vc.x at `o4`,
+  `N`+vc.y at `o8`, `V`+fog at `o12` and the fragment #5's `pa0.w`/`pa4.w` land on the
+  same two lanes), which is what pins the pairing: they could be swapped only by a
+  compiler that reorders the same source differently in two permutations. No iterator
+  table in the container confirms the pairing, so this stays 75, not 90.
+- **The vertex colour is `VertexColour1`, type 4, on the Vita** (four unsigned normalised
+  bytes at offset 24 of Altima's 32-byte edge vertex). `oag_rcs::rcsmodel::psp2::SubMesh::
+  colours` never carried it (`vertex_colour1` filters the PS4's type 11), so the loader gains
+  `vita_vertex_colour1`, read for these two lanes only.
+- **`Watercolour` is not authored on Altima's edge** (its four parameters are `Opacity`,
+  `SpecularColour`, `SpecularPower`, `Speed`), and the program's uniform image holds only
+  the literals (`2.0`, `0`), no default. **The edge takes the circuit's `fc15` pond
+  `ColourConstant` as its `Watercolour`, chosen, not measured** (a neighbour authored by the
+  same shader family, `(0.133, 0.173, 0.219)` against Park's own `Watercolour`
+  `(0.133, 0.173, 0.218)`).
+
+Drawn as kinds 7 and 8 of the water entry (`mesh::rcs::psp2::water`, `VITA_WATER_KIND`,
+`VITA_EDGE_KIND`, `shade.wesl`'s `vita_fc17` and `vita_edge`), classified by interface
+(`Law::of`): a time-scrolled material with one `NormalMap` and a `Watercolour`, or whose
+ambient-only program also samples the map and declares exactly `Opacity` and `Watercolour`.
+`Opacity` rides the header's `offset`, `SpecularColour` the specular lanes, the vertex
+colour's `x` and `y` the second coordinate pair (`vita_edge` reads them as the chain's
+`vc.x`, `vc.y`). The alpha chain is pinned by `vita_fc17_edge_lit_path` (a triangle drawn
+through the pipeline, five readings; drop the map's alpha, `vc.x`, `vc.y` or `Opacity` and
+one fails) and the batches by `omega_transparency_ground_truth`'s walk: Altima 5 `fc15` +
+5 edge, Park 4 `fc17`, Mall 3, Tower 4, Square 4, 25 in all, 9 of them `fc17`, 5 blended.
 
 Of the HD circuits' materials on the Vita, `reflectplane_dc_seawater` declares
 `screenSpaceReflectionTex` and `time` (34 programs each), `dc_seawater`
@@ -461,7 +498,7 @@ the place to start.
 | HD `reflectplane_dc_seawater` | under `original`: `light * ColourConstant + sun * SpecularColour * sat(N.H)^SpecularPower * sat(8 N.L)` over the two scrolled taps, through the chunk's frame (`mesh::rcs::water`); under `off`, the generic reading, where the non-lightmapped slots (Ubermall, Chenghou, Modesto's plain slot) add `DiffuseTexture1`, a normal map, as a glow | the planar reflection (`Reflectivity * R`) |
 | HD `water` (Amphiseum) | under `original`: the two taps, `light * ColourConstant + Reflectivity * probeTint(sky)`; under `off`, generic | nothing known |
 | 2048 `fc15_effects_vscroll_water` | under `original`: the constant colour times light through one RGB normal map scrolled `u + 0.05 t` and the tangent frame, plus the map-alpha-weighted Phong highlight (`mesh::rcs::psp2::water`, kind `VITA_SEA_KIND`, HD's `sea_block` layout with the second tap at weight zero); under `off`, the flat colour | the program's `liveLighting0specular` is the scene sun here, not read per circuit |
-| 2048 `fc17_*` (Altima's lavender sheets, Park) | the normal map drawn as a picture (`VITA_FAULTS`) | the program, see above (alpha open) |
+| 2048 `fc17_*` (Altima's lavender sheets, Park) | under `original`: the constant `Watercolour` (the edge's a chosen stand-in) times light through the normal map scrolled `v + Speed t`, plus `SpecularColour` Phong; the edge blended by `vc.y * Opacity + (1 - vc.y) a vc.x` (`mesh::rcs::psp2::water`, kinds 7 and 8); under `off`, the normal map drawn as a picture (`VITA_FAULTS`) | the Vita3K frame of the original (4a) |
 | Omega seas | the constant colour times light, flat (`psp2::lighting_only`) on the families whose instance is 2048's; `reflectplane_*` unread | normals, scroll, specular, reflection |
 | Refraction target (Vineta K glass) | drawn on HD, 2048 and Omega | n/a; it is the pattern the reflection target follows |
 
@@ -590,11 +627,28 @@ the rest; the sparkle moves between the two frames. Over the 2 s pair, on agains
 (the pond); elsewhere on and off agree to the bloom's single levels. The 300-to-420 difference is
 5,812 pixels over 24 levels larger with the law than without, in the same box (the road, the
 HUD clock and the lavender `fc17` sheets scroll in both). `off` is **pixel-identical to main**
-(0 differing pixels at both ticks against a build of main). What it does not
-do: the lavender sheets next to the pond (`fc17`) are still the normal map as a picture, which
-is the most visible Altima water and stays open; the highlight (its brightness a chosen stand-in, above) only shows near the sun's mirror
-angle (power 250), so a typical chase view shows the ripple shading and an occasional glint, not
-a constantly sparkling sea.
+(0 differing pixels at both ticks against a build of main). The lavender sheets
+(`fc17`) were the next thing: see the next paragraph. The highlight (its brightness a chosen stand-in, above) only shows near the
+sun's mirror angle (power 250), so a typical chase view shows the ripple shading and an
+occasional glint, not a constantly sparkling sea.
+
+**What a player sees at Altima's pond edge and Park's sea (2026-11-17, `water-fc17`, headless
+`--screenshot`, 1280x720, debug-profile `quick` build, ticks 300 / 120).** Altima, the pond
+under the road beside the shore (`--pose=-250,-8,1372 --pose-hold`, cameras
+`100,40,1150,0.05,-0.25,0.97` and `100,200,1100,0.1,-0.7,0.7`): under main's `original` the
+shore carries lavender wedges, one fanned round the ferry and one along the far bank, the
+water normal map painted as a picture. Under this change the wedges are gone: the pond is
+the dark water it is elsewhere, and the sheets only shade it, with the shoreline's gravel
+visible through them and the ferry sitting in dark water instead of a lavender fan. The
+sheets are translucent (the alpha chain, with `vc.x` and `vc.y` as the loader reads them),
+not a hard-edged foam strip; whether the original's edge shows a lighter foam colour is open,
+because `Watercolour` is unauthored on the edge and our stand-in is the pond's own colour (a
+Vita3K frame would settle it; **not taken**, see Open 4a). Park's sea changes by at most 4
+levels and over 1,391 pixels above one level (the sun is far from the mirror angle from that
+view and the colour was already `Watercolour`): the effect there is the moving ripple shading
+and the glint only. `off` is **pixel-identical** to a build of the parent commit (0 differing
+pixels at Altima's `100,200,1100` pose, 300 ticks, and Park's `1000,200,-3500` pose, 120
+ticks).
 
 ## Lineage, per finding
 
@@ -602,7 +656,7 @@ a constantly sparkling sea.
 | --- | --- | --- | --- |
 | Sea law (two taps, planar reflection) | checked, applies on its HD circuits (`reflectplane_dc_seawater` declares `screenSpaceReflectionTex` and `time`), not wired: its draw goes through `psp2`, which classifies by the GXP program's interface and has no tap reader; the `0.05` and `1.15` literals are not checked in the GXP | checked, applies (HD's interface exactly), not wired: same `psp2` path, the literals unread in the GCN program | taps drawn without the planar term (`mesh::rcs::water`) |
 | Reflect set (bit 3 / `wohdmeshreflect`) | checked, applies (name tag, 353 and 52), not wired | checked, applies (268 and 73), not wired | measured here |
-| 2048 own water (`fc15`/`fc17`) | `fc15` measured and drawn here, `fc17` open | **checked, differs**: Omega's 2048 mode replaces both with `reflectplane_*` (two taps, Fresnel planar reflection) on the same meshes, its programs are GCN, and the build matches GXP only; Omega's Zone models keep `fc17` and no `fc15` ships there, so nothing is drawn for free | not applicable |
+| 2048 own water (`fc15`/`fc17`) | `fc15` and `fc17` measured and drawn here | **checked, differs**: Omega's 2048 mode replaces both with `reflectplane_*` (two taps, Fresnel planar reflection) on the same meshes, its programs are GCN, and the build matches GXP only; Omega's Zone models keep `fc17` and no `fc15` ships there: **checked, applies, not wired** for `fc17` - the build classifies GXP programs only and `water::plan` returns on a PS4 source, so the edge draws as before (flat constant, normal map unread); the law (same material name and, if the instance record matches, the same `Opacity`/`Speed`/`SpecularColour` parameters) would apply once the GCN program is read, which this lane did not do | not applicable |
 | Amphiseum `water` | not checked (the Vita's Amphiseum shows no water material by name) | checked, differs (cube probe) | drawn (`mesh::rcs::water`) |
 | Vineta K scroll table | checked, differs (`dc_seawater`) | checked, applies (`water_test_2_castnoshipshadows`), `water_noref` replaced by `temp_water`, not wired | drawn (`mesh::rcs::water`) |
 | `enhanced` (own generated map, Pulse and Pure only) | checked, differs: nothing is offered (`Title::water.enhanced` empty); its seas are drawn through `psp2`, no `.vex` batches | checked, differs: same, and Omega's own law is the planned one | not applicable (HD's `original` is the law `enhanced` follows) |
@@ -617,12 +671,12 @@ a constantly sparkling sea.
    caustic pass to compare against ours (batch state `0x202`'s blend is read: additive by alpha).
 3. Pure's caustic frames on Vineta K.
 4. Omega's `Reflectivity*` combine and `Speed` law (a GCN instruction read),
-   and the alpha chain of 2048's `fc17` edge program (which vertex outputs `pa0.w` and
-   `pa4.w` of its lit fragment program carry; the colour and specular are read, see "2048
-   (Vita)").
-4a. No Vita3K frame of Altima's sea exists: the look of `fc15` is not compared against the
-   original (the lane's 45-minute box was not spent on one; the instruction read is the
-   evidence).
+   (2048's `fc17` edge program is read whole, "2048 (Vita)": its `Watercolour` is unauthored
+   and drawn as the pond's `ColourConstant`, chosen; Omega's Zone `fc17` is not wired).
+4a. No Vita3K frame of Altima's sea exists: the look of `fc15` and `fc17` is not compared against the
+   original (`water-fc17` did not take the 45-minute capture; the edge's stand-in `Watercolour`
+   and the lane pairing of `pa0.w`/`pa4.w`, 75, are what a frame would test: walk Empire Climb in
+   `scripts/vita3k-drive.py race`, hold position at the pond, `shot` and compare the shore wedges).
 5. `sea`, `seareflect`, `seaweed` class nodes: a class census over PSP `.vex`.
 6. Blue Ridge's `Water` texture is embedded and bound by no batch; whether a node of
    another class draws it is unread.
