@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-17
-summary: "HD: frictionless spark (row 5), smoke anchor (row 8) and a frame pair (row 9) still open; pair-contact spark, smoke kill/carry, spark strength law and opponents' sparks landed"
+summary: "HD: frictionless spark (row 5), smoke anchor (row 8) and a frame pair (row 9) open; rows 1-4, 6, 7 landed"
 size: M (55)
 difficulty: medium (60)
 ---
