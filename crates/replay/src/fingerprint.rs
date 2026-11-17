@@ -91,9 +91,14 @@ mod tests {
         let mut recorder = Recorder::new(header, 99);
         for tick in 0..ticks {
             let mut inputs = oag_gameplay::PlayerInputs::none();
-            let mut snapshot = InputSnapshot::default();
-            snapshot.stick_x = if nudge_at == Some(tick) { 0.5 } else { 0.25 };
-            inputs.set(0, snapshot);
+            let stick_x = if nudge_at == Some(tick) { 0.5 } else { 0.25 };
+            inputs.set(
+                0,
+                InputSnapshot {
+                    stick_x,
+                    ..InputSnapshot::default()
+                },
+            );
             inputs.set(1, InputSnapshot::default());
             recorder.record(&inputs, || tick);
         }
