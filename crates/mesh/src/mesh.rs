@@ -416,8 +416,8 @@ pub use flap::Flap;
 mod batch_placement;
 pub use batch_placement::{BatchPlacement, batch_placements};
 
-pub mod rcs;
 pub mod caustic_pass;
+pub mod rcs;
 pub mod shine_pass;
 pub mod ship_skin;
 pub mod sky_cube;

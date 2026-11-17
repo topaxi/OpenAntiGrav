@@ -126,7 +126,8 @@ pub fn build(track: &Model) -> Option<Pass> {
         };
         let first = indices.len() as u32;
         let colour = colour(flagged.scale);
-        for &index in &track.indices[flagged.draw.range.start as usize..flagged.draw.range.end as usize]
+        for &index in
+            &track.indices[flagged.draw.range.start as usize..flagged.draw.range.end as usize]
         {
             let slot = &mut remap[index as usize];
             let mapped = *slot.get_or_insert_with(|| {

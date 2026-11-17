@@ -20,7 +20,10 @@ fn the_pass_names_the_odd_files() {
 #[test]
 fn the_tint_is_the_authored_triple_times_the_mesh_byte() {
     assert_eq!(colour(255), [51.0 / 255.0, 1.0, 204.0 / 255.0, 1.0]);
-    assert_eq!(colour(204), [40.0 / 255.0, 204.0 / 255.0, 163.0 / 255.0, 1.0]);
+    assert_eq!(
+        colour(204),
+        [40.0 / 255.0, 204.0 / 255.0, 163.0 / 255.0, 1.0]
+    );
     assert_eq!(colour(0), [0.0, 0.0, 0.0, 1.0]);
 }
 
@@ -29,7 +32,13 @@ fn a_tile_is_seventy_one_and_a_bit_units_and_height_moves_nothing() {
     let tile = 1.0 / UV_SCALE;
     let at = uv([tile, 3.0, 0.0], [0.0; 3]);
     assert!((at[0] - 1.0).abs() < 1e-6 && at[1] == 0.0);
-    assert_eq!(uv([5.0, 0.0, 7.0], [0.0; 3]), uv([5.0, 90.0, 7.0], [0.0; 3]));
-    assert_eq!(uv([5.0, 0.0, 7.0], [1.0, 2.0, 3.0]), uv([4.0, 9.0, 4.0], [0.0; 3]));
+    assert_eq!(
+        uv([5.0, 0.0, 7.0], [0.0; 3]),
+        uv([5.0, 90.0, 7.0], [0.0; 3])
+    );
+    assert_eq!(
+        uv([5.0, 0.0, 7.0], [1.0, 2.0, 3.0]),
+        uv([4.0, 9.0, 4.0], [0.0; 3])
+    );
     assert_eq!(UV_SCALE, 0.014);
 }
