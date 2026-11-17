@@ -94,13 +94,13 @@ not `Mode::from_name`: `from_name` is the settings file's and `--mode`'s reader 
 Tournament (a campaign's tournament leg is launched by `Session::launch_campaign_cell`, never
 chosen), while a replay header records the mode its race ran, so a file must be able to name it. A
 campaign recording rebuilds only with its `[options] campaign_skill`; without it the field flies at
-another tuning and the file stops matching within seconds (five Pulse EU Flash tournament races
-from a Steam Deck, written before the key existed, desynced at tick 360 or 420). Proved on Pulse
-only, not in the table above: `crates/raceplay/tests/campaign_replay_ground_truth.rs` (those five
-files, with the key inserted by name; local, never committed) and
-`replay_viewer_ground_truth::a_campaign_race_recorded_from_the_menus_reproduces` (the campaign's
+another tuning and the file stops matching within seconds. Proved on Pulse only, not in the table
+above: `replay_viewer_ground_truth::a_campaign_race_recorded_from_the_menus_reproduces` (the campaign's
 first cell, a Single Race against the original driver, recorded from the menus: it records the key,
-reproduces every stored hash, and desyncs without it). 2048's event
+reproduces every stored hash, and desyncs without it). **Old recordings are not supported across a
+simulation or state-hash change** (policy, 2026-11-17): a physics law, a tuning or a new hashed field
+desyncs them, at the first stored hash or, when the tick-zero hash moves, at open. No test pins how an
+outdated file fails; replay coverage is a recording the same build makes inside the test. 2048's event
 campaign (`Launch::Event`, `grid_teams`) is still refused by the tick-zero hash.
 
 The four titles' 7,200-tick Time Trial recordings are re-driven through the rebuild, not through a

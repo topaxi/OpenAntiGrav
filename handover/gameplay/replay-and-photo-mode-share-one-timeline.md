@@ -52,8 +52,7 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
 - **Campaign replays (fixed 2026-11-08, `replay-fix`).** Five campaign recordings from the maintainer's Steam Deck could not
   be watched. `Mode::from_name` skips Tournament, so `Mode::from_recorded_name` reads a header. The campaign launch's AI
   tuning and finished-craft thrust were never recorded, so `[options] campaign_skill` carries them. There is no back-compat
-  (unreleased; the maintainer deletes the old files). `campaign_replay_ground_truth` verifies the five Deck files with the key
-  inserted by name, from `data/reference/replays/pulse-tournament/` (local, never committed).
+  (unreleased; the maintainer deletes the old files). The five Deck files are no longer a test (old recordings are unsupported across hash changes).
   `replay_viewer_ground_truth::a_campaign_race_recorded_from_the_menus_reproduces` passes with `data/dlc` mounted.
   `docs/formats/replay-file.md` names `campaign_skill` and Tournament.
 - **Viewer blur (fixed, `replay-fix`).** "LOD and blur all over the place" was motion blur history surviving a seek, so the
