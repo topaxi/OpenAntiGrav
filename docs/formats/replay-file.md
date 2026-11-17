@@ -95,7 +95,9 @@ Tournament (a campaign's tournament leg is launched by `Session::launch_campaign
 chosen), while a replay header records the mode its race ran, so a file must be able to name it. A
 campaign recording rebuilds only with its `[options] campaign_skill`; without it the field flies at
 another tuning and the file stops matching within seconds (five Pulse EU Flash tournament races
-from a Steam Deck, written before the key existed, desynced at tick 360 or 420). Proved on Pulse
+from a Steam Deck, written before the key existed, desynced at tick 360 or 420, later at tick 60 once Pulse flew its measured body damping, and since
+2026-11-16 at tick 0: arena-rescue's `beneath_wide` flag joined the state hash, so the viewer
+refuses all five at open, and the ground truth asserts that refusal). Proved on Pulse
 only, not in the table above: `crates/raceplay/tests/campaign_replay_ground_truth.rs` (those five
 files, with the key inserted by name; local, never committed) and
 `replay_viewer_ground_truth::a_campaign_race_recorded_from_the_menus_reproduces` (the campaign's

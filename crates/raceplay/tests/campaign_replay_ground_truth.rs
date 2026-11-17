@@ -20,10 +20,13 @@
 //! (`contact-response.md`, "an unshielded craft-to-craft bump charges the energy pool"), so each
 //! leg diverged earlier, at the field's first bump off the grid (tick 360 or 420). Pulse now flies
 //! its measured body damping (`Laws::PULSE`), which changes every craft's flight from the grid, so
-//! each leg diverges at the first stored hash (tick 60). The maintainer accepts that a physics
+//! each leg diverged at the first stored hash (tick 60). Arena-rescue's per-slot `beneath_wide`
+//! flag is now part of the state hash (`docs/gameplay/ai.md`, "The race's beneath rescue asks the
+//! same"), which moves the tick-zero hash itself, so `Viewer::open` refuses every leg before a
+//! tick runs (`docs/formats/replay-file.md`). The maintainer accepts that a physics or hash-layout
 //! change desyncs old recordings. Each
-//! leg names its first diverging tick (`Some(tick)` in `deck_tests!`): a leg that stops diverging,
-//! or diverges elsewhere, fails. A re-recorded file takes `None` and must reproduce to its end.
+//! leg names its first diverging tick (`Some(tick)` in `deck_tests!`, `Some(0)` being the refusal to open): a leg that stops
+//! diverging, or diverges elsewhere, fails. A re-recorded file takes `None` and must reproduce to its end.
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay --run-ignored all campaign_replay_ground_truth
@@ -32,7 +35,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_raceplay as race;
-use oag_raceplay::timeline::Pass;
+use oag_raceplay::timeline::{OpenError, Pass};
 use oag_replay::Replay;
 
 fn root() -> PathBuf {
@@ -84,7 +87,8 @@ fn source() -> Option<PathBuf> {
 }
 
 /// Opens `name` as WATCH does, plays the opening pass to its end and seeks the race on screen
-/// to the last tick, or checks the tick it diverges at when `desync_at` names one.
+/// to the last tick, or checks the tick it diverges at when `desync_at` names one (tick 0 is
+/// the viewer refusing to open the file).
 fn watches_to_the_end(name: &str, desync_at: Option<u64>) {
     let (Some(mut replay), Some(source)) = (recording(name), source()) else {
         return;
@@ -99,8 +103,18 @@ fn watches_to_the_end(name: &str, desync_at: Option<u64>) {
     let loaded = race::load(&options).unwrap_or_else(|e| panic!("{name}: loading: {e:#}"));
     let mut on_screen = race::Race::start(loaded.setup.clone());
     let ticks = replay.ticks();
-    let mut viewer = race::viewer::Viewer::open(loaded.setup, replay)
-        .unwrap_or_else(|e| panic!("{name}: refused at tick zero: {e}"));
+    let mut viewer = match (race::viewer::Viewer::open(loaded.setup, replay), desync_at) {
+        (Ok(viewer), _) => viewer,
+        (Err(OpenError::Desync(desync)), Some(tick)) => {
+            assert_eq!(
+                desync.tick, tick,
+                "{name}: the viewer refuses the recording at another tick"
+            );
+            println!("{name}: refused at tick {tick}, as expected");
+            return;
+        }
+        (Err(e), _) => panic!("{name}: refused: {e}"),
+    };
     viewer.begin(&mut on_screen).expect("seats the race");
     let pass = loop {
         match viewer.pass() {
@@ -146,9 +160,9 @@ macro_rules! deck_tests {
 }
 
 deck_tests! {
-    leg_1_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126092-1.oagr", Some(60);
-    leg_2_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126226-1.oagr", Some(60);
-    leg_3_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126364-1.oagr", Some(60);
-    leg_4_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126501-1.oagr", Some(60);
-    leg_5_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126656-1.oagr", Some(60);
+    leg_1_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126092-1.oagr", Some(0);
+    leg_2_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126226-1.oagr", Some(0);
+    leg_3_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126364-1.oagr", Some(0);
+    leg_4_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126501-1.oagr", Some(0);
+    leg_5_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126656-1.oagr", Some(0);
 }
