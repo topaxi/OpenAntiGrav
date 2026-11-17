@@ -105,12 +105,29 @@ so 16 frames at 30 per second, a 0.533 s loop. `Texture_LoadEffectSurfaces` load
 
 ## PS2
 
-**Not checked in the PS2 executable.** The bit is in the PS2 disc's own data (above),
-and byte 3 of a batch header is the same field on both platforms
-(`oag_vex::vex::Batch::header_flags`). A PCSX2 frame of Vostok Reef's underwater
-section is the check; until then the PSP law is what an implementation inherits.
+**The PS2 executable was not read** (no PS2 program was open in Ghidra when this was wired);
+the law is **inherited from PSP**, no PS2 confidence. What the PS2 disc itself shows:
+
+- Byte 3 of a batch header is the same field (`Batch::draws_in_caustic_pass`), and only
+  Vostok Reef carries the bit (`crates/vex/tests/caustic_pass_ground_truth.rs`).
+- The frames ship as `Data\Tex\caustics\save.NN.pct` in `WADS2.WAD` (odd `NN`, 01 to 31, found
+  by `Texture_FindOrLoad`'s `.mip` to `.pct` rewrite), so the PS2 build has the same 16-frame table.
+- The mesh payload's byte at `+0x0e` (the tint scale) takes the values 25, 51, 76, 102, 127, 153,
+  204 and 229 on the flagged meshes: tenths of 255, so the PSP's `/255` reading holds (a PS2
+  `0x80 = 1.0` reading would be impossible past 128).
+- Batch state `0x202` is `pass_mask` `0x202`: `BlendClass::Additive` (`GU_ADD`, `GU_SRC_ALPHA`,
+  `GU_FIX` white) and alpha test `GREATER 0` (`Batch::blend_class`, `alpha_test_reference`), which
+  settles the blend this page listed as not read.
+
+Still open: the quarter turn's axis (read as about the horizontal axis, so the projection is
+top-down: confidence 70, the frames show the pattern lying on the floor), the mesh fog function
+(`FUN_0891eac0`, drawn here with black fog), and a PCSX2 frame.
 
 ## What this engine draws
 
-Nothing: `Batch::header_flags & 0x04` is unread and no caustic frame is loaded for a
-race. A Vostok Reef race draws its floor without the overlay.
+The pass, on the PS2 disc's Vostok Reef (`oag_mesh::mesh::caustic_pass`, `oag_raceplay`'s
+`scene::caustic`): 255 of 257 flagged batches of `track.vex` (the other two sit under an animated
+node and are left undrawn), unlit, tinted `tint * byte / 255`, additive by the frame's alpha, depth
+test only, frame `(int)(clock * 30) & 0xf`. `graphics.water = off` skips it. The coordinate is the
+node-local position rotated by the node's rotation (the node translation is dropped, as the matrix
+does), so a vertex moved in height keeps its coordinate.

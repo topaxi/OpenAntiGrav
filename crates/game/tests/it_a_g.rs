@@ -24,6 +24,7 @@ mod campaign_cell_class_census_ground_truth;
 mod campaign_cursor_ground_truth;
 mod campaign_medal;
 mod campaign_pointer_ground_truth;
+mod caustic_pass_ground_truth;
 mod cockpit_hit_ground_truth;
 mod countdown_voice_ground_truth;
 mod custom_campaign_ground_truth;
