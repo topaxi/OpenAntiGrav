@@ -314,8 +314,8 @@ fn a_degenerate_light_direction_still_snaps_to_something_finite() {
 #[test]
 fn a_resolution_scales_the_atlas_layout_whole() {
     assert_eq!(Resolution::ORIGINAL.atlas(), (ATLAS_WIDTH, ATLAS_HEIGHT));
-    for rank in 0..MAX_CASTERS {
-        assert_eq!(Resolution::ORIGINAL.square(rank), RANK_SQUARES[rank]);
+    for (rank, square) in RANK_SQUARES.into_iter().enumerate() {
+        assert_eq!(Resolution::ORIGINAL.square(rank), square);
     }
     assert_eq!(Resolution::scaled(1).square(0).2, 768);
     for scale in [1, 2, 4] {
@@ -325,7 +325,7 @@ fn a_resolution_scales_the_atlas_layout_whole() {
             width <= 8192 && height <= 8192,
             "within a default device limit"
         );
-        for rank in 0..MAX_CASTERS {
+        for (rank, original_side) in RANK_SIDES.into_iter().enumerate() {
             let (x, y, side) = resolution.square(rank);
             assert!(
                 x + side <= width && y + side <= height,
@@ -333,7 +333,7 @@ fn a_resolution_scales_the_atlas_layout_whole() {
             );
             assert_eq!(
                 side * RANK_SIDES[0],
-                resolution.square(0).2 * RANK_SIDES[rank],
+                resolution.square(0).2 * original_side,
                 "rank {rank} keeps its ratio to the nearest craft's side"
             );
         }

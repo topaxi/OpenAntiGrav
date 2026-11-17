@@ -232,6 +232,10 @@ optional = true
 type = "string"
 optional = true
 
+[types.render-profile.shadow_resolution]
+type = "string"
+optional = true
+
 [types.render-profile.water]
 type = "string"
 optional = true
