@@ -373,8 +373,8 @@ impl Driver {
         let target = match followed {
             Some(plan) => {
                 let run_up = line.takeoff_within(index, planned::RUN_UP_REACH);
-                let least = planned::least_share(line, index, run_up);
-                let target = planned::target(plan, index, speed, tuning, &personality, least);
+                let approach = planned::Approach::at(line, index, run_up);
+                let target = planned::target(plan, index, speed, tuning, &personality, approach);
                 // A plan learned on a quicker-turning hull is followed at the
                 // share this one can carry (`SpeedPlan::share_for`), in corners
                 // only: the speed a gap needs is the gap's, whatever the hull
