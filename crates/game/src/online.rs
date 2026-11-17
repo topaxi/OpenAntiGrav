@@ -274,19 +274,15 @@ pub fn run(plan: &Plan) -> Result<Connect> {
                     hosting = Some(opened);
                     stage = 2;
                 }
-                _ => {}
-            }
-            match &plan.action {
-                Action::Create(_) if plan.host.is_some() => {}
-                Action::Create(settings) => {
+                (Action::Create(settings), None) => {
                     lobby.create(settings.clone());
                     stage = 2;
                 }
-                Action::Join(Some(room)) => {
+                (Action::Join(Some(room)), _) => {
                     lobby.join(*room);
                     stage = 2;
                 }
-                Action::Join(None) => {}
+                (Action::Join(None), _) => {}
             }
         }
         if stage == 1 {
