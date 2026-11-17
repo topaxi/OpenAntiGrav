@@ -56,18 +56,20 @@ fn build_under(
     .ok()
 }
 
-/// `graphics.water` reaches the build, and every value draws today's constant reading: the
-/// same four classified slots (one lit colour, three glint-only), the same vertices. Dropping
-/// the setting's wiring leaves the report naming `original` under every value and fails here.
+/// `graphics.water` reaches the build: `off` (and the laws not drawn here, `2048` and
+/// `omega`) keep the constant reading, one lit-colour and three glint-only slots with no
+/// taps; `original` and `hd` draw the taps on all four and change the vertices' slots.
+/// Dropping the setting's wiring leaves the report naming `original` under every value and
+/// fails here; dropping the taps leaves `original` equal to `off`.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn every_water_setting_reaches_the_build_and_draws_the_constant_reading() {
+fn every_water_setting_reaches_the_build_and_only_hd_s_laws_draw_the_taps() {
     let Some(image) = oag_testdata::image(IMAGE) else {
         return;
     };
     let reads = Reads::new();
     let path = "/data/environments/01_vineta_k/track.vex";
-    let mut baseline: Option<(usize, usize, Vec<u32>)> = None;
+    let mut seen: Vec<(oag_display::display::Water, Vec<u32>)> = Vec::new();
     for law in oag_display::display::Water::ALL {
         let (model, report) = build_under(&reads, &image, path, law).expect("Vineta K builds");
         assert_eq!(report.water_law, law, "the build was asked for {law}");
@@ -75,17 +77,27 @@ fn every_water_setting_reaches_the_build_and_draws_the_constant_reading() {
             report.describe().contains(&format!("water setting: {law}")),
             "the loader report names the law"
         );
-        let seen = (
+        let taps = matches!(
+            law,
+            oag_display::display::Water::Original | oag_display::display::Water::Hd
+        );
+        let counts = (
             report.water_lit_colour,
             report.water_glint_only,
-            model.vertices.iter().map(|v| v.slots).collect::<Vec<_>>(),
+            report.water_taps_drawn,
         );
-        assert_eq!((seen.0, seen.1), (1, 3), "{law}: classified slots");
-        match &baseline {
-            None => baseline = Some(seen),
-            Some(first) => assert!(first == &seen, "{law}: draws what the first value drew"),
-        }
+        assert_eq!(counts, if taps { (0, 0, 4) } else { (1, 3, 0) }, "{law}");
+        seen.push((law, model.vertices.iter().map(|v| v.slots).collect()));
     }
+    let slots_of = |law| &seen.iter().find(|(l, _)| *l == law).expect("built").1;
+    use oag_display::display::Water;
+    assert!(slots_of(Water::Off) == slots_of(Water::Vita2048));
+    assert!(slots_of(Water::Off) == slots_of(Water::Omega));
+    assert!(slots_of(Water::Original) == slots_of(Water::Hd));
+    assert!(
+        slots_of(Water::Off) != slots_of(Water::Original),
+        "the taps move the slots"
+    );
 }
 
 /// How many drawn materials and chunks resolve no shader variant, per circuit
@@ -103,20 +115,38 @@ fn variant_gap(circuit: &str, track: &str) -> (usize, usize) {
     }
 }
 
-/// `(water_lit_colour, water_glint_only, ice_bound)` for one circuit's two
-/// directions, with every one of the models building and `ice_unread` zero.
-fn reach(circuit: &str) -> (usize, usize, usize) {
-    let Some(image) = oag_testdata::image(IMAGE) else {
-        return (usize::MAX, 0, 0);
-    };
+/// What one circuit's two directions classify, under `original`: the water
+/// families' chunks per direction (forward, reverse; `(sea, sky, lit colour, glint)`),
+/// the water materials drawn with their taps and the ice materials bound, with every one
+/// of the models building and `ice_unread` zero.
+#[derive(Debug, PartialEq, Eq)]
+struct Reach {
+    chunks: [(usize, usize, usize, usize); 2],
+    taps_drawn: usize,
+    ice: usize,
+}
+
+fn reach(circuit: &str) -> Option<Reach> {
+    let image = oag_testdata::image(IMAGE)?;
     let reads = Reads::new();
-    let (mut lit, mut glint, mut ice) = (0, 0, 0);
-    for track in ["track.vex", "track_reversed.vex"] {
+    let mut got = Reach {
+        chunks: [(0, 0, 0, 0); 2],
+        taps_drawn: 0,
+        ice: 0,
+    };
+    for (direction, track) in ["track.vex", "track_reversed.vex"].into_iter().enumerate() {
         let path = format!("/data/environments/{circuit}/{track}");
         let Some((model, report)) = build(&reads, &image, &path) else {
             continue;
         };
         assert_eq!(report.ice_unread, 0, "{path}");
+        let c = report.water_chunks;
+        got.chunks[direction] = (c.sea, c.sky, c.lit_colour, c.glint);
+        got.taps_drawn += report.water_taps_drawn;
+        println!(
+            "{path}: taps drawn {}, unread {}, blocked {}",
+            report.water_taps_drawn, report.water_taps_unread, report.water_taps_blocked
+        );
         let (unshipped, missed) = variant_gap(circuit, track);
         assert!(
             report.variants_unshipped <= unshipped && report.variant_chunks_missed <= missed,
@@ -130,9 +160,12 @@ fn reach(circuit: &str) -> (usize, usize, usize) {
             "{path}: a drawn colour texture is not a picture: {}",
             crate::track_albedo::describe(&faults)
         );
-        lit += report.water_lit_colour;
-        glint += report.water_glint_only;
-        ice += report.ice_bound;
+        assert_eq!(
+            (report.water_lit_colour, report.water_glint_only),
+            (0, 0),
+            "{path}: under `original` no water keeps the constant reading"
+        );
+        got.ice += report.ice_bound;
         if report.ice_bound > 0 {
             assert!(
                 model.vertices.iter().any(|v| v.slots & slots::ICE != 0),
@@ -157,118 +190,154 @@ fn reach(circuit: &str) -> (usize, usize, usize) {
             );
         }
     }
-    (lit, glint, ice)
+    Some(got)
 }
 
 macro_rules! reach_test {
-    ($name:ident, $circuit:literal, $expected:expr, $why:literal) => {
+    ($name:ident, $circuit:literal, $chunks:expr, $taps:expr, $ice:expr, $why:literal) => {
         #[test]
         #[ignore = "needs a decrypted PS3 disc image in data/images"]
         fn $name() {
-            let got = reach($circuit);
-            if got.0 == usize::MAX {
+            let Some(got) = reach($circuit) else {
                 return;
-            }
-            assert_eq!(got, $expected, $why);
+            };
+            let want = Reach {
+                chunks: $chunks,
+                taps_drawn: $taps,
+                ice: $ice,
+            };
+            assert_eq!(got, want, $why);
         }
     };
 }
 
 reach_test!(
-    vineta_k_has_one_lit_colour_sea_and_three_glint_seas_per_direction,
+    vineta_k_has_two_lit_colour_chunks_and_three_glint_chunks_per_direction,
     "01_vineta_k",
-    (2, 6, 0),
-    "water_test_2 x1 and water_noref x3, both directions"
+    [(0, 0, 2, 3); 2],
+    8,
+    0,
+    "water_test_2 x1 (2 chunks) and water_noref x3 (3 chunks), both directions"
 );
 reach_test!(
     sebenco_climb_has_three_ice_materials_per_direction,
     "10_sebenco_climb",
-    (0, 0, 6),
+    [(0, 0, 0, 0); 2],
+    0,
+    6,
     "sebenco_ice x3, both directions"
+);
+reach_test!(
+    moa_therma_has_thirty_one_sea_chunks_per_direction,
+    "03_track",
+    [(31, 0, 0, 0); 2],
+    8,
+    0,
+    "reflectplane_dc_seawater: 12 + 1 + 14 + 4 chunks over four slots, both directions"
+);
+reach_test!(
+    ubermall_has_thirteen_sea_chunks_forward_and_seven_reversed,
+    "05_ubermall",
+    [(13, 0, 0, 0), (7, 0, 0, 0)],
+    6,
+    0,
+    "reflectplane_dc_seawater: 11 + 1 + 1 forward, 5 + 1 + 1 reversed"
+);
+reach_test!(
+    chenghou_project_has_three_sea_chunks_per_direction,
+    "04_chenghou_project",
+    [(3, 0, 0, 0); 2],
+    2,
+    0,
+    "reflectplane_dc_seawater x1, both directions"
+);
+reach_test!(
+    modesto_heights_has_five_sea_chunks_per_direction,
+    "modesto_heights",
+    [(5, 0, 0, 0); 2],
+    4,
+    0,
+    "reflectplane_dc_seawater: 5 chunks, and a lightmapped slot drawn only as a chunk's second surface"
+);
+reach_test!(
+    amphiseum_has_two_sky_lit_pool_chunks_per_direction,
+    "amphiseum",
+    [(0, 2, 0, 0); 2],
+    4,
+    0,
+    "water x2 slots, one chunk each, both directions"
 );
 reach_test!(
     no_other_circuit_is_reached_02,
     "02_track",
-    (0, 0, 0),
-    "none"
-);
-reach_test!(
-    no_other_circuit_is_reached_03,
-    "03_track",
-    (0, 0, 0),
-    "none"
-);
-reach_test!(
-    no_other_circuit_is_reached_04,
-    "04_chenghou_project",
-    (0, 0, 0),
-    "none"
-);
-reach_test!(
-    no_other_circuit_is_reached_05,
-    "05_ubermall",
-    (0, 0, 0),
-    "none"
+    [(0, 0, 0, 0); 2],
+    0,
+    0,
+    "no water and no ice"
 );
 reach_test!(
     no_other_circuit_is_reached_12,
     "12_sol_2",
-    (0, 0, 0),
-    "none"
+    [(0, 0, 0, 0); 2],
+    0,
+    0,
+    "no water and no ice"
 );
 reach_test!(
     no_other_circuit_is_reached_15,
     "15_anulpha_pass",
-    (0, 0, 0),
-    "none"
-);
-reach_test!(
-    no_other_circuit_is_reached_amphiseum,
-    "amphiseum",
-    (0, 0, 0),
-    "none"
-);
-reach_test!(
-    no_other_circuit_is_reached_modesto,
-    "modesto_heights",
-    (0, 0, 0),
-    "none"
+    [(0, 0, 0, 0); 2],
+    0,
+    0,
+    "no water and no ice"
 );
 reach_test!(
     no_other_circuit_is_reached_talons,
     "talons_junction",
-    (0, 0, 0),
-    "none"
+    [(0, 0, 0, 0); 2],
+    0,
+    0,
+    "no water and no ice"
 );
 reach_test!(
     no_other_circuit_is_reached_tech,
     "tech_de_ra",
-    (0, 0, 0),
-    "none"
+    [(0, 0, 0, 0); 2],
+    0,
+    0,
+    "no water and no ice"
 );
 reach_test!(
     no_other_circuit_is_reached_zone1,
     "zone_1",
-    (0, 0, 0),
-    "none"
+    [(0, 0, 0, 0); 2],
+    0,
+    0,
+    "no water and no ice"
 );
 reach_test!(
     no_other_circuit_is_reached_zone2,
     "zone_2",
-    (0, 0, 0),
-    "none"
+    [(0, 0, 0, 0); 2],
+    0,
+    0,
+    "no water and no ice"
 );
 reach_test!(
     no_other_circuit_is_reached_zone3,
     "zone_3",
-    (0, 0, 0),
-    "none"
+    [(0, 0, 0, 0); 2],
+    0,
+    0,
+    "no water and no ice"
 );
 reach_test!(
     no_other_circuit_is_reached_zone4,
     "zone_4",
-    (0, 0, 0),
-    "none"
+    [(0, 0, 0, 0); 2],
+    0,
+    0,
+    "no water and no ice"
 );
 
 /// What the resolved lit-race program of one material reads, by unit.

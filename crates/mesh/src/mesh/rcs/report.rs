@@ -354,6 +354,19 @@ pub struct Report {
     /// (`graphics.water`). Every value draws the constant reading until its
     /// law is wired (see `super::water::reading`).
     pub water_law: oag_display::display::Water,
+    /// Chunks of each water family `super::water` classifies, whatever the law draws:
+    /// `reflectplane_dc_seawater`, Amphiseum's `water`, `water_test_2` and `water_noref`.
+    pub water_chunks: crate::mesh::rcs::WaterChunks,
+    /// Water materials drawn with their scrolled taps (`graphics.water` `original` on HD).
+    pub water_taps_drawn: usize,
+    /// Water materials under such a law whose taps were not drawn: the material does not
+    /// author what the program reads (`unread`), or the slot's glow index is taken or the
+    /// table is full (`blocked`). They keep the reading they had before.
+    pub water_taps_unread: usize,
+    pub water_taps_blocked: usize,
+    /// Of the drawn ones, slots whose generic additive glow (a normal map read as one) the
+    /// taps replaced.
+    pub water_glow_replaced: usize,
     /// Sebenco ice materials drawn as their authored water and ice lerp, and
     /// ones whose textures or colours could not be read (drawn as before).
     pub ice_bound: usize,
@@ -640,13 +653,29 @@ impl Report {
         } + &match self.light_cone_bound {
             0 => String::new(),
             n => format!(", {n} light-cone material(s) with their facing ramp bound"),
-        } + &match self.water_lit_colour + self.water_glint_only {
+        } + &match self.water_lit_colour + self.water_glint_only + self.water_taps_drawn {
             0 => String::new(),
+            _ if self.water_taps_drawn > 0 => format!(
+                ", {} water material(s) drawn with their scrolled normal taps ({} sea, {} sky-lit, \
+                 {} lit-colour, {} glint chunks); the planar reflection is NOT drawn (water setting: {})",
+                self.water_taps_drawn,
+                self.water_chunks.sea,
+                self.water_chunks.sky,
+                self.water_chunks.lit_colour,
+                self.water_chunks.glint,
+                self.water_law
+            ),
             n => format!(
                 ", {n} water material(s) whose picture is a normal map, not painted \
                  ({} as lit vertex colour, {} as black plus a glint); their reflection \
                  (the engine's paraboloid probe) is NOT drawn (water setting: {})",
                 self.water_lit_colour, self.water_glint_only, self.water_law
+            ),
+        } + &match self.water_taps_unread + self.water_taps_blocked {
+            0 => String::new(),
+            _ => format!(
+                ", {} water material(s) whose taps are unread and {} blocked (glow index taken or table full)",
+                self.water_taps_unread, self.water_taps_blocked
             ),
         } + &match self.ice_bound {
             0 => String::new(),

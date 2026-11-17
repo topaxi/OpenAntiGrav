@@ -12,6 +12,20 @@
 //! declares the paraboloid probe, at least one other sampler is decoded as a
 //! normal, no declared sampler besides the lightmap is read as a colour, and
 //! the baked-lightmap lighting formula is absent.
+//!
+//! **The sea and Amphiseum's pool** are classified by their own program facts
+//! (`docs/rendering/water.md`, "HD/Fury: `reflectplane_dc_seawater`" and
+//! "HD/Fury: Vineta K and Amphiseum"): `reflectplane_dc_seawater` declares
+//! `screenSpaceReflectionTex`, `DiffuseTexture` and `DiffuseTexture1` and reads
+//! neither of the two as a colour; Amphiseum's `water` declares the paraboloid,
+//! `NormalTexture2`, `ColourConstant` and `time`.
+//!
+//! Under a law that draws the taps ([`Reading::Taps`]: HD's `original`, and
+//! `hd`), every family gets its program's scrolled normal taps ([`Tap`]) through a
+//! [`PROGRAM_WATER`] entry, the normal map bound third, and the chunk's own
+//! tangent frame; the sea draws `light * ColourConstant + specular` without the
+//! planar reflection, the other three add the sky paraboloid. Under `off` every
+//! family keeps the reading it had before the taps were drawn.
 
 use oag_display::display::Water;
 use oag_rcs::rcsmaterial::fragment::Program;
@@ -19,8 +33,9 @@ use oag_rcs::{rcsmaterial, rcsmodel};
 
 use crate::mesh::{ModelTexture, Texels};
 
+use super::skin::decode_texture;
 use super::{Report, TextureSlots, Textures};
-use crate::mesh::{Emissive, slots};
+use crate::mesh::{Emissive, PROGRAM_WATER, TangentFrame, slots};
 
 use super::emissive::EMISSIVE_LIMIT;
 
@@ -83,22 +98,298 @@ pub const fn is_drawn(law: Water) -> bool {
 }
 
 /// What a classified water slot is drawn as.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Reading {
     /// The program's own colour term with no normal map, no scroll and no
-    /// reflection: lit vertex colour, or black plus a glint.
+    /// reflection: lit vertex colour, or black plus a glint; the sea and
+    /// Amphiseum's pool keep the generic reading.
     Constant,
+    /// HD's law: the scrolled normal taps, the program's colour, specular and the sky
+    /// reflection where it has one; not the planar reflection.
+    Taps,
 }
 
-/// The reading each law draws a classified water slot as. **Every law draws
-/// [`Reading::Constant`] today**: the scrolled-tap laws of `docs/rendering/water.md`
-/// join here by adding their variant, and nothing in the menu or the load
-/// moves. `off` is this reading by definition.
+/// The reading each law draws a classified water slot as. This module reads HD's
+/// programs, so `original` (on HD) and `hd` draw the taps; `off` is the constant
+/// reading by definition, and the 2048 and Omega laws are not drawn here yet.
 const fn reading(law: Water) -> Reading {
     match law {
-        Water::Off | Water::Original | Water::Hd | Water::Vita2048 | Water::Omega => {
-            Reading::Constant
+        Water::Original | Water::Hd => Reading::Taps,
+        Water::Off | Water::Vita2048 | Water::Omega => Reading::Constant,
+    }
+}
+
+/// The scroll rate of the sea's taps, per unit of the engine `time`: the literal
+/// `c[207].z` of `reflectplane_dc_seawater`'s vertex block 3 (`MAD o[TC4].x, 0.05,
+/// time, u`), the same literal Amphiseum's fragment block and Vineta K's vertex block
+/// multiply `time` by (`docs/rendering/water.md`, "How it is drawn").
+pub const SEA_SCROLL: f32 = 0.05;
+
+/// The second sea tap's scale: `MUL R2.xy, R2, 1.15` before the fetch from
+/// `DiffuseTexture1` (fragment `@0x09` of the sea's lit block).
+pub const SEA_SECOND_SCALE: f32 = 1.15;
+
+/// One fetch of a water program's normal map: `uv * scale + time * scroll`, its
+/// decoded normal weighted by `weight` in the sum.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tap {
+    pub scale: [f32; 2],
+    pub scroll: [f32; 2],
+    pub weight: f32,
+}
+
+impl Tap {
+    /// The coordinate this tap fetches at `uv` and engine time `time`, in seconds.
+    #[must_use]
+    pub fn at(self, uv: [f32; 2], time: f32) -> [f32; 2] {
+        [
+            uv[0] * self.scale[0] + time * self.scroll[0],
+            uv[1] * self.scale[1] + time * self.scroll[1],
+        ]
+    }
+
+    /// The sea's two taps (and Amphiseum's): `(u + 0.05 t, v)` and
+    /// `1.15 (-u + 0.05 t, v)`, summed unweighted.
+    #[must_use]
+    pub const fn sea() -> [Self; 2] {
+        [
+            Self {
+                scale: [1.0, 1.0],
+                scroll: [SEA_SCROLL, 0.0],
+                weight: 1.0,
+            },
+            Self {
+                scale: [-SEA_SECOND_SCALE, SEA_SECOND_SCALE],
+                scroll: [SEA_SECOND_SCALE * SEA_SCROLL, 0.0],
+                weight: 1.0,
+            },
+        ]
+    }
+
+    /// One of Vineta K's three taps, off the material's own `scale` and `rate`:
+    /// `uv * scale + 0.05 t * rate` on both axes (vertex block 3, `MAD o[TC5].xy,
+    /// 0.05 time, rate, uv * scale`).
+    #[must_use]
+    pub fn vineta(scale: f32, rate: f32, weight: f32) -> Self {
+        Self {
+            scale: [scale, scale],
+            scroll: [SEA_SCROLL * rate, SEA_SCROLL * rate],
+            weight,
         }
     }
+}
+
+/// `~crc32("screenSpaceReflectionTex")`.
+const SCREEN_REFLECTION: u32 = 0xec2b_3fc2;
+/// `~crc32("DiffuseTexture")` and `~crc32("DiffuseTexture1")`: the sea's two taps.
+const DIFFUSE_TEXTURE: u32 = 0x11cb_4f74;
+const DIFFUSE_TEXTURE1: u32 = 0x06a7_7e50;
+/// Amphiseum's two tap samplers: unit 0 (no preimage) and `~crc32("NormalTexture2")`.
+const POOL_FIRST: u32 = 0x739a_786e;
+const NORMAL_TEXTURE2: u32 = 0x62ae_87a7;
+/// `~crc32("ColourConstant")`, `Reflectivity`, `SpecularColour`, `SpecularPower`, `time`.
+const COLOUR_CONSTANT: u32 = 0x4d60_d566;
+const REFLECTIVITY: u32 = 0x5e5b_1937;
+const SPECULAR_COLOUR: u32 = 0x370a_63cb;
+const SPECULAR_POWER: u32 = 0x81e0_e773;
+const TIME: u32 = 0x906b_67ba;
+/// Vineta K's waves sampler (`waves2`, unit 0 of both programs) and `water_noref`'s
+/// second map, whose alpha it reads at `uv` plus the third tap.
+const WAVES: u32 = 0xb0b3_4798;
+const NOREF_SECOND: u32 = 0x65f5_d93c;
+/// Vineta K's per-tap scale and rate parameters, in tap order (vertex block 3:
+/// `c464`, `c462`, `c463` and `c461`, `c460`, `c459`).
+const VINETA_SCALES: [u32; 3] = [0xf4bc_8b2f, 0x6db5_da95, 0x1ab2_ea03];
+const VINETA_RATES: [u32; 3] = [0x0256_7724, 0x9b5f_269e, 0xec58_1608];
+/// How Vineta K's fragment programs sum the three decoded taps: `t3 + (t1 + t2) / 2`
+/// (`MAD /2` twice, `@0x01`..`@0x0d` of both lit blocks), up to the normalise.
+const VINETA_WEIGHTS: [f32; 3] = [0.5, 0.5, 1.0];
+
+/// The water families, by program.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Family {
+    /// `reflectplane_dc_seawater`.
+    Sea,
+    /// Amphiseum's `water`: the sea's taps and the sky reflection.
+    Sky,
+    /// `water_test_2`: lit vertex colour plus the reflection times it.
+    LitColour,
+    /// `water_noref`: the reflection and a glint.
+    Glint,
+}
+
+impl Family {
+    /// `program[1]` of the entry, read by `shade.wesl`.
+    fn kind(self) -> f32 {
+        match self {
+            Self::Sea => 1.0,
+            Self::Sky => 2.0,
+            Self::LitColour => 3.0,
+            Self::Glint => 4.0,
+        }
+    }
+}
+
+/// How many chunks of each family a model has, counted whatever the law draws.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct WaterChunks {
+    pub sea: usize,
+    pub sky: usize,
+    pub lit_colour: usize,
+    pub glint: usize,
+}
+
+fn family(declared: &rcsmaterial::Declared, program: &Program) -> Option<Family> {
+    let unit = |hash: u32| {
+        declared
+            .samplers
+            .iter()
+            .find(|&&(h, _)| h == hash)
+            .map(|&(_, u)| u8::try_from(u).unwrap_or(u8::MAX))
+    };
+    let not_colour = |hash: u32| unit(hash).is_some_and(|u| !program.samples_colour(u));
+    let declares = |hash: u32| declared.parameters.contains(&hash);
+    if unit(SCREEN_REFLECTION).is_some()
+        && not_colour(DIFFUSE_TEXTURE)
+        && not_colour(DIFFUSE_TEXTURE1)
+        && declares(COLOUR_CONSTANT)
+    {
+        return Some(Family::Sea);
+    }
+    if unit(PARABOLOID).is_some()
+        && not_colour(NORMAL_TEXTURE2)
+        && declares(COLOUR_CONSTANT)
+        && declares(TIME)
+    {
+        return Some(Family::Sky);
+    }
+    is_water(declared, program).then(|| {
+        if declares(CONSTANT_AMBIENT) {
+            Family::LitColour
+        } else {
+            Family::Glint
+        }
+    })
+}
+
+/// The first vec4 of an authored parameter.
+fn parameter(material: &rcsmodel::Material, hash: u32) -> Option<[f32; 4]> {
+    material
+        .parameters
+        .iter()
+        .find(|p| p.hash == hash)
+        .map(|p| p.value)
+}
+
+/// The path a material binds at `hash`.
+fn path_of(material: &rcsmodel::Material, hash: u32) -> Option<&str> {
+    material
+        .samplers
+        .iter()
+        .find(|(h, p)| *h == hash && p.is_some())
+        .and_then(|(_, p)| p.as_deref())
+}
+
+/// What a family's taps read: the taps, the normal map, and for `water_noref` its
+/// second map. `None` where the material does not author what the program reads, or
+/// binds two different files where the law needs one.
+fn taps_of(
+    material: &rcsmodel::Material,
+    family: Family,
+) -> Option<(Vec<Tap>, String, Option<String>)> {
+    match family {
+        Family::Sea | Family::Sky => {
+            let (a, b) = match family {
+                Family::Sea => (DIFFUSE_TEXTURE, DIFFUSE_TEXTURE1),
+                _ => (POOL_FIRST, NORMAL_TEXTURE2),
+            };
+            let map = path_of(material, a)?;
+            (path_of(material, b)? == map).then(|| (Tap::sea().to_vec(), map.to_string(), None))
+        }
+        Family::LitColour | Family::Glint => {
+            let mut taps = Vec::with_capacity(3);
+            for ((scale, rate), weight) in
+                VINETA_SCALES.iter().zip(&VINETA_RATES).zip(VINETA_WEIGHTS)
+            {
+                taps.push(Tap::vineta(
+                    parameter(material, *scale)?[0],
+                    parameter(material, *rate)?[0],
+                    weight,
+                ));
+            }
+            let second = match family {
+                Family::Glint => Some(path_of(material, NOREF_SECOND)?.to_string()),
+                _ => None,
+            };
+            Some((taps, path_of(material, WAVES)?.to_string(), second))
+        }
+    }
+}
+
+/// The consecutive glow-table entries of one tapped water slot.
+fn entries(material: &rcsmodel::Material, family: Family, taps: &[Tap]) -> Option<Vec<Emissive>> {
+    let rgb = |v: [f32; 4]| [v[0], v[1], v[2]];
+    let (colour, reflectivity, power, specular) = match family {
+        Family::Sea => (
+            rgb(parameter(material, COLOUR_CONSTANT)?),
+            0.0,
+            parameter(material, SPECULAR_POWER)?[0],
+            rgb(parameter(material, SPECULAR_COLOUR)?),
+        ),
+        Family::Sky => (
+            rgb(parameter(material, COLOUR_CONSTANT)?),
+            parameter(material, REFLECTIVITY)?[0],
+            0.0,
+            [0.0; 3],
+        ),
+        Family::LitColour | Family::Glint => ([0.0; 3], 1.0, 0.0, [0.0; 3]),
+    };
+    let mut out = vec![
+        Emissive {
+            tint: colour,
+            offset: reflectivity,
+            scale: power,
+            rate: 0.0,
+            program: [PROGRAM_WATER, family.kind()],
+        },
+        Emissive {
+            tint: specular,
+            offset: f32::from(u8::try_from(taps.len()).ok()?),
+            scale: 0.0,
+            rate: 0.0,
+            program: [0.0; 2],
+        },
+    ];
+    out.extend(taps.iter().map(|tap| Emissive {
+        tint: [tap.scale[0], tap.scale[1], tap.scroll[0]],
+        offset: tap.scroll[1],
+        scale: tap.weight,
+        rate: 0.0,
+        program: [0.0; 2],
+    }));
+    Some(out)
+}
+
+/// Lays `block` into the table as consecutive entries (sharing an identical block
+/// already there) and returns its first index.
+fn lay(table: &mut Vec<Emissive>, block: &[Emissive]) -> Option<usize> {
+    table
+        .windows(block.len())
+        .position(|seen| seen == block)
+        .or_else(|| {
+            (table.len() + block.len() < EMISSIVE_LIMIT).then(|| {
+                let at = table.len();
+                table.extend_from_slice(block);
+                at
+            })
+        })
+}
+
+/// What [`water`] binds for the taps: the normal map third, `water_noref`'s second map
+/// fourth.
+pub(super) struct Bound {
+    pub(super) normal_maps: TextureSlots,
+    pub(super) second_maps: TextureSlots,
 }
 
 /// Takes the normal map out of every water material's albedo.
@@ -123,14 +414,21 @@ pub(super) fn water(
     skins: &mut TextureSlots,
     packed: &mut [u32],
     table: &mut Vec<Emissive>,
+    material_tangent: &mut [TangentFrame],
     law: Water,
     report: &mut Report,
-) {
+) -> Bound {
+    let mut bound = Bound {
+        normal_maps: vec![None; model.materials.len()],
+        second_maps: vec![None; model.materials.len()],
+    };
     if super::isolate::water_off() {
-        return;
+        return bound;
     }
     report.water_law = law;
     let mut black: Option<std::sync::Arc<ModelTexture>> = None;
+    let mut decoded: std::collections::HashMap<String, Option<std::sync::Arc<ModelTexture>>> =
+        Default::default();
     for (slot, material) in model.materials.iter().enumerate() {
         let Some(variant) = variants.get(slot).copied().flatten() else {
             continue;
@@ -144,33 +442,109 @@ pub(super) fn water(
         ) else {
             continue;
         };
-        if !is_water(&declared, &program) {
+        let Some(family) = family(&declared, &program) else {
             continue;
-        }
-        match reading(law) {
-            Reading::Constant => {}
-        }
+        };
+        let chunks = model
+            .meshes
+            .iter()
+            .filter(|mesh| usize::try_from(mesh.material).ok() == Some(slot))
+            .count();
+        let counter = match family {
+            Family::Sea => &mut report.water_chunks.sea,
+            Family::Sky => &mut report.water_chunks.sky,
+            Family::LitColour => &mut report.water_chunks.lit_colour,
+            Family::Glint => &mut report.water_chunks.glint,
+        };
+        *counter += chunks;
         let lit_vertex_colour = declared.parameters.contains(&CONSTANT_AMBIENT);
-        let Some(texture) = skins.get_mut(slot) else {
-            continue;
-        };
-        *texture = if lit_vertex_colour {
-            None
-        } else {
-            Some(
-                black
-                    .get_or_insert_with(|| {
-                        std::sync::Arc::new(ModelTexture {
-                            label: "water: no reflection, black".to_string(),
-                            width: 1,
-                            height: 1,
-                            texels: Texels::Rgba8(vec![0, 0, 0, 255]),
-                            mip_count: None,
+        // The picture is never the normal map, under either reading: lit vertex colour has
+        // none (white), `water_noref` none but its reflection (black).
+        if let Some(texture) = skins
+            .get_mut(slot)
+            .filter(|_| !matches!(family, Family::Sea | Family::Sky))
+        {
+            *texture = if lit_vertex_colour {
+                None
+            } else {
+                Some(
+                    black
+                        .get_or_insert_with(|| {
+                            std::sync::Arc::new(ModelTexture {
+                                label: "water: no reflection, black".to_string(),
+                                width: 1,
+                                height: 1,
+                                texels: Texels::Rgba8(vec![0, 0, 0, 255]),
+                                mip_count: None,
+                            })
                         })
+                        .clone(),
+                )
+            };
+        }
+        if reading(law) == Reading::Taps {
+            let mut map = |path: &str| {
+                decoded
+                    .entry(path.to_string())
+                    .or_insert_with(|| {
+                        textures(&format!("/{path}"))
+                            .and_then(|bytes| decode_texture(path, &bytes))
+                            .map(std::sync::Arc::new)
                     })
-                    .clone(),
-            )
-        };
+                    .clone()
+            };
+            let read = taps_of(material, family).and_then(|(taps, normal, second)| {
+                let normal = map(&normal)?;
+                let second = match second {
+                    Some(path) => Some(map(&path)?),
+                    None => None,
+                };
+                Some((entries(material, family, &taps)?, normal, second))
+            });
+            let Some((block, normal, second)) = read else {
+                report.water_taps_unread += 1;
+                continue;
+            };
+            // A slot the generic reading gave an additive glow (the non-lightmapped sea adds
+            // `DiffuseTexture1`, a normal map, `docs/rendering/water.md`, "What this engine
+            // draws today") is the program's colour once its taps are drawn: the glow goes.
+            // Any other claim keeps the slot.
+            let Some(word) = packed.get_mut(slot) else {
+                continue;
+            };
+            let held = slots::material_index(*word) as usize;
+            let glow = held != 0
+                && table
+                    .get(held - 1)
+                    .is_some_and(|entry| entry.program[0] == 0.0 && entry.rate <= 1.0);
+            let index = (held == 0 || glow).then(|| lay(table, &block)).flatten();
+            let Some(index) = index else {
+                report.water_taps_blocked += 1;
+                continue;
+            };
+            if glow {
+                *word &= slots::ROLE_MASK & !slots::ADD_SECOND;
+                report.water_glow_replaced += 1;
+            }
+            *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+            let drawn = Some((normal, second));
+            if let Some((normal, second)) = drawn {
+                bound.normal_maps[slot] = Some(normal);
+                bound.second_maps[slot] = second;
+                // The programs build their frame from the chunk's own tangent and
+                // `B = cross(N, T) * w` (vertex block 3, `MUL o[TC0].xyz, N x T, v[2].w`).
+                if let Some(frame) = material_tangent.get_mut(slot) {
+                    if !frame.carried() {
+                        *frame = TangentFrame::Raw;
+                    }
+                }
+                report.water_taps_drawn += 1;
+                continue;
+            }
+        }
+        if matches!(family, Family::Sea | Family::Sky) {
+            continue;
+        }
         if lit_vertex_colour {
             // The program's own light is `ambient + sun * sat(N.L)` times the
             // vertex colour (`rcsmaterial.md`, "Water family"), where the
@@ -203,6 +577,103 @@ pub(super) fn water(
             report.water_lit_colour += 1;
         } else {
             report.water_glint_only += 1;
+        }
+    }
+    bound
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The sea's first tap scrolls `u` by `0.05` per second and leaves `v`: dropping the
+    /// rate, or scrolling `v`, moves this point.
+    #[test]
+    fn the_first_sea_tap_is_u_plus_five_hundredths_of_time() {
+        let [first, _] = Tap::sea();
+        assert_eq!(first.at([0.25, 0.75], 2.0), [0.35, 0.75]);
+        assert_eq!(first.at([0.25, 0.75], 0.0), [0.25, 0.75]);
+    }
+
+    /// The second tap is `1.15 (-u + 0.05 t, v)`: the opposite `u`, the same rate, then
+    /// the scale on both axes. Each of the three dropped gives another coordinate.
+    #[test]
+    fn the_second_sea_tap_is_the_opposite_u_scaled_by_one_point_one_five() {
+        let [_, second] = Tap::sea();
+        let [u, v] = second.at([0.25, 0.75], 2.0);
+        let want = [1.15 * (-0.25 + 0.05 * 2.0), 1.15 * 0.75];
+        assert!(
+            (u - want[0]).abs() < 1e-6 && (v - want[1]).abs() < 1e-6,
+            "{u}, {v}"
+        );
+        // The two taps move the same way along `u` as time passes, the second 1.15 times as fast.
+        let du = second.at([0.0, 0.0], 1.0)[0] - second.at([0.0, 0.0], 0.0)[0];
+        assert!((du - 0.0575).abs() < 1e-6, "{du}");
+        assert!(second.scale[0] < 0.0 && second.scale[1] > 0.0);
+    }
+
+    /// Vineta K's taps add `0.05 t * rate` to both axes of `uv * scale`.
+    #[test]
+    fn a_vineta_tap_scrolls_both_axes_by_its_rate() {
+        let tap = Tap::vineta(2.0, 1.2914, 0.5);
+        let [u, v] = tap.at([0.5, 0.25], 10.0);
+        assert!((u - (1.0 + 0.645_7)).abs() < 1e-5 && (v - (0.5 + 0.645_7)).abs() < 1e-5);
+        assert_eq!(tap.weight, 0.5);
+    }
+
+    /// `off`, `2048` and `omega` keep the constant reading; `original` and `hd` draw the taps.
+    #[test]
+    fn only_hd_s_laws_draw_the_taps() {
+        for (law, taps) in [
+            (Water::Off, false),
+            (Water::Original, true),
+            (Water::Hd, true),
+            (Water::Vita2048, false),
+            (Water::Omega, false),
+        ] {
+            assert_eq!(reading(law) == Reading::Taps, taps, "{law}");
+        }
+    }
+
+    /// A tap's entry carries its numbers in the order `water.wesl` reads them.
+    #[test]
+    fn a_tap_entry_is_scale_then_scroll() {
+        let material = rcsmodel::Material {
+            name: "sea.rcsmaterial".to_string(),
+            state: 1,
+            src_factor: 0,
+            dst_factor: 0,
+            alpha_func: 0,
+            alpha_ref: 0.0,
+            texture: String::new(),
+            second_texture: None,
+            texture_sampler: 0,
+            second_texture_sampler: None,
+            samplers: Vec::new(),
+            parameters: vec![
+                param(COLOUR_CONSTANT, [0.08, 0.12, 0.13, 0.0]),
+                param(SPECULAR_COLOUR, [0.5, 0.5, 0.3, 0.0]),
+                param(SPECULAR_POWER, [75.0, 0.0, 0.0, 0.0]),
+            ],
+            curve: None,
+        };
+        let block = entries(&material, Family::Sea, &Tap::sea()).expect("authored");
+        assert_eq!(block.len(), 4);
+        assert_eq!(block[0].program, [PROGRAM_WATER, 1.0]);
+        assert_eq!((block[0].tint, block[0].scale), ([0.08, 0.12, 0.13], 75.0));
+        assert_eq!((block[1].tint, block[1].offset), ([0.5, 0.5, 0.3], 2.0));
+        let second = &block[3];
+        assert_eq!(
+            (second.tint, second.offset),
+            ([-1.15, 1.15, 1.15 * 0.05], 0.0)
+        );
+    }
+
+    fn param(hash: u32, value: [f32; 4]) -> oag_rcs::rcsmodel::material::Parameter {
+        oag_rcs::rcsmodel::material::Parameter {
+            hash,
+            value,
+            quads: 1,
         }
     }
 }

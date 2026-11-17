@@ -197,6 +197,7 @@ mod skin;
 mod vertex_scroll;
 mod water;
 pub use water::is_drawn as water_law_is_drawn;
+pub use water::{SEA_SCROLL, SEA_SECOND_SCALE, Tap, WaterChunks};
 mod window_glass;
 use bounds::bounding_sphere;
 

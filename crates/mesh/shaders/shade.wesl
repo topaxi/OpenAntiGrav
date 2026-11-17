@@ -14,6 +14,7 @@ import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encode, encoded_out, linear_out};
 import package::shading_modes::{colour_is_light, light_rig, nova_prelit, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
+import package::water::{water_kind, water_normal, water_tap_uv};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
 import package::types::{VertexOutput};
 import package::zone::{zone_aniso, zone_base_term, zone_glow, zone_sample, zone_set};
@@ -152,6 +153,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // **Omega's `_shadow` crowds** (`Emissive::program` mode 16, `mesh::rcs::psp2::crowd`): the light
     // is `Ambient + constantAmbientColour + sun * sat(N.L)` and the lit picture is times `Shadowed`.
     let crowd_lit = row_scale.z > 15.5 && row_scale.z < 16.5;
+    // **HD's scrolled-tap water** (`Emissive::program` mode 17, `oag_mesh::mesh::rcs::water`):
+    // 1 the sea, 2 Amphiseum's pool, 3 `water_test_2`, 4 `water_noref`; 0 elsewhere.
+    let water_entry = (in.slots >> 24u) & 63u;
+    let water = water_kind(water_entry, row_scale);
     let n = normalize(in.normal);
     // **Omega's panel-map road** (`Emissive::program` mode 15, `mesh::rcs::psp2::panel_map`): the
     // diffuse, normal and emissive are sampled at the coordinate the march into the panel map
@@ -209,6 +214,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         n_lit = n_hull;
     } else if dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
         n_hull = hull_normal(material_sample(MATERIAL_PAD_MASK, in.texcoord), n, in.tangent);
+        n_lit = n_hull;
+    }
+    // The water's normal is its scrolled taps' sum (`water.wesl`), for the light, the
+    // specular and the reflection alike.
+    if water > 0.5 {
+        n_hull = water_normal(water_entry, water, in.texcoord, n, in.tangent);
         n_lit = n_hull;
     }
 
@@ -503,6 +514,17 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             authored = ambient_term + sun_diffuse;
             sun_light = sun_diffuse;
         }
+        // The tapped water: the sea and the pool are `(ambient or the bake + sun * sat(N.L))
+        // * ColourConstant` with no vertex light (the picture is the constant, set below);
+        // `water_test_2` is `vertex colour * (ambient + sun * sat(N.L))`, the vertex colour
+        // its picture.
+        if water > 0.5 && water < 2.5 {
+            authored = ambient_term + prelit + sun_diffuse;
+            sun_light = sun_diffuse;
+        } else if water > 2.5 {
+            authored = ambient_term + sun_diffuse;
+            sun_light = sun_diffuse;
+        }
         // `cf_vex_billboard` (`Emissive::program` mode 1): `ambient + sun * sat(N.L)`, no
         // prelit term, no sun mask and no shadow - `oag_mesh::mesh::rcs::billboard_glass`.
         if row_scale.z > 0.5 && row_scale.z < 1.5 {
@@ -603,7 +625,17 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // consecutive glow-table entries. Chosen, not measured: `F` uses the
     // vertex normal, and the constants are display values decoded to the
     // domain the textures are sampled in.
-    if (in.slots & 4194304u) != 0u && row_scale.y > 1.5 {
+    if water > 0.5 {
+        // **The tapped water's picture** (`mesh::rcs::water`): `ColourConstant` (linear, the
+        // entry's tint) for the sea and the pool, the vertex colour for `water_test_2`, black
+        // for `water_noref`, whose colour is all reflection and glint. Opaque.
+        let water_picture = select(
+            select(vec3<f32>(0.0), in.colour.rgb, water < 3.5),
+            row_tint.rgb,
+            water < 2.5,
+        );
+        picture = vec4<f32>(encode(water_picture), 1.0);
+    } else if (in.slots & 4194304u) != 0u && row_scale.y > 1.5 {
         // **`water_test_2`** (`mesh::rcs::water`): the program's picture is the
         // vertex colour itself (`TC1 * (ambient + sun * sat(N.L))`), kept in
         // the gamma domain the branch below decodes. The light is set where
@@ -1170,6 +1202,14 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             * specular_tint
             * select(vec3<f32>(1.0), in.colour.rgb, colour_factor)
             * select(1.0, 0.0, no_specular);
+        // The sea's own specular: `sun * SpecularColour * sat(N.H)^SpecularPower * sat(8 N.L)`
+        // times the bake's sun mask (`@0x2d`..`@0x5b` of its lit block), the colour in the next
+        // entry and the power in `scale`. The pool and `water_test_2` have none; `water_noref`
+        // keeps the generic glint.
+        if water > 0.5 && water < 3.5 {
+            specular = scene.light.sun * emissive_tint(water_entry + 1u).rgb
+                * (pow(ndh, row_scale.x) * ndl_spec * mask * rig_on * select(0.0, 1.0, water < 1.5));
+        }
 
         // **The reflection probe**, on the hull materials whose `IBL` variant declares it
         // (`slots` index into the glow table, `rate` 8): `probe(reflect(-V, N))` times
@@ -1232,6 +1272,19 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             if row_tint.w > 0.5 {
                 sky_reflection += emissive_tint(sky_entry + 1u).xyz * (1.0 - glow_mask.a);
             }
+        }
+
+        // **The tapped water's sky reflection** (`mesh::rcs::water`), at the mapped normal:
+        // the pool's `Reflectivity * probeTint(sky)`, `water_test_2`'s `vertex colour *
+        // probeTint(sky)`, and `water_noref`'s `probeTint(sky) * a`, `a` the alpha of its second
+        // map (fourth binding) at `uv` plus the third tap (block `@0x3870`, `@0x5c`). The sea's
+        // reflection is the planar target, not drawn.
+        if water > 1.5 {
+            let r = reflect(-to_eye, n_lit);
+            let sky = probe_tint(textureSampleLevel(sky_probe_tex, shadow_sampler, env_probe_uv(r), 0.0).rgb);
+            let gate = material_sample(MATERIAL_WAVE_MAP, in.texcoord + water_tap_uv(water_entry, 2u, in.texcoord)).a;
+            let weight = select(select(in.colour.rgb, vec3<f32>(gate), water > 3.5), vec3<f32>(row_tint.w), water < 2.5);
+            sky_reflection = sky * weight;
         }
 
         // **The panel-map road's sun lobe and sky sheen** (mode 15, `mesh::rcs::psp2::panel_map`),
