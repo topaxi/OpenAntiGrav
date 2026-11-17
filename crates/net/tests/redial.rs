@@ -7,7 +7,7 @@ use oag_net::host::Host;
 use oag_net::link::Loopback;
 use oag_raceplay::Race;
 
-use crate::loopback::{Pace, Pilot, params, pilot, ready_all, tokened};
+use crate::loopback::{Pace, Pilot, Seated, params, pilot, ready_all, tokened};
 
 fn holding_turbo(params: &oag_net::wire::RaceParams) -> Box<Race> {
     let mut race = crate::loopback::headless(params);
@@ -189,7 +189,7 @@ static QUICK: [std::time::Duration; 2] = [
 fn seated_cuttable(
     host: &mut Host,
     params: &oag_net::wire::RaceParams,
-) -> (Vec<(Client, Box<Race>, Pilot)>, Vec<String>, Vec<Cutter>) {
+) -> (Vec<Seated>, Vec<String>, Vec<Cutter>) {
     let tokens: Vec<String> = (0..2).map(|n| format!("token-{n}")).collect();
     host.expect_seats(
         (0..2)
