@@ -565,6 +565,32 @@ A title's memory per room is not a trigger: no title measured needs more than 40
    there is harmless.
 5. **Matchmaking** (quick match) is a lobby rule and adds no machine.
 
+### The connection path and network floods (unverified, 2026-11-17)
+
+The remote host's web side sits behind an HTTP CDN proxy. Which path the game's
+WebTransport traffic took in the 2026-10-16 internet test is **not verified**. That test
+reached UDP 60000-60010 "with nothing to open" and connected by certificate hash
+(`online-lobby.md`, "Measured over the internet"), which is the shape of a direct
+connection to the host's own address. An HTTP CDN proxy does not forward arbitrary UDP
+ports; forwarding them needs a UDP-capable proxy product, usually on an expensive plan
+(from memory, not looked up).
+
+If the path is direct:
+
+- **The host's own address is public.** Every player connects to it, so the CDN does not
+  hide the host, and a volumetric flood against the game ports reaches it unfiltered.
+  The web side stays protected only if it neither shares that address nor answers on it.
+- **The per-address caps see real player addresses**, which is what they need. Behind a
+  proxy every player would share the proxy's addresses and the caps would not tell them
+  apart.
+- **Defences against a flood, cheapest first:** accept the risk while there are no
+  players; the VPS provider's own network filtering (often included); a UDP-capable proxy
+  or game-traffic relay in front of the race ports. A relay costs latency and, behind it,
+  the caps need the client's address passed through.
+
+**To verify** (one minute): resolve the host name the clients connect to and compare the
+addresses with the CDN's published ranges and the host's own address.
+
 ### Where to host: price first, then ease
 
 Prices were looked up on 2026-11-17 from comparison pages, not from each provider's own
