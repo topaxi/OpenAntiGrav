@@ -436,3 +436,28 @@ bands differ by 201,658 / 381,052 / 509,492 summed RGB at ticks 505 / 525 / 545.
 **Wipeout HD and Pure.** Pure shares the Pulse draw paths above, so the fix
 reaches its mine and bomb. HD's blasts take `write_clocked` with
 `model_clock` instead and were not touched; its RCS materials are another lane's.
+
+## Moa Therma's yachts are drawn; their phase is the world clock (2026-11-17, `hd-yacht`)
+
+**Claim checked: "the yacht seen right of the tower in the original's sea frame is absent from ours". False
+(confidence 85 that we draw it; 60 that the original frame's yacht is the same node at another phase, the
+original frame was not re-taken: RPCS3 was held back by a running render benchmark).**
+
+- The yachts are `Mesh` nodes of `03_track/track.vex` named `wohdmeshreflect__WESLiner1_0..27Shape` and
+  `wohdmeshreflect__wes_linerb2..13Shape` (with `pasted__wake_front/back` wake sheets), each resolving to a chunk of
+  `track.rcsmodel` (a hull about 270 long). All 472 of the circuit's other nodes resolve too; the 5 that do not are
+  `wohdtrack_0011_4Shape`, `polySurfaceShape27395`, `ship_glass_2aShape`, `ship_glass3aShape` and `windowShape`
+  (glass and a window pane, the loader report's "5 addressed no chunk"). The reflect tag keeps a mesh in the
+  main view (`psp2::refraction_only::REFLECT_TAG`), so nothing culls them.
+- They move on `Anim Transform` tracks. `oag-game --race --track /data/environments/03_track/track.vex
+  --camera-pose=209.615,38.304,-367.677,0.0128,-0.1133,-0.9935,0.0013,0.9936,-0.1133 --camera-fov 60.0144
+  --size 640x360 --ticks 10 --anim-seconds T` shows open sea at T = 0, 5, 10, 90 and 150, a yacht entering from the
+  right at 15 s and crossing to the tower at 20 to 40 s, and others at 80 to 120 and 200 s. The water pair's frame
+  (`--ticks 572`, no clock offset) simply lands on an empty phase.
+- Cause of the mismatch: the scenery clock is the world clock, which runs from world load and differs per capture
+  (see "world_clock_offset_s" above and `--world-clock-offset`), so a pair that does not read it from RAM cannot
+  agree on where a moving prop is. The water pair has no recorded offset.
+- Open: re-take the original sea frame with `scripts/rpcs3-hd-world-clock.py` read in the same pause, and render ours
+  with `--world-clock-offset`; the yacht should then land where theirs is. Other circuits: not censused (the liners
+  are Moa Therma's; Ubermall's `wohdmeshreflect` set is 73 nodes, not examined). Omega: not checked (its
+  copy of Moa Therma is a `.rcsmodel` of the same nodes, `docs/rendering/water.md`; not run).
