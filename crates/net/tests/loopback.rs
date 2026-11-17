@@ -529,7 +529,10 @@ fn a_token_taking_over_a_seat_whose_link_is_still_held_is_the_person_returning()
         }
     }
     assert_eq!(mismatches, [0, 0]);
-    assert!(matches[1] > 300, "the returned client checked ticks: {matches:?}");
+    assert!(
+        matches[1] > 300,
+        "the returned client checked ticks: {matches:?}"
+    );
     assert!(
         host.history().iter().all(|tick| tick.retired == 0),
         "the race never saw the seat leave"

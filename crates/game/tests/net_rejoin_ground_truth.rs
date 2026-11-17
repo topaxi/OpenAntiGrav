@@ -90,7 +90,12 @@ impl Lab {
             .arg("--image")
             .arg(&image)
             .args(["--listen", "127.0.0.1:0", "--race-listen", "127.0.0.1:0"])
-            .args(["--countdown-ms", "200", "--max-ticks", &max_ticks.to_string()])
+            .args([
+                "--countdown-ms",
+                "200",
+                "--max-ticks",
+                &max_ticks.to_string(),
+            ])
             .stdout(log.try_clone().expect("a handle"))
             .stderr(log)
             .spawn()
@@ -138,7 +143,11 @@ impl Lab {
 
     /// `who`'s `rejoin.toml`.
     fn record(&self, who: &str) -> PathBuf {
-        self.dir.join(who).join("state").join("oag").join("rejoin.toml")
+        self.dir
+            .join(who)
+            .join("state")
+            .join("oag")
+            .join("rejoin.toml")
     }
 
     /// An `oag-game` of `who`'s profile with `args`, its output in `<who><log>.log`.
@@ -203,13 +212,19 @@ impl Lab {
         );
         let state = self.dir.join(format!("{who}-state.jsonl"));
         let state = state.display().to_string();
-        self.game(who, &format!("{who}-again"), &["--drive", &script, "--state-log", &state])
+        self.game(
+            who,
+            &format!("{who}-again"),
+            &["--drive", &script, "--state-log", &state],
+        )
     }
 
     /// Two clients race; `a` is on the road and has written its seat, `b` is in the race too.
     fn race(&self) -> (Proc, Proc) {
         let a = self.client("a", true);
-        self.wait("the room to open", 90, |lab| lab.read("a").contains("online: room 1: 1 in it"));
+        self.wait("the room to open", 90, |lab| {
+            lab.read("a").contains("online: room 1: 1 in it")
+        });
         let b = self.client("b", false);
         self.wait("both to be racing", 180, |lab| {
             lab.record("a").exists() && lab.progress("a").is_some_and(|(tick, _, _)| tick >= 300)
@@ -222,7 +237,12 @@ impl Lab {
     fn progress(&self, log: &str) -> Option<(u32, u32, u32)> {
         let text = self.read(log);
         let number = |line: &str, after: &str| -> Option<u32> {
-            line.split(after).nth(1)?.split_whitespace().next()?.parse().ok()
+            line.split(after)
+                .nth(1)?
+                .split_whitespace()
+                .next()?
+                .parse()
+                .ok()
         };
         let mut seen = None;
         let (mut ok, mut bad) = (0, 0);
@@ -275,18 +295,33 @@ fn a_killed_game_offered_its_race_takes_the_seat_back_and_finishes() {
     );
     let status = again.finish(280);
     let log = lab.read("a-again");
-    assert!(status.is_some_and(|s| s.success()), "the relaunch ran to the end:\n{}", &log[log.len().saturating_sub(2000)..]);
+    assert!(
+        status.is_some_and(|s| s.success()),
+        "the relaunch ran to the end:\n{}",
+        &log[log.len().saturating_sub(2000)..]
+    );
     assert!(shot.exists(), "the offer was drawn");
-    let (_, ok, bad) = lab.progress("a-again").expect("the rejoined client logged its hashes");
+    let (_, ok, bad) = lab
+        .progress("a-again")
+        .expect("the rejoined client logged its hashes");
     assert_eq!(bad, 0, "the rejoined client's hashes");
     assert!(ok > 600, "{ok} confirmed ticks checked after the rejoin");
     let _ = b.finish(60);
-    let (_, ok_b, bad_b) = lab.progress("b").expect("the other client logged its hashes");
-    assert_eq!((bad_b, ok_b > 1500), (0, true), "the other client: ok {ok_b} bad {bad_b}");
+    let (_, ok_b, bad_b) = lab
+        .progress("b")
+        .expect("the other client logged its hashes");
+    assert_eq!(
+        (bad_b, ok_b > 1500),
+        (0, true),
+        "the other client: ok {ok_b} bad {bad_b}"
+    );
     lab.wait("the race to be over", 30, |lab| {
         lab.read("lobby").contains("every person has finished")
     });
-    assert!(!lab.record("a").exists(), "the record is deleted at the end of the race");
+    assert!(
+        !lab.record("a").exists(),
+        "the record is deleted at the end of the race"
+    );
 }
 
 /// DECLINE deletes the record and goes on to the lobby questions; the seat stays with the away
@@ -305,17 +340,33 @@ fn a_declined_offer_deletes_the_record_and_leaves_the_seat_to_the_away_driver() 
         "until screen.id=rejoinrace within 3600; press cross; until screen.id=online within 600; ticks 30",
     );
     let status = again.finish(200);
-    assert!(status.is_some_and(|s| s.success()), "the relaunch ran to the end");
+    assert!(
+        status.is_some_and(|s| s.success()),
+        "the relaunch ran to the end"
+    );
     assert!(!lab.record("a").exists(), "DECLINE deleted the record");
     let seen = states(&lab, "a");
-    assert!(seen.iter().any(|s| screen_id(s) == "rejoinrace"), "the offer was made");
-    assert_eq!(seen.last().map(screen_id), Some("online"), "the lobby questions follow");
+    assert!(
+        seen.iter().any(|s| screen_id(s) == "rejoinrace"),
+        "the offer was made"
+    );
+    assert_eq!(
+        seen.last().map(screen_id),
+        Some("online"),
+        "the lobby questions follow"
+    );
     lab.wait("the away seat to finish the race", 200, |lab| {
         lab.read("lobby").contains("every person has finished")
     });
     let _ = b.finish(60);
-    let (_, ok_b, bad_b) = lab.progress("b").expect("the other client logged its hashes");
-    assert_eq!((bad_b, ok_b > 1500), (0, true), "the other client: ok {ok_b} bad {bad_b}");
+    let (_, ok_b, bad_b) = lab
+        .progress("b")
+        .expect("the other client logged its hashes");
+    assert_eq!(
+        (bad_b, ok_b > 1500),
+        (0, true),
+        "the other client: ok {ok_b} bad {bad_b}"
+    );
 }
 
 /// A launch after the race has ended makes no offer: the record is deleted, the lobby
@@ -336,7 +387,10 @@ fn a_launch_after_the_race_has_ended_is_not_offered_it() {
     assert!(lab.record("a").exists(), "the killed game left its seat");
     let mut again = lab.relaunch("a", "until screen.id=online within 3600; ticks 30");
     let status = again.finish(200);
-    assert!(status.is_some_and(|s| s.success()), "the relaunch reached the lobby questions");
+    assert!(
+        status.is_some_and(|s| s.success()),
+        "the relaunch reached the lobby questions"
+    );
     let seen = states(&lab, "a");
     assert!(
         seen.iter().all(|s| screen_id(s) != "rejoinrace"),

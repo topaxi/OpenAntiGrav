@@ -615,7 +615,11 @@ impl Host {
             let Some(seat) = seat.as_mut() else { continue };
             // A person who came back is loading the race again and says nothing until it is
             // ready, which on a slow machine is longer than the silence a flying seat may keep.
-            let allowed = if seat.ready { after } else { after.max(RELOAD_GRACE) };
+            let allowed = if seat.ready {
+                after
+            } else {
+                after.max(RELOAD_GRACE)
+            };
             if seat.left.is_none() && seat.heard.elapsed() > allowed {
                 let why = format!("no input for {after:?}");
                 log::warn!("net: seat {slot} ({}) left: {why}", seat.name);
