@@ -105,8 +105,20 @@ so 16 frames at 30 per second, a 0.533 s loop. `Texture_LoadEffectSurfaces` load
 
 ## PS2
 
-**The PS2 executable was not read** (no PS2 program was open in Ghidra when this was wired);
-the law is **inherited from PSP**, no PS2 confidence. What the PS2 disc itself shows:
+**Checked in the PS2 executable (`SCES_547.48`, EU, Ghidra `/pulse/SCES_547.48-ps2-pulse-eu`):
+ported, the law is the PSP's** (confidence 80; read from the decompile, not run). Not renamed
+(names.tsv is the PSP program's):
+
+| PS2 address | PSP twin | What matches |
+| --- | --- | --- |
+| `FUN_001dd198` | the pass loop in `FUN_089307b4` | `FUN_001dc4d0` (begin), `FUN_001dc650` per node, `FUN_001dca10` per batch whose byte 3 has `& 4` (or whose mesh has `+0x124 != 0`), `FUN_001dca98` (end) |
+| `FUN_001dc650` | `Mesh_SetCausticNodeState` | tint `(int)(byte[mesh+0x0e] * k) & 0xff` packed R from `0x28286c` (0.2), G from `0x282874` (1.0), B from `0x282870` (0.8); `Gfx_BuildBatchStateList(.., 0x202, 0, ..)`; pixel mask `0xff000000`; fog by `byte[mesh+0x0c] & 8`; rotation literal `0x3fc90fdb`; scale `0x282878` = 0.014 (`0x3c656042`); texture matrix slot 3 (`FUN_0010ba90(3, ..)`) |
+| `FUN_001daf98` (reads the frame-name table at `0x2bc470`, 16 `save.NN.tga`, odd 01 to 31) | `Texture_LoadEffectSurfaces` | the same 16 odd frames |
+
+Callers of `FUN_001dc650`: `FUN_001dd198`, `FUN_001f3e20`. Not located: the `(int)(t * 30) & 0xf`
+binder (the 30 and the mask are taken from PSP); the rotation axis (VU0 macro code, as on PSP).
+
+What the PS2 disc itself shows:
 
 - Byte 3 of a batch header is the same field (`Batch::draws_in_caustic_pass`), and only
   Vostok Reef carries the bit (`crates/vex/tests/caustic_pass_ground_truth.rs`).

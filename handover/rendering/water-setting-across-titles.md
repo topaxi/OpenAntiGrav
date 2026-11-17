@@ -149,7 +149,7 @@ map.**
   edge program is unread.
 - Pure's caustic frames on Vineta K are unread; the caustic bit is unread on
   Pure's version-4 batches.
-- Pulse's caustic pass is read on the PSP code only (PS2 executable unread, a PCSX2 frame open) and reached only by PS2
+- Pulse's caustic pass is read on the PSP code only (PS2 executable checked, ported; a PCSX2 frame open) and reached only by PS2
   disc data or the PSP download pack.
 - Blue Ridge's embedded `Water` texture is bound by no batch; unread.
 

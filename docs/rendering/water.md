@@ -328,7 +328,7 @@ the place to start.
 | Surface | Today | Missing |
 | --- | --- | --- |
 | Pulse, Pure water textures | under `off` and `original`: the texture, with any authored texture-offset track; under `enhanced` (this project's own, see below): HD's sea law over a generated normal map on the listed sea textures | nothing known |
-| Pulse Vostok Reef caustics (PS2 disc) | under `original`: the pass (255 of 257 flagged batches; two under an animated node are left out), frame by the world clock; under `off`, nothing | the PS2 executable's own read, a PCSX2 frame, the mesh fog |
+| Pulse Vostok Reef caustics (PS2 disc) | under `original`: the pass (255 of 257 flagged batches; two under an animated node are left out), frame by the world clock; under `off`, nothing | a PCSX2 frame, the mesh fog |
 | HD `water_test_2`, `water_noref` | under `original`: the three scrolled taps through the chunk's frame, `water_test_2` lit vertex colour plus vertex colour times the sky reflection, `water_noref` the sky reflection times `a` (or `0.2 a + 0.4`) plus the generic glint (`mesh::rcs::water`, `PROGRAM_WATER`); under `off`, lit vertex colour or black plus fog | `water_noref`'s own glint (`sat(a * 0x697f57e3)`, power `0x2a2dc10b`) |
 | HD `sebenco_ice` | the three-colour lerp (`mesh::rcs::ice`) | bump-perturbed facing, own specular |
 | HD `reflectplane_dc_seawater` | under `original`: `light * ColourConstant + sun * SpecularColour * sat(N.H)^SpecularPower * sat(8 N.L)` over the two scrolled taps, through the chunk's frame (`mesh::rcs::water`); under `off`, the generic reading, where the non-lightmapped slots (Ubermall, Chenghou, Modesto's plain slot) add `DiffuseTexture1`, a normal map, as a glow | the planar reflection (`Reflectivity * R`) |
