@@ -199,13 +199,11 @@ pub fn quad(placement: &Placement) -> [GpuVertex; 6] {
 
 /// How dark a projected hull is drawn, before [`fade`] scales it.
 ///
-/// **Read off the original's own GE list (2026-10-21, `pulse-zone-render`).** The
-/// shadow pass is two colour-masked stencil volume draws (`Shadow_RenderOccluderVolume`)
-/// and a clip-space wipe quad that blends `src * 0x60 + dst * 0x9f` (`BLENDMODE`
-/// `0xaa`, `BLENDFIXEDA` `0x606060`, `BLENDFIXEDB` `0x9f9f9f`) with a black source, on
-/// the Moa Therma Zone frame: what the stencil marks keeps `159/255` of its colour,
-/// so the shadow is `1 - 159/255` dark. Earlier this was `0.35`, picked to read as a
-/// shadow; the original's number is within a hundredth of it.
+/// **The original's.** Its shadow pass marks the stencil with each occluder's volume and
+/// then draws one clip-space quad (`Shadow_DrawWipe`) that blends black over the marked
+/// pixels by a fixed factor: the float `0.38` times 255, truncated to `96`, so a marked
+/// pixel keeps `159/255` of its colour. Read in both Pulse builds and seen in a GE dump of
+/// a live frame (`docs/ghidra/functions/psp-pulse-usa/shadow-wipe.md`, "The law").
 pub const HULL_DARKNESS: f32 = 1.0 - 159.0 / 255.0;
 
 /// One craft's authored hull, and where its shadow lands.
