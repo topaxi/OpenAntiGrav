@@ -60,6 +60,10 @@ pub const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 /// A close usually reaches the lobby before the new link's hello does. Chosen.
 pub const SEAT_GRACE: Duration = Duration::from_secs(30);
 
+/// How long a seat that came back to a running race may take to load it again and say it is
+/// ready before [`Host::drop_silent`] gives it up. Chosen, not measured.
+pub const RELOAD_GRACE: Duration = Duration::from_secs(60);
+
 /// One person's connection and input stream.
 pub struct Seat {
     link: Box<dyn Link>,
@@ -369,7 +373,7 @@ impl Host {
                         .position(|(_, wanted)| !token.is_empty() && *wanted == token)
                     {
                         let name = self.expected[slot].0.clone();
-                        if self.seat_has_left(slot) {
+                        if self.seat_has_left(slot) || self.seat_is_held_by_a_dead_link(slot) {
                             self.reseat(slot, link)
                         } else {
                             self.seat_at(Some(slot), link, name)
@@ -477,7 +481,22 @@ impl Host {
                 .is_some_and(|seat| seat.left.is_some())
     }
 
-    /// Seats a returning person's new `link` in seat `slot`, which they left: the welcome
+    /// Whether seat `slot` is taken in a race that is running and has not been given up, so a
+    /// token arriving for it is its person coming back before the host noticed the old link was
+    /// dead (a killed game sends no close frame; [`Self::drop_silent`] waits seconds, QUIC's
+    /// idle timeout longer). The token is the proof of who it is, so the new link replaces the
+    /// old one; the race never saw the seat leave.
+    fn seat_is_held_by_a_dead_link(&self, slot: usize) -> bool {
+        self.phase == Phase::Racing
+            && self
+                .seats
+                .get(slot)
+                .and_then(Option::as_ref)
+                .is_some_and(|seat| seat.left.is_none())
+    }
+
+    /// Seats a returning person's new `link` in seat `slot`, which they left (or whose old
+    /// link is still held, [`Self::seat_is_held_by_a_dead_link`]): the welcome
     /// again, then the seat counts as present from the next tick ([`TickRecord::retired`]
     /// clears and the craft is handed back). The seat keeps its held input and edge state, so
     /// the press and release edges go on from where the person's last input left them; what
@@ -594,7 +613,14 @@ impl Host {
         let mut dropped = 0;
         for (slot, seat) in self.seats.iter_mut().enumerate() {
             let Some(seat) = seat.as_mut() else { continue };
-            if seat.left.is_none() && seat.heard.elapsed() > after {
+            // A person who came back is loading the race again and says nothing until it is
+            // ready, which on a slow machine is longer than the silence a flying seat may keep.
+            let allowed = if seat.ready {
+                after
+            } else {
+                after.max(RELOAD_GRACE)
+            };
+            if seat.left.is_none() && seat.heard.elapsed() > allowed {
                 let why = format!("no input for {after:?}");
                 log::warn!("net: seat {slot} ({}) left: {why}", seat.name);
                 // Told, so a player who only stalled is taken back to the menus rather than left

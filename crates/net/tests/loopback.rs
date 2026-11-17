@@ -484,6 +484,93 @@ fn a_person_whose_link_drops_comes_back_to_their_seat_and_the_hashes_agree() {
     assert_eq!(race.sim.world.controllers[1], Controller::Remote);
 }
 
+/// A killed game sends no close frame: the host still holds the old link when the relaunched
+/// game's token arrives. The token takes the seat over, the race never sees the person leave
+/// (nothing is retired) and the hashes agree.
+#[test]
+fn a_token_taking_over_a_seat_whose_link_is_still_held_is_the_person_returning() {
+    use oag_gameplay::Controller;
+    let params = params(2);
+    let mut host = Host::new(holding_turbo(&params), params.clone());
+    let (mut clients, tokens) = tokened(&mut host, 2, &mut || holding_turbo(&params));
+    ready_all(
+        &mut host,
+        &mut clients,
+        &Pace::Wall(std::time::Duration::ZERO),
+    );
+    host.start(0);
+    let (mut mismatches, mut matches) = ([0u32; 2], [0u32; 2]);
+    let mut returned = false;
+    while host.tick_number() < 1100 {
+        host.poll();
+        host.tick();
+        let at = host.tick_number();
+        for (n, (client, race, pilot)) in clients.iter_mut().enumerate() {
+            if n == 1 && at == 600 {
+                // The old server end stays in the host: nothing closed it.
+                let (server_end, client_end) = Loopback::pair();
+                host.join(Box::new(server_end));
+                client.reconnect(Box::new(client_end), "client 1", "", &tokens[1]);
+                *race = holding_turbo(&params);
+                returned = true;
+            }
+            if n == 1 && returned && client.phase() == &Phase::Reconnecting {
+                host.poll();
+                if client.poll_welcome().expect("welcomed").is_some() {
+                    client.ready(race).expect("the same start state");
+                }
+                continue;
+            }
+            let own = pilot(client, race);
+            client.step(race, &own);
+            let stats = client.take_stats();
+            mismatches[n] += stats.hash_mismatches;
+            matches[n] += stats.hash_matches;
+        }
+    }
+    assert_eq!(mismatches, [0, 0]);
+    assert!(
+        matches[1] > 300,
+        "the returned client checked ticks: {matches:?}"
+    );
+    assert!(
+        host.history().iter().all(|tick| tick.retired == 0),
+        "the race never saw the seat leave"
+    );
+    assert_eq!(host.race().sim.world.controllers[1], Controller::Remote);
+}
+
+/// A seat that came back to a running race and has not said ready again is loading it, and is
+/// given [`oag_net::host::RELOAD_GRACE`] before it counts as silent; once ready it is held to
+/// the ordinary silence.
+#[test]
+fn a_returning_seat_loading_the_race_is_not_silent_until_it_is_ready() {
+    let params = params(1);
+    let mut host = Host::new(holding_turbo(&params), params.clone());
+    let (mut clients, tokens) = tokened(&mut host, 1, &mut || holding_turbo(&params));
+    ready_all(
+        &mut host,
+        &mut clients,
+        &Pace::Wall(std::time::Duration::ZERO),
+    );
+    host.start(0);
+    host.poll();
+    host.tick();
+    let (client, race, _) = &mut clients[0];
+    let (server_end, client_end) = Loopback::pair();
+    host.join(Box::new(server_end));
+    client.reconnect(Box::new(client_end), "client 0", "", &tokens[0]);
+    host.poll();
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    let silence = web_time::Duration::from_millis(1);
+    assert_eq!(host.drop_silent(silence), 0, "loading, not silent");
+    assert!(client.poll_welcome().expect("welcomed").is_some());
+    client.ready(race).expect("the same start state");
+    host.poll();
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    assert_eq!(host.drop_silent(silence), 1, "ready and then silent");
+}
+
 /// A seat that has sent nothing for the allowed silence is dropped, told so, and retired.
 #[test]
 fn a_silent_seat_is_dropped_and_told() {

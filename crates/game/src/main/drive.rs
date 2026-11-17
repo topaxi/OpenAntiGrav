@@ -464,8 +464,15 @@ fn screen(stage: &MenuStage) -> Screen {
         busy: stage.change.is_some(),
         ..Screen::default()
     };
-    if stage.prompt.is_some() {
-        return overlay("prompt");
+    if let Some(prompt) = &stage.prompt {
+        // The id names what the prompt is for (`rejoinrace`, `online`), so a script can tell one
+        // prompt from another; a variant's fields (a player's name) are not reported.
+        let purpose = format!("{:?}", prompt.purpose).to_lowercase();
+        let name = purpose.split(|c: char| !c.is_alphanumeric()).next().unwrap_or_default();
+        return Screen {
+            id: name.to_string(),
+            ..overlay("prompt")
+        };
     }
     if let Some(picker) = &stage.picker {
         return picker_screen(&picker.model);
