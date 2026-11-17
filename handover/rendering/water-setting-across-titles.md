@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-17
-summary: "Setting landed; HD seas draw their taps under original; Pulse and Pure offer enhanced (own generated normal map); next the RPCS3 sea pair, planar reflection, the borrowed laws"
+summary: "Setting, HD taps and Pulse/Pure enhanced landed; next the RPCS3 sea pair, the planar reflection, 2048 and Omega laws, the borrowed laws"
 categories: [rendering, frontend]
 size: XL (60)
 difficulty: medium (55)
