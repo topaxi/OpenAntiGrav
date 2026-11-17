@@ -371,3 +371,12 @@ HD Zone race already plays.
   `WO_SHIP_DEATH_SPARKS` are on the disc but not strings in the executable, so no
   HD trigger is read for them; they stay unwired rather than ungated on a guess.
 - The Zone mode map, which unlocks all three Zone variants at once.
+
+## 2026-11-17: items 1 and 2 of the damage smoke re-read are wired
+
+A state change kills the slot's previous state smoke (`psys::Stage::kill`) and every damage smoke
+carries the craft's velocity (`psys::Stage::carry`), in `crates/raceplay/src/damage_fx.rs`; tests
+`a_state_change_kills_the_previous_smoke_with_its_particles` and
+`the_damage_smoke_carries_the_crafts_velocity`. Velocity is passed in units a second like the
+trail-hit burst (the original's 1/60 is its per-tick unit). 2048 and Omega: checked, applies,
+not wired (they play no damage smoke yet). Item 3 (the anchor) is still open.
