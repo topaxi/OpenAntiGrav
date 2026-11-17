@@ -1355,8 +1355,14 @@ paths.
 - [ ] Networking - a first headless `oag-server` and `oag-game --connect` over
       WebTransport race a whole circuit on localhost (2026-10-14,
       [ADR-0070](../architecture/adr/0070-the-network-transport-is-webtransport.md),
-      [networking](../networking/README.md#running-a-local-server)); no menu entry,
-      no web client, no weapons over the network yet
+      [networking](../networking/README.md#running-a-local-server)); since then
+      an online lobby with ONLINE menus on every title, room settings, kick and
+      rematch (2026-10-16 to 2026-10-19,
+      [online lobby](../networking/online-lobby.md#8-the-online-menus-2026-10-16)),
+      and weapons and Eliminator online (2026-10-19,
+      [ADR-0071](../architecture/adr/0071-weapons-are-predicted-simulation-with-a-discrete-state-correction-trigger.md));
+      raced over the internet on Pulse only; no web client; spectate, chat,
+      invite-only and quick match unbuilt
 - [x] **Wipeout Pure: intro to menu into a Time Trial** (2026-08-12)
 - [ ] Wipeout Pure: its own physics, HUD, Zone mode, reset volumes - boost
       plume settled (2026-09-23): none exists, and the engine flare already
