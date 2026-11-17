@@ -44,6 +44,7 @@ mod vex_class_ground_truth;
 mod vex_layer_ground_truth;
 mod vex_node_normals_ground_truth;
 mod vex_ps2_ground_truth;
+mod water_caustic_sweep;
 mod weather_ground_truth;
 mod world_lights_ground_truth;
 

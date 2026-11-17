@@ -400,6 +400,12 @@ only thrust time gives the opposite. `oag-game`'s `--pose-intensity`,
 off-canvas Xvfb capture sat in the repository as the only original-side
 comparison for a week.
 
+## Water
+
+[`water.md`](water.md): how each title draws water (textures and a caustic pass on
+Pulse, scrolled wave normals with a planar or sky reflection on HD, 2048 and
+Omega), the per-circuit census, and what is drawn here today.
+
 ## Prerequisites
 
 Requires [asset archaeology](../architecture/asset-pipeline.md) (M1). There is

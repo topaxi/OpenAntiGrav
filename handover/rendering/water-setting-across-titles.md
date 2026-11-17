@@ -1,0 +1,196 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-11-17
+summary: "Water setting (off/original/HD/2048/Omega) planned, nothing wired: HD sea taps first, then the planar reflection capture"
+categories: [rendering, frontend]
+size: XL (60)
+difficulty: medium (55)
+---
+
+# A per-title `Water` setting: what each choice draws, and the lanes that build it
+
+2026-11-17, lane `water-re` (measure). The recovered laws, the census and the
+confidence scores are in [water.md](../../docs/rendering/water.md) and
+[caustic-pass.md](../../docs/ghidra/functions/psp-pulse-usa/caustic-pass.md).
+This thread is the plan. Nothing here is wired.
+
+## The maintainer's request
+
+Each title gets a `Water` setting with `off`, `original`, `HD`, `2048`, `Omega`,
+default `original`. A choice that needs original assets is offered only when
+that disc image is present. An own-design water for Pure and Pulse is optional
+and TBD.
+
+## What each choice draws
+
+| Choice | Law | Assets it needs | Offered when |
+| --- | --- | --- | --- |
+| `off` | the surface's constant colour or texture, lit, no wave normal, no scroll, no reflection, no caustic pass (what is drawn today on every title) | none | always |
+| `original` | the title's own law (water.md): Pulse textures plus Vostok Reef's caustic pass; Pure textures; HD taps plus planar or sky reflection; 2048 one scrolled tap; Omega two taps plus Fresnel planar reflection | the title's own disc | always |
+| `HD` | HD's sea law: two `dc_waternormalmap` taps at `u + 0.05 t` and `1.15 (-u + 0.05 t)`, sun diffuse and specular, reflection | HD's `dc_waternormalmap.gtf` (and `waves2.gtf` for Vineta K) | the HD image is present, and the title is not HD |
+| `2048` | 2048's `fc15` law: one `water_lapping_waves2_n` tap at `u + 0.05 t`, sun diffuse and specular, no reflection | 2048's `water_lapping_waves2_n.gxt` | the 2048 package is present, and the title is not 2048 |
+| `Omega` | Omega's `reflectplane_mid` law: `NormalMap` and `NormalMap1`, `Speed`, Fresnel-weighted planar reflection | Omega's `dc_waternormalmap.gnf`, `Water_lapping_waves2_N.gnf` | the Omega package is present, the title is not Omega, **and lane 6 has read the law** |
+
+A choice equal to the title's own `original` is dropped from that title's row,
+not shown twice. All three later-title choices borrow a normal map, so none is
+"needs no assets"; the own-design option below is the one that would be offered
+with no other disc.
+
+### Which surfaces are water on a title that borrows a law
+
+Never by guess. Per title, a table the title package owns and the loader
+injects:
+
+- **HD:** by program facts, as `mesh::rcs::water::is_water` does today. The sea
+  is "declares `screenSpaceReflectionTex` (`0xec2b3fc2`) and `DiffuseTexture1`
+  (`0x06a77e50`), reads both material samplers as normals". Amphiseum's `water`
+  is "declares `paraboloidReflectionTex`, `NormalTexture2` (`0x62ae87a7`) and
+  `ColourConstant`".
+- **2048:** by the program's declared interface (`oag_rcs::gxp::sampler_use`
+  already separates the eight lighting-only families): `NormalMap` plus `time`
+  plus `ColourConstant` or `Watercolour`.
+- **Omega:** by the GCN program's declared names (`oag_rcs::gcn`):
+  `screenSpaceReflectionTex` with a `NormalMap*` or `DiffuseTexture1` sampler,
+  or 2048's rule on the Zone models.
+- **Pulse:** the caustic bit (`Batch::header_flags & 0x04`) for the caustic
+  pass; for a borrowed law, the batches whose material binds one of the
+  embedded textures the census names (`NewSeaTest`, `sea`, `water`), as a
+  per-circuit list in `oag-pulse`. **Lane 8 must confirm each name on a frame
+  first** (a census by name says the texture ships, not that it is the sea
+  sheet).
+- **Pure:** the same, in `oag-pure`: `AAdc_Water`, `AAdc_WaterDark` (Vineta K),
+  `Water` (Blue Ridge).
+
+### Where the borrowed law's numbers come from
+
+HD authors `ColourConstant`, `Reflectivity`, `SpecularColour` and
+`SpecularPower` per circuit. For a circuit the lender also ships (Moa Therma
+between Pulse and HD, Vineta K between Pure and HD, for example; the pairing
+table is lane 8's to write), read the lender's own instance for that circuit
+off its disc. For a circuit it does not ship, the
+values are **chosen, not measured**: the lender's Moa Therma instance, with the
+colour replaced by the borrower's own water texture's mean. Say which in the
+loader report.
+
+### Reflection on a title with no reflect set
+
+Pulse and Pure author no reflect set and no sky paraboloid. Under `HD` or
+`Omega` they reflect the title's own sky cube only, resampled to the dual
+paraboloid `mesh::sky_paraboloid` builds (chosen, not measured; Amphiseum's
+`water` is the HD precedent for a sea that reflects only the sky). A planar
+pass over Pulse geometry is the own-design section's question, not this one's.
+
+## Plumbing
+
+- **Enum:** `oag_display::display::Water { Off, Original, Hd, Vita2048, Omega }`
+  in its own file beside `shadows.rs`, serde names `off`, `original`, `hd`,
+  `2048`, `omega`.
+- **Setting:** `graphics.water` in the per-title table of
+  `crates/game/src/settings/render_profile.rs` (where `shadows` lives, for the
+  same reason: what a value means depends on the title). Default `original` on
+  every title.
+- **Menu:** one `[[page.entry]]` `kind = "choice"` in `assets/ui/menu.toml`,
+  `string_id = "OAG_GRAPHICS_WATER"`, values `["off", "original", "hd", "2048",
+  "omega"]`, with the English label and value texts in
+  `assets/ui/strings/english.toml` in the same change (`just check-strings`).
+  Other languages name the gap in `[untranslated]`.
+- **Availability:** `oag_ui::menu::Definition::drop_unavailable_water(title,
+  present)`, modelled on `drop_unavailable_rumble_original`: drops the value
+  equal to the title's own, and each lender value whose image the `oag-source`
+  registry does not find. A stored value that is no longer offered falls back
+  to `original` at load, with a `warn`.
+- **Render side:** the law is generic and lives in `oag-mesh`: a `WaterLaw`
+  record per material slot (taps: sampler, scale, rate; colour; specular;
+  reflection kind `None | Sky | Planar`; weights) in the glow-table style
+  `slots::ICE` uses, and one `shade.wesl` branch. `oag-mesh` names no title:
+  `oag-raceplay`'s load builds the records from the title package's table and,
+  for a borrowed law, from the lender's archive through `oag-source` (rule 3).
+  The planar target is a pass in `oag_raceplay`'s `scene`, beside
+  `behind_glass`, sharing its half-size target code. The caustic pass belongs
+  to the `.vex` draw path with the 16 frames loaded by `oag-raceplay`.
+- **Clock:** the taps scroll on the race clock the existing
+  `AnimTrack::Scroll` uses, so a replay shows the same water.
+
+## Own-design water for Pulse and Pure (TBD; chosen, not measured)
+
+Not planned in detail; the maintainer decides whether it exists. If it does it
+is a sixth value (`enhanced`), offered on Pulse and Pure with no other disc
+present, built from this project's own authored normal map and parameters
+(opt-in upgrades for Pulse and Pure are our data), on the same `WaterLaw`
+record. Open questions for the maintainer: a planar reflection or sky only,
+whether Vostok Reef's caustics extend to other underwater sections, and whether
+it is one look or one per circuit.
+
+## Open
+
+- The planar reflection's camera, target size, clear and `distortion` are
+  unread on every title (water.md, "Open" 1).
+- Omega's `Reflectivity*` combine and `Speed` law are unread; 2048's `fc17`
+  edge program is unread.
+- Pure's caustic frames on Vineta K are unread; the caustic bit is unread on
+  Pure's version-4 batches.
+- Pulse's caustic pass is read on the PSP code only and reached only by PS2
+  disc data or the PSP download pack.
+- The Pulse and Pure water texture names are a census by name, not confirmed
+  on a frame.
+
+## Next Steps
+
+Ranked. Hours are for one member on an idle machine.
+
+1. **HD sea without the planar term** (`oag-wire`, opus, 6 to 8 h). Classify
+   `reflectplane_dc_seawater` by program facts; draw `(ambient + sun N.L) *
+   ColourConstant + specular` with both scrolled taps; give Amphiseum's `water`
+   and Vineta K's `water_test_2`/`water_noref` their taps (the scale and rate
+   table in water.md) and the sky-paraboloid reflection `window_glass` already
+   samples. Acceptance: a ground-truth check inside `hd_water_ground_truth`'s
+   existing walk pinning the classified chunk counts per circuit (Moa Therma
+   31, Ubermall 13 and 7, Chenghou 3, Modesto 5, Amphiseum 2, Vineta K 2 and
+   3); unit tests that fail if `0.05`, `1.15` or the opposite `u` sign is
+   dropped; two `--screenshot` frames 2 s apart on Moa Therma differ on the
+   sea and are identical off it; the `hd/moa-therma`-style pair at a sea pose
+   moves toward the RPCS3 frame; 2048 and Omega recorded as checked, applies,
+   not wired, or wired through `psp2` in the same lane (Omega work backports
+   to 2048).
+2. **The setting and `off`** (`oag-wire`, sonnet, 3 to 4 h). Enum, per-title
+   field, menu row, strings, `drop_unavailable_water`, `off` routing every
+   classified water slot to today's constant reading. Acceptance: settings
+   round-trip and fallback tests, a menu test with and without each lender
+   image (and with `OAG_MODS` pinned empty), `just check-strings`, mouse
+   support as every row has. Can run beside lane 1; touches different crates.
+3. **Capture the HD reflection target** (`oag-capture`, sonnet, 2 to 3 h).
+   One RPCS3 frame at a Moa Therma sea pose with the draw hook: the second
+   target's size, clear and projection (`c[256]` of its draws), the sea draw's
+   patched `reflectProject` and `distortion`, whether the 30 bit-1 chunks are
+   the only users, and what Chenghou's and Modesto's sea samples with no
+   reflect chunk. Acceptance: the numbers on water.md with the capture
+   command, confidence 90 where read.
+4. **The planar reflection** (`oag-wire`, opus, 8 h; after 3). A mirrored
+   pass over render-flag bit-3 chunks (HD) and `wohdmeshreflect` meshes (2048,
+   Omega, `psp2::refraction_only`'s split generalised), sampled through
+   `reflectProject` with the `distortion` offset. Acceptance: target set
+   equals the flagged set per circuit (HD 257 and 73; Omega 268, 73, 30, 38,
+   45, 24; 2048 353 and 52), no target on a circuit with none, frame cost
+   quoted at 800p, 1080p and 4K.
+5. **2048's own water** (`oag-wire`, opus, 5 h). `fc15`/`fc17` one-tap law;
+   read the `fc17` edge program first (`scripts/vita-usse.py disasm`).
+   Acceptance: per-circuit counts pinned in `omega_transparency_ground_truth`'s
+   walk, a Vita3K frame pair on Altima at two times.
+6. **Omega's own water** (`oag-re` then `oag-wire`, opus, 8 h). A GCN
+   instruction read of `reflectplane_mid` (`Reflectivity*`, `Speed`), then
+   wire it on Omega's 2048 circuits and as the `Omega` choice. Checked against
+   2048 in the same change.
+7. **Vostok Reef's caustics** (`oag-capture`, sonnet, 2 h, then `oag-wire`,
+   sonnet, 4 h). A PCSX2 frame of the underwater floor with and without the
+   pass, batch state `0x202`'s blend, then the pass. PS2 inherits the PSP law
+   where the frame does not contradict it.
+8. **Borrowed laws on Pulse and Pure** (`oag-wire`, opus, 8 h; after 1, 2).
+   Confirm each water texture name on a frame, add the per-circuit tables to
+   `oag-pulse` and `oag-pure`, borrow the lender's normal map and per-circuit
+   numbers through `oag-source`, sky-only reflection. Acceptance: with no
+   lender image the row offers `off` and `original` only; with HD present,
+   Pulse's Moa Therma under `HD` shows the scrolled taps on the sea batches
+   and nothing else changes (capture diff against `original`).
+9. **Pure's caustic frames** (`oag-re`, opus, 3 h).
+10. **Own-design water**: blocked on the maintainer's answers above.

@@ -1477,3 +1477,8 @@
 0x08a6eb5c	function	SpectatorCamera_GetTypeId	88	attract-demo.md
 0x08acb358	data	g_spectator_camera_vtable	85	attract-demo.md
 0x08b32c64	data	g_spectator_camera	90	attract-demo.md
+0x0890dc64	function	Mesh_BeginCausticPass	75	caustic-pass.md
+0x0890ddd8	function	Mesh_SetCausticNodeState	72	caustic-pass.md
+0x0890e0dc	function	Mesh_EndCausticPass	75	caustic-pass.md
+0x08abf494	data	g_caustic_tint	70	caustic-pass.md
+0x08abf4a0	data	g_caustic_uv_scale	72	caustic-pass.md

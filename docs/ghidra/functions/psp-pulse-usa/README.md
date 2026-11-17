@@ -23,6 +23,7 @@ An unencrypted ELF, so no decryption step is needed. See
 | [Video and the Movie widget](frontend-video.md) | Intro sequence, sceMpeg playback, XML-driven playback, the START skip |
 | [XML reader](xml-reader.md) | The one parser behind the front end, handling stats and camera blocks, and its exponent-blind float accessor |
 | [Texture animation](texture-animation.md) | The GU texture offset/scale primitives, their callers, and what is still unknown about the global scroll clock |
+| [Caustic pass](caustic-pass.md) | The second draw of batches flagged `0x04` with a 16-frame ripple texture projected from above: Vostok Reef only, PS2 disc data |
 | [Loading screen](loading-screen.md) | The screen type field, the `loading` plugin's tip table, and the procedural heartbeat wave that is not a movie |
 | [Sound engine](sound.md) | Cue dispatch by name, and the 32-entry SAS voice table the waveform address and length are committed from |
 | [Audio levels](audio-levels.md) | The group/master volume chain to the DAC, and the finding that the original reserves no headroom |
