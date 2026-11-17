@@ -2,7 +2,7 @@
 status: blocked-maintainer
 titles: [all]
 updated: 2026-11-17
-summary: "Online server: a three-version roadmap (reconnect and limits, several rooms and crash resume, cheaper rooms) waits on eight ranked decisions; hosting and the lobby/race split are sized"
+summary: "Online server roadmap: three versions (reconnect, several rooms with crash resume, cheaper rooms) wait on eight ranked decisions"
 categories: [tooling]
 ---
 
