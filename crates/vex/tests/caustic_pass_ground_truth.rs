@@ -12,9 +12,12 @@ use oag_vex::vex;
 
 use crate::wad_walk;
 
+/// A census: per directory index `(flagged, total)`, and the tint bytes.
+type Census = (BTreeMap<usize, (usize, usize)>, Vec<u8>);
+
 /// `(flagged, total)` batches of every `.vex` blob of `archive` that has any
 /// flagged, by directory index, and the tint byte of each flagged mesh.
-fn census(image: &str, archive: &str) -> Option<(BTreeMap<usize, (usize, usize)>, Vec<u8>)> {
+fn census(image: &str, archive: &str) -> Option<Census> {
     let path = oag_testdata::image(&format!("data/images/{image}"))?;
     let mut disc = DiscImage::open(&path).expect("image opens");
     let mut found = BTreeMap::new();
