@@ -573,6 +573,50 @@ From here the round trip is about 10 ms.
 - Everything was removed from the host afterwards (the one lobby killed by pid, its directory and a stray pid file deleted,
   the home listing checked).
 
+### Measured over the internet, with the limits (2026-11-17)
+
+The same deploy and measurements a third time, on `main` at `091a66175`, which has `net-v1b`'s limits (the lobby's 64
+connections and 16 per address, the race host's 48 waiting for a hello, bounded transport queues, a datagram budget of
+120 a second with a burst of 120 per link and direction, one repeated warning a second). The remote host is the same kind
+as before (x86-64, 1 core, about 1 GB, shared with other services), reached by its host name over the same path; the
+server is the musl build with the lean Pulse (PSP, EU) extraction (184 MB), run with `--max-ticks 1800`. The clients were
+**release** builds (`oag-game`, `--no-audio --net-bot`, one `--release` build with `debug-assertions` off).
+From here the round trip is about 10 ms.
+
+- **Race.** Five pairs and one four-person room of `oag-game --online --net-bot`, name by name through UDP 60000 and
+  60001: **0 bad hashes in all fourteen clients** (every `net:` line, `bad 0`), all six rooms ended at `--max-ticks reached`
+  and freed the slot. The lobby log (the race child writes into it too) has 16 lines in all: the start banner and, per
+  race, one `races:` and one `race is over:` line. **No warning, refusal, budget, cap or queue line.**
+- **Network** (per client, `net:` lines from tick 300, one a second-ish): QUIC rtt 9.2 to 14.8 ms (mostly 10-12), loss 0.0 %,
+  jitter 0.0 to 11.1 ms, rx 50.1 KB/s and tx 7.8 to 10.1 KB/s in a pair; in the four-person room rx 77.9 KB/s and tx
+  9.6 to 9.7 KB/s. Corrections cumulate to 1 or 2 over a 30 s race in a pair and 1 to 4 in the room of four. The first
+  second stalls as before (confirm latency about 0.9 s at tick 30, 66-83 ms by tick 200 and 80-100 ms after).
+- **Against the earlier rows** (2026-11-17, before the limits: rtt 9.1-17.9 ms, loss 0.0 %, rx 50.1 KB/s, tx 8.1-10.3 KB/s,
+  0-6 corrections a minute): the same row for row, so the limits cost nothing measurable on a well-behaved pair.
+- **Datagram rate against the budget.** The client prints UDP datagrams a second (`rx ... d/s`, `tx ... d/s`, the transport's
+  packet counters, so an upper bound on the application datagrams the budget counts: it includes acknowledgement-only
+  packets). Over the 14 clients: **tx mean 60 to 73, peak 79 a second; rx mean 61 to 71, peak 92 a second** (the peaks are
+  the first seconds, while the client catches up). Against 120 a second that is **at least 34 % headroom on tx and 23 % on rx
+  at the sampled peak, and about 45 % at the steady mean** in a pair. In the room of four the means are rx 66 to 71 and tx 63
+  to 68, peaks rx 77 and tx 77: **four people cost no more datagrams than two** (a snapshot carries more bytes, not more
+  datagrams), so the headroom at 4 is the same, rx 78 KB/s instead of 50. The sampling is one reading per second, and a
+  burst inside a second is absorbed by the bucket's 120. An over-budget datagram is dropped **silently** (`wt.rs`, the
+  reader task has no counter and no log), so the lobby log's silence alone does not prove none was dropped; the proof is
+  the client counters above (the budget is read on both ends) together with 0 bad hashes and no stalls after the first second.
+- **Server cost** (sampled with `top` every 4 s and `/proc/<pid>/status` every 0.25 s on the host): the race child 9 to 13 MB
+  resident and 11 to 17 % of the one core averaged over the samples of a race in a pair, 19 % in the room of four (peaks of 67 to 81 %
+  of the core in the first seconds, while it loads), the lobby 3.4 to 5.3 MB and 1 to 1.5 %. **Two load transients are larger than the
+  steady figure: the race child peaked at 542 MB resident (`VmHWM`; 462 MB at a `top` sample 0.7 s after it started) while
+  it loaded the circuit, and the lobby's `VmHWM` was 380 MB** (its start, reading the extraction). The host showed about 640 MB available
+  with 2 GB of swap and was never short, but a second load on top of a busy host would be, so the "17 rooms by memory" row in
+  `server-roadmap.md` is a steady-state figure, not a loading one.
+- **A name stays taken for a while after a race.** A pair that reused the previous pair's `--online-name` within about a
+  minute was refused `BadName: that name is in use` (twice: the held session, `SEAT_GRACE` 30 s, plus the lobby's time to
+  free it, is the likely cause, a hypothesis of about 55 %, not read out of the code). Not a limit firing on a pair; the
+  runs that followed used one name per run.
+- Everything was removed from the host afterwards (the one lobby killed by pid, its directory deleted, the home listing
+  and the free ports checked).
+
 ### Tests
 
 - `wire::online` and `online::rooms` unit tests (round trips, every rule above).
