@@ -58,7 +58,8 @@ fn race(args: &Args) -> Result<()> {
     );
     let mut host = Host::new(race, job.params.clone());
     let identity = oag_net::wt::Identity::self_signed(&[])?;
-    let mut listener = oag_net::wt::Listener::bind(args.listen, &identity)?;
+    let mut listener =
+        oag_net::wt::Listener::bind(args.listen, &identity, oag_net::wt::LinkLimits::RACE)?;
     println!("listening on {}", listener.local_addr());
     println!("cert-hash {}", identity.hash_hex());
     let limits = Limits {

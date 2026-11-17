@@ -180,7 +180,8 @@ fn main() -> Result<()> {
     println!("fingerprint {:#018x}", host.fingerprint());
 
     let identity = oag_net::wt::Identity::self_signed(&cli.cert_names)?;
-    let mut listener = oag_net::wt::Listener::bind(cli.listen, &identity)?;
+    let mut listener =
+        oag_net::wt::Listener::bind(cli.listen, &identity, oag_net::wt::LinkLimits::RACE)?;
     println!("listening on {}", listener.local_addr());
     println!("cert-hash {}", identity.hash_hex());
     if let Some(path) = &cli.hash_out {

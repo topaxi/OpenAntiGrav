@@ -25,6 +25,7 @@ use oag_gameplay::input::Input;
 use oag_gameplay::{MAX_PLAYERS, PlayerInputs};
 use oag_raceplay::Race;
 
+use crate::limits::LogLimit;
 use crate::link::Link;
 use crate::wire::board::Board;
 use crate::wire::{Confirmed, Control, Datagram, Held, PROTOCOL, RaceParams, TickRecord};
@@ -43,6 +44,14 @@ pub const MAX_INPUT_AHEAD: u32 = 119;
 
 /// The least time between two resend requests a seat is answered. Chosen.
 pub const RESEND_INTERVAL: Duration = Duration::from_secs(1);
+
+/// The most connections a race host keeps waiting for their hello; past it the oldest is
+/// closed. Chosen, not measured: four times the seats of a full race
+/// (`docs/networking/server-roadmap.md`, "V1: survive the network", the memory arithmetic).
+pub const MAX_JOINING: usize = 48;
+
+/// How long a connection may go without saying hello before it is closed. Chosen.
+pub const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// One person's connection and input stream.
 pub struct Seat {
@@ -64,6 +73,8 @@ pub struct Seat {
     /// When a resend request was last answered.
     resent: Option<Instant>,
     counts: SeatCounts,
+    /// One warning a second about this seat.
+    log: LogLimit,
 }
 
 /// What happened to one seat's input since [`Host::take_counts`] was last asked.
@@ -96,7 +107,10 @@ pub struct Host {
     params: RaceParams,
     fingerprint: u64,
     seats: Vec<Option<Seat>>,
-    joining: Vec<Box<dyn Link>>,
+    joining: Vec<(Box<dyn Link>, Instant)>,
+    hello_timeout: Duration,
+    /// One warning a second about refused connections.
+    refusals: LogLimit,
     history: Vec<TickRecord>,
     phase: Phase,
     /// Seat tokens a lobby issued, by seat: when set, a hello is seated by its token.
@@ -116,6 +130,8 @@ impl Host {
             fingerprint,
             seats: (0..people).map(|_| None).collect(),
             joining: Vec::new(),
+            hello_timeout: HELLO_TIMEOUT,
+            refusals: LogLimit::default(),
             history: Vec::new(),
             phase: Phase::Lobby,
             expected: Vec::new(),
@@ -173,7 +189,21 @@ impl Host {
 
     /// A new connection. It is seated when its hello arrives.
     pub fn join(&mut self, link: Box<dyn Link>) {
-        self.joining.push(link);
+        if self.joining.len() >= MAX_JOINING {
+            self.joining.remove(0);
+        }
+        self.joining.push((link, Instant::now()));
+    }
+
+    /// Connections that have not yet said hello.
+    #[must_use]
+    pub fn joining(&self) -> usize {
+        self.joining.len()
+    }
+
+    /// Sets how long a connection may stay silent before its hello ([`HELLO_TIMEOUT`]).
+    pub fn set_hello_timeout(&mut self, timeout: Duration) {
+        self.hello_timeout = timeout;
     }
 
     /// Whether every seat has joined and loaded the race.
@@ -246,8 +276,10 @@ impl Host {
                         log::info!("net: seat {slot} ({}) left: {reason}", seat.name);
                         seat.left = Some(reason);
                     }
-                    Ok(other) => log::warn!("net: seat {slot}: unexpected {other:?}"),
-                    Err(e) => log::warn!("net: seat {slot}: {e}"),
+                    Ok(other) => seat
+                        .log
+                        .warn(|| format!("net: seat {slot}: unexpected {other:?}")),
+                    Err(e) => seat.log.warn(|| format!("net: seat {slot}: {e}")),
                 }
             }
             while let Some(message) = seat.link.recv() {
@@ -275,8 +307,10 @@ impl Host {
                             seat.newest = Some(seat.newest.map_or(tick, |n| n.max(tick)));
                         }
                     }
-                    Ok(other) => log::warn!("net: seat {slot}: unexpected {other:?}"),
-                    Err(e) => log::warn!("net: seat {slot}: {e}"),
+                    Ok(other) => seat
+                        .log
+                        .warn(|| format!("net: seat {slot}: unexpected {other:?}")),
+                    Err(e) => seat.log.warn(|| format!("net: seat {slot}: {e}")),
                 }
             }
         }
@@ -284,10 +318,10 @@ impl Host {
 
     fn poll_joining(&mut self) {
         let mut still = Vec::new();
-        for mut link in std::mem::take(&mut self.joining) {
+        for (mut link, since) in std::mem::take(&mut self.joining) {
             let Some(message) = link.recv_control() else {
-                if link.closed().is_none() {
-                    still.push(link);
+                if link.closed().is_none() && since.elapsed() < self.hello_timeout {
+                    still.push((link, since));
                 }
                 continue;
             };
@@ -317,7 +351,8 @@ impl Host {
                         Err("unknown seat token".to_string())
                     };
                     if let Err(why) = placed {
-                        log::warn!("net: refused a connection: {why}");
+                        self.refusals
+                            .warn(|| format!("net: refused a connection: {why}"));
                     }
                     continue;
                 }
@@ -327,7 +362,8 @@ impl Host {
                 Ok(other) => format!("expected a hello, got {other:?}"),
                 Err(e) => format!("{e}"),
             };
-            log::warn!("net: refused a connection: {reason}");
+            self.refusals
+                .warn(|| format!("net: refused a connection: {reason}"));
             link.send_control(&Control::Reject { reason });
         }
         self.joining = still;
@@ -384,6 +420,7 @@ impl Host {
                     left: None,
                     heard: Instant::now(),
                     resent: None,
+                    log: LogLimit::default(),
                     counts: SeatCounts::default(),
                 });
                 return Ok(slot);

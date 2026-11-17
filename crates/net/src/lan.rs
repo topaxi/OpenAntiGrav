@@ -114,6 +114,7 @@ impl Hosted {
         let listener = Listener::bind(
             SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), config.port),
             &identity,
+            crate::wt::LinkLimits::RACE,
         )
         .context("binding the game port")?;
         let port = listener.local_addr().port();

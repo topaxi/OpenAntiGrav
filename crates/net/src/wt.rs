@@ -16,21 +16,66 @@
 //! by every link in the process; a [`WtLink`] is a set of channels to it.
 
 use std::net::SocketAddr;
-use std::sync::mpsc;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock, mpsc};
 
 use anyhow::{Context, Result, anyhow};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use web_time::Duration;
 
+use crate::limits::{Budget, LogLimit};
 use crate::link::Link;
 use crate::stats::PathStats;
 
 /// How long a client waits for the handshake. Chosen.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// The largest reliable message accepted, so a broken peer cannot ask for 4 GiB.
-const MAX_RELIABLE: usize = 1 << 20;
+/// The largest reliable message accepted, so a broken peer cannot ask for 4 GiB. Chosen: four
+/// times the largest message this protocol sends (a resend chunk of [`crate::host::RESEND_CHUNK`]
+/// ticks of twelve seats, about 64 KiB).
+const MAX_RELIABLE: usize = 256 << 10;
+
+/// Reliable messages a link holds that its owner has not read; the reader waits for room, which
+/// stops the peer through QUIC's flow control. Chosen.
+const IN_RELIABLE: usize = 4;
+
+/// Datagrams a link holds that its owner has not read; the next is dropped. Chosen: four
+/// seconds of a peer sending at the tick rate.
+const IN_DATAGRAMS: usize = 256;
+
+/// The datagrams a link accepts each second: twice the tick rate, so a client that repeats
+/// itself is covered and one that floods is not. Chosen.
+pub const DATAGRAM_RATE: u32 = 120;
+
+/// The datagrams a quiet link may then send at once, one second's worth. Chosen.
+pub const DATAGRAM_BURST: u32 = 120;
+
+/// Handshakes a listener has under way at once; the next is refused with a 503. Chosen.
+const HANDSHAKES: usize = 64;
+
+/// Sessions a listener has accepted that its owner has not yet taken; the next is closed.
+/// Chosen: a server polls every 5 ms.
+const UNTAKEN: usize = 256;
+
+/// How long a handshake may take before it is dropped. Chosen.
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// What one link may queue to send before the peer is closed as not draining, in bytes.
+#[derive(Debug, Clone, Copy)]
+pub struct LinkLimits {
+    /// Bytes queued for the peer and not yet written.
+    pub out_bytes: usize,
+}
+
+impl LinkLimits {
+    /// A lobby: it sends lists and refusals, a few kilobytes at a time. Chosen.
+    pub const LOBBY: Self = Self { out_bytes: 1 << 20 };
+    /// A race: a seat that asks for a resend from tick 0 is sent the whole history, 249 bytes a
+    /// tick at twelve seats, so 16 MiB holds a 17 minute race. Chosen.
+    pub const RACE: Self = Self {
+        out_bytes: 16 << 20,
+    };
+}
 
 fn runtime() -> &'static tokio::runtime::Runtime {
     static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
@@ -130,11 +175,22 @@ enum Out {
     Reliable(Vec<u8>),
 }
 
+impl Out {
+    fn len(&self) -> usize {
+        match self {
+            Self::Datagram(bytes) | Self::Reliable(bytes) => bytes.len(),
+        }
+    }
+}
+
 /// One end of a WebTransport session.
 pub struct WtLink {
-    datagrams: mpsc::Receiver<Vec<u8>>,
-    reliable: mpsc::Receiver<Vec<u8>>,
+    datagrams: tokio::sync::mpsc::Receiver<Vec<u8>>,
+    reliable: tokio::sync::mpsc::Receiver<Vec<u8>>,
     out: tokio::sync::mpsc::UnboundedSender<Out>,
+    /// Bytes in `out` not yet written.
+    queued: Arc<AtomicUsize>,
+    limits: LinkLimits,
     closed: Arc<Mutex<Option<String>>>,
     max_datagram: usize,
     peer: SocketAddr,
@@ -154,7 +210,9 @@ impl WtLink {
         send: web_transport_quinn::SendStream,
         recv: web_transport_quinn::RecvStream,
         peer: SocketAddr,
+        limits: LinkLimits,
     ) -> Self {
+        let queued = Arc::new(AtomicUsize::new(0));
         let closed = Arc::new(Mutex::new(None));
         let close = {
             let closed = closed.clone();
@@ -167,23 +225,25 @@ impl WtLink {
                 }
             }
         };
-        let (datagram_in, datagrams) = mpsc::channel();
-        let (reliable_in, reliable) = mpsc::channel();
+        let (datagram_in, datagrams) = tokio::sync::mpsc::channel(IN_DATAGRAMS);
+        let (reliable_in, reliable) = tokio::sync::mpsc::channel(IN_RELIABLE);
         let (out, mut outgoing) = tokio::sync::mpsc::unbounded_channel::<Out>();
         let max_datagram = session.max_datagram_size();
         let rt = runtime();
 
         let reader = session.clone();
         rt.spawn(async move {
+            let mut budget = Budget::new(DATAGRAM_RATE, DATAGRAM_BURST, web_time::Instant::now());
             loop {
                 match reader.read_datagram().await {
+                    // Over budget: dropped before it is queued or decoded.
+                    Ok(_) if !budget.take(web_time::Instant::now()) => {}
                     // The keep-alive of the other end's writer.
                     Ok(bytes) if bytes.is_empty() => {}
-                    Ok(bytes) => {
-                        if datagram_in.send(bytes.to_vec()).is_err() {
-                            break;
-                        }
-                    }
+                    Ok(bytes) => match datagram_in.try_send(bytes.to_vec()) {
+                        Ok(()) | Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {}
+                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => break,
+                    },
                     // The close is reported by the reliable reader below, once every message
                     // that arrived before it has been handed over: a close seen here first
                     // could be read ahead of a refusal still on its way to the queue.
@@ -211,7 +271,7 @@ impl WtLink {
                     on_close(format!("reliable stream: {e}"));
                     break;
                 }
-                if reliable_in.send(bytes).is_err() {
+                if reliable_in.send(bytes).await.is_err() {
                     break;
                 }
             }
@@ -219,6 +279,7 @@ impl WtLink {
 
         let counters = session.clone();
         let writer = session;
+        let drained = queued.clone();
         rt.spawn(async move {
             let mut send = send;
             loop {
@@ -232,6 +293,7 @@ impl WtLink {
                     }
                 };
                 let Some(message) = message else { break };
+                drained.fetch_sub(message.len(), Ordering::Relaxed);
                 match message {
                     // A datagram that will not go (too large, congestion) is lost,
                     // which the protocol's redundancy covers.
@@ -264,6 +326,8 @@ impl WtLink {
             datagrams,
             reliable,
             out,
+            queued,
+            limits,
             closed,
             max_datagram,
             peer,
@@ -272,15 +336,39 @@ impl WtLink {
     }
 }
 
+impl WtLink {
+    /// Queues `message`, or closes the session when the peer has let more than the limit pile up.
+    fn queue(&self, message: Out) {
+        let len = message.len();
+        let total = self.queued.fetch_add(len, Ordering::Relaxed) + len;
+        if total > self.limits.out_bytes {
+            let why = format!(
+                "{} bytes queued to send and the peer does not drain them",
+                self.limits.out_bytes
+            );
+            let mut slot = self
+                .closed
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if slot.is_none() {
+                *slot = Some(why);
+                self.session.close(1, b"send queue full");
+            }
+            return;
+        }
+        let _ = self.out.send(message);
+    }
+}
+
 impl Link for WtLink {
     fn send_datagram(&mut self, bytes: Vec<u8>) {
-        let _ = self.out.send(Out::Datagram(bytes));
+        self.queue(Out::Datagram(bytes));
     }
     fn recv_datagram(&mut self) -> Option<Vec<u8>> {
         self.datagrams.try_recv().ok()
     }
     fn send_reliable(&mut self, bytes: Vec<u8>) {
-        let _ = self.out.send(Out::Reliable(bytes));
+        self.queue(Out::Reliable(bytes));
     }
     fn recv_reliable(&mut self) -> Option<Vec<u8>> {
         self.reliable.try_recv().ok()
@@ -327,7 +415,7 @@ impl Listener {
     /// # Errors
     ///
     /// The address could not be bound, or the certificate was refused.
-    pub fn bind(addr: SocketAddr, identity: &Identity) -> Result<Self> {
+    pub fn bind(addr: SocketAddr, identity: &Identity, limits: LinkLimits) -> Result<Self> {
         let rt = runtime();
         let _guard = rt.enter();
         let mut server = web_transport_quinn::ServerBuilder::new()
@@ -335,7 +423,9 @@ impl Listener {
             .with_certificate(identity.chain.clone(), identity.key.clone_key())
             .with_context(|| format!("listening on {addr}"))?;
         let local = server.local_addr()?;
-        let (found, incoming) = mpsc::channel();
+        let (found, incoming) = mpsc::sync_channel(UNTAKEN);
+        let handshakes = Arc::new(tokio::sync::Semaphore::new(HANDSHAKES));
+        let refused = Arc::new(Mutex::new(LogLimit::default()));
         let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
         rt.spawn(async move {
             loop {
@@ -345,20 +435,45 @@ impl Listener {
                 };
                 let Some(request) = request else { break };
                 let found = found.clone();
+                let handshakes = handshakes.clone();
+                let refused = refused.clone();
                 tokio::spawn(async move {
                     let peer = request.conn().remote_address();
-                    let session = match request.ok().await {
-                        Ok(session) => session,
-                        Err(e) => {
-                            log::warn!("net: {peer}: session refused: {e}");
-                            return;
-                        }
+                    let warn = |line: String| {
+                        refused
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .warn(|| line);
                     };
-                    match session.accept_bi().await {
-                        Ok((send, recv)) => {
-                            let _ = found.send(WtLink::spawn(session, send, recv, peer));
+                    let Ok(_permit) = handshakes.try_acquire_owned() else {
+                        warn(format!("net: {peer}: too many handshakes under way"));
+                        let _ = request
+                            .reject(web_transport_quinn::http::StatusCode::SERVICE_UNAVAILABLE)
+                            .await;
+                        return;
+                    };
+                    let shaken = tokio::time::timeout(HANDSHAKE_TIMEOUT, async {
+                        let session = request
+                            .ok()
+                            .await
+                            .map_err(|e| format!("session refused: {e}"))?;
+                        let (send, recv) = session
+                            .accept_bi()
+                            .await
+                            .map_err(|e| format!("no reliable stream: {e}"))?;
+                        Ok::<_, String>((session, send, recv))
+                    })
+                    .await;
+                    match shaken {
+                        Ok(Ok((session, send, recv))) => {
+                            // A full queue drops the link, which closes its session.
+                            let _ =
+                                found.try_send(WtLink::spawn(session, send, recv, peer, limits));
                         }
-                        Err(e) => log::warn!("net: {peer}: no reliable stream: {e}"),
+                        Ok(Err(e)) => warn(format!("net: {peer}: {e}")),
+                        Err(_) => warn(format!(
+                            "net: {peer}: no handshake in {HANDSHAKE_TIMEOUT:?}"
+                        )),
                     }
                 });
             }
@@ -402,7 +517,7 @@ pub fn connect(addr: &str, hash: [u8; 32]) -> Result<WtLink> {
             .with_context(|| format!("connecting to {addr}"))?;
         let peer = session.remote_address();
         let (send, recv) = session.open_bi().await?;
-        Ok(WtLink::spawn(session, send, recv, peer))
+        Ok(WtLink::spawn(session, send, recv, peer, LinkLimits::RACE))
     })
 }
 
@@ -453,12 +568,17 @@ mod tests {
     #[test]
     fn dropping_a_listener_frees_its_port() {
         let identity = Identity::self_signed(&[]).expect("certificate");
-        let first = Listener::bind("127.0.0.1:0".parse().expect("addr"), &identity).expect("bind");
+        let first = Listener::bind(
+            "127.0.0.1:0".parse().expect("addr"),
+            &identity,
+            LinkLimits::RACE,
+        )
+        .expect("bind");
         let addr = first.local_addr();
         drop(first);
         let started = std::time::Instant::now();
         loop {
-            match Listener::bind(addr, &identity) {
+            match Listener::bind(addr, &identity, LinkLimits::RACE) {
                 Ok(_) => break,
                 Err(e) => assert!(
                     started.elapsed() < std::time::Duration::from_secs(5),
@@ -475,8 +595,12 @@ mod tests {
     #[test]
     fn a_session_carries_both_kinds_and_a_wrong_pin_is_refused() {
         let identity = Identity::self_signed(&[]).expect("certificate");
-        let mut listener =
-            Listener::bind("127.0.0.1:0".parse().expect("addr"), &identity).expect("bind");
+        let mut listener = Listener::bind(
+            "127.0.0.1:0".parse().expect("addr"),
+            &identity,
+            LinkLimits::RACE,
+        )
+        .expect("bind");
         let addr = listener.local_addr().to_string();
 
         let wrong = connect(&addr, [7; 32]).expect_err("a wrong pin connected");
