@@ -156,7 +156,11 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // **HD's scrolled-tap water** (`Emissive::program` mode 17, `oag_mesh::mesh::rcs::water`):
     // 1 the sea, 2 Amphiseum's pool, 3 `water_test_2`, 4 `water_noref`; 0 elsewhere.
     let water_entry = (in.slots >> 24u) & 63u;
-    let water = water_kind(water_entry, row_scale);
+    let water_raw = water_kind(water_entry, row_scale);
+    // **2048's own sea** (kind 6, `mesh::rcs::psp2::water`): the generic lit path with a
+    // scrolled normal map and Phong highlight, so none of the HD families' branches apply.
+    let vita_water = water_raw > 5.5;
+    let water = select(water_raw, 0.0, vita_water);
     let n = normalize(in.normal);
     // **Omega's panel-map road** (`Emissive::program` mode 15, `mesh::rcs::psp2::panel_map`): the
     // diffuse, normal and emissive are sampled at the coordinate the march into the panel map
@@ -220,6 +224,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // specular and the reflection alike.
     if water > 0.5 {
         n_hull = water_normal(water_entry, water, select(in.texcoord, in.world.xz, water > 4.5), n, in.tangent);
+        n_lit = n_hull;
+    }
+    if vita_water {
+        n_hull = water_normal(water_entry, water_raw, in.texcoord, n, in.tangent);
         n_lit = n_hull;
     }
 
@@ -1209,6 +1217,15 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         if water > 0.5 && water < 3.5 {
             specular = scene.light.sun * water_specular_colour(water_entry)
                 * (pow(ndh, row_scale.x) * ndl_spec * mask * rig_on * select(0.0, 1.0, water < 1.5));
+        }
+        // 2048's sea: `liveLighting0specular * t.a * sat(R.L)^SpecularPower`, `R` the view
+        // reflected about the mapped normal, `t.a` the first tap's alpha (fc15 fragment `@0x0c`
+        // to `@0x18`). No `sat(8 N.L)` gate.
+        if vita_water {
+            let gloss = material_sample(MATERIAL_PAD_MASK, water_tap_uv(water_entry, water_raw, 0u, in.texcoord)).a;
+            let reflected = reflect(-to_eye, n_lit);
+            let facing = clamp(dot(reflected, scene.light.direction), 0.0, 1.0);
+            specular = scene.light.sun * (pow(facing, row_scale.x) * gloss * mask * rig_on * in.lit);
         }
 
         // **The reflection probe**, on the hull materials whose `IBL` variant declares it

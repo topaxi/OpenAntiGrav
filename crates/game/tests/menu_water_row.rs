@@ -35,9 +35,9 @@ fn the_shipped_row_lists_every_water_value_in_order() {
     assert_eq!(offered(&built_in()), every);
 }
 
-/// The row is hidden where nothing it offers changes the picture: 2048 and Omega (their `original`
-/// is `off`, and nothing borrowed is drawn), Pulse and Pure without `enhanced`; shown on HD, whose
-/// `original` draws the sea's taps, and on Pulse and Pure, which offer `enhanced`.
+/// The row is hidden where nothing it offers changes the picture: Omega (its `original` is `off`,
+/// and nothing borrowed is drawn), Pulse and Pure without `enhanced`; shown on HD and 2048, whose
+/// `original` draws the sea's scrolled normal map, and on Pulse and Pure, which offer `enhanced`.
 #[test]
 fn the_row_is_shown_only_where_it_changes_the_picture() {
     let none = |_: &str| false;
@@ -47,7 +47,7 @@ fn the_row_is_shown_only_where_it_changes_the_picture() {
         (oag_pure::TITLE, true),
         (oag_hd::TITLE, true),
         (oag_omega::TITLE, false),
-        (oag_2048::TITLE, false),
+        (oag_2048::TITLE, true),
     ] {
         for present in [&none as &dyn Fn(&str) -> bool, &with_every_disc] {
             assert_eq!(
@@ -67,7 +67,7 @@ fn with_no_lender_disc_the_row_offers_what_the_title_changes() {
         (oag_pure::TITLE, &["off", "original", "enhanced"][..]),
         (oag_hd::TITLE, &["off", "original"][..]),
         (oag_omega::TITLE, &[][..]),
-        (oag_2048::TITLE, &[][..]),
+        (oag_2048::TITLE, &["off", "original"][..]),
     ] {
         assert_eq!(row_after(title, &[]), want, "{}", title.name);
     }
@@ -130,7 +130,7 @@ fn with_every_lender_present_only_drawn_laws_are_offered() {
         (oag_pure::TITLE, &drawn[..]),
         (oag_hd::TITLE, &["off", "original"][..]),
         (oag_omega::TITLE, &[][..]),
-        (oag_2048::TITLE, &[][..]),
+        (oag_2048::TITLE, &["off", "original"][..]),
     ] {
         assert_eq!(row_after(title, &present), want, "{}", title.name);
     }

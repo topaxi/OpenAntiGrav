@@ -27,6 +27,8 @@ const LIGHT_PREFIX: &str = "liveLighting";
 /// Declared by the ambient-only permutation, and by the zone ones.
 const AMBIENT: &str = "constantAmbientColour";
 const FOG: &str = "fogColour";
+/// The engine clock a scrolling surface's vertex program adds to its coordinate.
+const TIME: &str = "time";
 /// Zone permutations declare `zone*` uniforms and samplers and are never the
 /// ambient-only one.
 const ZONE_PREFIX: &str = "zone";
@@ -73,6 +75,9 @@ pub struct SamplerUse {
     /// ambient and fog colours, where there is exactly one: the constant the
     /// surface takes its colour from when its samplers are lighting only.
     pub colour_uniform: Option<String>,
+    /// Whether a vertex program of the file declares the engine's `time` uniform: the
+    /// surface scrolls with the clock (`fc15`/`fc17_effects_vscroll_water`).
+    pub time_scrolled: bool,
 }
 
 /// Reads `data`, a whole `.rcsmaterial` file, for its ambient-only and lit
@@ -135,9 +140,15 @@ pub fn sampler_use(data: &[u8]) -> Option<SamplerUse> {
     colours.sort_unstable();
     colours.dedup();
     let colour_uniform = (colours.len() == 1).then(|| colours[0].to_string());
+    let time_scrolled = super::programs(data)
+        .into_iter()
+        .filter_map(|(_, p)| p.ok())
+        .filter(|p| !p.is_fragment())
+        .any(|p| names(&p, Category::Uniform).contains(&TIME));
     Some(SamplerUse {
         ambient_samplers,
         lighting_only,
         colour_uniform,
+        time_scrolled,
     })
 }

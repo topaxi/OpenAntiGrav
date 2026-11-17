@@ -5,7 +5,8 @@ import package::hull_normal::{hull_normal};
 import package::texture_lod::{MATERIAL_PAD_MASK, material_sample};
 
 // The entry's family, `program[1]`: 1 the sea, 2 Amphiseum's pool, 3 `water_test_2`,
-// 4 `water_noref`; 0 where the entry is not a water entry.
+// 4 `water_noref`, 5 `enhanced`, 6 2048's own sea (`mesh::rcs::psp2::water`); 0 where the
+// entry is not a water entry.
 fn water_kind(entry: u32, row_scale: vec4<f32>) -> f32 {
     if entry != 0u && row_scale.z > 16.5 && row_scale.z < 17.5 {
         return row_scale.w;
@@ -47,7 +48,8 @@ fn water_specular_colour(entry: u32) -> vec3<f32> {
 // `2x - 1` and rebuild `z = sqrt(1 - x^2 - y^2)` (the sea's `@0x00`..`@0x1f`); Vineta K
 // decodes RGB (`MAD R0.xyz, tap, 2, -1`). Three taps, unrolled; the sea's third weighs zero.
 fn water_normal(entry: u32, kind: f32, uv: vec2<f32>, n: vec3<f32>, tangent: vec4<f32>) -> vec3<f32> {
-    let rgb = kind > 2.5 && kind < 4.5;
+    // Vineta K and 2048's sea decode the map's RGB (`MAD R0.xyz, tap, 2, -1`).
+    let rgb = (kind > 2.5 && kind < 4.5) || kind > 5.5;
     var sum = vec3<f32>(0.0);
     for (var i = 0u; i < 3u; i = i + 1u) {
         let texel = material_sample(MATERIAL_PAD_MASK, water_tap_uv(entry, kind, i, uv));

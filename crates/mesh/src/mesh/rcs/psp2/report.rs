@@ -43,6 +43,8 @@ pub struct Report {
     pub decoded_tangents: usize,
     /// What the PS4 normal-map binding found - see `normal_map`. All zero on a Vita model.
     pub normal_maps: NormalMapCensus,
+    /// 2048's own sea (`psp2::water`). All zero on a PS4 model.
+    pub sea: super::water::Census,
     /// Materials that multiply `VertexColour1` into the light (`psp2::hull_colour`).
     pub hull_colour: HullColourCensus,
     /// How many materials this model's own table names, whether or not this
@@ -271,7 +273,7 @@ impl Report {
                 self.non_finite_texcoords
             )
         };
-        let tangents = if self.decoded_tangents == 0 {
+        let tangents = (if self.decoded_tangents == 0 {
             String::new()
         } else if self.normal_maps.submeshes == 0 {
             format!(
@@ -280,7 +282,7 @@ impl Report {
             )
         } else {
             self.normal_maps.describe()
-        };
+        }) + &self.sea.describe();
         let see_through = if self.blended_draws + self.cutout_draws == 0 {
             String::new()
         } else {

@@ -65,6 +65,57 @@ fn altimas_glass_and_cutouts_leave_the_opaque_list_on_the_vita_too() {
     assert!(model.draws.len() > model.transparent_draws.len());
 }
 
+/// Altima's sea draws under `original` and is the flat colour it was under `off`: the glow
+/// table gains the sea's block and the third binding gains the normal map only under `original`.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn altimas_sea_draws_its_law_under_original_and_nothing_under_off() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/extracted/vita/PCSF00007/base/PSP2/data.psarc");
+    if !path.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        return;
+    }
+    let mut archive =
+        oag_assets::psarc::Archive::open(path.to_str().expect("utf-8")).expect("opens");
+    let blob = archive
+        .read_path("data/art/published/environments/altima/track.rcsmodel")
+        .expect("model");
+    let mut build = |law| {
+        psp2::build_circuit(
+            "altima",
+            &blob,
+            None,
+            &mut |p| archive.read_path(p).ok(),
+            law,
+        )
+        .expect("builds")
+    };
+    let (on, on_report) = build(oag_display::display::Water::Original);
+    let (off, off_report) = build(oag_display::display::Water::Off);
+    assert_eq!((on_report.sea.drawn, off_report.sea.drawn), (5, 0));
+    assert_eq!(off_report.sea.submeshes, 5, "classified either way");
+    assert_eq!(on.emissive.len(), off.emissive.len() + 3);
+    let sea = on
+        .emissive
+        .iter()
+        .find(|e| {
+            e.program
+                == [
+                    oag_mesh::mesh::PROGRAM_WATER,
+                    oag_mesh::mesh::rcs::VITA_SEA_KIND,
+                ]
+        })
+        .expect("the sea's header entry");
+    assert_eq!(sea.scale, 250.0, "Altima's SpecularPower");
+    assert_eq!(on.vertices.len(), off.vertices.len());
+}
+
 /// Builds every circuit model in `archives` whose path matches `is_track`
 /// (`track_albedo` counts the colour slots that are not pictures). psp2 resolves no shader variant (the Vita and PS4
 /// programs are unread), so there is no variant clause on these two titles, and
@@ -78,7 +129,7 @@ fn every_circuit_binds(
     archives: &mut [oag_assets::psarc::Archive],
     first_track_archive: usize,
     is_track: impl Fn(&str) -> bool,
-) -> (usize, usize, psp2::UnboundDraws) {
+) -> Walk {
     let mut unbound = psp2::UnboundDraws::default();
     let mut tracks: Vec<(usize, String)> = Vec::new();
     for (i, a) in archives.iter().enumerate().skip(first_track_archive) {
@@ -91,13 +142,19 @@ fn every_circuit_binds(
     }
     tracks.sort();
     let mut faulty = 0;
+    let mut seas = Vec::new();
     for (i, path) in &tracks {
         let blob = archives[*i].read_path(path).expect("the model reads");
         let name = path.rsplit('/').nth(1).unwrap_or(path).to_string();
-        let (model, report) = psp2::build(&name, &blob, None, &mut |p| {
-            archives.iter_mut().find_map(|a| a.read_path(p).ok())
-        })
+        let (model, report) = psp2::build_circuit(
+            &name,
+            &blob,
+            None,
+            &mut |p| archives.iter_mut().find_map(|a| a.read_path(p).ok()),
+            oag_display::display::Water::Original,
+        )
         .expect("builds");
+        seas.push((path.clone(), report.sea.clone()));
         println!(
             "{path}: {} submesh(es), {} unresolved{}",
             report.submeshes,
@@ -111,7 +168,21 @@ fn every_circuit_binds(
         }
         faulty += faults.len();
     }
-    (tracks.len(), faulty, unbound)
+    Walk {
+        circuits: tracks.len(),
+        faulty,
+        unbound,
+        seas,
+    }
+}
+
+/// What `every_circuit_binds` found over its circuit models.
+struct Walk {
+    circuits: usize,
+    faulty: usize,
+    unbound: psp2::UnboundDraws,
+    /// Each model's path and its 2048-sea census (`psp2::water`), the PS4 ones all zero.
+    seas: Vec<(String, psp2::water::Census)>,
 }
 
 /// Altima's road binds its `DiffuseMap`, not the first sampler listed.
@@ -181,7 +252,12 @@ fn omega_circuit(dir: &str, known: usize) {
         .filter_map(|a| oag_assets::psarc::Archive::open_file(&root.join(a)).ok())
         .collect();
     let marker = format!("/{dir}/track");
-    let (n, faulty, unbound) = every_circuit_binds(&mut archives, 0, |p| {
+    let Walk {
+        circuits: n,
+        faulty,
+        unbound,
+        ..
+    } = every_circuit_binds(&mut archives, 0, |p| {
         p.contains(&marker) && p.ends_with(".final.rcsmodel") && !p.contains(".final.pvs")
     });
     println!("{dir}: {n} model(s), {faulty} drawn colour slot(s) that are not pictures");
@@ -363,14 +439,42 @@ fn the_2048_circuits_bind_no_more_lookups_than_the_known_gap() {
     }
     let mut archives =
         vec![oag_assets::psarc::Archive::open(path.to_str().expect("utf-8")).expect("opens")];
-    let (n, faulty, unbound) = every_circuit_binds(&mut archives, 0, |p| {
+    let walk = every_circuit_binds(&mut archives, 0, |p| {
         p.contains("/environments/") && p.ends_with("/track.rcsmodel")
             || p.contains("/environments/") && p.ends_with("/track_reversed.rcsmodel")
     });
+    let Walk {
+        circuits: n,
+        faulty,
+        unbound,
+        ..
+    } = walk;
     println!("{n} circuit model(s), {faulty} drawn colour slot(s) that are not pictures");
+    the_2048_seas_are_the_fc15_batches(&walk.seas);
     assert!(n > 4, "2048's circuits were found: {n}");
     assert!(faulty <= VITA_FAULTS, "{faulty} > {VITA_FAULTS}");
     only_by_design("2048", &unbound);
+}
+
+/// 2048's own seas, by the programs' declared interface (`psp2::water`): the batches of
+/// `fc15_effects_vscroll_water`, counted per circuit and all drawn. Drop
+/// `Plan`'s classification or the `build_circuit` law and every count here falls to zero. The
+/// other circuits' seas (`fc17_*`, `reflectplane_*`, pictures) are not this law and stay 0.
+fn the_2048_seas_are_the_fc15_batches(seas: &[(String, psp2::water::Census)]) {
+    const FC15: [(&str, usize); 4] = [("altima", 5), ("mall", 3), ("tower", 4), ("square", 4)];
+    for (path, sea) in seas {
+        let circuit = path.rsplit('/').nth(1).unwrap_or(path);
+        let want = FC15
+            .iter()
+            .find(|(name, _)| {
+                *name == circuit && path.contains("/environments/") && !path.contains("DLC")
+            })
+            .map_or(0, |&(_, n)| n);
+        assert_eq!(sea.submeshes, want, "{path}: {sea:?}");
+        assert_eq!(sea.drawn, want, "{path}: {sea:?}");
+        assert_eq!(sea.left_flat, 0, "{path}: {sea:?}");
+    }
+    assert_eq!(seas.iter().map(|(_, s)| s.drawn).sum::<usize>(), 16);
 }
 
 /// 2048's DLC circuits and the patch's re-shipped ones, the two DLC packages and the two patch
@@ -402,10 +506,21 @@ fn the_2048_dlc_and_patch_circuits_bind_every_texture_they_name() {
             oag_assets::psarc::Archive::open(root.join(p).to_str().expect("utf-8")).expect("opens")
         })
         .collect();
-    let (n, _, unbound) = every_circuit_binds(&mut archives, 1, |p| {
+    let Walk {
+        circuits: n,
+        unbound,
+        seas,
+        ..
+    } = every_circuit_binds(&mut archives, 1, |p| {
         p.contains("/environments/") && p.ends_with("/track.rcsmodel")
             || p.contains("/environments/") && p.ends_with("/track_reversed.rcsmodel")
     });
     assert!(n >= 4, "the DLC circuits were found: {n}");
     only_by_design("2048 DLC and patch", &unbound);
+    // The DLC circuits' seas are HD's `reflectplane_dc_seawater` and `dc_seawater`, two taps
+    // each: not 2048's one-tap law, so none is classified as it.
+    assert!(
+        seas.iter().all(|(_, sea)| *sea == Default::default()),
+        "{seas:?}"
+    );
 }

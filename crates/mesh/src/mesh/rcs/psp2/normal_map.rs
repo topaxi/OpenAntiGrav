@@ -77,6 +77,13 @@ impl Plan {
         self.maps.iter().any(Option::is_some)
     }
 
+    /// Binds `map` as material `index`'s normal map (2048's sea, `psp2::water`).
+    pub(super) fn bind(&mut self, index: usize, map: Arc<ModelTexture>) {
+        if let Some(slot) = self.maps.get_mut(index) {
+            *slot = Some(map);
+        }
+    }
+
     /// The normal map of material `index`.
     pub(super) fn of(&self, index: Option<usize>) -> Option<&Arc<ModelTexture>> {
         self.maps.get(index?)?.as_ref()

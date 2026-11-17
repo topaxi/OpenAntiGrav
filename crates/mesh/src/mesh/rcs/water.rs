@@ -99,6 +99,11 @@ pub const fn is_drawn(law: Water) -> bool {
     }
 }
 
+/// `program[1]` of a 2048 sea's entry: the shape of `sea_block`, read as 2048's `fc15` program
+/// reads it (RGB-decoded normal map, Phong highlight weighted by the map's alpha). HD's
+/// families are 1 to 4, `vex_water`'s `enhanced` is 5.
+pub const VITA_SEA_KIND: f32 = 6.0;
+
 /// What a classified water slot is drawn as.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Reading {
@@ -164,6 +169,21 @@ impl Tap {
                 scale: [-SEA_SECOND_SCALE, SEA_SECOND_SCALE],
                 scroll: [SEA_SECOND_SCALE * SEA_SCROLL, 0.0],
                 weight: 1.0,
+            },
+        ]
+    }
+
+    /// 2048's own sea: one tap, `(u + 0.05 t, v)` (the vertex program adds `0.05 * time` to
+    /// `uv1.x`, `docs/rendering/water.md`, "2048 (Vita)"), and a second of weight zero, which
+    /// keeps the two-tap entry layout the shader reads.
+    #[must_use]
+    pub const fn vita_sea() -> [Self; 2] {
+        let [first, second] = Self::sea();
+        [
+            first,
+            Self {
+                weight: 0.0,
+                ..second
             },
         ]
     }
@@ -755,6 +775,16 @@ mod tests {
         assert_eq!(block[0].tint, [0.5, 0.5, 1.0]);
         assert_eq!(block[1].tint, [1.0, 2.0, 4.0]);
         assert_eq!(block[2].tint, [0.05, 0.1, 0.05 * 1.2914]);
+    }
+
+    /// 2048's sea scrolls `u` by `0.05 t` through one tap; a second of weight zero keeps the
+    /// layout. Change the literal or the weight and the program's law is no longer drawn.
+    #[test]
+    fn the_vita_sea_is_one_tap_at_u_plus_a_twentieth_of_time() {
+        let [tap, none] = Tap::vita_sea();
+        assert_eq!(tap.at([0.25, 0.5], 10.0), [0.25 + 0.5, 0.5]);
+        assert_eq!((tap.weight, none.weight), (1.0, 0.0));
+        assert_eq!(SEA_SCROLL, 0.05);
     }
 
     fn param(hash: u32, value: [f32; 4]) -> oag_rcs::rcsmodel::material::Parameter {
