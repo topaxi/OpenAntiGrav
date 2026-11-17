@@ -846,14 +846,31 @@ impl Session {
                 }
             },
             Step::Dialing(mut task, handoff) if task.is_finished() => match task.join() {
-                Some(Ok(Ok(link))) => Step::Waiting(Box::new(Pending::new(
-                    Box::new(link),
-                    &handoff.name,
-                    &online.team,
-                    &handoff.token,
-                    self.net_bot,
-                    "the online race",
-                ))),
+                Some(Ok(Ok(link))) => {
+                    let host = with_port(&online.address);
+                    let host = host.rsplit_once(':').map_or(host.as_str(), |(h, _)| h);
+                    let rejoin = oag_game::net_play::rejoin::Rejoin {
+                        addr: format!("{host}:{}", handoff.port),
+                        cert_hash: handoff.cert_hash,
+                        room: online
+                            .lobby
+                            .as_ref()
+                            .and_then(|lobby| lobby.room.as_ref())
+                            .map_or(0, |room| room.id),
+                        team: online.team.clone(),
+                        name: handoff.name.clone(),
+                        token: handoff.token.clone(),
+                    };
+                    Step::Waiting(Box::new(Pending::new(
+                        Box::new(link),
+                        &handoff.name,
+                        &online.team,
+                        &handoff.token,
+                        self.net_bot,
+                        "the online race",
+                        Some((rejoin, None)),
+                    )))
+                }
                 other => {
                     let why = match other {
                         Some(Ok(Err(e))) => format!("{e:#}"),
