@@ -46,9 +46,9 @@ pub const MAX_INPUT_AHEAD: u32 = 119;
 pub const RESEND_INTERVAL: Duration = Duration::from_secs(1);
 
 /// The most connections a race host keeps waiting for their hello; past it the oldest is
-/// closed. Chosen, not measured: ten times the seats of a full race
-/// (`docs/networking/server-roadmap.md`, "Bounds and limits").
-pub const MAX_JOINING: usize = 120;
+/// closed. Chosen, not measured: four times the seats of a full race
+/// (`docs/networking/server-roadmap.md`, "V1: survive the network", the memory arithmetic).
+pub const MAX_JOINING: usize = 48;
 
 /// How long a connection may go without saying hello before it is closed. Chosen.
 pub const HELLO_TIMEOUT: Duration = Duration::from_secs(10);

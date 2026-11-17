@@ -25,8 +25,8 @@ use crate::wt::{Identity, LinkLimits, Listener, WtLink};
 const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Connections the lobby keeps at once, joining or joined, by default. Chosen, not measured: a
-/// lobby link costs about 2.6 MiB at its worst (`docs/networking/server-roadmap.md`, "Bounds
-/// and limits"), so 64 stay inside a 1 GB host with the race beside them.
+/// lobby link costs about 2.6 MiB at its worst (`docs/networking/server-roadmap.md`, "V1:
+/// survive the network", the memory arithmetic), so 64 stay inside a 1 GB host with the race beside them.
 pub const MAX_CONNECTIONS: usize = 64;
 
 /// Connections one address may hold at once, by default. Chosen: a household or a LAN party

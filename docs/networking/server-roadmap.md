@@ -403,10 +403,54 @@ with the reason "went quiet". The lobby sends the hand-off again to a session ta
 went out. A dropped `WtLink` finishes its stream and waits up to 1 s for the acknowledgement before it
 closes, and the close is reported only by the reliable reader. Tests: `loopback::a_peer_cannot_grow_a_seats_buffer_with_inputs_for_far_future_ticks`,
 `loopback::a_hundred_resend_requests_in_a_second_get_one_answer`, the `online` tests for the quiet child
-and the takeover. Not landed: a bound on the transport queues, the datagram budget, the per-address
-connection and per-person room caps, the one-line-a-second log limit, item 3, and the hand-off's host.
+and the takeover. Not landed: item 3 and the hand-off's host.
 The `Health` line is text on the child's output, not a typed message; the typed form arrives with the
 host protocol in V2.
+
+**Landed (item 2, the rest: no `PROTOCOL` change).** No single peer, address or room can grow the
+server's memory or log volume without bound. All values are chosen, not measured.
+
+| Limit | Value | Where |
+| --- | --- | --- |
+| Lobby connections in all | 64 (`server::MAX_CONNECTIONS`) | `Server::accept`, refused with `Refusal::Full` and the reason |
+| Lobby connections per address | 16 (`server::MAX_PER_ADDRESS`) | same; counted live over joining and joined, so nothing leaks |
+| Race connections awaiting a hello | 48 (`host::MAX_JOINING`), oldest closed first | `Host::join` |
+| Time to say hello (race) | 10 s (`host::HELLO_TIMEOUT`) | `Host::poll_joining` |
+| Handshakes under way | 64, each at most 10 s; the next gets a 503 | `wt::Listener::bind` |
+| Sessions accepted and not yet taken | 256, the next is closed | same |
+| Reliable message | 256 KiB (was 1 MiB) | `wt::MAX_RELIABLE` |
+| Reliable messages unread by the owner | 4; the reader then waits, which stops the peer through QUIC flow control | `WtLink` |
+| Datagrams unread by the owner | 256, the next is dropped | `WtLink` |
+| Datagrams a link accepts | 120 a second with a burst of 120 (twice the tick rate) | `WtLink` reader, before the queue; the keep-alive counts |
+| Bytes queued to send | 1 MiB on a lobby link, 16 MiB on a race link (a resend from tick 0 of a 17 minute race at twelve seats, 249 bytes a tick); past it the session is closed, reason "does not drain" | `wt::LinkLimits` |
+| A repeated warning | one line a second per seat, per lobby client, per race host (refusals) and per listener (handshakes); the next line says how many were held back | `limits::LogLimit` |
+
+Rooms per person was already one (`Person::room`), and a room's members were already capped by its
+`max_players`; neither was red. The lobby's connect, join and leave lines moved from `info` to `debug`:
+a peer cycling connections would otherwise write a line each. The datagram budget sits in the transport,
+not in `Host`, so no wall-clock decision reaches which inputs the simulation applies. The race host does
+not see addresses (`Link` has none), so it has no per-address cap; its bound is `MAX_JOINING` and the
+hello timeout, and the lobby's per-address cap guards the way in.
+
+*Memory arithmetic* (the target is a 1 GB VPS). A link at its worst: unread reliable messages (4 queued
+and one being read) 5 x 256 KiB = 1.25 MiB, unread datagrams 256 x 1.2 KiB = 0.3 MiB, plus the send
+queue. Lobby: 64 x (1 + 1.25 + 0.3) = about 163 MiB. Race process: 12 seats x (16 + 1.25 + 0.3) = about
+210 MiB, plus 48 awaiting a hello x 1.55 = about 74 MiB: about 284 MiB. Both processes at every bound at once
+come to about 450 MiB, before QUIC's and tokio's per-connection state (unmeasured) and the race's own
+tracks and models (HD, Omega and 2048 on this host are unknown, above). A normal session sits at kilobytes;
+the bounds are the ceiling a hostile peer reaches, not a forecast. The 16 MiB race queue is the one large
+term: it exists so a legitimate late resend is not mistaken for a peer that does not drain; the journal
+(V2) retires it.
+
+Tests, each red with its limit disabled and green with it: `online::one_address_may_hold_only_its_cap_of_lobby_connections_and_the_others_are_still_served`,
+`online::the_lobby_holds_only_its_cap_of_connections_whatever_their_addresses`,
+`online::a_peer_that_never_reads_is_closed_at_the_send_queue_limit_and_the_other_is_still_served`,
+`online::a_flood_of_datagrams_is_cut_to_the_budget_and_the_other_peer_is_still_served`,
+`online::sessions_nobody_takes_are_bounded_and_the_listener_keeps_accepting`,
+`loopback::hundreds_of_silent_connections_are_bounded_and_the_expected_seat_still_joins`,
+`loopback::a_connection_that_never_says_hello_is_dropped_after_the_hello_timeout`,
+`loopback::ten_thousand_malformed_datagrams_from_one_seat_log_at_most_a_line_a_second`. Not tested:
+the 64 concurrent handshakes (no way to hold one open from a client) and the handshake timeout.
 
 **Boundary.** `Health` and the host field in the hand-off. Still pipes, one slot, one box.
 

@@ -485,7 +485,7 @@ fn hundreds_of_silent_connections_are_bounded_and_the_expected_seat_still_joins(
     let _silent = silent_links(&mut host, 300);
     host.poll();
     assert!(
-        host.joining() <= oag_net::host::MAX_JOINING,
+        host.joining() <= oag_net::host::MAX_JOINING.min(299),
         "{} connections wait",
         host.joining()
     );
