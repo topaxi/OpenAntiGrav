@@ -14,7 +14,15 @@ use oag_net::wire::online::{Phase as RoomPhase, Refusal};
 use web_time::Duration;
 
 use crate::loopback::headless;
-use crate::online::{Lab, Racer, config, fly, fly_once, settings, thread_runner};
+use crate::online::{Lab, Racer, config, fly_once, settings, thread_runner};
+
+/// The host's sign of life to the lobby, once a second, as a hosting game sends it.
+fn alive(lab: &mut Lab, owner: usize, room: u32, last: &mut std::time::Instant) {
+    if last.elapsed() >= Duration::from_secs(1) {
+        *last = std::time::Instant::now();
+        lab.people[owner].host_up(room);
+    }
+}
 
 fn player_host(max_ticks: u32) -> PlayerHost {
     PlayerHost::bind(
@@ -144,7 +152,14 @@ fn a_guest_joins_through_the_handoff_and_races_the_host_to_the_end_with_no_bad_h
         Racer::dial(ann, &lab, &handoffs[0]),
         Racer::dial(bob, &lab, &handoffs[1]),
     ];
-    fly(&mut lab, &mut racers);
+    let mut beat = std::time::Instant::now();
+    while racers
+        .iter()
+        .any(|r| !matches!(r.client.phase(), Phase::Over(_)))
+    {
+        alive(&mut lab, ann, room, &mut beat);
+        fly_once(&mut lab, &mut racers);
+    }
     for racer in &racers {
         assert_eq!(racer.mismatches, 0, "person {}'s hashes", racer.who);
         assert!(racer.matches >= 300, "{} ticks confirmed", racer.matches);
@@ -181,7 +196,7 @@ fn the_host_leaving_the_race_ends_it_for_the_guest_with_the_reason() {
     let mut lab = Lab::new(thread_runner(60));
     let (ann, bob) = (lab.join("ann"), lab.join("bob"));
     let mut host = player_host(100_000);
-    hosted_room_starts(&mut lab, ann, bob, &mut host);
+    let room = hosted_room_starts(&mut lab, ann, bob, &mut host);
     let handoff = lab.people[bob].take_handoff().expect("handed off");
     let own = lab.people[ann].take_handoff().expect("handed off");
     let mut racers = [
@@ -190,6 +205,7 @@ fn the_host_leaving_the_race_ends_it_for_the_guest_with_the_reason() {
     ];
     // Fly until the guest has confirmed two seconds, then the host's player leaves.
     let started = std::time::Instant::now();
+    let mut beat = started;
     let mut left = false;
     while !matches!(racers[1].client.phase(), Phase::Over(_)) {
         assert!(
@@ -200,6 +216,7 @@ fn the_host_leaving_the_race_ends_it_for_the_guest_with_the_reason() {
             host.end_race();
             left = true;
         }
+        alive(&mut lab, ann, room, &mut beat);
         fly_once(&mut lab, &mut racers);
     }
     assert_eq!(
@@ -229,6 +246,27 @@ fn a_host_that_vanishes_closes_its_room_and_the_lobby_tells_the_guest_why() {
     lab.people[bob].list();
     lab.pump();
     lab.until("an empty list", |lab| lab.people[bob].rooms.is_empty());
+}
+
+/// A machine that is killed closes nothing: the lobby hears no sign of life from it for
+/// `QUIET_TIMEOUT` and closes its room, telling the guest why.
+#[test]
+fn a_host_that_goes_quiet_mid_race_is_taken_for_gone_within_ten_seconds() {
+    let mut lab = Lab::new(thread_runner(60));
+    let (ann, bob) = (lab.join("ann"), lab.join("bob"));
+    let mut host = player_host(100_000);
+    hosted_room_starts(&mut lab, ann, bob, &mut host);
+    let quiet = std::time::Instant::now();
+    lab.until("the lobby to tell the guest", |lab| {
+        lab.people[bob].left.is_some()
+    });
+    assert_eq!(lab.people[bob].left.as_deref(), Some(HOST_LEFT_RACING));
+    assert!(
+        quiet.elapsed() < Duration::from_secs(10),
+        "{:?}",
+        quiet.elapsed()
+    );
+    assert_eq!(lab.server.hosted_races(), 0);
 }
 
 #[test]

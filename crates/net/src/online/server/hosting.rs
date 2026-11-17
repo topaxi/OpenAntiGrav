@@ -11,7 +11,8 @@ use web_time::{Duration, Instant};
 use super::{Server, token};
 use crate::online::hostkey;
 use crate::online::moderation::canonical;
-use crate::online::rooms::{ClientId, Launch};
+use crate::online::race_proc::QUIET_TIMEOUT;
+use crate::online::rooms::{ClientId, HOST_LEFT_RACING, Launch};
 use crate::wire::board::Board;
 use crate::wire::online::{HostOffer, Message, RaceJob, Refusal, RoomSettings};
 
@@ -58,6 +59,8 @@ pub(super) struct HostedRace {
     pub(super) seats: Vec<(ClientId, String, String)>,
     up: bool,
     launched: Instant,
+    /// When the host last said it is up: it says so once a second while the race runs.
+    heard: Instant,
 }
 
 /// An address as the host part of `host:port`.
@@ -239,6 +242,7 @@ impl Server {
                 seats,
                 up: false,
                 launched: Instant::now(),
+                heard: Instant::now(),
             },
         );
     }
@@ -257,15 +261,16 @@ impl Server {
         })
     }
 
-    /// The host has loaded the race: every seat is handed its address.
+    /// The host has loaded the race: every seat is handed its address. Said again, it is the
+    /// host's sign of life.
     pub(super) fn host_up(&mut self, id: ClientId, room: u32) {
-        let Some(race) = self
-            .hosted
-            .get_mut(&room)
-            .filter(|race| race.host == id && !race.up)
-        else {
+        let Some(race) = self.hosted.get_mut(&room).filter(|race| race.host == id) else {
             return;
         };
+        race.heard = Instant::now();
+        if race.up {
+            return;
+        }
         race.up = true;
         let seats: Vec<ClientId> = race.seats.iter().map(|(seat, _, _)| *seat).collect();
         for seat in seats {
@@ -322,6 +327,12 @@ impl Server {
                 // Its host left, and the rooms closed it and told its people.
                 self.hosted.remove(&room);
                 log::info!("host-log: room {room}'s hosted race ended with its host");
+                continue;
+            } else if race.up && race.heard.elapsed() > QUIET_TIMEOUT {
+                // A machine that was killed closes no link; its silence is the sign.
+                self.hosted.remove(&room);
+                log::info!("host-log: room {room}'s host went quiet: closing the room");
+                self.rooms.close(room, HOST_LEFT_RACING);
                 continue;
             } else if !race.up && race.launched.elapsed() > HOST_LOAD_TIMEOUT {
                 "the host did not bring the race up"

@@ -320,7 +320,8 @@ pub enum Message {
         /// Where the host listens, signed.
         offer: HostOffer,
     },
-    /// Host to lobby: the race of [`Self::Launch`] is loaded and its seats may dial.
+    /// Host to lobby: the race of [`Self::Launch`] is loaded and its seats may dial. Sent again
+    /// once a second while the race runs, as the host's sign of life.
     HostUp {
         /// The room.
         room: u32,
