@@ -152,6 +152,10 @@ pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
             *controller = Controller::Local;
         }
     }
+    // After the seats: an online room's people are remote, not local.
+    if let Some(room) = super::Room::from_table(&header.options)? {
+        race.apply_room(&room);
+    }
     // After the seats, as the session applies the AI choice: which driver flies reads who is
     // human.
     if let Some(ai) = launch.original_ai {

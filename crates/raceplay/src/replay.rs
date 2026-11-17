@@ -41,6 +41,7 @@ mod launch;
 mod rebuild;
 #[cfg(feature = "view")]
 mod recording;
+mod room;
 mod shot;
 
 pub use events::ApplyError;
@@ -50,4 +51,5 @@ pub use rebuild::{apply_recorded, load_recorded, rebuild, start_recorded};
 pub(crate) use recording::ReplayState;
 #[cfg(feature = "view")]
 pub use recording::{Ghost, GhostCapture, Paused};
+pub use room::Room;
 pub use shot::{Resimulated, resimulate};

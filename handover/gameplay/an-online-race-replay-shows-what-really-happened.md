@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: blocked-maintainer
 titles: [all]
 updated: 2026-11-17
-summary: "Online replay = the server-confirmed run, saved locally; rebuilt pose track; download the server's copy only when the end fingerprint differs"
+summary: "Local half landed (confirmed run saved, room in header, local fingerprint). Left: server fingerprint and download, with PROTOCOL 2"
 categories: [frontend]
 ---
 
@@ -28,30 +28,24 @@ of the predicted run). The comparison is by content, not bytes.
   ([server-roadmap.md](../../docs/networking/server-roadmap.md), "The target version",
   Operations).
 
+## Landed (online-replay lane)
+
+- Item 1: the pose track is already the confirmed run since `rec-panic` (pose is read from the
+  confirmed state; a full-tick re-drive of the recording gives a gap of 0 on every craft), so no
+  separate rebuild is stored.
+- Item 2, local half: `Replay::fingerprint`, kept at the end by `NetPlay::replay_fingerprint`.
+- Item 4: an online race arms the recording (`load.rs`, the net branch), so the end screen's WATCH
+  REPLAY row (Pulse dialect) is offered; the room is in the header, so the viewer rebuilds it.
+  `docs/formats/replay-file.md`, "An online race's recording".
+
 ## Open
 
-1. **The pose track of the real run.** The `POSE` chunk recorded live is the client's
-   predicted view. Rebuild it after the race by re-simulating the confirmed inputs
-   (`resimulate`), so the replay's picture is the server's race, rockets included.
-2. **A fingerprint at the end.** The server's `End` carries a hash over the race parameters,
-   every seat's confirmed input stream and the state hashes; the client computes the same over
-   its recording. Equal: the local replay is the real one, offer nothing. Different (a
-   desync, a gap from a reconnect, a missed stretch): offer **Download the server's replay**.
-3. **The download.** The race host keeps the finished journal (V2's journal on disk, or the
-   history in memory until the room closes) and streams it on request; the client writes it
-   as an ordinary `.oagr` and opens it in the viewer. Bound it (size, one request per client,
-   rate) like the other limits in `crates/net`.
-4. **The end screen.** A row on the online end screens: WATCH REPLAY (the local, confirmed
-   replay), or DOWNLOAD REPLAY when the fingerprints differ; strings need `string_id` and
-   English text (CLAUDE.md, `just check-strings`).
-5. **Wire change.** The fingerprint and the download message bump `PROTOCOL` to 2; bundle it
-   with the server roadmap's other version-2 changes (decision 4 there) rather than alone.
+1. **The server's fingerprint.** `End` carries it; the client compares and offers DOWNLOAD REPLAY on
+   a difference (a wire change, `PROTOCOL` 2).
+2. **The download** of the server's journal (item 3 above), bounded like the other limits.
+3. A seat's retirement is not an `EVNT` entry; a recording across one does not re-drive.
+4. No session-level test arms the recording through the menus (no menu-driven LAN test exists).
 
 ## Next Steps
 
-1. After `rec-panic` merges: a sonnet `oag-wire` lane (about 4 to 6 hours) for items 1, 2
-   and 4 (no wire change if the fingerprint is first computed and shown locally only), with
-   acceptance: an online race with a forced late correction (a rocket hit the client predicted
-   as a miss) whose saved replay shows the hit at the server's tick.
-2. Items 3 and 5 with the `PROTOCOL` 2 bump, once the maintainer settles the roadmap's
-   decision 4.
+1. With the `PROTOCOL` 2 bump (server-roadmap decision 4): items 1 and 2.

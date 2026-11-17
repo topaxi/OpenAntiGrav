@@ -38,6 +38,20 @@ fn params() -> RaceParams {
     }
 }
 
+/// The header a recording of this room's race opens with.
+fn recording_header(params: &RaceParams) -> oag_replay::Header {
+    let mut header = oag_replay::Header::new(
+        &params.title,
+        &params.track,
+        &params.mode,
+        &params.class,
+        &params.team,
+        params.seed,
+    );
+    header.options = oag_net::race::replay_options(params).expect("the room's options");
+    header
+}
+
 #[test]
 #[ignore = "needs a disc image"]
 fn two_bot_clients_race_a_real_circuit_at_100_ms_and_agree_with_the_server() {
@@ -132,14 +146,7 @@ fn a_predicting_clients_recording_is_the_confirmed_run_and_re_drives() {
             ));
             let client = Client::connect(link, &format!("bot {n}"));
             let (mut race, _) = oag_net::race::load(&params, &source).expect("loads");
-            race.start_recording(oag_replay::Header::new(
-                &params.title,
-                &params.track,
-                &params.mode,
-                &params.class,
-                &params.team,
-                params.seed,
-            ));
+            race.start_recording(recording_header(&params));
             let pilot: Pilot = Box::new(|client, race| client.bot_input(race));
             (client, race, pilot)
         })
@@ -167,7 +174,55 @@ fn a_predicting_clients_recording_is_the_confirmed_run_and_re_drives() {
         })
         .unwrap_or_else(|why| panic!("client {n}: the recording does not reproduce: {why:?}"));
         assert_eq!(found, replay.ticks(), "client {n}");
+        // The viewer's own rebuild (WATCH REPLAY) reaches the tick-zero state the recording
+        // opened with: the file carries the room, not only the launch.
+        let rebuilt = oag_raceplay::replay::rebuild(&replay.header, &source)
+            .unwrap_or_else(|why| panic!("client {n}: the viewer cannot rebuild it: {why:#}"));
+        assert_eq!(
+            rebuilt.sim.state_hash(),
+            replay.initial_hash,
+            "client {n}: the rebuilt race is not the recorded one"
+        );
+        // The pose track the client kept is the picture of the confirmed run: re-driving the
+        // confirmed inputs through full ticks draws the same craft in the same places, so a
+        // hit the prediction missed is where the server had it.
+        let mut shown = rebuilt;
+        shown.start_recording(replay.header.clone());
+        oag_replay::Verifier::run(&replay, shown.sim.state_hash(), |_, inputs| {
+            shown.tick(inputs);
+            shown.sim.state_hash()
+        })
+        .unwrap_or_else(|why| panic!("client {n}: the viewer's re-drive diverges: {why:?}"));
+        let again = shown
+            .recorded()
+            .and_then(|r| r.pose_track)
+            .expect("pose track");
+        let kept = replay
+            .pose_track
+            .as_ref()
+            .expect("the client kept a pose track");
+        assert_eq!(kept.crafts(), again.crafts(), "client {n}");
+        assert_eq!(kept.last_tick(), again.last_tick(), "client {n}");
+        for slot in 0..kept.crafts() {
+            for tick in 0..=kept.last_tick() {
+                let (a, b) = (kept.pose(slot, tick as f64), again.pose(slot, tick as f64));
+                assert_eq!(a, b, "client {n}: craft {slot} at tick {tick}");
+            }
+        }
     }
+    // The two clients hold the same run over the stretch both confirmed, whatever their
+    // predictions did on the way.
+    let theirs: Vec<_> = clients
+        .iter()
+        .map(|(_, race, _)| race.recorded().expect("the client records"))
+        .collect();
+    let common = theirs.iter().map(|r| r.ticks()).min().unwrap();
+    assert!(common > 600, "only {common} ticks in common");
+    assert_eq!(
+        theirs[0].fingerprint_through(common),
+        theirs[1].fingerprint_through(common),
+        "the two clients of one race hold different runs"
+    );
 }
 
 /// A LAN race the way the menus run it, in one process and over real sockets: a hosting game

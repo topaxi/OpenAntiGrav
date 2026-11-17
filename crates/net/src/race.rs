@@ -113,21 +113,56 @@ fn scheme(params: &RaceParams) -> Result<oag_gameplay::ControlScheme> {
 ///
 /// A control scheme this build does not know.
 pub fn prepare(race: &mut Race, params: &RaceParams) -> Result<()> {
-    let people = usize::from(params.people).min(oag_gameplay::MAX_PLAYERS);
-    for controller in race.sim.world.controllers.iter_mut().take(people) {
-        *controller = Controller::Remote;
-    }
     race.set_control_scheme(scheme(params)?);
     race.set_autopilot(false);
     // Off for everybody unless the room allowed it, in which case each seat flies the level
     // that person asked for: the same list on both ends, so the physics agrees.
     race.set_pilot_assist(oag_physics::pilot_assist::Level::Off);
-    for slot in 0..usize::from(params.people).min(oag_gameplay::MAX_PLAYERS) {
-        race.set_pilot_assist_seat(slot, seat_assist(params, slot));
-    }
-    race.set_barrel_rolls(!params.no_barrel_rolls);
-    race.set_zone_target(zone_target(params));
+    race.apply_room(&room(params));
     Ok(())
+}
+
+/// What `params` holds fixed beyond [`options`], for [`Race::apply_room`] and a recording's header.
+#[must_use]
+pub fn room(params: &RaceParams) -> oag_raceplay::replay::Room {
+    let people = params
+        .people
+        .min(u8::try_from(oag_gameplay::MAX_PLAYERS).unwrap_or(u8::MAX));
+    oag_raceplay::replay::Room {
+        people,
+        assists: (0..usize::from(people))
+            .map(|seat| seat_assist(params, seat))
+            .collect(),
+        barrel_rolls: !params.no_barrel_rolls,
+        zone_target: zone_target(params),
+    }
+}
+
+/// The `options` table a recording of this room's race carries, so the file rebuilds as the
+/// race: the launch settings `prepare` applies, and the room.
+///
+/// # Errors
+///
+/// A difficulty or control scheme this build does not know.
+pub fn replay_options(params: &RaceParams) -> Result<std::collections::BTreeMap<String, String>> {
+    let difficulty = oag_ai::Difficulty::from_name(&params.difficulty).ok_or_else(|| {
+        anyhow!(
+            "the server's difficulty {:?} is unknown here",
+            params.difficulty
+        )
+    })?;
+    let launch = oag_raceplay::replay::Launch {
+        scheme: scheme(params)?,
+        difficulty,
+        autopilot: false,
+        pilot_assist: oag_physics::pilot_assist::Level::Off,
+        original_ai: None,
+        campaign_skill: None,
+        skill_level: None,
+    };
+    let mut table = launch.to_table();
+    table.extend(room(params).to_table());
+    Ok(table)
 }
 
 /// The Pilot Assist level seat `seat` flies: its entry in [`RaceParams::assists`], else off.
