@@ -214,7 +214,10 @@ pub fn from_mesh(sky: &Model) -> Option<Vec<u8>> {
         {
             continue;
         }
-        for tri in sky.indices[draw.range.start as usize..draw.range.end as usize].chunks_exact(3) {
+        for tri in sky.indices[draw.range.start as usize..draw.range.end as usize]
+            .as_chunks::<3>()
+            .0
+        {
             let v = |k: usize| &sky.vertices[tri[k] as usize];
             let (a, b, c) = (v(0), v(1), v(2));
             let sub = |p: [f32; 3], q: [f32; 3]| [p[0] - q[0], p[1] - q[1], p[2] - q[2]];

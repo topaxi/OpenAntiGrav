@@ -83,10 +83,15 @@ fn check(image: &str, class: &str, circuit: &str, track: &str, vertices: usize) 
     let map = oag_mesh::mesh::sky_paraboloid::from_mesh(sky).expect("a sky mesh casts a map");
     let (w, h) = oag_mesh::mesh::sky_paraboloid::SIZE;
     assert_eq!(map.len(), (w * h * 4) as usize, "{circuit}");
-    assert!(map.chunks_exact(4).all(|t| t[3] == 255), "{circuit}");
+    assert!(
+        map.as_chunks::<4>().0.iter().all(|t| t[3] == 255),
+        "{circuit}"
+    );
     let first = &map[..3];
     assert!(
-        map.chunks_exact(4)
+        map.as_chunks::<4>()
+            .0
+            .iter()
             .any(|t| t[..3].iter().zip(first).any(|(a, b)| a.abs_diff(*b) > 24)),
         "{circuit}: the sky map has more than one colour"
     );

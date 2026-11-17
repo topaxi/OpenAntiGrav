@@ -158,7 +158,7 @@ mod tests {
     fn the_normals_lean_but_face_up() {
         let map = bytes(7);
         let (mut lean, mut flat) = (0u32, 0u32);
-        for texel in map.chunks_exact(4) {
+        for texel in map.as_chunks::<4>().0 {
             let z = f32::from(texel[0]) / 255.0 * 2.0 - 1.0;
             assert!(z > 0.5, "z {z}");
             if texel[1].abs_diff(128) > 8 || texel[3].abs_diff(128) > 8 {
@@ -177,7 +177,12 @@ mod tests {
     fn the_slopes_are_in_green_and_alpha() {
         let map = bytes(7);
         for channel in [1usize, 3] {
-            let values: Vec<f32> = map.chunks_exact(4).map(|t| f32::from(t[channel])).collect();
+            let values: Vec<f32> = map
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|t| f32::from(t[channel]))
+                .collect();
             let mean = values.iter().sum::<f32>() / values.len() as f32;
             assert!((mean - 127.5).abs() < 6.0, "channel {channel} mean {mean}");
             let (lo, hi) = values

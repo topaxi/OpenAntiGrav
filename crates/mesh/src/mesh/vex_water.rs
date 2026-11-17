@@ -69,7 +69,7 @@ fn mean_colour(texture: &ModelTexture) -> Option<[f32; 3]> {
         return None;
     }
     let mut sum = [0u64; 3];
-    for texel in base.chunks_exact(4) {
+    for texel in base.as_chunks::<4>().0 {
         for (total, &byte) in sum.iter_mut().zip(texel) {
             *total += u64::from(byte);
         }
@@ -133,18 +133,20 @@ pub fn is_tagged(model: &Model) -> bool {
 /// `slots`, a tangent, and, where the batch authored no normals (the loader faces such a
 /// vertex at `+z`), a normal from its triangles, turned to face up.
 pub fn enhanced(model: &mut Model, names: &[&str]) -> Report {
-    let mut report = Report::default();
-    report.missing = names
-        .iter()
-        .filter(|name| {
-            !model
-                .textures
-                .iter()
-                .flatten()
-                .any(|texture| names_match(&texture.label, name))
-        })
-        .map(|name| (*name).to_string())
-        .collect();
+    let mut report = Report {
+        missing: names
+            .iter()
+            .filter(|name| {
+                !model
+                    .textures
+                    .iter()
+                    .flatten()
+                    .any(|texture| names_match(&texture.label, name))
+            })
+            .map(|name| (*name).to_string())
+            .collect(),
+        ..Report::default()
+    };
     let map = Arc::new(water_normal::texture(SEED));
     let mut entry_of: Vec<Option<u32>> = vec![None; model.textures.len()];
     for (slot, texture) in model.textures.iter().enumerate() {
@@ -195,7 +197,7 @@ pub fn enhanced(model: &mut Model, names: &[&str]) -> Report {
             continue;
         };
         let mut accumulated = vec![[0.0f32; 3]; (last - first + 1) as usize];
-        for tri in triangles.chunks_exact(3) {
+        for tri in triangles.as_chunks::<3>().0 {
             let p = |i: u32| model.vertices[i as usize].position;
             let (a, b, c) = (p(tri[0]), p(tri[1]), p(tri[2]));
             let mut n = cross(
