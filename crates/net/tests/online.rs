@@ -561,6 +561,39 @@ fn a_client_that_drops_while_its_race_loads_and_takes_its_session_over_receives_
 }
 
 #[test]
+fn a_session_whose_old_link_closes_before_the_new_one_says_hello_is_still_taken_over() {
+    let gate = gate("takeover-close-first");
+    let script = fake_race(
+        "takeover_close_first",
+        &format!(
+            "echo 'listening on [::]:45682'\n\
+             echo 'cert-hash 0505050505050505050505050505050505050505050505050505050505050505'\n\
+             while true; do echo 'health: waiting'; sleep 0.2; if [ -e '{}' ]; then exit 0; fi; done",
+            gate.display()
+        ),
+    );
+    let mut lab = Lab::new(child_runner(script));
+    let (a1, a2) = (lab.join("a1"), lab.join("a2"));
+    lab.room_starts(a1, a2, ["Feisar", "Qirex"]);
+    lab.until("the hand-off", |lab| lab.people[a1].has_handoff());
+    let first = lab.people[a1].take_handoff().expect("handed off");
+    let token = lab.people[a1].token.clone().expect("a session token");
+    // The old link goes first and the lobby reads the close before any new link exists.
+    let (gone, _) = oag_net::link::Loopback::pair();
+    lab.people[a1] = LobbyClient::connect(Box::new(gone) as Box<dyn Link>, "a1", &[edition()], "");
+    for _ in 0..50 {
+        lab.pump();
+    }
+    let link = oag_net::wt::connect(&lab.server.local_addr().to_string(), lab.server.cert_hash())
+        .expect("connects to the lobby");
+    lab.people[a1] =
+        LobbyClient::connect(Box::new(link) as Box<dyn Link>, "a1", &[edition()], &token);
+    lab.until("the hand-off again", |lab| lab.people[a1].has_handoff());
+    assert_eq!(lab.people[a1].take_handoff(), Some(first));
+    std::fs::write(&gate, b"").expect("lets the child end");
+}
+
+#[test]
 fn a_title_with_no_image_cannot_start_and_says_so() {
     let mut lab = Lab::new(Box::new(ChildRunner {
         images: Vec::new(),
