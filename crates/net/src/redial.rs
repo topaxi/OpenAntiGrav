@@ -96,6 +96,13 @@ impl Redial {
         self.attempts
     }
 
+    /// How much of the patience is left, while the link is lost.
+    #[must_use]
+    pub fn left(&self, now: Instant) -> Option<Duration> {
+        let lost_at = self.lost_at?;
+        Some(self.give_up.saturating_sub(now.duration_since(lost_at)))
+    }
+
     /// Whether the client is between a loss and getting its seat back.
     #[must_use]
     pub fn active(&self) -> bool {

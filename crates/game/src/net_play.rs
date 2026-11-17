@@ -22,6 +22,7 @@
 //! a run on localhost can be judged at a real network's numbers (chosen, not
 //! measured).
 
+pub mod reconnect;
 pub mod rejoin;
 
 use std::cell::{Cell, RefCell};
@@ -498,6 +499,24 @@ impl NetPlay {
                 self.client.borrow().phase(),
                 Phase::Lost(_) | Phase::Reconnecting
             )
+    }
+
+    /// Whole seconds of the redial's patience left, while the game is waiting to get its seat
+    /// back (what the RECONNECTING overlay counts down).
+    #[must_use]
+    pub fn reconnect_seconds_left(&self) -> Option<u32> {
+        if !self.reconnecting() {
+            return None;
+        }
+        let left = self.redial.borrow().as_ref()?.0.left(Instant::now())?;
+        Some(u32::try_from(left.as_secs() + u64::from(left.subsec_nanos() > 0)).unwrap_or(0))
+    }
+
+    /// The player leaves a race whose link is gone: the race is over for this client at once.
+    pub fn give_up(&self) {
+        self.client
+            .borrow_mut()
+            .give_up("the player left while reconnecting");
     }
 
     /// Names the person in each seat, by seat, before [`Self::begin_join`].

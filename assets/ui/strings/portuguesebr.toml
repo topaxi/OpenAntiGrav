@@ -51,6 +51,8 @@ OAG_ONLINE_REJOIN_YES = { text = "REENTRAR NA CORRIDA", human = false }
 OAG_ONLINE_REJOIN_NO = { text = "RECUSAR", human = false }
 OAG_ONLINE_REJOIN_LOOKING = { text = "PROCURANDO SUA CORRIDA...", human = false }
 OAG_ONLINE_REJOIN_GONE = { text = "SUA CORRIDA TERMINOU", human = false }
+OAG_NET_RECONNECTING = { text = "RECONECTANDO", human = false }
+OAG_NET_RECONNECT_HINT = { text = "PRESSIONE VOLTAR PARA SAIR DA CORRIDA", human = false }
 OAG_ONLINE_LOST = { text = "O LOBBY FOI FECHADO", human = false }
 OAG_ONLINE_LIST_TITLE = { text = "JOGOS ONLINE", human = false }
 OAG_ONLINE_LIST_HINT = { text = "ESCOLHA UM JOGO OU CRIE UM", human = false }

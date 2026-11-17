@@ -462,8 +462,9 @@ dials again through a `Dialer` (0.25 s, 0.5, 1, 2, then every 4 s, chosen) and h
 race host hold the seat. A hello the host refuses (the race is over, the seat is gone) ends the race
 for this client with the host's reason. `NetPlay` keeps the address, certificate hash, name and token
 (`Rejoin`) and dials on a thread of its own (`WtDialer`), so no frame blocks; a plain `--connect` holds
-no token and does not redial. `NetPlay::reconnecting` says when the game should show the wait; no
-"reconnecting" screen is drawn yet (see the online thread). *Record.* When a race starts `NetPlay`
+no token and does not redial. `NetPlay::reconnecting` says when the game should show the wait; a
+RECONNECTING overlay (dimmed last frame, seconds left of the 30 s) is drawn meanwhile and BACK or Start
+leaves the race at once; the budget running out ends it with a reason, as a dead link did before. *Record.* When a race starts `NetPlay`
 writes `rejoin.toml` in the state directory (`$XDG_STATE_HOME/oag/`, kind `rejoin`,
 `schemas/v1/rejoin.tosd`): title, race address, certificate hash, lobby room, name, team, seat token
 and an expiry. Every 10 s it writes again, each write expiring 180 s on (both chosen), so a killed game's

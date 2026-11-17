@@ -38,6 +38,8 @@ pub(crate) mod endrace;
 mod demo;
 #[path = "session/escape.rs"]
 mod escape;
+#[path = "session/reconnect.rs"]
+mod reconnect;
 #[path = "session/frame.rs"]
 mod frame;
 #[path = "session/frame_timing.rs"]

@@ -179,12 +179,16 @@ fn a_cut_link_is_redialled_by_the_game_without_a_relaunch() {
         [None, Some(Box::new(dialer))],
     );
     let (mut was_reconnecting, mut away) = (false, false);
+    let mut overlay = None;
     while room.host.tick_number() < 1600 {
         round(&mut room, None, &to_host);
         if room.host.tick_number() == 600 {
             room.cutters[1].cut();
         }
         was_reconnecting |= room.nets[1].0.reconnecting();
+        if let Some(seconds) = room.nets[1].0.reconnect_seconds_left() {
+            overlay = Some(seconds);
+        }
         away |= room.host.race().sim.world.controllers[1] == Controller::Away;
         if room.nets[1].0.reconnecting() {
             std::thread::sleep(std::time::Duration::from_millis(30));
@@ -200,6 +204,13 @@ fn a_cut_link_is_redialled_by_the_game_without_a_relaunch() {
         began.borrow()
     );
     assert!(!net.reconnecting(), "and is back");
+    assert_eq!(
+        net.reconnect_seconds_left(),
+        None,
+        "the overlay is gone after the redial"
+    );
+    let seconds = overlay.expect("the overlay had seconds to show while reconnecting");
+    assert!((1..=30).contains(&seconds), "{seconds}");
     assert_eq!(net.over(), None);
     let (ok, bad) = net.hashes();
     assert_eq!(bad, 0);
@@ -286,4 +297,33 @@ fn a_killed_game_rejoins_from_the_seat_it_wrote_down() {
         round(&mut room, None, &to_host);
     }
     assert!(!file_b.exists(), "the record is deleted when the race ends");
+}
+
+/// BACK while the game waits for its seat ends the race for this client on that call.
+#[test]
+fn giving_up_while_reconnecting_ends_the_race_at_once() {
+    let dir = scratch("giveup");
+    let to_host = Rc::new(RefCell::new(VecDeque::new()));
+    let dialer = LoopbackDialer {
+        to_host: to_host.clone(),
+        refuse: u32::MAX,
+        began: Rc::new(RefCell::new(0)),
+        pending: false,
+    };
+    let mut room = room(
+        [&dir.join("a.toml"), &dir.join("b.toml")],
+        [None, Some(Box::new(dialer))],
+    );
+    room.cutters[1].cut();
+    while !room.nets[1].0.reconnecting() {
+        round(&mut room, None, &to_host);
+    }
+    assert_eq!(room.nets[1].0.over(), None, "still waiting for the seat");
+    room.nets[1].0.give_up();
+    assert!(!room.nets[1].0.reconnecting());
+    let why = room.nets[1]
+        .0
+        .over()
+        .expect("the race is over for this client");
+    assert!(why.contains("left"), "{why}");
 }
