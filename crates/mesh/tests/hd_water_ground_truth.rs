@@ -100,6 +100,34 @@ fn every_water_setting_reaches_the_build_and_only_hd_s_laws_draw_the_taps() {
     );
 }
 
+/// The sea's table entry carries the material's own `Reflectivity` (Moa Therma 0.3, Ubermall
+/// 0.36; `docs/rendering/water.md`, "HD/Fury: `reflectplane_dc_seawater`"), which the shader
+/// weights the sea's stand-in sky reflection by. Dropping the lane leaves a sea with no
+/// reflection term and fails here.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_sea_entry_carries_its_materials_reflectivity() {
+    let Some(image) = oag_testdata::image(IMAGE) else {
+        return;
+    };
+    let reads = Reads::new();
+    for (circuit, authored) in [("03_track", 0.3_f32), ("05_ubermall", 0.36)] {
+        let path = format!("/data/environments/{circuit}/track.vex");
+        let (model, _) = build(&reads, &image, &path).expect("the circuit builds");
+        let seas: Vec<f32> = model
+            .emissive
+            .iter()
+            .filter(|entry| entry.program == [mesh::PROGRAM_WATER, 1.0])
+            .map(|entry| entry.offset)
+            .collect();
+        assert!(!seas.is_empty(), "{circuit}: no sea entry");
+        assert!(
+            seas.iter().all(|&weight| (weight - authored).abs() < 1e-6),
+            "{circuit}: the sea entries weight the reflection {seas:?}, authored {authored}"
+        );
+    }
+}
+
 /// How many drawn materials and chunks resolve no shader variant, per circuit
 /// and direction, measured 2026-10-19: **a ratchet over a known gap, not zero**.
 /// Only Modesto Heights, Talon's Junction and Tech De Ra have one (the others

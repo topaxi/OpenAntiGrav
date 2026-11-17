@@ -143,6 +143,10 @@ map.**
 
 ## Open
 
+- **LANDED (`water-hdsea`): a stopgap for the sea's planar term** (water.md, "The sea's
+  stand-in for the planar term"): `Reflectivity * encode(sky)`, chosen, not measured; the
+  sea is within 10 luma levels of the original in the three crops. The planar lane deletes
+  the sea's `encode(sky)` branch in `shade.wesl` when it draws the real target.
 - The planar reflection is read on HD Moa Therma (water.md, "The planar reflection, read off
   live frames"); unread: Chenghou's and Modesto's seas (recipe there), bit 1 as the mirror, and
   Omega's and 2048's copies of the same passes.
