@@ -103,6 +103,7 @@ const fn reading(law: Water) -> Reading {
 ///   sun glint, so with no reflection it is **black plus the glint**: a black
 ///   picture, the glint left to the generic specular (**chosen, not
 ///   measured**), and fog on top.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn water(
     model: &rcsmodel::Model,
     variants: &[Option<rcsmaterial::Variant>],
