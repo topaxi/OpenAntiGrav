@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-17
-summary: "After an online race, its replay is the server-confirmed run (what really happened), saved locally; download the server's copy only when the fingerprint differs"
+summary: "Online replay = the server-confirmed run, saved locally; rebuilt pose track; download the server's copy only when the end fingerprint differs"
 categories: [frontend]
 ---
 
