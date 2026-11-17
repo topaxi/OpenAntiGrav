@@ -1,0 +1,62 @@
+# The seat of an online race this machine is in, so a game started again after a crash can
+# take it back, see crates/game/src/rejoin_record.rs. Written when the race starts and
+# refreshed while it runs, deleted when it ends or the offer is declined; this project's own
+# file. The loader decides whether it is still fresh, the schema only says what shape it has.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/rejoin[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+[types.seat]
+type = "table"
+
+# The title that was racing (`Title::name`).
+[types.seat.title]
+type = "string"
+
+# The race server, host:port.
+[types.seat.addr]
+type = "string"
+
+# The server certificate's SHA-256, 64 hex digits.
+[types.seat.cert_hash]
+type = "string"
+
+# The lobby room the race came from, 0 when it came from none.
+[types.seat.room]
+type = "integer"
+min = 0
+
+[types.seat.name]
+type = "string"
+
+[types.seat.team]
+type = "string"
+
+# The seat token the server reseats this person on.
+[types.seat.token]
+type = "string"
+
+# Unix seconds after which the record is stale.
+[types.seat.expires]
+type = "integer"
+min = 0
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+
+[elements.seat]
+type = "types.seat"
+optional = true

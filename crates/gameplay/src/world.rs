@@ -547,7 +547,8 @@ impl World {
         (0..MAX_PLAYERS).filter(|&slot| self.controllers[slot].is_human())
     }
 
-    /// The lowest slot a person flies, or slot 0 when nobody does.
+    /// The lowest slot a person flies, else the lowest [`Controller::Away`] seat (a one-person
+    /// room whose person is away still has its view on their craft), or slot 0 when nobody does.
     ///
     /// The single view a full-screen HUD draws and a single-camera render
     /// follows, until a viewport per player exists to draw the rest into. Slot
@@ -556,14 +557,17 @@ impl World {
     /// every caller here already had slot 0 written into it.
     #[must_use]
     pub fn primary_slot(&self) -> usize {
-        self.human_slots().next().unwrap_or(0)
+        self.human_slots()
+            .next()
+            .or_else(|| (0..MAX_PLAYERS).find(|&slot| self.controllers[slot] == Controller::Away))
+            .unwrap_or(0)
     }
 
     /// Whether a person flies `slot`, and so the player step runs for it.
     ///
     /// Every slot [`Self::human_slots`] names whose craft is on the grid, and
-    /// [`Self::primary_slot`] always - the fallback slot is stepped as a player
-    /// even when nobody is marked human, which is what a race with no human in
+    /// [`Self::primary_slot`] unless its person is [`Controller::Away`] - the fallback slot
+    /// is stepped as a player even when nobody is marked human, which is what a race with no human in
     /// it (an attract demo, a headless run that never touched the controllers)
     /// has always done. With the default grid this is `slot == 0`, so asking it
     /// where the code used to say "slot 0" or "not slot 0" changes nothing.
@@ -577,7 +581,7 @@ impl World {
     #[must_use]
     pub fn person_flown(&self, slot: usize) -> bool {
         if slot == self.primary_slot() {
-            return true;
+            return self.controllers.get(slot) != Some(&Controller::Away);
         }
         slot < MAX_PLAYERS
             && self.controllers[slot].is_human()

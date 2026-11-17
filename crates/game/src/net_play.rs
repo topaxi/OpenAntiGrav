@@ -22,14 +22,19 @@
 //! a run on localhost can be judged at a real network's numbers (chosen, not
 //! measured).
 
+pub mod reconnect;
+pub mod rejoin;
+
 use std::cell::{Cell, RefCell};
 
 use anyhow::{Result, anyhow};
 use oag_gameplay::InputSnapshot;
 use oag_net::client::{Client, Phase, Stats, Welcome};
+use oag_net::redial::{Dialer, Identity, Redial};
 use oag_net::stats::{Collector, NetStats};
 use oag_net::wire::RaceParams;
 use oag_raceplay::{Options, Race};
+use rejoin::Rejoin;
 use web_time::{Duration, Instant};
 
 /// How long [`NetPlay::join`] waits for the other seats to load. Chosen.
@@ -76,6 +81,23 @@ pub struct NetPlay {
     /// The sparkline and hash totals, and the last whole second the overlay reads.
     /// See [`oag_net::stats`].
     overlay: RefCell<(Collector, Option<NetStats>)>,
+    /// The way back to the seat after the link closes; absent for a connection that holds no
+    /// seat token, which nobody could be given back.
+    redial: RefCell<Option<(Redial, Box<dyn Dialer>)>>,
+    /// What the record of this seat holds ([`crate::rejoin_record`]).
+    rejoin: Option<Rejoin>,
+    record: RefCell<Record>,
+    /// Confirmed ticks whose state hash matched the server's, and those whose did not, since
+    /// the join.
+    hashes: Cell<(u32, u32)>,
+}
+
+/// Where the record of the seat is written and when it last was.
+#[derive(Debug, Default)]
+struct Record {
+    /// A file other than the state directory's, for a test.
+    file: Option<std::path::PathBuf>,
+    last: Option<Instant>,
 }
 
 /// A connection that has said hello and is waiting for the server's welcome: the menus'
@@ -86,6 +108,10 @@ pub struct Pending {
     bot: bool,
     /// Where it connected, for the log line.
     label: String,
+    /// Who it is and where, for the redial; see [`NetPlay::redial`].
+    seat: Option<(Rejoin, Option<oag_net::link::Conditions>)>,
+    /// A dialler to use instead of the transport's, for a test.
+    dialer: Option<Box<dyn Dialer>>,
 }
 
 impl Pending {
@@ -99,12 +125,33 @@ impl Pending {
         token: &str,
         bot: bool,
         label: &str,
+        rejoin: Option<(Rejoin, Option<oag_net::link::Conditions>)>,
     ) -> Self {
+        let seat = rejoin.filter(|_| !token.is_empty());
         Self {
             client: Some(Client::connect_seat(link, name, team, token)),
             bot,
             label: label.to_string(),
+            seat,
+            dialer: None,
         }
+    }
+
+    /// Redials with `dialer` instead of the transport's: a test with no socket.
+    #[must_use]
+    pub fn with_dialer(mut self, dialer: Box<dyn Dialer>) -> Self {
+        self.dialer = Some(dialer);
+        self
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn dialer(rejoin: &Rejoin, shim: Option<oag_net::link::Conditions>) -> Option<Box<dyn Dialer>> {
+        Some(Box::new(rejoin::WtDialer::new(rejoin, shim)))
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn dialer(_: &Rejoin, _: Option<oag_net::link::Conditions>) -> Option<Box<dyn Dialer>> {
+        None
     }
 
     /// Reads the link once: the [`NetPlay`] once the welcome has come, `None` before.
@@ -120,6 +167,18 @@ impl Pending {
             return Ok(None);
         };
         let client = self.client.take().expect("polled just above");
+        let seat = self.seat.take();
+        let given = self.dialer.take();
+        let rejoin = seat.as_ref().map(|(rejoin, _)| rejoin.clone());
+        let redial = seat.and_then(|(rejoin, shim)| {
+            let dialer = given.or_else(|| Self::dialer(&rejoin, shim))?;
+            let identity = Identity {
+                name: rejoin.name,
+                team: rejoin.team,
+                token: rejoin.token,
+            };
+            Some((Redial::new(identity), dialer))
+        });
         println!(
             "net: seat {} of {} on {}, {} on {}, seed {}, weapons {}",
             welcome.seat,
@@ -145,6 +204,10 @@ impl Pending {
             board_checked: Cell::new(false),
             names: RefCell::new(Vec::new()),
             overlay: RefCell::new((Collector::new(), None)),
+            redial: RefCell::new(redial),
+            rejoin,
+            record: RefCell::new(Record::default()),
+            hashes: Cell::new((0, 0)),
         }))
     }
 }
@@ -188,7 +251,23 @@ impl NetPlay {
             Some(conditions) => Box::new(oag_net::link::Shim::new(link, conditions)),
             None => Box::new(link),
         };
-        let mut pending = Pending::new(link, &args.name, "", &args.token, args.bot, &args.addr);
+        let rejoin = Rejoin {
+            addr: args.addr.clone(),
+            cert_hash: args.cert_hash,
+            room: 0,
+            team: String::new(),
+            name: args.name.clone(),
+            token: args.token.clone(),
+        };
+        let mut pending = Pending::new(
+            link,
+            &args.name,
+            "",
+            &args.token,
+            args.bot,
+            &args.addr,
+            Some((rejoin, args.shim)),
+        );
         let asked = Instant::now();
         loop {
             if let Some(net) = pending.poll()? {
@@ -300,8 +379,13 @@ impl NetPlay {
         let mut client = self.client.borrow_mut();
         client.poll();
         match client.phase() {
-            Phase::Racing => Ok(true),
+            Phase::Racing => {
+                drop(client);
+                self.save_record();
+                Ok(true)
+            }
             Phase::Over(why) => Err(anyhow!("the server ended the race: {why}")),
+            Phase::Lost(why) if self.redial.borrow().is_none() => Err(anyhow!("{why}")),
             _ => Ok(false),
         }
     }
@@ -320,7 +404,9 @@ impl NetPlay {
     /// how many ticks the race advanced (0, 1 or 2), each a drawn `Race::tick`.
     pub fn step(&self, race: &mut Race, device: InputSnapshot) -> u32 {
         let own = self.own_input(race, device);
+        self.redial_step();
         let ticks = self.client.borrow_mut().step(race, &own);
+        self.keep_record();
         self.log_second(race);
         if self.over().is_some() && !self.board_printed.replace(true) {
             print_board(race);
@@ -332,6 +418,105 @@ impl NetPlay {
         }
         self.check_server_board(race);
         ticks
+    }
+
+    /// Dials again when the link has closed under the race ([`oag_net::redial`]).
+    fn redial_step(&self) {
+        let mut redial = self.redial.borrow_mut();
+        let Some((redial, dialer)) = redial.as_mut() else {
+            return;
+        };
+        let was_lost = matches!(self.client.borrow().phase(), Phase::Lost(_));
+        redial.step(
+            &mut self.client.borrow_mut(),
+            dialer.as_mut(),
+            Instant::now(),
+        );
+        if was_lost && redial.attempts() == 1 {
+            log::debug!("net: the link closed; dialling again");
+        }
+    }
+
+    /// Points the record of the seat at `file`, where a test reads it back.
+    pub fn record_in(&self, file: std::path::PathBuf) {
+        self.record.borrow_mut().file = Some(file);
+    }
+
+    fn record_file(&self) -> Option<std::path::PathBuf> {
+        self.record
+            .borrow()
+            .file
+            .clone()
+            .or_else(crate::rejoin_record::path)
+    }
+
+    /// Writes the record of the seat: where the race is and the token that takes the seat back.
+    fn save_record(&self) {
+        let (Some(rejoin), Some(file)) = (&self.rejoin, self.record_file()) else {
+            return;
+        };
+        match crate::rejoin_record::store_to(
+            &file,
+            &self.welcome.params.title,
+            rejoin,
+            crate::rejoin_record::now(),
+        ) {
+            Ok(()) => self.record.borrow_mut().last = Some(Instant::now()),
+            Err(e) => log::warn!("net: could not keep the seat for a rejoin: {e:#}"),
+        }
+    }
+
+    /// Refreshes the record while the race runs, and deletes it once the race is over.
+    fn keep_record(&self) {
+        if self.rejoin.is_none() {
+            return;
+        }
+        if self.over().is_some() {
+            self.clear_record();
+        } else if self.record.borrow().last.is_some_and(|at| {
+            at.elapsed() >= Duration::from_secs(crate::rejoin_record::REFRESH_SECONDS)
+        }) {
+            self.save_record();
+        }
+    }
+
+    /// Deletes the record: the race is over or this person left it.
+    pub fn clear_record(&self) {
+        if self.rejoin.is_some()
+            && self.record.borrow_mut().last.take().is_some()
+            && let Some(file) = self.record_file()
+        {
+            crate::rejoin_record::clear_at(&file);
+        }
+    }
+
+    /// Whether the link is gone and this machine is dialling for its seat: the race stands
+    /// still meanwhile.
+    #[must_use]
+    pub fn reconnecting(&self) -> bool {
+        self.redial.borrow().is_some()
+            && matches!(
+                self.client.borrow().phase(),
+                Phase::Lost(_) | Phase::Reconnecting
+            )
+    }
+
+    /// Whole seconds of the redial's patience left, while the game is waiting to get its seat
+    /// back (what the RECONNECTING overlay counts down).
+    #[must_use]
+    pub fn reconnect_seconds_left(&self) -> Option<u32> {
+        if !self.reconnecting() {
+            return None;
+        }
+        let left = self.redial.borrow().as_ref()?.0.left(Instant::now())?;
+        Some(u32::try_from(left.as_secs() + u64::from(left.subsec_nanos() > 0)).unwrap_or(0))
+    }
+
+    /// The player leaves a race whose link is gone: the race is over for this client at once.
+    pub fn give_up(&self) {
+        self.client
+            .borrow_mut()
+            .give_up("the player left while reconnecting");
     }
 
     /// Names the person in each seat, by seat, before [`Self::begin_join`].
@@ -403,11 +588,19 @@ impl NetPlay {
         self.fingerprint.get()
     }
 
+    /// How many confirmed ticks matched the server's state hash, and how many did not: the
+    /// second is always a bug or different content.
+    #[must_use]
+    pub fn hashes(&self) -> (u32, u32) {
+        self.hashes.get()
+    }
+
     /// Why the race is over, once the server has ended it or the link has gone.
     #[must_use]
     pub fn over(&self) -> Option<String> {
         match self.client.borrow().phase() {
             Phase::Over(why) => Some(why.clone()),
+            Phase::Lost(why) if self.redial.borrow().is_none() => Some(why.clone()),
             _ => None,
         }
     }
@@ -462,6 +655,9 @@ impl NetPlay {
     /// the lead and the prediction window, and how late a shot first showed.
     fn log_second(&self, race: &Race) {
         let stats = self.client.borrow_mut().take_stats();
+        let (ok, bad) = self.hashes.get();
+        self.hashes
+            .set((ok + stats.hash_matches, bad + stats.hash_mismatches));
         let mut log = self.log.borrow_mut();
         let sum = &mut log.0;
         sum.predicted += stats.predicted;
@@ -591,6 +787,11 @@ impl Drop for NetPlay {
     fn drop(&mut self) {
         if self.over().is_none() {
             self.leave("the client closed");
+        }
+        // A game that is going down on a panic keeps the record: it is what the next one
+        // rejoins from.
+        if !std::thread::panicking() {
+            self.clear_record();
         }
     }
 }

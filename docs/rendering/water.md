@@ -327,7 +327,7 @@ the place to start.
 
 | Surface | Today | Missing |
 | --- | --- | --- |
-| Pulse, Pure water textures | the texture, with any authored texture-offset track | nothing known |
+| Pulse, Pure water textures | under `off` and `original`: the texture, with any authored texture-offset track; under `enhanced` (this project's own, see below): HD's sea law over a generated normal map on the listed sea textures | nothing known |
 | Pulse Vostok Reef caustics (PS2 disc) | under `original`: the pass (255 of 257 flagged batches; two under an animated node are left out), frame by the world clock; under `off`, nothing | the PS2 executable's own read, a PCSX2 frame, the mesh fog |
 | HD `water_test_2`, `water_noref` | under `original`: the three scrolled taps through the chunk's frame, `water_test_2` lit vertex colour plus vertex colour times the sky reflection, `water_noref` the sky reflection times `a` (or `0.2 a + 0.4`) plus the generic glint (`mesh::rcs::water`, `PROGRAM_WATER`); under `off`, lit vertex colour or black plus fog | `water_noref`'s own glint (`sat(a * 0x697f57e3)`, power `0x2a2dc10b`) |
 | HD `sebenco_ice` | the three-colour lerp (`mesh::rcs::ice`) | bump-perturbed facing, own specular |
@@ -358,6 +358,61 @@ frame of a sea pose exists (the compare page's HD pairs are start-line frames an
 October Moa Therma state no longer loads), so the look is not yet measured against the
 original.
 
+## Enhanced: this project's own water on Pulse and Pure
+
+2026-11-17, lane `water-enhanced`. **Chosen, not measured, everywhere but the shape of the
+law**: the maintainer's decision (2026-11-17) is an `enhanced` value of the WATER row on a
+title whose original draws no water program, with no other disc involved. The shape is HD's
+sea (two taps of a wave normal map scrolled in opposite directions, light times a colour, a sun
+glint, the sky's reflection and no planar term, as Amphiseum's), drawn by our shader
+(`water.wesl`, family 5 of the PROGRAM_WATER entry; `mesh::vex_water`).
+
+| Part | What it is |
+| --- | --- |
+| Surfaces | Per-circuit lists in `oag_pulse::race::WATER_CIRCUITS` and `oag_pure::race::WATER_CIRCUITS`, carried as `Title::water` (`oag_title::water`) and read by the loader; the generic crates name no title. A batch is water when it binds a listed embedded texture. |
+| Normal map | Generated (`mesh::water_normal`): value noise on a wrapping integer lattice, four octaves, 128 square, slopes by wrapped central differences. Tiles exactly; a seed gives the same bytes everywhere (integer hash and IEEE `+ - * /` `sqrt` only), pinned by a test. `x` in alpha, `y` in green, as the sea's taps decode it. Never copied from a disc. |
+| Taps | HD's two (`Tap::sea`: `u + 0.05 t` and `1.15 (-u + 0.05 t)`), on the world's `x` and `z`, one tile of the map per 240 world units. The surface's own texture coordinates give no wave size (Moa Therma's `NewSeaTest` repeats 16 times across 3,700 units, Vineta K's `AAdc_Water` once across 1,200), so they are not read. |
+| Colour | The mean of the surface's own texture's base level (`oag_title::water::Circuit::textures`), times the vertex colour's baked light (Pulse's are prelit), times `0.5 + 0.5 N.L`. |
+| Glint, sky | `0.5 * sat(N.H)^90 * sat(8 N.L)` in white, the sun the stand-in key light's direction `(0.4, 0.8, 0.5)`; the sky is `Reflectivity 0.22` times the sky at the reflected ray, weighted `0.4 + 0.6 (1 - N.V)^3`. |
+| Sky map | A mesh sky (Pulse's and Pure's `Skycube` dome, 477 to 518 triangles) has no map of its own, so one is cast out of it at load, only where a circuit's water reads it (`sky_paraboloid::from_mesh`): the ray of each texel against the dome, texel times vertex colour, in the engine's dual-paraboloid layout. |
+
+**Which surfaces are water, confirmed on a frame** (top-down and low camera poses, headless
+`--screenshot`, the same pose under `off` and `enhanced`):
+
+| Title | Circuit | Texture | Draws / vertices | On a frame |
+| --- | --- | --- | --- | --- |
+| Pulse | `03_Track` (Moa Therma), forward and reversed | `NewSeaTest` | 25 / 7,210 | the sea: flat near-black under `off`, rippled with a glint under `enhanced` |
+| Pulse | `06_Track` | `sea` | 10 / 1,788 | the teal sea |
+| Pulse | `14_Track` (Fort Gale) | `NewSeaTest` | 3 / 468 | the sea |
+| Pulse | `16_Track` | `water` | 1 / 75 | the river, a narrow strip: it changes, little |
+| Pure | `01_Vineta_K` | `AAdc_Water`, `AAdc_WaterDark` | 21 / 5,795 | the open sea, both halves |
+
+**Not listed, and why.** `SeaRock`, `Seats`, `rich_Seagull`, `WaveBuilding_*` (a substring match
+on `sea` and `wave`, not water); `WaterFoam`, `AAdc_waterFoam` (blended foam, drawn as it is);
+`NWaterfall*`, `Waterfall_*` (waterfalls); `rich_sea_GLOW` (a Zone sign); `Seabed*`; Blue
+Ridge's `Water`: embedded, **bound by no batch** (a census by name found it, the batch walk
+did not). Pulse PS2 embeds no names and resolves them through its texture set: Moa Therma's sea
+is found there too (12 / 4,775).
+
+**What a player sees.** Moa Therma from above: the near-black plane becomes a dark slate sea
+with moving ripples and bright glints (40% of the frame is sea; over it two frames 2 s apart,
+ticks 2 and 122, differ by a mean 18.7 levels against 3.1 under `off`, the rest the sky).
+Vineta K from above: a flat dark teal sheet becomes a rippled teal sea, 74% of the frame, 21.0
+levels mean difference 2 s apart against 0.0 under `off`. Low over the water the waves and the
+sky's reflection show as a real sea. In a race frame from the track the sea is often not in
+view and the frame is unchanged. `off` and `original` are pixel-identical to the build before
+this change on Pulse PSP, Pulse PS2, Pure and HD (Moa Therma's sea pose).
+
+**The row.** WATER is shown on a title only when something in it changes the picture: its own
+`original` differs from `off` (`Title::water.original_differs`: HD) or a value past those two
+is offered (`enhanced` on a title that lists a sea, or a borrowed law that is drawn and whose
+disc is present). Today that hides it on 2048 and Omega and shows it on Pulse, Pure and HD.
+`oag_game::water_setting::row_changes_picture`.
+
+Open: whether the glint and the sky are right beside an original frame (nothing to compare
+against: the original draws a flat texture); one look or one per circuit; the sun is fixed in
+the world, so a glint shows only on the sun's side.
+
 ## Lineage, per finding
 
 | Finding | 2048 | Omega | HD |
@@ -367,6 +422,7 @@ original.
 | 2048 own water (`fc15`/`fc17`) | measured here | **checked, differs**: replaced by `reflectplane_*` | not applicable |
 | Amphiseum `water` | not checked (the Vita's Amphiseum shows no water material by name) | checked, differs (cube probe) | drawn (`mesh::rcs::water`) |
 | Vineta K scroll table | checked, differs (`dc_seawater`) | checked, applies (`water_test_2_castnoshipshadows`), `water_noref` replaced by `temp_water`, not wired | drawn (`mesh::rcs::water`) |
+| `enhanced` (own generated map, Pulse and Pure only) | checked, differs: nothing is offered (`Title::water.enhanced` empty); its seas are drawn through `psp2`, no `.vex` batches | checked, differs: same, and Omega's own law is the planned one | not applicable (HD's `original` is the law `enhanced` follows) |
 | Pulse caustic pass | not applicable | not applicable | HD ships `data/tex/caustics/` and `wo_underwater_godrays.pob`; consumer not looked for |
 
 ## Open
@@ -379,3 +435,5 @@ original.
 4. Omega's `Reflectivity*` combine and `Speed` law (a GCN instruction read),
    and 2048's `fc17` edge program.
 5. `sea`, `seareflect`, `seaweed` class nodes: a class census over PSP `.vex`.
+6. Blue Ridge's `Water` texture is embedded and bound by no batch; whether a node of
+   another class draws it is unread.

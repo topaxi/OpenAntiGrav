@@ -452,10 +452,45 @@ Tests: `loopback::a_person_whose_link_drops_comes_back_to_their_seat_and_the_has
 return 900: hashes agree, pickup held throughout, countdown on the HUD, pickup fired after, the
 recording re-drives; away top speed 91 u/s against 125 flown by the person);
 `net_ground_truth::an_away_craft_loses_time_against_the_opponent_driver` (racing-line index after
-1,500 ticks 2169 away, 2780 under the plain driver); `raceplay` `tests::hand_back`. Not landed: the
-windowed game does not redial by itself (`NetPlay` keeps no address; `Client::reconnect` is the
-call), a one-person room's lone seat is still stepped as the player when away (`primary_slot`'s
-fallback), and the lowest AI level is not applied to an away seat (the thrust cap alone is).
+1,500 ticks 2169 away, 2780 under the plain driver); `raceplay` `tests::hand_back`. Not landed
+from item 1 alone: the lowest AI level is not applied to an away seat (the thrust cap alone is).
+
+**Landed (item 1, the rest: no `PROTOCOL` change).** *Redial.* A link that closes under a race the
+server has not ended is `Phase::Lost` (not `Over`) and the race stands still; `oag_net::redial::Redial`
+dials again through a `Dialer` (0.25 s, 0.5, 1, 2, then every 4 s, chosen) and hands the new link to
+`Client::reconnect`, giving up with the reason after `SEAT_GRACE`, 30 s, the time the lobby and the
+race host hold the seat. A hello the host refuses (the race is over, the seat is gone) ends the race
+for this client with the host's reason. `NetPlay` keeps the address, certificate hash, name and token
+(`Rejoin`) and dials on a thread of its own (`WtDialer`), so no frame blocks; a plain `--connect` holds
+no token and does not redial. `NetPlay::reconnecting` says when the game should show the wait; a
+RECONNECTING overlay (dimmed last frame, seconds left of the 30 s) is drawn meanwhile and BACK or Start
+leaves the race at once; the budget running out ends it with a reason, as a dead link did before. *Record.* When a race starts `NetPlay`
+writes `rejoin.toml` in the state directory (`$XDG_STATE_HOME/oag/`, kind `rejoin`,
+`schemas/v1/rejoin.tosd`): title, race address, certificate hash, lobby room, name, team, seat token
+and an expiry. Every 10 s it writes again, each write expiring 180 s on (both chosen), so a killed game's
+record goes stale on its own; the race ending or the player leaving deletes it, and a panic keeps it.
+*Offer.* ONLINE (MULTIPLAYER page) looks for a fresh record of this title's race first, dials the race
+server to see it still answers, and only then asks REJOIN RACE or DECLINE (the DELETE PILOT confirm);
+DECLINE deletes the record, REJOIN RACE dials with the token, builds the race fresh and catches up
+through `Resend` (900 ticks behind in the loopback test, every hash agreeing). A record that is
+expired, another title's, unreadable, or whose server does not answer is deleted with no offer; a
+refused seat goes on to the lobby questions with "YOUR RACE IS OVER". The offer appears when ONLINE is
+opened, not at boot (an unprompted prompt over the front end is not built). A race that has ended but
+whose process still answers is the one case the probe cannot tell from a running one: the dial that
+follows the yes is refused and the player lands on the lobby questions. A rejoined race has no lobby
+behind it, so its end returns to the front end rather than the room. *One-person room.* An away seat
+with nobody else in the race is no longer the primary slot's fallback player: `World::primary_slot`
+names the lowest `Away` seat when no human flies, and `person_flown` is false for it, so the driver
+at the half-thrust cap steps it (the camera still follows it). Tests:
+`redial::a_client_whose_link_is_cut_redials_and_rejoins_without_a_relaunch`,
+`redial::a_client_that_cannot_get_back_gives_up`,
+`redial::the_only_person_in_a_room_goes_away_and_comes_back`,
+`redial::a_fresh_process_with_the_token_takes_the_seat_and_catches_up` (`oag-net`);
+`net_play_rejoin::a_cut_link_is_redialled_by_the_game_without_a_relaunch` and
+`net_play_rejoin::a_killed_game_rejoins_from_the_seat_it_wrote_down` (`oag-game`: record written at the
+start, left by a killed game, a new `NetPlay` rejoins from it with 0 bad hashes, deleted at the end);
+`rejoin_record` (expired, another title, unreadable, the shipped fixture);
+`hand_back::a_lone_person_who_goes_away_is_not_stepped_as_the_player` (`oag-raceplay`).
 
 **Landed (items 2, 4, 5, 6 in part; no `PROTOCOL` change).** The host drops an input more than
 119 ticks ahead (`MAX_INPUT_AHEAD`, a seat buffers under 120) and answers one resend request a

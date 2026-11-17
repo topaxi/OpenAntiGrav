@@ -456,6 +456,14 @@ pub const ZONE_TEAM: &str = "Zone_01";
 /// the mapping Pulse needs a comment to explain does not arise here.
 pub const DEFAULT_TRACK: &str = r"Data\Environments\01_Vineta_K\track.vex";
 
+/// The circuits whose sea `enhanced` water draws on, and the embedded textures it is drawn on
+/// (`oag_title::water`): Vineta K's two seas. Blue Ridge embeds a texture named `Water` that no
+/// batch binds, so it is not listed (`docs/rendering/water.md`, "Enhanced").
+pub const WATER_CIRCUITS: &[oag_title::water::Circuit] = &[oag_title::water::Circuit {
+    directory: "01_Vineta_K",
+    textures: &["AAdc_Water", "AAdc_WaterDark"],
+}];
+
 /// The team whose `handlingstats.xml` and model a race uses by default.
 ///
 /// **Assegai, which is Pulse's default too - and the reason is Pulse's, not

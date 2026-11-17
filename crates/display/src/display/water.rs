@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 /// `[render_profiles.<title> (<platform>)] water`. A value other than
 /// [`Self::Off`] and [`Self::Original`] borrows another title's law, so a menu
 /// offers it only when that title's disc image is present and never on that
-/// title itself (`docs/rendering/water.md`).
+/// title itself (`docs/rendering/water.md`). [`Self::Enhanced`] is no title's:
+/// it is offered where a title names the surfaces it draws on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum Water {
@@ -17,6 +18,10 @@ pub enum Water {
     /// The title's own law. The default.
     #[default]
     Original,
+    /// This project's own water for a title whose original draws none: HD's sea law
+    /// (two opposite-scrolled taps, sun specular, the sky's reflection) over a normal map
+    /// generated here, with parameters of our own. Needs no other disc.
+    Enhanced,
     /// Wipeout HD's sea law.
     Hd,
     /// Wipeout 2048's one-tap law.
@@ -32,6 +37,7 @@ impl Water {
         match self {
             Self::Off => "off",
             Self::Original => "original",
+            Self::Enhanced => "enhanced",
             Self::Hd => "hd",
             Self::Vita2048 => "2048",
             Self::Omega => "omega",
@@ -39,9 +45,10 @@ impl Water {
     }
 
     /// Every choice, for the menus and for error messages.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Off,
         Self::Original,
+        Self::Enhanced,
         Self::Hd,
         Self::Vita2048,
         Self::Omega,
@@ -62,7 +69,7 @@ impl std::str::FromStr for Water {
             .into_iter()
             .find(|water| water.name().eq_ignore_ascii_case(text))
             .ok_or_else(|| {
-                format!("{text:?} is not a water setting; try off, original, hd, 2048 or omega")
+                format!("{text:?} is not a water setting; try off, original, enhanced, hd, 2048 or omega")
             })
     }
 }

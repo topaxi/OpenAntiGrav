@@ -280,6 +280,7 @@ const TITLE: &Title = &Title {
     cursor: "",
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
+    water: oag_title::water::Water::NONE,
     rumble: oag_title::rumble::Rumble::Absent,
     demo: oag_title::demo::Demo::PULSE,
 };

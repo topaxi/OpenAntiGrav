@@ -39,6 +39,9 @@ use crate::stage::Stage;
 
 use super::Session;
 
+#[path = "online/rejoin.rs"]
+mod rejoin;
+
 /// The name the lobby's name field opens on: the shared player name (the lobby's keys are lower
 /// case), else what the last connection went by, else the login name.
 fn lobby_name(saved: &str, player: &crate::settings::Player) -> String {
@@ -83,9 +86,17 @@ pub(crate) struct Online {
     /// The people in the room when the race was handed off, by seat: the race's end screens
     /// call them by these names.
     seat_names: Vec<String>,
+    /// The seat of a race still running that REJOIN RACE offers back (`rejoin`).
+    offer: Option<oag_game::net_play::rejoin::Rejoin>,
+    /// The race was dialled from a record, so no lobby is behind it.
+    rejoined: bool,
 }
 
 enum Step {
+    /// Dialling the race a record says this person was in, to see it is still there.
+    Probing(Task<Result<oag_net::wt::WtLink>>),
+    /// REJOIN RACE is on screen.
+    Offered,
     /// Asking for `Field`.
     Typing,
     /// Dialling the lobby (off the frame thread).
@@ -142,8 +153,12 @@ impl Session {
             asked_list: None,
             notice: None,
             seat_names: Vec::new(),
+            offer: None,
+            rejoined: false,
         });
-        self.open_online_prompt(Field::Address);
+        if !self.begin_rejoin_offer() {
+            self.open_online_prompt(Field::Address);
+        }
     }
 
     fn online_edition(&self) -> Edition {
@@ -752,7 +767,7 @@ impl Session {
                     self.end_online();
                 }
             }
-            Step::Connecting(_) | Step::Hello | Step::Dialing(..) | Step::Waiting(_) => {
+            Step::Probing(_) | Step::Connecting(_) | Step::Hello | Step::Dialing(..) | Step::Waiting(_) => {
                 self.end_online();
             }
             _ => {}
@@ -824,7 +839,13 @@ impl Session {
             return;
         }
         let step = std::mem::replace(&mut online.step, Step::Hub);
+        let mut probed = None;
+        let mut gone = false;
         online.step = match step {
+            Step::Probing(mut task) if task.is_finished() => {
+                probed = Some(matches!(task.join(), Some(Ok(Ok(_)))));
+                Step::Offered
+            }
             Step::Connecting(mut task) if task.is_finished() => match task.join() {
                 Some(Ok(Ok(link))) => {
                     online.lobby = Some(LobbyClient::connect(
@@ -846,26 +867,55 @@ impl Session {
                 }
             },
             Step::Dialing(mut task, handoff) if task.is_finished() => match task.join() {
-                Some(Ok(Ok(link))) => Step::Waiting(Box::new(Pending::new(
-                    Box::new(link),
-                    &handoff.name,
-                    &online.team,
-                    &handoff.token,
-                    self.net_bot,
-                    "the online race",
-                ))),
+                Some(Ok(Ok(link))) => {
+                    let host = with_port(&online.address);
+                    let host = host.rsplit_once(':').map_or(host.as_str(), |(h, _)| h);
+                    let rejoin = oag_game::net_play::rejoin::Rejoin {
+                        addr: format!("{host}:{}", handoff.port),
+                        cert_hash: handoff.cert_hash,
+                        room: online
+                            .lobby
+                            .as_ref()
+                            .and_then(|lobby| lobby.room.as_ref())
+                            .map_or(0, |room| room.id),
+                        team: online.team.clone(),
+                        name: handoff.name.clone(),
+                        token: handoff.token.clone(),
+                    };
+                    Step::Waiting(Box::new(Pending::new(
+                        Box::new(link),
+                        &handoff.name,
+                        &online.team,
+                        &handoff.token,
+                        self.net_bot,
+                        "the online race",
+                        Some((rejoin, None)),
+                    )))
+                }
                 other => {
                     let why = match other {
                         Some(Ok(Err(e))) => format!("{e:#}"),
                         _ => "the connection thread stopped".to_string(),
                     };
-                    online.notice = Some((why.to_uppercase(), Instant::now()));
-                    Step::Hub
+                    if online.rejoining() {
+                        warn!("online: the race to rejoin did not answer: {why}");
+                        gone = true;
+                        Step::Typing
+                    } else {
+                        online.notice = Some((why.to_uppercase(), Instant::now()));
+                        Step::Hub
+                    }
                 }
             },
             other => other,
         };
         self.online = Some(online);
+        if let Some(answered) = probed {
+            self.rejoin_probed(answered);
+        }
+        if gone {
+            self.rejoin_gone();
+        }
         self.advance_online();
     }
 
@@ -938,6 +988,12 @@ impl Session {
                     }
                 }
                 Ok(None) => {}
+                Err(e) if online.rejoining() => {
+                    warn!("online: the seat could not be taken back: {e:#}");
+                    self.online = Some(online);
+                    self.rejoin_gone();
+                    return;
+                }
                 Err(e) => {
                     online.notice = Some((format!("{e:#}").to_uppercase(), Instant::now()));
                     online.step = Step::Hub;
@@ -1131,6 +1187,11 @@ impl Session {
             return;
         };
         if !matches!(online.step, Step::Waiting(_) | Step::Dialing(..) | Step::Room) {
+            return;
+        }
+        if online.rejoining() {
+            // Nothing to be back in: the lobby was never dialled.
+            self.end_online();
             return;
         }
         online.step = Step::Room;

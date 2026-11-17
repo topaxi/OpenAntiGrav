@@ -45,6 +45,14 @@ OAG_ONLINE_NAME_TITLE = { text = "SEU NOME", human = false }
 OAG_ONLINE_NAME_HINT = { text = "COMO OS OUTROS JOGADORES VÃO VER VOCÊ", human = false }
 OAG_ONLINE_CONNECTING = { text = "CONECTANDO...", human = false }
 OAG_ONLINE_FAILED = { text = "NÃO FOI POSSÍVEL CONECTAR", human = false }
+OAG_ONLINE_REJOIN_TITLE = { text = "REENTRAR NA CORRIDA", human = false }
+OAG_ONLINE_REJOIN_ASK = { text = "VOCÊ ESTAVA EM UMA CORRIDA ONLINE QUE AINDA ESTÁ EM ANDAMENTO. VOLTAR AO SEU LUGAR?", human = false }
+OAG_ONLINE_REJOIN_YES = { text = "REENTRAR NA CORRIDA", human = false }
+OAG_ONLINE_REJOIN_NO = { text = "RECUSAR", human = false }
+OAG_ONLINE_REJOIN_LOOKING = { text = "PROCURANDO SUA CORRIDA...", human = false }
+OAG_ONLINE_REJOIN_GONE = { text = "SUA CORRIDA TERMINOU", human = false }
+OAG_NET_RECONNECTING = { text = "RECONECTANDO", human = false }
+OAG_NET_RECONNECT_HINT = { text = "PRESSIONE VOLTAR PARA SAIR DA CORRIDA", human = false }
 OAG_ONLINE_LOST = { text = "O LOBBY FOI FECHADO", human = false }
 OAG_ONLINE_LIST_TITLE = { text = "JOGOS ONLINE", human = false }
 OAG_ONLINE_LIST_HINT = { text = "ESCOLHA UM JOGO OU CRIE UM", human = false }

@@ -47,6 +47,7 @@ compatible addition goes into the same `v1` schema, a breaking change gets `v2/`
 | `menu` | `assets/ui/menu.toml` (and `--menu <path>`) | `oag_ui::menu::Definition::parse` | [`menu.tosd`](../../schemas/v1/menu.tosd) |
 | `pilot` | `$XDG_CONFIG_HOME/oag/pilots/*.toml`, `assets/ai/example-pilot.toml` | `oag_raceplay::pilots::parse` | [`pilot.tosd`](../../schemas/v1/pilot.tosd) |
 | `music-state` | `$XDG_CONFIG_HOME/oag/music.toml` ([race music resume](../architecture/race-music-resume.md)) | `oag_game::music_state` | [`music-state.tosd`](../../schemas/v1/music-state.tosd) |
+| `rejoin` | `$XDG_STATE_HOME/oag/rejoin.toml` ([online reconnect](../networking/server-roadmap.md)) | `oag_game::rejoin_record` | [`rejoin.tosd`](../../schemas/v1/rejoin.tosd) |
 | `track` | `<name>.track.toml` ([track file](track-file.md)) | `oag_trackfile::read` | [`track.tosd`](../../schemas/v1/track.tosd) |
 
 | `settings` | `$XDG_CONFIG_HOME/oag/settings.toml` ([persistence](../architecture/persistence.md)) | `oag_game::settings` | [`settings.tosd`](../../schemas/v1/settings.tosd) |

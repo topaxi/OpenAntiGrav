@@ -67,6 +67,7 @@ mod eliminator_pad_stamp_ground_truth;
 mod eliminator_pads_ground_truth;
 mod energy_turbo_ground_truth;
 mod engine_light_ground_truth;
+mod enhanced_water_ground_truth;
 mod falloff_survey_ground_truth;
 mod fire_law_inherit_ground_truth;
 mod font_border_ground_truth;

@@ -396,6 +396,16 @@ OAG_PLAYER_TAG_TITLE = { text = "GIB DEIN TAG EIN", human = false }
 
 [untranslated]
 ids = [
+    # The RECONNECTING overlay; no translation pass yet.
+    "OAG_NET_RECONNECTING",
+    "OAG_NET_RECONNECT_HINT",
+    # Rejoining a running online race; no translation pass yet.
+    "OAG_ONLINE_REJOIN_TITLE",
+    "OAG_ONLINE_REJOIN_ASK",
+    "OAG_ONLINE_REJOIN_YES",
+    "OAG_ONLINE_REJOIN_NO",
+    "OAG_ONLINE_REJOIN_LOOKING",
+    "OAG_ONLINE_REJOIN_GONE",
     # The campaign editor, new with it; no translation pass yet.
     "OAG_MENU_CAMPAIGN_EDITOR",
     "OAG_MENU_CAMPAIGN_EDITOR_SUBTITLE",

@@ -17,6 +17,7 @@ mod lobby;
 mod loopback;
 mod net_ground_truth;
 mod online;
+mod redial;
 mod room_settings_ground_truth;
 mod server_libs;
 mod weapons_ground_truth;

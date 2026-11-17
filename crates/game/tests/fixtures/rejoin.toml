@@ -1,0 +1,13 @@
+# OpenAntiGrav online seat: where an online race this machine is in is, so a game started
+# again can take the seat back. This project's own file.
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/rejoin.tosd", version = "1.0.0" }
+
+[seat]
+title = "Wipeout Pulse"
+addr = "race.example.org:40123"
+cert_hash = "0000000000000000000000000000000000000000000000000000000000000000"
+room = 7
+name = "pilot"
+team = "AG Systems"
+token = "token-1"
+expires = 1795000000

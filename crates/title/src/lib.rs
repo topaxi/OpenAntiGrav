@@ -70,6 +70,7 @@ pub mod speed;
 pub mod team;
 pub mod touch;
 pub mod track_alias;
+pub mod water;
 pub mod weapon_pad;
 pub mod weapons;
 pub mod weather;
@@ -298,6 +299,9 @@ pub struct Title {
     /// Whether a circuit's rain and snow are played, and so whether the weather
     /// setting is offered. See [`weather::Weather`].
     pub weather: weather::Weather,
+    /// Whether the water setting has anything to change here, and the surfaces its
+    /// `enhanced` law is drawn on. See [`water::Water`].
+    pub water: water::Water,
     /// Whether the original plays pad patterns, and so whether the RUMBLE
     /// setting offers `original`. See [`rumble::Rumble`].
     pub rumble: rumble::Rumble,

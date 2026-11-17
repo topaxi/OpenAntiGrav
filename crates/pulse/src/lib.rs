@@ -114,6 +114,12 @@ pub const TITLE: &Title = &Title {
         // lens); Outpost 7's is snow.
         rain_circuit: Some(r"Data\Environments\14_Track\track.vex"),
     },
+    water: oag_title::water::Water {
+        // Vostok Reef's caustic pass on the PS2 disc (`looks.track_caustic`); the flag is per
+        // title, and the PSP pressing's row is shown by `enhanced` anyway.
+        original_differs: true,
+        enhanced: race::WATER_CIRCUITS,
+    },
     // PSP: no motors; the PS2 level-and-timer law is documented and not played (`docs/gameplay/rumble.md`).
     rumble: oag_title::rumble::Rumble::Absent,
     // The 60 s idle test and the 120 s timeout are read off the executable; `docs/ui/attract-demo.md`.
@@ -776,6 +782,14 @@ mod tests {
             names::language_entries("PI012"),
             r"Data\Plugins\PI012\entries.xml"
         );
+    }
+
+    /// Pulse's own water law differs from `off` because it draws the caustic pass on the PS2
+    /// disc, so the WATER row is shown on it under `original`.
+    #[test]
+    fn pulses_own_water_differs_from_off_where_the_caustic_pass_draws() {
+        assert!(TITLE.looks.track_caustic.applies(oag_disc::Platform::Ps2));
+        assert!(TITLE.water.original_differs);
     }
 
     /// The deny-list rules a source *out* and never in: an unknown serial gets

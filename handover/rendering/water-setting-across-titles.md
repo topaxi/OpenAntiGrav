@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-17
-summary: "Setting landed; HD seas draw their scrolled taps under original (no planar term); next the RPCS3 sea pair and planar reflection"
+summary: "Setting, HD taps and Pulse/Pure enhanced landed; next the RPCS3 sea pair, the planar reflection, 2048 and Omega laws, the borrowed laws"
 categories: [rendering, frontend]
 size: XL (60)
 difficulty: medium (55)
@@ -13,7 +13,7 @@ difficulty: medium (55)
 2026-11-17, lane `water-re` (measure). The recovered laws, the census and the
 confidence scores are in [water.md](../../docs/rendering/water.md) and
 [caustic-pass.md](../../docs/ghidra/functions/psp-pulse-usa/caustic-pass.md).
-This thread is the plan. Steps 1 (HD's taps, without the planar term), 2 (the setting) and Pulse PS2's caustic pass have landed.
+This thread is the plan. Steps 1 (HD's taps, without the planar term), 2 (the setting), 10 (own-design `enhanced` on Pulse and Pure, with the row hidden where nothing changes) and Pulse PS2's caustic pass have landed.
 
 ## The maintainer's request
 
@@ -112,7 +112,7 @@ pass over Pulse geometry is the own-design section's question, not this one's.
 - **Clock:** the taps scroll on the race clock the existing
   `AnimTrack::Scroll` uses, so a replay shows the same water.
 
-## Own-design water for Pulse and Pure (decided 2026-11-17; chosen, not measured)
+## Own-design water for Pulse and Pure (decided 2026-11-17; chosen, not measured; LANDED, `water-enhanced`)
 
 **Decided (maintainer, 2026-11-17): keep the setting, hide the row when it
 would change nothing, and build `enhanced` with a procedurally generated normal
@@ -131,8 +131,15 @@ map.**
   shown only if `original` differs from `off` on that title (HD once the sea
   law lands, Pulse PS2 once the caustic pass lands), or `enhanced` is offered
   there and drawn, or a lender's law is drawn and its disc is present.
+- **Landed** (docs/rendering/water.md, "Enhanced"): `Water::Enhanced`, `oag_title::water` per
+  title (`original_differs`, the circuit and texture lists in `oag_pulse::race` and
+  `oag_pure::race`), `mesh::vex_water` (tags the batches), `mesh::water_normal` (the generated
+  map, pinned), `sky_paraboloid::from_mesh` (the dome cast to the reflection map), `water.wesl`
+  family 5, `water_setting::row_changes_picture`. The row is hidden on 2048 and Omega.
 - Still open for later: whether Vostok Reef's caustics extend to other
-  underwater sections, and one look or one per circuit.
+  underwater sections, one look or one per circuit, the sun being fixed in the world (a glint
+  shows only on the sun's side), and an `enhanced` for HD, 2048 and Omega (their `original`
+  draws or will draw its own; `Title::water.enhanced` empty keeps it unoffered there).
 
 ## Open
 
@@ -144,8 +151,7 @@ map.**
   Pure's version-4 batches.
 - Pulse's caustic pass is read on the PSP code only (PS2 executable unread, a PCSX2 frame open) and reached only by PS2
   disc data or the PSP download pack.
-- The Pulse and Pure water texture names are a census by name, not confirmed
-  on a frame.
+- Blue Ridge's embedded `Water` texture is bound by no batch; unread.
 
 ## Next Steps
 
@@ -236,4 +242,4 @@ Ranked. Hours are for one member on an idle machine.
    Pulse's Moa Therma under `HD` shows the scrolled taps on the sea batches
    and nothing else changes (capture diff against `original`).
 9. **Pure's caustic frames** (`oag-re`, opus, 3 h).
-10. **Own-design water**: blocked on the maintainer's answers above.
+10. **LANDED (`water-enhanced`): own-design water** (see above).
