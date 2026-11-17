@@ -183,6 +183,24 @@ back whatever cues were undrained at the snapshot, which a client that drained
 them since would hear twice; and `capture_results` and `wreck_ended_tick` still
 run, because a caller reads them back.
 
+## A client's recording is the confirmed run (2026-11-17)
+
+A replay recorder wants one pose and one input row per world tick, in order (`Race::record_tick` asserts
+it). A predicting client cannot give that from its present: every correction rewinds the ticks it
+predicted and replays them with other remote inputs, and when the server is ahead the present is
+replaced by the confirmed state, a jump over ticks nobody recorded. A debug client tripped the
+assertion within the first ticks of a race (`left: 12, right: 13` on a local `oag-server`, found on
+`oag-game --connect ... --net-bot`; release builds wrote a wrong file silently).
+
+So `Client::predict` sets the recording aside for the predicted tick (`Race::pause_recording`) and
+`advance_confirmed` records each confirmed tick (`Race::tick_confirmed`, the sim-only tick plus the
+recorder). The file holds the inputs the server confirmed and the hashes of the run it saw, lagging
+the picture by the prediction window. Test:
+`net_ground_truth::a_predicting_clients_recording_is_the_confirmed_run_and_re_drives` (900 ticks, 100 ms,
+two bots, corrections happening; the recording has exactly the confirmed ticks and re-drives on a fresh
+race to every stored hash). Not covered: a seat that retires mid-race (`retire`) is not a recorded event,
+so such a file does not re-drive past the retirement.
+
 ## Reconciliation cost (2026-10-14, desktop)
 
 Section 3a's M2 (replay cost per tick) and M3 (snapshot cost). The Galaxy S24

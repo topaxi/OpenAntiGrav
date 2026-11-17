@@ -572,7 +572,9 @@ impl Client {
         let held = Held::of(own);
         let snapshot = held.snapshot(&mut self.own_edges);
         let inputs = self.inputs_for(snapshot);
+        let paused = race.pause_recording();
         race.tick(&inputs);
+        race.resume_recording(paused);
         self.own.push_back((tick, held, snapshot));
         self.sent_at.push_back((tick, Instant::now()));
         self.predicted.push_back((
@@ -631,7 +633,7 @@ impl Client {
             }
             crate::race::retire(race, record.retired);
             self.retired = record.retired;
-            race.tick_sim_only(&inputs);
+            race.tick_confirmed(&inputs);
             if race.sim.state_hash() == record.hash {
                 self.stats.hash_matches += 1;
             } else {
