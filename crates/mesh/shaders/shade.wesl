@@ -1220,7 +1220,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         }
         // 2048's sea: `liveLighting0specular * t.a * sat(R.L)^SpecularPower`, `R` the view
         // reflected about the mapped normal, `t.a` the first tap's alpha (fc15 fragment `@0x0c`
-        // to `@0x18`). No `sat(8 N.L)` gate.
+        // to `@0x18`). No `sat(8 N.L)` gate. **`liveLighting0specular` is the sun's diffuse
+        // colour here, chosen, not measured:** 2048's envsettings author no sun specular colour
+        // or intensity (Omega's carry both), so the loader's `specular_scale` reads 0 and is
+        // not applied.
         if vita_water {
             let gloss = material_sample(MATERIAL_PAD_MASK, water_tap_uv(water_entry, water_raw, 0u, in.texcoord)).a;
             let reflected = reflect(-to_eye, n_lit);

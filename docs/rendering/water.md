@@ -296,7 +296,11 @@ instruction, 2026-11-17 (`water-2048`), confidence 85:**
 - **No reflection sampler**, and the fog lerp ends it.
 
 Altima authors `ColourConstant` `(0.133, 0.173, 0.219)` and `SpecularPower` 250,
-`water_lapping_waves2_n.gxt` as `NormalMap`. The literal of `@1` (`sa18.x`, `2.0039` in
+`water_lapping_waves2_n.gxt` as `NormalMap`. **`liveLighting0specular` is drawn as the sun's
+diffuse colour, chosen, not measured**: 2048's envsettings author no sun specular colour or
+intensity (Omega's carry both, `docs/formats/envsettings.md`), so the glint's brightness rests
+on that stand-in; the engine's own `specular x0.00` line is the absent key, not a measured zero.
+Whether the `time` uniform is in seconds is not recorded (our clock is). The literal of `@1` (`sa18.x`, `2.0039` in
 `f16`) and `c15.y` (1) are not traced to a register by name; the shape is unambiguous.
 
 **fc17, read as far as the colour and the specular, alpha open (confidence 60).**
@@ -465,7 +469,7 @@ the rest; the sparkle moves between the two frames. Over the 2 s pair, on agains
 HUD clock and the lavender `fc17` sheets scroll in both). `off` is **pixel-identical to main**
 (0 differing pixels at both ticks against a build of main). What it does not
 do: the lavender sheets next to the pond (`fc17`) are still the normal map as a picture, which
-is the most visible Altima water and stays open; the highlight only shows near the sun's mirror
+is the most visible Altima water and stays open; the highlight (its brightness a chosen stand-in, above) only shows near the sun's mirror
 angle (power 250), so a typical chase view shows the ripple shading and an occasional glint, not
 a constantly sparkling sea.
 

@@ -7,6 +7,8 @@
 //! frame, lights it as `(ambient + diffuse * sat(N.L)) * ColourConstant`, and adds
 //! `liveLighting0specular * t.a * sat(R.L)^SpecularPower`, `R` the view reflected about the
 //! mapped normal. The vertex program adds `0.05 * time` to the first coordinate's `u`.
+//! `liveLighting0specular` is drawn as the sun's diffuse colour (chosen, not measured: 2048's
+//! envsettings author no sun specular colour).
 //!
 //! The sea rides HD's tap entry (`mesh::rcs::water::sea_block`, kind
 //! [`VITA_SEA_KIND`]) with the second tap at weight zero, the map bound third as the PS4's
