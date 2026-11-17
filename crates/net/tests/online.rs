@@ -438,6 +438,7 @@ fn child_runner(program: std::path::PathBuf) -> Box<ChildRunner> {
         listen: "127.0.0.1:0".parse().expect("addr"),
         limits: Limits::default(),
         load_timeout: Duration::from_secs(20),
+        quiet_timeout: Duration::from_secs(60),
     })
 }
 
@@ -496,6 +497,61 @@ fn a_race_that_never_comes_up_is_killed_and_the_slot_freed() {
                 .as_ref()
                 .is_some_and(|r| r.note.contains("did not come up"))
     });
+}
+
+#[test]
+fn a_race_process_that_goes_quiet_is_stopped_and_the_slot_freed_within_ten_seconds() {
+    let script = fake_race(
+        "hung",
+        "echo 'listening on [::]:45680'\n\
+         echo 'cert-hash 0303030303030303030303030303030303030303030303030303030303030303'\n\
+         exec sleep 60",
+    );
+    let mut lab = Lab::new(Box::new(ChildRunner {
+        quiet_timeout: Duration::from_secs(2),
+        ..*child_runner(script)
+    }));
+    let (a1, a2) = (lab.join("a1"), lab.join("a2"));
+    lab.room_starts(a1, a2, ["Feisar", "Qirex"]);
+    lab.until("the hand-off", |lab| lab.people[a1].has_handoff());
+    let up = std::time::Instant::now();
+    lab.until("the room back open with a reason", |lab| {
+        lab.phase(a1) == Some(RoomPhase::Open)
+            && lab.people[a1]
+                .room
+                .as_ref()
+                .is_some_and(|r| r.note.contains("went quiet"))
+    });
+    assert!(up.elapsed() < Duration::from_secs(10), "{:?}", up.elapsed());
+    assert_eq!(lab.server.racing_room(), None, "the slot is free again");
+}
+
+#[test]
+fn a_client_that_drops_while_its_race_loads_and_takes_its_session_over_receives_the_handoff() {
+    let gate = gate("takeover");
+    let script = fake_race(
+        "takeover",
+        &format!(
+            "echo 'listening on [::]:45681'\n\
+             echo 'cert-hash 0404040404040404040404040404040404040404040404040404040404040404'\n\
+             while true; do echo 'health: waiting'; sleep 0.2; if [ -e '{}' ]; then exit 0; fi; done",
+            gate.display()
+        ),
+    );
+    let mut lab = Lab::new(child_runner(script));
+    let (a1, a2) = (lab.join("a1"), lab.join("a2"));
+    lab.room_starts(a1, a2, ["Feisar", "Qirex"]);
+    lab.until("the hand-off", |lab| lab.people[a1].has_handoff());
+    let first = lab.people[a1].take_handoff().expect("handed off");
+    // The link drops and the person comes back on a new one under their session token.
+    let token = lab.people[a1].token.clone().expect("a session token");
+    let link = oag_net::wt::connect(&lab.server.local_addr().to_string(), lab.server.cert_hash())
+        .expect("connects to the lobby");
+    lab.people[a1] =
+        LobbyClient::connect(Box::new(link) as Box<dyn Link>, "a1", &[edition()], &token);
+    lab.until("the hand-off again", |lab| lab.people[a1].has_handoff());
+    assert_eq!(lab.people[a1].take_handoff(), Some(first));
+    std::fs::write(&gate, b"").expect("lets the child end");
 }
 
 #[test]

@@ -55,7 +55,7 @@ to 3 are answered.
    closes at tick 600 and returns at 900, every hash agreeing on both ends; red today at
    "the race has started" (`host.rs:366`). Touches `crates/net` and `oag-game`'s
    `net_play`; not `crates/ai`.
-2. **V1b, limits, health and the lobby's loose ends** (`oag-wire`, sonnet, about 23 h).
+2. **V1b, limits, health and the lobby's loose ends** (landed on branch `net-v1`: the host's input and resend bounds, the race child's `health` lines and the lobby's 5 s quiet timeout, the takeover re-send, the refusal-before-close ordering. Still open from it: the client's desync report and end-of-race summary, the per-address and per-room caps, the transport's bounded queues, the datagram budget, the one-log-line-a-second limit and the hand-off's host field; `PROTOCOL` did not change) (`oag-wire`, sonnet, about 23 h).
    The bounds of the page's "Robustness" list on the host and the lobby; `Health` lines
    from the race child and a hang timeout; the client's desync report and end-of-race
    summary; the takeover re-sends a pending hand-off (the lobby thread's item 5); the

@@ -402,3 +402,67 @@ fn the_weapon_digest_knows_a_shot_by_the_tick_it_was_fired_on() {
         "two shots fired 37 ticks apart read as one"
     );
 }
+
+/// A bare link seated and ready, driven by hand.
+fn raw_seat(host: &mut Host) -> Loopback {
+    let (server_end, mut mine) = Loopback::pair();
+    host.join(Box::new(server_end));
+    mine.send_control(&oag_net::wire::Control::Hello {
+        protocol: oag_net::wire::PROTOCOL,
+        name: "raw".into(),
+        team: String::new(),
+        token: String::new(),
+    });
+    host.poll();
+    mine.send_control(&oag_net::wire::Control::Ready {
+        fingerprint: host.fingerprint(),
+    });
+    host.poll();
+    assert!(host.all_ready());
+    mine
+}
+
+#[test]
+fn a_peer_cannot_grow_a_seats_buffer_with_inputs_for_far_future_ticks() {
+    let params = params(1);
+    let mut host = Host::new(headless(&params), params);
+    let mut mine = raw_seat(&mut host);
+    host.start(0);
+    for n in 0..10_000u32 {
+        mine.send(&oag_net::wire::Datagram::Inputs {
+            seat: 0,
+            first: n,
+            inputs: vec![oag_net::wire::Held::default()],
+        });
+    }
+    host.poll();
+    assert!(
+        host.buffered_inputs(0) < 120,
+        "{} inputs buffered",
+        host.buffered_inputs(0)
+    );
+}
+
+#[test]
+fn a_hundred_resend_requests_in_a_second_get_one_answer() {
+    let params = params(1);
+    let mut host = Host::new(headless(&params), params);
+    let mut mine = raw_seat(&mut host);
+    host.start(0);
+    for _ in 0..5 {
+        host.poll();
+        host.tick();
+    }
+    while mine.recv_control().is_some() {}
+    for _ in 0..100 {
+        mine.send_control(&oag_net::wire::Control::Resend { from: 0 });
+    }
+    host.poll();
+    let mut answers = 0;
+    while let Some(message) = mine.recv_control() {
+        if matches!(message, Ok(oag_net::wire::Control::Ticks(_))) {
+            answers += 1;
+        }
+    }
+    assert_eq!(answers, 1);
+}
