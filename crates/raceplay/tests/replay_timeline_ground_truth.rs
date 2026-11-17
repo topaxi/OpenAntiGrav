@@ -58,7 +58,7 @@ fn launch() -> Launch {
 fn single_race(source: &Path) -> race::Options {
     race::Options {
         source: source.display().to_string(),
-        class: "VENOM".to_string(),
+        class: std::env::var("OAG_SWEEP_CLASS").unwrap_or_else(|_| "VENOM".to_string()),
         mode: oag_race::Mode::SingleRace,
         ..race::Options::default()
     }
@@ -545,4 +545,61 @@ fn the_opening_pass_costs() {
             .unwrap_or_default()
             .trim()
     );
+}
+
+/// Writes the `.oagr` of recordings of one title to the directory `OAG_SWEEP_OUT` names:
+/// `<title>-<class>-pad.oagr` (the pad-flown race above, five minutes), `-autopilot.oagr` (the
+/// cost sweep's race: the player's craft on Autopilot, idle input) and, with
+/// `OAG_SWEEP_FINISH` set, only `-pad-finish.oagr` (the pad race stopped shortly after the
+/// finish, as `record` does with no tick count). `OAG_SWEEP_CLASS` is the speed class of the
+/// race (default VENOM); the header still says `venom`. A scratch sweep for
+/// `docs/formats/replay-file.md`, "Compression, measured": the compressors are run over the
+/// files by hand.
+#[test]
+#[ignore = "a sweep: needs game data, OAG_SWEEP and OAG_SWEEP_OUT"]
+fn dump_the_recordings_for_a_compressor() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let title = std::env::var("OAG_SWEEP_TITLE").unwrap_or_else(|_| "pulse".to_string());
+    let out = std::path::PathBuf::from(std::env::var_os("OAG_SWEEP_OUT").expect("OAG_SWEEP_OUT"));
+    let class = std::env::var("OAG_SWEEP_CLASS").unwrap_or_else(|_| "VENOM".to_string());
+    if std::env::var_os("OAG_SWEEP_FINISH").is_some() {
+        let Some((_, run)) = record(&title, None) else {
+            return;
+        };
+        std::fs::write(
+            out.join(format!("{title}-{class}-pad-finish.oagr")),
+            run.replay.to_bytes(),
+        )
+        .expect("writing the finish recording");
+        return;
+    }
+    let ticks = 18_000;
+    let Some((source, run)) = record(&title, Some(ticks)) else {
+        return;
+    };
+    std::fs::write(
+        out.join(format!("{title}-{class}-pad.oagr")),
+        run.replay.to_bytes(),
+    )
+    .expect("writing the pad recording");
+
+    let options = single_race(&source);
+    let loaded = race::load(&options).expect("loading the race");
+    let seed = loaded.setup.seed;
+    let mut race = Race::start(loaded.setup);
+    race.apply_launch(&launch());
+    race.start_recording(header_of(&title, oag_race::Mode::SingleRace, seed));
+    race.set_autopilot(true);
+    let idle = PlayerInputs::single(oag_gameplay::InputSnapshot::default());
+    for _ in 0..ticks {
+        race.tick(&idle);
+        race.drain_cues();
+    }
+    std::fs::write(
+        out.join(format!("{title}-{class}-autopilot.oagr")),
+        race.recorded().expect("recording").to_bytes(),
+    )
+    .expect("writing the autopilot recording");
 }

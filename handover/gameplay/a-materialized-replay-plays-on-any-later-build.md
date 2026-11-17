@@ -55,26 +55,23 @@ Constraints:
   2x the pose track again, so about 1 MB for a five-minute race. Measure before choosing between
   always-on and opt-in.
 
-Compression (nothing in a `.oagr` is compressed today; the screenshot chunk in
-`crates/replay/src/shot.rs` is deflated):
-
-- ADR-0087 decision 4 measured general compressors on Pulse: on the **stored** pose track gzip -9
-  saves 9 percent and xz -9 28 percent (zstd not measured); on the **raw** 60 Hz pose stream gzip -9
-  29, zstd -19 42 and xz -9 55 percent. The keyframe refinement already took most of the
-  redundancy, so the ADR applied no compression.
-- The input stream (6.3 to 6.9 bytes a tick a human seat, ADR-0055) was never put through a
-  compressor. Analog stick values change slowly, so it may compress better than the pose track.
-- A materialized replay would roughly double the stored size, which makes a compressed container
-  more worth having. `ruzstd` is already in the workspace (texture packs), so zstd adds no
-  dependency.
+Compression: **measured 2026-11-17**, [`docs/formats/replay-file.md`](../../docs/formats/replay-file.md),
+"Compression, measured" (five titles, Venom and Phantom, per chunk). Summary: `ruzstd` 0.9.1
+encodes only `Uncompressed` and `Fastest` (2 to 9 percent of the whole file), so the earlier note
+that zstd is free through `ruzstd` holds for decoding only. `HASH`, `EVNT`, `HEAD` do not compress;
+`POSE` saves 7 to 11 percent at zstd 3; `INPT` saves 23 to 47 percent. Whole file, finish-length
+race: deflate -9 12.6 to 16.4 percent (`flate2` is already an `oag-replay` dependency), zstd 19
+15 to 21 percent (C crate, native-only), xz -9 22 to 31. Not wired: a 30 to 95 KB saving a file is
+the maintainer's call against a format bump. The recordings carry no person's input (an AI driver's
+pad); a human's `INPT` would compress less.
 
 ## Next Steps
 
-0. Compression measurement (sonnet `oag-docs` or `oag-perf`, about 30 min, measure lane): zstd at
-   a few levels (3, 9, 19), gzip -9 and xz -9 over each chunk of a real `.oagr` (`INPT`, `HASH`,
-   `POSE`, the whole file), on all five titles, at Venom and Phantom, from the cost sweep's Autopilot
-   race and a pad-flown race (`replay_timeline_ground_truth`'s recording). Report percent saved and
-   encode/decode time per chunk; recommend per chunk whether a zstd wrapper earns its keep.
+
+0. Compression: measured (above). Decide only if the stored size grows: if so, a deflate -9 wrapper
+   over the payload after `HEAD` (no new dependency, every target, new `FORMAT_VERSION` or chunk) is
+   the cheapest step; zstd 19 through the C crate needs a native-only container. Re-measure the
+   whole file on the design lane's chunks (items 1 to 4), which may be more compressible than `POSE`.
 1. Design lane (sonnet `oag-docs`, 2 to 3 h): the per-tick schema for items 1 to 4, which of them
    the renderer, HUD and audio already read as a per-tick output (the cheapest cut), always-on versus
    a "keep" flag, and an ADR draft extending ADR-0087 decision 4. Measure the size on the cost
