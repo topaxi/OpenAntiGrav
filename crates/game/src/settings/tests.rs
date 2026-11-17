@@ -1204,7 +1204,7 @@ fn weather_defaults_to_the_original_and_round_trips_its_names() {
 
 /// Writes `text` as a settings file in a scratch directory, loads it, and
 /// returns what loaded with the file's contents afterwards.
-fn load_text(text: &str) -> (Settings, String) {
+pub(super) fn load_text(text: &str) -> (Settings, String) {
     use std::sync::atomic::{AtomicU32, Ordering};
     static NEXT: AtomicU32 = AtomicU32::new(0);
     let dir = std::env::temp_dir().join(format!(

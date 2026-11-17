@@ -617,7 +617,7 @@ pub(crate) struct RaceRoute {
 /// Nothing on this path writes the file back.
 pub(crate) fn run_race(
     cli: &Cli,
-    options: race::Options,
+    mut options: race::Options,
     settings: &settings::Settings,
     anisotropy: Anisotropy,
     mut audio: oag_sound::Audio,
@@ -625,6 +625,7 @@ pub(crate) fn run_race(
     route: RaceRoute,
 ) -> Result<()> {
     let RaceRoute { net, restage } = route;
+    options.water = oag_game::water_setting::for_source(settings, &options.source);
     // `--event` resolves a Wipeout 2048 campaign event onto `options` before
     // loading - see `race::load_event`'s own doc comment for what it
     // overrides and why this is a second entry point rather than a new

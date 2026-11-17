@@ -163,6 +163,7 @@ fn the_report_names_both_kinds_of_absence() {
         glass_grid_unread: 0,
         water_lit_colour: 0,
         water_glint_only: 0,
+        water_law: oag_display::display::Water::Original,
         isolated: 0,
         behind_glass: 0,
     };

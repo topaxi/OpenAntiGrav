@@ -747,6 +747,23 @@ impl Definition {
         }
     }
 
+    /// Drops the values of the WATER row that `offered` refuses, keeping the row. The row's own
+    /// order is kept, and a value is asked about by its stored spelling. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_water(&mut self, offered: &dyn Fn(&str) -> bool) {
+        for page in &mut self.pages {
+            for entry in &mut page.entries {
+                if let Entry::Choice {
+                    setting, values, ..
+                } = entry
+                    && setting == "graphics.water"
+                {
+                    values.retain(|choice| offered(&choice.value));
+                }
+            }
+        }
+    }
+
     /// Drops every QUIT row, for a platform whose apps are not quit from
     /// inside (Android: the player leaves with the system's home or app
     /// switcher, and the app is suspended, not ended). Same once-before-read

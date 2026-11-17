@@ -702,8 +702,14 @@ fn main() -> Result<()> {
             );
         }
         let data = mesh::read_blob(&cli.archive, name)?;
-        let ps3 = mesh::rcs::scene_from(&cli.archive, name, &data, Default::default())?
-            .inspect(|(_, report)| println!("{}", report.describe()));
+        let ps3 = mesh::rcs::scene_from(
+            &cli.archive,
+            name,
+            &data,
+            Default::default(),
+            Default::default(),
+        )?
+        .inspect(|(_, report)| println!("{}", report.describe()));
         let model = match ps3 {
             Some((model, _)) => ps3_mesh::with_pads(&cli.archive, name, &data, model),
             None => mesh::build_with_textures(name, &data, external.as_ref())?,

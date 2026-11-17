@@ -160,6 +160,7 @@ pub(super) fn menu_page(
     definition.drop_unavailable_trail_length(title);
     definition.drop_unavailable_weather(title);
     definition.drop_unavailable_rumble_original(title);
+    crate::water_setting::trim_row(&mut definition, title, &crate::menu_tree::disc_probe());
     definition.drop_unavailable_dynamic_hud(title);
     definition.drop_unavailable_game_options(title);
     definition.rename_campaign_row(title, strings);

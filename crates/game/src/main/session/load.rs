@@ -522,6 +522,14 @@ impl Session {
                 shell.title,
             );
         }
+        // And for the WATER row: the profile's choice, resolved against the discs this machine has.
+        if let Some(shell) = self.shell.as_ref() {
+            options.water = oag_game::water_setting::resolve(
+                self.render_profile().water,
+                shell.title,
+                &oag_game::menu_tree::disc_probe(),
+            );
+        }
         // The same refresh, for the BOOST ZOOM row: a race reads it when it loads.
         options.boost_zoom = self
             .settings

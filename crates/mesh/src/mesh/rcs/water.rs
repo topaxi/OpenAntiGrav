@@ -13,6 +13,7 @@
 //! normal, no declared sampler besides the lightmap is read as a colour, and
 //! the baked-lightmap lighting formula is absent.
 
+use oag_display::display::Water;
 use oag_rcs::rcsmaterial::fragment::Program;
 use oag_rcs::{rcsmaterial, rcsmodel};
 
@@ -69,6 +70,25 @@ const CONSTANT_AMBIENT: u32 = rcsmaterial::CONSTANT_AMBIENT;
 /// ice pool's: no glow entry scrolls at 2.0 (`mesh::Emissive::rate` is 0 or 1).
 pub(crate) const WATER_FLAG: f32 = 2.0;
 
+/// What a classified water slot is drawn as.
+enum Reading {
+    /// The program's own colour term with no normal map, no scroll and no
+    /// reflection: lit vertex colour, or black plus a glint.
+    Constant,
+}
+
+/// The reading each law draws a classified water slot as. **Every law draws
+/// [`Reading::Constant`] today**: the scrolled-tap laws of `docs/rendering/water.md`
+/// join here by adding their variant, and nothing in the menu or the load
+/// moves. `off` is this reading by definition.
+const fn reading(law: Water) -> Reading {
+    match law {
+        Water::Off | Water::Original | Water::Hd | Water::Vita2048 | Water::Omega => {
+            Reading::Constant
+        }
+    }
+}
+
 /// Takes the normal map out of every water material's albedo.
 ///
 /// Two programs share the shape and differ in what is left once the
@@ -90,11 +110,13 @@ pub(super) fn water(
     skins: &mut TextureSlots,
     packed: &mut [u32],
     table: &mut Vec<Emissive>,
+    law: Water,
     report: &mut Report,
 ) {
     if super::isolate::water_off() {
         return;
     }
+    report.water_law = law;
     let mut black: Option<std::sync::Arc<ModelTexture>> = None;
     for (slot, material) in model.materials.iter().enumerate() {
         let Some(variant) = variants.get(slot).copied().flatten() else {
@@ -111,6 +133,9 @@ pub(super) fn water(
         };
         if !is_water(&declared, &program) {
             continue;
+        }
+        match reading(law) {
+            Reading::Constant => {}
         }
         let lit_vertex_colour = declared.parameters.contains(&CONSTANT_AMBIENT);
         let Some(texture) = skins.get_mut(slot) else {

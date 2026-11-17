@@ -350,6 +350,10 @@ pub struct Report {
     /// Water materials whose only colour is the reflection and a sun glint:
     /// drawn black plus the generic specular, the reflection not drawn.
     pub water_glint_only: usize,
+    /// The law the player chose for the water materials counted above
+    /// (`graphics.water`). Every value draws the constant reading until its
+    /// law is wired (see `super::water::reading`).
+    pub water_law: oag_display::display::Water,
     /// Sebenco ice materials drawn as their authored water and ice lerp, and
     /// ones whose textures or colours could not be read (drawn as before).
     pub ice_bound: usize,
@@ -641,8 +645,8 @@ impl Report {
             n => format!(
                 ", {n} water material(s) whose picture is a normal map, not painted \
                  ({} as lit vertex colour, {} as black plus a glint); their reflection \
-                 (the engine's paraboloid probe) is NOT drawn",
-                self.water_lit_colour, self.water_glint_only
+                 (the engine's paraboloid probe) is NOT drawn (water setting: {})",
+                self.water_lit_colour, self.water_glint_only, self.water_law
             ),
         } + &match self.ice_bound {
             0 => String::new(),

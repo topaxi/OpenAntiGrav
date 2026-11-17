@@ -3337,6 +3337,7 @@ dependencies = [
  "oag-assets",
  "oag-bytes",
  "oag-core",
+ "oag-display",
  "oag-formats",
  "oag-gpu",
  "oag-rcs",

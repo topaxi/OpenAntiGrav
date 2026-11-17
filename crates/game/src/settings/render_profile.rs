@@ -326,6 +326,16 @@ pub struct RenderProfile {
     /// the row applies live. See [`oag_display::display::Weather`].
     #[serde(default)]
     pub weather: oag_display::display::Weather,
+    /// Which law draws a classified water surface: `off`, `original`, or
+    /// another title's (`hd`, `2048`, `omega`).
+    ///
+    /// Per title because what `original` means depends on the title. Default
+    /// `original`, which is also what an unknown spelling falls back to. A
+    /// borrowed value is offered only while that title's disc is present
+    /// ([`crate::water_setting`]); a stored value that is no longer offered
+    /// draws as `original`. See [`oag_display::display::Water`].
+    #[serde(default)]
+    pub water: oag_display::display::Water,
 }
 
 impl RenderProfile {
@@ -478,6 +488,7 @@ impl Default for RenderProfile {
             scenery_sort: oag_display::display::ScenerySort::default(),
             trail_length: oag_display::display::TrailLength::default(),
             weather: oag_display::display::Weather::default(),
+            water: oag_display::display::Water::default(),
         }
     }
 }
@@ -509,7 +520,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 18] = [
+pub(super) const PROFILE_KEYS: [&str; 19] = [
     "render_scale",
     "render_scale_chosen",
     "target_fps",
@@ -528,6 +539,7 @@ pub(super) const PROFILE_KEYS: [&str; 18] = [
     "scenery_sort",
     "trail_length",
     "weather",
+    "water",
 ];
 
 /// The keys that used to live flat in `[graphics]` and now live in one

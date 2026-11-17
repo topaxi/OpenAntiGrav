@@ -47,12 +47,14 @@ mod screen_filter;
 mod shadows;
 mod trail_length;
 mod trail_order;
+mod water;
 mod weather;
 
 pub use {
     aspect::Aspect, dynamic_hud::DynamicHud, hud_scale::*, motion_blur::*, msaa::Msaa,
     reconstruction::Reconstruction, scenery_sort::ScenerySort, screen_filter::FilterStrength,
-    shadows::Shadows, trail_length::TrailLength, trail_order::TrailOrder, weather::Weather,
+    shadows::Shadows, trail_length::TrailLength, trail_order::TrailOrder, water::Water,
+    weather::Weather,
 };
 
 /// What kind of window the game asks the compositor for.

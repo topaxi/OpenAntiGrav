@@ -4,6 +4,7 @@
 //! Split out of `mesh/rcs.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
+use oag_display::display::Water;
 use oag_gpu::formats::SceneStore;
 use oag_rcs::rcsmodel;
 
@@ -85,6 +86,7 @@ pub(super) fn material_setup(
     model_blob: &[u8],
     textures: Textures<'_>,
     store: SceneStore,
+    water_law: Water,
     report: &mut Report,
 ) -> MaterialSetup {
     // **The variant first**, because which sampler entry each of this
@@ -296,6 +298,7 @@ pub(super) fn material_setup(
         &mut skins,
         &mut material_slots,
         &mut emissive,
+        water_law,
         report,
     );
     // The hulls that read the reflection probe claim a slot's glow index last: ice ORs its

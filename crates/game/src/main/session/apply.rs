@@ -612,6 +612,20 @@ impl Session {
                     return;
                 }
             },
+            // Read when the next race loads its circuit: the water families
+            // are classified into their material slots there
+            // (`oag_mesh::mesh::WaterLaw`).
+            "graphics.water" => match text.parse::<display::Water>() {
+                Ok(water) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.water = water;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             // Applied by the next frame's composite, which resolves the name
             // through the catalogue and rebuilds the pass if it changed - so
             // the menu the player is standing on is drawn through the filter

@@ -101,6 +101,7 @@ pub mod texture_pack;
 pub mod title_lists;
 pub mod track_panel;
 pub mod unlock;
+pub mod water_setting;
 
 /// Frames of the reel `Intro Screen->IntroMovie1` can possibly show, plus one.
 ///
