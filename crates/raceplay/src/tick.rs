@@ -219,8 +219,9 @@ impl Race {
         }
         let primary = self.sim.world.primary_slot();
         assert!(
-            steps[primary].is_some(),
-            "the primary slot is always stepped as a player"
+            steps[primary].is_some()
+                || self.sim.world.controllers[primary] == oag_gameplay::Controller::Away,
+            "the primary slot is stepped as a player unless its person is away"
         );
         // **After the craft moved and before the race rules.** A rocket fired
         // this tick was spawned from the pose the tick *started* at, in

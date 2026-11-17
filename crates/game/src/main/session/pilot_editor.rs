@@ -183,6 +183,9 @@ fn pilot_choice(entry: &pilots::Entry, strings: Option<&StringTable>) -> menu::C
     menu::Choice::labelled(&entry.name, label)
 }
 
+/// The text of a [`Finished`] confirm that was answered no.
+const DECLINED: &str = "declined";
+
 impl Session {
     /// Populates the PILOT and AXIS rows from [`Session::pilot_roster`], and
     /// LOW/HIGH for whichever one they land on - called once, when the AI
@@ -564,6 +567,10 @@ impl Session {
             self.online_field_entered(field, &finished.text);
             return;
         }
+        if finished.purpose == Purpose::RejoinRace {
+            self.rejoin_answered(finished.text != DECLINED);
+            return;
+        }
         let Some(dir) = pilots::directory() else {
             error!("no config directory on this platform, so nothing can be written");
             return;
@@ -610,6 +617,7 @@ impl Session {
             }
             Purpose::LanAddress
             | Purpose::Online(_)
+            | Purpose::RejoinRace
             | Purpose::CampaignName
             | Purpose::CampaignSeed
             | Purpose::PlayerName
@@ -772,8 +780,12 @@ impl Session {
         match outcome {
             Outcome::Pending => None,
             Outcome::Cancelled => {
-                stage.prompt = None;
-                None
+                let prompt = stage.prompt.take()?;
+                // Declining the offer to rejoin is an answer, not a dismissal: the record goes.
+                (prompt.purpose == Purpose::RejoinRace).then(|| Finished {
+                    purpose: prompt.purpose,
+                    text: DECLINED.to_string(),
+                })
             }
             Outcome::Accepted => {
                 let prompt = stage.prompt.take().expect("checked just above");

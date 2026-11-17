@@ -1049,6 +1049,8 @@ impl Session {
             (surface.0 as f32, surface.1 as f32),
             overlay_space.size.1 / surface.1.max(1) as f32,
         ));
+        // A network race whose link is gone: RECONNECTING over the last frame.
+        list.extend(self.reconnect_screen(overlay_space.size));
         // The line under a split race's pause: who paused and when it is anyone's.
         list.extend(self.pause_line(overlay_space.size));
         // Photo mode's screen, over the surface and so not in a shot.

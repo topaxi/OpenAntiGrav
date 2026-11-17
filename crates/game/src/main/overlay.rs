@@ -45,6 +45,8 @@ pub(crate) enum Purpose {
     LanAddress,
     /// One answer of the online connect step (`session::online`).
     Online(OnlineField),
+    /// Take the seat of an online race back (`session::online_rejoin`).
+    RejoinRace,
 }
 
 /// Which text the online connect step is asking for.

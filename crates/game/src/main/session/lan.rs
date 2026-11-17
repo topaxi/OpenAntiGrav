@@ -244,6 +244,7 @@ impl Session {
             "",
             self.net_bot,
             "this machine",
+            None,
         );
         self.lan = Some(Lan {
             step: Step::Lobby {
@@ -617,6 +618,7 @@ impl Session {
                                 "",
                                 self.net_bot,
                                 &to.addr.to_string(),
+                                None,
                             ));
                             (
                                 Step::Waiting {

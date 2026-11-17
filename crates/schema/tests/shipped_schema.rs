@@ -47,6 +47,7 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
         ("crates/trackfile/tests/fixtures/oval.track.toml", "track"),
         ("crates/mod/tests/fixtures/example.rumble.toml", "rumble"),
         ("crates/game/tests/fixtures/music-state.toml", "music-state"),
+        ("crates/game/tests/fixtures/rejoin.toml", "rejoin"),
         ("crates/game/tests/fixtures/settings.toml", "settings"),
         (
             "crates/replay/tests/fixtures/replay-header.toml",
