@@ -120,3 +120,100 @@ fn no_other_title_draws_these() {
     };
     assert!(names(&layout, &loud, oag_pulse::hud::ART).is_empty());
 }
+
+const ZONE_SCORE: &str = r#"
+<Screen>
+<Text name="ScoreTxt"><Values idstring="IG_HUD_SCORE" font="HUD" align="centre" vertalign="top" x="480" y="20"/></Text>
+<Text name="Score"><Values string="" font="HUD" align="left" vertalign="top" x="480" y="60"/></Text>
+</Screen>
+"#;
+
+/// The Zone `SCORE` value is centred under `SCORE`: `FUN_811538c2` writes the left-anchored
+/// widget's x as `ScoreTxt`'s x minus half the width of the value's digits. Fails if 2048's
+/// `Score` stays left-anchored at the authored x (the value hangs off to the right of `SCORE`),
+/// or if another title's `Score` is moved.
+#[test]
+fn the_2048_zone_score_value_is_centred_under_its_caption() {
+    use super::draw::*;
+    use super::tests::{context, strings};
+    let layout = Layout::from_xml(ZONE_SCORE);
+    let strings = strings();
+    let aligns = |art: &'static oag_title::HudArt| {
+        let cx = Context {
+            art,
+            ..context(&layout, &strings)
+        };
+        let readout = Readout {
+            zone: 5,
+            score: 1780,
+            ..Readout::blank()
+        };
+        draw_list(&cx, &readout)
+            .hud_text
+            .into_iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, x, align, .. } if text == "1780" => Some((x, align)),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(aligns(oag_2048::hud::ART), [(480.0, Align::Centre)]);
+    assert_eq!(aligns(oag_pulse::hud::ART), [(480.0, Align::Left)]);
+}
+
+/// With nothing held and the icon's height still above zero, 2048 keeps drawing the last weapon's
+/// icon at the slot with its height scaled by `hud+0x224` and the frame at full width
+/// (`Hud_UpdatePickupIcon`, not-held branch). Fails if the release draws nothing, or if another
+/// title draws the leftover.
+#[test]
+fn the_2048_icon_collapses_in_height_after_release_with_its_frame_up() {
+    use super::draw::*;
+    use oag_tables::weapons::Weapon;
+    let layout = Layout::from_xml(super::tests::SAMPLE_2048_PICKUP);
+    let src = layout.sprite("PickupIcon").expect("icon").src.clone();
+    let sheet = crate::sprite::Sheet::placed_at(&[(
+        src.as_str(),
+        crate::sprite::Placed {
+            x: 0,
+            y: 0,
+            width: 512,
+            height: 512,
+            quad_extent: None,
+            quad_centre: None,
+            blend: None,
+            scale: [1.0, 1.0],
+        },
+    )]);
+    let strings = super::tests::strings();
+    let sprites = |art: &'static oag_title::HudArt, high: f32| {
+        let cx = Context {
+            art,
+            sheet: &sheet,
+            ..super::tests::context(&layout, &strings)
+        };
+        let readout = Readout {
+            pickup: None,
+            pickup_releasing: Some(Weapon::Missile),
+            pickup_pop: Some([1.0, high]),
+            pickup_fly: Some(0.0),
+            ..Readout::blank()
+        };
+        draw_list(&cx, &readout)
+            .sprites
+            .into_iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { rect, .. } => Some(rect),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let full = sprites(oag_2048::hud::ART, 1.0);
+    let half = sprites(oag_2048::hud::ART, 0.5);
+    assert_eq!(full.len(), 2, "frame and icon: {full:?}");
+    assert_eq!(half.len(), 2);
+    assert_eq!(half[0], full[0], "the frame holds its full width");
+    assert_eq!(half[1][2], full[1][2], "the icon keeps its width");
+    assert_eq!(half[1][3], full[1][3] * 0.5, "and loses half its height");
+    assert_eq!(sprites(oag_2048::hud::ART, 0.0)[1][3], 0.0, "flat at zero");
+    assert!(sprites(oag_pulse::hud::ART, 0.5).is_empty());
+}

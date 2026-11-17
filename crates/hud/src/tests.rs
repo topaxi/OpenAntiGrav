@@ -613,7 +613,7 @@ fn the_pickup_backdrop_takes_its_weapons_own_colour_and_the_icon_keeps_its_autho
 /// one `PickupIcon` at its authored top-centre rect and one `PickupBgFrame`
 /// at the bottom-left slot - values straight off
 /// `cargo run -p oag-game --example vita_2048_hud_dump`.
-const SAMPLE_2048_PICKUP: &str = r#"
+pub(super) const SAMPLE_2048_PICKUP: &str = r#"
 <Screen>
 <Screen name="HUD">
 <Image name="PickupBgFrame">

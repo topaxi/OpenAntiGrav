@@ -762,6 +762,13 @@ pub struct Readout {
     /// at full size. Ported by `SlotHud::advance`; drawn only by a title whose art carries
     /// [`oag_title::HudArt::pickup_icon_uv`].
     pub pickup_pop: Option<[f32; 2]>,
+    /// The weapon 2048's icon is still collapsing for after the craft let go of it: the last one
+    /// held while nothing is held and [`Self::pickup_pop`]'s height has not yet run out
+    /// (`Hud_UpdatePickupIcon`'s not-held branch takes `10 dt` off `hud+0x224` and sets the icon's
+    /// height to the table's `h * hud+0x224`, the frame staying up). `None` otherwise. Ported by
+    /// `SlotHud::advance`; drawn only by a title whose art carries
+    /// [`oag_title::HudArt::pickup_icon_uv`].
+    pub pickup_releasing: Option<oag_tables::weapons::Weapon>,
     /// The running XP of the race's event (the `"%d"` `Hud_UpdateXpLines` writes into `RaceXP`),
     /// or `None` when no tally is armed: outside a campaign event the caption draws alone.
     pub race_xp: Option<u32>,

@@ -225,6 +225,9 @@ impl Race {
             pickup_announcing: hud.pickup_announce_left > 0.0,
             pickup_fly: Some(hud.pickup_fly_travel),
             pickup_pop: Some([1.0 + hud.pickup_pop[0], hud.pickup_pop[1]]),
+            pickup_releasing: hud
+                .pickup_last
+                .filter(|_| held.is_none() && hud.pickup_pop[1] > 0.0),
             race_xp: self.xp_tally().map(crate::xp_tally::XpTally::total),
             pickup_fade: hud.pickup_fade,
             thrust_chase_percent: hud.thrust_chase_percent,
