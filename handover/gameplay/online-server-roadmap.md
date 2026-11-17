@@ -48,7 +48,10 @@ own leftovers (spectate, chat, invite-only, quick match, the recorded pad stream
    load and 380 MB lobby start were the extraction's sparse `Data.wad` read whole (twice in the
    race). `oag_assets::sparse` now keeps only the range table: 572 to 18.5 MB and 383 to 9.7 MB
    locally (`docs/networking/online-lobby.md`, "Server memory while loading"), so the
-   rooms-per-1-GB memory column holds while loading too. Still open: the musl build's peaks on
+   rooms-per-1-GB memory column holds while loading too. The V1 bar (lobby plus two races in
+   about 430 MB) holds by about 3x even at its worst case, two loads at once included
+   (`server-roadmap.md`, "Rooms on a 1 GB VPS"); no stagger rule is needed for memory. Open:
+   whether a load on the one vCPU stalls a racing room's ticks (CPU, not measured). Still open: the musl build's peaks on
    the remote host are not re-measured (expect the same, the buffers are the allocator's
    requests); HD, Omega and 2048 extractions were not measured (same code path, larger
    archives, so a larger "before"); the circuit `.vex` (5.1 MB on Pulse) is read twice and held

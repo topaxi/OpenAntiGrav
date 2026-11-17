@@ -597,6 +597,39 @@ and the lobby at 383 MB, so a 1 GB host could load one race at a time and nothin
 | Omega | 17 | 3 | 4 to 5 | CPU |
 | 2048 | 17 (from the waiting figure) | not measured | not measured | CPU, presumably |
 
+**The lobby and two races on the 1 GB VPS** (the V1 bar: about 430 MB free beside the host's
+websites). Measured 2026-11-17 on localhost, two runs, lean release `oag-server` on a lean Pulse PSP
+extraction: the lobby, race A racing (two `oag-game --connect --net-bot` clients, AI on the other
+six, weapons on, 3,600 ticks, 0 bad hashes) and, 35 s in, races B and C loading **at the same
+moment**. `VmHWM` per process and the largest sum over 0.2 s samples:
+
+| Process | Peak resident |
+| --- | --- |
+| Lobby | 9.1 to 9.2 MB |
+| Race A, racing, after 60 s | 27.4 to 32.1 MB |
+| Race B, loading | 18.1 to 18.3 MB |
+| Race C, loading at the same moment | 17.9 to 18.0 MB |
+| All four at once, sampled sum | 61.6 to 66.6 MB resident, 33.3 to 43.9 MB proportional (`Pss`) |
+
+The resident sum counts the binary's shared pages (about 9.5 MB) once per process, so `Pss` is
+what the host actually spends. Worst case, by arithmetic on the peaks (resident, so pessimistic):
+
+| Case | Sum | Against 430 MB |
+| --- | --- | --- |
+| Lobby + one race racing + one loading | 9.2 + 32.1 + 18.3 = 60 MB | 14 % |
+| Lobby + two races loading at once | 9.2 + 18.3 + 18.0 = 46 MB | 11 % |
+| Lobby + two full races at 30 minutes (estimated: 32 MB + 23 MB of history each, "Performance") | 9.2 + 2 x 55 = 119 MB | 28 % |
+| The same with a third race loading | 119 + 18.3 = 138 MB | 32 % |
+
+So **two races fit with room to spare, including two loading at once**: memory needs no rule
+that staggers loads. Before the sparse fix of 2026-11-17 a single load peaked at 572 MB and the
+lobby at 383 MB, so not even the lobby and one load fitted in 430 MB. Not measured: an 8-person
+room's history (estimated above), the musl build on the host itself, titles other than Pulse
+(their localhost race processes are 32 to 36 MB, "Performance"). CPU, not memory, is what a
+load costs a racing room on one vCPU (the remote saw 67 to 81 % of the core for the first
+seconds of a load before the fix); a lobby rule of one load at a time would be a CPU measure, and
+is not needed until a load is measured stalling a racing room's ticks.
+
 Today and in V1 one race runs at a time by design, so the box is far from any limit. V2
 can use 3 slots there. V3 should about double the CPU rows.
 
