@@ -85,10 +85,11 @@ const CONSTANT_AMBIENT: u32 = rcsmaterial::CONSTANT_AMBIENT;
 /// ice pool's: no glow entry scrolls at 2.0 (`mesh::Emissive::rate` is 0 or 1).
 pub(crate) const WATER_FLAG: f32 = 2.0;
 
-/// Whether `law` is drawn as its own law yet. **The one flag each lane flips when it lands**
-/// (`docs/rendering/water.md`, "Open"): the WATER row offers a value only
-/// while this holds, and `original` is the title's own look, which today is the constant
-/// reading below.
+/// Whether `law` is drawn **on a title other than its own** yet: the WATER row offers a
+/// value only while this holds (`docs/rendering/water.md`, "Open"). A law is always drawn on
+/// its own title as `original` (HD's taps are, under `original` on HD), so a borrowed value
+/// becomes true only once a borrower draws it: `Hd` with the lane that borrows HD's law onto
+/// Pulse, Pure, 2048 and Omega.
 #[must_use]
 pub const fn is_drawn(law: Water) -> bool {
     match law {
