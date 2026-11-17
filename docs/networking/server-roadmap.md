@@ -385,6 +385,11 @@ content and no people.**
 6. The refusal-before-close ordering is made certain (the lobby waits for the refusal to
    be acknowledged or for 1 s before closing).
 
+**Did the limits hold in real play?** Yes, on a well-behaved pair (`online-lobby.md`, "Measured over the internet, with the
+limits", 2026-11-17): six races, 14 clients, 0 bad hashes, no limit line in the lobby log, datagram rates peaking at 79 a second
+sent and 92 received against the budget of 120 (the same with four people). Two caveats: a budget drop is silent, so the log
+alone cannot show one; and the race child's load peaked at 542 MB resident, which the "Rooms on a 1 GB VPS" memory row does not count.
+
 **Why first.** A dropped link ending the race is the failure a real network shows most,
 and nothing here changes the topology or the encoding of a tick. Everything later needs
 the limits.
