@@ -615,6 +615,16 @@ pub(crate) struct NetArgs {
     #[arg(long, requires = "online")]
     pub(crate) online_create: bool,
 
+    /// With `--online-create`: this machine hosts the room's race (a player-hosted room). The
+    /// lobby checks `--online-host-port` from its side before it lists the room.
+    #[arg(long, requires = "online_create")]
+    pub(crate) online_host: bool,
+
+    /// The UDP port a hosted race listens on, the one to open or forward to this machine; 0
+    /// lets the system pick (a test on one machine).
+    #[arg(long, requires = "online_host", default_value_t = oag_net::lan::DEFAULT_PORT)]
+    pub(crate) online_host_port: u16,
+
     /// The room to join, from the lobby's list.
     #[arg(long, requires = "online", conflicts_with = "online_create")]
     pub(crate) online_room: Option<u32>,
@@ -699,6 +709,7 @@ impl NetArgs {
             bot: self.net_bot,
             name: format!("oag-game {}", std::process::id()),
             token: String::new(),
+            lobby: None,
         }))
     }
 
@@ -773,6 +784,9 @@ impl NetArgs {
             assist: oag_physics::pilot_assist::Level::from_name(&self.online_assist)
                 .ok_or_else(|| anyhow::anyhow!("--online-assist is off, normal or extreme"))?,
             start_at: self.online_start_at,
+            host: self
+                .online_host
+                .then(|| (source.to_string(), self.online_host_port)),
         }))
     }
 

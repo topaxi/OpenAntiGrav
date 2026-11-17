@@ -26,6 +26,7 @@ fn room(id: u32, owner: &str, members: u8, joinable: bool) -> RoomInfo {
         },
         members,
         joinable,
+        player_hosted: false,
     }
 }
 
@@ -112,6 +113,7 @@ fn the_room_says_who_is_ready_and_where_the_room_is() {
         note: note.into(),
         board: Board::default(),
         rematch: false,
+        player_hosted: false,
     };
     assert_eq!(member_line(&members[0], &strings()), "ADA (HOST)  READY");
     assert_eq!(member_line(&members[1], &strings()), "BOB  PICKING");
@@ -166,6 +168,7 @@ fn the_room_screen_seats_everyone_in_the_room_and_leaves_the_rest_waiting() {
         note: String::new(),
         board: Board::default(),
         rematch: false,
+        player_hosted: false,
     };
     let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
     fill_room(&mut screen, &snapshot, false, &strings(), &|_| None);
@@ -213,6 +216,7 @@ fn snapshot_of(people: usize, max_players: u8, phase: Phase) -> Snapshot {
         note: String::new(),
         board: Board::default(),
         rematch: false,
+        player_hosted: false,
     }
 }
 
@@ -486,5 +490,47 @@ fn a_guest_is_told_the_host_asked_for_a_rematch_in_the_discs_words_where_it_has_
     assert_eq!(
         room_hint(&snapshot, false, &strings()),
         "THE HOST STARTS THE RACE"
+    );
+}
+
+#[test]
+fn a_player_hosted_room_carries_the_mark_and_says_what_it_means() {
+    let mut hosted = room(2, "bob", 1, true);
+    hosted.player_hosted = true;
+    let screen = list(&[room(1, "ada", 1, true), hosted.clone()]);
+    assert_eq!(
+        room_seat(&hosted, &strings()),
+        "WIPEOUT PULSE (1/8) PLAYER-HOSTED"
+    );
+    assert_eq!(
+        room_seat(&room(1, "ada", 1, true), &strings()),
+        "WIPEOUT PULSE (1/8)"
+    );
+    assert_eq!(
+        screen.note(1),
+        Some("PLAYER-HOSTED: THE HOST'S MACHINE RUNS THE RACE AND COULD CHEAT")
+    );
+    assert_eq!(screen.note(0), Some("02_TRACK / VENOM / SINGLE RACE"));
+    // A hosted room that cannot be joined says that first.
+    hosted.joinable = false;
+    assert!(room_line(&hosted, &strings(), &|_| None).starts_with("NOT JOINABLE"));
+}
+
+#[test]
+fn a_guest_in_a_player_hosted_room_is_told_what_the_mark_means() {
+    let mut room = snapshot_of(2, 4, Phase::Open);
+    assert_eq!(
+        room_hint(&room, false, &strings()),
+        "THE HOST STARTS THE RACE"
+    );
+    room.player_hosted = true;
+    assert_eq!(
+        room_hint(&room, false, &strings()),
+        "PLAYER-HOSTED: THE HOST'S MACHINE RUNS THE RACE AND COULD CHEAT"
+    );
+    assert_eq!(
+        room_hint(&room, true, &strings()),
+        "PRESS START WHEN EVERYONE IS READY",
+        "the host knows"
     );
 }

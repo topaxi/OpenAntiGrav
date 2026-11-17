@@ -90,6 +90,13 @@ pub(crate) struct Online {
     offer: Option<oag_game::net_play::rejoin::Rejoin>,
     /// The race was dialled from a record, so no lobby is behind it.
     rejoined: bool,
+    /// HOST GAME was chosen: the room being made is one this machine hosts.
+    host_wanted: bool,
+    /// This machine as the host of the room it owns (ADR-0092), from the offer until the room
+    /// is left.
+    hosting: Option<oag_game::online::Hosting>,
+    /// The lobby's address as the link reached it: its family is the hosting port's.
+    lobby_peer: Option<std::net::IpAddr>,
 }
 
 enum Step {
@@ -155,6 +162,9 @@ impl Session {
             seat_names: Vec::new(),
             offer: None,
             rejoined: false,
+            host_wanted: false,
+            hosting: None,
+            lobby_peer: None,
         });
         if !self.begin_rejoin_offer() {
             self.open_online_prompt(Field::Address);
@@ -324,8 +334,44 @@ impl Session {
         }
         if let Some(online) = &mut self.online {
             online.step = Step::Settings;
+            online.host_wanted = false;
         }
         self.resupply_race_modes();
+    }
+
+    /// HOST GAME: CREATE GAME's pages, and the room they make is hosted by this machine.
+    pub(crate) fn open_online_host(&mut self) {
+        self.open_online_create();
+        if let Some(online) = &mut self.online
+            && matches!(online.step, Step::Settings)
+        {
+            online.host_wanted = true;
+        }
+    }
+
+    /// Opens the hosting port and offers it to the lobby as the host of a room with `settings`,
+    /// signed with this profile's key. The lobby answers with the room, or a refusal that says
+    /// why (the port is closed, a ban).
+    fn online_offer_host(
+        online: &mut Online,
+        settings: RoomSettings,
+        source: &str,
+        port: u16,
+    ) -> Result<()> {
+        let lobby_hash = oag_net::wt::parse_hash(&online.hash)?;
+        let peer = online
+            .lobby_peer
+            .ok_or_else(|| anyhow::anyhow!("the lobby's address is not known"))?;
+        let lobby = online
+            .lobby
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("not connected to a lobby"))?;
+        let hosting = oag_game::online::Hosting::open(source, port, peer)?;
+        let key = oag_game::identity::load_or_create()?;
+        info!("online: hosting on UDP port {}", hosting.port());
+        hosting.offer(lobby, &lobby_hash, &key, settings)?;
+        online.hosting = Some(hosting);
+        Ok(())
     }
 
     /// JOIN GAME: Ship Select, then the list.
@@ -468,20 +514,34 @@ impl Session {
             }
         }
         let team = self.online_team(&options);
+        let host_port = self.settings.online.host_port;
         let Some(online) = &mut self.online else {
             return;
         };
-        let Some(lobby) = &mut online.lobby else {
+        if online.lobby.is_none() {
             return;
-        };
+        }
         online.team = team;
         online.pick_sent = false;
-        if editing {
-            lobby.edit(settings);
-        } else {
-            lobby.create(settings);
+        let mut failed = None;
+        if !editing && online.host_wanted {
+            if let Err(e) = Self::online_offer_host(online, settings, &options.source, host_port) {
+                failed = Some(format!("{e:#}"));
+            }
+        } else if let Some(lobby) = &mut online.lobby {
+            if editing {
+                lobby.edit(settings);
+            } else {
+                lobby.create(settings);
+            }
         }
-        online.step = Step::Room;
+        if let Some(why) = failed {
+            warn!("online: cannot host: {why}");
+            online.notice = Some((why.to_uppercase(), Instant::now()));
+            online.step = Step::Hub;
+        } else {
+            online.step = Step::Room;
+        }
         // The room stands over the ONLINE page, not over the RACE page it was made on, so
         // BACK from the room lands on the page the player chose CREATE GAME from.
         if let Stage::Menu(stage) = &mut self.stage {
@@ -746,6 +806,8 @@ impl Session {
                 if let Some(lobby) = &mut online.lobby {
                     lobby.leave();
                 }
+                // The hosting port closes with the room.
+                online.hosting = None;
                 online.step = Step::Hub;
                 if let Stage::Menu(stage) = &mut self.stage {
                     stage.lan = None;
@@ -816,14 +878,29 @@ impl Session {
             if let Err(why) = lobby.poll() {
                 lost = Some(format!("{}: {why}", self.online_say("OAG_ONLINE_LOST", "THE LOBBY CLOSED")));
             }
+            if let Some(hosting) = &mut online.hosting {
+                hosting.pump(lobby);
+            }
+            // The room closed under a race that is being flown (its host left, or was banned):
+            // the race ends with the lobby's reason, and the menus show it when they reopen.
+            if let (Some(net), Some(reason)) = (&self.net, &lobby.left)
+                && matches!(online.step, Step::Waiting(_) | Step::Dialing(..))
+            {
+                net.lobby_closed(reason);
+            }
             if let Some((_code, text)) = lobby.refused.take() {
                 if matches!(online.step, Step::Hello) {
                     refused = Some(text);
                 } else {
                     online.notice = Some((text.to_uppercase(), Instant::now()));
-                    // A refused join leaves the room list where it was.
+                    // A refused join leaves the room list where it was; a refused offer to host
+                    // closes the hosting port and goes back to the ONLINE page.
                     if matches!(online.step, Step::Room) && lobby.room.is_none() {
-                        online.step = Step::List;
+                        online.step = if online.hosting.take().is_some() {
+                            Step::Hub
+                        } else {
+                            Step::List
+                        };
                     }
                 }
             }
@@ -848,6 +925,7 @@ impl Session {
             }
             Step::Connecting(mut task) if task.is_finished() => match task.join() {
                 Some(Ok(Ok(link))) => {
+                    online.lobby_peer = Some(link.peer().ip());
                     online.lobby = Some(LobbyClient::connect(
                         Box::new(link),
                         &online.name,
@@ -868,10 +946,12 @@ impl Session {
             },
             Step::Dialing(mut task, handoff) if task.is_finished() => match task.join() {
                 Some(Ok(Ok(link))) => {
-                    let host = with_port(&online.address);
-                    let host = host.rsplit_once(':').map_or(host.as_str(), |(h, _)| h);
                     let rejoin = oag_game::net_play::rejoin::Rejoin {
-                        addr: format!("{host}:{}", handoff.port),
+                        addr: oag_game::online::race_addr(
+                            &with_port(&online.address),
+                            &handoff,
+                            online.hosting.as_ref(),
+                        ),
                         cert_hash: handoff.cert_hash,
                         room: online
                             .lobby
@@ -964,9 +1044,11 @@ impl Session {
                 .and_then(|lobby| lobby.room.as_ref())
                 .map(|room| room.members.iter().map(|m| m.name.clone()).collect())
                 .unwrap_or_default();
-            let host = with_port(&online.address);
-            let host = host.rsplit_once(':').map_or(host.as_str(), |(h, _)| h).to_string();
-            let addr = format!("{host}:{}", handoff.port);
+            let addr = oag_game::online::race_addr(
+                &with_port(&online.address),
+                &handoff,
+                online.hosting.as_ref(),
+            );
             let hash = handoff.cert_hash;
             info!("online: the race is on {addr}");
             online.step = Step::Dialing(
@@ -1050,7 +1132,18 @@ impl Session {
         if online.notice.as_ref().is_some_and(|(_, at)| at.elapsed() > NOTICE_FOR) {
             online.notice = None;
         }
-        let notice = online.notice.as_ref().map(|(text, _)| text.clone());
+        let mut notice = online.notice.as_ref().map(|(text, _)| text.clone());
+        // An offer to host waits on the lobby's check of this machine's port.
+        if notice.is_none()
+            && matches!(online.step, Step::Room)
+            && online.hosting.is_some()
+            && online.lobby.as_ref().is_some_and(|lobby| lobby.room.is_none())
+        {
+            notice = Some(self.online_say(
+                "OAG_ONLINE_HOST_CHECKING",
+                "CHECKING THAT THE LOBBY CAN REACH THIS MACHINE...",
+            ));
+        }
         let hub_notice = matches!(online.step, Step::Hub)
             .then(|| online.notice.take().map(|(text, _)| text))
             .flatten();
@@ -1147,7 +1240,11 @@ impl Session {
                         screen.set_hint(notice);
                     }
                 }
-                None => {}
+                None => {
+                    if let Some(notice) = notice {
+                        screen.set_hint(notice);
+                    }
+                }
             }
         }
     }
@@ -1162,6 +1259,7 @@ impl Session {
             address: online.address.clone(),
             hash: online.hash.clone(),
             name: online.name.clone(),
+            host_port: self.settings.online.host_port,
         };
         if let Err(e) = crate::settings::save(&self.settings) {
             warn!("online: cannot remember the lobby: {e:#}");
@@ -1193,6 +1291,10 @@ impl Session {
             // Nothing to be back in: the lobby was never dialled.
             self.end_online();
             return;
+        }
+        // A host back in the menus has left the race it hosts, if it is still running.
+        if let Some(hosting) = &online.hosting {
+            hosting.end_race();
         }
         online.step = Step::Room;
         online.pick_sent = false;

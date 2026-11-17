@@ -1,0 +1,37 @@
+# A player's key pair, see crates/game/src/identity.rs: what an online lobby knows a player who
+# hosts a race by. Made on first use and kept; this project's own file. It holds a private key.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/identity[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+[types.key]
+type = "table"
+
+[types.key.algorithm]
+type = "string"
+allowedvalues = ["ed25519"]
+
+# The key pair as PKCS#8, hex digits.
+[types.key.pkcs8]
+type = "string"
+pattern = "^[0-9a-f]+$"
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+
+[elements.key]
+type = "types.key"
+optional = true

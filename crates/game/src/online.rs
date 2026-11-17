@@ -7,13 +7,149 @@
 //! The menus' ONLINE screens (Omega's `OnlineMainMenu`, `Game List`, `MP Select`,
 //! `GameLobby`) are open work; `docs/networking/online-lobby.md` has their order.
 
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::sync::{Arc, Mutex};
+
 use anyhow::{Result, anyhow, bail};
 use oag_net::link::Link;
-use oag_net::online::client::LobbyClient;
+use oag_net::online::client::{Handoff, LobbyClient};
+use oag_net::online::player_host::{Event, PlayerHost};
 use oag_net::wire::online::{Edition, Phase, RoomSettings};
 use web_time::{Duration, Instant};
 
 use crate::net_play::Connect;
+
+/// What the lobby said that ends a race from outside it: the room closed under this person
+/// (its host left, or was banned). Shared with the race's [`crate::net_play::NetPlay`].
+pub type LobbyWord = Arc<Mutex<Option<String>>>;
+
+/// This machine as the race host of a room it owns on a lobby: the listener the lobby probed,
+/// the thread that runs each race the lobby sends, and what the lobby is told about it
+/// (`docs/architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md`).
+#[derive(Debug)]
+pub struct Hosting {
+    host: PlayerHost,
+    /// The title's disc image or folder, as this game opened it: what a hosted race loads.
+    source: String,
+    /// The loopback address of the listener's family, where this machine's own seat dials.
+    own: IpAddr,
+    /// The room whose race is up, and when the lobby was last told so.
+    up: Option<(u32, Instant)>,
+}
+
+impl Hosting {
+    /// Opens the hosting port (`port`, 0 for the game's own, [`oag_net::lan::DEFAULT_PORT`]) on
+    /// every interface of the family the lobby link uses (`lobby_peer`), so the address the
+    /// lobby sees this machine at is one the listener answers on.
+    ///
+    /// # Errors
+    ///
+    /// The port could not be bound.
+    pub fn open(source: &str, port: u16, lobby_peer: IpAddr) -> Result<Self> {
+        let v4 = match lobby_peer {
+            IpAddr::V4(_) => true,
+            IpAddr::V6(v6) => v6.to_ipv4_mapped().is_some(),
+        };
+        let (any, own): (IpAddr, IpAddr) = if v4 {
+            (Ipv4Addr::UNSPECIFIED.into(), Ipv4Addr::LOCALHOST.into())
+        } else {
+            (Ipv6Addr::UNSPECIFIED.into(), Ipv6Addr::LOCALHOST.into())
+        };
+        let host = PlayerHost::bind(
+            SocketAddr::new(any, port),
+            oag_net::online::race_proc::Limits::default(),
+        )?;
+        Ok(Self {
+            host,
+            source: source.to_string(),
+            own,
+            up: None,
+        })
+    }
+
+    /// The port the listener is on.
+    #[must_use]
+    pub fn port(&self) -> u16 {
+        self.host.port()
+    }
+
+    /// Offers this listener to `lobby` as the host of a new room with `settings`, signed with
+    /// the profile's key for the lobby whose certificate hashes to `lobby_hash`.
+    ///
+    /// # Errors
+    ///
+    /// The lobby has not welcomed this client yet.
+    pub fn offer(
+        &self,
+        lobby: &mut LobbyClient,
+        lobby_hash: &[u8; 32],
+        key: &oag_net::online::hostkey::PlayerKey,
+        settings: RoomSettings,
+    ) -> Result<()> {
+        let token = lobby
+            .token
+            .clone()
+            .ok_or_else(|| anyhow!("the lobby has not welcomed this machine"))?;
+        let offer = key.offer(lobby_hash, &token, self.host.port(), self.host.hash());
+        lobby.host_room(settings, offer);
+        Ok(())
+    }
+
+    /// Every tick: a race the lobby sent is started, the lobby is told when it is up (and once a
+    /// second after, the sign of life it expects) and when it is over.
+    pub fn pump(&mut self, lobby: &mut LobbyClient) {
+        if let Some((room, job)) = lobby.take_launch() {
+            log::debug!("online: hosting room {room}'s race: {:?}", job.params);
+            let source = self.source.clone();
+            self.host.launch(
+                room,
+                job,
+                Arc::new(move |params| oag_net::race::load(params, &source).map(|(race, _)| race)),
+            );
+        }
+        while let Some(event) = self.host.poll() {
+            match event {
+                Event::Up(room) => {
+                    lobby.host_up(room);
+                    self.up = Some((room, Instant::now()));
+                }
+                Event::Over(room, ended) => {
+                    println!("online: the hosted race is over: {}", ended.reason);
+                    lobby.host_over(room, &ended.reason, ended.board);
+                    self.up = None;
+                }
+            }
+        }
+        if let Some((room, told)) = &mut self.up
+            && told.elapsed() >= Duration::from_secs(1)
+        {
+            lobby.host_up(*room);
+            *told = Instant::now();
+        }
+    }
+
+    /// The host's player left the race: its seats are told and the race ends.
+    pub fn end_race(&self) {
+        self.host.end_race();
+    }
+}
+
+/// Where the race of `handoff` is dialled: this machine's own listener when it hosts the race,
+/// else the address the hand-off names (a player host's), else the lobby's own host.
+#[must_use]
+pub fn race_addr(lobby_addr: &str, handoff: &Handoff, hosting: Option<&Hosting>) -> String {
+    if let Some(hosting) = hosting {
+        return SocketAddr::new(hosting.own, handoff.port).to_string();
+    }
+    let host = if handoff.host.is_empty() {
+        lobby_addr
+            .rsplit_once(':')
+            .map_or(lobby_addr, |(host, _)| host)
+    } else {
+        handoff.host.as_str()
+    };
+    format!("{host}:{}", handoff.port)
+}
 
 /// How long the whole lobby flow may take before it gives up (a room that never fills).
 /// Chosen.
@@ -48,6 +184,9 @@ pub struct Plan {
     pub assist: oag_physics::pilot_assist::Level,
     /// The owner presses START when this many are ready.
     pub start_at: usize,
+    /// With [`Action::Create`]: this machine hosts the room's race. The title's source and the
+    /// UDP port to listen on (0: the game's own).
+    pub host: Option<(String, u16)>,
 }
 
 /// Runs the lobby flow to the hand-off.
@@ -58,6 +197,8 @@ pub struct Plan {
 /// minutes.
 pub fn run(plan: &Plan) -> Result<Connect> {
     let link = oag_net::wt::connect(&plan.addr, plan.cert_hash)?;
+    let lobby_peer = link.peer().ip();
+    let mut hosting = None::<Hosting>;
     let mut lobby = LobbyClient::connect(
         Box::new(link) as Box<dyn Link>,
         &plan.name,
@@ -80,20 +221,22 @@ pub fn run(plan: &Plan) -> Result<Connect> {
         if started.elapsed() > GIVE_UP {
             bail!("no race within {GIVE_UP:?}");
         }
+        if let Some(hosting) = &mut hosting {
+            hosting.pump(&mut lobby);
+        }
         if let Some(handoff) = lobby.take_handoff() {
-            let host = plan
-                .addr
-                .rsplit_once(':')
-                .map_or(plan.addr.as_str(), |(host, _)| host);
-            println!("online: the race is on {host}:{}", handoff.port);
-            keep_lobby_open(lobby);
+            let addr = race_addr(&plan.addr, &handoff, hosting.as_ref());
+            println!("online: the race is on {addr}");
+            let word = LobbyWord::default();
+            keep_lobby_open(lobby, hosting, word.clone());
             return Ok(Connect {
-                addr: format!("{host}:{}", handoff.port),
+                addr,
                 cert_hash: handoff.cert_hash,
                 shim: None,
                 bot: false,
                 name: handoff.name,
                 token: handoff.token,
+                lobby: Some(word),
             });
         }
         if stage == 0 && lobby.welcomed() {
@@ -102,7 +245,22 @@ pub fn run(plan: &Plan) -> Result<Connect> {
                 lobby.name, lobby.served
             );
             stage = 1;
+            match (&plan.action, &plan.host) {
+                (Action::Create(settings), Some((source, port))) => {
+                    let opened = Hosting::open(source, *port, lobby_peer)?;
+                    let key = crate::identity::load_or_create()?;
+                    println!(
+                        "online: hosting on UDP port {}, asking the lobby to check it",
+                        opened.port()
+                    );
+                    opened.offer(&mut lobby, &plan.cert_hash, &key, settings.clone())?;
+                    hosting = Some(opened);
+                    stage = 2;
+                }
+                _ => {}
+            }
             match &plan.action {
+                Action::Create(_) if plan.host.is_some() => {}
                 Action::Create(settings) => {
                     lobby.create(settings.clone());
                     stage = 2;
@@ -127,8 +285,13 @@ pub fn run(plan: &Plan) -> Result<Connect> {
         }
         if let Some(room) = lobby.room.clone() {
             let line = format!(
-                "room {}: {} in it, {:?}{}",
+                "room {}{}: {} in it, {:?}{}",
                 room.id,
+                if room.player_hosted {
+                    " (player-hosted)"
+                } else {
+                    ""
+                },
                 room.members.len(),
                 room.phase,
                 if room.note.is_empty() {
@@ -165,13 +328,23 @@ pub fn run(plan: &Plan) -> Result<Connect> {
 
 /// The lobby link stays open for the whole race (the lobby pushes the end of the race on it,
 /// and a closed link would have the lobby drop this person from their room): a thread polls
-/// it until the process exits and says when the room is open again.
-fn keep_lobby_open(mut lobby: LobbyClient) {
+/// it until the process exits and says when the room is open again. A race this machine hosts
+/// is reported to the lobby from here, and a room that closes under the race is `word`.
+fn keep_lobby_open(mut lobby: LobbyClient, mut hosting: Option<Hosting>, word: LobbyWord) {
     let spawned = std::thread::Builder::new()
         .name("oag-lobby".into())
         .spawn(move || {
             let mut note = String::new();
             while lobby.poll().is_ok() {
+                if let Some(hosting) = &mut hosting {
+                    hosting.pump(&mut lobby);
+                }
+                if let Some(reason) = lobby.left.take() {
+                    println!("online: the lobby closed the room: {reason}");
+                    *word
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(reason);
+                }
                 if let Some(room) = &lobby.room
                     && room.phase == Phase::Open
                     && room.note != note

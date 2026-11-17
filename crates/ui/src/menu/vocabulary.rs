@@ -76,6 +76,9 @@ pub enum Action {
     /// The ONLINE page's CREATE GAME row: the RACE page, Track Select and Ship Select, then
     /// a room on the lobby.
     OnlineCreate,
+    /// The ONLINE page's HOST GAME row: CREATE GAME's pages, then a room on the lobby whose
+    /// race this machine runs (ADR-0092).
+    OnlineHost,
     /// The ONLINE page's JOIN GAME row: Ship Select, then the lobby's list of rooms.
     OnlineJoin,
     /// The OPTIONS page's PLAYER NAME row: opens the name entry on the stored name
@@ -126,6 +129,7 @@ impl Action {
             Self::JoinLan => "lan_join",
             Self::OpenOnline => "online_open",
             Self::OnlineCreate => "online_create",
+            Self::OnlineHost => "online_host",
             Self::OnlineJoin => "online_join",
             Self::EditPlayerName => "edit_player_name",
             Self::EditPlayerTag => "edit_player_tag",
@@ -168,6 +172,7 @@ impl Action {
             "lan_join" => Some(Self::JoinLan),
             "online_open" => Some(Self::OpenOnline),
             "online_create" => Some(Self::OnlineCreate),
+            "online_host" => Some(Self::OnlineHost),
             "online_join" => Some(Self::OnlineJoin),
             "edit_player_name" => Some(Self::EditPlayerName),
             "edit_player_tag" => Some(Self::EditPlayerTag),
@@ -184,7 +189,7 @@ impl Action {
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 24] {
+    pub fn all() -> [Self; 25] {
         [
             Self::LaunchRace,
             Self::Quit,
@@ -200,6 +205,7 @@ impl Action {
             Self::JoinLan,
             Self::OpenOnline,
             Self::OnlineCreate,
+            Self::OnlineHost,
             Self::OnlineJoin,
             Self::EditPlayerName,
             Self::EditPlayerTag,

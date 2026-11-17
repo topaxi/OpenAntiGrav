@@ -20,4 +20,13 @@ pub struct Online {
     /// The name to go by in rooms; empty means the login name.
     #[serde(default)]
     pub name: String,
+    /// The UDP port HOST GAME listens on, the one to open or forward to this machine; 0 is the
+    /// game's own (`oag_net::lan::DEFAULT_PORT`).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub host_port: u16,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref, reason = "serde's signature")]
+fn is_zero(port: &u16) -> bool {
+    *port == 0
 }

@@ -137,6 +137,7 @@ pub(super) fn capture_online(
                     .collect(),
             },
             rematch: false,
+            player_hosted: false,
         };
         crate::online_screen::fill_room(&mut screen, &snapshot, true, strings, &|_| None);
         // No row is under the cursor unless the page asks for one.
@@ -155,6 +156,8 @@ pub(super) fn capture_online(
                 settings: settings.clone(),
                 members: 1 + u8::try_from(n % 4).unwrap_or(0),
                 joinable: n != 1,
+                // The third room is one a player's machine hosts.
+                player_hosted: n == 2,
             })
             .collect();
         crate::online_screen::fill_list(&mut screen, &rooms, strings, &|_| None);

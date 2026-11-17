@@ -100,6 +100,7 @@ impl Session {
         online.step = Step::Dialing(
             Task::spawn("online-rejoin-connect", move || oag_net::wt::connect(&addr, hash)),
             Handoff {
+                host: String::new(),
                 port,
                 cert_hash: rejoin.cert_hash,
                 token: rejoin.token,

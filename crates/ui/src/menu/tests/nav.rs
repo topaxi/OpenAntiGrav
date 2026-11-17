@@ -185,6 +185,11 @@ fn the_online_page_has_create_and_join() {
         .collect();
     assert_eq!(
         actions,
-        [Some(Action::OnlineCreate), Some(Action::OnlineJoin), None]
+        [
+            Some(Action::OnlineCreate),
+            Some(Action::OnlineHost),
+            Some(Action::OnlineJoin),
+            None
+        ]
     );
 }
