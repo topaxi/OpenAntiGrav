@@ -174,7 +174,6 @@ impl WtLink {
         let rt = runtime();
 
         let reader = session.clone();
-        let on_close = close.clone();
         rt.spawn(async move {
             loop {
                 match reader.read_datagram().await {
