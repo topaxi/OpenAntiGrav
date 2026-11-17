@@ -345,12 +345,15 @@ fn a_person_who_leaves_is_retired_on_both_ends_and_the_hashes_agree() {
     );
 }
 
+/// A client with its race and the pilot that flies it.
+pub(crate) type Seated = (Client, Box<Race>, Pilot);
+
 /// Seats `people` clients by lobby token and returns them with the tokens.
 pub(crate) fn tokened(
     host: &mut Host,
     people: u8,
     race: &mut dyn FnMut() -> Box<Race>,
-) -> (Vec<(Client, Box<Race>, Pilot)>, Vec<String>) {
+) -> (Vec<Seated>, Vec<String>) {
     let tokens: Vec<String> = (0..people).map(|n| format!("token-{n}")).collect();
     host.expect_seats(
         (0..people)
