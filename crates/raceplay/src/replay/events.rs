@@ -12,7 +12,7 @@ use oag_tables::weapons::{ModKind, Weapon};
 use crate::Race;
 
 /// How long a returning person's craft is flown for them before they have it back, in seconds.
-/// Chosen, not measured: inside the 2 to 3 s the maintainer asked for, long enough to read and to
+/// Chosen, not measured: inside the 2 to 3 s range (`docs/networking/server-roadmap.md`, decision 2), long enough to read and to
 /// reach for the cancel, short enough that the driver's pace is not worth waiting for.
 pub const HAND_BACK_SECONDS: f32 = 2.5;
 
