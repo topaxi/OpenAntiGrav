@@ -167,6 +167,30 @@ fn a_predicting_clients_recording_is_the_confirmed_run_and_re_drives() {
         })
         .unwrap_or_else(|why| panic!("client {n}: the recording does not reproduce: {why:?}"));
         assert_eq!(found, replay.ticks(), "client {n}");
+        // EXPERIMENT
+        println!("client {n}: setup {:?} slots {:?}", replay.header.setup.is_some(), replay.header.slots);
+        let mut rebuilt = oag_raceplay::replay::rebuild(&replay.header, &source);
+        match &mut rebuilt {
+            Ok(r) => println!("client {n}: rebuilt tick0 {:#x} vs {:#x}", r.sim.state_hash(), replay.initial_hash),
+            Err(e) => println!("client {n}: rebuild failed {e:#}"),
+        }
+        let track = replay.pose_track.as_ref().expect("pose track");
+        let mut rec = oag_net::race::load(&params, &source).expect("loads").0;
+        rec.start_recording(replay.header.clone());
+        oag_replay::Verifier::run(&replay, rec.sim.state_hash(), |_, inputs| {
+            rec.tick(inputs);
+            rec.sim.state_hash()
+        }).expect("re-drives");
+        let again = rec.recorded().expect("records").pose_track.expect("track");
+        let mut worst = 0.0f32;
+        for slot in 0..track.crafts() {
+            for t in 0..track.last_tick() {
+                let a = track.pose(slot, t as f64).unwrap();
+                let b = again.pose(slot, t as f64).unwrap();
+                worst = worst.max((a.position - b.position).length());
+            }
+        }
+        println!("client {n}: worst pose gap vs resimulation {worst}");
     }
 }
 

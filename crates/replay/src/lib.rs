@@ -41,6 +41,7 @@
 pub mod codec;
 pub mod event;
 pub mod file;
+pub mod fingerprint;
 pub mod header;
 pub mod pose;
 pub mod record;
