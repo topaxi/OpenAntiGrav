@@ -41,6 +41,7 @@ mod original_laws;
 #[cfg(feature = "view")]
 mod pads;
 mod pose;
+#[cfg(feature = "view")]
 mod pulse_ps2;
 mod pulse_psp;
 #[cfg(feature = "view")]
