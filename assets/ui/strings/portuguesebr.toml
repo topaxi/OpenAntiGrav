@@ -492,4 +492,11 @@ OAG_EDITOR_PROGRESSION_RAMP = { text = "CRESCENTE", human = false }
 
 [untranslated]
 ids = [
+    # Rejoining a running online race; no translation pass yet.
+    "OAG_ONLINE_REJOIN_TITLE",
+    "OAG_ONLINE_REJOIN_ASK",
+    "OAG_ONLINE_REJOIN_YES",
+    "OAG_ONLINE_REJOIN_NO",
+    "OAG_ONLINE_REJOIN_LOOKING",
+    "OAG_ONLINE_REJOIN_GONE",
 ]

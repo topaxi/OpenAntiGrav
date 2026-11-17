@@ -30,7 +30,11 @@ fn the_only_person_in_a_room_goes_away_and_comes_back() {
     let params = params(1);
     let mut host = Host::new(holding_turbo(&params), params.clone());
     let (mut clients, tokens) = tokened(&mut host, 1, &mut || holding_turbo(&params));
-    ready_all(&mut host, &mut clients, &Pace::Wall(std::time::Duration::ZERO));
+    ready_all(
+        &mut host,
+        &mut clients,
+        &Pace::Wall(std::time::Duration::ZERO),
+    );
     host.start(0);
     let (mut mismatches, mut matches) = (0, 0);
     let mut away_seen = false;
@@ -79,7 +83,11 @@ fn a_fresh_process_with_the_token_takes_the_seat_and_catches_up() {
     let params = params(2);
     let mut host = Host::new(holding_turbo(&params), params.clone());
     let (mut clients, tokens) = tokened(&mut host, 2, &mut || holding_turbo(&params));
-    ready_all(&mut host, &mut clients, &Pace::Wall(std::time::Duration::ZERO));
+    ready_all(
+        &mut host,
+        &mut clients,
+        &Pace::Wall(std::time::Duration::ZERO),
+    );
     host.start(0);
     let mut fresh: Option<(Client, Box<Race>, Pilot)> = None;
     let (mut mismatches, mut matches) = (0, 0);
@@ -213,7 +221,11 @@ fn a_client_whose_link_is_cut_redials_and_rejoins_without_a_relaunch() {
     let params = params(2);
     let mut host = Host::new(holding_turbo(&params), params.clone());
     let (mut clients, tokens, cutters) = seated_cuttable(&mut host, &params);
-    ready_all(&mut host, &mut clients, &Pace::Wall(std::time::Duration::ZERO));
+    ready_all(
+        &mut host,
+        &mut clients,
+        &Pace::Wall(std::time::Duration::ZERO),
+    );
     host.start(0);
     let to_host = Rc::new(RefCell::new(VecDeque::new()));
     let new_cutters = Rc::new(RefCell::new(Vec::new()));
@@ -260,9 +272,15 @@ fn a_client_whose_link_is_cut_redials_and_rejoins_without_a_relaunch() {
         }
     }
     host.end("the test is over");
-    assert!(lost_seen, "the cut was seen as a lost link, not an ended race");
+    assert!(
+        lost_seen,
+        "the cut was seen as a lost link, not an ended race"
+    );
     assert!(away_seen, "the host held the seat away meanwhile");
-    assert_eq!(dialer.began, 4, "three refused dials, then one that connected");
+    assert_eq!(
+        dialer.began, 4,
+        "three refused dials, then one that connected"
+    );
     assert_eq!(clients[1].0.phase(), &Phase::Racing);
     assert_eq!(mismatches, [0, 0]);
     assert!(matches[1] > 300, "{}", matches[1]);
@@ -275,7 +293,11 @@ fn a_client_that_cannot_get_back_gives_up() {
     let params = params(2);
     let mut host = Host::new(holding_turbo(&params), params.clone());
     let (mut clients, tokens, cutters) = seated_cuttable(&mut host, &params);
-    ready_all(&mut host, &mut clients, &Pace::Wall(std::time::Duration::ZERO));
+    ready_all(
+        &mut host,
+        &mut clients,
+        &Pace::Wall(std::time::Duration::ZERO),
+    );
     host.start(0);
     cutters[1].cut();
     let mut dialer = LoopbackDialer {

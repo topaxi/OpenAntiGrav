@@ -30,10 +30,10 @@ use anyhow::{Result, anyhow};
 use oag_gameplay::InputSnapshot;
 use oag_net::client::{Client, Phase, Stats, Welcome};
 use oag_net::redial::{Dialer, Identity, Redial};
-use rejoin::Rejoin;
 use oag_net::stats::{Collector, NetStats};
 use oag_net::wire::RaceParams;
 use oag_raceplay::{Options, Race};
+use rejoin::Rejoin;
 use web_time::{Duration, Instant};
 
 /// How long [`NetPlay::join`] waits for the other seats to load. Chosen.
@@ -86,6 +86,9 @@ pub struct NetPlay {
     /// What the record of this seat holds ([`crate::rejoin_record`]).
     rejoin: Option<Rejoin>,
     record: RefCell<Record>,
+    /// Confirmed ticks whose state hash matched the server's, and those whose did not, since
+    /// the join.
+    hashes: Cell<(u32, u32)>,
 }
 
 /// Where the record of the seat is written and when it last was.
@@ -106,6 +109,8 @@ pub struct Pending {
     label: String,
     /// Who it is and where, for the redial; see [`NetPlay::redial`].
     seat: Option<(Rejoin, Option<oag_net::link::Conditions>)>,
+    /// A dialler to use instead of the transport's, for a test.
+    dialer: Option<Box<dyn Dialer>>,
 }
 
 impl Pending {
@@ -127,14 +132,19 @@ impl Pending {
             bot,
             label: label.to_string(),
             seat,
+            dialer: None,
         }
     }
 
+    /// Redials with `dialer` instead of the transport's: a test with no socket.
+    #[must_use]
+    pub fn with_dialer(mut self, dialer: Box<dyn Dialer>) -> Self {
+        self.dialer = Some(dialer);
+        self
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
-    fn dialer(
-        rejoin: &Rejoin,
-        shim: Option<oag_net::link::Conditions>,
-    ) -> Option<Box<dyn Dialer>> {
+    fn dialer(rejoin: &Rejoin, shim: Option<oag_net::link::Conditions>) -> Option<Box<dyn Dialer>> {
         Some(Box::new(rejoin::WtDialer::new(rejoin, shim)))
     }
 
@@ -157,9 +167,10 @@ impl Pending {
         };
         let client = self.client.take().expect("polled just above");
         let seat = self.seat.take();
+        let given = self.dialer.take();
         let rejoin = seat.as_ref().map(|(rejoin, _)| rejoin.clone());
         let redial = seat.and_then(|(rejoin, shim)| {
-            let dialer = Self::dialer(&rejoin, shim)?;
+            let dialer = given.or_else(|| Self::dialer(&rejoin, shim))?;
             let identity = Identity {
                 name: rejoin.name,
                 team: rejoin.team,
@@ -195,6 +206,7 @@ impl Pending {
             redial: RefCell::new(redial),
             rejoin,
             record: RefCell::new(Record::default()),
+            hashes: Cell::new((0, 0)),
         }))
     }
 }
@@ -414,7 +426,11 @@ impl NetPlay {
             return;
         };
         let was_lost = matches!(self.client.borrow().phase(), Phase::Lost(_));
-        redial.step(&mut self.client.borrow_mut(), dialer.as_mut(), Instant::now());
+        redial.step(
+            &mut self.client.borrow_mut(),
+            dialer.as_mut(),
+            Instant::now(),
+        );
         if was_lost && redial.attempts() == 1 {
             log::debug!("net: the link closed; dialling again");
         }
@@ -553,6 +569,13 @@ impl NetPlay {
         self.fingerprint.get()
     }
 
+    /// How many confirmed ticks matched the server's state hash, and how many did not: the
+    /// second is always a bug or different content.
+    #[must_use]
+    pub fn hashes(&self) -> (u32, u32) {
+        self.hashes.get()
+    }
+
     /// Why the race is over, once the server has ended it or the link has gone.
     #[must_use]
     pub fn over(&self) -> Option<String> {
@@ -613,6 +636,9 @@ impl NetPlay {
     /// the lead and the prediction window, and how late a shot first showed.
     fn log_second(&self, race: &Race) {
         let stats = self.client.borrow_mut().take_stats();
+        let (ok, bad) = self.hashes.get();
+        self.hashes
+            .set((ok + stats.hash_matches, bad + stats.hash_mismatches));
         let mut log = self.log.borrow_mut();
         let sum = &mut log.0;
         sum.predicted += stats.predicted;

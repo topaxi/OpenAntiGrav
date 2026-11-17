@@ -202,7 +202,11 @@ fn a_lone_person_who_goes_away_is_not_stepped_as_the_player() {
     assert!(race.sim.world.person_flown(0));
     assert!(race.set_away(0));
     assert_eq!(race.sim.world.controllers[0], Controller::Away);
-    assert_eq!(race.sim.world.primary_slot(), 0, "the view stays on their craft");
+    assert_eq!(
+        race.sim.world.primary_slot(),
+        0,
+        "the view stays on their craft"
+    );
     assert!(!race.sim.world.person_flown(0), "the driver flies it");
     let mut held = PlayerInputs::none();
     held.set(0, oag_gameplay::InputSnapshot::EMPTY);

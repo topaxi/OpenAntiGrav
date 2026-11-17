@@ -40,4 +40,6 @@ impl Session {
     pub(crate) fn online_rematch(&mut self) {}
 
     pub(crate) fn online_field_entered(&mut self, _field: OnlineField, _text: &str) {}
+
+    pub(crate) fn rejoin_answered(&mut self, _yes: bool) {}
 }

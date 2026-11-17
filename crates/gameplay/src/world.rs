@@ -559,9 +559,7 @@ impl World {
     pub fn primary_slot(&self) -> usize {
         self.human_slots()
             .next()
-            .or_else(|| {
-                (0..MAX_PLAYERS).find(|&slot| self.controllers[slot] == Controller::Away)
-            })
+            .or_else(|| (0..MAX_PLAYERS).find(|&slot| self.controllers[slot] == Controller::Away))
             .unwrap_or(0)
     }
 

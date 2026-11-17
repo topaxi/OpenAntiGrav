@@ -46,7 +46,10 @@ fn the_file_carries_its_schema_header() {
 fn an_expired_seat_is_discarded_without_an_offer() {
     let path = scratch("expired");
     store_to(&path, "Wipeout Pulse", &rejoin(), 1_000).unwrap();
-    assert_eq!(load_from(&path, "Wipeout Pulse", 1_000 + HOLD_SECONDS), None);
+    assert_eq!(
+        load_from(&path, "Wipeout Pulse", 1_000 + HOLD_SECONDS),
+        None
+    );
     assert!(!path.exists(), "and the record is deleted");
 }
 

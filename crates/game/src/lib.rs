@@ -73,7 +73,6 @@ pub mod mods;
 pub mod movie;
 pub mod music_pool;
 pub mod music_state;
-pub mod rejoin_record;
 pub mod net_play;
 pub mod official;
 #[cfg(not(target_arch = "wasm32"))]
@@ -86,6 +85,7 @@ pub mod prompts;
 pub mod race_capture;
 pub mod race_seed;
 pub mod records;
+pub mod rejoin_record;
 pub mod render;
 pub mod replay_view;
 pub mod replays;

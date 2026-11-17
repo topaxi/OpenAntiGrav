@@ -75,7 +75,10 @@ fn read(path: &Path) -> Option<Seat> {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
         Err(e) => {
-            warn!("could not read {}: {e:#}; no seat to rejoin", path.display());
+            warn!(
+                "could not read {}: {e:#}; no seat to rejoin",
+                path.display()
+            );
             return None;
         }
     };
