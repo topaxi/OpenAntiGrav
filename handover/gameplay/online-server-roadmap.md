@@ -16,6 +16,13 @@ own leftovers (spectate, chat, invite-only, quick match, the recorded pad stream
 
 ## Open
 
+0. **Lobby session grace (landed on `net-flake`).** The lobby used to drop a person the poll it
+   read their link's close, so a reconnect whose hello arrived a poll later found no session and
+   the hand-off was never re-sent (the takeover test hung under load; reproduced
+   deterministically by closing the old link first). A person with a seat in the running race now
+   keeps their session `SEAT_GRACE` (30 s, `crates/net/src/online/server.rs`, chosen not
+   measured) after the close. Still open: a person without a seat, or after the race, is dropped
+   at once; the lobby keeps a dropped seat visible in its room for the grace.
 1. **Eight decisions, ranked, at the top of the page.** The first three gate the lanes
    below: the journal is the session (V1, V2), a returning player takes the craft back
    (V1), a race stays a process and a race host becomes an agent (V2). None is an ADR yet;
