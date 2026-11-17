@@ -330,7 +330,7 @@ fn a_person_who_leaves_is_retired_on_both_ends_and_the_hashes_agree() {
         history[299].retired, 0b10,
         "seat 1 is retired once it has left"
     );
-    assert_eq!(host.race().sim.world.controllers[1], Controller::Ai);
+    assert_eq!(host.race().sim.world.controllers[1], Controller::Away);
     assert_eq!(host.race().sim.world.controllers[0], Controller::Remote);
     // The survivor's own present simulation (what the game checks `finished()` on) has the
     // leaver's craft retired too, not only its confirmed state.
@@ -340,9 +340,148 @@ fn a_person_who_leaves_is_retired_on_both_ends_and_the_hashes_agree() {
     }
     assert_eq!(
         race.sim.world.controllers[1],
-        Controller::Ai,
+        Controller::Away,
         "the survivor's present has the leaver retired"
     );
+}
+
+/// A client with its race and the pilot that flies it.
+pub(crate) type Seated = (Client, Box<Race>, Pilot);
+
+/// Seats `people` clients by lobby token and returns them with the tokens.
+pub(crate) fn tokened(
+    host: &mut Host,
+    people: u8,
+    race: &mut dyn FnMut() -> Box<Race>,
+) -> (Vec<Seated>, Vec<String>) {
+    let tokens: Vec<String> = (0..people).map(|n| format!("token-{n}")).collect();
+    host.expect_seats(
+        (0..people)
+            .map(|n| (format!("client {n}"), tokens[usize::from(n)].clone()))
+            .collect(),
+    );
+    let clients = (0..people)
+        .map(|n| {
+            let (server_end, client_end) = Loopback::pair();
+            host.join(Box::new(server_end));
+            let client = Client::connect_seat(
+                Box::new(client_end),
+                &format!("client {n}"),
+                "",
+                &tokens[usize::from(n)],
+            );
+            (client, race(), pilot(u32::from(n) * 3))
+        })
+        .collect();
+    (clients, tokens)
+}
+
+/// Runs a race until `until` in which client 1's link closes at tick `drop_at` and a new one
+/// takes the seat back at `return_at`; `observe` sees the host after each of its ticks. Returns
+/// each client's hash mismatches and matches.
+pub(crate) fn drop_and_return(
+    host: &mut Host,
+    clients: &mut [(Client, Box<Race>, Pilot)],
+    tokens: &[String],
+    (drop_at, return_at, until): (u32, u32, u32),
+    mut observe: impl FnMut(&Host),
+) -> ([u32; 2], [u32; 2]) {
+    ready_all(host, clients, &Pace::Wall(std::time::Duration::ZERO));
+    host.start(0);
+    let mut mismatches = [0u32; 2];
+    let mut matches = [0u32; 2];
+    while host.tick_number() < until {
+        host.poll();
+        host.tick();
+        let at = host.tick_number();
+        observe(host);
+        for (n, (client, race, pilot)) in clients.iter_mut().enumerate() {
+            if n == 1 && (drop_at..return_at).contains(&at) {
+                if at == drop_at {
+                    client.leave("link lost");
+                }
+                continue;
+            }
+            if n == 1 && at == return_at {
+                let (server_end, client_end) = Loopback::pair();
+                host.join(Box::new(server_end));
+                client.reconnect(Box::new(client_end), "client 1", "", &tokens[1]);
+            }
+            let own = pilot(client, race);
+            client.step(race, &own);
+            let stats = client.take_stats();
+            mismatches[n] += stats.hash_mismatches;
+            matches[n] += stats.hash_matches;
+        }
+    }
+    host.end("the test is over");
+    (mismatches, matches)
+}
+
+fn holding_turbo(params: &RaceParams) -> Box<Race> {
+    let mut race = headless(params);
+    for ship in race
+        .sim
+        .world
+        .ships
+        .iter_mut()
+        .take(usize::from(params.people))
+    {
+        ship.pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
+    }
+    race
+}
+
+/// A person whose link drops at tick 600 and returns at tick 900 takes their seat back: it is
+/// away on both ends in between and handed back at the first tick the host seats them again, and
+/// both ends agree on every hash throughout. (The headless grid has one craft, so the craft's
+/// own pace, pickup and countdown are the disc-backed test's,
+/// `net_ground_truth::a_dropped_link_returns_to_its_craft_and_its_pickup`.)
+#[test]
+fn a_person_whose_link_drops_comes_back_to_their_seat_and_the_hashes_agree() {
+    use oag_gameplay::Controller;
+    let params = params(2);
+    let mut host = Host::new(holding_turbo(&params), params.clone());
+    let (mut clients, tokens) = tokened(&mut host, 2, &mut || holding_turbo(&params));
+    let mut handed_back_at = None;
+    let (mismatches, matches) =
+        drop_and_return(&mut host, &mut clients, &tokens, (600, 900, 1300), |host| {
+            let at = host.tick_number();
+            let world = &host.race().sim.world;
+            if at == 700 {
+                assert_eq!(world.controllers[1], Controller::Away);
+            }
+            if handed_back_at.is_none() && at > 900 && world.ships[1].handback {
+                handed_back_at = Some(at);
+                assert_eq!(world.controllers[1], Controller::Remote);
+                assert!(world.ships[1].autopilot_timer > 2.0, "the countdown starts");
+            }
+        });
+    assert_eq!(mismatches, [0, 0]);
+    assert!(matches[0] > 1200, "{}", matches[0]);
+    assert!(
+        matches[1] > 600 + 300,
+        "the returning client checked the ticks it missed and the ones after: {}",
+        matches[1]
+    );
+    let handed_back_at = handed_back_at.expect("the seat was handed back");
+    assert!(
+        (900..960).contains(&handed_back_at),
+        "handed back at {handed_back_at}"
+    );
+    let history = host.history();
+    assert_eq!(history[599].retired, 0);
+    assert_eq!(history[600].retired, 0b10);
+    assert_eq!(
+        history[handed_back_at as usize].retired, 0,
+        "away no longer"
+    );
+    assert_eq!(host.race().sim.world.controllers[1], Controller::Remote);
+    let (returned, race, _) = &mut clients[1];
+    for _ in 0..30 {
+        returned.step(race, &oag_gameplay::InputSnapshot::EMPTY);
+    }
+    assert_eq!(race.sim.world.controllers[1], Controller::Remote);
 }
 
 /// A seat that has sent nothing for the allowed silence is dropped, told so, and retired.

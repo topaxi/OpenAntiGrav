@@ -13,7 +13,7 @@ use oag_net::host::Host;
 use oag_net::link::{Conditions, Link, Loopback, Shim};
 use oag_net::wire::RaceParams;
 
-use crate::loopback::{Pace, Pilot, drive};
+use crate::loopback::{Pace, Pilot, drive, drop_and_return, tokened};
 
 const IMAGE: &str = "pulse-psp-eu.chd";
 
@@ -653,6 +653,181 @@ fn a_retired_person_s_craft_is_flown_by_the_ai() {
     assert!(
         (at - idle_at).length() > 300.0,
         "and has left the grid behind"
+    );
+}
+
+/// A race of this room's, with a Turbo in each person's pickup slot.
+fn holding_turbo(params: &RaceParams, source: &str) -> Box<oag_raceplay::Race> {
+    let (mut race, _) = oag_net::race::load(params, source).expect("loads");
+    for ship in race
+        .sim
+        .world
+        .ships
+        .iter_mut()
+        .take(usize::from(params.people))
+    {
+        ship.pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
+    }
+    race
+}
+
+/// A person whose link closes at tick 600 and returns at tick 900 flies their craft again on a
+/// real circuit: the seat is away on both ends in between with the pickup it held still held, the
+/// hand-back shows as an Autopilot countdown over that pickup, then the pickup is usable again,
+/// both ends agree on every hash, and the returning client's recording of the confirmed run
+/// (the drop and the return in it as events) re-drives to the server's hashes.
+#[test]
+#[ignore = "needs a disc image"]
+fn a_dropped_link_returns_to_its_craft_and_its_pickup() {
+    use oag_gameplay::Controller;
+    use oag_tables::weapons::Weapon;
+    let Some(image) = oag_testdata::image(IMAGE) else {
+        return;
+    };
+    let source = image.display().to_string();
+    let mut params = params();
+    params.weapons = true;
+    let mut host = Host::new(holding_turbo(&params, &source), params.clone());
+    let (mut clients, tokens) = tokened(&mut host, 2, &mut || holding_turbo(&params, &source));
+    clients[1].1.start_recording(recording_header(&params));
+    for client in &mut clients {
+        // The bot's flying without its trigger: it fires what it holds, and this test holds it.
+        client.2 = Box::new(|client, race| {
+            use oag_gameplay::input::Button;
+            let mut own = client.bot_input(race);
+            let mut buttons = oag_gameplay::input::Input::new();
+            buttons.begin_frame(if own.buttons.is_held(Button::Cross) {
+                Button::Cross.bit()
+            } else {
+                0
+            });
+            own.buttons = buttons;
+            own
+        });
+    }
+    let mut handed_back_at = None;
+    let mut countdown_seen = false;
+    let mut away_speed = 0.0_f32;
+    let (mismatches, matches) =
+        drop_and_return(&mut host, &mut clients, &tokens, (600, 900, 1500), |host| {
+            let at = host.tick_number();
+            let race = host.race();
+            let ship = &race.sim.world.ships[1];
+            if (700..900).contains(&at) {
+                assert_eq!(race.sim.world.controllers[1], Controller::Away, "tick {at}");
+                assert_eq!(ship.pickup.weapon, Some(Weapon::Turbo), "tick {at}");
+                away_speed = away_speed.max(ship.physics.body.linear_velocity.length());
+            }
+            if at % 100 == 0 && at >= 500 {
+                eprintln!(
+                    "tick {at} seat 1 speed {:.1} {:?}",
+                    ship.physics.body.linear_velocity.length(),
+                    race.sim.world.controllers[1]
+                );
+            }
+            if handed_back_at.is_none() && at > 900 && ship.handback {
+                handed_back_at = Some(at);
+            }
+            if let Some(from) = handed_back_at {
+                let shown = race.readout_for(1);
+                if at < from + 140 {
+                    countdown_seen |= shown.pickup == Some(Weapon::Autopilot)
+                        && format!("{:?}", shown.sub_weapon).starts_with("Some(Autopilot(");
+                    assert_eq!(ship.pickup.weapon, Some(Weapon::Turbo), "tick {at}");
+                } else if at > from + 160 {
+                    assert_eq!(shown.pickup, Some(Weapon::Turbo), "tick {at}");
+                    assert_eq!(shown.sub_weapon, None, "tick {at}");
+                    assert!(!ship.handback && ship.autopilot_timer == 0.0, "tick {at}");
+                    assert_eq!(race.sim.world.controllers[1], Controller::Remote);
+                }
+            }
+        });
+    assert_eq!(mismatches, [0, 0]);
+    assert!(matches[0] > 1400 && matches[1] > 1000, "{matches:?}");
+    assert!(handed_back_at.is_some(), "the seat was never handed back");
+    assert!(countdown_seen, "the HUD never showed the countdown");
+    eprintln!("away top speed {away_speed:.1}, handed back at {handed_back_at:?}");
+
+    // The pickup is usable again: the returned person fires it.
+    let (_, race, _) = &mut clients[1];
+    let mut square = oag_gameplay::input::Input::new();
+    square.begin_frame(oag_gameplay::input::Button::Square.bit());
+    let mut inputs = oag_gameplay::PlayerInputs::none();
+    inputs.set(
+        1,
+        oag_gameplay::InputSnapshot {
+            buttons: square,
+            ..oag_gameplay::InputSnapshot::default()
+        },
+    );
+    race.tick_sim_only(&inputs);
+    assert_eq!(
+        race.sim.world.ships[1].pickup.weapon, None,
+        "the Turbo was fired"
+    );
+    assert!(race.sim.world.ships[1].physics.turbo_timer > 0.0);
+
+    // The recording re-drives, drop and return included.
+    let replay = clients[1].1.recorded().expect("the client records");
+    let events: Vec<_> = replay
+        .events
+        .iter()
+        .filter(|event| event.kind == oag_replay::Kind::Presence.code())
+        .map(|event| (event.tick, event.value))
+        .collect();
+    assert_eq!(events.len(), 2, "{events:?}");
+    assert_eq!(events[0], (600, 0));
+    assert_eq!(events[1].1, 1);
+    let mut again = holding_turbo(&params, &source);
+    let found = oag_replay::Verifier::run(&replay, again.sim.state_hash(), |due, inputs| {
+        for event in due {
+            again.apply_event(event).expect("applies");
+        }
+        again.tick_sim_only(inputs);
+        again.sim.state_hash()
+    })
+    .unwrap_or_else(|why| panic!("the recording across a drop does not reproduce: {why:?}"));
+    assert_eq!(found, replay.ticks());
+}
+
+/// A dropped person's craft must lose time to the opponent driver that flies the seat, never
+/// gain: the same craft handed to the plain opponent driver at tick 300 covers more of the
+/// racing line in the next 1,500 ticks, and what it held is still held at the end.
+#[test]
+#[ignore = "needs a disc image"]
+fn an_away_craft_loses_time_against_the_opponent_driver() {
+    let Some(image) = oag_testdata::image(IMAGE) else {
+        return;
+    };
+    let source = image.display().to_string();
+    let params = params();
+    let none = oag_gameplay::PlayerInputs::none();
+    let flown = |away: bool| {
+        let mut race = holding_turbo(&params, &source);
+        for tick in 0..1800 {
+            if tick == 300 {
+                race.set_away(1);
+                if !away {
+                    race.sim.world.controllers[1] = oag_gameplay::Controller::Ai;
+                }
+            }
+            race.tick_sim_only(&none);
+        }
+        let ship = &race.sim.world.ships[1];
+        (ship.driver.index, ship.pickup.weapon)
+    };
+    let (opponent, _) = flown(false);
+    let (away, held) = flown(true);
+    eprintln!("racing-line index after 1,500 ticks: opponent driver {opponent}, away {away}");
+    assert!(
+        away < opponent,
+        "the away craft is no faster than an opponent: {away} against {opponent}"
+    );
+    assert!(away > 0, "and it is flying: {away}");
+    assert_eq!(
+        held,
+        Some(oag_tables::weapons::Weapon::Turbo),
+        "the away craft kept its pickup"
     );
 }
 

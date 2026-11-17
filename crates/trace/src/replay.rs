@@ -484,6 +484,7 @@ pub fn replay<R: Raycaster + ?Sized>(
         // A replay has no course either, so nothing ever advances this.
         standing: oag_race::Standing::default(),
         autopilot_timer: 0.0,
+        handback: false,
         // A replay has no track and therefore no `Weapon Pad`, so nothing can
         // ever fill this. Named rather than left to `..Default::default()` so
         // that a pickup reaching a replay is a compile error to think about
@@ -729,6 +730,7 @@ where
         // A replay has no course either, so nothing ever advances this.
         standing: oag_race::Standing::default(),
         autopilot_timer: 0.0,
+        handback: false,
         // A replay has no track and therefore no `Weapon Pad`, so nothing can
         // ever fill this. Named rather than left to `..Default::default()` so
         // that a pickup reaching a replay is a compile error to think about

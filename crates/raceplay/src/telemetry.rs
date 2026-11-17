@@ -349,7 +349,9 @@ impl Race {
     /// is what the original has in it.
     fn sub_weapon(&self, slot: usize) -> Option<oag_hud::SubWeapon> {
         let ship = &self.sim.world.ships[slot];
-        if ship.pickup.weapon == Some(oag_tables::weapons::Weapon::Cannon) {
+        // A hand-back's countdown reads over a held Cannon's rounds.
+        let handing_back = ship.handback && ship.autopilot_timer > 0.0;
+        if ship.pickup.weapon == Some(oag_tables::weapons::Weapon::Cannon) && !handing_back {
             let cannon = self
                 .sim
                 .weapons

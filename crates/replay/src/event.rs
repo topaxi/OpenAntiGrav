@@ -25,7 +25,7 @@ pub struct Event {
 
 /// The kinds of change this build writes and applies.
 ///
-/// Code `4` and above are for a later build: a file carrying one reads, and the build that
+/// Code `5` and above are for a later build: a file carrying one reads, and the build that
 /// applies events refuses it by name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -39,6 +39,10 @@ pub enum Kind {
     /// (`oag_game::split_screen::follow_devices`); ADR-0087's fork hands a seat nobody took to
     /// the driver the same way.
     Controller,
+    /// A person's link dropped or returned: `0` the seat is away (the opponent driver flies it
+    /// below racing pace and its pickup is kept), `1` the person is handed the craft back
+    /// through a short Autopilot countdown (`oag_raceplay::Race::set_away`, `hand_back`).
+    Presence,
 }
 
 impl Kind {
@@ -49,6 +53,7 @@ impl Kind {
             Self::PilotAssist => 1,
             Self::Give => 2,
             Self::Controller => 3,
+            Self::Presence => 4,
         }
     }
 
@@ -59,6 +64,7 @@ impl Kind {
             1 => Some(Self::PilotAssist),
             2 => Some(Self::Give),
             3 => Some(Self::Controller),
+            4 => Some(Self::Presence),
             _ => None,
         }
     }

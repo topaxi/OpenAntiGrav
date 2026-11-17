@@ -17,6 +17,13 @@ pub(crate) use fire_law::fire_terms;
 pub use pad_seek::PadSeeking;
 pub(super) use pad_seek::line_positions as pad_seek_positions;
 
+/// The most thrust, as a fraction of full, the driver flies a dropped person's craft at, and
+/// the returning person's hand-back countdown ([`Race::hand_back`]). Chosen, not measured: a
+/// dropped link must never be a free pass through a hard section, so the stand-in is clearly
+/// slower than a competent player (`docs/networking/server-roadmap.md`, "V1: survive the
+/// network").
+pub(crate) const AWAY_THRUST: f32 = 0.5;
+
 /// How much of an Autopilot pickup is left when the announcer warns.
 ///
 /// `Autopilot_Update`'s test is `now < 1.0 && previous > 1.0`, a literal in the
@@ -351,6 +358,9 @@ impl Race {
         }
         let now = timer - self.sim.dt;
         self.sim.world.ships[slot].autopilot_timer = now.max(0.0);
+        if now <= 0.0 {
+            self.sim.world.ships[slot].handback = false;
+        }
         if now < AUTOPILOT_WARNING_SECONDS && timer > AUTOPILOT_WARNING_SECONDS {
             self.raise_disengaging(slot);
         }
@@ -400,15 +410,18 @@ impl Race {
     /// left the original's `now < 1.0 && previous > 1.0` edge is crossed. It is
     /// raised here, a tick before the original's, and has not been heard live.
     pub(super) fn spend_pickup_under_autopilot(&mut self, slot: usize, absorb: bool) {
-        if !absorb || !self.sim.autopilot_absorb_cancels {
+        let handback = self.sim.world.ships[slot].handback;
+        // A hand-back is cancellable on every title, whatever its Autopilot pickup does.
+        if !absorb || !(self.sim.autopilot_absorb_cancels || handback) {
             return;
         }
         let ship = &self.sim.world.ships[slot];
-        if !self.sim.world.mode().pickups_absorb() && !ship.pickup.is_empty() {
+        if !self.sim.world.mode().pickups_absorb() && !ship.pickup.is_empty() && !ship.handback {
             self.eliminator_absorb(slot);
         }
         let left = self.sim.world.ships[slot].autopilot_timer;
         self.sim.world.ships[slot].autopilot_timer = 0.0;
+        self.sim.world.ships[slot].handback = false;
         if left > AUTOPILOT_WARNING_SECONDS {
             self.raise_disengaging(slot);
         }
@@ -869,17 +882,27 @@ impl Race {
             // An opponent under a Disruptor: always AI-driven, so the Stall
             // passes it by and the rest apply. See `Race::disrupted_controls`.
             controls = self.disrupted_controls(slot, controls, true);
+            // A person's seat whose link has dropped crawls round: the driver in their
+            // place must never be a shortcut (`Race::set_away`).
+            let away = self.sim.world.controllers[slot] == oag_gameplay::Controller::Away;
+            if away {
+                controls.thrust = controls.thrust.min(AWAY_THRUST);
+            }
 
             // The pads, measured from where the craft starts the tick, exactly as
             // slot 0's are. Both classes: a speed pad boosts an opponent and a
             // weapon pad hands it a pickup.
             let (moved, sweep) = self.pad_sweep(slot, position);
             let pad_hit = self.test_speedup_pads(slot, position, moved, &sweep);
-            self.test_weapon_pads(slot, position, moved, &sweep);
+            if !away {
+                self.test_weapon_pads(slot, position, moved, &sweep);
+            }
             self.sim
                 .extensions
                 .test_triggers(slot, &sweep, self.sim.world.tick);
-            self.spend_opponent_pickup(slot, &controls, &field);
+            if !away {
+                self.spend_opponent_pickup(slot, &controls, &field);
+            }
 
             // The driver just located itself, and the line is index-parallel to
             // `ai_order`, so this costs a lookup rather than a search.

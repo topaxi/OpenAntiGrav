@@ -198,8 +198,9 @@ recorder). The file holds the inputs the server confirmed and the hashes of the 
 the picture by the prediction window. Test:
 `net_ground_truth::a_predicting_clients_recording_is_the_confirmed_run_and_re_drives` (900 ticks, 100 ms,
 two bots, corrections happening; the recording has exactly the confirmed ticks and re-drives on a fresh
-race to every stored hash). Not covered: a seat that retires mid-race (`retire`) is not a recorded event,
-so such a file does not re-drive past the retirement.
+race to every stored hash). A seat that goes away mid-race and returns is a `Presence` event
+(`Race::set_away`, `hand_back`) written beside the confirmed tick, so the file re-drives across the drop
+(`net_ground_truth::a_dropped_link_returns_to_its_craft_and_its_pickup`).
 
 ## Reconciliation cost (2026-10-14, desktop)
 

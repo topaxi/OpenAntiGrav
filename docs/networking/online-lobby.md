@@ -809,8 +809,9 @@ fixed.
 2. **A leaver held the finish open.** A seat whose person left kept repeating its last input and
    `Race::finished` still counted it as a person, so the race ran to the tick limit (30 minutes). Now
    `TickRecord.retired` (a cumulative seat mask, one byte a record) carries the departure: from the
-   record it first appears in, **both ends** set that slot's controller to the AI
-   (`race::retire`) before the tick runs, so the controllers (which are hashed) agree and the end rule
+   record it first appears in, **both ends** set that slot's controller to `Away`, the opponent
+   driver below racing pace with the pickup kept (`race::retire`; a returning person is handed the
+   craft back, `docs/networking/server-roadmap.md`, "V1") before the tick runs, so the controllers (which are hashed) agree and the end rule
    counts the remaining people only. The owner (seat 0) and a joiner both tested. A seat that sends
    nothing for 8 s while racing is dropped the same way (`Host::drop_silent`): a vanished player sends
    no close frame, and QUIC's idle timeout alone is 30 s; the dropped seat is sent an `End` with the

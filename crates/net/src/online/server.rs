@@ -23,10 +23,7 @@ use crate::wt::{Identity, LinkLimits, Listener, WtLink};
 
 /// How long a new connection has to say hello. Chosen.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
-/// How long a person with a seat in the running race keeps their session after their link
-/// closed, so a reconnect under the session token can still take it over and be handed the
-/// race's address. A close usually reaches the lobby before the new link's hello does.
-const SEAT_GRACE: Duration = Duration::from_secs(30);
+use crate::host::SEAT_GRACE;
 
 /// Connections the lobby keeps at once, joining or joined, by default. Chosen, not measured: a
 /// lobby link costs about 2.6 MiB at its worst (`docs/networking/server-roadmap.md`, "V1:

@@ -69,13 +69,8 @@ own leftovers (spectate, chat, invite-only, quick match, the recorded pad stream
 Each is one drive lane unless split. Hours are estimates. None starts before decisions 1
 to 3 are answered.
 
-1. **V1a, a seat can be taken back** (`oag-wire`, opus, about 22 h). The host seats a token
-   whose seat left, during the race; `TickRecord.retired` becomes the seats away now;
-   `race::retire` hands a craft back; the client reconnects and asks for the ticks it lacks;
-   the game shows "reconnecting". `PROTOCOL` 2. Acceptance: a `loopback` test where a link
-   closes at tick 600 and returns at 900, every hash agreeing on both ends; red today at
-   "the race has started" (`host.rs:366`). Touches `crates/net` and `oag-game`'s
-   `net_play`; not `crates/ai`.
+1. **V1a, a seat can be taken back** (landed on branch `net-rejoin`: the host reseats a token whose seat left, `retired` is the seats away now, `Client::reconnect`, the Autopilot hand-back over the held pickup, `Kind::Presence` replay events; `server-roadmap.md`, V1 "Landed (item 1)"). Still open: the windowed game redials by itself (`NetPlay` keeps no address or token after the welcome; a "reconnecting" screen; a redial must not block the frame), the one-person room whose lone seat goes away is still stepped as the player (`World::primary_slot`'s fallback), the lowest AI level for an away seat, and a game-level look at the countdown in a window.
+
 2. **V1b, limits, health and the lobby's loose ends** (landed on branch `net-v1`: the host's input and resend bounds, the race child's `health` lines and the lobby's 5 s quiet timeout, the takeover re-send, the refusal-before-close ordering. Landed on branch `net-v1b`: lobby caps per address and in all, the race host's join cap and hello timeout, bounded transport queues, the datagram budget, the one-line-a-second warning limit (`server-roadmap.md`, V1 "Landed (item 2, the rest)"). Still open: the client's desync report and end-of-race summary and the hand-off's host field; `PROTOCOL` did not change) (`oag-wire`, sonnet, about 23 h).
    The bounds of the page's "Robustness" list on the host and the lobby; `Health` lines
    from the race child and a hang timeout; the client's desync report and end-of-race

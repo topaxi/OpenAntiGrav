@@ -93,9 +93,9 @@ Each line says what it would become once accepted.
 
 | Event | What happens today | Where |
 | --- | --- | --- |
-| A player's link drops mid-race | The seat is retired to the AI for good; the client's race is over | `host.rs:189-192`, `host.rs:425-432`, `client.rs:443-447` |
+| A player's link drops mid-race | The seat is away (`Controller::Away`: the opponent driver at half thrust, pickup kept); the client's race is over until it reconnects (V1, landed) | `Host::poll`, `race::retire`, `Client::reconnect` |
 | A player is silent for 8 s | Same, with a message | `crates/net/src/serve.rs:21`, `host.rs:461-479` |
-| The player comes back | Refused: "the race has started" | `host.rs:345`, `host.rs:366` |
+| The player comes back | Seated again by token and handed the craft back through the Autopilot countdown (V1, landed) | `Host::reseat`, `Race::hand_back` |
 | The race process crashes | The room returns with the exit status; the race is lost | `race_proc.rs:311-313` |
 | The race process hangs | Nothing notices: after `Up` the lobby only waits for the exit, so the one slot is held | `race_proc.rs:330-354` |
 | The lobby dies | Its race child stops within seconds; rooms, names and tokens were in memory | `race_cmd.rs:87-97`, `server.rs:59-61` |
@@ -415,6 +415,41 @@ the craft and they get it back. A refusal always says why.
 both ends; the AI driver's state for that slot must be built the same way each time.
 `PROTOCOL` becomes 2. A restarted client on a slow phone replays about ten times slower
 than a desktop (unmeasured).
+
+**Landed (item 1, a seat can be taken back; no `PROTOCOL` change; maintainer 2026-11-17 for the hand-back).**
+`TickRecord.retired` is now the seats away *now*: the host seats a hello whose token names a seat
+that left (`Host::reseat`: the welcome again, `left` cleared, buffered inputs dropped, the seat's
+held input and press edges kept so both ends' edges go on from the same place), answers the returning
+client's `Ready` with the start, and keeps a race with every person away open for `SEAT_GRACE`
+(30 s, the lobby's constant, moved to `host`); a quit or refused seat is not held. The client
+`reconnect`s on a new link (`Phase::Reconnecting`), keeps its confirmed state and asks for the
+ticks it lacks; a restarted process builds a fresh race and `connect_seat`s, which the same host
+path serves from tick 0. Fixed on the way: a resend longer than 256 ticks labelled every chunk
+with the first tick (`RESEND_CHUNK`), so a gap over 256 ticks never closed.
+
+*Away.* A leaver is `Controller::Away` (hashed as 3, not human, so a race does not wait on it),
+not `Controller::Ai`: the opponent driver flies it at no more than half thrust
+(`field::AWAY_THRUST`, chosen), neither collects nor fires a pickup, so what the person held is held
+when they return. Its driver is seeded from the race seed and the slot and placed on the line where
+the craft is (`Race::set_away`), the same on every peer. *Hand-back.* On the tick the mask clears,
+both ends run `Race::hand_back`: the controller goes back to `Remote`, `Ship::autopilot_timer` is
+set to `HAND_BACK_SECONDS` (**2.5 s**, chosen inside the 2 to 3 s asked for) and `Ship::handback`
+marks it (hashed only while set; a race with no drop hashes as before). The craft flies on the
+driver at the same half thrust with no Autopilot engine boost; the HUD shows the Autopilot icon and
+the seconds left over whatever is held (`held_for_hud`, `sub_weapon`), on every title, because it
+uses the real Autopilot's readout; absorb cancels it on every title, whatever the title's Autopilot
+does (`spend_pickup_under_autopilot`; a recorded input), without paying out the held pickup. The
+away and return are `Kind::Presence` replay events written where the confirmed ticks are
+(`advance_confirmed`, never the prediction), so a recording across a drop re-drives.
+Tests: `loopback::a_person_whose_link_drops_comes_back_to_their_seat_and_the_hashes_agree`;
+`net_ground_truth::a_dropped_link_returns_to_its_craft_and_its_pickup` (real circuit, bots, drop 600,
+return 900: hashes agree, pickup held throughout, countdown on the HUD, pickup fired after, the
+recording re-drives; away top speed 91 u/s against 125 flown by the person);
+`net_ground_truth::an_away_craft_loses_time_against_the_opponent_driver` (racing-line index after
+1,500 ticks 2169 away, 2780 under the plain driver); `raceplay` `tests::hand_back`. Not landed: the
+windowed game does not redial by itself (`NetPlay` keeps no address; `Client::reconnect` is the
+call), a one-person room's lone seat is still stepped as the player when away (`primary_slot`'s
+fallback), and the lowest AI level is not applied to an away seat (the thrust cap alone is).
 
 **Landed (items 2, 4, 5, 6 in part; no `PROTOCOL` change).** The host drops an input more than
 119 ticks ahead (`MAX_INPUT_AHEAD`, a seat buffers under 120) and answers one resend request a

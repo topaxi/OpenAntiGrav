@@ -221,6 +221,10 @@ impl Race {
         // A mod's own pickup (`Weapon::Extension`) is held as itself: the HUD draws the icon
         // and backdrop its look names (`crate::extension_pickup`), none on a mod that
         // declares none.
+        // A hand-back runs over a held pickup: the Autopilot shows, the pickup returns after.
+        if ship.handback && ship.autopilot_timer > 0.0 {
+            return Some(oag_tables::weapons::Weapon::Autopilot);
+        }
         ship.pickup.weapon.or_else(|| {
             (ship.autopilot_timer > 0.0).then_some(oag_tables::weapons::Weapon::Autopilot)
         })
