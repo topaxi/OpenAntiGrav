@@ -449,6 +449,10 @@ pub(crate) fn one_emitter_pob(name: &str, flags: u32) -> Vec<u8> {
 
 /// A race whose collision-spark effect is the one supplied, against a wall.
 fn race_with_spark_effect(blob: &[u8]) -> Race {
+    Race::start(spark_setup(blob))
+}
+
+fn spark_setup(blob: &[u8]) -> Setup {
     let mut setup = setup_with(
         hulled_handling(),
         vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
@@ -456,7 +460,7 @@ fn race_with_spark_effect(blob: &[u8]) -> Race {
     let effect = oag_fx::psys::Effect::parse(blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
     setup.handles.insert(Trigger::CollisionSpark, effect);
-    Race::start(setup)
+    setup
 }
 
 fn push_toward_wall(race: &mut Race) {
@@ -742,4 +746,56 @@ fn a_craft_no_tick_has_placed_is_found_where_it_stands_and_only_then() {
     assert!(race.sim.world.tick > 0);
     race.sim.world.ships[0].physics.body.position = Vec3::new(60.0, 0.0, 400.0);
     assert_eq!(race.visibility_sections().0, UNPLACED);
+}
+
+/// **HD: a craft-to-craft contact starts the seat's attached spark, and the first tick with
+/// neither a wall nor a pair contact stops it.** The wall-only case is
+/// `a_looping_spark_effect_stops_when_the_contact_does`.
+#[test]
+fn a_pair_contact_starts_and_ends_the_attached_spark() {
+    use oag_pob::flags;
+
+    let mut setup = spark_setup(&one_emitter_pob("WO_TEST_SPARK", flags::LOOPING));
+    setup.mode = Mode::SingleRace;
+    let mut race = Race::start(setup);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ships[1].handling = hulled_handling();
+    let touch = |race: &mut Race| {
+        let at = Vec3::new(20.0, 0.0, 0.0);
+        let a = &mut race.sim.world.ships[0].physics;
+        a.body.position = at;
+        a.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
+        let b = &mut race.sim.world.ships[1].physics;
+        b.body.position = at + Vec3::new(0.0, 0.0, 1.0);
+        b.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
+    };
+    let apart = |race: &mut Race| {
+        race.sim.world.ships[0].physics.body.position = Vec3::new(20.0, 0.0, 0.0);
+        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        race.sim.world.ships[1].physics.body.position = Vec3::new(20.0, 0.0, 500.0);
+        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+    };
+
+    apart(&mut race);
+    race.tick(&PlayerInputs::none());
+    assert_eq!(race.spark_ignitions(), 0);
+    assert!(!race.sparks().is_running());
+
+    touch(&mut race);
+    let evaluated = race.tick(&PlayerInputs::none());
+    assert!(
+        evaluated.wall.resolved.is_none(),
+        "the fixture touched the wall - not a pair-only contact"
+    );
+    assert_eq!(race.spark_ignitions(), 1, "the pair contact did not start the spark");
+    assert!(race.sparks().is_emitting());
+
+    apart(&mut race);
+    race.tick(&PlayerInputs::none());
+    assert!(
+        !race.sparks().is_emitting(),
+        "the spark kept emitting on the contact-free tick"
+    );
+    assert_eq!(race.spark_ignitions(), 1);
 }

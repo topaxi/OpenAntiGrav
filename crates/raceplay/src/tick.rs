@@ -808,6 +808,7 @@ impl Race {
             model_matrix,
             self.sim.dt,
             evaluated,
+            self.view.pair_contacts[slot],
         );
     }
 
@@ -830,6 +831,7 @@ impl Race {
                     model_matrix,
                     self.sim.dt,
                     &step.evaluated,
+                    self.view.pair_contacts[slot],
                 );
             }
         }

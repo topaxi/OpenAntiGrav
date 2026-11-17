@@ -1251,6 +1251,10 @@ impl Race {
     /// wall's law on the pair's impulse, for player and opponents alike, so a rival can
     /// be wrecked by a bump.
     pub(super) fn resolve_craft_pairs(&mut self) {
+        #[cfg(feature = "view")]
+        {
+            self.view.pair_contacts = [None; oag_gameplay::MAX_SHIPS];
+        }
         let people = self.sim.world.human_slots().count();
         if !self.sim.world.mode().craft_collide(people) {
             return;
@@ -1290,6 +1294,10 @@ impl Race {
                     if self.draws() {
                         for slot in [a, b] {
                             self.throw_contact_spark(slot, contact.point, contact.impulse, true);
+                            self.view.pair_contacts[slot] = Some(crate::contact_fx::PairContact {
+                                point: contact.point,
+                                impulse: contact.impulse,
+                            });
                         }
                     }
                     // The ring loop's friction test passes for a pair record, then splits on the
