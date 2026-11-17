@@ -394,6 +394,20 @@ both ends; the AI driver's state for that slot must be built the same way each t
 `PROTOCOL` becomes 2. A restarted client on a slow phone replays about ten times slower
 than a desktop (unmeasured).
 
+**Landed (items 2, 4, 5, 6 in part; no `PROTOCOL` change).** The host drops an input more than
+119 ticks ahead (`MAX_INPUT_AHEAD`, a seat buffers under 120) and answers one resend request a
+second (`RESEND_INTERVAL`). The race process prints `health: ...` once a second while its people
+load, and its racing loop prints its progress line once a second; the lobby takes any line as a sign
+of life and stops a child that is up and silent for `QUIET_TIMEOUT` (5 s, chosen), freeing the slot
+with the reason "went quiet". The lobby sends the hand-off again to a session taken over after it
+went out. A dropped `WtLink` finishes its stream and waits up to 1 s for the acknowledgement before it
+closes, and the close is reported only by the reliable reader. Tests: `loopback::a_peer_cannot_grow_a_seats_buffer_with_inputs_for_far_future_ticks`,
+`loopback::a_hundred_resend_requests_in_a_second_get_one_answer`, the `online` tests for the quiet child
+and the takeover. Not landed: a bound on the transport queues, the datagram budget, the per-address
+connection and per-person room caps, the one-line-a-second log limit, item 3, and the hand-off's host.
+The `Health` line is text on the child's output, not a typed message; the typed form arrives with the
+host protocol in V2.
+
 **Boundary.** `Health` and the host field in the hand-off. Still pipes, one slot, one box.
 
 **Hosting.** The existing 1 GB VPS, unchanged.

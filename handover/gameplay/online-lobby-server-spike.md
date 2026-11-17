@@ -18,7 +18,7 @@ tested locally; nothing has been deployed or tried over a real network.
 2. ~~**The menu screens.**~~ Landed 2026-10-16 (`docs/networking/online-lobby.md` part 8). Landed 2026-10-16 (`online-menus-titles`): the owner's ROOM SETTINGS and MAX PLAYERS, a typed port and IPv6 literal, a live walk on Pure, HD, 2048 and Omega, the pointer on Pure and HD. Kick landed 2026-10-19 (item 6). Open: the Omega sub-pages that are not settings (friends, invite-only; the settings rows landed, item 4).
 3. ~~The build at join~~ (landed 2026-10-16, part 6 of the doc): a hello of another build is refused by name. Open still: `--online-create` hardcodes AI fill off, which only matters in modes without opponents.
 4. ~~**Settings Omega has and `RaceParams` lacks**~~ Landed 2026-10-19 (`docs/networking/online-lobby.md` part 9): laps, barrel rolls, Pilot Assist allowed (a level per seat) and the zone target travel through the wire, the lobby, `race::prepare` and the room screen on every title. Open: the eliminations target (not a kill count; an Eliminator room uses the mode's own), and a live pointer click on the new rows on each title.
-5. **Session takeover re-sending a pending hand-off.** (The killed-lobby orphan is fixed, part 7.)
+5. ~~**Session takeover re-sending a pending hand-off.**~~ Landed (V1 of `docs/networking/server-roadmap.md`, `online` test of the takeover). (The killed-lobby orphan is fixed, part 7.)
    ~~The room note carries the reason, not the places~~ (landed 2026-10-19, part 11 of the doc: the board rides `End` and the room snapshot, the end screens name every person, the room shows each seat's place; RACE AGAIN asks the room for a rematch).
 6. **Spectate, chat, invite-only, quick match**: not built, Omega has some of them. ~~Kick~~ landed 2026-10-19 (part 11: the owner's confirm on a seat, refused back by name while the room exists; Omega authors no host kick, so it is ours). Open from that lane: a pad-only walk of the kick; Pure, Omega and 2048 live (their end screens are the built-in table, named, 2048's over its touch pages: **checked, differs** from HD's grid, not walked), Omega's authored 'GO TO NEW LOBBY' / return countdown (`ER_GOTO_NEW_LOBBY`, `ONL_IGM_RTL_COUNTDOWN`) not wired, a ban that outlives the room (none: by design), a person who returns to the room by any route is ready (a READY toggle row would need a pad and pointer row on every title's room screen).
 7. **Containers**: the `Runner` seam (`online::race_proc`) is where a spawner per room on its own
@@ -57,7 +57,7 @@ one's slot-0 input stream alone and in a pack, on `pulse-psp-usa.chd`.
 
 ## Next Steps
 
-0. The reconnect, the takeover re-send, the refusal flake and the containers item are sized as versions in [the server roadmap thread](online-server-roadmap.md); pick them up there.
+0. The reconnect and the containers item are sized (the takeover re-send and the refusal flake landed with V1b) as versions in [the server roadmap thread](online-server-roadmap.md); pick them up there.
 
 1. ~~The ONLINE screens~~ landed; follow-ups are in item 2 above.
 2. The extraction omits Omega's guest roster (2048-era craft need a hull variant in `RaceParams`) and anything DLC; if the server grows either, the extractor's plan grows with it (`oag_net::extract::plan`).

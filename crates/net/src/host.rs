@@ -37,6 +37,13 @@ pub const REDUNDANCY: usize = 16;
 /// Ticks per resend message. Chosen.
 pub const RESEND_CHUNK: usize = 256;
 
+/// How many ticks past the next one a seat's input may be for before it is dropped, so a seat
+/// buffers fewer than 120 inputs. Chosen: two seconds, far beyond any client's lead.
+pub const MAX_INPUT_AHEAD: u32 = 119;
+
+/// The least time between two resend requests a seat is answered. Chosen.
+pub const RESEND_INTERVAL: Duration = Duration::from_secs(1);
+
 /// One person's connection and input stream.
 pub struct Seat {
     link: Box<dyn Link>,
@@ -54,6 +61,8 @@ pub struct Seat {
     left: Option<String>,
     /// When anything last arrived from the seat.
     heard: Instant,
+    /// When a resend request was last answered.
+    resent: Option<Instant>,
     counts: SeatCounts,
 }
 
@@ -153,6 +162,15 @@ impl Host {
         &self.history
     }
 
+    /// How many inputs are buffered for `slot`'s future ticks.
+    #[must_use]
+    pub fn buffered_inputs(&self, slot: usize) -> usize {
+        self.seats
+            .get(slot)
+            .and_then(Option::as_ref)
+            .map_or(0, |seat| seat.inputs.len())
+    }
+
     /// A new connection. It is seated when its hello arrives.
     pub fn join(&mut self, link: Box<dyn Link>) {
         self.joining.push(link);
@@ -212,7 +230,10 @@ impl Host {
                         });
                         seat.left = Some(reason);
                     }
+                    Ok(Control::Resend { .. })
+                        if seat.resent.is_some_and(|at| at.elapsed() < RESEND_INTERVAL) => {}
                     Ok(Control::Resend { from }) => {
+                        seat.resent = Some(Instant::now());
                         let from = from as usize;
                         for chunk in self.history.get(from..).unwrap_or(&[]).chunks(RESEND_CHUNK) {
                             seat.link.send_control(&Control::Ticks(Confirmed {
@@ -245,6 +266,9 @@ impl Host {
                                     seat.counts.late += 1;
                                     seat.newest = Some(tick);
                                 }
+                                continue;
+                            }
+                            if tick - next >= MAX_INPUT_AHEAD {
                                 continue;
                             }
                             seat.inputs.insert(tick, held);
@@ -359,6 +383,7 @@ impl Host {
                     newest: None,
                     left: None,
                     heard: Instant::now(),
+                    resent: None,
                     counts: SeatCounts::default(),
                 });
                 return Ok(slot);

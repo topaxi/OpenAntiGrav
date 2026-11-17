@@ -122,6 +122,9 @@ pub fn parse_hash(text: &str) -> Result<[u8; 32]> {
 /// QUIC's default idle timeout.
 const KEEP_ALIVE: std::time::Duration = std::time::Duration::from_secs(5);
 
+/// How long a link being dropped waits for its peer to acknowledge what it sent last. Chosen.
+const FLUSH_ON_CLOSE: Duration = Duration::from_secs(1);
+
 enum Out {
     Datagram(Vec<u8>),
     Reliable(Vec<u8>),
@@ -171,7 +174,6 @@ impl WtLink {
         let rt = runtime();
 
         let reader = session.clone();
-        let on_close = close.clone();
         rt.spawn(async move {
             loop {
                 match reader.read_datagram().await {
@@ -182,10 +184,10 @@ impl WtLink {
                             break;
                         }
                     }
-                    Err(e) => {
-                        on_close(format!("{e}"));
-                        break;
-                    }
+                    // The close is reported by the reliable reader below, once every message
+                    // that arrived before it has been handed over: a close seen here first
+                    // could be read ahead of a refusal still on its way to the queue.
+                    Err(_) => break,
                 }
             }
         });
@@ -248,6 +250,12 @@ impl WtLink {
                         }
                     }
                 }
+            }
+            // Closing the session now would discard what the stream has not yet delivered,
+            // and the peer would read the close without the refusal sent just before it:
+            // finish the stream and give the peer a moment to acknowledge it.
+            if send.finish().is_ok() {
+                let _ = tokio::time::timeout(FLUSH_ON_CLOSE, send.stopped()).await;
             }
             writer.close(0, b"bye");
         });

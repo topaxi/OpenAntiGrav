@@ -49,6 +49,8 @@ struct Running {
     handle: Box<dyn Handle>,
     /// `(client, name, seat token)` by seat.
     seats: Vec<(ClientId, String, String)>,
+    /// Where the race listens once it is up: what a hand-off carries.
+    up: Option<(u16, [u8; 32])>,
     handed_off: bool,
 }
 
@@ -155,8 +157,9 @@ impl Server {
             });
         }
         for mut pending in std::mem::take(&mut self.joining) {
+            let closed = pending.link.closed();
             let Some(bytes) = pending.link.recv_reliable() else {
-                if pending.link.closed().is_none() && pending.since.elapsed() < HELLO_TIMEOUT {
+                if closed.is_none() && pending.since.elapsed() < HELLO_TIMEOUT {
                     self.joining.push(pending);
                 }
                 continue;
@@ -228,6 +231,7 @@ impl Server {
                 },
             );
             self.welcome(id);
+            self.resend_handoff(id);
             return;
         }
         let id = self.next_client;
@@ -245,6 +249,29 @@ impl Server {
                 log::info!("lobby: {:?} joined as client {id}", self.rooms.name(id));
                 self.welcome(id);
             }
+        }
+    }
+
+    /// A person who took their session over after the hand-off went out gets it again: the
+    /// first one went to the link that dropped.
+    fn resend_handoff(&mut self, id: ClientId) {
+        let Some(running) = self.race.as_ref().filter(|r| r.handed_off) else {
+            return;
+        };
+        let (Some((port, cert_hash)), Some((_, name, token))) = (
+            running.up,
+            running.seats.iter().find(|(seat, _, _)| *seat == id),
+        ) else {
+            return;
+        };
+        let message = Message::Handoff {
+            port,
+            cert_hash,
+            token: token.clone(),
+            name: name.clone(),
+        };
+        if let Some(client) = self.clients.get_mut(&id) {
+            client.link.send_lobby(&message);
         }
     }
 
@@ -266,10 +293,10 @@ impl Server {
             let mut gone = None;
             let mut incoming = Vec::new();
             if let Some(client) = self.clients.get_mut(&id) {
+                gone = client.link.closed();
                 while let Some(message) = client.link.recv_lobby() {
                     incoming.push(message);
                 }
-                gone = client.link.closed();
             }
             for message in incoming {
                 match message {
@@ -308,6 +335,7 @@ impl Server {
                     room: launch.room,
                     handle,
                     seats,
+                    up: None,
                     handed_off: false,
                 });
             }
@@ -325,6 +353,7 @@ impl Server {
         match running.handle.poll() {
             Status::Starting => {}
             Status::Up { port, cert_hash } => {
+                running.up = Some((port, cert_hash));
                 if !running.handed_off {
                     running.handed_off = true;
                     for (id, name, token) in &running.seats {

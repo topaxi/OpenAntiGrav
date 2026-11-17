@@ -94,6 +94,7 @@ pub fn run(args: &Args) -> Result<()> {
         listen: args.race_listen,
         limits,
         load_timeout: Duration::from_secs(args.load_timeout),
+        quiet_timeout: oag_net::online::race_proc::QUIET_TIMEOUT,
     };
     let mut server = Server::bind(
         Config {

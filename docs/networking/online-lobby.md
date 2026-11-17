@@ -529,7 +529,11 @@ From here the round trip is about 10 ms.
 - **Build string.** A client built with another `OAG_GIT_HASH` is refused with the named text. This found a
   bug: the lobby hangs up right after a refusal, `LobbyClient::poll` returned the close before the caller read
   `refused`, and the client printed "the lobby closed: ... bye" with no reason. `poll` now hands the refusal
-  over first (`a_refusal_that_arrives_with_the_close_is_still_read`).
+  over first (`a_refusal_that_arrives_with_the_close_is_still_read`). The flake that remained on a real
+  socket was in the transport: a dropped `WtLink` closed the session at once and discarded the refusal
+  still in flight, and the datagram reader could report the close ahead of the reliable queue. A link now
+  finishes its stream and waits up to 1 s for the peer to acknowledge it before closing, only the reliable
+  reader reports the close, and a poll reads the close before it drains the queue.
 - Everything was removed from the host afterwards (processes killed by pid, files deleted, listing checked).
 
 ### Tests
@@ -559,8 +563,9 @@ From here the round trip is about 10 ms.
   sub-pages Omega has beyond the list (part 9 lists which of them are settings and are done).
 - **EU and USA pressings of one platform's title are not told apart before the race** (the
   same rule as LAN); the tick-0 hash catches them, as a join timeout.
-- **A session takeover does not re-send a pending hand-off**, so a client that drops during the
-  race's loading and reconnects to the lobby misses it; it times out at the child and returns.
+- ~~A session takeover does not re-send a pending hand-off~~ (fixed, V1 of the server roadmap: the
+  lobby keeps where the race listens and sends the hand-off again to a session taken over after it
+  went out; `online::a_client_that_drops_while_its_race_loads_and_takes_its_session_over_receives_the_handoff`).
 - ~~A SIGKILLed lobby orphans its running race child~~ (fixed, part 7).
 - **No spectators, no chat, no quick match, no invite-only**; Omega has some of them (kick is part 11).
 - **One race slot is per server**, so a second title waits behind the first. The containers shape
@@ -772,7 +777,7 @@ crossed the line (tick ~2800), 0 bad hashes on the survivor, the leaver's craft 
 
 ### Open
 
-- Session takeover still does not re-send a pending hand-off (part 5).
+- ~~Session takeover does not re-send a pending hand-off~~ (fixed, part 5).
 - ~~The room note carries the reason only~~ (part 11: the board travels in `End` and the room).
 - The windowed client's return from the results table to the room is the menus lane's: the table
   says "x or escape leaves the race" and the `--online` flag path has no room screen to go back to.

@@ -74,6 +74,16 @@ pub trait Runner: Send {
     fn launch(&mut self, job: &RaceJob) -> Result<Box<dyn Handle>, String>;
 }
 
+/// How long a race process that has come up may print nothing before the lobby takes it for
+/// hung and stops it. Chosen: five seconds is five of the child's once-a-second `health`
+/// and progress lines (`docs/networking/server-roadmap.md`, "Lobby and race server").
+pub const QUIET_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The line a race prints once a second while it waits for its people to load, so the lobby
+/// can tell a waiting race from a hung one. The racing loop's own once-a-second line serves
+/// after that.
+const HEALTH_LINE: &str = "health: waiting for the people to load";
+
 /// How a race process is bounded.
 #[derive(Debug, Clone, Copy)]
 pub struct Limits {
@@ -108,7 +118,12 @@ pub fn run_race(
 ) -> Result<Ended, String> {
     host.expect_seats(seats.to_vec());
     let asked = Instant::now();
+    let mut beat = Instant::now();
     while !host.all_ready() {
+        if beat.elapsed() >= Duration::from_secs(1) {
+            beat = Instant::now();
+            say(HEALTH_LINE);
+        }
         if stop() {
             return Err("the lobby stopped the race".into());
         }
@@ -273,6 +288,9 @@ pub struct ChildRunner {
     pub limits: Limits,
     /// How long the child may take to start accepting (loading a race). Chosen.
     pub load_timeout: Duration,
+    /// How long a child that is up may print nothing before it is stopped as hung
+    /// ([`QUIET_TIMEOUT`]).
+    pub quiet_timeout: Duration,
 }
 
 struct ChildHandle {
@@ -288,6 +306,9 @@ struct ChildHandle {
     hash: Option<[u8; 32]>,
     started: Instant,
     load_timeout: Duration,
+    quiet_timeout: Duration,
+    /// When the child last printed a line.
+    heard: Instant,
     /// The child's last lines of output, for a failure's reason.
     tail: Arc<Mutex<Vec<String>>>,
     over: Option<Ended>,
@@ -321,6 +342,7 @@ impl Handle for ChildHandle {
             return Status::Over(ended.clone());
         }
         while let Ok(line) = self.lines.try_recv() {
+            self.heard = Instant::now();
             if let Some(addr) = line.strip_prefix("listening on ") {
                 self.port = addr.trim().parse::<SocketAddr>().ok().map(|a| a.port());
             } else if let Some(hex) = line.strip_prefix("cert-hash ") {
@@ -350,6 +372,19 @@ impl Handle for ChildHandle {
             }
         }
         if let (Some(port), Some(cert_hash)) = (self.port, self.hash) {
+            if self.heard.elapsed() > self.quiet_timeout {
+                log::warn!(
+                    "lobby: the race process printed nothing for {}s: stopping it",
+                    self.quiet_timeout.as_secs()
+                );
+                let _ = self.child.kill();
+                let ended = Ended::without_board(format!(
+                    "the race process went quiet for {}s and was stopped",
+                    self.quiet_timeout.as_secs()
+                ));
+                self.over = Some(ended.clone());
+                return Status::Over(ended);
+            }
             return Status::Up { port, cert_hash };
         }
         if self.started.elapsed() > self.load_timeout {
@@ -441,6 +476,8 @@ impl Runner for ChildRunner {
             hash: None,
             started: Instant::now(),
             load_timeout: self.load_timeout,
+            quiet_timeout: self.quiet_timeout,
+            heard: Instant::now(),
             tail,
             over: None,
         }))

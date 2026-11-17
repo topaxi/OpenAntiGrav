@@ -65,6 +65,9 @@ impl LobbyClient {
     ///
     /// The link closed, and why. A refusal read in the same poll is held back one call, in `refused`.
     pub fn poll(&mut self) -> Result<(), String> {
+        // Read before the queue: a message that lands after this is read on the next poll,
+        // never lost behind a close seen after it.
+        let closed = self.link.closed();
         while let Some(message) = self.link.recv_lobby() {
             match message {
                 Ok(Message::Welcome {
@@ -103,7 +106,7 @@ impl LobbyClient {
                 Err(e) => log::warn!("lobby: {e}"),
             }
         }
-        match self.link.closed() {
+        match closed {
             // A refused hello is followed by a hang-up that can be read in this same poll: hand
             // the refusal over first, and report the close on the next.
             Some(_) if self.refused.is_some() => Ok(()),
