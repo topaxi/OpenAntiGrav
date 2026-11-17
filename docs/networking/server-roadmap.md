@@ -33,7 +33,7 @@ Each line says what it would become once accepted.
 - **6 accepted, a CA certificate for a host name**, probably from Let's Encrypt.
 - **7 accepted as immediate relay** (target version, after V3): the server forwards each input when it arrives, marked unconfirmed, and **the first record for a seat and tick wins** (an identical resend changes nothing; a revised record for a tick already received is ignored, so seeing others early lets nobody rewrite their own past; today the last one wins, `host.rs:250`). Latency-scaled relay was weighed and declined: it is never better than immediate for anyone and only removes the low-ping lead. Measure corrections a minute before and after.
 - **8 accepted, resync from the newest matching snapshot**: the client keeps a snapshot of its confirmed state about once a second and, on a hash mismatch, replays from the newest snapshot whose hash matched the server; if the same tick disagrees again it retries once from tick 0 (a divergence can sit in an unhashed field before any hash shows it); a third disagreement tells the player by name, hands the seat to the AI and logs tick, build and platform on the server.
-- **Version one (2026-11-17):** the server runs the lobby and **two concurrent races**; further races are hosted by players, listed in the lobby with a **player-hosted** mark (the host is the authority and may cheat; latency favours the host). See the handover thread on player-hosted races.
+- **Version one (2026-11-17):** the server runs the lobby and **two concurrent races**; further races are hosted by players, listed in the lobby with a **player-hosted** mark (the host is the authority and may cheat; latency favours the host). Designed in [ADR-0092](../architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md); its first slice is built ("Player-hosted races" below).
 
 1. **The input journal is the session.** A race is its `RaceParams`, its seat table and
    the append-only list of confirmed ticks. Whoever holds those can resume it: a player
@@ -653,6 +653,30 @@ In the order they are worth doing: race hosts on other machines and region place
 (about 40 hours), spectators and late joiners from the journal (30), the simulation
 fingerprint (12), replay download and a server-side record check (15), early relay if
 decision 7 is yes (15). Each is its own lane.
+
+## Player-hosted races (ADR-0092, first slice landed 2026-11-17)
+
+[ADR-0092](../architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md) decides what version one's player hosting is; what is built
+and how to run it is in [the online lobby](online-lobby.md), part 12. In this page's terms:
+
+- **It is the host protocol with one slot, on a player's machine.** `HostRoom` is `Register`
+  and a room in one (signed with the player's key, the port probed before the room exists),
+  `Launch { room, job }` carries the same `RaceJob` a race child reads, `HostUp` is `Up` and,
+  repeated each second, `Health`, and `HostOver` is `Over`. The typed messages V2 wants for the
+  server's own race children now exist on the lobby link; the children still speak text lines.
+- **The hand-off's host landed** (V1 item 5): `Handoff.host` is empty for the lobby's own host
+  and a player host's observed address otherwise.
+- **A hosted room uses no server slot** and never queues, so it does not move the two-race
+  figure or the memory tables below. It costs the lobby one probe (a handshake) and the room's
+  menu traffic.
+- **Reachability is the cheapest option**: a port the host opens or forwards, probed from the
+  lobby. UPnP, hole punching and a capped relay are later, in that order.
+- **When the host leaves, the race ends** with a reason on every guest's screen; the journal
+  (decision 1) is what would let it move instead.
+- **Moderation** is a ban file by key and address and a `host-log:` line per event.
+- **Not built:** the anti-cheat path (the params hash in the hand-off, signed checkpoints, the
+  lobby's re-simulation, signed inputs), a report row, a random seed (today's is predictable
+  from the room id, for every race), the server's own second race slot.
 
 ## Infrastructure
 

@@ -83,7 +83,7 @@ OAG_ONLINE_KICK_HINT = { text = "CONFIRME PARA REMOVER ESTE JOGADOR DA PARTIDA",
 OAG_ONLINE_HOST_RACE_AGAIN = { text = "O ANFITRIÃO QUER CORRER DE NOVO", human = false }
 OAG_ONLINE_MODE_TWO_ONLY = { text = "O frente a frente é para duas pessoas", human = false }
 OAG_ONLINE_HOSTGAME = { text = "HOSPEDAR JOGO", human = false }
-OAG_ONLINE_HOSTGAME_SUBTITLE = { text = "A corrida roda nesta máquina: precisa de uma porta UDP aberta, e os outros veem seu endereço", human = false }
+OAG_ONLINE_HOSTGAME_SUBTITLE = { text = "A corrida roda nesta máquina: requer porta UDP aberta", human = false }
 OAG_ONLINE_PLAYER_HOSTED = { text = "HOSPEDADO POR JOGADOR", human = false }
 OAG_ONLINE_PLAYER_HOSTED_HINT = { text = "HOST JOGADOR: A MÁQUINA DELE RODA A CORRIDA, PODE TRAPACEAR", human = false }
 OAG_ONLINE_HOST_CHECKING = { text = "VERIFICANDO SE O LOBBY ALCANÇA ESTA MÁQUINA...", human = false }

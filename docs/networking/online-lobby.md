@@ -406,11 +406,12 @@ Client to lobby: `Hello { protocol, name, titles, token }` (magic `OAGL`), `List
 with, an index into `Level::ALL`), `Start` (owner), `Leave`.
 
 Lobby to client: `Welcome { token, name, titles }`, `Rooms(list)`, `Room(snapshot)` (pushed on
-every change, owner first), `Left { reason }`, `Handoff { port, cert_hash, token, name }`,
-`Rejected { code, text }`.
+every change, owner first), `Left { reason }`, `Handoff { host, port, cert_hash, token, name }`
+(`host` is empty for the lobby's own host), `Rejected { code, text }`.
 
 Named refusals (`Refusal`): `Full`, `Started`, `Content`, `Version`, `NoSuchRoom`, `NotOwner`,
-`NeedPlayers`, `NotReady`, `BadName`, `NotInRoom`, `InRoom`, `BadSettings`.
+`NeedPlayers`, `NotReady`, `BadName`, `NotInRoom`, `InRoom`, `BadSettings`, `Kicked`, `Banned`,
+`Unreachable`, `BadHost`. The messages of a player-hosted room are in part 12.
 
 Room settings (`RoomSettings`): title, track, class, mode, max players (2 to 8), AI fill, laps,
 weapons, barrel rolls, Pilot Assist allowed and the zone target (part 9). Weapons are Omega's
@@ -1260,4 +1261,118 @@ JOIN GAME and the room list, START RACE, the race, the end screens, the room aga
   `confirm()`, covered by the room form's own tests), and Pure, Omega, 2048 and the PS2 pressing: their routes are above
   (**checked, differs** from HD's grid: Pure and Omega the built-in table, 2048 the built-in table over its touch pages);
   the board, the names and all the lobby code are title-blind.
+
+## 12. Player-hosted races (2026-11-17)
+
+Design and reasons: [ADR-0092](../architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md). This part is what is built and how to
+run it. **Chosen, not measured**, like the rest of the lobby.
+
+### What a player does
+
+HOST GAME on the ONLINE page (or `--online-create --online-host`) walks CREATE GAME's pages and
+then offers this machine as the room's race host. The game opens its hosting port (UDP 4435,
+`[online] host_port` in `settings.toml` or `--online-host-port`), the lobby dials that port from
+its side, and only then lists the room, marked **PLAYER-HOSTED** beside the host's name. The
+port has to be reachable from the lobby: open, or forwarded to this machine by the router. A
+refusal names the port. Everybody else joins the room as they join any other; at START the race
+runs on the host's machine and the lobby hands each member the host's address.
+
+The mark's one line is "PLAYER-HOSTED: THE HOST RUNS THE RACE AND MAY CHEAT" (the list row
+under the cursor, and a guest's room). Not on the line, and true: latency favours the host, no
+record is kept, and the host and its guests see each other's addresses.
+
+### The messages
+
+- Client to lobby: `HostRoom { settings, offer }` with `offer = { port, cert_hash, key,
+  signature }`; `HostUp { room }` once the race is loaded and again once a second while it runs;
+  `HostOver { room, reason, board }`.
+- Lobby to the host: `Launch { room, job }`, the `RaceJob` a race child reads from its standard
+  input.
+- `RoomInfo` and `Snapshot` carry `player_hosted`.
+
+The signature is Ed25519 (`ring`) over `"OAG-HOST-1" | lobby certificate hash | session token |
+port | cert_hash` (`HostOffer::statement`). The key pair is made on first use and kept in
+`identity.toml` in the configuration directory (`oag_game::identity`, mode 0600).
+
+### Where it lives
+
+| Piece | Where |
+| --- | --- |
+| The key pair and the offer | `oag_net::online::hostkey`, `oag_game::identity` |
+| The lobby's side: signature, bans, limits, probe, launch, hand-off | `crates/net/src/online/server/hosting.rs` |
+| The ban file | `oag_net::online::moderation` |
+| A hosted room's rules (no queue, the owner's edition, closes with its owner) | `oag_net::online::rooms` |
+| The host thread on the player's machine | `oag_net::online::player_host` |
+| The game's side, menus and `--online` | `oag_game::online::Hosting`, `session::online` |
+
+### Limits on what a host controls
+
+| Limit | Value |
+| --- | --- |
+| Player-hosted rooms in all, probes included | 32 (`MAX_HOSTED_ROOMS`) |
+| Player-hosted rooms per address | 2 (`MAX_HOSTED_PER_ADDRESS`) |
+| Probes under way | 4 (`MAX_PROBES`), each one WebTransport handshake of at most 5 s |
+| Hosting requests per connection | one every 5 s (`HOST_ASK_INTERVAL`), one probe at a time |
+| The address probed and handed out | the one the request came from, never one it names |
+| A host that is up and silent | 5 s (`QUIET_TIMEOUT`), then its room is closed |
+| A host that does not load the race | 120 s |
+| A hosted race the lobby hears no end of | 35 minutes |
+
+### Moderation
+
+`oag-server lobby --ban-file PATH`: one ban a line, `key <64 hex digits> [reason]` or `addr <ip>
+[reason]`, `#` for a comment. The file is read again within 2 s of a change; a listed room whose
+host is now banned is closed with the reason. Every registration, refusal, launch and end is a
+`host-log:` line in the lobby's log with the first 16 digits of the key, the address, the name,
+the room and its settings.
+
+### Run it locally
+
+```sh
+target/debug/oag-server lobby --image data/images/pulse-psp-eu.chd \
+  --listen 127.0.0.1:60020 --race-listen 127.0.0.1:60021 --hash-out /tmp/lobby.hash \
+  --ban-file /tmp/bans.txt
+# Ada hosts; port 0 lets the system pick one, which is only any use on one machine.
+target/debug/oag-game data/images/pulse-psp-eu.chd --no-audio --net-bot \
+  --online 127.0.0.1:60020 --lobby-hash @/tmp/lobby.hash --online-name ada --online-team Feisar \
+  --online-create --online-host --online-host-port 0 --online-laps 1 \
+  --online-track 'Data\Environments\01_Track\track.vex' --screenshot /tmp/a.png --ticks 20000
+# Bob joins the first joinable room and is handed Ada's address.
+target/debug/oag-game data/images/pulse-psp-eu.chd --no-audio --net-bot \
+  --online 127.0.0.1:60020 --lobby-hash @/tmp/lobby.hash --online-name bob --online-team Feisar \
+  --screenshot /tmp/b.png --ticks 20000
+```
+
+Measured on 2026-11-17 by `net_hosted_ground_truth` (debug builds, localhost, Pulse EU circuit
+01, one lap, two bots): the lobby logged the registration and sent the launch to the host; the
+guest printed `online: room 1 (player-hosted): 2 in it` and `the race is on 127.0.0.1:<the
+host's port>`; both finished with 0 bad hashes over more than 1,500 checked ticks and a board
+equal to the host's; the lobby logged `room 1's hosted race is over: every person has finished`
+and ran no race child. A host killed mid-race: the lobby logged `host went quiet` and the guest
+printed `the lobby closed the room: the host left: a player-hosted race ends with its host` and
+exited. A host whose profile key was in the ban file exited with `the lobby refused: Banned: you
+may not host on this lobby: altered a race`.
+
+### Tests
+
+- `oag-net` `player_host::` (no disc, real sockets): the signed offer whose port answers is
+  listed with the mark and the host's name; a guest races the host to the end through the
+  hand-off with no bad hash; the host leaving the race ends it for the guest with the reason; a
+  host that vanishes, and one that goes quiet, close the room with the reason; a wrong signature,
+  a second request too soon and a closed port are refused by name; an address hosts only its
+  cap; a banned key is refused and a ban added later delists the room.
+- `oag-net` `hostkey`, `moderation`, the wire round trip; `oag-game` `identity` (made on first
+  use, the same key after, owner-only, a broken file left alone) and `online_screen` (the mark
+  and its line).
+- `oag-game` `net_hosted_ground_truth` (`#[ignore]`d, real processes): the three runs above.
+
+### Open
+
+- HOST GAME from the menus is wired and compiled; no test drives it end to end (the real-process
+  test uses `--online-host`).
+- Nothing helps a host behind a router beyond the refusal: UPnP, hole punching and a relay are
+  ADR-0092's later steps.
+- A host whose lobby link drops loses its room; the host's own record of the race is not kept
+  apart from a server race's (no records are shared yet either way).
+- The anti-cheat path of ADR-0092 decision 7 is design only.
 

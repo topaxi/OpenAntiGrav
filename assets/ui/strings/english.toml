@@ -127,7 +127,7 @@ OAG_ONLINE_KICK_HINT = { text = "CONFIRM TO REMOVE THIS PERSON FROM THE GAME", h
 OAG_ONLINE_HOST_RACE_AGAIN = { text = "THE HOST WANTS TO RACE AGAIN", human = false }
 OAG_ONLINE_MODE_TWO_ONLY = { text = "Head to Head is for two people", human = false }
 OAG_ONLINE_HOSTGAME = { text = "HOST GAME", human = false }
-OAG_ONLINE_HOSTGAME_SUBTITLE = { text = "Run the race on this machine: needs an open UDP port, and the others see your address", human = false }
+OAG_ONLINE_HOSTGAME_SUBTITLE = { text = "Run the race on this machine: needs an open UDP port", human = false }
 OAG_ONLINE_PLAYER_HOSTED = { text = "PLAYER-HOSTED", human = false }
 OAG_ONLINE_PLAYER_HOSTED_HINT = { text = "PLAYER-HOSTED: THE HOST RUNS THE RACE AND MAY CHEAT", human = false }
 OAG_ONLINE_HOST_CHECKING = { text = "CHECKING THAT THE LOBBY CAN REACH THIS MACHINE...", human = false }

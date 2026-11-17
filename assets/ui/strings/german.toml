@@ -77,7 +77,7 @@ OAG_ONLINE_KICK_HINT = { text = "BESTÄTIGEN, UM DIESEN SPIELER AUS DEM SPIEL ZU
 OAG_ONLINE_HOST_RACE_AGAIN = { text = "DER GASTGEBER MÖCHTE NOCH EINMAL FAHREN", human = false }
 OAG_ONLINE_MODE_TWO_ONLY = { text = "Head to Head ist für zwei Personen", human = false }
 OAG_ONLINE_HOSTGAME = { text = "SPIEL HOSTEN", human = false }
-OAG_ONLINE_HOSTGAME_SUBTITLE = { text = "Das Rennen läuft auf diesem Rechner: braucht einen offenen UDP-Port, und die anderen sehen deine Adresse", human = false }
+OAG_ONLINE_HOSTGAME_SUBTITLE = { text = "Rennen auf diesem Rechner: offener UDP-Port nötig", human = false }
 OAG_ONLINE_PLAYER_HOSTED = { text = "VON SPIELER GEHOSTET", human = false }
 OAG_ONLINE_PLAYER_HOSTED_HINT = { text = "SPIELER-HOST: SEIN RECHNER RECHNET DAS RENNEN, KANN MOGELN", human = false }
 OAG_ONLINE_HOST_CHECKING = { text = "PRÜFE, OB DIE LOBBY DIESEN RECHNER ERREICHT...", human = false }

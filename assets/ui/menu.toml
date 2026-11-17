@@ -234,7 +234,7 @@ kind = "action"
 label = "HOST GAME"
 string_id = "OAG_ONLINE_HOSTGAME"
 action = "online_host"
-subtitle = "Run the race on this machine: needs an open UDP port, and the others see your address"
+subtitle = "Run the race on this machine: needs an open UDP port"
 subtitle_string_id = "OAG_ONLINE_HOSTGAME_SUBTITLE"
 
 [[page.entry]]

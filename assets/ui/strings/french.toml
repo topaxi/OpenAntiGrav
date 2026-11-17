@@ -116,7 +116,7 @@ OAG_ONLINE_KICK_HINT = { text = "CONFIRMER POUR RETIRER CE JOUEUR DE LA PARTIE",
 OAG_ONLINE_HOST_RACE_AGAIN = { text = "L'HÔTE VEUT FAIRE UNE AUTRE COURSE", human = false }
 OAG_ONLINE_MODE_TWO_ONLY = { text = "Le face-à-face est pour deux personnes", human = false }
 OAG_ONLINE_HOSTGAME = { text = "HÉBERGER UNE PARTIE", human = false }
-OAG_ONLINE_HOSTGAME_SUBTITLE = { text = "La course tourne sur cette machine : il faut un port UDP ouvert, et les autres voient votre adresse", human = false }
+OAG_ONLINE_HOSTGAME_SUBTITLE = { text = "Course sur cette machine : port UDP ouvert requis", human = false }
 OAG_ONLINE_PLAYER_HOSTED = { text = "HÉBERGÉE PAR UN JOUEUR", human = false }
 OAG_ONLINE_PLAYER_HOSTED_HINT = { text = "HÔTE JOUEUR : SA MACHINE GÈRE LA COURSE ET PEUT TRICHER", human = false }
 OAG_ONLINE_HOST_CHECKING = { text = "VÉRIFICATION : LE SALON PEUT-IL JOINDRE CETTE MACHINE...", human = false }
