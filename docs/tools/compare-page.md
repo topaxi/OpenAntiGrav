@@ -566,6 +566,23 @@ from the original's body (`--pose`, the field file, `--read-pose`); only post-bo
 - **Open, ring panel strobe.** At the original's clock ours draws the ring's glass panels cyan where the original's are dark blue; at
   other clocks ours is dark (offsets 0 to 150 give a dark ring, 119.81 a lit one). The panels' phase is not the world clock's
   linear read, or they run on a faster flicker; not investigated.
+- **HD: every grab of the original records the world clock (2026-11-18, `hd-clock-gate`; maintainer: "the tooling shall also ensure that future HD/Fury screenshots will include world clock time").**
+  The one grab path is `grab_with_clock` in `scripts/rpcs3-drive.py` (`screenshot()` and `record_clock()` wrap it; `rpcs3-drive.py grab PATH` is
+  the shell form). It takes the frame, then reads the clock through `rpcs3_hd_field.world_clock_record` and writes `<stem>.clock.json` beside the
+  image (`world_clock_s`, `lap_clock_s`, `world_clock_offset_s`, `nodes`, `total`, `scan`, `screen`, `grabbed_at`). Outside a race (no player craft with a
+  lap clock in the craft array) it writes `null` and a `reason` instead of a clock: after a race the freed `MeshImporter` nodes still read a plausible
+  frozen time, so the read is gated on a live player craft. The first read of a process scans the heap (0.7 to 1.3 s over `serve`'s socket), later
+  ones re-read 24 cached nodes (0.01 s) and rescan when they stop agreeing. `rpcs3-drive.py capture` takes its `ship.scenery_clock` from the same
+  grab, so `rpcs3-hd-pair.py`'s `original.world_clock_offset_s` / `world_clock_s` come from this path. Caveats: `world_clock_s` is read right
+  after the grab, so on a running game it is the moment of the read, not of the presented frame (which lags it); and the offset `world clock - lap
+  clock` is per moment, because the lap clock restarts at each lap (offset 5.84 s on lap 1 and 48.12 s on lap 3 of one Talon's Junction state).
+  A film (`rpcs3-hd-shipselect-film.py`, ffmpeg x11grab) gets one sidecar for its start (`film.clock.json`); its frames are not stamped.
+  Two checks: `just check-hd-clock-grab` (`scripts/check-hd-clock-grab.py`) fails an RPCS3/HD script that shells out to `import`, `xwd`,
+  `grim` or `x11grab` itself, and a helper that stopped writing the sidecar; `check-pair-provenance` (rule `hd_world_clock`, in
+  `compare_provenance.py`) fails an HD race, scenery or zone pair without a numeric `original.world_clock_offset_s`, and a menu or loading pair
+  without `original.world_clock_note`; `Pair.finish` refuses it at make time too (override: `--accept-provenance hd_world_clock=REASON`). Pairs
+  made before are frozen in `HD_CLOCK_BASELINE` (7: `hd/talons-assegai-c1`, `hd/loading-loading` and five `hd/menu-*`); an entry that
+  now complies fails the scan until it is removed, so the list only shrinks. Other titles: not covered, see the rows above.
 - **Open, 2048, Omega, Pure world clocks.** No `MeshImporter` equivalent is located: the 2048 and Omega executables carry no
   `MeshImporter` string, and `find_similar_functions_fuzzy` of HD's `MeshImporter_AdvanceTime` (`0x002be9c0`) into the 2048 eboot at
   threshold 0.5 returns nothing (PPC to Thumb-2). Pure's `BOOT.BIN` is not in the open Ghidra (`/pulse` and `/omega`, `/2048`, `/hdfury` are),
