@@ -141,6 +141,7 @@ impl Scene {
         cull: TrackCull<'_>,
         scratch: &mut Vec<mesh::GpuVertex>,
     ) {
+        self.write_caustic(queue, view_projection, prev_vp);
         if let Some(track) = &self.track_shine {
             let view = race.view();
             let seconds = self.anim_clock.get();

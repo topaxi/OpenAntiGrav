@@ -60,6 +60,9 @@ impl Scene {
         if let Some(shine) = &mut self.track_shine {
             shine.share_scene(device, blocks);
         }
+        if let Some(caustic) = &mut self.track_caustic {
+            caustic.share_scene(device, blocks);
+        }
         for drawable in self.flares.iter_mut().chain(&mut self.boost).flatten() {
             drawable.share_scene(device, blocks, SceneKind::Flame);
         }
@@ -114,6 +117,9 @@ impl Scene {
         self.wrecks.share_uniforms(device, blocks);
         if let Some(shine) = &mut self.track_shine {
             shine.share_uniforms(device, blocks);
+        }
+        if let Some(caustic) = &mut self.track_caustic {
+            caustic.share_uniforms(device, blocks);
         }
         if let Some(gantry) = &mut self.gantry {
             gantry.share_uniforms(device, blocks);

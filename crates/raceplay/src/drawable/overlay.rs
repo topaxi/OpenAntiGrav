@@ -255,13 +255,14 @@ impl Drawable {
     }
 
     /// Draws a circuit's extra pass: the draws [`Self::track_shine_shown`] answers, through the
-    /// pipelines built with this drawable's own blend.
+    /// pipelines built with this drawable's own blend. `sources` are the circuit draws the pass's
+    /// draws from `first` redraw.
     pub(crate) fn draw_track_shine(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
         block: ViewBlock,
         track: &Drawable,
-        sources: &[usize],
+        (sources, first): (&[usize], usize),
         cull: TrackCull<'_>,
     ) -> SceneStats {
         let mut stats = SceneStats::default();
@@ -277,7 +278,7 @@ impl Drawable {
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         let mut current: Option<&wgpu::RenderPipeline> = None;
         for index in self.track_shine_shown(block, track, sources, cull) {
-            let draw = &self.model.draws[index];
+            let draw = &self.model.draws[first + index];
             let pipeline = &self.blend_pipeline[usize::from(draw.culled)];
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
                 pass.set_pipeline(pipeline);
