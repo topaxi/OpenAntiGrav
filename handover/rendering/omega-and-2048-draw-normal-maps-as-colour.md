@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [2048, omega]
-updated: 2026-11-11
+updated: 2026-11-17
 summary: "pipe strip and Chenghou emmissivenew wired (2048 41 to 3, Omega 149 to 67); left: water edge, temp_diffuse, Omega jd_*_n/rocks/amb_glass"
 categories: [rendering]
 ---
@@ -84,6 +84,9 @@ non-lightmap texture) and so still draw it.
   of the plain family and its `_emmissive_alpha` are unread. Evidence: `docs/formats/gxp.md`,
   "`diffuse_normal_specular_emmissivenew` colours by `Texture1`...".
   Left on 2048 (3): the Altima water edge (1), `temp_diffuse` on Square and Subway (2).
+- **2026-11-17 (`water-re`):** 2048's `fc15` water law is read (one `NormalMap` tap at `u + 0.05 t`, no reflection)
+  and Omega replaces it with a `reflectplane_*` family (`docs/rendering/water.md`). The Altima edge program is still
+  unread; it is lane 5 of [water-setting-across-titles.md](water-setting-across-titles.md).
 
 ## Next Steps
 

@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd, 2048, omega]
-updated: 2026-11-01
-summary: "Vineta K: HD rock-to-sand blend unread, sea ripple needs the paraboloid probe; 2048/Omega target drawn, rt_icetunnel (Sebenco) glass law unread"
+updated: 2026-11-17
+summary: "Vineta K: HD rock-to-sand blend unread, sea ripple readable (water thread lane 1); 2048/Omega target drawn, rt_icetunnel (Sebenco) glass law unread"
 ---
 
 # Vineta K's glass refraction and arch glow: what is left
@@ -34,6 +34,9 @@ a scratch directory, not kept (`report.md`, `shots/`, `sweep/`).
 - **The sea sheet is a smooth gradient where the capture's is rippled**: its `TC1 * R` term, the runtime 512x256
   dual-paraboloid `paraboloidReflectionTex`, is not drawn; its lower half has no disc source found (rcsmaterial.md
   section 2). This is now the largest difference at the top of the target.
+  **2026-11-17 (`water-re`): no longer blocked.** The probe is the circuit's sky (hd-track-tone.md, drawn for the
+  glass), and the three wave taps' scales and scroll rates are read (`docs/rendering/water.md`, "HD/Fury: Vineta K
+  and Amphiseum"). Wiring is lane 1 of [water-setting-across-titles.md](water-setting-across-titles.md).
 - **Why the glass's literal coordinate is twice the target's.** `refractProject` and `distortion` as read give
   `(1 + x/w, 1 - y/w)`; the picture agrees with `0.5 + 0.5 (x/w, -y/w)` (90 % against 0 % on 7,341 pane pixels).
   A texture normalisation rule of the linear `R5G6B5` target is the likely reason; unread.

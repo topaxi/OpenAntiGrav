@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd, omega]
-updated: 2026-10-22
-summary: "HD sea reflection probe (what renders into the runtime target) and Omega's water are open"
+updated: 2026-11-17
+summary: "HD sea reflection is planar (camera unread); Omega's Sebenco pond is rt_snow_ref, unwired; ice facing term open"
 ---
 
 # Sebenco and Vineta K: scalar maps fixed, ice water drawn; the sea's reflection and Omega's water stay open
@@ -42,6 +42,10 @@ lane wide is a scalar, not the colour".
   with `_1`/`_2` shader splits; PS4 GNM shaders, so the microcode classifiers here do not run). Checked, applies, not wired: the
   three ice colours are model parameters, so wiring `Sebenco_ice` there is a parameter read plus the same shader branch
   (`slots::ICE`, `GpuVertex::texcoord2`). 2048 differs (`dc_seawater`, no Sebenco ice).
+- **2026-11-17 (`water-re`):** what Omega's water programs declare is read (`docs/rendering/water.md`, "Omega"):
+  Moa Therma's sea has HD's interface, Amphiseum's `water` reads a cube, and the pond of Omega's `track.final.rcsmodel` draws with `rt_snow_ref`
+  (`Sebenco_ice` ships in the archive and no submesh of that model uses it; census on the same page). HD's sea reflection is a planar target fed by render-flag bit-3
+  chunks, not the paraboloid; its camera is unread. Lanes: [water-setting-across-titles.md](water-setting-across-titles.md).
 
 ## Next Steps
 
