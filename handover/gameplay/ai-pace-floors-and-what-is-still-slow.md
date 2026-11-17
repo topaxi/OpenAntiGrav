@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-03
-summary: "AI pace: 2048 sol has its floor now, a road gap at 3553-3620 still loops the field (air-pitch lever unproven, queued); 06 and others still slow"
+updated: 2026-11-17
+summary: "AI pace: sol's field laps at every level (2048, Omega); a relocated craft still loops at sol's earlier gap; 06 and others still slow"
 size: M (40)
 difficulty: medium (40)
 ---
@@ -18,22 +18,29 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 
 ## Open
 
-- **2048 `sol`: the floor is in (2026-11-03, lane `2048-sol-ai-laps`); a gap
-  in the road still loops 2048's field.** The 153-respawn loop was a missing
-  floor, not the driver: the `.vex`'s lone `Reset` node kept `track_col.col`
-  out (`docs/formats/2048-collision.md`, "Which circuits read the container";
-  `crates/raceplay/tests/sol_ground_truth.rs`). Left: ring samples 3553-3620
-  are a gap after a speed pad (~3530), shared by every route. It clears from
-  about 170 u/s at the lip; the verifier reaches 173 (cruise 129.4 u/s), the
-  field 166-169 (cruise 124-125, plain seed-0 driver 127.6). Bit 0 covers line
-  3384-3647, so the original's relocation puts the craft back at ~3274 and it
-  meets the lip at the same speed: the rescue is faithful, the miss is the
-  driver's. Numbers on `docs/gameplay/ai.md`, "Floors in the speed plan".
-  2048 after the floor, field of seven, VENOM, 12,000 ticks, respawns per craft:
-  Novice 6/35/12/34/34/3/33, Skilled 19/21/4/35/8/8/22, Elite 21/2/2/21/3/13/6,
-  Ace 36/9/9/13/1/22/5 (craft with a flying lap: 2, 3, 4, 3 of 7). Omega's
-  `sol` (HD hulls): Elite 0/1/1/3/5/1/4 and Ace 3/2/1/2/1/3/3, every craft
-  laps; Novice and Skilled 1-35.
+- ~~**2048 `sol`: a gap in the road loops the field.**~~ Closed 2026-11-17,
+  lane `sol-gap`: a field of seven laps at every level on 2048 and Omega
+  (`sol_ground_truth::a_field_of_seven_laps_*`, eight tests). The miss was not
+  marginal lip speed on one handling: the plan's lap is flown on slot 7's hull
+  and four of seven fly a slower one that does not clear the gap on the plan's
+  own line, and air pitch does nothing (the flight is ballistic). Full nose up
+  on the ground over the run-up lands every hull. The rule, the per-hull
+  numbers and the before/after tables: `docs/gameplay/ai.md`, "A lip on a
+  descent is taken nose up".
+- **`sol`, what is left** (same section, "Still open on `sol`"):
+  - A craft relocated to about 957 loops at the earlier gap (ring 1118-1306,
+    not a diving takeoff): it reaches the lip at 178-179 u/s against a flying
+    craft's 191, lands 21 units left and 20 under the line and meets a reset
+    volume. 2048 Ace, slot 7: 12 times in a row. It is why that row's claim is
+    decided at tick 11,787 of 12,000.
+  - The gap at 3556 is still missed 5 to 10 times a run on 2048 (1 to 3 on
+    Omega): a craft in traffic more than about 7 units off the line misses the
+    pad. Dropping the traffic exception summed 83 respawns against 98 over the
+    eight runs on an earlier form of the rule, not separated from scatter.
+  - Reset-volume respawns at 4100-4199, 2 to 7 a run at Novice and Skilled.
+    Not looked into.
+  - The feisar hull's own ring plan was not re-checked for verifying with the
+    rule; the field drives the reference's adapted or fallback copy.
 - **Floors still in use** (plans holding a ceiling at or under 20 u/s): Pulse
   `07_Track` VENOM (2141, 2144-2145, 2375), HD `04_Track` PHANTOM (2307), Pure
   Citta Nuova VENOM (1493). The trough plan does not win there.
@@ -69,28 +76,21 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 - **Omega**: loads now (2026-10-12: `OAG_SWEEP_TITLE=omega
   OAG_SWEEP_ONLY=cathedral`, about 15 s a slice), but its pace was not
   measured against gold. A full forward lone slice runs 10-17 minutes under
-  load. It re-ships 2048's circuits, so `sol` is the first thing to check
-  there.
+  load. Its `sol` field is measured since 2026-11-17 (laps at every level).
 - **Elite (the default)** costs 7.5 % of the Ace's lone lap on `07_Track` and
   `23_Track`, against 1-2 % elsewhere. A design question, not a defect.
 
 ## Next Steps
 
 - **Decided 2026-10-11 (maintainer): campaign cells topping out at Elite (`tune_at_scale` clamps at 3.0, no cell reaches Ace) is intended.** Not a gap.
-1. `sol` gap (queued follow-up, opus). A one-off test held a constant air
-   pitch on every airborne tick in place of the trim (`steer_y`, positive
-   nose up): Ace field respawns summed 95 with the trim, 79 at 0, 45 at +0.5,
-   34 at +1, 33 at -1, and both signs cleared and fell from 167-169 u/s lips.
-   No sign effect: the gap is marginal. First find which held air pitch,
-   applied only over 3553-3620, changes the outcome, and its sign; and why a
-   race craft cruises 2-5 u/s under the verifier on the same handling
-   (personality wander costs ~2; four of 2048's seven opponents fly the
-   player's `feisar2048\3` because the native team ids lack their variant,
-   `handover/tooling/2048s-track-vex-parses-but-two-binary-formats-changed.md`).
-   Then a narrow rule (unsupported line run only) with the lone board,
-   `ai_clean_lap_gate` and the determinism hashes unchanged, and the claim
-   test: a field of seven at every level laps on 2048 `sol` within 12,000
-   ticks. About 3 hours. Size M (40), difficulty medium (40).
+1. `sol`'s earlier gap after a relocation (ring 1118-1306). Trace it with
+   `OAG_SWEEP=1 OAG_SOL_SLOT=7 OAG_SOL_FROM=930 OAG_SOL_TO=1330
+   OAG_SOL_TICKS=12000 ... sol_ground_truth::gap_run_up_trace`. Two things to
+   weigh: where the relocation puts the craft (bit 0 crumbs, the original's)
+   against the run-up the two pads at 990 and 1110 need, and the line the
+   craft takes off on (it lands 21 units left). Then widen the claim test's
+   margin (2048 Ace has 213 ticks to spare). About 2 hours. Size S (25),
+   difficulty medium (40).
 2. `06_Track` VENOM: aim the run-up at the landing sample. About 2 hours.
 3. `cathedral` PHANTOM: a plan-aware roll or the rescue gap, then re-run
    the 2048 lone and field PHANTOM slices. About 2 hours.
