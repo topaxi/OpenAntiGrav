@@ -190,9 +190,16 @@ fn the_boot_trim_applies_the_water_row_trim() {
         "undrawn laws stay hidden"
     );
     let mut definition = built_in();
-    oag_game::menu_tree::finish_definition(&mut definition, oag_2048::TITLE, &strings, &|_| true);
+    oag_game::menu_tree::finish_definition(&mut definition, oag_omega::TITLE, &strings, &|_| true);
     assert!(
         offered(&definition).is_empty(),
         "the row is gone where nothing in it changes the picture"
+    );
+    let mut definition = built_in();
+    oag_game::menu_tree::finish_definition(&mut definition, oag_2048::TITLE, &strings, &|_| true);
+    assert_eq!(
+        offered(&definition),
+        ["off", "original"],
+        "2048's own sea draws under original, so the row stays"
     );
 }
