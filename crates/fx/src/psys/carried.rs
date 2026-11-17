@@ -64,7 +64,10 @@ impl Stage {
         Some(playing)
     }
 
-    fn carry(&mut self, playing: Playing, effect: &Effect, velocity: Vec3) {
+    /// Gives an already-playing instance of `effect` the inherited `velocity`, as
+    /// [`Self::play_carried`] does at its start: for an instance started by another call
+    /// (an attached or riding one).
+    pub fn carry(&mut self, playing: Playing, effect: &Effect, velocity: Vec3) {
         if let Some(instance) = self.instances.get_mut(usize::from(playing.index)) {
             instance.system.carry(effect, velocity);
         }

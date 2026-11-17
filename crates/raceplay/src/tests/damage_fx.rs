@@ -10,14 +10,20 @@ use oag_title::Trigger::{DamageCritical, DamageMild, DamageModerate};
 use oag_weapons::projectile::WeaponHit;
 
 fn race_with_smoke(smoke: bool) -> Race {
+    race_with_smoke_inheriting(smoke, 0.0)
+}
+
+/// A race whose three smokes inherit `inherit` times the craft's velocity (the record's `+0x4d0`).
+fn race_with_smoke_inheriting(smoke: bool, inherit: f32) -> Race {
     let mut handling = hulled_handling();
     handling.dimensions.shield = 100.0;
     let mut setup = setup(handling);
     if smoke {
         for trigger in [DamageMild, DamageModerate, DamageCritical] {
             let blob = super::respawn::one_emitter_pob(super::respawn::trigger_name(trigger), 0);
-            let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+            let mut effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
                 .expect("the hand-laid effect parses");
+            effect.emitters[0].velocity_inherit = inherit;
             setup.handles.insert(trigger, effect);
         }
     }
@@ -162,4 +168,72 @@ fn a_leachbeam_hit_throws_the_attached_spark_where_the_title_has_no_locators() {
     assert_eq!(race.damage_smokes_started_for_tests(), 2, "no hold");
     hit_leaving(&mut race, 90.0, false);
     assert_eq!(race.damage_smokes_started_for_tests(), 2, "not a LeachBeam");
+}
+
+/// A hit that changes the state ends the previous state's smoke outright: the old instance is
+/// gone with its particles, not left to finish (`particle-triggers.md`, "the damage smoke
+/// re-read"). Red to green: without the kill both instances' particles are alive.
+#[test]
+fn a_state_change_kills_the_previous_smoke_with_its_particles() {
+    let mut race = race_with_smoke(true);
+    hit_leaving(&mut race, 90.0, false);
+    for _ in 0..2 {
+        race.tick(&PlayerInputs::none());
+    }
+    let mild = race.view.stage.alive_count();
+    assert!(mild > 0, "the mild smoke has particles on screen");
+    assert_eq!(race.damage_smoke_anchors_for_tests().len(), 1);
+
+    hit_leaving(&mut race, 55.0, false);
+    assert_eq!(
+        race.damage_smoke_anchors_for_tests().len(),
+        1,
+        "the mild smoke still rides after the state changed"
+    );
+    assert_eq!(
+        race.view.stage.alive_count(),
+        0,
+        "the previous state's particles survived the change"
+    );
+
+    for _ in 0..2 {
+        race.tick(&PlayerInputs::none());
+    }
+    hit_leaving(&mut race, 20.0, false);
+    assert_eq!(
+        race.damage_smoke_anchors_for_tests().len(),
+        2,
+        "critical rides its own two, moderate's is gone"
+    );
+}
+
+/// The smoke's particles carry the craft's velocity (over 60 in the original, per tick; ours
+/// in units a second like every carried burst). Red to green: without `carry` the two runs
+/// agree.
+#[test]
+fn the_damage_smoke_carries_the_crafts_velocity() {
+    let farthest_after_hit = |velocity: Vec3| {
+        let mut race = race_with_smoke_inheriting(true, 1.0);
+        race.sim.world.ships[0].physics.body.linear_velocity = velocity;
+        hit_leaving(&mut race, 90.0, false);
+        let at = race.sim.world.ships[0].physics.body.position;
+        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        for _ in 0..10 {
+            race.view
+                .stage
+                .advance(race.dt(), &mut oag_core::Rng::new(1));
+        }
+        let (additive, _) = race.view.stage.vertices(Vec3::X, Vec3::Y);
+        assert!(!additive.is_empty(), "the smoke drew nothing");
+        additive
+            .iter()
+            .map(|v| v.position[2] - at.z)
+            .fold(f32::MIN, f32::max)
+    };
+    let carried = farthest_after_hit(Vec3::new(0.0, 0.0, 60.0));
+    let resting = farthest_after_hit(Vec3::ZERO);
+    assert!(
+        carried > resting + 1.0,
+        "carried {carried} resting {resting}: the smoke did not take the craft's velocity"
+    );
 }

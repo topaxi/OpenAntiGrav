@@ -14,6 +14,21 @@
 use super::*;
 use crate::handles::EffectHandles;
 
+/// A craft-to-craft contact on a seat's craft this tick, from
+/// [`Race::resolve_craft_pairs`]: where the hulls touched and the pair's impulse.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct PairContact {
+    pub(super) point: Vec3,
+    pub(super) impulse: f32,
+}
+
+/// What touched a seat's craft this tick: its wall contact and its craft-to-craft one.
+#[derive(Clone, Copy)]
+pub(super) struct Touch<'a> {
+    pub(super) evaluated: &'a Evaluated,
+    pub(super) pair: Option<PairContact>,
+}
+
 /// The effects one seat's wall hits raise.
 #[derive(Debug)]
 pub(super) struct ContactFx {
@@ -131,8 +146,9 @@ impl ContactFx {
         ship: &Ship,
         model_matrix: Mat4,
         dt: f32,
-        evaluated: &Evaluated,
+        touch: Touch,
     ) {
+        let Touch { evaluated, pair } = touch;
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically
         // rather than spawn once and go silent.
@@ -166,6 +182,27 @@ impl ContactFx {
             } else {
                 evaluated.wall.impact && self.cooldown <= 0.0
             };
+        // A craft-to-craft contact restarts the attached spark exactly as a wall record does
+        // (`docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`, "who owns the looping
+        // spark"). Only where the effect is attached: a burst title's pair contact is thrown by
+        // the hit-spark locators instead (`Race::throw_contact_spark`).
+        let pair_fire = if attached_effect && !shielded && !self.attached && !can_fire {
+            pair
+        } else {
+            None
+        };
+        if let Some(pair) = pair_fire {
+            let (anchor_model, up_model) = nearest_locator(collision_fx, model_matrix, pair.point);
+            self.anchor = Some(anchor_model);
+            self.anchor_up = Some(up_model);
+            if let Some(effect) = effect.as_deref() {
+                self.sparks
+                    .ignite(effect, pair.point, sparks::severity(pair.impulse));
+            }
+            self.ignitions += 1;
+            self.cooldown = oag_gameplay::cue::COLLISION_COOLDOWN;
+            self.attached = true;
+        }
         if can_fire && let Some(contact) = evaluated.wall.resolved {
             // `contact.point` is deliberately the *penetrating* hull sample
             // point, not the wall surface - see its doc comment on
@@ -184,17 +221,7 @@ impl ContactFx {
             // no locators authored, the surface point itself is mapped into
             // model space, aimed along world up, so it still rides the hull
             // with rotation.
-            let (anchor_model, up_model) = collision_fx
-                .iter()
-                .min_by(|a, b| {
-                    let da = (model_matrix.transform_point3(a.position) - surface).length_squared();
-                    let db = (model_matrix.transform_point3(b.position) - surface).length_squared();
-                    da.total_cmp(&db)
-                })
-                .map_or_else(
-                    || (model_matrix.inverse().transform_point3(surface), Vec3::Y),
-                    |anchor| (anchor.position, anchor.up),
-                );
+            let (anchor_model, up_model) = nearest_locator(collision_fx, model_matrix, surface);
             self.anchor = Some(anchor_model);
             self.anchor_up = Some(up_model);
             if let Some(effect) = effect.as_deref() {
@@ -243,7 +270,10 @@ impl ContactFx {
         // rule does not generalise to the four HD effects that mix `LOOPING`
         // with clear siblings - it would truncate the siblings. None of the
         // four is wired to this trigger.
-        if self.attached && evaluated.wall.resolved.is_none() {
+        //
+        // A pair contact counts as a contact: the original's flag is set by any record that
+        // asks for the spark, a hull pair's included (`0x000ebf8c`..`0x000ebfb8`).
+        if self.attached && evaluated.wall.resolved.is_none() && pair.is_none() {
             self.sparks.stop();
             self.attached = false;
         }
@@ -266,4 +296,24 @@ impl ContactFx {
             self.sparks.advance(effect, dt, anchor, up, &mut self.rng);
         }
     }
+}
+
+/// The `Ship Collision Fx` locator nearest `point` as (position, `+Y`), model space; with none
+/// authored, `point` mapped into model space aimed along world up.
+fn nearest_locator(
+    collision_fx: &[oag_livery::SparkAnchor],
+    model_matrix: Mat4,
+    point: Vec3,
+) -> (Vec3, Vec3) {
+    collision_fx
+        .iter()
+        .min_by(|a, b| {
+            let da = (model_matrix.transform_point3(a.position) - point).length_squared();
+            let db = (model_matrix.transform_point3(b.position) - point).length_squared();
+            da.total_cmp(&db)
+        })
+        .map_or_else(
+            || (model_matrix.inverse().transform_point3(point), Vec3::Y),
+            |anchor| (anchor.position, anchor.up),
+        )
 }

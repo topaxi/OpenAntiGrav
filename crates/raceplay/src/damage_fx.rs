@@ -16,7 +16,10 @@
 //! the same state does nothing; a hit that changes the state plays the new one
 //! straight away; once it has run out any hit plays the current state again.
 //! The smoke is therefore per hit and not a level: nothing replays it while the
-//! craft simply flies, and a recharge draws nothing.
+//! craft simply flies, and a recharge draws nothing. A state change ends the previous state's
+//! smoke outright, particles included (`0x002a1994`), and every smoke carries the craft's
+//! velocity (`0x002a1c18`; `docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "the
+//! damage smoke re-read").
 //!
 //! # Chosen, not measured
 //!
@@ -94,6 +97,8 @@ pub fn plays(state: State, last: State, hold: f32) -> bool {
 struct Riding {
     slot: usize,
     playing: psys::Playing,
+    /// A damage state's smoke, which the next state kills; not a LeachBeam spark.
+    state_smoke: bool,
 }
 
 /// The damage smoke's own state: per-craft state and hold, and the instances
@@ -142,13 +147,23 @@ impl Race {
             return;
         }
         let at = self.drawn_position(slot);
+        let velocity = ship.physics.body.linear_velocity;
+        let changed = state != self.view.damage_fx.last[slot];
         let mut any = false;
         for &trigger in state.triggers() {
             let Some(effect) = self.view.handles.get(trigger).cloned() else {
                 continue;
             };
+            if changed && !any {
+                self.kill_state_smoke(slot);
+            }
             if let Some(playing) = self.view.stage.play_riding(&effect, at, 1.0) {
-                self.view.damage_fx.riding.push(Riding { slot, playing });
+                self.view.stage.carry(playing, &effect, velocity);
+                self.view.damage_fx.riding.push(Riding {
+                    slot,
+                    playing,
+                    state_smoke: true,
+                });
                 self.view.damage_fx.started += 1;
                 any = true;
             }
@@ -177,9 +192,27 @@ impl Race {
             return;
         };
         if let Some(playing) = self.view.stage.play_riding(&effect, at, 1.0) {
-            self.view.damage_fx.riding.push(Riding { slot, playing });
+            self.view.damage_fx.riding.push(Riding {
+                slot,
+                playing,
+                state_smoke: false,
+            });
             self.view.damage_fx.started += 1;
         }
+    }
+
+    /// Ends `slot`'s previous damage state outright, particles included (`0x002a1994`, which
+    /// calls `0x0027f7b0(.., 1)` and `0x00285868`; `particle-triggers.md`, "the damage smoke
+    /// re-read").
+    fn kill_state_smoke(&mut self, slot: usize) {
+        let stage = &mut self.view.stage;
+        self.view.damage_fx.riding.retain(|smoke| {
+            let ends = smoke.slot == slot && smoke.state_smoke;
+            if ends {
+                stage.kill(smoke.playing);
+            }
+            !ends
+        });
     }
 
     /// Counts the holds down and keeps every emitting smoke on its craft.

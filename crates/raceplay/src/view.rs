@@ -81,6 +81,9 @@ pub struct RaceView {
     /// The seat's wall-contact effects: the camera shake, the collision sparks and
     /// what paces them. See [`ContactFx`](super::contact_fx::ContactFx).
     pub(super) contact: super::contact_fx::ContactFx,
+    /// Each craft's craft-to-craft contact of this tick, set by `resolve_craft_pairs` and read
+    /// by the seat's [`ContactFx`](super::contact_fx::ContactFx) the same tick.
+    pub(super) pair_contacts: [Option<super::contact_fx::PairContact>; MAX_SHIPS],
     /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
     pub(super) camera_override: Option<CameraOverride>,
     /// The HUD's race state imposed on the primary readout. See [`crate::CaptureHud`].

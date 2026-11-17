@@ -392,3 +392,12 @@ it stops it (`0x000ed0cc`), then clears the byte. The same block decays the cont
   compares HD against throughout
 - [`ps4-omega-eu/ship-collision-fx.md`](../ps4-omega-eu/ship-collision-fx.md) -
   the second, independent reading that raised this page's confidence
+
+## 2026-11-17: the pair contact starts the attached spark
+
+`ContactFx::advance` takes the seat's craft-to-craft contact (`PairContact`, set by
+`Race::resolve_craft_pairs`) beside the wall contact: it ignites the attached
+`WO_SHIP_COLL_SPARK_DAMAGE` at the nearest locator when the effect is looping, and the stop rule
+counts a pair contact as a contact. Test `a_pair_contact_starts_and_ends_the_attached_spark`.
+Burst-effect titles (Pulse, Pure) are untouched by the gate. 2048 and Omega: checked, applies,
+not wired.
