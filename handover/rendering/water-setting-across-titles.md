@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-17
-summary: "Setting, HD taps, 2048 fc15 and Pulse/Pure enhanced landed; next the RPCS3 sea pair, the planar reflection, 2048 fc17 alpha, Omega law, the borrowed laws"
+summary: "Setting, HD taps, 2048 fc15, Pulse/Pure enhanced landed; next RPCS3 sea pair, planar reflection, 2048 fc17 alpha, Omega law, borrowed laws"
 categories: [rendering, frontend]
 size: XL (60)
 difficulty: medium (55)
