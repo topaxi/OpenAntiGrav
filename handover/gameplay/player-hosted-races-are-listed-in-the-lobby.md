@@ -2,7 +2,7 @@
 status: re-first
 titles: [all]
 updated: 2026-11-17
-summary: "Version one: the server runs the lobby and two races; further races are hosted by players, listed in the lobby and marked as player-hosted"
+summary: "Version one: lobby plus two server races; further races hosted by registered players, listed with a mark and moderated (bans)"
 categories: [tooling]
 ---
 
@@ -50,7 +50,24 @@ unfair latency, etc.)."
    only): it uses the certificate-hash method through the lobby's hand-off, as today.
 6. **When the host leaves.** The race ends for everyone (or, later, the journal moves to
    another player or to the server if a slot is free; decision 1 makes that possible).
-7. **Strings and screens.** The lobby's room list gets the mark and a short explanation;
+7. **Registration to host (maintainer, 2026-11-17: "maybe registration is needed for
+   'serving' a game, so that moderating and banning will be possible").** Joining stays
+   open; hosting a listed race needs a registered identity the lobby can moderate. Options,
+   lightest first (chosen, not measured; none built):
+   - **A key pair per player**, made on first use and kept in the profile; the host signs
+     its registration and the lobby knows it by the public key. No email, no password. A
+     ban is by key (plus address as a speed bump); a banned player can make a new key, so
+     this alone stops only casual abuse.
+   - **A key bound to an account** the operator approves or that comes from a platform
+     login (Steam, for example): costlier to replace, so a ban holds. Needs an account
+     store on the server, which the roadmap so far has none of.
+   - Moderation the lobby needs either way: a report button on a player-hosted room, an
+     operator command to delist a room and ban a host (and list bans), a log of who hosted
+     what and when, and a reason shown to a banned host. The ban list lives with the lobby
+     (a file on the server for version one).
+   Where accounts sit relative to the roadmap ("Not covered": accounts are outside it)
+   is the maintainer's call.
+8. **Strings and screens.** The lobby's room list gets the mark and a short explanation;
    rows need `string_id` and English text (CLAUDE.md, `just check-strings`).
 
 ## Next Steps
