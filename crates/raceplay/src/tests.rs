@@ -18,7 +18,6 @@ use super::*;
 use oag_vex::track;
 
 mod autopilot;
-mod hand_back;
 mod between_ticks;
 mod bindless;
 mod blast_push;
@@ -62,6 +61,7 @@ mod extension_names;
 mod extension_odds;
 #[cfg(feature = "extensions")]
 mod extension_replay;
+mod hand_back;
 
 #[cfg(feature = "extensions")]
 mod extension_picks;

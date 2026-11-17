@@ -800,9 +800,7 @@ impl Race {
             if !self.may_use_pickup(slot) {
                 continue;
             }
-            let holds_fire = if self.sim.world.controllers[slot]
-                == oag_gameplay::Controller::Away
-            {
+            let holds_fire = if self.sim.world.controllers[slot] == oag_gameplay::Controller::Away {
                 false
             } else if self.sim.world.controllers[slot].is_human() {
                 // That slot's own held state. An autopilot blend takes the pad

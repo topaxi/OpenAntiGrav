@@ -417,7 +417,13 @@ pub(crate) fn drop_and_return(
 
 fn holding_turbo(params: &RaceParams) -> Box<Race> {
     let mut race = headless(params);
-    for ship in race.sim.world.ships.iter_mut().take(usize::from(params.people)) {
+    for ship in race
+        .sim
+        .world
+        .ships
+        .iter_mut()
+        .take(usize::from(params.people))
+    {
         ship.pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
     }
     race
@@ -435,12 +441,8 @@ fn a_person_whose_link_drops_comes_back_to_their_seat_and_the_hashes_agree() {
     let mut host = Host::new(holding_turbo(&params), params.clone());
     let (mut clients, tokens) = tokened(&mut host, 2, &mut || holding_turbo(&params));
     let mut handed_back_at = None;
-    let (mismatches, matches) = drop_and_return(
-        &mut host,
-        &mut clients,
-        &tokens,
-        (600, 900, 1300),
-        |host| {
+    let (mismatches, matches) =
+        drop_and_return(&mut host, &mut clients, &tokens, (600, 900, 1300), |host| {
             let at = host.tick_number();
             let world = &host.race().sim.world;
             if at == 700 {
@@ -451,8 +453,7 @@ fn a_person_whose_link_drops_comes_back_to_their_seat_and_the_hashes_agree() {
                 assert_eq!(world.controllers[1], Controller::Remote);
                 assert!(world.ships[1].autopilot_timer > 2.0, "the countdown starts");
             }
-        },
-    );
+        });
     assert_eq!(mismatches, [0, 0]);
     assert!(matches[0] > 1200, "{}", matches[0]);
     assert!(
@@ -468,7 +469,10 @@ fn a_person_whose_link_drops_comes_back_to_their_seat_and_the_hashes_agree() {
     let history = host.history();
     assert_eq!(history[599].retired, 0);
     assert_eq!(history[600].retired, 0b10);
-    assert_eq!(history[handed_back_at as usize].retired, 0, "away no longer");
+    assert_eq!(
+        history[handed_back_at as usize].retired, 0,
+        "away no longer"
+    );
     assert_eq!(host.race().sim.world.controllers[1], Controller::Remote);
     let (returned, race, _) = &mut clients[1];
     for _ in 0..30 {

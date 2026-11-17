@@ -22,7 +22,7 @@ pub(super) use pad_seek::line_positions as pad_seek_positions;
 /// dropped link must never be a free pass through a hard section, so the stand-in is clearly
 /// slower than a competent player (`docs/networking/server-roadmap.md`, "V1: survive the
 /// network").
-pub(crate) const AWAY_THRUST: f32 = 0.6;
+pub(crate) const AWAY_THRUST: f32 = 0.5;
 
 /// How much of an Autopilot pickup is left when the announcer warns.
 ///

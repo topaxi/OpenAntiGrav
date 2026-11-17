@@ -331,7 +331,8 @@ impl Race {
     /// not measured, and capped by the finished craft's own thrust law anyway).
     pub(crate) fn autopilot_engine_flags(&self, slot: usize) -> oag_physics::engine::EngineFlags {
         let ship = &self.sim.world.ships[slot];
-        let autopilot = (ship.autopilot_timer > 0.0 && !ship.handback) || self.autopilot_flies(slot);
+        let autopilot =
+            (ship.autopilot_timer > 0.0 && !ship.handback) || self.autopilot_flies(slot);
         let law = self.sim.autopilot_engine;
         oag_physics::engine::EngineFlags {
             uncapped: (autopilot && law.uncapped.value) || ship.standing.finished(),

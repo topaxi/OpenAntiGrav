@@ -97,7 +97,11 @@ fn absorb_cancels_a_hand_back_and_keeps_the_pickup() {
     let ship = &race.sim.world.ships[1];
     assert_eq!(ship.autopilot_timer, 0.0, "the countdown was cancelled");
     assert!(!ship.handback);
-    assert_eq!(ship.pickup.weapon, Some(Weapon::Turbo), "the pickup was kept");
+    assert_eq!(
+        ship.pickup.weapon,
+        Some(Weapon::Turbo),
+        "the pickup was kept"
+    );
 }
 
 /// A real Autopilot pickup still cancels as the title's law says, and keeps its boost.

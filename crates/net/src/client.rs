@@ -440,9 +440,7 @@ impl Client {
                     log::info!("net: the race starts (server lead {lead_ticks} ticks)");
                     self.phase = Phase::Racing;
                 }
-                Ok(Control::Welcome { fingerprint, .. })
-                    if self.phase == Phase::Reconnecting =>
-                {
+                Ok(Control::Welcome { fingerprint, .. }) if self.phase == Phase::Reconnecting => {
                     // The same race: say so, and the server answers with the start.
                     self.link.send_control(&Control::Ready { fingerprint });
                 }
