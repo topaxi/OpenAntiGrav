@@ -717,6 +717,12 @@ impl System {
         self.ignitions += 1;
     }
 
+    /// The severity the system plays at - see [`Self::ignite`]'s `scale`.
+    #[must_use]
+    pub fn scale(&self) -> f32 {
+        self.scale
+    }
+
     /// Changes this system's own severity - see [`Self::ignite`]'s own
     /// `scale` argument for what it multiplies. Every particle already alive
     /// keeps the size and speed it spawned with; only particles emitted

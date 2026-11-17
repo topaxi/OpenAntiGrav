@@ -311,13 +311,20 @@ it stops it (`0x000ed0cc`), then clears the byte. The same block decays the cont
 - **A craft-to-craft contact throws the same sparks**, on both craft, each from its own nearest
   locator. This engine starts them for a wall only on HD. Open, ready to wire.
 - **Every craft a view can see within 100 units throws them**, not the seat's craft alone.
-  This engine draws the seat's own. Open.
+  Wired (`crates/raceplay/src/field_sparks.rs`): one riding `Stage` instance per opponent, the
+  same start/hold/release rule as the seat's, asked only from a craft within 100 units of a local
+  view's eye (the player's and each extra seat's) and not under a Shield. A full twelve-craft grid
+  reaches 11 such instances beside the seat's own pool, inside the stage's 64.
 - **A frictionless record throws kind 2** (`WO_SHIP_COLL_SPARK_NODAMAGE`, or the `_ZONE`
   file under the mode mask), a one-shot. Which records carry no friction on HD (the cage, the
   floor) is not read.
 - **The spark's strength is `min(speed / 80, 1) + min(|p| / 80, 1)`, cut to zero under 0.1**,
   in the instance's scale block slot 5, and the instance carries the craft's velocity over 60.
-  This engine plays it at `oag_fx::sparks::severity(impact_speed)`, Pulse's law. Open.
+  Wired (`oag_fx::sparks::attached_strength`) where the effect is authored looping, the craft's
+  velocity carried; Pulse and Pure keep `severity`. The wall record's `p` is the frame's largest
+  contact impulse (`WallResponse::impulse_largest`, what the sound law reads). **Chosen, not
+  measured:** that slot 5 is the particle system's severity (the field Pulse's `2x + 0.4` writes);
+  what `0x002846d0` does with slot 5 is unread.
 - **RPCS3**: see [particle-triggers.md](particle-triggers.md), "2026-11-15: the damage smoke
   re-read, and a film of a hit", for the frames where two hulls touch.
 

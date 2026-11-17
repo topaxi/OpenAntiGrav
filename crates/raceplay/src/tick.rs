@@ -763,6 +763,7 @@ impl Race {
                 self.advance_contact_fx(seat, &evaluated);
             }
             self.advance_seat_contact_fx(&steps, seat);
+            self.advance_field_sparks();
         }
 
         // Last, after every write this tick makes: the recording stores the

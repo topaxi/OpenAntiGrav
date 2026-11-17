@@ -39,6 +39,14 @@ impl Stage {
         Some(self.claim(index, effect, point, scale, true))
     }
 
+    /// The severity an attached instance plays at - see [`super::System::scale`]. `None` on a
+    /// stale handle.
+    #[must_use]
+    pub fn scale(&self, playing: Playing) -> Option<f32> {
+        self.instance(playing)
+            .map(|instance| instance.system.scale())
+    }
+
     /// Whether an attached instance's emitters are still running - see
     /// [`super::System::is_emitting`]. `false` on a stale handle.
     ///
