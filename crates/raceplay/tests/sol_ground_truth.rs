@@ -91,3 +91,94 @@ fn every_grid_slot_has_ground_under_it_on_2048() {
 fn every_grid_slot_has_ground_under_it_on_omega() {
     every_grid_slot_has_ground_under_it("omega");
 }
+
+/// The window a field gets to lap in.
+const FIELD_TICKS: u32 = 12_000;
+
+/// A field of seven opponents at VENOM with slot 0 sitting out: each craft's
+/// respawns and flying laps (a lap begun over the line, not off the grid).
+/// Stops once every craft has a flying lap, unless `OAG_SWEEP` asks for the
+/// whole window's respawn counts.
+fn field(title: &str, level: oag_ai::Difficulty) -> Option<(Vec<u32>, Vec<u32>, u32)> {
+    let (source, track) = source(title)?;
+    let loaded = race::load(&race::Options {
+        source: source.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty: level,
+        track: Some(track.to_string()),
+        ..race::Options::default()
+    })
+    .unwrap_or_else(|e| panic!("{title} sol does not load: {e:#}"));
+    let mut race = race::Race::start(loaded.setup);
+    race.sim.world.ships[0].active = false;
+    let count = race.ship_count() as usize;
+    let whole_window = std::env::var_os("OAG_SWEEP").is_some();
+    let causes = std::env::var_os("OAG_SWEEP_CAUSES").is_some();
+    let mut lap: Vec<u32> = (0..count)
+        .map(|slot| race.sim.world.ships[slot].standing.lap)
+        .collect();
+    let mut flying = vec![0u32; count];
+    let mut respawns = vec![0u32; count];
+    let mut ticks = 0;
+    for tick in 0..FIELD_TICKS {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        ticks = tick + 1;
+        for slot in 1..count {
+            let ship = &race.sim.world.ships[slot];
+            if causes && race.respawns_of(slot) != respawns[slot] {
+                println!(
+                    "{title} sol {level:?}: slot {slot} tick {tick} lap {} {:?}@{}",
+                    ship.standing.lap,
+                    race.last_respawn_cause_of(slot),
+                    ship.driver.index
+                );
+            }
+            respawns[slot] = race.respawns_of(slot);
+            if ship.standing.lap != lap[slot] {
+                flying[slot] += u32::from(lap[slot] > 1);
+                lap[slot] = ship.standing.lap;
+            }
+        }
+        if !whole_window && flying[1..].iter().all(|&laps| laps > 0) {
+            break;
+        }
+    }
+    Some((respawns[1..].to_vec(), flying[1..].to_vec(), ticks))
+}
+
+fn a_field_of_seven_laps(title: &str, level: oag_ai::Difficulty) {
+    let Some((respawns, flying, ticks)) = field(title, level) else {
+        return;
+    };
+    println!(
+        "{title} sol VENOM {level:?}: respawns per craft {respawns:?}, flying laps per craft \
+         {flying:?}, {ticks} ticks"
+    );
+    assert!(
+        flying.iter().all(|&laps| laps > 0),
+        "{title} sol {level:?}: a craft has no flying lap in {FIELD_TICKS} ticks: flying laps \
+         {flying:?}, respawns {respawns:?}"
+    );
+}
+
+macro_rules! sol_fields {
+    ($($name:ident => $title:literal, $level:ident;)*) => {$(
+        #[test]
+        #[ignore = "needs the extracted game under data/extracted/"]
+        fn $name() {
+            a_field_of_seven_laps($title, oag_ai::Difficulty::$level);
+        }
+    )*};
+}
+
+sol_fields! {
+    a_field_of_seven_laps_2048_sol_at_novice => "2048", Novice;
+    a_field_of_seven_laps_2048_sol_at_skilled => "2048", Skilled;
+    a_field_of_seven_laps_2048_sol_at_elite => "2048", Elite;
+    a_field_of_seven_laps_2048_sol_at_ace => "2048", Ace;
+    a_field_of_seven_laps_omega_sol_at_novice => "omega", Novice;
+    a_field_of_seven_laps_omega_sol_at_skilled => "omega", Skilled;
+    a_field_of_seven_laps_omega_sol_at_elite => "omega", Elite;
+    a_field_of_seven_laps_omega_sol_at_ace => "omega", Ace;
+}
