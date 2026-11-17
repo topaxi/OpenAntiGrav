@@ -742,7 +742,10 @@ mod tests {
         assert_eq!(block.len(), 3);
         assert_eq!(block[0].program, [PROGRAM_WATER, 1.0]);
         assert_eq!((block[0].tint, block[0].scale), ([0.08, 0.12, 0.13], 75.0));
-        assert_eq!(block[0].offset, 0.3, "the sea weights its reflection by Reflectivity");
+        assert_eq!(
+            block[0].offset, 0.3,
+            "the sea weights its reflection by Reflectivity"
+        );
         assert_eq!((block[1].program, block[2].program[0]), ([0.5, 0.5], 0.3));
         assert_eq!(
             (block[2].tint, block[2].offset, block[2].scale),
