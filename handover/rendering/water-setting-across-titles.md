@@ -164,8 +164,14 @@ Ranked. Hours are for one member on an idle machine.
    **lane 1 adds a `Reading` variant per law there**; every value maps to
    `Reading::Constant` today. `Report::water_law` names the law in the loader
    line. Open: the 2048 and Omega `psp2` water path and the front-end capture
-   route (`capture.rs`) read no setting yet; the `omega` value is offered
-   before lane 6 has read its law (the brief asked for it unconditionally).
+   route (`capture.rs`) read no setting yet; 
+   **Each choice is hidden until its law is drawn:** `mesh::rcs::water::is_drawn(law)`
+   is the one flag; `water_setting::offered` also requires it, so today the row
+   holds `off` and `original` only, and `original` equals today's look until
+   lane 1. Lane 1 flips `Hd`, lane 5 `Vita2048`, lane 6 `Omega` (and adds the
+   `Reading` variant) when its law is drawn; the menu test
+   `with_every_lender_present_only_drawn_laws_are_offered` then grows its list.
+   A saved `hd`/`2048`/`omega` resolves to `original` until then.
    Original wording: (`oag-wire`, sonnet, 3 to 4 h). Enum, per-title
    field, menu row, strings, `drop_unavailable_water`, `off` routing every
    classified water slot to today's constant reading. Acceptance: settings

@@ -7,10 +7,21 @@
 
 use oag_display::display::Water;
 
-/// Whether the water row offers `value` on `title`. `present` says whether a
-/// title's disc image (by [`oag_title::Title::slug`]) is on this machine.
+/// Whether the water row offers `value` on `title`: its law is drawn yet
+/// (`oag_mesh::mesh::rcs::water_law_is_drawn`) and its lender is available.
 #[must_use]
 pub fn offered(value: Water, title: &oag_title::Title, present: &dyn Fn(&str) -> bool) -> bool {
+    oag_mesh::mesh::rcs::water_law_is_drawn(value) && lender_available(value, title, present)
+}
+
+/// Whether the lender of `value`'s law is on this machine and is not `title` itself.
+/// `present` says whether a title's disc image (by [`oag_title::Title::slug`]) is here.
+#[must_use]
+pub fn lender_available(
+    value: Water,
+    title: &oag_title::Title,
+    present: &dyn Fn(&str) -> bool,
+) -> bool {
     match oag_source::title::water_lender(value) {
         None => true,
         Some(lender) => lender.slug() != title.slug() && present(&lender.slug()),
