@@ -7,7 +7,9 @@
 Attached to a `serve` sitting in a running Time Trial (restored state, then three `cross` at `START RACE`). A placed
 craft falls and the game resets it to the track within a few seconds, so the placement, the settle (`SETTLE`, default
 0.8 s of game time), the dump and the window grab are one attach. Writes the dump (`hd-sea-reflect-read.py` reads it),
-`body.json` (the craft's pose at the pause) and `theirs.png` (the 1920x1080 window at the origin after `FLUSH`, default
+`body.json` (the craft's pose at the pause), `world.json` (the scenery's animation clock and the lap clock read in the same
+pause: `world_clock_s`, `lap_clock_s`, `world_clock_offset_s` = the first less the second, the `--world-clock-offset` source of
+a pair, `docs/tools/compare-page.md` "The world clock and random craft motion") and `theirs.png` (the 1920x1080 window at the origin after `FLUSH`, default
 3.5 s, so the RSX has presented the paused frame; size the window first with `rpcs3-hd-pair.py`'s `set_window`).
 `HOOK_FP_LEN=0x900` because the sea program is longer than the default 0x600 cut.
 """
@@ -35,6 +37,13 @@ with Debugger(port=int(port), host=host, timeout=120.0) as g:
     g.pause()
     drive.dump_frame(g, out, stem, args)
     pose = place.read_pose(g, body)
+    import rpcs3_hd_field
+    world = rpcs3_hd_field.scenery_clock(rpcs3_hd_field.Mem(drive.RemoteMem(drive.read_session()["socket"])))
+    lap = struct.unpack(">f", g.read(ship + 0x7014, 4))[0]
+    json.dump({"world_clock_s": world and world["time_s"], "lap_clock_s": lap, "nodes": world and world["nodes"],
+               "total": world and world["total"], "world_clock_offset_s": world and world["time_s"] - lap},
+              open(out / "world.json", "w"))
+    print("world clock", world, "lap clock", lap)
     print("pose after dump", pose["pos"])
     json.dump({"pos": pose["pos"], "rows": pose["rows"]}, open(out / "body.json", "w"))
     time.sleep(float(os.environ.get("FLUSH", "3.5")))
