@@ -129,6 +129,7 @@ fn triangle_model() -> Model {
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),
+        caustic: oag_mesh::mesh::caustic_pass::Caustic::default(),
 
         vertex_colour_is_light: false,
         stamps_glow: false,

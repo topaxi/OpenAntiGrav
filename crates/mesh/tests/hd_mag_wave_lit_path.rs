@@ -102,6 +102,7 @@ fn model(wave: bool) -> Model {
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),
+        caustic: oag_mesh::mesh::caustic_pass::Caustic::default(),
         vertex_colour_is_light: false,
         stamps_glow: false,
         glow_by_texel: false,

@@ -209,6 +209,13 @@ pub fn mesh_box_centre(payload: &[u8]) -> Option<[f32; 3]> {
     ])
 }
 
+/// The mesh payload's byte at `+0x0e`: the caustic pass scales its tint by it
+/// (`Mesh_SetCausticNodeState`, `docs/ghidra/functions/psp-pulse-usa/caustic-pass.md`).
+#[must_use]
+pub fn mesh_caustic_scale(payload: &[u8]) -> Option<u8> {
+    payload.get(0x0e).copied()
+}
+
 /// The GU vertex type of a mesh payload's first batch, in either list.
 ///
 /// **`Some(0)` is the answer that matters**: a batch declaring no vertex format

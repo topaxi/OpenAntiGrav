@@ -860,6 +860,11 @@ pub struct Looks {
     /// whose circuit pass is drawn unweighted leaves this unread. Keyed on the race's own
     /// archive.
     pub track_shine_weighted: Rule,
+    /// A circuit's caustic pass: the batches flagged `0x04` redrawn with the sixteen
+    /// `Data\Tex\caustics` frames (`oag_mesh::mesh::caustic_pass`,
+    /// `docs/ghidra/functions/psp-pulse-usa/caustic-pass.md`). The data decides where it draws;
+    /// the player's `graphics.water` of `off` switches it off. Keyed on the race's own archive.
+    pub track_caustic: Rule,
     /// The shield tint.
     pub shield_palette: ShieldPalettes,
     /// Our own HD/Fury-style shield, offered as the player's `graphics.own_shield` on a title
@@ -987,6 +992,7 @@ impl Looks {
             lens_flare: Rule::UNREAD,
             track_shine: Rule::UNREAD,
             track_shine_weighted: Rule::UNREAD,
+            track_caustic: Rule::UNREAD,
             shield_palette,
             own_shield: Rule::UNREAD,
             own_rockets: Rule::UNREAD,
