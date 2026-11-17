@@ -34,6 +34,7 @@ pub(crate) enum BlobSource {
     /// Chosen by the file's first bytes, never by its name (`crate::sparse`).
     Sparse {
         sparse: crate::sparse::Sparse,
+        file: std::fs::File,
         path: PathBuf,
     },
     Disc {
@@ -91,8 +92,8 @@ impl BlobSource {
             }
         }
         match self {
-            Self::Sparse { sparse, path } => {
-                sparse.read(offset, len).map(<[u8]>::to_vec).ok_or_else(|| {
+            Self::Sparse { sparse, file, path } => {
+                sparse.read(file, offset, len)?.ok_or_else(|| {
                     crate::record::note_miss(format!(
                         "{} {offset}..{}",
                         path.display(),
@@ -170,10 +171,11 @@ impl BlobSource {
         let len = file.metadata()?.len();
         let mut head = [0u8; 4];
         if file.read_exact(&mut head).is_ok() && crate::sparse::Sparse::is_sparse(&head) {
-            let sparse =
-                crate::sparse::Sparse::parse(&path.display().to_string(), std::fs::read(path)?)?;
+            // The table only: a range's bytes are read when asked for, like `File`'s.
+            let sparse = crate::sparse::Sparse::parse(&path.display().to_string(), &mut file)?;
             return Ok(Self::Sparse {
                 sparse,
+                file,
                 path: path.to_path_buf(),
             });
         }

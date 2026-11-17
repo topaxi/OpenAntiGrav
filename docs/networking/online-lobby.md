@@ -608,8 +608,9 @@ From here the round trip is about 10 ms.
   of the core in the first seconds, while it loads), the lobby 3.4 to 5.3 MB and 1 to 1.5 %. **Two load transients are larger than the
   steady figure: the race child peaked at 542 MB resident (`VmHWM`; 462 MB at a `top` sample 0.7 s after it started) while
   it loaded the circuit, and the lobby's `VmHWM` was 380 MB** (its start, reading the extraction). The host showed about 640 MB available
-  with 2 GB of swap and was never short, but a second load on top of a busy host would be, so the "17 rooms by memory" row in
-  `server-roadmap.md` is a steady-state figure, not a loading one.
+  with 2 GB of swap and was never short, but a second load on top of a busy host would be. **Both peaks were the
+  extraction's sparse archives read whole, fixed the same day: 18.5 MB race load and 9.7 MB lobby start**
+  (part 6, "Server memory while loading").
 - **A name stays taken for a while after a race.** A pair that reused the previous pair's `--online-name` within about a
   minute was refused `BadName: that name is in use` (twice: the held session, `SEAT_GRACE` 30 s, plus the lobby's time to
   free it, is the likely cause, a hypothesis of about 55 %, not read out of the code). Not a limit firing on a pair; the
@@ -733,6 +734,46 @@ A race reads whole entries (a circuit's `.vex` carries its geometry, collision a
 compressed blob that the lean load reads whole), so the two PSP titles and the PS2 keep most of
 their circuits and ships. Reading only the collision, spline and pad sections of a `.vex` is a
 change to the load path, a follow-up, not to the extractor.
+
+### Server memory while loading (2026-11-17)
+
+**A race child or lobby opened on an extraction held each sparse archive whole in memory.**
+`BlobSource::open_file` read the whole `Data.wad` stand-in (192.7 MB for Pulse PSP EU) with
+`std::fs::read`, and `Sparse::parse` copied its data section out of that buffer, so opening it
+cost twice the file at once and kept one copy for the life of the process. The lobby opens a
+title's archives once at start (to name the title), the race load opened `Data.wad` twice:
+**383 MB lobby, 572 MB race child**, against 13 MB and 24 MB opened on the `.chd` itself. That
+is the 380 MB and 542 MB measured on the remote host (part 5, "Measured over the internet, with
+the limits"). It also broke `oag_assets::blob_source`'s own rule that no container is slurped.
+
+**Now `Sparse` keeps only the header and range table** and reads each range from the file when
+asked, like the plain-file source; a read outside the recorded ranges still fails by name
+(`NotExtracted`). Nothing a reader is answered changes: the tick-0 state hash of the default
+Pulse race is `0xc4430b77e8e80ed0` before and after, and the same from the `.chd`.
+
+Measured with a lean release `oag-server` (`cargo build --release -p oag-net --bin oag-server`
+alone, glibc), on a lean Pulse PSP EU extraction (184 MiB), `VmHWM` from `/proc/<pid>/status`
+read once the process printed its ready line, three runs each (load average about 30, which does
+not move a memory figure: runs agree within 0.4 MB):
+
+| Process | Before | After |
+| --- | --- | --- |
+| Race load (`oag-server --image <extraction>`, default circuit, 8 craft) | 571.8 to 572.1 MB | **18.4 to 18.8 MB** |
+| Lobby at start (`oag-server lobby --image <extraction>`) | 382.5 to 383.0 MB | **9.7 to 9.8 MB** |
+| Race load from the `.chd`, for reference | 23.8 MB | 24.1 MB |
+
+The standalone `oag-server --image` and the lobby's race child (`oag-server race`) load through
+the same `oag_net::race::load`. heaptrack before: 385.5 MB peak from `sparse.rs` (the data copy,
+two archives) and 192.7 MB from the `std::fs::read` in `blob_source.rs`, 578 MB peak heap in all;
+after: 11.4 MB peak heap for the race load and 0.2 MB for the lobby. Most of what is left is
+the circuit's `.vex` entry (5.1 MB, read whole, see "The extractor" above), held twice at once:
+`oag_raceplay`'s track load reads it once for the AI line and again for the collision
+(`load/track_inputs.rs`), a further 5 MB a later change could save. The musl build
+the host runs allocates the same buffers; its figures were not re-measured remotely.
+
+Held by `oag_assets::sparse`'s `an_archive_on_a_sparse_file_reads_the_file_at_each_read`: it
+rewrites an entry's bytes on disk under an open archive and requires the next read to see them,
+which a copy taken at open cannot.
 
 ### The build string
 

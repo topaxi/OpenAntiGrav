@@ -388,7 +388,8 @@ content and no people.**
 **Did the limits hold in real play?** Yes, on a well-behaved pair (`online-lobby.md`, "Measured over the internet, with the
 limits", 2026-11-17): six races, 14 clients, 0 bad hashes, no limit line in the lobby log, datagram rates peaking at 79 a second
 sent and 92 received against the budget of 120 (the same with four people). Two caveats: a budget drop is silent, so the log
-alone cannot show one; and the race child's load peaked at 542 MB resident, which the "Rooms on a 1 GB VPS" memory row does not count.
+alone cannot show one; and the race child's load peaked at 542 MB resident (the lobby 380 MB at start), both from the extraction's
+sparse archive read whole; fixed the same day, 18.5 MB and 9.7 MB (`online-lobby.md`, "Server memory while loading").
 
 **Why first.** A dropped link ending the race is the failure a real network shows most,
 and nothing here changes the topology or the encoding of a tick. Everything later needs
@@ -571,6 +572,8 @@ From the measurements above and the remote run of 2026-10-16
 | --- | --- | --- |
 | Memory per race process, any title raced | 32 to 36 MB after a minute; budget 40 MB | measured, localhost |
 | Memory, lobby | 6 MB | measured, remote |
+| Peak memory while a race loads, Pulse PSP extraction | 18.5 MB (572 MB before the sparse fix) | measured, localhost, lean release build |
+| Peak memory, lobby start, Pulse PSP extraction | 9.7 MB (383 MB before the sparse fix) | measured, localhost, lean release build |
 | CPU per two-person room on a 1 GB, 1 vCPU VPS | 15 to 20 % of the core | measured, remote, no AI and no weapons |
 | CPU per two-person room, desktop | 3.1 to 3.7 % of a core | measured, localhost, AI and weapons on |
 | CPU per extra person, desktop | about 0.3 points | measured, one pair of runs |
@@ -582,7 +585,10 @@ From the measurements above and the remote run of 2026-10-16
 ### Rooms on a 1 GB VPS
 
 Taking 700 MB as free for races and 80 percent of the one core as the ceiling. All rows
-are estimates from the table above; only Pulse was ever raced remotely.
+are estimates from the table above; only Pulse was ever raced remotely. The memory column holds while
+loading too: a race's load peak (18.5 MB on a Pulse extraction) is under its 40 MB budget, and
+the lobby starts at 9.7 MB. Before the sparse fix of 2026-11-17 one Pulse load peaked at 572 MB
+and the lobby at 383 MB, so a 1 GB host could load one race at a time and nothing beside it.
 
 | Title | By memory | By CPU, full rooms | By CPU, two-person rooms | Binding |
 | --- | --- | --- | --- | --- |
