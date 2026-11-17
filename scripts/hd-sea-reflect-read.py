@@ -100,7 +100,7 @@ def main():
     members = [d for d in draws if d.get(0x210, 0) == tgt]
     first = members[0]
     print("\ntarget %08x: %d draws" % (tgt, len(members)))
-    print("  surface format %08x pitch %08x clip %08x/%08x viewport %08x/%08x scale %g,%g offset %g,%g" % (
+    print("  surface format %08x pitch %08x clip %08x/%08x viewport %08x/%08x offset %g,%g scale %g,%g" % (
         first.get(0x208, 0), first.get(0x20C, 0), first.get(0x200, 0), first.get(0x204, 0), first.get(0xA00, 0), first.get(0xA04, 0),
         fl(first.get(0xA20, 0)), fl(first.get(0xA24, 0)), fl(first.get(0xA30, 0)), fl(first.get(0xA34, 0))))
     print("  depth surface %08x pitch %08x; clear colour %08x, depth/stencil %08x, mask %08x; colour mask %08x, depth test %d func %x mask %d, cull %d" % (
@@ -108,7 +108,10 @@ def main():
         first.get(0x324, 0), first.get(0xA74, 0) & 1, first.get(0xA6C, 0), first.get(0xA70, 0) & 1, first.get(0x183C, 0) & 1))
     main = sea[0]
     print("  main view: surface %08x clip %08x/%08x" % (main.get(0x210, 0), main.get(0x200, 0), main.get(0x204, 0)))
-    bound = sampled = 0
+    bound = sampled = shared = 0
+    last_use = {}
+    for d in draws:
+        last_use[d.get(0x8E4, 0) & 0xFFFFFFF0] = d["n"]
     for d in draws:
         if d.get(0x210, 0) == tgt:
             continue
@@ -116,11 +119,16 @@ def main():
         if not us:
             continue
         bound += 1
+        fp = d.get(0x8E4, 0) & 0xFFFFFFF0
+        reused = last_use[fp] > d["n"]
         read = {int(m.group(1)) for m in re.finditer(r"unit(\d+)", fp_text(dump, stem, d))}
+        if reused:
+            shared += 1
         if any(u in read for u in us):
             sampled += 1
             print("    samples it: draw %d %s" % (d["n"], names.get(d["n"], "?")))
-    print("  main-view draws binding it: %d; sampling it: %d" % (bound, sampled))
+    print("  main-view draws binding it: %d; sampling it: %d; of the %d that do not sample it, %d have a program address a later draw reuses "
+          "(the bytes read are the later draw's, so for those 'never reads unit 3' is not established)" % (bound, sampled, bound - sampled, shared))
     t_names = Counter(names.get(d["n"], "?").split("#")[0] for d in members)
     print("  materials drawn into it (fp-matched, a match lists the families that share a program):", dict(t_names.most_common(8)))
 

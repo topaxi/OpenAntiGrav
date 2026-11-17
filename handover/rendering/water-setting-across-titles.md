@@ -210,14 +210,15 @@ Ranked. Hours are for one member on an idle machine.
    image (and with `OAG_MODS` pinned empty), `just check-strings`, mouse
    support as every row has. Can run beside lane 1; touches different crates.
 3. **LANDED (`water-hdcap`): the HD reflection target read.** One Moa Therma sea frame,
-   three frames over two restores: a 960 x 540 R5G6B5 + Z16 target at `0x02a20000`
+   three frames over two restores, plus Chenghou's frames (a second cold boot: the same target, sky only, no sea in view): a 960 x 540 R5G6B5 + Z16 target at `0x02a20000`
    cleared opaque black / depth 1, drawn before the main view with the sky and the scenery
    under the main view-projection mirrored by `y' = K - y`, `K = -50` (plane -25; Moa
    Therma authors `Water plane height` -50), front-face culling; the sea reads it at its own
    screen position through `reflectProject` = the main view-projection, normal pushed 40
    world units (`distortion.z` = 40 = `Water distortion`); only the sea material samples it.
-   **Left open:** Chenghou's and Modesto's seas (the recipe in water.md names a visibility-set
-   scan, then `scripts/hd-sea-place-dump.py` and `hd-sea-reflect-read.py`), and bit 1.
+   **Left open:** what Chenghou's and Modesto's sea draws bind (no sea in any frame; the recipe
+   in water.md names a visibility-set scan, then `scripts/hd-sea-place-dump.py` and
+   `hd-sea-reflect-read.py`), Modesto not booted, and bit 1.
    The RPCS3 sea pair the HD taps lane left open is made (sea-crop luma: original 140, `off`
    139, `original` 105; `original` reads 35 levels darker than the original and worse than
    `off` by MAE until lane 4 lands).
