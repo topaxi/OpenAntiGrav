@@ -71,7 +71,7 @@ const CONSTANT_AMBIENT: u32 = rcsmaterial::CONSTANT_AMBIENT;
 pub(crate) const WATER_FLAG: f32 = 2.0;
 
 /// Whether `law` is drawn as its own law yet. **The one flag each lane flips when it lands**
-/// (`handover/rendering/water-setting-across-titles.md`): the WATER row offers a value only
+/// (`docs/rendering/water.md`, "Open"): the WATER row offers a value only
 /// while this holds, and `original` is the title's own look, which today is the constant
 /// reading below.
 #[must_use]
