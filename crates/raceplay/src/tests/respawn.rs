@@ -788,7 +788,11 @@ fn a_pair_contact_starts_and_ends_the_attached_spark() {
         evaluated.wall.resolved.is_none(),
         "the fixture touched the wall - not a pair-only contact"
     );
-    assert_eq!(race.spark_ignitions(), 1, "the pair contact did not start the spark");
+    assert_eq!(
+        race.spark_ignitions(),
+        1,
+        "the pair contact did not start the spark"
+    );
     assert!(race.sparks().is_emitting());
 
     apart(&mut race);
