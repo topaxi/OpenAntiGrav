@@ -68,12 +68,7 @@ pub fn fill_list(
             })
             .collect(),
     );
-    screen.set_row_labels(
-        rooms
-            .iter()
-            .map(|room| room.owner.to_uppercase().chars().take(8).collect())
-            .collect(),
-    );
+    screen.set_row_labels(rooms.iter().map(|room| room_label(room, strings)).collect());
     let notes = rooms
         .iter()
         .map(|room| Some(room_line(room, strings, track_name)))
@@ -81,8 +76,22 @@ pub fn fill_list(
     screen.set_notes(notes, rooms.iter().map(|room| !room.joinable).collect());
 }
 
-/// The line under the title while the cursor is on a room: its circuit, class and mode, or
-/// why it cannot be joined.
+/// A room's left-hand text in the list: its owner, and beside the name the PLAYER-HOSTED mark
+/// when that person's machine runs the race. The mark sits on this side because the other
+/// holds the title, whose length the mark would push out of its box on the longest titles.
+#[must_use]
+pub fn room_label(room: &RoomInfo, strings: &StringTable) -> String {
+    let owner: String = room.owner.to_uppercase().chars().take(8).collect();
+    if room.player_hosted {
+        let mark = say(strings, "OAG_ONLINE_PLAYER_HOSTED", "PLAYER-HOSTED");
+        format!("{owner} - {mark}")
+    } else {
+        owner
+    }
+}
+
+/// The line under the title while the cursor is on a room: its circuit, class and mode, what
+/// the PLAYER-HOSTED mark means, or why the room cannot be joined.
 #[must_use]
 pub fn room_line(
     room: &RoomInfo,
@@ -94,6 +103,15 @@ pub fn room_line(
             strings,
             "OAG_ONLINE_ROW_CLOSED",
             "NOT JOINABLE: FULL, STARTED, OR NOT YOUR TITLE, BUILD OR MODS",
+        );
+    }
+    // What the mark means, in place of the circuit, which the room itself shows: the host's
+    // machine is the authority (ADR-0092, decision 4).
+    if room.player_hosted {
+        return say(
+            strings,
+            "OAG_ONLINE_PLAYER_HOSTED_HINT",
+            "PLAYER-HOSTED: THE HOST RUNS THE RACE AND MAY CHEAT",
         );
     }
     let track = if room.settings.track.is_empty() {
@@ -201,6 +219,12 @@ pub fn room_hint(room: &Snapshot, owner: bool, strings: &StringTable) -> String 
                 )
             },
             str::to_uppercase,
+        ),
+        // A guest of a room a player's machine hosts is told what that means before the race.
+        Phase::Open if room.player_hosted => say(
+            strings,
+            "OAG_ONLINE_PLAYER_HOSTED_HINT",
+            "PLAYER-HOSTED: THE HOST RUNS THE RACE AND MAY CHEAT",
         ),
         Phase::Open => say(strings, "OAG_ONLINE_ROOM_HINT", "THE HOST STARTS THE RACE"),
         Phase::Queued { position } => say(
@@ -374,6 +398,7 @@ pub fn room_info(
         settings: settings.clone(),
         members: 0,
         joinable: true,
+        player_hosted: false,
     };
     room_line(&info, strings, track_name)
 }

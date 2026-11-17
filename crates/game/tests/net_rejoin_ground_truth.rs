@@ -18,16 +18,16 @@ const IMAGE: &str = "pulse-psp-eu.chd";
 const TRACK: &str = "Data\\Environments\\01_Track\\track.vex";
 
 /// A child process, killed (SIGKILL) and reaped when it goes out of scope.
-struct Proc(Child);
+pub(crate) struct Proc(pub(crate) Child);
 
 impl Proc {
-    fn kill(&mut self) {
+    pub(crate) fn kill(&mut self) {
         let _ = self.0.kill();
         let _ = self.0.wait();
     }
 
     /// Waits for the process to exit by itself, killing it after `secs`.
-    fn finish(&mut self, secs: u64) -> Option<std::process::ExitStatus> {
+    pub(crate) fn finish(&mut self, secs: u64) -> Option<std::process::ExitStatus> {
         let until = Instant::now() + Duration::from_secs(secs);
         while Instant::now() < until {
             if let Ok(Some(status)) = self.0.try_wait() {
@@ -70,8 +70,8 @@ fn server_binary() -> PathBuf {
 }
 
 /// A lobby and the directory its clients keep their profiles in.
-struct Lab {
-    dir: PathBuf,
+pub(crate) struct Lab {
+    pub(crate) dir: PathBuf,
     image: PathBuf,
     addr: String,
     hash: String,
@@ -80,7 +80,17 @@ struct Lab {
 
 impl Lab {
     /// Starts `oag-server lobby` with races that stop at `max_ticks`.
-    fn new(tag: &str, image: PathBuf, max_ticks: u32) -> Self {
+    pub(crate) fn new(tag: &str, image: PathBuf, max_ticks: u32) -> Self {
+        Self::with_lobby_args(tag, image, max_ticks, &[])
+    }
+
+    /// [`Self::new`], the lobby given `extra` arguments as well.
+    pub(crate) fn with_lobby_args(
+        tag: &str,
+        image: PathBuf,
+        max_ticks: u32,
+        extra: &[&str],
+    ) -> Self {
         let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("rejoin-{tag}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("no-mods")).expect("a scratch directory");
@@ -96,6 +106,7 @@ impl Lab {
                 "--max-ticks",
                 &max_ticks.to_string(),
             ])
+            .args(extra)
             .stdout(log.try_clone().expect("a handle"))
             .stderr(log)
             .spawn()
@@ -123,7 +134,7 @@ impl Lab {
         lab
     }
 
-    fn read(&self, log: &str) -> String {
+    pub(crate) fn read(&self, log: &str) -> String {
         let mut text = String::new();
         if let Ok(mut file) = File::open(self.dir.join(format!("{log}.log"))) {
             let mut bytes = Vec::new();
@@ -133,7 +144,7 @@ impl Lab {
         text
     }
 
-    fn wait(&self, what: &str, secs: u64, mut done: impl FnMut(&Self) -> bool) {
+    pub(crate) fn wait(&self, what: &str, secs: u64, mut done: impl FnMut(&Self) -> bool) {
         let until = Instant::now() + Duration::from_secs(secs);
         while !done(self) {
             assert!(Instant::now() < until, "timed out waiting for {what}");
@@ -175,6 +186,11 @@ impl Lab {
 
     /// A headless client of the lobby. `create` makes the room; the other joins it.
     fn client(&self, who: &str, create: bool) -> Proc {
+        self.client_with(who, create, &[])
+    }
+
+    /// [`Self::client`] with `extra` arguments as well.
+    pub(crate) fn client_with(&self, who: &str, create: bool, extra: &[&str]) -> Proc {
         let shot = self.dir.join(format!("{who}.png"));
         let mut args = vec![
             "--online",
@@ -201,6 +217,7 @@ impl Lab {
                 "2",
             ]);
         }
+        args.extend(extra);
         self.game(who, who, &args)
     }
 
@@ -234,7 +251,7 @@ impl Lab {
 
     /// A client's per-second lines: the newest tick, and the hashes checked (ok, bad) in all of
     /// them (each line counts the second since the one before).
-    fn progress(&self, log: &str) -> Option<(u32, u32, u32)> {
+    pub(crate) fn progress(&self, log: &str) -> Option<(u32, u32, u32)> {
         let text = self.read(log);
         let number = |line: &str, after: &str| -> Option<u32> {
             line.split(after)
@@ -255,7 +272,7 @@ impl Lab {
     }
 }
 
-fn image() -> Option<PathBuf> {
+pub(crate) fn image() -> Option<PathBuf> {
     oag_testdata::image(IMAGE)
 }
 

@@ -119,6 +119,8 @@ pub struct Snapshot {
     pub board: Board,
     /// The owner has asked for a rematch and the room is waiting for the rest to be ready.
     pub rematch: bool,
+    /// The owner's machine runs this room's race, not the server ([`Message::HostRoom`]).
+    pub player_hosted: bool,
 }
 
 /// A room as the list shows it.
@@ -134,6 +136,58 @@ pub struct RoomInfo {
     pub members: u8,
     /// Whether a join would be accepted right now.
     pub joinable: bool,
+    /// The owner's machine runs this room's race, not the server ([`Message::HostRoom`]).
+    pub player_hosted: bool,
+}
+
+/// What a player who hosts a room's race says of the host: where it listens and who signs for
+/// it (`docs/architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md`,
+/// decision 3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostOffer {
+    /// The UDP port the host listens on, at the address its lobby link comes from.
+    pub port: u16,
+    /// SHA-256 of the host's certificate.
+    pub cert_hash: [u8; 32],
+    /// The player's Ed25519 public key.
+    pub key: [u8; 32],
+    /// The player's signature over [`HostOffer::statement`].
+    pub signature: [u8; 64],
+}
+
+impl HostOffer {
+    /// The bytes a host signs: a tag, the lobby it registers with (its certificate's hash), the
+    /// session token that lobby's welcome issued, and the listener offered.
+    #[must_use]
+    pub fn statement(lobby: &[u8; 32], token: &str, port: u16, cert_hash: &[u8; 32]) -> Vec<u8> {
+        let mut out = b"OAG-HOST-1".to_vec();
+        out.extend_from_slice(lobby);
+        put_string(&mut out, token);
+        out.extend_from_slice(&port.to_le_bytes());
+        out.extend_from_slice(cert_hash);
+        out
+    }
+
+    fn put(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.port.to_le_bytes());
+        out.extend_from_slice(&self.cert_hash);
+        out.extend_from_slice(&self.key);
+        out.extend_from_slice(&self.signature);
+    }
+
+    fn take(r: &mut Reader<'_, Le>) -> Result<Self, Malformed> {
+        let port = r.u16()?;
+        let mut offer = Self {
+            port,
+            cert_hash: [0; 32],
+            key: [0; 32],
+            signature: [0; 64],
+        };
+        offer.cert_hash.copy_from_slice(r.take(32)?);
+        offer.key.copy_from_slice(r.take(32)?);
+        offer.signature.copy_from_slice(r.take(64)?);
+        Ok(offer)
+    }
 }
 
 /// Why the lobby said no.
@@ -165,10 +219,16 @@ pub enum Refusal {
     BadSettings,
     /// The room's owner removed this person from it, and the room remembers.
     Kicked,
+    /// This player's key or address is on the lobby's ban list: no hosting.
+    Banned,
+    /// The lobby could not reach the port a host offered.
+    Unreachable,
+    /// A host's offer is unsigned, wrongly signed, or one too many.
+    BadHost,
 }
 
 impl Refusal {
-    const ALL: [Self; 13] = [
+    const ALL: [Self; 16] = [
         Self::Full,
         Self::Started,
         Self::Content,
@@ -182,6 +242,9 @@ impl Refusal {
         Self::InRoom,
         Self::BadSettings,
         Self::Kicked,
+        Self::Banned,
+        Self::Unreachable,
+        Self::BadHost,
     ];
 
     fn from_byte(byte: u8) -> Result<Self, Malformed> {
@@ -249,6 +312,29 @@ pub enum Message {
         /// The person's name.
         name: String,
     },
+    /// Client to lobby: open a room and own it, with this machine as its race host. The lobby
+    /// checks the signature and its ban list and dials the offered port before the room exists.
+    HostRoom {
+        /// The room's settings.
+        settings: RoomSettings,
+        /// Where the host listens, signed.
+        offer: HostOffer,
+    },
+    /// Host to lobby: the race of [`Self::Launch`] is loaded and its seats may dial. Sent again
+    /// once a second while the race runs, as the host's sign of life.
+    HostUp {
+        /// The room.
+        room: u32,
+    },
+    /// Host to lobby: the hosted race is over, and why.
+    HostOver {
+        /// The room.
+        room: u32,
+        /// Why it ended.
+        reason: String,
+        /// The host's final board, empty when nobody was placed.
+        board: Board,
+    },
     /// Lobby to client: the session, with the token that takes it over after a dropped link.
     Welcome {
         /// The session token.
@@ -267,10 +353,21 @@ pub enum Message {
         /// Why.
         reason: String,
     },
-    /// Lobby to client: the race is up. Reconnect to the lobby's host on `port`, trusting
-    /// only `cert_hash`, and say the seat `token` in the race hello. The lobby link stays open.
+    /// Lobby to the owner of a player-hosted room: run this race. The host answers
+    /// [`Self::HostUp`] once it has loaded it, and [`Self::HostOver`] when it ends.
+    Launch {
+        /// The room.
+        room: u32,
+        /// The race and its seats, as a race child is told them.
+        job: RaceJob,
+    },
+    /// Lobby to client: the race is up. Reconnect to `host` on `port`, trusting only
+    /// `cert_hash`, and say the seat `token` in the race hello. The lobby link stays open.
     Handoff {
-        /// The race's UDP port, on the host the lobby was dialled on.
+        /// The address the race is on: empty for the host the lobby was dialled on, else a
+        /// player host's address as the lobby saw it.
+        host: String,
+        /// The race's UDP port.
         port: u16,
         /// SHA-256 of the race server's certificate.
         cert_hash: [u8; 32],
@@ -320,12 +417,17 @@ impl RaceJob {
     /// [`Malformed`] for truncated bytes or bytes left over.
     pub fn decode(bytes: &[u8]) -> Result<Self, Malformed> {
         let mut r = Reader::new(bytes);
-        let params = RaceParams::take(&mut r)?;
+        let job = Self::take(&mut r)?;
+        r.end()?;
+        Ok(job)
+    }
+
+    fn take(r: &mut Reader<'_, Le>) -> Result<Self, Malformed> {
+        let params = RaceParams::take(r)?;
         let count = r.u8()?;
         let seats = (0..count)
             .map(|_| Ok((r.string()?, r.string()?)))
             .collect::<Result<Vec<_>, Malformed>>()?;
-        r.end()?;
         Ok(Self { params, seats })
     }
 
@@ -484,6 +586,30 @@ impl Message {
                 out.push(0x29);
                 put_string(&mut out, name);
             }
+            Self::HostRoom { settings, offer } => {
+                out.push(0x2A);
+                put_settings(&mut out, settings);
+                offer.put(&mut out);
+            }
+            Self::HostUp { room } => {
+                out.push(0x2B);
+                out.extend_from_slice(&room.to_le_bytes());
+            }
+            Self::HostOver {
+                room,
+                reason,
+                board,
+            } => {
+                out.push(0x2C);
+                out.extend_from_slice(&room.to_le_bytes());
+                put_string(&mut out, reason);
+                board.put(&mut out);
+            }
+            Self::Launch { room, job } => {
+                out.push(0x36);
+                out.extend_from_slice(&room.to_le_bytes());
+                out.extend_from_slice(&job.encode());
+            }
             Self::Welcome {
                 token,
                 name,
@@ -505,6 +631,7 @@ impl Message {
                     put_settings(&mut out, &room.settings);
                     out.push(room.members);
                     out.push(u8::from(room.joinable));
+                    out.push(u8::from(room.player_hosted));
                 }
             }
             Self::Room(room) => {
@@ -522,18 +649,21 @@ impl Message {
                 put_string(&mut out, &room.note);
                 room.board.put(&mut out);
                 out.push(u8::from(room.rematch));
+                out.push(u8::from(room.player_hosted));
             }
             Self::Left { reason } => {
                 out.push(0x33);
                 put_string(&mut out, reason);
             }
             Self::Handoff {
+                host,
                 port,
                 cert_hash,
                 token,
                 name,
             } => {
                 out.push(0x34);
+                put_string(&mut out, host);
                 out.extend_from_slice(&port.to_le_bytes());
                 out.extend_from_slice(cert_hash);
                 put_string(&mut out, token);
@@ -581,6 +711,20 @@ impl Message {
             0x27 => Self::Leave,
             0x28 => Self::Rematch,
             0x29 => Self::Kick { name: r.string()? },
+            0x2A => Self::HostRoom {
+                settings: take_settings(&mut r)?,
+                offer: HostOffer::take(&mut r)?,
+            },
+            0x2B => Self::HostUp { room: r.u32()? },
+            0x2C => Self::HostOver {
+                room: r.u32()?,
+                reason: r.string()?,
+                board: Board::take(&mut r)?,
+            },
+            0x36 => Self::Launch {
+                room: r.u32()?,
+                job: RaceJob::take(&mut r)?,
+            },
             0x30 => Self::Welcome {
                 token: r.string()?,
                 name: r.string()?,
@@ -596,6 +740,7 @@ impl Message {
                         settings: take_settings(&mut r)?,
                         members: r.u8()?,
                         joinable: r.u8()? != 0,
+                        player_hosted: r.u8()? != 0,
                     });
                 }
                 Self::Rooms(rooms)
@@ -621,16 +766,19 @@ impl Message {
                     note: r.string()?,
                     board: Board::take(&mut r)?,
                     rematch: r.u8()? != 0,
+                    player_hosted: r.u8()? != 0,
                 })
             }
             0x33 => Self::Left {
                 reason: r.string()?,
             },
             0x34 => {
+                let host = r.string()?;
                 let port = r.u16()?;
                 let mut cert_hash = [0; 32];
                 cert_hash.copy_from_slice(r.take(32)?);
                 Self::Handoff {
+                    host,
                     port,
                     cert_hash,
                     token: r.string()?,
@@ -719,6 +867,7 @@ mod tests {
                 settings: settings(),
                 members: 2,
                 joinable: true,
+                player_hosted: true,
             }]),
             Message::Room(Snapshot {
                 id: 3,
@@ -743,11 +892,28 @@ mod tests {
                     }],
                 },
                 rematch: true,
+                player_hosted: true,
             }),
+            Message::HostRoom {
+                settings: settings(),
+                offer: HostOffer {
+                    port: 4435,
+                    cert_hash: [3; 32],
+                    key: [4; 32],
+                    signature: [5; 64],
+                },
+            },
+            Message::HostUp { room: 3 },
+            Message::HostOver {
+                room: 3,
+                reason: "the host left".into(),
+                board: Board::default(),
+            },
             Message::Left {
                 reason: "race over".into(),
             },
             Message::Handoff {
+                host: "192.0.2.7".into(),
                 port: 60001,
                 cert_hash: [7; 32],
                 token: "seat".into(),
@@ -770,6 +936,7 @@ mod tests {
                 note: String::new(),
                 board: Board::default(),
                 rematch: false,
+                player_hosted: false,
             });
             assert_eq!(Message::decode(&room.encode()), Ok(room));
         }

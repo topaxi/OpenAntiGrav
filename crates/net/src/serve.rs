@@ -64,7 +64,7 @@ pub fn run(
         host.poll();
         host.drop_silent(SILENCE);
         let over = if stop() {
-            Some("the host stopped")
+            Some(host.stop_reason())
         } else {
             let due = started + dt * host.tick_number();
             let now = Instant::now();

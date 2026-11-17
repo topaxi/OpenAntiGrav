@@ -72,6 +72,8 @@ pub struct Launch {
     pub params: RaceParams,
     /// The people who race: seat `i` is `seats[i]`.
     pub seats: Vec<(ClientId, String)>,
+    /// The room's owner runs the race (seat 0), not the server.
+    pub hosted: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,7 +109,15 @@ struct Room {
     armed: bool,
     /// Names (lower case) the owner removed: refused back while the room exists.
     banned: Vec<String>,
+    /// The owner's machine runs the race: the room takes no server slot, its reference
+    /// edition is the owner's, and it closes when the owner leaves.
+    hosted: bool,
 }
+
+/// What a member is told when a player-hosted room closes under them.
+pub const HOST_LEFT: &str = "the host left: this game is closed";
+/// What a member is told when a player-hosted race ends because its host went.
+pub const HOST_LEFT_RACING: &str = "the host left: a player-hosted race ends with its host";
 
 #[derive(Debug, Clone)]
 struct Person {
@@ -129,7 +139,7 @@ pub struct Rooms {
     next_room: u32,
     launches: u64,
     outbox: Vec<(ClientId, Message)>,
-    launch: Option<Launch>,
+    launches_due: VecDeque<Launch>,
     now: u64,
 }
 
@@ -153,7 +163,7 @@ impl Rooms {
             next_room: 1,
             launches: 0,
             outbox: Vec::new(),
-            launch: None,
+            launches_due: VecDeque::new(),
             now: 0,
         }
     }
@@ -242,7 +252,7 @@ impl Rooms {
 
     /// A race to bring up, once a room's countdown has run out.
     pub fn take_launch(&mut self) -> Option<Launch> {
-        self.launch.take()
+        self.launches_due.pop_front()
     }
 
     fn say(&mut self, to: ClientId, message: Message) {
@@ -255,8 +265,22 @@ impl Rooms {
 
     /// Why `id` cannot race `title` on this server, `None` when it can: the person's edition
     /// of it against the server's, by the decision LAN discovery makes ([`differs`]).
-    fn mismatch(&self, id: ClientId, title: &str) -> Option<Compat> {
-        let server = self.config.titles.iter().find(|e| e.title == title)?;
+    ///
+    /// A player-hosted room's reference is its `host`'s own edition instead of the server's.
+    fn mismatch(&self, id: ClientId, title: &str, host: Option<ClientId>) -> Option<Compat> {
+        let server = match host {
+            Some(host) => {
+                let Some(edition) = self
+                    .people
+                    .get(&host)
+                    .and_then(|p| p.titles.iter().find(|e| e.title == title))
+                else {
+                    return Some(Compat::OtherTitle);
+                };
+                edition
+            }
+            None => self.config.titles.iter().find(|e| e.title == title)?,
+        };
         let Some(theirs) = self
             .people
             .get(&id)
@@ -281,23 +305,31 @@ impl Rooms {
         differs(&local, &host)
     }
 
-    fn can_race(&self, id: ClientId, title: &str) -> bool {
-        self.mismatch(id, title).is_none()
+    fn can_race(&self, id: ClientId, title: &str, host: Option<ClientId>) -> bool {
+        self.mismatch(id, title, host).is_none()
     }
 
-    fn content_refusal(&self, id: ClientId, title: &str) -> Fail {
-        match self.mismatch(id, title) {
+    /// The person whose edition a room is judged against: its owner when the owner hosts.
+    fn host_of(room: &Room) -> Option<ClientId> {
+        room.hosted
+            .then(|| room.members.first().map(|m| m.client))
+            .flatten()
+    }
+
+    fn content_refusal(&self, id: ClientId, title: &str, host: Option<ClientId>) -> Fail {
+        let whose = if host.is_some() { "host" } else { "server" };
+        match self.mismatch(id, title, host) {
             Some(Compat::OtherVersion) => refuse(
                 Refusal::Version,
-                "your build differs from the server's, so the race would not match",
+                &format!("your build differs from the {whose}'s, so the race would not match"),
             ),
             Some(Compat::OtherContent) => refuse(
                 Refusal::Content,
-                "your mods differ from the server's, so the race would not match",
+                &format!("your mods differ from the {whose}'s, so the race would not match"),
             ),
             _ => refuse(
                 Refusal::Content,
-                "you do not have this server's pressing of that title",
+                &format!("you do not have this {whose}'s pressing of that title"),
             ),
         }
     }
@@ -345,6 +377,7 @@ impl Rooms {
             note: room.note.clone(),
             board: room.board.clone(),
             rematch: room.armed,
+            player_hosted: room.hosted,
         }
     }
 
@@ -365,15 +398,30 @@ impl Rooms {
         }
     }
 
-    fn validate(&self, id: ClientId, settings: &mut RoomSettings) -> Result<(), Fail> {
-        if !self.config.titles.iter().any(|e| e.title == settings.title) {
-            return Err(refuse(
-                Refusal::BadSettings,
-                "this server does not race that title",
-            ));
-        }
-        if !self.can_race(id, &settings.title) {
-            return Err(self.content_refusal(id, &settings.title));
+    fn validate(
+        &self,
+        id: ClientId,
+        settings: &mut RoomSettings,
+        hosted: bool,
+    ) -> Result<(), Fail> {
+        if hosted {
+            // The host's own edition is the room's reference: it only has to have the title.
+            if self.mismatch(id, &settings.title, Some(id)).is_some() {
+                return Err(refuse(
+                    Refusal::BadSettings,
+                    "you cannot host a title you did not say you have",
+                ));
+            }
+        } else {
+            if !self.config.titles.iter().any(|e| e.title == settings.title) {
+                return Err(refuse(
+                    Refusal::BadSettings,
+                    "this server does not race that title",
+                ));
+            }
+            if !self.can_race(id, &settings.title, None) {
+                return Err(self.content_refusal(id, &settings.title, None));
+            }
         }
         match oag_race::Mode::from_name(&settings.mode) {
             None => return Err(refuse(Refusal::BadSettings, "unknown race mode")),
@@ -407,7 +455,7 @@ impl Rooms {
     pub fn list(&self, id: ClientId) -> Vec<RoomInfo> {
         self.rooms
             .iter()
-            .filter(|r| self.can_race(id, &r.settings.title))
+            .filter(|r| self.can_race(id, &r.settings.title, Self::host_of(r)))
             .map(|r| RoomInfo {
                 id: r.id,
                 owner: r
@@ -421,6 +469,7 @@ impl Rooms {
                 joinable: r.stage == Stage::Open
                     && r.members.len() < usize::from(r.settings.max_players)
                     && !self.is_banned(r, id),
+                player_hosted: r.hosted,
             })
             .collect()
     }
@@ -436,7 +485,7 @@ impl Rooms {
                 self.say(id, Message::Rooms(rooms));
                 Ok(())
             }
-            Message::CreateRoom(settings) => self.create(id, settings),
+            Message::CreateRoom(settings) => self.create(id, settings, false),
             Message::JoinRoom { room } => self.join(id, room),
             Message::Edit(settings) => self.edit(id, settings),
             Message::Ready {
@@ -465,11 +514,83 @@ impl Rooms {
         }
     }
 
-    fn create(&mut self, id: ClientId, mut settings: RoomSettings) -> Result<(), Fail> {
+    /// Whether `id` could open a player-hosted room with `settings` right now: what the
+    /// service asks before it spends a probe on the offer.
+    ///
+    /// # Errors
+    ///
+    /// The refusal [`Self::create_hosted`] would give.
+    pub fn vet_hosted(&self, id: ClientId, settings: &RoomSettings) -> Result<(), Fail> {
         if self.room_of(id).is_some() {
             return Err(refuse(Refusal::InRoom, "leave your room first"));
         }
-        self.validate(id, &mut settings)?;
+        self.validate(id, &mut settings.clone(), true)
+    }
+
+    /// Opens a room whose race `id`'s own machine runs. The service calls this once the
+    /// offer is verified and the host's port answered; a refusal goes to the outbox.
+    pub fn create_hosted(&mut self, id: ClientId, settings: RoomSettings) {
+        if !self.people.contains_key(&id) {
+            return;
+        }
+        if let Err((code, text)) = self.create(id, settings, true) {
+            self.say(id, Message::Rejected { code, text });
+        }
+    }
+
+    /// How many player-hosted rooms there are.
+    #[must_use]
+    pub fn hosted_rooms(&self) -> usize {
+        self.rooms.iter().filter(|r| r.hosted).count()
+    }
+
+    /// The player-hosted room `id` owns, if any.
+    #[must_use]
+    pub fn hosted_by(&self, id: ClientId) -> Option<u32> {
+        self.rooms
+            .iter()
+            .find(|r| r.hosted && r.members.first().map(|m| m.client) == Some(id))
+            .map(|r| r.id)
+    }
+
+    /// Whether `room` is still there.
+    #[must_use]
+    pub fn exists(&self, room: u32) -> bool {
+        self.room_index(room).is_some()
+    }
+
+    /// Closes `room` under everyone in it, each told `reason`: an operator's ban of its host.
+    pub fn close(&mut self, room: u32, reason: &str) {
+        let Some(index) = self.room_index(room) else {
+            return;
+        };
+        let members: Vec<ClientId> = self.rooms[index].members.iter().map(|m| m.client).collect();
+        for client in members {
+            if let Some(person) = self.people.get_mut(&client) {
+                person.room = None;
+            }
+            self.say(
+                client,
+                Message::Left {
+                    reason: reason.to_string(),
+                },
+            );
+        }
+        if let Some(index) = self.room_index(room) {
+            self.close_room(index);
+        }
+    }
+
+    fn create(
+        &mut self,
+        id: ClientId,
+        mut settings: RoomSettings,
+        hosted: bool,
+    ) -> Result<(), Fail> {
+        if self.room_of(id).is_some() {
+            return Err(refuse(Refusal::InRoom, "leave your room first"));
+        }
+        self.validate(id, &mut settings, hosted)?;
         let room = Room {
             id: self.next_room,
             settings,
@@ -485,6 +606,7 @@ impl Rooms {
             board: Board::default(),
             armed: false,
             banned: Vec::new(),
+            hosted,
         };
         self.next_room += 1;
         if let Some(person) = self.people.get_mut(&id) {
@@ -503,8 +625,9 @@ impl Rooms {
             return Err(refuse(Refusal::NoSuchRoom, "no such room"));
         };
         let title = self.rooms[index].settings.title.clone();
-        if !self.can_race(id, &title) {
-            return Err(self.content_refusal(id, &title));
+        let host = Self::host_of(&self.rooms[index]);
+        if !self.can_race(id, &title, host) {
+            return Err(self.content_refusal(id, &title, host));
         }
         if self.is_banned(&self.rooms[index], id) {
             return Err(refuse(
@@ -554,7 +677,9 @@ impl Rooms {
                 "the settings are locked once START is pressed",
             ));
         }
-        self.validate(id, &mut settings)?;
+        let hosted = self.rooms[index].hosted;
+        self.validate(id, &mut settings, hosted)?;
+        let host = Self::host_of(&self.rooms[index]);
         let mut kicked = Vec::new();
         let room = &mut self.rooms[index];
         let changed = room.settings != settings;
@@ -568,7 +693,7 @@ impl Rooms {
         }
         let members: Vec<ClientId> = room.members.iter().map(|m| m.client).collect();
         for client in members {
-            if client != id && !self.can_race(client, &settings.title) {
+            if client != id && !self.can_race(client, &settings.title, host) {
                 kicked.push(client);
             }
         }
@@ -757,11 +882,20 @@ impl Rooms {
                 &format!("waiting for: {}", waiting.join(", ")),
             ));
         }
-        self.rooms[index].stage = Stage::Queued;
         self.rooms[index].armed = false;
+        self.rooms[index].note = String::new();
+        if self.rooms[index].hosted {
+            // The owner's machine is the slot: nothing to wait in line for.
+            self.rooms[index].stage = Stage::Countdown {
+                until: self.now + u64::from(self.config.countdown_ms),
+                shown: u32::MAX,
+            };
+            self.push_room(index);
+            return Ok(());
+        }
+        self.rooms[index].stage = Stage::Queued;
         let room_id = self.rooms[index].id;
         self.queue.push_back(room_id);
-        self.rooms[index].note = String::new();
         self.push_queue();
         Ok(())
     }
@@ -798,6 +932,16 @@ impl Rooms {
         let name = self.name(id).unwrap_or_default().to_string();
         let owner_left = self.rooms[index].members.first().map(|m| m.client) == Some(id);
         self.rooms[index].members.retain(|m| m.client != id);
+        if owner_left && self.rooms[index].hosted {
+            // Nobody else can run this room's race: it closes, racing or not.
+            let why = if self.rooms[index].stage == Stage::Racing {
+                HOST_LEFT_RACING
+            } else {
+                HOST_LEFT
+            };
+            self.close(room, why);
+            return;
+        }
         if self.rooms[index].members.is_empty() {
             // A racing room stays until its race is reported over, so the slot is not freed early.
             if self.rooms[index].stage != Stage::Racing {
@@ -920,15 +1064,31 @@ impl Rooms {
                 break;
             }
         }
-        let Some(active) = self.active else { return };
-        let Some(index) = self.room_index(active) else {
+        if let Some(active) = self.active
+            && self.room_index(active).is_none()
+        {
             self.active = None;
-            return;
-        };
+        }
+        // The room holding the server's slot, and every player-hosted room that pressed START.
+        let counting: Vec<u32> = self
+            .rooms
+            .iter()
+            .filter(|r| matches!(r.stage, Stage::Countdown { .. }))
+            .map(|r| r.id)
+            .collect();
+        for room in counting {
+            if let Some(index) = self.room_index(room) {
+                self.count_down(index, now);
+            }
+        }
+    }
+
+    fn count_down(&mut self, index: usize, now: u64) {
         if let Stage::Countdown { until, shown } = self.rooms[index].stage {
             if now >= until {
                 self.rooms[index].stage = Stage::Racing;
-                self.launch = Some(self.launch_for(index));
+                let launch = self.launch_for(index);
+                self.launches_due.push_back(launch);
                 self.push_room(index);
             } else {
                 let seconds = u32::try_from((until - now).div_ceil(1000)).unwrap_or(u32::MAX);
@@ -995,6 +1155,7 @@ impl Rooms {
             room: room.id,
             params,
             seats,
+            hosted: room.hosted,
         }
     }
 }

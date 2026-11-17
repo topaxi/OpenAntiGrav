@@ -19,7 +19,7 @@ use crate::loopback::headless;
 
 const TITLE: &str = "Wipeout Test";
 
-fn edition() -> Edition {
+pub(crate) fn edition() -> Edition {
     Edition {
         title: TITLE.into(),
         platform: "PSP".into(),
@@ -28,7 +28,7 @@ fn edition() -> Edition {
     }
 }
 
-fn settings() -> RoomSettings {
+pub(crate) fn settings() -> RoomSettings {
     RoomSettings {
         title: TITLE.into(),
         track: String::new(),
@@ -44,7 +44,7 @@ fn settings() -> RoomSettings {
     }
 }
 
-fn config() -> Config {
+pub(crate) fn config() -> Config {
     Config {
         listen: "127.0.0.1:0".parse().expect("addr"),
         cert_names: Vec::new(),
@@ -55,10 +55,11 @@ fn config() -> Config {
         },
         max_connections: oag_net::online::server::MAX_CONNECTIONS,
         max_per_address: oag_net::online::server::MAX_PER_ADDRESS,
+        ban_file: None,
     }
 }
 
-fn thread_runner(max_ticks: u32) -> Box<ThreadRunner> {
+pub(crate) fn thread_runner(max_ticks: u32) -> Box<ThreadRunner> {
     Box::new(ThreadRunner {
         load: Arc::new(|params| Ok(headless(params))),
         listen: "127.0.0.1:0".parse().expect("addr"),
@@ -70,24 +71,27 @@ fn thread_runner(max_ticks: u32) -> Box<ThreadRunner> {
 }
 
 /// A lobby and the people connected to it, pumped from one thread.
-struct Lab {
-    server: Server,
-    people: Vec<LobbyClient>,
+pub(crate) struct Lab {
+    pub(crate) server: Server,
+    pub(crate) people: Vec<LobbyClient>,
 }
 
 impl Lab {
-    fn new(runner: Box<dyn oag_net::online::race_proc::Runner>) -> Self {
+    pub(crate) fn new(runner: Box<dyn oag_net::online::race_proc::Runner>) -> Self {
         Self::with_config(config(), runner)
     }
 
-    fn with_config(config: Config, runner: Box<dyn oag_net::online::race_proc::Runner>) -> Self {
+    pub(crate) fn with_config(
+        config: Config,
+        runner: Box<dyn oag_net::online::race_proc::Runner>,
+    ) -> Self {
         Self {
             server: Server::bind(config, runner).expect("binds"),
             people: Vec::new(),
         }
     }
 
-    fn join(&mut self, name: &str) -> usize {
+    pub(crate) fn join(&mut self, name: &str) -> usize {
         let link = oag_net::wt::connect(
             &self.server.local_addr().to_string(),
             self.server.cert_hash(),
@@ -104,7 +108,7 @@ impl Lab {
         who
     }
 
-    fn pump(&mut self) {
+    pub(crate) fn pump(&mut self) {
         self.server.poll();
         for person in &mut self.people {
             let _ = person.poll();
@@ -112,7 +116,7 @@ impl Lab {
         std::thread::sleep(Duration::from_millis(2));
     }
 
-    fn until(&mut self, what: &str, done: impl Fn(&Lab) -> bool) {
+    pub(crate) fn until(&mut self, what: &str, done: impl Fn(&Lab) -> bool) {
         let started = std::time::Instant::now();
         while !done(self) {
             assert!(
@@ -123,7 +127,7 @@ impl Lab {
         }
     }
 
-    fn phase(&self, who: usize) -> Option<RoomPhase> {
+    pub(crate) fn phase(&self, who: usize) -> Option<RoomPhase> {
         self.people[who].room.as_ref().map(|r| r.phase)
     }
 
@@ -153,22 +157,25 @@ impl Lab {
 
 /// Reconnects `who` to their race with the hand-off, and flies it to the end. Returns the
 /// seat the race gave them and the state hashes that agreed and disagreed.
-struct Racer {
-    who: usize,
-    client: Client,
+pub(crate) struct Racer {
+    pub(crate) who: usize,
+    pub(crate) client: Client,
     race: Option<Box<oag_raceplay::Race>>,
-    seat: Option<usize>,
-    matches: u32,
-    mismatches: u32,
+    pub(crate) seat: Option<usize>,
+    pub(crate) matches: u32,
+    pub(crate) mismatches: u32,
 }
 
 impl Racer {
-    fn dial(who: usize, lab: &Lab, handoff: &Handoff) -> Self {
-        let link = oag_net::wt::connect(
-            &format!("{}:{}", lab.server.local_addr().ip(), handoff.port),
-            handoff.cert_hash,
-        )
-        .expect("connects to the race");
+    pub(crate) fn dial(who: usize, lab: &Lab, handoff: &Handoff) -> Self {
+        // A player-hosted race is on the address the hand-off names, a server's on the lobby's.
+        let host = if handoff.host.is_empty() {
+            lab.server.local_addr().ip().to_string()
+        } else {
+            handoff.host.clone()
+        };
+        let link = oag_net::wt::connect(&format!("{host}:{}", handoff.port), handoff.cert_hash)
+            .expect("connects to the race");
         Self {
             who,
             client: Client::connect_seat(Box::new(link), &handoff.name, "", &handoff.token),
@@ -181,7 +188,7 @@ impl Racer {
 }
 
 /// Flies every racer until their race is over.
-fn fly(lab: &mut Lab, racers: &mut [Racer]) {
+pub(crate) fn fly(lab: &mut Lab, racers: &mut [Racer]) {
     let started = std::time::Instant::now();
     while racers
         .iter()
@@ -191,27 +198,32 @@ fn fly(lab: &mut Lab, racers: &mut [Racer]) {
             started.elapsed() < Duration::from_secs(60),
             "the race never ended"
         );
-        lab.pump();
-        for racer in racers.iter_mut() {
-            if racer.race.is_none() {
-                if let Some(welcome) = racer.client.poll_welcome().expect("welcomed") {
-                    racer.seat = Some(welcome.seat);
-                    let mut race = headless(&welcome.params);
-                    racer.client.ready(&mut race).expect("the same start state");
-                    racer.race = Some(race);
-                }
-                continue;
+        fly_once(lab, racers);
+    }
+}
+
+/// One pass of [`fly`]: the lobby, then each racer loads, or reads its link and steps.
+pub(crate) fn fly_once(lab: &mut Lab, racers: &mut [Racer]) {
+    lab.pump();
+    for racer in racers.iter_mut() {
+        if racer.race.is_none() {
+            if let Some(welcome) = racer.client.poll_welcome().expect("welcomed") {
+                racer.seat = Some(welcome.seat);
+                let mut race = headless(&welcome.params);
+                racer.client.ready(&mut race).expect("the same start state");
+                racer.race = Some(race);
             }
-            racer.client.poll();
-            if racer.client.phase() == &Phase::Racing {
-                let race = racer.race.as_mut().expect("loaded");
-                let own = racer.client.bot_input(race);
-                racer.client.step(race, &own);
-                let stats = racer.client.take_stats();
-                racer.matches += stats.hash_matches;
-                racer.mismatches += stats.hash_mismatches;
-                std::thread::sleep(Duration::from_micros(14_000));
-            }
+            continue;
+        }
+        racer.client.poll();
+        if racer.client.phase() == &Phase::Racing {
+            let race = racer.race.as_mut().expect("loaded");
+            let own = racer.client.bot_input(race);
+            racer.client.step(race, &own);
+            let stats = racer.client.take_stats();
+            racer.matches += stats.hash_matches;
+            racer.mismatches += stats.hash_mismatches;
+            std::thread::sleep(Duration::from_micros(14_000));
         }
     }
 }

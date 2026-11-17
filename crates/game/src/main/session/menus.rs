@@ -549,6 +549,7 @@ impl Session {
             // The MULTIPLAYER page's ONLINE row and the ONLINE page's two (`session::online`).
             menu::MenuEvent::Fired(menu::Action::OpenOnline) => self.open_online(),
             menu::MenuEvent::Fired(menu::Action::OnlineCreate) => self.open_online_create(),
+            menu::MenuEvent::Fired(menu::Action::OnlineHost) => self.open_online_host(),
             menu::MenuEvent::Fired(menu::Action::OnlineJoin) => self.open_online_join(),
             // The OPTIONS page's PLAYER NAME and PLAYER TAG rows (`session::player_name`).
             menu::MenuEvent::Fired(menu::Action::EditPlayerName) => self.edit_player_name(),

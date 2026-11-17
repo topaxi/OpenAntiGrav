@@ -1,0 +1,7 @@
+# OpenAntiGrav player key: who this profile is to an online lobby when it hosts a race.
+# A TEST FIXTURE: this key identifies nobody and is public.
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/identity.tosd", version = "1.0.0" }
+
+[key]
+algorithm = "ed25519"
+pkcs8 = "3051020101300506032b657004220420c77df778feb0a88d6c9901c4a5b8ac42e30772cdae83697116704256e80b9f0c812100c848b7e1892192fca4f6ee60c0537fc1d49a6d1771afcf67956770cf95b023af"

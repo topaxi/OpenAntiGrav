@@ -56,6 +56,10 @@ pub struct Connect {
     /// The seat token an online lobby handed this person for this race ([`crate::online`]),
     /// empty for a plain `--connect`.
     pub token: String,
+    /// Where the lobby's word arrives that the room closed under this race, for a race that
+    /// came from a lobby.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub lobby: Option<crate::online::LobbyWord>,
 }
 
 /// A connection to a server and the client half of the protocol.
@@ -90,7 +94,21 @@ pub struct NetPlay {
     /// Confirmed ticks whose state hash matched the server's, and those whose did not, since
     /// the join.
     hashes: Cell<(u32, u32)>,
+    /// The lobby said the room closed under this race, and when this client heard it.
+    closed: RefCell<Option<(String, Instant)>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    lobby: RefCell<Option<crate::online::LobbyWord>>,
 }
+
+/// How long an exiting `--online` host waits to tell the lobby how its race ended. Chosen: the
+/// host thread lets the last ticks reach its seats for a second before it reports.
+#[cfg(not(target_arch = "wasm32"))]
+const REPORT_WAIT: Duration = Duration::from_secs(4);
+
+/// How long after the lobby says the room closed the race is ended here if its host has not
+/// ended it itself. Chosen: a host that leaves in order sends its own end and the final ticks
+/// first, and those are the better ending.
+const CLOSED_GRACE: Duration = Duration::from_secs(1);
 
 /// Where the record of the seat is written and when it last was.
 #[derive(Debug, Default)]
@@ -208,6 +226,9 @@ impl Pending {
             rejoin,
             record: RefCell::new(Record::default()),
             hashes: Cell::new((0, 0)),
+            closed: RefCell::new(None),
+            #[cfg(not(target_arch = "wasm32"))]
+            lobby: RefCell::new(None),
         }))
     }
 }
@@ -271,6 +292,7 @@ impl NetPlay {
         let asked = Instant::now();
         loop {
             if let Some(net) = pending.poll()? {
+                *net.lobby.borrow_mut() = args.lobby.clone();
                 return Ok(net);
             }
             if asked.elapsed() > Duration::from_secs(10) {
@@ -404,6 +426,7 @@ impl NetPlay {
     /// how many ticks the race advanced (0, 1 or 2), each a drawn `Race::tick`.
     pub fn step(&self, race: &mut Race, device: InputSnapshot) -> u32 {
         let own = self.own_input(race, device);
+        self.heed_lobby();
         self.redial_step();
         let ticks = self.client.borrow_mut().step(race, &own);
         self.keep_record();
@@ -418,6 +441,37 @@ impl NetPlay {
         }
         self.check_server_board(race);
         ticks
+    }
+
+    /// The lobby says the room closed under this race (its host left, or was banned): the race
+    /// ends here with `reason` unless its host ends it first.
+    pub fn lobby_closed(&self, reason: &str) {
+        self.closed
+            .borrow_mut()
+            .get_or_insert_with(|| (reason.to_string(), Instant::now()));
+    }
+
+    /// Ends the race on the lobby's word, once the host has had its moment to end it itself.
+    fn heed_lobby(&self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(word) = self.lobby.borrow().as_ref()
+            && let Some(reason) = word
+                .closed
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take()
+        {
+            self.lobby_closed(&reason);
+        }
+        let closed = self.closed.borrow();
+        let Some((reason, heard)) = closed.as_ref() else {
+            return;
+        };
+        let mut client = self.client.borrow_mut();
+        if heard.elapsed() >= CLOSED_GRACE && !matches!(client.phase(), Phase::Over(_)) {
+            log::warn!("net: the lobby closed the room: {reason}");
+            client.give_up(reason);
+        }
     }
 
     /// Dials again when the link has closed under the race ([`oag_net::redial`]).
@@ -787,6 +841,21 @@ impl Drop for NetPlay {
     fn drop(&mut self) {
         if self.over().is_none() {
             self.leave("the client closed");
+        }
+        // A `--online` run that hosted the race is about to exit: the lobby is told how the
+        // race ended first, so the room gets its board instead of losing its host.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(word) = self.lobby.borrow().as_ref() {
+            use std::sync::atomic::Ordering;
+            let asked = Instant::now();
+            let hosted = word.unreported.load(Ordering::Relaxed);
+            while word.unreported.load(Ordering::Relaxed) && asked.elapsed() < REPORT_WAIT {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            if hosted {
+                // The report is queued on the lobby link; give it the moment to leave.
+                std::thread::sleep(Duration::from_millis(300));
+            }
         }
         // A game that is going down on a panic keeps the record: it is what the next one
         // rejoins from.

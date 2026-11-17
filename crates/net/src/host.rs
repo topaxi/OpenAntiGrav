@@ -141,6 +141,8 @@ pub struct Host {
     phase: Phase,
     /// Seat tokens a lobby issued, by seat: when set, a hello is seated by its token.
     expected: Vec<(String, String)>,
+    /// What the seats are told when whoever runs this host stops it.
+    stop_reason: &'static str,
 }
 
 impl Host {
@@ -161,7 +163,19 @@ impl Host {
             history: Vec::new(),
             phase: Phase::Lobby,
             expected: Vec::new(),
+            stop_reason: "the host stopped",
         }
+    }
+
+    /// What the seats are told when whoever runs this host stops it ([`crate::serve::run`]).
+    #[must_use]
+    pub fn stop_reason(&self) -> &'static str {
+        self.stop_reason
+    }
+
+    /// Replaces [`Self::stop_reason`]: a player's machine says its player left.
+    pub fn set_stop_reason(&mut self, reason: &'static str) {
+        self.stop_reason = reason;
     }
 
     /// Seats only the people a lobby named: `seats[i]` is the (name, token) of seat `i`,

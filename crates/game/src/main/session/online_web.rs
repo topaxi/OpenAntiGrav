@@ -13,6 +13,8 @@ impl Session {
 
     pub(crate) fn open_online_create(&mut self) {}
 
+    pub(crate) fn open_online_host(&mut self) {}
+
     pub(crate) fn open_online_join(&mut self) {}
 
     pub(crate) fn online_creating(&self) -> bool {

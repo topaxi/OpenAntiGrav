@@ -428,6 +428,13 @@ optional = true
 type = "string"
 optional = true
 
+# The UDP port HOST GAME listens on; absent or 0 is the game's own.
+[types.online.host_port]
+type = "integer"
+min = 0
+max = 65535
+optional = true
+
 # [player]: the name every title shares and the tag Pulse and Pure use.
 [types.player]
 type = "table"

@@ -14,7 +14,7 @@
 #     naming its inputs by setting key, or without it for the RACE page's own
 #     launch), quit,
 #     save_pilot, new_pilot, rename_pilot, delete_pilot, open_campaign, multiplayer_local,
-#     lan_host, lan_join, online_open, online_create, online_join;
+#     lan_host, lan_join, online_open, online_create, online_host, online_join;
 #   - every `button` is an abstract button name;
 #   - every page is reachable from `root`.
 #
@@ -225,6 +225,17 @@ string_id = "OAG_ONLINE_CREATE"
 action = "online_create"
 subtitle = "Choose the race, then wait for the others to join"
 subtitle_string_id = "OAG_ONLINE_CREATE_SUBTITLE"
+
+# The same pages, but the race runs on this machine and the lobby lists the room as
+# PLAYER-HOSTED (ADR-0092): the lobby checks this machine's hosting port before it lists it.
+[[page.entry]]
+id = "online_host"
+kind = "action"
+label = "HOST GAME"
+string_id = "OAG_ONLINE_HOSTGAME"
+action = "online_host"
+subtitle = "Run the race on this machine: needs an open UDP port"
+subtitle_string_id = "OAG_ONLINE_HOSTGAME_SUBTITLE"
 
 [[page.entry]]
 id = "online_join"

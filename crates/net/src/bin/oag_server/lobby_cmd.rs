@@ -52,6 +52,10 @@ pub struct Args {
     /// Write the lobby's certificate hash to this file as well as printing it.
     #[arg(long)]
     hash_out: Option<std::path::PathBuf>,
+    /// The ban list for players who host a race: lines `key <64 hex> [reason]` or
+    /// `addr <ip> [reason]`, read again when the file changes.
+    #[arg(long)]
+    ban_file: Option<std::path::PathBuf>,
     /// The base of the races' seeds.
     #[arg(long, default_value_t = 1)]
     seed: u64,
@@ -108,6 +112,7 @@ pub fn run(args: &Args) -> Result<()> {
             },
             max_connections: oag_net::online::server::MAX_CONNECTIONS,
             max_per_address: oag_net::online::server::MAX_PER_ADDRESS,
+            ban_file: args.ban_file.clone(),
         },
         Box::new(runner),
     )?;

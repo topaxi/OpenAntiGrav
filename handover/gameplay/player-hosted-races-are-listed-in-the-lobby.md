@@ -1,8 +1,8 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [all]
 updated: 2026-11-17
-summary: "Version one: lobby plus two server races; further races hosted by registered players, listed with a mark and moderated (bans)"
+summary: "ADR-0092 slice landed; open: server's second race slot, HOST GAME menus test, UPnP and hole punching, the anti-cheat path"
 categories: [tooling]
 ---
 
@@ -29,7 +29,57 @@ unfair latency, etc.)."
   the limits"); lane `net-mem` is cutting it with "lobby plus two races on the 1 GB VPS" as its
   acceptance bar.
 
+## Landed (2026-11-17, lane `net-playerhost`)
+
+Design: [ADR-0092](../../docs/architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md) (Proposed). What is built and how to run
+it: [online-lobby.md](../../docs/networking/online-lobby.md), part 12; the roadmap's
+"Player-hosted races" section.
+
+- Items 2, 3 (its cheapest option), 4, 5, 6 (the race ends), 7 (the key pair, the ban file, the
+  host log) and 9 of the list below are built and tested: `oag-net` `player_host::`,
+  `oag-game` `net_hosted_ground_truth` (real processes), `identity`, `online_screen`.
+- Item 8 is designed (ADR-0092 decision 7), not built.
+
 ## Open
+
+1. **Server capacity for version one: two races.** Untouched by this lane: the lobby still has
+   one race slot of its own (`Server::race`). The memory for two is measured (roadmap, "The
+   lobby and two races on the 1 GB VPS"); the wiring is the roadmap's V2 item 1.
+2. **HOST GAME from the menus has no driven test.** The row, the offer, the "checking" line
+   and the launch are wired (`session::online`) and the same `oag_game::online::Hosting` runs
+   under `--online-host`, which the real-process test covers; nobody has walked the menus as
+   host. A `--drive` script needs a saved `[online]` address, hash and name to pass the three
+   prompts.
+3. **Reachability beyond an opened port** (ADR-0092 decision 2): UPnP/NAT-PMP/PCP first, then
+   hole punching (client and listener on one `quinn` endpoint each), then a capped relay.
+   Today a host behind a router gets a refusal that names the port and nothing more.
+4. **The host's lobby link dropping closes its room**, mid-race too. Re-registering with the
+   session token, and the race moving to another host from the journal, are later.
+5. **Anti-cheat** (ADR-0092 decision 7), cheapest first: a hash of the job's `RaceParams` in
+   the hand-off that a client checks against the host's welcome; a seed the lobby draws at
+   random (today `seed ^ room << 32 ^ launches`, predictable, on server races too); signed
+   once-a-second checkpoints; the fraud proof and the lobby's re-simulation; signed inputs.
+6. **Moderation beyond the file**: a REPORT row on a hosted room, operator subcommands, and a
+   host log file of its own (today `host-log:` lines in the lobby's log).
+7. **Records.** A player-hosted race must not feed a record or leaderboard once online races
+   feed any; none do today, so nothing is excluded yet.
+8. **Not checked:** IPv6 hosts (the code binds the lobby link's family; only IPv4 localhost
+   was run), a real forwarded port over the internet, Windows, titles other than Pulse in the
+   real-process test (the path is title-blind; the stills were read on Pulse, Pure, HD and
+   Omega).
+
+## Next Steps
+
+1. The driven menus test of item 2 (an afternoon): `--drive` to ONLINE with a saved lobby,
+   `select online_host`, the RACE pages, then a second `--online` client as the guest.
+2. The params hash and the random seed of item 5 (half a day, one wire field and one check).
+3. The server's second race slot (roadmap V2 item 1), which is what "version one" still lacks
+   on the server side.
+4. UPnP (item 3), behind the same probe.
+
+## The thread as it stood (2026-11-17, before the lane)
+
+### Open then
 
 1. **Server capacity for version one: two races.** The lobby runs at most two races itself;
    a third room waits or goes to a player host. Depends on `net-mem`'s numbers.
@@ -102,7 +152,7 @@ unfair latency, etc.)."
 9. **Strings and screens.** The lobby's room list gets the mark and a short explanation;
    rows need `string_id` and English text (CLAUDE.md, `just check-strings`).
 
-## Next Steps
+### Next steps then
 
 1. After `net-mem` lands: confirm the two-race cap and whether starts must be staggered.
 2. A design pass (sonnet `oag-docs`, 2 h) that picks the reachability option and the
