@@ -68,7 +68,38 @@ unfair latency, etc.)."
    **Decided 2026-11-17 (maintainer): the key pair per player is enough for version one,**
    accepted with its known weakness (a banned player can make a new key). Accounts stay
    outside the roadmap.
-8. **Strings and screens.** The lobby's room list gets the mark and a short explanation;
+8. **Anti-cheat for a player host (agreed with the maintainer 2026-11-17; none built).**
+   Every client already re-simulates the race from the confirmed inputs and compares state
+   hashes with the host every tick (server-roadmap decision 8), so:
+   - **Simulation cheats are detected by one honest client.** A host that alters the
+     simulation (speed, shield, a pickup) disagrees with every honest client on that tick.
+     For a player-hosted race, a disagreement that survives decision 8's resync becomes a
+     **host report** to the lobby, not only a drop.
+   - **A report is a fraud proof, judged by the lobby.** The host signs every confirmed
+     tick record it broadcasts; each player signs their own inputs with their key pair
+     (item 7). A client that disagrees sends the lobby the signed records and inputs up to
+     the tick and the host's claimed hash; the lobby, which has the content, re-simulates
+     (about a second for a five-minute race) and decides. This works with two players,
+     where a vote cannot, and a lying client cannot forge the host's signature. The
+     verdict and the proof are the moderation evidence (bans, item 7).
+   - **A quorum is only extra weight** when the lobby cannot re-simulate (content it does
+     not carry): several clients agreeing with each other against the host.
+   - **Input-level cheats pass every hash check**, because the simulation of a manipulated
+     input stream is correct, so each needs its own measure:
+     - forging another player's input: rejected by the input signatures;
+     - delaying or dropping a rival's inputs ("packet loss"): clients measure how long
+       their own inputs take to be confirmed against their round trip and attach the
+       statistics to a report; evidence, not proof;
+     - choosing the race seed to rig pickup rolls: a commit-reveal seed (each player sends
+       a hashed random part, then reveals it; the seed combines all of them);
+     - the host's zero latency and first look at everyone's inputs: inherent, disclosed by
+       the PLAYER-HOSTED mark, not fixed.
+   - **Not in reach of any comparison:** bots and clients reading their own copy of the
+     race, as on server races.
+   Terms, for reading elsewhere: this is state verification with fraud proofs (optimistic
+   execution checked after the fact), not Byzantine consensus; full BFT ordering would
+   replace the single host with peer-to-peer lockstep, which costs every player latency.
+9. **Strings and screens.** The lobby's room list gets the mark and a short explanation;
    rows need `string_id` and English text (CLAUDE.md, `just check-strings`).
 
 ## Next Steps
