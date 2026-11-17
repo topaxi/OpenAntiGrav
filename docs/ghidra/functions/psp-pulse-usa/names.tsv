@@ -1482,3 +1482,8 @@
 0x0890e0dc	function	Mesh_EndCausticPass	75	caustic-pass.md
 0x08abf494	data	g_caustic_tint	70	caustic-pass.md
 0x08abf4a0	data	g_caustic_uv_scale	72	caustic-pass.md
+0x08922ea4	function	Shadow_DrawWipe	88	shadow-wipe.md
+0x08922e18	function	Shadow_SubmitWipe	80	shadow-wipe.md
+0x0892342c	function	ShadowNode_Read	75	shadow-wipe.md
+0x08a88680	data	g_shadow_darkness	90	shadow-wipe.md
+0x08b62550	data	g_shadow_darkness_override	78	shadow-wipe.md

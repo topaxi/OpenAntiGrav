@@ -191,6 +191,7 @@ OAG_GRAPHICS_MSAA = { text = "MSAA", human = false }
 OAG_GRAPHICS_MOTION_BLUR = { text = "BEWEGUNGSUNSCHÄRFE", human = false }
 OAG_GRAPHICS_MOTION_BLUR_RESOLUTION = { text = "UNSCHÄRFEAUFLÖSUNG", human = false }
 OAG_GRAPHICS_SHADOWS = { text = "SCHATTEN", human = false }
+OAG_GRAPHICS_SHADOW_RESOLUTION = { text = "SCHATTENAUFLÖSUNG", human = false }
 OAG_GRAPHICS_WATER = { text = "WASSER", human = false }
 OAG_GRAPHICS_MODEL_DETAIL = { text = "MODELLDETAILS", human = false }
 OAG_GRAPHICS_TEXTURE_DETAIL = { text = "TEXTURDETAILS", human = false }

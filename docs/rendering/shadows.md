@@ -7,8 +7,8 @@
 > **All four tiers are built.** `original` draws on Pulse and on HD/Fury by
 > each title's own mechanism - authored occluder hulls there, a coverage map
 > here - and on 2048 or Pure it draws nothing and the load report says so.
-> `mapped` is this project's own and works on every title, with one named gap
-> in step 7 below.
+> `mapped` is this project's own and works on every title. How many texels the
+> maps get is its own setting, [Shadow resolution](#shadow-resolution).
 > The page was written before any of it, so the setting's shape was agreed
 > before an enum and a menu row made it expensive to change, the way
 > [`motion-blur.md`](motion-blur.md) did for its own row.
@@ -961,6 +961,15 @@ Each step is a landing that can be reviewed on its own.
    marked, and ours with shadows off matches the frame better. Zone does not turn
    the shadow off.
 
+   **The wipe is read in the executable too (2026-11-17).** `Shadow_DrawWipe`
+   (`0x08922ea4`, confidence 88) multiplies the float `0.38` by 255, truncates
+   to `96` and blends black by it; the PS2 build has the same function and
+   float. A second wipe at half that strength runs in a later layer when a
+   counter the ghost mesh code increments is non-zero (a ghost's shadow,
+   hypothesis at confidence 55, not drawn here), and the unused `shadow` node
+   overrides the darkness as well as the direction:
+   [`shadow-wipe.md`](../ghidra/functions/psp-pulse-usa/shadow-wipe.md).
+
    **HD landed 2026-09-04 too, and its mechanism is a different one.** 2048:
    the `track_proximity_shadow` pair plus the precomputed environment shadows,
    with the shadow direction read straight out of `.EnvSettings`. Pure:
@@ -1207,7 +1216,7 @@ bridge.
 6. ~~**Measure 2048**~~ - **done 2026-09-02**, and it moved the design: 2048 has
    a shadow runtime of its own, a shadow light of its own, and six occluders
    that re-proved the payload closure on a second platform.
-7. **`mapped` - landed 2026-09-04, two cascades since 2026-10-25, and with a named gap.** A
+7. **`mapped` - landed 2026-09-04, two cascades since 2026-10-25.** A
    depth map every surface casts into and every lit surface reads, opt-in, this
    project's own: `shadow::map::Map::render_depth` fills it and `mesh.wgsl`
    compares against it. Offered on every title, because unlike `original` it
@@ -1320,21 +1329,19 @@ bridge.
      draw and left the entire road untouched. Four debugging passes were spent
      on the projection maths before the entry points were counted.
 
-   **The gap, stated rather than tuned away: a craft's own shadow does not
-   appear on the road.** *(2026-09-11: the mirrored lookup above is the
-   likely cause and is fixed; whether this closes the gap has not been
-   re-measured with a diff, so the paragraph stands until it is.)*
-   Scenery-on-scenery and the rest of the frame do
-   shadow. What has been ruled out, each by a separate run: the depth pass
-   writes depth (`shadow_map_coverage.rs` reads the texels back), the map has
-   content at the road's own texels, the road computes a `uv` inside the map,
-   the road and the craft land 13 texels apart at 2048 as the light's tilt
-   predicts, and the craft's caster carries 13 ranges and 4,335 indices. What
-   is *not* ruled out, and is the first thing to check: the caster shader
-   applies `mvp * position` where `mesh.wgsl`'s vertex stage applies
-   `model * (node_anims.transform[xform] * position)` - so any geometry baked
-   in an anim node's space is cast from the wrong place, and the caster pass
-   binds no node matrices at all.
+   ~~**The gap: a craft's own shadow does not appear on the road.**~~ **Closed,
+   measured 2026-11-17.** The mirrored lookup above was the cause, and the
+   animated nodes have cast at their own matrices since 2026-10-25, so the
+   caster shader's missing node transform is no longer a suspect either. On
+   Wipeout HD at Talon's Junction's grid, from the camera of the original's own
+   capture (`data/reference/hd-capture/talons-grid-recheck/00`), the road beside
+   the player's hull reads 21.5 % darker under `mapped` than under `off`, in the
+   craft's outline; on Pulse (Talon's Junction, tick 600, chase camera) `mapped`
+   against `off` changes 39,824 pixels, the road behind the craft among them.
+   [`hd_craft_shadow_ground_truth.rs`](../../crates/game/tests/hd_craft_shadow_ground_truth.rs)
+   pins the HD figure. What a player sees: the shadow is there, fainter than
+   `original`'s (22 % against 27 to 30 %) and softer, see
+   [Shadow resolution](#shadow-resolution).
 
 Steps 1-6 have landed, step 5 on Pulse only. **What is next is a title, not a
 step**: `original` on HD is its shadow-map pipeline and on 2048 its
@@ -1355,6 +1362,80 @@ than eyeballed: every vertex lands exactly one `LIFT` above the contact plane,
 and the polygon's centre sits `0.836` units from the contact point under a
 craft whose hull is `10.5` long
 (`crates/raceplay/tests/shadow_ground_truth.rs`).
+
+## Shadow resolution
+
+2026-11-17, `shadow-tier`. The maintainer's observation from play: "ours are
+also much less sharp". Measured, then fixed where it was a deviation, then
+offered as a setting.
+
+**The measurement.** One view, Wipeout HD, Talon's Junction's grid from the
+camera of an RPCS3 capture of the original (`data/reference/hd-capture/talons-grid-recheck/00`,
+1278x718; ours `--race --opponents --ticks 0 --team FEISAR` at its
+`--camera-pose`, 1280x720, MSAA and reconstruction off). The player's shadow
+lies on the road beside the hull. Its left edge is crossed by horizontal
+scanlines (rows 598 to 626), and per scanline the width is `0.8 * contrast /
+steepest one-pixel step`, which is a linear ramp's 10 to 90 % width; the
+figure is the median over the rows. For ours the profile is coverage,
+`1 - frame / off`, so the road's texture divides out; for the original there
+is no `off` frame, so it is luminance and the road's lettering is in it
+(quartiles 1.46 to 2.06 px).
+
+| | edge width, px at 720p | coverage inside |
+| --- | --- | --- |
+| the original | **1.72** | - |
+| `original`, before (512-texel side) | 2.29 | 0.27 |
+| `original`, shadow resolution `original` (768) | **1.89** | 0.27 |
+| `original`, `high` (1536) | 1.39 | 0.28 |
+| `original`, `ultra` (3072) | 1.22 | 0.28 |
+| `mapped`, `original` (2048 depth map) | 2.65 (7.7 by plateau crossings) | 0.22 |
+| `mapped`, `high` and `ultra` (4096) | 2.25 (5.3) | 0.20 |
+
+`mapped`'s edge is a four-tap comparison, a staircase of steep steps, so the
+slope width flatters it; its width by 10 and 90 % crossings of the plateaus
+is the bracketed figure. **Pulse's `original` is geometry and has no texel**:
+the original's stencil volume and this renderer's polygon are both
+pixel-sharp at any size (a matched pair, `pulse-psp/moa-therma-white`, shows
+a hard edge in both), so nothing was changed there.
+
+**The cause on HD: the box, not the filter.** The original fits each ship's
+512-texel map to the ship's own bounding box, 12 to 21 units across (24 to 43
+texels a world unit, [`shadow-model-maps.md`](../ghidra/functions/ps3-hdfury-eu/shadow-model-maps.md)).
+This renderer's box is 24 units (`CRAFT_HALF_EXTENT`, the margin ours), so the
+same 512 texels were 21 a unit and the edge a third wider. **The fix is the
+density, and it is a chosen equivalent**: the nearest craft's side is 768
+texels (32 a unit, the middle of the original's range), every other rank in
+the original's ratio to it. Fitting the box to each hull's own bounds, which
+is the original's law, stays open: a hull's vertex bounds reach far past the
+hull on an HD `Ship.vex` (the trap recorded under "HD's hull is a receiver
+too").
+
+**The setting.** `graphics.shadow_resolution` in the title's render profile
+(`oag_display::display::ShadowResolution`), a SHADOW RESOLUTION row under
+SHADOWS on the ADVANCED graphics page, `--shadow-resolution` for one run.
+Read when a race builds its scene, because every drawable binds the maps.
+
+| value | craft maps (nearest side, atlas) | `mapped` depth map | what it is |
+| --- | --- | --- | --- |
+| `original` (default) | 768, 1536x1152 | 2048 | the original's texels per world unit on HD |
+| `high` | 1536, 3072x2304 | 4096 | twice the texels a side: sharper than the original |
+| `ultra` | 3072, 6144x4608 | 4096 | four times; the depth map is capped at 4096 (two `Depth32Float` layers are 128 MiB there) |
+
+`oag_render::shadow::map::Resolution` carries the sizes; the atlas layout is
+the same one scaled whole, and the receiver reads the atlas's size from the
+texture. **What a player sees**: at `original` the nearest craft's shadow
+shows the hull's notches where it showed a rounded patch, and at `ultra` the
+edge is a pixel wide at 720p and stays clean at 4K. Blob shadows and Pulse's
+hulls do not move with it. Not measured: the cost of `high` and `ultra` on an
+integrated GPU (the 2048-against-1024 run above could not tell them apart at
+that size, and these are larger).
+
+**Checked on the other titles.** Pulse's four tiers are pixel-identical before
+and after at one pose (Talon's Junction, tick 600). `mapped` at the default
+and `off` are pixel-identical on HD. **2048 and Omega: checked, applies, not
+their own**: a forced `--shadows original` there goes through the same atlas
+and so takes the new sizes, but neither title's own mechanism is built
+("2048's and Omega's `original`" above), so there is nothing of theirs to compare an edge against.
 
 ## The shadow blinked, 2026-10-05: a flat polygon on a road that is not flat
 

@@ -1,12 +1,12 @@
 ---
 status: ready-to-wire
 titles: [2048, omega]
-updated: 2026-10-19
-summary: "Mapped shadow tier: a craft's own shadow does not reach the road; the original tier on 2048 and Omega is Unbuilt"
+updated: 2026-11-17
+summary: "The original shadow tier on 2048 and Omega is Unbuilt; HD's per-hull box fit and LiveStencilShadow are open"
 difficulty: hard (35)
 ---
 
-# All four shadow tiers draw; `mapped` has one named gap and 2048 has none of it
+# All four shadow tiers draw; 2048 and Omega have no `original` of their own
 
 2026-09-04. Rewritten from the file that split off
 [shadows-are-planned-and-pulses-occluder-payload-closes.md](shadows-are-planned-and-pulses-occluder-payload-closes.md)
@@ -56,7 +56,13 @@ Two things worth carrying forward from doing it:
   depth attachment, no bias and no comparison sampler in the pass.
 - **`original` on 2048**: the `track_proximity_shadow` pair and the
   precomputed environment shadows, and it needs 2048 to race first.
-- **`mapped` landed 2026-09-04 with a gap that is written down rather than
+- ~~`mapped`: a craft's own shadow does not appear on the road~~ **Closed,
+  measured 2026-11-17**: it is there on HD (the road beside the hull 21.5 %
+  darker than `off`, in the craft's outline) and on Pulse, pinned by
+  `crates/game/tests/hd_craft_shadow_ground_truth.rs`. The mirrored lookup
+  (fixed 2026-09-11) was the cause; the caster's node transform was not. The
+  rest of this item is the record of what had been ruled out.
+  **`mapped` landed 2026-09-04 with a gap that is written down rather than
   tuned away: a craft's own shadow does not appear on the road.** Everything
   else does - scenery on scenery, and the frame at large. Ruled out by separate
   runs: the depth pass writes depth (the texels are read back in
@@ -86,7 +92,15 @@ Two things worth carrying forward from doing it:
   chain above its node - identity on Pulse's craft, and not on a model where
   it is not. The guard is now a shape comparison: the hull's plan-view
   footprint covers 93 % of the craft mesh's and spills 4 % beyond it.
-- **`HULL_DARKNESS` is ours and unevidenced.** What a stencil volume is
+- ~~`HULL_DARKNESS` is ours and unevidenced~~ **Measured**: `96/255`, from a
+  GE dump (2026-10-21) and from the executable (2026-11-17): `Shadow_DrawWipe`
+  `0x08922ea4` blends black by `trunc(0.38 * 255)`, PS2 the same
+  ([`shadow-wipe.md`](../../docs/ghidra/functions/psp-pulse-usa/shadow-wipe.md)).
+  Open from that page: a second wipe at half strength in a later layer,
+  probably a ghost's shadow (confidence 55), which this project does not draw;
+  and two craft's overlapping polygons darken twice where the original's one
+  wipe darkens once. The old text:
+  **`HULL_DARKNESS` is ours and unevidenced.** What a stencil volume is
   darkened by is decided by the pass that fills it, and that pass is unread on
   Pulse; at full alpha the tier drew a black hole in the road, so `0.35` is a
   number picked to read as a shadow and derived from nothing. **HD's side is
@@ -95,6 +109,14 @@ Two things worth carrying forward from doing it:
   so HD's `MAP_STRENGTH` is gone from an HD race (the multiply survives for a
   scene with no authored rig and for `mapped`). Pulse's pass is the one still
   unread.
+- **Shadow resolution landed 2026-11-17** (`graphics.shadow_resolution`:
+  `original`, `high`, `ultra`; [`shadows.md`](../../docs/rendering/shadows.md),
+  "Shadow resolution"). HD's edge measured 2.29 px against the original's 1.72
+  at 720p because our box is 24 units where the original fits the hull's own
+  12 to 21; the default side is now 768 (1.89 px), a chosen equivalent. **Open:
+  fit each craft's box to its hull's bounds, the original's law**, which needs a
+  bound of the hull alone (an HD `Ship.vex`'s vertex bounds are 164 units).
+  Open: the cost of `high` and `ultra` on an integrated GPU is not measured.
 - **HD's map size is read, and ours is a chosen equivalent.** `shadowMapTexSize`
   is `(2/w, 2/h)` of each ship's own map, 512/512/256/128/64/32/32/32 by distance
   rank. The one grid-fitted map is 2048 (about 12 texels per unit, the original's
@@ -183,8 +205,15 @@ Two things worth carrying forward from doing it:
 - Look at both drawn tiers in a window on one title and judge the four numbers
   that are ours: the fade, the falloff's darkness, the lift, and
   `HULL_DARKNESS`. Every judgement so far is from a headless capture.
-- Read Pulse's compositing pass and replace `HULL_DARKNESS` with a measurement.
-  HD's is read (`shadow-track-redraw.md`) and its darkness constant is gone.
+- ~~Read Pulse's compositing pass and replace `HULL_DARKNESS` with a measurement.~~
+  Done, `shadow-wipe.md`.
+- **2048's `original`** was not advanced on 2026-11-17. The recipe stands on
+  [`ship-shadows.md`](../../docs/ghidra/functions/vita-2048-eu-v104/ship-shadows.md)
+  and in `shadows.md`, "2048's and Omega's `original`": the map is one
+  orthographic depth map along `Lighting.Ship shadow direction` fitted to the
+  camera frustum out to 60 units; what blocks a `Built` is the receiver's
+  strength (one branch of its select is a per-vertex interpolant, unread) and
+  a still of the original showing the shadow (Vita3K showed none in six).
 - Read the `ShadowToAlpha` variants of the special-combine track materials (the
   glass floor's facing ramp, the magstrip floor, light cones); on those chunks
   `shadowed` keeps the chosen `MAP_STRENGTH` multiply because the generic
@@ -192,8 +221,8 @@ Two things worth carrying forward from doing it:
 - One shadow map per craft on HD, sized by distance rank (512/512/256/128/64/32),
   each receiver combining `1 - prod(1 - coverage_i)` the way the original's
   successive blends do; the shared 2048 map is the chosen stand-in.
-- Bind the node matrices in the caster pass, which is the named gap above and
-  the likeliest reason a craft casts nothing onto the road.
+- ~~Bind the node matrices in the caster pass.~~ Not needed: the gap closed
+  without it (above).
 - A real cascade ladder: `mapped` is one cascade fitted ahead of the camera,
   which is a choice about where its texels go rather than a solution.
 

@@ -513,7 +513,6 @@ impl Stage {
             cannon_quad_textures,
             clouds,
             shadows,
-            shadow_hulls,
             campaign_2048_event,
             track_stats,
             ghost_static,
@@ -591,7 +590,6 @@ impl Stage {
             wo_composite,
             zone_grade,
             shadows,
-            shadow_hulls,
             behind_glass,
         )?);
         scene.attach_ripples(ripples);

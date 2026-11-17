@@ -363,11 +363,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     #[cfg(feature = "view")]
-    let (shadows, shadow_hulls) = super::shadow::assets(
+    let shadows = super::shadow::assets(
         craft_of(&mut craft, &mut archives),
         &slot_teams,
         craft_title.race,
         options.mode,
+        options.shadow_resolution,
         &mut report,
     );
     #[cfg(feature = "view")]
@@ -1411,8 +1412,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ghost_static: weapon_models::load_ghost_static(&mut archives, wm, &mut report),
         #[cfg(feature = "view")]
         shadows,
-        #[cfg(feature = "view")]
-        shadow_hulls,
         // Overwritten by `load_event` on the one path that has an event
         // name to carry - see `Loaded::campaign_2048_event`'s own doc.
         #[cfg(feature = "view")]

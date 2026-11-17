@@ -14,7 +14,7 @@ use oag_core::math::{Mat4, Vec3};
 use oag_mesh::mesh::GpuVertex;
 use oag_mesh::mesh_render::Geometry;
 use oag_render::shadow::map::{
-    ATLAS_HEIGHT, ATLAS_WIDTH, Caster, CraftCaster, DEPTH_SIZE, Fit, Map, RANK_SIDES,
+    ATLAS_HEIGHT, ATLAS_WIDTH, Caster, CraftCaster, DEPTH_SIZE, Fit, Map, RANK_SIDES, Resolution,
 };
 
 fn vertex(position: [f32; 3]) -> GpuVertex {
@@ -105,7 +105,7 @@ fn a_craft_covers_the_middle_of_its_square_and_leaves_the_rest_of_the_atlas_clea
     let Some((device, queue)) = device() else {
         return;
     };
-    let mut map = Map::new(&device);
+    let mut map = Map::new(&device, Resolution::ORIGINAL);
     let (vertex_buffer, index_buffer, index_count) = quad_buffers(&device, &queue);
 
     // Straight down at the origin, fitted to twice the caster's own half-width
@@ -213,7 +213,7 @@ fn a_craft_out_of_view_keeps_its_record_and_draws_nothing() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let mut map = Map::new(&device);
+    let mut map = Map::new(&device, Resolution::ORIGINAL);
     let (vertex_buffer, index_buffer, index_count) = quad_buffers(&device, &queue);
     let fit = Fit {
         centre: Vec3::ZERO,
@@ -252,7 +252,7 @@ fn an_empty_depth_pass_over_a_clear_map_is_skipped_and_a_caster_still_draws() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let mut map = Map::new(&device);
+    let mut map = Map::new(&device, Resolution::ORIGINAL);
     let (vertex_buffer, index_buffer, index_count) = quad_buffers(&device, &queue);
     let fit = Fit {
         centre: Vec3::ZERO,
@@ -308,7 +308,7 @@ fn craft_far_apart_each_draw_into_the_square_of_their_own_rank() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let mut map = Map::new(&device);
+    let mut map = Map::new(&device, Resolution::ORIGINAL);
     let (vertex_buffer, index_buffer, index_count) = quad_buffers(&device, &queue);
     let whole = 0..index_count;
     let ranges = std::slice::from_ref(&whole);
@@ -432,7 +432,7 @@ fn the_depth_pass_records_the_caster_and_clears_the_rest() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let mut map = Map::new(&device);
+    let mut map = Map::new(&device, Resolution::ORIGINAL);
     let (vertex_buffer, index_buffer, index_count) = quad_buffers(&device, &queue);
 
     let fit = Fit {
@@ -495,7 +495,7 @@ fn the_receivers_lookup_reads_the_row_the_caster_landed_in() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let mut map = Map::new(&device);
+    let mut map = Map::new(&device, Resolution::ORIGINAL);
     let (vertex_buffer, index_buffer, index_count) = quad_buffers(&device, &queue);
     // A tilted light, the shape of a circuit's own sun, and the caster
     // lifted above the fit's centre: in the light's view that is a shift
@@ -610,7 +610,7 @@ fn a_caster_with_nothing_to_draw_is_skipped_rather_than_panicking() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let mut map = Map::new(&device);
+    let mut map = Map::new(&device, Resolution::ORIGINAL);
     // What a drawable whose every chunk was filtered out (`OAG_ONLY_SLOT` with
     // no slot that matches) holds: zero-size buffers and no draw ranges. A
     // zero-size buffer has no slice, and `slice(..)` of one panics in wgpu.

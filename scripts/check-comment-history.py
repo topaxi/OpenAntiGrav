@@ -87,7 +87,7 @@ BASELINE: dict[str, int] = {
     "pure": 37,
     "race": 22,
     "rcs": 19,
-    "render": 17,
+    "render": 16,
     "sound": 6,
     "source": 2,
     "tables": 37,

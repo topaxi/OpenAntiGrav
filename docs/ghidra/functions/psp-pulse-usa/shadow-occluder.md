@@ -432,9 +432,9 @@ given address.
   `(1, -10, 2)` normalized, in `g_shadow_direction` (`0x08b62540`), and the
   second candidate is an override a live `shadow` `0x3cb` node installs. See
   the section above.
-- **What `0x0892342c` belongs to.** Its tail fills
-  `g_shadow_direction_override` from an object's own vector; its entry is at
-  `0x0892342c` and the rest of it is unread, so it carries no name here.
+- ~~**What `0x0892342c` belongs to.**~~ **Read 2026-11-17**: it is the `shadow`
+  node's reader, `ShadowNode_Read`, and it fills a darkness override beside the
+  direction: [`shadow-wipe.md`](shadow-wipe.md).
 - ~~The `m` face-to-vertex index mapping's exact byte layout~~ **Read
   2026-09-04**: `u16[4]` of per-edge adjacent faces at `+0x10` and `u16[4]` of
   vertex indices at `+0x18`, closing on 14,328 of 14,328 reciprocal edges. See

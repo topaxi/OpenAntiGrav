@@ -344,9 +344,28 @@ pub fn assets(
     teams: &[String],
     race: &oag_title::RaceDefaults,
     mode: oag_race::Mode,
+    resolution: oag_display::display::ShadowResolution,
     report: &mut Vec<String>,
-) -> (Vec<shadow::Silhouette>, Vec<Option<Occluder>>) {
-    let silhouettes = silhouettes(archives, teams, race, mode, report);
-    let hulls = hulls(archives, teams, race, mode, report);
-    (silhouettes, hulls)
+) -> Assets {
+    Assets {
+        silhouettes: silhouettes(archives, teams, race, mode, report),
+        hulls: hulls(archives, teams, race, mode, report),
+        resolution,
+    }
+}
+
+/// What a race's shadows are built from: what [`assets`] read off the craft, and how many
+/// texels the maps get.
+#[derive(Debug, Default)]
+pub struct Assets {
+    /// One `blob` shadow silhouette per grid slot, slot 0 the player's: the disc's own where
+    /// the source ships one (Wipeout HD's nine `ambient_shadow.gtf`) and a generated falloff
+    /// where it does not.
+    pub silhouettes: Vec<shadow::Silhouette>,
+    /// One authored shadow hull per grid slot, for the `original` tier, where the craft's
+    /// own model carries one. `None` where it does not, and the load report says which: a
+    /// craft with no `Dynamic Shadow Occluder` casts no `original` shadow.
+    pub hulls: Vec<Option<Occluder>>,
+    /// The player's `graphics.shadow_resolution` ([`crate::Options::shadow_resolution`]).
+    pub resolution: oag_display::display::ShadowResolution,
 }
