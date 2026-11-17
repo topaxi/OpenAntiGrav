@@ -129,7 +129,7 @@ OAG_ONLINE_MODE_TWO_ONLY = { text = "Head to Head is for two people", human = fa
 OAG_ONLINE_HOSTGAME = { text = "HOST GAME", human = false }
 OAG_ONLINE_HOSTGAME_SUBTITLE = { text = "Run the race on this machine: needs an open UDP port, and the others see your address", human = false }
 OAG_ONLINE_PLAYER_HOSTED = { text = "PLAYER-HOSTED", human = false }
-OAG_ONLINE_PLAYER_HOSTED_HINT = { text = "PLAYER-HOSTED: THE HOST'S MACHINE RUNS THE RACE AND COULD CHEAT", human = false }
+OAG_ONLINE_PLAYER_HOSTED_HINT = { text = "PLAYER-HOSTED: THE HOST RUNS THE RACE AND MAY CHEAT", human = false }
 OAG_ONLINE_HOST_CHECKING = { text = "CHECKING THAT THE LOBBY CAN REACH THIS MACHINE...", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Host a race on your network, or join one", human = false }
 OAG_LAN_HOST = { text = "HOST GAME", human = false }

@@ -124,6 +124,7 @@ STRING_CONSUMERS = [
     "crates/game/src/photo.rs",
     "crates/game/src/main/session/multiplayer.rs",
     "crates/game/src/main/session/online.rs",
+    "crates/game/src/online_screen.rs",
     "crates/game/src/main/session/online/rejoin.rs",
     "crates/game/src/main/session/reconnect.rs",
 ]

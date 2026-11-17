@@ -498,17 +498,11 @@ fn a_player_hosted_room_carries_the_mark_and_says_what_it_means() {
     let mut hosted = room(2, "bob", 1, true);
     hosted.player_hosted = true;
     let screen = list(&[room(1, "ada", 1, true), hosted.clone()]);
-    assert_eq!(
-        room_seat(&hosted, &strings()),
-        "WIPEOUT PULSE (1/8) PLAYER-HOSTED"
-    );
-    assert_eq!(
-        room_seat(&room(1, "ada", 1, true), &strings()),
-        "WIPEOUT PULSE (1/8)"
-    );
+    assert_eq!(room_label(&hosted, &strings()), "BOB - PLAYER-HOSTED");
+    assert_eq!(room_label(&room(1, "ada", 1, true), &strings()), "ADA");
     assert_eq!(
         screen.note(1),
-        Some("PLAYER-HOSTED: THE HOST'S MACHINE RUNS THE RACE AND COULD CHEAT")
+        Some("PLAYER-HOSTED: THE HOST RUNS THE RACE AND MAY CHEAT")
     );
     assert_eq!(screen.note(0), Some("02_TRACK / VENOM / SINGLE RACE"));
     // A hosted room that cannot be joined says that first.
@@ -526,7 +520,7 @@ fn a_guest_in_a_player_hosted_room_is_told_what_the_mark_means() {
     room.player_hosted = true;
     assert_eq!(
         room_hint(&room, false, &strings()),
-        "PLAYER-HOSTED: THE HOST'S MACHINE RUNS THE RACE AND COULD CHEAT"
+        "PLAYER-HOSTED: THE HOST RUNS THE RACE AND MAY CHEAT"
     );
     assert_eq!(
         room_hint(&room, true, &strings()),
