@@ -491,6 +491,22 @@ at the half-thrust cap steps it (the camera still follows it). Tests:
 start, left by a killed game, a new `NetPlay` rejoins from it with 0 bad hashes, deleted at the end);
 `rejoin_record` (expired, another title, unreadable, the shipped fixture);
 `hand_back::a_lone_person_who_goes_away_is_not_stepped_as_the_player` (`oag-raceplay`).
+*Real processes.* `net_rejoin_ground_truth` (`oag-game`, `#[ignore]`d, Pulse EU circuit 01, one lap):
+the real `oag-server lobby` binary, two `oag-game --online --net-bot` clients through it, one
+SIGKILLed once it has written `rejoin.toml`, and a new `oag-game` on the same profile directories
+driven through the menus by `--drive` to ONLINE. `a_killed_game_offered_its_race_takes_the_seat_back_and_finishes`
+(REJOIN RACE: 0 bad hashes on both clients, the server reports every person finished, the record is
+gone; about 54 s), `a_declined_offer_deletes_the_record_and_leaves_the_seat_to_the_away_driver`
+(DECLINE: record gone, the lobby questions follow, the away seat and the other client finish the
+race, 0 bad hashes; about 65 s) and `a_launch_after_the_race_has_ended_is_not_offered_it` (no offer,
+record deleted; about 28 s). Two server holes the real kill showed, closed in `Host`: a killed game
+sends no close frame, so a relaunch inside the 8 s silence was refused "every seat is taken" and its
+record deleted; a token for a seat whose old link is still held now replaces that link (the race never
+sees the person leave; `loopback::a_token_taking_over_a_seat_whose_link_is_still_held_is_the_person_returning`).
+And a returning seat is loading the race for longer than a flying seat may be silent, so until it has
+said ready it is given `RELOAD_GRACE` (60 s, chosen) instead (`loopback::a_returning_seat_loading_the_race_is_not_silent_until_it_is_ready`).
+`--drive` reports a prompt's purpose as `screen.id` (`rejoinrace`, `online`) so a script can tell the
+offer from the lobby questions. The offer's focus starts on DECLINE, as every confirm's does.
 
 **Landed (items 2, 4, 5, 6 in part; no `PROTOCOL` change).** The host drops an input more than
 119 ticks ahead (`MAX_INPUT_AHEAD`, a seat buffers under 120) and answers one resend request a
