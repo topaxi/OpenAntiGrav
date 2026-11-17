@@ -112,15 +112,27 @@ pass over Pulse geometry is the own-design section's question, not this one's.
 - **Clock:** the taps scroll on the race clock the existing
   `AnimTrack::Scroll` uses, so a replay shows the same water.
 
-## Own-design water for Pulse and Pure (TBD; chosen, not measured)
+## Own-design water for Pulse and Pure (decided 2026-11-17; chosen, not measured)
 
-Not planned in detail; the maintainer decides whether it exists. If it does it
-is a sixth value (`enhanced`), offered on Pulse and Pure with no other disc
-present, built from this project's own authored normal map and parameters
-(opt-in upgrades for Pulse and Pure are our data), on the same `WaterLaw`
-record. Open questions for the maintainer: a planar reflection or sky only,
-whether Vostok Reef's caustics extend to other underwater sections, and whether
-it is one look or one per circuit.
+**Decided (maintainer, 2026-11-17): keep the setting, hide the row when it
+would change nothing, and build `enhanced` with a procedurally generated normal
+map.**
+
+- **`enhanced`**: a sixth value, offered on Pulse and Pure with no other disc
+  present. HD's sea law (two opposite-scrolled taps, lighting, specular; sky
+  reflection only, as Amphiseum) drawn by our shader over **a normal map this
+  project generates procedurally** (tiling, two channels as HD's
+  `dc_waternormalmap` layout), with parameters of our own (colour from each
+  circuit's own water texture's mean, reflectivity and specular power tuned for
+  a good picture), all labelled chosen, not measured. No HD disc involved: the
+  shader is ours and the borrowed `hd` choice stays the one that reads HD's own
+  normal map and values off its disc.
+- **The row is hidden** on a title when nothing it offers changes the picture:
+  shown only if `original` differs from `off` on that title (HD once the sea
+  law lands, Pulse PS2 once the caustic pass lands), or `enhanced` is offered
+  there and drawn, or a lender's law is drawn and its disc is present.
+- Still open for later: whether Vostok Reef's caustics extend to other
+  underwater sections, and one look or one per circuit.
 
 ## Open
 
