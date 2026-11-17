@@ -25,8 +25,8 @@ Each line says what it would become once accepted.
 - **4 accepted**: the wire is frozen at the first public deployment; builds race together on an equal simulation fingerprint.
 - **5 accepted**: one small flat-traffic VPS through V3.
 - **6 accepted, a CA certificate for a host name**, probably from Let's Encrypt.
-- **7 open**: explained to the maintainer, answer pending.
-- **8 accepted provisionally**: explained, confirmation pending.
+- **7 accepted as immediate relay** (target version, after V3): the server forwards each input when it arrives, marked unconfirmed, and **the first record for a seat and tick wins** (an identical resend changes nothing; a revised record for a tick already received is ignored, so seeing others early lets nobody rewrite their own past; today the last one wins, `host.rs:250`). Latency-scaled relay was weighed and declined: it is never better than immediate for anyone and only removes the low-ping lead. Measure corrections a minute before and after.
+- **8 accepted, resync from the newest matching snapshot**: the client keeps a snapshot of its confirmed state about once a second and, on a hash mismatch, replays from the newest snapshot whose hash matched the server; if the same tick disagrees again it retries once from tick 0 (a divergence can sit in an unhashed field before any hash shows it); a third disagreement tells the player by name, hands the seat to the AI and logs tick, build and platform on the server.
 
 1. **The input journal is the session.** A race is its `RaceParams`, its seat table and
    the append-only list of confirmed ticks. Whoever holds those can resume it: a player
