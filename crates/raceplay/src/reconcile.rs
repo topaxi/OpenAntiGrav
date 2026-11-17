@@ -128,6 +128,18 @@ impl Race {
         evaluations
     }
 
+    /// [`Self::tick_sim_only`], then the recording takes the tick: the step of a client that
+    /// advances the state the server confirmed. A predicting client does not record its own
+    /// predicted ticks ([`Self::pause_recording`]), because a correction rewinds them and the
+    /// present can jump forward to the server's; the confirmed ticks arrive in order, so the
+    /// recording holds the run the server saw, with its inputs and hashes.
+    pub fn tick_confirmed(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluations {
+        let evaluations = self.tick_sim_only(inputs);
+        #[cfg(feature = "view")]
+        self.record_tick(inputs);
+        evaluations
+    }
+
     /// Whether this tick draws and sounds, as opposed to only simulating.
     /// False inside [`Self::tick_sim_only`], and always in a build without the
     /// `view` feature, where every tick runs as that one does.

@@ -101,6 +101,75 @@ fn two_bot_clients_race_a_real_circuit_at_100_ms_and_agree_with_the_server() {
     }
 }
 
+/// A recording armed on a predicting client describes the run the server confirmed: the
+/// predicted ticks (rewound by every correction, and jumped over when the server is ahead) are not
+/// written, the confirmed ones are, in order, so the recorder's tick invariant holds under debug
+/// assertions and the file re-drives to the server's own hashes.
+#[test]
+#[ignore = "needs a disc image"]
+fn a_predicting_clients_recording_is_the_confirmed_run_and_re_drives() {
+    let Some(image) = oag_testdata::image(IMAGE) else {
+        return;
+    };
+    let source = image.display().to_string();
+    let mut params = params();
+    let (race, title) = oag_net::race::load(&params, &source).expect("loads");
+    params.title = title.to_string();
+    let mut host = Host::new(race, params.clone());
+    let clock = oag_net::link::Clock::default();
+    let mut clients: Vec<_> = (0..2)
+        .map(|n| {
+            let (server_end, client_end) = Loopback::pair();
+            host.join(Box::new(server_end));
+            let link: Box<dyn Link> = Box::new(Shim::with_clock(
+                client_end,
+                Conditions {
+                    one_way: web_time::Duration::from_millis(50),
+                    loss: 0.0,
+                    ..Conditions::default()
+                },
+                clock.clone(),
+            ));
+            let client = Client::connect(link, &format!("bot {n}"));
+            let (mut race, _) = oag_net::race::load(&params, &source).expect("loads");
+            race.start_recording(oag_replay::Header::new(
+                &params.title,
+                &params.track,
+                &params.mode,
+                &params.class,
+                &params.team,
+                params.seed,
+            ));
+            let pilot: Pilot = Box::new(|client, race| client.bot_input(race));
+            (client, race, pilot)
+        })
+        .collect();
+    let ticks = 900;
+    let totals = drive(
+        &mut host,
+        &mut clients,
+        ticks,
+        &Pace::Virtual(clock, std::time::Duration::from_micros(16_667)),
+    );
+    for (n, total) in totals.iter().enumerate() {
+        assert!(total.corrections > 0, "client {n}: nothing was corrected");
+        assert_eq!(total.hash_mismatches, 0, "client {n}");
+        let replay = clients[n].1.recorded().expect("the client records");
+        assert_eq!(
+            replay.ticks(),
+            u64::from(total.hash_matches),
+            "client {n}: the recording holds the confirmed ticks, no more and no fewer"
+        );
+        let (mut again, _) = oag_net::race::load(&params, &source).expect("loads");
+        let found = oag_replay::Verifier::run(&replay, again.sim.state_hash(), |_, inputs| {
+            again.tick_sim_only(inputs);
+            again.sim.state_hash()
+        })
+        .unwrap_or_else(|why| panic!("client {n}: the recording does not reproduce: {why:?}"));
+        assert_eq!(found, replay.ticks(), "client {n}");
+    }
+}
+
 /// A LAN race the way the menus run it, in one process and over real sockets: a hosting game
 /// ([`oag_net::lan::Hosted`], its own player on the in-process link), a browser that finds it
 /// by discovery, a second player that connects with the hash the answer carries, START, and the

@@ -3419,6 +3419,7 @@ dependencies = [
  "oag-physics",
  "oag-race",
  "oag-raceplay",
+ "oag-replay",
  "oag-source",
  "oag-tables",
  "oag-testdata",
