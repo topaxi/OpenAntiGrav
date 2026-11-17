@@ -514,7 +514,7 @@ impl Session {
             }
         }
         let team = self.online_team(&options);
-        let host_port = self.settings.online.host_port;
+        let host_port = oag_game::online::hosting_port(self.settings.online.host_port);
         let Some(online) = &mut self.online else {
             return;
         };

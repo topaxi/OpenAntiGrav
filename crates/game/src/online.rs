@@ -49,9 +49,9 @@ pub struct Hosting {
 }
 
 impl Hosting {
-    /// Opens the hosting port (`port`, 0 for the game's own, [`oag_net::lan::DEFAULT_PORT`]) on
-    /// every interface of the family the lobby link uses (`lobby_peer`), so the address the
-    /// lobby sees this machine at is one the listener answers on.
+    /// Opens the hosting port (`port`; 0 lets the system pick one, which only a test on one
+    /// machine can use) on every interface of the family the lobby link uses (`lobby_peer`), so
+    /// the address the lobby sees this machine at is one the listener answers on.
     ///
     /// # Errors
     ///
@@ -149,6 +149,16 @@ impl Hosting {
     }
 }
 
+/// The UDP port HOST GAME listens on for the `[online] host_port` setting: the setting, or the
+/// game's own when it is unset (0). Never 0: the port a player opens or forwards is a fixed one.
+#[must_use]
+pub fn hosting_port(setting: u16) -> u16 {
+    match setting {
+        0 => oag_net::lan::DEFAULT_PORT,
+        port => port,
+    }
+}
+
 /// Where the race of `handoff` is dialled: this machine's own listener when it hosts the race,
 /// else the address the hand-off names (a player host's), else the lobby's own host.
 #[must_use]
@@ -200,7 +210,7 @@ pub struct Plan {
     /// The owner presses START when this many are ready.
     pub start_at: usize,
     /// With [`Action::Create`]: this machine hosts the room's race. The title's source and the
-    /// UDP port to listen on (0: the game's own).
+    /// UDP port to listen on (0: the system picks).
     pub host: Option<(String, u16)>,
 }
 
@@ -374,5 +384,61 @@ fn keep_lobby_open(mut lobby: LobbyClient, mut hosting: Option<Hosting>, word: L
         });
     if let Err(e) = spawned {
         log::warn!("online: the lobby link is not kept open: {e}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn handoff(host: &str) -> Handoff {
+        Handoff {
+            host: host.into(),
+            port: 4435,
+            cert_hash: [0; 32],
+            token: String::new(),
+            name: String::new(),
+        }
+    }
+
+    #[test]
+    fn host_game_listens_on_the_set_port_or_the_games_own_never_a_random_one() {
+        assert_eq!(hosting_port(0), oag_net::lan::DEFAULT_PORT);
+        assert_ne!(hosting_port(0), 0);
+        assert_eq!(hosting_port(50_123), 50_123);
+    }
+
+    #[test]
+    fn a_race_is_dialled_on_the_lobbys_host_unless_the_handoff_names_a_players() {
+        assert_eq!(
+            race_addr("race.example.org:60000", &handoff(""), None),
+            "race.example.org:4435"
+        );
+        assert_eq!(
+            race_addr("race.example.org:60000", &handoff("192.0.2.7"), None),
+            "192.0.2.7:4435"
+        );
+        assert_eq!(
+            race_addr("[2001:db8::1]:60000", &handoff("[2001:db8::7]"), None),
+            "[2001:db8::7]:4435"
+        );
+    }
+
+    #[test]
+    fn a_host_dials_its_own_listener_on_the_loopback_of_the_lobby_links_family() {
+        for (peer, own) in [("192.0.2.1", "127.0.0.1"), ("2001:db8::1", "[::1]")] {
+            let Ok(hosting) = Hosting::open("unused", 0, peer.parse().expect("an address")) else {
+                // A machine with no IPv6 cannot bind that family; the IPv4 half still stands.
+                assert_ne!(own, "127.0.0.1", "IPv4 binds everywhere");
+                continue;
+            };
+            let mut named = handoff("203.0.113.9");
+            named.port = hosting.port();
+            assert_eq!(
+                race_addr("race.example.org:60000", &named, Some(&hosting)),
+                format!("{own}:{}", hosting.port()),
+                "never the public address: a router rarely loops it back"
+            );
+        }
     }
 }
