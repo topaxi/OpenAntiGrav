@@ -288,6 +288,20 @@ pub fn is_preferred_trail_hit_lender(title: &Title) -> bool {
     title.slug() == oag_hd::TITLE.slug()
 }
 
+/// The title whose water law `graphics.water`'s `value` borrows, or `None` for `off` and
+/// `original`. Here for the reason [`borrowed_zoom_ring`] is: the one place a title package is
+/// named for another's data.
+#[must_use]
+pub fn water_lender(value: oag_display::display::Water) -> Option<&'static Title> {
+    use oag_display::display::Water;
+    match value {
+        Water::Off | Water::Original => None,
+        Water::Hd => Some(oag_hd::TITLE),
+        Water::Vita2048 => Some(oag_2048::TITLE),
+        Water::Omega => Some(oag_omega::TITLE),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

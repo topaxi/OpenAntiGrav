@@ -24,6 +24,7 @@ mod menu_graphics_advanced;
 mod menu_screen_filter;
 mod menu_screen_size;
 mod menu_sfx_ground_truth;
+mod menu_water_row;
 mod menu_web_rows;
 mod mine_launch_audio_ground_truth;
 mod mine_texture_scroll_ground_truth;

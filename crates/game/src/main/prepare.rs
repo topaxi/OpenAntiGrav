@@ -175,6 +175,7 @@ impl Pending {
             ),
             own_shield: self.settings.graphics.own_shield,
             own_rockets: self.settings.graphics.own_rockets,
+            water: oag_display::display::Water::default(),
             foreign_track: self
                 .foreign_entry
                 .as_ref()
@@ -405,7 +406,12 @@ impl Pending {
         // strings - `16_Track` and `Mantis` against their localised names,
         // which are shipped content and only ever live in memory.
         let (mut definition, mods, custom_campaigns) = self.menu_for(title, boot_shell.platform, updated)?;
-        oag_game::menu_tree::finish_definition(&mut definition, title, &boot_shell.strings);
+        oag_game::menu_tree::finish_definition(
+            &mut definition,
+            title,
+            &boot_shell.strings,
+            &oag_game::menu_tree::disc_probe(),
+        );
         // Built through `Shell::from_boot` rather than a literal here, so
         // this boot and a live LANGUAGE-row switch
         // (`Session::resupply_language`) read the same `boot::Shell` the

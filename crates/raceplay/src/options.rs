@@ -114,6 +114,11 @@ pub struct Options {
     /// Pulse and Pure) draws our own rocket effect in place of the disc's flare and blasts. Off by
     /// default. See `crate::own_rockets`.
     pub own_rockets: bool,
+    /// The law the circuit's classified water slots are drawn under: the player's
+    /// `graphics.water`, already resolved against the discs this machine has
+    /// (`oag_game::water_setting::resolve`), since this crate cannot see them.
+    /// `original` by default. See `oag_mesh::mesh::rcs::build_scene_with`.
+    pub water: oag_display::display::Water,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///

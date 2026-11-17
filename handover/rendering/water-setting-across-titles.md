@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-17
-summary: "Water setting (off/original/HD/2048/Omega) planned, nothing wired: HD sea taps first, then the planar reflection capture"
+summary: "Water setting row and load hook landed, every value draws the constant reading; HD sea taps next, then the planar reflection"
 categories: [rendering, frontend]
 size: XL (60)
 difficulty: medium (55)
@@ -13,7 +13,7 @@ difficulty: medium (55)
 2026-11-17, lane `water-re` (measure). The recovered laws, the census and the
 confidence scores are in [water.md](../../docs/rendering/water.md) and
 [caustic-pass.md](../../docs/ghidra/functions/psp-pulse-usa/caustic-pass.md).
-This thread is the plan. Nothing here is wired.
+This thread is the plan. Step 2 (the setting) has landed; no law is drawn yet.
 
 ## The maintainer's request
 
@@ -153,7 +153,26 @@ Ranked. Hours are for one member on an idle machine.
    moves toward the RPCS3 frame; 2048 and Omega recorded as checked, applies,
    not wired, or wired through `psp2` in the same lane (Omega work backports
    to 2048).
-2. **The setting and `off`** (`oag-wire`, sonnet, 3 to 4 h). Enum, per-title
+2. **LANDED: the setting and `off`.** `oag_display::display::Water`;
+   `graphics.water` in `RenderProfile`; the WATER row in `menu.toml`
+   (`OAG_GRAPHICS_WATER`); `oag_game::water_setting` (`offered`, `resolve`,
+   `trim_row`, `for_source`) and `Definition::drop_unavailable_water(&dyn Fn)`
+   (the lender's disc is asked through `menu_tree::disc_probe`, the survey the
+   campaign check shares; `oag-ui` names no title). `race::Options::water` is the
+   resolved law; `mesh::rcs::build_scene_with` / `build_scene_views` /
+   `scene_from` carry it to `water::water`, whose `reading(law)` is the hook:
+   **lane 1 adds a `Reading` variant per law there**; every value maps to
+   `Reading::Constant` today. `Report::water_law` names the law in the loader
+   line. Open: the 2048 and Omega `psp2` water path and the front-end capture
+   route (`capture.rs`) read no setting yet; 
+   **Each choice is hidden until its law is drawn:** `mesh::rcs::water::is_drawn(law)`
+   is the one flag; `water_setting::offered` also requires it, so today the row
+   holds `off` and `original` only, and `original` equals today's look until
+   lane 1. Lane 1 flips `Hd`, lane 5 `Vita2048`, lane 6 `Omega` (and adds the
+   `Reading` variant) when its law is drawn; the menu test
+   `with_every_lender_present_only_drawn_laws_are_offered` then grows its list.
+   A saved `hd`/`2048`/`omega` resolves to `original` until then.
+   Original wording: (`oag-wire`, sonnet, 3 to 4 h). Enum, per-title
    field, menu row, strings, `drop_unavailable_water`, `off` routing every
    classified water slot to today's constant reading. Acceptance: settings
    round-trip and fallback tests, a menu test with and without each lender

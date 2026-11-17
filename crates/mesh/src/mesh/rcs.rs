@@ -30,6 +30,7 @@
 
 use anyhow::{Context, Result, bail};
 use oag_core::math::{Mat4, Vec3};
+use oag_display::display::Water;
 use oag_gpu::formats::SceneStore;
 use oag_rcs::rcsmodel;
 use oag_vex::vex;
@@ -104,6 +105,7 @@ pub fn scene_from(
     name: &str,
     data: &[u8],
     store: SceneStore,
+    water: Water,
 ) -> Result<Option<(Model, Report)>> {
     if !oag_vex::vex::geometry_is_external(data) {
         return Ok(None);
@@ -117,12 +119,13 @@ pub fn scene_from(
     let Ok(geometry) = archive.read_entry(&sibling) else {
         return Ok(None);
     };
-    let (model, report) = build_scene(
+    let (model, report) = build_scene_with(
         name,
         data,
         &geometry,
         &mut |path| archive.read_entry(path).ok(),
         store,
+        water,
     )?;
     Ok(Some((model, report)))
 }
@@ -193,6 +196,7 @@ pub mod siblings;
 mod skin;
 mod vertex_scroll;
 mod water;
+pub use water::is_drawn as water_law_is_drawn;
 mod window_glass;
 use bounds::bounding_sphere;
 
@@ -209,7 +213,7 @@ use setup::{MaterialSetup, material_setup};
 
 mod scene;
 use scene::Setup;
-pub use scene::{BehindGlass, View, build_scene, build_scene_views};
+pub use scene::{BehindGlass, View, build_scene, build_scene_views, build_scene_with};
 
 /// Whether a chunk's declaration names no texture coordinate.
 ///
@@ -699,7 +703,7 @@ pub fn build(
         label,
         data,
         model_blob,
-        Setup::Decode(textures, store),
+        Setup::Decode(textures, store, Water::default()),
         pick,
         false,
         View::Main,
@@ -781,8 +785,8 @@ fn build_with_options(
         material_anim,
         anim_tracks,
     } = match setup {
-        Setup::Decode(textures, store) => {
-            material_setup(&model, model_blob, textures, store, &mut report)
+        Setup::Decode(textures, store, water) => {
+            material_setup(&model, model_blob, textures, store, water, &mut report)
         }
         Setup::Copy(from) => MaterialSetup::of(from),
     };

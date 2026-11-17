@@ -332,7 +332,14 @@ pub(super) fn build_pad_class(
         material_anim,
         anim_tracks,
         ..
-    } = material_setup(&model, model_blob, textures, store, &mut report);
+    } = material_setup(
+        &model,
+        model_blob,
+        textures,
+        store,
+        oag_display::display::Water::default(),
+        &mut report,
+    );
     out.textures = skins;
     out.lightmaps = seconds;
     out.material_slots = material_slots;

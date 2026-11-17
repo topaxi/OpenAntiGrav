@@ -434,6 +434,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         title.looks,
         options.mode == Mode::Zone,
         store,
+        options.water,
         &mut report,
     );
     stages::checkpoint()?;

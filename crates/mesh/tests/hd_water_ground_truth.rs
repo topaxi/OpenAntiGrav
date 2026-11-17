@@ -33,17 +33,59 @@ fn build(
     image: &std::path::Path,
     path: &str,
 ) -> Option<(mesh::Model, mesh::rcs::Report)> {
+    build_under(reads, image, path, oag_display::display::Water::default())
+}
+
+fn build_under(
+    reads: &Reads,
+    image: &std::path::Path,
+    path: &str,
+    water: oag_display::display::Water,
+) -> Option<(mesh::Model, mesh::rcs::Report)> {
     let specs: Vec<String> = (0..4).map(|n| archive(image, n)).collect();
     let (spec, data) = reads.read_any(&specs, path)?;
     let geometry = mesh::rcs::sibling_geometry(spec, path, &data)?;
-    mesh::rcs::build_scene(
+    mesh::rcs::build_scene_with(
         path,
         &data,
         &geometry,
         &mut |name| reads.read_any(&specs, name).map(|(_, bytes)| bytes),
         oag_gpu::formats::SceneStore::default(),
+        water,
     )
     .ok()
+}
+
+/// `graphics.water` reaches the build, and every value draws today's constant reading: the
+/// same four classified slots (one lit colour, three glint-only), the same vertices. Dropping
+/// the setting's wiring leaves the report naming `original` under every value and fails here.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_water_setting_reaches_the_build_and_draws_the_constant_reading() {
+    let Some(image) = oag_testdata::image(IMAGE) else {
+        return;
+    };
+    let reads = Reads::new();
+    let path = "/data/environments/01_vineta_k/track.vex";
+    let mut baseline: Option<(usize, usize, Vec<u32>)> = None;
+    for law in oag_display::display::Water::ALL {
+        let (model, report) = build_under(&reads, &image, path, law).expect("Vineta K builds");
+        assert_eq!(report.water_law, law, "the build was asked for {law}");
+        assert!(
+            report.describe().contains(&format!("water setting: {law}")),
+            "the loader report names the law"
+        );
+        let seen = (
+            report.water_lit_colour,
+            report.water_glint_only,
+            model.vertices.iter().map(|v| v.slots).collect::<Vec<_>>(),
+        );
+        assert_eq!((seen.0, seen.1), (1, 3), "{law}: classified slots");
+        match &baseline {
+            None => baseline = Some(seen),
+            Some(first) => assert!(first == &seen, "{law}: draws what the first value drew"),
+        }
+    }
 }
 
 /// How many drawn materials and chunks resolve no shader variant, per circuit

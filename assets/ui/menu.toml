@@ -1286,6 +1286,21 @@ setting = "graphics.shadows"
 values = ["off", "blob", "original", "mapped"]
 
 
+# Which law draws a sea, a lake or a pool: `off` is the surface's constant
+# colour or texture, lit, with no wave normal, scroll or reflection; `original`
+# is the title's own law and the default; `hd`, `2048` and `omega` borrow that
+# title's law and read its textures, so the row offers one only while that
+# title's disc image is present and never on the title itself
+# (`Definition::drop_unavailable_water`). Read when a race loads its circuit.
+# See `docs/rendering/water.md`.
+[[page.entry]]
+kind = "choice"
+label = "WATER"
+string_id = "OAG_GRAPHICS_WATER"
+setting = "graphics.water"
+values = ["off", "original", "hd", "2048", "omega"]
+
+
 # How far out an authored `LodGroup` switches to its coarser tiers. `original`
 # is the recovered rule - `LodGroup_SelectChild`'s per-frame switch at the
 # distances the disc authors, 30 units on a Pulse craft - and the default.

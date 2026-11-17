@@ -40,10 +40,23 @@ pub fn mods_menu(
     }
     let mut definition = built.definition;
     let mut listing = built.listing;
-    // Surveyed only when a campaign names another disc: the same survey
-    // a two-title race reads, by title slug.
+    let installed = mods.installed_for(title, &disc_probe());
+    crate::campaign::custom::add_picker(
+        &mut definition,
+        &mut listing,
+        &installed,
+        title,
+        &strings::project_table(language),
+    );
+    Ok((definition, listing, installed))
+}
+
+/// Whether a title's disc image (by [`oag_title::Title::slug`]) is on this machine: the same
+/// survey a two-title race reads. Surveyed on the first question only, so a menu that asks
+/// nothing (no campaign names another disc, no lender row) reads no image.
+pub fn disc_probe() -> impl Fn(&str) -> bool {
     let discs = std::cell::OnceCell::new();
-    let has_disc = |slug: &str| {
+    move |slug: &str| {
         discs
             .get_or_init(|| {
                 crate::launcher::distinct_titles(&crate::launcher::survey(
@@ -58,16 +71,7 @@ pub fn mods_menu(
             })
             .iter()
             .any(|have| have == slug)
-    };
-    let installed = mods.installed_for(title, &has_disc);
-    crate::campaign::custom::add_picker(
-        &mut definition,
-        &mut listing,
-        &installed,
-        title,
-        &strings::project_table(language),
-    );
-    Ok((definition, listing, installed))
+    }
 }
 
 /// The title's trims of a tree [`mods_menu`] built: rows this title, platform or input
@@ -77,6 +81,7 @@ pub fn finish_definition(
     definition: &mut menu::Definition,
     title: &'static oag_title::Title,
     strings: &oag_ui::language::StringTable,
+    present: &dyn Fn(&str) -> bool,
 ) {
     // A no-op on every title but Wipeout Pure and Wipeout Pulse, whose
     // race defaults declare no variant axis at all - see
@@ -107,6 +112,8 @@ pub fn finish_definition(
     definition.drop_unavailable_weather(title);
     // And the RUMBLE row's `original` value, where the original plays patterns: HD and Omega.
     definition.drop_unavailable_rumble_original(title);
+    // And the WATER row's borrowed laws, where the lender's disc is absent or is this title.
+    crate::water_setting::trim_row(definition, title, present);
     // And the three rows the race box's own screens pick, on a title
     // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
     definition.drop_rows_picked_on_screen(title);
@@ -169,6 +176,6 @@ pub fn rebuilt(
     let loaded = Mods::load_from(bases, switches)?;
     let (mut definition, listing, installed) =
         mods_menu(&loaded, language, title, platform, updated)?;
-    finish_definition(&mut definition, title, strings);
+    finish_definition(&mut definition, title, strings, &disc_probe());
     Ok((definition, listing, installed))
 }

@@ -232,6 +232,10 @@ optional = true
 type = "string"
 optional = true
 
+[types.render-profile.water]
+type = "string"
+optional = true
+
 [types.render-profile.screen_filter]
 type = "string"
 optional = true

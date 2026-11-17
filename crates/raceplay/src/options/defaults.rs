@@ -26,6 +26,7 @@ impl Default for Options {
             wingtip_contrails: WingtipContrails::Off,
             own_shield: false,
             own_rockets: false,
+            water: oag_display::display::Water::default(),
             team: None,
             hull_variant: None,
             skin: None,

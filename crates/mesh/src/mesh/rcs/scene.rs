@@ -22,6 +22,7 @@
 //! of every texture.
 
 use anyhow::{Context, Result};
+use oag_display::display::Water;
 use oag_gpu::formats::SceneStore;
 use oag_rcs::rcsmodel;
 use oag_vex::vex;
@@ -57,7 +58,7 @@ impl View {
 /// Where a build's material tables come from.
 pub(super) enum Setup<'a> {
     /// Decoded from the file through the caller's texture reader.
-    Decode(Textures<'a>, SceneStore),
+    Decode(Textures<'a>, SceneStore, Water),
     /// Read back off a model already built from the same file.
     Copy(&'a Model),
 }
@@ -66,7 +67,7 @@ impl Setup<'_> {
     /// The same source, borrowed for one call.
     fn reborrow(&mut self) -> Setup<'_> {
         match self {
-            Setup::Decode(textures, store) => Setup::Decode(&mut **textures, *store),
+            Setup::Decode(textures, store, water) => Setup::Decode(&mut **textures, *store, *water),
             Setup::Copy(model) => Setup::Copy(model),
         }
     }
@@ -134,11 +135,27 @@ pub fn build_scene(
     textures: Textures<'_>,
     store: SceneStore,
 ) -> Result<(Model, Report)> {
+    build_scene_with(label, data, model_blob, textures, store, Water::default())
+}
+
+/// [`build_scene`] with the water law the player chose (`graphics.water`).
+///
+/// # Errors
+///
+/// As [`build_scene`].
+pub fn build_scene_with(
+    label: &str,
+    data: &[u8],
+    model_blob: &[u8],
+    textures: Textures<'_>,
+    store: SceneStore,
+    water: Water,
+) -> Result<(Model, Report)> {
     build_view(
         label,
         data,
         model_blob,
-        Setup::Decode(textures, store),
+        Setup::Decode(textures, store, water),
         View::Main,
     )
 }
@@ -155,8 +172,9 @@ pub fn build_scene_views(
     model_blob: &[u8],
     textures: Textures<'_>,
     store: SceneStore,
+    water: Water,
 ) -> Result<(Model, BehindGlass, Report)> {
-    let (main, report) = build_scene(label, data, model_blob, textures, store)?;
+    let (main, report) = build_scene_with(label, data, model_blob, textures, store, water)?;
     if report.behind_glass == 0 {
         return Ok((main, BehindGlass::default(), report));
     }
@@ -257,7 +275,7 @@ fn build_view(
     let placed = pads::placed_hashes(data, &nodes, classes, order, &model);
 
     // The pad masks are the main view's; a copied setup already carries them.
-    if let Setup::Decode(textures, _) = setup {
+    if let Setup::Decode(textures, _, _) = setup {
         pads::bind_scene_pad_masks(&model, &placed, &mut out, textures, &mut report);
     }
 

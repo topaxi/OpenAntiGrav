@@ -51,10 +51,14 @@ fn amphiseums_no_ambient_slots_split_from_emissive_the_way_the_shader_assumes() 
     let Some(data) = archive_cache::read(&spec, TRACK) else {
         return;
     };
-    let Some((model, _report)) =
-        mesh::rcs::scene_from(&spec, TRACK, &data, oag_gpu::formats::SceneStore::default())
-            .expect("Amphiseum's track should build")
-    else {
+    let Some((model, _report)) = mesh::rcs::scene_from(
+        &spec,
+        TRACK,
+        &data,
+        oag_gpu::formats::SceneStore::default(),
+        Default::default(),
+    )
+    .expect("Amphiseum's track should build") else {
         panic!("{TRACK}: not a PS3 model");
     };
 
