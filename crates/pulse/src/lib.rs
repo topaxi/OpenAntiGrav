@@ -114,6 +114,10 @@ pub const TITLE: &Title = &Title {
         // lens); Outpost 7's is snow.
         rain_circuit: Some(r"Data\Environments\14_Track\track.vex"),
     },
+    water: oag_title::water::Water {
+        original_differs: false,
+        enhanced: race::WATER_CIRCUITS,
+    },
     // PSP: no motors; the PS2 level-and-timer law is documented and not played (`docs/gameplay/rumble.md`).
     rumble: oag_title::rumble::Rumble::Absent,
     // The 60 s idle test and the 120 s timeout are read off the executable; `docs/ui/attract-demo.md`.

@@ -658,9 +658,17 @@ impl Scene {
             .sh
             .map(|hull| crate::sh_probes::ShAmbient::new(device, hull));
         // The circuit's sky as the engine's `paraboloidReflectionTex`, for the materials that read it.
+        // A mesh sky (Pulse's, Pure's) has no map of its own: one is cast out of it only where
+        // the track's water reads the sky (`mesh::vex_water`).
         let sky_probe = sky_model
             .as_ref()
-            .and_then(mesh::sky_paraboloid::from_sky)
+            .and_then(|sky| {
+                mesh::sky_paraboloid::from_sky(sky).or_else(|| {
+                    mesh::vex_water::is_tagged(&track_model)
+                        .then(|| mesh::sky_paraboloid::from_mesh(sky))
+                        .flatten()
+                })
+            })
             .map(|map| mesh_render::upload_sky_probe(device, queue, &map));
         let shadow_maps = mesh_render::ShadowMaps {
             coverage: Some(shadow_map.view()),

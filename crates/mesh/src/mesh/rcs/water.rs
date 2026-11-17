@@ -89,11 +89,12 @@ pub(crate) const WATER_FLAG: f32 = 2.0;
 /// value only while this holds (`docs/rendering/water.md`, "Open"). A law is always drawn on
 /// its own title as `original` (HD's taps are, under `original` on HD), so a borrowed value
 /// becomes true only once a borrower draws it: `Hd` with the lane that borrows HD's law onto
-/// Pulse, Pure, 2048 and Omega.
+/// Pulse, Pure, 2048 and Omega. `Enhanced` is drawn by `mesh::vex_water` on the titles that
+/// name their water surfaces.
 #[must_use]
 pub const fn is_drawn(law: Water) -> bool {
     match law {
-        Water::Off | Water::Original => true,
+        Water::Off | Water::Original | Water::Enhanced => true,
         Water::Hd | Water::Vita2048 | Water::Omega => false,
     }
 }
@@ -116,7 +117,7 @@ enum Reading {
 const fn reading(law: Water) -> Reading {
     match law {
         Water::Original | Water::Hd => Reading::Taps,
-        Water::Off | Water::Vita2048 | Water::Omega => Reading::Constant,
+        Water::Off | Water::Enhanced | Water::Vita2048 | Water::Omega => Reading::Constant,
     }
 }
 
@@ -360,36 +361,23 @@ fn entries(
             let [first, second] = taps else {
                 return None;
             };
-            let (head, specular) = match family {
+            let colour = rgb(parameter(material, COLOUR_CONSTANT)?);
+            let (offset, scale, specular) = match family {
                 Family::Sea => (
-                    header(
-                        rgb(parameter(material, COLOUR_CONSTANT)?),
-                        0.0,
-                        parameter(material, SPECULAR_POWER)?[0],
-                    ),
+                    0.0,
+                    parameter(material, SPECULAR_POWER)?[0],
                     rgb(parameter(material, SPECULAR_COLOUR)?),
                 ),
-                _ => (
-                    header(
-                        rgb(parameter(material, COLOUR_CONSTANT)?),
-                        parameter(material, REFLECTIVITY)?[0],
-                        0.0,
-                    ),
-                    [0.0; 3],
-                ),
+                _ => (parameter(material, REFLECTIVITY)?[0], 0.0, [0.0; 3]),
             };
-            let tap = |tap: &Tap, program: [f32; 2]| Emissive {
-                tint: [tap.scale[0], tap.scale[1], tap.scroll[0]],
-                offset: tap.scroll[1],
-                scale: tap.weight,
-                rate: 0.0,
-                program,
-            };
-            Some(vec![
-                head,
-                tap(first, [specular[0], specular[1]]),
-                tap(second, [specular[2], 0.0]),
-            ])
+            Some(sea_block(
+                family.kind(),
+                colour,
+                offset,
+                scale,
+                specular,
+                [first, second],
+            ))
         }
         Family::LitColour | Family::Glint => {
             let [a, b, c] = taps else {
@@ -419,9 +407,43 @@ fn entries(
     }
 }
 
+/// The three consecutive glow-table entries of a two-tap water slot (the sea, the pool, and
+/// `enhanced` on a title with no water program): the header (`colour`, the reflection weight
+/// as `offset`, the specular power as `scale`, `kind` in `program[1]`), then one entry per
+/// [`Tap`] (`tint` the `u` and `v` scale and the `u` scroll, `offset` the `v` scroll, `scale`
+/// the weight), the specular colour riding the two tap entries' `program` lanes.
+pub(crate) fn sea_block(
+    kind: f32,
+    colour: [f32; 3],
+    reflection: f32,
+    power: f32,
+    specular: [f32; 3],
+    taps: [&Tap; 2],
+) -> Vec<Emissive> {
+    let head = Emissive {
+        tint: colour,
+        offset: reflection,
+        scale: power,
+        rate: 0.0,
+        program: [PROGRAM_WATER, kind],
+    };
+    let tap = |tap: &Tap, program: [f32; 2]| Emissive {
+        tint: [tap.scale[0], tap.scale[1], tap.scroll[0]],
+        offset: tap.scroll[1],
+        scale: tap.weight,
+        rate: 0.0,
+        program,
+    };
+    vec![
+        head,
+        tap(taps[0], [specular[0], specular[1]]),
+        tap(taps[1], [specular[2], 0.0]),
+    ]
+}
+
 /// Lays `block` into the table as consecutive entries (sharing an identical block
 /// already there) and returns its first index.
-fn lay(table: &mut Vec<Emissive>, block: &[Emissive]) -> Option<usize> {
+pub(crate) fn lay(table: &mut Vec<Emissive>, block: &[Emissive]) -> Option<usize> {
     table
         .windows(block.len())
         .position(|seen| seen == block)

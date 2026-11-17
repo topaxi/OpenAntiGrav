@@ -108,6 +108,10 @@ pub const TITLE: &Title = &Title {
     // Pure authors none of the seven shadow classes (`docs/formats/pure-status.md`): nothing is the right picture.
     original_shadows: oag_title::shadow::OriginalShadows::Absent,
     weather: oag_title::weather::Weather::Unplayed,
+    water: oag_title::water::Water {
+        original_differs: false,
+        enhanced: race::WATER_CIRCUITS,
+    },
     // No motors on a PSP (`docs/gameplay/rumble.md`, "Provenance per title").
     rumble: oag_title::rumble::Rumble::Absent,
     // Inherited by lineage, `docs/ui/attract-demo.md`.

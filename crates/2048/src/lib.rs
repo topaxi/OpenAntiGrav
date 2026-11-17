@@ -189,6 +189,7 @@ pub const TITLE: &Title = &Title {
     // The proximity and environment shadows are not built (`docs/rendering/shadows.md`).
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
+    water: oag_title::water::Water::NONE,
     // Ships the 69 files and reads none (`docs/gameplay/rumble.md`).
     rumble: oag_title::rumble::Rumble::Absent,
     // Inherited by lineage, but the disc authors the timeouts and the circuit: `DemoConfig.xml`,

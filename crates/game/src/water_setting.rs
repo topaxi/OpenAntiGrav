@@ -8,10 +8,24 @@
 use oag_display::display::Water;
 
 /// Whether the water row offers `value` on `title`: its law is drawn yet
-/// (`oag_mesh::mesh::rcs::water_law_is_drawn`) and its lender is available.
+/// (`oag_mesh::mesh::rcs::water_law_is_drawn`), its lender is available, and `enhanced` only
+/// where the title lists the surfaces it is drawn on.
 #[must_use]
 pub fn offered(value: Water, title: &oag_title::Title, present: &dyn Fn(&str) -> bool) -> bool {
-    oag_mesh::mesh::rcs::water_law_is_drawn(value) && lender_available(value, title, present)
+    oag_mesh::mesh::rcs::water_law_is_drawn(value)
+        && lender_available(value, title, present)
+        && (value != Water::Enhanced || title.water.offers_enhanced())
+}
+
+/// Whether the row changes the picture on `title` at all: its own `original` differs from `off`,
+/// or a value other than those two is offered. Where nothing does, the row is hidden.
+#[must_use]
+pub fn row_changes_picture(title: &oag_title::Title, present: &dyn Fn(&str) -> bool) -> bool {
+    title.water.original_differs
+        || Water::ALL
+            .into_iter()
+            .filter(|value| !matches!(value, Water::Off | Water::Original))
+            .any(|value| offered(value, title, present))
 }
 
 /// Whether the lender of `value`'s law is on this machine and is not `title` itself.
@@ -62,15 +76,19 @@ pub fn for_source(settings: &crate::settings::Settings, source: &str) -> Water {
     resolve(chosen, title, &crate::menu_tree::disc_probe())
 }
 
-/// Trims the WATER row of `definition` to what [`offered`] allows on `title`.
+/// Trims the WATER row of `definition` to what [`offered`] allows on `title`, and drops the
+/// row where [`row_changes_picture`] says nothing in it would show.
 pub fn trim_row(
     definition: &mut oag_ui::menu::Definition,
     title: &oag_title::Title,
     present: &dyn Fn(&str) -> bool,
 ) {
-    definition.drop_unavailable_water(&|value| {
-        value
-            .parse::<Water>()
-            .is_ok_and(|water| offered(water, title, present))
-    });
+    definition.drop_unavailable_water(
+        &|value| {
+            value
+                .parse::<Water>()
+                .is_ok_and(|water| offered(water, title, present))
+        },
+        row_changes_picture(title, present),
+    );
 }

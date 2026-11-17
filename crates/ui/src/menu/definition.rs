@@ -747,10 +747,15 @@ impl Definition {
         }
     }
 
-    /// Drops the values of the WATER row that `offered` refuses, keeping the row. The row's own
-    /// order is kept, and a value is asked about by its stored spelling. Same
-    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
-    pub fn drop_unavailable_water(&mut self, offered: &dyn Fn(&str) -> bool) {
+    /// Drops the values of the WATER row that `offered` refuses, and the row itself when
+    /// `changes_picture` is false (nothing it could hold would show). The row's own order is
+    /// kept, and a value is asked about by its stored spelling. Same once-before-read timing as
+    /// [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_water(
+        &mut self,
+        offered: &dyn Fn(&str) -> bool,
+        changes_picture: bool,
+    ) {
         for page in &mut self.pages {
             for entry in &mut page.entries {
                 if let Entry::Choice {
@@ -760,6 +765,11 @@ impl Definition {
                 {
                     values.retain(|choice| offered(&choice.value));
                 }
+            }
+            if !changes_picture {
+                page.retain_rows(|entry| {
+                    !matches!(entry, Entry::Choice { setting, .. } if setting == "graphics.water")
+                });
             }
         }
     }

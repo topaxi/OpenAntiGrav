@@ -147,7 +147,8 @@ fn build_level(faces: [&[u8]; 6], face_size: u32, size: (u32, u32)) -> Vec<u8> {
 
 /// The map of a sky model: the [`Model::sky_reflection`] its loader found, else the one built from
 /// the six square `RGBA8` faces of a [`super::sky_cube::build`] model. `None` for any other model
-/// (a Pulse sky mesh, an uploaded or compressed face), which then has no map to bind.
+/// (an uploaded or compressed face), which then has no map to bind. A mesh sky (Pulse's and
+/// Pure's) has no map of its own: [`from_mesh`] builds one where a surface wants it.
 #[must_use]
 pub fn from_sky(sky: &Model) -> Option<Vec<u8>> {
     if let Some(map) = &sky.sky_reflection {
@@ -170,6 +171,143 @@ pub fn from_sky(sky: &Model) -> Option<Vec<u8>> {
     }
     let faces: [&[u8]; 6] = faces.try_into().ok()?;
     Some(build(faces, size?))
+}
+
+/// The base level of a texture as `RGBA8`, with its size.
+fn base_level(texture: &super::ModelTexture) -> Option<(&[u8], usize, usize)> {
+    let bytes: &[u8] = match &texture.texels {
+        Texels::Rgba8(bytes) => bytes,
+        Texels::Chain(levels) => levels.first()?,
+        _ => return None,
+    };
+    let (w, h) = (texture.width as usize, texture.height as usize);
+    (w > 0 && h > 0 && bytes.len() >= w * h * 4).then_some((bytes, w, h))
+}
+
+/// A sky **mesh** (Pulse's and Pure's `Skycube`: a dome of a few hundred textured triangles
+/// around the origin) as the map, by casting the ray of each texel from the origin into the
+/// triangles and reading the picture there, texel times vertex colour, in the gamma the sky is
+/// drawn in. A texel no triangle covers takes the mean of the ones that were hit. `None` for a
+/// model with no readable triangle. Chosen, not measured: the original has no reflection map on
+/// these titles (`docs/rendering/water.md`, "Enhanced").
+#[must_use]
+pub fn from_mesh(sky: &Model) -> Option<Vec<u8>> {
+    struct Triangle {
+        a: [f32; 3],
+        e1: [f32; 3],
+        e2: [f32; 3],
+        uv: [[f32; 2]; 3],
+        colour: [[f32; 3]; 3],
+        texture: usize,
+    }
+    let mut triangles = Vec::new();
+    for draw in &sky.draws {
+        let Some(texture) = draw.texture else {
+            continue;
+        };
+        if sky
+            .textures
+            .get(texture)
+            .and_then(Option::as_ref)
+            .and_then(|t| base_level(t))
+            .is_none()
+        {
+            continue;
+        }
+        for tri in sky.indices[draw.range.start as usize..draw.range.end as usize].chunks_exact(3) {
+            let v = |k: usize| &sky.vertices[tri[k] as usize];
+            let (a, b, c) = (v(0), v(1), v(2));
+            let sub = |p: [f32; 3], q: [f32; 3]| [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+            let colour = |x: &super::GpuVertex| [x.colour[0], x.colour[1], x.colour[2]];
+            triangles.push(Triangle {
+                a: a.position,
+                e1: sub(b.position, a.position),
+                e2: sub(c.position, a.position),
+                uv: [a.texcoord, b.texcoord, c.texcoord],
+                colour: [colour(a), colour(b), colour(c)],
+                texture,
+            });
+        }
+    }
+    if triangles.is_empty() {
+        return None;
+    }
+    let cross = |a: [f32; 3], b: [f32; 3]| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
+    let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let mut out = vec![0u8; (SIZE.0 * SIZE.1 * 4) as usize];
+    let mut missed = Vec::new();
+    let mut sum = [0.0f64; 3];
+    let mut hits = 0.0f64;
+    for j in 0..SIZE.1 {
+        for i in 0..SIZE.0 {
+            let u = (i as f32 + 0.5) / SIZE.0 as f32;
+            let v = (j as f32 + 0.5) / SIZE.1 as f32;
+            let d = direction(u, v);
+            // The lookup reads the map at `direction`'s mirror in `z` (module doc).
+            let ray = [d[0], d[1], -d[2]];
+            let mut nearest = f32::MAX;
+            let mut colour = None;
+            for t in &triangles {
+                let p = cross(ray, t.e2);
+                let det = dot(t.e1, p);
+                if det.abs() < 1.0e-9 {
+                    continue;
+                }
+                let inv = 1.0 / det;
+                let origin = [-t.a[0], -t.a[1], -t.a[2]];
+                let s = dot(origin, p) * inv;
+                if !(0.0..=1.0).contains(&s) {
+                    continue;
+                }
+                let q = cross(origin, t.e1);
+                let w = dot(ray, q) * inv;
+                if w < 0.0 || s + w > 1.0 {
+                    continue;
+                }
+                let along = dot(t.e2, q) * inv;
+                if along <= 0.0 || along >= nearest {
+                    continue;
+                }
+                nearest = along;
+                colour = Some((t, 1.0 - s - w, s, w));
+            }
+            let at = ((j * SIZE.0 + i) * 4) as usize;
+            let Some((t, b0, b1, b2)) = colour else {
+                missed.push(at);
+                continue;
+            };
+            let Some((bytes, tw, th)) = sky.textures[t.texture].as_deref().and_then(base_level)
+            else {
+                missed.push(at);
+                continue;
+            };
+            let tu = b0 * t.uv[0][0] + b1 * t.uv[1][0] + b2 * t.uv[2][0];
+            let tv = b0 * t.uv[0][1] + b1 * t.uv[1][1] + b2 * t.uv[2][1];
+            let px = ((tu - tu.floor()) * tw as f32) as usize % tw;
+            let py = ((tv - tv.floor()) * th as f32) as usize % th;
+            let texel = &bytes[(py * tw + px) * 4..][..3];
+            for k in 0..3 {
+                let light = b0 * t.colour[0][k] + b1 * t.colour[1][k] + b2 * t.colour[2][k];
+                let byte = (f32::from(texel[k]) * light.clamp(0.0, 1.0) + 0.5) as u8;
+                out[at + k] = byte;
+                sum[k] += f64::from(byte);
+            }
+            out[at + 3] = 255;
+            hits += 1.0;
+        }
+    }
+    let mean: [u8; 3] = std::array::from_fn(|k| (sum[k] / hits.max(1.0)) as u8);
+    for at in missed {
+        out[at..at + 3].copy_from_slice(&mean);
+        out[at + 3] = 255;
+    }
+    Some(out)
 }
 
 #[cfg(test)]

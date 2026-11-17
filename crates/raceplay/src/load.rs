@@ -492,6 +492,23 @@ pub fn load(options: &Options) -> Result<Loaded> {
             track_model = mesh::build_with_textures(&track, &track_blob, Some(&external))?;
             ps2_track_textures = Some(external);
         }
+        // `enhanced` water, where the title lists this circuit's sea (`oag_title::water`).
+        if options.water == oag_display::display::Water::Enhanced
+            && let Some(names) = title.water.textures_of(&track)
+        {
+            let tagged = mesh::vex_water::enhanced(&mut track_model, names);
+            report.push(format!(
+                "{track}: enhanced water on {} texture(s), {} draw(s), {} vertex(es){}",
+                tagged.slots,
+                tagged.draws,
+                tagged.vertices,
+                if tagged.missing.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({} not bound here)", tagged.missing.join(", "))
+                }
+            ));
+        }
         geometry::with_batch_cull(track_model, title.looks, archives.layout.platform)
     };
     // HD's zoom-streak ring on a title that draws none of its own: the player's

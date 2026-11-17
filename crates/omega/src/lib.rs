@@ -186,6 +186,7 @@ pub const TITLE: &Title = &Title {
     // Not tried on Omega: its sun and craft carry-over from HD are unmeasured.
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
+    water: oag_title::water::Water::NONE,
     // Measured, confidence 80: the small bytes are summed (`docs/gameplay/rumble.md`).
     rumble: oag_title::rumble::Rumble::Patterns(
         oag_title::rumble::SmallMotor::Sum,

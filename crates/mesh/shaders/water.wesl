@@ -18,7 +18,7 @@ fn water_kind(entry: u32, row_scale: vec4<f32>) -> f32 {
 // (`kind` 1, 2) carry one entry per tap after the header; Vineta K (3, 4) the three scales
 // in the next entry and the three scrolls in the one after, both axes alike.
 fn water_tap_uv(entry: u32, kind: f32, i: u32, uv: vec2<f32>) -> vec2<f32> {
-    if kind < 2.5 {
+    if kind < 2.5 || kind > 4.5 {
         let tap = emissive_tint(entry + 1u + min(i, 1u));
         return uv * tap.xy + scene.time.x * tap.zw;
     }
@@ -30,7 +30,7 @@ fn water_tap_uv(entry: u32, kind: f32, i: u32, uv: vec2<f32>) -> vec2<f32> {
 // The weight of tap `i`: the tap entry's `scale` (sea, pool; two taps), the header's tint
 // (Vineta K; three taps).
 fn water_tap_weight(entry: u32, kind: f32, i: u32) -> f32 {
-    if kind < 2.5 {
+    if kind < 2.5 || kind > 4.5 {
         return select(0.0, emissive_scale(entry + 1u + min(i, 1u)).x, i < 2u);
     }
     return emissive_tint(entry)[min(i, 2u)];
@@ -47,7 +47,7 @@ fn water_specular_colour(entry: u32) -> vec3<f32> {
 // `2x - 1` and rebuild `z = sqrt(1 - x^2 - y^2)` (the sea's `@0x00`..`@0x1f`); Vineta K
 // decodes RGB (`MAD R0.xyz, tap, 2, -1`). Three taps, unrolled; the sea's third weighs zero.
 fn water_normal(entry: u32, kind: f32, uv: vec2<f32>, n: vec3<f32>, tangent: vec4<f32>) -> vec3<f32> {
-    let rgb = kind > 2.5;
+    let rgb = kind > 2.5 && kind < 4.5;
     var sum = vec3<f32>(0.0);
     for (var i = 0u; i < 3u; i = i + 1u) {
         let texel = material_sample(MATERIAL_PAD_MASK, water_tap_uv(entry, kind, i, uv));
@@ -60,4 +60,38 @@ fn water_normal(entry: u32, kind: f32, uv: vec2<f32>, n: vec3<f32>, tangent: vec
         return n;
     }
     return hull_normal(vec4<f32>(normalize(sum) * 0.5 + 0.5, 0.0), n, tangent);
+}
+
+// **`enhanced` water** (kind 5, `mesh::vex_water`), in the gamma domain every Pulse-shaped
+// asset is drawn in. The picture is the entry's colour (the surface's own texture's mean)
+// times the vertex colour's baked light times a diffuse term from the wave normal; a sun glint
+// and the sky's reflection are added. The taps read the world's `x` and `z`
+// (`water_normal` is handed them), so the waves have one size wherever the surface's own
+// texture coordinates run. The sun is the stand-in key light's direction and the numbers are
+// chosen, not measured.
+const ENHANCED_SUN: vec3<f32> = vec3<f32>(0.404, 0.808, 0.505);
+const ENHANCED_DARK: f32 = 0.5;
+const ENHANCED_LIT: f32 = 0.5;
+const ENHANCED_GLINT: f32 = 0.5;
+
+fn enhanced_water(
+    tint: vec4<f32>,
+    power: f32,
+    specular_colour: vec3<f32>,
+    vertex_colour: vec3<f32>,
+    n: vec3<f32>,
+    to_eye: vec3<f32>,
+    sky: vec3<f32>,
+) -> vec3<f32> {
+    let ndl = clamp(dot(n, ENHANCED_SUN), 0.0, 1.0);
+    let half_vector = normalize(to_eye + ENHANCED_SUN);
+    let ndh = clamp(dot(half_vector, n), 0.0, 1.0);
+    let glint = specular_colour * (pow(ndh, power) * ENHANCED_GLINT * clamp(8.0 * ndl, 0.0, 1.0));
+    // The sky grazes the surface at a low angle, so it is weighted by how far the eye leans
+    // over: `0.4` face on, all of `tint.w` at the horizon.
+    let lean = 1.0 - clamp(dot(to_eye, n), 0.0, 1.0);
+    let fresnel = 0.4 + 0.6 * lean * lean * lean;
+    return tint.rgb * vertex_colour * (ENHANCED_DARK + ENHANCED_LIT * ndl)
+        + glint
+        + sky * (tint.w * fresnel);
 }

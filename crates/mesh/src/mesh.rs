@@ -416,6 +416,8 @@ pub mod shine_pass;
 pub mod ship_skin;
 pub mod sky_cube;
 pub mod sky_paraboloid;
+pub mod vex_water;
+pub mod water_normal;
 
 /// Reads one named blob out of an archive inside a disc image.
 ///
