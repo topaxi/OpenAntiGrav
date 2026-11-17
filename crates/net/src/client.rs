@@ -94,6 +94,9 @@ pub enum Phase {
     Ready,
     /// The clock is running.
     Racing,
+    /// A new link has said hello to a race already running; waiting for the welcome and the
+    /// start ([`Client::reconnect`]).
+    Reconnecting,
     /// Over, and why.
     Over(String),
 }
@@ -319,6 +322,27 @@ impl Client {
         }
     }
 
+    /// Takes the seat back on a new `link` after the old one closed: says hello with the seat
+    /// `token`, keeps the confirmed state and the race, and asks the server for the ticks it
+    /// lacks. The server hands the craft back through the Autopilot countdown at a tick of
+    /// its choosing and both ends reach the same hash there (`docs/networking/server-roadmap.md`,
+    /// "V1: survive the network"). The race itself is the caller's to keep: a client whose
+    /// process restarted builds a fresh one and calls [`Self::connect_seat`] instead.
+    pub fn reconnect(&mut self, mut link: Box<dyn Link>, name: &str, team: &str, token: &str) {
+        link.send_control(&Control::Hello {
+            protocol: PROTOCOL,
+            name: name.to_string(),
+            team: team.to_string(),
+            token: token.to_string(),
+        });
+        self.link = link;
+        self.phase = Phase::Reconnecting;
+        self.settled = false;
+        self.resend_asked = None;
+        self.lead = None;
+        self.sent_at.clear();
+    }
+
     /// Whether a difference in weapon state alone corrects the present, with every craft within
     /// the threshold. On by default; off reproduces the position-only trigger, which is the
     /// baseline ADR-0071 measures against.
@@ -415,6 +439,12 @@ impl Client {
                 Ok(Control::Start { lead_ticks }) => {
                     log::info!("net: the race starts (server lead {lead_ticks} ticks)");
                     self.phase = Phase::Racing;
+                }
+                Ok(Control::Welcome { fingerprint, .. })
+                    if self.phase == Phase::Reconnecting =>
+                {
+                    // The same race: say so, and the server answers with the start.
+                    self.link.send_control(&Control::Ready { fingerprint });
                 }
                 Ok(Control::Ticks(confirmed)) => self.stash(confirmed),
                 Ok(Control::End { reason, board }) => {
@@ -631,7 +661,7 @@ impl Client {
                     *last = *held;
                 }
             }
-            crate::race::retire(race, record.retired);
+            crate::race::presence(race, record.retired);
             self.retired = record.retired;
             race.tick_confirmed(&inputs);
             if race.sim.state_hash() == record.hash {
@@ -657,7 +687,11 @@ impl Client {
             self.board_confirmed = true;
         }
         let confirmed = std::mem::replace(&mut race.sim, present);
-        crate::race::retire(race, self.retired);
+        // The present follows the newest confirmed presence too, but the recording describes
+        // the confirmed run alone.
+        let paused = race.pause_recording();
+        crate::race::presence(race, self.retired);
+        race.resume_recording(paused);
         let now = self.confirmed_tick;
         while self.own.front().is_some_and(|(t, _, _)| *t < now) {
             self.own.pop_front();

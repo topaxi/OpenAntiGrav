@@ -120,6 +120,10 @@ impl Race {
         if let Some(cap) = self.finished_thrust_cap(slot) {
             controls.thrust = controls.thrust.min(cap);
         }
+        // The returning person's hand-back is as slow as the driver that held the seat.
+        if self.sim.world.ships[slot].handback && self.sim.world.ships[slot].autopilot_timer > 0.0 {
+            controls.thrust = controls.thrust.min(super::field::AWAY_THRUST);
+        }
         // A Disruptor hit filters whatever the pilot - human or driver -
         // asked for: no thrust, no airbrakes, a mirrored yaw, or an
         // autopilot's thrust scale. Before the start-line gate below, so a
@@ -327,7 +331,7 @@ impl Race {
     /// not measured, and capped by the finished craft's own thrust law anyway).
     pub(crate) fn autopilot_engine_flags(&self, slot: usize) -> oag_physics::engine::EngineFlags {
         let ship = &self.sim.world.ships[slot];
-        let autopilot = ship.autopilot_timer > 0.0 || self.autopilot_flies(slot);
+        let autopilot = (ship.autopilot_timer > 0.0 && !ship.handback) || self.autopilot_flies(slot);
         let law = self.sim.autopilot_engine;
         oag_physics::engine::EngineFlags {
             uncapped: (autopilot && law.uncapped.value) || ship.standing.finished(),

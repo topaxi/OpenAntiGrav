@@ -221,10 +221,10 @@ pub struct TickRecord {
     pub hash: u64,
     /// The input the server applied to each person's slot, `0..people` in order.
     pub inputs: Vec<Held>,
-    /// The seats whose person has left, one bit a seat (bit 0 is seat 0), cumulative. From
-    /// the tick it first appears in, both ends hand that craft to the AI driver before the
-    /// tick runs ([`crate::race::retire`]), so a leaver cannot hold the race open. Chosen, not
-    /// measured.
+    /// The seats whose person is away now, one bit a seat (bit 0 is seat 0). From the tick a
+    /// bit first appears, both ends hand that craft to the away driver before the tick runs
+    /// ([`crate::race::retire`]); from the tick it clears, to its person through the hand-back
+    /// countdown ([`crate::race::return_seats`]). Chosen, not measured.
     pub retired: u8,
 }
 

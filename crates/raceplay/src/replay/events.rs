@@ -11,6 +11,11 @@ use oag_tables::weapons::{ModKind, Weapon};
 
 use crate::Race;
 
+/// How long a returning person's craft is flown for them before they have it back, in seconds.
+/// Chosen, not measured: inside the 2 to 3 s the maintainer asked for, long enough to read and to
+/// reach for the cancel, short enough that the driver's pace is not worth waiting for.
+pub const HAND_BACK_SECONDS: f32 = 2.5;
+
 /// Why an event could not be applied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ApplyError {
@@ -73,7 +78,7 @@ impl Race {
         let value = match controller {
             oag_gameplay::Controller::Ai => 0,
             oag_gameplay::Controller::Local => 1,
-            oag_gameplay::Controller::Remote => return false,
+            oag_gameplay::Controller::Remote | oag_gameplay::Controller::Away => return false,
         };
         let Some(have) = self.sim.world.controllers.get_mut(slot) else {
             return false;
@@ -83,6 +88,69 @@ impl Race {
         }
         *have = controller;
         self.record_event(slot, Kind::Controller, value);
+        true
+    }
+
+    /// A person's seat loses its link: the opponent driver flies the craft in their place,
+    /// below racing pace, and neither collects nor fires a pickup, so what the person held is
+    /// still held when they return. Recorded as a [`Kind::Presence`] event. Returns whether the
+    /// seat changed (a seat that is not a person's, or is already away, does not).
+    ///
+    /// The driver is seeded from the race seed and the slot and placed on the line where the
+    /// craft is, the same on every peer; the person's own driver state was never used.
+    pub fn set_away(&mut self, slot: usize) -> bool {
+        if !self.write_away(slot) {
+            return false;
+        }
+        #[cfg(feature = "view")]
+        self.record_event(slot, Kind::Presence, 0);
+        true
+    }
+
+    /// A returning person is handed the craft back: for [`HAND_BACK_SECONDS`] the driver keeps
+    /// flying it below racing pace, the HUD shows an Autopilot pickup counting down, and the
+    /// pickup held before the drop stays held. Absorb cancels the countdown (a recorded
+    /// input). Recorded as a [`Kind::Presence`] event. Returns whether the seat changed.
+    pub fn hand_back(&mut self, slot: usize) -> bool {
+        if !self.write_hand_back(slot) {
+            return false;
+        }
+        #[cfg(feature = "view")]
+        self.record_event(slot, Kind::Presence, 1);
+        true
+    }
+
+    fn write_away(&mut self, slot: usize) -> bool {
+        let Some(have) = self.sim.world.controllers.get_mut(slot) else {
+            return false;
+        };
+        if !have.is_human() {
+            return false;
+        }
+        *have = oag_gameplay::Controller::Away;
+        let ship = &mut self.sim.world.ships[slot];
+        ship.autopilot_timer = 0.0;
+        ship.handback = false;
+        ship.driver = oag_ai::Driver::for_slot(
+            self.sim.race_seed,
+            u32::try_from(oag_gameplay::MAX_SHIPS + slot).unwrap_or(u32::MAX),
+        );
+        self.locate_player_driver(slot);
+        true
+    }
+
+    fn write_hand_back(&mut self, slot: usize) -> bool {
+        let Some(have) = self.sim.world.controllers.get_mut(slot) else {
+            return false;
+        };
+        if *have != oag_gameplay::Controller::Away {
+            return false;
+        }
+        *have = oag_gameplay::Controller::Remote;
+        let ship = &mut self.sim.world.ships[slot];
+        ship.autopilot_timer = HAND_BACK_SECONDS;
+        ship.handback = true;
+        self.locate_player_driver(slot);
         true
     }
 
@@ -137,6 +205,15 @@ impl Race {
                     *have = controller;
                 }
             }
+            Some(Kind::Presence) => match event.value {
+                0 => {
+                    self.write_away(seat);
+                }
+                1 => {
+                    self.write_hand_back(seat);
+                }
+                _ => return Err(bad),
+            },
             None => return Err(ApplyError::UnknownKind(event.kind)),
         }
         Ok(())

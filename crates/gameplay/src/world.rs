@@ -64,6 +64,13 @@ pub enum Controller {
     Local,
     /// Flown by a person somewhere else, off inputs that arrive as data.
     Remote,
+    /// A person's seat whose link has dropped, flown by the opponent driver in their place.
+    ///
+    /// Not [`Self::is_human`], so the race does not wait on it, and unlike [`Self::Ai`] it
+    /// is a person's craft: the pickup it holds is kept for them, the driver collects and
+    /// fires nothing, and it flies below racing pace (`Race::set_away`). The person's return
+    /// is `Race::hand_back`.
+    Away,
 }
 
 impl Controller {
@@ -167,6 +174,12 @@ pub struct Ship {
     /// Hashed all the same: a craft being driven for is a different race from
     /// one being driven, and a replay that lost this would diverge.
     pub autopilot_timer: f32,
+    /// Whether the running [`Self::autopilot_timer`] is a returning person's hand-back
+    /// (`Race::hand_back`) rather than an Autopilot pickup: the pickup held is kept, no
+    /// engine boost comes with it, and the HUD shows the Autopilot pickup over whatever is held.
+    ///
+    /// Hashed only while set, so a race with no reconnection hashes as before.
+    pub handback: bool,
     /// Seconds of weapon slowdown owed to this craft but not yet applied.
     ///
     /// The original's `entity+0x130`. A weapon impact adds its
@@ -292,6 +305,7 @@ impl Default for Ship {
             weapon_ai: oag_ai::weapon_ai::WeaponAi::default(),
             standing: oag_race::Standing::default(),
             autopilot_timer: 0.0,
+            handback: false,
             pending_slowdown: 0.0,
             pending_thrust_scale: 1.0,
             quake_lift: 0.0,

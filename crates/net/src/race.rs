@@ -20,12 +20,11 @@
 //! - **Weapons are the room's**, and they are predicted simulation, not server events
 //!   (ADR-0071): a client compares the discrete weapon state at every confirmed tick
 //!   ([`crate::weapon_sync`]).
-//! - **Every person's slot is [`Controller::Remote`] on every peer**, the client's
+//! - **Every person's slot is [`oag_gameplay::Controller::Remote`] on every peer**, the client's
 //!   own included, because the controllers are hashed. Which slot is this machine's
 //!   is view-side: `Race::set_seat`.
 
 use anyhow::{Context, Result, anyhow};
-use oag_gameplay::Controller;
 use oag_raceplay::{Options, Race};
 
 use crate::wire::RaceParams;
@@ -181,24 +180,34 @@ fn zone_target(params: &RaceParams) -> Option<u16> {
     (zone && params.zone_target > 0).then_some(u16::from(params.zone_target))
 }
 
-/// Hands the craft of every seat in `retired` (a [`crate::wire::TickRecord::retired`] mask) to
-/// the AI driver: a person who left must not hold the race open, and the end rule
-/// (`Race::finished`) counts only people. Both ends call it with the same mask at the same
-/// tick. **Chosen, not measured**: the original has no network race.
-pub fn retire(race: &mut Race, retired: u8) {
-    let seats = oag_gameplay::MAX_PLAYERS.min(8);
-    for (slot, controller) in race
-        .sim
-        .world
-        .controllers
-        .iter_mut()
-        .enumerate()
-        .take(seats)
-    {
-        if retired >> slot & 1 == 1 {
-            *controller = Controller::Ai;
+/// Hands the craft of every seat in `away` (a [`crate::wire::TickRecord::retired`] mask) to the
+/// driver that flies a dropped person's seat: a person who left must not hold the race open
+/// (`Race::finished` counts only people), and the craft crawls round with its pickup kept
+/// (`Race::set_away`). Both ends call it with the same mask at the same tick. **Chosen, not
+/// measured**: the original has no network race.
+pub fn retire(race: &mut Race, away: u8) {
+    for slot in 0..oag_gameplay::MAX_PLAYERS.min(8) {
+        if away >> slot & 1 == 1 {
+            race.set_away(slot);
         }
     }
+}
+
+/// Hands every away seat missing from `away` back to its person: the countdown of
+/// `Race::hand_back`, with the pickup held before the drop still held.
+pub fn return_seats(race: &mut Race, away: u8) {
+    for slot in 0..oag_gameplay::MAX_PLAYERS.min(8) {
+        if away >> slot & 1 == 0 {
+            race.hand_back(slot);
+        }
+    }
+}
+
+/// [`retire`] and [`return_seats`] for one tick's mask: the whole of a seat's presence, applied
+/// before the tick runs on the host and on a client's confirmed state alike.
+pub fn presence(race: &mut Race, away: u8) {
+    retire(race, away);
+    return_seats(race, away);
 }
 
 /// The state hash a prepared race starts from: what the client must reproduce to

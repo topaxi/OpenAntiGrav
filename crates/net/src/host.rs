@@ -53,6 +53,13 @@ pub const MAX_JOINING: usize = 48;
 /// How long a connection may go without saying hello before it is closed. Chosen.
 pub const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// How long a person with a seat in the running race keeps it after their link closed: the
+/// lobby keeps their session that long so a reconnect under the session token can still take it
+/// over and be handed the race's address, and the race host keeps the seat to hand it back
+/// ([`Host::poll`]) and does not end the race for want of people before it is over.
+/// A close usually reaches the lobby before the new link's hello does. Chosen.
+pub const SEAT_GRACE: Duration = Duration::from_secs(30);
+
 /// One person's connection and input stream.
 pub struct Seat {
     link: Box<dyn Link>,
@@ -66,8 +73,9 @@ pub struct Seat {
     edges: Input,
     /// The newest tick an input has arrived for.
     newest: Option<u32>,
-    /// Why the seat left, once it has.
+    /// Why the seat left, once it has, and when.
     left: Option<String>,
+    left_at: Option<Instant>,
     /// When anything last arrived from the seat.
     heard: Instant,
     /// When a resend request was last answered.
@@ -75,6 +83,20 @@ pub struct Seat {
     counts: SeatCounts,
     /// One warning a second about this seat.
     log: LogLimit,
+}
+
+impl Seat {
+    /// The link is gone; the person has [`SEAT_GRACE`] to come back.
+    fn leave(&mut self, why: String) {
+        self.left = Some(why);
+        self.left_at = Some(Instant::now());
+    }
+
+    /// The person quit or was refused: the grace is spent already.
+    fn leave_for_good(&mut self, why: String) {
+        self.leave(why);
+        self.left_at = Instant::now().checked_sub(SEAT_GRACE).or(self.left_at);
+    }
 }
 
 /// What happened to one seat's input since [`Host::take_counts`] was last asked.
@@ -229,6 +251,7 @@ impl Host {
         self.poll_joining();
         let next = self.tick_number();
         let fingerprint = self.fingerprint;
+        let racing = self.phase == Phase::Racing;
         for (slot, seat) in self.seats.iter_mut().enumerate() {
             let Some(seat) = seat.as_mut() else { continue };
             if seat.left.is_some() {
@@ -236,7 +259,7 @@ impl Host {
             }
             if let Some(why) = seat.link.closed() {
                 log::warn!("net: seat {slot} ({}) left: {why}", seat.name);
-                seat.left = Some(why);
+                seat.leave(why);
                 continue;
             }
             while let Some(message) = seat.link.recv_control() {
@@ -246,6 +269,10 @@ impl Host {
                     }) if theirs == fingerprint => {
                         log::info!("net: seat {slot} ({}) is ready", seat.name);
                         seat.ready = true;
+                        // A person who came back to a running race has missed its start.
+                        if racing {
+                            seat.link.send_control(&Control::Start { lead_ticks: 0 });
+                        }
                     }
                     Ok(Control::Ready {
                         fingerprint: theirs,
@@ -258,23 +285,24 @@ impl Host {
                         seat.link.send_control(&Control::Reject {
                             reason: reason.clone(),
                         });
-                        seat.left = Some(reason);
+                        seat.leave_for_good(reason);
                     }
                     Ok(Control::Resend { .. })
                         if seat.resent.is_some_and(|at| at.elapsed() < RESEND_INTERVAL) => {}
                     Ok(Control::Resend { from }) => {
                         seat.resent = Some(Instant::now());
                         let from = from as usize;
-                        for chunk in self.history.get(from..).unwrap_or(&[]).chunks(RESEND_CHUNK) {
+                        let ticks = self.history.get(from..).unwrap_or(&[]);
+                        for (n, chunk) in ticks.chunks(RESEND_CHUNK).enumerate() {
                             seat.link.send_control(&Control::Ticks(Confirmed {
-                                first: u32::try_from(from).unwrap_or(u32::MAX),
+                                first: u32::try_from(from + n * RESEND_CHUNK).unwrap_or(u32::MAX),
                                 ticks: chunk.to_vec(),
                             }));
                         }
                     }
                     Ok(Control::End { reason, .. }) => {
                         log::info!("net: seat {slot} ({}) left: {reason}", seat.name);
-                        seat.left = Some(reason);
+                        seat.leave_for_good(reason);
                     }
                     Ok(other) => seat
                         .log
@@ -341,7 +369,11 @@ impl Host {
                         .position(|(_, wanted)| !token.is_empty() && *wanted == token)
                     {
                         let name = self.expected[slot].0.clone();
-                        self.seat_at(Some(slot), link, name)
+                        if self.seat_has_left(slot) {
+                            self.reseat(slot, link)
+                        } else {
+                            self.seat_at(Some(slot), link, name)
+                        }
                     } else {
                         link.send_control(&Control::Reject {
                             reason: "this race seats the people its lobby named; \
@@ -418,6 +450,7 @@ impl Host {
                     edges: Input::new(),
                     newest: None,
                     left: None,
+                    left_at: None,
                     heard: Instant::now(),
                     resent: None,
                     log: LogLimit::default(),
@@ -432,6 +465,43 @@ impl Host {
             reason: reason.clone(),
         });
         Err(reason)
+    }
+
+    /// Whether seat `slot` was taken and its person has since left, in a race that is running.
+    fn seat_has_left(&self, slot: usize) -> bool {
+        self.phase == Phase::Racing
+            && self
+                .seats
+                .get(slot)
+                .and_then(Option::as_ref)
+                .is_some_and(|seat| seat.left.is_some())
+    }
+
+    /// Seats a returning person's new `link` in seat `slot`, which they left: the welcome
+    /// again, then the seat counts as present from the next tick ([`TickRecord::retired`]
+    /// clears and the craft is handed back). The seat keeps its held input and edge state, so
+    /// the press and release edges go on from where the person's last input left them; what
+    /// was buffered or counted as late for the gap is dropped. The client asks for the ticks
+    /// it lacks ([`Control::Resend`]) and says it is ready, which is answered with the start.
+    fn reseat(&mut self, slot: usize, mut link: Box<dyn Link>) -> Result<usize, String> {
+        let Some(seat) = self.seats.get_mut(slot).and_then(Option::as_mut) else {
+            return Err("every seat is taken".to_string());
+        };
+        log::info!("net: {:?} returns to seat {slot}", seat.name);
+        link.send_control(&Control::Welcome {
+            seat: u8::try_from(slot).unwrap_or(0),
+            params: self.params.clone(),
+            fingerprint: self.fingerprint,
+        });
+        seat.link = link;
+        seat.left = None;
+        seat.left_at = None;
+        seat.ready = false;
+        seat.inputs.clear();
+        seat.newest = None;
+        seat.heard = Instant::now();
+        seat.resent = None;
+        Ok(slot)
     }
 
     /// Tells every seat the race clock starts; the first [`Self::tick`] should run
@@ -473,7 +543,7 @@ impl Host {
             applied.push(held);
         }
         let retired = self.retired_mask();
-        crate::race::retire(&mut self.race, retired);
+        crate::race::presence(&mut self.race, retired);
         self.race.tick_sim_only(&inputs);
         self.history.push(TickRecord {
             hash: self.race.sim.state_hash(),
@@ -483,7 +553,7 @@ impl Host {
         self.broadcast();
     }
 
-    /// The seats whose person has left, as [`TickRecord::retired`] carries them.
+    /// The seats whose person is away now, as [`TickRecord::retired`] carries them.
     fn retired_mask(&self) -> u8 {
         self.seats
             .iter()
@@ -533,7 +603,7 @@ impl Host {
                     reason: format!("you were dropped from the race: {why}"),
                     board: Board::default(),
                 });
-                seat.left = Some(why);
+                seat.leave(why);
                 dropped += 1;
             }
         }
@@ -552,12 +622,15 @@ impl Host {
         self.seats.iter().flatten().any(|seat| seat.left.is_some())
     }
 
-    /// Whether every seat has left.
+    /// Whether every seat has left and none has been away for less than [`SEAT_GRACE`], the
+    /// time a person has to return.
     #[must_use]
     pub fn deserted(&self) -> bool {
-        self.seats
-            .iter()
-            .all(|seat| seat.as_ref().is_none_or(|seat| seat.left.is_some()))
+        self.seats.iter().all(|seat| {
+            seat.as_ref().is_none_or(|seat| {
+                seat.left.is_some() && seat.left_at.is_some_and(|at| at.elapsed() >= SEAT_GRACE)
+            })
+        })
     }
 
     /// Tells every seat the race is over, after the newest confirmed ticks on the

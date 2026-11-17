@@ -44,7 +44,7 @@ mod recording;
 mod room;
 mod shot;
 
-pub use events::ApplyError;
+pub use events::{ApplyError, HAND_BACK_SECONDS};
 pub use launch::{Launch, OriginalAi, UnknownOption};
 pub use rebuild::{apply_recorded, load_recorded, rebuild, start_recorded};
 #[cfg(feature = "view")]

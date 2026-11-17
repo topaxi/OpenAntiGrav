@@ -135,6 +135,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         weapon_ai,
         standing,
         autopilot_timer,
+        handback,
         pending_slowdown,
         pending_thrust_scale,
         quake_lift,
@@ -178,6 +179,9 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // else. That is why adding it moved the committed hashes with no behaviour
     // changing; see the history note in `tests/determinism.rs`.
     hasher.write_f32(*autopilot_timer);
+    if *handback {
+        hasher.write_u8(0x68);
+    }
     // The same shape as `autopilot_timer` above: zero through every scenario the
     // gate runs, because none of them fires a weapon, so it is a fixed run of
     // four more bytes per ship per tick. It moved the committed hashes with no
@@ -497,6 +501,7 @@ fn write_controller(hasher: &mut StateHasher, controller: Controller) {
         Controller::Ai => 0,
         Controller::Local => 1,
         Controller::Remote => 2,
+        Controller::Away => 3,
     });
 }
 
@@ -915,7 +920,12 @@ mod tests {
     fn who_flies_a_slot_moves_the_hash() {
         let base = hash_world(&World::new(1));
         for slot in 0..crate::world::MAX_PLAYERS {
-            for controller in [Controller::Ai, Controller::Local, Controller::Remote] {
+            for controller in [
+                Controller::Ai,
+                Controller::Local,
+                Controller::Remote,
+                Controller::Away,
+            ] {
                 let mut world = World::new(1);
                 if world.controllers[slot] == controller {
                     continue;
