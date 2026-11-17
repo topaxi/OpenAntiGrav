@@ -44,7 +44,18 @@ own leftovers (spectate, chat, invite-only, quick match, the recorded pad stream
    step-up triggers, the path to several hosts and a price comparison (looked up
    2026-11-17, unverified against the providers' own pages) are in the page's
    "Infrastructure".
-5. **Lobby and race boundary.** Already split in code (`rooms.rs` has no I/O, the `Runner`
+5. **Load peaks on an extraction (fixed, `net-mem`, 2026-11-17).** The remote's 542 MB race
+   load and 380 MB lobby start were the extraction's sparse `Data.wad` read whole (twice in the
+   race). `oag_assets::sparse` now keeps only the range table: 572 to 18.5 MB and 383 to 9.7 MB
+   locally (`docs/networking/online-lobby.md`, "Server memory while loading"), so the
+   rooms-per-1-GB memory column holds while loading too. Still open: the musl build's peaks on
+   the remote host are not re-measured (expect the same, the buffers are the allocator's
+   requests); HD, Omega and 2048 extractions were not measured (same code path, larger
+   archives, so a larger "before"); the circuit `.vex` (5.1 MB on Pulse) is read twice and held
+   twice during the load (`crates/raceplay/src/load/track_inputs.rs`). Measure with
+   `/proc/<pid>/status` `VmHWM` of `oag-server --image <extraction> --listen 127.0.0.1:0` once
+   it prints `listening on`.
+6. **Lobby and race boundary.** Already split in code (`rooms.rs` has no I/O, the `Runner`
    seam, the job on standard input, the hand-off with port and hash); tied to one machine
    by a hand-off with no host, pipes, the lobby opening the images, one slot. The page's
    "Lobby and race server: the boundary" names the host protocol (`Register`, `Launch`,

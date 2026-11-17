@@ -19,6 +19,8 @@
 //! | `16 n` | `(offset: u64, len: u64)` per range, ascending, never touching |
 //! | rest | the ranges' bytes, concatenated in the same order |
 
+use std::io::{Read, Seek, SeekFrom};
+
 use crate::{Error, Result};
 
 /// The first four bytes of a sparse archive.
@@ -27,13 +29,15 @@ pub const MAGIC: [u8; 4] = *b"OAGX";
 const VERSION: u32 = 1;
 const HEADER: usize = 20;
 
-/// An archive's recorded ranges, parsed.
+/// An archive's recorded ranges: the header and range table only. The ranges'
+/// bytes stay in the file and are read on demand ([`Self::locate`]), so opening
+/// an extraction costs its table, not its size (a Pulse `Data.wad` extraction is
+/// 184 MiB, and a race process held it whole, twice).
 #[derive(Debug)]
 pub struct Sparse {
     len: u64,
-    /// `(offset, len, start in data)`, ascending by offset.
-    ranges: Vec<(u64, u64, usize)>,
-    data: Vec<u8>,
+    /// `(offset, len, position in the file)`, ascending by offset.
+    ranges: Vec<(u64, u64, u64)>,
 }
 
 impl Sparse {
@@ -43,49 +47,57 @@ impl Sparse {
         head.starts_with(&MAGIC)
     }
 
-    /// Parses a whole sparse file.
+    /// Parses a sparse file's header and range table from `file`, checking that the
+    /// file holds exactly the bytes the table names. Reads nothing of the ranges.
     ///
     /// # Errors
     ///
     /// [`Error::BadSparse`] on a file that is cut short, has another version, or whose
-    /// ranges run past the archive's length or overlap.
-    pub fn parse(label: &str, bytes: Vec<u8>) -> Result<Self> {
+    /// ranges run past the archive's length or overlap; an I/O error reading it.
+    pub fn parse(label: &str, file: &mut (impl Read + Seek)) -> Result<Self> {
         let bad = |why: &str| Error::BadSparse {
             archive: label.to_string(),
             why: why.to_string(),
         };
-        if bytes.len() < HEADER || !Self::is_sparse(&bytes) {
+        let file_len = file.seek(SeekFrom::End(0))?;
+        file.seek(SeekFrom::Start(0))?;
+        let mut header = [0u8; HEADER];
+        if file.read_exact(&mut header).is_err() || !Self::is_sparse(&header) {
             return Err(bad("not a sparse archive"));
         }
-        let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().expect("4 bytes"));
-        let wide = |at: usize| u64::from_le_bytes(bytes[at..at + 8].try_into().expect("8 bytes"));
-        if word(4) != VERSION {
+        let word = |b: &[u8], at: usize| u32::from_le_bytes(b[at..at + 4].try_into().expect("4"));
+        let wide = |b: &[u8], at: usize| u64::from_le_bytes(b[at..at + 8].try_into().expect("8"));
+        if word(&header, 4) != VERSION {
             return Err(bad("another version"));
         }
-        let len = wide(8);
-        let count = word(16) as usize;
+        let len = wide(&header, 8);
+        let count = word(&header, 16) as usize;
         let table_end = count
             .checked_mul(16)
             .and_then(|table| table.checked_add(HEADER))
-            .filter(|end| *end <= bytes.len())
+            .filter(|end| *end as u64 <= file_len)
             .ok_or_else(|| bad("the range table is cut short"))?;
+        let mut table = vec![0u8; table_end - HEADER];
+        file.read_exact(&mut table)
+            .map_err(|_| bad("the range table is cut short"))?;
         let mut ranges = Vec::with_capacity(count);
-        let (mut at_data, mut previous_end) = (0usize, 0u64);
+        let (mut at_data, mut previous_end) = (table_end as u64, 0u64);
         for n in 0..count {
-            let (offset, size) = (wide(HEADER + 16 * n), wide(HEADER + 16 * n + 8));
+            let (offset, size) = (wide(&table, 16 * n), wide(&table, 16 * n + 8));
             let end = offset.checked_add(size).filter(|end| *end <= len);
             let Some(end) = end.filter(|_| offset >= previous_end) else {
                 return Err(bad("a range overlaps another or runs past the archive"));
             };
             ranges.push((offset, size, at_data));
-            at_data += usize::try_from(size).map_err(|_| bad("a range is too large"))?;
+            at_data = at_data
+                .checked_add(size)
+                .ok_or_else(|| bad("a range is too large"))?;
             previous_end = end;
         }
-        if table_end + at_data != bytes.len() {
+        if at_data != file_len {
             return Err(bad("the data does not match the range table"));
         }
-        let data = bytes[table_end..].to_vec();
-        Ok(Self { len, ranges, data })
+        Ok(Self { len, ranges })
     }
 
     /// The archive's length, as the whole archive had it.
@@ -106,20 +118,42 @@ impl Sparse {
         self.ranges.iter().map(|range| range.1).sum()
     }
 
-    /// `len` bytes at `offset`, when one recorded range holds them all.
+    /// Where in the sparse file the `len` archive bytes at `offset` start, when one
+    /// recorded range holds them all.
     #[must_use]
-    pub fn read(&self, offset: u64, len: u64) -> Option<&[u8]> {
-        if len == 0 {
-            return Some(&[]);
-        }
+    pub fn locate(&self, offset: u64, len: u64) -> Option<u64> {
         let end = offset.checked_add(len)?;
         let at = self.ranges.partition_point(|range| range.0 <= offset);
-        let &(start, size, in_data) = self.ranges.get(at.checked_sub(1)?)?;
-        if end > start + size {
-            return None;
+        let &(start, size, in_file) = self.ranges.get(at.checked_sub(1)?)?;
+        (end <= start + size).then(|| in_file + (offset - start))
+    }
+
+    /// `len` bytes at `offset`, read from `file` (the file this was parsed from), when
+    /// one recorded range holds them all; `Ok(None)` when none does.
+    ///
+    /// # Errors
+    ///
+    /// An I/O error reading `file`.
+    pub fn read(
+        &self,
+        file: &mut (impl Read + Seek),
+        offset: u64,
+        len: u64,
+    ) -> Result<Option<Vec<u8>>> {
+        if len == 0 {
+            return Ok(Some(Vec::new()));
         }
-        let from = in_data + usize::try_from(offset - start).ok()?;
-        self.data.get(from..from + usize::try_from(len).ok()?)
+        let Some(at) = self.locate(offset, len) else {
+            return Ok(None);
+        };
+        let size = usize::try_from(len).map_err(|_| Error::BadSparse {
+            archive: String::new(),
+            why: format!("a read of {len} bytes"),
+        })?;
+        file.seek(SeekFrom::Start(at))?;
+        let mut buf = vec![0u8; size];
+        file.read_exact(&mut buf)?;
+        Ok(Some(buf))
     }
 }
 
@@ -162,40 +196,75 @@ pub fn write(
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
     use super::*;
 
-    fn built() -> Sparse {
+    fn built() -> (Sparse, Cursor<Vec<u8>>) {
         let whole: Vec<u8> = (0..=99).collect();
         let ranges = [(10, 5), (40, 10)];
         let bytes = write(100, &ranges, |offset, len| {
             Ok(whole[offset as usize..(offset + len) as usize].to_vec())
         })
         .expect("writes");
-        Sparse::parse("t", bytes).expect("parses")
+        let mut file = Cursor::new(bytes);
+        (Sparse::parse("t", &mut file).expect("parses"), file)
     }
 
     #[test]
     fn a_recorded_range_reads_back_and_the_rest_is_refused() {
-        let sparse = built();
-        assert_eq!(sparse.len(), 100);
-        assert_eq!(sparse.present(), 15);
-        assert_eq!(sparse.read(12, 3), Some(&[12u8, 13, 14][..]));
-        assert_eq!(sparse.read(40, 10).map(<[u8]>::len), Some(10));
-        assert_eq!(sparse.read(9, 2), None, "starts before a range");
-        assert_eq!(sparse.read(14, 2), None, "runs past a range");
-        assert_eq!(sparse.read(0, 1), None, "in a hole");
+        let (sparse, mut file) = built();
+        let mut read = |offset, len| sparse.read(&mut file, offset, len).expect("reads");
+        assert_eq!(read(12, 3), Some(vec![12u8, 13, 14]));
+        assert_eq!(read(40, 10).map(|b| b.len()), Some(10));
+        assert_eq!(read(9, 2), None, "starts before a range");
+        assert_eq!(read(14, 2), None, "runs past a range");
+        assert_eq!(read(0, 1), None, "in a hole");
         assert_eq!(
-            sparse.read(77, 0),
-            Some(&[][..]),
+            read(77, 0),
+            Some(Vec::new()),
             "nothing asked is nothing read"
         );
+        assert_eq!(sparse.len(), 100);
+        assert_eq!(sparse.present(), 15);
     }
 
     #[test]
     fn a_truncated_file_is_refused_by_name() {
         let mut bytes = write(100, &[(0, 4)], |_, len| Ok(vec![7; len as usize])).expect("writes");
         bytes.pop();
-        let error = Sparse::parse("Data.wad", bytes).expect_err("cut short");
+        let error = Sparse::parse("Data.wad", &mut Cursor::new(bytes)).expect_err("cut short");
         assert!(error.to_string().contains("Data.wad"), "{error}");
+    }
+
+    /// Opening keeps only the table: an archive opened on a sparse file reads each entry
+    /// from the file when asked, never from a copy made at open (a Pulse `Data.wad`
+    /// extraction held whole cost a race process 572 MB instead of 24 MB,
+    /// `docs/networking/online-lobby.md`, "Server memory while loading").
+    #[test]
+    fn an_archive_on_a_sparse_file_reads_the_file_at_each_read() {
+        let wad = crate::testing::wad(&[("first", b"before"), ("second", b"other")]);
+        let bytes = write(wad.len() as u64, &[(0, wad.len() as u64)], |offset, len| {
+            Ok(wad[offset as usize..(offset + len) as usize].to_vec())
+        })
+        .expect("writes");
+        let dir = crate::testing::temp_dir("sparse-lazy");
+        let path = dir.join("Data.wad");
+        std::fs::write(&path, &bytes).expect("writing the sparse file");
+        let mut archive = crate::Archive::open(&path.to_string_lossy()).expect("opens");
+        assert_eq!(archive.read_name("first").unwrap(), b"before");
+
+        let at = bytes
+            .windows(6)
+            .position(|w| w == b"before")
+            .expect("the entry's bytes");
+        let mut changed = bytes;
+        changed[at..at + 6].copy_from_slice(b"AFTER!");
+        std::fs::write(&path, &changed).expect("rewriting in place, same length");
+        assert_eq!(
+            archive.read_name("first").unwrap(),
+            b"AFTER!",
+            "the open archive must read the file, not a copy of it"
+        );
     }
 }
