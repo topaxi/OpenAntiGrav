@@ -470,7 +470,7 @@ writes `rejoin.toml` in the state directory (`$XDG_STATE_HOME/oag/`, kind `rejoi
 and an expiry. Every 10 s it writes again, each write expiring 180 s on (both chosen), so a killed game's
 record goes stale on its own; the race ending or the player leaving deletes it, and a panic keeps it.
 *Offer.* ONLINE (MULTIPLAYER page) looks for a fresh record of this title's race first, dials the race
-server to see it still answers, and only then asks REJOIN RACE or DECLINE (the DELETE PILOT confirm);
+server to see it still answers, and only then asks REJOIN RACE or DECLINE (the DELETE PILOT confirm, opened on REJOIN RACE, since declining gives the seat away);
 DECLINE deletes the record, REJOIN RACE dials with the token, builds the race fresh and catches up
 through `Resend` (900 ticks behind in the loopback test, every hash agreeing). A record that is
 expired, another title's, unreadable, or whose server does not answer is deleted with no offer; a

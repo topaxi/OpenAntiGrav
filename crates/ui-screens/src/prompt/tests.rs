@@ -227,6 +227,28 @@ fn a_confirm_opens_on_no_and_a_bare_cross_cancels() {
     );
 }
 
+/// A question whose no is the loss (a rejoin) opens on yes, and Circle still backs out.
+#[test]
+fn a_confirm_opened_on_yes_accepts_a_bare_cross_and_circle_cancels() {
+    let labels = || ConfirmLabels {
+        title: "REJOIN RACE".into(),
+        message: "Take your seat back?".into(),
+        yes: "REJOIN RACE".into(),
+        no: "DECLINE".into(),
+    };
+    let mut confirm = Confirm::opened_on_yes(labels());
+    assert!(confirm.on_yes());
+    assert_eq!(
+        confirm.update(&mut tick(&[Button::Cross])),
+        Outcome::Accepted
+    );
+    let mut confirm = Confirm::opened_on_yes(labels());
+    assert_eq!(
+        confirm.update(&mut tick(&[Button::Circle])),
+        Outcome::Cancelled
+    );
+}
+
 /// Moving to yes and confirming is the only way through.
 #[test]
 fn a_confirm_accepts_only_after_the_answer_is_moved_to_yes() {

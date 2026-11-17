@@ -692,14 +692,24 @@ impl Confirm {
     ///
     /// Ours, and deliberate: everything this is used for so far destroys
     /// something, and a dialog that opens on the destructive answer turns a
-    /// stray Cross into a deleted file. A caller that wants the other default
-    /// can say so, and none does.
+    /// stray Cross into a deleted file. A question whose **no** is the one
+    /// that loses something opens on yes instead ([`Self::opened_on_yes`]).
     #[must_use]
     pub fn new(labels: ConfirmLabels) -> Self {
         Self {
             labels,
             yes: false,
             navs: NavLog::default(),
+        }
+    }
+
+    /// A question opened on **yes**, for one whose negative answer is the
+    /// destructive one (declining a rejoin gives the seat away).
+    #[must_use]
+    pub fn opened_on_yes(labels: ConfirmLabels) -> Self {
+        Self {
+            yes: true,
+            ..Self::new(labels)
         }
     }
 

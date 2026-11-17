@@ -52,7 +52,7 @@ impl Session {
         if let Stage::Menu(stage) = &mut self.stage {
             stage.lan = None;
         }
-        let confirm = prompt::Confirm::new(prompt::ConfirmLabels {
+        let confirm = prompt::Confirm::opened_on_yes(prompt::ConfirmLabels {
             title: self.online_say("OAG_ONLINE_REJOIN_TITLE", "REJOIN RACE"),
             message: self.online_say(
                 "OAG_ONLINE_REJOIN_ASK",

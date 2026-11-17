@@ -288,7 +288,7 @@ fn a_killed_game_offered_its_race_takes_the_seat_back_and_finishes() {
     let mut again = lab.relaunch(
         "a",
         &format!(
-            "until screen.id=rejoinrace within 3600; screenshot {}; press right; press cross; \
+            "until screen.id=rejoinrace within 3600; screenshot {}; press cross; \
              until stage=race within 3600; until endrace=photo within 20000",
             shot.display()
         ),
@@ -337,7 +337,7 @@ fn a_declined_offer_deletes_the_record_and_leaves_the_seat_to_the_away_driver() 
     a.kill();
     let mut again = lab.relaunch(
         "a",
-        "until screen.id=rejoinrace within 3600; press cross; until screen.id=online within 600; ticks 30",
+        "until screen.id=rejoinrace within 3600; press left; press cross; until screen.id=online within 600; ticks 30",
     );
     let status = again.finish(200);
     assert!(
