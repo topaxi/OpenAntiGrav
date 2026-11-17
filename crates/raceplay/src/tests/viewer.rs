@@ -392,6 +392,69 @@ fn past_the_last_agreeing_second_a_pose_track_plays_in_pose_view() {
     assert!((shown.position - recorded.position).length() < 1e-3);
 }
 
+/// The file as it is after a build changed the tick-zero hash: read back from bytes sealed with
+/// a hash this build's race does not have, so the file's own checksum is redone.
+fn rehashed(mut replay: Replay) -> Replay {
+    replay.initial_hash ^= 1;
+    Replay::from_bytes(&replay.to_bytes()).expect("a sealed file")
+}
+
+/// A recording whose tick-zero hash no longer matches opens in POSE VIEW from its first tick when
+/// it carries a pose track: no tick is simulated, a seek lands on the recorded pose, and nothing
+/// of it is state a take-over could start from.
+#[test]
+fn a_tick_zero_mismatch_with_a_pose_track_opens_in_pose_view() {
+    let replay = rehashed(recording(TICKS).0);
+    let track = replay.pose_track.clone().expect("poses");
+    let (mut viewer, mut race) = open(replay);
+    assert_eq!(viewer.built(), Some(0), "no tick agrees");
+    assert_eq!(viewer.mismatch().map(|d| d.tick), Some(0));
+    assert!(viewer.stops_matching(), "the build-mismatch notice shows");
+    assert_eq!(viewer.state(), State::PoseView);
+    assert_eq!(viewer.update(&mut race), Moved::Seeked);
+    for _ in 0..30 {
+        assert_eq!(viewer.update(&mut race), Moved::Stepped(1));
+    }
+    assert_eq!(viewer.at(), 30);
+    assert!(viewer.in_pose_view());
+    assert_eq!(race.sim.world.tick, 0, "no tick of the simulation ran");
+    viewer.seek(&mut race, 250);
+    assert_eq!(viewer.at(), 250);
+    assert_eq!(viewer.state(), State::PoseView);
+    for slot in 0..usize::from(race.ship_count()) {
+        let recorded = track.pose(slot, 250.0).expect("a pose");
+        assert!((race.craft_pose(slot).position - recorded.position).length() < 1e-3);
+    }
+    viewer.seek(&mut race, TICKS);
+    assert_eq!(viewer.state(), State::PoseEnded);
+}
+
+/// Without a pose track the file is refused, naming it; a header that no longer loads is refused
+/// as before, whatever the file carries.
+#[test]
+fn a_tick_zero_mismatch_without_a_pose_track_is_refused_by_name() {
+    let mut replay = rehashed(recording(TICKS).0);
+    replay.pose_track = None;
+    let Err(refusal) = Viewer::open(fixture(), replay) else {
+        panic!("nothing to play instead");
+    };
+    assert!(matches!(
+        refusal,
+        crate::timeline::OpenError::NoPoseTrack(_)
+    ));
+    assert!(refusal.to_string().contains("no pose track"), "{refusal}");
+
+    let mut replay = rehashed(recording(TICKS).0);
+    replay.header.mods.push(oag_replay::header::ModUse {
+        id: "absent".to_string(),
+        ..Default::default()
+    });
+    let Err(refusal) = Viewer::open(fixture(), replay) else {
+        panic!("a header this build cannot load");
+    };
+    assert!(matches!(refusal, crate::timeline::OpenError::Start(_)));
+}
+
 /// While the first keyframe is not in, the viewer holds the grid and moves nothing.
 #[test]
 fn nothing_moves_until_the_first_keyframe_is_in() {

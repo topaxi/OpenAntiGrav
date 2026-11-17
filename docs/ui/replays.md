@@ -78,7 +78,9 @@ result from `HEAD`, so **any other mode is listed with NOTE: MODE NOT VERIFIED a
 | What the header names | What WATCH does |
 | --- | --- |
 | Zone, Eliminator, Head to Head with one person, Speed Lap (Pulse, run through WATCH, 752 ticks each) | rebuilds, the pass ends complete, plays to the end |
-| A race whose tick-zero hash disagrees (another mode written into `[setup]`; a 2048 campaign event, `Launch::Event`; a pack or roster this machine lacks) | **loading ends, the menus reopen on the REPLAYS page and the row is dimmed with NOT THE RACE THAT WAS RECORDED**; nothing plays (`replay_viewer_ground_truth::a_recording_this_build_cannot_rebuild_is_refused_by_name`) |
+| A race whose tick-zero hash disagrees (another mode written into `[setup]`; a 2048 campaign event, `Launch::Event`; a pack or roster this machine lacks; a state-hash layout change since the recording) and the file carries a `POSE` chunk | **opens in POSE VIEW from its first tick** with the build-mismatch notice: the header still builds the race, no tick is simulated and the recorded hulls are shown. A seek lands on the pose track's pose (`oag_raceplay` `tests::viewer::a_tick_zero_mismatch_with_a_pose_track_opens_in_pose_view`) |
+| The same, with no `POSE` chunk | **loading ends, the menus reopen on the REPLAYS page and the row is dimmed with NOT THE RACE THAT WAS RECORDED, AND NO POSE TRACK TO SHOW**; nothing plays (`replay_viewer_ground_truth::a_recording_this_build_cannot_rebuild_is_refused_by_name`, `tests::viewer::a_tick_zero_mismatch_without_a_pose_track_is_refused_by_name`) |
+| A header that no longer builds the race (an unknown launch setting, a module this build lacks) | refused as before, whatever the file carries, with the loader's reason |
 | A file that will not read at all | the same dimmed row with the reader's reason |
 
 Not run: Tournament, a campaign cell on Pulse, Race Remix, foreign tracks, split screen beyond Pulse's two
@@ -92,7 +94,7 @@ disc the session booted from, and loads the race through the **ordinary loader a
 (`Session::start_race_loading`, the half of a launch a race box and a recording share). At the
 hand-over `Viewer::open` starts the `Timeline` over a copy of the loaded `Setup` and `Viewer::begin`
 puts the header's launch settings and seats on the race on screen, stops its recording and ghost. A
-tick-zero mismatch ends the load there.
+tick-zero mismatch with no pose track ends the load there; with one, the viewer opens in POSE VIEW (table above).
 
 `oag_raceplay::viewer::Viewer` moves the race on screen with `Race::tick` (drawn), and the timeline's
 probe only restores keyframes: a seek restores the keyframe at or before `target - 60` into the race

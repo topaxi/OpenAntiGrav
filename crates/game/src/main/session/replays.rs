@@ -218,7 +218,7 @@ pub(crate) fn open_viewer(
     let setup = setup.context("the race's setup was not kept")?;
     let viewer = Viewer::open(setup, *replay).map_err(|e| {
         let why = match &e {
-            OpenError::Desync(_) => page::TICK_ZERO.to_string(),
+            OpenError::NoPoseTrack(_) => page::NO_POSE_TRACK.to_string(),
             OpenError::Start(start) => format!("{start:#}"),
         };
         // A screenshot is no row of the list: its refusal is told to the player at once.

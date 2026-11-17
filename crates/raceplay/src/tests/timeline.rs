@@ -135,10 +135,17 @@ fn a_desync_ends_the_prefix_at_the_last_agreeing_hash() {
 fn the_wrong_race_is_refused_at_tick_zero() {
     let (mut replay, _) = recording(10, &[]);
     replay.initial_hash ^= 1;
-    let Err(OpenError::Desync(desync)) = Timeline::open(fixture(), replay) else {
+    replay.pose_track = None;
+    let Err(OpenError::NoPoseTrack(desync)) = Timeline::open(fixture(), replay) else {
         panic!("another race must be refused");
     };
     assert_eq!(desync.tick, 0);
+    assert!(
+        OpenError::NoPoseTrack(desync)
+            .to_string()
+            .contains("no pose track"),
+        "the refusal names what is missing"
+    );
 }
 
 /// A ceiling of a few keyframes doubles the interval until they fit, and every tick still

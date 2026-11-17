@@ -99,7 +99,7 @@ above: `replay_viewer_ground_truth::a_campaign_race_recorded_from_the_menus_repr
 first cell, a Single Race against the original driver, recorded from the menus: it records the key,
 reproduces every stored hash, and desyncs without it). **Old recordings are not supported across a
 simulation or state-hash change** (policy, 2026-11-17): a physics law, a tuning or a new hashed field
-desyncs them, at the first stored hash or, when the tick-zero hash moves, at open. No test pins how an
+desyncs them, at the first stored hash or, when the tick-zero hash moves, at open: a file with a `POSE` chunk then opens in POSE VIEW from tick 0 (the verified prefix is empty), one without is refused naming the missing pose track. No test pins how an
 outdated file fails; replay coverage is a recording the same build makes inside the test. 2048's event
 campaign (`Launch::Event`, `grid_teams`) is still refused by the tick-zero hash.
 

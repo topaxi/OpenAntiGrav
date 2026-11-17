@@ -491,6 +491,8 @@ fn a_recording_this_build_cannot_rebuild_is_refused_by_name() {
         oag_replay::Replay::from_bytes(&std::fs::read(&files[0]).expect("read")).expect("parse");
     // The same file asking for another race: the rebuild is not the recorded one.
     replay.header.setup.as_mut().expect("a setup").mode = "zone".to_string();
+    // With a pose track the file would open in POSE VIEW instead of being refused.
+    replay.pose_track = None;
     std::fs::write(&files[0], replay.to_bytes()).expect("write");
     let shots = profile.dir.join("shots");
     std::fs::create_dir_all(&shots).expect("a directory");
