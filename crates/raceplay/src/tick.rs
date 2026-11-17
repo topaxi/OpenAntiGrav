@@ -807,8 +807,10 @@ impl Race {
             &self.sim.world.ships[slot],
             model_matrix,
             self.sim.dt,
-            evaluated,
-            self.view.pair_contacts[slot],
+            super::contact_fx::Touch {
+                evaluated,
+                pair: self.view.pair_contacts[slot],
+            },
         );
     }
 
@@ -830,8 +832,10 @@ impl Race {
                     &self.sim.world.ships[slot],
                     model_matrix,
                     self.sim.dt,
-                    &step.evaluated,
-                    self.view.pair_contacts[slot],
+                    super::contact_fx::Touch {
+                        evaluated: &step.evaluated,
+                        pair: self.view.pair_contacts[slot],
+                    },
                 );
             }
         }

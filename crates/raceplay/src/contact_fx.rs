@@ -22,6 +22,13 @@ pub(super) struct PairContact {
     pub(super) impulse: f32,
 }
 
+/// What touched a seat's craft this tick: its wall contact and its craft-to-craft one.
+#[derive(Clone, Copy)]
+pub(super) struct Touch<'a> {
+    pub(super) evaluated: &'a Evaluated,
+    pub(super) pair: Option<PairContact>,
+}
+
 /// The effects one seat's wall hits raise.
 #[derive(Debug)]
 pub(super) struct ContactFx {
@@ -139,9 +146,9 @@ impl ContactFx {
         ship: &Ship,
         model_matrix: Mat4,
         dt: f32,
-        evaluated: &Evaluated,
-        pair: Option<PairContact>,
+        touch: Touch,
     ) {
+        let Touch { evaluated, pair } = touch;
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically
         // rather than spawn once and go silent.
