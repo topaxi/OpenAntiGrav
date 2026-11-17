@@ -5,12 +5,18 @@
 //! updates the fields, and the screens (or a test) read the fields.
 
 use crate::link::Link;
-use crate::wire::online::{Edition, Message, Refusal, RoomInfo, RoomSettings, Snapshot};
+use crate::wire::board::Board;
+use crate::wire::online::{
+    Edition, HostOffer, Message, RaceJob, Refusal, RoomInfo, RoomSettings, Snapshot,
+};
 
 /// Where a race is, as the lobby told this client.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Handoff {
-    /// The race's UDP port, on the host the lobby was dialled on.
+    /// The address the race is on: empty for the host the lobby was dialled on, else a player
+    /// host's own.
+    pub host: String,
+    /// The race's UDP port.
     pub port: u16,
     /// SHA-256 of the race server's certificate.
     pub cert_hash: [u8; 32],
@@ -39,6 +45,8 @@ pub struct LobbyClient {
     pub left: Option<String>,
     /// The newest refusal.
     pub refused: Option<(Refusal, String)>,
+    /// A race the lobby asked this machine to host; taken with [`Self::take_launch`].
+    launch: Option<(u32, RaceJob)>,
 }
 
 impl LobbyClient {
@@ -56,6 +64,7 @@ impl LobbyClient {
             handoff: None,
             left: None,
             refused: None,
+            launch: None,
         }
     }
 
@@ -88,13 +97,16 @@ impl LobbyClient {
                     self.room = None;
                     self.left = Some(reason);
                 }
+                Ok(Message::Launch { room, job }) => self.launch = Some((room, job)),
                 Ok(Message::Handoff {
+                    host,
                     port,
                     cert_hash,
                     token,
                     name,
                 }) => {
                     self.handoff = Some(Handoff {
+                        host,
                         port,
                         cert_hash,
                         token,
@@ -140,6 +152,30 @@ impl LobbyClient {
     /// Opens a room.
     pub fn create(&mut self, settings: RoomSettings) {
         self.link.send_lobby(&Message::CreateRoom(settings));
+    }
+
+    /// Opens a room whose race this machine hosts ([`Message::HostRoom`]).
+    pub fn host_room(&mut self, settings: RoomSettings, offer: HostOffer) {
+        self.link.send_lobby(&Message::HostRoom { settings, offer });
+    }
+
+    /// The race the lobby asked this machine to host, once; the room and its job.
+    pub fn take_launch(&mut self) -> Option<(u32, RaceJob)> {
+        self.launch.take()
+    }
+
+    /// Tells the lobby the hosted race of `room` is loaded and its seats may dial.
+    pub fn host_up(&mut self, room: u32) {
+        self.link.send_lobby(&Message::HostUp { room });
+    }
+
+    /// Tells the lobby the hosted race of `room` is over.
+    pub fn host_over(&mut self, room: u32, reason: &str, board: Board) {
+        self.link.send_lobby(&Message::HostOver {
+            room,
+            reason: reason.to_string(),
+            board,
+        });
     }
 
     /// Joins a room.

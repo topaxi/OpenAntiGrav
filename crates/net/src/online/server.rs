@@ -13,6 +13,7 @@ use std::net::{IpAddr, SocketAddr};
 use anyhow::Result;
 use web_time::{Duration, Instant};
 
+use super::moderation::BanFile;
 use super::race_proc::{Handle, Runner, Status};
 use super::rooms::{ClientId, Config as RoomsConfig, Rooms};
 use crate::limits::LogLimit;
@@ -34,6 +35,9 @@ pub const MAX_CONNECTIONS: usize = 64;
 /// behind one NAT, with room for a full race of twelve to reconnect.
 pub const MAX_PER_ADDRESS: usize = 16;
 
+mod hosting;
+pub use hosting::{HOST_ASK_INTERVAL, MAX_HOSTED_PER_ADDRESS, MAX_HOSTED_ROOMS, MAX_PROBES};
+
 /// What the service is built from.
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -47,6 +51,8 @@ pub struct Config {
     pub max_connections: usize,
     /// Connections one address may hold at once ([`MAX_PER_ADDRESS`]).
     pub max_per_address: usize,
+    /// The ban list for players who host ([`super::moderation`]), if the operator keeps one.
+    pub ban_file: Option<std::path::PathBuf>,
 }
 
 struct Pending {
@@ -62,6 +68,8 @@ struct Connected {
     token: String,
     /// When the link was first seen closed, for a person held by `SEAT_GRACE`.
     dropped: Option<Instant>,
+    /// When this connection last asked to host.
+    host_asked: Option<Instant>,
 }
 
 struct Running {
@@ -89,6 +97,13 @@ pub struct Server {
     max_per_address: usize,
     /// One warning a second about refused connections.
     refusals: LogLimit,
+    /// The players whose machines run a listed room's race, by client.
+    hosts: BTreeMap<ClientId, hosting::HostRec>,
+    /// Offered ports being checked.
+    probes: Vec<hosting::Probe>,
+    /// The player-hosted races under way, by room.
+    hosted: BTreeMap<u32, hosting::HostedRace>,
+    bans: BanFile,
 }
 
 /// A fresh 128-bit token, hex.
@@ -123,6 +138,10 @@ impl Server {
             max_connections: config.max_connections,
             max_per_address: config.max_per_address,
             refusals: LogLimit::default(),
+            hosts: BTreeMap::new(),
+            probes: Vec::new(),
+            hosted: BTreeMap::new(),
+            bans: BanFile::new(config.ban_file),
         })
     }
 
@@ -164,6 +183,7 @@ impl Server {
         self.rooms.tick(now);
         self.launch();
         self.watch_race();
+        self.watch_hosted();
         self.flush();
     }
 
@@ -287,10 +307,12 @@ impl Server {
                     log: LogLimit::default(),
                     token: token_in.to_string(),
                     dropped: None,
+                    host_asked: None,
                 },
             );
             self.welcome(id);
             self.resend_handoff(id);
+            self.resend_hosted_handoff(id);
             return;
         }
         let id = self.next_client;
@@ -307,6 +329,7 @@ impl Server {
                         log: LogLimit::default(),
                         token: token(),
                         dropped: None,
+                        host_asked: None,
                     },
                 );
                 log::debug!("lobby: {:?} joined as client {id}", self.rooms.name(id));
@@ -328,6 +351,7 @@ impl Server {
             return;
         };
         let message = Message::Handoff {
+            host: String::new(),
             port,
             cert_hash,
             token: token.clone(),
@@ -365,13 +389,23 @@ impl Server {
                 }
             }
             for message in incoming {
-                self.rooms.handle(id, message);
+                match message {
+                    Message::HostRoom { settings, offer } => self.host_room(id, settings, offer),
+                    Message::HostUp { room } => self.host_up(id, room),
+                    Message::HostOver {
+                        room,
+                        reason,
+                        board,
+                    } => self.host_over(id, room, &reason, board),
+                    other => self.rooms.handle(id, other),
+                }
             }
             if let Some(why) = gone {
                 let seated = self
                     .race
                     .as_ref()
-                    .is_some_and(|r| r.seats.iter().any(|(seat, _, _)| *seat == id));
+                    .is_some_and(|r| r.seats.iter().any(|(seat, _, _)| *seat == id))
+                    || self.hosted_guest(id);
                 if let Some(client) = self.clients.get_mut(&id).filter(|_| seated) {
                     let since = *client.dropped.get_or_insert_with(Instant::now);
                     if since.elapsed() < SEAT_GRACE {
@@ -389,6 +423,10 @@ impl Server {
         let Some(launch) = self.rooms.take_launch() else {
             return;
         };
+        if launch.hosted {
+            self.launch_hosted(launch);
+            return;
+        }
         let seats: Vec<(ClientId, String, String)> = launch
             .seats
             .iter()
@@ -432,6 +470,7 @@ impl Server {
                     for (id, name, token) in &running.seats {
                         if let Some(client) = self.clients.get_mut(id) {
                             client.link.send_lobby(&Message::Handoff {
+                                host: String::new(),
                                 port,
                                 cert_hash,
                                 token: token.clone(),

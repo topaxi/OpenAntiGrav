@@ -125,6 +125,8 @@ pub fn run_race(
             say(HEALTH_LINE);
         }
         if stop() {
+            // The seats that are already waiting are told, not left to time out.
+            host.end(host.stop_reason());
             return Err("the lobby stopped the race".into());
         }
         if asked.elapsed() > limits.join_timeout {
