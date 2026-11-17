@@ -1,8 +1,8 @@
 ---
-status: blocked-maintainer
+status: ready-to-wire
 titles: [all]
 updated: 2026-11-17
-summary: "Local half landed (confirmed run saved, room in header, local fingerprint). Left: server fingerprint and download, with PROTOCOL 2"
+summary: "Local half landed (confirmed run saved, room in header, local fingerprint); left: server fingerprint and replay download"
 categories: [frontend]
 ---
 
@@ -48,4 +48,4 @@ of the predicted run). The comparison is by content, not bytes.
 
 ## Next Steps
 
-1. With the `PROTOCOL` 2 bump (server-roadmap decision 4): items 1 and 2.
+1. Items 1 and 2 (sonnet `oag-wire`). Not blocked: server-roadmap decision 4 (accepted 2026-11-17) freezes the wire only from the first public deployment, so until then `End` and a download message are edited in place under `PROTOCOL` 1. Item 3 belongs with them (a retirement as an `EVNT` entry).
