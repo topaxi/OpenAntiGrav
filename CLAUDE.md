@@ -32,6 +32,7 @@ just check-size   # ratchet: file length 1,500, inline #[cfg(test)] mod 500
 just check-comment-history   # ratchet: no dates, "maintainer" or lane names in code comments
 just check-title-branching   # ratchet on `title.name == oag_X::TITLE.name` in generic crates; per-title behaviour is `Title` data (ADR-0058)
 just check-title-reach       # ratchet on generic crates naming a title package by path; they go through `oag_title::Title`, the oag-source registry or the composition root
+just check-hd-clock-grab   # every HD/Fury grab of the original goes through `rpcs3-drive.py`'s `grab_with_clock`, which writes the world clock beside the frame; an HD pair without `original.world_clock_offset_s` fails `check-pair-provenance`
 just check-names  # every names.tsv row still matches its evidence page, offline
 just check-handover          # HANDOVER.md under 256 KiB (the Read tool's ceiling)
 just check-weapon-lineage    # docs/gameplay/weapon-lineage.md's checked axes match the title crates

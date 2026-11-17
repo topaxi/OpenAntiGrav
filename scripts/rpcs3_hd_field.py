@@ -153,18 +153,10 @@ STAMP_OFFSET = 0x15C
 GANTRY_WINDOW_END = max(b for _, b in GANTRY_WINDOWS)
 
 
-def scenery_clock(m, lo=0x30000000, hi=0x36000000, chunk=0x100000):
-    """The time the scenery's animation nodes run on, read out of RAM in the same pause as the frame.
-
-    Every `MeshImporter` that moves is advanced from one global clock (`MeshImporter_AdvanceTime`,
-    `docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`): its time (`+0xc0`) equals its last stamp (`+0x15c`), the
-    global clock, because it was set to 0 when that clock read 0. Returns `{"time_s", "nodes", "total"}`, the most common
-    time among nodes whose time and stamp agree and sit past the gantry windows (the gantry's own nodes are reset into a
-    window), or `None` when none do. The clock keeps running through the pre-race wait, so `time_s - lap clock` is the
-    per-capture `world_clock_offset_s`.
-    """
+def scenery_nodes(m, lo=0x30000000, hi=0x36000000, chunk=0x100000):
+    """`(address, time, stamp)` of every `MeshImporter` in the heap, read in one pass over its blocks."""
     needle = struct.pack(">I", MESH_IMPORTER_VTABLE)
-    seen, total = {}, 0
+    found = []
     for base in range(lo, hi, chunk):
         try:
             block = m.rd(base, chunk)
@@ -173,13 +165,96 @@ def scenery_clock(m, lo=0x30000000, hi=0x36000000, chunk=0x100000):
         at = block.find(needle)
         while at >= 0:
             if at % 4 == 0 and at + STAMP_OFFSET + 4 <= len(block):
-                total += 1
-                (t,) = struct.unpack(">f", block[at + TIME_OFFSET:at + TIME_OFFSET + 4])
-                (stamp,) = struct.unpack(">f", block[at + STAMP_OFFSET:at + STAMP_OFFSET + 4])
-                if t > GANTRY_WINDOW_END and abs(t - stamp) < 0.03:
-                    seen[t] = seen.get(t, 0) + 1
+                found.append((base + at, struct.unpack(">f", block[at + TIME_OFFSET:at + TIME_OFFSET + 4])[0],
+                              struct.unpack(">f", block[at + STAMP_OFFSET:at + STAMP_OFFSET + 4])[0]))
             at = block.find(needle, at + 4)
+    return found
+
+
+def _node_time(m, node):
+    """`(time, stamp)` of one node, or `None` when it is no longer a `MeshImporter`."""
+    block = m.rd(node, STAMP_OFFSET + 4)
+    if struct.unpack(">I", block[:4])[0] != MESH_IMPORTER_VTABLE:
+        return None
+    return (struct.unpack(">f", block[TIME_OFFSET:TIME_OFFSET + 4])[0],
+            struct.unpack(">f", block[STAMP_OFFSET:STAMP_OFFSET + 4])[0])
+
+
+def _scenery_mode(pairs):
+    seen = {}
+    for t, stamp in pairs:
+        if t > GANTRY_WINDOW_END and abs(t - stamp) < 0.03:
+            seen[t] = seen.get(t, 0) + 1
     if not seen:
         return None
     best = max(seen, key=seen.get)
-    return {"time_s": best, "nodes": seen[best], "total": total}
+    return best, seen[best]
+
+
+def scenery_clock(m, nodes=None):
+    """The time the scenery's animation nodes run on, read out of RAM in the same pause as the frame.
+
+    Every `MeshImporter` that moves is advanced from one global clock (`MeshImporter_AdvanceTime`,
+    `docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`): its time (`+0xc0`) equals its last stamp (`+0x15c`), the
+    global clock, because it was set to 0 when that clock read 0. Returns `{"time_s", "nodes", "total"}`, the most common
+    time among nodes whose time and stamp agree and sit past the gantry windows (the gantry's own nodes are reset into a
+    window), or `None` when none do. The clock keeps running through the pre-race wait, so `time_s - lap clock` is the
+    per-capture `world_clock_offset_s`. `nodes` limits the read to those addresses (a sample cached from an earlier
+    full scan); a node that stopped being a `MeshImporter` is skipped.
+    """
+    if nodes is None:
+        pairs = [(t, stamp) for _, t, stamp in scenery_nodes(m)]
+    else:
+        pairs = [tp for tp in (_node_time(m, n) for n in nodes) if tp is not None]
+    mode = _scenery_mode(pairs)
+    if mode is None:
+        return None
+    return {"time_s": mode[0], "nodes": mode[1], "total": len(pairs)}
+
+
+#: How many nodes of the dominant group a cache keeps: enough that a few stale ones do not move the mode.
+CLOCK_SAMPLE = 24
+
+
+def world_clock_record(m, cache, grabbed_at=None):
+    """The original's world clock for a frame grab, always a dict: the clock, or `null` with a reason.
+
+    `{"world_clock_s", "lap_clock_s", "world_clock_offset_s", "nodes", "total", "reason", "scan"}`. The scenery clock is
+    only recorded while a race is running: a player craft in the craft array, a lap clock that is a finite non-negative
+    number, and scenery nodes whose time and stamp agree. After a race the freed nodes still read plausible, so a
+    menu screen with no player craft records `null` and says why. `cache` is a dict the caller keeps between grabs:
+    the first grab scans the heap (`scan: "full"`), the next ones re-read a `CLOCK_SAMPLE` of the nodes it found
+    (`scan: "cached"`, tens of reads instead of 96 MiB) and rescan when the sample no longer agrees.
+    The offset `world_clock_s - lap_clock_s` is stable across a run's pauses; the two numbers are read within a few
+    milliseconds of each other, and `paused` is not known here, so a film frame's `world_clock_s` itself is the moment of the read.
+    """
+    rec = {"world_clock_s": None, "lap_clock_s": None, "world_clock_offset_s": None, "nodes": None, "total": None,
+           "reason": None, "scan": None}
+    try:
+        rows = field_rows(m)
+    except Exception as error:  # noqa: BLE001 - a menu has no craft array, which is the answer
+        rec["reason"] = "no craft array (%s: %s)" % (type(error).__name__, error)
+        return rec
+    player = next((r for r in rows if r["player"]), None)
+    if player is None or not (player["clock"] == player["clock"]) or player["clock"] < 0 or player["clock"] > 1e5:
+        rec["reason"] = "no race running (no player craft with a lap clock)"
+        return rec
+    lap = player["clock"]
+    clock = None
+    if cache.get("nodes"):
+        clock = scenery_clock(m, cache["nodes"])
+        rec["scan"] = "cached"
+        if clock is None or clock["nodes"] * 2 < clock["total"]:
+            clock = None
+    if clock is None:
+        found = scenery_nodes(m)
+        rec["scan"] = "full"
+        mode = _scenery_mode([(t, stamp) for _, t, stamp in found])
+        clock = mode and {"time_s": mode[0], "nodes": mode[1], "total": len(found)}
+        cache["nodes"] = [a for a, t, stamp in found if clock and t == clock["time_s"] and abs(t - stamp) < 0.03][:CLOCK_SAMPLE]
+    if clock is None:
+        rec["reason"] = "no scenery MeshImporter node agrees with its stamp"
+        return rec
+    rec.update(world_clock_s=clock["time_s"], lap_clock_s=lap, world_clock_offset_s=clock["time_s"] - lap,
+               nodes=clock["nodes"], total=clock["total"])
+    return rec

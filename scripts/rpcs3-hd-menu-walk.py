@@ -61,8 +61,8 @@ def window(w, h):
 
 def grab(path, w, h):
     display = os.environ["OAG_RPCS3_DISPLAY"]
-    subprocess.run(["import", "-display", "127.0.0.1:%s" % display, "-window", "root",
-                    "-crop", "%dx%d+0+0" % (w, h), "+repage", str(path)], check=True)
+    if drive.screenshot(path, crop="%dx%d+0+0" % (w, h), display="127.0.0.1:%s" % display) is None:
+        raise SystemExit("the grab of the original failed")
 
 
 def main():
