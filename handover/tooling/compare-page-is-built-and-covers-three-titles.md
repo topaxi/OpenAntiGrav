@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [pulse, hd, pure, 2048, omega]
-updated: 2026-11-12
+updated: 2026-11-18
 summary: "Compare page: Pulse PS2 pairs all 16 circuits; 2048 now 14 circuits (adopt pending); Pure, Omega partial; publishing unlocked"
 ---
 
@@ -155,3 +155,8 @@ Pulse PSP Zone pairs exist, HD's do not. `psp-pulse-pair.py --zone` reads `g_gam
 - **Hull, a measure result:** the GE list of the Moa state (`texfilter` 0x107 = linear mip-linear min, linear mag; per-texture level bias in slope mode, every hull draw reading level 0 at 11.6 units) matches ours; shifting ours by 0.25 or 0.5 pixel in any direction only raises the hull-box error (zero shift is the minimum over 6 pairs), so there is no placement or filter law left. What remains is the silhouette's pixel rule at the edges (the black outline lands one pixel off) and PPSSPP's output dither (a 2x2 pattern in smooth gradients); both are the emulator's.
 - **2048, 11 new race pairs (2026-11-12, `gallery-2048b`; adoption into `data/reference/compare-page/2048-vita/` pending):** Metropia, Anulpha Pass, Moa Therma, Chenghou Project, Ubermall, Sebenco Climb, Sol 2 and the Fury pack's Talons Junction, Amphiseum, Modesto Heights, Tech De Ra, through the HD Campaign's first node with its track name rewritten in the guest's memory (`vita3k-mem.py rename-track`, `compare-page.md` "Eleven pairs through a renamed grid cell"). Open: the eight other base circuits (the Single Player events pick the circuit by a `TrackDefinition` instance id, not a cell string; rank-gated), the Zone and reversed circuits (cell records exist, same rename reaches them, ours' mode untested), Anulpha Pass's wide cyan floor glow and flat blue sky block in ours (not `alpha_emissive`), `scripts/vita-2048-pair.py`'s hull-offset ratio still wrong (`--skip-craft-offset`).
 - **2048 DLC pair `dlc-vineta-k` (2026-10-29, `2048-dlc-vineta-k`):** the "lighting is the gap" reading is stale (frame mean luminance 48.3 original, 45.1 ours) and the livery is not another skin (all four Feisar skins are blue and yellow). Fixed: the `PilotAssist` icon and `TOTAL` in hundredths; the 2048 profile now carries `pilot_assist = "on"`, so `just compare-rerender-ours --only 2048` redraws all three 2048 pairs with the icon. Open, in order of area: the white ring round the hull and the blue blob over the engine (no HUD widget; likely a 3D or runtime effect, unread), the red wall's sponsor decals (ours is plain red), the hard shadows on the right wall, the hull's shading (olive and teal in the original over the same paint), the rivals' craft. Rule: [compare-page.md](../../docs/tools/compare-page.md) "The DLC pair".
+9. **World clock and craft motion on 2048, Omega, Pure** (2026-11-18, `compare-clock`; census and recipes in `docs/tools/compare-page.md`,
+   "The world clock and random craft motion, per title"). HD (pairs and the sea pair script), Pulse PSP and PS2 read the clock; 2048,
+   Omega and Pure do not: the node that holds it is not located (no `MeshImporter` string, fuzzy match empty, Pure not in Ghidra, Omega
+   v1.07 not in Ghidra). Also open: 2048's chase-camera tripod shake (cannot be patched out), Omega's hull shake patch, HD's `HullShake_Apply`
+   callers, the sea frame's dump-versus-window camera skew, the ring panels' cyan strobe in ours.

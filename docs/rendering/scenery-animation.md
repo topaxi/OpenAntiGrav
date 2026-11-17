@@ -457,7 +457,10 @@ original frame was not re-taken: RPCS3 was held back by a running render benchma
 - Cause of the mismatch: the scenery clock is the world clock, which runs from world load and differs per capture
   (see "world_clock_offset_s" above and `--world-clock-offset`), so a pair that does not read it from RAM cannot
   agree on where a moving prop is. The water pair has no recorded offset.
-- Open: re-take the original sea frame with `scripts/rpcs3-hd-world-clock.py` read in the same pause, and render ours
+- **Closed 2026-11-18 (`compare-clock`, confidence 80):** the original sea frame was re-taken with the clock read in the same
+  pause (`scripts/hd-sea-place-dump.py`, `world.json`): at world clock 119.976 s it shows a liner at the left edge and the airship
+  under the ring, and ours at `--world-clock-offset 119.810 --ticks 10` draws both, where `--ticks 572` draws neither
+  (`docs/tools/compare-page.md`, "The world clock and random craft motion, per title"). It was open as: re-take the original sea frame with `scripts/rpcs3-hd-world-clock.py` read in the same pause, and render ours
   with `--world-clock-offset`; the yacht should then land where theirs is. Other circuits: not censused (the liners
   are Moa Therma's; Ubermall's `wohdmeshreflect` set is 73 nodes, not examined). Omega: not checked (its
   copy of Moa Therma is a `.rcsmodel` of the same nodes, `docs/rendering/water.md`; not run).

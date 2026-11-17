@@ -532,7 +532,7 @@ from the original's body (`--pose`, the field file, `--read-pose`); only post-bo
 | Pulse PS2 `pcsx2-pulse-pair.py` | `*(g_ingame + 0x40)` in the state file's EE RAM (`g_ingame` `0x27DDBC`), run on by the race clock to the grab | yes | yes (flag stored; rebuilt from state file if absent) | 75 (`anim-transform.md`) |
 | Pure PSP `psp-pure-pair.py` | **none** | no | no | no address located in Pure's `BOOT.BIN` |
 | HD `rpcs3-hd-pair.py` | `MeshImporter` nodes (vtable `0x00869fd0`) `+0xc0` with `+0x15c` stamp, most common value past the gantry windows, RAM in the same pause as the frame | yes | yes (flag stored) | 85 (`rpcs3_hd_field.scenery_clock`, 12 circuits) |
-| HD sea pair `hd-sea-place-dump.py` | none until this lane; now reads the same `scenery_clock` and the lap clock in the pause and writes `world.json` | no `pair.json` exists for it | n/a | see "Closed" below |
+| HD sea pair `hd-sea-place-dump.py` | none until this lane; now reads the same `scenery_clock` and the lap clock in the pause and writes `world.json` (`world_clock_s`, `lap_clock_s`, `world_clock_offset_s`) | by hand: `--world-clock-offset` = `world_clock_s` less `ticks / 60`; the sea pair still has no `pair.json` | n/a | 85, same read as `rpcs3-hd-pair.py`; see "Closed" below |
 | 2048 `vita-2048-pair.py` | **none** | no | no | HD's `MeshImporter` equivalent not yet located in the eboot |
 | Omega `shadps4-omega-pair.py` | **none** | no | no | running build is v1.07, not in Ghidra |
 | Weapon, camera and menu pair scripts (`psp-weapon-pair.py`, `psp-camera-pair.py`, `hd-weapon-pair.py`, `hd-missile-film-pair.py`, `rpcs3-hd-trail-hit-pair.py`) | none | no | no | crops of a craft or an effect; a moving prop elsewhere in the frame is not matched. Open, low priority |
@@ -544,6 +544,46 @@ from the original's body (`--pose`, the field file, `--read-pose`); only post-bo
 | 2048 | drawn-hull shake, HD's constant for constant; plus the chase camera's "internal tripod" shake (`0x811be926`, `invert = 1`) | yes | hull: yes, two `bl 0x811b5500` overwritten through `/proc/<pid>/mem` (`--walk`). **Tripod: no**, nopping it left the HUD down | hull: `--no-hull-shake`. Tripod: ours has none, so the camera differs by the original's shake | `vita-2048-eu-v104/hull-shake.md`, confidence 85 / 70 |
 | Omega | drawn-hull shake, HD's (`0x012f7200` in v1.00) | yes | **no patch**: the running v1.07 executable is not in Ghidra and `Apply` was not read | `--no-hull-shake` is passed, so ours is off and the original's is on | `ps4-omega-eu/hull-shake.md`, confidence 80 for `Update` |
 | Pulse PSP / PS2, Pure | none found. The random generators (libc `rand`, the particle RANROT) feed AI, pickups, HUD, particles, clouds, mines; none writes a craft's display matrix. The Zone-mode hits and weapon-hit shakes are events, not idle motion, and are carried by posing from the body | n/a | n/a | `hull_shake` is `None` in these titles' race data, so nothing to turn off | `psp-pulse-usa/prng.md` lines 22-23; absence of evidence, **confidence 65** (no instruction sweep of the display-matrix builder was done for Pure) |
+
+**Closed and open (2026-11-18, `compare-clock`).**
+
+- **Closed, HD sea pair.** `scripts/hd-sea-place-dump.py` now reads the scenery clock and the lap clock in the same pause as the dump and
+  the window grab. Two attached runs on one Moa Therma Time Trial restore: world clock 91.043 s / lap 8.645 s and 119.976 s / lap 37.578 s,
+  offsets **82.3983 and 82.3981 s** (a third pause, 88.743 / 6.345, gave 82.3983): the offset is stable to 0.0003 s, the clock itself is
+  not (it runs on through the wait), which is why a pair must read it. The 119.976 s frame is the discriminating one: it shows a liner
+  (yacht) at the left edge of the sea and the airship under the ring, and ours at `--world-clock-offset 119.810 --ticks 10` draws both,
+  the yacht 0.2 s of travel from the original's (it sits 30 px further right at 1920x1080), where ours at the old pair's `--ticks 572` (clock
+  9.5 s) draws neither. A sweep of the offset (0, 30, 60, 90, 100 to 125, 130, 140, 150 s) puts a yacht in the box at 60, 100 and 121 to 125 s and none at 0, 30, 90, 105 to 119, 130, 140 or 150 s (the box metric jumps
+  from 34 to 54 at 60 s and 41 to 45 at the others), so the prop is placed by the offset to within about a second, and the falsifier the lane set (the minimum landing elsewhere) did not
+  fire. **Region metric** (mean abs RGB difference, 1920x1080, yaw fitted below): yacht box `0,330,280,530` 34.5 before and 35.4 after; the metric
+  does not move because the box is mostly sea and the ring above it differs (next bullet): the picture is the evidence, read in the
+  `theirs.png` / `ours` pair. **Confidence 80** that the world clock is what places the yachts.
+- **The dump camera is a frame newer than the window frame.** The pushbuffer dump and the window grab of a moving (falling, placed) craft
+  differ by a frame or two: the camera decomposed from the dump (`ps3_pose.pick_camera` needs two dumps; here the one frame-unique
+  dual-register candidate after removing the first dump's, eye `196.926 41.743 -367.921`) renders about 12 degrees of yaw away from the window's frame (a
+  yaw sweep -17 to +15 degrees, fitted on the tower and pad structure: minimum at -12 to -13.5). So a sea pair is only registered after a yaw
+  fit; the craft should be held still (not falling) for a dump and a grab to agree. **Open:** a placement that rests, so no fit is needed.
+- **Open, ring panel strobe.** At the original's clock ours draws the ring's glass panels cyan where the original's are dark blue; at
+  other clocks ours is dark (offsets 0 to 150 give a dark ring, 119.81 a lit one). The panels' phase is not the world clock's
+  linear read, or they run on a faster flicker; not investigated.
+- **Open, 2048, Omega, Pure world clocks.** No `MeshImporter` equivalent is located: the 2048 and Omega executables carry no
+  `MeshImporter` string, and `find_similar_functions_fuzzy` of HD's `MeshImporter_AdvanceTime` (`0x002be9c0`) into the 2048 eboot at
+  threshold 0.5 returns nothing (PPC to Thumb-2). Pure's `BOOT.BIN` is not in the open Ghidra (`/pulse` and `/omega`, `/2048`, `/hdfury` are),
+  and the running Omega is v1.07, which is not in Ghidra. **Recipe, 2048:** find the animated scenery's texture-transform updater by the
+  texture scroll of a known animated surface (a breakpoint is not available on Vita3K; read `/proc/<pid>/mem` at guest address plus
+  `0x400000000`, the channel `vita-2048-pair.py` patches through) with two reads a second apart of floats that advance by 1.0 per second
+  inside the scene graph, then name the node type; check Omega against it (`checked, applies` if the same node layout holds). **Recipe,
+  Pure:** import `BOOT.BIN`, match Pulse's `Mesh_UpdateTextureTransforms` (`0x0890e160`) by its callers' string neighbourhood, then
+  `scripts/psp-world-anim-clock.py` with the new address. **Recipe, Omega:** shadPS4 exposes no readable guest memory on this
+  machine; the HD node layout is expected, not measured.
+- **Open, random craft motion.** HD is closed (hull shake). 2048: the chase camera's "internal tripod" shake stays on in the original
+  and ours draws none, a difference no patch can remove (nopping it kept the HUD down); the alternative is a flag on ours that draws the
+  same shake from the same law (`HullShake::HD` already ships), recorded as `ours.camera_tripod_shake`, and a pair would then match
+  in law, not frame for frame. Omega: the hull shake is on in the original (no patch located for v1.07). HD `Apply` with `r5 != 0`: callers
+  not enumerated (Ghidra holds no call xref to `0x000d39d0`); recipe: scan `.text` for `bl` encodings that resolve to `0x000d39d0` from the
+  extracted `EBOOT.elf`, which is not under `data/extracted`.
+- **The re-render keeps a recorded offset.** `compare-rerender-ours.py` now adds `--world-clock-offset` from `ours.world_clock_offset_s`
+  when a stored pair's flags lack it (any title).
 
 ## Pad seats: two agents' emulators at once (2026-11-16, `seat-pads`)
 
