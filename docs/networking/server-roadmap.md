@@ -588,8 +588,9 @@ If the path is direct:
   or game-traffic relay in front of the race ports. A relay costs latency and, behind it,
   the caps need the client's address passed through.
 
-**To verify** (one minute): resolve the host name the clients connect to and compare the
-addresses with the CDN's published ranges and the host's own address.
+**To verify at the next deployment** (nothing is deployed on 2026-11-17; one minute):
+resolve the host name the clients connect to and compare the addresses with the CDN's
+published ranges and the host's own address.
 
 ### Where to host: price first, then ease
 
