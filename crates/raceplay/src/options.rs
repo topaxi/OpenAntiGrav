@@ -1307,26 +1307,10 @@ pub struct Loaded {
     /// ramp, each where the title builds it and it decodes - see
     /// [`crate::rocket_smoke::RibbonTextures`].
     pub ribbon_textures: crate::rocket_smoke::RibbonTextures,
-    /// One `blob` shadow silhouette per grid slot, slot 0 the player's.
-    ///
-    /// The disc's own where the source ships one - Wipeout HD's nine
-    /// `ambient_shadow.gtf`, one per team - and a generated falloff where it
-    /// does not, which is every other title. Loaded whatever
-    /// `[render_profiles.<title>] shadows` says, so moving that row applies
-    /// live rather than at the next race; the tier costs nothing while it is
-    /// `off` because `Scene::render` never uploads a quad. See
-    /// [`crate::shadow`] and `oag_render::shadow`.
-    pub shadows: Vec<oag_render::shadow::Silhouette>,
-    /// [`Options::shadow_resolution`], carried to the scene's build.
-    #[cfg(feature = "view")]
-    pub shadow_resolution: oag_display::display::ShadowResolution,
-    /// One authored shadow hull per grid slot, for the `original` tier, where
-    /// the craft's own model carries one.
-    ///
-    /// `None` where it does not, and the load report says which - a craft with
-    /// no `Dynamic Shadow Occluder` casts no `original` shadow rather than
-    /// borrowing another team's. See [`crate::shadow::hulls`].
-    pub shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
+    /// Both shadow tiers' per-slot assets and the maps' resolution. Loaded whatever
+    /// `[render_profiles.<title>] shadows` says, so moving that row applies live. See
+    /// [`crate::shadow::Assets`].
+    pub shadows: crate::shadow::Assets,
     /// The Wipeout 2048 campaign event this load resolved, if
     /// [`load_event`](super::load_event) is what built it - `None` for every
     /// other title and for an ordinary `--race`/menu launch on 2048 itself.

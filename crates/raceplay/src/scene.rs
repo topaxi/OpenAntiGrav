@@ -593,9 +593,7 @@ impl Scene {
         omega_tonemap: Option<oag_post::omega_tonemap::Params>,
         wo_composite: Option<oag_post::wo_composite::Params>,
         zone_grade: Option<crate::zone_grade::ZoneGrade>,
-        shadows: Vec<oag_render::shadow::Silhouette>,
-        shadow_resolution: oag_display::display::ShadowResolution,
-        shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
+        shadows: crate::shadow::Assets,
         behind_glass: behind_glass::BehindGlassModels,
     ) -> Result<Self> {
         // **Opened here, not by the caller.** Every drawable below shares this
@@ -651,8 +649,12 @@ impl Scene {
         // inert, so the shadow row applies live without rebuilding a pipeline.
         // A caller that never casts pays one megabyte and a cleared pass.
         crate::stages::checkpoint()?;
-        let shadow_resolution =
-            oag_render::shadow::map::Resolution::scaled(shadow_resolution.scale());
+        let crate::shadow::Assets {
+            silhouettes: shadows,
+            hulls: shadow_hulls,
+            resolution,
+        } = shadows;
+        let shadow_resolution = oag_render::shadow::map::Resolution::scaled(resolution.scale());
         let shadow_map = oag_render::shadow::map::Map::new(device, shadow_resolution);
         let sun_occlusion = oag_render::shadow::occlusion::Maps::new(
             device,

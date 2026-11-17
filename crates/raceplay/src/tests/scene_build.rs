@@ -216,9 +216,7 @@ pub(super) fn scene_over_post(
         omega_tonemap,
         wo_composite,
         None,
-        Vec::new(),
         Default::default(),
-        Vec::new(),
         Default::default(),
     )
     .expect("the scene builds")
@@ -345,9 +343,7 @@ fn adverts_rebound(source: &str) -> Option<(usize, usize, usize)> {
         None,
         None,
         None,
-        Vec::new(),
         Default::default(),
-        Vec::new(),
         Default::default(),
     )
     .expect("the scene builds");

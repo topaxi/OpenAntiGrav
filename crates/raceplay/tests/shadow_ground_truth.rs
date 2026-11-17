@@ -127,7 +127,7 @@ fn the_projected_hull_lands_on_the_surface_under_the_craft() {
     let Some(loaded) = load_with_opponents() else {
         return;
     };
-    let hulls = loaded.shadow_hulls.clone();
+    let hulls = loaded.shadows.hulls.clone();
     let race = race::Race::start(loaded.setup);
     let placements = race.shadow_placements();
     let placement = &placements[0];
@@ -277,7 +277,7 @@ fn the_shadow_hull_is_the_shape_of_the_ship_it_belongs_to() {
     let Some(loaded) = load_with_opponents() else {
         return;
     };
-    let hull = loaded.shadow_hulls[0].as_ref().expect("a hull");
+    let hull = loaded.shadows.hulls[0].as_ref().expect("a hull");
     let model = &loaded.liveries[0].hull;
 
     // One grid, one scale, both shapes: the ship's triangles and the hull's
@@ -400,7 +400,7 @@ fn silhouettes(source: &std::path::Path, mode: oag_race::Mode) -> Silhouettes {
         .cloned()
         .collect();
     Silhouettes {
-        images: loaded.shadows,
+        images: loaded.shadows.silhouettes,
         report,
     }
 }
