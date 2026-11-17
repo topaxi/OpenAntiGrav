@@ -2,8 +2,10 @@
 
 How each original draws water, which circuits carry it, and what this engine
 draws of it today. Measured 2026-11-17 (lane `water-re`) off the disc data and
-the shipped shader programs; **no emulator frame was taken in this lane**, so
-nothing here is in the rubric's runtime band. Earlier readings this page builds
+the shipped shader programs; the HD planar reflection's target, camera and constants
+were read off live RPCS3 frames the same day (lane `water-hdcap`, "The planar
+reflection, read off live frames"), and are the only runtime-band numbers on
+this page. Earlier readings this page builds
 on: [rcsmaterial.md](../formats/rcsmaterial.md) ("Water family", "Vineta K
 against a draw capture"), [hd-track-tone.md](hd-track-tone.md) ("The reflection
 map is the sky"), [the 2048 pass page](../ghidra/functions/vita-2048-eu-v104/refraction-pass.md),
@@ -16,7 +18,7 @@ map is the sky"), [the 2048 pass page](../ghidra/functions/vita-2048-eu-v104/ref
 | Pulse PSP (disc) | textured meshes (`NewSeaTest`, `sea`, `water`, `NWaterfall*`) | authored texture-offset tracks where a material has one, not surveyed per surface | none | 85 |
 | Pulse, Vostok Reef (PS2 disc, PSP download) | the above plus a **caustic pass**: flagged batches redrawn with a ripple texture projected from above | 16 frames at 30 fps | none | 75 (PSP code), 90 (which data) |
 | Pure | textured meshes; Vineta K's `.vex` embeds 16 caustic frames | not read | none | 60 |
-| HD/Fury sea (`reflectplane_dc_seawater`) | flat colour, two wave-normal taps, sun diffuse and specular, **planar reflection** | taps scroll `u + 0.05 t` and `-u + 0.05 t` | `screenSpaceReflectionTex` through `reflectProject`, fed by chunks with render flag bit 3 | 85 (program), 88 (which chunks) |
+| HD/Fury sea (`reflectplane_dc_seawater`) | flat colour, two wave-normal taps, sun diffuse and specular, **planar reflection** | taps scroll `u + 0.05 t` and `-u + 0.05 t` | `screenSpaceReflectionTex` through `reflectProject`, fed by chunks with render flag bit 3: a 960 x 540 R5G6B5 target drawn under the main camera mirrored about y = -25 (Moa Therma, read live) | 85 (program), 88 (which chunks), 90 (target, camera, constants) |
 | HD Vineta K (`water_test_2`, `water_noref`) | vertex colour times light, three wave taps | three scales and rates per material | `paraboloidReflectionTex` (the sky) | 90 |
 | HD Amphiseum (`water`) | flat colour, two wave taps | as the sea, in the fragment program | `paraboloidReflectionTex` | 85 |
 | 2048 own circuits (`fc15`/`fc17_effects_vscroll_water`) | flat colour, **one** wave normal map, sun diffuse and specular | `u + 0.05 t` | none | 80 |
@@ -220,12 +222,79 @@ binary. Render flag bit 1 (`0x02`) is set on exactly the 30 Moa Therma chunks
 of `reflectplane_dc_seawater` and nowhere else on the disc; the sorter does not
 consult it. It probably marks the mirror surface (confidence 50, not named).
 
-**Not read:** the reflection camera (which plane it mirrors about, the target's
-size and clear), `distortion`'s value, and what the target holds on Chenghou,
-Modesto and Ubermall's reverse layout, which have the sea material and no
-bit-3 chunk beyond those counted. One RPCS3 frame on Moa Therma's sea answers
-all three ([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md),
-"Capturing one frame's draws").
+**Read off live frames, 2026-11-17 (`water-hdcap`; the section below).** The reflection
+camera, the target's size and clear, `distortion` and `reflectProject` are measured on
+Moa Therma; Chenghou's and Modesto's seas are not reached ("What is still unread").
+
+### The planar reflection, read off live frames (2026-11-17, `water-hdcap`)
+
+**Claim, and what would have falsified it.** The sea's `screenSpaceReflectionTex` is a
+second render target the frame draws before the main view, with the bit-3 scenery and the
+sky, under a camera that is the main one mirrored about a horizontal plane (a Householder
+reflection, determinant -1; the identity would have meant a screen-space grab); the sea
+program's `reflectProject` is the matrix that maps a world point to the main view's
+screen, so it samples the picture where the point itself appears; and no other material
+samples the target. Each was falsifiable on one frame, and none failed.
+
+**Method.** RPCS3 0.0.43, `Write Color Buffers` on, Resolution Scale 100, audio renderer
+`"Null"`, Time Trial, Moa Therma (`03_Track`), standard Harimau, one cold boot walked
+to the grid (`scripts/emu-hd-timetrial-state.sh <lane> 2 9 0 <name>`) and saved, then
+restored twice. In each restore the craft was placed over the sea with
+`scripts/hd-sea-place-dump.py` (`x y z` = `210 38 -380`, `150 38 -400` and `210 38
+-380`, facing `-z`, the camera then 38 above the water) and one frame's draws dumped with
+`HOOK_LIGHT=1 HOOK_NO_HEADS=1 HOOK_FP_LEN=0x900`
+([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md), "Capturing one frame's
+draws"); `scripts/hd-sea-reflect-read.py` prints every number below. A draw is named by
+`rsx_fp_match.py` against the circuit's `.rcsmaterial` files, so the sea is
+`reflectplane_dc_seawater#5`/`#8`. Two traps: the sea program is 79 to 86 instructions
+and the hook's default 0x600-byte cut hides it (`HOOK_FP_LEN=0x900`), and a restored
+state's command stream runs past the hook's default seed (`RING_DUMP=0x40000000:0x120000`,
+else "0 draws"). Three frames, two restores of one cold boot (so three poses and two
+memory layouts, not three cold boots).
+
+| Quantity | Value, every frame | Confidence |
+| --- | --- | ---: |
+| The target | one surface the frame draws into before the main view: colour at VRAM offset `0x02a20000` (the offset moved by no frame here), depth `0x02b40000` | 90 |
+| Size and format | **960 x 540**, `SET_SURFACE_FORMAT` `0x123` = R5G6B5 colour, Z16 depth, pitch `0x800`; clip, scissor and viewport are all `0x3c0 x 0x21c`, viewport scale `(480, 270)` | 90 |
+| Clear | `CLEAR_SURFACE` mask `0xf3` (colour, depth, stencil): colour `0xff000000` (opaque black), depth/stencil `0x0000ffff` | 90 |
+| Draw state | depth test on, `LEQUAL`, write on, blend off on the scenery; **cull face `0x404` (front) against the main view's `0x405` (back)**: the mirror reverses the winding. The six sky faces (the plain sky program) draw first, unculled | 90 |
+| What it holds | 6 sky faces and 17 to 58 scenery draws (`dc_diffuse`, `blimphull*`, `glass_reflect`, `dc_windows_b_opaque`, `diffuse_specular`, ...), the bit-3 set as far as the frame shows it; the sea, the track and the craft are not in it | 85 |
+| The camera | its view-projection, `c[260..263]` of the target's draws, is the main view's `c[256..259]` with **row y negated and row 3 plus `K` times main row y**, `K = -50.0000` (least-squares fit, residual 0.00004 over all four columns), on all three frames. That is `y' = K - y`: a mirror about **y = K / 2 = -25.0**. Rows x and z, so the projection, the field of view and the aspect, are the main view's (not widened, unlike the behind-glass target) | 90 |
+| `K` and the envsettings | Moa Therma's `track.envsettings` authors `Water plane height` = -50.0 (and `Water distortion` 40, `Refract distortion` 2); K equals it. Every circuit that ships a planar reflect authors -50, so this cannot tell "K is the setting" from "K is a constant"; Vineta K authors 100 and has no planar reflect | 70 for the link |
+| The sea sheet | the five chunks decoded from the dump (`s16` position times `c[466]` plus `c[467]`) are flat at **y = -26.0547**, 1.05 below the mirror plane | 90 |
+| `reflectProject` | the four rows of the **main** view-projection (the sea program's constants for `P.y`, `P.x`, `P.z` and the translation row equal `c[256..259]` of the same draw to 5 digits); the sea sampled at the point's own screen position `(0.5 + q.x / 2w, 0.5 - q.y / 2w)`, which reads the target's flipped-y picture correctly. Each sea draw also carries the mirror matrix in `c[260..263]` | 90 |
+| `distortion` | the sea program scales the normal's `x` and `z` by the constant `{0, 0, 40, 0}.zzzz`: **`distortion.z` = 40** on all 18 sea draws read, equal to the circuit's `Water distortion` (40 on all 11 envsettings read). The glass reads `(0, 0, -1, 1)` on Vineta K (`Refract distortion` -1), so `distortion` is `(0, 0, authored amount, 1)`, the amount chosen by the surface's kind | 90 (value), 80 (the setting it comes from) |
+| Only users | in the three frames **6, 5 and 7 draws sample the target and all are `reflectplane_dc_seawater`**; 61, 66 and 47 other main-view draws leave the target bound on unit 3 (a stale binding, the engine never rebinds it) and their programs, disassembled, never read unit 3. This is a census of the draws in one frame, by material, not of the circuit's chunks and not of render flags: the disc census (30 bit-1 chunks of this material, 257 bit-3 chunks) is the static side | 85 |
+| Main view in the same frames | 1300 x 1080 (`clip 0x0514 x 0x0438`), the scene-width throttle (`--pin-scene-width`, [emulator-recipes.md](../reverse-engineering/emulator-recipes.md)); the reflection target stayed 960 x 540 | 85 |
+
+What the engine should build from this (the thread's lane 4): a second pass before the
+main view that draws the bit-3 chunks and the sky into a 960 x 540 R5G6B5 + Z16 target
+cleared to opaque black / depth 1, with the main view-projection mirrored by `y' = K - y`
+(`K` = the authored `Water plane height`, -50, so the plane is at -25), front-face culling; the sea samples it at its own screen position through the
+main matrix, with its normal pushing the sample point by 40 world units along `x` and
+`z`. Reflection quality is the original's: at 960 x 540 against a 1300 x 1080 main view.
+
+**What is still unread, and the recipe.**
+
+- **Chenghou's and Modesto's seas (the claim's last part).** The sea program is the
+  same (`reflectplane_dc_seawater`) and reads unit 3, but no frame showed their sea: the
+  Chenghou grid frame (615 draws) and a craft placed at `0 20 0` (704 draws) hold no sea
+  draw. The sea chunks are gated by the track's visibility set (our build submits Chenghou's
+  3 sea chunks from a camera at 1200 above the origin with `--pvs false` and culls them with
+  the set on), and the original picks the set from the craft's track section, so a placement
+  off the track sees the nearest section's set. Recipe: scan track sections for one whose
+  set holds the sea (`oag-game --race --pose <x,y,z> --pvs true` with
+  `OAG_ONLY_MATERIAL=reflectplane_dc_seawater`, the log line `N draw(s) submitted`),
+  place the craft there with `scripts/hd-sea-place-dump.py`, then
+  `scripts/hd-sea-reflect-read.py <dump> <stem> <circuit materials dir>`: it prints which
+  surface the sea's unit 3 binds, or `no sea draw in the frame`. Saved states,
+  `data/saves/hd-fury/hd-timetrial-chenghou-harimau-std-start.SAVESTAT.zst` (Modesto:
+  `emu-hd-timetrial-state.sh <lane> 10 9 0 <name>`). Static fact meanwhile: Chenghou and
+  Modesto carry no bit-3 chunk, so their target would be only the sky, if the pass runs at all.
+- Whether bit 1 (`0x02`) marks the mirror: the frame census names draws by material, not by
+  chunk flag. Read the chunk's flag word from the dump's vertex stage with the draw's
+  chunk offset (not done).
+- Ubermall (13/7 chunks, a pool): not framed.
 
 `reflectplane_dc_seawateredging` (the shore strip) is a blended picture
 (`dc_waterdiffuse` or `and_waterfoam_blend`), an alpha gradient
@@ -347,10 +416,44 @@ own (the HUD clock, the sky traffic) plus a halo of 21,823 pixels outside a
 40-level skip mask, 96% of them one level and at most 11, which follows the sea's
 moving highlight (the bloom is the likely carrier; no switch isolates it). Vineta K's
 open sea from above was a black sheet under `off`; under `original` it is a rippled sea
-reflecting the sky with a sun glint. Ubermall's pool panels change by little. No RPCS3
-frame of a sea pose exists (the compare page's HD pairs are start-line frames and the
-October Moa Therma state no longer loads), so the look is not yet measured against the
-original.
+reflecting the sky with a sun glint. Ubermall's pool panels change by little. **Against the original, one sea pose (2026-11-17, `water-hdcap`).** One RPCS3 frame
+of Moa Therma's sea (craft placed at `210 38 -380`, the window at 1920 x 1080, taken while the
+game was paused; the dump's main view-projection decomposed by `ps3_pose.py` into eye
+`(209.615, 38.304, -367.677)`, forward `(0.0128, -0.1133, -0.9935)`, up `(0.0013, 0.9936,
+-0.1133)`, field of view 60.014 degrees, aspect 1.7778) and ours rendered at that camera with
+`oag-game --race --camera-pose=... --camera-fov 60.0144 --size 1920x1080 --ticks 572
+--no-hull-shake`, the HD render profile's `water` set to `off` and to `original` (the
+setting is per render profile, `[render_profiles."Wipeout HD (PS3)"]`, not under `[graphics]`).
+**Not made with `rpcs3-hd-pair.py`**: a placed craft is reset to the track within seconds
+(a craft placed at y 150 was back on the track after about 7 s), and the pair tool attaches
+and captures for longer than that; `scripts/hd-sea-place-dump.py` places, dumps and grabs the
+window in one attach instead. Frames (`data/scratch/`, never published): `pair1/theirs.png`,
+`ours-off.png`, `ours-original.png`, the stack `stack-theirs-off-original.png`. The camera
+registers well (the tower, its shadow ring and the horizon line up); the craft is only in
+theirs, because ours places it on the grid.
+
+Crops (fixed before the metric was read; mean over RGB and Rec. 709 luma, 0 to 255):
+
+| Crop | Original luma | `off` luma, MAE | `original` luma, MAE |
+| --- | ---: | ---: | ---: |
+| band `(620,500)-(1300,640)`, sea between the tower and the yacht | 140.4 | 138.7, 20.9 | 104.9, 36.0 |
+| foreground `(0,640)-(780,840)`, shadowed sea | 138.2 | 138.1, 24.6 | 103.5, 35.3 |
+| far strip `(1000,480)-(1900,520)`, sea at the horizon | 162.5 | 155.5, 22.2 | 124.7, 38.6 |
+
+Mean RGB in the band: original `(126.5, 144.5, 140.4)`, `off` `(139.2, 139.1, 133.1)`,
+`original` `(88.6, 109.6, 106.4)`. **What a player sees.** The original's sea is a pale
+teal, finely rippled, with the tower, its shadow ring and the yacht mirrored in it (soft,
+broken by the ripples); the horizon band is brighter than the near water. `off` is a grey,
+noisy sheet (the normal map painted as a picture), which happens to match the original's
+brightness and is the wrong colour. `original` (the taps, no planar term) has the right hue
+(teal, the authored `ColourConstant`) and fine ripples, and is a flat matte plane 35 luma
+levels **darker** than the original in every crop: it lacks the reflection term
+(`Reflectivity` 0.3 of the sky and scenery picture, plus the sun's glint in it), which is what
+brightens and lifts the original's sea. By MAE `off` is closer (21 to 25) than `original`
+(35 to 39), which says the unwired planar term, not the taps, is the biggest remaining
+difference, and that `original` reads worse than `off` until it is wired. One frame, one
+pose, one tick: a sea-crop number, not a verdict on the taps' phase (the scroll runs on the
+race clock and was matched to the HUD's 5.0 s only by tick count).
 
 ## Enhanced: this project's own water on Pulse and Pure
 
@@ -421,8 +524,9 @@ the world, so a glint shows only on the sun's side.
 
 ## Open
 
-1. One RPCS3 frame at Moa Therma's sea: the reflection target's size, camera
-   and contents, `distortion`, and whether bit 1 marks the mirror.
+1. Chenghou's and Modesto's seas, Ubermall's pool, and whether bit 1 marks the mirror
+   (the planar reflection's other values are read on Moa Therma, "The planar reflection,
+   read off live frames", with the recipe for these).
 2. Vostok Reef on PCSX2 or PPSSPP (with the download pack): a frame of the
    caustic pass, and batch state `0x202`'s blend.
 3. Pure's caustic frames on Vineta K.
