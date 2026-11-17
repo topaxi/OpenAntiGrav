@@ -242,6 +242,136 @@ table above with their own tick-zero rows. **ported**: Omega and 2048 use the sa
 `Launch` and events as the other three titles. The pose track is **ported** the same way: each title
 was recorded and measured on its own data (the tables above), and the respawn ran on each.
 
+## Compression, measured
+
+2026-11-17. Nothing in a `.oagr` is compressed today (the screenshot chunk is deflated). This
+section measures what a general compressor would save, per chunk, on all five titles at Venom and
+Phantom, and recommends. The dependency decides the answer, so it comes first.
+
+**Which encoder.** `ruzstd` 0.9.1 (the workspace's zstd, a pure-Rust crate used for `.zim`
+pictures) **encodes only `Uncompressed` and `Fastest`**; `Default` (zstd 3), `Better` (7) and `Best`
+(11) are marked `UNIMPLEMENTED` in its source. The zstd levels below (3, 9, 19) therefore need the
+C `zstd` crate, which the mod loader's `zip` already links, native-only
+(`cargo tree -i zstd -e normal`: `oag-mod`, `oag-source` and everything above them, including
+`oag-net`'s dependents). `oag-replay` is not native-only. `oag-replay` already depends on `flate2`
+(zlib-rs, every target; `shot.rs` deflates with it), so **deflate costs no new dependency**. The
+workspace's LZMA crate (`lzma-rs-perf-exp`, for Unity bundles) was not measured as an encoder; xz is
+shown only as the ceiling.
+
+**Method.** Recordings: for each title and class, (a) the cost sweep's race, the player's craft on
+Autopilot with idle input, 18,000 ticks, eight craft; (b) the pad-flown Single Race of
+`replay_timeline_ground_truth` (an AI driver emitting pad values, with an assist change and a
+given weapon, see `write_between_ticks`), for 18,000 ticks; (c) the same stopped 300 ticks after the
+finish (at least 6,700 ticks). Written by the scratch sweep
+`replay_timeline_ground_truth::dump_the_recordings_for_a_compressor`:
+
+```sh
+OAG_SWEEP=1 OAG_SWEEP_TITLE=<title> OAG_SWEEP_CLASS=<VENOM|PHANTOM> OAG_SWEEP_OUT=<dir> \
+  OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay --cargo-profile quick \
+  --run-ignored all --no-capture -E 'test(/dump_the_recordings/)'   # OAG_SWEEP_FINISH=1 for (c)
+```
+
+Each file was split by its chunk framing (tag, u32 length, payload); `INPT` is every seat's
+payloads joined. Compressors: the `zstd` (levels 1, 3, 9, 19), `gzip -9` and `xz -9` command-line
+tools, one process per chunk; percent saved is `100 * (1 - compressed / raw)`. `ruzstd`'s
+`Fastest` was run in-process over the same chunks. **Times** are best of 3 (CLI) or 5 (ruzstd)
+and the CLI ones include process start-up (about 2 ms), so they are upper bounds; the machine was
+loaded (load average 2 to 23 across the runs). Pulse Venom Autopilot `POSE` reproduces ADR-0087's
+general-compressor rows (gzip -9 10.4 percent against its 9, xz -9 28.7 against 28).
+
+**What the recordings are.** Neither carries a person's input. The pad race is an AI driver
+(`replay_ground_truth::Pad`; Pure's is the race's own driver) emitting stick and button values; a
+human's stick is probably noisier, so its `INPT` compresses worse than the bot's, not better. The
+Autopilot race has no human seat: its `INPT` is 8 bytes. (a) and (b) run 18,000 ticks whatever the
+finish, which on Pure Phantom (finish 4,187) and 2048 Phantom (5,309) is mostly input after the
+finish; (c) removes that. Finish ticks, Venom / Phantom: Pulse 7,889 / 7,774, Pure 8,563 / 4,187,
+HD 8,083 / 5,960, 2048 14,097 / 5,309, Omega 7,643 / 8,778.
+
+**Percent saved, `POSE`** (the Autopilot race, (a); the pad-flown race, (b), is within 2 points of it):
+
+| Title, class | raw bytes | zstd 3 | zstd 19 | gzip -9 | xz -9 | ruzstd Fastest |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pulse Venom | 418,288 | 8.5 | 16.5 | 10.4 | 28.7 | 3.4 |
+| Pulse Phantom | 525,745 | 9.4 | 17.0 | 11.3 | 28.6 | 4.4 |
+| Pure Venom | 356,070 | 10.3 | 16.9 | 12.5 | 29.0 | |
+| Pure Phantom | 454,367 | 11.1 | 19.4 | 12.9 | 32.6 | |
+| HD Venom | 420,285 | 8.3 | 15.7 | 10.7 | 27.0 | |
+| HD Phantom | 552,499 | 7.5 | 15.0 | 9.5 | 26.5 | |
+| 2048 Venom | 406,411 | 9.2 | 13.2 | 10.5 | 25.5 | |
+| 2048 Phantom | 537,886 | 9.3 | 13.2 | 10.5 | 23.5 | |
+| Omega Venom | 417,473 | 8.4 | 15.2 | 10.4 | 27.4 | |
+| Omega Phantom | 575,659 | 6.7 | 12.8 | 8.6 | 23.5 | |
+
+`ruzstd` Fastest over `POSE`: 1.6 to 7.4 percent on every file (mean 3.5). zstd 9 sits within 1
+point of zstd 3 on `POSE` and `INPT`.
+
+**Percent saved, `INPT`** (pad-flown race stopped after the finish, (c); one seat):
+
+| Title | Venom bytes | zstd 3 | zstd 19 | gzip -9 | xz -9 | Phantom bytes | zstd 3 | zstd 19 | gzip -9 | xz -9 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pulse | 55,063 | 26.5 | 42.9 | 32.2 | 43.9 | 83,913 | 47.0 | 54.4 | 48.1 | 56.8 |
+| Pure | 64,187 | 29.0 | 43.6 | 34.9 | 45.5 | 38,560 | 39.2 | 50.5 | 43.8 | 51.7 |
+| HD | 57,169 | 26.1 | 44.2 | 32.8 | 45.8 | 68,109 | 45.9 | 54.4 | 48.0 | 57.2 |
+| 2048 | 88,723 | 24.8 | 44.2 | 32.1 | 43.8 | 44,233 | 33.9 | 48.1 | 38.6 | 48.4 |
+| Omega | 51,131 | 23.3 | 42.2 | 30.7 | 43.6 | 86,939 | 47.1 | 55.1 | 48.1 | 57.2 |
+
+That is 6.2 to 7.2 bytes a tick at Venom (ADR-0055: 6.3 to 6.9), and the compressor finds
+the repeats of a held stick. `ruzstd` Fastest: 4 to 11 percent at Venom, 17 to 35 at Phantom.
+
+**Percent saved, the whole file** (pad-flown race, finish + 300 ticks, (c); the Autopilot race
+(a) in brackets, whose `INPT` is empty):
+
+| Title, class | raw bytes | zstd 3 | zstd 19 | gzip -9 | xz -9 | ruzstd Fastest |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pulse Venom | 311,016 | 9.6 (7.3) | 17.4 (15.0) | 12.7 (9.7) | 29.9 (28.6) | 3.3 |
+| Pulse Phantom | 382,073 | 14.7 (8.8) | 20.8 (16.1) | 16.4 (10.7) | 29.8 (28.2) | 9.1 |
+| Pure Venom | 310,256 | 11.4 (8.7) | 18.1 (15.2) | 14.3 (11.3) | 31.2 (28.0) | 4.2 |
+| Pure Phantom | 252,586 | 12.4 (10.2) | 19.0 (18.3) | 15.2 (12.2) | 29.9 (31.9) | 6.3 |
+| HD Venom | 320,913 | 9.4 (7.3) | 17.4 (14.3) | 13.0 (9.9) | 27.3 (27.0) | 3.3 |
+| HD Phantom | 323,649 | 13.7 (5.9) | 18.8 (14.2) | 15.6 (9.0) | 28.7 (26.3) | 8.3 |
+| 2048 Venom | 536,615 | 10.7 (7.9) | 17.2 (11.3) | 12.8 (9.2) | 27.9 (26.2) | 2.3 |
+| 2048 Phantom | 310,687 | 10.7 (8.4) | 15.1 (12.1) | 12.9 (9.9) | 21.9 (23.5) | 4.2 |
+| Omega Venom | 295,543 | 9.5 (7.4) | 17.4 (13.7) | 12.6 (9.6) | 30.2 (27.2) | 2.8 |
+| Omega Phantom | 423,733 | 14.5 (6.0) | 19.8 (12.2) | 16.0 (8.3) | 28.3 (22.8) | 8.4 |
+
+**The other chunks.** `HASH` (2,410 bytes at 18,000 ticks, one 8-byte hash a second) does not
+compress: zstd grows it by 0.5 percent, gzip by 1, xz by 2.9. `EVNT` (15 bytes in these runs) and
+`HEAD` (about 570 bytes of TOML, 33 to 37 percent with zstd or gzip, 22 with xz) are too small
+to matter; a compressor grows an `EVNT` of that size by 87 percent or more.
+
+**Speed**, the whole file (c), 10 files, median / worst, milliseconds, encode then decode: zstd 1
+2.2 / 2.4 then 1.3 / 1.5; zstd 3 2.3 / 3.3 then 1.3 / 1.6; zstd 9 5.4 / 6.7 then 1.3 / 1.6; zstd 19
+51 / 74 then 1.6 / 2.1; gzip -9 18 / 60 then 1.7 / 6.2; xz -9 82 / 126 then 6.9 / 12.5. `ruzstd`
+Fastest: encode 5 to 9 ms, decode 0.2 to 0.6 ms in-process. Even xz at the worst is
+a one-off at the end of a race (the chunk's own encoding is 1 to 5 ms, "Cost at the end of a
+race"), so speed does not decide anything; the saved bytes and the dependency do.
+
+**Recommendation.** The keep-or-drop line used here, 10 percent of the file and a dependency that
+builds on every target the replay crate does, is **chosen, not measured**.
+
+1. **Do not wrap the file in `ruzstd`.** Its encoder reaches 2 to 9 percent of the whole file, a
+   third to two thirds of what the same format saves at
+   level 3. There is no pure-Rust encoder at any useful level.
+2. **Do not compress `HASH`, `EVNT` or `HEAD`.** They grow or are under 600 bytes.
+3. **`POSE` is worth little by itself**: 7 to 11 percent at zstd 3, 13 to 19 at zstd 19, 9 to 13
+   with deflate -9. The track is already delta-coded and refined (ADR-0087 decision 4); only xz
+   (21 to 33 percent) finds structure in it, and no encoder for it is wired.
+4. **`INPT` is the chunk that earns it**: 23 to 29 percent at Venom and 34 to 47 at Phantom with zstd
+   3, deflate -9 31 to 35 and 38 to 48. A human's stick would compress less (above).
+5. **If anything is wired, deflate -9 over the whole payload after `HEAD`** (`flate2` is already
+   an `oag-replay` dependency, works on every target, and saves 12.6 to 16.4 percent of the whole
+   file on a finish-length race, 8 to 12 percent on an Autopilot one). Its cost is the
+   format, not measured: the container changes, so a new `FORMAT_VERSION` or a new chunk (a design
+   note, not a finding).
+6. **zstd 19 through the C crate** saves 15 to 21 percent (2 to 5 points more than deflate) and
+   is native-only like `oag-mod`. It is the option to revisit if the materialized replay (this
+   thread) roughly doubles the stored size and a native-only container is acceptable. The
+   dependency choice is the maintainer's.
+
+A five-minute race is 250 to 540 KB uncompressed, so the best of these saves 30 to 95 KB a file.
+Whether that justifies a format bump is the maintainer's call; the measurement does not make the
+case on its own.
+
 ## Open
 
 Recording every race and the `auto/` ring, the `Timeline`, the REPLAYS page and the viewer are built
