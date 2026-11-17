@@ -123,11 +123,12 @@ pub(super) fn track_model(
         // `oag_mesh::mesh::rcs::psp2`.
         Some(geometry) if mesh::rcs::psp2::is_psp2(geometry) => {
             let animation = psp2_animation(archives, track, model_name, report);
-            match mesh::rcs::psp2::build(
+            match mesh::rcs::psp2::build_circuit(
                 track,
                 geometry,
                 animation.as_ref(),
                 &mut crate::stages::reader(archives),
+                water,
             ) {
                 Ok((mut model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));

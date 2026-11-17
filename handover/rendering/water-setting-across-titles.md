@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-17
-summary: "HD taps, setting, enhanced and the planar-reflection read landed; next wire the planar pass, Chenghou/Modesto seas, 2048 and Omega laws"
+summary: "HD taps, setting, enhanced, 2048 fc15 and the planar read landed; next planar pass, HD sea brightness, fc17 alpha, Omega law"
 categories: [rendering, frontend]
 size: XL (60)
 difficulty: medium (55)
@@ -13,7 +13,7 @@ difficulty: medium (55)
 2026-11-17, lane `water-re` (measure). The recovered laws, the census and the
 confidence scores are in [water.md](../../docs/rendering/water.md) and
 [caustic-pass.md](../../docs/ghidra/functions/psp-pulse-usa/caustic-pass.md).
-This thread is the plan. Steps 1 (HD's taps, without the planar term), 2 (the setting), 10 (own-design `enhanced` on Pulse and Pure, with the row hidden where nothing changes) and Pulse PS2's caustic pass have landed.
+This thread is the plan. Steps 1 (HD's taps, without the planar term), 2 (the setting), 5 in part (2048's `fc15` sea, below), 10 (own-design `enhanced` on Pulse and Pure, with the row hidden where nothing changes) and Pulse PS2's caustic pass have landed.
 
 ## The maintainer's request
 
@@ -146,8 +146,11 @@ map.**
 - The planar reflection is read on HD Moa Therma (water.md, "The planar reflection, read off
   live frames"); unread: Chenghou's and Modesto's seas (recipe there), bit 1 as the mirror, and
   Omega's and 2048's copies of the same passes.
-- Omega's `Reflectivity*` combine and `Speed` law are unread; 2048's `fc17`
-  edge program is unread.
+- Omega's `Reflectivity*` combine and `Speed` law are unread. 2048's `fc17` edge
+  program is read except its alpha chain (which vertex outputs `pa0.w` and `pa4.w` of
+  the lit fragment program carry; water.md, "2048 (Vita)"); Altima's lavender sheets and
+  Park's sea stay the normal map drawn as a picture until it is. No Vita3K frame of
+  Altima's sea was taken.
 - Pure's caustic frames on Vineta K are unread; the caustic bit is unread on
   Pure's version-4 batches.
 - Pulse's caustic pass is read on the PSP code only (PS2 executable checked, ported; a PCSX2 frame open) and reached only by PS2
@@ -229,10 +232,12 @@ Ranked. Hours are for one member on an idle machine.
    equals the flagged set per circuit (HD 257 and 73; Omega 268, 73, 30, 38,
    45, 24; 2048 353 and 52), no target on a circuit with none, frame cost
    quoted at 800p, 1080p and 4K.
-5. **2048's own water** (`oag-wire`, opus, 5 h). `fc15`/`fc17` one-tap law;
-   read the `fc17` edge program first (`scripts/vita-usse.py disasm`).
-   Acceptance: per-circuit counts pinned in `omega_transparency_ground_truth`'s
-   walk, a Vita3K frame pair on Altima at two times.
+5. **2048's own water, `fc15` landed** (`water-2048`: `mesh::rcs::psp2::water`,
+   kind `VITA_SEA_KIND`, `build_circuit(.., law)`, `oag_2048::TITLE.water.original_differs`,
+   counts pinned in `omega_transparency_ground_truth`'s walk). Left: `fc17` (the colour and
+   specular are read, the alpha chain is not: the lavender sheets and Park's sea still draw the
+   normal map as a picture), a Vita3K frame pair on Altima at two times. `is_drawn(Vita2048)` stays
+   false on purpose: it is the borrowed `2048` choice on other titles, which nothing draws yet.
 6. **Omega's own water** (`oag-re` then `oag-wire`, opus, 8 h). A GCN
    instruction read of `reflectplane_mid` (`Reflectivity*`, `Speed`), then
    wire it on Omega's 2048 circuits and as the `Omega` choice. Checked against

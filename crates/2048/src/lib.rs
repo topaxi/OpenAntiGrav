@@ -189,7 +189,12 @@ pub const TITLE: &Title = &Title {
     // The proximity and environment shadows are not built (`docs/rendering/shadows.md`).
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
-    water: oag_title::water::Water::NONE,
+    water: oag_title::water::Water {
+        // `fc15_effects_vscroll_water` draws its scrolled normal map and sun highlight under
+        // `original` (`oag_mesh::mesh::rcs::psp2::water`); under `off` it is the flat colour.
+        original_differs: true,
+        enhanced: &[],
+    },
     // Ships the 69 files and reads none (`docs/gameplay/rumble.md`).
     rumble: oag_title::rumble::Rumble::Absent,
     // Inherited by lineage, but the disc authors the timeouts and the circuit: `DemoConfig.xml`,
@@ -654,6 +659,14 @@ mod tests {
         let fire = TITLE.weapons.opponent_fire;
         assert_eq!(fire.origin, oag_title::Origin::Measured);
         assert_eq!(fire.value, oag_title::weapons::OpponentFire::OMEGA);
+    }
+
+    /// Its own sea (`fc15_effects_vscroll_water`) draws a scrolled normal map under `original`,
+    /// so the WATER row is shown; it offers no `enhanced`.
+    #[test]
+    fn the_2048s_own_water_differs_from_off() {
+        assert!(TITLE.water.original_differs);
+        assert!(!TITLE.water.offers_enhanced());
     }
 
     #[test]

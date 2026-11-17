@@ -31,6 +31,7 @@
 //! those separately instead of leaving a silent difference.
 
 use anyhow::Result;
+use oag_display::display::Water;
 
 use oag_core::math::{Mat4, Vec3};
 use oag_rcs::rcsmodel::psp2;
@@ -63,6 +64,7 @@ mod tarmac;
 mod transparency;
 mod twin_blend;
 mod uv_keys;
+pub mod water;
 
 pub use chevron::PLASMA_COMBINE;
 pub use hull_colour::Census as HullColourCensus;
@@ -137,12 +139,30 @@ pub fn build(
     animation: Option<&Animation>,
     textures: Textures<'_>,
 ) -> Result<(Model, Report)> {
+    build_circuit(label, model_blob, animation, textures, Water::Off)
+}
+
+/// [`build`] for a race's circuit, under the player's water setting. 2048's own seas
+/// (`psp2::water`) draw their scrolled normal map under `original` and stay the flat colour
+/// under any other value.
+///
+/// # Errors
+///
+/// Propagates [`psp2::parse`].
+pub fn build_circuit(
+    label: &str,
+    model_blob: &[u8],
+    animation: Option<&Animation>,
+    textures: Textures<'_>,
+    water: Water,
+) -> Result<(Model, Report)> {
     build_planned(
         label,
         model_blob,
         &|scene| placement::plan(scene, animation),
         None,
         textures,
+        water,
     )
 }
 
@@ -165,6 +185,7 @@ pub fn build_with_vex(
         &|scene| placement::plan_from_vex(scene, vex_blob),
         None,
         textures,
+        Water::Off,
     )
 }
 
@@ -190,6 +211,7 @@ pub fn build_billboard(
         &|scene| placement::plan_from_vex(scene, vex_blob),
         Some(vex_blob),
         textures,
+        Water::Off,
     )
 }
 
@@ -214,6 +236,7 @@ fn build_planned(
     planner: &dyn Fn(&psp2::nodes::Scene) -> placement::Plan,
     billboard_vex: Option<&[u8]>,
     textures: Textures<'_>,
+    water: Water,
 ) -> Result<(Model, Report)> {
     let decoded = psp2::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
@@ -273,7 +296,17 @@ fn build_planned(
     // `mt_tunnelrefraction` and `cl_tunnelrefraction` read the refraction target.
     let glass = refraction::plan(&decoded.materials, &mut glow.emissive, &mut report);
     // A PS4 submesh with a tangent reads a normal map, bound third.
-    let normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
+    let mut normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
+    // 2048's own seas scroll a normal map, bound third as the PS4's are.
+    let sea = water::plan(
+        &decoded,
+        ps4,
+        water == Water::Original,
+        &mut glow,
+        (&twin, &mut normals),
+        &mut *textures,
+        &mut report,
+    );
     // Omega's hull programs multiply `VertexColour1` into the light (`psp2::hull_colour`).
     let hull_colour = hull_colour::plan(&decoded, ps4, &mut *textures, &mut report.hull_colour);
     // Omega's `tarmac_markings_*` roads lay a dirt splat and a decal atlas over the diffuse.
@@ -566,7 +599,8 @@ fn build_planned(
                     | tarmac.role(submesh.material)
                     | crowd.role(submesh.material)
                     | chevron.role(submesh.material)
-                    | glass.role(submesh.material),
+                    | glass.role(submesh.material)
+                    | sea.role(submesh.material),
                 xform: place.xform,
                 sun_mask,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
