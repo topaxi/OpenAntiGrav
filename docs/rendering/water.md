@@ -481,6 +481,45 @@ difference, and that `original` reads worse than `off` until it is wired. One fr
 pose, one tick: a sea-crop number, not a verdict on the taps' phase (the scroll runs on the
 race clock and was matched to the HUD's 5.0 s only by tick count).
 
+**The sea's stand-in for the planar term (2026-11-17, `water-hdsea`; chosen, not measured, until
+the planar pass is drawn).** Diagnosis on the pair above: the per-channel gap between `original`
+and the original's sea is near constant and neutral in all three crops (band `+37.9 / +34.9 /
++34.0`, foreground `+35.8 / +34.5 / +34.5`, horizon strip `+30.5 / +27.7 / +26.8`, RGB), and
+equal in the shadowed foreground as in the lit band, so a term is missing, none is wrong. The
+sea's light is right: the lightmapped block's diffuse is `sat(N.L) * sun * lightmap.a` plus
+the bake (block `@0x3560`, `@0x2a`..`@0x50`), which is what ours draws, masked by the bake's
+alpha as the original does. What was wrong is the *shadow depth*: with no reflection a shadowed
+sea was only the bake (foreground 5th percentile luma 37.5 against the original's 107.1),
+because the original's reflection term is added unmasked and unshadowed.
+
+The stand-in is `Reflectivity * encode(sky(reflect(-V, N)))`, the sky paraboloid
+(`mesh::sky_paraboloid`) at the mapped normal, unmasked, in `shade.wesl`'s tapped-water block;
+`Reflectivity` (Moa Therma 0.3, Ubermall 0.36) is now the sea entry's header `offset`
+(`mesh::rcs::water::entries`; before it was 0). **It is encoded, not read linear, on the sea
+alone:** the sea's `R` is a framebuffer the sky and scenery programs wrote, display-encoded
+values, while the pool and the glass read the probe map's own linear texels. Added linear
+(first try) it recovered about 20 of the ~35 missing levels; encoded it recovers the rest.
+The target itself was not dumped (the frames hold state and command streams, not pixels), so the
+weight is the authored one and the sky is the only stand-in for the mirrored scenery (the tower,
+the yacht and the ring's reflection are not in it).
+
+| Crop | Original | `off` luma, MAE | `original` before | `original` now |
+| --- | ---: | ---: | ---: | ---: |
+| band | 140.4 | 138.7, 18.9 | 104.9, 35.9 | 135.4, 9.0 |
+| foreground | 138.2 | 138.1, 22.4 | 103.5, 35.1 | 130.6, 11.6 |
+| near-horizon strip | 145.2 | 153.0, 8.9 | 116.9, 28.2 | 143.6, 3.6 |
+
+Shadow: the foreground's 5th / 50th percentile luma is 93.4 / 137.5 now against the original's
+107.1 / 142.7 (before: 37.5 / 114.1). The ring's shadow is still a little darker than the
+original's; the rest of the difference is the planar term's own picture. `off` is
+pixel-identical to the build before; Vineta K (`water_noref`, kind 4: a top-down pose with
+about half the frame sea) and Amphiseum (the pool, kind 2: a grid frame) are pixel-identical
+before and after, since only the sea's kind reads the new lane and the encoding. Pinned by
+`mesh::rcs::water::tests::a_tap_entry_is_scale_then_scroll` (the header's lane) and
+`hd_water_ground_truth::the_sea_entry_carries_its_materials_reflectivity` (Moa Therma 0.3,
+Ubermall 0.36 off the disc). The planar lane replaces this stand-in: delete the sea's
+`encode(sky)` branch there.
+
 ## Enhanced: this project's own water on Pulse and Pure
 
 2026-11-17, lane `water-enhanced`. **Chosen, not measured, everywhere but the shape of the

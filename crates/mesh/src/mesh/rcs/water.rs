@@ -23,8 +23,9 @@
 //! Under a law that draws the taps ([`Reading::Taps`]: HD's `original`, and
 //! `hd`), every family gets its program's scrolled normal taps ([`Tap`]) through a
 //! [`PROGRAM_WATER`] entry, the normal map bound third, and the chunk's own
-//! tangent frame; the sea draws `light * ColourConstant + specular` without the
-//! planar reflection, the other three add the sky paraboloid. Under `off` every
+//! tangent frame; the sea draws `light * ColourConstant + specular` plus the sky paraboloid
+//! at `Reflectivity` in place of the planar reflection (a stand-in), the other three add the
+//! sky paraboloid. Under `off` every
 //! family keeps the reading it had before the taps were drawn.
 
 use oag_display::display::Water;
@@ -364,7 +365,7 @@ fn entries(
             let colour = rgb(parameter(material, COLOUR_CONSTANT)?);
             let (offset, scale, specular) = match family {
                 Family::Sea => (
-                    0.0,
+                    parameter(material, REFLECTIVITY).map_or(0.0, |v| v[0]),
                     parameter(material, SPECULAR_POWER)?[0],
                     rgb(parameter(material, SPECULAR_COLOUR)?),
                 ),
@@ -733,6 +734,7 @@ mod tests {
                 param(COLOUR_CONSTANT, [0.08, 0.12, 0.13, 0.0]),
                 param(SPECULAR_COLOUR, [0.5, 0.5, 0.3, 0.0]),
                 param(SPECULAR_POWER, [75.0, 0.0, 0.0, 0.0]),
+                param(REFLECTIVITY, [0.3, 0.0, 0.0, 0.0]),
             ],
             curve: None,
         };
@@ -740,6 +742,7 @@ mod tests {
         assert_eq!(block.len(), 3);
         assert_eq!(block[0].program, [PROGRAM_WATER, 1.0]);
         assert_eq!((block[0].tint, block[0].scale), ([0.08, 0.12, 0.13], 75.0));
+        assert_eq!(block[0].offset, 0.3, "the sea weights its reflection by Reflectivity");
         assert_eq!((block[1].program, block[2].program[0]), ([0.5, 0.5], 0.3));
         assert_eq!(
             (block[2].tint, block[2].offset, block[2].scale),

@@ -1278,15 +1278,22 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // the pool's `Reflectivity * probeTint(sky)`, `water_test_2`'s `vertex colour *
         // probeTint(sky)`, and `water_noref`'s `probeTint(sky) * a` (lightmapped block `@0x3870`,
         // `@0x5c`) or `* (0.2 a + 0.4)` (block `@0x24b0`, the entry's `offset` 1), `a` the alpha
-        // of its second map (fourth binding) at `uv` plus the third tap. The sea's reflection
-        // is the planar target, not drawn.
-        if water > 1.5 && water < 4.5 {
+        // of its second map (fourth binding) at `uv` plus the third tap.
+        //
+        // **The sea's reflection is the planar target (`Reflectivity * R`), which is not drawn**
+        // (`docs/rendering/water.md`, "The planar reflection, read off live frames"). Until it
+        // is, the sea carries `Reflectivity * sky` at the mapped normal in its place, unmasked
+        // and unshadowed as the planar term is. Chosen, not measured: the sky stands in for the
+        // mirrored sky and scenery. The target holds what the sky and scenery programs wrote,
+        // display-encoded values, so the sky is encoded here as `enhanced` water does, where
+        // the pool and the glass read the probe map's own linear texels.
+        if water > 0.5 && water < 4.5 {
             let r = reflect(-to_eye, n_lit);
             let sky = probe_tint(textureSampleLevel(sky_probe_tex, shadow_sampler, env_probe_uv(r), 0.0).rgb);
             let gate = material_sample(MATERIAL_WAVE_MAP, in.texcoord + water_tap_uv(water_entry, water, 2u, in.texcoord)).a;
             let glint_weight = select(gate, 0.2 * gate + 0.4, row_tint.w > 0.5);
             let weight = select(select(in.colour.rgb, vec3<f32>(glint_weight), water > 3.5), vec3<f32>(row_tint.w), water < 2.5);
-            sky_reflection = sky * weight;
+            sky_reflection = select(sky, encode(sky), water < 1.5) * weight;
         }
 
         // **The panel-map road's sun lobe and sky sheen** (mode 15, `mesh::rcs::psp2::panel_map`),
