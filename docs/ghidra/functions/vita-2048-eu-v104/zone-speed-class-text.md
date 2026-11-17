@@ -72,11 +72,31 @@ frame), 35 `ZEN`, 75 `SUPERSONIC`, each resolved by 2048's own plugin and none a
 `crates/raceplay/tests/vita_2048_hud_event_ground_truth.rs::the_hd_campaigns_zone_reads_its_hd_layout` (disc) and
 `crates/hud/src/zone_tests.rs::the_2048_zone_hud_names_the_class_off_the_zone_on_hds_thresholds`.
 
-Not wired: the **next class** row (`NextSpeedClass`, `hud+0x564`/`+0x568`): the walker places it by
-`record[i-1].threshold - counter`; `HudArt`'s next-class draw is keyed on the grade's stage (`Readout::zone_next_in`),
-which 2048 does not carry for this table. Left open.
+## The score, and the next-class row (read 2026-11-17, `hud-2048`)
 
-**Omega: checked, applies, not wired.** Omega's eboot carries the same fourteen thresholds at `0x0197b8a0` (sixteen-byte
-records, 8-byte pointers; `MSC_SVENOM` at `0x018731e0`), read by `FUN_0126b030` and `FUN_012992b0`. `oag_omega::hud::ART`
-keeps `zone_speed_classes: None` and the change is left to an Omega lane (its racing is incomplete and this lane keeps
-other titles' HUD frames unchanged).
+**The score value is centred at runtime (confidence 80).** In the same function the `"%d"` of `*(*(hud + 0x3c) + 0x2c)`
+goes into the widget at `hud+0x264` (`Score`), after which: the width of a string of as many `3` characters as the value
+has digits is measured (`FUN_8128fdea`; a value of 0 or less measures one character), and while neither `hud+0xa8` nor
+`hud+0xa9` is set the widget's x becomes `getter(hud+0x268)` (vtable `+0x60`, `ScoreTxt`'s x, 480) minus half that width.
+`Zone_HUD_HD.xml` authors `Score` `align="left"` at `x="0"` in `ScoreFrame` (`OffsetX="480"`), under `ScoreTxt` `align="centre"`,
+so the left anchor is a placeholder and the value hangs centred under `SCORE`. Ours: `oag_hud::dialect_2048::text_align`
+draws `Score` centred on a title with the uv-rewrite table. **Chosen, not measured:** we centre on the value's own width, which
+equals the original's `3`-string only while the font's digits share a width. Test:
+`crates/hud/src/state_2048_tests.rs::the_2048_zone_score_value_is_centred_under_its_caption`.
+
+**The next-class row is authored invisible in the HD Zone layout (confidence 75).** `Zone_HUD_HD.xml` puts
+`ZonePlus1`-`ZonePlus10`, `NextSpeedClassBG` and `NextSpeedClass` in a block commented "stuff needed for the old hud code to
+pick up", each with `color="0"` (alpha 0) and no position, so at `(0, 0)`. `FUN_811538c2` positions the pair beside
+`ZonePlus[record[i-1].threshold - counter]` (`+32.0`, `-2.0`; the text a further `+20.0` right) and sets their visible bit, but
+writes no colour; `search_instructions` for `ldr.w ... #0x564]`/`#0x568]` finds this function the only HUD reader of the two
+widgets. With the rows themselves at alpha 0 and nothing writing a colour, the row is placed and not seen. That agrees with
+`68-zone-5.png`, which the data-axis notes describe as `FLASH` / `ZONE` / `5` only. **Not wired, on purpose**: drawing it
+would be inventing a colour the layout nulls. Headless Vineta K Zone at zone 5, before and after: `FLASH`, `ZONE`, `5`, no ladder.
+
+**Omega: checked, differs.** Omega's `Data/xml/zone_hud.xml` (the file its `SPZoneRaceManager` loads) is HD's layout, not 2048's
+`_HD` one: `NextSpeedClassBG` (385x35 art) and `NextSpeedClass` (`"next speed class"`) are authored visible, `ZonePlus1`-`3`
+sit on an arc at their own x and y (`25,76`, `0,135`, `-15,198`), `SpeedClass` is authored at `(130, 35)`, `Score` is a left
+`Score` with no `ScoreTxt` caption widget. So Omega does draw the next-class widget, but placed by its own walker
+(`FUN_0126b030`, unread for the row) on that arc, not by 2048's `+32/-2` rule, and `zone_speed_classes` is still `None`. Left open
+for an Omega lane: wire the shared fourteen-record table first, then read where `FUN_0126b030` puts the row.
+

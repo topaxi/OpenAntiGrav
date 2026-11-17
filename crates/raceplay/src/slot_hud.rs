@@ -44,6 +44,9 @@ pub(super) struct SlotHud {
     pub(super) thrust_chase_percent: f32,
     /// 2048's `hud+0x230`: the held weapon the pickup icon last showed, `None` for nothing.
     pub(super) pickup_held_prev: Option<oag_tables::weapons::Weapon>,
+    /// The weapon the pickup icon last showed, kept after release so the icon's collapse can
+    /// draw it ([`oag_hud::Readout::pickup_releasing`]).
+    pub(super) pickup_last: Option<oag_tables::weapons::Weapon>,
     /// 2048's `hud+0x228`: seconds of the grant announcement left
     /// ([`oag_hud::Readout::pickup_announcing`]).
     pub(super) pickup_announce_left: f32,
@@ -197,6 +200,7 @@ impl SlotHud {
             0.0
         };
         if held.is_some() {
+            self.pickup_last = held;
             self.pickup_pop[0] = (self.pickup_pop[0] - dt * POP_WIDE_PER_SECOND).max(0.0);
             self.pickup_pop[1] = (self.pickup_pop[1] + dt * POP_HIGH_RISE_PER_SECOND).min(1.0);
         } else if self.pickup_pop[1] > 0.0 {

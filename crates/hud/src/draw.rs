@@ -1067,14 +1067,19 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
     // rather than allow-listed, because *which* icon is live changes with what
     // the craft is holding - see `pickup_sprites`.
     let look = super::pickup::look(cx.art, readout);
-    if let Some(weapon) = look.map(|look| look.weapon).or(readout.pickup) {
+    let releasing = super::dialect_2048::releasing_icon(cx.art, readout);
+    if let Some(weapon) = look
+        .map(|look| look.weapon)
+        .or(readout.pickup)
+        .or(releasing)
+    {
         let mut sprites = pickup_sprites(
             cx.layout,
             weapon,
             &readout.ext,
             cx.art,
             readout.pickup_announcing,
-            readout.pickup_fly,
+            releasing.map_or(readout.pickup_fly, |_| Some(f32::MAX)),
             look,
         );
         if cx.art.pickup_icon_uv.is_some() {
@@ -1238,7 +1243,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
                 &label.name,
                 outline_colour(cx, label.border.unwrap_or(cx.default_border)),
             )),
-            align: label.align,
+            align: super::dialect_2048::text_align(cx.art, label),
             text,
             wrap_width: None,
         };

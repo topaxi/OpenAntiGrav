@@ -287,3 +287,29 @@ fn a_grant_on_a_race_reads_its_pop_in_off_the_readout() {
     let [wide, high] = race.readout().pickup_pop.expect("a race reads it");
     assert!(wide < 10.0 && high > 0.0, "{wide} {high}");
 }
+
+/// After release the readout names the last weapon for as long as the icon's height has not run
+/// out (`Hud_UpdatePickupIcon`'s not-held branch), and never while a weapon is held. Fails if
+/// `Race::readout` drops `SlotHud::pickup_last`, or keeps the weapon past the collapse.
+#[test]
+fn a_released_weapon_is_named_by_the_readout_until_its_icon_has_collapsed() {
+    use oag_tables::weapons::Weapon;
+    let mut race = race_with_a_grid();
+    let slot = race.player_slot();
+    race.tick(&PlayerInputs::none());
+    assert_eq!(race.readout().pickup_releasing, None);
+    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    for _ in 0..20 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert_eq!(race.readout().pickup, Some(Weapon::Missile));
+    assert_eq!(race.readout().pickup_releasing, None, "held");
+    race.sim.world.ships[slot].pickup.weapon = None;
+    race.tick(&PlayerInputs::none());
+    assert_eq!(race.readout().pickup, None);
+    assert_eq!(race.readout().pickup_releasing, Some(Weapon::Missile));
+    for _ in 0..8 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert_eq!(race.readout().pickup_releasing, None, "0.1 s later");
+}
