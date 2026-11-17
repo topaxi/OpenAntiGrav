@@ -158,7 +158,8 @@ pub fn store_to(path: &Path, title: &str, rejoin: &Rejoin, now: u64) -> Result<(
 pub fn load_from(path: &Path, title: &str, now: u64) -> Option<Rejoin> {
     let seat = read(path)?;
     let hash = parse_hash(&seat.cert_hash);
-    let (Some(cert_hash), true) = (hash, seat.title == title && seat.expires > now) else {
+    let (Some(cert_hash), true) = (hash, title_fits(&seat.title, title) && seat.expires > now)
+    else {
         clear_at(path);
         return None;
     };
@@ -170,6 +171,11 @@ pub fn load_from(path: &Path, title: &str, now: u64) -> Option<Rejoin> {
         team: seat.team,
         token: seat.token,
     })
+}
+
+/// The rule `oag_net::race::check_title` applies: a server that names no title fits any.
+fn title_fits(recorded: &str, opened: &str) -> bool {
+    recorded.is_empty() || recorded == opened
 }
 
 /// Deletes the record at `path`; no record is not an error.

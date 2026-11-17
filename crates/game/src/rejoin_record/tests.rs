@@ -93,3 +93,10 @@ fn clearing_a_missing_record_is_quiet() {
     clear_at(&path);
     assert!(!path.exists());
 }
+
+#[test]
+fn a_server_that_names_no_title_fits_any_title() {
+    let path = scratch("untitled");
+    store_to(&path, "", &rejoin(), 1_000).unwrap();
+    assert_eq!(load_from(&path, "Wipeout Pulse", 1_001), Some(rejoin()));
+}
