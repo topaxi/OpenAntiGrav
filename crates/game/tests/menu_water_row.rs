@@ -35,16 +35,41 @@ fn the_shipped_row_lists_every_water_value_in_order() {
     assert_eq!(offered(&built_in()), every);
 }
 
+/// The row is hidden where nothing it offers changes the picture: 2048 and Omega (their `original`
+/// is `off`, and nothing borrowed is drawn), Pulse and Pure without `enhanced`; shown on HD, whose
+/// `original` draws the sea's taps, and on Pulse and Pure, which offer `enhanced`.
 #[test]
-fn with_no_lender_disc_the_row_offers_off_and_original_only() {
-    for title in [
-        oag_pulse::TITLE,
-        oag_pure::TITLE,
-        oag_hd::TITLE,
-        oag_omega::TITLE,
-        oag_2048::TITLE,
+fn the_row_is_shown_only_where_it_changes_the_picture() {
+    let none = |_: &str| false;
+    let with_every_disc = |_: &str| true;
+    for (title, shown) in [
+        (oag_pulse::TITLE, true),
+        (oag_pure::TITLE, true),
+        (oag_hd::TITLE, true),
+        (oag_omega::TITLE, false),
+        (oag_2048::TITLE, false),
     ] {
-        assert_eq!(row_after(title, &[]), ["off", "original"], "{}", title.name);
+        for present in [&none as &dyn Fn(&str) -> bool, &with_every_disc] {
+            assert_eq!(
+                oag_game::water_setting::row_changes_picture(title, present),
+                shown,
+                "{}",
+                title.name
+            );
+        }
+    }
+}
+
+#[test]
+fn with_no_lender_disc_the_row_offers_what_the_title_changes() {
+    for (title, want) in [
+        (oag_pulse::TITLE, &["off", "original", "enhanced"][..]),
+        (oag_pure::TITLE, &["off", "original", "enhanced"][..]),
+        (oag_hd::TITLE, &["off", "original"][..]),
+        (oag_omega::TITLE, &[][..]),
+        (oag_2048::TITLE, &[][..]),
+    ] {
+        assert_eq!(row_after(title, &[]), want, "{}", title.name);
     }
 }
 
@@ -89,27 +114,25 @@ fn with_every_lender_present_only_drawn_laws_are_offered() {
         .filter(|w| oag_mesh::mesh::rcs::water_law_is_drawn(**w))
         .map(|w| w.name())
         .collect();
-    assert_eq!(drawn, ["off", "original"], "no borrowed law is drawn yet");
-    for title in [
-        oag_pulse::TITLE,
-        oag_pure::TITLE,
-        oag_hd::TITLE,
-        oag_omega::TITLE,
-        oag_2048::TITLE,
+    assert_eq!(
+        drawn,
+        ["off", "original", "enhanced"],
+        "no borrowed law is drawn yet"
+    );
+    let lenders = [
+        oag_hd::TITLE.slug(),
+        oag_2048::TITLE.slug(),
+        oag_omega::TITLE.slug(),
+    ];
+    let present: Vec<&str> = lenders.iter().map(String::as_str).collect();
+    for (title, want) in [
+        (oag_pulse::TITLE, &drawn[..]),
+        (oag_pure::TITLE, &drawn[..]),
+        (oag_hd::TITLE, &["off", "original"][..]),
+        (oag_omega::TITLE, &[][..]),
+        (oag_2048::TITLE, &[][..]),
     ] {
-        assert_eq!(
-            row_after(
-                title,
-                &[
-                    &oag_hd::TITLE.slug(),
-                    &oag_2048::TITLE.slug(),
-                    &oag_omega::TITLE.slug()
-                ]
-            ),
-            drawn,
-            "{}",
-            title.name
-        );
+        assert_eq!(row_after(title, &present), want, "{}", title.name);
     }
 }
 
@@ -134,10 +157,19 @@ fn a_saved_value_that_is_not_offered_draws_original() {
         Water::Original,
         "an undrawn law falls back"
     );
-    for value in [Water::Off, Water::Original] {
+    for value in [Water::Off, Water::Original, Water::Enhanced] {
         assert_eq!(
             oag_game::water_setting::resolve(value, oag_pulse::TITLE, &none),
             value
+        );
+    }
+    // `enhanced` is offered where the title lists a sea, and falls back where it does not.
+    for title in [oag_hd::TITLE, oag_omega::TITLE, oag_2048::TITLE] {
+        assert_eq!(
+            oag_game::water_setting::resolve(Water::Enhanced, title, &all),
+            Water::Original,
+            "{}",
+            title.name
         );
     }
 }
@@ -149,12 +181,18 @@ fn the_boot_trim_applies_the_water_row_trim() {
     let strings = oag_ui::language::StringTable::default();
     let mut definition = built_in();
     oag_game::menu_tree::finish_definition(&mut definition, oag_pulse::TITLE, &strings, &|_| false);
-    assert_eq!(offered(&definition), ["off", "original"]);
+    assert_eq!(offered(&definition), ["off", "original", "enhanced"]);
     let mut definition = built_in();
     oag_game::menu_tree::finish_definition(&mut definition, oag_pulse::TITLE, &strings, &|_| true);
     assert_eq!(
         offered(&definition),
-        ["off", "original"],
+        ["off", "original", "enhanced"],
         "undrawn laws stay hidden"
+    );
+    let mut definition = built_in();
+    oag_game::menu_tree::finish_definition(&mut definition, oag_2048::TITLE, &strings, &|_| true);
+    assert!(
+        offered(&definition).is_empty(),
+        "the row is gone where nothing in it changes the picture"
     );
 }

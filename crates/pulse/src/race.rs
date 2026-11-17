@@ -220,6 +220,30 @@ pub const ZONE_TRACK_PREFIX: &str = "zone_";
 /// note on [`DEFAULT_TRACK`] for the full account of that day.
 pub const DEFAULT_TRACK: &str = r"Data\Environments\16_Track\track.vex";
 
+/// The circuits whose sea `enhanced` water draws on, and the embedded texture each draws it
+/// on (`oag_title::water`). By name, from a census of every circuit's batches
+/// (`crates/mesh/tests/enhanced_water_ground_truth.rs`) and each confirmed on a frame
+/// (`docs/rendering/water.md`, "Enhanced"). Moa Therma (`03_Track`) and Fort Gale
+/// (`14_Track`) bind `NewSeaTest`, `06_Track` binds `sea`, `16_Track` binds `water`.
+pub const WATER_CIRCUITS: &[oag_title::water::Circuit] = &[
+    oag_title::water::Circuit {
+        directory: "03_Track",
+        textures: &["NewSeaTest"],
+    },
+    oag_title::water::Circuit {
+        directory: "06_Track",
+        textures: &["sea"],
+    },
+    oag_title::water::Circuit {
+        directory: "14_Track",
+        textures: &["NewSeaTest"],
+    },
+    oag_title::water::Circuit {
+        directory: "16_Track",
+        textures: &["water"],
+    },
+];
+
 /// The team whose `handlingstats.xml` and model a race uses by default.
 ///
 /// **Assegai, not Feisar** - chosen to match the reference scenario used for

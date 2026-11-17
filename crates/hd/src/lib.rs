@@ -223,6 +223,11 @@ pub const TITLE: &Title = &Title {
     // Built 2026-09-04: the craft render into a coverage map the track samples.
     original_shadows: oag_title::shadow::OriginalShadows::Built,
     weather: oag_title::weather::Weather::Unplayed,
+    // The sea's taps are drawn under `original` (`docs/rendering/water.md`).
+    water: oag_title::water::Water {
+        original_differs: true,
+        enhanced: &[],
+    },
     // Measured, confidence 84: any non-zero small byte is full on (`docs/gameplay/rumble.md`).
     rumble: oag_title::rumble::Rumble::Patterns(
         oag_title::rumble::SmallMotor::OnOff,

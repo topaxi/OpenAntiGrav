@@ -14,7 +14,7 @@ import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encode, encoded_out, linear_out};
 import package::shading_modes::{colour_is_light, light_rig, nova_prelit, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
-import package::water::{water_kind, water_normal, water_specular_colour, water_tap_uv};
+import package::water::{enhanced_water, water_kind, water_normal, water_specular_colour, water_tap_uv};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
 import package::types::{VertexOutput};
 import package::zone::{zone_aniso, zone_base_term, zone_glow, zone_sample, zone_set};
@@ -219,7 +219,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // The water's normal is its scrolled taps' sum (`water.wesl`), for the light, the
     // specular and the reflection alike.
     if water > 0.5 {
-        n_hull = water_normal(water_entry, water, in.texcoord, n, in.tangent);
+        n_hull = water_normal(water_entry, water, select(in.texcoord, in.world.xz, water > 4.5), n, in.tangent);
         n_lit = n_hull;
     }
 
@@ -1280,7 +1280,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // `@0x5c`) or `* (0.2 a + 0.4)` (block `@0x24b0`, the entry's `offset` 1), `a` the alpha
         // of its second map (fourth binding) at `uv` plus the third tap. The sea's reflection
         // is the planar target, not drawn.
-        if water > 1.5 {
+        if water > 1.5 && water < 4.5 {
             let r = reflect(-to_eye, n_lit);
             let sky = probe_tint(textureSampleLevel(sky_probe_tex, shadow_sampler, env_probe_uv(r), 0.0).rgb);
             let gate = material_sample(MATERIAL_WAVE_MAP, in.texcoord + water_tap_uv(water_entry, water, 2u, in.texcoord)).a;
@@ -1631,10 +1631,28 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         absorb = vec4<f32>(absorb_rgb * scene.light.output_scale, in.colour.a);
     }
     let composed_plain = mix(mix(cone_or_floor, flame, flame_shading), absorb, absorb_shading);
-    let composed = vec4<f32>(
+    let composed_lit = vec4<f32>(
         composed_plain.rgb * select(vec3<f32>(1.0), in.colour.rgb, shield_shading != 0.0)
             + shield_lightning,
         composed_plain.a,
+    );
+    // **`enhanced` water** (`mesh::vex_water`, `water.wesl`) replaces the whole sum: the program
+    // has its own light, glint and sky and no texture, so running the surface's generic path
+    // and overwriting it would only shade it twice. The sky is the probe map's, encoded back to
+    // the gamma the rest of the sum is in.
+    var enhanced_rgb = vec3<f32>(0.0);
+    if water > 4.5 {
+        let sky = encode(textureSampleLevel(
+            sky_probe_tex, shadow_sampler, env_probe_uv(reflect(-to_eye, n_lit)), 0.0,
+        ).rgb);
+        enhanced_rgb = enhanced_water(
+            row_tint, row_scale.x, water_specular_colour(water_entry), in.colour.rgb, n_lit, to_eye, sky,
+        );
+    }
+    let composed = select(
+        composed_lit,
+        vec4<f32>(mix(enhanced_rgb, decode(enhanced_rgb), linear_out), 1.0),
+        water > 4.5,
     );
 
     // **Wipeout HD's two rim-shaded weapon glows**, `slots::RIM_GLOW` (the

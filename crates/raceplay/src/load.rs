@@ -56,6 +56,8 @@ mod trail_hits;
 pub use track_stats::authored_length;
 mod variant;
 #[cfg(feature = "view")]
+mod water;
+#[cfg(feature = "view")]
 mod weapon_models;
 #[cfg(feature = "view")]
 mod zone_livery;
@@ -492,6 +494,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             track_model = mesh::build_with_textures(&track, &track_blob, Some(&external))?;
             ps2_track_textures = Some(external);
         }
+        water::enhanced(&mut track_model, options.water, title, &track, &mut report);
         geometry::with_batch_cull(track_model, title.looks, archives.layout.platform)
     };
     // HD's zoom-streak ring on a title that draws none of its own: the player's
