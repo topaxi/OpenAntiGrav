@@ -327,7 +327,16 @@ fn taps_of(
 }
 
 /// The consecutive glow-table entries of one tapped water slot.
-fn entries(material: &rcsmodel::Material, family: Family, taps: &[Tap]) -> Option<Vec<Emissive>> {
+///
+/// `water_noref`'s reflection weight differs by variant: the lightmapped block (`@0x3870`,
+/// declares the lightmap) multiplies by the second map's alpha `a`, the other (`@0x24b0`)
+/// by `0.2 a + 0.4`; `offset` 0 and 1 say which.
+fn entries(
+    material: &rcsmodel::Material,
+    family: Family,
+    taps: &[Tap],
+    lightmapped: bool,
+) -> Option<Vec<Emissive>> {
     let rgb = |v: [f32; 4]| [v[0], v[1], v[2]];
     let (colour, reflectivity, power, specular) = match family {
         Family::Sea => (
@@ -342,7 +351,8 @@ fn entries(material: &rcsmodel::Material, family: Family, taps: &[Tap]) -> Optio
             0.0,
             [0.0; 3],
         ),
-        Family::LitColour | Family::Glint => ([0.0; 3], 1.0, 0.0, [0.0; 3]),
+        Family::LitColour => ([0.0; 3], 1.0, 0.0, [0.0; 3]),
+        Family::Glint => ([0.0; 3], f32::from(u8::from(!lightmapped)), 0.0, [0.0; 3]),
     };
     let mut out = vec![
         Emissive {
@@ -499,7 +509,15 @@ pub(super) fn water(
                     Some(path) => Some(map(&path)?),
                     None => None,
                 };
-                Some((entries(material, family, &taps)?, normal, second))
+                let lightmapped = declared
+                    .samplers
+                    .iter()
+                    .any(|&(h, _)| h == rcsmaterial::LIGHTMAP_SAMPLER);
+                Some((
+                    entries(material, family, &taps, lightmapped)?,
+                    normal,
+                    second,
+                ))
             });
             let Some((block, normal, second)) = read else {
                 report.water_taps_unread += 1;
@@ -657,7 +675,7 @@ mod tests {
             ],
             curve: None,
         };
-        let block = entries(&material, Family::Sea, &Tap::sea()).expect("authored");
+        let block = entries(&material, Family::Sea, &Tap::sea(), true).expect("authored");
         assert_eq!(block.len(), 4);
         assert_eq!(block[0].program, [PROGRAM_WATER, 1.0]);
         assert_eq!((block[0].tint, block[0].scale), ([0.08, 0.12, 0.13], 75.0));
