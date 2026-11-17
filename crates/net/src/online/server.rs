@@ -23,6 +23,10 @@ use crate::wt::{Identity, LinkLimits, Listener, WtLink};
 
 /// How long a new connection has to say hello. Chosen.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long a person with a seat in the running race keeps their session after their link
+/// closed, so a reconnect under the session token can still take it over and be handed the
+/// race's address. A close usually reaches the lobby before the new link's hello does.
+const SEAT_GRACE: Duration = Duration::from_secs(30);
 
 /// Connections the lobby keeps at once, joining or joined, by default. Chosen, not measured: a
 /// lobby link costs about 2.6 MiB at its worst (`docs/networking/server-roadmap.md`, "V1:
@@ -59,6 +63,8 @@ struct Connected {
     /// One warning a second about this person's messages.
     log: LogLimit,
     token: String,
+    /// When the link was first seen closed, for a person held by `SEAT_GRACE`.
+    dropped: Option<Instant>,
 }
 
 struct Running {
@@ -283,6 +289,7 @@ impl Server {
                     ip,
                     log: LogLimit::default(),
                     token: token_in.to_string(),
+                    dropped: None,
                 },
             );
             self.welcome(id);
@@ -302,6 +309,7 @@ impl Server {
                         ip,
                         log: LogLimit::default(),
                         token: token(),
+                        dropped: None,
                     },
                 );
                 log::debug!("lobby: {:?} joined as client {id}", self.rooms.name(id));
@@ -363,6 +371,16 @@ impl Server {
                 self.rooms.handle(id, message);
             }
             if let Some(why) = gone {
+                let seated = self
+                    .race
+                    .as_ref()
+                    .is_some_and(|r| r.seats.iter().any(|(seat, _, _)| *seat == id));
+                if let Some(client) = self.clients.get_mut(&id).filter(|_| seated) {
+                    let since = *client.dropped.get_or_insert_with(Instant::now);
+                    if since.elapsed() < SEAT_GRACE {
+                        continue;
+                    }
+                }
                 log::debug!("lobby: client {id} left: {why}");
                 self.clients.remove(&id);
                 self.rooms.disconnect(id);

@@ -359,6 +359,7 @@ content and no people.**
 
 **What changes.**
 
+0. The lobby keeps a seated person's session 30 s after their link closes, so a reconnect gets the hand-off (`SEAT_GRACE`).
 1. A seat can be taken back. The host seats a hello whose token names a seat that left,
    during the race; `TickRecord.retired` becomes the seats away *now*, not ever; the
    client reconnects by itself and asks for the ticks it lacks. No journal file yet: the
