@@ -55,12 +55,30 @@ Constraints:
   2x the pose track again, so about 1 MB for a five-minute race. Measure before choosing between
   always-on and opt-in.
 
+Compression (nothing in a `.oagr` is compressed today; the screenshot chunk in
+`crates/replay/src/shot.rs` is deflated):
+
+- ADR-0087 decision 4 measured general compressors on Pulse: on the **stored** pose track gzip -9
+  saves 9 percent and xz -9 28 percent (zstd not measured); on the **raw** 60 Hz pose stream gzip -9
+  29, zstd -19 42 and xz -9 55 percent. The keyframe refinement already took most of the
+  redundancy, so the ADR applied no compression.
+- The input stream (6.3 to 6.9 bytes a tick a human seat, ADR-0055) was never put through a
+  compressor. Analog stick values change slowly, so it may compress better than the pose track.
+- A materialized replay would roughly double the stored size, which makes a compressed container
+  more worth having. `ruzstd` is already in the workspace (texture packs), so zstd adds no
+  dependency.
+
 ## Next Steps
 
-1. Design lane (sonnet `oag-docs`, 2 to 3 h): the per-tick schema for items 1 to 4, which of them
+1. Compression measurement (sonnet `oag-docs` or `oag-perf`, about 30 min, measure lane): zstd at
+   a few levels (3, 9, 19), gzip -9 and xz -9 over each chunk of a real `.oagr` (`INPT`, `HASH`,
+   `POSE`, the whole file), on all five titles, at Venom and Phantom, from the cost sweep's Autopilot
+   race and a pad-flown race (`replay_timeline_ground_truth`'s recording). Report percent saved and
+   encode/decode time per chunk; recommend per chunk whether a zstd wrapper earns its keep.
+2. Design lane (sonnet `oag-docs`, 2 to 3 h): the per-tick schema for items 1 to 4, which of them
    the renderer, HUD and audio already read as a per-tick output (the cheapest cut), always-on versus
    a "keep" flag, and an ADR draft extending ADR-0087 decision 4. Measure the size on the cost
    sweep's Autopilot race (`OAG_SWEEP=1`, the same race as the `POSE` table) on every title.
-2. Wire lane (sonnet `oag-wire`): record and play items 1 and 3 first (what makes POSE VIEW read as
+3. Wire lane (sonnet `oag-wire`): record and play items 1 and 3 first (what makes POSE VIEW read as
    the race), then 2, then 4; acceptance is a POSE VIEW frame pair against the simulated frame at
    the same tick on one title, then the rest.
