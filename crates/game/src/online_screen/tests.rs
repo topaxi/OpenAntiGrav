@@ -502,7 +502,7 @@ fn a_player_hosted_room_carries_the_mark_and_says_what_it_means() {
     assert_eq!(room_label(&room(1, "ada", 1, true), &strings()), "ADA");
     assert_eq!(
         screen.note(1),
-        Some("PLAYER-HOSTED: THE HOST RUNS THE RACE AND MAY CHEAT")
+        Some("PLAYER-HOSTED: RUN BY A PLAYER, NOT THE SERVER - UNOFFICIAL")
     );
     assert_eq!(screen.note(0), Some("02_TRACK / VENOM / SINGLE RACE"));
     // A hosted room that cannot be joined says that first.
@@ -520,7 +520,7 @@ fn a_guest_in_a_player_hosted_room_is_told_what_the_mark_means() {
     room.player_hosted = true;
     assert_eq!(
         room_hint(&room, false, &strings()),
-        "PLAYER-HOSTED: THE HOST RUNS THE RACE AND MAY CHEAT"
+        "PLAYER-HOSTED: RUN BY A PLAYER, NOT THE SERVER - UNOFFICIAL"
     );
     assert_eq!(
         room_hint(&room, true, &strings()),

@@ -1277,7 +1277,7 @@ port has to be reachable from the lobby: open, or forwarded to this machine by t
 refusal names the port. Everybody else joins the room as they join any other; at START the race
 runs on the host's machine and the lobby hands each member the host's address.
 
-The mark's one line is "PLAYER-HOSTED: THE HOST RUNS THE RACE AND MAY CHEAT" (the list row
+The mark's one line is "PLAYER-HOSTED: RUN BY A PLAYER, NOT THE SERVER - UNOFFICIAL" (the list row
 under the cursor, and a guest's room). Not on the line, and true: latency favours the host, no
 record is kept, and the host and its guests see each other's addresses.
 

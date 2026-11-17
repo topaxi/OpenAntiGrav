@@ -111,7 +111,7 @@ pub fn room_line(
         return say(
             strings,
             "OAG_ONLINE_PLAYER_HOSTED_HINT",
-            "PLAYER-HOSTED: THE HOST RUNS THE RACE AND MAY CHEAT",
+            "PLAYER-HOSTED: RUN BY A PLAYER, NOT THE SERVER - UNOFFICIAL",
         );
     }
     let track = if room.settings.track.is_empty() {
@@ -224,7 +224,7 @@ pub fn room_hint(room: &Snapshot, owner: bool, strings: &StringTable) -> String 
         Phase::Open if room.player_hosted => say(
             strings,
             "OAG_ONLINE_PLAYER_HOSTED_HINT",
-            "PLAYER-HOSTED: THE HOST RUNS THE RACE AND MAY CHEAT",
+            "PLAYER-HOSTED: RUN BY A PLAYER, NOT THE SERVER - UNOFFICIAL",
         ),
         Phase::Open => say(strings, "OAG_ONLINE_ROOM_HINT", "THE HOST STARTS THE RACE"),
         Phase::Queued { position } => say(
