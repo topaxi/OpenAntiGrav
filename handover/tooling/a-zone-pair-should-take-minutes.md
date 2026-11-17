@@ -20,7 +20,7 @@ kind; "model" is the gap between one tool result and the next call):
 | Pulse PS2 (PCSX2) | 29 min | ~25 min | 12 | 11 | 0.1 | 2 | menu walk 7 (old states refused), a missed paused grab redone |
 | 2048 (Vita3K) | 60 min | ~35 min | 23 | 11 | 19 | 4 | Zone mode written (hull-matrix scan), camera variants, stage sweep, second boot |
 | Omega (wipeout_pc) | 61 min | ~36 min | 19 | 1 | 13 | 5 | 25 min building a serve/control harness and pose read before the first grab |
-| HD (RPCS3) | 107+ min | not yet | 29 | 75 | 0.1 | - | in Zone at 12 min; 90+ min failing to reach zone 5 (input-driven race, crashes, attract demo) |
+| HD (RPCS3) | ~133 min | ~130 min | 29+ | 75+ | 0.1 | - | in Zone at 12 min; 90+ min finding a zone-5 window (the Zone race crashes deterministically at 55.7 s, clean window 52-54 s), attract demo, window sizing |
 
 The gates (2-5 min under the shared lock) and the build (1-4 min) are not the
 problem. Model time (12-29 min a lane) scales with how much each lane had to
@@ -56,6 +56,7 @@ invent.
 - A Zone save-state library and its index; regenerating states after an
   emulator update.
 - One shared driver instead of five per-emulator Zone modes.
+- HD pair `hd-zone-vineta-k-z5` is refused by the pair check (heading 1.86 deg against 1.0): `--pose` carries yaw only, the craft is tilted 2.75 deg off the spline; a pose with pitch and roll fixes it. `rpcs3-hd-pair.py` `set_window` picks the root window when the emulator window is larger than the screen. HD Zone capture needs `OAG_COMPARE_PLATFORM=hd-fury` on `serve` and a `--state` sidecar `{"mode":"zone"}` (else ours renders Time Trial); not yet written up in `docs/tools/compare-page.md`.
 
 ## Next Steps
 
