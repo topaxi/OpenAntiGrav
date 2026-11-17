@@ -62,6 +62,27 @@ pub fn path() -> Option<PathBuf> {
     }
 }
 
+fn hex(bytes: &[u8; 32]) -> String {
+    use std::fmt::Write;
+    bytes
+        .iter()
+        .fold(String::with_capacity(64), |mut text, byte| {
+            let _ = write!(text, "{byte:02x}");
+            text
+        })
+}
+
+fn parse_hash(text: &str) -> Option<[u8; 32]> {
+    if text.len() != 64 || !text.is_ascii() {
+        return None;
+    }
+    let mut hash = [0u8; 32];
+    for (byte, pair) in hash.iter_mut().zip(text.as_bytes().chunks(2)) {
+        *byte = u8::from_str_radix(std::str::from_utf8(pair).ok()?, 16).ok()?;
+    }
+    Some(hash)
+}
+
 /// Seconds since the Unix epoch.
 #[must_use]
 pub fn now() -> u64 {
@@ -107,7 +128,7 @@ pub fn store_to(path: &Path, title: &str, rejoin: &Rejoin, now: u64) -> Result<(
         seat: Some(Seat {
             title: title.to_owned(),
             addr: rejoin.addr.clone(),
-            cert_hash: oag_net::wt::hex(&rejoin.cert_hash),
+            cert_hash: hex(&rejoin.cert_hash),
             room: rejoin.room,
             name: rejoin.name.clone(),
             team: rejoin.team.clone(),
@@ -136,7 +157,7 @@ pub fn store_to(path: &Path, title: &str, rejoin: &Rejoin, now: u64) -> Result<(
 #[must_use]
 pub fn load_from(path: &Path, title: &str, now: u64) -> Option<Rejoin> {
     let seat = read(path)?;
-    let hash = oag_net::wt::parse_hash(&seat.cert_hash).ok();
+    let hash = parse_hash(&seat.cert_hash);
     let (Some(cert_hash), true) = (hash, seat.title == title && seat.expires > now) else {
         clear_at(path);
         return None;
