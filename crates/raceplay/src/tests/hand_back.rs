@@ -148,3 +148,47 @@ fn presence_events_reproduce_the_change() {
             .is_err()
     );
 }
+
+/// A thrust press, a pulled airbrake or a hard stick ends the countdown on that tick, but not the
+/// input already held when the link came back.
+#[test]
+fn a_deliberate_input_takes_the_craft_back_after_a_short_grace() {
+    let cancels = |snapshot: InputSnapshot, wait: u32| {
+        let mut race = returning();
+        race.set_away(1);
+        race.hand_back(1);
+        for _ in 0..wait {
+            race.tick(&PlayerInputs::none());
+        }
+        let mut inputs = PlayerInputs::none();
+        inputs.set(1, snapshot);
+        race.tick(&inputs);
+        let ship = &race.sim.world.ships[1];
+        assert_eq!(
+            ship.pickup.weapon,
+            Some(Weapon::Turbo),
+            "the pickup is kept"
+        );
+        !ship.handback
+    };
+    let mut buttons = Buttons::new();
+    let thrust = buttons.tick(CROSS);
+    assert!(!cancels(thrust, 0), "inside the grace");
+    let mut buttons = Buttons::new();
+    assert!(cancels(buttons.tick(CROSS), 30));
+    let steer = InputSnapshot {
+        stick_x: 0.8,
+        ..InputSnapshot::default()
+    };
+    assert!(cancels(steer, 30));
+    let brake = InputSnapshot {
+        airbrake_left: 1.0,
+        ..InputSnapshot::default()
+    };
+    assert!(cancels(brake, 30));
+    let drift = InputSnapshot {
+        stick_x: 0.2,
+        ..InputSnapshot::default()
+    };
+    assert!(!cancels(drift, 30), "inside the deadzone");
+}
