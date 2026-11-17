@@ -22,7 +22,7 @@ Each line says what it would become once accepted.
   seconds while the craft is handed back (the exact length is to be chosen). A pickup
   the player held before the disconnect is held again, usable, once that autopilot ends.
 - **3 accepted**: one race, one process.
-- **4 open**: explained to the maintainer, answer pending.
+- **4 accepted**: the wire is frozen at the first public deployment; builds race together on an equal simulation fingerprint.
 - **5 accepted**: one small flat-traffic VPS through V3.
 - **6 accepted, a CA certificate for a host name**, probably from Let's Encrypt.
 - **7 open**: explained to the maintainer, answer pending.
