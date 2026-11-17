@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-17
-summary: "Setting, HD taps and Pulse/Pure enhanced landed; next the RPCS3 sea pair, the planar reflection, 2048 and Omega laws, the borrowed laws"
+summary: "HD taps, setting, enhanced and the planar-reflection read landed; next wire the planar pass, Chenghou/Modesto seas, 2048 and Omega laws"
 categories: [rendering, frontend]
 size: XL (60)
 difficulty: medium (55)
@@ -143,8 +143,9 @@ map.**
 
 ## Open
 
-- The planar reflection's camera, target size, clear and `distortion` are
-  unread on every title (water.md, "Open" 1).
+- The planar reflection is read on HD Moa Therma (water.md, "The planar reflection, read off
+  live frames"); unread: Chenghou's and Modesto's seas (recipe there), bit 1 as the mirror, and
+  Omega's and 2048's copies of the same passes.
 - Omega's `Reflectivity*` combine and `Speed` law are unread; 2048's `fc17`
   edge program is unread.
 - Pure's caustic frames on Vineta K are unread; the caustic bit is unread on
@@ -208,14 +209,20 @@ Ranked. Hours are for one member on an idle machine.
    round-trip and fallback tests, a menu test with and without each lender
    image (and with `OAG_MODS` pinned empty), `just check-strings`, mouse
    support as every row has. Can run beside lane 1; touches different crates.
-3. **Capture the HD reflection target** (`oag-capture`, sonnet, 2 to 3 h).
-   One RPCS3 frame at a Moa Therma sea pose with the draw hook: the second
-   target's size, clear and projection (`c[256]` of its draws), the sea draw's
-   patched `reflectProject` and `distortion`, whether the 30 bit-1 chunks are
-   the only users, and what Chenghou's and Modesto's sea samples with no
-   reflect chunk. Acceptance: the numbers on water.md with the capture
-   command, confidence 90 where read.
-4. **The planar reflection** (`oag-wire`, opus, 8 h; after 3). A mirrored
+3. **LANDED (`water-hdcap`): the HD reflection target read.** One Moa Therma sea frame,
+   three frames over two restores, plus Chenghou's frames (a second cold boot: the same target, sky only, no sea in view): a 960 x 540 R5G6B5 + Z16 target at `0x02a20000`
+   cleared opaque black / depth 1, drawn before the main view with the sky and the scenery
+   under the main view-projection mirrored by `y' = K - y`, `K = -50` (plane -25; Moa
+   Therma authors `Water plane height` -50), front-face culling; the sea reads it at its own
+   screen position through `reflectProject` = the main view-projection, normal pushed 40
+   world units (`distortion.z` = 40 = `Water distortion`); only the sea material samples it.
+   **Left open:** what Chenghou's and Modesto's sea draws bind (no sea in any frame; the recipe
+   in water.md names a visibility-set scan, then `scripts/hd-sea-place-dump.py` and
+   `hd-sea-reflect-read.py`), Modesto not booted, and bit 1.
+   The RPCS3 sea pair the HD taps lane left open is made (sea-crop luma: original 140, `off`
+   139, `original` 105; `original` reads 35 levels darker than the original and worse than
+   `off` by MAE until lane 4 lands).
+4. **The planar reflection** (`oag-wire`, opus, 8 h; **ready to wire**, lane 3 read the camera, target and constants). A mirrored
    pass over render-flag bit-3 chunks (HD) and `wohdmeshreflect` meshes (2048,
    Omega, `psp2::refraction_only`'s split generalised), sampled through
    `reflectProject` with the `distortion` offset. Acceptance: target set
