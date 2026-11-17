@@ -6156,28 +6156,17 @@ All of it is **chosen, not measured**.
 
 **Still open, by how much a player sees it:**
 
-- **2048 `sol`** (re-measured 2026-11-03). The loop above was not the
-  driver: `sol` had **no floor**. Its `.vex` authors a lone `Reset` node, which
-  kept `track_col.col` out of the load, so every craft fell from the grid into
-  that volume ([2048-collision.md](../formats/2048-collision.md#which-circuits-read-the-container-2026-11-03)).
-  With the floor the ring plan verifies (VENOM, 44,448 steps, 180 lowerings,
-  lap 3,770 ticks), and what is left is one **gap in the road at ring samples
-  3553-3620**, after a speed pad at about 3530 and before route 2's split at
-  about 3648, so every way round crosses it. A craft clears it from about 170
-  u/s at the lip: the verifier reaches 173, cruising at 129.4 u/s down the
-  approach; a field craft on the same `feisar2048\3` handling cruises at 124-125
-  (127.6 as a plain seed-0 driver) and reaches 166-169, then falls about 75
-  units into the `.vex`'s reset volume. Spline flag bit 0 ("lay no crumb") runs
-  from line sample 3384 to 3647, so the original's relocation puts the craft
-  back at about 3274 and it meets the lip at the same speed: the rescue is the
-  original's, the miss is the driver's. A one-off test held a constant air
-  pitch on every airborne tick of the lap (`steer_y`, positive nose up) in
-  place of the trim: the Ace field's respawns summed 95 with the trim, 79 at
-  0, 45 at +0.5, 34 at +1 and 33 at -1, and both signs cleared and fell from
-  lips of 167-169 u/s. **No sign effect**: the gap is marginal and any change
-  in air pitch reshuffles who clears it. Which held pitch over 3553-3620 alone
-  clears it, if any, is not measured.
-  Omega's `sol` (HD hulls) already laps at Elite and Ace with 0-5 respawns.
+- ~~**2048 `sol`**: the field loops at the gap at ring samples 3553-3620.~~
+  Closed 2026-11-17: [a lip on a descent is taken nose up](#a-lip-on-a-descent-is-taken-nose-up-2026-11-17),
+  and a field of seven laps at every level on 2048 and Omega. What was known
+  before (2026-11-03): `sol` had **no floor** (its `.vex` authors a lone
+  `Reset` node, which kept `track_col.col` out of the load,
+  [2048-collision.md](../formats/2048-collision.md#which-circuits-read-the-container-2026-11-03));
+  with the floor the ring plan verifies, and what was left was the one gap
+  after a speed pad at about 3530 and before route 2's split at about 3648, so
+  every way round crosses it. Spline flag bit 0 ("lay no crumb") runs from
+  line sample 3384 to 3647, so the original's relocation puts a fallen craft
+  back at about 3274: the rescue is the original's, the miss was the driver's.
 - **Pulse `06_Track` VENOM**, on the corner model, crawls at 15-33 u/s over
   samples 1100-1200. Its gap at 1196 clears near 60 u/s; from 90 u/s the craft
   lands drifting right into the wall at 1238, and too slow it stalls in the
@@ -6196,6 +6185,160 @@ All of it is **chosen, not measured**.
   500 s.
 - **Pure has no reference laps**: `campaign_reference_laps` finds no grid at
   Pulse's grid entry names on its disc.
+
+### A lip on a descent is taken nose up (2026-11-17)
+
+Lane `sol-gap`. 2048's and Omega's `sol` cross a gap in the road (ring
+samples 3556-3622, 101 units) after a speed pad at about 3530, at the foot of
+a descent the line runs down at a slope of -0.7. On main a field of seven at
+VENOM looped there at every level: a craft fell about 75 units into the
+`.vex`'s reset volume, was put back at about 3270 by the original's
+relocation, and fell again 289 ticks later.
+
+All of the rule below is **chosen, not measured**: opponent behaviour is this
+project's own, tuned for a good race.
+
+#### What was wrong: the plan was flown on another hull
+
+The earlier reading compared the field with the plan's verification lap "on
+the same handling". It is not the same handling. The ring plan is learned on
+the most agile hull whose plan verifies (`Race::field_speed_plan`), here slot
+7's. Four of the seven opponents (slots 1, 2, 4, 6) fly `feisar2048\3`, a
+slower hull whose own plan cannot verify, because it does not clear the gap at
+full throttle on the plan's own line. Each distinct hull of the grid, full
+throttle from the grid in the plan's own stepping
+(`sol_ground_truth::gap_run_up_trace` with `OAG_SOL_HULLS`, before the rule):
+
+| hull (slot) | `<Engine amount>` | cruise at 3500 | at the lip (3561) | at the far side (3620) | |
+| --- | --- | --- | --- | --- | --- |
+| 1 (and 2, 4, 6) | 0.382 | 123.7 u/s | 172.3 | 182.5, 3.8 under the line, airborne | falls |
+| 3 | 0.428 | 130.5 | 178.2 | 188.6, 1.3 under, airborne | lands by 3640 |
+| 5 | 0.418 | 129.2 | 175.4 | 187.0, 0.9 under, then 4.6 under | falls |
+| 7, the plan's reference | 0.412 | 128.1 | 176.5 | 173.1, on the road | lands |
+
+So speed alone does not decide it: hull 5 is faster than hull 7 at every
+sample and falls. And the race steps what the plan steps: the plan's stepping
+forked from a racing craft's own state at sample 3300 (`Race::probe_speed_plan`
+mid-race) read 124.0 u/s down the descent, tick for tick what the race did.
+The "2 to 5 u/s under the verifier" was the hull.
+
+A lone Ace also missed the speed pad outright: it sat 8.4 to 10 units right of
+the line down the descent, the pad took craft up to about 7 units off it, and
+the craft left the lip at 127 u/s.
+
+#### Air pitch does nothing; ground pitch decides it
+
+Held pitch commands (`steer_y`, positive nose up) in the plan's stepping, per
+hull, full throttle:
+
+- **In the air over the gap alone** (samples 3505-3660, airborne ticks only):
+  hull 1 is 3.8, 3.8, 3.7, 3.8, 3.8 and 3.7 units under the line at 3621 for
+  the trim (0.2), -1, -0.5, 0, +0.5 and +1. The flight is ballistic. This is
+  the answer to "which held air pitch over 3553-3620 changes the outcome":
+  none, either sign.
+- **On the ground before the lip, full nose up**: every hull lands. Hull 1
+  leaves at 167.2 u/s against 172.3 (sinking at 102.8 against about 108) and is on
+  the road at 3620. Held from sample 3300, 3505, 3530 or 3545, the same.
+- **Half deflection** (+0.5 from 3505, or +0.5 and +0.25 from 3300): hull 1
+  still falls.
+- **Full nose down on the ground**: faster at the lip (175.7 for hull 1) and
+  every hull falls, hulls 3 and 7 included.
+- **A lateral offset of the aim point** from 3300: 8 left misses the pad; 5
+  left and 5 right both leave hull 1 short.
+
+#### The rule
+
+`oag_ai::Line` marks a takeoff run-up (`is_takeoff`, the 75 units before a
+gap of 40 samples or more) as **diving** where the road falls at least -0.5
+over it, as the world-Y of its direction end to end (`line::DIVING_TAKEOFF`,
+`Line::is_diving_takeoff`), and the `RUN_UP_REACH` (450 units) before it as
+its approach (`Line::is_diving_approach`). The driver then does three things:
+
+1. **Nose up on the run-up**: on the ground on a diving run-up it holds the
+   pitch at full deflection (`driver::PULL_UP`). In the air it holds its trim
+   as before.
+2. **The plan's line on the approach**: its level's share of its own lateral
+   character is none (`planned::plan_slack`), as within reach of a sample the
+   plan passed a wall closely. Traffic still hands character back.
+3. **The plan whole on the approach**: no level margin on the plan's targets
+   and the plan's full pace (`planned::Approach::Diving`), and no lift for a
+   rival ahead. A Skilled craft held to 0.96 of the pace, and a Novice braking
+   at its 0.55 margin for a ceiling beyond the gap, slowed from 118-120 to 106
+   u/s before the pad and left the lip at 153-157.
+
+The plan is learned with the same driver, so its own lap takes the lip nose
+up too. With the rule every hull lands in the plan's stepping: 169.3, 173.4,
+173.6 and 172.8 u/s at the lip for hulls 1, 3, 5 and 7.
+
+**Which takeoffs it touches.** `ai_speed_plan_sweep::takeoff_census` lists
+every takeoff of every layout, both directions: Pulse 11, Pure 1, HD 8, 2048
+28, Omega 28. Two dive, on both 2048 and Omega: `sol`'s lips at 2859 (run-up
+slope -0.56) and 3556 (-0.71). The steepest run-up anywhere else is -0.37
+(Pulse `09_Track`), then -0.34. So no other layout's line, plan or race moves:
+`race_ground_truth`'s twelve circuits print the same lines before and after,
+and no determinism reference moved.
+
+#### Before and after
+
+A field of seven, VENOM, slot 0 sitting out, 12,000 ticks, respawns per craft
+(slots 1 to 7), and craft with a flying lap (`OAG_SWEEP=1` on
+`sol_ground_truth::a_field_of_seven_laps_*`):
+
+| | before | lap | after | lap |
+| --- | --- | --- | --- | --- |
+| 2048 Novice | 19/35/33/34/33/3/20 | 1 of 7 | 2/1/2/3/0/0/1 | 7 |
+| 2048 Skilled | 21/8/33/35/34/20/35 | 1 | 1/2/0/2/3/1/0 | 7 |
+| 2048 Elite | 21/17/35/24/3/7/1 | 3 | 0/2/0/0/4/2/2 | 7 |
+| 2048 Ace | 21/3/22/22/5/6/1 | 4 | 3/3/0/1/2/0/13 | 7 |
+| Omega Novice | 19/9/28/5/32/3/35 | 3 | 2/0/0/5/1/0/1 | 7 |
+| Omega Skilled | 20/11/7/3/21/21/26 | 3 | 4/0/0/1/0/0/0 | 7 |
+| Omega Elite | 9/9/10/3/8/2/9 | 7 | 2/0/0/1/1/1/1 | 7 |
+| Omega Ace | 9/4/8/7/5/0/1 | 7 | 0/0/1/1/1/0/0 | 7 |
+
+Before, every respawn was a `ResetZone` relocation to 3262-3280. The claim
+test stops when the last craft has its flying lap: 11,095, 9,917, 8,942 and
+11,787 ticks on 2048 (Novice to Ace) and 11,189, 9,794, 8,501 and 8,351 on
+Omega. Shield was not measured in this lane, per lap or at the end of the run.
+
+The three parts, added in order (respawns per craft; craft with a flying lap):
+
+| | nose up only | and the line and the full pace share | and no level margin (the rule) |
+| --- | --- | --- | --- |
+| 2048 Novice | 19/34/13/24/34/2/5; 2 | 4/9/0/8/0/0/1; 7 | 2/1/2/3/0/0/1; 7 |
+| 2048 Skilled | 19/11/4/4/1/5/4; 6 | 5/6/0/3/4/0/0; 7 | 1/2/0/2/3/1/0; 7 |
+| 2048 Elite | 6/3/1/3/2/3/1; 7 | 9/8/0/5/1/1/2; 7 | 0/2/0/0/4/2/2; 7 |
+| 2048 Ace | 1/0/29/1/1/0/4; 6 | 1/1/1/2/2/0/2; 7 | 3/3/0/1/2/0/13; 7 |
+| Omega Novice | 13/0/0/0/33/3/2; 5 | 2/0/0/5/1/0/1; 7 | the same |
+| Omega Skilled | 3/1/1/2/3/9/1; 7 | 4/0/0/1/0/0/0; 7 | the same |
+
+**2048 and Omega: ported.** One rule, both measured, each pinned by its four
+levels (`sol_ground_truth::a_field_of_seven_laps_2048_sol_at_*` and
+`..._omega_sol_at_*`).
+
+#### Tried and not kept
+
+- **No character back in traffic on the approach** (a slack of zero whatever
+  the rivals do). On the second column's rule the eight runs summed 83
+  respawns against 98, with the same craft lapping. Not separated from the
+  field's run-to-run scatter, and a field held to one line runs nose to tail
+  and sticks (`craft_sticking_ground_truth`, the reason `planned::plan_slack`
+  hands character back in traffic at all).
+
+#### Still open on `sol`
+
+- **The gap is still missed 5 to 10 times a run on 2048** (1 to 3 on Omega):
+  a craft in traffic more than about 7 units off the line misses the pad.
+- **A relocated craft loops at the earlier gap** (ring samples 1118-1306, 280
+  units, not a diving takeoff: lip slope -0.01). A flying craft leaves that
+  lip at 191 u/s. One put back at about 957 reaches it at 178-179 through the
+  pads at 990 and 1110, lands 21 units left of the line and 20 under it, and
+  meets a reset volume: 2048 Ace's slot 7 did it 12 times in a row, and it is
+  why that row's last flying lap comes at tick 11,787. Seen once in the
+  "nose up only" column too (29 times, relocated to 946).
+- **A reset-volume respawn at 4100-4199**, 2 to 7 a run at Novice and
+  Skilled on both titles. Not looked into.
+- The claim's window is thin where a craft loops: 2048 Ace has 213 ticks to
+  spare and Novice 905, Omega Novice 811.
 
 ## Branch choice at a fork
 

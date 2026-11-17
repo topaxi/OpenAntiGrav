@@ -510,3 +510,68 @@ fn plan_floor_report() {
         }
     }
 }
+
+/// Every takeoff on every layout of `OAG_SWEEP_TITLE`: the lip's line index
+/// (the first unsupported sample of a run `oag_ai::Line::is_takeoff` leads
+/// into), the gap's length in samples and units, how steeply the line runs at
+/// the lip (world-Y of its direction over the last eight samples of road),
+/// across the gap (lip to the first supported sample after it) and over the
+/// whole run-up, and whether the driver takes it nose up
+/// (`oag_ai::Line::is_diving_takeoff`).
+#[test]
+#[ignore = "a probe: set OAG_SWEEP, read the lines"]
+fn takeoff_census() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(image) = image() else {
+        return;
+    };
+    for reversed in [false, true] {
+        for (id, entry) in layouts(reversed) {
+            let Ok(loaded) = race::load(&race::Options {
+                source: image.display().to_string(),
+                class: "VENOM".to_string(),
+                mode: oag_race::Mode::SingleRace,
+                track: Some(entry.clone()),
+                ..race::Options::default()
+            }) else {
+                eprintln!("skipping {entry}: it does not load");
+                continue;
+            };
+            let race = race::Race::start(loaded.setup);
+            let line = race.racing_line();
+            let n = line.len();
+            for lip in 0..n {
+                let before = (lip + n - 1) % n;
+                if !line.is_unsupported(lip)
+                    || line.is_unsupported(before)
+                    || !line.is_takeoff(before)
+                {
+                    continue;
+                }
+                let run = (0..n)
+                    .take_while(|step| line.is_unsupported((lip + step) % n))
+                    .count();
+                let far = (lip + run) % n;
+                let road = (line.point(before) - line.point((lip + n - 9) % n)).normalize_or_zero();
+                let across = line.point(far) - line.point(before);
+                let first = (0..n)
+                    .take_while(|back| line.is_takeoff((before + n - back) % n))
+                    .count();
+                let run_up = (line.point(before) - line.point((before + n + 1 - first) % n))
+                    .normalize_or_zero();
+                println!(
+                    "TAKEOFF {} {id} {} lip {lip} gap {run} samples {:.0} units, lip slope {:.2}, across slope {:.2}, run-up slope {:.2}, diving {}",
+                    title(),
+                    if reversed { "rev" } else { "fwd" },
+                    across.length(),
+                    road.y,
+                    across.normalize_or_zero().y,
+                    run_up.y,
+                    line.is_diving_takeoff(before),
+                );
+            }
+        }
+    }
+}

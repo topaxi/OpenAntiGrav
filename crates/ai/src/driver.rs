@@ -178,6 +178,17 @@ pub struct Driver {
 /// a stacked section. Eight craft pay it every tick.
 const SEARCH_WINDOW: usize = 48;
 
+/// The pitch command held on the ground over the run-up to a gap the road
+/// dives into ([`Line::is_diving_takeoff`]): full deflection, nose up.
+///
+/// **Chosen, not measured**: what a player does at a lip on a descent. On
+/// 2048's `sol` (the gap after the pad at ring sample 3530) a craft that
+/// follows the road off the lip sinks under the far side whatever it holds in
+/// the air; nose up on the run-up it lands, 5 units/s slower at the lip. Half
+/// deflection does not carry the slowest hull over
+/// (`docs/gameplay/ai.md`, "A lip on a descent is taken nose up").
+const PULL_UP: f32 = 1.0;
+
 /// The most provocation a driver can carry, in ticks (ten seconds), so a craft
 /// having a bad race cannot bank grievance forever.
 const PROVOCATION_MAX: u16 = 600;
@@ -362,7 +373,8 @@ impl Driver {
         let target = match followed {
             Some(plan) => {
                 let run_up = line.takeoff_within(index, planned::RUN_UP_REACH);
-                let target = planned::target(plan, index, speed, tuning, &personality, run_up);
+                let approach = planned::Approach::at(line, index, run_up);
+                let target = planned::target(plan, index, speed, tuning, &personality, approach);
                 // A plan learned on a quicker-turning hull is followed at the
                 // share this one can carry (`SpeedPlan::share_for`), in corners
                 // only: the speed a gap needs is the gap's, whatever the hull
@@ -396,7 +408,7 @@ impl Driver {
         };
         // No lift on the run-up to a gap: clearing speed cannot be bought back
         // in the air. Chosen, not measured.
-        let thrust = if line.is_takeoff(index) {
+        let thrust = if line.is_takeoff(index) || line.is_diving_approach(index) {
             thrust
         } else {
             thrust * self.caution(ctx, &personality)
@@ -421,10 +433,12 @@ impl Driver {
         ShipControls {
             steer_x: steer.command,
             // `oag_physics::forces::evaluate` reads `grounded` (last frame's contacts) on entry, as this does.
-            steer_y: if state.grounded > 0.0 {
-                0.0
-            } else {
+            steer_y: if state.grounded <= 0.0 {
                 ctx.air_trim
+            } else if line.is_diving_takeoff(index) {
+                PULL_UP
+            } else {
+                0.0
             },
             thrust,
             airbrake_left,

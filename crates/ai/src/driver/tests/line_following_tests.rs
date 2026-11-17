@@ -562,3 +562,47 @@ fn a_craft_mid_flight_never_brakes_for_the_corner_ahead() {
         "airborne should not spend a symmetric brake it has no grip for"
     );
 }
+
+/// 800 samples one unit of `-z` apart, falling `fall` units each, with a
+/// 60-sample gap from sample 600.
+fn descent(fall: f32) -> Line {
+    let points = (0..800)
+        .map(|step| Vec3::new(0.0, -fall * step as f32, -(step as f32)))
+        .collect();
+    let unsupported = (0..800).map(|step| (600..660).contains(&step)).collect();
+    Line::new(points).with_unsupported(unsupported)
+}
+
+/// The pitch a driver holds at sample `index` of `line`, on the ground or off
+/// it, with an air trim of a quarter.
+fn pitch_at(line: &Line, index: usize, grounded: bool) -> f32 {
+    let mut driver = Driver {
+        index: index as u32,
+        ..Driver::default()
+    };
+    let mut state = craft(line.point(index), 100.0);
+    state.grounded = if grounded { 1.0 } else { 0.0 };
+    let tuning = Tuning::default();
+    driver
+        .drive(
+            &state,
+            &Context {
+                air_trim: 0.25,
+                ..Context::new(line, &tuning)
+            },
+        )
+        .steer_y
+}
+
+/// 2048's `sol`: a craft that follows a steep descent off its lip leaves
+/// already sinking, so the driver pulls the nose up over the run-up.
+#[test]
+fn a_grounded_craft_holds_the_nose_up_on_a_diving_run_up_and_nowhere_else() {
+    let steep = descent(1.0);
+    assert_eq!(pitch_at(&steep, 590, true), 1.0);
+    // The approach before the run-up, and the air over it, are as ever.
+    assert_eq!(pitch_at(&steep, 400, true), 0.0);
+    assert_eq!(pitch_at(&steep, 590, false), 0.25);
+    // A gentler run-up is driven level.
+    assert_eq!(pitch_at(&descent(0.4), 590, true), 0.0);
+}

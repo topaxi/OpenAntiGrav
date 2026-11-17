@@ -23,6 +23,16 @@ pub const TAKEOFF_RUNUP: f32 = 75.0;
 /// the jumps that matter are 50 samples and up.
 pub const TAKEOFF_MIN_RUN: usize = 40;
 
+/// How steeply the road must fall over a takeoff's run-up, as the world-Y of
+/// its direction, for the driver to hold the nose up into the gap
+/// ([`Line::is_diving_takeoff`]).
+///
+/// **Chosen, not measured.** 2048's and Omega's `sol` leave two lips down a
+/// descent of -0.67 and -0.69; the steepest run-up on any other layout of the
+/// five titles is far short of it (`docs/gameplay/ai.md`, "A lip on a
+/// descent is taken nose up").
+pub const DIVING_TAKEOFF: f32 = -0.5;
+
 /// How much room a craft has either side of the line, and which way "aside" is.
 ///
 /// **Both bounds are relative to the line**, so `left` is at most zero and
@@ -93,6 +103,13 @@ pub struct Line {
     /// Parallel to [`Self::points`], or empty: `true` on the [`TAKEOFF_RUNUP`]
     /// of road before each run of unsupported samples. See [`Self::is_takeoff`].
     takeoff: Vec<bool>,
+    /// Parallel to [`Self::points`], or empty: the [`Self::takeoff`] samples
+    /// whose road dives into the gap. See [`Self::is_diving_takeoff`].
+    diving: Vec<bool>,
+    /// Parallel to [`Self::points`], or empty: the [`Self::diving`] samples
+    /// and the [`RUN_UP_REACH`] of line before them. See
+    /// [`Self::is_diving_approach`].
+    diving_approach: Vec<bool>,
     /// Empty, or [`Self::max_curvature_stepped`]'s answers for one span. See
     /// [`Self::with_strides`].
     strides: Strides,
@@ -125,6 +142,8 @@ impl Line {
             corridor: Vec::new(),
             unsupported: Vec::new(),
             takeoff: Vec::new(),
+            diving: Vec::new(),
+            diving_approach: Vec::new(),
             strides: Strides::default(),
         }
     }
@@ -144,6 +163,8 @@ impl Line {
             corridor,
             unsupported: Vec::new(),
             takeoff: Vec::new(),
+            diving: Vec::new(),
+            diving_approach: Vec::new(),
             strides: Strides::default(),
         }
     }
@@ -168,7 +189,7 @@ impl Line {
         } else {
             Vec::new()
         };
-        self.takeoff = self.takeoff_runups();
+        (self.takeoff, self.diving, self.diving_approach) = self.takeoff_runups();
         self.strides = Strides::default();
         self
     }
@@ -213,9 +234,15 @@ impl Line {
     ///
     /// Walked backwards from the run's first sample summing segment lengths (a
     /// distance, since samples are unevenly spaced). Wraps.
-    fn takeoff_runups(&self) -> Vec<bool> {
+    ///
+    /// The second mask is the run-ups whose road falls at least as steeply as
+    /// [`DIVING_TAKEOFF`], end to end; the third adds the [`RUN_UP_REACH`] of
+    /// line before each of those.
+    fn takeoff_runups(&self) -> (Vec<bool>, Vec<bool>, Vec<bool>) {
         let n = self.points.len();
         let mut marked = vec![false; if self.unsupported.is_empty() { 0 } else { n }];
+        let mut diving = marked.clone();
+        let mut approach = marked.clone();
         for start in 0..marked.len() {
             let previous = (start + n - 1) % n;
             if !self.unsupported[start] || self.unsupported[previous] {
@@ -238,8 +265,51 @@ impl Line {
                 marked[back] = true;
                 at = back;
             }
+            // `at` is the run-up's first sample, `previous` its last.
+            let fall = (self.points[previous] - self.points[at])
+                .normalize_or_zero()
+                .y;
+            if at != start && fall <= DIVING_TAKEOFF {
+                let mut back = previous;
+                loop {
+                    diving[back] = true;
+                    approach[back] = true;
+                    if back == at {
+                        break;
+                    }
+                    back = (back + n - 1) % n;
+                }
+                let mut reached = 0.0;
+                while reached < RUN_UP_REACH {
+                    let before = (back + n - 1) % n;
+                    if before == start {
+                        break;
+                    }
+                    reached += (self.points[back] - self.points[before]).length();
+                    approach[before] = true;
+                    back = before;
+                }
+            }
         }
-        marked
+        (marked, diving, approach)
+    }
+
+    /// Whether `index` lies on the way into a gap the road dives into: on
+    /// its run-up ([`Self::is_diving_takeoff`]) or within [`RUN_UP_REACH`]
+    /// before it. Clearing such a gap leaves no room for a level's share of
+    /// the pace or a pilot's own line.
+    #[must_use]
+    pub fn is_diving_approach(&self, index: usize) -> bool {
+        !self.diving_approach.is_empty() && self.diving_approach[index % self.diving_approach.len()]
+    }
+
+    /// Whether `index` lies on the run-up to a gap the road dives into: a
+    /// takeoff run-up ([`Self::is_takeoff`]) falling at least as steeply as
+    /// [`DIVING_TAKEOFF`]. A craft that follows such a road off its lip leaves
+    /// already sinking; the driver holds the nose up over it.
+    #[must_use]
+    pub fn is_diving_takeoff(&self, index: usize) -> bool {
+        !self.diving.is_empty() && self.diving[index % self.diving.len()]
     }
 
     /// Whether `index` lies on the run-up to a gap: the road a craft is still

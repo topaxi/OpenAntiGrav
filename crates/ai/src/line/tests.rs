@@ -388,3 +388,53 @@ fn a_tabulated_line_reads_the_same_bits_as_the_walk() {
         assert_eq!(a.to_bits(), b.to_bits(), "another chord walks");
     }
 }
+
+/// 800 samples one unit of `-z` apart, falling `fall` units each, with a
+/// 60-sample gap from sample 600.
+fn descent(fall: f32) -> Line {
+    let points = (0..800)
+        .map(|step| Vec3::new(0.0, -fall * step as f32, -(step as f32)))
+        .collect();
+    let unsupported = (0..800).map(|step| (600..660).contains(&step)).collect();
+    Line::new(points).with_unsupported(unsupported)
+}
+
+/// 2048's `sol`: a lip down a descent of -0.7 is taken nose up, and the line
+/// before it leaves no room for a level's share or a pilot's own line.
+#[test]
+fn a_run_up_down_a_steep_descent_is_a_diving_takeoff() {
+    let steep = descent(1.0);
+    assert!(steep.is_takeoff(599));
+    assert!(steep.is_diving_takeoff(599));
+    assert!(steep.is_diving_takeoff(560));
+    // The run-up is `TAKEOFF_RUNUP` of road, 53 samples of this descent.
+    assert!(!steep.is_takeoff(540));
+    assert!(!steep.is_diving_takeoff(540));
+    assert!(steep.is_diving_approach(599));
+    assert!(steep.is_diving_approach(540));
+    assert!(steep.is_diving_approach(300));
+    // `RUN_UP_REACH` before the run-up is 318 samples; nothing further back,
+    // in the gap or after it.
+    assert!(!steep.is_diving_approach(200));
+    assert!(!steep.is_diving_approach(600));
+    assert!(!steep.is_diving_approach(700));
+}
+
+/// The steepest run-up on any other layout falls at -0.37 (Pulse `09_Track`):
+/// a takeoff, and not one the driver changes anything for.
+#[test]
+fn a_run_up_down_a_gentler_descent_is_only_a_takeoff() {
+    let gentle = descent(0.4);
+    assert!(gentle.is_takeoff(599));
+    for index in 0..800 {
+        assert!(!gentle.is_diving_takeoff(index), "{index}");
+        assert!(!gentle.is_diving_approach(index), "{index}");
+    }
+    let flat = Line::new(
+        (0..64)
+            .map(|step| Vec3::new(0.0, 0.0, -(step as f32)))
+            .collect(),
+    );
+    assert!(!flat.is_diving_takeoff(10));
+    assert!(!flat.is_diving_approach(10));
+}

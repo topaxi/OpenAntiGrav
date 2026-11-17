@@ -35,6 +35,10 @@ const NOVICE_GAP: f32 = 0.452_277_25;
 /// exactly, an Elite spends a third, a Skilled two thirds, a Novice all. **Within
 /// [`TIGHT_REACH`] of a sample the plan passed a wall closely, the level's share is
 /// none**, whatever the level: there the plan's line is the only one known to fit.
+/// **The same on the way into a gap the road dives into**
+/// (`Line::is_diving_approach`): on 2048's `sol` the pad that makes the clearing
+/// speed is 7 units either side of the plan's line, and a lone Ace 9 wide of it
+/// missed the pad every time.
 /// Traffic still hands character back there (zeroing it too put
 /// `craft_sticking_ground_truth` over its limit, 2,002 pair-ticks against 2,000). The
 /// plan is the speed the craft carries *on* the line; a pilot holding its own
@@ -46,7 +50,7 @@ pub(super) fn plan_slack(ctx: &Context<'_>, personality: &Personality, index: us
     let Some(plan) = ctx.plan.filter(|plan| plan.len() == ctx.line.len()) else {
         return 1.0;
     };
-    if plan.tight_within(index, TIGHT_REACH) {
+    if plan.tight_within(index, TIGHT_REACH) || ctx.line.is_diving_approach(index) {
         return traffic(ctx);
     }
     let level = ((1.0 - plan_margin(ctx.tuning, personality)) / NOVICE_GAP).clamp(0.0, 1.0);
@@ -92,23 +96,61 @@ pub(crate) const RUN_UP_REACH: f32 = 450.0;
 /// measured off the original.**
 const RUN_UP_SHARE: f32 = 0.96;
 
+/// How much of a plan a driver gives away at a sample, by what lies ahead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Approach {
+    /// No takeoff within [`RUN_UP_REACH`]: the level's margin and its share of
+    /// the pace.
+    Open,
+    /// A takeoff within [`RUN_UP_REACH`]: the share of the pace is at least
+    /// [`RUN_UP_SHARE`].
+    RunUp,
+    /// On the way into a gap the road dives into
+    /// (`Line::is_diving_approach`): **the plan whole**, no margin and the
+    /// full pace, whatever the level. The plan's own lap clears such a gap
+    /// with nothing to spare: on 2048's `sol` a Skilled craft held to 0.96 of
+    /// the pace, and a Novice braking at its 0.55 margin for a ceiling beyond
+    /// the gap, slowed from 118-120 to 106 units/s before the pad and left
+    /// the lip at 153-157 against the 167 that lands. Chosen, not measured.
+    Diving,
+}
+
+impl Approach {
+    /// What `index` of `line` is, given `run_up` (a takeoff within
+    /// [`RUN_UP_REACH`], which the caller already asked).
+    pub(super) fn at(line: &crate::Line, index: usize, run_up: bool) -> Self {
+        if line.is_diving_approach(index) {
+            Self::Diving
+        } else if run_up {
+            Self::RunUp
+        } else {
+            Self::Open
+        }
+    }
+}
+
 /// The speed a driver of this level and character holds at `index` on `plan`:
 /// the plan's lowest target over the airbrake ramp ahead, times [`plan_margin`],
 /// and for lower levels no more than `Tuning::pace_share` of the plan's pace.
+/// The plan's own target on an [`Approach::Diving`].
 pub(super) fn target(
     plan: &SpeedPlan,
     index: usize,
     speed: f32,
     tuning: &Tuning,
     personality: &Personality,
-    run_up: bool,
+    approach: Approach,
 ) -> f32 {
-    let corners = plan.target_ahead(
+    let ahead = plan.target_ahead(
         index,
         speed,
         crate::plan::LEAD_TICKS * personality.patience,
         PLAN_DT,
-    ) * plan_margin(tuning, personality);
+    );
+    if approach == Approach::Diving {
+        return ahead;
+    }
+    let corners = ahead * plan_margin(tuning, personality);
     // The level's share of the plan's own pace, which reaches the straights; at
     // one it is no cap, so the top two levels drive the plan.
     // **Not much below the plan on the way into a jump**: a share of the pace
@@ -118,7 +160,7 @@ pub(super) fn target(
     // one: a Skilled craft landing at the plan's full pace at PHANTOM could not
     // brake to its corner margin and left the road at samples 330-410. Chosen,
     // not measured.
-    let share = if run_up {
+    let share = if approach == Approach::RunUp {
         tuning.pace_share.max(RUN_UP_SHARE)
     } else {
         tuning.pace_share
@@ -202,6 +244,41 @@ mod tests {
         );
         assert_eq!(slack(&tight, 0), 0.0);
         assert_eq!(slack(&tight, 151), slack(&open, 151));
+    }
+
+    /// 800 samples one unit of `-z` apart, falling a unit each, with a
+    /// 60-sample gap from sample 600: a diving takeoff.
+    fn steep_descent() -> crate::Line {
+        let points = (0..800)
+            .map(|step| oag_core::math::Vec3::new(0.0, -(step as f32), -(step as f32)))
+            .collect();
+        let unsupported = (0..800).map(|step| (600..660).contains(&step)).collect();
+        crate::Line::new(points).with_unsupported(unsupported)
+    }
+
+    /// 2048's `sol`: on the way into a gap the road dives into, a Novice holds
+    /// the plan's line and its whole pace.
+    #[test]
+    fn a_novice_drives_the_plan_whole_into_a_diving_takeoff() {
+        let line = steep_descent();
+        let tuning = Difficulty::Novice.tune(&Tuning::default());
+        let plan = SpeedPlan::unlimited(&line);
+        let ctx = Context {
+            plan: Some(&plan),
+            ..Context::new(&line, &tuning)
+        };
+        assert_eq!(plan_slack(&ctx, &Personality::NEUTRAL, 100), 1.0);
+        assert_eq!(plan_slack(&ctx, &Personality::NEUTRAL, 400), 0.0);
+        assert_eq!(Approach::at(&line, 100, false), Approach::Open);
+        assert_eq!(Approach::at(&line, 100, true), Approach::RunUp);
+        assert_eq!(Approach::at(&line, 400, true), Approach::Diving);
+        assert_eq!(Approach::at(&line, 590, true), Approach::Diving);
+        // A target of 200 under the craft: a Novice takes 0.55 of it, and all of
+        // it into the gap.
+        let plan = SpeedPlan::unlimited(&line).with_target(400, 200.0);
+        let held = |approach| target(&plan, 400, 100.0, &tuning, &Personality::NEUTRAL, approach);
+        assert_eq!(held(Approach::Diving), 200.0);
+        assert!(held(Approach::RunUp) < 120.0, "{}", held(Approach::RunUp));
     }
 
     /// A driver over its target misses the braking point every time at rate one, except
