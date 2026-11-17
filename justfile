@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
+check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -212,7 +212,7 @@ test-data *ARGS:
 # `check-status` is left out: a member never commits `status.md`, so a stale table is
 # the lead's to regenerate, and the full `just` checks it.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
+gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # `just test`, narrowed to what `scripts/affected.py` selects. A selection is
 # nextest arguments, one per line; `--no-tests=pass` because a narrowed
@@ -1432,6 +1432,12 @@ merge-lane BRANCH MESSAGE:
 # docs page nobody wrote, which check-docs never sees. See ADR-0047
 check-captures:
     python3 scripts/check-ghidra-captures.py
+
+# Every grab of the HD/Fury original goes through scripts/rpcs3-drive.py's grab_with_clock, which writes the world
+# clock beside the frame (`<stem>.clock.json`); an RPCS3/HD script that shells out to `import`, `xwd` or x11grab itself
+# fails. A pair's own clock field is check-pair-provenance's (rule hd_world_clock). Offline.
+check-hd-clock-grab:
+    python3 scripts/check-hd-clock-grab.py
 
 # Every comparison pair records how its original was made, breaks no refusal rule and names no worktree or
 # scratch path (scripts/compare_provenance.py, docs/tools/compare-page.md "Provenance"). The pair scan reads

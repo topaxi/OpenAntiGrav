@@ -40,10 +40,7 @@ from rpcs3_debugger import Debugger  # noqa: E402
 
 
 def grab(path, crop):
-    result = subprocess.run(
-        ["import", "-display", drive.DISPLAY, "-window", "root", "-crop", crop,
-         "+repage", str(path)], capture_output=True)
-    return path if result.returncode == 0 else None
+    return drive.screenshot(path, crop=crop)
 
 
 def main():

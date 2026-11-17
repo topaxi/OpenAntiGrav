@@ -507,7 +507,74 @@ def emulator_env():
     return env
 
 
-def screenshot(path, trim=False):
+#: The `Session` a grab reads the world clock through, and the node sample cached between grabs
+#: (`rpcs3_hd_field.world_clock_record`). A grab with no `Session` in the process reads through the live `serve`.
+GRAB = {"session": None, "cache": {}}
+
+
+def clock_sidecar_path(path):
+    """`shot.png` -> `shot.clock.json`, never `shot.json` (several film scripts write that one)."""
+    return Path(path).with_suffix(".clock.json")
+
+
+def world_clock_now():
+    """The original's world clock record now (`rpcs3_hd_field.world_clock_record`); never raises."""
+    import rpcs3_hd_field
+    try:
+        session = GRAB["session"]
+        if session is not None and not session.attach and session.proc is not None:
+            mem = session.open_mem()
+        else:
+            info = live_session()
+            if info is None:
+                raise OSError("no emulator to read the clock from")
+            mem = RemoteMem(info["socket"])
+        rec = rpcs3_hd_field.world_clock_record(rpcs3_hd_field.Mem(mem), GRAB["cache"])
+    except Exception as error:  # noqa: BLE001 - a missing clock is recorded, not raised
+        rec = {"world_clock_s": None, "lap_clock_s": None, "world_clock_offset_s": None, "nodes": None, "total": None,
+               "reason": "clock read failed (%s: %s)" % (type(error).__name__, error), "scan": None}
+    rec["screen"] = current_screen()
+    return rec
+
+
+def grab_with_clock(path, trim=False, crop=None, display=None):
+    """Grab the emulator's display and record the world clock beside it: `(path or None, clock record)`.
+
+    Every grab of the original goes through here (`just check-hd-clock-grab` fails an HD script that shells out to
+    `import` itself). The clock is read right after the grab returns and written to `<stem>.clock.json`
+    (`world_clock_s`, `lap_clock_s`, `world_clock_offset_s`, or `null` with a `reason` outside a race), so a loose
+    frame carries it as a pair does. `crop` is an ImageMagick geometry; `display` defaults to this module's own.
+    """
+    command = ["import", "-display", display or DISPLAY, "-window", "root"]
+    if crop:
+        command += ["-crop", crop, "+repage"]
+    result = subprocess.run(command + [str(path)], capture_output=True)
+    if result.returncode != 0:
+        print("screenshot failed: %s" % result.stderr.decode()[:160], file=sys.stderr)
+        return None, None
+    clock = world_clock_now()
+    if trim:
+        subprocess.run(
+            ["mogrify", "-bordercolor", "black", "-fuzz", "0%", "-trim",
+             "+repage", str(path)],
+            capture_output=True)
+    clock["grabbed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    clock["image"] = Path(path).name
+    clock_sidecar_path(path).write_text(json.dumps(clock, indent=1) + "\n")
+    return path, clock
+
+
+def record_clock(path):
+    """The clock sidecar for a recording that is not one frame (a film): the clock at its start, `<stem>.clock.json`."""
+    clock = world_clock_now()
+    clock["grabbed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    clock["image"] = Path(path).name
+    clock["note"] = "taken when the recording started; the film's frames are not individually stamped"
+    clock_sidecar_path(path).write_text(json.dumps(clock, indent=1) + "\n")
+    return clock
+
+
+def screenshot(path, trim=False, crop=None, display=None):
     """Grab the virtual root window. Returns the path, or None if it failed.
 
     `trim` crops the pure-black border away, which matters because the root
@@ -515,21 +582,10 @@ def screenshot(path, trim=False):
     somewhere inside it - a comparison against a rendered frame has to be of
     the frame, not of the desktop it happened to be presented on. The crop is
     on exactly `#000000` and nothing near it, so a dark scene keeps its own
-    black; only pixels no renderer wrote are removed.
+    black; only pixels no renderer wrote are removed. The world clock goes to
+    `<stem>.clock.json` beside the image (`grab_with_clock`).
     """
-    result = subprocess.run(
-        ["import", "-display", DISPLAY, "-window", "root", str(path)],
-        capture_output=True)
-    if result.returncode != 0:
-        print("screenshot failed: %s" % result.stderr.decode()[:160],
-              file=sys.stderr)
-        return None
-    if trim:
-        subprocess.run(
-            ["mogrify", "-bordercolor", "black", "-fuzz", "0%", "-trim",
-             "+repage", str(path)],
-            capture_output=True)
-    return path
+    return grab_with_clock(path, trim, crop, display)[0]
 
 
 #: One long-lived emulator a member keeps up between captures (`serve`). The
@@ -778,6 +834,7 @@ class Session:
             attach = os.environ.get("OAG_RPCS3_ATTACH") == "1"
         self.attach = attach
         self.serving = False
+        GRAB["session"] = self
 
     def _enter_attached(self):
         info = live_session()
@@ -966,6 +1023,7 @@ class Session:
         """
         self.home_menu_select("Take Screenshot")
         self.pad.press("cross", 0.15)
+        record_clock(self.log_dir / ("rpcs3-framebuffer-%s.png" % time.strftime("%H%M%S")))
         time.sleep(3.0)
 
     def toggle_recording(self):
@@ -1491,6 +1549,15 @@ def cmd_shot(args):
     return 0
 
 
+def cmd_grab(args):
+    """One frame and its clock sidecar, for the shell scripts that walk menus."""
+    path, clock = grab_with_clock(args.path, args.trim, args.crop, args.display)
+    if path is None:
+        return 1
+    print("%s world clock %s (offset %s)" % (path, clock["world_clock_s"], clock["world_clock_offset_s"]), flush=True)
+    return 0
+
+
 def emulator_screenshots(title_id="BCES00664"):
     """Every screenshot RPCS3 has written for a title, oldest first."""
     root = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
@@ -1745,7 +1812,7 @@ def cmd_capture(args):
                 # lap clock lagged RAM's by 0.1 to 0.3 s on the 2026-10-21 HD pairs). `OAG_CAPTURE_FLUSH`
                 # seconds let it catch up first.
                 time.sleep(float(os.environ.get("OAG_CAPTURE_FLUSH", "0")))
-                shot = screenshot(out / ("%s.png" % stem), trim=True)
+                shot, grab_clock = grab_with_clock(out / ("%s.png" % stem), trim=True)
                 # The player's body at the same instant as the frame and the camera.
                 try:
                     player_ship, player_body = rpcs3_place.find_player(gdb)
@@ -1771,8 +1838,9 @@ def cmd_capture(args):
                     except Exception as error:  # noqa: BLE001 - the phase is a bonus
                         print("  %s: no gantry time (%s)" % (stem, error), flush=True)
                     try:
-                        # The scenery's animation clock in the same pause (`world_clock_offset_s` of the pair).
-                        ship_pose["scenery_clock"] = rpcs3_hd_field.scenery_clock(rpcs3_hd_field.Mem(session.open_mem()))
+                        # The scenery's animation clock in the same pause, read with the frame (`world_clock_offset_s` of the pair).
+                        ship_pose["scenery_clock"] = (None if grab_clock is None or grab_clock["world_clock_s"] is None else
+                                                      {"time_s": grab_clock["world_clock_s"], "nodes": grab_clock["nodes"], "total": grab_clock["total"]})
                     except Exception as error:  # noqa: BLE001 - the phase is a bonus
                         print("  %s: no scenery clock (%s)" % (stem, error), flush=True)
                     if args.field:
@@ -2514,6 +2582,12 @@ def main(argv=None):
     boot.add_argument("--hold", type=float, default=30.0)
     boot.set_defaults(run=cmd_boot)
 
+    grab = sub.add_parser("grab", help="grab the display to PATH and write PATH's world clock sidecar (`grab_with_clock`)")
+    grab.add_argument("path")
+    grab.add_argument("--display", default=None, help="X display, default this module's")
+    grab.add_argument("--crop", default=None, help="ImageMagick geometry")
+    grab.add_argument("--trim", action="store_true")
+    grab.set_defaults(run=cmd_grab)
     shot = sub.add_parser("shot")
     shot.add_argument("--screen", default="Main Menu")
     shot.add_argument("--timeout", type=float, default=180.0)
