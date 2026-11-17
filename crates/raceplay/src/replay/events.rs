@@ -99,12 +99,12 @@ impl Race {
     /// The driver is seeded from the race seed and the slot and placed on the line where the
     /// craft is, the same on every peer; the person's own driver state was never used.
     pub fn set_away(&mut self, slot: usize) -> bool {
-        if !self.write_away(slot) {
-            return false;
-        }
+        let changed = self.write_away(slot);
         #[cfg(feature = "view")]
-        self.record_event(slot, Kind::Presence, 0);
-        true
+        if changed {
+            self.record_event(slot, Kind::Presence, 0);
+        }
+        changed
     }
 
     /// A returning person is handed the craft back: for [`HAND_BACK_SECONDS`] the driver keeps
@@ -112,12 +112,12 @@ impl Race {
     /// pickup held before the drop stays held. Absorb cancels the countdown (a recorded
     /// input). Recorded as a [`Kind::Presence`] event. Returns whether the seat changed.
     pub fn hand_back(&mut self, slot: usize) -> bool {
-        if !self.write_hand_back(slot) {
-            return false;
-        }
+        let changed = self.write_hand_back(slot);
         #[cfg(feature = "view")]
-        self.record_event(slot, Kind::Presence, 1);
-        true
+        if changed {
+            self.record_event(slot, Kind::Presence, 1);
+        }
+        changed
     }
 
     fn write_away(&mut self, slot: usize) -> bool {
