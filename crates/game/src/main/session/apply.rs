@@ -612,6 +612,19 @@ impl Session {
                     return;
                 }
             },
+            // Read when the next race builds its scene: the maps are bound by
+            // every drawable, so their size is fixed for a race.
+            "graphics.shadow_resolution" => match text.parse::<display::ShadowResolution>() {
+                Ok(resolution) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.shadow_resolution = resolution;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             // Read when the next race loads its circuit: the water families
             // are classified into their material slots there
             // (`oag_mesh::mesh::WaterLaw`).

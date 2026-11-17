@@ -648,10 +648,7 @@ impl super::super::Scene {
         if let Ok(dump) = std::env::var(DUMP_SHADOW_MAP_VAR) {
             let texels = self.shadow_map.borrow().read_back(device, queue);
             let rgba: Vec<u8> = texels.iter().flat_map(|t| [*t, *t, *t, 255]).collect();
-            let (width, height) = (
-                oag_render::shadow::map::ATLAS_WIDTH,
-                oag_render::shadow::map::ATLAS_HEIGHT,
-            );
+            let (width, height) = self.shadow_map.borrow().resolution().atlas();
             std::fs::write(&dump, oag_texture::png::encode_rgba(width, height, &rgba))
                 .map_err(|error| anyhow::anyhow!("writing {dump}: {error}"))?;
             println!("wrote {dump} (shadow atlas, {width}x{height})");
@@ -705,6 +702,7 @@ impl super::super::Scene {
         mapped_fit(
             race.ship_model_matrix_of(slot),
             mapped_light(&self.light, race.scenery_fx().sun(self.anim_clock.get())),
+            self.shadow_resolution.depth_size(),
         )
     }
 
@@ -717,6 +715,7 @@ impl super::super::Scene {
         mapped_far_fit(
             race.ship_model_matrix_of(slot),
             mapped_light(&self.light, race.scenery_fx().sun(self.anim_clock.get())),
+            self.shadow_resolution.depth_size(),
         )
     }
 
@@ -881,17 +880,21 @@ fn mapped_centre(player: oag_core::math::Mat4) -> Vec3 {
 /// The `mapped` tier's own fit, built and snapped in one place - so a caller
 /// cannot reach `render_depth` with an unsnapped `Fit` by skipping a step.
 ///
-/// Snapped against `shadow::map::DEPTH_SIZE`, the map this tier actually
-/// fills - not `shadow::map::SIZE`, which belongs to the coverage tier and
+/// Snapped against `depth_size`, the side of the map this tier actually
+/// fills (`shadow::map::Resolution::depth_size`) - not `shadow::map::SIZE`, which belongs to the coverage tier and
 /// breathes with its own caster grid every frame, so it has no fixed texel
 /// size worth snapping against. See `Fit::snapped`.
-fn mapped_fit(player: oag_core::math::Mat4, towards_light: Vec3) -> oag_render::shadow::map::Fit {
+fn mapped_fit(
+    player: oag_core::math::Mat4,
+    towards_light: Vec3,
+    depth_size: u32,
+) -> oag_render::shadow::map::Fit {
     oag_render::shadow::map::Fit {
         centre: mapped_centre(player),
         radius: MAPPED_RADIUS,
         towards_light,
     }
-    .snapped(oag_render::shadow::map::DEPTH_SIZE)
+    .snapped(depth_size)
 }
 
 /// Which way the `mapped` tier's light points, per title.
@@ -925,6 +928,7 @@ fn mapped_light(light: &oag_mesh::mesh_render::Light, track_sun: Option<[f32; 3]
 fn mapped_far_fit(
     player: oag_core::math::Mat4,
     towards_light: Vec3,
+    depth_size: u32,
 ) -> oag_render::shadow::map::Fit {
     let position = player.transform_point3(Vec3::ZERO);
     let lead = mapped_centre(player) - position;
@@ -933,7 +937,7 @@ fn mapped_far_fit(
         radius: MAPPED_FAR_RADIUS,
         towards_light,
     }
-    .snapped(oag_render::shadow::map::DEPTH_SIZE)
+    .snapped(depth_size)
 }
 
 /// [`MAPPED_DEPTH_BIAS`] in the far layer's own depth units.
@@ -1123,13 +1127,21 @@ mod tests {
     #[test]
     fn the_mapped_fit_snaps_its_centre() {
         let towards_light = Vec3::Y;
-        let base = mapped_fit(Mat4::IDENTITY, towards_light);
+        let base = mapped_fit(
+            Mat4::IDENTITY,
+            towards_light,
+            oag_render::shadow::map::DEPTH_SIZE,
+        );
         // Comfortably inside this centre's own rounding margin - see the
         // `map::tests::snap_fixture` comment for why a fixed-size nudge has
         // to be checked against the specific base it is nudging, not
         // assumed safe from its size alone.
         let nudged_player = Mat4::from_translation(Vec3::new(0.0, 0.0, 1e-4));
-        let nudged = mapped_fit(nudged_player, towards_light);
+        let nudged = mapped_fit(
+            nudged_player,
+            towards_light,
+            oag_render::shadow::map::DEPTH_SIZE,
+        );
         assert_eq!(
             nudged.matrix().to_cols_array(),
             base.matrix().to_cols_array(),
@@ -1154,8 +1166,10 @@ mod tests {
             for yaw in headings {
                 let player = Mat4::from_translation(Vec3::new(120.0, -7.0, 45.0))
                     * Mat4::from_rotation_y(yaw);
-                let near = mapped_fit(player, towards_light);
-                let far = mapped_far_fit(player, towards_light).matrix();
+                let near = mapped_fit(player, towards_light, oag_render::shadow::map::DEPTH_SIZE);
+                let far =
+                    mapped_far_fit(player, towards_light, oag_render::shadow::map::DEPTH_SIZE)
+                        .matrix();
                 // The near box's eight corners, through the far box's own
                 // projection: each must land inside its unit square and depth.
                 let near_inverse = near.matrix().inverse();

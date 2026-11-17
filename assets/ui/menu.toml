@@ -1285,6 +1285,19 @@ string_id = "OAG_GRAPHICS_SHADOWS"
 setting = "graphics.shadows"
 values = ["off", "blob", "original", "mapped"]
 
+# How many texels the shadow maps get. `original` is the title's own edge
+# sharpness; `high` and `ultra` are 2x and 4x the texels a side, sharper than
+# the original, for a GPU with room. It changes the tiers that render a map
+# (HD's per-craft maps under `original`, the depth map under `mapped`); Pulse's
+# projected hulls and the blob are geometry and do not move. Read when a race
+# builds its scene. See `docs/rendering/shadows.md`, "Shadow resolution".
+[[page.entry]]
+kind = "choice"
+label = "SHADOW RESOLUTION"
+string_id = "OAG_GRAPHICS_SHADOW_RESOLUTION"
+setting = "graphics.shadow_resolution"
+values = ["original", "high", "ultra"]
+
 
 # Which law draws a sea, a lake or a pool: `off` is the surface's constant
 # colour or texture, lit, with no wave normal, scroll or reflection; `original`

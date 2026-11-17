@@ -69,6 +69,87 @@ pub const RANK_SQUARES: [(u32, u32, u32); MAX_CASTERS] = [
     (512, 512, 32),
 ];
 
+/// The texel sizes of a [`Map`]: the side of the nearest craft's coverage square and the side of
+/// the `mapped` tier's depth map. Every other coverage square keeps its ratio to the nearest
+/// one ([`RANK_SIDES`]), so the atlas is [`RANK_SQUARES`] scaled whole.
+///
+/// What the player's shadow resolution picks, and what [`Self::ORIGINAL`] measures against the
+/// original, is in `docs/rendering/shadows.md`, "Shadow resolution".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Resolution {
+    /// A sixteenth of the nearest craft's side: every square's side and corner is a whole
+    /// multiple of it.
+    unit: u32,
+    depth: u32,
+}
+
+impl Resolution {
+    /// The sides the constants name: the original's own per-ship sides ([`RANK_SIDES`]) and
+    /// [`DEPTH_SIZE`].
+    pub const ORIGINAL: Self = Self {
+        unit: RANK_SIDES[0] / 16,
+        depth: DEPTH_SIZE,
+    };
+
+    /// The largest depth map side: two `Depth32Float` layers of it are 128 MiB.
+    pub const MAX_DEPTH: u32 = 4096;
+
+    /// The sizes a shadow resolution of `scale` builds: `scale` times [`DEPTH_SIZE`] (capped at
+    /// [`Self::MAX_DEPTH`]) and `scale` times a nearest-craft side of 768.
+    ///
+    /// **768 and not the original's 512, so that the default has the original's texels per
+    /// world unit.** The original fits each 512 map to the ship's own bounding box, 12 to 21
+    /// units across, which is 24 to 43 texels a unit; this renderer's box is 24 units
+    /// ([`CRAFT_HALF_EXTENT`], its margin ours), so 512 texels are 21 a unit and the shadow's
+    /// edge measured a third wider than the original's. 768 are 32 a unit, the middle of the
+    /// original's range: a **chosen** equivalent, the measurement in
+    /// `docs/rendering/shadows.md`, "Shadow resolution".
+    #[must_use]
+    pub const fn scaled(scale: u32) -> Self {
+        let depth = DEPTH_SIZE * scale;
+        Self {
+            unit: Self::ORIGINAL.unit * 3 / 2 * scale,
+            depth: if depth > Self::MAX_DEPTH {
+                Self::MAX_DEPTH
+            } else {
+                depth
+            },
+        }
+    }
+
+    /// The coverage atlas's width and height, in texels.
+    #[must_use]
+    pub const fn atlas(self) -> (u32, u32) {
+        (
+            ATLAS_WIDTH / Self::ORIGINAL.unit * self.unit,
+            ATLAS_HEIGHT / Self::ORIGINAL.unit * self.unit,
+        )
+    }
+
+    /// Where `rank`'s square sits in the atlas: `(x, y, side)` in texels.
+    #[must_use]
+    pub const fn square(self, rank: usize) -> (u32, u32, u32) {
+        let rank = if rank < MAX_CASTERS {
+            rank
+        } else {
+            MAX_CASTERS - 1
+        };
+        let (x, y, side) = RANK_SQUARES[rank];
+        let base = Self::ORIGINAL.unit;
+        (
+            x / base * self.unit,
+            y / base * self.unit,
+            side / base * self.unit,
+        )
+    }
+
+    /// The depth map's side, in texels.
+    #[must_use]
+    pub const fn depth_size(self) -> u32 {
+        self.depth
+    }
+}
+
 /// Half the side of the box each craft's maps are fitted to, in world units:
 /// 12, the original's fallback box (`(-6, -6, -6)..(6, 6, 6)`,
 /// `Shadow_BuildShipShadowMatrices`) plus a margin of 6 so a hull's silhouette
@@ -308,10 +389,11 @@ pub const DEPTH_LAYERS: u32 = 2;
 /// Separate from [`Map::render`] because it is arithmetic, so the same record
 /// the pass projects with is checked without a GPU.
 #[must_use]
-pub fn craft_shadow(fit: &Fit, rank: usize) -> CraftShadow {
-    let (x, y, side) = RANK_SQUARES[rank.min(MAX_CASTERS - 1)];
+pub fn craft_shadow(fit: &Fit, rank: usize, resolution: Resolution) -> CraftShadow {
+    let (x, y, side) = resolution.square(rank);
     let matrix = fit.snapped(side).craft_matrix();
-    let (width, height) = (ATLAS_WIDTH as f32, ATLAS_HEIGHT as f32);
+    let (width, height) = resolution.atlas();
+    let (width, height) = (width as f32, height as f32);
     CraftShadow {
         matrix: matrix.to_cols_array_2d(),
         rect: [
@@ -354,6 +436,7 @@ pub struct CraftCaster<'a> {
 /// and the per-caster uniforms.
 #[derive(Debug)]
 pub struct Map {
+    resolution: Resolution,
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     pipeline: wgpu::RenderPipeline,
@@ -424,12 +507,13 @@ fn slot_offset(slot: usize) -> u32 {
 impl Map {
     /// Builds the map and its caster pipeline.
     #[must_use]
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, resolution: Resolution) -> Self {
+        let (atlas_width, atlas_height) = resolution.atlas();
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("shadow map atlas"),
             size: wgpu::Extent3d {
-                width: ATLAS_WIDTH,
-                height: ATLAS_HEIGHT,
+                width: atlas_width,
+                height: atlas_height,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -541,8 +625,8 @@ impl Map {
         let depth = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("shadow depth map"),
             size: wgpu::Extent3d {
-                width: DEPTH_SIZE,
-                height: DEPTH_SIZE,
+                width: resolution.depth_size(),
+                height: resolution.depth_size(),
                 depth_or_array_layers: DEPTH_LAYERS,
             },
             mip_level_count: 1,
@@ -627,6 +711,7 @@ impl Map {
         });
 
         Self {
+            resolution,
             texture,
             view,
             pipeline,
@@ -660,6 +745,12 @@ impl Map {
     #[must_use]
     pub fn depth_matrix(&self) -> Mat4 {
         self.depth_matrix
+    }
+
+    /// The texel sizes this map was built at.
+    #[must_use]
+    pub fn resolution(&self) -> Resolution {
+        self.resolution
     }
 
     /// How many casters that pass drew.
@@ -846,7 +937,7 @@ impl Map {
         self.atlas_clear = crafts.is_empty();
         self.passes += 1;
         for (index, craft) in crafts.iter().enumerate() {
-            let record = craft_shadow(&craft.fit, craft.rank);
+            let record = craft_shadow(&craft.fit, craft.rank, self.resolution);
             if let Some(slot) = self.crafts.get_mut(craft.slot) {
                 *slot = record;
             }
@@ -881,7 +972,7 @@ impl Map {
             if craft.caster.ranges.is_empty() || !craft.seen {
                 continue;
             }
-            let (x, y, side) = RANK_SQUARES[craft.rank.min(MAX_CASTERS - 1)];
+            let (x, y, side) = self.resolution.square(craft.rank);
             // The viewport maps the craft's clip box onto its own square and
             // the scissor keeps what the box does not clip (the guard band)
             // out of the neighbouring squares.
@@ -904,15 +995,16 @@ impl Map {
     }
 
     /// Reads the atlas back as one byte per texel, row-major from the top -
-    /// [`ATLAS_WIDTH`] by [`ATLAS_HEIGHT`] of them - blocking on the GPU. For a
+    /// [`Resolution::atlas`] of them - blocking on the GPU. For a
     /// headless check or a dump; the frame never calls this.
     #[must_use]
     pub fn read_back(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> Vec<u8> {
-        let (width, height) = (ATLAS_WIDTH as usize, ATLAS_HEIGHT as usize);
-        let row = ATLAS_WIDTH.div_ceil(256) * 256;
+        let (atlas_width, atlas_height) = self.resolution.atlas();
+        let (width, height) = (atlas_width as usize, atlas_height as usize);
+        let row = atlas_width.div_ceil(256) * 256;
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("shadow map readback"),
-            size: u64::from(row * ATLAS_HEIGHT),
+            size: u64::from(row * atlas_height),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -924,12 +1016,12 @@ impl Map {
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(row),
-                    rows_per_image: Some(ATLAS_HEIGHT),
+                    rows_per_image: Some(atlas_height),
                 },
             },
             wgpu::Extent3d {
-                width: ATLAS_WIDTH,
-                height: ATLAS_HEIGHT,
+                width: atlas_width,
+                height: atlas_height,
                 depth_or_array_layers: 1,
             },
         );

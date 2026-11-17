@@ -418,6 +418,7 @@ pub fn capture(
     let mut shot_facts = shot::Facts::of(&loaded, options);
     let Loaded {
         shadows,
+        shadow_resolution,
         shadow_hulls,
         setup,
         mut hud,
@@ -667,6 +668,7 @@ pub fn capture(
         wo_composite,
         zone_grade,
         shadows,
+        shadow_resolution,
         shadow_hulls,
         behind_glass,
     )?;

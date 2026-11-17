@@ -20,6 +20,7 @@ mod hd_bomb_blast_ground_truth;
 mod hd_boot_ground_truth;
 mod hd_campaign_ground_truth;
 mod hd_cell_select_ground_truth;
+mod hd_craft_shadow_ground_truth;
 mod hd_endrace_ground_truth;
 mod hd_flyer_ground_truth;
 mod hd_fury_backdrop_ground_truth;

@@ -513,6 +513,7 @@ impl Stage {
             cannon_quad_textures,
             clouds,
             shadows,
+            shadow_resolution,
             shadow_hulls,
             campaign_2048_event,
             track_stats,
@@ -591,6 +592,7 @@ impl Stage {
             wo_composite,
             zone_grade,
             shadows,
+            shadow_resolution,
             shadow_hulls,
             behind_glass,
         )?);

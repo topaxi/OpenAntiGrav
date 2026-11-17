@@ -324,6 +324,9 @@ pub struct Scene {
     /// applies live; the strength in `Scene::shadow` is what turns it on. See
     /// `oag_render::shadow::map`.
     shadow_map: std::cell::RefCell<oag_render::shadow::map::Map>,
+    /// The texel sizes [`Self::shadow_map`] was built at, kept beside it so a fit is snapped
+    /// without borrowing the map.
+    shadow_resolution: oag_render::shadow::map::Resolution,
     /// How many `blob` silhouettes this project generated for want of the
     /// disc's own, and whether the log has said so yet - see
     /// `Scene::shadow_geometry`.
@@ -591,6 +594,7 @@ impl Scene {
         wo_composite: Option<oag_post::wo_composite::Params>,
         zone_grade: Option<crate::zone_grade::ZoneGrade>,
         shadows: Vec<oag_render::shadow::Silhouette>,
+        shadow_resolution: oag_display::display::ShadowResolution,
         shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
         behind_glass: behind_glass::BehindGlassModels,
     ) -> Result<Self> {
@@ -647,7 +651,9 @@ impl Scene {
         // inert, so the shadow row applies live without rebuilding a pipeline.
         // A caller that never casts pays one megabyte and a cleared pass.
         crate::stages::checkpoint()?;
-        let shadow_map = oag_render::shadow::map::Map::new(device);
+        let shadow_resolution =
+            oag_render::shadow::map::Resolution::scaled(shadow_resolution.scale());
+        let shadow_map = oag_render::shadow::map::Map::new(device, shadow_resolution);
         let sun_occlusion = oag_render::shadow::occlusion::Maps::new(
             device,
             &mesh_render::material_bind_group_layout(device),
@@ -1229,6 +1235,7 @@ impl Scene {
             sparks,
             shadow,
             shadow_map: std::cell::RefCell::new(shadow_map),
+            shadow_resolution,
             generated_silhouettes,
             shadow_silhouette_count,
             generated_silhouettes_said: std::cell::Cell::new(false),

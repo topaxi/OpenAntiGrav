@@ -930,6 +930,13 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) shadows: Option<oag_display::display::Shadows>,
 
+    /// How many texels the shadow maps get: original, high or ultra.
+    ///
+    /// Overrides `[render_profiles.<title>] shadow_resolution` for every title,
+    /// for this run only. See docs/rendering/shadows.md, "Shadow resolution".
+    #[arg(long)]
+    pub(crate) shadow_resolution: Option<oag_display::display::ShadowResolution>,
+
     /// Which screen filter draws the finished frame: `off`, a built-in such
     /// as `psp-3000` or `crt-interlaced`, or the stem of a `.wgsl` file in
     /// `<config dir>/oag/shaders/`.

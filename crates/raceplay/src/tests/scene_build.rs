@@ -217,6 +217,7 @@ pub(super) fn scene_over_post(
         wo_composite,
         None,
         Vec::new(),
+        Default::default(),
         Vec::new(),
         Default::default(),
     )
@@ -345,6 +346,7 @@ fn adverts_rebound(source: &str) -> Option<(usize, usize, usize)> {
         None,
         None,
         Vec::new(),
+        Default::default(),
         Vec::new(),
         Default::default(),
     )

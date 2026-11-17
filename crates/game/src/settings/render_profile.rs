@@ -336,6 +336,11 @@ pub struct RenderProfile {
     /// draws as `original`. See [`oag_display::display::Water`].
     #[serde(default)]
     pub water: oag_display::display::Water,
+    /// How many texels the shadow maps get: `original` (the default, the
+    /// title's own sharpness), `high` or `ultra`. Read when a race builds its
+    /// scene. See [`oag_display::display::ShadowResolution`].
+    #[serde(default)]
+    pub shadow_resolution: oag_display::display::ShadowResolution,
 }
 
 impl RenderProfile {
@@ -489,6 +494,7 @@ impl Default for RenderProfile {
             trail_length: oag_display::display::TrailLength::default(),
             weather: oag_display::display::Weather::default(),
             water: oag_display::display::Water::default(),
+            shadow_resolution: oag_display::display::ShadowResolution::default(),
         }
     }
 }
@@ -520,7 +526,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 19] = [
+pub(super) const PROFILE_KEYS: [&str; 20] = [
     "render_scale",
     "render_scale_chosen",
     "target_fps",
@@ -540,6 +546,7 @@ pub(super) const PROFILE_KEYS: [&str; 19] = [
     "trail_length",
     "weather",
     "water",
+    "shadow_resolution",
 ];
 
 /// The keys that used to live flat in `[graphics]` and now live in one

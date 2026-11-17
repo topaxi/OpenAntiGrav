@@ -176,6 +176,7 @@ impl Pending {
             own_shield: self.settings.graphics.own_shield,
             own_rockets: self.settings.graphics.own_rockets,
             water: oag_display::display::Water::default(),
+            shadow_resolution: oag_display::display::ShadowResolution::default(),
             foreign_track: self
                 .foreign_entry
                 .as_ref()

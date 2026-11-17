@@ -44,6 +44,7 @@ fn advanced(pulse_like: bool, weather: bool, trail_hits: bool) -> Vec<&'static s
         "graphics.motion_blur",
         "graphics.motion_blur_resolution",
         "graphics.shadows",
+        "graphics.shadow_resolution",
         "graphics.water",
         "graphics.model_detail",
         "graphics.texture_detail",

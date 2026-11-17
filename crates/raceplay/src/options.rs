@@ -119,6 +119,9 @@ pub struct Options {
     /// (`oag_game::water_setting::resolve`), since this crate cannot see them.
     /// `original` by default. See `oag_mesh::mesh::rcs::build_scene_with`.
     pub water: oag_display::display::Water,
+    /// The player's `graphics.shadow_resolution`: how many texels the shadow maps get, read
+    /// when the scene is built. See `oag_render::shadow::map::Resolution`.
+    pub shadow_resolution: oag_display::display::ShadowResolution,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///
@@ -1314,6 +1317,9 @@ pub struct Loaded {
     /// `off` because `Scene::render` never uploads a quad. See
     /// [`crate::shadow`] and `oag_render::shadow`.
     pub shadows: Vec<oag_render::shadow::Silhouette>,
+    /// [`Options::shadow_resolution`], carried to the scene's build.
+    #[cfg(feature = "view")]
+    pub shadow_resolution: oag_display::display::ShadowResolution,
     /// One authored shadow hull per grid slot, for the `original` tier, where
     /// the craft's own model carries one.
     ///

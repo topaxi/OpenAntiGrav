@@ -206,7 +206,7 @@ fn a_craft_record_holds_its_ranks_square_and_centres_the_craft_in_it() {
     let sun = Vec3::new(-0.78, 0.58, -0.24).normalize();
     let craft = Vec3::new(40.0, 3.0, -25.0);
     for (rank, (x, y, side)) in RANK_SQUARES.into_iter().enumerate() {
-        let record = craft_shadow(&Fit::craft(craft, sun), rank);
+        let record = craft_shadow(&Fit::craft(craft, sun), rank, Resolution::ORIGINAL);
         assert_eq!(
             record.rect,
             [
@@ -240,8 +240,8 @@ fn a_craft_far_from_the_pack_is_in_its_own_box_alone() {
         let clip = Mat4::from_cols_array_2d(&record.matrix) * point.extend(1.0);
         clip.x.abs() < 1.0 && clip.y.abs() < 1.0 && (0.0..=1.0).contains(&clip.z)
     };
-    let pack_record = craft_shadow(&Fit::craft(pack, sun), 0);
-    let straggler_record = craft_shadow(&Fit::craft(straggler, sun), 1);
+    let pack_record = craft_shadow(&Fit::craft(pack, sun), 0, Resolution::ORIGINAL);
+    let straggler_record = craft_shadow(&Fit::craft(straggler, sun), 1, Resolution::ORIGINAL);
     assert!(in_box(&pack_record, pack) && !in_box(&pack_record, straggler));
     assert!(in_box(&straggler_record, straggler) && !in_box(&straggler_record, pack));
 }
@@ -257,7 +257,11 @@ fn the_cull_sphere_holds_the_receivers_slab() {
         corner < CRAFT_CULL_RADIUS,
         "{corner} against {CRAFT_CULL_RADIUS}"
     );
-    let record = craft_shadow(&Fit::craft(Vec3::new(1.0, 2.0, 3.0), Vec3::Y), 0);
+    let record = craft_shadow(
+        &Fit::craft(Vec3::new(1.0, 2.0, 3.0), Vec3::Y),
+        0,
+        Resolution::ORIGINAL,
+    );
     assert_eq!(
         record.centre,
         [1.0, 2.0, 3.0, CRAFT_CULL_RADIUS * CRAFT_CULL_RADIUS]
@@ -271,10 +275,14 @@ fn the_cull_sphere_holds_the_receivers_slab() {
 fn a_craft_record_is_stable_under_a_sub_texel_drift() {
     let sun = Vec3::new(-0.78, 0.58, -0.24).normalize();
     let craft = Vec3::new(40.0, 3.0, -25.0);
-    let base = craft_shadow(&Fit::craft(craft, sun), 0);
+    let base = craft_shadow(&Fit::craft(craft, sun), 0, Resolution::ORIGINAL);
     let texel = CRAFT_HALF_EXTENT * 2.0 / RANK_SIDES[0] as f32;
     let across = sun.cross(Vec3::Y).normalize();
-    let drifted = craft_shadow(&Fit::craft(craft + across * texel * 0.1, sun), 0);
+    let drifted = craft_shadow(
+        &Fit::craft(craft + across * texel * 0.1, sun),
+        0,
+        Resolution::ORIGINAL,
+    );
     for (got, want) in drifted
         .matrix
         .iter()
@@ -284,7 +292,7 @@ fn a_craft_record_is_stable_under_a_sub_texel_drift() {
         assert!((got - want).abs() < 1e-5, "{got} against {want}");
     }
     // The rank 5 square is 32 texels, so its own record differs.
-    let coarse = craft_shadow(&Fit::craft(craft, sun), 5);
+    let coarse = craft_shadow(&Fit::craft(craft, sun), 5, Resolution::ORIGINAL);
     assert_ne!(coarse.rect, base.rect);
 }
 
@@ -299,4 +307,39 @@ fn a_degenerate_light_direction_still_snaps_to_something_finite() {
     }
     .snapped(1024);
     assert!(snapped.centre.is_finite());
+}
+
+/// Every resolution's atlas is the original layout scaled whole: the squares stay inside it,
+/// keep their ratios, and the default puts 768 texels on the nearest craft.
+#[test]
+fn a_resolution_scales_the_atlas_layout_whole() {
+    assert_eq!(Resolution::ORIGINAL.atlas(), (ATLAS_WIDTH, ATLAS_HEIGHT));
+    for rank in 0..MAX_CASTERS {
+        assert_eq!(Resolution::ORIGINAL.square(rank), RANK_SQUARES[rank]);
+    }
+    assert_eq!(Resolution::scaled(1).square(0).2, 768);
+    for scale in [1, 2, 4] {
+        let resolution = Resolution::scaled(scale);
+        let (width, height) = resolution.atlas();
+        assert!(
+            width <= 8192 && height <= 8192,
+            "within a default device limit"
+        );
+        for rank in 0..MAX_CASTERS {
+            let (x, y, side) = resolution.square(rank);
+            assert!(
+                x + side <= width && y + side <= height,
+                "rank {rank} at {scale}x"
+            );
+            assert_eq!(
+                side * RANK_SIDES[0],
+                resolution.square(0).2 * RANK_SIDES[rank],
+                "rank {rank} keeps its ratio to the nearest craft's side"
+            );
+        }
+        assert_eq!(
+            resolution.depth_size(),
+            (DEPTH_SIZE * scale).min(Resolution::MAX_DEPTH)
+        );
+    }
 }

@@ -635,3 +635,24 @@ fn the_enums_own_default_casts_nothing() {
     assert!(!Shadows::default().draws());
     assert!(Shadows::Blob.draws());
 }
+
+#[test]
+fn a_shadow_resolution_round_trips_and_only_grows() {
+    for value in ShadowResolution::ALL {
+        assert_eq!(value.name().parse::<ShadowResolution>(), Ok(value));
+        assert_eq!(value.to_string(), value.name());
+    }
+    assert_eq!(
+        "HIGH".parse::<ShadowResolution>(),
+        Ok(ShadowResolution::High)
+    );
+    assert!("low".parse::<ShadowResolution>().is_err());
+    assert_eq!(ShadowResolution::default(), ShadowResolution::Original);
+    // The default is the original's sharpness and nothing offered is below it.
+    assert_eq!(ShadowResolution::Original.scale(), 1);
+    assert!(
+        ShadowResolution::ALL
+            .windows(2)
+            .all(|pair| pair[0].scale() < pair[1].scale())
+    );
+}

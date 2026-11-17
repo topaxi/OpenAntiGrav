@@ -1174,6 +1174,10 @@ pub fn menu_seeds(
             text(&profile.motion_blur_resolution.to_string()),
         ),
         ("graphics.shadows", text(&profile.shadows.to_string())),
+        (
+            "graphics.shadow_resolution",
+            text(&profile.shadow_resolution.to_string()),
+        ),
         ("graphics.water", text(&profile.water.to_string())),
         (
             "graphics.model_detail",
@@ -1398,6 +1402,8 @@ pub fn save(settings: &Settings) -> Result<()> {
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod shadow_resolution_tests;
 #[cfg(test)]
 mod water_tests;
 

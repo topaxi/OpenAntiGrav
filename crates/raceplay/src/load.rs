@@ -1412,6 +1412,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         #[cfg(feature = "view")]
         shadows,
         #[cfg(feature = "view")]
+        shadow_resolution: options.shadow_resolution,
+        #[cfg(feature = "view")]
         shadow_hulls,
         // Overwritten by `load_event` on the one path that has an event
         // name to carry - see `Loaded::campaign_2048_event`'s own doc.

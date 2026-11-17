@@ -57,6 +57,20 @@ pub fn resolve(chosen: Water, title: &oag_title::Title, present: &dyn Fn(&str) -
     Water::Original
 }
 
+/// The render profile of the title `source` opens as, for a route that has no menu shell to
+/// ask. `None` when the source will not open or the title has no stored profile.
+#[must_use]
+pub fn profile_for_source<'a>(
+    settings: &'a crate::settings::Settings,
+    source: &str,
+) -> Option<&'a crate::settings::RenderProfile> {
+    let opened = oag_source::title::open_source(source, Vec::new(), Vec::new()).ok()?;
+    settings.render_profiles.get(&crate::settings::profile_key(
+        opened.title,
+        opened.archives.layout.platform,
+    ))
+}
+
 /// The law a race off `source` draws, for a route that has no menu shell to ask: the title and
 /// platform come from opening the source, the choice from that title's profile.
 /// `original` when the source will not open (the load reports that itself).

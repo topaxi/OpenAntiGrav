@@ -626,6 +626,10 @@ pub(crate) fn run_race(
 ) -> Result<()> {
     let RaceRoute { net, restage } = route;
     options.water = oag_game::water_setting::for_source(settings, &options.source);
+    options.shadow_resolution = cli.shadow_resolution.unwrap_or_else(|| {
+        oag_game::water_setting::profile_for_source(settings, &options.source)
+            .map_or_else(Default::default, |profile| profile.shadow_resolution)
+    });
     // `--event` resolves a Wipeout 2048 campaign event onto `options` before
     // loading - see `race::load_event`'s own doc comment for what it
     // overrides and why this is a second entry point rather than a new
