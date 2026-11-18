@@ -12,6 +12,8 @@
 use std::path::{Path, PathBuf};
 
 use oag_mesh::mesh::rcs::psp2;
+use oag_mesh::mesh::{Model, PROGRAM_VERTEX_BLEND, slots};
+use oag_rcs::rcsmodel::psp2::vertex_blend;
 
 const ARCHIVES: [&str; 5] = [
     "data00.psarc",
@@ -172,6 +174,7 @@ fn every_circuit_binds(
     tracks.sort();
     let mut faulty = 0;
     let mut seas = Vec::new();
+    let mut blends = Vec::new();
     for (i, path) in &tracks {
         let blob = archives[*i].read_path(path).expect("the model reads");
         let name = path.rsplit('/').nth(1).unwrap_or(path).to_string();
@@ -184,6 +187,7 @@ fn every_circuit_binds(
         )
         .expect("builds");
         seas.push((path.clone(), report.sea.clone()));
+        blends.push((path.clone(), Blend::of(&blob, &model, &report)));
         println!(
             "{path}: {} submesh(es), {} unresolved{}",
             report.submeshes,
@@ -202,6 +206,144 @@ fn every_circuit_binds(
         faulty,
         unbound,
         seas,
+        blends,
+    }
+}
+
+/// What one model's `fc07_blend_vertred_lambert_2diff` materials built to, against what the
+/// file itself authors (`oag_rcs::rcsmodel::psp2::vertex_blend`).
+struct Blend {
+    /// Materials the build admitted, and family materials it left to the generic reading.
+    admitted: usize,
+    unread: usize,
+    /// Family materials in the file, by the reader's row.
+    authored: usize,
+    /// Per red value, the vertices the file authors on the family's submeshes and the vertices
+    /// the build drew with that weight.
+    reds_authored: Vec<usize>,
+    reds_drawn: Vec<usize>,
+    /// The `(DiffuseMap, DiffuseMap01)` pairs the file authors and the `(first, third binding)`
+    /// pairs the blended draws bind, lower case, sorted.
+    pairs_authored: Vec<(String, String)>,
+    pairs_bound: Vec<(String, String)>,
+    /// Every blended vertex is still lit: the mix replaces the albedo alone.
+    lit: bool,
+}
+
+impl Blend {
+    fn of(blob: &[u8], model: &Model, report: &psp2::Report) -> Self {
+        let mut out = Self {
+            admitted: report.vertex_blend_materials,
+            unread: report.vertex_blend_unread,
+            authored: 0,
+            reds_authored: vec![0; 256],
+            reds_drawn: vec![0; 256],
+            pairs_authored: Vec::new(),
+            pairs_bound: Vec::new(),
+            lit: true,
+        };
+        let file = oag_rcs::rcsmodel::psp2::parse(blob).expect("the model parses");
+        for (index, material) in file.materials.iter().enumerate() {
+            let Some(named) = vertex_blend::of(material) else {
+                continue;
+            };
+            out.authored += 1;
+            out.pairs_authored.push((
+                named.first.to_ascii_lowercase(),
+                named.second.to_ascii_lowercase(),
+            ));
+            for submesh in file.submeshes.iter().filter(|s| s.material == Some(index)) {
+                // Red is the colour's first byte, named here and not through the reader's
+                // constant, so a reader moved to another lane fails below.
+                for [red, ..] in &submesh.vita_vertex_colour1 {
+                    out.reds_authored[usize::from(*red)] += 1;
+                }
+            }
+        }
+        let blended = |v: &oag_mesh::mesh::GpuVertex| {
+            let index = slots::material_index(v.slots) as usize;
+            index != 0 && model.emissive[index - 1].program[0] == PROGRAM_VERTEX_BLEND
+        };
+        for v in model.vertices.iter().filter(|v| blended(v)) {
+            out.reds_drawn[(v.texcoord2[0] * 255.0).round() as usize] += 1;
+            out.lit &= v.lit == 1.0 && v.slots & slots::NO_SUN == 0;
+        }
+        let label = |slots: &oag_mesh::mesh::TextureSlots, at: usize| {
+            slots
+                .get(at)
+                .and_then(Option::as_ref)
+                .map_or_else(String::new, |t| t.label.to_ascii_lowercase())
+        };
+        for draw in model
+            .draws
+            .iter()
+            .chain(&model.transparent_draws)
+            .chain(&model.alpha_tested_draws)
+        {
+            let range = draw.range.start as usize..draw.range.end as usize;
+            let Some(at) = draw.texture.filter(|_| {
+                model.indices[range]
+                    .iter()
+                    .any(|&i| blended(&model.vertices[i as usize]))
+            }) else {
+                continue;
+            };
+            out.pairs_bound
+                .push((label(&model.textures, at), label(&model.pad_masks, at)));
+        }
+        for pairs in [&mut out.pairs_authored, &mut out.pairs_bound] {
+            pairs.sort();
+            pairs.dedup();
+        }
+        out
+    }
+}
+
+/// `fc07_blend_vertred_lambert_2diff` on each model of a walk: every family material the file
+/// authors is admitted, each blended draw binds its `DiffuseMap` first and its `DiffuseMap01`
+/// third, and the weights the vertices carry are the file's `VertexColour1` reds, value for
+/// value. `want` names the circuits that carry the family and how many materials each has;
+/// every other model has none. Drop `psp2::vertex_blend::plan`, bind another sampler third or
+/// read another lane of the colour and a count, a pair or a histogram here moves.
+fn the_blend_family_mixes_its_second_picture_by_the_vertex_red(
+    blends: &[(String, Blend)],
+    want: &[(&str, usize)],
+) {
+    for (path, blend) in blends {
+        let circuit = path.rsplit('/').nth(1).unwrap_or(path);
+        let materials = want
+            .iter()
+            .find(|(name, _)| *name == circuit)
+            .map_or(0, |&(_, materials)| materials);
+        println!(
+            "{path}: {} vertex-blend material(s) of {} authored, {} blended vertices",
+            blend.admitted,
+            blend.authored,
+            blend.reds_drawn.iter().sum::<usize>()
+        );
+        assert_eq!(blend.admitted, materials, "{path}");
+        assert_eq!(blend.unread, 0, "{path}");
+        assert!(blend.lit, "{path}: a blended vertex is unlit");
+        if materials == 0 {
+            assert_eq!(blend.reds_drawn.iter().sum::<usize>(), 0, "{path}");
+            assert!(blend.pairs_bound.is_empty(), "{path}");
+            continue;
+        }
+        assert_eq!(blend.authored, materials, "{path}");
+        assert_eq!(
+            blend.pairs_bound, blend.pairs_authored,
+            "{path}: (first, third) against (DiffuseMap, DiffuseMap01)"
+        );
+        assert_eq!(
+            blend.reds_drawn, blend.reds_authored,
+            "{path}: the weights drawn against VertexColour1's red"
+        );
+        let mixed: usize = blend.reds_drawn[1..255].iter().sum();
+        assert!(
+            blend.reds_drawn[0] > 0 && mixed > 0,
+            "{path}: the family is painted, not constant: {} at 0, {mixed} between",
+            blend.reds_drawn[0]
+        );
     }
 }
 
@@ -212,6 +354,8 @@ struct Walk {
     unbound: psp2::UnboundDraws,
     /// Each model's path and its 2048-sea census (`psp2::water`), the PS4 ones all zero.
     seas: Vec<(String, psp2::water::Census)>,
+    /// Each model's path and its vertex-blend family (`psp2::vertex_blend`).
+    blends: Vec<(String, Blend)>,
 }
 
 /// Altima's road binds its `DiffuseMap`, not the first sampler listed.
@@ -288,6 +432,7 @@ fn omega_circuit(dir: &str, known: usize) {
         faulty,
         unbound,
         seas,
+        blends,
     } = every_circuit_binds(&mut archives, 0, |p| {
         p.contains(&marker) && p.ends_with(".final.rcsmodel") && !p.contains(".final.pvs")
             // Altima's Zone model rides its circuit's walk: the one Zone model whose water
@@ -296,6 +441,8 @@ fn omega_circuit(dir: &str, known: usize) {
     });
     println!("{dir}: {n} model(s), {faulty} drawn colour slot(s) that are not pictures");
     omegas_reflective_seas_are_the_two_tap_batches(dir, &seas);
+    // Omega's copies of the family are not wired (`psp2::vertex_blend`): no PS4 model blends.
+    the_blend_family_mixes_its_second_picture_by_the_vertex_red(&blends, &[]);
     assert!(n >= 1, "{dir} was found");
     assert!(faulty <= known, "{dir}: {faulty} > {known}");
     only_by_design(dir, &unbound);
@@ -529,6 +676,19 @@ fn the_2048_circuits_bind_no_more_lookups_than_the_known_gap() {
     } = walk;
     println!("{n} circuit model(s), {faulty} drawn colour slot(s) that are not pictures");
     the_2048_seas_are_the_fc15_and_fc17_batches(&walk.seas);
+    // (circuit directory, family materials), the census of `docs/formats/gxp.md`.
+    the_blend_family_mixes_its_second_picture_by_the_vertex_red(
+        &walk.blends,
+        &[
+            ("altima", 21),
+            ("arena", 11),
+            ("cathedral", 4),
+            ("park", 68),
+            ("square", 11),
+            ("subway", 1),
+            ("Moa_Therma", 1),
+        ],
+    );
     assert!(n > 4, "2048's circuits were found: {n}");
     assert!(faulty <= VITA_FAULTS, "{faulty} > {VITA_FAULTS}");
     only_by_design("2048", &unbound);

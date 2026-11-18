@@ -698,6 +698,21 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let linear = bars * mix(decode(first.rgb), decode(second.rgb), vec3<f32>(w));
         picture = vec4<f32>(encode(linear), first.a);
     }
+    // **2048's `fc07_blend_vertred_lambert_2diff`** (`Emissive::program` mode 18,
+    // `oag_mesh::mesh::rcs::psp2::vertex_blend`), read off its fragment programs:
+    //
+    //     albedo = mix(DiffuseMap^2, DiffuseMap01^2, VertexColour1.r)
+    //
+    // the second picture third, at the first's coordinate, the weight in the second coordinate
+    // pair's `x`. Mixed decoded (`decode` is the square on 2048) and put back in the domain
+    // `picture` is decoded from below; the light and the alpha are the first picture's own.
+    let blend_entry = (in.slots >> 24u) & 63u;
+    if blend_entry != 0u && row_scale.z > 17.5 && row_scale.z < 18.5 {
+        let other = material_sample(MATERIAL_PAD_MASK, first_uv);
+        let w = clamp(in.lightmap_texcoord.z, 0.0, 1.0);
+        let linear = mix(decode(first.rgb), decode(other.rgb), vec3<f32>(w));
+        picture = vec4<f32>(encode(linear), first.a);
+    }
     // **Omega's `tarmac_markings_dirt_markingsnormal[_emis]` roads** (`Emissive::program` mode 14,
     // `oag_mesh::mesh::rcs::psp2::tarmac`), read off the pixel programs:
     //

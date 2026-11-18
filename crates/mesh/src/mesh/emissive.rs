@@ -120,6 +120,11 @@ pub const PROGRAM_CROWD: f32 = 16.0;
 /// the specular colour and the tap count, then one entry per tap.
 pub const PROGRAM_WATER: f32 = 17.0;
 
+/// [`Emissive::program`]'s mode for 2048's `fc07_blend_vertred_lambert_2diff`: the lit albedo is
+/// the first texture and the third binding mixed by the vertex colour's red, which rides the
+/// second coordinate pair's `x`. See `super::rcs::psp2`'s `vertex_blend`.
+pub const PROGRAM_VERTEX_BLEND: f32 = 18.0;
+
 /// [`Emissive::program`]'s mode for 2048's plain `diffuse_normal_specular_emmissive`: the third
 /// binding's **alpha**, unsquared, times the entry's tint, added like [`PROGRAM_EMISSIVE_ADD`].
 pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;
