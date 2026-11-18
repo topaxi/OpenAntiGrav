@@ -247,7 +247,7 @@ halted until a client sends `vCont;c`. Use `/proc/<pid>/mem`.
 | `*(ship+0x5f84)` is a body whose `+0x08/+0x18/+0x28` are three unit basis rows (w 0), `+0x38` is the position (w 1), `+0x48/+0x58/+0x68` the transpose, `+0x90` a vector that reads as linear velocity | `camera.md` already documents `bodyPos = *(*(ship+0x5f84)+0x38)`; the layout read live on all 8 ships | 65 |
 | The same position appears as 0.75-scaled rows then a position in 35 render-side copies (`0x874a8a30`, `0x82252b00`, `0x815f0d68` in the eboot data...) | `g_craft_scale` is 0.75; all 35 were rewritten to a unique value and snapped back | 80 |
 
-**The unresolved part, and why `place` stops here.** Writing the body at `+0x38`
+**The unresolved part, and why `place` stopped here (superseded 2026-11-18 by "The teleport that works" below: the pull-back was the grid hold).** Writing the body at `+0x38`
 (position, basis, transpose, zero `+0x90`) is accepted and the body hovers and
 settles with no respawn, but **the body of ship index 7 is not the craft the camera
 follows**: with the visible craft at `(-728, 5.3, -178)` the body read
@@ -285,8 +285,7 @@ over the grabs only (`window_drift`, whole-run `max_drift` and the pulled-off ti
 
 **Attitude and coordinates**: the basis rows are ours' `--pose` rows for the same X,Y,Z,YAW (`rpcs3_place.our_attitude`), and **no transform
 between 2048's coordinates and ours' is needed on Altima**: with the body written at ours' pond pose `-250,-8,1372` the original's chase
-camera shows the same scenery as ours at that pose (the cave wall, the track edge, the pond with its boat, the green pad; two boots,
-`pairs` below), to within the sprung camera's offset (the original's camera is not rigid, ours' is). Confidence 85 for Altima; other circuits
+camera shows the same scenery as ours at that pose (the cave wall, the track edge, the pond with its boat, the green pad; two boots), to within the sprung camera's offset (the original's camera is not rigid, ours' is). Confidence 85 for Altima; other circuits
 unchecked. The hull shake is patched out (`pair.json`, `original.hull_shake`); the camera tripod shake is still on and the two frames
 show no visible shake at the grab.
 
@@ -296,12 +295,12 @@ boat, a smooth shore gradient (no glints, no speckle). Ours at the same pose has
 along the shore (water.md, 2048, Open 4a).
 
 **Not traced**: the chain from `Ship_UpdateCameraRigs` (`0x811bd89a`) to the body is not read (the picture and 14 and 38 hull matrices at the
-pose in the three scans are the evidence, not the chain), so nothing here is a rename; `camera.md` already has `bodyPos = *(*(ship+0x5f84)+0x38)`.
+pose in the three scans are the evidence, not the chain), so nothing here is a rename (next: trace the camera rig from `0x811bd89a` to the body, then name the craft array `0x818a6bf8` as data); `camera.md` already has `bodyPos = *(*(ship+0x5f84)+0x38)`.
 A steering-only discriminator was not needed.
 
-**Omega** (CLAUDE.md, 2048 and Omega): **checked, differs / partly open**. shadPS4 exposes no readable guest memory (`compare-page.md`, clock census),
-so no write there; the native `wipeout_pc` port's memory is readable through `/proc/<pid>/mem` of the launching process, so the same
-write is **not tried** there: Omega's body layout (8-byte pointers) is unread.
+**Omega** (CLAUDE.md, 2048 and Omega): shadPS4 is **not checkable** (no guest memory readout, `compare-page.md`, clock census). The native
+`wipeout_pc` port's memory is readable through `/proc/<pid>/mem` of the launching process, so the same write is **open**, not tried:
+Omega's body layout (8-byte pointers) is unread.
 
 **HD:** the same body shape as
 `rpcs3_place.py` (basis rows, w-0 rows, position w 1, transpose after them), with

@@ -913,12 +913,14 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    teleport) or a denser sample around where the spline passes the water.
    **Pair taken 2026-11-18 (`vita-teleport`, two boots)**: the teleport places the original's craft at ours' Altima pond pose
    `-250,-8,1372` (yaw 0) and the same scenery, the pond and its boat are in view on both sides
-   (`vita3k-capture.md`, "The teleport that works"). Read by eye on a 3x crop, **ours differs**: (1) a stippled grey-white
-   speckle along the shore and the basin's right edge that the original does not have (the original's shore is a smooth
-   dark gradient); (2) the original's basin is a dark navy with a faint lighter band under the boat, ours near-black;
-   (3) no glint or ripple movement is judged from a still. Ripple scale and scroll, glint colour and `fc17` edge colour are
-   not measured from one still pair per boot; the speckle is the first difference to chase (a dither of the shore alpha or
-   `fc17` edge in ours, not a feature of the original). Park's sea pose is not placed (Park's Time Trial does not load, see
+   (`vita3k-capture.md`, "The teleport that works"). Read by eye on a 3x crop: (1) **ours draws a grey-white stipple** along the pond's shore and right edge, on the rock face
+   at the top right and on a dotted band along the far track edge, none of which the original shows (its shore is a smooth dark
+   gradient), so the stipple is on several surfaces at this pose and **its pass is not isolated** (not shown to be the water);
+   (2) the original's basin is a dark navy with a faint lighter band under the boat, ours near-black; (3) ripple scroll and glint
+   are not judged from a still. Ripple scale, glint colour and `fc17` edge colour are not measured. **Caveat: the scenery clock
+   the pair recorded reads 2.0039 s on every boot (HUD 0:12), a value that looks like a fixed node, not the clock, and ours was rendered
+   at it (`--world-clock-offset 2.004`): treat `world_clock_offset_s` as unverified, so no ripple or scroll comparison and no
+   adoption of the pair until it is re-read.** Park's sea pose is not placed (Park's Time Trial does not load, see
    `vita3k-capture.md`; its Race cell loaded in `water-2048cmp`).
 5. `sea`, `seareflect`, `seaweed` class nodes: a class census over PSP `.vex`.
 6. Blue Ridge's `Water` texture is embedded and bound by no batch; whether a node of
