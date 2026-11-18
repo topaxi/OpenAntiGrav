@@ -922,6 +922,35 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    at it (`--world-clock-offset 2.004`): treat `world_clock_offset_s` as unverified, so no ripple or scroll comparison and no
    adoption of the pair until it is re-read.** Park's sea pose is not placed (Park's Time Trial does not load, see
    `vita3k-capture.md`; its Race cell loaded in `water-2048cmp`).
+   **Matched pairs, 2026-11-18 (`vita-water-pairs`; three boots of the place path, a fourth for Park).** Two Altima poses, each seen once
+   on a clean boot (confidence 55, seen once): the pond at `-250,-8,1372` yaw 0 (`altima1`) and a raised view over the wall at
+   `-250,25,1385` yaw -15 (`altima2c`); scenery, boat and rock walls agree in both. (1) **The clock is now a real one**: the earlier
+   2.0039 s is a group of pairs that never moves (two reads 0.6 s apart: step 0.000; so are 9.625, 4.0016, 37.159 and 14737.6), the
+   live group is the one whose median step is 0.57 to 0.60 s per 0.6 s of wall time (40.0 s, 36.5 s and 38.1 s on three boots;
+   `world_clock_s` 43.53 at `altima1`, 37.64 at `altima2c`, read right after each grab, series 41.28, 42.47, 43.53). See
+   `ghidra/functions/vita-2048-eu-v104/world-clock.md`, "The place path took a constant". Placement by it is **not tested to better than a
+   few seconds**: the boat is the only element in view that ours moves with the clock (offsets 40 to 50 s move it by a few to about ten px,
+   read off 4x crops) and the original's boat sits within that range at the read clock, nothing sharper.
+   (2) **The stipple is not the water setting, not the shadows, not MSAA** (the falsifier, "survives with the water off", fired
+   against the water: `graphics.water = off`, `--shadows off` and `--msaa 4x` leave the same speckle; `--anisotropy 16x` changes its
+   grain, so it is a texture sampled at a grazing angle; it **moves with the world clock**, so a scrolled surface). It sits where the
+   original draws a **smooth lit gravel shore** and on the dark floor beside it (ours 29,31,34 mean and sd 22 against the original's
+   20,22,26 and sd 19 in a 40x20 box on the shore). Candidates (not isolated; the `OAG_ONLY_MATERIAL` and `OAG_TINT_MATERIALS`
+   filters act on `.rcsmodel` only and `OAG_ONLY_MATERIAL` panics on a Vita circuit with an empty buffer): the `fc17` edge sheet's alpha
+   (the normal map's noisy `a` where the original's alpha is smooth) at confidence 40, or the other normal-map-as-colour families the
+   thread on that names (`m_diffuse_normal_constantspecular`, `rocks_01_normal_alpha`). (3) **The `fc17` edge colour**: the original
+   draws a lavender-blue band along the pond's left rim, RGB 36,35,61 (`altima2c`, box 8x24 at 533,172) and 42,46,54 (`altima1`);
+   ours draws 16,16,17 and 8,10,14 there, so the chosen stand-in (the pond's `ColourConstant`, near black) is **too dark and has no
+   blue**: the edge is lit lavender in the original (alpha at the shore is not separable from the rim in a still). (4) **The pond
+   basin**: original 15,16,21 (`altima2c`) and 20,22,27 (`altima1`); ours 2,3,4 and 9,9,11, so ours is 11 to 14 levels darker with no
+   blue lift; no glint is drawn on either side from these poses (the sun is not reflected at this angle), so the glint colour stays
+   unmeasured. (5) **Ripple scale and scroll direction are not readable**: the basin is near black on both sides and a still has no
+   scroll; it needs a brighter sea (a pose facing the sun) and two frames of one held pose, not taken here.
+   (6) **Park's sea pose `1000,200,-3500` was refused by the hold**: the guest pulled the body 725.6 units over the grabs at 200
+   units up (120 reads pulled off the pose, the last at 16 s), so the original's camera was not at the pose; its frame does show a
+   large flat red-brown plane below the park where ours draws terrain, which would be the sea but is not a matched pose. Ours
+   at 50 units up at that place is inside a wall. Park's transform and sea comparison stay open (needs a pose the hold keeps, a
+   `--read-pose` of the grid against ours, or a lower pose over the red plane).
 5. `sea`, `seareflect`, `seaweed` class nodes: a class census over PSP `.vex`.
 6. Blue Ridge's `Water` texture is embedded and bound by no batch; whether a node of
    another class draws it is unread.

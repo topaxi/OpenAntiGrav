@@ -51,3 +51,19 @@ scenery clock read here is the clock that places the vehicle; the pair was not a
 - **Omega.** Checked, not assumed (`docs/tools/compare-page.md`, "The world clock and random craft motion, per title"): Omega's nodes
   are HD's class (the `MeshImporter` equivalent in the PS4 executable was not read) and the native port's memory is readable, so the same
   scan can be run there; not done in this lane.
+
+## The place path took a constant (2026-11-18, `vita-water-pairs`)
+
+`vita-2048-pair.py --place` read "the clock" as the most common value among pairs `0x40` apart, and that is **not** always the live group:
+a placed race's memory holds several groups of 200 or more pairs, and the largest can be one that never moves. Three boots of the place path
+(`altima1`, `altima2c`, `park1`) listed the same six groups: `14737.6`, `2.0039`, `9.625`, `4.0016` and `37.159` did not move (median step
+0.000 over 0.6 s of wall time); one group per boot did (40.0, 36.5 and 38.1 s when scanned, a median step of 0.571 to 0.600 s per 0.6 s,
+the guest at 95 to 100 % of wall rate, confidence 85 that it is the node clock: it advances, about a thousand nodes share it, the grab-time
+series 41.28, 42.47, 43.53 follows the 0.3 s grab spacing plus the frame grab). The 2.0039 s group is a fixed node, as the earlier pair
+suspected. `pick_advancing_clock` (`scripts/vita-2048-pair.py`) now reads every group twice 0.6 s apart and takes the advancing one; the
+cached addresses are re-read right after each grab, so the clock is the grab's to within a few hundredths. The HUD race time at the grab
+(0:16.89, 0:13.06, 0:12.86) is not the clock (the clock runs from the load: 43.5 s, 37.6 s, 38.1 s). **Placement by the clock is not shown
+to better than a few seconds** (`rendering/water.md`, Open 4a: the one element ours moves with the clock in view is a boat whose bob is
+small). **Omega:** checked, not tried: the native port's memory is readable through `/proc/<pid>/mem` of the process that launches it
+(`docs/tools/compare-page.md`, 2026-11-01), so the same scan-and-two-reads would work there, but Omega's node layout (8-byte pointers) is
+unread and the 2048 offsets are not assumed (checked, differs for the layout; the method carries over).

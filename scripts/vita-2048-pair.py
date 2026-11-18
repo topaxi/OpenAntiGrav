@@ -652,7 +652,42 @@ def scan_scenery_clock(pid, exclude=()):
         return None
     import struct
     return {"time_s": struct.unpack("<f", struct.pack("<I", value))[0], "nodes": n, "total": sum(counts.values()), "addresses": where[value],
-            "groups": sorted(v for v, c in counts.items() if c >= CLOCK_MIN_NODES)}
+            "groups": sorted(v for v, c in counts.items() if c >= CLOCK_MIN_NODES),
+            "group_addresses": {v: where[v] for v, c in counts.items() if c >= CLOCK_MIN_NODES}}
+
+
+def pick_advancing_clock(pid, found, wait=0.6):
+    """The group of `found["group_addresses"]` whose value advances with the wall clock, as `found` shape (`time_s`, `addresses`, `nodes`), or None.
+    The most common value is not always the clock: a group the race load leaves behind (a freed scene's nodes, a constant 2.0039 s on every
+    boot) heads the count and never moves. Two reads `wait` seconds apart; the clock moves by about `wait` (the guest runs at wall rate in a race)."""
+    import struct
+
+    def read(addresses):
+        with open("/proc/%d/mem" % pid, "rb", 0) as mem:
+            vals = []
+            for a in addresses:
+                mem.seek(HOST_WINDOW[0] + a)
+                vals.append(struct.unpack("<f", mem.read(4))[0])
+        return vals
+
+    groups = found.get("group_addresses") or {}
+    first = {v: read(a) for v, a in groups.items()}
+    t0 = time.monotonic()
+    time.sleep(wait)
+    second = {v: read(a) for v, a in groups.items()}
+    dt = time.monotonic() - t0
+    best = None
+    for v, a in groups.items():
+        steps = sorted(b - c for b, c in zip(second[v], first[v]))
+        move = steps[len(steps) // 2] if steps else 0.0
+        if 0.5 * dt <= move <= 1.5 * dt and (best is None or len(a) > len(best[1])):
+            best = (v, a, move, second[v][len(second[v]) // 2])
+    found["advancing"] = [{"bits": v, "median_step_s": sorted(b - c for b, c in zip(second[v], first[v]))[len(first[v]) // 2],
+                           "value_s": second[v][len(second[v]) // 2]} for v in groups]
+    found["advancing_wall_s"] = dt
+    if best is None:
+        return None
+    return {**found, "time_s": best[3], "addresses": best[1], "advancing_group_bits": best[0], "advancing_median_step_s": best[2]}
 
 
 def read_scenery_clock(pid, cache, rescan=True):
@@ -995,13 +1030,21 @@ def place_main(args, out, pair, plat, profile_dir, which, env):
     hold = PoseHold(pid, body, pos, rows).start()
     try:
         time.sleep(args.place_settle)
+        found = scan_scenery_clock(pid)
+        clock_cache = pick_advancing_clock(pid, found) if found else None
         hold.mark()
         frames = []
+        clock_series = []
         for i in range(3):
             frames.append(s.shot("place%d.png" % i))
+            clock_series.append(read_scenery_clock(pid, clock_cache, rescan=False) if clock_cache else None)
             time.sleep(0.3)
-        clock_cache = {}
-        world_clock = read_scenery_clock(pid, clock_cache)
+        world_clock = clock_series[-1]
+        pair.rec["original"]["world_clock"] = {
+            "method": "the scan's groups (value shared by >= %d node pairs 0x40 apart) re-read 0.6 s apart: the one that advances by about the wall time; "
+                      "its cached addresses re-read right after each grab" % CLOCK_MIN_NODES,
+            "groups": (found or {}).get("advancing"), "advancing_group_bits": (clock_cache or {}).get("advancing_group_bits"),
+            "series_after_grabs_s": clock_series}
         os.kill(pid, signal.SIGSTOP)
         try:
             held = read_body_pose(pid, body)
