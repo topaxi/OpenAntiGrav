@@ -3,12 +3,12 @@
 //! (`docs/architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md`,
 //! decision 6).
 //!
-//! One ban a line, `key <64 hex digits> [date] [reason]` or `addr <ip address> [date]
+//! One ban a line, `key <64 hex digits> <date> [reason]` or `addr <ip address> <date>
 //! [reason]`; blank lines and lines starting with `#` are skipped. The date is when the ban was
 //! made, a UTC stamp as the log writes one (`2026-11-18T12:34:56.789Z`, `oag_log::stamp`), so a
-//! list can be pruned or bans given a lifetime later; a line without one is a ban of unknown
-//! date. The lobby writes the date on every ban it makes itself. A line that does not parse is
-//! reported and skipped, never a reason to stop serving.
+//! list can be pruned or bans given a lifetime later; the lobby writes it on every ban it makes
+//! itself, and an operator writes it by hand. A line that does not parse, a missing date
+//! included, is reported and skipped, never a reason to stop serving.
 
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
@@ -30,8 +30,8 @@ const NO_REASON: &str = "banned by the operator";
 pub struct Ban {
     /// Why, as the player is told.
     pub reason: String,
-    /// When the ban was made (`oag_log::stamp`), `None` for a line that gives no date.
-    pub since: Option<String>,
+    /// When the ban was made (`oag_log::stamp`).
+    pub since: String,
 }
 
 impl Ban {
@@ -40,16 +40,13 @@ impl Ban {
     pub fn now(reason: &str) -> Self {
         Self {
             reason: reason.replace(['\n', '\r'], " "),
-            since: Some(oag_log::stamp::format(SystemTime::now())),
+            since: oag_log::stamp::format(SystemTime::now()),
         }
     }
 
-    /// The ban's line after its subject: the date if known, then the reason.
+    /// The ban's line after its subject: the date, then the reason.
     fn tail(&self) -> String {
-        match &self.since {
-            Some(since) => format!("{since} {}", self.reason),
-            None => self.reason.clone(),
-        }
+        format!("{} {}", self.since, self.reason)
     }
 }
 
@@ -74,11 +71,15 @@ impl Bans {
             let mut words = line.splitn(3, char::is_whitespace);
             let (kind, subject) = (words.next().unwrap_or(""), words.next().unwrap_or(""));
             let rest = words.next().map_or("", str::trim);
-            let (since, rest) = match rest.split_once(char::is_whitespace) {
-                Some((first, more)) if is_stamp(first) => (Some(first.to_string()), more.trim()),
-                None if is_stamp(rest) => (Some(rest.to_string()), ""),
-                _ => (None, rest),
-            };
+            let (since, rest) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
+            if !is_stamp(since) {
+                skipped.push(format!(
+                    "line {}: no date after the {kind} (a UTC stamp like 2026-11-18T12:34:56.000Z)",
+                    number + 1
+                ));
+                continue;
+            }
+            let (since, rest) = (since.to_string(), rest.trim());
             let reason = Some(rest)
                 .filter(|reason| !reason.is_empty())
                 .unwrap_or(NO_REASON)
@@ -258,18 +259,26 @@ fn read(path: &Path) -> Bans {
 mod tests {
     use super::*;
 
+    const DAY: &str = "2026-11-18T09:15:00.000Z";
+
     #[test]
-    fn a_ban_file_names_keys_and_addresses_with_their_reasons_and_skips_what_it_cannot_read() {
+    fn a_ban_file_names_keys_and_addresses_with_their_dates_and_reasons_and_skips_the_rest() {
         let key = "ab".repeat(32);
         let text = format!(
-            "# the list\n\nkey {key} altered the race\naddr 192.0.2.7\naddr ::ffff:192.0.2.9 v4 in v6\n\
-             key short\nnonsense here\n"
+            "# the list\n\nkey {key} {DAY} altered the race\naddr 192.0.2.7 {DAY}\n\
+             addr ::ffff:192.0.2.9 {DAY} v4 in v6\nkey short {DAY}\nnonsense here\n\
+             addr 192.0.2.8 undated reason\n"
         );
         let (bans, skipped) = Bans::parse(&text);
         assert_eq!(bans.len(), 3);
-        assert_eq!(skipped.len(), 2, "{skipped:?}");
+        assert_eq!(skipped.len(), 3, "{skipped:?}");
+        assert!(skipped[2].contains("no date"), "{skipped:?}");
         let free: IpAddr = "198.51.100.1".parse().expect("addr");
         assert_eq!(bans.banned(&[0xAB; 32], free), Some("altered the race"));
+        assert_eq!(
+            bans.key_ban(&[0xAB; 32]).map(|b| b.since.as_str()),
+            Some(DAY)
+        );
         assert_eq!(
             bans.banned(&[1; 32], "192.0.2.7".parse().expect("addr")),
             Some(NO_REASON)
@@ -278,42 +287,28 @@ mod tests {
             bans.banned(&[1; 32], "192.0.2.9".parse().expect("addr")),
             Some("v4 in v6")
         );
-        assert_eq!(bans.banned(&[1; 32], free), None);
         assert_eq!(
-            bans.key_ban(&[0xAB; 32]).and_then(|b| b.since.clone()),
-            None
+            bans.banned(&[1; 32], "192.0.2.8".parse().expect("addr")),
+            None,
+            "an undated line bans nobody"
         );
+        assert_eq!(bans.banned(&[1; 32], free), None);
     }
 
     #[test]
-    fn a_ban_names_its_date_and_the_lobby_writes_it_on_its_own_bans() {
-        let key = "cd".repeat(32);
-        let text = format!(
-            "key {key} 2026-11-18T09:15:00.000Z forged an input\naddr 192.0.2.7 \
-             2026-11-17T00:00:00.000Z\n"
-        );
-        let (bans, skipped) = Bans::parse(&text);
-        assert!(skipped.is_empty(), "{skipped:?}");
-        let ban = bans.key_ban(&[0xCD; 32]).expect("the key is banned");
-        assert_eq!(ban.reason, "forged an input");
-        assert_eq!(ban.since.as_deref(), Some("2026-11-18T09:15:00.000Z"));
-        assert_eq!(
-            bans.banned(&[1; 32], "192.0.2.7".parse().expect("addr")),
-            Some(NO_REASON),
-            "a date with no reason"
-        );
+    fn a_ban_the_lobby_makes_is_written_with_its_date_and_reads_back() {
         let dir = std::env::temp_dir().join(format!("oag-ban-date-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("bans.txt");
         let _ = std::fs::remove_file(&path);
         let mut file = BanFile::new(Some(path.clone()));
-        file.ban([7; 32], "altered the race");
+        file.ban([7; 32], "altered\nthe race");
         let written = std::fs::read_to_string(&path).expect("the ban was written");
         let (again, skipped) = Bans::parse(&written);
         assert!(skipped.is_empty(), "{written}");
         let ban = again.key_ban(&[7; 32]).expect("read back");
         assert_eq!(ban.reason, "altered the race");
-        assert!(ban.since.as_deref().is_some_and(is_stamp), "{written}");
+        assert!(is_stamp(&ban.since), "{written}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

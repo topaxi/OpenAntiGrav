@@ -103,8 +103,9 @@ port, or a server slot that is free.
 
 Version one:
 
-- **A ban list as a file** (`oag-server lobby --ban-file`): lines `key <64 hex> [reason]` and
-  `addr <ip> [reason]`, re-read when it changes. A banned host is refused with the reason; a room
+- **A ban list as a file** (`oag-server lobby --ban-file`): lines `key <64 hex> <date> [reason]` and
+  `addr <ip> <date> [reason]`, the date a UTC stamp of when the ban was made (so a list can be
+  pruned or bans given a lifetime later), re-read when it changes. A banned host is refused with the reason; a room
   whose host is banned while it is listed is closed. Bans cover hosting only.
 - **A host log**: one `host-log` line in the lobby's log per registration, refusal, launch and
   end, with the key, address, name, room and settings.

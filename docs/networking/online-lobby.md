@@ -1320,8 +1320,11 @@ port | cert_hash` (`HostOffer::statement`). The key pair is made on first use an
 
 ### Moderation
 
-`oag-server lobby --ban-file PATH`: one ban a line, `key <64 hex digits> [reason]` or `addr <ip>
-[reason]`, `#` for a comment. The file is read again within 2 s of a change; a listed room whose
+`oag-server lobby --ban-file PATH`: one ban a line, `key <64 hex digits> <date> [reason]` or
+`addr <ip> <date> [reason]`, `#` for a comment. The date is when the ban was made, a UTC stamp as
+the log writes one (`2026-11-18T12:34:56.000Z`), so the list can be pruned or bans given a
+lifetime later; a line without one is reported and skipped. The lobby appends its own dated line
+when it proves a host cheated. The file is read again within 2 s of a change; a listed room whose
 host is now banned is closed with the reason. Every registration, refusal, launch and end is a
 `host-log:` line in the lobby's log with the first 16 digits of the key, the address, the name,
 the room and its settings.

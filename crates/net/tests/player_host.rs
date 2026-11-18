@@ -334,7 +334,14 @@ fn a_banned_key_cannot_host_and_a_ban_added_later_delists_the_room() {
     let file = dir.join("bans.txt");
     let banned = PlayerKey::generate().expect("a key");
     let hex = |key: &PlayerKey| oag_net::wt::hex(&key.public());
-    std::fs::write(&file, format!("key {} altered a race\n", hex(&banned))).expect("writes");
+    std::fs::write(
+        &file,
+        format!(
+            "key {} 2026-11-18T00:00:00.000Z altered a race\n",
+            hex(&banned)
+        ),
+    )
+    .expect("writes");
     let mut lab = Lab::with_config(
         oag_net::online::server::Config {
             ban_file: Some(file.clone()),
@@ -358,7 +365,7 @@ fn a_banned_key_cannot_host_and_a_ban_added_later_delists_the_room() {
     std::fs::write(
         &file,
         format!(
-            "key {} altered a race\nkey {} hosted and quit\n",
+            "key {} 2026-11-18T00:00:00.000Z altered a race\nkey {} 2026-11-18T00:00:00.000Z hosted and quit\n",
             hex(&banned),
             hex(&other)
         ),

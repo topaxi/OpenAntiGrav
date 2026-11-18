@@ -141,7 +141,11 @@ fn a_host_whose_profile_key_is_on_the_ban_file_is_refused_with_the_reason() {
         .expect("a key is made");
     let bans = scratch.join("bans.txt");
     let hex: String = key.public().iter().map(|b| format!("{b:02x}")).collect();
-    std::fs::write(&bans, format!("key {hex} altered a race\n")).expect("the ban file");
+    std::fs::write(
+        &bans,
+        format!("key {hex} 2026-11-18T00:00:00.000Z altered a race\n"),
+    )
+    .expect("the ban file");
     let bans = bans.display().to_string();
     let lab = Lab::with_lobby_args("hosted-banned", image, 20_000, &["--ban-file", &bans]);
     let profile = lab.dir.join("a").join("config").join("oag");
