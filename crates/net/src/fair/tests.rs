@@ -262,8 +262,6 @@ fn a_forgery_claim_older_than_half_the_ledger_is_not_put_to_the_host() {
         "at the edge"
     );
     assert!(too_old_to_challenge(301 + LEDGER_TICKS / 2, 300), "past it");
-    // Half the ledger plus the challenge's own time is still inside what the host keeps.
-    assert!(LEDGER_TICKS / 2 + 600 < LEDGER_TICKS);
 }
 
 #[test]

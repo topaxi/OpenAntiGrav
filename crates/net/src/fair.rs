@@ -36,6 +36,9 @@ pub const CHECKPOINT_EVERY: u32 = 60;
 /// challenge: two minutes, about 2 MB a seat.
 pub const LEDGER_TICKS: u32 = 7200;
 
+// Half the ledger plus a challenge's 10 s is still inside what the host keeps.
+const _: () = assert!(LEDGER_TICKS / 2 + 600 < LEDGER_TICKS);
+
 /// Whether a forgery claim on `tick` is too old to put to the host, `ticks_since_up` ticks of
 /// wall clock after the host said its race was up (no race has run more ticks than that). An
 /// honest client claims within a second or two of the tick; past half the ledger, an honest host
