@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-18
-summary: "HD taps, setting, enhanced, 2048 fc15 and fc17, the planar read and Omega's own sea landed; next planar pass, borrowed laws (the lender loader), Omega Zone model load"
+summary: "HD taps, setting, enhanced, 2048 fc15/fc17, planar read and Omega's own sea landed; next planar pass, lender loader, Omega Zone model"
 categories: [rendering, frontend]
 size: XL (60)
 difficulty: medium (55)
