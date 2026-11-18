@@ -285,14 +285,50 @@ fn omega_circuit(dir: &str, known: usize) {
         circuits: n,
         faulty,
         unbound,
-        ..
+        seas,
     } = every_circuit_binds(&mut archives, 0, |p| {
         p.contains(&marker) && p.ends_with(".final.rcsmodel") && !p.contains(".final.pvs")
     });
     println!("{dir}: {n} model(s), {faulty} drawn colour slot(s) that are not pictures");
+    omegas_reflective_seas_are_the_two_tap_batches(dir, &seas);
     assert!(n >= 1, "{dir} was found");
     assert!(faulty <= known, "{dir}: {faulty} > {known}");
     only_by_design(dir, &unbound);
+}
+
+/// Omega's reflective seas, by their PS4 programs' declared interface and taps
+/// (`oag_rcs::gcn::sea`, `psp2::water`): the batches of `reflectplane_mid`, `_edge`, `_pond`,
+/// `_dc_seawater_new` and `_dc_seawater_tow`, counted per circuit model and all drawn under
+/// `original`. Drop the PS4 classification and every count falls to zero. Park's
+/// `reflectplane_dc_seawater` and the HD circuits' seas carry HD's interface, the shore strip
+/// (`reflectplane_rt_seawateredging`) reads no reflection: none is this law, and no PS4 model
+/// matches 2048's GXP laws.
+fn omegas_reflective_seas_are_the_two_tap_batches(
+    dir: &str,
+    seas: &[(String, psp2::water::Census)],
+) {
+    // (circuit directory, batches, of which the blended edge)
+    const WANT: [(&str, usize, usize); 5] = [
+        ("altima", 10, 5),
+        ("mall", 8, 0),
+        ("tower", 5, 0),
+        ("square", 7, 0),
+        ("bridge", 13, 0),
+    ];
+    let (batches, edge) = WANT
+        .iter()
+        .find(|(name, ..)| *name == dir)
+        .map_or((0, 0), |&(_, batches, edge)| (batches, edge));
+    for (path, sea) in seas {
+        println!("{path}: {sea:?}");
+        assert_eq!(sea.reflective, batches, "{path}: {sea:?}");
+        assert_eq!(sea.reflective_drawn, batches, "{path}: {sea:?}");
+        assert_eq!(sea.reflective_edge_drawn, edge, "{path}: {sea:?}");
+        assert_eq!(
+            sea.submeshes, 0,
+            "{path}: a PS4 model matches no GXP law: {sea:?}"
+        );
+    }
 }
 
 /// A draw that names a texture of its own never goes without it, and a texture that is

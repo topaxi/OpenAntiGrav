@@ -115,6 +115,68 @@ pub const VITA_WATER_KIND: f32 = 7.0;
 /// header's `offset`.
 pub const VITA_EDGE_KIND: f32 = 8.0;
 
+/// `program[1]` of an Omega reflective sea's entry (`reflectplane_mid` and its siblings,
+/// `mesh::rcs::psp2::water`): two `.ag` taps of the wave normal map at `(+-u + K Speed t, v)`,
+/// `Watercolour` times the light, a Phong highlight in `SpecularColour`, and the reflection
+/// weighted by [`Fresnel`] (`docs/rendering/water.md`, "Omega (PS4)").
+pub const OMEGA_SEA_KIND: f32 = 9.0;
+
+/// `program[1]` of Omega's blended sea edge (`reflectplane_edge`): [`OMEGA_SEA_KIND`] with the
+/// alpha `VertexColour1.y * Opacity`; `Opacity` rides the header's `offset`.
+pub const OMEGA_EDGE_KIND: f32 = 10.0;
+
+/// The weight Omega's sea programs give the reflection:
+/// `ReflectivityStrength * (ReflectivityMin + ReflectivityScale * sat(1 - N.V)^ReflectivityPower)`
+/// (`reflectplane_mid` pixel `@0x28c`..`@0x30c` and `@0x380`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fresnel {
+    pub min: f32,
+    pub scale: f32,
+    pub power: f32,
+    pub strength: f32,
+}
+
+impl Fresnel {
+    /// The weight at `facing = sat(1 - N.V)`.
+    #[must_use]
+    pub fn weight(self, facing: f32) -> f32 {
+        self.strength * (self.min + self.scale * facing.clamp(0.0, 1.0).powf(self.power))
+    }
+
+    /// What the entry carries: the constant term and the facing term's factor, each already
+    /// times `ReflectivityStrength` (the program uses only the products), and the power.
+    #[must_use]
+    pub fn lanes(self) -> [f32; 3] {
+        [
+            self.strength * self.min,
+            self.strength * self.scale,
+            self.power,
+        ]
+    }
+}
+
+/// The three glow-table entries of an Omega reflective sea: [`sea_block`]'s layout (`opacity`
+/// in the header's `offset`), with [`Fresnel::lanes`] in the two tap entries' `rate` lanes
+/// (the constant term, the facing factor) and the second tap entry's last `program` lane (the
+/// power).
+#[must_use]
+pub fn reflective_block(
+    kind: f32,
+    colour: [f32; 3],
+    opacity: f32,
+    power: f32,
+    specular: [f32; 3],
+    taps: [&Tap; 2],
+    fresnel: Fresnel,
+) -> Vec<Emissive> {
+    let mut block = sea_block(kind, colour, opacity, power, specular, taps);
+    let [constant, facing, exponent] = fresnel.lanes();
+    block[1].rate = constant;
+    block[2].rate = facing;
+    block[2].program[1] = exponent;
+    block
+}
+
 /// What a classified water slot is drawn as.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Reading {
@@ -211,6 +273,19 @@ impl Tap {
             },
             second,
         ]
+    }
+
+    /// Omega's reflective sea: both taps at `(sign * u + rate * Speed * t, v)`, summed
+    /// unweighted. `rate` and the two signs are the pixel program's own
+    /// ([`oag_rcs::gcn::SeaTaps`]: `0.05`, `+u` on `NormalMap` and `-u` on `NormalMap1`),
+    /// `speed` the material's `Speed`.
+    #[must_use]
+    pub fn reflective(rate: f32, signs: [f32; 2], speed: f32) -> [Self; 2] {
+        signs.map(|sign| Self {
+            scale: [sign, 1.0],
+            scroll: [rate * speed, 0.0],
+            weight: 1.0,
+        })
     }
 
     /// One of Vineta K's three taps, off the material's own `scale` and `rate`:

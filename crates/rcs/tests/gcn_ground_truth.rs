@@ -436,3 +436,88 @@ fn the_shipshield_programs_carry_the_lightning_rates_in_every_variant() {
         oag_rcs::rcsmodel::psp2::vertex_decl::UV1_UV2_HASH
     );
 }
+
+/// Omega's reflective seas (`docs/rendering/water.md`, "Omega (PS4)"): every lit pixel program of
+/// the five materials fetches `NormalMap` at `(u + 0.05 Speed time, v)` and `NormalMap1` at
+/// `(0.05 Speed time - u, v)`, found by data flow in all eight variants of each. The pond and
+/// the tower's sea add `SpecularStrength`, the edge `Opacity` and `Watercolour1`. The shore
+/// strip and Park's `reflectplane_dc_seawater` (HD's interface) are not this law.
+#[test]
+#[ignore = "needs the Omega extraction"]
+fn the_reflective_sea_programs_carry_the_two_opposite_taps_in_every_variant() {
+    let (Some(base), Some(later)) = (
+        path("omega-eu/uroot/data00.psarc"),
+        path("omega-eu/uroot/data04.psarc"),
+    ) else {
+        return;
+    };
+    let mut archives = [
+        oag_assets::psarc::Archive::open_file(&base).expect("the archive opens"),
+        oag_assets::psarc::Archive::open_file(&later).expect("the archive opens"),
+    ];
+    let mut read = |entry: &str| {
+        archives
+            .iter_mut()
+            .find_map(|a| a.read_path(entry).ok())
+            .unwrap_or_else(|| panic!("{entry} reads"))
+    };
+    let taps = gcn::SeaTaps {
+        rate: 0.05,
+        signs: [1.0, -1.0],
+    };
+    // (entry, colour constant, SpecularStrength, Opacity)
+    let seas = [
+        (
+            "altima/materials/reflectplane_mid",
+            "Watercolour",
+            false,
+            false,
+        ),
+        (
+            "altima/materials/reflectplane_edge",
+            "Watercolour1",
+            false,
+            true,
+        ),
+        (
+            "square/materials/reflectplane_pond",
+            "Watercolour",
+            true,
+            false,
+        ),
+        (
+            "tower/materials/reflectplane_dc_seawater_tow",
+            "Watercolour",
+            true,
+            false,
+        ),
+        (
+            "mall/materials/reflectplane_dc_seawater_new",
+            "Watercolour",
+            false,
+            false,
+        ),
+    ];
+    for (entry, colour, specular_strength, opacity) in seas {
+        let bytes = read(&format!("data/environments2048/{entry}.rcsmaterial"));
+        assert_eq!(
+            gcn::sea(&bytes),
+            Some(gcn::Sea {
+                taps,
+                colour: colour.to_string(),
+                specular_strength,
+                opacity,
+                programs: 8,
+            }),
+            "{entry}"
+        );
+    }
+    for entry in [
+        "park/materials/reflectplane_dc_seawater",
+        "shared/objectlibrary/materials/reflectplane_rt_seawateredging",
+        "altima/materials/fc17_effects_vscroll_wateredge_vertexcol",
+    ] {
+        let bytes = read(&format!("data/environments2048/{entry}.rcsmaterial"));
+        assert_eq!(gcn::sea(&bytes), None, "{entry}");
+    }
+}
