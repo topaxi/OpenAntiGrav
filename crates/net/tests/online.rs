@@ -108,7 +108,7 @@ impl Lab {
         self.people.push(LobbyClient::connect_keyed(
             Box::new(link) as Box<dyn Link>,
             name,
-            &[self.edition.clone()],
+            std::slice::from_ref(&self.edition),
             "",
             key,
         ));
