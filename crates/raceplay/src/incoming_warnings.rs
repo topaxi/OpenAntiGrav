@@ -53,7 +53,7 @@ impl Race {
         self.view.huds[self.player_slot()].incoming_enabled
             && self.viewport_count() <= 1
             && self.core.sim.people() <= 1
-            && self.view.seat.is_none()
+            && self.core.outcome.seat.is_none()
             && matches!(
                 self.core.sim.world.mode(),
                 oag_race::Mode::SingleRace

@@ -21,7 +21,7 @@ impl Race {
     /// The slots whose view shows tags: the person-flown slots with a view of their own.
     fn tag_viewers(&self) -> impl Iterator<Item = usize> + '_ {
         let primary = self.player_slot();
-        let own_views = if self.view.seat.is_some() {
+        let own_views = if self.core.outcome.seat.is_some() {
             0
         } else {
             self.viewport_count()
@@ -68,7 +68,8 @@ impl Race {
     /// gap; the original's own fallback string is one shared `PLAYER`).
     #[must_use]
     pub fn tag_name(&self, slot: usize) -> String {
-        self.view
+        self.core
+            .outcome
             .person_names
             .get(slot)
             .filter(|name| !name.is_empty())

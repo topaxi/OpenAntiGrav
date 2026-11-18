@@ -590,7 +590,7 @@ impl Race {
         // race ended, with the start pushed back to `WRECK_HANDOFF_TICKS`.
         let (finish, delay) = match self.core.sim.world.ships[player].standing.finish_tick {
             Some(finish) => (finish, 0),
-            None => match self.view.wreck_ended_tick {
+            None => match self.core.outcome.wreck_ended_tick {
                 Some(ended) => (ended, WRECK_HANDOFF_TICKS.saturating_sub(START_TICKS)),
                 None => return,
             },

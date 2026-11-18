@@ -147,7 +147,7 @@ impl Race {
     pub fn runs_on_after_the_wreck(&self) -> bool {
         self.core.sim.finished()
             && self.core.sim.world.mode() == Mode::SingleRace
-            && self.view.wreck_ended_tick.is_some()
+            && self.core.outcome.wreck_ended_tick.is_some()
     }
 
     /// Whether the world goes on being stepped under the end-race screens, for
@@ -213,7 +213,7 @@ impl Race {
     /// The results screens' tallies. See [`RunStats`].
     #[must_use]
     pub fn run_stats(&self) -> RunStats {
-        self.view.run_stats
+        self.core.outcome.run_stats
     }
 
     /// The team id each grid slot flew, slot 0 the player's - [`Setup::slot_teams`].
@@ -225,7 +225,7 @@ impl Race {
     /// [`Setup::slot_teams`]: crate::Setup::slot_teams
     #[must_use]
     pub fn slot_teams(&self) -> &[String] {
-        &self.view.slot_teams
+        &self.core.outcome.slot_teams
     }
 
     /// Names the person flying each slot, by slot (empty for a slot with none): what the end
@@ -233,14 +233,14 @@ impl Race {
     /// a local one gives seat 1 the stored player name
     /// (`oag_game::split_screen::name_first_seat`). View-only; the simulation never reads it.
     pub fn set_person_names(&mut self, names: Vec<String>) {
-        self.view.person_names = names;
+        self.core.outcome.person_names = names;
     }
 
     /// The name of the person who flew each slot ([`Self::set_person_names`]), empty where
     /// the race knows none.
     #[must_use]
     pub fn person_names(&self) -> &[String] {
-        &self.view.person_names
+        &self.core.outcome.person_names
     }
 
     /// The results, once there are any.
@@ -252,14 +252,14 @@ impl Race {
     /// finish.
     #[must_use]
     pub fn results(&self) -> Option<&Board> {
-        self.view.results.as_ref()
+        self.core.outcome.results.as_ref()
     }
 
     /// How many times the board has been replaced since it was first taken:
     /// what a screen drawn from a copy of it compares to know it is stale.
     #[must_use]
     pub fn results_revision(&self) -> u32 {
-        self.view.results_revision
+        self.core.outcome.results_revision
     }
 
     /// Re-takes the board from the world as it is now, while the field runs on
@@ -281,16 +281,16 @@ impl Race {
         if !self.core.sim.runs_on_after_the_line() {
             return;
         }
-        let Some(held) = &self.view.results else {
+        let Some(held) = &self.core.outcome.results else {
             return;
         };
         if held.rows.iter().all(scoreboard::Row::finished) {
             return;
         }
         let fresh = self.take_board(held.tick);
-        if self.view.results.as_ref() != Some(&fresh) {
-            self.view.results = Some(fresh);
-            self.view.results_revision = self.view.results_revision.wrapping_add(1);
+        if self.core.outcome.results.as_ref() != Some(&fresh) {
+            self.core.outcome.results = Some(fresh);
+            self.core.outcome.results_revision = self.core.outcome.results_revision.wrapping_add(1);
         }
     }
 
@@ -301,7 +301,7 @@ impl Race {
     /// the race in `self.core.sim` is finished.
     pub fn recapture_results(&mut self) {
         if self.core.sim.finished() {
-            self.view.results = None;
+            self.core.outcome.results = None;
             self.capture_results();
         }
     }
@@ -311,12 +311,12 @@ impl Race {
     /// Called at the end of [`Race::tick`], after the standings have been
     /// advanced, so the last crossing is already in the table it reads.
     pub(super) fn capture_results(&mut self) {
-        if !self.core.sim.finished() || self.view.results.is_some() {
+        if !self.core.sim.finished() || self.core.outcome.results.is_some() {
             return;
         }
         let board = self.take_board(oag_race::race_clock_ticks(self.core.sim.world.tick));
-        self.view.results = Some(board);
-        self.view.results_revision = self.view.results_revision.wrapping_add(1);
+        self.core.outcome.results = Some(board);
+        self.core.outcome.results_revision = self.core.outcome.results_revision.wrapping_add(1);
     }
 
     /// The player's 1-based place on an Eliminator's end-of-race board, off the standings as
@@ -387,7 +387,8 @@ impl Race {
         // A race names the people it was given names for (the lobby's, or seat 1's stored name).
         for row in board.rows.iter_mut().filter(|row| row.player) {
             row.name = self
-                .view
+                .core
+                .outcome
                 .person_names
                 .get(usize::from(row.slot))
                 .filter(|name| !name.is_empty())

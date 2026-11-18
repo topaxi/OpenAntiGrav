@@ -409,7 +409,7 @@ impl Race {
             .filter_map(|row| {
                 let slot = slots[row];
                 Some(oag_hud::KillTag {
-                    team: self.view.slot_teams.get(slot)?.clone(),
+                    team: self.core.outcome.slot_teams.get(slot)?.clone(),
                     count: counts[row],
                     player: slot == player,
                 })
@@ -492,7 +492,7 @@ impl Race {
         // Two people: both rows carry a team name, each view's own first. One person: the
         // player's row is the profile tag in the original, which this build has none of.
         let named = self.core.sim.people > 1;
-        let team = |slot: usize| self.view.slot_teams.get(slot).cloned();
+        let team = |slot: usize| self.core.outcome.slot_teams.get(slot).cloned();
         Some(oag_hud::HeadToHead {
             gap: ahead.abs(),
             player_leads: ahead > 0.0,

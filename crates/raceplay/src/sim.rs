@@ -14,10 +14,10 @@
 //! `mod_sounds`, `announcements` and `class_announcements` are `oag_gameplay::cue` types
 //! and plain integers. What does:
 //!
-//! - **State a tick writes outside this struct.** The fields the lean
-//!   [`RaceView`](super::RaceView) keeps without the `view` feature (the seat, the person
-//!   names, the slot teams, the results board and its revision, the run statistics and
-//!   `wreck_ended_tick`) sit beside `RaceSim`, not in it, and the tick writes some of them.
+//! - **State a tick writes outside this struct.** The race's
+//!   [`Outcome`](crate::outcome::Outcome) (the seat, the person names, the slot teams, the
+//!   results board and its revision, the run statistics and `wreck_ended_tick`) sits beside
+//!   `RaceSim` in [`SimRace`](super::SimRace), not in it, and the tick writes some of it.
 //!   ADR-0087 decision 9 rests on two of them, the results capture and the wreck's end tick,
 //!   living outside `RaceSim`.
 //! - **The tick calls the view in the middle.** [`Race::tick`](super::Race::tick) and the

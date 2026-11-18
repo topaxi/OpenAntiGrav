@@ -548,7 +548,7 @@ impl Race {
             // reads a person-flown craft's state alone; an opponent's wreck stays
             // down (the original's state 6, measured live) and ends nothing.
             if self.core.sim.eliminate_if_wrecked(slot) && slot == self.player_slot() {
-                self.view.wreck_ended_tick = Some(self.core.sim.world.tick);
+                self.core.outcome.wreck_ended_tick = Some(self.core.sim.world.tick);
                 // The original plays `~BLOWUP`, hides the HUD and swings the camera
                 // into its mode 5 on the way here. **The sound is built** and is
                 // held on `Race::craft_is_exploding` rather than raised here,

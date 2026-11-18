@@ -837,13 +837,12 @@ impl Race {
                     xp: None,
                     scheme: ControlScheme::default(),
                 },
+                outcome: crate::outcome::Outcome {
+                    slot_teams,
+                    ..Default::default()
+                },
                 plans: None,
             },
-            #[cfg(not(feature = "view"))]
-            view: Box::new(RaceView {
-                slot_teams,
-                ..RaceView::default()
-            }),
             #[cfg(feature = "view")]
             view: Box::new(RaceView {
                 chase_params,
@@ -867,8 +866,6 @@ impl Race {
                 hull_shake_on: true,
                 camera_shake_on: true,
                 player_tags_on: false,
-                seat: None,
-                person_names: Vec::new(),
                 contact: super::contact_fx::ContactFx::new(),
                 pair_contacts: [None; oag_gameplay::MAX_SHIPS],
                 field_sparks: Default::default(),
@@ -882,7 +879,6 @@ impl Race {
                 now_playing,
                 world_clock_offset,
                 gantry_seconds,
-                wreck_ended_tick: None,
                 restores: 0,
                 photo: None,
                 spectates_from_start: false,
@@ -937,7 +933,6 @@ impl Race {
                     Rng::new(super::engine_light::engine_light_seed(slot))
                 }),
                 spark_anchors,
-                slot_teams,
                 collision_fx,
                 effects,
                 handles,
@@ -1017,9 +1012,6 @@ impl Race {
                 absorb_overlay: [None; MAX_SHIPS],
                 absorb_shell: Default::default(),
                 stage_rng: Rng::new(STAGE_SEED),
-                results: None,
-                results_revision: 0,
-                run_stats: results::RunStats::default(),
                 shield_was_up: false,
                 // Every bar starts at `0.0`, not `1.0`: the pool is `0.0` until
                 // `<Misc>` loads (see `Readout::shield_fraction`'s own

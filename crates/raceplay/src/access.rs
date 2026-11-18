@@ -73,7 +73,7 @@ impl Race {
     /// The team id the craft in `slot` flies, when the grid named one.
     #[must_use]
     pub fn slot_team(&self, slot: usize) -> Option<&str> {
-        self.view.slot_teams.get(slot).map(String::as_str)
+        self.core.outcome.slot_teams.get(slot).map(String::as_str)
     }
 }
 
@@ -559,7 +559,8 @@ impl Race {
     /// necessarily this machine's.
     #[must_use]
     pub fn player_slot(&self) -> usize {
-        self.view
+        self.core
+            .outcome
             .seat
             .unwrap_or_else(|| self.core.sim.world.primary_slot())
     }
@@ -577,7 +578,7 @@ impl Race {
     /// `docs/ghidra/functions/ps3-hdfury-eu/autopilot.md`.
     #[must_use]
     pub fn heard_here(&self, slot: usize) -> bool {
-        match self.view.seat {
+        match self.core.outcome.seat {
             Some(seat) => slot == seat,
             None => {
                 slot == self.core.sim.world.primary_slot()
@@ -594,7 +595,7 @@ impl Race {
     pub fn set_seat(&mut self, slot: Option<usize>) {
         #[cfg(feature = "view")]
         let followed = self.player_slot();
-        self.view.seat = slot.filter(|&slot| slot < oag_gameplay::MAX_PLAYERS);
+        self.core.outcome.seat = slot.filter(|&slot| slot < oag_gameplay::MAX_PLAYERS);
         // The camera starts settled on the craft it now follows, as a race start's does; a
         // seat that names the craft it already follows is no cut.
         #[cfg(feature = "view")]

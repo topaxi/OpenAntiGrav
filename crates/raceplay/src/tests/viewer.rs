@@ -245,15 +245,15 @@ fn a_seek_back_clears_what_the_view_kept_about_a_later_moment() {
     let (mut viewer, mut race) = open(replay);
     assert_eq!(pass_ended(&mut viewer), Pass::Complete);
     viewer.seek(&mut race, TICKS);
-    race.view.results = Some(crate::scoreboard::Board {
+    race.core.outcome.results = Some(crate::scoreboard::Board {
         rows: Vec::new(),
         laps_target: None,
         tick: TICKS,
     });
-    race.view.wreck_ended_tick = Some(TICKS);
+    race.core.outcome.wreck_ended_tick = Some(TICKS);
     viewer.seek(&mut race, 100);
     assert!(race.results().is_none());
-    assert!(race.view.wreck_ended_tick.is_none());
+    assert!(race.core.outcome.wreck_ended_tick.is_none());
 }
 
 /// A seek is a camera cut: the drawn view jumps, and the motion blur and a temporal upscaler

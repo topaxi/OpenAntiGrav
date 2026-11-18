@@ -452,7 +452,8 @@ impl Race {
         let primary = slot == self.player_slot();
         if primary && self.draws() {
             let body = &self.core.sim.world.ships[slot].physics.body;
-            self.view
+            self.core
+                .outcome
                 .run_stats
                 .observe(body.linear_velocity.dot(body.forward()).abs());
         }
@@ -487,7 +488,7 @@ impl Race {
             self.xp_lap_completed();
         }
         if primary && outcome.perfect_zone && self.draws() {
-            self.view.run_stats.perfect_zones += 1;
+            self.core.outcome.run_stats.perfect_zones += 1;
         }
         if outcome.perfect_zone
             && let Some(zone) = self.core.sim.zone
@@ -555,7 +556,7 @@ impl Race {
     /// slot, so each seat of a split or multi-window race gets its own lines.
     fn watches_laps_of(&self, slot: usize) -> bool {
         slot == self.player_slot()
-            || (self.view.seat.is_none() && self.core.sim.world.person_flown(slot))
+            || (self.core.outcome.seat.is_none() && self.core.sim.world.person_flown(slot))
     }
 
     /// Feeds each local person's craft to its own lap watch. A replayed tick

@@ -65,8 +65,8 @@ impl Race {
         self.restore_sim(snapshot);
         #[cfg(feature = "view")]
         {
-            self.view.results = None;
-            self.view.wreck_ended_tick = None;
+            self.core.outcome.results = None;
+            self.core.outcome.wreck_ended_tick = None;
             self.view.restores = self.view.restores.wrapping_add(1);
             self.settle_poses();
         }
@@ -96,9 +96,10 @@ impl Race {
     /// each of the twenty-odd push sites: a cue's bookkeeping
     /// (`contact_cue_cooldown`) is sim state and must keep running.
     ///
-    /// **What still runs although it lives in the view**, because the
-    /// simulation or the caller reads it back. The lock-on is not one of them:
-    /// each person-flown slot's lock is simulation state
+    /// **What still runs although it is not simulation state**, because the
+    /// simulation or the caller reads it back: the race's
+    /// [`Outcome`](crate::outcome::Outcome), beside `RaceSim` and outside its hash. The
+    /// lock-on is not one of them: each person-flown slot's lock is simulation state
     /// ([`RaceSim::advance_locks`], hashed), advanced from the world with no camera, so
     /// the chase camera and the reticle are never read by a shot, and a server
     /// with neither agrees with its client about a lock. The picture's reticle

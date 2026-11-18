@@ -27,7 +27,6 @@
 //! that is the reading this split keeps. They are produced by the tick and
 //! drained by the caller; what plays them is the bank, and the bank is here.
 
-#[cfg(feature = "view")]
 use super::*;
 
 /// The half of a race that exists to be looked at and listened to.
@@ -35,7 +34,6 @@ use super::*;
 /// Reached as `Race::view`. Every field is out of the determinism hash by
 /// construction - see the module doc comment - so a change here can move a
 /// picture and cannot move a race.
-#[cfg(feature = "view")]
 #[derive(Debug)]
 pub struct RaceView {
     /// Which of the three perspectives is live. **Render-only state**, on `Race`
@@ -69,15 +67,6 @@ pub struct RaceView {
     pub(super) camera_shake_on: bool,
     /// Whether other people's multiplayer tags are drawn ([`super::Race::set_player_tags`]).
     pub(super) player_tags_on: bool,
-    /// The grid slot this machine's person flies in a network race, set by
-    /// [`super::Race::set_seat`]. View-only: in a network race every person's slot
-    /// is [`oag_gameplay::Controller::Remote`] on every peer, because the
-    /// controllers are hashed, so "which craft is mine" cannot live in the world.
-    pub(super) seat: Option<usize>,
-    /// The name of the person flying each slot, by slot, empty for a slot with none
-    /// ([`super::Race::set_person_names`]): the lobby's in a network race, the stored player name
-    /// for seat 1 in a local one. View-only: the end screens and the multiplayer tags name people.
-    pub(super) person_names: Vec<String>,
     /// The seat's wall-contact effects: the camera shake, the collision sparks and
     /// what paces them. See [`ContactFx`](super::contact_fx::ContactFx).
     pub(super) contact: super::contact_fx::ContactFx,
@@ -108,10 +97,6 @@ pub struct RaceView {
     pub(super) spectates_from_start: bool,
     /// Photo mode's camera while it is open. See [`super::photo`].
     pub(super) photo: Option<super::photo::Photo>,
-    /// The tick the player's wreck ended the race on, `None` until it does.
-    /// View-side bookkeeping for [`Race::runs_on_after_the_end`] and the spectator
-    /// director's clock; nothing the simulation reads.
-    pub(super) wreck_ended_tick: Option<u64>,
     /// How many times a viewer has put the race back to another tick
     /// ([`Race::restore_for_viewing`]): each is a cut, so the motion blur and a temporal
     /// upscaler do not read the jump as motion ([`Race::camera_cuts`]).
@@ -292,8 +277,6 @@ pub struct RaceView {
     pub(super) engine_light_rng: [Rng; MAX_SHIPS],
     /// Authored hull spark anchors per slot, model space.
     pub(super) spark_anchors: Vec<Vec<Vec3>>,
-    /// The team id each slot flies - [`Setup::slot_teams`].
-    pub(super) slot_teams: Vec<String>,
     /// The `Ship Collision Fx` locators in model space - see
     /// [`Setup::collision_fx`].
     pub(super) collision_fx: Vec<oag_livery::SparkAnchor>,
@@ -522,40 +505,4 @@ pub struct RaceView {
     /// What the weather adds to the original's. `[render_profiles.<title>] weather`;
     /// see [`Race::set_weather`].
     pub(super) weather: oag_display::display::Weather,
-    /// The results table, taken on the tick the race reached its finish
-    /// condition, and `None` before that.
-    ///
-    /// **A snapshot rather than a live query**: "the race is over" has to mean
-    /// one table, not one that moves under a reader at every tick. The field is
-    /// still moving when the player crosses - `oag_race::places` ranks whoever
-    /// has not finished by distance covered - so the board is replaced only by
-    /// [`Race::refresh_results`], when the world runs on behind the end screens,
-    /// and each replacement bumps [`Self::results_revision`].
-    ///
-    /// On `Race` rather than in `World`: it is derived from state the world
-    /// already holds, so hashing it would hash the same facts twice, and a
-    /// replay reproduces it by reaching the same tick. See [`Self::results`].
-    pub(super) results: Option<crate::scoreboard::Board>,
-    /// Boards taken or replaced so far, for [`Race::results_revision`].
-    pub(super) results_revision: u32,
-    /// The tallies the Zone results screen reports - see [`RunStats`].
-    pub(super) run_stats: super::results::RunStats,
-}
-
-/// The half of a race that exists to be looked at, in a build with nothing to
-/// look at it with (the `view` feature off): only what a headless host still
-/// reads - the results it prints, the slot teams and seat it reports, the
-/// wreck's end tick that decides whether the race ran on - each documented on
-/// the full struct's field of the same name. Every tick runs as
-/// [`Race::tick_sim_only`] runs one, so nothing else here is ever written.
-#[cfg(not(feature = "view"))]
-#[derive(Debug, Default)]
-pub struct RaceView {
-    pub(super) seat: Option<usize>,
-    pub(super) person_names: Vec<String>,
-    pub(super) wreck_ended_tick: Option<u64>,
-    pub(super) slot_teams: Vec<String>,
-    pub(super) results: Option<crate::scoreboard::Board>,
-    pub(super) results_revision: u32,
-    pub(super) run_stats: super::results::RunStats,
 }

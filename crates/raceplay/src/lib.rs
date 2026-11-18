@@ -268,6 +268,7 @@ pub mod now_playing;
 mod options;
 mod original_ai;
 mod original_tables;
+mod outcome;
 #[cfg(feature = "view")]
 mod own_rockets;
 mod pads;
@@ -333,6 +334,7 @@ pub mod track_panel;
 pub mod transit;
 #[cfg(feature = "view")]
 mod transit_camera;
+#[cfg(feature = "view")]
 mod view;
 #[cfg(feature = "view")]
 pub mod viewer;
@@ -404,6 +406,7 @@ pub use spline::{Spline, circuit_length};
 pub use telemetry::{Telemetry, describe};
 #[cfg(feature = "view")]
 pub use texture_sink::TextureSink;
+#[cfg(feature = "view")]
 pub use view::RaceView;
 #[cfg(feature = "view")]
 pub use viewpoint::WindowViews;
@@ -783,6 +786,7 @@ pub struct Race {
     /// in one place instead of interleaved with the world above. Nothing in
     /// here reaches [`RaceSim::state_hash`], and nothing above it may be reached
     /// *from* here - see [`view`] for the argument.
+    #[cfg(feature = "view")]
     view: Box<RaceView>,
     /// The recording of this race, if one was asked for, and the ghost it
     /// races against, if any. Neither reaches [`RaceSim::state_hash`] - see

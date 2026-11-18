@@ -95,7 +95,7 @@ impl Race {
             // hull stays where its own chase camera frames it (offsetting the hull
             // alone drew it off the camera's centre for the length of the glide).
             let remote = self.core.sim.world.controllers[slot] == oag_gameplay::Controller::Remote
-                || self.view.seat == Some(slot);
+                || self.core.outcome.seat == Some(slot);
             // **A hit the client had not predicted is drawn where it lands**: the own
             // craft's input is known exactly, so what moves it in a correction is an
             // interaction, and a hit that first shows here (shield lost) must not be

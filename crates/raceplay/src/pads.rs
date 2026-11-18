@@ -132,7 +132,7 @@ impl Race {
                     let lap = self.core.sim.world.race[slot].lap;
                     #[cfg(feature = "view")]
                     if self.draws() {
-                        self.view.run_stats.count_boost(lap);
+                        self.core.outcome.run_stats.count_boost(lap);
                     }
                 }
                 // Zone mode only. `Ship_ApplySpeedupPad` raises its flag under

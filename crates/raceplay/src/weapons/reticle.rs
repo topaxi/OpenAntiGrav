@@ -169,7 +169,7 @@ impl Race {
     fn update_viewed_sights(&mut self) {
         // A network client draws its seat's one view through `self.view.sight`;
         // the per-slot reticles are for local split screen and windows.
-        if self.view.seat.is_some() {
+        if self.core.outcome.seat.is_some() {
             return;
         }
         let primary = self.player_slot();
