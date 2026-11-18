@@ -203,7 +203,11 @@ struct Staged {
 }
 
 fn build(request: Request, loaded: race::Loaded) -> Built {
-    warm(build_stage(request, loaded))
+    let built = warm(build_stage(request, loaded));
+    // `loaded` was consumed building the scene: its decode buffers are free now, and are what a
+    // second race in the session would otherwise grow the heap past.
+    crate::heap::release_freed();
+    built
 }
 
 fn build_stage(request: Request, loaded: race::Loaded) -> Staged {
@@ -301,24 +305,42 @@ fn warm(staged: Staged) -> Built {
 ///
 /// A thread that will not spawn drops its closure, and the stage with it,
 /// right here: a hitch rather than a leak.
-#[cfg(target_arch = "wasm32")]
 pub(crate) fn drop_off_thread(stage: Box<RaceStage>) {
-    drop(stage);
+    drop_then_release(stage);
 }
 
-/// See the wasm twin above: the web build has no thread to drop it on.
+/// See [`drop_off_thread`]. Also hands the heap the race freed back to the system, on the same
+/// thread: the build's transients and the stage's own buffers are what a second race in the
+/// same session would otherwise sit on top of (`crate::heap`). Returns the thread so a test can
+/// wait for it.
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn drop_off_thread(stage: Box<RaceStage>) {
+pub(crate) fn drop_then_release<T: Send + 'static>(
+    value: T,
+) -> Option<std::thread::JoinHandle<()>> {
     let guard = oag_thread::gpu_workers::Guard::enter("race-drop");
     let spawned = std::thread::Builder::new()
         .name("race-drop".to_string())
         .spawn(move || {
             let _guard = guard;
-            drop(stage);
+            drop(value);
+            crate::heap::release_freed();
         });
-    if let Err(e) = spawned {
-        log::warn!("could not release the parked race off the frame thread: {e}");
+    match spawned {
+        Ok(handle) => Some(handle),
+        Err(e) => {
+            log::warn!("could not release the parked race off the frame thread: {e}");
+            None
+        }
     }
+}
+
+/// See the native twin above: the web build has no thread to drop it on.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn drop_then_release<T: Send + 'static>(
+    value: T,
+) -> Option<std::thread::JoinHandle<()>> {
+    drop(value);
+    None
 }
 
 #[cfg(test)]
