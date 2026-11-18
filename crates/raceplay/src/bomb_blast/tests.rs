@@ -27,7 +27,7 @@ fn a_blast_ages_and_retires_at_the_hardcoded_lifetime() {
     let dt = 1.0 / 60.0;
     let ticks = (LIFETIME_SECONDS / dt).ceil() as u32 + 2;
     for _ in 0..ticks {
-        race.advance_bomb_blast_models(dt);
+        race.view.advance_bomb_blast_models(dt);
     }
 
     assert_eq!(
@@ -48,7 +48,7 @@ fn the_hemisphere_hides_well_before_the_shockwave_does() {
     let dt = 1.0 / 60.0;
     let ticks = (HEMISPHERE_HIDE_AT_SECONDS / dt).ceil() as u32 + 2;
     for _ in 0..ticks {
-        race.advance_bomb_blast_models(dt);
+        race.view.advance_bomb_blast_models(dt);
     }
 
     let draws = race.bomb_blast_draws();
@@ -103,7 +103,7 @@ fn the_shockwave_only_starts_growing_after_its_own_delay() {
 
     let dt = 1.0 / 60.0;
     // One tick, well inside the 0.1s gate.
-    race.advance_bomb_blast_models(dt);
+    race.view.advance_bomb_blast_models(dt);
     let before = race.view.bomb_blasts[0].expect("just spawned");
     assert_eq!(
         before.shockwave_scale, SHOCKWAVE_SCALE.start,
@@ -116,7 +116,7 @@ fn the_shockwave_only_starts_growing_after_its_own_delay() {
 
     let ticks = (SHOCKWAVE_SCALE_DELAY_SECONDS / dt).ceil() as u32 + 2;
     for _ in 0..ticks {
-        race.advance_bomb_blast_models(dt);
+        race.view.advance_bomb_blast_models(dt);
     }
     let after = race.view.bomb_blasts[0].expect("still inside the 4.0s lifetime");
     assert!(
@@ -148,7 +148,7 @@ fn the_shockwave_alpha_ease_fades_from_opaque_to_nothing() {
 fn a_ship_explosions_shockwave_eases_as_the_original_logged_it() {
     let mut race = race_with_a_grid();
     let at = Vec3::new(-112.61, -49.85, -195.41);
-    race.spawn_ship_shockwave(at, Vec3::Y * 0.75);
+    race.view.spawn_ship_shockwave(at, Vec3::Y * 0.75);
     let dt = 1.0 / 60.0;
     let seen = [0.1, 1.095, 2.040, 2.938, 3.791, 4.602];
     for (tick, expect) in seen.iter().enumerate() {
@@ -158,7 +158,7 @@ fn a_ship_explosions_shockwave_eases_as_the_original_logged_it() {
             "tick {tick}: {} against {expect}",
             blast.shockwave_scale
         );
-        race.advance_bomb_blast_models(dt);
+        race.view.advance_bomb_blast_models(dt);
     }
     let draw = race.bomb_blast_draws()[0].expect("live");
     assert!(!draw.hemisphere_visible, "a ship explosion has no dome");
@@ -177,7 +177,7 @@ fn a_ship_explosions_shockwave_eases_as_the_original_logged_it() {
 
     let ticks = (SHIP_SHOCKWAVE_LIFETIME_SECONDS / dt).ceil() as u32 + 2;
     for _ in 0..ticks {
-        race.advance_bomb_blast_models(dt);
+        race.view.advance_bomb_blast_models(dt);
     }
     assert_eq!(race.bomb_blast_draws().iter().flatten().count(), 0);
 }
@@ -228,7 +228,7 @@ fn the_draw_carries_the_age_the_texture_tracks_play_at() {
 
     let dt = 1.0 / 60.0;
     for _ in 0..90 {
-        race.advance_bomb_blast_models(dt);
+        race.view.advance_bomb_blast_models(dt);
     }
     let draw = race.bomb_blast_draws()[0].expect("live");
     assert!(
@@ -245,10 +245,10 @@ fn the_draw_carries_the_age_the_texture_tracks_play_at() {
 #[test]
 fn a_ship_explosions_shockwave_texture_also_plays_on_its_age() {
     let mut race = race_with_a_grid();
-    race.spawn_ship_shockwave(Vec3::ZERO, Vec3::Y * 0.75);
+    race.view.spawn_ship_shockwave(Vec3::ZERO, Vec3::Y * 0.75);
     let dt = 1.0 / 60.0;
     for _ in 0..30 {
-        race.advance_bomb_blast_models(dt);
+        race.view.advance_bomb_blast_models(dt);
     }
     let draw = race.bomb_blast_draws()[0].expect("live");
     assert!((draw.age - 0.5).abs() < 1e-3, "{}", draw.age);

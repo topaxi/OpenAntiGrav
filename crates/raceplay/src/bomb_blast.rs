@@ -329,82 +329,6 @@ pub(super) struct BombBlastDraw {
 }
 
 impl Race {
-    /// Starts a ship explosion's shockwave at `position` (the craft's own, not the explosion
-    /// effect's dropped one) with the craft's up as `dir` - see this module's doc comment.
-    /// Dropped silently when every slot is live, like [`Self::spawn_bomb_blast_model`].
-    pub(crate) fn spawn_ship_shockwave(&mut self, position: Vec3, up: Vec3) {
-        let Some(slot) = self.view.bomb_blasts.iter().position(Option::is_none) else {
-            return;
-        };
-        self.view.bomb_blasts[slot] = Some(BombBlast {
-            kind: BlastKind::ShipExplosion,
-            position,
-            dir: up.try_normalize().unwrap_or(Vec3::Y),
-            age: 0.0,
-            hemisphere_scale: HEMISPHERE_SCALE.start,
-            shockwave_scale: SHIP_SHOCKWAVE_SCALE.start,
-            shockwave_alpha: SHIP_SHOCKWAVE_ALPHA.start,
-        });
-    }
-
-    /// Ages every live blast one tick, steps its three eases and retires
-    /// whichever just crossed [`LIFETIME_SECONDS`].
-    ///
-    /// Called from [`Race::tick`], after the impacts loop that can spawn a
-    /// new one this same tick - the same one-tick order
-    /// [`Race::advance_plasma_blast_models`] already runs a freshly-spawned
-    /// blast in.
-    pub(crate) fn advance_bomb_blast_models(&mut self, dt: f32) {
-        self.advance_hd_bomb_blasts(dt);
-        self.advance_hd_missile_blasts(dt);
-        let fades = self.view.bomb_shockwave_fades;
-        for slot in &mut self.view.bomb_blasts {
-            let Some(blast) = slot else { continue };
-            blast.age += dt;
-            if blast.kind == BlastKind::ShipExplosion {
-                blast.shockwave_scale = SHIP_SHOCKWAVE_SCALE.step(blast.shockwave_scale);
-                blast.shockwave_alpha = SHIP_SHOCKWAVE_ALPHA.step(blast.shockwave_alpha);
-                if blast.age >= SHIP_SHOCKWAVE_LIFETIME_SECONDS {
-                    *slot = None;
-                }
-                continue;
-            }
-            blast.hemisphere_scale = HEMISPHERE_SCALE.step(blast.hemisphere_scale);
-            if fades {
-                blast.shockwave_alpha = SHOCKWAVE_ALPHA.step(blast.shockwave_alpha);
-            }
-            if blast.age > SHOCKWAVE_SCALE_DELAY_SECONDS {
-                blast.shockwave_scale = SHOCKWAVE_SCALE.step(blast.shockwave_scale);
-            }
-            if blast.age >= LIFETIME_SECONDS {
-                *slot = None;
-            }
-        }
-    }
-
-    /// Ages every live HD blast one tick, plays `WO_BOMB_RAYS` at the one that
-    /// just crossed half a second, and frees whichever outlived three. Called
-    /// from [`Self::advance_bomb_blast_models`].
-    fn advance_hd_bomb_blasts(&mut self, dt: f32) {
-        let rays = self.view.handles.get(Trigger::BombRays).cloned();
-        let mut played = Vec::new();
-        for slot in &mut self.view.hd_bomb_blasts {
-            let Some(blast) = slot else { continue };
-            let step = blast.step(dt);
-            if step.rays {
-                played.push(blast.position);
-            }
-            if step.retire {
-                *slot = None;
-            }
-        }
-        if let Some(effect) = rays {
-            for position in played {
-                self.view.stage.play(&effect, position, 1.0);
-            }
-        }
-    }
-
     /// Where each laid Bomb's halo sits and how large it is, for HD only (empty
     /// elsewhere): the bomb's own model, scaled by [`hd::halo_scale`] of the
     /// seconds the bomb has sat.
@@ -571,5 +495,82 @@ impl RaceView {
             shockwave_scale: SHOCKWAVE_SCALE.start,
             shockwave_alpha: SHOCKWAVE_ALPHA.start,
         });
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Starts a ship explosion's shockwave at `position` (the craft's own, not the explosion
+    /// effect's dropped one) with the craft's up as `dir` - see this module's doc comment.
+    /// Dropped silently when every slot is live, like [`Self::spawn_bomb_blast_model`].
+    pub(crate) fn spawn_ship_shockwave(&mut self, position: Vec3, up: Vec3) {
+        let Some(slot) = self.bomb_blasts.iter().position(Option::is_none) else {
+            return;
+        };
+        self.bomb_blasts[slot] = Some(BombBlast {
+            kind: BlastKind::ShipExplosion,
+            position,
+            dir: up.try_normalize().unwrap_or(Vec3::Y),
+            age: 0.0,
+            hemisphere_scale: HEMISPHERE_SCALE.start,
+            shockwave_scale: SHIP_SHOCKWAVE_SCALE.start,
+            shockwave_alpha: SHIP_SHOCKWAVE_ALPHA.start,
+        });
+    }
+    /// Ages every live blast one tick, steps its three eases and retires
+    /// whichever just crossed [`LIFETIME_SECONDS`].
+    ///
+    /// Called from [`Race::tick`], after the impacts loop that can spawn a
+    /// new one this same tick - the same one-tick order
+    /// [`Race::advance_plasma_blast_models`] already runs a freshly-spawned
+    /// blast in.
+    pub(crate) fn advance_bomb_blast_models(&mut self, dt: f32) {
+        self.advance_hd_bomb_blasts(dt);
+        self.advance_hd_missile_blasts(dt);
+        let fades = self.bomb_shockwave_fades;
+        for slot in &mut self.bomb_blasts {
+            let Some(blast) = slot else { continue };
+            blast.age += dt;
+            if blast.kind == BlastKind::ShipExplosion {
+                blast.shockwave_scale = SHIP_SHOCKWAVE_SCALE.step(blast.shockwave_scale);
+                blast.shockwave_alpha = SHIP_SHOCKWAVE_ALPHA.step(blast.shockwave_alpha);
+                if blast.age >= SHIP_SHOCKWAVE_LIFETIME_SECONDS {
+                    *slot = None;
+                }
+                continue;
+            }
+            blast.hemisphere_scale = HEMISPHERE_SCALE.step(blast.hemisphere_scale);
+            if fades {
+                blast.shockwave_alpha = SHOCKWAVE_ALPHA.step(blast.shockwave_alpha);
+            }
+            if blast.age > SHOCKWAVE_SCALE_DELAY_SECONDS {
+                blast.shockwave_scale = SHOCKWAVE_SCALE.step(blast.shockwave_scale);
+            }
+            if blast.age >= LIFETIME_SECONDS {
+                *slot = None;
+            }
+        }
+    }
+    /// Ages every live HD blast one tick, plays `WO_BOMB_RAYS` at the one that
+    /// just crossed half a second, and frees whichever outlived three. Called
+    /// from [`Self::advance_bomb_blast_models`].
+    fn advance_hd_bomb_blasts(&mut self, dt: f32) {
+        let rays = self.handles.get(Trigger::BombRays).cloned();
+        let mut played = Vec::new();
+        for slot in &mut self.hd_bomb_blasts {
+            let Some(blast) = slot else { continue };
+            let step = blast.step(dt);
+            if step.rays {
+                played.push(blast.position);
+            }
+            if step.retire {
+                *slot = None;
+            }
+        }
+        if let Some(effect) = rays {
+            for position in played {
+                self.stage.play(&effect, position, 1.0);
+            }
+        }
     }
 }

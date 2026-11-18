@@ -259,7 +259,7 @@ fn a_draw_alpha_reaches_no_state_hash() {
                 1000.0,
                 oag_display::display::Fov::default(),
             ),
-            drawn.nozzle_of(0),
+            drawn.view.nozzle_of(&drawn.core, 0),
         );
         drawn.tick(&PlayerInputs::none());
         plain.tick(&PlayerInputs::none());
@@ -323,11 +323,11 @@ fn the_trail_head_follows_the_drawn_nozzle_and_only_between_ticks() {
     race.set_draw_alpha(0.5);
     assert_eq!(
         race.trail_head_of(0).map(|head| head.position),
-        race.nozzle_of(0)
+        race.view.nozzle_of(&race.core, 0)
     );
     assert_eq!(race.trail_head_of(0).map(|head| head.alpha), Some(0.5));
     assert_ne!(
-        race.nozzle_of(0),
+        race.view.nozzle_of(&race.core, 0),
         Some(
             crate::drawable::model_matrix_of(&race.core.sim.world.ships[0])
                 .transform_point3(Vec3::new(0.0, 0.0, 4.0))
@@ -394,11 +394,11 @@ fn the_body_a_blob_shadow_casts_from_is_the_drawn_one() {
     race.tick(&PlayerInputs::none());
     let after = race.core.sim.world.ships[0].physics.body.position;
     assert_eq!(
-        race.body_between(0),
+        race.view.body_between(&race.core, 0),
         race.core.sim.world.ships[0].physics.body
     );
     race.set_draw_alpha(0.25);
-    let drawn = race.body_between(0).position;
+    let drawn = race.view.body_between(&race.core, 0).position;
     assert!(
         drawn.abs_diff_eq(before.lerp(after, 0.25), 1e-4),
         "cast from {drawn}, not a quarter of {before} -> {after}"

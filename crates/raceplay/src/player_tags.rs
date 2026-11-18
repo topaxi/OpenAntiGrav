@@ -107,7 +107,7 @@ impl Race {
             .filter(|&target| self.core.sim.tagged_for(viewer, target))
             .filter_map(|target| {
                 let fade = self.view.huds[viewer].tag_fade[target];
-                let body = self.body_between(target);
+                let body = self.view.body_between(&self.core, target);
                 let anchor = body.position + body.up() * raise(fade);
                 let projected = self.project_for_sight(anchor, screen)?;
                 let alpha = alpha(fade, projected.distance, true);

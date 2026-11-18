@@ -17,6 +17,8 @@
 //! See `docs/ghidra/functions/psp-pulse-usa/perfect-start.md`.
 
 use super::*;
+#[cfg(feature = "view")]
+use crate::stage::Stage;
 
 use oag_physics::launch::Grade;
 
@@ -30,20 +32,26 @@ impl RaceSim {
     }
 }
 
-impl Race {
+#[cfg(feature = "view")]
+impl Stage<'_> {
     /// Fires the perfect-start effect on each human craft whose grade became
     /// [`Grade::Perfect`] this tick. The grade is written once, on the
     /// first-thrust edge, so a change is that edge.
-    pub(super) fn fire_perfect_starts(&mut self, before: &[Grade; oag_gameplay::MAX_SHIPS]) {
-        let count = self.core.sim.world.ship_count as usize;
+    pub(super) fn fire_perfect_starts(
+        &mut self,
+        core: &SimRace,
+        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
+        before: &[Grade; oag_gameplay::MAX_SHIPS],
+    ) {
+        let count = core.sim.world.ship_count as usize;
         for (slot, &was) in before.iter().enumerate().take(count) {
-            if !self.core.sim.world.controllers[slot].is_human() {
+            if !core.sim.world.controllers[slot].is_human() {
                 continue;
             }
-            let now = self.core.sim.world.ships[slot].physics.launch.grade;
+            let now = core.sim.world.ships[slot].physics.launch.grade;
             if now == Grade::Perfect && was != Grade::Perfect {
-                crate::stage::stage!(self).boost_plume(slot);
-                self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                self.boost_plume(slot);
+                cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::Turbo,
                     slot,
                 ));

@@ -27,7 +27,7 @@ fn a_blast_ages_and_retires_at_the_hardcoded_lifetime() {
     let life = race.view.plasma_blast_law.expect("Pulse's law").life;
     let ticks = (life / dt).ceil() as u32 + 2;
     for _ in 0..ticks {
-        race.advance_plasma_blast_models(dt);
+        race.view.advance_plasma_blast_models(&race.core, dt);
     }
 
     assert_eq!(
@@ -138,7 +138,7 @@ fn an_hd_blast_draws_with_its_age_as_the_model_clock_and_pulse_with_none() {
         race.view.hd_plasma_blast = hd;
         race.view.spawn_plasma_blast_model(&race.core, Vec3::ZERO);
         for _ in 0..30 {
-            race.advance_plasma_blast_models(dt);
+            race.view.advance_plasma_blast_models(&race.core, dt);
         }
         let draw = race
             .plasma_blast_draws(Mat4::from_translation(Vec3::X))
@@ -171,7 +171,7 @@ fn pulse_blast_after(ticks: u32) -> (Race, PlasmaBlastDraw) {
     race.view
         .spawn_plasma_blast_model(&race.core, Vec3::new(292.1, -42.7, -194.4));
     for _ in 0..ticks {
-        race.advance_plasma_blast_models(DT);
+        race.view.advance_plasma_blast_models(&race.core, DT);
     }
     let draw = race
         .plasma_blast_draws(Mat4::IDENTITY)
@@ -366,7 +366,7 @@ fn a_pure_blast_lives_two_seconds_with_dropped_hemispheres() {
     let at = Vec3::new(1.0, 2.0, 3.0);
     race.view.spawn_plasma_blast_model(&race.core, at);
     for _ in 0..90 {
-        race.advance_plasma_blast_models(DT);
+        race.view.advance_plasma_blast_models(&race.core, DT);
     }
     let draw = race
         .plasma_blast_draws(Mat4::IDENTITY)
@@ -393,7 +393,7 @@ fn a_pure_blast_lives_two_seconds_with_dropped_hemispheres() {
         "{hemisphere}"
     );
     for _ in 0..40 {
-        race.advance_plasma_blast_models(DT);
+        race.view.advance_plasma_blast_models(&race.core, DT);
     }
     assert_eq!(
         race.plasma_blast_draws(Mat4::IDENTITY)
@@ -427,7 +427,7 @@ fn a_disruptor_halo_eases_fades_and_retires_at_one_second() {
     let at = Vec3::new(4.0, 5.0, 6.0);
     race.view.spawn_disruptor_halo(at);
     for _ in 0..30 {
-        race.advance_plasma_blast_models(DT);
+        race.view.advance_plasma_blast_models(&race.core, DT);
     }
     let (matrix, tint, age) = race
         .disruptor_halo_draws(Mat4::IDENTITY)
@@ -441,7 +441,7 @@ fn a_disruptor_halo_eases_fades_and_retires_at_one_second() {
     assert_eq!(matrix.w_axis.truncate(), at);
     assert!((age - 0.5).abs() < 0.02, "{age}");
     for _ in 0..31 {
-        race.advance_plasma_blast_models(DT);
+        race.view.advance_plasma_blast_models(&race.core, DT);
     }
     assert!(
         race.disruptor_halo_draws(Mat4::IDENTITY)

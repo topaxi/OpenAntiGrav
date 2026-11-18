@@ -100,7 +100,7 @@ impl Scene {
         if self.mod_shaders.borrow().is_none() {
             return;
         }
-        let drawing = race.viewed_slot();
+        let drawing = race.view.viewed_slot(&race.core);
         let wanted = views.iter().find_map(|&(slot, rect)| {
             let request = race.core.sim.extension_portal_view(slot)?;
             if let Some(held) = self.held_snapshot(slot, &request) {
@@ -277,6 +277,6 @@ impl Scene {
     /// texture is not this view's.
     pub(crate) fn portal_engine_of(&self, race: &Race) -> Option<[[f32; 4]; 4]> {
         let (slot, matrix) = self.portal_engine.get()?;
-        (slot == race.viewed_slot()).then(|| matrix.to_cols_array_2d())
+        (slot == race.view.viewed_slot(&race.core)).then(|| matrix.to_cols_array_2d())
     }
 }

@@ -304,18 +304,18 @@ fn a_rocket_first_drawn_mid_flight_gets_its_effect_as_old_as_it_is() {
 
     // Drawn every tick of the flight.
     let mut ridden = flying(1);
-    ridden.advance_projectile_flares();
+    ridden.view.advance_projectile_flares(&ridden.core);
     for _ in 1..AGE {
         ridden.view.stage.advance(dt, &mut ridden.view.stage_rng);
         fly(&mut ridden, 1);
-        ridden.advance_projectile_flares();
+        ridden.view.advance_projectile_flares(&ridden.core);
     }
     // First drawn on the tick it is fired: the effect starts with nothing out.
     let mut fresh = flying(1);
-    fresh.advance_projectile_flares();
+    fresh.view.advance_projectile_flares(&fresh.core);
     // First drawn `AGE` ticks into the flight.
     let mut late = flying(AGE);
-    late.advance_projectile_flares();
+    late.view.advance_projectile_flares(&late.core);
 
     let (ridden, fresh, late) = (alive(&ridden), alive(&fresh), alive(&late));
     assert!(

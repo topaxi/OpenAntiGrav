@@ -607,7 +607,8 @@ fn a_craft_inside_a_trail_sparks_from_its_leading_half() {
 
     let craft = race.core.sim.world.ships[1].physics.body;
     let anchor = race
-        .spark_anchor_of(1, 0)
+        .view_state()
+        .spark_anchor_of(&race.core, 1, 0)
         .expect("slot 1 authors spark anchors and slot 0 has a ribbon");
     let ahead = (anchor - craft.position).dot(craft.forward());
     println!("anchor {ahead:.2} units ahead of the hull centre");
@@ -642,7 +643,12 @@ fn the_anchor_test_fires_later_than_the_sphere_it_replaced() {
         let across = step as f32 * 0.1;
         race.core.sim.world.ships[1].physics.body.position =
             lead.position - lead.forward() * 12.0 + lead.up() * across;
-        if race.spark_anchor_of(1, 0).is_some() && race.trail_touches_for_tests(1, 0) {
+        if race
+            .view_state()
+            .spark_anchor_of(&race.core, 1, 0)
+            .is_some()
+            && race.trail_touches_for_tests(1, 0)
+        {
             anchor_edge = across;
         }
     }
@@ -700,7 +706,8 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
     let far = hd::SPRITE_FADEOUT_DIST + hd::SPRITE_FADEOUT_RANGE;
     for slot in 1..race.core.sim.ship_count() as usize {
         let nozzle = race
-            .nozzle_of(slot)
+            .view_state()
+            .nozzle_of(&race.core, slot)
             .expect("every HD hull authors a nozzle");
         let body = race.core.sim.world.ships[slot].physics.body;
         let distance = (nozzle - eye).length();
@@ -733,7 +740,10 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
     let lead = race.core.sim.world.ships[0].physics.body;
     race.core.sim.world.ships[1].physics.body.orientation = lead.orientation;
     race.core.sim.world.ships[1].physics.body.position = lead.position + lead.forward() * 8.0;
-    let nozzle = race.nozzle_of(1).expect("slot 1's nozzle");
+    let nozzle = race
+        .view_state()
+        .nozzle_of(&race.core, 1)
+        .expect("slot 1's nozzle");
     let quad = race.hd_sprite_quad(1, right, up);
     assert_eq!(quad.len(), 6, "an opponent 8 units ahead is one quad");
     let alpha = quad[0].colour[3];

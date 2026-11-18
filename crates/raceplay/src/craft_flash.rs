@@ -43,6 +43,10 @@
 //! `WO_SHIP_EXPLOSION`, [`BLOWUP_DELAY`] later, is thrown with the big flash,
 //! at the live model's matrix ([`Race::throw_wreck_explosion`]).
 
+#[cfg(feature = "view")]
+use crate::RaceView;
+#[cfg(feature = "view")]
+use crate::SimRace;
 use oag_core::math::{Mat4, Vec3};
 use oag_gameplay::MAX_SHIPS;
 use oag_physics::CraftState;
@@ -72,21 +76,32 @@ pub(super) struct CraftFlashes {
 }
 
 impl Race {
+    /// The local player was put back on the track: `Ship_SetState` case 3 and
+    /// `Ship_UpdateRespawn` both start kind 6 for `craft+0x368 == 0` only.
+    pub(super) fn flash_player_reset(&mut self, slot: usize) {
+        if slot == self.core.player_slot() {
+            self.view.start_flash(oag_fx::flash::RESET, Vec3::ZERO);
+        }
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
     /// Starts the washes a craft's state edges call for, once a tick, after
     /// the destroyed-craft pass has settled every state.
-    pub(super) fn advance_craft_flashes(&mut self) {
-        let player = self.core.player_slot();
-        let dt = self.core.sim.dt;
-        for slot in 0..self.core.sim.world.ship_count as usize {
-            let ship = &self.core.sim.world.ships[slot];
+    pub(super) fn advance_craft_flashes(&mut self, core: &SimRace) {
+        let player = core.player_slot();
+        let dt = core.sim.dt;
+        for slot in 0..core.sim.world.ship_count as usize {
+            let ship = &core.sim.world.ships[slot];
             let state = ship.physics.craft_state;
-            let position = self.view.drawn_position(&self.core, slot);
-            let was = std::mem::replace(&mut self.view.craft_flashes.previous[slot], state);
+            let position = self.drawn_position(core, slot);
+            let was = std::mem::replace(&mut self.craft_flashes.previous[slot], state);
             let out_of_the_race_now =
                 was == CraftState::Destroyed && state == CraftState::Eliminated;
             if was != CraftState::Destroyed
                 && state == CraftState::Destroyed
-                && let Some(fx) = self.view.seat_contact_mut(&self.core, slot)
+                && let Some(fx) = self.seat_contact_mut(core, slot)
             {
                 // `Ship_SetState` case 4, the local player's half: it zeroes
                 // the camera's shake duration, cancelling a running one.
@@ -98,16 +113,16 @@ impl Race {
                 // destroy camera ([`super::destroy_camera`]); the flash reads
                 // this port's own active camera in the same way.
                 self.start_flash(oag_fx::flash::BLAST, position);
-                let model = self.view.drawn_model(&self.core, slot);
-                self.view.craft_flashes.blowup[slot] = Some((BLOWUP_DELAY, position, model));
-                self.throw_wreck_fx(slot);
+                let model = self.drawn_model(core, slot);
+                self.craft_flashes.blowup[slot] = Some((BLOWUP_DELAY, position, model));
+                self.throw_wreck_fx(core, slot);
                 // Every mode, the edge that ends a Single Race or a Zone run
                 // included: the finished race steps its cosmetics
                 // ([`Race::tick_cosmetics`]), so the shake decays under the
                 // results as the original's does.
-                self.arm_player_blast_shake(slot, STATE_5_SHAKE);
+                self.arm_player_blast_shake(core, slot, STATE_5_SHAKE);
             }
-            if let Some((left, at, model)) = &mut self.view.craft_flashes.blowup[slot] {
+            if let Some((left, at, model)) = &mut self.craft_flashes.blowup[slot] {
                 // The edge tick's own `dt` is not counted: the timer is armed
                 // by the case-5 write, and the first subtraction is next frame's.
                 if !out_of_the_race_now {
@@ -115,46 +130,37 @@ impl Race {
                 }
                 if *left <= 0.0 {
                     let (at, model) = (*at, *model);
-                    self.view.craft_flashes.blowup[slot] = None;
+                    self.craft_flashes.blowup[slot] = None;
                     let kind = if slot == player {
                         oag_fx::flash::PLAYER_DESTROYED
                     } else {
                         oag_fx::flash::BLAST
                     };
                     self.start_flash(kind, at);
-                    self.throw_wreck_explosion(slot, model);
+                    self.throw_wreck_explosion(core, slot, model);
                     if slot == player {
                         self.hold_destroy_camera();
                     }
-                    self.arm_player_blast_shake(slot, STATE_6_SHAKE);
+                    self.arm_player_blast_shake(core, slot, STATE_6_SHAKE);
                 }
             }
         }
     }
-
     /// `Camera_ArmShake(magnitude, duration, camera, mode)` as the craft's two
     /// explosions call it, for a person's own craft: the player's and every other local seat's.
     fn arm_player_blast_shake(
         &mut self,
+        core: &SimRace,
         slot: usize,
         (magnitude, duration, side): (f32, f32, Side),
     ) {
-        if let Some(fx) = self.view.seat_contact_mut(&self.core, slot) {
+        if let Some(fx) = self.seat_contact_mut(core, slot) {
             fx.shake
                 .arm_with(magnitude, duration, side, &mut fx.shake_rng);
         }
     }
-
-    /// The local player was put back on the track: `Ship_SetState` case 3 and
-    /// `Ship_UpdateRespawn` both start kind 6 for `craft+0x368 == 0` only.
-    pub(super) fn flash_player_reset(&mut self, slot: usize) {
-        if slot == self.core.player_slot() {
-            self.start_flash(oag_fx::flash::RESET, Vec3::ZERO);
-        }
-    }
-
     pub(super) fn start_flash(&mut self, kind: oag_fx::flash::Kind, at: Vec3) {
-        if let Some(flash) = &mut self.view.screen_flash {
+        if let Some(flash) = &mut self.screen_flash {
             flash.start(kind, at);
         }
     }

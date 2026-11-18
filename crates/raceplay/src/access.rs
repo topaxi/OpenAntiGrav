@@ -145,7 +145,7 @@ impl Race {
     /// setting, and exactly `0.0` at `original`, whatever the weather.
     #[must_use]
     pub fn wet_road(&self) -> f32 {
-        if self.enhanced_weather() {
+        if self.view.enhanced_weather() {
             self.view.scenery_fx.weather().wet_road()
         } else {
             0.0

@@ -349,7 +349,7 @@ fn a_craft_in_a_transit_is_flown_and_drawn_for_its_own_view_under_a_backdrop() {
     // A second seat's view of the same race.
     assert_eq!(race.set_viewport_count(2), 2);
     race.set_viewpoint(1);
-    assert_eq!(race.viewed_slot(), 1);
+    assert_eq!(race.view.viewed_slot(&race.core), 1);
     assert!(!race.ship_drawn(0), "no other view draws it");
     race.reset_viewpoint();
     // 30 units a second, and 19 ticks since the tick the seat was opened on: the camera and

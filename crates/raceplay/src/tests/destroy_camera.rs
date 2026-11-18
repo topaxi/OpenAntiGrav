@@ -108,17 +108,17 @@ fn a_tick_with_the_player_destroyed_cuts_to_the_circuits_camera() {
 fn the_players_explosions_shake_their_camera() {
     let mut race =
         race_with_weapon_table(Mode::Eliminator, enveloping_pad(), 1.0, one_mine_table());
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     assert!(!race.view.contact.shake.active());
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     assert!(race.view.contact.shake.active());
     assert!((race.view.contact.shake.magnitude() - 0.3).abs() < 1e-6);
     for _ in 0..92 {
         race.view.contact.shake.advance(1.0 / 60.0);
-        race.advance_craft_flashes();
+        race.view.advance_craft_flashes(&race.core);
     }
     assert!(
         (race.view.contact.shake.magnitude() - 0.8).abs() < 1e-6,
@@ -127,9 +127,9 @@ fn the_players_explosions_shake_their_camera() {
 
     let mut other = with_a_station();
     other.core.sim.world.ships[3].physics.craft_state = CraftState::Destroyed;
-    other.advance_craft_flashes();
+    other.view.advance_craft_flashes(&other.core);
     other.core.sim.world.ships[3].physics.craft_state = CraftState::Eliminated;
-    other.advance_craft_flashes();
+    other.view.advance_craft_flashes(&other.core);
     assert!(
         !other.view.contact.shake.active(),
         "an opponent's blast shakes nobody"
@@ -144,9 +144,9 @@ fn a_race_that_ends_on_the_edge_is_shaken_like_any_other() {
     let mut race = with_a_station();
     assert_ne!(race.core.sim.world.mode(), Mode::Eliminator);
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     assert!((race.view.contact.shake.magnitude() - 0.3).abs() < 1e-6);
 }
 
@@ -156,9 +156,9 @@ fn destruction_cancels_a_running_shake() {
     let mut race = with_a_station();
     race.force_shake(1.0);
     assert!(race.view.contact.shake.active());
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     assert!(!race.view.contact.shake.active());
 }
 

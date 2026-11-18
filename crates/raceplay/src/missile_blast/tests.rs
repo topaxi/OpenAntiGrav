@@ -68,7 +68,7 @@ fn an_entry_lives_one_second() {
     race.view.spawn_hd_missile_blast(Vec3::ZERO, Quat::IDENTITY);
     let dt = 1.0 / 60.0;
     for _ in 0..58 {
-        race.advance_hd_missile_blasts(dt);
+        race.view.advance_hd_missile_blasts(dt);
     }
     let (_, age) = race.hd_missile_blast_draws()[0].expect("still live at 0.97 s");
     assert!(
@@ -76,7 +76,7 @@ fn an_entry_lives_one_second() {
         "the age is the elapsed seconds"
     );
     for _ in 0..3 {
-        race.advance_hd_missile_blasts(dt);
+        race.view.advance_hd_missile_blasts(dt);
     }
     assert_eq!(live(&race), 0, "freed once the age reached a second");
 }
@@ -133,11 +133,11 @@ fn taken(race: &Race, slot: usize) -> usize {
 fn retirement_is_strictly_past_a_second() {
     let mut race = hd_race();
     race.view.spawn_hd_missile_blast(Vec3::ZERO, Quat::IDENTITY);
-    race.advance_hd_missile_blasts(0.5);
-    race.advance_hd_missile_blasts(0.5);
+    race.view.advance_hd_missile_blasts(0.5);
+    race.view.advance_hd_missile_blasts(0.5);
     let (_, age) = race.hd_missile_blast_draws()[0].expect("alive at exactly 1.0 s");
     assert_eq!(age, 1.0);
-    race.advance_hd_missile_blasts(0.5);
+    race.view.advance_hd_missile_blasts(0.5);
     assert_eq!(live(&race), 0, "freed on the first update past 1.0 s");
 }
 
@@ -163,7 +163,7 @@ fn the_streaks_outlive_the_blast_by_their_node_life() {
     race.view.spawn_hd_missile_blast(Vec3::ZERO, Quat::IDENTITY);
     let dt = 1.0 / 60.0;
     for _ in 0..61 {
-        race.advance_hd_missile_blasts(dt);
+        race.view.advance_hd_missile_blasts(dt);
     }
     assert_eq!(live(&race), 0, "the blast is spent");
     assert_eq!(race.missile_streaks_live(), 16, "the streaks are not");
@@ -172,7 +172,7 @@ fn the_streaks_outlive_the_blast_by_their_node_life() {
     assert!(!race.missile_streak_vertices(eye, &ramp).is_empty());
     // The last node was laid at 1.0 s with a life of at most 1.2 s.
     for _ in 0..74 {
-        race.advance_hd_missile_blasts(dt);
+        race.view.advance_hd_missile_blasts(dt);
     }
     assert_eq!(race.missile_streaks_live(), 0, "every node has died");
     assert!(race.missile_streak_vertices(eye, &ramp).is_empty());
@@ -204,7 +204,7 @@ fn an_entry_lays_a_node_at_the_centre_then_steps_along_its_row() {
         assert!((r0.length() - 1.0).abs() < 1e-4 && (r1.length() - 1.0).abs() < 1e-4);
         assert!(r0.dot(r1).abs() < 1e-4 && r1.dot(r2).abs() < 1e-4 && r0.dot(r2).abs() < 1e-4);
     }
-    race.advance_hd_missile_blasts(1.0 / 60.0);
+    race.view.advance_hd_missile_blasts(1.0 / 60.0);
     let stepped = entries(&race);
     for (before, after) in started.iter().zip(&stepped) {
         let moved = after.position - centre;
@@ -229,6 +229,6 @@ fn a_title_without_streaks_starts_none() {
     let mut race = hd_race();
     race.view.spawn_hd_missile_blast(Vec3::ZERO, Quat::IDENTITY);
     assert!(race.view.hd_missile_streaks.is_none());
-    race.advance_hd_missile_blasts(1.0 / 60.0);
+    race.view.advance_hd_missile_blasts(1.0 / 60.0);
     assert_eq!(race.missile_streaks_live(), 0);
 }

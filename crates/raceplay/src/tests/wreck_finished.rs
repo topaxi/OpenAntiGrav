@@ -289,14 +289,18 @@ fn zone_grid(mode: Mode) -> Race {
 #[test]
 fn a_station_camera_is_masked_by_the_section_of_the_craft_it_draws() {
     let race = race_with_a_grid();
-    assert_eq!(race.station_camera_section(), None, "the chase camera");
+    assert_eq!(
+        race.view.station_camera_section(&race.core),
+        None,
+        "the chase camera"
+    );
     let mut race = a_race_the_wreck_ended();
     assert!(
         race.view.destroy_camera_now().is_some(),
         "the destroy camera has the picture"
     );
     assert_eq!(
-        race.station_camera_section(),
+        race.view.station_camera_section(&race.core),
         Some(race.core.sim.section_of_slot(0)),
         "the wreck's own section"
     );
@@ -319,7 +323,7 @@ fn a_station_camera_is_masked_by_the_section_of_the_craft_it_draws() {
         .and_then(crate::finish_camera::FinishCamera::drawn_slot)
         .expect("the director has started");
     assert_eq!(
-        race.station_camera_section(),
+        race.view.station_camera_section(&race.core),
         Some(race.core.sim.section_of_slot(slot))
     );
 }
@@ -373,7 +377,7 @@ fn photo_mode_over_the_directors_camera_is_not_masked_by_the_directors_station()
         race.tick_finished();
     }
     assert!(
-        race.station_camera_section().is_some(),
+        race.view.station_camera_section(&race.core).is_some(),
         "the director's mask"
     );
     assert!(race.photo_begin(false, false, None));
@@ -385,9 +389,9 @@ fn photo_mode_over_the_directors_camera_is_not_masked_by_the_directors_station()
         .photo()
         .map(crate::photo::Photo::subject)
         .expect("open");
-    assert_eq!(race.framed_slot(), subject);
+    assert_eq!(race.view.framed_slot(&race.core), subject);
     assert_eq!(
-        race.station_camera_section(),
+        race.view.station_camera_section(&race.core),
         None,
         "the photo's own camera"
     );

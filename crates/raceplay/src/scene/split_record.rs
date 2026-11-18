@@ -600,7 +600,7 @@ impl Views {
         let uploads = Uploads::begin(
             gpu.queue,
             &scene.uniform_blocks,
-            SceneBlocks::view(race.viewed_slot()),
+            SceneBlocks::view(race.view.viewed_slot(&race.core)),
             std::mem::take(&mut self.staging),
         );
         // The first view's writes land before the first submission, which is its own: only

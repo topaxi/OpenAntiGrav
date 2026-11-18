@@ -241,7 +241,7 @@ fn photo_modes_weather_section_is_the_subjects() {
     let ship = &mut race.core.sim.world.ships[3];
     ship.physics.body.position = Vec3::from_array(pos);
     ship.driver.index = u32::try_from(line).expect("a short fixture");
-    let seat = race.section_of_framed();
+    let seat = race.view.section_of_framed(&race.core);
     assert!(race.photo_begin(false, false, None));
     for _ in 0..3 {
         race.photo_step(Pad {
@@ -249,7 +249,7 @@ fn photo_modes_weather_section_is_the_subjects() {
             ..pad()
         });
     }
-    let subject = race.section_of_framed();
+    let subject = race.view.section_of_framed(&race.core);
     assert_ne!(subject, UNPLACED);
     assert_ne!(subject, seat);
     assert_eq!(

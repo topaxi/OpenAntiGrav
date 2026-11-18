@@ -297,7 +297,7 @@ fn the_own_craft_and_its_camera_glide_together() {
         offset.length() > 2.0,
         "the own craft carries the offset: {offset:?}"
     );
-    let drawn_at = client.ship_tick_body(0).position;
+    let drawn_at = client.view.ship_tick_body(&client.core, 0).position;
     let sim_at = client.core.sim.world.ships[0].physics.body.position;
     assert!(
         ((drawn_at - sim_at) - offset).length() < 1.0e-4,

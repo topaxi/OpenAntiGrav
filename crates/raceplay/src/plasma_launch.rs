@@ -39,50 +39,50 @@ pub(crate) fn effect_up(heading: Vec3) -> Vec3 {
     (-heading).try_normalize().unwrap_or(Vec3::Y)
 }
 
-impl Race {
+impl Race {}
+
+#[cfg(feature = "view")]
+impl RaceView {
     /// Starts the release effect for every bolt whose wind-up ended this tick, keeps the
     /// emitting ones on their craft's muzzle and lets go of the finished ones. After
     /// `projectile::step`, before `Stage::advance`.
-    pub(crate) fn advance_plasma_launch(&mut self) {
-        let effect = self.view.handles.get(Trigger::PlasmaLaunch).cloned();
+    pub(crate) fn advance_plasma_launch(&mut self, core: &SimRace) {
+        let effect = self.handles.get(Trigger::PlasmaLaunch).cloned();
         for slot in 0..oag_weapons::projectile::MAX_PROJECTILES {
-            let projectile = &self.core.sim.world.projectiles.slots[slot];
+            let projectile = &core.sim.world.projectiles.slots[slot];
             let released = projectile.kind == Some(oag_tables::weapons::Weapon::Plasma)
                 && projectile.charge <= 0.0;
-            let just_released = released && !self.view.plasma_launch.released[slot];
-            self.view.plasma_launch.released[slot] = released;
+            let just_released = released && !self.plasma_launch.released[slot];
+            self.plasma_launch.released[slot] = released;
             let (Some(effect), true) = (effect.as_ref(), just_released) else {
                 continue;
             };
             let owner = usize::from(projectile.owner);
-            let at = self
-                .view
-                .muzzle_of(&self.core, owner)
-                .unwrap_or(projectile.position);
+            let at = self.muzzle_of(core, owner).unwrap_or(projectile.position);
             // The node's own matrix: the hull's, whose `+Y` is the craft's up.
-            let up = self.core.sim.world.ships[owner].physics.body.up();
-            if let Some(playing) = self.view.stage.play_riding(effect, at, 1.0) {
-                self.view.stage.orient(playing, up);
+            let up = core.sim.world.ships[owner].physics.body.up();
+            if let Some(playing) = self.stage.play_riding(effect, at, 1.0) {
+                self.stage.orient(playing, up);
                 // Its three emitters are local-space (flag `0x2`): drawn through the
                 // node's matrix, they ride the craft at the node's row length.
-                self.view.stage.set_ride_scale(playing, MUZZLE_NODE_SCALE);
-                self.view.stage.set_rides_frame(playing, true);
-                self.view.plasma_launch.riding.push((owner, playing));
+                self.stage.set_ride_scale(playing, MUZZLE_NODE_SCALE);
+                self.stage.set_rides_frame(playing, true);
+                self.plasma_launch.riding.push((owner, playing));
             }
         }
-        let mut riding = std::mem::take(&mut self.view.plasma_launch.riding);
+        let mut riding = std::mem::take(&mut self.plasma_launch.riding);
         riding.retain(|&(owner, playing)| {
-            let ship = &self.core.sim.world.ships[owner];
-            if !ship.in_world() || !self.view.stage.is_emitting(playing) {
-                self.view.stage.detach(playing);
+            let ship = &core.sim.world.ships[owner];
+            if !ship.in_world() || !self.stage.is_emitting(playing) {
+                self.stage.detach(playing);
                 return false;
             }
-            if let Some(at) = self.view.muzzle_of(&self.core, owner) {
-                self.view.stage.follow(playing, at);
-                self.view.stage.orient(playing, ship.physics.body.up());
+            if let Some(at) = self.muzzle_of(core, owner) {
+                self.stage.follow(playing, at);
+                self.stage.orient(playing, ship.physics.body.up());
             }
             true
         });
-        self.view.plasma_launch.riding = riding;
+        self.plasma_launch.riding = riding;
     }
 }

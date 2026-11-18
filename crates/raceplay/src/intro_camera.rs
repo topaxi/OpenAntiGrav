@@ -379,7 +379,7 @@ impl Race {
     /// person's skip ends it for everyone (chosen, not measured).
     pub fn tick_intro(&mut self, inputs: &PlayerInputs) {
         // Before the flyby moves the camera - see `between_ticks`.
-        self.capture_poses();
+        self.view.capture_poses(&self.core);
         let world = &self.core.sim.world;
         let held = (0..world.ship_count.into())
             .filter(|&slot| world.person_flown(slot))
@@ -400,7 +400,7 @@ impl Race {
             // `RaceMode_UpdateIntro` starts `ScreenFlash` kind 10 as its camera substate ends:
             // 0.7 s of white, its keys and duration the executable's (no falloff). The flash
             // advances on the race ticks that follow. Pulse PSP's node only (`screen_flash`).
-            self.start_flash(oag_fx::flash::INTRO_END, Vec3::ZERO);
+            self.view.start_flash(oag_fx::flash::INTRO_END, Vec3::ZERO);
         }
     }
 

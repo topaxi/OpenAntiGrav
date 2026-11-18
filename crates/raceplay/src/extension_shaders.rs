@@ -177,7 +177,10 @@ impl Race {
     /// The view being drawn's fill through a shader. One that names a shader the mod lacks
     /// is no fill.
     pub(crate) fn mod_fill(&self) -> Option<Fill> {
-        let (mod_id, shader, colour) = self.core.sim.extension_shaded_fill(self.viewed_slot())?;
+        let (mod_id, shader, colour) = self
+            .core
+            .sim
+            .extension_shaded_fill(self.view.viewed_slot(&self.core))?;
         Some(Fill {
             shader: self.view.handles.shaders().place(mod_id, shader)?,
             colour,
@@ -188,8 +191,10 @@ impl Race {
     pub(crate) fn mod_shader_params(&self) -> Vec<[Option<f32>; MAX_PARAMS]> {
         let shaders = self.view.handles.shaders();
         let mut params = vec![[None; MAX_PARAMS]; shaders.list().len()];
-        for (mod_id, shader, index, value) in
-            self.core.sim.extension_shader_params(self.viewed_slot())
+        for (mod_id, shader, index, value) in self
+            .core
+            .sim
+            .extension_shader_params(self.view.viewed_slot(&self.core))
         {
             if let Some(place) = shaders.place(mod_id, shader) {
                 params[place][usize::from(index)] = Some(value);

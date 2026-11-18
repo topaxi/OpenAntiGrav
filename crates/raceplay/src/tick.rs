@@ -60,7 +60,7 @@ impl Race {
         // Before anything moves: the poses a draw blends from. See `between_ticks`.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.capture_poses();
+            self.view.capture_poses(&self.core);
         }
         // Decays every tick regardless of contact, like `Camera_ArmShake`'s own
         // `shake_timer`, and **first**: the original arms the shake while it
@@ -314,8 +314,8 @@ impl Race {
         // actually ended the tick rather than a tick behind it.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.advance_projectile_flares();
-            self.advance_plasma_launch();
+            self.view.advance_projectile_flares(&self.core);
+            self.view.advance_plasma_launch(&self.core);
         }
         // `slot` is read only by the drawn blast below.
         #[cfg_attr(not(feature = "view"), allow(unused_variables))]
@@ -343,9 +343,11 @@ impl Race {
             // A Pulse Plasma craft hit detonates twice in the same tick: the
             // bolt's own blast above, and one at the struck craft.
             #[cfg(feature = "view")]
-            if let Some(at) =
-                self.plasma_craft_hit_blast_point(impact.kind, impact.struck.map(usize::from))
-            {
+            if let Some(at) = self.view.plasma_craft_hit_blast_point(
+                &self.core,
+                impact.kind,
+                impact.struck.map(usize::from),
+            ) {
                 crate::stage::stage!(self).note_blast(
                     &self.core,
                     impact.kind,
@@ -429,12 +431,15 @@ impl Race {
         // a freshly-placed flare. See `blast_models` module doc comment.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.advance_plasma_blast_models(self.core.sim.dt);
+            self.view
+                .advance_plasma_blast_models(&self.core, self.core.sim.dt);
             // Same one-tick order, for the Bomb's own hemisphere/shockwave pool.
-            self.advance_bomb_blast_models(self.core.sim.dt);
-            self.advance_mag_floor_fx();
-            self.advance_magstrip_wake();
-            self.ignite_missile_bounces(&bounces_before);
+            self.view.advance_bomb_blast_models(self.core.sim.dt);
+            self.view.advance_mag_floor_fx(&self.core);
+            self.core
+                .lending_cues(|core, cues| self.view.advance_magstrip_wake(core, cues));
+            self.view
+                .ignite_missile_bounces(&self.core, &bounces_before);
         }
         // The same `bounces_before`/after edge the visual bounce above reads,
         // for the two weapons' own bounce cues - `Cue::MissileHitWall`
@@ -480,16 +485,16 @@ impl Race {
         // rather than the last one's.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.advance_engine_flares();
-            self.advance_absorb_bursts();
+            self.view.advance_engine_flares(&self.core);
+            self.view.advance_absorb_bursts(&self.core);
             self.view.advance_hit_sparks(&self.core);
             self.draw_extension_effects();
             self.view.advance_damage_smoke(&self.core);
-            self.advance_wreck_fx();
+            self.view.advance_wreck_fx(&self.core);
             self.view
                 .stage
                 .advance(self.core.sim.dt, &mut self.view.stage_rng);
-            self.advance_scenery_fx(self.core.sim.dt);
+            self.view.advance_scenery_fx(&self.core, self.core.sim.dt);
         }
 
         for (slot, step) in steps.iter().enumerate() {
@@ -519,7 +524,7 @@ impl Race {
         self.tick_destroyed_craft();
         #[cfg(feature = "view")]
         if self.draws() {
-            self.advance_craft_flashes();
+            self.view.advance_craft_flashes(&self.core);
             self.advance_destroy_camera();
         }
 
@@ -590,7 +595,7 @@ impl Race {
         self.advance_quake();
         #[cfg(feature = "view")]
         if self.draws() {
-            self.advance_quake_visual();
+            self.view.advance_quake_visual(&self.core);
         }
 
         // Beside the Quake and for the same reason: both are single-instance
@@ -599,12 +604,13 @@ impl Race {
         self.advance_leach_beam();
         #[cfg(feature = "view")]
         if self.draws() {
-            self.advance_leach_beam_visual();
-            self.advance_leach_beam_ribbon();
-            self.advance_leach_strip();
-            self.advance_rocket_smoke();
-            self.advance_missile_smoke();
-            self.advance_wingtip();
+            self.view.advance_leach_beam_visual(&self.core);
+            self.core
+                .lending_cues(|core, cues| self.view.advance_leach_beam_ribbon(core, cues));
+            self.view.advance_leach_strip(&self.core);
+            self.view.advance_rocket_smoke(&self.core);
+            self.view.advance_missile_smoke(&self.core);
+            self.view.advance_wingtip(&self.core);
         }
 
         // Beside them for the same reason: a Repulser's wave sweep reads every
@@ -612,7 +618,7 @@ impl Race {
         self.advance_repulsers();
         #[cfg(feature = "view")]
         if self.draws() {
-            self.advance_repulser_visual();
+            self.view.advance_repulser_visual(&self.core);
         }
 
         // **After the standings**, so the last crossing is in the table this
@@ -655,16 +661,20 @@ impl Race {
             // it is the same reason the chase camera is advanced from here.
             // The perfect start arms the flare the way a pad does, so before the
             // exhausts take this tick's step, as the pad's arming is.
-            self.fire_perfect_starts(&launch_grades);
-            self.fire_roll_payouts(&roll_payouts);
-            self.advance_hull_shakes();
-            self.advance_exhausts();
+            self.core.lending_cues(|core, cues| {
+                crate::stage::stage!(self).fire_perfect_starts(core, cues, &launch_grades)
+            });
+            self.core.lending_cues(|core, cues| {
+                crate::stage::stage!(self).fire_roll_payouts(core, cues, &roll_payouts)
+            });
+            self.view.advance_hull_shakes(&self.core);
+            self.view.advance_exhausts(&self.core);
             // After the trails have taken this tick's sample, so a craft is tested
             // against the ribbon as it stands now rather than one tick stale.
-            self.advance_trail_hits();
+            self.view.advance_trail_hits(&self.core);
             // Same argument, and after `step`/`step_opponents` so a shell that lost
             // its last tick of protection this frame starts fading this frame.
-            self.advance_shields();
+            self.view.advance_shields(&self.core);
 
             // Open while the boost's own timer runs, close once it has expired, both
             // as an exponential approach so neither edge is a step. Driven from

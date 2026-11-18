@@ -274,7 +274,7 @@ impl Race {
     /// the next tick runs. For a race taken back out from behind the menus,
     /// whose last tick is long past.
     pub fn settle_poses(&mut self) {
-        self.hold_particles_still();
+        self.view.hold_particles_still();
         self.view.poses.previous = None;
         self.view.poses.projectiles.clear();
         self.view.poses.generations = PoseGenerations {
@@ -298,15 +298,6 @@ impl Race {
         self.view.drawn_model(&self.core, slot)
     }
 
-    /// The craft in `slot`'s body at this tick exactly, whatever the draw alpha
-    /// is: what [`Self::body_between`] returns at `1.0`.
-    #[must_use]
-    pub fn ship_tick_body(&self, slot: usize) -> oag_physics::Body {
-        let mut body = self.core.sim.world.ships[slot].physics.body;
-        body.position = self.view.drawn_position(&self.core, slot);
-        body
-    }
-
     /// The craft in `slot`'s model matrix on the previous tick, when a draw
     /// between ticks would sweep from it to this one: `None` where the draw shows
     /// this tick as it is (no previous tick, a respawn or a change of whether it
@@ -324,65 +315,6 @@ impl Race {
             && !moved(from.model.w_axis.truncate(), model.w_axis.truncate())
             && !moved(from.position, self.view.drawn_position(&self.core, slot)))
         .then_some(from.model)
-    }
-
-    /// Keeps this tick's draw poses as the previous ones, before the tick
-    /// moves them: the first thing every tick path does.
-    pub(super) fn capture_poses(&mut self) {
-        self.view.poses.alpha = 1.0;
-        self.hold_particles_still();
-        self.view.poses.generations = PoseGenerations {
-            current: next_generation(),
-            previous: self.view.poses.generations.current,
-        };
-        let pose = TickPose {
-            world_tick: self.core.sim.world.tick,
-            camera: CameraPose {
-                view: self.view.tick_view(&self.core),
-                unshaken: self.view.tick_view_unshaken(&self.core),
-                forward_speed: self.core.tick_forward_speed(),
-                boost_kick: self.view.boost_kick,
-                fov_offset: self.core.sim.extension_fov_offset(self.core.player_slot()),
-                key: self.view.camera_key(&self.core),
-            },
-            ships: std::array::from_fn(|slot| {
-                let ship = &self.core.sim.world.ships[slot];
-                ShipPose {
-                    model: self.view.drawn_model(&self.core, slot),
-                    position: self.view.drawn_position(&self.core, slot),
-                    orientation: ship.physics.body.orientation,
-                    flaps: self.view.flaps[slot],
-                    shield_swell: self.view.shield[slot].swell(),
-                    key: self.core.sim.ship_key(slot),
-                }
-            }),
-        };
-        self.view.poses.previous = Some(pose);
-        // After the capture, so the previous pose is the one last drawn and the
-        // tick's own draws start from the offset one step further out.
-        self.decay_corrections();
-        let mut projectiles = std::mem::take(&mut self.view.poses.projectiles);
-        projectiles.clear();
-        projectiles.extend(
-            self.core
-                .sim
-                .world
-                .projectiles
-                .slots
-                .iter()
-                .enumerate()
-                .map(|(slot, projectile)| {
-                    let kind = projectile.kind?;
-                    Some(ProjectilePose {
-                        kind,
-                        owner: projectile.owner,
-                        lifetime: projectile.lifetime,
-                        age: projectile.age,
-                        matrix: self.projectile_matrix(kind, slot, projectile),
-                    })
-                }),
-        );
-        self.view.poses.projectiles = projectiles;
     }
 }
 
@@ -432,29 +364,6 @@ impl Race {
             .then_some(poses.alpha)
     }
 
-    /// The craft in `slot`'s body at the draw alpha, for a draw that reads the
-    /// body rather than the hull's matrix: its position lerped and orientation
-    /// slerped from a tick ago, on the same snaps as
-    /// [`crate::RaceView::ship_model_matrix_of`]. The tick's body itself, untouched,
-    /// outside a draw.
-    pub(super) fn body_between(&self, slot: usize) -> oag_physics::Body {
-        let mut body = self.ship_tick_body(slot);
-        if let (Some(alpha), Some(previous)) = (
-            self.view.ship_alpha(&self.core, slot),
-            &self.view.poses.previous,
-        ) {
-            let from = previous.ships[slot];
-            if from.position.distance(body.position) <= SNAP_DISTANCE {
-                body.position = from.position.lerp(body.position, alpha);
-                body.orientation = from
-                    .orientation
-                    .normalize()
-                    .slerp(body.orientation.normalize(), alpha);
-            }
-        }
-        body
-    }
-
     /// Where the newest sample of the engine trail in `slot` is drawn: the
     /// nozzle as this draw places the hull, while that is between ticks, and
     /// `None` when the hull is drawn at this tick and the recorded sample is
@@ -467,7 +376,7 @@ impl Race {
     pub fn trail_head_of(&self, slot: usize) -> Option<oag_fx::exhaust::TrailHead> {
         self.view.ship_alpha(&self.core, slot)?;
         Some(oag_fx::exhaust::TrailHead {
-            position: self.nozzle_of(slot)?,
+            position: self.view.nozzle_of(&self.core, slot)?,
             alpha: self.world_alpha().unwrap_or(1.0),
         })
     }
@@ -693,5 +602,87 @@ impl RaceView {
         let previous = poses.previous.as_ref()?;
         (poses.alpha < 1.0 && previous.ships[slot].key == core.sim.ship_key(slot))
             .then_some(poses.alpha)
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The craft in `slot`'s body at this tick exactly, whatever the draw alpha
+    /// is: what [`Self::body_between`] returns at `1.0`.
+    #[must_use]
+    pub fn ship_tick_body(&self, core: &SimRace, slot: usize) -> oag_physics::Body {
+        let mut body = core.sim.world.ships[slot].physics.body;
+        body.position = self.drawn_position(core, slot);
+        body
+    }
+    /// Keeps this tick's draw poses as the previous ones, before the tick
+    /// moves them: the first thing every tick path does.
+    pub(super) fn capture_poses(&mut self, core: &SimRace) {
+        self.poses.alpha = 1.0;
+        self.hold_particles_still();
+        self.poses.generations = PoseGenerations {
+            current: next_generation(),
+            previous: self.poses.generations.current,
+        };
+        let pose = TickPose {
+            world_tick: core.sim.world.tick,
+            camera: CameraPose {
+                view: self.tick_view(core),
+                unshaken: self.tick_view_unshaken(core),
+                forward_speed: core.tick_forward_speed(),
+                boost_kick: self.boost_kick,
+                fov_offset: core.sim.extension_fov_offset(core.player_slot()),
+                key: self.camera_key(core),
+            },
+            ships: std::array::from_fn(|slot| {
+                let ship = &core.sim.world.ships[slot];
+                ShipPose {
+                    model: self.drawn_model(core, slot),
+                    position: self.drawn_position(core, slot),
+                    orientation: ship.physics.body.orientation,
+                    flaps: self.flaps[slot],
+                    shield_swell: self.shield[slot].swell(),
+                    key: core.sim.ship_key(slot),
+                }
+            }),
+        };
+        self.poses.previous = Some(pose);
+        // After the capture, so the previous pose is the one last drawn and the
+        // tick's own draws start from the offset one step further out.
+        self.decay_corrections();
+        let mut projectiles = std::mem::take(&mut self.poses.projectiles);
+        projectiles.clear();
+        projectiles.extend(core.sim.world.projectiles.slots.iter().enumerate().map(
+            |(slot, projectile)| {
+                let kind = projectile.kind?;
+                Some(ProjectilePose {
+                    kind,
+                    owner: projectile.owner,
+                    lifetime: projectile.lifetime,
+                    age: projectile.age,
+                    matrix: self.projectile_matrix(kind, slot, projectile),
+                })
+            },
+        ));
+        self.poses.projectiles = projectiles;
+    }
+    /// The craft in `slot`'s body at the draw alpha, for a draw that reads the
+    /// body rather than the hull's matrix: its position lerped and orientation
+    /// slerped from a tick ago, on the same snaps as
+    /// [`crate::RaceView::ship_model_matrix_of`]. The tick's body itself, untouched,
+    /// outside a draw.
+    pub(super) fn body_between(&self, core: &SimRace, slot: usize) -> oag_physics::Body {
+        let mut body = self.ship_tick_body(core, slot);
+        if let (Some(alpha), Some(previous)) = (self.ship_alpha(core, slot), &self.poses.previous) {
+            let from = previous.ships[slot];
+            if from.position.distance(body.position) <= SNAP_DISTANCE {
+                body.position = from.position.lerp(body.position, alpha);
+                body.orientation = from
+                    .orientation
+                    .normalize()
+                    .slerp(body.orientation.normalize(), alpha);
+            }
+        }
+        body
     }
 }

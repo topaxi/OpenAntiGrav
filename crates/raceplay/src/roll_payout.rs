@@ -15,6 +15,8 @@
 //! landing inside a payout rises again, as the original calls the flare again.
 
 use super::*;
+#[cfg(feature = "view")]
+use crate::stage::Stage;
 
 impl RaceSim {
     /// Every slot's roll turbo timer, taken before this tick steps the field.
@@ -26,15 +28,21 @@ impl RaceSim {
     }
 }
 
-impl Race {
+#[cfg(feature = "view")]
+impl Stage<'_> {
     /// Lights the flare and raises `TURBO` for each craft whose roll payout was
     /// armed this tick.
-    pub(super) fn fire_roll_payouts(&mut self, before: &[f32; oag_gameplay::MAX_SHIPS]) {
-        let count = self.core.sim.world.ship_count as usize;
+    pub(super) fn fire_roll_payouts(
+        &mut self,
+        core: &SimRace,
+        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
+        before: &[f32; oag_gameplay::MAX_SHIPS],
+    ) {
+        let count = core.sim.world.ship_count as usize;
         for (slot, &was) in before.iter().enumerate().take(count) {
-            if self.core.sim.world.ships[slot].physics.roll_payout_timer > was {
-                crate::stage::stage!(self).boost_plume(slot);
-                self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+            if core.sim.world.ships[slot].physics.roll_payout_timer > was {
+                self.boost_plume(slot);
+                cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::Turbo,
                     slot,
                 ));

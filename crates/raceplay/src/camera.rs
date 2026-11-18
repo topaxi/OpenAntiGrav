@@ -420,7 +420,7 @@ impl Race {
         // The viewed craft's, because this places the camera being drawn: the seat's on a
         // network client, not slot 0's. An opponent recovering across the circuit must not
         // blank the shot.
-        let slot = self.viewed_slot();
+        let slot = self.view.viewed_slot(&self.core);
         if self.core.sim.respawn_cooldown[slot] > 0 {
             return (UNPLACED, UNPLACED);
         }
@@ -468,7 +468,8 @@ impl Race {
             return VisibleSet::everything();
         }
         match self
-            .station_camera_section()
+            .view
+            .station_camera_section(&self.core)
             .or_else(|| self.flyby_camera_section())
         {
             Some(section) => visibility.set_exact(section, view_projection),
@@ -477,25 +478,6 @@ impl Race {
                 visibility.set(craft, camera, view_projection)
             }
         }
-    }
-
-    /// The one section the draws are masked with when the camera stands on an authored station
-    /// rather than on the craft, `None` for every other camera.
-    ///
-    /// `Camera_UpdateSpectatorView` publishes the section of the craft in `cam+0x1e4`
-    /// (`cam+0x1e8`, through `FUN_08878644`) in every mode, and the visible set the draws are
-    /// masked with is that section's row alone (`FUN_0891e908`; no padding, no second source).
-    /// The destroy camera and the director's cameras sit hundreds of units from the craft,
-    /// where the camera's own section cannot be told from the craft's spline window and was
-    /// falling to [`UNPLACED`], which draws everything: Talon's Junction's station 0 sits
-    /// inside a tube whose inside the original's mask leaves out.
-    #[must_use]
-    pub fn station_camera_section(&self) -> Option<u8> {
-        if self.view.extra_viewpoint().is_some() || self.view.photo.is_some() {
-            return None;
-        }
-        self.drawn_craft_of_a_station_camera()
-            .map(|slot| self.core.sim.section_of_slot(slot))
     }
 
     /// The section the draws are masked with during the pre-race flyby: that of the spline
@@ -519,19 +501,6 @@ impl Race {
             .spline
             .nearest(self.view.camera_position(&self.core))?;
         Some(sample.section_id)
-    }
-
-    /// The craft the camera draws when it stands on an authored station: the destroy camera's
-    /// wreck (the player) or the director's drawn craft. `None` for every other camera.
-    fn drawn_craft_of_a_station_camera(&self) -> Option<usize> {
-        if let Some(director) = &self.view.finish_camera
-            && director.is_imposed()
-            && let Some(slot) = director.drawn_slot()
-        {
-            return Some(slot);
-        }
-        (self.view.camera_override.is_none() && self.view.destroy_camera_now().is_some())
-            .then(|| self.core.player_slot())
     }
 }
 
@@ -562,32 +531,7 @@ impl RaceSim {
 }
 
 #[cfg(feature = "view")]
-impl Race {
-    /// The section of the craft the picture frames ([`Self::framed_slot`]), [`UNPLACED`] where
-    /// it cannot be told. A person's craft is located by the tick in `Ship::segment`; an
-    /// opponent's `segment` is never written, and its driver's index on its own line, mapped
-    /// to the sample table, is where the simulation has it (photo mode's subject is usually
-    /// one).
-    pub(super) fn section_of_framed(&self) -> u8 {
-        let slot = self.framed_slot();
-        let ship = &self.core.sim.world.ships[slot];
-        let index = if self.core.sim.world.person_flown(slot) {
-            self.core.sim.located_sample(ship)
-        } else {
-            let line = usize::try_from(ship.driver.index).unwrap_or(usize::MAX);
-            self.core.sim.located_from(
-                ship,
-                self.core
-                    .sim
-                    .sample_index_for(slot, line)
-                    .unwrap_or(usize::MAX),
-            )
-        };
-        index.map_or(UNPLACED, |index| {
-            self.core.sim.section_of(index, ship.physics.body.position)
-        })
-    }
-}
+impl Race {}
 
 #[cfg(feature = "view")]
 impl RaceSim {
@@ -936,6 +880,69 @@ impl RaceView {
             self.boost_fov_kick.gain(),
             aspect,
         )
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The section of the craft the picture frames ([`Self::framed_slot`]), [`UNPLACED`] where
+    /// it cannot be told. A person's craft is located by the tick in `Ship::segment`; an
+    /// opponent's `segment` is never written, and its driver's index on its own line, mapped
+    /// to the sample table, is where the simulation has it (photo mode's subject is usually
+    /// one).
+    pub(super) fn section_of_framed(&self, core: &SimRace) -> u8 {
+        let slot = self.framed_slot(core);
+        let ship = &core.sim.world.ships[slot];
+        let index = if core.sim.world.person_flown(slot) {
+            core.sim.located_sample(ship)
+        } else {
+            let line = usize::try_from(ship.driver.index).unwrap_or(usize::MAX);
+            core.sim.located_from(
+                ship,
+                core.sim.sample_index_for(slot, line).unwrap_or(usize::MAX),
+            )
+        };
+        index.map_or(UNPLACED, |index| {
+            core.sim.section_of(index, ship.physics.body.position)
+        })
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The one section the draws are masked with when the camera stands on an authored station
+    /// rather than on the craft, `None` for every other camera.
+    ///
+    /// `Camera_UpdateSpectatorView` publishes the section of the craft in `cam+0x1e4`
+    /// (`cam+0x1e8`, through `FUN_08878644`) in every mode, and the visible set the draws are
+    /// masked with is that section's row alone (`FUN_0891e908`; no padding, no second source).
+    /// The destroy camera and the director's cameras sit hundreds of units from the craft,
+    /// where the camera's own section cannot be told from the craft's spline window and was
+    /// falling to [`UNPLACED`], which draws everything: Talon's Junction's station 0 sits
+    /// inside a tube whose inside the original's mask leaves out.
+    #[must_use]
+    pub fn station_camera_section(&self, core: &SimRace) -> Option<u8> {
+        if self.extra_viewpoint().is_some() || self.photo.is_some() {
+            return None;
+        }
+        self.drawn_craft_of_a_station_camera(core)
+            .map(|slot| core.sim.section_of_slot(slot))
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The craft the camera draws when it stands on an authored station: the destroy camera's
+    /// wreck (the player) or the director's drawn craft. `None` for every other camera.
+    fn drawn_craft_of_a_station_camera(&self, core: &SimRace) -> Option<usize> {
+        if let Some(director) = &self.finish_camera
+            && director.is_imposed()
+            && let Some(slot) = director.drawn_slot()
+        {
+            return Some(slot);
+        }
+        (self.camera_override.is_none() && self.destroy_camera_now().is_some())
+            .then(|| core.player_slot())
     }
 }
 

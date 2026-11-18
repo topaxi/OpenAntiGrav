@@ -156,11 +156,11 @@ fn a_seats_own_explosions_shake_its_view() {
     for views in VIEWS {
         for seat in 1..views {
             let mut race = local_people(views, false);
-            race.advance_craft_flashes();
+            race.view.advance_craft_flashes(&race.core);
             race.core.sim.world.ships[seat].physics.craft_state = CraftState::Destroyed;
-            race.advance_craft_flashes();
+            race.view.advance_craft_flashes(&race.core);
             race.core.sim.world.ships[seat].physics.craft_state = CraftState::Eliminated;
-            race.advance_craft_flashes();
+            race.view.advance_craft_flashes(&race.core);
             for view in 0..views {
                 assert_eq!(
                     view_is_shaken(&race, view),
@@ -202,7 +202,7 @@ fn a_local_seats_boost_pulse_draws_in_its_view_alone() {
             let mut race = local_people(views, true);
             crate::stage::stage!(race).fire_zoom_boost(&race.core, seat);
             for _ in 0..6 {
-                race.advance_zoom();
+                race.view.advance_zoom(&race.core);
             }
             for view in 0..views {
                 race.set_viewpoint(view);
@@ -242,9 +242,9 @@ fn the_players_screen_wash_does_not_cover_another_seats_view() {
         race.view.screen_flash = Some(oag_fx::flash::ScreenFlash::default());
         let at = race.core.sim.world.ships[0].physics.body.position;
         race.core.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
-        race.advance_craft_flashes();
+        race.view.advance_craft_flashes(&race.core);
         race.core.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
-        race.advance_craft_flashes();
+        race.view.advance_craft_flashes(&race.core);
         race.view
             .screen_flash
             .as_mut()

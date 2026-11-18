@@ -136,7 +136,8 @@ fn every_craft_lays_its_own_ribbon() {
 
     let nozzles: Vec<Vec3> = (0..8)
         .map(|slot| {
-            race.nozzle_of(slot)
+            race.view
+                .nozzle_of(&race.core, slot)
                 .expect("the fixture's hull authors a nozzle")
         })
         .collect();
@@ -324,7 +325,9 @@ fn a_missile_places_two_heads_on_its_flare_anchors() {
     let projectile = &race.core.sim.world.projectiles.slots[slot];
     let age = oag_weapons::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
     let (a, b) = crate::weapons::missile_flare_anchors(projectile.position, velocity, age);
-    let body = race.projectile_matrix(oag_tables::weapons::Weapon::Missile, slot, projectile);
+    let body = race
+        .view
+        .projectile_matrix(oag_tables::weapons::Weapon::Missile, slot, projectile);
     for (head, anchor) in heads.iter().zip([a, b]) {
         let want = body.w_axis.truncate() + (anchor - projectile.position);
         assert!(
@@ -686,7 +689,7 @@ fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
         Vec3::Z,
         0,
     );
-    race.advance_projectile_flares();
+    race.view.advance_projectile_flares(&race.core);
     // No disc in a headless fixture, so no effect loaded and no instance
     // is taken - the trigger still has to run, and still has to be a
     // no-op rather than a panic.
@@ -699,7 +702,7 @@ fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
     // With the slot vacated the bookkeeping must clear either way, or the
     // next projectile in that slot inherits a flare it never started.
     race.core.sim.world.projectiles.slots[0].kind = None;
-    race.advance_projectile_flares();
+    race.view.advance_projectile_flares(&race.core);
     assert_eq!(race.view.projectile_flare[0], None);
     assert_eq!(race.stage().playing_count(), 0);
 }

@@ -695,7 +695,7 @@ impl super::super::Scene {
         if self.layer.get() == Layer::Whole {
             0
         } else {
-            race.viewed_slot()
+            race.view.viewed_slot(&race.core)
         }
     }
 

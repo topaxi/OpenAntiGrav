@@ -137,11 +137,6 @@ impl Race {
             }
         }
     }
-
-    /// The player's craft is in state 6: the camera stops following it.
-    pub(super) fn hold_destroy_camera(&mut self) {
-        self.view.destroy_camera.held = true;
-    }
 }
 
 #[cfg(feature = "view")]
@@ -150,5 +145,13 @@ impl RaceView {
     #[must_use]
     pub(super) fn destroy_camera_now(&self) -> Option<&Destroy> {
         self.destroy_camera.active.as_ref()
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The player's craft is in state 6: the camera stops following it.
+    pub(super) fn hold_destroy_camera(&mut self) {
+        self.destroy_camera.held = true;
     }
 }

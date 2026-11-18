@@ -50,7 +50,7 @@ pub(super) fn hd_flame_transform(
     if !race.hd_trail_active() {
         return Mat4::IDENTITY;
     }
-    let Some(nozzle) = origin.or_else(|| race.nozzle_local_of(slot)) else {
+    let Some(nozzle) = origin.or_else(|| race.view.nozzle_local_of(slot)) else {
         return Mat4::IDENTITY;
     };
     let flame = race.hd_flame_of(slot);

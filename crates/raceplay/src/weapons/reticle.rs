@@ -143,7 +143,10 @@ impl Race {
         } else {
             self.set_viewpoint(slot);
         }
-        let world = self.body_between(usize::from(target)).position;
+        let world = self
+            .view
+            .body_between(&self.core, usize::from(target))
+            .position;
         let drawn = self.project_for_sight(world, sight.screen());
         match drawing {
             Some(extra) => self.set_viewpoint(extra),

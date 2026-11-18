@@ -35,6 +35,10 @@ pub mod spray;
 pub mod weather;
 mod wind;
 
+#[cfg(feature = "view")]
+use crate::RaceView;
+#[cfg(feature = "view")]
+use crate::SimRace;
 use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_fx::psys;
@@ -235,106 +239,7 @@ impl SceneryFx {
     }
 }
 
-impl super::Race {
-    /// The weather's one step: where the camera is and the section the drawn
-    /// craft is in, as `cam+0x1e8` publishes it through `FUN_08878644`.
-    ///
-    /// A craft the spline cannot place keeps the section it last published -
-    /// chosen, not measured: the original's field is always a real section.
-    pub(super) fn advance_weather(&mut self, dt: f32) {
-        let section = self
-            .station_camera_section()
-            .unwrap_or_else(|| self.section_of_framed());
-        let section = if section == oag_render::pvs::UNPLACED {
-            self.view.scenery_fx.weather().section()
-        } else {
-            i32::from(section)
-        };
-        let camera = self.camera_frame();
-        let rain = self.core.sim.extensions.sky().rain.unwrap_or(0.0);
-        self.view.scenery_fx.weather_mut().drive(rain);
-        // Ours, chosen: the lens's drops slide outward while the viewed craft boosts, with
-        // the enhanced weather on only; off, the lens keeps the original's law untouched.
-        let boosting = self.enhanced_weather() && {
-            let ship = &self.core.sim.world.ships[self.framed_slot()].physics;
-            ship.pad_timer > 0.0 || ship.turbo_timer > 0.0
-        };
-        self.view
-            .scenery_fx
-            .weather_mut()
-            .set_lens_boosting(boosting);
-        self.view
-            .scenery_fx
-            .advance_weather(&self.view.effects, dt, camera, section);
-        self.advance_splashes(dt);
-    }
-
-    /// Whether the enhanced weather's extras run: the player's setting, or a track
-    /// module's rain, which forces them on whatever the setting says. A circuit's own
-    /// authored weather stays under the setting alone.
-    #[must_use]
-    pub fn enhanced_weather(&self) -> bool {
-        self.view.weather.is_enhanced() || self.view.scenery_fx.weather().is_driven_active()
-    }
-
-    /// The enhanced weather's one step: ages the splashes and throws one
-    /// where a drop's last move crossed a floor. **Nothing runs at `original`**
-    /// beyond clearing what a switch back left behind, so that frame is the
-    /// original's. See [`splash`].
-    fn advance_splashes(&mut self, dt: f32) {
-        if !self.enhanced_weather() {
-            if !self.view.scenery_fx.weather().splashes().is_empty() {
-                self.view.scenery_fx.weather_mut().splashes_mut().clear();
-            }
-            if !self.view.scenery_fx.weather().spray().is_empty() {
-                self.view.scenery_fx.weather_mut().spray_mut().clear();
-            }
-            return;
-        }
-        let weather = self.view.scenery_fx.weather();
-        let snow = weather.is_snow();
-        let hits: Vec<(Vec3, Vec3)> = weather
-            .drop_segments()
-            .into_iter()
-            .filter_map(|(from, to)| self.core.sim.floor_crossing(from, to))
-            .filter(|&(at, _)| !self.point_is_under_cover(at))
-            .collect();
-        let wet = self.view.scenery_fx.weather().wet_road();
-        let emitters = if wet > 0.0 {
-            self.spray_emitters()
-        } else {
-            Vec::new()
-        };
-        self.view
-            .scenery_fx
-            .weather_mut()
-            .spray_mut()
-            .advance(dt, wet, &emitters);
-        let splashes = self.view.scenery_fx.weather_mut().splashes_mut();
-        splashes.advance(dt);
-        for (at, normal) in hits {
-            splashes.spawn(at, normal, snow);
-        }
-    }
-
-    /// Whether `point`, a hit on the track, lies in a covered section: the
-    /// section of the spline sample nearest it, tested with the original's
-    /// own mask (`Section_IsCovered`), wherever the camera is. **A point the
-    /// spline cannot place (off the track) counts as open**: no cover is
-    /// evidence for it. Chosen, not measured.
-    pub fn point_is_under_cover(&self, point: Vec3) -> bool {
-        let Some((index, _, _)) = self.core.sim.spline.nearest(point) else {
-            return false;
-        };
-        let section = self.core.sim.section_of(index, point);
-        section != oag_render::pvs::UNPLACED
-            && self
-                .view
-                .scenery_fx
-                .weather()
-                .section_is_covered(i32::from(section))
-    }
-}
+impl super::Race {}
 
 impl super::RaceSim {
     /// Where the segment `from..to` crosses a floor from above, and that
@@ -360,10 +265,102 @@ impl super::RaceSim {
     }
 }
 
-impl super::Race {
+impl super::Race {}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The weather's one step: where the camera is and the section the drawn
+    /// craft is in, as `cam+0x1e8` publishes it through `FUN_08878644`.
+    ///
+    /// A craft the spline cannot place keeps the section it last published -
+    /// chosen, not measured: the original's field is always a real section.
+    pub(super) fn advance_weather(&mut self, core: &SimRace, dt: f32) {
+        let section = self
+            .station_camera_section(core)
+            .unwrap_or_else(|| self.section_of_framed(core));
+        let section = if section == oag_render::pvs::UNPLACED {
+            self.scenery_fx.weather().section()
+        } else {
+            i32::from(section)
+        };
+        let camera = self.camera_frame(core);
+        let rain = core.sim.extensions.sky().rain.unwrap_or(0.0);
+        self.scenery_fx.weather_mut().drive(rain);
+        // Ours, chosen: the lens's drops slide outward while the viewed craft boosts, with
+        // the enhanced weather on only; off, the lens keeps the original's law untouched.
+        let boosting = self.enhanced_weather() && {
+            let ship = &core.sim.world.ships[self.framed_slot(core)].physics;
+            ship.pad_timer > 0.0 || ship.turbo_timer > 0.0
+        };
+        self.scenery_fx.weather_mut().set_lens_boosting(boosting);
+        self.scenery_fx
+            .advance_weather(&self.effects, dt, camera, section);
+        self.advance_splashes(core, dt);
+    }
+    /// Whether the enhanced weather's extras run: the player's setting, or a track
+    /// module's rain, which forces them on whatever the setting says. A circuit's own
+    /// authored weather stays under the setting alone.
+    #[must_use]
+    pub fn enhanced_weather(&self) -> bool {
+        self.weather.is_enhanced() || self.scenery_fx.weather().is_driven_active()
+    }
+    /// The enhanced weather's one step: ages the splashes and throws one
+    /// where a drop's last move crossed a floor. **Nothing runs at `original`**
+    /// beyond clearing what a switch back left behind, so that frame is the
+    /// original's. See [`splash`].
+    fn advance_splashes(&mut self, core: &SimRace, dt: f32) {
+        if !self.enhanced_weather() {
+            if !self.scenery_fx.weather().splashes().is_empty() {
+                self.scenery_fx.weather_mut().splashes_mut().clear();
+            }
+            if !self.scenery_fx.weather().spray().is_empty() {
+                self.scenery_fx.weather_mut().spray_mut().clear();
+            }
+            return;
+        }
+        let weather = self.scenery_fx.weather();
+        let snow = weather.is_snow();
+        let hits: Vec<(Vec3, Vec3)> = weather
+            .drop_segments()
+            .into_iter()
+            .filter_map(|(from, to)| core.sim.floor_crossing(from, to))
+            .filter(|&(at, _)| !self.point_is_under_cover(core, at))
+            .collect();
+        let wet = self.scenery_fx.weather().wet_road();
+        let emitters = if wet > 0.0 {
+            self.spray_emitters(core)
+        } else {
+            Vec::new()
+        };
+        self.scenery_fx
+            .weather_mut()
+            .spray_mut()
+            .advance(dt, wet, &emitters);
+        let splashes = self.scenery_fx.weather_mut().splashes_mut();
+        splashes.advance(dt);
+        for (at, normal) in hits {
+            splashes.spawn(at, normal, snow);
+        }
+    }
+    /// Whether `point`, a hit on the track, lies in a covered section: the
+    /// section of the spline sample nearest it, tested with the original's
+    /// own mask (`Section_IsCovered`), wherever the camera is. **A point the
+    /// spline cannot place (off the track) counts as open**: no cover is
+    /// evidence for it. Chosen, not measured.
+    pub fn point_is_under_cover(&self, core: &SimRace, point: Vec3) -> bool {
+        let Some((index, _, _)) = core.sim.spline.nearest(point) else {
+            return false;
+        };
+        let section = core.sim.section_of(index, point);
+        section != oag_render::pvs::UNPLACED
+            && self
+                .scenery_fx
+                .weather()
+                .section_is_covered(i32::from(section))
+    }
     /// The lens as a world frame: where it is and where its axes point.
-    pub(super) fn camera_frame(&self) -> psys::field::Frame {
-        let world = self.view.view(&self.core).inverse();
+    pub(super) fn camera_frame(&self, core: &SimRace) -> psys::field::Frame {
+        let world = self.view(core).inverse();
         psys::field::Frame {
             position: world.w_axis.truncate(),
             right: world.x_axis.truncate(),

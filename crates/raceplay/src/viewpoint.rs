@@ -428,27 +428,6 @@ impl Race {
         self.view.viewpoints.drawing.set(None);
     }
 
-    /// The slot of the craft the view being drawn follows: the player's, or the
-    /// extra slot.
-    #[must_use]
-    pub fn viewed_slot(&self) -> usize {
-        self.view
-            .extra_viewpoint()
-            .unwrap_or_else(|| self.core.player_slot())
-    }
-
-    /// The craft the picture being drawn frames: photo mode's subject while the mode is open,
-    /// else [`Self::viewed_slot`]. What places the weather and the boost lens;
-    /// [`Self::viewed_slot`] stays the key of the view's scene blocks and histories, which a
-    /// change of subject must not move.
-    #[must_use]
-    pub fn framed_slot(&self) -> usize {
-        match (self.view.extra_viewpoint(), self.view.photo.as_ref()) {
-            (None, Some(photo)) => photo.subject(),
-            _ => self.viewed_slot(),
-        }
-    }
-
     /// How many times the picture being drawn has jumped to a different shot - what a camera
     /// history watches to throw its previous frame away. The player's view is
     /// [`crate::RaceView::camera_cuts`]; an extra seat's chase camera jumps when that craft respawns, and
@@ -468,7 +447,7 @@ impl Race {
     /// The craft the view being drawn follows: the player's, or the extra slot.
     #[must_use]
     pub fn viewed_ship(&self) -> &Ship {
-        &self.core.sim.world.ships[self.viewed_slot()]
+        &self.core.sim.world.ships[self.view.viewed_slot(&self.core)]
     }
 
     /// [`crate::RaceView::extra_view`] without the shake: where the seat's camera is really pointed.
@@ -558,5 +537,26 @@ impl RaceView {
             return None;
         }
         self.viewpoints.contact.get_mut(slot)?.as_deref_mut()
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The slot of the craft the view being drawn follows: the player's, or the
+    /// extra slot.
+    #[must_use]
+    pub fn viewed_slot(&self, core: &SimRace) -> usize {
+        self.extra_viewpoint().unwrap_or_else(|| core.player_slot())
+    }
+    /// The craft the picture being drawn frames: photo mode's subject while the mode is open,
+    /// else [`Self::viewed_slot`]. What places the weather and the boost lens;
+    /// [`Self::viewed_slot`] stays the key of the view's scene blocks and histories, which a
+    /// change of subject must not move.
+    #[must_use]
+    pub fn framed_slot(&self, core: &SimRace) -> usize {
+        match (self.extra_viewpoint(), self.photo.as_ref()) {
+            (None, Some(photo)) => photo.subject(),
+            _ => self.viewed_slot(core),
+        }
     }
 }

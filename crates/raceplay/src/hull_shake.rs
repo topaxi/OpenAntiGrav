@@ -19,6 +19,8 @@
 //! player test above them was read.
 
 use crate::RaceView;
+#[cfg(feature = "view")]
+use crate::SimRace;
 use oag_core::Rng;
 use oag_core::math::{Mat4, Quat, Vec3};
 use oag_title::hull_shake::HullShake as Law;
@@ -131,27 +133,6 @@ impl Race {
             }
         }
     }
-
-    /// Every active craft's shake, one tick.
-    pub(super) fn advance_hull_shakes(&mut self) {
-        let Some(law) = self.view.hull_shake_law else {
-            return;
-        };
-        if !self.view.hull_shake_on {
-            return;
-        }
-        for slot in 0..self.core.sim.world.ship_count as usize {
-            let ship = &self.core.sim.world.ships[slot];
-            if !ship.in_world() {
-                continue;
-            }
-            let speed = ship.physics.body.linear_velocity.length();
-            let dt = self.core.sim.dt;
-            self.view.hull_shake[slot]
-                .get_or_insert_with(|| Shake::new(&law, slot))
-                .advance(&law, dt, speed);
-        }
-    }
 }
 
 #[cfg(feature = "view")]
@@ -161,6 +142,30 @@ impl RaceView {
         self.hull_shake[slot]
             .as_ref()
             .map_or(Mat4::IDENTITY, Shake::local)
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Every active craft's shake, one tick.
+    pub(super) fn advance_hull_shakes(&mut self, core: &SimRace) {
+        let Some(law) = self.hull_shake_law else {
+            return;
+        };
+        if !self.hull_shake_on {
+            return;
+        }
+        for slot in 0..core.sim.world.ship_count as usize {
+            let ship = &core.sim.world.ships[slot];
+            if !ship.in_world() {
+                continue;
+            }
+            let speed = ship.physics.body.linear_velocity.length();
+            let dt = core.sim.dt;
+            self.hull_shake[slot]
+                .get_or_insert_with(|| Shake::new(&law, slot))
+                .advance(&law, dt, speed);
+        }
     }
 }
 

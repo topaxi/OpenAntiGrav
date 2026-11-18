@@ -120,6 +120,8 @@
 //! ([`Race::hd_craft_engine_lights`]). Evidence:
 //! `docs/rendering/hd-ship-materials.md`, "The engine bay".
 
+#[cfg(feature = "view")]
+use crate::RaceView;
 use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_gameplay::MAX_SHIPS;
@@ -237,13 +239,6 @@ pub(super) fn record(
 }
 
 impl Race {
-    /// Redraws one craft's jitter for this tick - the original's
-    /// `EngineFlare_Update` rewrite of `flare+0x250`. Called from the exhaust
-    /// tick, on a title with an engine light law.
-    pub(super) fn advance_engine_light_jitter(&mut self, slot: usize) {
-        self.view.engine_light_jitter[slot] = Jitter::draw(&mut self.view.engine_light_rng[slot]);
-    }
-
     /// This frame's engine lights as the **track** takes them: one per active
     /// craft with an authored engine light, or empty on a title with none, on a circuit that
     /// switches the SPU vertex lights off (`ViewSetup::spu_vertex_lights`), and for
@@ -270,7 +265,7 @@ impl Race {
             .filter(|&slot| self.core.sim.ship_active(slot))
             .filter_map(|slot| {
                 let light = self.view.engine_lights.get(slot).copied().flatten()?;
-                let nozzle = self.nozzle_local_of(slot)?;
+                let nozzle = self.view.nozzle_local_of(slot)?;
                 record(
                     self.view.ship_model_matrix_of(&self.core, slot),
                     nozzle,
@@ -284,6 +279,16 @@ impl Race {
                 )
             })
             .collect()
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Redraws one craft's jitter for this tick - the original's
+    /// `EngineFlare_Update` rewrite of `flare+0x250`. Called from the exhaust
+    /// tick, on a title with an engine light law.
+    pub(super) fn advance_engine_light_jitter(&mut self, slot: usize) {
+        self.engine_light_jitter[slot] = Jitter::draw(&mut self.engine_light_rng[slot]);
     }
 }
 

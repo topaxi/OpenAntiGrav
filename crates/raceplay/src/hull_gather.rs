@@ -71,7 +71,7 @@ impl HullGather {
             let placements = race
                 .core
                 .sim
-                .shadow_placements_of(|slot| race.ship_tick_body(slot));
+                .shadow_placements_of(|slot| race.view.ship_tick_body(&race.core, slot));
             project(
                 race,
                 hulls,

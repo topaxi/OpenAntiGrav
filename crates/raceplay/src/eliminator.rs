@@ -292,7 +292,8 @@ impl Race {
             dimensions.shield * LAP_REFILL_FRACTION,
         );
         #[cfg(feature = "view")]
-        self.play_absorb_feedback(slot, false);
+        self.core
+            .lending_cues(|_, cues| self.view.play_absorb_feedback(cues, slot, false));
     }
 
     /// An absorb in the Eliminator: the held weapon is spent on a Shield, and

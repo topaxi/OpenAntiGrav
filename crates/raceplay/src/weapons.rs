@@ -683,7 +683,8 @@ impl Race {
             // `WO_WEAPON_ABSORB` burst staggered over the hull's locators.
             // See `race::absorb` and `docs/ghidra/functions/psp-pulse-usa/shield.md`.
             #[cfg(feature = "view")]
-            self.play_absorb_feedback(slot, true);
+            self.core
+                .lending_cues(|_, cues| self.view.play_absorb_feedback(cues, slot, true));
         }
         // `Held::take` rather than a direct write - see its doc comment for
         // why an absorb mid-drop has to clear more than the visible weapon.

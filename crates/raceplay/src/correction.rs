@@ -135,18 +135,6 @@ impl Race {
     pub fn correction_offset_of(&self, slot: usize) -> Vec3 {
         self.view.correction[slot]
     }
-
-    /// One drawn tick of the glide: every offset loses its share. Not run by a
-    /// replay, which is not drawn.
-    pub(super) fn decay_corrections(&mut self) {
-        let keep = 0.5f32.powf(1.0 / HALF_LIFE_TICKS);
-        for offset in &mut self.view.correction {
-            *offset *= keep;
-            if offset.length_squared() < 1.0e-6 {
-                *offset = Vec3::ZERO;
-            }
-        }
-    }
 }
 
 /// A scripted misprediction for a capture: at tick `at` craft `slot` is handed to a
@@ -389,5 +377,20 @@ impl RaceView {
     /// `slot`'s body position as drawn at this tick.
     pub(super) fn drawn_position(&self, core: &SimRace, slot: usize) -> Vec3 {
         core.sim.world.ships[slot].physics.body.position + self.correction[slot]
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// One drawn tick of the glide: every offset loses its share. Not run by a
+    /// replay, which is not drawn.
+    pub(super) fn decay_corrections(&mut self) {
+        let keep = 0.5f32.powf(1.0 / HALF_LIFE_TICKS);
+        for offset in &mut self.correction {
+            *offset *= keep;
+            if offset.length_squared() < 1.0e-6 {
+                *offset = Vec3::ZERO;
+            }
+        }
     }
 }

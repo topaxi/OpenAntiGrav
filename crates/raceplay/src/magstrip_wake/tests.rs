@@ -22,7 +22,8 @@ fn run(race: &mut Race, probes: &[bool]) -> Vec<(usize, usize)> {
     for &hit in probes {
         blend = ramp(blend, hit);
         race.core.sim.world.ships[SLOT].physics.mag_lock_blend = blend;
-        race.advance_magstrip_wake();
+        race.core
+            .lending_cues(|core, cues| race.view.advance_magstrip_wake(core, cues));
         let cues = race.core.sim.drain_cues();
         let count = |cue| {
             cues.iter()

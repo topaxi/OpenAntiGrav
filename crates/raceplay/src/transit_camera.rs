@@ -140,7 +140,7 @@ impl crate::Race {
     /// by what the craft has flown on while it is in a transit, which is the camera on its
     /// seat.
     pub(crate) fn pair_view(&self) -> Mat4 {
-        match self.flown(self.viewed_slot()) {
+        match self.flown(self.view.viewed_slot(&self.core)) {
             Some((forward, distance)) => {
                 self.view.view(&self.core) * Mat4::from_translation(forward * distance)
             }
@@ -153,7 +153,7 @@ impl crate::Race {
     #[must_use]
     pub fn ship_flown_in_view(&self, slot: usize) -> bool {
         matches!(self.view.transit_seats.get(slot), Some(Some(_)))
-            && self.viewed_slot() == slot
+            && self.view.viewed_slot(&self.core) == slot
             && self.mod_fill().is_some_and(|fill| {
                 self.mod_shaders()
                     .get(fill.shader)
@@ -176,7 +176,7 @@ impl crate::Race {
     /// first ticks: a frame that stands still on the road it left, not one that swings with the
     /// ease. What a mod's shader reads as `craft_frame` once it is in eye space.
     pub(crate) fn craft_frame(&self) -> Mat4 {
-        let slot = self.viewed_slot();
+        let slot = self.view.viewed_slot(&self.core);
         let seat = self.view.transit_seats.get(slot).copied().flatten();
         let (target, place) = match (seat, self.flown(slot)) {
             (Some(seat), Some((_, distance))) => {

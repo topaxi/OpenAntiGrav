@@ -26,6 +26,8 @@
 //! - **An opponent's boost.** The original's pulse is the viewing craft's: a local person's
 //!   other seat fires its own pulse for its own view, and nobody else's draws in it.
 
+#[cfg(feature = "view")]
+use crate::RaceView;
 use crate::SimRace;
 use crate::stage::Stage;
 use oag_post::hd_zoom::{Frame, Tuning};
@@ -101,17 +103,6 @@ impl Race {
         // (`Scene::run_boost_zoom` leaves it to HD's chain when there is one).
         borrowed.or_else(|| Some(self.view.photo.as_ref()?.speed_blur()?.0))
     }
-
-    /// One tick of the pulses.
-    pub(super) fn advance_zoom(&mut self) {
-        let dt = self.core.sim.dt;
-        for pulse in std::iter::once(&mut self.view.zoom)
-            .chain(self.view.viewpoints.zoom.iter_mut())
-            .flatten()
-        {
-            pulse.advance(dt);
-        }
-    }
 }
 
 #[cfg(feature = "view")]
@@ -132,6 +123,20 @@ impl Stage<'_> {
         };
         if let Some(pulse) = pulse {
             pulse.fire_boost();
+        }
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// One tick of the pulses.
+    pub(super) fn advance_zoom(&mut self, core: &SimRace) {
+        let dt = core.sim.dt;
+        for pulse in std::iter::once(&mut self.zoom)
+            .chain(self.viewpoints.zoom.iter_mut())
+            .flatten()
+        {
+            pulse.advance(dt);
         }
     }
 }

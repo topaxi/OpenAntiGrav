@@ -65,7 +65,7 @@ impl FieldSparks {
 impl Race {
     /// Every local view's eye: the player's and each extra seat's.
     fn view_eyes(&self) -> Vec<Vec3> {
-        let player = self.camera_frame().position;
+        let player = self.view.camera_frame(&self.core).position;
         std::iter::once(player)
             .chain(self.viewpoint_eyes())
             .collect()

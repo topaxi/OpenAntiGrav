@@ -227,7 +227,7 @@ fn a_seat_reports_its_own_camera_cut_not_the_players() {
                 } else {
                     race.set_viewpoint(slot);
                 }
-                assert_eq!(race.viewed_slot(), slot);
+                assert_eq!(race.view.viewed_slot(&race.core), slot);
                 seen[view].push(race.viewed_camera_cut());
             }
             race.reset_viewpoint();

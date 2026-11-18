@@ -101,19 +101,6 @@ pub(super) struct Shown {
 }
 
 impl Race {
-    /// Reads every craft's mag-floor contact for the tick just run. Called
-    /// once a tick from [`Race::tick`], after the simulation.
-    ///
-    /// Deliberately not from `Race::tick_cosmetics`: that path freezes the
-    /// world, so the effect freezes with the craft it hangs under.
-    pub(crate) fn advance_mag_floor_fx(&mut self) {
-        for (slot, shown) in self.view.mag_floor_fx.iter_mut().enumerate() {
-            let blend = self.core.sim.world.ships[slot].physics.mag_lock_blend;
-            shown.on = contact_this_tick(shown.previous_blend, blend);
-            shown.previous_blend = blend;
-        }
-    }
-
     /// This frame's `[MagEffect1, MagEffect2]` model matrices per ship slot,
     /// `None` for a craft off the strip, out of play, or with no spline
     /// sample under it.
@@ -140,3 +127,19 @@ impl Race {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Reads every craft's mag-floor contact for the tick just run. Called
+    /// once a tick from [`Race::tick`], after the simulation.
+    ///
+    /// Deliberately not from `Race::tick_cosmetics`: that path freezes the
+    /// world, so the effect freezes with the craft it hangs under.
+    pub(crate) fn advance_mag_floor_fx(&mut self, core: &SimRace) {
+        for (slot, shown) in self.mag_floor_fx.iter_mut().enumerate() {
+            let blend = core.sim.world.ships[slot].physics.mag_lock_blend;
+            shown.on = contact_this_tick(shown.previous_blend, blend);
+            shown.previous_blend = blend;
+        }
+    }
+}

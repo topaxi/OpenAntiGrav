@@ -125,7 +125,7 @@ impl Scene {
         };
         // A view of a split asks before its first view (`Scene::render_slots`).
         if matches!(self.layer.get(), Layer::Whole | Layer::Window) && self.does_frame_work() {
-            let drawn = [(race.viewed_slot(), viewport)];
+            let drawn = [(race.view.viewed_slot(&race.core), viewport)];
             self.draw_portal_view(device, queue, race, &drawn, &settings);
         }
         // Every drawable's matrices of this view are staged here and written once, in runs,
@@ -136,7 +136,7 @@ impl Scene {
         let uploads = Uploads::begin(
             queue,
             &self.uniform_blocks,
-            SceneBlocks::view(race.viewed_slot()),
+            SceneBlocks::view(race.view.viewed_slot(&race.core)),
             std::mem::take(&mut *self.upload_staging.borrow_mut()),
         );
         let pass = self.prepare_view(
@@ -322,7 +322,7 @@ impl Scene {
         // views of a frame never read or write the same one (`SceneBlocks`).
         let block = match portal {
             Some(_) => SceneBlocks::portal(),
-            None => SceneBlocks::view(race.viewed_slot()),
+            None => SceneBlocks::view(race.view.viewed_slot(&race.core)),
         };
         let queue = uploads;
         let aspect = portal.map_or(viewport.2.max(1.0) / viewport.3.max(1.0), |p| p.aspect);
@@ -1055,7 +1055,7 @@ impl Scene {
             // No locator, nothing drawn - rather than a flare at the origin.
             // `break` rather than `continue` because the whole field shares one
             // model, so a missing `Engine Flare` node is missing for every craft.
-            let Some(nozzle) = race.nozzle_of(slot) else {
+            let Some(nozzle) = race.view.nozzle_of(&race.core, slot) else {
                 break;
             };
             let exhaust = race.exhaust_of(slot);
@@ -1092,7 +1092,7 @@ impl Scene {
                     race.trail_head_of(slot),
                     right,
                     up,
-                    race.trail_law(),
+                    race.view.trail_law(),
                 );
             }
         }
@@ -1125,7 +1125,7 @@ impl Scene {
             queue,
             &vp,
             race.core.sim.world.tick,
-            &race.camera_frame(),
+            &race.view.camera_frame(&race.core),
             visible_set.map_or(oag_vex::pvs::ALL_VISIBLE, |set| set.mask()),
         );
         oag_gpu::perfprobe::mark("exhaust-upload");
