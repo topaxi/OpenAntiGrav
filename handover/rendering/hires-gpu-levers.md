@@ -84,18 +84,19 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
      timestamps around them would let a whole race show a cut there.
 
 - **2026-11-18, `circuit-lighting-rungs`** (`docs/rendering/hires-gpu-levers.md`, "Circuit
-  shading: exact cuts, the vertex curve and a lighting rung"). Landed: six exact cuts and HD's
+  shading: exact cuts, the vertex curve and a lighting rung"). Landed: five exact cuts and HD's
   vertex curve in the vertex stage (the original's order, renderer.md "The vertex curve is per
-  vertex"); Deck `track solid, shaded` at 4K HD 10.49 to 8.65 ms, 2048 6.71 to under 5.9, Omega
-  8.38 to under 7.1. `graphics.circuit_lighting` (`original` default, `simplified`): a further
+  vertex"); Deck `track solid, shaded` at 4K HD 10.49 to 8.65 ms, 2048 6.71 to 5.15, Omega 8.38
+  to 6.32. `graphics.circuit_lighting` (`original` default, `simplified`): a further
   19 % on HD at 4K, but it buys only about 5 % of render scale at a 4K output, and exact
   lighting at 90 % looks better. Approximated light curves: no gain on RDNA2, not added.
   Left:
   1. **The rich pipelines' `programs_present` override** (HD 0.58 ms, Omega 0.80 ms at 4K is the
      whole rich half), and the craft pass, all rich (3 ms at 4K). Measure: the `track solid,
      shaded` and `craft, weapons, shields` spans, same command as the page.
-  2. **Omega's plain draws carrying specular or a normal map**: `simplified` saves 17 % of
-     Omega's shading at 4K for 0.2 % of its pixels. A census of which plain draws carry them,
+  2. **Dead work the rung still finds**: `simplified` saves 7 % of 2048's shading at 4K with no
+     pixel changed (try `tangents_present` per plain list, as `slots_present` is) and 7.8 % of
+     Omega's for 0.2 % of its pixels. A census of which plain draws carry them,
      and a pipeline of their own, may take most of that exactly. Measure: the same span on Tech de
      Ra, pixels diffed.
   3. **B (albedo decode through an sRGB view)**: one small lane judged by the 13 HD pairs;

@@ -1157,13 +1157,13 @@ and Omega at 4K) can go exactly, in the original's own order, and what a player-
 lighting saves against a lower render scale. **Chosen workload, not measured against any
 original.**
 
-**Result.** Seven exact cuts (and the original's own order for the vertex light curve) take the
+**Result.** Five exact cuts (and the original's own order for the vertex light curve) take the
 Deck's `track solid, shaded` at 4K from 10.49 to 8.65 ms on HD (-17.6 %), 6.71 to 5.15 on 2048 (-23.3 %)
 and 8.38 to 6.32 on Omega (-24.6 %), and Omega's `track blended` from 2.55 to 1.64; the pictures are
 byte-identical except HD's vertex-lit chunks, which the original's order moves. One option landed,
 **`graphics.circuit_lighting`** (`original`, the default, or `simplified`): a further 20 % of HD's
 circuit shading and 8 % of Omega's at 4K on the Deck, for a flatter, matte track; at a 4K output
-that buys about 5 % of render scale, and exact lighting at the scale that costs the same looks
+that buys about 5 % of render scale (offscreen, upscale not counted), and exact lighting at the scale that costs the same looks
 better. The second
 option the brief named, approximated light curves, is not a speed option on this hardware and was
 not added.
@@ -1244,7 +1244,7 @@ What each is:
   Omega 7,401 to 6,606 (795 us), 2048 nothing. The override would recover a fraction of that; the
   craft pass (3 ms at 4K, all rich) is where it would pay more, and is left open.
 
-### The circuit lighting rung: `graphics.circuit_lighting`
+### The circuit lighting rung
 
 `simplified` drops three things on a circuit's plain pipelines (the `simplified_lighting`
 override, through `BuildCacheScope::simplified_lighting`, where the rig is on): the specular, the
@@ -1279,8 +1279,9 @@ HD race pairs it moves away from the original on 9 (Modesto Heights whole-frame 
 5.77, Anulpha Pass 2.94 to 5.16), and stays level on Talon's Junction and The Amphiseum. Omega
 changes only where its draws carry a specular or normal map (0.2 % of the frame).
 
-**Titles.** HD and Omega share the shader family and are wired. 2048 is wired and changes nothing:
-its circuits author no specular, carry no tangents on the plain draws and no SPU lights. Pulse and
+**Titles.** HD and Omega share the shader family and are wired. 2048 is wired and changes no pixel
+at three sizes (its circuits author no specular and have no SPU lights), yet `simplified` still
+saves 7 % of its shading at 4K after cut 6: dead work whose cause is open (below). Pulse and
 Pure: skipped, the row is dropped (`Definition::drop_unavailable_circuit_lighting`, keyed on
 `Looks::material_render_state`); their circuits have no authored rig to simplify.
 
@@ -1330,7 +1331,10 @@ is what the scale draws before the upscale), HD / Omega frame p50 / p95, ms:
 | 100 % | 16.58 / 23.85 | 11.80 / 14.49 (before cut 6) |
 | `simplified` at 100 % | 15.54 / 23.26 | 10.90 / 13.18 |
 
-`simplified` at native 4K costs what exact lighting costs at about 95 % scale on HD (p50 between
+All scaled rows are offscreen targets: they include no upscale or present pass, and what an
+upscale costs over a native 4K present was not measured here (about 1 ms for the presented resolve,
+"What a 4K output costs after this" above). `simplified` at native 4K costs what exact lighting
+costs at about 95 % scale on HD (p50 between
 the 90 % and 100 % rows, p95 near 100 %), and the same on Omega. **Exact lighting at 90 %, cheaper
 than the rung, looks better than the rung at native**: crops at 1:1 of the 4K output (Talon's
 Junction, tick 2,500, NVIDIA, `--render-scale 90` against `--circuit-lighting simplified`) show
