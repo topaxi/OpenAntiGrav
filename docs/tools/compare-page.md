@@ -632,7 +632,7 @@ loading), ours is re-rendered at that offset with `--no-hull-shake`, and `HD_CLO
 | `hd/ubermall` | 34.39 | 38.36 | 3.8 to 4.54 | 0.45 to 0.45 |
 | `hd/vineta-k` | 33.26 | 40.16 | 2.77 to 3.39 | 0.44 to 0.43 |
 
-The offset moved by up to 8 s between two boots of the same circuit and hull (Anulpha 37.5 to 21.3, Moa Therma 40.5 to 32.6): the world clock at the
+The offset moved by up to 16 s between two boots of the same circuit and hull (Anulpha 37.5 to 21.3, Moa Therma 40.5 to 32.6): the world clock at the
 start of a Time Trial is not a constant of the track, which is why a stored offset is never reused. Side by side, every Time Trial pair lines up
 (craft, HUD, moving props, the Moa Therma airship, signs); the grey difference moved by under 2 and edge NCC by under 0.03 on all 13 Time Trial pairs.
 Menu mean grey 5 to 12 (before 4 to 10) is the same order. Maintainer, 2026-11-18: re-making "does not have to reuse the same ship/craft/skin, as long
@@ -649,8 +649,8 @@ as ours also uses the same in the end" - both changes below follow that.
   (`rpcs3-drive.py status`) or the frame's brightness (below 0.3 on a Fury menu) before the next.
 - **`compare-rerender-all.py` now skips a front-end walk** (`rpcs3-hd-menu-pair.py` pairs are re-made by that script itself, in one walk: its argv has no
   state to restore) and refuses a pair with no `--state` that has no cold-boot route by name instead of a `ValueError`.
-- **Cold boots fail more often than 1 in 6 on a first pass**: `anulpha-pass`, `chenghou-project` and `metropia` failed in the walk on the first
-  pass (a dropped press, then a stall), `sol-2` was refused by the capture parity check ("capture has no camera"); a second and third pass
+- **Cold boots fail more often than 1 in 6 on a first pass**: `anulpha-pass`, `chenghou-project` and `metropia` failed on the first
+  pass (`emu-hd-glass-boot.sh` exit 1, in the boot step, cause not read), `sol-2` was refused by the capture parity check ("capture has no camera"); a second and third pass
   (`--resume`, `--attempts 3`) made all four.
 - **The Oct 20 savestates on the second workstation do not load here**: restoring `hd-timetrial-*-harimau-classic-start` crashes this RPCS3 build
   (`0.0.42-19777`) in `ppu_load_prx` ("Verification failed ... errno=2"), so a savestate cannot stand in for a cold boot on a profile with the classic hull locked.
