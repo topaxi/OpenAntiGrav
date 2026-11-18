@@ -390,3 +390,95 @@ fn every_grids_back_card_stands_on_the_measured_cell_selection_rectangle() {
         }
     }
 }
+
+/// The player's view of `Cell Selection`'s card, through the real binary: it is drawn into
+/// the scene the Fury backdrop's bloom chain reads, under the block a screen with models
+/// loads. The flat red of `09_blitzed`'s back (texel 63) leaves the chain at the page's own
+/// adapted exposure plus its frame bloom, where the original's frame shows 103 and 104 at
+/// the same `Safe Area Setting` of 96; over the page at the stand-in gain it drew 126, and
+/// under the backdrop's own block 108 with no glow past its edge. That glow is the same
+/// chain's: the bloom of the card reaches a few pixels over the black beside it and is gone
+/// a dozen pixels out.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images and a GPU adapter"]
+fn the_cell_page_card_is_exposed_and_bloomed_by_the_front_ends_chain() {
+    let Some(image) = image() else {
+        return;
+    };
+    let dir = std::env::temp_dir().join("oag-hd-flyer-cell-chain-ground-truth");
+    for empty in ["no-dlc", "no-mods", "config/oag"] {
+        std::fs::create_dir_all(dir.join(empty)).expect("a temp directory");
+    }
+    // The card's share of the frame sets the exposure, so the safe area is the original's.
+    std::fs::write(
+        dir.join("config/oag/settings.toml"),
+        "[graphics]\nhud_safe_area = 96\n",
+    )
+    .expect("a settings file");
+    let out = dir.join("cell-select.png");
+    let (width, height) = (960_usize, 540_usize);
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&image)
+        .args([
+            "--no-audio",
+            "--size",
+            "960x540",
+            "--menu-page",
+            "cell-select",
+        ])
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .env("OAG_DLC", dir.join("no-dlc"))
+        .env("OAG_MODS", dir.join("no-mods"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --menu-page cell-select");
+    let still = oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot"))
+        .expect("a PNG");
+    assert_eq!(
+        (still.width as usize, still.height as usize),
+        (width, height)
+    );
+    let at = |x: usize, y: usize| {
+        let i = (y * width + x) * 4;
+        [still.rgba[i], still.rgba[i + 1], still.rgba[i + 2]]
+    };
+    // A band of the card clear of every widget: right of the wordmark, above the rule.
+    let mut reds: Vec<u8> = Vec::new();
+    for y in 100..125 {
+        for x in 360..600 {
+            let [r, g, b] = at(x, y);
+            assert!(
+                g < 8 && b < 8,
+                "({x}, {y}) is not the card's red: {r} {g} {b}"
+            );
+            reds.push(r);
+        }
+    }
+    reds.sort_unstable();
+    let card = reds[reds.len() / 2];
+    println!("card red {card}");
+    assert!(
+        (96..=104).contains(&card),
+        "the card's flat red is {card}: 126 is the page draw's gain, 108 the backdrop's own block, 63 the texel"
+    );
+    // The card's left edge on a row clear of its notches, and the black beside it.
+    let row = 320;
+    let edge = (0..width / 2)
+        .find(|&x| at(x, row)[0] > card / 2)
+        .expect("the card's left edge");
+    let near = at(edge - 2, row)[0];
+    let far = at(edge - 14, row)[0];
+    println!("edge at {edge}: {near} two pixels out, {far} fourteen out");
+    assert!(
+        (3..card / 2).contains(&near),
+        "no bloom past the card's edge: {near} two pixels out"
+    );
+    assert!(
+        far <= 2,
+        "the bloom does not end: {far} fourteen pixels out"
+    );
+}
