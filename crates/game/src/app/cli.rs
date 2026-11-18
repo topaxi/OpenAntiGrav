@@ -942,6 +942,14 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) scene_precision: Option<oag_display::display::ScenePrecision>,
 
+    /// How much of the authored rig a circuit's plain surfaces compute: original (the
+    /// original's shading) or simplified (no specular, normal map or SPU vertex lights).
+    ///
+    /// Overrides `[render_profiles.<title>] circuit_lighting` for every title, for this run
+    /// only. See docs/rendering/hires-gpu-levers.md, "The circuit lighting rung".
+    #[arg(long)]
+    pub(crate) circuit_lighting: Option<oag_display::display::CircuitLighting>,
+
     /// Which screen filter draws the finished frame: `off`, a built-in such
     /// as `psp-3000` or `crt-interlaced`, or the stem of a `.wgsl` file in
     /// `<config dir>/oag/shaders/`.

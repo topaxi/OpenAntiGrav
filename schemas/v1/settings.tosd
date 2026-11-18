@@ -240,6 +240,10 @@ optional = true
 type = "string"
 optional = true
 
+[types.render-profile.circuit_lighting]
+type = "string"
+optional = true
+
 [types.render-profile.water]
 type = "string"
 optional = true

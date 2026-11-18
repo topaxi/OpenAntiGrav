@@ -1361,6 +1361,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         #[cfg(feature = "view")]
         light,
         #[cfg(feature = "view")]
+        circuit_lighting: options.circuit_lighting,
+        #[cfg(feature = "view")]
         probes,
         #[cfg(feature = "view")]
         authored_fog,

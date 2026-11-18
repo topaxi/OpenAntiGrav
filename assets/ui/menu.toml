@@ -1327,6 +1327,21 @@ string_id = "OAG_GRAPHICS_SCENE_PRECISION"
 setting = "graphics.scene_precision"
 values = ["original", "float"]
 
+# How much of the authored lighting a circuit's plain surfaces compute. `original` is
+# the default and the original's own shading. `simplified` departs from the
+# original's look for speed: no specular glints, no normal maps and none of Wipeout
+# HD's moving SPU lights on the track, so it reads flatter; the baked light, the
+# sun, fog and craft shadows stay. Only a title whose circuits are shaded from their
+# own materials (HD, 2048, Omega) has a choice; the row is dropped elsewhere
+# (`Definition::drop_unavailable_circuit_lighting`). Read when a race builds its
+# scene. See `docs/rendering/hires-gpu-levers.md`, "The circuit lighting rung".
+[[page.entry]]
+kind = "choice"
+label = "CIRCUIT LIGHTING"
+string_id = "OAG_GRAPHICS_CIRCUIT_LIGHTING"
+setting = "graphics.circuit_lighting"
+values = ["original", "simplified"]
+
 
 # Which law draws a sea, a lake or a pool: `off` is the surface's constant
 # colour or texture, lit, with no wave normal, scroll or reflection; `original`

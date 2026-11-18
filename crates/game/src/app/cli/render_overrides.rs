@@ -49,6 +49,9 @@ impl Cli {
         if let Some(precision) = self.scene_precision {
             profile.scene_precision = precision;
         }
+        if let Some(lighting) = self.circuit_lighting {
+            profile.circuit_lighting = lighting;
+        }
         if let Some(screen_filter) = &self.screen_filter {
             profile.screen_filter = screen_filter.clone();
         }

@@ -12,7 +12,7 @@ import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
 import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encode, encoded_out, linear_out};
-import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, zone_race};
+import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, simplified_lighting, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::water::{enhanced_water, reflective_sea_weight, water_kind, water_normal, water_specular_colour, water_tap_uv};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
@@ -237,7 +237,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let bump = material_sample_grad(MATERIAL_PAD_MASK, panel_uv, uv_grad[0], uv_grad[1]);
         n_hull = hull_normal(bump, n, in.tangent);
         n_lit = n_hull;
-    } else if dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
+    } else if simplified_lighting == 0.0 && dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
         n_hull = hull_normal(material_sample(MATERIAL_PAD_MASK, in.texcoord), n, in.tangent);
         n_lit = n_hull;
     }
@@ -533,9 +533,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
                 ).rgb);
             }
         }
+        let spu = select(in.spu_light, vec3<f32>(0.0), simplified_lighting != 0.0);
         let lit_sum = select(
-            hull_ambient + prelit + vertex_light_term + sun_diffuse + in.spu_light,
-            in.colour.rgb * (hull_ambient + sun_diffuse + in.spu_light),
+            hull_ambient + prelit + vertex_light_term + sun_diffuse + spu,
+            in.colour.rgb * (hull_ambient + sun_diffuse + spu),
             colour_factor,
         );
         authored = select(lit_sum, vec3<f32>(1.0), emissive);
@@ -1470,7 +1471,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             glow_tint_offset.x * sun_light * glow_decoded,
             glow_is_billboard,
         );
-        let program_specular = select(specular, vec3<f32>(0.0), glow_is_billboard) * pane_clear;
+        let program_specular = select(select(specular, vec3<f32>(0.0), glow_is_billboard) * pane_clear, vec3<f32>(0.0), simplified_lighting != 0.0);
         let program_multiplier = select(
             select(vec3<f32>(1.0), glow_decoded, glow_is_bw_glass),
             vec3<f32>(row_scale.w),

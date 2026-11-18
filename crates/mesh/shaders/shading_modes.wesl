@@ -32,6 +32,13 @@ override lit_by_rig: f32 = 0.0;
 // `nova_vertex` is the constant false; 1.0, the vertex deciding, by default.
 override nova_vertices: f32 = 1.0;
 
+// **1.0 on a circuit's plain pipeline when the player chose CIRCUIT LIGHTING `simplified`**
+// (`oag_display::display::CircuitLighting`, `BuildCacheScope::simplified_lighting`): a departure
+// from the original for speed. No specular, no normal map, no Wipeout HD SPU vertex lights; the
+// albedo, baked light, ambient, sun on the surface's own normal, glows, fog and shadows stay.
+// 0.0, the original's shading, by default.
+override simplified_lighting: f32 = 0.0;
+
 // **Whether `in.colour` is a baked light rather than a tint** - 1.0 only for a
 // Wipeout HD `.rcsmodel`, set from `Model::vertex_colour_is_light`. HD's
 // fragment programs *add* the interpolated colour to the lightmap term before
