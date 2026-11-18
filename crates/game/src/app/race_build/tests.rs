@@ -96,6 +96,7 @@ fn race_build_polls_never_wait_on_the_build() {
         anim_seconds: None,
     };
 
+    let releases_before = crate::heap::releases();
     let started = Instant::now();
     let mut worker = BuildWorker::spawn(request, loaded);
     let mut polls = 0u32;
@@ -139,6 +140,11 @@ fn race_build_polls_never_wait_on_the_build() {
             | crate::app::loading_stage::RaceBuildError::Gpu(e) => format!("{e:#}"),
         })
     );
+    // The build hands the heap its decode buffers freed back before it returns.
+    assert!(
+        crate::heap::releases() > releases_before,
+        "the build ended without returning the freed heap"
+    );
     // Structural, and immune to a contended machine: the build took many
     // frames, so the first poll cannot have been the one that waited for it.
     assert!(
@@ -149,5 +155,29 @@ fn race_build_polls_never_wait_on_the_build() {
         slowest < POLL_BUDGET,
         "a poll took {slowest:?}, over the {POLL_BUDGET:?} chosen budget, across {polls} polls \
          of a {total:?} build"
+    );
+}
+
+/// What a race leaves behind is released, and the heap it freed is handed back, by the time the
+/// drop thread ends. A count rather than a resident-set threshold: the claim is that the call is
+/// made once per race let go, which a changed allocator or a busier machine cannot move.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_race_let_go_is_dropped_and_the_heap_returned_by_the_drop_thread() {
+    let race = std::sync::Arc::new(());
+    let weak = std::sync::Arc::downgrade(&race);
+    let before = crate::heap::releases();
+
+    let handle = super::drop_then_release(race).expect("the drop thread spawns");
+    handle.join().expect("the drop thread does not panic");
+
+    assert!(
+        weak.upgrade().is_none(),
+        "the value outlived its drop thread"
+    );
+    assert_eq!(
+        crate::heap::releases(),
+        before + 1,
+        "the heap is returned once per race dropped"
     );
 }
