@@ -341,6 +341,18 @@ compare.
   No term was scaled on a guess, so Tower is unchanged.
 - **Fragment-program blend in the executable:** [fragment-programs.md](../ghidra/functions/vita-2048-eu-v104/fragment-programs.md).
 
+## `fc07_blend_vertred_lambert_2diff`: the second picture is read (2026-11-18, `w2048-fc07`)
+
+The family binds `DiffuseMap` and `DiffuseMap01` (the "picture is the sampler named `DiffuseMap`"
+rule above takes the first; the second was unread) and mixes them by `VertexColour1.r` before the
+light: `albedo = mix(D0^2, D1^2, VertexColour1.r)`, then the family's vertex-lit or lightmapped sum,
+then the fog. Confidence 90, with the operand listings, the nine copies and the frame of the
+original in [gxp.md](gxp.md) ("`fc07_blend_vertred_lambert_2diff` mixes two pictures by the vertex
+red"). Wired for Vita circuits; eight circuits carry it (Altima's rock faces and gravel shore, Park's
+whole ground). `fc14_blend_vertred_phong` binds the same two samplers; its programs are not read.
+**Omega: checked, applies, not wired** (its GCN program reads the same two textures and the same
+weight; the circuits mostly use the re-authored `_new` and `2diffnormal` variants, whose programs are unread).
+
 ## Vertex-lit and lightmapped combines (2026-10-31, `2048-track-lighting`)
 
 **Method.** Vita3K caches the SPIR-V it translates each program to under the SHA-256 of the GXP

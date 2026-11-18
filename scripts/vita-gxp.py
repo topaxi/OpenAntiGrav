@@ -31,6 +31,8 @@ The container, little-endian throughout:
     +0x20 u32  unread; zero on all but 24 programs, which carry 1 or 0x112
     +0x24 u32  parameter count
     +0x28 u32  parameter table offset, relative to this field
+    +0x2c u32  input block offset,     relative to this field
+    +0x30 u16  primary register count (the `pa` words a program reads)
     +0x3c u32  primary instruction count
     +0x40 u32  primary code offset,    relative to this field
     +0x44 u32  secondary instruction count
@@ -45,6 +47,15 @@ The container, little-endian throughout:
     +0x8c u32  that table's offset,    relative to this field
     +0x90 u32  container count
     +0x94 u32  container table offset, relative to this field
+
+A fragment program's input block says what each `pa` register holds: at
+block `+0x0c` a u16 record count, at `+0x10` a u32 offset (relative to that
+field) to 16-byte records `info, resource, size, component info`. A record
+whose `info` bits 12-15 are not 0xf iterates that interpolant into the next
+`((size >> 4) & 3) + 1` words; one whose low nibble is not 0xf also fetches
+the sampler `resource` at that interpolant's coordinate into the
+`((size >> 6) & 3) + 1` words after it. `dump` lists them, and `census`
+counts the fragment programs whose records add up to `+0x30`.
 
 Fields not listed are left unread rather than guessed. `+0x20` looked like a
 constant zero over `eboot.elf` and `data.psarc`'s materials, 44,603 programs,
@@ -346,6 +357,37 @@ class Program:
     def kind(self) -> str:
         return "fragment" if self.fragment else "vertex"
 
+    def fragment_inputs(self) -> tuple[list[tuple[int, str, int, int | None, int]], int]:
+        """A fragment program's `pa` registers, in order, and the words they add up to.
+
+        Each row is `(first word, "iterated" | "texel", interpolant, sampler
+        resource or None, words)`. The total is not checked here; `census`
+        compares it with the register count at `+0x30`.
+        """
+        b = self.raw
+        block = rel(b, 0x2C)
+        count = struct.unpack_from("<H", b, block + 0x0C)[0]
+        table = rel(b, block + 0x10)
+        if table + 16 * count > self.size:
+            raise Broken("the fragment input records run past the program")
+        rows, at = [], 0
+        for i in range(count):
+            info, resource, size, _ = struct.unpack_from("<4I", b, table + 16 * i)
+            iterated, fetched = (info >> 12) & 0xF, info & 0xF
+            if iterated != 0xF:
+                words = ((size >> 4) & 3) + 1
+                rows.append((at, "iterated", iterated, None, words))
+                at += words
+            if fetched != 0xF:
+                words = ((size >> 6) & 3) + 1
+                rows.append((at, "texel", fetched, resource, words))
+                at += words
+        return rows, at
+
+    @property
+    def primary_registers(self) -> int:
+        return struct.unpack_from("<H", self.raw, 0x30)[0]
+
     def summary(self) -> str:
         return (
             f"{self.at:#010x} {self.size:#7x} {self.kind():8s} "
@@ -397,6 +439,7 @@ def cmd_census(specs: list[str]) -> int:
         files = set()
         found = decoded = residue = rejected = 0
         vert = frag = 0
+        inputs_close = 0
         params = 0
         for label, p, at in walk(spec):
             files.add(label)
@@ -413,12 +456,17 @@ def cmd_census(specs: list[str]) -> int:
             params += p.param_count
             if p.fragment:
                 frag += 1
+                try:
+                    inputs_close += p.fragment_inputs()[1] == p.primary_registers
+                except (Broken, struct.error):
+                    pass
             else:
                 vert += 1
         print(f"{spec}")
         print(f"  {decoded} of {found} programs decode, over {len(files)} file(s) walked")
         print(f"  {rejected} magic(s) rejected as not a container")
         print(f"  {vert} vertex, {frag} fragment, {params} parameters")
+        print(f"  {inputs_close} of {frag} fragment input tables add up to the primary register count")
         print(f"  {residue} byte(s) unaccounted by any header field")
         grand[0] += decoded
         grand[1] += found
@@ -462,6 +510,16 @@ def cmd_dump(spec: str, index: int) -> int:
                 f"    {q.kind():14s} {q.name:40s} comp={q.components} "
                 f"array={q.array_size} container={q.container} resource={q.resource}"
             )
+        if p.fragment:
+            samplers = {q.resource: q.name for q in p.parameters if q.kind() == "sampler"}
+            rows, total = p.fragment_inputs()
+            print(f"  fragment inputs ({total} words, header says {p.primary_registers}):")
+            for at, what, interpolant, resource, words in rows:
+                if what == "texel":
+                    name = samplers.get(resource, "?")
+                    print(f"    pa{at:<3d} texel of sampler {resource} ({name}) at interpolant {interpolant}")
+                else:
+                    print(f"    pa{at:<3d} interpolant {interpolant}, {words} word(s)")
         return 0
     print(f"no program #{index} in {spec}")
     return 2

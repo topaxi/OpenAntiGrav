@@ -945,8 +945,12 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    places on main and at most 20 with the fix. Frames, the Altima pose and Park: the stipple is gone from the "5" sign, the right-hand
    board and the orange sign on Park too; Mall (no vertex-lit speckle) is unchanged. **Omega: checked, not affected** (the `2 + mask`
    marker is set for the Vita reader only, and Omega's Altima at the grid is pixel-identical before and after, 0 differing pixels).
-   Not from this lane and still open: the gravel shore itself is brighter and greyer than the original's (dark, with a green grass
-   edge: the `fc07_blend_vertred_lambert_2diff` second picture and its vertex-red blend are not read), and `OAG_TINT_MATERIALS`,
+   The gravel shore's grey (brighter and bluer than the original's, no earth band or green grass edge) was the
+   `fc07_blend_vertred_lambert_2diff` second picture and its vertex-red blend, read and wired 2026-11-18
+   ([gxp.md](../formats/gxp.md), "`fc07_blend_vertred_lambert_2diff` mixes two pictures by the vertex red"): the shore box
+   `760,300,920,420` at the Altima pose went from 17.8 levels off the original's mean to 3.6. The gravel beside the
+   pond wall stays 16 to 19 levels darker than the original's (the light there, not the picture). Still open here:
+   `OAG_TINT_MATERIALS`,
    `OAG_ALBEDO_ONLY` and `OAG_OPAQUE_ONLY` do not reach the Vita track (`OAG_SKIP_MATERIAL` and `OAG_SKIP_SLOT` do).
    *Superseded reading below, kept for the evidence it recorded:*
    (2) **The stipple is not the water setting, not the shadows, not MSAA** (the falsifier, "survives with the water off", fired
