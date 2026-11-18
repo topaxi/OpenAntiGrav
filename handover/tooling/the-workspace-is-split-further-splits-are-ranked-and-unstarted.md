@@ -1,7 +1,7 @@
 ---
 status: parked
 titles: [all]
-updated: 2026-11-11
+updated: 2026-11-18
 summary: "Measured 2026-11-11: raceplay load and game profile/boot splits save 0 percent in the moved code, 6-10 percent outside it; parked"
 size: M (35)
 difficulty: medium (30)
@@ -42,7 +42,7 @@ of raceplay's 51k (about 2 s of a 44 s rebuild, 5 %). The game lib is 38k lines 
 windowed application (`app`, in the lib since the binary's body moved there) 27k: boot, movie and loading are 21 % of the lib (about
 3.4 s of 34 s, 10 %), the profile set (records, unlock, ghosts, campaign, settings,
 profile) 16 % (7.5 %), all of them 37 % (about 6 s, 17 % best case, about 11 % weighted
-by where edits land). The binary unit (12-18 s, half the wall) does not move. Line share
+by where edits land). The binary unit (12-18 s, half the wall, measured while the windowed application was still the binary's; it is now part of the lib's unit tests) does not move. Line share
 is the only proxy (`cargo llvm-lines` is not installed here), and the best case needs all
 three cuts and an edit outside them.
 
@@ -70,7 +70,7 @@ crate for persistence).
   it can sit below the tick; if it needs `Race`, leave it.
 - **Measured, not worth it for build time (see above): a profile/progress crate** from `oag-game`: `records` (1k lines), `unlock`,
   `ghosts`, campaign state, probably `settings` (1.7k). This is where "modern
-  saves" persistence lives. Check what `main/` reads out of them first.
+  saves" persistence lives. Check what `app/` reads out of them first.
 - **Measured, not worth it (see above): the boot and media cluster** in `oag-game`: `movie` (2.5k), `loading` (2.6k),
   `boot` (3.6k). `capture` and `race_capture` composite the front end's overlays
   and probably stay.
