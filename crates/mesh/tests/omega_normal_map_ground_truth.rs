@@ -184,5 +184,29 @@ fn a_2048_circuit_stays_unbound() {
     assert!(report.decoded_tangents > 0, "{}", report.describe());
     assert_eq!(report.normal_maps, psp2::NormalMapCensus::default());
     assert!(model.vertices.iter().all(|v| v.tangent == 0));
-    assert!(model.pad_masks.is_empty());
+    // The third binding carries no normal map: where it is bound at all it is the vertex-red
+    // blend's second picture, which only a blended draw's texture can have.
+    let blended = |v: &oag_mesh::mesh::GpuVertex| {
+        let index = oag_mesh::mesh::slots::material_index(v.slots) as usize;
+        index != 0 && model.emissive[index - 1].program[0] == oag_mesh::mesh::PROGRAM_VERTEX_BLEND
+    };
+    let blended_textures: Vec<usize> = model
+        .draws
+        .iter()
+        .chain(&model.transparent_draws)
+        .chain(&model.alpha_tested_draws)
+        .filter(|d| {
+            let range = d.range.start as usize..d.range.end as usize;
+            model.indices[range]
+                .iter()
+                .any(|&i| blended(&model.vertices[i as usize]))
+        })
+        .filter_map(|d| d.texture)
+        .collect();
+    for (at, mask) in model.pad_masks.iter().enumerate() {
+        assert!(
+            mask.is_none() || blended_textures.contains(&at),
+            "texture {at} binds a third picture that is not the vertex-red blend's"
+        );
+    }
 }
