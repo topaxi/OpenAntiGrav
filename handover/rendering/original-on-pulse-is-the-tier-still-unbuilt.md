@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [2048, omega]
-updated: 2026-11-17
+updated: 2026-11-18
 summary: "The original shadow tier on 2048 and Omega is Unbuilt; HD's per-hull box fit and LiveStencilShadow are open"
 difficulty: hard (35)
 ---
@@ -18,9 +18,8 @@ and this file is what is left**, which is step 5.
 
 - **The setting.** `oag_display::display::Shadows`, `off` and `blob`, in
   `[render_profiles.<title>] shadows`; a `SHADOWS` row on the GRAPHICS page;
-  `--shadows` as a per-run override. `original` and `mapped` are refused by
-  `FromStr`, and `display/tests.rs` names both so whoever lands one deletes
-  their line beside a new variant.
+  `--shadows` as a per-run override. All four tiers (`off`, `blob`,
+  `original`, `mapped`) parse now (`Shadows::ALL`).
 - **`blob`.** `oag_render::shadow` draws it, `oag_raceplay::shadow` places
   it. HD's own nine `ambient_shadow.gtf` are the silhouette where the source
   ships them, a generated falloff elsewhere, and the load report says which
@@ -60,20 +59,7 @@ Two things worth carrying forward from doing it:
   measured 2026-11-17**: it is there on HD (the road beside the hull 21.5 %
   darker than `off`, in the craft's outline) and on Pulse, pinned by
   `crates/game/tests/hd_craft_shadow_ground_truth.rs`. The mirrored lookup
-  (fixed 2026-09-11) was the cause; the caster's node transform was not. The
-  rest of this item is the record of what had been ruled out.
-  **`mapped` landed 2026-09-04 with a gap that is written down rather than
-  tuned away: a craft's own shadow does not appear on the road.** Everything
-  else does - scenery on scenery, and the frame at large. Ruled out by separate
-  runs: the depth pass writes depth (the texels are read back in
-  `shadow_map_coverage.rs`), the map has content at the road's texels, the road
-  computes a `uv` inside the map, road and craft land 13 texels apart at 2048
-  exactly as the light's tilt predicts, and the craft's caster carries 13
-  ranges and 4,335 indices. **The first thing to check** is the one difference
-  between the two vertex paths: `caster.wgsl` does `mvp * position` where
-  `mesh.wgsl` does `model * (node_anims.transform[xform] * position)`, and the
-  caster pass binds no node matrices at all - so anything baked in an anim
-  node's space is cast from the wrong place.
+  (fixed 2026-09-11) was the cause; the caster's node transform was not.
 - **Two bugs the `mapped` work turned up, both of which shadowed *something***
   and so read as working: the map lookup was mirrored vertically (glam's
   `rh::proj::directx` projections are **Y-down**, and HD's coverage tier had
@@ -116,7 +102,7 @@ Two things worth carrying forward from doing it:
   12 to 21; the default side is now 768 (1.89 px), a chosen equivalent. **Open:
   fit each craft's box to its hull's bounds, the original's law**, which needs a
   bound of the hull alone (an HD `Ship.vex`'s vertex bounds are 164 units).
-  Open: the cost of `high` and `ultra` on an integrated GPU is not measured.
+  The Steam Deck cost of `high` and `ultra` was benched 2026-11-18: inside run-to-run noise at 800p, 1080p and 4K, but **unproven** (a headless HD frame was pixel-identical between `original` and `ultra`, so the bench pose may draw no edge the setting changes; `shadows.md`, "Shadow resolution"). Open: a pose where a shadow edge is in view.
 - **HD's map size is read, and ours is a chosen equivalent.** `shadowMapTexSize`
   is `(2/w, 2/h)` of each ship's own map, 512/512/256/128/64/32/32/32 by distance
   rank. The one grid-fitted map is 2048 (about 12 texels per unit, the original's
@@ -223,9 +209,10 @@ Two things worth carrying forward from doing it:
   successive blends do; the shared 2048 map is the chosen stand-in.
 - ~~Bind the node matrices in the caster pass.~~ Not needed: the gap closed
   without it (above).
-- A real cascade ladder: `mapped` is one cascade fitted ahead of the camera,
-  which is a choice about where its texels go rather than a solution.
+- ~~A real cascade ladder~~ `mapped` has two cascades since 2026-10-25
+  (`DEPTH_LAYERS` in `crates/render/src/shadow/map.rs`, `shadows.md` tier 7);
+  more would be a choice about where texels go.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-the implementation half of the thread above, and **steps 2 and 3 of [shadows.md](../../docs/rendering/shadows.md)'s plan landed 2026-09-04**: `graphics.shadows` (`off`/`blob`, per title, with a GRAPHICS row and a `--shadows` override) and the `blob` tier itself - a ground-aligned quad per craft, cast along the craft's own down axis against the circuit's collision geometry and filtered to `Floor`/`MagFloor` (a bare `raycast` puts the shadow up the barrier a craft is scraping). HD's own nine `ambient_shadow.gtf` are the silhouette where a source ships them, with the **coverage polarity measured** - corner texel 0, outline to 212 of 255, and the `remap` broadcasts it into red with alpha forced opaque, so reading `.a` draws a full-strength rectangle - and a generated falloff elsewhere, reported per slot. **Diffed `off` against `blob` on four titles** rather than eyeballed: Pulse PSP 8,595 pixels changed at a worst delta of 43, Pulse PS2 4,637 at 75, Pure 16,924 at 166, HD/Fury 25,022 at 77 - though every judgement about how it *looks* is still from a headless capture. **A trap worth the reading time**: the first fade faded from the ground, so a craft resting at its own ride height drew at strength `0.030` - 5,262 pixels changed by a maximum of 2, which reads exactly like a pass that never ran; an `off`-versus-`blob` PNG diff at threshold **zero** is what told them apart. **Step 5 landed the same day**: `original` draws the craft's own `Dynamic Shadow Occluder` hull, silhouette taken in hull space against `oag_pulse::shadow::AUTHORED_AXIS` - `(1, -10, 2)` normalized, carried by all three Pulse builds and neither Pure one - and projected onto the surface its own cast found; `blob` against `original` changes 5,720 pixels at a worst delta of 126, which is what says the two tiers draw different things. **HD's `original` landed the same day and is a different mechanism**: the craft render into a *coverage* map - `TXP R1.x, f[TC0] unit2` then `ADD H0.w, -R1.xxxx, {1}`, nothing compared anywhere, so no depth attachment and no comparison sampler - and the track samples it projectively, 1,289 pixels against `off` at a worst delta of 58. Proved inert where it should be: Pulse's `original` is byte-identical before and after. **`mapped` landed the same day** - a depth map everything casts into and every lit surface reads, this project's own, one cascade - and found two bugs that shadowed *something* and so read as working: the lookup was mirrored vertically (glam's `rh::proj::directx` projections are **Y-down**, and HD's coverage tier had the same bug hidden by a caster near its map's centre), and the shadow term reached one fragment entry point of five, where a race draws through the `_velocity` pair. Open: a craft's own shadow does not appear on the road under `mapped` - five things ruled out by separate runs and the caster shader's missing node transform named as the first thing to check; `original` on 2048 (needs 2048 to race); HD's separate `LiveStencilShadow` path; and three darkness constants that are ours because the compositing pass is unread, nothing shadows anything but the road, nobody has seen either tier in a window, and HD's own `ambientShadowBlendFactor` has never been read. **2026-09-21: HD's hull receives too** - `Job RenderShips` renders the track around each craft from the sun as its own sun-occlusion mask into a second per-ship map and the hull's sun is gated by it ([ship-sun-occlusion.md](../../docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md)); `oag_render::shadow::occlusion` draws that half, and the self-shadow depth half, the chunk draw order and the six white-clear tracks stay open on the thread file
+the implementation half of the thread above, and **steps 2 and 3 of [shadows.md](../../docs/rendering/shadows.md)'s plan landed 2026-09-04**: `graphics.shadows` (`off`/`blob`, per title, with a GRAPHICS row and a `--shadows` override) and the `blob` tier itself - a ground-aligned quad per craft, cast along the craft's own down axis against the circuit's collision geometry and filtered to `Floor`/`MagFloor` (a bare `raycast` puts the shadow up the barrier a craft is scraping). HD's own nine `ambient_shadow.gtf` are the silhouette where a source ships them, with the **coverage polarity measured** - corner texel 0, outline to 212 of 255, and the `remap` broadcasts it into red with alpha forced opaque, so reading `.a` draws a full-strength rectangle - and a generated falloff elsewhere, reported per slot. **Diffed `off` against `blob` on four titles** rather than eyeballed: Pulse PSP 8,595 pixels changed at a worst delta of 43, Pulse PS2 4,637 at 75, Pure 16,924 at 166, HD/Fury 25,022 at 77 - though every judgement about how it *looks* is still from a headless capture. **A trap worth the reading time**: the first fade faded from the ground, so a craft resting at its own ride height drew at strength `0.030` - 5,262 pixels changed by a maximum of 2, which reads exactly like a pass that never ran; an `off`-versus-`blob` PNG diff at threshold **zero** is what told them apart. **Step 5 landed the same day**: `original` draws the craft's own `Dynamic Shadow Occluder` hull, silhouette taken in hull space against `oag_pulse::shadow::AUTHORED_AXIS` - `(1, -10, 2)` normalized, carried by all three Pulse builds and neither Pure one - and projected onto the surface its own cast found; `blob` against `original` changes 5,720 pixels at a worst delta of 126, which is what says the two tiers draw different things. **HD's `original` landed the same day and is a different mechanism**: the craft render into a *coverage* map - `TXP R1.x, f[TC0] unit2` then `ADD H0.w, -R1.xxxx, {1}`, nothing compared anywhere, so no depth attachment and no comparison sampler - and the track samples it projectively, 1,289 pixels against `off` at a worst delta of 58. Proved inert where it should be: Pulse's `original` is byte-identical before and after. **`mapped` landed the same day** - a depth map everything casts into and every lit surface reads, this project's own, one cascade then, two since 2026-10-25 - and found two bugs that shadowed *something* and so read as working: the lookup was mirrored vertically (glam's `rh::proj::directx` projections are **Y-down**, and HD's coverage tier had the same bug hidden by a caster near its map's centre), and the shadow term reached one fragment entry point of five, where a race draws through the `_velocity` pair. Open: a craft's own shadow does not appear on the road under `mapped` - five things ruled out by separate runs and the caster shader's missing node transform named as the first thing to check; `original` on 2048 (needs 2048 to race); HD's separate `LiveStencilShadow` path; and three darkness constants that are ours because the compositing pass is unread, nothing shadows anything but the road, nobody has seen either tier in a window, and HD's own `ambientShadowBlendFactor` has never been read. **2026-09-21: HD's hull receives too** - `Job RenderShips` renders the track around each craft from the sun as its own sun-occlusion mask into a second per-ship map and the hull's sun is gated by it ([ship-sun-occlusion.md](../../docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md)); `oag_render::shadow::occlusion` draws that half, and the self-shadow depth half, the chunk draw order and the six white-clear tracks stay open on the thread file

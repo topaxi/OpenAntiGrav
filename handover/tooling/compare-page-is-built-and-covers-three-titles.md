@@ -160,3 +160,4 @@ Pulse PSP Zone pairs exist, HD's do not. `psp-pulse-pair.py --zone` reads `g_gam
    Omega and Pure do not: the node that holds it is not located (no `MeshImporter` string, fuzzy match empty, Pure not in Ghidra, Omega
    v1.07 not in Ghidra). Also open: 2048's chase-camera tripod shake (cannot be patched out), Omega's hull shake patch, HD's `HullShake_Apply`
    callers, the sea frame's dump-versus-window camera skew, the ring panels' cyan strobe in ours.
+10. **HD pairs carry their world clock** (2026-11-18, `hd-clock-gate`, `hd-reclock`; `docs/tools/compare-page.md`, "HD re-capture"): every HD grab goes through `grab_with_clock` (`just check-hd-clock-grab`), 19 of the 20 HD pairs were re-made with the clock beside the frame (13 Time Trial offsets 21.3 to 36.0 s; menu and loading pairs carry the no-race note), and `HD_CLOCK_BASELINE` is empty. `hd-race/talons-pack` keeps its stored offset (not re-made, `compare-page.md`, "Why `hd-race/talons-pack` stayed").

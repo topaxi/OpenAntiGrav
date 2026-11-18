@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-17
+updated: 2026-11-18
 summary: "HD: frictionless spark (row 5), smoke anchor (row 8) and a frame pair (row 9) open; rows 1-4, 6, 7 landed"
 size: M (55)
 difficulty: medium (60)
@@ -60,16 +60,14 @@ Leads read in passing, not followed:
 
 ## Next Steps
 
-Rows 1, 2, 6 and 7 landed 2026-11-17 (attached mode only, so Pulse's burst sparks and every
-non-HD title are unchanged; the 2048 and Omega callers are still not wired). Strike them below.
+Rows 1 to 4, 6 and 7 landed 2026-11-17 (attached mode only, so Pulse's burst sparks and every
+non-HD title are unchanged; the 2048 and Omega callers are still not wired).
 
 1. Row 9 first: `scripts/emu-env.sh`, restore
    `hd-racebox-talons-venom-weapons-grid-rpcs3-20574`, run the film, render ours **posed**
    from the film's craft poses (not with `hd-missile-film-pair.py`, see the row), and look at
    1.0 s to 2.0 s (the hulls touching) and 0.5 s to 0.75 s (the struck rival alone).
-2. Rows 1 and 2 together (one change, one test: a pair contact on HD starts the seat's attached
-   spark and the next contact-free tick stops it).
-3. Rows 6 and 7 (small, `damage_fx.rs` alone), then row 8 against a frame.
-4. Row 5 after its read. Rows 3 and 4 landed 2026-11-17: slot 5 is mapped onto the particle
-   system's severity (`scale`), **chosen, not measured** (what `0x002846d0` does with slot 5 is
-   still unread); the opponents' spark is one riding `Stage` instance per craft.
+2. Row 8 against a frame (`damage_fx.rs`).
+3. Row 5 after its read. Slot 5 of rows 3 and 4 is mapped onto the particle system's
+   severity (`scale`), **chosen, not measured** (what `0x002846d0` does with slot 5 is still
+   unread); the opponents' spark is one riding `Stage` instance per craft.
