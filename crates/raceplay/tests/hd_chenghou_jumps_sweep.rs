@@ -74,7 +74,7 @@ fn chenghou_jumps_per_tick() {
         body.linear_velocity = forward * p[9];
         body.angular_velocity = Vec3::ZERO;
     } else {
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
     }
     let ticks: u64 = env_or("OAG_TICKS", "1200").parse().unwrap();
     println!("tick x y z vy height grounded speed fx fy fz ux uy uz");

@@ -54,7 +54,7 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     project's Turbo gate too.
 - **A forked circuit still learns the speed plans** when the original flies:
   the route plans gate which routes the coin offers
-  (`Race::steer_branching`) and are learned on the ring plan's reference hull.
+  (`RaceSim::steer_branching`) and are learned on the ring plan's reference hull.
   Skipping them for the original field means deciding what offers a route
   there (every route, or a rule of the original's own), which changes how an
   original opponent goes round a fork, so it was not done. Everything else
@@ -114,7 +114,7 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
       flying class pays; the fork sweep cannot see a wreck, so a rule that
       weighs the absorb's shield against a stint's exposure is open.
   - ~~**Lead, the player's own pickup:** a cold stint finds the craft with a
-    whole-line search (`Race::locate_player_driver`).~~ Fixed 2026-10-20
+    whole-line search (`RaceSim::locate_player_driver`).~~ Fixed 2026-10-20
     (lane `opponent-autopilot-wire`): the ring search is right on the ring
     (0 of 32,027 wrong); on a route the ring's nearest point is another deck,
     so the locate also searches each route's own samples. Slot 0 cold-located

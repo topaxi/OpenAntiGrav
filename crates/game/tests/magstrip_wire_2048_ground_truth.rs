@@ -62,7 +62,7 @@ fn load_mode(mode: oag_race::Mode) -> Option<race::Race> {
         );
     }
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     Some(race)
 }
 

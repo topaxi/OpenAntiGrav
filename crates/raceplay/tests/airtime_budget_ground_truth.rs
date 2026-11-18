@@ -220,7 +220,7 @@ fn measure_airtime(
     if let Some(pilot) = pilot {
         // Tempered here, so a sweep across tiers is asking about the same
         // character at four levels rather than whichever one slot 1 drew.
-        race.set_ai_pilot(LONE, level.temper(&pilot));
+        race.sim.set_ai_pilot(LONE, level.temper(&pilot));
     }
     // Everyone but one opponent off the track, so every airborne window
     // measured is this craft's own driving, with no traffic in the way of it.

@@ -372,6 +372,7 @@ fn a_quake_wave_under_a_mine_sets_it_off_quietly() {
     // mine sits inside its radius on the very next tick.
     let stats = race.quake_stats().expect("the disc authors a Quake");
     let progress = race
+        .sim
         .course()
         .expect("a course")
         .locate(mines[0].position, None)

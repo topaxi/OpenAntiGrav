@@ -131,7 +131,7 @@ fn race_with_hud(
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     Some((race, loaded.hud))
 }
 
@@ -310,7 +310,7 @@ fn a_fire_over_the_line_is_a_lap_and_on_the_last_lap_a_finish_on_the_exit_tick()
     drive_until(&mut race, 3000, |r| {
         r.sim.world.ships[0].standing.lap_start_tick.is_some()
     });
-    let length = race.course().expect("a course").length();
+    let length = race.sim.course().expect("a course").length();
     // Near the end of the lap: a fire there crosses the line.
     drive_until(&mut race, 6000, |r| progress(r) > length - 150.0);
     give(&mut race, 0);
@@ -465,7 +465,7 @@ fn a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and
         return;
     };
     race.watch_laps(&hud, None);
-    let length = race.course().expect("a course").length();
+    let length = race.sim.course().expect("a course").length();
     let count = usize::from(race.sim.world.ship_count);
     let gap = |from: f32, to: f32| {
         let delta = to - from;

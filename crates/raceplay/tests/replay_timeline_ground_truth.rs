@@ -591,7 +591,7 @@ fn dump_the_recordings_for_a_compressor() {
     let mut race = Race::start(loaded.setup);
     race.apply_launch(&launch());
     race.start_recording(header_of(&title, oag_race::Mode::SingleRace, seed));
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let idle = PlayerInputs::single(oag_gameplay::InputSnapshot::default());
     for _ in 0..ticks {
         race.tick(&idle);

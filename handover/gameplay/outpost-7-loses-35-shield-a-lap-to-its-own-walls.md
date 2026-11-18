@@ -395,7 +395,7 @@ ticks** - `throttle`'s identical `speed <= target` branch never leaves
 `(1.0, 0.0)`. The craft is at full thrust into both walls; `target` never
 drops below its actual speed until after the impact.
 
-Cross-checked against `Race::racing_line().curvature(idx, span)` at spans 4,
+Cross-checked against `RaceSim::racing_line().curvature(idx, span)` at spans 4,
 8, 11 (what `corner_target` actually reads) and 16, on the same finished
 race: **the true local peak (`span = 4`) is 1.66x higher than the windowed
 `span = 11` value `corner_target` is fed, at the first corner (0.02305 vs

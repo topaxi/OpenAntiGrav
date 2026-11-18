@@ -37,7 +37,7 @@ fn start() -> Option<race::Race> {
     })
     .expect("loading");
     let mut race = race::Race::start(loaded.setup);
-    assert!(race.use_original_ai(None, 0));
+    assert!(race.sim.use_original_ai(None, 0));
     let mut moving = 0;
     for _ in 0..SETTLE + 2000 {
         race.tick(&PlayerInputs::none());
@@ -58,7 +58,7 @@ fn start() -> Option<race::Race> {
 }
 
 fn targets(race: &race::Race, a: usize, b: usize) -> (f32, f32) {
-    let field = race.original_ai_field().expect("original field");
+    let field = race.sim.original_ai_field().expect("original field");
     (
         field.drivers[a].planner.target,
         field.drivers[b].planner.target,

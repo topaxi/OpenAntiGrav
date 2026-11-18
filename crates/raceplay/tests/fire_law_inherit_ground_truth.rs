@@ -19,7 +19,7 @@
 //! `FireLaw::Ours` and fails here.
 //!
 //! Each title's single race then flies two minutes under the original driver
-//! (`Race::use_original_ai`, what every campaign and race box race with
+//! (`RaceSim::use_original_ai`, what every campaign and race box race with
 //! opponents runs) and counts the projectiles opponents put in the air. Until
 //! 2026-10-19 that was **zero on all five titles**: the original branch never
 //! advanced `oag_ai::Driver`'s noise phase, so every craft rolled one constant
@@ -59,7 +59,10 @@ const SECONDS: u64 = 120;
 /// how many projectiles opponents launched, and the drain cadence of every
 /// opponent LeachBeam that came up (`true` for once a trip).
 fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, Vec<bool>) {
-    assert!(race.use_original_ai(None, 1), "the original driver flies");
+    assert!(
+        race.sim.use_original_ai(None, 1),
+        "the original driver flies"
+    );
     let count = usize::from(race.ship_count());
     let mut held = vec![0usize; count];
     let mut fired = 0;
@@ -99,7 +102,7 @@ fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, Vec<b
 fn fires_original(source: String, mode: oag_race::Mode, per_trip: bool, terms: &str) {
     let fly_eliminator = source.contains("ps4");
     let race = started(source, mode, terms);
-    assert_eq!(race.fire_law(), FireLaw::Original, "{mode:?}");
+    assert_eq!(race.sim.fire_law(), FireLaw::Original, "{mode:?}");
     if mode == oag_race::Mode::SingleRace || fly_eliminator {
         let (fired, beams) = opponents_fire_under_the_original_driver(race);
         println!(

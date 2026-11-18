@@ -40,7 +40,7 @@ fn race_on(track: &str) -> Option<race::Race> {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     Some(race)
 }
 
@@ -181,7 +181,7 @@ fn a_clearance_probe_reads_the_real_track() {
 
 /// The nearest the craft is to a sample of course route `route` and to a ring point, in units.
 fn offsets(race: &race::Race, route: usize) -> (f32, f32) {
-    let course = race.course().expect("a course");
+    let course = race.sim.course().expect("a course");
     let at = race.sim.world.ships[0].physics.body.position;
     let nearest = |points: &mut dyn Iterator<Item = oag_core::math::Vec3>| {
         points.map(|p| p.distance(at)).fold(f32::INFINITY, f32::min)
@@ -199,7 +199,7 @@ fn an_exit_on_a_forks_route_seats_the_craft_and_its_driver_on_the_route() {
         return;
     };
     let (route, half) = {
-        let course = race.course().expect("a course");
+        let course = race.sim.course().expect("a course");
         let route = &course.routes()[0];
         let span = (course.progress_at(route.merge).unwrap()
             - course.progress_at(route.split).unwrap())

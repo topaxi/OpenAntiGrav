@@ -54,7 +54,7 @@ fn a_hand_back_counts_down_as_an_autopilot_over_the_held_pickup() {
         Some(SubWeapon::Autopilot(crate::replay::HAND_BACK_SECONDS))
     );
     assert_eq!(race.sim.world.ships[1].pickup.weapon, Some(Weapon::Turbo));
-    assert!(race.flown_for_the_player(1), "the driver has the craft");
+    assert!(race.sim.flown_for_the_player(1), "the driver has the craft");
     assert_eq!(
         race.autopilot_engine_flags(1).speedup,
         None,
@@ -80,7 +80,7 @@ fn a_hand_back_counts_down_as_an_autopilot_over_the_held_pickup() {
     let ship = &race.sim.world.ships[1];
     assert!(!ship.handback);
     assert_eq!(ship.autopilot_timer, 0.0);
-    assert!(!race.flown_for_the_player(1), "the person flies again");
+    assert!(!race.sim.flown_for_the_player(1), "the person flies again");
 }
 
 /// Absorb cancels the countdown on every title, and it does not pay out the held pickup.

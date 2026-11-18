@@ -507,7 +507,7 @@ follows it; where it departs, [built](#built-2026-10-12-oag_aioriginal) says so.
 | `Ai_ComputeControls` (steer, airbrakes), `Ai_ComputePitch` | `original::steer`, `original::pitch` | As recovered; `last_forward` refreshes only while airborne (decompile). The yaw prediction uses `oag_core::math::sin_cos` |
 | `Ai_SnapToLane` | `original::Rail` and `oag_physics::rail::apply` | Velocity and position only. Applied between the opponent's controls and its physics step |
 | `AiManager_Update` | `original::Field` | Round robin of period eight over the slots, the shuffle on the first tick, one seeded generator of the field's own |
-| Campaign only | `oag_raceplay::Race::use_original_ai`, called from the campaign launch | Keyed on the campaign cell, at the cell's resolved skill scale or the race's ambient one; a title opts in through `oag_title::RaceDefaults::original_opponent` (Pulse and HD) |
+| Campaign only | `oag_raceplay::RaceSim::use_original_ai`, called from the campaign launch | Keyed on the campaign cell, at the cell's resolved skill scale or the race's ambient one; a title opts in through `oag_title::RaceDefaults::original_opponent` (Pulse and HD) |
 | A title's variant | `original::Laws`, from `oag_title::RaceDefaults::original_driver` | `Laws::PULSE` is Pulse; HD's five branches as data, [below](#hd-the-same-driver-five-gated-branches-2026-10-12) |
 
 **Where the rail sits, measured.** `AiManager_Update` (vtable `0x08ac9f20`, slot 4)
@@ -589,7 +589,7 @@ original now owns. Each race start logs one line saying which AI flies and why
 (`AI: the original driver flies the opponents, skill 3.00, level 1`, or
 `AI: this project's driver flies (--ai ours)`).
 
-**The fallback is unchanged.** `Race::use_original_ai` keeps this project's
+**The fallback is unchanged.** `RaceSim::use_original_ai` keeps this project's
 driver, with the reason logged, when the title and class have no tables that
 read or the track has no closed lap. The tables are read for every race of the
 five titles (their `original_opponent` flag), whatever the mode.
@@ -869,7 +869,7 @@ autopilot can easily overtake AI opponents"). The read is on
   original has no "AI under autopilot" behaviour to switch to. Flying it
   anyway was measured on 2026-10-19 and not wired (below).
 
-**Built.** `oag_ai::original::Autopilot` is that driver; `Race::autopilot_controls`
+**Built.** `oag_ai::original::Autopilot` is that driver; `RaceSim::autopilot_controls`
 flies it on every title whose original tables read (Pulse, Pure, HD, 2048,
 Omega), under `--ai ours` too, for every route that hands the player's craft to
 a driver: the Autopilot pickup, `--autopilot`, a Disruptor's autopilot effects
@@ -1155,7 +1155,7 @@ before it (next section), the one change is **RAPIER Skilled and Elite turning
 on**. The rule is title data, `oag_title::opponent_autopilot::BY_CLASS_AND_DIFFICULTY`
 on all five titles (`RaceDefaults::opponent_autopilot`, every switch
 `Origin::Chosen`), read at load at the race's class and difficulty;
-`Race::set_opponent_autopilot` still overrides it. The original-AI field (the
+`RaceSim::set_opponent_autopilot` still overrides it. The original-AI field (the
 campaign) keeps the absorb.
 
 **The difficulty is the race's own** `oag_ai::Difficulty` by name (`novice`,
@@ -1416,7 +1416,7 @@ class from the measurement of this engine below. RAPIER is held off by that
 measurement, not by the rule. The rule is title data,
 `oag_title::opponent_autopilot::BELOW_RAPIER` on all five titles
 (`RaceDefaults::opponent_autopilot`, every switch `Origin::Chosen`), read at
-load at the race's class; `Race::set_opponent_autopilot` overrides it for
+load at the race's class; `RaceSim::set_opponent_autopilot` overrides it for
 the sweep. The original-AI field (the campaign) keeps the absorb.
 
 **Today an opponent draws it.** The `ai` column gives the Autopilot 5.8 % of
@@ -1693,7 +1693,7 @@ pinned by `autopilot_original_ground_truth`:
 **The player's own cold locate finds the route it is on (2026-10-20).** The
 first fix left the player's pickup (and every other cold locate of a
 person's craft: the finish-line handover, `--autopilot`, the network
-`autopilot_wants`) on `Race::locate_player_driver`'s whole-ring search. The
+`autopilot_wants`) on `RaceSim::locate_player_driver`'s whole-ring search. The
 ring's own search is never wrong on the ring: every opponent of a Pulse VENOM
 race, every 30 ticks on all twelve circuits, its warm driver against a cold
 ring search (a one-off probe, not kept), 0 of 32,027 wrong. The defect is the branches: on route 1 of
@@ -1701,7 +1701,7 @@ ring search (a one-off probe, not kept), 0 of 32,027 wrong. The defect is the br
 2,349) the ring's nearest point is index 403 at y 99, 55 units above the
 craft, so a narrower ring search seeded near the craft's progress would still
 pick the wrong deck. So the locate also searches every route's own samples
-(`Race::nearest_route_sample`) and takes a route's point when it is nearer,
+(`RaceSim::nearest_route_sample`) and takes a route's point when it is nearer,
 setting the branching as past that route's split (`RouteLine::entered`, ours).
 Slot 0 of an autopiloted Pulse VENOM race (seed 1, weapons on), cold-located
 every 30 ticks and counted wrong when the located point is more than 10 units
@@ -1720,7 +1720,7 @@ air or on the ground. Those five are a lead on the autopilot's own branch
 tracking, not followed here.
 
 **The original's driver re-commits onto an unplanned route (2026-10-20, lane
-`zone-05-shield`).** `Race::recommit` (the port of `Ai_ChooseBranch`'s state-2
+`zone-05-shield`).** `RaceSim::recommit` (the port of `Ai_ChooseBranch`'s state-2
 re-commit) offered only routes with a verified speed plan, a filter that is
 ours: it keeps this project's driver off a route it cannot pace. A lone craft
 builds no route plans at all (`route_speed_plans` returns none below two
@@ -1875,7 +1875,7 @@ handling with several humans is unread, so `ai_choice` declines
 since 2026-10-13, **chosen, not measured, no confidence score**: the round robin
 takes every active craft nobody flies (`original_ai_begin_tick`), and the rubber
 band, `PosBalancing` and Pure's zone multiplier read the best-placed person
-(`Race::rubber_band_reference`, lowest slot on a tie) where the original reads
+(`RaceSim::rubber_band_reference`, lowest slot on a tie) where the original reads
 its one player (`AiManager_SnapshotRacers`, `0x088352c0`, refreshes the single
 player record `DAT_08b34410`/`DAT_08b34418` the thrust law reads, confidence per
 [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md)). What stays open: `use_original_ai`'s grid numbers assume the
@@ -2706,7 +2706,7 @@ Reported from play, the same day: with the gate above fixed, `--race
 no visible airbrake through Talon's Junction's own U-turn, and the craft "takes
 a normal turn" through the one corner the differential most exists for.
 Instrumented the exact code path `--autopilot` runs
-(`Race::autopilot_controls`, which shares `ship.driver.drive` with every AI
+(`RaceSim::autopilot_controls`, which shares `ship.driver.drive` with every AI
 opponent) rather than the synthetic ovals: the gate **was** opening - 19 ticks
 of the corner engaged it - but the differential it computed peaked at **7.67**
 of the airbrake's `0..=100` range. Barely there against a symmetric brake
@@ -3378,7 +3378,7 @@ first landing falls short.
 
 `oag_ai::Field` is three optional rivals - the nearest **ahead**, the nearest
 **behind**, and one **alongside** - plus this craft's own race position.
-`Race::field_for` builds it; the driver is handed it the same way it is handed
+`RaceSim::field_for` builds it; the driver is handed it the same way it is handed
 its line, because `oag-ai` depends on `oag-core` and `oag-physics` and on
 nothing that knows what a race is.
 
@@ -3800,7 +3800,7 @@ being equal would break silently if either moved.
 
 **Two index spaces exist from here on**, and conflating them is the bug this
 introduces if it is done carelessly. `driver.index` indexes the racing line;
-`Spline::nearest` returns a sample index. `Race::ai_sample` is the only bridge,
+`Spline::nearest` returns a sample index. `RaceSim::ai_sample` is the only bridge,
 and it wraps, because the caller asking for the sample after this one is asking
 a lap question - `ai_order[i + 1]`, never `ai_order[i] + 1`, which at the end of
 a path is somewhere else entirely. `Race::respawn` speaks the sample table's
@@ -6130,7 +6130,7 @@ change, `ai_speed_plan_sweep` at Ace, 18,000 ticks:
 - `race_ground_truth`'s twelve circuits (Pulse VENOM) read exactly as before,
   every one a clean lap with 0 respawns.
 - The original drivers (`oag_ai::original`, campaign races) never read the
-  speed plan. A campaign load still builds it (`Race::field_speed_plan` does
+  speed plan. A campaign load still builds it (`RaceSim::field_speed_plan` does
   not ask which driver flies), and every original-driver ground truth passes
   unchanged, `vita_2048_original_ai::the_field_finishes_cathedral` included.
 
@@ -6202,7 +6202,7 @@ project's own, tuned for a good race.
 
 The earlier reading compared the field with the plan's verification lap "on
 the same handling". It is not the same handling. The ring plan is learned on
-the most agile hull whose plan verifies (`Race::field_speed_plan`), here slot
+the most agile hull whose plan verifies (`RaceSim::field_speed_plan`), here slot
 7's. Four of the seven opponents (slots 1, 2, 4, 6) fly `feisar2048\3`, a
 slower hull whose own plan cannot verify, because it does not clear the gap at
 full throttle on the plan's own line. Each distinct hull of the grid, full
@@ -6218,7 +6218,7 @@ throttle from the grid in the plan's own stepping
 
 So speed alone does not decide it: hull 5 is faster than hull 7 at every
 sample and falls. And the race steps what the plan steps: the plan's stepping
-forked from a racing craft's own state at sample 3300 (`Race::probe_speed_plan`
+forked from a racing craft's own state at sample 3300 (`RaceSim::probe_speed_plan`
 mid-race) read 124.0 u/s down the descent, tick for tick what the race did.
 The "2 to 5 u/s under the verifier" was the hull.
 
@@ -6372,7 +6372,7 @@ is ported. See [the 2048 page](../ghidra/functions/vita-2048-eu-v104/ai-branch-c
   round to its split and then the route's own samples, built by the same
   `racing_line` the ring's is (`oag_raceplay`'s `routes` module). A driver's
   index is into whichever line it is on, and every consumer that pairs it with
-  a line, a sample or a plan asks `Race::line_of` / `ai_sample_for` / `plan_of`.
+  a line, a sample or a plan asks `RaceSim::line_of` / `ai_sample_for` / `plan_of`.
 - **Chosen, not measured**, each forced by a measured failure on `05_Track` or
   `07_Track` (`cargo run -p oag-game --example fork_trace`):
   - the driver holds its draw (`Branching::pending`) and moves onto the route's
@@ -6497,7 +6497,7 @@ field drove them: 390 traversals, wrecked craft 9 to 5 over the twelve races.
   speed on the route's line flipped 2048 `arena`'s routes clean or not with the
   lead-in's length (120 samples: route 2 failed at the switch; 320: route 1 did).
 - **The player's autopilot flies the original's driver**, which reads no plan: a
-  measurement of the plans has to set `Race::set_autopilot_tuning`, as
+  measurement of the plans has to set `RaceSim::set_autopilot_tuning`, as
   `route_plan_board` now does.
 
 The measuring command (`crates/raceplay/tests/route_plan_board.rs`):
@@ -7010,7 +7010,7 @@ are 190-270 units/s (the reference never failed there), so a slower-turning hull
 no speed it can carry. It was the one plan a race drove that had never lapped on the hull
 driving it.
 
-**The change** (`Race::fallback_ring`, `SpeedPlan::verify_at`, `SpeedPlan::at_share`).
+**The change** (`RaceSim::fallback_ring`, `SpeedPlan::verify_at`, `SpeedPlan::at_share`).
 Where a hull's adapted ring plan fails, the reference is verified as it stands on that hull:
 two laps of the neutral driver at its yaw share, the share left off takeoff run-ups as
 `Driver::drive` leaves it. Followed there if it laps touching the wall at most 10 ticks
@@ -7350,7 +7350,7 @@ field stays in contact**: 181,828 charged touches over 64 races is about 400 tic
 original's field holds contact that long was measured afterwards: it does not, and the reason is in
 [the field's contact time against the original's](#the-fields-contact-time-against-the-originals). That our
 resolver's sustained-contact impulse runs high is not supported by these numbers. **The board above flies this
-project's driver** (it never calls `Race::use_original_ai`), not the original driver every race with opponents
+project's driver** (it never calls `RaceSim::use_original_ai`), not the original driver every race with opponents
 flies by default ([which AI flies](#which-ai-flies-2026-10-13)).
 
 ## The field's contact time against the original's

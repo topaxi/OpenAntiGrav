@@ -1864,7 +1864,7 @@ emulator yet): PS2 Pulse `FUN_0012ad78`/`FUN_0012b880` and HD/Fury's `SPArcade` 
   clean before and after; no golden changed).
 - A craft keeps its own pilot and driver seed when it changes row, so nobody's character moves.
   The laws that key on the grid *row* follow the new row: the original AI's `8 - grid` formation slot
-  and `GridPlace<N>` start stats take `rank_from_back` (`Race::use_original_ai`, campaign only, so one
+  and `GridPlace<N>` start stats take `rank_from_back` (`RaceSim::use_original_ai`, campaign only, so one
   person there today), and the `pilots on the grid` log line lists the rows.
 - If the head count at launch is higher than the devices that turn up (an unplugged pad), the rows are still the people's and the vacant ones are flown by
   the grid's driver (`follow_devices`).

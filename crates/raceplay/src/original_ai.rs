@@ -6,7 +6,7 @@
 //!
 //! **Still never a player setting** (opponents race on this project's own driver). What changed is who
 //! asks: the composition root (`oag_game::ai_choice`) calls
-//! [`Race::use_original_ai`] for every race that fields opponents, and the only
+//! [`RaceSim::use_original_ai`] for every race that fields opponents, and the only
 //! way back to this project's driver is the developer flag `oag-game --ai
 //! ours`, a run flag and not a menu row or a settings key. Evidence:
 //! `docs/gameplay/ai.md`, "The original driver, recovered" and "Which AI flies".
@@ -35,13 +35,13 @@ pub(super) struct OriginalAi {
 /// read, off a step's wall response: a wall touches (the rail's
 /// `body+0x370 != 0` drops on any record) and never pushes (the planner's loop
 /// skips every record whose kind is not `1`, `0x08855238`). The craft-to-craft
-/// half, which does push, is [`Race::original_ai_pair_contact`]'s
+/// half, which does push, is [`RaceSim::original_ai_pair_contact`]'s
 /// (`docs/gameplay/ai.md`, "The two rules").
 fn contact_summary(wall: &oag_physics::WallResponse) -> (i32, bool) {
     (0, wall.contacts > 0)
 }
 
-impl Race {
+impl RaceSim {
     /// Flies every opponent with the original's own driver for the rest of
     /// this race. `skill` is `AI_ResolveSkillScale`'s campaign value
     /// (`Session::resolve_campaign_ai_skill_scale`), `None` for a race with
@@ -54,7 +54,7 @@ impl Race {
     /// read or the track has no closed lap: the race keeps this project's
     /// driver, which is an honest fallback rather than a guessed table.
     pub fn use_original_ai(&mut self, skill: Option<f32>, level: usize) -> bool {
-        let Some(tables) = self.sim.original_tables.as_deref().copied() else {
+        let Some(tables) = self.original_tables.as_deref().copied() else {
             log::warn!(
                 "AI: this project's driver flies (no original tables for this title and class; \
                  see the loader report)"
@@ -64,24 +64,24 @@ impl Race {
         // Pure's cruise throttle reads no skill; a Pulse-shaped table always
         // comes with its finished-thrust read, the same file.
         let skill = skill
-            .or(self.sim.finished_thrust.map(|thrust| thrust.skill))
+            .or(self.finished_thrust.map(|thrust| thrust.skill))
             .unwrap_or(0.0);
-        if self.sim.course.is_none() {
+        if self.course.is_none() {
             log::warn!("AI: this project's driver flies (the track has no closed lap)");
             return false;
         }
-        let count = self.sim.world.ship_count as usize;
+        let count = self.world.ship_count as usize;
         // The grid position (1 front, 8 back) each craft starts on, which is the row
         // `rank_from_back` gave it: the player last with the opponents seated from the
         // back, or - with several people - the people on the last rows.
-        let people = usize::from(self.sim.people);
-        let front_anchored = self.sim.world.mode().field_is_fixed();
+        let people = usize::from(self.people);
+        let front_anchored = self.world.mode().field_is_fixed();
         let grid: [u8; MAX_SHIPS] = std::array::from_fn(|slot| {
             let rank = oag_gameplay::rank_from_back(slot, count, people);
             grid_row(rank, count, front_anchored).clamp(1, MAX_SHIPS) as u8
         });
-        self.sim.original_ai = Some(Box::new(OriginalAi {
-            field: tables.field(skill, level.min(2), grid, self.sim.race_seed),
+        self.original_ai = Some(Box::new(OriginalAi {
+            field: tables.field(skill, level.min(2), grid, self.race_seed),
             contacts: [(0, false); MAX_SHIPS],
         }));
         log::info!("AI: the original driver flies the opponents, skill {skill:.2}, level {level}");
@@ -93,7 +93,7 @@ impl Race {
     /// (`oag_ai::original::Field::set_event_ai_skills`). Nothing without an
     /// original field.
     pub fn set_original_event_ai_skills(&mut self, pad_tracking: f32, weapon_avoidance: f32) {
-        if let Some(ai) = self.sim.original_ai.as_mut() {
+        if let Some(ai) = self.original_ai.as_mut() {
             ai.field.set_event_ai_skills(pad_tracking, weapon_avoidance);
         }
     }
@@ -101,20 +101,20 @@ impl Race {
     /// Whether this race's opponents fly the original's driver.
     #[must_use]
     pub fn original_ai_active(&self) -> bool {
-        self.sim.original_ai.is_some()
+        self.original_ai.is_some()
     }
 
     /// The original field, for a measurement that reads its state.
     #[must_use]
     pub fn original_ai_field(&self) -> Option<&Field> {
-        self.sim.original_ai.as_deref().map(|ai| &ai.field)
+        self.original_ai.as_deref().map(|ai| &ai.field)
     }
 
     /// `AiManager_Update`'s head, once a tick before the opponents: which
     /// slot runs its thrust law and lane choice this tick.
     pub(super) fn original_ai_begin_tick(&mut self) -> Option<usize> {
         let (list, n) = self.ai_flown_slots();
-        let ai = self.sim.original_ai.as_mut()?;
+        let ai = self.original_ai.as_mut()?;
         Some(ai.field.begin_tick(&list[..n]))
     }
 
@@ -123,11 +123,11 @@ impl Race {
     /// With one person in slot 0 this is slots `1..count`, the list the round
     /// robin always took; a person in another slot is left out as slot 0 is.
     pub(super) fn ai_flown_slots(&self) -> ([usize; MAX_SHIPS], usize) {
-        let count = self.sim.world.ship_count as usize;
+        let count = self.world.ship_count as usize;
         let mut list = [0usize; MAX_SHIPS];
         let mut n = 0;
-        for slot in (0..count)
-            .filter(|&s| self.sim.world.ships[s].active && !self.sim.world.person_flown(s))
+        for slot in
+            (0..count).filter(|&s| self.world.ships[s].active && !self.world.person_flown(s))
         {
             list[n] = slot;
             n += 1;
@@ -148,7 +148,7 @@ impl Race {
     /// person, and a race with nobody flown (the attract demo) is
     /// [`oag_gameplay::World::primary_slot`], as before.
     pub(super) fn rubber_band_reference(&self, places: &[u8; MAX_SHIPS]) -> usize {
-        let world = &self.sim.world;
+        let world = &self.world;
         (0..world.ship_count as usize)
             .filter(|&slot| world.person_flown(slot))
             .min_by_key(|&slot| (places[slot], slot))
@@ -193,8 +193,8 @@ impl Race {
     /// The craft's own sample: its located line index, projected onto the
     /// segment to the next sample.
     fn original_own(&self, slot: usize, progress: f32) -> Option<(TrackPoint, f32)> {
-        let index = self.sim.world.ships[slot].driver.index as usize;
-        let position = self.sim.world.ships[slot].physics.body.position;
+        let index = self.world.ships[slot].driver.index as usize;
+        let position = self.world.ships[slot].physics.body.position;
         let p0 = self.original_sample_position(slot, index)?;
         let p1 = self.original_sample_position(slot, index + 1).unwrap_or(p0);
         let segment = p1 - p0;
@@ -216,8 +216,8 @@ impl Race {
         distance: f32,
         progress: f32,
     ) -> Option<TrackPoint> {
-        let start = self.sim.world.ships[slot].driver.index as usize;
-        let length = self.sim.racing_line.len().max(1);
+        let start = self.world.ships[slot].driver.index as usize;
+        let length = self.racing_line.len().max(1);
         let mut here = self.original_sample_position(slot, start)?;
         let next = self.original_sample_position(slot, start + 1)?;
         here = here + (next - here) * start_fraction;
@@ -247,24 +247,24 @@ impl Race {
     /// fraction, its fraction along its own segment and the lap's length,
     /// for the lookahead. `None` off a closed lap or off the track.
     fn original_tick(&self, slot: usize, contacts: (i32, bool)) -> Option<(Tick, f32, f32, f32)> {
-        let course = self.sim.course.as_deref()?;
+        let course = self.course.as_deref()?;
         let lap_length = course.length();
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         let progress = (ship.standing.progress.unwrap_or(0.0) / lap_length).rem_euclid(1.0);
         // HD's `racer+0x90`, measured: the distance into the current lap.
         let lap_distance = ship.standing.progress.unwrap_or(0.0).rem_euclid(lap_length);
         let race_fraction = oag_ai::original::race_fraction(
             ship.standing.distance(course),
-            self.sim.world.laps_target().unwrap_or(0),
+            self.world.laps_target().unwrap_or(0),
             lap_length,
         );
         let body = ship.physics.body;
         let finished = ship.standing.finished();
         let grounded = ship.physics.grounded;
         let (own, fraction) = self.original_own(slot, progress)?;
-        let sample_index = self.sample_index_of(self.sim.world.ships[slot].driver.index as usize);
+        let sample_index = self.sample_index_of(self.world.ships[slot].driver.index as usize);
         let point_ai = sample_index
-            .map(|i| self.sim.spline.point_ai(i))
+            .map(|i| self.spline.point_ai(i))
             .unwrap_or_default();
         let (contact_sides, touching) = contacts;
         let tick = Tick {
@@ -297,43 +297,38 @@ impl Race {
         lane_slot: usize,
         places: &[u8; MAX_SHIPS],
     ) -> Option<Output> {
-        let contacts = self.sim.original_ai.as_ref()?.contacts[slot];
+        let contacts = self.original_ai.as_ref()?.contacts[slot];
         let (tick, progress, fraction, lap_length) = self.original_tick(slot, contacts)?;
-        let course = self.sim.course.as_deref()?;
-        let count = self.sim.world.ship_count as usize;
+        let course = self.course.as_deref()?;
+        let count = self.world.ship_count as usize;
         // Lap-length units: `Standing::distance`, laps included.
         let racers: [(f32, u8); MAX_SHIPS] = std::array::from_fn(|k| {
-            let ship = &self.sim.world.ships[k];
+            let ship = &self.world.ships[k];
             (ship.standing.distance(course), places[k])
         });
         let player = self.rubber_band_reference(places);
         let player_rubber_band_off =
-            self.sim.world.ships[player].physics.craft_state != oag_physics::CraftState::Racing;
-        let race_time = self
-            .sim
-            .world
-            .tick
-            .saturating_sub(oag_race::COUNTDOWN_TICKS) as f32
-            * self.sim.dt;
-        let dt = self.sim.dt;
+            self.world.ships[player].physics.craft_state != oag_physics::CraftState::Racing;
+        let race_time = self.world.tick.saturating_sub(oag_race::COUNTDOWN_TICKS) as f32 * self.dt;
+        let dt = self.dt;
         let standings = Standings {
             racers: &racers[..count],
             player,
             player_rubber_band_off,
             race_time,
-            eliminator: self.sim.world.mode() == oag_race::Mode::Eliminator,
+            eliminator: self.world.mode() == oag_race::Mode::Eliminator,
             lap_length,
         };
         // Out of the sim for the call, so the lookahead can read the track
         // while the field is driven.
-        let mut ai = self.sim.original_ai.take()?;
+        let mut ai = self.original_ai.take()?;
         let output = ai
             .field
             .drive(slot, slot == lane_slot, &tick, &standings, dt, |distance| {
                 let ahead_progress = (progress + distance / lap_length).rem_euclid(1.0);
                 self.original_ahead(slot, fraction, distance, ahead_progress)
             });
-        self.sim.original_ai = Some(ai);
+        self.original_ai = Some(ai);
         Some(output)
     }
 
@@ -344,9 +339,9 @@ impl Race {
     /// driver instead. Its contact summary is empty: the player's planner
     /// zeroes what the push feeds, and the player's rail ignores contact.
     pub(super) fn drive_original_autopilot(&mut self, slot: usize) -> Option<Output> {
-        let tables = self.sim.original_tables.as_deref().copied()?;
+        let tables = self.original_tables.as_deref().copied()?;
         let (tick, progress, fraction, lap_length) = self.original_tick(slot, (0, false))?;
-        let seat = self.sim.autopilots.get_mut(slot)?;
+        let seat = self.autopilots.get_mut(slot)?;
         let mut autopilot = seat.take().unwrap_or_else(|| {
             log::info!("autopilot: the original's player driver flies slot {slot}");
             Box::new(oag_ai::original::Autopilot::new(
@@ -356,15 +351,15 @@ impl Race {
                     tables.throttle,
                     super::original_tables::Throttle::Cruise { .. }
                 ),
-                self.sim.race_seed ^ slot as u64,
+                self.race_seed ^ slot as u64,
             ))
         });
-        let dt = self.sim.dt;
+        let dt = self.dt;
         let output = autopilot.drive(&tick, dt, |distance| {
             let ahead_progress = (progress + distance / lap_length).rem_euclid(1.0);
             self.original_ahead(slot, fraction, distance, ahead_progress)
         });
-        self.sim.autopilots[slot] = Some(autopilot);
+        self.autopilots[slot] = Some(autopilot);
         Some(output)
     }
 
@@ -372,12 +367,12 @@ impl Race {
     /// tick's step: Pure's zone multiplier and launch flag. Nothing without
     /// an original field or a closed lap.
     pub(super) fn original_ai_end_tick(&mut self, places: &[u8; MAX_SHIPS]) {
-        let Some(course) = self.sim.course.as_deref() else {
+        let Some(course) = self.course.as_deref() else {
             return;
         };
-        let count = self.sim.world.ship_count as usize;
+        let count = self.world.ship_count as usize;
         let racers: [(f32, u8); MAX_SHIPS] =
-            std::array::from_fn(|k| (self.sim.world.ships[k].standing.distance(course), places[k]));
+            std::array::from_fn(|k| (self.world.ships[k].standing.distance(course), places[k]));
         let player = self.rubber_band_reference(places);
         let standings = Standings {
             racers: &racers[..count],
@@ -387,7 +382,7 @@ impl Race {
             eliminator: false,
             lap_length: course.length(),
         };
-        if let Some(ai) = self.sim.original_ai.as_mut() {
+        if let Some(ai) = self.original_ai.as_mut() {
             ai.field.end_tick(&standings);
         }
     }
@@ -395,7 +390,7 @@ impl Race {
     /// Notes what this tick's step said about slot `slot`'s contacts, for the
     /// next tick's planner and rail.
     pub(super) fn original_ai_contacts(&mut self, slot: usize, wall: &oag_physics::WallResponse) {
-        if let Some(ai) = self.sim.original_ai.as_mut() {
+        if let Some(ai) = self.original_ai.as_mut() {
             ai.contacts[slot] = contact_summary(wall);
         }
     }
@@ -413,16 +408,16 @@ impl Race {
     /// push, its rail ignores contact, and [`Self::original_ai_contacts`]
     /// never resets its entry.
     pub(super) fn original_ai_pair_contact(&mut self, slot: usize, point: Vec3) {
-        if self.sim.world.person_flown(slot) {
+        if self.world.person_flown(slot) {
             return;
         }
-        let body = self.sim.world.ships[slot].physics.body;
+        let body = self.world.ships[slot].physics.body;
         let side = if (-body.right()).dot(point - body.position) >= 0.0 {
             1
         } else {
             -1
         };
-        if let Some(ai) = self.sim.original_ai.as_mut() {
+        if let Some(ai) = self.original_ai.as_mut() {
             let (sides, _) = ai.contacts[slot];
             ai.contacts[slot] = (sides + side, true);
         }

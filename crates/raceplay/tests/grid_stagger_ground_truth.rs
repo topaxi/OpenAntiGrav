@@ -316,7 +316,7 @@ fn player_departures() {
             for slot in 1..oag_gameplay::MAX_SHIPS {
                 race.sim.world.ships[slot].active = false;
             }
-            race.set_autopilot(true);
+            race.sim.set_autopilot(true);
             let mut peak = 0.0f32;
             for _ in 0..6_000 {
                 race.tick(&oag_gameplay::PlayerInputs::none());

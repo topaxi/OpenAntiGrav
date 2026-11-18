@@ -316,7 +316,7 @@ impl Race {
         self.reseat(slot, relocation.pose.position);
         // Told which line it is on, as a route's own samples are the nearest to a craft there.
         if let Some(route) = usize::from(exit.route).checked_sub(1) {
-            self.seat_on_route(slot, route);
+            self.sim.seat_on_route(slot, route);
         }
         true
     }

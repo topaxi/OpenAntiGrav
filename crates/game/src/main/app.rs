@@ -74,7 +74,7 @@ pub(crate) struct App {
     /// `--prompt-style`, parsed. See `session::prompts`.
     pub(crate) prompt_style: Option<oag_input::prompt::PromptStyle>,
     /// `--autopilot`: whether the player's craft is flown for them. A
-    /// verification aid - see `race::Race::set_autopilot`.
+    /// verification aid - see `race::RaceSim::set_autopilot`.
     pub(crate) autopilot: bool,
     /// `--autopilot-pilot`, resolved to a pilot at startup. See the CLI field.
     pub(crate) autopilot_pilot: Option<oag_ai::Pilot>,

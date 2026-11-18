@@ -1,6 +1,6 @@
 //! The player's autopilot flies the original's own player driver
 //! (`oag_ai::original::Autopilot`): Pulse PSP USA, VENOM, seed 1, slot 0 on
-//! `Race::set_autopilot` for the whole race.
+//! `RaceSim::set_autopilot` for the whole race.
 
 use oag_core::math::Vec3;
 use oag_gameplay::PlayerInputs;
@@ -59,8 +59,8 @@ fn the_autopilot_flies_the_original_player_driver_whatever_the_opponents_fly() {
     ) else {
         return;
     };
-    assert!(!race.original_ai_active());
-    race.set_autopilot(true);
+    assert!(!race.sim.original_ai_active());
+    race.sim.set_autopilot(true);
     for _ in 0..900 {
         race.tick_sim_only(&PlayerInputs::none());
     }
@@ -195,8 +195,8 @@ fn run(image: &str, track: &str, ticks: u64, weapons: Option<bool>) -> Option<Ru
 }
 
 fn run_from(mut race: oag_raceplay::Race, ticks: u64) -> Run {
-    assert!(race.use_original_ai(None, 1), "the AI tables read");
-    race.set_autopilot(true);
+    assert!(race.sim.use_original_ai(None, 1), "the AI tables read");
+    race.sim.set_autopilot(true);
     let mut out = Run::default();
     let mut lap = race.sim.world.ships[0].standing.lap;
     for _ in 0..ticks {
@@ -269,7 +269,7 @@ fn flies_the_original_autopilot(image: &str) {
     })
     .unwrap_or_else(|e| panic!("{image}: {e}"));
     let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     for _ in 0..1_800 {
         race.tick_sim_only(&PlayerInputs::none());
     }
@@ -336,15 +336,15 @@ fn opponent_fork(
     })
     .expect("loading the track");
     let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.set_autopilot(true);
-    race.set_opponent_autopilot(false);
+    race.sim.set_autopilot(true);
+    race.sim.set_opponent_autopilot(false);
     for _ in 0..trigger {
         race.tick_sim_only(&PlayerInputs::none());
     }
     let snapshot = race.snapshot_sim();
     let branch = |race: &mut oag_raceplay::Race, on: bool| {
         race.restore_sim(&snapshot);
-        race.set_opponent_autopilot(on);
+        race.sim.set_opponent_autopilot(on);
         if on {
             // Weapons off, so no table: the Pulse table's `time`, 5 s.
             race.sim.world.ships[slot].autopilot_timer = 5.0;
@@ -371,7 +371,7 @@ fn opponent_fork(
     Some((absorbed, autopilot, flown))
 }
 
-/// The Autopilot speeds an opponent up under `Race::set_opponent_autopilot`
+/// The Autopilot speeds an opponent up under `RaceSim::set_opponent_autopilot`
 /// (`docs/gameplay/ai.md`, "An opponent's Autopilot, measured and not
 /// wired"): one Pulse 01 fork at Novice, where the paired sweep's median gain
 /// is 72 units over the window. Fails if the switch stops flying the
@@ -428,12 +428,12 @@ fn an_original_field_opponent_is_not_handed_an_autopilot() {
     ) else {
         return;
     };
-    race.set_opponent_autopilot(true);
-    assert!(race.engage_opponent_autopilot(1), "ours flies it");
+    race.sim.set_opponent_autopilot(true);
+    assert!(race.sim.engage_opponent_autopilot(1), "ours flies it");
     race.sim.world.ships[1].autopilot_timer = 0.0;
-    assert!(race.use_original_ai(None, 1));
+    assert!(race.sim.use_original_ai(None, 1));
     assert!(
-        !race.engage_opponent_autopilot(1),
+        !race.sim.engage_opponent_autopilot(1),
         "the original's absorbs it"
     );
 }
@@ -476,8 +476,8 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
     })
     .expect("loading the track");
     let mut race = oag_raceplay::Race::start(loaded.setup);
-    assert!(race.use_original_ai(None, 1), "the AI tables read");
-    race.set_autopilot(true);
+    assert!(race.sim.use_original_ai(None, 1), "the AI tables read");
+    race.sim.set_autopilot(true);
     let mut out = WallRun::default();
     let mut last = 0;
     let mut touching = false;
@@ -617,13 +617,13 @@ fn wall_sweep() {
 }
 
 /// Slot 0's warm driver against a cold locate of the same craft
-/// (`Race::set_autopilot` re-locates it, as a pickup does), every `every`
+/// (`RaceSim::set_autopilot` re-locates it, as a pickup does), every `every`
 /// ticks over `ticks` of an autopiloted Pulse VENOM race, seed 1, weapons on.
 /// Returns (located, of them on a route, wrong: the cold point more than 10
 /// units further from the craft than the warm one), and the first wrong tick.
 fn cold_locates(track: &str, ticks: u64, every: u64) -> Option<(u32, u32, u32, Option<u64>)> {
     let mut race = race("pulse-psp-usa.chd", track, None)?;
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let (mut n, mut on_route, mut wrong, mut first) = (0, 0, 0, None);
     for tick in 1..=ticks {
         race.tick_sim_only(&PlayerInputs::none());
@@ -635,11 +635,11 @@ fn cold_locates(track: &str, ticks: u64, every: u64) -> Option<(u32, u32, u32, O
             continue;
         }
         let warm = ship.driver;
-        let warm_point = race.line_of(0).point(warm.index as usize);
+        let warm_point = race.sim.line_of(0).point(warm.index as usize);
         let snapshot = race.snapshot_sim();
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         let cold = race.sim.world.ships[0].driver;
-        let cold_point = race.line_of(0).point(cold.index as usize);
+        let cold_point = race.sim.line_of(0).point(cold.index as usize);
         race.restore_sim(&snapshot);
         n += 1;
         on_route += u32::from(warm.branching.route != 0);
@@ -668,7 +668,7 @@ fn cold_locates(track: &str, ticks: u64, every: u64) -> Option<(u32, u32, u32, O
 /// A cold locate of the player's craft on a route's own samples finds that
 /// route, not the ring's nearest point on another deck: Pulse `05_Track`,
 /// where the ring passes 55 units above route 1 (`docs/gameplay/ai.md`, "An
-/// opponent's Autopilot"). Fails if `Race::locate_player_driver` searches the
+/// opponent's Autopilot"). Fails if `RaceSim::locate_player_driver` searches the
 /// ring alone.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -757,7 +757,7 @@ fn an_opponent_flies_its_autopilot_by_class_and_difficulty() {
             .expect("loading the track");
             let mut race = oag_raceplay::Race::start(loaded.setup);
             assert_eq!(
-                race.engage_opponent_autopilot(1),
+                race.sim.engage_opponent_autopilot(1),
                 flies,
                 "{image} {class} {difficulty}"
             );

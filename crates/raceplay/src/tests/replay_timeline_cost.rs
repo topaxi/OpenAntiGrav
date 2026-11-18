@@ -443,7 +443,7 @@ fn replay_timeline_cost_sweep() {
         std::mem::size_of::<Race>(),
     );
 
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let idle = PlayerInputs::single(oag_gameplay::InputSnapshot::default());
     let slots = usize::from(race.ship_count());
 
@@ -676,7 +676,7 @@ fn replay_timeline_cost_sweep() {
     for (_, sim) in keyframes.iter().skip(2).step_by(5) {
         for (inputs, out) in [(&idle, &mut dead), (&held, &mut thrust)] {
             race.restore_sim(sim);
-            race.set_autopilot(false);
+            race.sim.set_autopilot(false);
             let base = race.sim.wall_contact_ticks[0];
             let shield = race.ship().physics.shield;
             let mut first = None;
@@ -691,7 +691,7 @@ fn replay_timeline_cost_sweep() {
                 shield_after.push(f64::from(shield - race.ship().physics.shield));
             }
         }
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
     }
     let report = |name: &str, v: &mut Vec<f64>| {
         let (m, lo, hi) = median(v);

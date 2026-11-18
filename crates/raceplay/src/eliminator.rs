@@ -131,7 +131,7 @@ impl Race {
     ///
     /// Call once a tick, after every craft has been stepped
     /// ([`Race::step_opponents`] included) and before
-    /// [`Race::update_standings`] reads a lap off any of them, so a craft
+    /// [`RaceSim::update_standings`] reads a lap off any of them, so a craft
     /// that respawns this tick is placed where it is *put*, not where the
     /// explosion left it.
     pub(super) fn tick_destroyed_craft(&mut self) {
@@ -214,12 +214,12 @@ impl Race {
                 // other level. The window is the forward reach of a coast
                 // (about 250 units, 100 samples at 2.5 units, measured on
                 // `16_Track`) with room to spare.
-                let index = self.line_of(slot).nearest(
+                let index = self.sim.line_of(slot).nearest(
                     self.sim.world.ships[slot].physics.body.position,
                     self.sim.world.ships[slot].driver.index as usize,
                     RESPAWN_SEARCH_WINDOW,
                 );
-                self.sample_index_for(slot, index)
+                self.sim.sample_index_for(slot, index)
             };
             self.sim.last_respawn_cause[slot] = Some(respawn::RespawnCause::Destroyed);
             self.respawn(slot, sample_index);

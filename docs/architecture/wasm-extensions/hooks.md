@@ -71,7 +71,7 @@ does (`oag_physics::forces::Environment::auto_speed`,
 | 6 | Rescue, AI craft, pairs | `tick.rs:415` to `:422`; `Race::step_opponents` (`crates/raceplay/src/field.rs:689`) | `respawned`, `reset`; phase 4's events and `weapon-fired` for AI craft | phase 4's commands for AI craft |
 | 7 | Clock | `self.sim.world.tick += 1`, `tick.rs:446` | | |
 | 8 | Race rules per person | `Race::advance_player_rules`, `tick.rs:493` (`player_step.rs:381`); `eliminate_if_wrecked` at `tick.rs:476` | `lap-completed`, `eliminated` | `set-finished` |
-| 9 | Standings | `Race::update_standings`, `tick.rs:501` (`field.rs:1019`) | `lap-completed` (AI craft) | `set-finished` (AI craft), `set-standing-key` |
+| 9 | Standings | `RaceSim::update_standings`, `tick.rs:501` (`field.rs:1019`) | `lap-completed` (AI craft) | `set-finished` (AI craft), `set-standing-key` |
 | 10 | Quake, leach beam, repulsers | `tick.rs:510` to `:530` | | |
 | 11 | Results | `Race::capture_results`, `tick.rs:541` | | |
 
@@ -125,7 +125,7 @@ rollback replays it. Names are the README's `event` variants.
 ### `wall-contact`
 
 - **Raised at** the wall contact a craft's step reports (`evaluated.wall.impact`),
-  where `Race::count_wall_contact` (`field.rs:545`, called from `step_player` and
+  where `RaceSim::count_wall_contact` (`field.rs:545`, called from `step_player` and
   `step_opponents`) already counts it and `raise_contact_cue`
   (`crates/raceplay/src/cues.rs:41`, called at `tick.rs:673`) raises the sound.
 - **Per contact edge**, once per craft per tick at most.
@@ -180,7 +180,7 @@ Two sources, because a person and an AI craft count laps through two structs:
   for the slots stepped as people (`tick.rs:452` to `:494`), calls
   `RaceState::update` (`crates/race/src/state.rs:410`); its `Outcome`
   (`state.rs:590`) has `lap_completed` and `lap_ticks`.
-- **Every craft, AI included:** `Race::update_standings` (`field.rs:1019`) runs
+- **Every craft, AI included:** `RaceSim::update_standings` (`field.rs:1019`) runs
   `advance_standings` (`field.rs:1258`), which calls `Standing::update`
   (`crates/race/src/standing.rs:175`) per active craft and returns whether a lap
   completed. An AI craft's `RaceState` is deliberately not advanced (the comment at
@@ -383,7 +383,7 @@ the backstop for a guest written without the SDK.
   course's numbering (`Course::routes`, the region's route entities); the host faults a route
   at or past the count and two for one slot; two modules for one slot, the later in id order
   wins.
-- **Read by** `Race::steer_branching` (`crates/raceplay/src/routes.rs`), run for every craft
+- **Read by** `RaceSim::steer_branching` (`crates/raceplay/src/routes.rs`), run for every craft
   a driver flies before it drives (`Ai_ChooseBranch`'s states 0 to 2): the coin is drawn as
   before on entering the pre-fork path, then where the driver moves onto a route's line
   (within `SWITCH_SAMPLES` of the split) a held preference replaces the coin's draw, if the
@@ -456,7 +456,7 @@ names no mod). All three are per slot, from a rules or a track module.
 
 | What | Where | Notes |
 | --- | --- | --- |
-| The primitive: a forward move to a course point under a lap | `Race::move_to`, `crates/raceplay/src/transit.rs` | Pose by the reset's placement without its drop (`breadcrumbs::emerge`: the width midpoint at the hover height, facing down the track) at the ring point or the fork route's point for it; cursors reset through `Race::reseat` (`respawn.rs`), shared with `put_back`, then an exit on a route seats the driver on that route's line (`Race::seat_on_route`). No respawn counted, nothing charged. View-side, the craft's chase camera is seated behind it on that tick (`RaceView::camera_jumps`); through the transit before it the camera flies on along the exit's framing carried back, a `portal-view` of that slot is seen from that seat, and under a backdrop fill the craft is drawn for its own view (`transit_camera`; `mod-shaders.md`, "A craft's own transit") |
+| The primitive: a forward move to a course point under a lap | `Race::move_to`, `crates/raceplay/src/transit.rs` | Pose by the reset's placement without its drop (`breadcrumbs::emerge`: the width midpoint at the hover height, facing down the track) at the ring point or the fork route's point for it; cursors reset through `Race::reseat` (`respawn.rs`), shared with `put_back`, then an exit on a route seats the driver on that route's line (`RaceSim::seat_on_route`). No respawn counted, nothing charged. View-side, the craft's chase camera is seated behind it on that tick (`RaceView::camera_jumps`); through the transit before it the camera flies on along the exit's framing carried back, a `portal-view` of that slot is seen from that seat, and under a backdrop fill the craft is drawn for its own view (`transit_camera`; `mod-shaders.md`, "A craft's own transit") |
 | A crossing of the line in the move | `Standing::jumped`, `crates/race/src/standing.rs:278`; `RaceState::jumped`, `crates/race/src/state.rs:511` | The standing credits it at once (lap, spawn crossing, deficit, finish), unless the lap's half-way gate is still shut (`Standing::gate`), when it is no lap and no finish as for a driven crossing, and a move that lands past half-way has driven both halves of the lap it lands on; the person's clock seeds its previous reading so that tick's `update` reads one forward wrap, and its `Outcome` flows as for a driven crossing |
 | Resolving a distance | `Race::exit_ahead` (`Race::point_ahead` without the route), `transit.rs` | Units, seconds at the current speed, lap share, a place on the lap (`Course::index_at_progress`), or a track trigger's centre located on the course; a trigger nearer a fork route's sample than the ring's names that route (`Exit::route`, kept in `Transit::route`), the others are ring points |
 | `transit{slot, ticks, distance, exit_factor}` lands | `Race::run_motion`, `crates/raceplay/src/extensions.rs:891`, after the call | `Race::begin_transit` (`transit.rs`); a refusal faults the module. The host refuses earlier a craft not racing or already out (`modhost/src/reply.rs`) |

@@ -197,7 +197,7 @@ sol_fields! {
 ///   as the plain seed-0 driver;
 /// - `OAG_SOL_HULLS`: each distinct hull of the grid (slots 1, 3, 5, 7) at
 ///   full throttle from the grid in the plan's own stepping
-///   (`Race::probe_speed_plan`), which is how the hulls were told apart: the
+///   (`RaceSim::probe_speed_plan`), which is how the hulls were told apart: the
 ///   plan's reference is slot 7's, and four of seven fly a slower one;
 /// - `OAG_SOL_VERIFY`: the ring plan's verification lap, tick by tick.
 #[test]
@@ -253,7 +253,7 @@ fn gap_run_up_trace() {
     if std::env::var_os("OAG_SOL_HULLS").is_some() {
         for slot in [1usize, 3, 5, 7] {
             let mut last = 0;
-            for row in &race.probe_speed_plan(slot, 1000.0, 2600) {
+            for row in &race.sim.probe_speed_plan(slot, 1000.0, 2600) {
                 let i = row.index as usize;
                 if (from..to).contains(&i) && (i / 20 != last / 20 || row.failure.is_some()) {
                     println!(
@@ -306,7 +306,7 @@ fn gap_run_up_trace() {
             continue;
         }
         let body = &ship.physics.body;
-        let line = race.line_of(watch);
+        let line = race.sim.line_of(watch);
         println!(
             "T {tick} {index} v {:.1} climb {:.1} grounded {:.0} air {:.2} pad {:.2} off {:.1} y {:.1} thrust {:.0} brake {:.0} respawns {}",
             body.linear_velocity.dot(body.forward()),

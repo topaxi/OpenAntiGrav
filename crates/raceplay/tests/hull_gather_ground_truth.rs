@@ -57,7 +57,7 @@ fn the_lerped_hull_agrees_with_the_one_projected_at_the_blended_pose() {
     let hulls = loaded.shadows.hulls.clone();
     let axis = Vec3::from_array(oag_pulse::shadow::WORLD_AXIS);
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
 
     let mut worst = 0.0f32;
     let mut errors: Vec<f32> = Vec::new();

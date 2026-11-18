@@ -1174,7 +1174,7 @@ a guess.
   the slot's own place now go to every person-flown slot (they went to slot 0),
   and the pad refresh countdown runs on the primary slot, the first one
   stepped. AI: the rubber band, the position-keyed tables and the Pure zone
-  multiplier read the best-placed person (`Race::rubber_band_reference`, lowest
+  multiplier read the best-placed person (`RaceSim::rubber_band_reference`, lowest
   slot on a tie, chosen); the original field's round robin is every active craft
   nobody flies; pad seeking skips every person-flown slot; the weapon AI's
   `player_gap` is the nearest person ahead, else the first person's gap
@@ -1188,7 +1188,7 @@ a guess.
   (`scoreboard::Craft::person`; `Board::player()` is the best-placed one). Slot
   0 handed to the AI with a person elsewhere gets a driver seeded from
   `Driver::for_slot(race_seed, MAX_SHIPS)` and located on the line on the first
-  tick (`Race::seed_vacated_driver`; lazily, because `driver.index` is hashed).
+  tick (`RaceSim::seed_vacated_driver`; lazily, because `driver.index` is hashed).
   **Unanswered, with addresses:** how the original ends a two-player race.
   `Race_FinishAllCrafts` (`0x08824e10`), reached only through `FUN_0882461c`
   from `FUN_088dfb90` in the `GriefReport_*` screen code, is the one multiplayer

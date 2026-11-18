@@ -292,7 +292,7 @@
 //!
 //! **Regenerated 2026-10-21 for the verified fallback plan** (lane
 //! `ai-rejudge-after-switches`): a hull whose adapted plan fails no longer follows
-//! the reference plan at its yaw share unchecked (`Race::fallback_ring`). Two rows
+//! the reference plan at its yaw share unchecked (`RaceSim::fallback_ring`). Two rows
 //! moved. `06_Track` RAPIER, worst median contact `419` to `154`: the lone Triakis
 //! had followed the reference at `0.774` in 14 of its 45 runs and ground the wall at
 //! samples 800-960, not on Vertica's crest (`docs/gameplay/ai.md`, "The fallback plan

@@ -135,8 +135,8 @@ fn measure(
         }
     }
     if slot == 0 {
-        race.set_autopilot(true);
-        race.set_autopilot_pilot(oag_ai::Pilot::BALANCED, level);
+        race.sim.set_autopilot(true);
+        race.sim.set_autopilot_pilot(oag_ai::Pilot::BALANCED, level);
     } else {
         race.sim.world.ships[slot].active = true;
     }
@@ -410,7 +410,7 @@ fn grid_slots_spawn_over_a_floor() {
                 }
             }
             if slot == 0 {
-                race.set_autopilot(true);
+                race.sim.set_autopilot(true);
             }
             let spawn = race.sim.world.ships[slot].physics.body.position;
             let spawn_lat = race

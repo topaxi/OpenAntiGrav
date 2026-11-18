@@ -196,7 +196,7 @@ pub fn finished_event(
         .context("the event carries no progress")?;
     let mut race = oag_raceplay::Race::start(loaded.setup);
     race.arm_event_xp(&progress);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     while !race.finished() && race.sim.world.tick < cap {
         race.tick(&oag_gameplay::PlayerInputs::none());
     }

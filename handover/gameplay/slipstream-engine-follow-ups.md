@@ -56,7 +56,7 @@ The engine never names the mod.
    route's sample than the ring's names that route (`transit::Exit::route`, `Transit::route`, in
    the state hash only while a transit runs). `Course::route_point` maps the ring point onto the
    route (the inverse of `locate_on_route`), `Race::move_to` places the craft there, and
-   `Race::seat_on_route` (shared with `locate_player_driver`) puts the driver on the route's
+   `RaceSim::seat_on_route` (shared with `locate_player_driver`) puts the driver on the route's
    line; `Course::locate_exit` decides ring or route. A reset and every other distance (units, seconds, lap share, progress) stay on the
    ring: only a trigger can name a route, and a craft already on a route that jumps forward by
    units still comes out on the ring. Proof: `transit_ground_truth::an_exit_on_a_forks_route_...`

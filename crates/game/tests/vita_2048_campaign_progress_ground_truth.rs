@@ -402,7 +402,7 @@ fn an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors() {
     let awards = progress.xp_awards.clone().expect("the table loads");
     let mut run = race::Race::start(loaded.setup);
     run.arm_event_xp(&progress);
-    run.set_autopilot(true);
+    run.sim.set_autopilot(true);
     let max = run.sim.world.ships[0].handling.dimensions.shield;
     let (mut lap, mut shield, mut damaged) = (run.sim.world.race[0].lap, max, false);
     let (mut perfect, mut full) = (0, 0);

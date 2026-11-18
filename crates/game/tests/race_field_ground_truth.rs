@@ -332,7 +332,7 @@ fn the_field_is_placed_by_how_far_round_it_is() {
         .iter()
         .position(|&place| place == 1)
         .expect("somebody is first");
-    let course = race.course().expect("16_Track closes");
+    let course = race.sim.course().expect("16_Track closes");
     let furthest = (0..8)
         .max_by(|&a, &b| {
             race.sim.world.ships[a]
@@ -376,7 +376,7 @@ fn the_players_place_reaches_the_hud() {
     }
 
     let readout = race.readout();
-    let course = race.course().expect("16_Track closes");
+    let course = race.sim.course().expect("16_Track closes");
     let places = race.places();
     for (slot, place) in places.iter().enumerate() {
         let standing = race.sim.world.ships[slot].standing;
@@ -449,7 +449,7 @@ fn an_opponent_fires_at_a_craft_ahead_on_a_real_circuit() {
         return;
     };
     let mut race = race::Race::start(loaded.setup);
-    race.set_fire_law(race::FireLaw::Ours);
+    race.sim.set_fire_law(race::FireLaw::Ours);
     assert_eq!(race.ship_count(), 8);
 
     let mut fired = 0usize;

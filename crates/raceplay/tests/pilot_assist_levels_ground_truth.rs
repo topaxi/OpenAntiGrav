@@ -222,7 +222,7 @@ fn fly(race: &mut Race) -> (u32, u32, f32, f32) {
     }
     let progress = race.sim.world.ships[0]
         .standing
-        .distance(race.course().expect("a course"));
+        .distance(race.sim.course().expect("a course"));
     (ticks, contacts, progress, peak)
 }
 

@@ -90,9 +90,9 @@ fn overlapped_plans_are_the_serial_plans_on_2048_altima() {
 /// The menus' setters as a campaign cell runs them, between the load
 /// thread's start and the hand-over.
 fn launch_setters(race: &mut Race) {
-    race.set_autopilot(false);
+    race.sim.set_autopilot(false);
     race.set_control_scheme(crate::ControlScheme::default());
-    race.set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
+    race.sim.set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
         0.5,
         &oag_ai::Tuning::default(),
     ));
@@ -102,7 +102,7 @@ fn launch_setters(race: &mut Race) {
         race.sim.world.ships[slot].driver.pilot ^= 0x5a5a;
     }
     assert!(
-        race.use_original_ai(None, 1),
+        race.sim.use_original_ai(None, 1),
         "Pulse has the original tables"
     );
 }

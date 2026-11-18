@@ -136,7 +136,7 @@ fn solo_on(track: &str, class: &str, tuning: Option<oag_ai::Tuning>) -> Option<S
     .ok()?;
     let mut race = race::Race::start(loaded.setup);
     if let Some(tuning) = tuning {
-        race.set_ai_tuning(tuning);
+        race.sim.set_ai_tuning(tuning);
     }
     for slot in 2..8 {
         race.sim.world.ships[slot].active = false;
@@ -152,7 +152,7 @@ fn solo_on(track: &str, class: &str, tuning: Option<oag_ai::Tuning>) -> Option<S
     // Buckets rather than a full per-index table: the whole point is to name
     // one stretch of road, and a sparse map would be a `HashMap` iteration
     // order feeding a printed report.
-    let line_len = race.racing_line().len() as u32;
+    let line_len = race.sim.racing_line().len() as u32;
     let mut clusters = vec![0.0f32; (line_len / CLUSTER + 2) as usize];
     let mut charged = 0.0f32;
     for tick in 0..TICKS {
@@ -643,10 +643,11 @@ fn what_the_airbrakes_do_through_a_hairpin() {
         .ok()
         .and_then(|v| v.trim().parse::<f32>().ok())
     {
-        race.set_ai_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning {
-            curvature_chord: Some(chord),
-            ..oag_ai::Tuning::default()
-        }));
+        race.sim
+            .set_ai_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning {
+                curvature_chord: Some(chord),
+                ..oag_ai::Tuning::default()
+            }));
     }
     for slot in 2..8 {
         race.sim.world.ships[slot].active = false;
@@ -835,7 +836,7 @@ fn what_is_wrong_with_the_line() {
     let reach = loaded.setup.handling.antigrav.ride_height;
     let collision = loaded.setup.collision.clone();
     let race = race::Race::start(loaded.setup);
-    let line = race.racing_line();
+    let line = race.sim.racing_line();
 
     let mut report = format!(
         "\n=== {circuit}_Track racing line, idx {first}-{last}, ride height {reach:.2} ===\n\
@@ -843,7 +844,7 @@ fn what_is_wrong_with_the_line() {
     );
     let mut previous: Option<oag_core::math::Vec3> = None;
     for index in first..=last.min(line.len().saturating_sub(1)) {
-        let Some(sample) = race.ai_sample(index) else {
+        let Some(sample) = race.sim.ai_sample(index) else {
             continue;
         };
         let point = line.point(index);
@@ -858,7 +859,8 @@ fn what_is_wrong_with_the_line() {
         let lateral = oag_core::math::Vec3::from_array(sample.lateral).normalize_or_zero();
         report.push_str(&format!(
             "{index:<6} {:<6} {gap:<6.2} {:<8} {:<8} {:<8.5} {:<8.5} {:<6.2} {:<6.2} {:.2}\n",
-            race.ai_sample_index(index)
+            race.sim
+                .ai_sample_index(index)
                 .map_or_else(|| "-".to_string(), |o| o.to_string()),
             hit.map_or_else(
                 || "none".to_string(),

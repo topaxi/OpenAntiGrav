@@ -162,8 +162,9 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
     // top level, standing in for a human who keeps up; the opponents are still
     // the measured craft. Otherwise slot 0 sits out.
     if scenario == "player" {
-        race.set_autopilot(true);
-        race.set_autopilot_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning::default()));
+        race.sim.set_autopilot(true);
+        race.sim
+            .set_autopilot_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning::default()));
     } else {
         race.sim.world.ships[0].active = false;
     }
@@ -478,7 +479,7 @@ fn plan_floor_report() {
                 continue;
             };
             let race = race::Race::start(loaded.setup);
-            let (plan, report) = race.build_speed_plan(1);
+            let (plan, report) = race.sim.build_speed_plan(1);
             let mut runs: Vec<(usize, usize, f32)> = Vec::new();
             for i in 0..plan.len() {
                 let ceiling = plan.ceiling(i);
@@ -540,7 +541,7 @@ fn takeoff_census() {
                 continue;
             };
             let race = race::Race::start(loaded.setup);
-            let line = race.racing_line();
+            let line = race.sim.racing_line();
             let n = line.len();
             for lip in 0..n {
                 let before = (lip + n - 1) % n;

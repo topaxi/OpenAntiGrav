@@ -16,7 +16,7 @@
 //! The finish is reached with the operator's `--autopilot`, which is then switched
 //! off, so what flies the craft afterwards is the finish-line rule and nothing the
 //! test left on. Falsifier: with the `standing.finished()` term removed from
-//! `Race::flown_for_the_player` the craft is left to a released pad and every test
+//! `RaceSim::flown_for_the_player` the craft is left to a released pad and every test
 //! below fails.
 
 use std::path::PathBuf;
@@ -48,7 +48,7 @@ fn finished_time_trial_at(difficulty: oag_ai::Difficulty) -> Option<race::Race> 
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     while !race.finished() && race.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
@@ -60,7 +60,7 @@ fn finished_time_trial_at(difficulty: oag_ai::Difficulty) -> Option<race::Race> 
         race.sim.world.ships[0].standing.finished(),
         "the lone craft ended the race by something other than the line"
     );
-    race.set_autopilot(false);
+    race.sim.set_autopilot(false);
     Some(race)
 }
 
@@ -79,7 +79,7 @@ fn the_craft_goes_on_lapping_with_no_input_after_the_line() {
         return;
     };
     assert!(
-        race.flown_for_the_player(0),
+        race.sim.flown_for_the_player(0),
         "the finish line did not hand the craft to the driver"
     );
     let at_line = race.sim.world.ships[0].physics.body.position;

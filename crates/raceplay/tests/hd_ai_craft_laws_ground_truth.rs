@@ -204,7 +204,7 @@ fn lone_opponent(environment: &str) {
         .map_or(0, oag_ai::SpeedPlan::tight_samples);
     println!(
         "{environment} (speed plan {plan}, {tight} of {} samples tight)",
-        race.racing_line().len()
+        race.sim.racing_line().len()
     );
     print_run(&race, 1, &run, TICKS);
     assert!(

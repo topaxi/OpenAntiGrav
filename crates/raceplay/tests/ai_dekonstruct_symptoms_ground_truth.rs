@@ -161,7 +161,7 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
         }
     }
     let mut out = Symptoms {
-        plan_lap: race.build_speed_plan(1).1.verify_lap_ticks,
+        plan_lap: race.sim.build_speed_plan(1).1.verify_lap_ticks,
         ..Symptoms::default()
     };
     let n = slots.len();

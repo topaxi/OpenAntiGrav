@@ -1,7 +1,7 @@
 //! Simulation mods in a race: the one call per tick, the event buffer, the command
 //! sinks and each module's state blob (`docs/architecture/wasm-extensions/hooks.md`).
 //!
-//! - **Event**: `wall-contact{slot}`, recorded by [`Race::count_wall_contact`] for every
+//! - **Event**: `wall-contact{slot}`, recorded by [`RaceSim::count_wall_contact`](crate::RaceSim::count_wall_contact) for every
 //!   racing craft, a person's or the AI's, on each tick it touches a wall (the same test
 //!   [`RaceSim::wall_contact_ticks`] counts). Raised after the call, so it reaches the
 //!   guest in the next tick's observation: a one-tick latency, identical everywhere.

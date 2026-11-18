@@ -82,7 +82,7 @@ fn what_the_jumps_approach_looks_like() {
     })
     .expect("loading 13_Track");
     let probe = race::Race::start(loaded.setup.clone());
-    let line = probe.racing_line();
+    let line = probe.sim.racing_line();
     println!("\ncurvature (span 4.0) and corridor by index, 0..55 on {TRACK_ID}:");
     for index in 0..55 {
         let aim = line.aim(index, 0.0);
@@ -104,7 +104,7 @@ fn what_the_jumps_approach_looks_like() {
             ..novice
         };
         let mut race = race::Race::start(loaded.setup.clone());
-        race.set_ai_tuning(tuning);
+        race.sim.set_ai_tuning(tuning);
         for slot in 2..8 {
             race.sim.world.ships[slot].active = false;
         }
@@ -158,7 +158,7 @@ fn run_grip(setup: &race::Setup, grip: f32) -> (u32, u32, f32, u32) {
         ..novice
     };
     let mut race = race::Race::start(setup.clone());
-    race.set_ai_tuning(tuning);
+    race.sim.set_ai_tuning(tuning);
     for slot in 2..8 {
         race.sim.world.ships[slot].active = false;
     }
@@ -281,7 +281,7 @@ fn flight_row(
     slot: usize,
     previous: Option<oag_core::math::Vec3>,
 ) -> String {
-    let line = race.racing_line();
+    let line = race.sim.racing_line();
     let ship = &race.sim.world.ships[slot];
     let index = ship.driver.index as usize;
     let here = line.point(index);
@@ -354,12 +354,15 @@ fn the_jump_flown_tick_by_tick() {
     for slot in (0..8).filter(|&slot| slot != LONE) {
         lone.sim.world.ships[slot].active = false;
     }
-    let arcs = arc_lengths(lone.racing_line());
+    let arcs = arc_lengths(lone.sim.racing_line());
     log_first_passes("novice", &mut lone, &arcs, &[LONE], 18_000);
 
     let field = race::load(&options(race::Options::default().difficulty)).expect("loading");
     let mut parked = race::Race::start(field.setup);
-    assert!(parked.use_original_ai(None, 1), "VENOM's AI tables read");
+    assert!(
+        parked.sim.use_original_ai(None, 1),
+        "VENOM's AI tables read"
+    );
     let slots: Vec<usize> = (1..8).collect();
     log_first_passes("original", &mut parked, &arcs, &slots, 9_000);
 }
@@ -415,7 +418,7 @@ fn parked_field() -> Option<(race::Setup, race::Race)> {
     })
     .expect("loading 13_Track");
     let mut race = race::Race::start(loaded.setup.clone());
-    assert!(race.use_original_ai(None, 1), "VENOM's AI tables read");
+    assert!(race.sim.use_original_ai(None, 1), "VENOM's AI tables read");
     Some((loaded.setup, race))
 }
 
@@ -460,7 +463,7 @@ fn the_parked_field_is_put_back_where_the_original_puts_it() {
                 (2936..=2955).contains(&index),
                 "slot {slot} was put back at line row {index}, the original at 2938-2953"
             );
-            let line = race.racing_line();
+            let line = race.sim.racing_line();
             let velocity = ship.physics.body.linear_velocity;
             let along = (line.point(index + 1) - line.point(index)).normalize();
             let want = launch[slot];
@@ -550,7 +553,7 @@ fn the_far_lip_face() {
     let Some((setup, race)) = parked_field() else {
         return;
     };
-    let line = race.racing_line();
+    let line = race.sim.racing_line();
     let arcs = arc_lengths(line);
     println!("down casts: idx,arc,line_y,surface_y,normal,surface");
     for index in (10..60).step_by(2) {
@@ -574,7 +577,8 @@ fn the_far_lip_face() {
     }
     let flagged: Vec<usize> = (0..line.len())
         .filter(|&index| {
-            race.ai_sample(index)
+            race.sim
+                .ai_sample(index)
                 .is_some_and(|sample| sample.flags & 1 != 0)
         })
         .collect();
@@ -591,7 +595,7 @@ fn the_far_lip_face() {
         line.len(),
     );
     for index in (0..70).step_by(5) {
-        if let Some(sample) = race.ai_sample(index) {
+        if let Some(sample) = race.sim.ai_sample(index) {
             println!(
                 "  idx {index}: flags {:#04x} half_width {:.2}/{:.2} ai_bound {:.2}/{:.2} line {:.2}",
                 sample.flags,
@@ -672,13 +676,15 @@ fn the_flag_bit_zero_census() {
             continue;
         };
         let race = race::Race::start(loaded.setup);
-        let line = race.racing_line();
+        let line = race.sim.racing_line();
         let flagged = runs_of(line.len(), |index| {
-            race.ai_sample(index)
+            race.sim
+                .ai_sample(index)
                 .is_some_and(|sample| sample.flags & 1 != 0)
         });
         let other = runs_of(line.len(), |index| {
-            race.ai_sample(index)
+            race.sim
+                .ai_sample(index)
                 .is_some_and(|sample| sample.flags & !1 != 0)
         });
         let gaps = runs_of(line.len(), |index| line.is_unsupported(index));
@@ -709,12 +715,12 @@ fn the_pad_before_the_jump() {
     };
     const ROW: usize = 3073;
     let lateral_at = |race: &race::Race, index: usize, position: oag_core::math::Vec3| {
-        race.ai_sample(index).map_or(f32::NAN, |sample| {
+        race.sim.ai_sample(index).map_or(f32::NAN, |sample| {
             let axis = oag_core::math::Vec3::from_array(sample.lateral).normalize();
             (position - oag_core::math::Vec3::from_array(sample.pos)).dot(axis)
         })
     };
-    let line = race.racing_line();
+    let line = race.sim.racing_line();
     for (n, pad) in race.speedup_pads().iter().enumerate() {
         let centre =
             oag_core::math::Vec3::new(pad.to_world[12], pad.to_world[13], pad.to_world[14]);

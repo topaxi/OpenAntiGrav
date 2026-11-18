@@ -559,7 +559,7 @@ impl Race {
         // tick, and slot 0's lap is then taken from the standing rather than
         // counted a second time - see `Ship::standing`. Outside the borrow above
         // rather than inside it because this walks the whole ship array.
-        self.update_standings();
+        self.sim.update_standings();
         #[cfg(feature = "view")]
         if self.draws() {
             self.tick_split_gap();

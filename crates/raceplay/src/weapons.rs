@@ -321,10 +321,10 @@ impl Race {
                     self.sim.world.ships[slot].autopilot_timer = simple.time;
                     // The driver has to be told where the craft is before it
                     // flies it, for the windowed-search reason
-                    // `Race::set_autopilot` records. A pickup is collected
+                    // `RaceSim::set_autopilot` records. A pickup is collected
                     // anywhere on the circuit, so this matters more here than
                     // it does for the operator's flag.
-                    self.locate_player_driver(slot);
+                    self.sim.locate_player_driver(slot);
                 }
                 oag_tables::weapons::Weapon::Rocket => {
                     let Some(stats) = weapons.rocket() else {
@@ -808,7 +808,7 @@ impl Race {
     /// blend buffer filled from the autopilot's own `Ai` record while
     /// `craft+0x1d4` is non-zero, and the player's autopilot is an `Ai` too - so
     /// it has the same unwritten hole, and the human pad's held byte is no longer
-    /// what is read. `Race::flown_for_the_player` is this port's stand-in for that
+    /// what is read. `RaceSim::flown_for_the_player` is this port's stand-in for that
     /// condition; it covers the operator's `--autopilot` too, which the original
     /// has no equivalent of.
     ///
@@ -842,17 +842,17 @@ impl Race {
             } else if self.sim.world.controllers[slot].is_human() {
                 // That slot's own held state. An autopilot blend takes the pad
                 // out of the loop entirely, exactly as above.
-                !self.flown_for_the_player(slot)
+                !self.sim.flown_for_the_player(slot)
                     && inputs
                         .get(slot)
                         .buttons
                         .is_held(oag_gameplay::input::Button::Square)
             } else {
-                let field = self.field_for(slot, &places);
+                let field = self.sim.field_for(slot, &places);
                 self.sim.world.ships[slot]
                     .driver
                     .holds_fire(&oag_ai::Context {
-                        line: self.line_of(slot),
+                        line: self.sim.line_of(slot),
                         tuning: &self.sim.ai_tuning,
                         pilot: &self.sim.ai_pilots[slot],
                         field: &field,
@@ -981,7 +981,7 @@ impl RaceSim {
     ///
     /// # The player and an opponent use the same rule, on purpose
     ///
-    /// `Race::opponent_decides` decides whether an *opponent* pulls the trigger -
+    /// `RaceSim::opponent_decides` decides whether an *opponent* pulls the trigger -
     /// the original's law (`oag_ai::weapon_ai`), or `oag_ai::Driver::wants_to_fire`
     /// without `WeaponAIstats.xml` - and its gates are about that decision: is
     /// there somebody in the shot's path, has the roll come up. They are not

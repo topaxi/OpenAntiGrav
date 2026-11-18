@@ -197,7 +197,7 @@ fn contact_trace() {
         if (index as f32) < lo || (index as f32) > hi {
             continue;
         }
-        let line = race.line_of(1);
+        let line = race.sim.line_of(1);
         let p = ship.physics.body.position;
         let lat = line
             .corridor_at(index)

@@ -104,7 +104,7 @@ fn craft_that_are_not_touching_are_left_alone() {
 fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
     let mut race = race_with_a_grid();
     race.sim.weapons = Some(Arc::new(one_rocket_table()));
-    // Whether to fire is `Race::opponent_decides`'s question, asked by the
+    // Whether to fire is `RaceSim::opponent_decides`'s question, asked by the
     // caller; this asks only who owns what leaves the rails.
     let firing = 3usize;
     assert!(
@@ -138,7 +138,7 @@ fn a_craft_on_a_track_with_no_ring_sees_an_empty_field() {
     race.sim.course = None;
     for slot in 0..8 {
         assert_eq!(
-            race.field_for(slot, &race.places()),
+            race.sim.field_for(slot, &race.places()),
             oag_ai::Field::EMPTY,
             "slot {slot}"
         );
@@ -151,7 +151,7 @@ fn a_craft_on_a_track_with_no_ring_sees_an_empty_field() {
 fn the_field_a_driver_sees_never_includes_itself() {
     let race = race_with_a_grid();
     for slot in 0..8 {
-        let field = race.field_for(slot, &race.places());
+        let field = race.sim.field_for(slot, &race.places());
         for rival in [field.ahead, field.behind, field.alongside]
             .into_iter()
             .flatten()
@@ -170,7 +170,7 @@ fn the_field_a_driver_sees_never_includes_itself() {
 fn the_field_a_driver_sees_orders_rivals_by_how_far_round_they_are() {
     let race = race_with_a_grid();
     for slot in 0..8 {
-        let field = race.field_for(slot, &race.places());
+        let field = race.sim.field_for(slot, &race.places());
         if let Some(ahead) = field.ahead {
             assert!(ahead.gap >= 0.0, "slot {slot}: an 'ahead' rival is behind");
         }
@@ -201,7 +201,7 @@ fn a_craft_on_the_grid_can_see_somebody() {
     let race = race_with_a_grid();
     let seen = (0..8)
         .filter(|&slot| {
-            let field = race.field_for(slot, &race.places());
+            let field = race.sim.field_for(slot, &race.places());
             field.ahead.is_some() || field.behind.is_some() || field.alongside.is_some()
         })
         .count();
@@ -296,7 +296,7 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
         .physics
         .body
         .position
-        .distance(race.line_of(1).point(ship.driver.index as usize));
+        .distance(race.sim.line_of(1).point(ship.driver.index as usize));
     assert!(
         residual < race.sim.rescue_distance,
         "recovered {residual} from where its driver thinks it is"

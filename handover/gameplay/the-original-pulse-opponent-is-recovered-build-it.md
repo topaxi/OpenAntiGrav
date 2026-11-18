@@ -24,7 +24,7 @@ law to the bit against the capture script, wander, shuffle, lane planner and
 ring, steering, pitch, rail), `oag_physics::rail::apply` is its one body
 write, applied between the controls and the step because one
 `AiManager_Update` runs per `Body_StepWorld` (measured), and every Pulse
-campaign race flies it (`Race::use_original_ai`, keyed on the campaign cell,
+campaign race flies it (`RaceSim::use_original_ai`, keyed on the campaign cell,
 `RaceDefaults::original_opponent` true on Pulse only). The authored lane
 band turned out to be an exclusion zone, not a hold. On the disc
 (`crates/game/tests/original_ai_ground_truth.rs`) the law reads the capture's

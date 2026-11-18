@@ -47,7 +47,7 @@ fn load() -> Option<race::Race> {
         "HD_electric_arc_8x8 and HD_ElectricArc_Contact must both decode"
     );
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     Some(race)
 }
 

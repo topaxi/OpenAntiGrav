@@ -59,10 +59,12 @@ fn race_at(event: &str, skill: Option<f32>, offset: f32) -> Option<oag_raceplay:
     crate::perturb::apply(&mut setup, offset);
     let mut race = oag_raceplay::Race::start(setup);
     assert!(
-        race.use_original_ai(Some(skill.unwrap_or(ai.skill_scale)), ai.level),
+        race.sim
+            .use_original_ai(Some(skill.unwrap_or(ai.skill_scale)), ai.level),
         "2048 flies the original driver"
     );
-    race.set_original_event_ai_skills(ai.pad_tracking, ai.weapon_avoidance);
+    race.sim
+        .set_original_event_ai_skills(ai.pad_tracking, ai.weapon_avoidance);
     Some(race)
 }
 
@@ -83,7 +85,7 @@ fn held(skill: f32, from: f32, to: f32) -> Option<Vec<Vec<(u8, f32)>>> {
         race.tick_sim_only(&PlayerInputs::none());
         if seconds(&race) >= from {
             let places = race.places();
-            let field = race.original_ai_field().expect("the field is on");
+            let field = race.sim.original_ai_field().expect("the field is on");
             out.push(
                 (1..8)
                     .map(|s| (places[s], field.drivers[s].held_thrust))
@@ -114,7 +116,7 @@ fn event_4_reads_the_ai_vita3k_read() {
         })
     );
     let race = race("2048 - Event 4", None).expect("loaded above");
-    let field = race.original_ai_field().expect("the field is on");
+    let field = race.sim.original_ai_field().expect("the field is on");
     assert!(field.laws().every_tick);
     for driver in &field.drivers {
         assert_eq!(f64::from(driver.planner.rate), 0.001_649_999_991_059_303_3);
@@ -395,7 +397,7 @@ fn super_phantom_challenges_fly_the_original_driver() {
         crate::perturb::apply(&mut setup, 0.0);
         let mut race = oag_raceplay::Race::start(setup);
         assert!(
-            race.use_original_ai(Some(ai.skill_scale), ai.level),
+            race.sim.use_original_ai(Some(ai.skill_scale), ai.level),
             "{event}: the Super Phantom tables read, so the original driver flies"
         );
     }

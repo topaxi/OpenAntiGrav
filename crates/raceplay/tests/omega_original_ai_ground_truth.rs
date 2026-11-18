@@ -223,7 +223,7 @@ fn fly_at(
     crate::perturb::apply(&mut setup, eps);
     let mut race = oag_raceplay::Race::start(setup);
     assert!(
-        race.use_original_ai(None, 1),
+        race.sim.use_original_ai(None, 1),
         "Omega flies the original driver"
     );
     let mut lap = [1u32; 8];

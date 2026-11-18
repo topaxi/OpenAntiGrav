@@ -16,7 +16,7 @@ impl Race {
     /// the route plans on top). The head of [`Self::tick`] learns them
     /// ([`Self::ensure_speed_plans`]) only if something will read them, after
     /// the caller has had its say on whose driver flies
-    /// ([`Self::use_original_ai`]); [`Self::speed_plan`] and [`Self::plan_of`]
+    /// ([`RaceSim::use_original_ai`]); [`Self::speed_plan`] and [`Self::plan_of`]
     /// learn them first, so no reader sees a plan missing that was there.
     ///
     /// The mass is copied into the rigid body because the force law reads
@@ -437,7 +437,7 @@ impl Race {
         //
         // Each one gets a driver here and its own `Environment`, standing and
         // exhaust as the race runs - see [`Self::step_opponents`],
-        // [`Self::update_standings`] and [`Self::advance_exhausts`].
+        // [`RaceSim::update_standings`] and [`Self::advance_exhausts`].
         //
         // **Gated on the mode first of all.** `mode.has_opponents()` is `false`
         // for a time trial, a speed lap and a Zone race - measured live,
@@ -682,7 +682,7 @@ impl Race {
                 ai_order: order.into(),
                 routes: routes.into(),
                 // Built below, once the field is seated: see
-                // `Race::field_speed_plan`.
+                // `RaceSim::field_speed_plan`.
                 speed_plan: None,
                 plans_built: false,
                 plan_reference: None,
@@ -700,7 +700,7 @@ impl Race {
                 race_seed: seed,
                 people,
                 // `--autopilot-skill` sets this after `Self::start` returns - see
-                // `Self::set_autopilot_tuning`. Every race starts with the two
+                // `RaceSim::set_autopilot_tuning`. Every race starts with the two
                 // tunings agreeing.
                 autopilot_tuning: None,
                 autopilots: std::array::from_fn(|_| None),

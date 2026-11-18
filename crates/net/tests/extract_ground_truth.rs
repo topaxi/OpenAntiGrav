@@ -59,7 +59,7 @@ fn hashes(
         for slot in 0..usize::from(params.people) {
             race.sim.world.controllers[slot] = oag_gameplay::Controller::Local;
         }
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
     }
     let none = PlayerInputs::none();
     let mut out = Vec::new();

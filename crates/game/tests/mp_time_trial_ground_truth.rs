@@ -104,7 +104,7 @@ fn the_board_is_ranked_by_total_time_and_names_both_people() {
     let Some(mut race) = people_race(oag_race::Mode::TimeTrial, 2) else {
         return;
     };
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     while !race.finished() && race.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }

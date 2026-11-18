@@ -92,7 +92,7 @@ fn start(
     .expect("loading the race");
     let race = race::Race::start(loaded.setup);
     assert_eq!(
-        race.route_count(),
+        race.sim.route_count(),
         1,
         "the pit lane is the track's one route"
     );
@@ -192,8 +192,8 @@ fn a_craft_that_reaches_its_checkpoint_in_time_has_its_clock_reset_and_loses_not
     // This project's driver flies the craft round: every checkpoint well inside 20 s.
     let mut modded = start(&file, Some(&source), false);
     let mut vanilla = start(&file, None, false);
-    modded.set_autopilot(true);
-    vanilla.set_autopilot(true);
+    modded.sim.set_autopilot(true);
+    vanilla.sim.set_autopilot(true);
     let mut reached = Vec::new();
     let mut lowest = CHECKPOINT_TICKS;
     let mut previous = blob(&modded);
@@ -258,7 +258,7 @@ fn run(
     ticks: u32,
 ) -> Run {
     let mut race = start(file, module, true);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let max = std::array::from_fn(|slot| shield_max(&race, slot));
     for &slot in low {
         race.sim.world.ships[slot].physics.shield = max[slot] * (AI_LOW_SHARE - 0.01);

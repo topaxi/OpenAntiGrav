@@ -67,7 +67,7 @@ fn an_hd_zone_craft_waits_on_the_grid_at_the_rays_height_not_the_lowered_hover()
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn an_hd_zone_craft_flies_at_the_rays_height() {
     let Some(mut race) = zone() else { return };
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     run_to(&mut race, GO + 120);
     let mut heights = Vec::new();
     for _ in 0..600 {

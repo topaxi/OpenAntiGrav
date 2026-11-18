@@ -135,7 +135,7 @@ impl Race {
             self.sim.race_seed,
             u32::try_from(oag_gameplay::MAX_SHIPS + slot).unwrap_or(u32::MAX),
         );
-        self.locate_player_driver(slot);
+        self.sim.locate_player_driver(slot);
         true
     }
 
@@ -150,7 +150,7 @@ impl Race {
         let ship = &mut self.sim.world.ships[slot];
         ship.autopilot_timer = HAND_BACK_SECONDS;
         ship.handback = true;
-        self.locate_player_driver(slot);
+        self.sim.locate_player_driver(slot);
         true
     }
 

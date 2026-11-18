@@ -635,7 +635,7 @@ fn opponent_beneath(depth: f32, across: f32, supported: bool) -> Race {
         let line = &race.sim.racing_line;
         let frames = (0..line.len())
             .map(|i| oag_ai::Frame {
-                lateral: race.ai_sample(i).map_or(Vec3::ZERO, |s| {
+                lateral: race.sim.ai_sample(i).map_or(Vec3::ZERO, |s| {
                     Vec3::from_array(s.lateral).normalize_or_zero()
                 }),
                 left: -CORRIDOR,
@@ -654,7 +654,7 @@ fn opponent_beneath(depth: f32, across: f32, supported: bool) -> Race {
 /// Moves opponent 1 to `depth` below and `across` its own line point.
 fn place_opponent(race: &mut Race, depth: f32, across: f32) {
     let index = race.sim.world.ships[1].driver.index as usize;
-    let sample = *race.ai_sample(index).expect("a grid race has samples");
+    let sample = *race.sim.ai_sample(index).expect("a grid race has samples");
     let up = -Vec3::from_array(sample.down).normalize_or_zero();
     let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
     let point = race.sim.racing_line.point(index);

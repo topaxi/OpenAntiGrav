@@ -113,7 +113,7 @@ fn scheme(params: &RaceParams) -> Result<oag_gameplay::ControlScheme> {
 /// A control scheme this build does not know.
 pub fn prepare(race: &mut Race, params: &RaceParams) -> Result<()> {
     race.set_control_scheme(scheme(params)?);
-    race.set_autopilot(false);
+    race.sim.set_autopilot(false);
     // Off for everybody unless the room allowed it, in which case each seat flies the level
     // that person asked for: the same list on both ends, so the physics agrees.
     race.sim

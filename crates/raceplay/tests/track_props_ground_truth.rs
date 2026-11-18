@@ -230,7 +230,7 @@ fn run(track: &Path, with: Vec<race::extensions::Source>) -> Option<(Vec<Tick>, 
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let pads = race.speedup_pads().to_vec();
     let mut input = oag_gameplay::input::Input::new();
     let ticks = (0..TICKS)
@@ -422,7 +422,7 @@ fn portal() -> race::extensions::Source {
 
 /// The course ring point nearest `at`, and its position.
 fn ring_point_at(race: &race::Race, progress: f32) -> Vec3 {
-    let course = race.course().expect("a course");
+    let course = race.sim.course().expect("a course");
     let index = course.index_at_progress(progress).expect("on the lap");
     course.position(index).expect("a ring point")
 }
@@ -445,7 +445,7 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
         })
         .expect("loading the race");
         let race = race::Race::start(loaded.setup);
-        let length = race.course().expect("a course").length();
+        let length = race.sim.course().expect("a course").length();
         (
             ring_point_at(&race, 150.0),
             ring_point_at(&race, length * 0.6),
@@ -465,7 +465,7 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let mut input = oag_gameplay::input::Input::new();
     let mut tick = |race: &mut race::Race| {
         input.begin_frame(Button::Cross.bit());
@@ -485,7 +485,12 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
     }
     let before = before.expect("the craft entered the first trigger and the module answered");
     let went = race.sim.world.ships[0].transit.expect("in transit");
-    let to = race.course().unwrap().position(went.to as usize).unwrap();
+    let to = race
+        .sim
+        .course()
+        .unwrap()
+        .position(went.to as usize)
+        .unwrap();
     assert!(
         to.distance(exit) < 5.0,
         "the exit is the course point at the second trigger's centre"

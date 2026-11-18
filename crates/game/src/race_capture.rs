@@ -59,7 +59,7 @@ pub struct CaptureOptions {
     ///
     /// **The only way a capture can reach a finished race**, so the only way `--screenshot`
     /// shows the results table: `--hold cross` drives into the first wall. See
-    /// [`Race::set_autopilot`], a verification aid.
+    /// [`RaceSim::set_autopilot`](oag_raceplay::RaceSim::set_autopilot), a verification aid.
     pub autopilot: bool,
     /// `--demo`: nobody is in the race ([`Race::fly_as_demo`]).
     pub demo: bool,
@@ -67,9 +67,9 @@ pub struct CaptureOptions {
     pub wallpaper: bool,
     /// `--pilot-assist`: the player's Pilot Assist ([`RaceSim::set_pilot_assist`]).
     pub pilot_assist: oag_physics::pilot_assist::Level,
-    /// `--autopilot-pilot`: a named pilot, not the baseline. See [`Race::set_autopilot_pilot`].
+    /// `--autopilot-pilot`: a named pilot, not the baseline. See [`RaceSim::set_autopilot_pilot`].
     pub autopilot_pilot: Option<oag_ai::Pilot>,
-    /// `--autopilot-skill`: a stated AI skill. See [`Race::set_autopilot_tuning`].
+    /// `--autopilot-skill`: a stated AI skill. See [`RaceSim::set_autopilot_tuning`].
     pub autopilot_skill: Option<oag_ai::Difficulty>,
     /// `--ai`. See [`crate::ai_choice`].
     pub ai_choice: crate::ai_choice::AiChoice,
@@ -540,10 +540,11 @@ pub fn capture(
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);
         if let Some(pilot) = options.autopilot_pilot {
-            race.set_autopilot_pilot(pilot, skill);
+            race.sim.set_autopilot_pilot(pilot, skill);
         }
         if let Some(skill) = options.autopilot_skill {
-            race.set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
+            race.sim
+                .set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
         }
     }
 

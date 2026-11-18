@@ -59,7 +59,7 @@ Options, to decide before the protocol ADR:
 1. **No race pause online.** Start opens a local overlay (settings, leave race); the
    race and the player's craft keep running. While the overlay is up the craft
    either coasts on neutral input, or the autopilot flies it (decide which; the
-   autopilot already flies any seat, `Race::set_autopilot`). Simplest, and nothing in
+   autopilot already flies any seat, `RaceSim::set_autopilot`). Simplest, and nothing in
    the protocol changes.
 2. **Lobby pause for private races.** The host or a majority vote pauses; a pause has a
    budget per player (count and length) and a hard timeout after which the race

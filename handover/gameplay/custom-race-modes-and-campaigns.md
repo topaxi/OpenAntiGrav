@@ -370,7 +370,7 @@ Turbo". Open:
 The smallest increment that a player feels, ahead of the README's phase 1 and 2: a
 craft that touches a wall slows far more than a normal craft.
 
-- **Event**: `wall-contact`, at `Race::count_wall_contact` (`field.rs:545`, from
+- **Event**: `wall-contact`, at `RaceSim::count_wall_contact` (`field.rs:545`, from
   `step_player` and `step_opponents`), so AI craft are cursed too.
 - **Command**: `scale-thrust{slot, factor}` with `factor` in `[0, 1]` only, written
   into `pending_thrust_scale`, the per-tick slow the Leach Beam already arms

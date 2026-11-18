@@ -23,7 +23,7 @@ fn started(track: &str) -> Option<race::Race> {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     Some(race)
 }
 

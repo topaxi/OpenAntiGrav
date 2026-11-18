@@ -84,7 +84,7 @@ fn lean_with_the_track(image: &str, expect: Frame) {
         race.tick(&PlayerInputs::none());
     }
     let stats = race.quake_stats().expect("the title authors a Quake");
-    let length = race.course().expect("a course").length();
+    let length = race.sim.course().expect("a course").length();
     let (mut leaned, mut built, mut washed) = (0, 0, 0);
     for step in 0..40 {
         let progress = length * (step as f32 / 40.0);

@@ -105,7 +105,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
     let mut out = Ride::default();
     let shield = race.sim.world.ships[0].physics.shield;
     for tick in 0..ticks {
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         if tick < next_shot {
             let snap = snapshot(Button::Cross.bit(), input.as_ref());
             input = Some(snap.buttons);
@@ -340,7 +340,7 @@ fn assert_laid_on_a_bank(title: (&str, &str), weapon: Weapon, judge_pose: bool) 
         race.sim.world.ships[0].physics.shield = shield;
         // Pressed and released on alternate ticks: a held button is one edge.
         let dropping = tick >= next_drop && (tick - next_drop) % 2 == 0;
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         // Anything in the pool after the tick was laid on it.
         race.sim.world.projectiles.clear();
         if tick >= next_drop {

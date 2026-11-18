@@ -53,7 +53,7 @@ fn row(race: &oag_raceplay::Race, label: &str, mask: u32) {
         "tick {:>4}  {label:<8} buttons {mask:#06x}  timer {:>7.3}  flown {:<5}  slot {:?}",
         race.sim.world.tick,
         ship.autopilot_timer,
-        race.flown_for_the_player(0),
+        race.sim.flown_for_the_player(0),
         ship.pickup.weapon,
     );
 }
@@ -73,7 +73,10 @@ fn flown_after_absorb(source: String) -> bool {
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Autopilot);
     race.tick(&pad.tick(CROSS | SQUARE));
     row(&race, "arm", CROSS | SQUARE);
-    assert!(race.flown_for_the_player(0), "the Autopilot did not arm");
+    assert!(
+        race.sim.flown_for_the_player(0),
+        "the Autopilot did not arm"
+    );
     assert_eq!(race.sim.world.ships[0].pickup.weapon, None);
     race.tick(&pad.tick(CROSS));
     row(&race, "release", CROSS);
@@ -82,7 +85,10 @@ fn flown_after_absorb(source: String) -> bool {
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Rocket);
     race.tick(&pad.tick(CROSS | SQUARE));
     row(&race, "fire", CROSS | SQUARE);
-    assert!(race.flown_for_the_player(0), "a fire press cancelled it");
+    assert!(
+        race.sim.flown_for_the_player(0),
+        "a fire press cancelled it"
+    );
     assert_eq!(
         race.sim.world.ships[0].pickup.weapon,
         Some(Weapon::Rocket),
@@ -115,7 +121,7 @@ fn flown_after_absorb(source: String) -> bool {
     row(&race, "absorb", CROSS | CIRCLE);
     race.tick(&pad.tick(CROSS));
     row(&race, "after", CROSS);
-    race.flown_for_the_player(0)
+    race.sim.flown_for_the_player(0)
 }
 
 #[test]

@@ -78,7 +78,7 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
             race.sim.world.ships[slot].active = false;
         }
     }
-    let line_len = race.racing_line().len() as u32;
+    let line_len = race.sim.racing_line().len() as u32;
     let mut charge = vec![vec![0.0f32; (line_len / CLUSTER + 2) as usize]; count];
     let mut seen_charge = vec![0.0f32; count];
     let mut seen_resp = vec![0u32; count];
@@ -327,6 +327,7 @@ fn field_trace() {
                     continue;
                 }
                 let off = race
+                    .sim
                     .ai_sample_for(s, sh.driver.index as usize)
                     .map_or(0.0, |sm| {
                         let lat = oag_core::math::Vec3::from_array(sm.lateral);
@@ -367,7 +368,7 @@ fn line_profile() {
     })
     .unwrap();
     let race = race::Race::start(loaded.setup);
-    let line = race.racing_line();
+    let line = race.sim.racing_line();
     let from: usize = std::env::var("OAG_FROM")
         .ok()
         .and_then(|s| s.parse().ok())

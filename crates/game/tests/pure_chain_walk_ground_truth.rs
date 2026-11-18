@@ -113,8 +113,9 @@ fn load_leg(
     .expect("the race loads");
     let _ = campaign;
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
-    race.set_autopilot_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning::default()));
+    race.sim.set_autopilot(true);
+    race.sim
+        .set_autopilot_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning::default()));
     race
 }
 

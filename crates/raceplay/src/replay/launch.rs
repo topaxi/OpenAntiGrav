@@ -15,7 +15,7 @@ use oag_physics::pilot_assist::Level;
 use crate::Race;
 
 /// The recovered original driver flying the opponents, and what it was asked to do
-/// ([`Race::use_original_ai`]): written to the race after its seats, so it is part of the state
+/// ([`RaceSim::use_original_ai`](crate::RaceSim::use_original_ai)): written to the race after its seats, so it is part of the state
 /// a rebuild must reproduce.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OriginalAi {
@@ -40,7 +40,7 @@ pub struct Launch {
     /// The original driver flies the opponents, when it does. `None`: this project's driver.
     pub original_ai: Option<OriginalAi>,
     /// A campaign cell's resolved skill scale, which tunes the field and the finished player's
-    /// thrust ([`Race::apply_campaign_skill`]). `None` outside a campaign cell.
+    /// thrust ([`RaceSim::apply_campaign_skill`](crate::RaceSim::apply_campaign_skill)). `None` outside a campaign cell.
     pub campaign_skill: Option<f32>,
     /// The rung a campaign cell raced at ([`crate::Options::skill_level`]), which picks every
     /// craft's shield slot. `None`: the rung [`Self::difficulty`] stands for.
@@ -190,10 +190,10 @@ impl Race {
     /// and [`super::rebuild`] both call.
     pub fn apply_launch(&mut self, launch: &Launch) {
         self.set_control_scheme(launch.scheme);
-        self.set_autopilot(launch.autopilot);
+        self.sim.set_autopilot(launch.autopilot);
         self.sim.set_pilot_assist(launch.pilot_assist);
         if let Some(scale) = launch.campaign_skill {
-            self.apply_campaign_skill(scale);
+            self.sim.apply_campaign_skill(scale);
         }
     }
 }

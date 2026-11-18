@@ -124,7 +124,7 @@ fn run(
     .ok()?;
     let mut race = race::Race::start(loaded.setup);
     if let Some(tuning) = tuning {
-        race.set_ai_tuning(tuning);
+        race.sim.set_ai_tuning(tuning);
     }
     for slot in 2..8 {
         race.sim.world.ships[slot].active = false;
@@ -187,7 +187,7 @@ fn run(
         capacity: race.sim.world.ships[LONE].handling.dimensions.shield,
         best,
         airborne,
-        line_len: race.racing_line().len() as u32,
+        line_len: race.sim.racing_line().len() as u32,
     })
 }
 

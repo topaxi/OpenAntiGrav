@@ -60,7 +60,7 @@ struct Solo {
 ///
 /// Autopilot rather than a scripted input, because it is slot 0 going through
 /// `Race::tick`: the same code path, the same triggers and the same recovery a
-/// human gets - see `Race::set_autopilot`. Alone, so nothing that happens to it
+/// human gets - see `RaceSim::set_autopilot`. Alone, so nothing that happens to it
 /// is about anybody else.
 fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
     let image = image()?;
@@ -77,7 +77,7 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
     for slot in 1..oag_gameplay::MAX_SHIPS {
         race.sim.world.ships[slot].active = false;
     }
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
 
     let mut solo = Solo {
         half_width: race.spline().max_half_width(),
@@ -247,7 +247,7 @@ fn a_player_thrown_off_a_real_circuit_at_speed_comes_back() {
     for slot in 1..oag_gameplay::MAX_SHIPS {
         race.sim.world.ships[slot].active = false;
     }
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
 
     // A lap's worth of driving first, so the craft leaves from the circuit rather
     // than from the grid - and **past the start-line countdown before that

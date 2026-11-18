@@ -385,7 +385,7 @@ pub(crate) struct BlurArgs {
 pub(crate) struct DriverArgs {
     /// Let an opponent's driver fly the player's craft.
     ///
-    /// A verification aid - see `race::Race::set_autopilot` - and the only way
+    /// A verification aid - see `race::RaceSim::set_autopilot` - and the only way
     /// to reach the **end** of a race without a human at the keyboard for four
     /// minutes: a race finishes when the player crosses the line for the last
     /// time, so nothing that holds the throttle in a straight line ever gets

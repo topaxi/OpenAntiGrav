@@ -133,11 +133,11 @@ fn an_ai_index_reads_the_sample_the_lap_puts_there() {
     });
     race.sim.world.ships[0].active = true;
 
-    let length = race.racing_line().len();
+    let length = race.sim.racing_line().len();
     assert!(length > 0);
     let walked: Vec<u16> = (0..length)
         .map(|ai_index| {
-            let sample = race.sample_index_of(ai_index).expect("a sample index");
+            let sample = race.sim.sample_index_of(ai_index).expect("a sample index");
             race.sim.spline.path_of(sample).expect("a path")
         })
         .collect();
@@ -154,7 +154,10 @@ fn an_ai_index_reads_the_sample_the_lap_puts_there() {
     // *path* it lands on: this fixture's three paths are clones of one
     // straight, so comparing positions would hold even on a wrap into the
     // branch the lap skips.
-    assert_eq!(race.sample_index_of(length), race.sample_index_of(0));
+    assert_eq!(
+        race.sim.sample_index_of(length),
+        race.sim.sample_index_of(0)
+    );
 }
 
 /// A local search finds what a whole-table search would, when the answer is

@@ -97,7 +97,7 @@ fn image() -> Option<PathBuf> {
 /// axis, and how far the corridor reaches either side of the line there.
 fn across(race: &race::Race, slot: usize) -> Option<(f32, f32, f32)> {
     let ship = &race.sim.world.ships[slot];
-    let aim = race.line_of(slot).aim(ship.driver.index as usize, 0.0);
+    let aim = race.sim.line_of(slot).aim(ship.driver.index as usize, 0.0);
     let frame = aim.corridor?;
     let offset = (ship.physics.body.position - aim.point).dot(frame.lateral);
     Some((offset, frame.left, frame.right))
@@ -139,7 +139,7 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
     let mut race = race::Race::start(loaded.setup);
     // Slot 0 flown too, so the grid stays together and craft actually end up
     // level with each other. A parked player is a race with seven craft in it.
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
 
     let ships = race.ship_count() as usize;
     let mut shifting = [false; 8];
@@ -181,7 +181,7 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
                     -1.0
                 };
                 let room = previous[slot].map_or(f32::INFINITY, |position| {
-                    let aim = race.line_of(slot).aim(ship.driver.index as usize, 0.0);
+                    let aim = race.sim.line_of(slot).aim(ship.driver.index as usize, 0.0);
                     aim.corridor.map_or(f32::INFINITY, |frame| {
                         let offset = (position - aim.point).dot(frame.lateral);
                         let edge = if toward > 0.0 {

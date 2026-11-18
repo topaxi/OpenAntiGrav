@@ -254,7 +254,7 @@ fn trace_a_rocket_volley_along_the_floor() {
         return;
     };
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let dt = race.dt();
 
     let (up, down, flat) = floor_winding(race.collision());

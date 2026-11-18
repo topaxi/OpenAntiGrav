@@ -662,7 +662,7 @@ impl Race {
             let line = usize::try_from(ship.driver.index).unwrap_or(usize::MAX);
             self.located_from(
                 ship,
-                self.sample_index_for(slot, line).unwrap_or(usize::MAX),
+                self.sim.sample_index_for(slot, line).unwrap_or(usize::MAX),
             )
         };
         index.map_or(UNPLACED, |index| {

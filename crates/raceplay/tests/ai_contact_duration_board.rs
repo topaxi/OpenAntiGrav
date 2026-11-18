@@ -57,7 +57,7 @@ fn run(entry: &str, class: &str, seed: u64) -> Option<(Vec<u32>, Vec<u32>, u32)>
     .expect("loading");
     let mut race = race::Race::start(loaded.setup);
     if std::env::var("OAG_AI").as_deref() != Ok("ours") {
-        assert!(race.use_original_ai(None, env_or("OAG_LEVEL", 0)));
+        assert!(race.sim.use_original_ai(None, env_or("OAG_LEVEL", 0)));
     }
     let count = race.ship_count() as usize;
     let player = race.sim.world.human_slots().next().unwrap_or(0);

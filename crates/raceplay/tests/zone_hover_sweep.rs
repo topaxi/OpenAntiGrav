@@ -63,7 +63,7 @@ fn sweep_one(source: &str, track: &str, label: &str) {
         return;
     };
     let mut zone = race::Race::start(loaded.setup);
-    zone.set_autopilot(true);
+    zone.sim.set_autopilot(true);
     let mut lap = zone.sim.world.ships[0].standing.lap;
     let mut lap_shield = Vec::new();
     let mut ticks = 0;

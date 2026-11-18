@@ -54,7 +54,7 @@ fn autopiloted_hd_race() -> Option<race::Race> {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     Some(race)
 }
 

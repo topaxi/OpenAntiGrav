@@ -21,13 +21,13 @@ use super::*;
 use oag_weapons::Craft as _;
 
 impl RaceSim {
-    /// Fires an opponent's Missile, once `Race::opponent_decides` has decided to.
+    /// Fires an opponent's Missile, once `RaceSim::opponent_decides` has decided to.
     ///
     /// Returns whether anything left the rails, so the caller knows whether to
     /// spend the pickup.
     ///
     /// **Two gates rather than one**, and they answer different questions.
-    /// `Race::opponent_decides` is the *driver's*: has the roll come up, with
+    /// `RaceSim::opponent_decides` is the *driver's*: has the roll come up, with
     /// something in the shot's path. `RaceSim::fire_missile` then runs the
     /// *weapon's* - `Ship_AcquireLock`'s recovered window, cone and along-track
     /// screen - and declines if nothing is lockable.
@@ -42,7 +42,7 @@ impl RaceSim {
         self.fire_missile(slot, &stats)
     }
 
-    /// Fires an opponent's Rocket, once `Race::opponent_decides` has decided to.
+    /// Fires an opponent's Rocket, once `RaceSim::opponent_decides` has decided to.
     ///
     /// Returns whether anything left the rails, so the caller knows whether to
     /// spend the pickup.
@@ -90,7 +90,7 @@ impl RaceSim {
     /// only one Quake can be in flight in the whole race, so a driver that
     /// wants to fire into an already-travelling wave simply keeps the
     /// pickup, the same as a full projectile pool would. Whether to fire is
-    /// `Race::opponent_decides`'s, as for every forward weapon; under the
+    /// `RaceSim::opponent_decides`'s, as for every forward weapon; under the
     /// original's law the Quake is the one that needs nothing in its path.
     fn fire_opponent_quake(&mut self, slot: usize) -> bool {
         // Chosen, not measured: a driver that wants a Quake while a wave is up
@@ -171,7 +171,7 @@ impl RaceSim {
     /// craft's hands rather than cashing it in - the `&&`-chain bug
     /// `an_opponent_that_declines_a_shot_does_not_absorb_the_pickup` covers.
     ///
-    /// Whether to fire is `Race::opponent_decides`'s. Under the original's law
+    /// Whether to fire is `RaceSim::opponent_decides`'s. Under the original's law
     /// the Plasma differs from the Rocket in two read places only: its own
     /// `WeaponAIstats.xml` row and its own shot speed in the path test.
     fn fire_opponent_plasma(&mut self, slot: usize) -> bool {
@@ -204,7 +204,7 @@ impl RaceSim {
     /// Throws an opponent's blade, if its driver wants a shot now.
     ///
     /// Returns whether anything left, for [`RaceSim::fire_opponent_plasma`]'s
-    /// reason; whether to throw is `Race::opponent_decides`'s.
+    /// reason; whether to throw is `RaceSim::opponent_decides`'s.
     ///
     /// **The coin is drawn from the world's generator here exactly as it is on
     /// the player's path**, and only once there is room in the array - see
@@ -250,7 +250,7 @@ impl Race {
     ///
     /// **`WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) is ported**, fire
     /// and absorb halves:
-    /// `Race::opponent_decides` asks `oag_ai::weapon_ai` for the Rocket,
+    /// `RaceSim::opponent_decides` asks `oag_ai::weapon_ai` for the Rocket,
     /// Missile, Plasma, Shuriken, LeachBeam, Repulser and Quake, on the odds out
     /// of the title's `WeaponAIstats.xml`, and falls back to
     /// `oag_ai::Driver::wants_to_fire` (fire only) where that file was not
@@ -263,7 +263,7 @@ impl Race {
     ///   turbo spent into a wall. The original fires it on the roll alone;
     ///   this gate is chosen. It arms that craft's own boost plume, the same
     ///   reuse the player's Turbo makes of the speed pad's visual.
-    /// - **A forward weapon is fired or absorbed when `Race::opponent_decides`
+    /// - **A forward weapon is fired or absorbed when `RaceSim::opponent_decides`
     ///   says so**, and kept rather than spent when it says hold, or when the
     ///   weapon itself declines (no lock, no authored stats, no free slot).
     /// - **An Autopilot flies the original's player driver for its `time` at
@@ -272,7 +272,7 @@ impl Race {
     ///   the title's `oag_title::RaceDefaults::opponent_autopilot` at the
     ///   race's class, measured faster on every class and, at RAPIER and
     ///   PHANTOM, less safe (`docs/gameplay/ai.md`);
-    ///   `Race::set_opponent_autopilot` overrides it.
+    ///   `RaceSim::set_opponent_autopilot` overrides it.
     ///   It is named here rather than left to fall through the default below,
     ///   because "no effect by design" and "no arm written yet" must not look
     ///   the same in this file.
@@ -302,7 +302,7 @@ impl Race {
             return;
         }
         // Before anything returns: it advances this craft's weapon-AI clocks.
-        let decision = self.opponent_decides(slot, field);
+        let decision = self.sim.opponent_decides(slot, field);
         if let Some(pace) = self.sim.score_pace
             && self.sim.world.ships[slot].weapon_ai.held_ticks < pace.hold_ticks
         {
@@ -408,7 +408,7 @@ impl Race {
             let route = ship.driver.branching.route;
             let context = oag_ai::Context {
                 air_trim: 0.0,
-                line: self.line_of(slot),
+                line: self.sim.line_of(slot),
                 tuning: &self.sim.ai_tuning,
                 pilot: &self.sim.ai_pilots[slot],
                 field,
@@ -475,8 +475,8 @@ impl Race {
             }
         } else if weapon == oag_tables::weapons::Weapon::Autopilot {
             // Absorbed, unless the class's switch hands the craft to the
-            // original's player driver (`Race::set_opponent_autopilot`).
-            if !self.engage_opponent_autopilot(slot) {
+            // original's player driver (`RaceSim::set_opponent_autopilot`).
+            if !self.sim.engage_opponent_autopilot(slot) {
                 self.sim.absorb_opponent_pickup(slot, absorb);
                 return;
             }
@@ -594,7 +594,7 @@ impl Race {
         let ship = &self.sim.world.ships[slot];
         let context = oag_ai::Context {
             air_trim: 0.0,
-            line: self.line_of(slot),
+            line: self.sim.line_of(slot),
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],
             field,

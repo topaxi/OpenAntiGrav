@@ -159,7 +159,7 @@ pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
     // After the seats, as the session applies the AI choice: which driver flies reads who is
     // human.
     if let Some(ai) = launch.original_ai {
-        race.use_original_ai(ai.skill, ai.level);
+        race.sim.use_original_ai(ai.skill, ai.level);
     }
     Ok(())
 }

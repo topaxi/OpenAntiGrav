@@ -58,7 +58,7 @@ fn residuals(disc: &str, track: &str) -> Option<Fired> {
         let burst = tick >= 240 && tick % 90 < 20;
         // The autopilot fires nothing, so it flies between bursts and the pad
         // takes over for each one.
-        race.set_autopilot(!burst);
+        race.sim.set_autopilot(!burst);
         if burst {
             race.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
         }
@@ -178,7 +178,7 @@ fn a_missile_fired_on_a_bank_is_born_riding_the_located_tracks_up() {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let stats = race.missile_stats().expect("the disc authors a Missile");
     let mut input: Option<Input> = None;
     for _ in 0..4_000_u32 {

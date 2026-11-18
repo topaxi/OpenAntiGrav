@@ -235,13 +235,13 @@ fn the_end_screens_sit_over_one_view_and_the_split_is_kept() {
 #[test]
 fn the_operators_autopilot_flies_every_local_seat_and_no_other() {
     let mut race = race_with_a_grid();
-    race.set_autopilot(true);
-    assert!(race.flown_for_the_player(0));
-    assert!(!race.flown_for_the_player(1), "an AI slot");
+    race.sim.set_autopilot(true);
+    assert!(race.sim.flown_for_the_player(0));
+    assert!(!race.sim.flown_for_the_player(1), "an AI slot");
     race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
-    assert!(race.flown_for_the_player(1), "a second local seat");
+    assert!(race.sim.flown_for_the_player(1), "a second local seat");
     race.sim.world.controllers[1] = oag_gameplay::Controller::Remote;
-    assert!(!race.flown_for_the_player(1), "somebody else's craft");
+    assert!(!race.sim.flown_for_the_player(1), "somebody else's craft");
 }
 
 /// A network race names its people on the board it leaves: the name each seat raced under, on a

@@ -258,7 +258,7 @@ fn a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts() {
     let idle = voices(&audio);
 
     let stats = race.quake_stats().expect("Pulse authors a Quake");
-    let length = race.course().expect("a course").length();
+    let length = race.sim.course().expect("a course").length();
     race.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
         0,
         length * 0.5,

@@ -309,11 +309,11 @@ fn beneath_census_all_titles() {
                     events.push(event);
                     wide[slot] = false;
                 }
-                let line = race.line_of(slot);
+                let line = race.sim.line_of(slot);
                 let index = ship.driver.index as usize;
                 let under = ship.physics.time_airborne <= 0.0
                     && !line.is_unsupported(index)
-                    && race.ai_sample_for(slot, index).is_some_and(|sample| {
+                    && race.sim.ai_sample_for(slot, index).is_some_and(|sample| {
                         let up = -Vec3::from_array(sample.down).normalize_or_zero();
                         (line.point(index) - ship.physics.body.position).dot(up)
                             > oag_race::recovery::BENEATH_LINE

@@ -9,7 +9,7 @@
 //! ```
 //!
 //! The synthetic tests (`oag_raceplay`'s `results` tests, `oag_game::results_tables`)
-//! write the standings by hand. This one lets `Race::set_autopilot` fly both seats
+//! write the standings by hand. This one lets `RaceSim::set_autopilot` fly both seats
 //! over the line, which needs the circuit's ring and racing line, and reads what the
 //! end screens are built from: the board, the rows `Session::build_endrace` makes of
 //! it, and the view a person has between their own line and the other's.
@@ -45,7 +45,7 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
     oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
 
     // Between the first person's line and the second's: the finished person's view
     // holds and says so, the other's does not, and the split is still drawn.
@@ -218,7 +218,7 @@ fn head_to_head_people_end_on_a_board_of_two_with_a_winner() {
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
     oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Vertical);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     while !race.finished() && race.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }

@@ -540,7 +540,7 @@ fn shuriken_bounces_off_a_wall() -> std::collections::BTreeSet<Cue> {
 /// about `Cue::QuakeHit`'s own edge, not the wave's travel time.
 ///
 /// Fired on the second tick rather than the first: `Race::spend_pickup` runs
-/// before `Race::update_standings` inside `Race::tick`, so a press on the
+/// before `RaceSim::update_standings` inside `Race::tick`, so a press on the
 /// very first tick would still read the pre-race `None`
 /// [`oag_race::Standing::progress`] starts at, and the Quake's own fire arm
 /// declines rather than launches with nowhere on the course to start from.

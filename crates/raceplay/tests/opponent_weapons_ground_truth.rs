@@ -86,7 +86,7 @@ fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
     // so under it a weapon turning into energy is sometimes the law and not
     // the fall-through this test exists for. The arms it guards are the same
     // under both laws.
-    race.set_fire_law(race::FireLaw::Ours);
+    race.sim.set_fire_law(race::FireLaw::Ours);
     // A few ticks so the grid settles and the standings take a first fix - the
     // drivers' own gates read `Standing::progress`.
     for _ in 0..60 {

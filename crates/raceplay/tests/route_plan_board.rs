@@ -93,8 +93,9 @@ fn difficulty() -> oag_ai::Difficulty {
 /// race's own level, as an opponent is: the autopilot otherwise flies the
 /// original's driver, which reads no speed plan.
 fn fly_ours(race: &mut race::Race) {
-    race.set_autopilot(true);
-    race.set_autopilot_tuning(difficulty().tune(&oag_ai::Tuning::default()));
+    race.sim.set_autopilot(true);
+    race.sim
+        .set_autopilot_tuning(difficulty().tune(&oag_ai::Tuning::default()));
 }
 
 fn only() -> Option<String> {
@@ -286,11 +287,12 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
         fly_ours(&mut race);
     }
     let course = race
+        .sim
         .course()
         .expect("a forked circuit has a course")
         .clone();
     let pre_fork = course.routes()[usize::from(want - 1)].pre_fork;
-    let mut tally = vec![Tally::default(); race.route_count() + 1];
+    let mut tally = vec![Tally::default(); race.sim.route_count() + 1];
     let mut w = Watch { open: None };
     for tick in 0..SOLO_TICKS {
         {
@@ -362,7 +364,7 @@ fn field(setup: &race::Setup, plans: &race::Race) -> (Vec<Tally>, Vec<u32>, u32)
     let mut race = with_plans(setup, plans);
     fly_ours(&mut race);
     let count = race.ship_count() as usize;
-    let mut tally = vec![Tally::default(); race.route_count() + 1];
+    let mut tally = vec![Tally::default(); race.sim.route_count() + 1];
     let mut watches: Vec<Watch> = (0..count).map(|_| Watch { open: None }).collect();
     for tick in 0..FIELD_TICKS {
         race.tick(&PlayerInputs::none());
@@ -393,7 +395,7 @@ fn board_at(circuit: &Circuit, class: &str, seed: u64) {
             return;
         };
         let mut plans = race::Race::start(setup.clone());
-        let routes = plans.route_count();
+        let routes = plans.sim.route_count();
         if routes == 0 {
             emit(&format!("noforks\t{}\t{class}\t{seed}", circuit.label));
             return;
@@ -521,7 +523,7 @@ fn route_verify_probe() {
                     );
                     continue;
                 }
-                for k in 0..race.route_count() {
+                for k in 0..race.sim.route_count() {
                     let at = std::env::var("OAG_ROUTE_PROBE_STAGES")
                         .ok()
                         .and_then(|t| t.parse().ok());
@@ -734,13 +736,14 @@ fn floor_along(
             })
             .collect();
         if std::env::var_os("OAG_ROUTE_PROBE_RING").is_some() {
-            let ring = race.racing_line();
+            let ring = race.sim.racing_line();
             let (j, d) = (0..ring.len())
                 .map(|j| (j, ring.point(j).distance(p)))
                 .min_by(|a, b| a.1.total_cmp(&b.1))
                 .unwrap_or((0, f32::NAN));
             let q = ring.point(j);
             let ring_path = race
+                .sim
                 .ai_sample_index(j)
                 .and_then(|s| race.spline().path_of(s));
             let route_path = probe
@@ -852,9 +855,9 @@ fn route_original_probe() {
                 if std::env::var_os("OAG_ROUTE_BOARD_OURS").is_some() {
                     fly_ours(&mut race);
                 } else {
-                    race.set_autopilot(true);
+                    race.sim.set_autopilot(true);
                 }
-                let Some(course) = race.course().cloned() else {
+                let Some(course) = race.sim.course().cloned() else {
                     continue;
                 };
                 let Some(pre_fork) = course
@@ -879,7 +882,7 @@ fn route_original_probe() {
                         continue;
                     }
                     let index = ship.driver.index as usize;
-                    let line = race.line_of(0);
+                    let line = race.sim.line_of(0);
                     let p = line.point(index);
                     let lateral = line
                         .aim(index, 0.0)

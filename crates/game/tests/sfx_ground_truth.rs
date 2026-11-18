@@ -1189,7 +1189,7 @@ fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
         !race.sounds().mod_sounds.is_empty(),
         "the mod's sounds reached the race's banks"
     );
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
 
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),

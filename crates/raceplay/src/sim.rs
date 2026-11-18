@@ -74,9 +74,9 @@ pub struct RaceSim {
     /// The finished player's thrust table and skill; `None` off the four
     /// Pulse classes. See [`super::finished_thrust`].
     pub(super) finished_thrust: Option<super::finished_thrust::FinishedThrust>,
-    /// The original opponent's tables, for [`super::Race::use_original_ai`].
+    /// The original opponent's tables, for [`super::RaceSim::use_original_ai`].
     pub(super) original_tables: Option<Arc<super::original_tables::OriginalTables>>,
-    /// The campaign's original opponent, when [`super::Race::use_original_ai`]
+    /// The campaign's original opponent, when [`super::RaceSim::use_original_ai`]
     /// switched it on; `None` flies this project's driver. Outside
     /// [`World`], so no state hash and no other mode moves.
     pub(super) original_ai: Option<Box<super::original_ai::OriginalAi>>,
@@ -98,7 +98,7 @@ pub struct RaceSim {
     /// Which spline sample each racing-line index is, in lap order.
     ///
     /// The identity permutation on nine of the disc's twelve circuits. See
-    /// [`ai_order`], and [`Race::ai_sample`] for the lookup itself.
+    /// [`ai_order`], and [`RaceSim::ai_sample`] for the lookup itself.
     pub(super) ai_order: Arc<[u32]>,
     /// One AI line per way round a fork, beside the ring's - see
     /// [`super::routes`]. Empty on a circuit with no fork.
@@ -106,13 +106,13 @@ pub struct RaceSim {
     /// The speed plan the opponents' drivers follow, built at the start from
     /// this line, this collision and the field's handling, or `None` when the
     /// race has no opponents or the plan did not verify clean. See
-    /// [`Race::field_speed_plan`] and `oag_ai::plan`.
+    /// [`RaceSim::field_speed_plan`] and `oag_ai::plan`.
     pub(super) speed_plan: Option<Arc<oag_ai::SpeedPlan>>,
     /// Whether [`Race::ensure_speed_plans`] has run: the plans are learned on
     /// the first tick, not in `Race::start`, so a race whose opponents all fly
     /// the original driver can skip them.
     pub(super) plans_built: bool,
-    /// The handling the speed plans were learned on, see [`Race::field_speed_plan`].
+    /// The handling the speed plans were learned on, see [`RaceSim::field_speed_plan`].
     pub(super) plan_reference: Option<Handling>,
     /// Each other hull on the grid's own ring and route plans, one entry per
     /// distinct handling. See [`Race::adapt_hull_plans`].
@@ -129,20 +129,20 @@ pub struct RaceSim {
     ///
     /// Not world state: it is read-only for the whole race and drawn from the
     /// race seed, so it reproduces without being carried. Slot 0 is the
-    /// player's, and is read only while [`Race::flown_for_the_player`] is -
-    /// by [`Race::set_ai_pilot`] (`--autopilot-pilot`) or the Autopilot
+    /// player's, and is read only while [`RaceSim::flown_for_the_player`] is -
+    /// by [`RaceSim::set_ai_pilot`] (`--autopilot-pilot`) or the Autopilot
     /// pickup - otherwise inert.
     pub(super) ai_pilots: Arc<[oag_ai::Pilot; oag_gameplay::MAX_SHIPS]>,
-    /// [`Race::autopilot_controls`]'s own tuning, for `--autopilot-skill`.
+    /// [`RaceSim::autopilot_controls`]'s own tuning, for `--autopilot-skill`.
     ///
     /// `None` outside that flag - every ordinary race, and every existing
-    /// `Race::set_autopilot(true)` call - which is what lets
-    /// [`Race::autopilot_controls`] fall back to [`Self::ai_tuning`], the
-    /// field's own. See [`Race::set_autopilot_tuning`] for why this is a
-    /// second field rather than a call to [`Race::set_ai_tuning`].
+    /// `RaceSim::set_autopilot(true)` call - which is what lets
+    /// [`RaceSim::autopilot_controls`] fall back to [`Self::ai_tuning`], the
+    /// field's own. See [`RaceSim::set_autopilot_tuning`] for why this is a
+    /// second field rather than a call to [`RaceSim::set_ai_tuning`].
     pub(super) autopilot_tuning: Option<oag_ai::Tuning>,
     /// Each person's own original driver, the autopilot
-    /// ([`Race::drive_original_autopilot`]), made the first time it flies.
+    /// ([`RaceSim::drive_original_autopilot`]), made the first time it flies.
     /// Outside [`Self::state_hash`] as [`Self::original_ai`] is.
     pub(super) autopilots: [Option<Box<oag_ai::original::Autopilot>>; oag_gameplay::MAX_PLAYERS],
     /// The rail write each person's autopilot asked for this tick, applied
@@ -155,7 +155,7 @@ pub struct RaceSim {
     pub(super) autopilot_ours: bool,
     /// An opponent on this project's driver flies the original's player
     /// driver while it holds an Autopilot, instead of absorbing it
-    /// ([`Race::set_opponent_autopilot`]). Starts as [`Setup::opponent_autopilot`],
+    /// ([`RaceSim::set_opponent_autopilot`]). Starts as [`Setup::opponent_autopilot`],
     /// the title's per-class rule.
     pub(super) opponent_autopilot: bool,
     /// The lap counter's ring, or `None` on a track whose chain does not close.
@@ -254,7 +254,7 @@ pub struct RaceSim {
     pub(super) extensions: crate::extensions::Extensions,
     /// How many ticks each craft has spent **in contact with a wall**: every
     /// opponent and every person's craft
-    /// (`Race::count_wall_contact`, from `Race::step_player` as well).
+    /// (`RaceSim::count_wall_contact`, from `Race::step_player` as well).
     ///
     /// Kept here, and outside [`Race::state_hash`], for exactly the reason
     /// [`Self::rolls_armed`] is: bookkeeping, not state the race reads back. It
@@ -559,7 +559,7 @@ pub struct RaceSim {
     /// reports and never read back into it, so, like the cue queue, absent from the state hash.
     pub(super) xp: Option<Box<crate::xp_tally::XpTally>>,
     /// Whether the primary slot is being driven by its own [`oag_ai::Driver`] instead of
-    /// by the input snapshot. See [`Race::set_autopilot`].
+    /// by the input snapshot. See [`RaceSim::set_autopilot`].
     pub(super) autopilot: bool,
     /// One-shot sound cues this tick asked for, awaiting a drain.
     ///

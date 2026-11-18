@@ -1,6 +1,6 @@
 //! Whether an opponent on this project's driver gains by flying the
 //! original's player driver while it holds an Autopilot
-//! (`Race::set_opponent_autopilot`), against absorbing it as it does today.
+//! (`RaceSim::set_opponent_autopilot`), against absorbing it as it does today.
 //!
 //! Paired forks: at each trigger the race is snapshotted, one opponent is
 //! handed the authored Autopilot `time` in branch B and left alone in branch
@@ -173,9 +173,9 @@ fn sweep(
             .weapon_stats()
             .and_then(|w| w.absorb(oag_tables::weapons::Weapon::Autopilot))
             .unwrap_or(0.0);
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         // The main path is the absorb, whatever the race's default.
-        race.set_opponent_autopilot(false);
+        race.sim.set_opponent_autopilot(false);
         let count = race.sim.world.ship_count as usize;
         let mut held = [false; 8];
         let mut next_slot = 1;
@@ -208,15 +208,15 @@ fn sweep(
                 continue;
             }
             let snapshot = race.snapshot_sim();
-            race.set_opponent_autopilot(true);
-            if !race.engage_opponent_autopilot(slot) {
+            race.sim.set_opponent_autopilot(true);
+            if !race.sim.engage_opponent_autopilot(slot) {
                 // Weapons off: no table to read the time from.
                 race.sim.world.ships[slot].autopilot_timer = time;
             }
             let trace = std::env::var("OAG_SWEEP_TRACE").ok() == Some(format!("{seed},{tick}"));
             let b = run_branch(&mut race, slot, stint, trace);
             race.restore_sim(&snapshot);
-            race.set_opponent_autopilot(false);
+            race.sim.set_opponent_autopilot(false);
             if trace {
                 println!("  -- A");
             }
@@ -397,8 +397,8 @@ struct Field {
 }
 
 fn whole_race(race: &mut oag_raceplay::Race, on: bool) -> Field {
-    race.set_opponent_autopilot(on);
-    race.set_autopilot(true);
+    race.sim.set_opponent_autopilot(on);
+    race.sim.set_autopilot(true);
     let count = race.sim.world.ship_count as usize;
     let mut out = Field::default();
     let mut timer = [0.0f32; 8];

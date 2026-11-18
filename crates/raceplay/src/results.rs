@@ -97,7 +97,7 @@ impl Race {
     /// race ends by crossing the line, by their craft's wreck outside the
     /// Eliminator, or - in the Eliminator, for all of them at once - by the
     /// kill target; so a person who finishes first sees the race run on, their
-    /// craft flown by the driver ([`Race::flown_for_the_player`]), until the
+    /// craft flown by the driver ([`RaceSim::flown_for_the_player`]), until the
     /// last person is done. With one person this is that person's flag, as it
     /// always was.
     ///
@@ -113,7 +113,7 @@ impl Race {
 
     /// Whether the world goes on being stepped under the end-race screens: the
     /// player crossed the line for the last time, so the craft is the driver's
-    /// (see [`Race::flown_for_the_player`]) and the rest of the field is still
+    /// (see [`RaceSim::flown_for_the_player`]) and the rest of the field is still
     /// lapping.
     ///
     /// **Only the line.** A race that ended any other way - the player's craft

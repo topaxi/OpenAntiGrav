@@ -225,7 +225,7 @@ fn photo_modes_weather_section_is_the_subjects() {
     let last = race.spline().len() - 1;
     let pos = race.spline().sample(last).expect("a sample").pos;
     let line = (0..race.sim.ai_order.len())
-        .find(|&k| race.ai_sample_index(k) == Some(last))
+        .find(|&k| race.sim.ai_sample_index(k) == Some(last))
         .expect("the last sample is on the racing line");
     let ship = &mut race.sim.world.ships[3];
     ship.physics.body.position = Vec3::from_array(pos);

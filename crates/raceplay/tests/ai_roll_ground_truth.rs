@@ -112,7 +112,7 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
     if let Some(pilot) = pilot {
         // Tempered here rather than in the caller, so a sweep across tiers is
         // asking about the same character at four levels.
-        race.set_ai_pilot(LONE, level.temper(&pilot));
+        race.sim.set_ai_pilot(LONE, level.temper(&pilot));
     }
     // Everyone but one opponent off the track, so nothing it does is about
     // anybody else - the same isolation `race_ground_truth.rs`'s solo benchmark
@@ -267,7 +267,8 @@ fn grid_rolls_mixed_on(
     let mut race = race::Race::start(loaded.setup);
     let opponents: Vec<usize> = (1..usize::from(race.ship_count())).collect();
     for (slot, &tier) in opponents.iter().zip(tiers.iter()) {
-        race.set_ai_pilot(*slot, tier.temper(&oag_ai::Pilot::BALANCED));
+        race.sim
+            .set_ai_pilot(*slot, tier.temper(&oag_ai::Pilot::BALANCED));
     }
     let rolls = measure_grid(&mut race, &opponents)?;
     Some(

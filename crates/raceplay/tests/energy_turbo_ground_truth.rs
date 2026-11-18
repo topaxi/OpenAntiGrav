@@ -14,7 +14,7 @@
 //!
 //! Single Race (weapons and damage on) with an empty grid, so two races differ only by
 //! the player's craft. The mod's pickup (`Weapon::Extension`) is put in the craft's hands
-//! at the start, which is what a weapon pad does under the mod's `pickup-roll`. This project's driver flies the craft (`Race::set_autopilot`);
+//! at the start, which is what a weapon pad does under the mod's `pickup-roll`. This project's driver flies the craft (`RaceSim::set_autopilot`);
 //! fire and absorb are pressed by the script.
 #![cfg(feature = "extensions")]
 
@@ -97,7 +97,7 @@ fn race_on(
     let mut race = race::Race::start(loaded.setup);
     // This project's driver steers (a scripted stick finds the first bend's wall); the
     // buttons below still reach the pickup and the mod.
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let ship = &mut race.sim.world.ships[0];
     ship.physics.shield = ship.handling.dimensions.shield * 0.5;
     if turbo {

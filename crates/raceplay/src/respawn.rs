@@ -111,6 +111,7 @@ impl Race {
         if !under {
             let ship = &self.sim.world.ships[slot];
             let outside = self
+                .sim
                 .line_of(slot)
                 .outside_the_corridor(ship.driver.index as usize, ship.physics.body.position);
             // On the road a craft is wide or it is not; in the air it stays
@@ -150,11 +151,11 @@ impl Race {
         // through the air: a craft that comes down early lands beneath it on
         // the road it was always going to land on (`25_Track` reversed,
         // samples 690-740, 77 ticks in the census).
-        let line = self.line_of(slot);
+        let line = self.sim.line_of(slot);
         if ship.physics.time_airborne > 0.0 || line.is_unsupported(index) {
             return false;
         }
-        let Some(sample) = self.ai_sample_for(slot, index) else {
+        let Some(sample) = self.sim.ai_sample_for(slot, index) else {
             return false;
         };
         let up = -Vec3::from_array(sample.down).normalize_or_zero();
@@ -259,6 +260,7 @@ impl Race {
     pub(super) fn located_sample_of(&self, slot: usize, index: usize) -> Option<Vec3> {
         let position = self.sim.world.ships[slot].physics.body.position;
         let believed = self
+            .sim
             .ai_sample_for(slot, index)
             .map(|sample| Vec3::from_array(sample.pos));
         let units = self.sim.reset_triggers.distance_units;
@@ -327,7 +329,7 @@ impl Race {
         // relationship to any lap at all.
         let sample = sample_index
             .and_then(|index| self.sim.spline.sample(index))
-            .or_else(|| self.ai_sample(0))
+            .or_else(|| self.sim.ai_sample(0))
             .or_else(|| self.sim.spline.start());
         let Some(sample) = sample.copied() else {
             return;

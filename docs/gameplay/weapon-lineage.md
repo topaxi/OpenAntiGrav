@@ -217,7 +217,7 @@ has it; only its table moves.
 | Cannon | `projectile::cannon` | the table; `WeaponModels.cannon`, `.cannon_look` (`CannonLook`, `CannonBody`); `Effects` `CannonSparks`, `WeaponSpark` |
 | Turbo | `oag_weapons::pickup`, then `oag_physics::engine` | the table only |
 | Shield | `oag_weapons::pickup`, then `oag_physics::damage` | the table; `Looks` (`ShieldPalettes`, hull overlay rule) |
-| Autopilot | `oag_weapons::pickup`, then `oag_ai::original::Autopilot` (the player's own original driver) through `Race::autopilot_controls` | the table; the title's original AI tables (controller row, `Laws`); this project's driver where none read |
+| Autopilot | `oag_weapons::pickup`, then `oag_ai::original::Autopilot` (the player's own original driver) through `RaceSim::autopilot_controls` | the table; the title's original AI tables (controller row, `Laws`); this project's driver where none read |
 | Plasma | `projectile::plasma` on the `flight` follower | the table; `WeaponModels.plasma_ball`, `.plasma_blast_pulse`, `.plasma_blast_hd`; `Effects` `PlasmaFlare`, `PlasmaBlast`, `PlasmaLightning*` |
 | Bomb | `projectile::mine` (shared with Mine), `oag_raceplay::bomb_blast` | the table; `WeaponModels.bomb`, `.bomb_blast_pulse` (`shockwave_fades`), `.bomb_blast_hd`; `Effects` `BombSmokering`, `BombRays` |
 | Mine | `projectile::mine` | the table; `WeaponModels.mine`; `Effects` `MineExplo` |

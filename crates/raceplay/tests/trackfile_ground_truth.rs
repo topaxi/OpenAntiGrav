@@ -789,7 +789,7 @@ fn a_zone_race_on_a_track_file_flies_the_hosts_zone_ramp_round_the_files_loop() 
         );
         assert!(loaded.setup.zone.is_some(), "{}", file.display());
         let mut race = race::Race::start(loaded.setup);
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         let inputs = oag_gameplay::PlayerInputs::none();
         for _ in 0..15_200 {
             race.tick(&inputs);
@@ -879,7 +879,7 @@ fn a_zone_race_on_a_track_file_loads_and_climbs_on_every_title() {
             .unwrap_or_else(|| panic!("{image}: no host speed pads line: {:#?}", loaded.report));
         println!("{image}: {pads}");
         let mut race = race::Race::start(loaded.setup);
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         let inputs = oag_gameplay::PlayerInputs::none();
         for _ in 0..1_800 {
             race.tick(&inputs);

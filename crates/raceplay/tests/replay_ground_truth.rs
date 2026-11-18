@@ -134,7 +134,7 @@ impl Pad {
         let controls = if let Some(driver) = self.race_driver.as_mut() {
             race.autopilot_wants(slot, driver)
         } else {
-            let line = race.racing_line();
+            let line = race.sim.racing_line();
             let physics = &race.sim.world.ships[slot].physics;
             if !self.seated {
                 let position = physics.body.position;
@@ -443,7 +443,7 @@ fn a_bare_pad_starts_on_the_line_where_the_grid_is_far_from_sample_zero() {
     let mut pad = Pad::new("pure");
     pad.race_driver = None;
     let _ = pad.inputs(&mut race);
-    let line = race.racing_line();
+    let line = race.sim.racing_line();
     let gap = line
         .point(pad.driver.index as usize)
         .distance(race.ship().physics.body.position);

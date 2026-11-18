@@ -98,17 +98,17 @@ impl Race {
     ///
     /// Flown for the player by either route - the operator's `--autopilot` or
     /// the pickup - and then the snapshot is not consulted for steering at all.
-    /// See [`Race::flown_for_the_player`].
+    /// See [`RaceSim::flown_for_the_player`].
     pub(super) fn player_controls(
         &mut self,
         slot: usize,
         snapshot: &InputSnapshot,
     ) -> oag_physics::ShipControls {
-        let flown = self.flown_for_the_player(slot);
+        let flown = self.sim.flown_for_the_player(slot);
         let mut controls = if flown {
-            self.autopilot_controls(slot)
+            self.sim.autopilot_controls(slot)
         } else {
-            self.release_autopilot(slot);
+            self.sim.release_autopilot(slot);
             let snapshot = if self.sim.flip_law.is_some() {
                 snapshot.shoulder_flips()
             } else {
@@ -186,7 +186,7 @@ impl Race {
         //
         // Still table order, deliberately: the player's locator works in sample
         // space, where every path the track authors is reachable. An opponent's
-        // equivalent goes through [`Self::ai_sample`] instead, because a driver
+        // equivalent goes through [`RaceSim::ai_sample`] instead, because a driver
         // is asking a lap question. See [`ai_order`].
         let track_sample_next = index
             .and_then(|index| self.sim.spline.sample(index + 1))
@@ -304,7 +304,8 @@ impl Race {
         #[cfg(feature = "view")]
         self.throw_cage_sparks(slot, &cage);
         self.lay_crumb(slot, crumb_flags);
-        self.count_wall_contact(slot, was_racing, &evaluated.wall, env_damage_rules);
+        self.sim
+            .count_wall_contact(slot, was_racing, &evaluated.wall, env_damage_rules);
         // The contact half of the same edge as the blast one, and the one a
         // player meets first: scraping a wall behind a shield costs nothing
         // and bulges the shell. The original's contact loop takes exactly this
@@ -333,7 +334,7 @@ impl Race {
     pub(crate) fn autopilot_engine_flags(&self, slot: usize) -> oag_physics::engine::EngineFlags {
         let ship = &self.sim.world.ships[slot];
         let autopilot =
-            (ship.autopilot_timer > 0.0 && !ship.handback) || self.autopilot_flies(slot);
+            (ship.autopilot_timer > 0.0 && !ship.handback) || self.sim.autopilot_flies(slot);
         let law = self.sim.autopilot_engine;
         oag_physics::engine::EngineFlags {
             uncapped: (autopilot && law.uncapped.value) || ship.standing.finished(),
