@@ -90,8 +90,10 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 
 ## Crates that do not exist yet
 
-Added when their milestone opens. Empty placeholder crates are noise, and a
-crate created before its shape is understood tends to get the wrong shape.
+Added when their milestone opens, and a new crate lands with a short
+`README.md` in its root: what it is for, plus the relations that matter (its
+layer, what it must not depend on, its counterpart). Empty placeholder crates
+are noise, and a crate created before its shape is understood tends to get the wrong shape.
 `oag-net`, reserved here for M8, was created on 2026-10-14 once the transport was
 decided ([ADR-0070](adr/0070-the-network-transport-is-webtransport.md)).
 
