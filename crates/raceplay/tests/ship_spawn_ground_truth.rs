@@ -186,7 +186,7 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
     // The countdown drive plus the measured window: a check that nothing above
     // ticked the world an extra time, not a claim about the window's length.
     assert_eq!(
-        race.sim.world.tick,
+        race.core.sim.world.tick,
         oag_race::COUNTDOWN_TICKS + u64::from(TICKS)
     );
 }

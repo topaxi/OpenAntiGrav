@@ -44,7 +44,7 @@ fn every_craft_takes_the_square_its_distance_rank_earns() {
     let scene = bare_scene_of(&device, &queue, &liveries);
     let view = target(&device);
     let race = race_with_a_grid();
-    let craft = usize::from(race.sim.ship_count());
+    let craft = usize::from(race.core.sim.ship_count());
     assert!(craft >= 4, "the grid fields several craft: {craft}");
     scene.render_viewports(
         &device,

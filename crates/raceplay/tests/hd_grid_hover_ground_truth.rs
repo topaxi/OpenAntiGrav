@@ -41,7 +41,7 @@ fn height(race: &Race) -> f32 {
 }
 
 fn run_to(race: &mut Race, tick: u64) {
-    while race.sim.world.tick < tick {
+    while race.core.sim.world.tick < tick {
         race.tick(&PlayerInputs::none());
     }
 }

@@ -63,8 +63,8 @@ fn sweep_one(source: &str, track: &str, label: &str) {
         return;
     };
     let mut zone = race::Race::start(loaded.setup);
-    zone.sim.set_autopilot(true);
-    let mut lap = zone.sim.world.ships[0].standing.lap;
+    zone.core.sim.set_autopilot(true);
+    let mut lap = zone.core.sim.world.ships[0].standing.lap;
     let mut lap_shield = Vec::new();
     let mut ticks = 0;
     let mut airborne = 0u32;
@@ -73,7 +73,7 @@ fn sweep_one(source: &str, track: &str, label: &str) {
     for tick in 0..TICKS {
         zone.tick(&PlayerInputs::none());
         ticks = tick + 1;
-        let ship = &zone.sim.world.ships[0];
+        let ship = &zone.core.sim.world.ships[0];
         if ship.standing.lap != lap {
             lap = ship.standing.lap;
             lap_shield.push(ship.physics.shield);
@@ -89,7 +89,7 @@ fn sweep_one(source: &str, track: &str, label: &str) {
             break;
         }
     }
-    let ship = &zone.sim.world.ships[0];
+    let ship = &zone.core.sim.world.ships[0];
     println!(
         "{:<10} probes {} ticks {:<5} air {:<4} partial {:<4} mean speed {:.1} laps {:<3} respawns {:<3} per-lap shield {:?} end shield {:.1}",
         label,
@@ -99,7 +99,7 @@ fn sweep_one(source: &str, track: &str, label: &str) {
         partial,
         speed / ticks as f64,
         ship.standing.lap,
-        zone.sim.respawns_of(0),
+        zone.core.sim.respawns_of(0),
         lap_shield
             .iter()
             .map(|s| (s * 10.0).round() / 10.0)

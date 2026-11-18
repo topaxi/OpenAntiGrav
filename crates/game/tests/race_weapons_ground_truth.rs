@@ -210,7 +210,7 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
         oag_race::Mode::Zone,
     ] {
         let mut race = race_at_pad(mode);
-        race.sim.world.ships[0].pickup.weapon = None;
+        race.core.sim.world.ships[0].pickup.weapon = None;
         for _ in 0..120 {
             race.tick(&Default::default());
         }
@@ -302,7 +302,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     race.tick(&PlayerInputs::single(snapshot(&mut buttons, SQUARE)));
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert_eq!(
-        race.sim.world.projectiles.live(),
+        race.core.sim.world.projectiles.live(),
         oag_weapons::projectile::ROCKET_SHOTS,
         "firing a rocket on a real track did not put a full volley in the air"
     );
@@ -314,7 +314,11 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     // three copies of one shot look identical in a screenshot.
     let right = race.ship().physics.body.right();
     let lateral: Vec<f32> = (0..oag_weapons::projectile::ROCKET_SHOTS)
-        .map(|slot| race.sim.world.projectiles.slots[slot].velocity.dot(right))
+        .map(|slot| {
+            race.core.sim.world.projectiles.slots[slot]
+                .velocity
+                .dot(right)
+        })
         .collect();
     println!("lateral velocity components off the disc's own spread: {lateral:?}");
     assert!(
@@ -343,18 +347,18 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     let mut last_alive = [0usize; oag_weapons::projectile::ROCKET_SHOTS];
     let mut furthest = 0.0f32;
     let mut travelled = 0.0f32;
-    let mut previous = race.sim.world.projectiles.slots[0].position;
-    while race.sim.world.projectiles.live() > 0 {
+    let mut previous = race.core.sim.world.projectiles.slots[0].position;
+    while race.core.sim.world.projectiles.live() > 0 {
         // Slot 0 is the middle rocket, the one that flies straight - the outer
         // two may detonate a tick either side of it.
-        let flying = race.sim.world.projectiles.slots[0].position;
-        if race.sim.world.projectiles.slots[0].kind.is_some() {
+        let flying = race.core.sim.world.projectiles.slots[0].position;
+        if race.core.sim.world.projectiles.slots[0].kind.is_some() {
             furthest = furthest.max((flying - muzzle).length());
             travelled += (flying - previous).length();
             previous = flying;
         }
         for (slot, alive) in last_alive.iter_mut().enumerate() {
-            if race.sim.world.projectiles.slots[slot].kind.is_some() {
+            if race.core.sim.world.projectiles.slots[slot].kind.is_some() {
                 *alive = ticks;
             }
         }
@@ -374,7 +378,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
 
     // The reap in ticks, so a shot that ended on geometry is the one that
     // ended sooner than it.
-    let reap = (oag_weapons::projectile::MAX_FLIGHT_SECONDS / race.sim.dt()) as usize;
+    let reap = (oag_weapons::projectile::MAX_FLIGHT_SECONDS / race.core.sim.dt()) as usize;
     let stopped = last_alive.iter().filter(|&&t| t < reap).count();
 
     // The middle shot is aimed down the craft's own forward axis, so it is

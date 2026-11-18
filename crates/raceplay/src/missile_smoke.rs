@@ -163,12 +163,12 @@ impl Race {
     /// is (`Race::missile_head_model_matrices`); the original's stores its two
     /// matrices at `missile + 0xf0` and `+0x130` (`0x0011e640`, unread).
     pub(crate) fn advance_missile_smoke(&mut self) {
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         let Some(smoke) = self.view.missile_smoke.as_mut() else {
             return;
         };
         let (stub, helix) = (spec(smoke.trail.stub), spec(smoke.trail.helix));
-        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
+        for (slot, projectile) in self.core.sim.world.projectiles.slots.iter().enumerate() {
             if projectile.kind != Some(oag_tables::weapons::Weapon::Missile) {
                 smoke.owners[slot] = None;
                 continue;

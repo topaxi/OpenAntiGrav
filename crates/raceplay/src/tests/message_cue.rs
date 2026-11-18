@@ -12,10 +12,11 @@ fn a_message_line_showing_raises_the_message_cue_once() {
     setup.mode = Mode::SingleRace;
     let mut race = Race::start(setup);
     race.tick(&PlayerInputs::none());
-    race.sim.drain_cues();
+    race.core.sim.drain_cues();
     race.tick(&PlayerInputs::none());
     let count = |race: &Race| {
-        race.sim
+        race.core
+            .sim
             .pending_cues()
             .iter()
             .filter(|e| e.cue == Cue::Message)
@@ -24,10 +25,10 @@ fn a_message_line_showing_raises_the_message_cue_once() {
     assert_eq!(count(&race), 0, "no message raised, no cue");
 
     race.raise_message("ER_GMA", true);
-    race.sim.drain_cues();
+    race.core.sim.drain_cues();
     race.tick(&PlayerInputs::none());
-    assert_eq!(count(&race), 1, "{:?}", race.sim.pending_cues());
-    race.sim.drain_cues();
+    assert_eq!(count(&race), 1, "{:?}", race.core.sim.pending_cues());
+    race.core.sim.drain_cues();
     race.tick(&PlayerInputs::none());
     assert_eq!(
         count(&race),
@@ -39,10 +40,11 @@ fn a_message_line_showing_raises_the_message_cue_once() {
 /// The slots that raised [`Cue::Message`] when `slot`'s board shows a line.
 fn message_slots(race: &mut Race, slot: usize) -> Vec<u8> {
     race.tick(&PlayerInputs::none());
-    race.sim.drain_cues();
+    race.core.sim.drain_cues();
     race.view.huds[slot].messages.push("ER_GMA", true);
     race.tick(&PlayerInputs::none());
-    race.sim
+    race.core
+        .sim
         .drain_cues()
         .into_iter()
         .filter(|e| e.cue == Cue::Message)

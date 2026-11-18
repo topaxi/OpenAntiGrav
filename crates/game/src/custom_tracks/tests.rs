@@ -381,9 +381,9 @@ mod disc {
             let loaded = oag_raceplay::load(options).expect("loads");
             let mut race = oag_raceplay::Race::start(loaded.setup);
             for slot in 2..8 {
-                race.sim.world.ships[slot].active = false;
+                race.core.sim.world.ships[slot].active = false;
             }
-            race.sim.world.ships[0].active = false;
+            race.core.sim.world.ships[0].active = false;
             race
         };
         let (mut menu, mut cli) = (start(&from_menu), start(&from_cli));
@@ -391,9 +391,13 @@ mod disc {
         for tick in 0..1_800u64 {
             menu.tick(&inputs);
             cli.tick(&inputs);
-            assert_eq!(menu.sim.state_hash(), cli.sim.state_hash(), "tick {tick}");
+            assert_eq!(
+                menu.core.sim.state_hash(),
+                cli.core.sim.state_hash(),
+                "tick {tick}"
+            );
         }
-        assert!(menu.sim.world.ships[1].physics.body.position.length() > 100.0);
+        assert!(menu.core.sim.world.ships[1].physics.body.position.length() > 100.0);
     }
 }
 

@@ -432,12 +432,12 @@ fn state_of(session: &mut Session) -> State {
             .endrace
             .as_ref()
             .map(|endrace| if endrace.is_photo() { "photo" } else { "other" }.to_string());
-        state.hash = Some(format!("{:016x}", stage.race.sim.state_hash()));
-        state.sim_tick = Some(stage.race.sim.world.tick);
-        state.pilot_assist = Some(stage.race.sim.pilot_assist_level().name().to_string());
+        state.hash = Some(format!("{:016x}", stage.race.core.sim.state_hash()));
+        state.sim_tick = Some(stage.race.core.sim.world.tick);
+        state.pilot_assist = Some(stage.race.core.sim.pilot_assist_level().name().to_string());
         state.ghost_visible = Some(stage.race.ghost_visible());
         state.recorded_events = stage.race.recorded_event_count();
-        state.humans = Some(stage.race.sim.world.human_slots().count());
+        state.humans = Some(stage.race.core.sim.world.human_slots().count());
         state.hud = Some(
             if session.race_hud_hidden() {
                 "off"
@@ -464,16 +464,17 @@ fn resolved(session: &Session) -> Option<Resolved> {
     };
     Some(Resolved {
         mods: race.map_or_else(Vec::new, |race| {
-            race.sim
+            race.core
+                .sim
                 .extension_reports()
                 .into_iter()
                 .map(|r| r.mod_id)
                 .collect()
         }),
         pickup: race.and_then(|race| {
-            let slot = (0..usize::from(race.sim.world.ship_count))
-                .find(|&slot| race.sim.world.person_flown(slot))?;
-            race.sim.world.ships[slot]
+            let slot = (0..usize::from(race.core.sim.world.ship_count))
+                .find(|&slot| race.core.sim.world.person_flown(slot))?;
+            race.core.sim.world.ships[slot]
                 .pickup
                 .weapon
                 .map(|weapon| weapon.as_type().to_string())
@@ -498,7 +499,7 @@ fn resolved(session: &Session) -> Option<Resolved> {
         mode: options.mode.name().to_string(),
         target: race
             .filter(|_| options.mode == oag_race::Mode::Eliminator)
-            .map(|race| race.sim.eliminator_target()),
+            .map(|race| race.core.sim.eliminator_target()),
     })
 }
 

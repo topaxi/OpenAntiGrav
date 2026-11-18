@@ -38,13 +38,13 @@ fn eliminator(seed: u64) -> Option<race::Race> {
 /// with an empty slot - the only ticks a pad can grant anything in.
 fn pickups_and_empty_ticks(race: &mut race::Race) -> (u32, u32) {
     let parked = PlayerInputs::single(oag_gameplay::InputSnapshot::new());
-    let count = race.sim.world.ship_count as usize;
+    let count = race.core.sim.world.ship_count as usize;
     let mut was_empty = vec![true; count];
     let (mut pickups, mut empty_ticks) = (0, 0);
     for _ in 0..TICKS {
         race.tick(&parked);
         for (slot, was) in was_empty.iter_mut().enumerate().skip(1) {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             let empty = ship.pickup.is_empty();
             if empty && ship.physics.craft_state == CraftState::Racing {
                 empty_ticks += 1;
@@ -54,7 +54,7 @@ fn pickups_and_empty_ticks(race: &mut race::Race) -> (u32, u32) {
             }
             *was = empty;
         }
-        if race.sim.world.primary_race().finished {
+        if race.core.sim.world.primary_race().finished {
             break;
         }
     }
@@ -74,11 +74,11 @@ fn an_empty_slot_eliminator_opponent_collects_more_often_steering_for_pads() {
         let Some(mut steering) = eliminator(seed) else {
             return;
         };
-        assert_eq!(steering.sim.pad_seeking(), PadSeeking::EmptySlot);
+        assert_eq!(steering.core.sim.pad_seeking(), PadSeeking::EmptySlot);
         let (p, e) = pickups_and_empty_ticks(&mut steering);
         on = (on.0 + p, on.1 + e);
         let mut plain = eliminator(seed).expect("loaded once already");
-        plain.sim.set_pad_seeking(PadSeeking::Off);
+        plain.core.sim.set_pad_seeking(PadSeeking::Off);
         let (p, e) = pickups_and_empty_ticks(&mut plain);
         off = (off.0 + p, off.1 + e);
     }
@@ -110,8 +110,8 @@ fn a_single_race_does_not_steer_for_pads() {
     .expect("loading the race");
     let race = race::Race::start(loaded.setup);
     assert!(
-        !race.sim.weapon_pads().is_empty(),
+        !race.core.sim.weapon_pads().is_empty(),
         "a Single Race arms its pads"
     );
-    assert_eq!(race.sim.pad_seeking(), PadSeeking::Off);
+    assert_eq!(race.core.sim.pad_seeking(), PadSeeking::Off);
 }

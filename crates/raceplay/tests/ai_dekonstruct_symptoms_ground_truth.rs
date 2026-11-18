@@ -151,17 +151,17 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
     crate::perturb::apply(&mut setup, 0.0);
     let mut race = race::Race::start(setup);
     let slots: Vec<usize> = if field {
-        (1..race.sim.ship_count() as usize).collect()
+        (1..race.core.sim.ship_count() as usize).collect()
     } else {
         vec![1]
     };
-    for slot in 0..race.sim.ship_count() as usize {
+    for slot in 0..race.core.sim.ship_count() as usize {
         if !slots.contains(&slot) {
-            race.sim.world.ships[slot].active = false;
+            race.core.sim.world.ships[slot].active = false;
         }
     }
     let mut out = Symptoms {
-        plan_lap: race.sim.build_speed_plan(1).1.verify_lap_ticks,
+        plan_lap: race.core.sim.build_speed_plan(1).1.verify_lap_ticks,
         ..Symptoms::default()
     };
     let n = slots.len();
@@ -176,16 +176,16 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
         let mut live = false;
         for (k, &slot) in slots.iter().enumerate() {
             // A copy: `plan_of` below borrows the race mutably.
-            let ship = race.sim.world.ships[slot];
+            let ship = race.core.sim.world.ships[slot];
             let body = &ship.physics.body;
             let speed = body.linear_velocity.dot(body.forward()).max(0.0);
             let index = ship.driver.index;
-            if race.sim.respawns_of(slot) != respawns[k] {
-                respawns[k] = race.sim.respawns_of(slot);
+            if race.core.sim.respawns_of(slot) != respawns[k] {
+                respawns[k] = race.core.sim.respawns_of(slot);
                 recovered[k] = true;
             }
-            let contact = race.sim.wall_contact_ticks_of(slot) != contacts[k];
-            contacts[k] = race.sim.wall_contact_ticks_of(slot);
+            let contact = race.core.sim.wall_contact_ticks_of(slot) != contacts[k];
+            contacts[k] = race.core.sim.wall_contact_ticks_of(slot);
             let h = &mut history[k];
             h.push(speed);
             let from = h.len().saturating_sub(STOP_WITHIN);
@@ -231,7 +231,7 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
     out.destroyed = slots
         .iter()
         .filter(|&&s| {
-            let ship = &race.sim.world.ships[s];
+            let ship = &race.core.sim.world.ships[s];
             ship.physics.craft_state != oag_physics::CraftState::Racing && !ship.standing.finished()
         })
         .count() as u32;

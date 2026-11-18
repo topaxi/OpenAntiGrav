@@ -180,7 +180,7 @@ fn a_later_views_reticle_follows_its_own_slots_lock() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[3].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.core.sim.world.ships[3].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
     let mut seen = false;
     for _ in 0..200 {
         race.tick(&PlayerInputs::none());
@@ -432,7 +432,7 @@ fn hd_reticle_in_split_view(loaded: &race::Loaded, cut: oag_render::viewport::Cu
         race.tick(&PlayerInputs::none());
     }
     for slot in 0..2 {
-        race.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+        race.core.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
     }
 
     let mut drawn = [false; 2];

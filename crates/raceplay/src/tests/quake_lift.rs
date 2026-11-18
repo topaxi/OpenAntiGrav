@@ -16,15 +16,16 @@ fn quake_race() -> Race {
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
     let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
     race.tick(&PlayerInputs::default());
     race
 }
 
 fn quake_hits(race: &mut Race) -> usize {
-    race.sim
+    race.core
+        .sim
         .drain_cues()
         .into_iter()
         .filter(|e| e.cue == Cue::QuakeHit && e.slot == 0)
@@ -33,7 +34,7 @@ fn quake_hits(race: &mut Race) -> usize {
 
 /// A wave the other craft fired, born so its bump arrives on slot 0 this tick.
 fn wave_on_the_player(race: &Race, age: f32) -> Wave {
-    let progress = race.sim.world.ships[0]
+    let progress = race.core.sim.world.ships[0]
         .standing
         .progress
         .expect("the first tick locates the craft");
@@ -47,14 +48,14 @@ fn wave_on_the_player(race: &Race, age: f32) -> Wave {
 #[test]
 fn a_wave_reaching_the_player_lifts_it_and_hits_once() {
     let mut race = quake_race();
-    let _ = race.sim.drain_cues();
-    race.sim.world.quake = Some(wave_on_the_player(&race, 0.3));
+    let _ = race.core.sim.drain_cues();
+    race.core.sim.world.quake = Some(wave_on_the_player(&race, 0.3));
     let mut hits = 0;
     let mut peak = 0.0f32;
     for _ in 0..3 {
         race.tick(&PlayerInputs::default());
         hits += quake_hits(&mut race);
-        peak = peak.max(race.sim.world.ships[0].quake_lift);
+        peak = peak.max(race.core.sim.world.ships[0].quake_lift);
     }
     assert!(peak > 0.1, "the wave never lifted the craft: {peak}");
     assert_eq!(hits, 1, "the hit lands once on the rising edge");
@@ -66,20 +67,20 @@ fn the_lift_keeps_decaying_after_the_wave_is_gone() {
     // Born one tick short of its end, so it expires this tick and is dropped.
     let mut wave = wave_on_the_player(&race, 4.999);
     wave.owner = 1;
-    race.sim.world.quake = Some(wave);
-    race.sim.world.ships[0].quake_lift = 1.0;
+    race.core.sim.world.quake = Some(wave);
+    race.core.sim.world.ships[0].quake_lift = 1.0;
     race.tick(&PlayerInputs::default());
     assert!(
-        race.sim.world.quake.is_none(),
+        race.core.sim.world.quake.is_none(),
         "the wave should have expired"
     );
-    let after_expiry = race.sim.world.ships[0].quake_lift;
+    let after_expiry = race.core.sim.world.ships[0].quake_lift;
     assert!(
         after_expiry > 0.0 && after_expiry < 1.0,
         "the lift froze or vanished with the wave: {after_expiry}"
     );
     race.tick(&PlayerInputs::default());
-    assert!(race.sim.world.ships[0].quake_lift < after_expiry);
+    assert!(race.core.sim.world.ships[0].quake_lift < after_expiry);
 }
 
 #[test]
@@ -87,7 +88,7 @@ fn the_cockpit_view_rises_with_the_lift() {
     let mut race = quake_race();
     race.view.camera_view = oag_display::display::CameraView::Internal;
     let level = race.tick_view_unshaken();
-    race.sim.world.ships[0].quake_lift = 2.0;
+    race.core.sim.world.ships[0].quake_lift = 2.0;
     let lifted = race.tick_view_unshaken();
     assert_ne!(level, lifted, "the cockpit eye ignores the wave height");
 }
@@ -115,10 +116,10 @@ fn cockpit_view_with(race: &Race, lift: f32) -> Mat4 {
 /// A real wave over the player under `law`, in the cockpit view.
 fn fly_wave_in_the_cockpit(law: QuakeHit) -> Flown {
     let mut race = quake_race();
-    race.sim.quake_hit = law;
+    race.core.sim.quake_hit = law;
     race.view.camera_view = oag_display::display::CameraView::Internal;
-    let _ = race.sim.drain_cues();
-    race.sim.world.quake = Some(wave_on_the_player(&race, 0.3));
+    let _ = race.core.sim.drain_cues();
+    race.core.sim.world.quake = Some(wave_on_the_player(&race, 0.3));
     let mut flown = Flown {
         hits: 0,
         peak: 0.0,
@@ -129,7 +130,7 @@ fn fly_wave_in_the_cockpit(law: QuakeHit) -> Flown {
     for _ in 0..3 {
         race.tick(&PlayerInputs::default());
         flown.hits += quake_hits(&mut race);
-        let lift = race.sim.world.ships[0].quake_lift;
+        let lift = race.core.sim.world.ships[0].quake_lift;
         if lift > flown.peak {
             flown.peak = lift;
             flown.view = race.tick_view_unshaken();

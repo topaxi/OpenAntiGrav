@@ -436,7 +436,7 @@ impl RaceStage {
     /// doc for why it takes primitives rather than a `&Race`.
     pub(crate) fn observation(&self) -> crate::records::Observation {
         let standing = self.race.player_standing();
-        let finished = self.race.sim.finished();
+        let finished = self.race.core.sim.finished();
         // A scored race (an HD Eliminator) is placed on its points, the board's own order, which
         // the results table, the headline, the voice and the record all read.
         let place = self
@@ -451,12 +451,14 @@ impl RaceStage {
             laps_completed: crate::records::laps_completed(
                 standing.lap,
                 finished,
-                self.race.sim.world.laps_target(),
+                self.race.core.sim.world.laps_target(),
             ),
             // The racing clock, so a finish time - and the medal and record
             // it feeds - excludes the start-line countdown.
             tick: oag_race::race_clock_ticks(
-                standing.finish_tick.unwrap_or(self.race.sim.world.tick),
+                standing
+                    .finish_tick
+                    .unwrap_or(self.race.core.sim.world.tick),
             ),
             best_lap_ticks: standing.best_lap_ticks,
             campaign_medal: self
@@ -487,10 +489,12 @@ impl RaceStage {
             place: self.race.player_place(),
             finish_centiseconds: finished.then(|| {
                 ticks_to_centiseconds(oag_race::race_clock_ticks(
-                    standing.finish_tick.unwrap_or(self.race.sim.world.tick),
+                    standing
+                        .finish_tick
+                        .unwrap_or(self.race.core.sim.world.tick),
                 ))
             }),
-            zone: self.race.sim.world.primary_race().zone,
+            zone: self.race.core.sim.world.primary_race().zone,
             kills: standing.kills,
         };
         match oag_2048::campaign::evaluate_tier(objectives, &outcome)? {
@@ -573,7 +577,7 @@ impl RaceStage {
     /// `Launch::record_result`.
     pub(crate) fn campaign_tier_name(&self) -> Option<String> {
         let standing = self.race.player_standing();
-        let tier = self.campaign_tier(self.race.sim.finished(), standing.best_lap_ticks)?;
+        let tier = self.campaign_tier(self.race.core.sim.finished(), standing.best_lap_ticks)?;
         Some(self.campaign_tiers().get(tier)?.name.clone())
     }
 
@@ -595,7 +599,7 @@ impl RaceStage {
                     .race
                     .player_standing()
                     .finish_tick
-                    .unwrap_or(self.race.sim.world.tick);
+                    .unwrap_or(self.race.core.sim.world.tick);
                 Some(ticks_to_centiseconds(oag_race::race_clock_ticks(tick)))
             }
             CampaignMode::Race | CampaignMode::Head2Head | CampaignMode::TimeTrial => None,
@@ -878,8 +882,8 @@ impl RaceStage {
             // **A resume countdown draws the same art on its own clock,
             // wherever on the track the race was paused.**
             let start_line = (!self.scene.draws_gantry()
-                && oag_race::RaceState::thrust_gated(self.race.sim.world.tick))
-            .then_some(self.race.sim.world.tick as f32 / 60.0);
+                && oag_race::RaceState::thrust_gated(self.race.core.sim.world.tick))
+            .then_some(self.race.core.sim.world.tick as f32 / 60.0);
             // The start's is one picture over the whole screen; a resume's is
             // one per view of a split, each centred as it would be alone
             // (chosen: a split's seam is no place for a digit). **In a multi-window

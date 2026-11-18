@@ -30,11 +30,11 @@ fn a_single_race_with_weapons_off_has_no_pads_on_pulse() {
         return;
     };
     assert!(
-        !on.sim.weapon_pad_refresh_left().is_empty(),
+        !on.core.sim.weapon_pad_refresh_left().is_empty(),
         "the default single race keeps its weapon pads"
     );
     assert!(
-        off.sim.weapon_pad_refresh_left().is_empty(),
+        off.core.sim.weapon_pad_refresh_left().is_empty(),
         "weapons OFF drops them"
     );
 }

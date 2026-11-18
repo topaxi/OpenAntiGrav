@@ -48,12 +48,12 @@ fn a_thrown_shuriken_leaves_at_the_recovered_angle() {
 
     assert_eq!(race.ship_pickup(), None, "throwing must spend the pickup");
     assert_eq!(
-        race.sim.world.projectiles.live(),
+        race.core.sim.world.projectiles.live(),
         1,
         "one press is one blade"
     );
 
-    let blade = race.sim.world.projectiles.slots[0];
+    let blade = race.core.sim.world.projectiles.slots[0];
     assert_eq!(blade.kind, Some(oag_tables::weapons::Weapon::Shuriken));
     // The fuse, not the ten-second safety net every other flier gets. Measured
     // one tick after the throw - the blade is spawned and then flown inside the
@@ -104,12 +104,12 @@ fn a_shurikens_side_is_drawn_and_both_sides_come_up() {
 
     let mut sides = (0, 0);
     for _ in 0..10 {
-        race.sim.world.projectiles.clear();
-        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shuriken);
+        race.core.sim.world.projectiles.clear();
+        race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shuriken);
         let mut buttons = Buttons::new();
         buttons.tick(0);
         race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
-        let blade = race.sim.world.projectiles.slots[0];
+        let blade = race.core.sim.world.projectiles.slots[0];
         assert_eq!(blade.kind, Some(oag_tables::weapons::Weapon::Shuriken));
         if blade.velocity.dot(right) > 0.0 {
             sides.0 += 1;
@@ -148,7 +148,7 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
         Some(oag_tables::weapons::Weapon::Plasma)
     );
     assert_eq!(
-        race.sim.world.projectiles.live(),
+        race.core.sim.world.projectiles.live(),
         0,
         "nothing before firing"
     );
@@ -159,12 +159,12 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
 
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert_eq!(
-        race.sim.world.projectiles.live(),
+        race.core.sim.world.projectiles.live(),
         1,
         "one press is one bolt, not a volley"
     );
 
-    let bolt = race.sim.world.projectiles.slots[0];
+    let bolt = race.core.sim.world.projectiles.slots[0];
     assert_eq!(bolt.kind, Some(oag_tables::weapons::Weapon::Plasma));
     assert_eq!(bolt.owner, 0);
     assert!(
@@ -201,7 +201,7 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
 fn a_craft_with_one_rocket_fires_one() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
-    race.sim.world.ships[0].weapon_counts =
+    race.core.sim.world.ships[0].weapon_counts =
         oag_weapons::counts::WeaponCounts::from_authored(Some(1.0), None);
     let mut buttons = Buttons::new();
 
@@ -211,22 +211,23 @@ fn a_craft_with_one_rocket_fires_one() {
         Some(oag_tables::weapons::Weapon::Rocket)
     );
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
-    assert_eq!(race.sim.world.projectiles.live(), 1);
+    assert_eq!(race.core.sim.world.projectiles.live(), 1);
 }
 
 /// A craft whose stats author three mines lays three, not the default five.
 #[test]
 fn a_craft_with_three_mines_lays_three() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(Arc::new(one_mine_table()));
-    race.sim.world.ships[0].weapon_counts =
+    race.core.sim.weapons = Some(Arc::new(one_mine_table()));
+    race.core.sim.world.ships[0].weapon_counts =
         oag_weapons::counts::WeaponCounts::from_authored(None, Some(3.0));
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
     let mut buttons = Buttons::new();
     let mut laid = 0;
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
     for _ in 0..120 {
         laid += race
+            .core
             .sim
             .drain_cues()
             .iter()
@@ -260,7 +261,7 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
         Some(oag_tables::weapons::Weapon::Rocket)
     );
     assert_eq!(
-        race.sim.world.projectiles.live(),
+        race.core.sim.world.projectiles.live(),
         0,
         "nothing before firing"
     );
@@ -271,13 +272,13 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
 
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert_eq!(
-        race.sim.world.projectiles.live(),
+        race.core.sim.world.projectiles.live(),
         oag_weapons::projectile::ROCKET_SHOTS,
         "one press is a volley of three"
     );
 
     for slot in 0..oag_weapons::projectile::ROCKET_SHOTS {
-        let rocket = race.sim.world.projectiles.slots[slot];
+        let rocket = race.core.sim.world.projectiles.slots[slot];
         assert_eq!(rocket.kind, Some(oag_tables::weapons::Weapon::Rocket));
         assert_eq!(rocket.owner, 0);
         assert!(
@@ -309,7 +310,11 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
     // which the count alone would not catch.
     let right = race.ship().physics.body.right();
     let lateral: Vec<f32> = (0..oag_weapons::projectile::ROCKET_SHOTS)
-        .map(|slot| race.sim.world.projectiles.slots[slot].velocity.dot(right))
+        .map(|slot| {
+            race.core.sim.world.projectiles.slots[slot]
+                .velocity
+                .dot(right)
+        })
         .collect();
     assert!(
         lateral.iter().any(|&l| l > 1.0) && lateral.iter().any(|&l| l < -1.0),

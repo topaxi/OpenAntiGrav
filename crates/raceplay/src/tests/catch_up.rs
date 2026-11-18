@@ -21,17 +21,17 @@ fn armed_pair() -> Race {
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_repulser_table());
     let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.controllers[1] = Controller::Remote;
-    let mut second = race.sim.world.ships[0];
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.controllers[1] = Controller::Remote;
+    let mut second = race.core.sim.world.ships[0];
     second.place_at(oag_gameplay::Pose {
         position: second.physics.body.position + second.physics.body.right() * 60.0,
         orientation: second.physics.body.orientation,
     });
-    race.sim.world.ships[1] = second;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].pickup.weapon = Some(oag_tables::weapons::Weapon::Repulser);
-    for ship in &mut race.sim.world.ships[..2] {
+    race.core.sim.world.ships[1] = second;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].pickup.weapon = Some(oag_tables::weapons::Weapon::Repulser);
+    for ship in &mut race.core.sim.world.ships[..2] {
         ship.physics.craft_state = oag_physics::CraftState::Racing;
     }
     race
@@ -55,7 +55,7 @@ fn agreed() -> (Box<Race>, Box<Race>) {
     for _ in 0..AGREED {
         server.tick_sim_only(&PlayerInputs::none());
         client.tick(&PlayerInputs::none());
-        client.sim.drain_cues();
+        client.core.sim.drain_cues();
     }
     (server, client)
 }
@@ -70,7 +70,7 @@ fn predict(
     let authoritative = server.snapshot_sim();
     for at in 0..WINDOW {
         client.tick(&window_input(at, guessed_fire));
-        client.sim.drain_cues();
+        client.core.sim.drain_cues();
     }
     let truth: Vec<PlayerInputs> = (0..WINDOW).map(|at| window_input(at, true)).collect();
     for inputs in &truth {
@@ -84,18 +84,24 @@ fn a_fire_first_seen_in_the_replay_is_started_late() {
     let (mut server, mut client) = agreed();
     let (authoritative, truth) = predict(&mut server, &mut client, false);
     assert!(
-        client.sim.world.repulsers.iter().flatten().count() == 0,
+        client.core.sim.world.repulsers.iter().flatten().count() == 0,
         "the client predicted a fire it had no input for"
     );
     client.reconcile(&authoritative, truth);
-    assert_eq!(client.sim.state_hash(), server.sim.state_hash());
+    assert_eq!(client.core.sim.state_hash(), server.core.sim.state_hash());
     let late = client.take_late_report();
     assert_eq!(late.cues, 1, "{late:?}");
     assert!(
         late.oldest_age >= (WINDOW - FIRE_AT - 2) as u32 && late.oldest_age <= WINDOW as u32,
         "the fire is as old as the ticks since it: {late:?}"
     );
-    let raised: Vec<Cue> = client.sim.drain_cues().into_iter().map(|e| e.cue).collect();
+    let raised: Vec<Cue> = client
+        .core
+        .sim
+        .drain_cues()
+        .into_iter()
+        .map(|e| e.cue)
+        .collect();
     assert_eq!(
         raised,
         vec![Cue::Repulsor],
@@ -111,7 +117,7 @@ fn a_fire_the_client_already_presented_is_not_presented_again() {
     let late = client.take_late_report();
     assert_eq!(late.cues, 0, "{late:?}");
     assert!(late.already_presented >= 1, "{late:?}");
-    assert!(client.sim.drain_cues().is_empty());
+    assert!(client.core.sim.drain_cues().is_empty());
 }
 
 #[test]
@@ -119,13 +125,13 @@ fn a_second_correction_over_the_same_window_adds_nothing() {
     let (mut server, mut client) = agreed();
     let (authoritative, truth) = predict(&mut server, &mut client, false);
     client.reconcile(&authoritative, truth.clone());
-    client.sim.drain_cues();
+    client.core.sim.drain_cues();
     let first = client.take_late_report();
     assert_eq!(first.cues, 1);
     client.reconcile(&authoritative, truth);
     let again = client.take_late_report();
     assert_eq!(again.cues, 0, "the same fire started twice: {again:?}");
-    assert!(client.sim.drain_cues().is_empty());
+    assert!(client.core.sim.drain_cues().is_empty());
 }
 
 #[test]
@@ -268,7 +274,7 @@ fn a_rocket_first_drawn_mid_flight_gets_its_effect_as_old_as_it_is() {
             race.view.handles.get(Trigger::RocketFlare).is_some(),
             "{report:?}"
         );
-        assert!(race.sim.world.projectiles.spawn_riding(
+        assert!(race.core.sim.world.projectiles.spawn_riding(
             oag_tables::weapons::Weapon::Rocket,
             launch,
             velocity,
@@ -281,7 +287,7 @@ fn a_rocket_first_drawn_mid_flight_gets_its_effect_as_old_as_it_is() {
     };
     /// Moves the one Rocket `ticks` ticks on, undrawn.
     fn fly(race: &mut Race, ticks: u32) {
-        let rocket = &mut race.sim.world.projectiles.slots[0];
+        let rocket = &mut race.core.sim.world.projectiles.slots[0];
         rocket.position += rocket.velocity * (ticks as f32 / 60.0);
         rocket.lifetime -= ticks as f32 / 60.0;
     }

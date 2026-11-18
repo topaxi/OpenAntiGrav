@@ -60,17 +60,17 @@ const SECONDS: u64 = 120;
 /// opponent LeachBeam that came up (`true` for once a trip).
 fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, Vec<bool>) {
     assert!(
-        race.sim.use_original_ai(None, 1),
+        race.core.sim.use_original_ai(None, 1),
         "the original driver flies"
     );
-    let count = usize::from(race.sim.ship_count());
+    let count = usize::from(race.core.sim.ship_count());
     let mut held = vec![0usize; count];
     let mut fired = 0;
     let mut beams = Vec::new();
     let mut was_up = false;
-    while race.sim.world.tick < oag_race::COUNTDOWN_TICKS + SECONDS * 60 {
+    while race.core.sim.world.tick < oag_race::COUNTDOWN_TICKS + SECONDS * 60 {
         race.tick(&PlayerInputs::none());
-        let beam = race.sim.world.leach_beams[0];
+        let beam = race.core.sim.world.leach_beams[0];
         if let Some(beam) = beam
             && beam.owner != 0
             && !was_up
@@ -79,7 +79,7 @@ fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, Vec<b
         }
         was_up = beam.is_some();
         let mut owned = vec![0usize; count];
-        for projectile in &race.sim.world.projectiles.slots {
+        for projectile in &race.core.sim.world.projectiles.slots {
             let owner = usize::from(projectile.owner);
             if projectile.kind.is_some() && owner < count {
                 owned[owner] += 1;
@@ -102,7 +102,7 @@ fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, Vec<b
 fn fires_original(source: String, mode: oag_race::Mode, per_trip: bool, terms: &str) {
     let fly_eliminator = source.contains("ps4");
     let race = started(source, mode, terms);
-    assert_eq!(race.sim.fire_law(), FireLaw::Original, "{mode:?}");
+    assert_eq!(race.core.sim.fire_law(), FireLaw::Original, "{mode:?}");
     if mode == oag_race::Mode::SingleRace || fly_eliminator {
         let (fired, beams) = opponents_fire_under_the_original_driver(race);
         println!(

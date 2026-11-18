@@ -152,15 +152,15 @@ impl Race {
     /// this tick.
     pub(super) fn advance_exhausts(&mut self) {
         self.advance_zoom();
-        for slot in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[slot].in_world() {
+        for slot in 0..self.core.sim.world.ship_count as usize {
+            if !self.core.sim.world.ships[slot].in_world() {
                 continue;
             }
-            let ship = &self.sim.world.ships[slot].physics;
+            let ship = &self.core.sim.world.ships[slot].physics;
             // Where the craft is drawn, so the reach below measures the nozzle against the
             // hull on the same pose while a correction glides out.
             let position = self.drawn_position(slot);
-            let thrust = if self.sim.zone.is_some() && ship.grounded > 0.0 {
+            let thrust = if self.core.sim.zone.is_some() && ship.grounded > 0.0 {
                 oag_physics::controls::CONTROL_MAX
             } else {
                 ship.thrust
@@ -168,7 +168,7 @@ impl Race {
             let speed = ship.body.linear_velocity.length();
             let back = -ship.body.forward();
             self.view.exhaust[slot].advance(
-                self.sim.dt,
+                self.core.sim.dt,
                 thrust,
                 speed,
                 &mut self.view.exhaust_rng[slot],
@@ -207,7 +207,7 @@ impl Race {
                     );
                     self.view.hd_trail[slot].push(
                         nozzle,
-                        self.sim.world.ships[slot].physics.body.up(),
+                        self.core.sim.world.ships[slot].physics.body.up(),
                         s01,
                     );
                 }
@@ -268,15 +268,15 @@ impl Race {
             return;
         }
         self.force_trail_sparks();
-        for owner in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[owner].in_world() || !self.trail_ready(owner) {
+        for owner in 0..self.core.sim.world.ship_count as usize {
+            if !self.core.sim.world.ships[owner].in_world() || !self.trail_ready(owner) {
                 continue;
             }
-            for intruder in 0..self.sim.world.ship_count as usize {
-                if intruder == owner || !self.sim.world.ships[intruder].in_world() {
+            for intruder in 0..self.core.sim.world.ship_count as usize {
+                if intruder == owner || !self.core.sim.world.ships[intruder].in_world() {
                     continue;
                 }
-                let at = self.sim.world.ships[intruder].physics.body.position;
+                let at = self.core.sim.world.ships[intruder].physics.body.position;
                 let hit = self.trail_touches(intruder, owner);
                 let bit = 1u8 << intruder;
                 if hit {
@@ -326,7 +326,10 @@ impl Race {
                 // hull instead of piling up behind it. Expendable: a craft in a
                 // trail holds about thirty instances at the every-tick rate, and
                 // a detonation or pickup burst must not lose its slot to them.
-                let velocity = self.sim.world.ships[intruder].physics.body.linear_velocity;
+                let velocity = self.core.sim.world.ships[intruder]
+                    .physics
+                    .body
+                    .linear_velocity;
                 let tint = self.trail_hit_tint();
                 self.view
                     .stage
@@ -386,7 +389,7 @@ impl Race {
         // hull, facing straight up, so it is on screen and clear of the exhaust
         // plume. What appears under the flag is therefore anchored exactly as a
         // real hit is - see [`hull_contact_point`].
-        let body = self.sim.world.ships[0].physics.body;
+        let body = self.core.sim.world.ships[0].physics.body;
         // The real placement with only the contact *direction* chosen: the
         // craft's own topmost authored spark anchor, so the burst is on the
         // hull exactly as a real hit is and still clear of the exhaust plume.
@@ -516,7 +519,7 @@ impl Race {
                     .trail_nearest(owner, point)
                     .is_some_and(|(_, away)| away <= reach)
         };
-        let at = self.sim.world.ships[slot].physics.body.position;
+        let at = self.core.sim.world.ships[slot].physics.body.position;
         let Some(anchors) = self.view.spark_anchors.get(slot).filter(|a| !a.is_empty()) else {
             return near(at, self.view.hull_reach[slot] + half_width);
         };
@@ -532,7 +535,7 @@ impl Race {
                 .fold(0.0f32, |far, a| far.max(a.x.hypot(a.y)));
             return near(at, radius + half_width);
         }
-        let matrix = model_matrix_of(&self.sim.world.ships[slot]);
+        let matrix = model_matrix_of(&self.core.sim.world.ships[slot]);
         anchors
             .iter()
             .any(|local| near(matrix.transform_point3(*local), half_width))
@@ -570,14 +573,14 @@ impl Race {
     #[must_use]
     pub fn spark_anchor_of(&self, slot: usize, owner: usize) -> Option<Vec3> {
         let anchors = self.view.spark_anchors.get(slot)?;
-        let matrix = model_matrix_of(&self.sim.world.ships[slot]);
+        let matrix = model_matrix_of(&self.core.sim.world.ships[slot]);
         // Where the craft *drives into* the ribbon: the point on it nearest the
         // hull's leading edge, not nearest the hull's centre. A craft already
         // inside a trail has the ribbon running through it end to end, so a
         // contact taken at the centre is equidistant from nose and tail and the
         // pick among anchors is a coin toss - which is how Assegai ended up
         // sparking from its own exhaust.
-        let body = self.sim.world.ships[slot].physics.body;
+        let body = self.core.sim.world.ships[slot].physics.body;
         let nose = body.position + body.forward() * self.view.hull_reach[slot];
         let contact = self.trail_nearest(owner, nose)?.0;
         anchors
@@ -726,10 +729,10 @@ impl Race {
     /// mid-fade shell for a craft that comes back.
     pub(super) fn advance_shields(&mut self) {
         for slot in 0..MAX_SHIPS {
-            if self.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0 {
+            if self.core.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0 {
                 self.view.shield[slot].deactivate();
             }
-            self.view.shield[slot].advance(self.sim.dt);
+            self.view.shield[slot].advance(self.core.sim.dt);
         }
     }
 
@@ -843,15 +846,15 @@ impl Race {
         // principle this function is built on - because a shortened step is
         // something the original's own variable timestep does anyway.
         let target = entry_intensity.unwrap_or(1.0).clamp(0.0, 1.0);
-        let ticks = target / exhaust::INTENSITY_RISE / self.sim.dt;
+        let ticks = target / exhaust::INTENSITY_RISE / self.core.sim.dt;
         // **The player's, and only the player's.** A pose comparison is against
         // one captured craft; posing the whole field would put seven opponents
         // into a boost the capture says nothing about.
         let (player, rng) = (&mut self.view.exhaust[0], &mut self.view.exhaust_rng[0]);
         for _ in 0..(ticks.floor() as u32) {
-            player.advance(self.sim.dt, Self::FULL_THRUST, speed, rng);
+            player.advance(self.core.sim.dt, Self::FULL_THRUST, speed, rng);
         }
-        let remainder = (ticks - ticks.floor()) * self.sim.dt;
+        let remainder = (ticks - ticks.floor()) * self.core.sim.dt;
         if remainder > 0.0 {
             player.advance(remainder, Self::FULL_THRUST, speed, rng);
         }
@@ -859,11 +862,11 @@ impl Race {
         // The zoom-streak pulse at the same age, so a posed frame shows the ring at the
         // `E` a paused capture of the original shows that long after the trigger.
         if let Some(pulse) = &mut self.view.zoom {
-            pulse.pose_boost(age, self.sim.dt);
+            pulse.pose_boost(age, self.core.sim.dt);
         }
-        let aged = (age / self.sim.dt).round() as u32;
+        let aged = (age / self.core.sim.dt).round() as u32;
         for _ in 0..aged {
-            player.advance(self.sim.dt, Self::FULL_THRUST, speed, rng);
+            player.advance(self.core.sim.dt, Self::FULL_THRUST, speed, rng);
         }
 
         // **A posed frame otherwise has no ribbon at all, and that silently
@@ -889,7 +892,7 @@ impl Race {
             let back = -self.ship().physics.body.forward();
             self.view.exhaust[0].clear_trail();
             for k in (0..self.view.exhaust[0].trail_samples_kept()).rev() {
-                let behind = back * (speed * self.sim.dt * k as f32);
+                let behind = back * (speed * self.core.sim.dt * k as f32);
                 self.view.exhaust[0].push_trail(nozzle + behind, back);
             }
             // The HD tube on the same straight-line terms, when it is the
@@ -899,7 +902,7 @@ impl Race {
                 let s01 = exhaust::hd::speed01(self.view.exhaust[0].speed_kmh(), 1.0);
                 self.view.hd_trail[0].clear();
                 for k in (0..exhaust::hd::SAMPLES).rev() {
-                    let behind = back * (speed * self.sim.dt * k as f32);
+                    let behind = back * (speed * self.core.sim.dt * k as f32);
                     self.view.hd_trail[0].push(nozzle + behind, up, s01);
                 }
             }
@@ -944,15 +947,15 @@ impl Race {
     /// timer, the flare and the ribbon's layers run on the same warmed trail a real crossing leaves, where
     /// [`Self::force_boost_state`] clears that trail and lays a straight one. `None` leaves every craft unboosted.
     pub fn warm_up_field(&mut self, velocities: &[Vec3], ticks: u32, boost_age: Option<f32>) {
-        let count = (self.sim.world.ship_count as usize).min(velocities.len());
+        let count = (self.core.sim.world.ship_count as usize).min(velocities.len());
         let at: Vec<Vec3> = (0..count)
-            .map(|slot| self.sim.world.ships[slot].physics.body.position)
+            .map(|slot| self.core.sim.world.ships[slot].physics.body.position)
             .collect();
         // What the replay borrows from each craft and hands back, so the frame is drawn
         // from the craft the capture posed and not from one flying at the replay's speed.
         let before: Vec<(Vec3, f32)> = (0..count)
             .map(|slot| {
-                let ship = &self.sim.world.ships[slot].physics;
+                let ship = &self.core.sim.world.ships[slot].physics;
                 (ship.body.linear_velocity, ship.thrust)
             })
             .collect();
@@ -961,21 +964,22 @@ impl Race {
             self.view.hd_trail[slot].clear();
         }
         // `force_boost_state`'s order: arm, then `aged` advances (the first is the entry tick).
-        let aged = boost_age.map(|age| (age / self.sim.dt).round() as u32);
+        let aged = boost_age.map(|age| (age / self.core.sim.dt).round() as u32);
         for behind in (0..ticks).rev() {
             if aged == Some(behind + 1) {
                 self.view.exhaust[0].boost(exhaust::BOOST_SECONDS);
             }
             for slot in 0..count {
-                let ship = &mut self.sim.world.ships[slot].physics;
-                ship.body.position = at[slot] - velocities[slot] * (self.sim.dt * behind as f32);
+                let ship = &mut self.core.sim.world.ships[slot].physics;
+                ship.body.position =
+                    at[slot] - velocities[slot] * (self.core.sim.dt * behind as f32);
                 ship.body.linear_velocity = velocities[slot];
                 ship.thrust = Self::FULL_THRUST;
             }
             if self.trail_hits_on() {
                 self.view
                     .stage
-                    .advance(self.sim.dt, &mut self.view.stage_rng);
+                    .advance(self.core.sim.dt, &mut self.view.stage_rng);
             }
             self.advance_exhausts();
             self.advance_trail_hits();
@@ -984,10 +988,10 @@ impl Race {
             self.view.exhaust[0].boost(exhaust::BOOST_SECONDS);
         }
         if let (Some(age), Some(pulse)) = (boost_age, &mut self.view.zoom) {
-            pulse.pose_boost(age, self.sim.dt);
+            pulse.pose_boost(age, self.core.sim.dt);
         }
         for (slot, (velocity, thrust)) in before.into_iter().enumerate() {
-            let ship = &mut self.sim.world.ships[slot].physics;
+            let ship = &mut self.core.sim.world.ships[slot].physics;
             ship.body.linear_velocity = velocity;
             ship.thrust = thrust;
         }
@@ -996,7 +1000,7 @@ impl Race {
     /// Runs the circuit's placed effects one step on the scenery clock - see
     /// `race::scenery_fx`.
     pub(super) fn advance_scenery_fx(&mut self, dt: f32) {
-        let seconds = self.sim.world.tick as f32 / 60.0;
+        let seconds = self.core.sim.world.tick as f32 / 60.0;
         self.view
             .scenery_fx
             .advance(&self.view.effects, dt, seconds);
@@ -1087,9 +1091,9 @@ impl Race {
     #[must_use]
     pub fn autopilot_is_active(&self) -> bool {
         (0..oag_gameplay::MAX_PLAYERS).any(|slot| {
-            self.sim.world.person_flown(slot)
+            self.core.sim.world.person_flown(slot)
                 && self.heard_here(slot)
-                && self.sim.world.ships[slot].autopilot_timer > 0.0
+                && self.core.sim.world.ships[slot].autopilot_timer > 0.0
         })
     }
 
@@ -1144,7 +1148,7 @@ impl Race {
             None => self.view.screen_flash.as_ref().and_then(|f| f.colour()),
         };
         // A module's `screen-fill` is the view's own slot's, so a seat wears its own.
-        let fill = self.sim.extension_fill(self.viewed_slot());
+        let fill = self.core.sim.extension_fill(self.viewed_slot());
         match (flash, fill) {
             (flash, None) => flash,
             (None, fill) => fill,
@@ -1231,7 +1235,7 @@ impl Race {
     /// bolt itself is released); the drawn matrix adds the display roll and lean.
     #[must_use]
     pub fn muzzle_of(&self, slot: usize) -> Option<Vec3> {
-        let local = self.sim.world.ships.get(slot)?.muzzle?;
+        let local = self.core.sim.world.ships.get(slot)?.muzzle?;
         Some(self.ship_model_matrix_of(slot).transform_point3(local))
     }
 
@@ -1250,7 +1254,7 @@ impl Race {
     /// A posed capture that runs the clock and then restores the pose it started from would
     /// otherwise leave the ribbon hanging off the pose the craft had turned to.
     pub fn place_player(&mut self, position: Vec3, orientation: Quat) {
-        let body = &mut self.sim.world.ships[FOLLOWED_SLOT].physics.body;
+        let body = &mut self.core.sim.world.ships[FOLLOWED_SLOT].physics.body;
         let turn = orientation * body.orientation.inverse();
         let from = body.position;
         body.position = position;

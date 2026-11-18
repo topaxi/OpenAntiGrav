@@ -49,7 +49,7 @@ fn residuals(disc: &str, track: &str) -> Option<Fired> {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    let dt = race.sim.dt();
+    let dt = race.core.sim.dt();
     let mut input: Option<Input> = None;
     let mut seen = [None::<u32>; oag_weapons::projectile::MAX_PROJECTILES];
     let mut out = Vec::new();
@@ -58,9 +58,9 @@ fn residuals(disc: &str, track: &str) -> Option<Fired> {
         let burst = tick >= 240 && tick % 90 < 20;
         // The autopilot fires nothing, so it flies between bursts and the pad
         // takes over for each one.
-        race.sim.set_autopilot(!burst);
+        race.core.sim.set_autopilot(!burst);
         if burst {
-            race.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
+            race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
         }
         let bits = if burst {
             Button::Cross.bit() | Button::Square.bit()
@@ -69,10 +69,10 @@ fn residuals(disc: &str, track: &str) -> Option<Fired> {
         };
         let snap = snapshot(bits, input.as_ref());
         input = Some(snap.buttons);
-        let before = race.sim.world.ships[0].physics;
-        let dimensions = race.sim.world.ships[0].handling.dimensions;
+        let before = race.core.sim.world.ships[0].physics;
+        let dimensions = race.core.sim.world.ships[0].handling.dimensions;
         race.tick(&PlayerInputs::single(snap));
-        for (slot, round) in race.sim.world.projectiles.slots.iter().enumerate() {
+        for (slot, round) in race.core.sim.world.projectiles.slots.iter().enumerate() {
             if round.kind != Some(Weapon::Cannon) || round.owner != 0 {
                 seen[slot] = None;
                 continue;
@@ -178,8 +178,9 @@ fn a_missile_fired_on_a_bank_is_born_riding_the_located_tracks_up() {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     let stats = race
+        .core
         .sim
         .missile_stats()
         .expect("the disc authors a Missile");
@@ -188,13 +189,14 @@ fn a_missile_fired_on_a_bank_is_born_riding_the_located_tracks_up() {
         let snap = snapshot(Button::Cross.bit(), input.as_ref());
         input = Some(snap.buttons);
         race.tick(&PlayerInputs::single(snap));
-        let up = race.sim.world.ships[0].physics.body.up();
+        let up = race.core.sim.world.ships[0].physics.body.up();
         if up.y > 0.9 {
             continue;
         }
-        race.sim.world.projectiles.clear();
-        assert!(race.sim.fire_missile(0, &stats));
+        race.core.sim.world.projectiles.clear();
+        assert!(race.core.sim.fire_missile(0, &stats));
         let missile = race
+            .core
             .sim
             .world
             .projectiles
@@ -202,7 +204,7 @@ fn a_missile_fired_on_a_bank_is_born_riding_the_located_tracks_up() {
             .iter()
             .find(|p| p.kind == Some(Weapon::Missile))
             .expect("a missile in the air");
-        let track_up = race.sim.world.ships[0]
+        let track_up = race.core.sim.world.ships[0]
             .track_up
             .expect("a stepped craft on a track with samples is located");
         assert_eq!(

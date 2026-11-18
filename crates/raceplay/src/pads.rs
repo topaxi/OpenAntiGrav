@@ -43,7 +43,7 @@ impl Race {
     /// jump both fall through to the single point: interpolating a zero-length
     /// step adds nothing, and interpolating a long one does not close the gap.
     pub(super) fn pad_sweep(&mut self, slot: usize, position: Vec3) -> (f32, Vec<Vec3>) {
-        let previous = self.sim.pad_previous_position[slot].replace(position);
+        let previous = self.core.sim.pad_previous_position[slot].replace(position);
         let moved = previous.map_or(f32::INFINITY, |from| position.distance(from));
         let sweep = match previous {
             Some(from) if (0.0..Self::PAD_SWEEP_LIMIT).contains(&moved) && moved > 0.0 => (1
@@ -77,23 +77,23 @@ impl Race {
         moved: f32,
         sweep: &[Vec3],
     ) -> Option<Vec3> {
-        if self.sim.speedup_pads.is_empty() {
+        if self.core.sim.speedup_pads.is_empty() {
             return None;
         }
 
         let mut hit = None;
-        for (index, pad) in self.sim.speedup_pads.iter().enumerate() {
+        for (index, pad) in self.core.sim.speedup_pads.iter().enumerate() {
             // The broadphase. Spend the distance travelled, and skip until it is
             // used up. `moved` is infinite on the first tick, so every pad is
             // measured once before any of them is skipped.
-            self.sim.pad_distance[slot][index] -= moved;
-            if self.sim.pad_distance[slot][index] > 0.0 {
+            self.core.sim.pad_distance[slot][index] -= moved;
+            if self.core.sim.pad_distance[slot][index] > 0.0 {
                 continue;
             }
 
             // Measured from the destination, which is where the cache has to be
             // correct from for the next tick's subtraction to mean anything.
-            self.sim.pad_distance[slot][index] = pad.distance(position.to_array());
+            self.core.sim.pad_distance[slot][index] = pad.distance(position.to_array());
 
             // First pad wins. The cache above is still updated for every pad whose
             // turn it was, or a skipped one would keep a stale distance forever.
@@ -115,19 +115,21 @@ impl Race {
         // the pad gives no push, and the entry below pays no plume, sound, boost count
         // or Zone score (chosen). The edge and the cache are the pad's as ever, and the
         // module hears every entry.
-        let factor = entered.map_or(1.0, |index| self.sim.extensions.pad_factor(slot, index));
-        if entered != self.sim.pad_current[slot] {
-            self.sim.pad_current[slot] = entered;
+        let factor = entered.map_or(1.0, |index| {
+            self.core.sim.extensions.pad_factor(slot, index)
+        });
+        if entered != self.core.sim.pad_current[slot] {
+            self.core.sim.pad_current[slot] = entered;
             if let Some(index) = entered {
-                self.sim.extensions.pad_entered(slot, index, false);
+                self.core.sim.extensions.pad_entered(slot, index, false);
             }
             if entered.is_some() && factor > 0.0 {
                 // The lap table's third column: `Ship_ApplySpeedupPad` adds one to the
                 // human craft's own per-lap counter on this same edge (`craft+0x900 +
                 // lap * 0x10 + 0x94`, its only writer). See [`RunStats`].
-                if self.sim.world.controllers[slot].is_human() {
+                if self.core.sim.world.controllers[slot].is_human() {
                     #[cfg(feature = "view")]
-                    let lap = self.sim.world.race[slot].lap;
+                    let lap = self.core.sim.world.race[slot].lap;
                     #[cfg(feature = "view")]
                     if self.draws() {
                         self.view.run_stats.count_boost(lap);
@@ -140,10 +142,10 @@ impl Race {
                 // score lands on the craft that actually crossed. Zone has no
                 // AI field today, so this gate is about who is being scored
                 // for rather than about excluding opponents.
-                if self.sim.world.controllers[slot].is_human()
-                    && self.sim.world.mode() == Mode::Zone
+                if self.core.sim.world.controllers[slot].is_human()
+                    && self.core.sim.world.mode() == Mode::Zone
                 {
-                    self.sim.world.race[slot].score += oag_race::zone::SPEEDUP_PAD_SCORE;
+                    self.core.sim.world.race[slot].score += oag_race::zone::SPEEDUP_PAD_SCORE;
                 }
                 // The visual, on the same edge and with the same **fixed**
                 // duration the original uses. `ExhaustFlare_OnSpeedupPad`
@@ -177,7 +179,7 @@ impl Race {
                 // layer decides how to place it now. See
                 // `oag_sound::sfx::Placement::CraftUnlessPlayer`, which
                 // carries the one hypothesis that split rides on.
-                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::SpeedupPad,
                     slot,
                 ));
@@ -240,7 +242,7 @@ impl Race {
         moved: f32,
         sweep: &[Vec3],
     ) {
-        if self.sim.weapon_pads.is_empty() {
+        if self.core.sim.weapon_pads.is_empty() {
             return;
         }
 
@@ -254,19 +256,19 @@ impl Race {
         // every tick: the player step runs before the opponents', lowest
         // person first, and the primary is always a person - slot 0 unless
         // slot 0 is handed to the AI.
-        if slot == self.sim.world.primary_slot() {
-            for left in &mut self.sim.weapon_pad_refresh_left {
-                *left = (*left - self.sim.dt).max(0.0);
+        if slot == self.core.sim.world.primary_slot() {
+            for left in &mut self.core.sim.weapon_pad_refresh_left {
+                *left = (*left - self.core.sim.dt).max(0.0);
             }
         }
 
         let mut hit = None;
-        for (index, pad) in self.sim.weapon_pads.iter().enumerate() {
-            self.sim.weapon_pad_distance[slot][index] -= moved;
-            if self.sim.weapon_pad_distance[slot][index] > 0.0 {
+        for (index, pad) in self.core.sim.weapon_pads.iter().enumerate() {
+            self.core.sim.weapon_pad_distance[slot][index] -= moved;
+            if self.core.sim.weapon_pad_distance[slot][index] > 0.0 {
                 continue;
             }
-            self.sim.weapon_pad_distance[slot][index] = pad.distance(position.to_array());
+            self.core.sim.weapon_pad_distance[slot][index] = pad.distance(position.to_array());
 
             if hit.is_none() && sweep.iter().any(|point| pad.contains(point.to_array())) {
                 hit = Some(index);
@@ -275,26 +277,26 @@ impl Race {
 
         // The edge, outside the loop for the same reason the speed pad's is: two
         // pads overlapping on one tick is one entry.
-        if hit == self.sim.weapon_pad_current[slot] {
+        if hit == self.core.sim.weapon_pad_current[slot] {
             return;
         }
-        self.sim.weapon_pad_current[slot] = hit;
+        self.core.sim.weapon_pad_current[slot] = hit;
         let Some(index) = hit else {
             return;
         };
         // A simulation mod hears every entry, cooling down or not.
-        self.sim.extensions.pad_entered(slot, index, true);
+        self.core.sim.extensions.pad_entered(slot, index, true);
 
         // Point 1 above. Unconditional, and before the grant, so a pad that
         // hands nothing over is still spent.
-        if self.sim.weapon_pad_refresh_left[index] > 0.0 {
+        if self.core.sim.weapon_pad_refresh_left[index] > 0.0 {
             // Still cooling down. The stamp is not refreshed - re-stamping would
             // make a craft parked on a pad hold it inert forever, and the
             // original cannot reach this branch at all: its timer is what
             // `Pad_ContainsPoint` is asked about before the hit is reported.
             return;
         }
-        self.sim.weapon_pad_refresh_left[index] = self.sim.weapon_pad_refresh;
+        self.core.sim.weapon_pad_refresh_left[index] = self.core.sim.weapon_pad_refresh;
 
         // **Nothing is granted to a craft whose Autopilot runs**, on any slot, an
         // opponent on this project's Autopilot included: `Ship_TestWeaponPads`
@@ -302,23 +304,25 @@ impl Race {
         // clear (`0x0883f0c0`), after `WeaponPads_TestCraft` has stamped the pad,
         // so the stamp above stays. Read statically on Pulse, confidence 80 - see
         // [`oag_title::weapons::Weapons::autopilot_pad_grants`].
-        if self.sim.world.ships[slot].autopilot_timer > 0.0 && !self.sim.autopilot_pad_grants {
+        if self.core.sim.world.ships[slot].autopilot_timer > 0.0
+            && !self.core.sim.autopilot_pad_grants
+        {
             return;
         }
 
         // Points 2 and 3.
-        if !self.sim.world.ships[slot].pickup.is_empty() {
+        if !self.core.sim.world.ships[slot].pickup.is_empty() {
             return;
         }
-        let Some(weapons) = self.sim.weapons.as_deref() else {
+        let Some(weapons) = self.core.sim.weapons.as_deref() else {
             return;
         };
-        let Some(table) = weapons.pickups_for(&self.sim.class) else {
+        let Some(table) = weapons.pickups_for(&self.core.sim.class) else {
             return;
         };
         // A mod's own pickup, drawn beside the title's weapons at its `[[pickup.odds]]`.
         let with_mod;
-        let mod_odds = self.sim.extensions.pickup_odds(&self.sim.class);
+        let mod_odds = self.core.sim.extensions.pickup_odds(&self.core.sim.class);
         let table = if mod_odds.is_empty() {
             table
         } else {
@@ -334,15 +338,15 @@ impl Race {
         // not depend on where it is; the rubber-banding is aimed at the player.
         // See `docs/gameplay/pickups.md`.
         // **Whichever slot a person flies**: their own place, their own column.
-        let who = if self.sim.world.person_flown(slot) {
+        let who = if self.core.sim.world.person_flown(slot) {
             oag_weapons::pickup::Driver::Human {
                 place: self.places()[slot],
-                field: self.sim.world.ship_count,
+                field: self.core.sim.world.ship_count,
             }
         } else {
             oag_weapons::pickup::Driver::Ai
         };
-        let last = self.sim.world.ships[slot].pickup.last;
+        let last = self.core.sim.world.ships[slot].pickup.last;
         // `None` for every non-2048 race and for a 2048 event whose weapon
         // set decodes to nothing recognised - the same "empty is no
         // restriction" reading `Setup::allowed_weapons`'s own doc comment
@@ -351,16 +355,18 @@ impl Race {
         // pads, not about who crosses them - **chosen, not measured**, since
         // no consumer of this mask has been found in `eboot.elf` to read
         // otherwise.
-        let allowed = (!self.sim.allowed_weapons.is_empty()).then_some(&*self.sim.allowed_weapons);
-        let drawn = oag_weapons::pickup::draw(&mut self.sim.world.rng, table, who, last, allowed);
+        let allowed =
+            (!self.core.sim.allowed_weapons.is_empty()).then_some(&*self.core.sim.allowed_weapons);
+        let drawn =
+            oag_weapons::pickup::draw(&mut self.core.sim.world.rng, table, who, last, allowed);
         if let Some(weapon) = drawn {
-            let pickup = &mut self.sim.world.ships[slot].pickup;
+            let pickup = &mut self.core.sim.world.ships[slot].pickup;
             pickup.grant(weapon);
             self.xp_weapon_pad(slot);
-            let pickup = &mut self.sim.world.ships[slot].pickup;
+            let pickup = &mut self.core.sim.world.ships[slot].pickup;
             // A simulation mod's `pickup-roll`: this grant becomes the mod's own pickup,
             // with `last` still the drawn weapon, so the title's repeat rule is unchanged.
-            if let Some(kind) = self.sim.extensions.rolls(slot, weapon) {
+            if let Some(kind) = self.core.sim.extensions.rolls(slot, weapon) {
                 pickup.weapon = Some(oag_tables::weapons::Weapon::Extension(kind));
             }
         }

@@ -96,8 +96,12 @@ fn image() -> Option<PathBuf> {
 /// Where a craft sits across the AI corridor, in the corridor's own lateral
 /// axis, and how far the corridor reaches either side of the line there.
 fn across(race: &race::Race, slot: usize) -> Option<(f32, f32, f32)> {
-    let ship = &race.sim.world.ships[slot];
-    let aim = race.sim.line_of(slot).aim(ship.driver.index as usize, 0.0);
+    let ship = &race.core.sim.world.ships[slot];
+    let aim = race
+        .core
+        .sim
+        .line_of(slot)
+        .aim(ship.driver.index as usize, 0.0);
     let frame = aim.corridor?;
     let offset = (ship.physics.body.position - aim.point).dot(frame.lateral);
     Some((offset, frame.left, frame.right))
@@ -139,9 +143,9 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
     let mut race = race::Race::start(loaded.setup);
     // Slot 0 flown too, so the grid stays together and craft actually end up
     // level with each other. A parked player is a race with seven craft in it.
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
 
-    let ships = race.sim.ship_count() as usize;
+    let ships = race.core.sim.ship_count() as usize;
     let mut shifting = [false; 8];
     // Where each craft stood at the end of last tick, which is what the driver saw when it
     // decided.
@@ -170,7 +174,7 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
         }
 
         for slot in 0..ships {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             let on = ship.physics.sideshift_timers.iter().any(|t| *t > 0.0);
             if on && !shifting[slot] {
                 // Which way it went, from the timer that armed. Index 1 is the
@@ -181,7 +185,11 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
                     -1.0
                 };
                 let room = previous[slot].map_or(f32::INFINITY, |position| {
-                    let aim = race.sim.line_of(slot).aim(ship.driver.index as usize, 0.0);
+                    let aim = race
+                        .core
+                        .sim
+                        .line_of(slot)
+                        .aim(ship.driver.index as usize, 0.0);
                     aim.corridor.map_or(f32::INFINITY, |frame| {
                         let offset = (position - aim.point).dot(frame.lateral);
                         let edge = if toward > 0.0 {

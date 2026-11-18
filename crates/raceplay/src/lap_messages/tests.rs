@@ -182,7 +182,7 @@ mod race_wiring {
     #[test]
     fn each_local_seat_grades_its_own_laps_into_its_own_view() {
         let (mut race, mut evaluated) = watched();
-        race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+        race.core.sim.world.controllers[1] = oag_gameplay::Controller::Local;
         let clean = evaluated;
         evaluated.wall.resolved = Some(contact());
         let done = oag_race::Outcome {
@@ -190,8 +190,8 @@ mod race_wiring {
             lap_ticks: Some(3600),
             ..Default::default()
         };
-        race.sim.world.race[0].lap = 2;
-        race.sim.world.race[1].lap = 2;
+        race.core.sim.world.race[0].lap = 2;
+        race.core.sim.world.race[1].lap = 2;
         race.observe_lap(0, &oag_race::Outcome::default(), &clean);
         race.observe_lap(1, &oag_race::Outcome::default(), &evaluated);
         assert!(!dirty_of(&race, 0));
@@ -208,12 +208,12 @@ mod race_wiring {
     }
 
     fn overlap_slots_0_and_1(race: &mut Race) {
-        let at = race.sim.world.ships[0].physics.body.position;
-        race.sim.world.ships[1].physics.body.position =
+        let at = race.core.sim.world.ships[0].physics.body.position;
+        race.core.sim.world.ships[1].physics.body.position =
             at + oag_core::math::Vec3::new(0.0, 0.0, 1.0);
-        race.sim.world.ships[0].physics.body.linear_velocity =
+        race.core.sim.world.ships[0].physics.body.linear_velocity =
             oag_core::math::Vec3::new(0.0, 0.0, 8.0);
-        race.sim.world.ships[1].physics.body.linear_velocity =
+        race.core.sim.world.ships[1].physics.body.linear_velocity =
             oag_core::math::Vec3::new(0.0, 0.0, -8.0);
     }
 
@@ -223,7 +223,7 @@ mod race_wiring {
     #[test]
     fn a_craft_to_craft_contact_spoils_both_laps() {
         let (mut race, clean) = watched();
-        race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+        race.core.sim.world.controllers[1] = oag_gameplay::Controller::Local;
         overlap_slots_0_and_1(&mut race);
         race.resolve_craft_pairs();
         race.observe_lap(0, &oag_race::Outcome::default(), &clean);
@@ -234,8 +234,8 @@ mod race_wiring {
     #[test]
     fn a_shielded_craft_keeps_its_lap_through_a_craft_contact() {
         let (mut race, clean) = watched();
-        race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
-        race.sim.world.ships[1].physics.shield_pickup_timer = 1.0;
+        race.core.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+        race.core.sim.world.ships[1].physics.shield_pickup_timer = 1.0;
         overlap_slots_0_and_1(&mut race);
         race.resolve_craft_pairs();
         race.observe_lap(0, &oag_race::Outcome::default(), &clean);
@@ -259,16 +259,21 @@ mod race_wiring {
     ) -> Vec<oag_gameplay::cue::Cue> {
         let (mut race, clean) = watched();
         race.view.huds[0].lap_watch = Some(LapWatch::new(hud, Some(stored)));
-        race.sim.world.race[0].lap = 2;
-        race.sim.world.race[0].best_lap_ticks = Some(3600);
-        race.sim.cues.clear();
+        race.core.sim.world.race[0].lap = 2;
+        race.core.sim.world.race[0].best_lap_ticks = Some(3600);
+        race.core.sim.cues.clear();
         let done = oag_race::Outcome {
             lap_completed: true,
             lap_ticks: Some(3600),
             ..Default::default()
         };
         race.observe_lap(0, &done, &clean);
-        race.sim.drain_cues().into_iter().map(|e| e.cue).collect()
+        race.core
+            .sim
+            .drain_cues()
+            .into_iter()
+            .map(|e| e.cue)
+            .collect()
     }
 
     /// Pulse voices the perfect lap on the crossing tick and, its executable

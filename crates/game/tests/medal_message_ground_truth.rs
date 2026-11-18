@@ -179,7 +179,7 @@ fn a_real_speed_lap_crossing_raises_the_banner_and_leaves_a_standing_line() {
     })
     .expect("loading 14_Track");
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     let gold = loaded
         .hud
         .context()
@@ -279,7 +279,7 @@ fn hd_speed_lap_raises_the_medal_and_its_voice_on_every_new_best_lap() {
             false,
         );
         let mut race = oag_raceplay::Race::start(loaded.setup.clone());
-        race.sim.set_autopilot(true);
+        race.core.sim.set_autopilot(true);
         race.watch_laps(&loaded.hud, None);
         let (mut earned, mut raised, mut best) = (None, Vec::new(), None);
         let (mut bests, mut cues) = (Vec::new(), Vec::new());
@@ -300,7 +300,8 @@ fn hd_speed_lap_raises_the_medal_and_its_voice_on_every_new_best_lap() {
                 raised.push((step, tier));
             }
             cues.extend(
-                race.sim
+                race.core
+                    .sim
                     .pending_cues()
                     .iter()
                     .filter(|e| Cue::SPEED_LAP_MEDAL.contains(&e.cue))

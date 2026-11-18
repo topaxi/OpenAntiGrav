@@ -24,7 +24,7 @@
 //!   methods it reaches interleave simulation statements with `#[cfg(feature = "view")]`
 //!   blocks (effects, camera shake, HUD messages), and one runs the other way: a HUD
 //!   message board decides whether a `Cue::Message` is raised. Most methods that read and
-//!   write this half alone are `impl RaceSim` methods, reached as `race.sim.x()`; the ones
+//!   write this half alone are `impl RaceSim` methods, reached as `race.core.sim.x()`; the ones
 //!   that read a view accessor (the seat's slot, the intro, who hears a cue) stay on `Race`.
 //! - **The extension runtime.** With the `extensions` feature, `extensions` holds the
 //!   module instances over `oag_modhost`, which `just check-deps` forbids to a gameplay
@@ -47,8 +47,9 @@ use super::*;
 
 /// The half of a race that decides what happens next.
 ///
-/// Reached as `Race::sim`. Holds no renderer, audio or windowing type - see the
-/// module doc comment for what stands between this and a crate of its own.
+/// Reached as `race.core.sim` ([`SimRace::sim`](super::SimRace::sim)). Holds no renderer,
+/// audio or windowing type - see the module doc comment for what stands between this and a
+/// crate of its own.
 ///
 /// # Why it is `Clone`
 ///
@@ -76,7 +77,7 @@ use super::*;
 /// its value's, so the text a restore is compared by still reads all of it.
 ///
 /// **Constant means constant after the first tick.** The plans, and the routes'
-/// plans, are written by [`Race::ensure_speed_plans`], and a test or a setter
+/// plans, are written by [`SimRace::ensure_speed_plans`], and a test or a setter
 /// may write any of the others, always through [`Arc::make_mut`] or a new
 /// [`Arc`]: a snapshot holding the old value keeps it. A snapshot from before
 /// the first tick therefore restores to a race with no plans, which learns them
@@ -127,7 +128,7 @@ pub struct RaceSim {
     /// race has no opponents or the plan did not verify clean. See
     /// [`RaceSim::field_speed_plan`] and `oag_ai::plan`.
     pub(super) speed_plan: Option<Arc<oag_ai::SpeedPlan>>,
-    /// Whether [`Race::ensure_speed_plans`] has run: the plans are learned on
+    /// Whether [`SimRace::ensure_speed_plans`] has run: the plans are learned on
     /// the first tick, not in `Race::start`, so a race whose opponents all fly
     /// the original driver can skip them.
     pub(super) plans_built: bool,

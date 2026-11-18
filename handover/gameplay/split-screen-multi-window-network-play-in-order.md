@@ -40,7 +40,7 @@ root, not in `oag-gameplay`. It advances `RaceSim`
 (`crates/raceplay/src/sim.rs`), which bundles `World` together with
 `CollisionWorld`, `Spline`, `ai_order: Vec<u32>`, `ai_tuning`,
 `weapon_pad_refresh_left` and a per-tick `cues: Vec<CueEvent>` audio-output
-accumulator (`self.sim.cues`, [ADR-0018](../../docs/architecture/adr/0018-audio-mixer-architecture.md)'s
+accumulator (`self.core.sim.cues`, [ADR-0018](../../docs/architecture/adr/0018-audio-mixer-architecture.md)'s
 "cues are a per-tick output, never `World` state") - `World` alone is not the
 simulation, and `RaceSim::state_hash` (`crates/raceplay/src/hash.rs`) hashes
 the extras precisely because of that. Every "`World`"/"`World::tick`"

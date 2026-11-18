@@ -69,8 +69,8 @@ fn run(class: &str, seed: u64, reversed: bool) -> Option<()> {
     })
     .expect("loading");
     let mut race = race::Race::start(loaded.setup);
-    race.sim.world.ships[0].active = false;
-    let count = race.sim.ship_count() as usize;
+    race.core.sim.world.ships[0].active = false;
+    let count = race.core.sim.ship_count() as usize;
     let mut c = vec![Craft::default(); count];
     let mut prev_wall = vec![0.0f32; count];
     let mut prev_roll = vec![0.0f32; count];
@@ -82,9 +82,10 @@ fn run(class: &str, seed: u64, reversed: bool) -> Option<()> {
     );
     for tick in 1..=TICKS {
         let before_shield: Vec<f32> = (0..count)
-            .map(|s| race.sim.world.ships[s].physics.shield)
+            .map(|s| race.core.sim.world.ships[s].physics.shield)
             .collect();
         let shots: Vec<_> = race
+            .core
             .sim
             .world
             .projectiles
@@ -95,11 +96,11 @@ fn run(class: &str, seed: u64, reversed: bool) -> Option<()> {
             .collect();
         race.tick(&PlayerInputs::none());
         for s in 1..count {
-            let ship = &race.sim.world.ships[s];
+            let ship = &race.core.sim.world.ships[s];
             let now = ship.physics.shield;
-            let wall = race.sim.wall_shield_charged_of(s);
-            let roll = race.sim.roll_shield_spent_of(s);
-            let resp = race.sim.respawns_of(s);
+            let wall = race.core.sim.wall_shield_charged_of(s);
+            let roll = race.core.sim.roll_shield_spent_of(s);
+            let resp = race.core.sim.respawns_of(s);
             let dwall = wall - prev_wall[s];
             let droll = roll - prev_roll[s];
             let dresp = resp - prev_resp[s];
@@ -176,7 +177,7 @@ fn run(class: &str, seed: u64, reversed: bool) -> Option<()> {
                         b.position.x,
                         b.position.y,
                         b.position.z,
-                        race.sim.wall_contact_ticks_of(s)
+                        race.core.sim.wall_contact_ticks_of(s)
                     );
                 }
             }
@@ -217,8 +218,8 @@ fn run(class: &str, seed: u64, reversed: bool) -> Option<()> {
             }
             let body = &ship.physics.body;
             let speed = body.linear_velocity.dot(body.forward()).max(0.0);
-            let contact = race.sim.wall_contact_ticks_of(s) != prev_contact[s];
-            prev_contact[s] = race.sim.wall_contact_ticks_of(s);
+            let contact = race.core.sim.wall_contact_ticks_of(s) != prev_contact[s];
+            prev_contact[s] = race.core.sim.wall_contact_ticks_of(s);
             let h = &mut c[s].stop_hist;
             h.push(speed);
             let from = h.len().saturating_sub(STOP_WITHIN);
@@ -239,9 +240,9 @@ fn run(class: &str, seed: u64, reversed: bool) -> Option<()> {
         }
     }
     let dead = c.iter().skip(1).filter(|x| x.dead_tick.is_some()).count();
-    let respawns: u32 = (1..count).map(|s| race.sim.respawns_of(s)).sum();
+    let respawns: u32 = (1..count).map(|s| race.core.sim.respawns_of(s)).sum();
     let end: Vec<String> = (1..count)
-        .map(|s| format!("{:.0}", race.sim.world.ships[s].physics.shield))
+        .map(|s| format!("{:.0}", race.core.sim.world.ships[s].physics.shield))
         .collect();
     let mut laps: Vec<String> = Vec::new();
     for lap in 1..=6u32 {

@@ -76,16 +76,17 @@ fn solo(track: PathBuf) -> Option<Solo> {
     let loaded = race::load(&o).ok()?;
     let mut race = race::Race::start(loaded.setup);
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
-    let (mut best, mut lap, mut started) = (None::<u64>, race.sim.world.ships[1].standing.lap, 0);
+    race.core.sim.world.ships[0].active = false;
+    let (mut best, mut lap, mut started) =
+        (None::<u64>, race.core.sim.world.ships[1].standing.lap, 0);
     let mut recovered = false;
     for tick in 0..18_000u64 {
-        let before = race.sim.respawns_of(1);
+        let before = race.core.sim.respawns_of(1);
         race.tick(&PlayerInputs::none());
-        recovered |= race.sim.respawns_of(1) != before;
-        let now = race.sim.world.ships[1].standing.lap;
+        recovered |= race.core.sim.respawns_of(1) != before;
+        let now = race.core.sim.world.ships[1].standing.lap;
         if now != lap {
             if lap > 1 && !recovered {
                 best = Some(best.map_or(tick - started, |b| b.min(tick - started)));
@@ -98,7 +99,7 @@ fn solo(track: PathBuf) -> Option<Solo> {
     Some(Solo {
         laps: lap,
         best,
-        respawns: race.sim.respawns_of(1),
+        respawns: race.core.sim.respawns_of(1),
     })
 }
 

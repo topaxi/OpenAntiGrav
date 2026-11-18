@@ -100,12 +100,12 @@ fn fly_through_first_reset(setup: race::Setup) -> Option<f32> {
     println!("reset collider {collider}, triangle at {centroid:?}, normal {normal:?}");
 
     let mut race = race::Race::start(setup);
-    assert_eq!(race.sim.respawns(), 0);
+    assert_eq!(race.core.sim.respawns(), 0);
 
     // Clear of the trigger and straight through it. Which side it starts on does
     // not matter: the swept ray crosses the plane either way.
     {
-        let body = &mut race.sim.world.ships[0].physics.body;
+        let body = &mut race.core.sim.world.ships[0].physics.body;
         body.position = centroid + normal * 20.0;
         body.linear_velocity = -normal * 600.0;
         body.angular_velocity = Vec3::ZERO;
@@ -113,10 +113,10 @@ fn fly_through_first_reset(setup: race::Setup) -> Option<f32> {
 
     for _ in 0..20 {
         race.tick(&PlayerInputs::none());
-        if race.sim.respawns() > 0 {
+        if race.core.sim.respawns() > 0 {
             let position = race.ship().physics.body.position;
             assert!(position.is_finite());
-            return race.sim.spline().distance_to(position);
+            return race.core.sim.spline().distance_to(position);
         }
     }
     None
@@ -178,7 +178,7 @@ fn pures_reset_surface_respawns_the_ship_too() {
 
     let max_half_width = {
         let race = race::Race::start(setup.clone());
-        race.sim.spline().max_half_width()
+        race.core.sim.spline().max_half_width()
     };
     let distance = fly_through_first_reset(setup)
         .expect("flying through Pure's reset surface did not respawn the ship");
@@ -269,13 +269,13 @@ fn touching_a_real_reset_volume_respawns_the_ship() {
     println!("reset collider {collider}, triangle at {centroid:?}, normal {normal:?}");
 
     let mut race = race::Race::start(setup);
-    assert_eq!(race.sim.respawns(), 0);
+    assert_eq!(race.core.sim.respawns(), 0);
 
     // Put the ship clear of the trigger and fire it straight through. Which side
     // of the triangle it starts on does not matter: the swept ray crosses the
     // plane either way.
     {
-        let body = &mut race.sim.world.ships[0].physics.body;
+        let body = &mut race.core.sim.world.ships[0].physics.body;
         body.position = centroid + normal * 20.0;
         body.linear_velocity = -normal * 600.0;
         body.angular_velocity = Vec3::ZERO;
@@ -283,13 +283,13 @@ fn touching_a_real_reset_volume_respawns_the_ship() {
 
     for _ in 0..20 {
         race.tick(&PlayerInputs::none());
-        if race.sim.respawns() > 0 {
+        if race.core.sim.respawns() > 0 {
             break;
         }
     }
 
     assert!(
-        race.sim.respawns() > 0,
+        race.core.sim.respawns() > 0,
         "flying through a real Reset triangle did not respawn the ship"
     );
 
@@ -298,13 +298,14 @@ fn touching_a_real_reset_volume_respawns_the_ship() {
     let position = race.ship().physics.body.position;
     assert!(position.is_finite());
     let distance = race
+        .core
         .sim
         .spline()
         .distance_to(position)
         .expect("the track has samples");
     println!("respawned {distance} from the nearest spline sample");
     assert!(
-        distance < race.sim.spline().max_half_width() * 2.0,
+        distance < race.core.sim.spline().max_half_width() * 2.0,
         "respawned {distance} from the spline, which is off the track"
     );
 }

@@ -76,9 +76,9 @@ impl Race {
     /// the destroyed-craft pass has settled every state.
     pub(super) fn advance_craft_flashes(&mut self) {
         let player = self.player_slot();
-        let dt = self.sim.dt;
-        for slot in 0..self.sim.world.ship_count as usize {
-            let ship = &self.sim.world.ships[slot];
+        let dt = self.core.sim.dt;
+        for slot in 0..self.core.sim.world.ship_count as usize {
+            let ship = &self.core.sim.world.ships[slot];
             let state = ship.physics.craft_state;
             let position = self.drawn_position(slot);
             let was = std::mem::replace(&mut self.view.craft_flashes.previous[slot], state);

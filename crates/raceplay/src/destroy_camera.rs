@@ -109,7 +109,7 @@ impl Race {
     /// racing again. Once a tick, after the craft's state has settled.
     pub(super) fn advance_destroy_camera(&mut self) {
         let player = self.player_slot();
-        let ship = &self.sim.world.ships[player];
+        let ship = &self.core.sim.world.ships[player];
         let state = ship.physics.craft_state;
         let subject = ship.physics.body.position;
         let out = matches!(

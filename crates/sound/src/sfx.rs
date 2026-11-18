@@ -169,7 +169,7 @@ pub(super) struct SfxVoices {
     /// `~PLASMATVL`'s held voice, one per **projectile** slot: a bolt is not
     /// the craft and several can be in the air, unlike the one-activation
     /// `Option<VoiceId>` of [`Self::shield`] (see [`Cue::PlasmaTravel`]). Driven
-    /// directly off `race.sim.world.projectiles.slots` in [`Audio::race_tick`],
+    /// directly off `race.core.sim.world.projectiles.slots` in [`Audio::race_tick`],
     /// as [`Engine`] reads craft position: a moving voice needs this tick's
     /// position. See [`TravelVoices`] for the shape the fields below share.
     plasma_travel: TravelVoices,
@@ -189,7 +189,7 @@ pub(super) struct SfxVoices {
     /// race's world-wide pool, not a slot in
     /// [`oag_weapons::projectile::Projectiles`] (see
     /// `oag_weapons::projectile::leach_beam`); driven directly off
-    /// `race.sim.world.leach_beams` (the first locked beam) for this tick's position.
+    /// `race.core.sim.world.leach_beams` (the first locked beam) for this tick's position.
     leach_attach: Option<VoiceId>,
     /// `~LEACHATTACH`'s voices when its event authors no loop (Omega's
     /// `_NGP_LEACHATTACH`): held as the handle, played once, stopped on release.

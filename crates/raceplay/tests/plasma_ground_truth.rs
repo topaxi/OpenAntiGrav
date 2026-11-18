@@ -97,7 +97,8 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 
 /// Every plasma bolt slot 0 has in the air.
 fn bolts(race: &race::Race) -> Vec<oag_weapons::projectile::Projectile> {
-    race.sim
+    race.core
+        .sim
         .world
         .projectiles
         .slots
@@ -140,7 +141,11 @@ fn moving_with(cage: bool) -> Option<(race::Race, oag_gameplay::InputSnapshot)> 
 fn the_discs_plasma_block_decodes_as_a_projectile() {
     let Some(loaded) = single_race() else { return };
     let race = race::Race::start(loaded.setup);
-    let plasma = race.sim.plasma_stats().expect("the disc authors a Plasma");
+    let plasma = race
+        .core
+        .sim
+        .plasma_stats()
+        .expect("the disc authors a Plasma");
 
     assert!(plasma.damage > 0.0, "no authored damage: {plasma:?}");
     assert!(plasma.blastradius > 0.0, "no authored blastradius");
@@ -169,7 +174,11 @@ fn the_discs_plasma_block_decodes_as_a_projectile() {
 
     // Harder than a rocket and slower to arrive is the shipped relationship on
     // both Pulse tables; asserting the *direction* keeps the number off the page.
-    let rocket = race.sim.rocket_stats().expect("the disc authors a Rocket");
+    let rocket = race
+        .core
+        .sim
+        .rocket_stats()
+        .expect("the disc authors a Rocket");
     assert!(
         plasma.damage > rocket.damage,
         "the plasma is not the heavier hit, which is what says these are two \
@@ -196,8 +205,12 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
     let Some((mut race, throttle)) = moving() else {
         return;
     };
-    let plasma = race.sim.plasma_stats().expect("the disc authors a Plasma");
-    let speed = race.sim.world.ships[0]
+    let plasma = race
+        .core
+        .sim
+        .plasma_stats()
+        .expect("the disc authors a Plasma");
+    let speed = race.core.sim.world.ships[0]
         .physics
         .body
         .linear_velocity
@@ -207,9 +220,9 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
         "the craft is barely moving at {speed:.1} units/s"
     );
 
-    let origin = race.sim.world.ships[0].physics.body.position;
-    let forward = race.sim.world.ships[0].physics.body.forward();
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
+    let origin = race.core.sim.world.ships[0].physics.body.position;
+    let forward = race.core.sim.world.ships[0].physics.body.forward();
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
 
     let mut buttons = Input::new();
     buttons.begin_frame(0);
@@ -296,7 +309,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
             // inside `Race::tick` (`crates/raceplay/src/tick.rs`), so the
             // velocity read here is exactly what the release computation
             // read this same tick - not a tick behind it.
-            let craft_kmh = race.sim.world.ships[0]
+            let craft_kmh = race.core.sim.world.ships[0]
                 .physics
                 .body
                 .linear_velocity
@@ -388,7 +401,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
     // and are still reachable. A weapon that reaches an impact with no authored
     // numbers is a bug in `pickup::IMPLEMENTED`, per `projectile::blast_stats`.
     assert!(
-        race.sim.plasma_stats().is_some(),
+        race.core.sim.plasma_stats().is_some(),
         "the table went away mid-race"
     );
     assert!(
@@ -442,7 +455,11 @@ fn a_plasma_bolt_that_times_out_far_above_the_track_hurts_nobody_below_it() {
     let Some((mut race, throttle)) = moving_with(false) else {
         return;
     };
-    let plasma = race.sim.plasma_stats().expect("the disc authors a Plasma");
+    let plasma = race
+        .core
+        .sim
+        .plasma_stats()
+        .expect("the disc authors a Plasma");
     assert!(
         plasma.blastradius > 0.0,
         "a zero radius reaches nobody anyway"
@@ -450,18 +467,19 @@ fn a_plasma_bolt_that_times_out_far_above_the_track_hurts_nobody_below_it() {
     assert!(plasma.damage > 0.0, "a zero damage credits nothing anyway");
 
     assert!(
-        race.sim.world.ship_count > 1,
+        race.core.sim.world.ship_count > 1,
         "a Single Race needs at least one opponent to stand nearby"
     );
     assert!(
-        race.sim.world.ships[1].active,
+        race.core.sim.world.ships[1].active,
         "slot 1 is not an active opponent"
     );
-    let sentinel_shield_before = race.sim.world.ships[1].physics.shield;
+    let sentinel_shield_before = race.core.sim.world.ships[1].physics.shield;
 
-    let above = race.sim.world.ships[0].physics.body.position + Vec3::Y * 10_000.0;
+    let above = race.core.sim.world.ships[0].physics.body.position + Vec3::Y * 10_000.0;
     assert!(
-        race.sim
+        race.core
+            .sim
             .world
             .projectiles
             .charge_up(above, Vec3::ZERO, 0, 0.0),
@@ -486,7 +504,7 @@ fn a_plasma_bolt_that_times_out_far_above_the_track_hurts_nobody_below_it() {
         // Before the tick, so the blast this tick's `projectile::step` may
         // spend sees slot 1 sitting next to the bolt.
         if let Some(bolt) = bolts(&race).first() {
-            race.sim.world.ships[1].physics.body.position = bolt.position + nearby_offset;
+            race.core.sim.world.ships[1].physics.body.position = bolt.position + nearby_offset;
         }
         race.tick(&PlayerInputs::single(throttle));
         ticks += 1;
@@ -512,9 +530,9 @@ fn a_plasma_bolt_that_times_out_far_above_the_track_hurts_nobody_below_it() {
     // teleported next to the bolt and nowhere else - so nothing but this
     // bolt's own blast can move its shield.
     assert_eq!(
-        race.sim.world.ships[1].physics.shield, sentinel_shield_before,
+        race.core.sim.world.ships[1].physics.shield, sentinel_shield_before,
         "the sentinel's shield moved from {} to {} - the timeout spent a blast \
          the original's teardown never reaches",
-        sentinel_shield_before, race.sim.world.ships[1].physics.shield
+        sentinel_shield_before, race.core.sim.world.ships[1].physics.shield
     );
 }

@@ -54,13 +54,13 @@ fn a_parked_player_eliminator_finishes_at_five(seed: u64) {
     let mut ended = None;
     for tick in 0..TICKS {
         race.tick(&parked);
-        if race.sim.world.primary_race().finished {
+        if race.core.sim.world.primary_race().finished {
             ended = Some(tick);
             break;
         }
     }
-    let kills: Vec<u32> = (0..race.sim.world.ship_count as usize)
-        .map(|slot| race.sim.world.ships[slot].standing.kills)
+    let kills: Vec<u32> = (0..race.core.sim.world.ship_count as usize)
+        .map(|slot| race.core.sim.world.ships[slot].standing.kills)
         .collect();
     println!(
         "seed {seed}: ended at {:?} s (original: 85 s), kills {kills:?}",
@@ -128,9 +128,9 @@ fn the_chosen_kill_target_is_what_the_eliminator_ends_on() {
         let mut best_when_ended = None;
         for _ in 0..TICKS * 3 {
             race.tick(&parked);
-            if race.sim.world.primary_race().finished {
-                best_when_ended = (0..race.sim.world.ship_count as usize)
-                    .map(|slot| race.sim.world.ships[slot].standing.kills)
+            if race.core.sim.world.primary_race().finished {
+                best_when_ended = (0..race.core.sim.world.ship_count as usize)
+                    .map(|slot| race.core.sim.world.ships[slot].standing.kills)
                     .max();
                 break;
             }
@@ -165,14 +165,14 @@ fn a_respawned_craft_keeps_its_place_in_the_race() {
         return;
     };
     let parked = PlayerInputs::single(oag_gameplay::InputSnapshot::new());
-    let slots = race.sim.world.ship_count as usize;
+    let slots = race.core.sim.world.ship_count as usize;
     let mut down = [None::<f32>; 8];
     let mut respawns = 0;
     for _ in 0..4000 {
         race.tick(&parked);
-        let course = race.sim.course().expect("a closed circuit").clone();
+        let course = race.core.sim.course().expect("a closed circuit").clone();
         for (slot, down) in down.iter_mut().enumerate().take(slots).skip(1) {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             let distance = ship.standing.distance(&course);
             match (ship.physics.craft_state, *down) {
                 (oag_physics::CraftState::Eliminated, None) => *down = Some(distance),

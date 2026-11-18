@@ -824,12 +824,12 @@ fn matrix(mount: &Mount, forward: Vec3) -> Mat4 {
 /// first line crossing, then the race-manager window the lap picks
 /// ([`BoardWindow::of`]), entered on the crossing that picked it.
 fn race_clock(clock: &Clock, tracker: &std::cell::Cell<BoardTracker>, race: &Race) -> f32 {
-    let tick = race.sim.world.tick;
+    let tick = race.core.sim.world.tick;
     let standing = race.player_standing();
     let Some(laps) = clock.laps else {
         return clock.seconds(tick);
     };
-    let window = BoardWindow::of(standing, race.sim.world.laps_target(), &laps);
+    let window = BoardWindow::of(standing, race.core.sim.world.laps_target(), &laps);
     let mut state = tracker.get();
     let entry = state.observe(tick, window, standing.lap_start_tick);
     tracker.set(state);

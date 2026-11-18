@@ -135,40 +135,41 @@ impl Race {
     /// that respawns this tick is placed where it is *put*, not where the
     /// explosion left it.
     pub(super) fn tick_destroyed_craft(&mut self) {
-        self.sim.tick_wreck_voice();
-        let mode = self.sim.world.mode();
+        self.core.sim.tick_wreck_voice();
+        let mode = self.core.sim.world.mode();
 
-        for slot in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[slot].active {
+        for slot in 0..self.core.sim.world.ship_count as usize {
+            if !self.core.sim.world.ships[slot].active {
                 continue;
             }
-            if self.sim.world.ships[slot].physics.craft_state != oag_physics::CraftState::Eliminated
+            if self.core.sim.world.ships[slot].physics.craft_state
+                != oag_physics::CraftState::Eliminated
             {
                 // Not currently down - the countdown has nothing to run and
                 // must not carry over into the *next* death, which would
                 // shorten it.
-                self.sim.respawn_delay[slot] = 0.0;
+                self.core.sim.respawn_delay[slot] = 0.0;
                 continue;
             }
             let delay = if mode == Mode::Eliminator {
-                eliminator_respawn_delay(self.sim.world.person_flown(slot))
+                eliminator_respawn_delay(self.core.sim.world.person_flown(slot))
             } else {
                 // The player's own ending is `RaceState::eliminate`; an
                 // opponent's wreck stays where it is (state 6, measured).
                 continue;
             };
 
-            if self.sim.respawn_delay[slot] <= 0.0 {
-                self.sim.respawn_delay[slot] = delay;
+            if self.core.sim.respawn_delay[slot] <= 0.0 {
+                self.core.sim.respawn_delay[slot] = delay;
                 if mode == Mode::Eliminator {
-                    self.sim.credit_kill(slot);
-                    if let Some(law) = self.sim.score_law {
-                        law.charge_death(&mut self.sim.world.ships[slot].standing);
+                    self.core.sim.credit_kill(slot);
+                    if let Some(law) = self.core.sim.score_law {
+                        law.charge_death(&mut self.core.sim.world.ships[slot].standing);
                     }
                 }
             }
-            self.sim.respawn_delay[slot] -= self.sim.dt;
-            if self.sim.respawn_delay[slot] > 0.0 {
+            self.core.sim.respawn_delay[slot] -= self.core.sim.dt;
+            if self.core.sim.respawn_delay[slot] > 0.0 {
                 // Still down.
                 continue;
             }
@@ -177,12 +178,12 @@ impl Race {
             // whose results screen has a row for it: a death is a fact about
             // the race, and `crates/raceplay/tests/ai_clean_lap_gate.rs` reads it
             // to tell a craft that died and came back from one that never died.
-            self.sim.world.ships[slot].standing.deaths += 1;
+            self.core.sim.world.ships[slot].standing.deaths += 1;
             // **A full pool, measured for the Eliminator's state 8**:
             // `Ship_UpdateRespawn` (state 8's update) calls `Ship_ResetShield`
             // on its way back to state 1.
-            let dimensions = self.sim.world.ships[slot].handling.dimensions;
-            oag_physics::damage::reset(&mut self.sim.world.ships[slot].physics, &dimensions);
+            let dimensions = self.core.sim.world.ships[slot].handling.dimensions;
+            oag_physics::damage::reset(&mut self.core.sim.world.ships[slot].physics, &dimensions);
 
             // The player's own last-known-good sample is latched separately
             // ([`RaceSim::last_on_track`]); an opponent's is read off its own
@@ -192,8 +193,8 @@ impl Race {
             // midpoint five units up, facing forty units down the tangent -
             // a stated departure, since `Race::respawn` is the one recovery
             // every path here shares.
-            let sample_index = if self.sim.world.person_flown(slot) {
-                Some(self.sim.last_on_track[slot] as usize)
+            let sample_index = if self.core.sim.world.person_flown(slot) {
+                Some(self.core.sim.last_on_track[slot] as usize)
             } else {
                 // **Where the wreck came to rest, not where the driver last
                 // looked.** `Driver::drive` does not run while a craft is down,
@@ -214,23 +215,23 @@ impl Race {
                 // other level. The window is the forward reach of a coast
                 // (about 250 units, 100 samples at 2.5 units, measured on
                 // `16_Track`) with room to spare.
-                let index = self.sim.line_of(slot).nearest(
-                    self.sim.world.ships[slot].physics.body.position,
-                    self.sim.world.ships[slot].driver.index as usize,
+                let index = self.core.sim.line_of(slot).nearest(
+                    self.core.sim.world.ships[slot].physics.body.position,
+                    self.core.sim.world.ships[slot].driver.index as usize,
                     RESPAWN_SEARCH_WINDOW,
                 );
-                self.sim.sample_index_for(slot, index)
+                self.core.sim.sample_index_for(slot, index)
             };
-            self.sim.last_respawn_cause[slot] = Some(respawn::RespawnCause::Destroyed);
+            self.core.sim.last_respawn_cause[slot] = Some(respawn::RespawnCause::Destroyed);
             self.respawn(slot, sample_index);
         }
         if mode != Mode::Eliminator {
             return;
         }
 
-        let target = self.sim.eliminator_kill_target;
-        let scored = self.sim.score_law.is_some();
-        let kills = self.sim.world.ships[..self.sim.world.ship_count as usize]
+        let target = self.core.sim.eliminator_kill_target;
+        let scored = self.core.sim.score_law.is_some();
+        let kills = self.core.sim.world.ships[..self.core.sim.world.ship_count as usize]
             .iter()
             .filter(|ship| ship.active)
             .map(|ship| {
@@ -245,8 +246,8 @@ impl Race {
         // Every person's race ends on the same count; the field's leader is the
         // event's, not a slot's.
         for slot in 0..oag_gameplay::MAX_PLAYERS {
-            if self.sim.world.person_flown(slot) {
-                self.sim.world.race[slot].eliminator_finished(target, kills);
+            if self.core.sim.world.person_flown(slot) {
+                self.core.sim.world.race[slot].eliminator_finished(target, kills);
             }
         }
     }
@@ -277,10 +278,10 @@ impl Race {
     /// on its own; stated rather than hidden, and `slot` is what to narrow
     /// if that reading is wrong.
     pub(super) fn eliminator_lap_health_refill(&mut self, slot: usize) {
-        if self.sim.world.mode() != Mode::Eliminator {
+        if self.core.sim.world.mode() != Mode::Eliminator {
             return;
         }
-        let ship = &mut self.sim.world.ships[slot];
+        let ship = &mut self.core.sim.world.ships[slot];
         if ship.physics.craft_state != oag_physics::damage::CraftState::Racing {
             return;
         }
@@ -321,16 +322,17 @@ impl Race {
     /// Autopilot: `Race::spend_pickup_under_autopilot` calls this first.
     pub(super) fn eliminator_absorb(&mut self, slot: usize) {
         let time = self
+            .core
             .sim
             .weapons
             .as_deref()
             .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Shield))
             .map(|shield| shield.time);
-        self.sim.world.ships[slot].pickup.take();
+        self.core.sim.world.ships[slot].pickup.take();
         if let Some(time) = time
-            && self.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0
+            && self.core.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0
         {
-            self.sim.world.ships[slot].physics.shield_pickup_timer = time;
+            self.core.sim.world.ships[slot].physics.shield_pickup_timer = time;
             self.shield_activate(slot);
         }
     }

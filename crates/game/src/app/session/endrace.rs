@@ -42,7 +42,7 @@ impl Session {
         if stage.demo.is_some() {
             return;
         }
-        if !stage.race.sim.finished() || stage.endrace.is_some() || stage.endrace_unavailable {
+        if !stage.race.core.sim.finished() || stage.endrace.is_some() || stage.endrace_unavailable {
             return;
         }
         // The prefetch still running on its worker: try again next frame rather than wait on it.
@@ -84,7 +84,7 @@ impl Session {
         // touched the page the room's owner set).
         let net = self.net.is_some();
         let mode = if net {
-            stage.race.sim.world.mode()
+            stage.race.core.sim.world.mode()
         } else {
             race_options.mode
         };
@@ -131,7 +131,7 @@ impl Session {
             .filter(|board| board.scored() && !split)
             .and_then(|board| board.player())
             .map(|row| row.place);
-        let standing = &stage.race.sim.world.ships[0].standing;
+        let standing = &stage.race.core.sim.world.ships[0].standing;
         let boosts = stage.race.run_stats().boosts_by_lap;
         let laps: Vec<oag_ui_screens::endrace::LapSplit> = (0..oag_race::MAX_RECORDED_LAPS)
             .filter_map(|index| {
@@ -159,7 +159,7 @@ impl Session {
             laps: observation.laps_completed,
             perfect_laps: 0,
             kills: standing.kills,
-            zones: u32::from(stage.race.sim.world.primary_race().zone),
+            zones: u32::from(stage.race.core.sim.world.primary_race().zone),
             perfect_zones: 0,
             difficulty: None,
             suggested_ship: false,
@@ -189,7 +189,7 @@ impl Session {
                     mode,
                     laps: observation.laps_completed,
                     kills: standing.kills,
-                    zones: u32::from(stage.race.sim.world.primary_race().zone),
+                    zones: u32::from(stage.race.core.sim.world.primary_race().zone),
                     difficulty: stage.campaign_difficulty,
                 });
                 let total = self.records.record_loyalty(title_ref, &team, award);
@@ -278,7 +278,7 @@ impl Session {
         let mut split_rewards = Vec::new();
         let split_results: Option<Vec<oag_ui_screens::endrace::Results>> =
             two_people.map(|board| {
-                let world = &stage.race.sim.world;
+                let world = &stage.race.core.sim.world;
                 crate::results_tables::split_people(board, world, &boosts)
                     .into_iter()
                     .map(|person| {
@@ -334,14 +334,14 @@ impl Session {
         } else if let Some(tournament) = pulse_tournament {
             ResultsModel::PulseTournament(tournament)
         } else if !is_hd && mode == oag_race::Mode::Eliminator {
-            let world = &stage.race.sim.world;
+            let world = &stage.race.core.sim.world;
             ResultsModel::PulseElimination(elimination_results(
                 &world.ships[..usize::from(world.ship_count)],
                 slot_teams.as_deref(),
             ))
         } else if !is_hd && mode == oag_race::Mode::Zone {
             ResultsModel::PulseZone(zone_results(
-                stage.race.sim.world.primary_race(),
+                stage.race.core.sim.world.primary_race(),
                 stage.race.run_stats(),
             ))
         } else if is_hd {

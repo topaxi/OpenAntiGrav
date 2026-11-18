@@ -83,8 +83,8 @@ impl Session {
             }
         };
         let header = &stage.replay_header;
-        let tick = race.sim.world.tick;
-        let hash = race.sim.state_hash();
+        let tick = race.core.sim.world.tick;
+        let hash = race.core.sim.state_hash();
         let setup = record
             .as_ref()
             .and_then(|record| record.replay.header.setup.as_ref());
@@ -100,7 +100,7 @@ impl Session {
         let slot = race
             .photo()
             .map_or_else(|| race.player_slot(), |photo| photo.subject());
-        let body = &race.sim.world.ships[slot].physics.body;
+        let body = &race.core.sim.world.ships[slot].physics.body;
         let craft = shot_meta::Craft {
             position: [body.position.x, body.position.y, body.position.z],
             rotation: [
@@ -130,6 +130,7 @@ impl Session {
                 id: listing.id.clone(),
                 version: listing.version.clone(),
                 sha256: race
+                    .core
                     .sim
                     .mods_used()
                     .iter()

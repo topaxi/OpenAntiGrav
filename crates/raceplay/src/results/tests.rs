@@ -14,8 +14,8 @@ use oag_gameplay::PlayerInputs;
 
 /// A craft that has crossed for the last time, on the tick given.
 fn finish(race: &mut Race, slot: usize, tick: u64) {
-    let laps_target = race.sim.world.laps_target().unwrap_or(0);
-    let standing = &mut race.sim.world.ships[slot].standing;
+    let laps_target = race.core.sim.world.laps_target().unwrap_or(0);
+    let standing = &mut race.core.sim.world.ships[slot].standing;
     standing.lap = laps_target + 1;
     standing.finish_tick = Some(tick);
 }
@@ -24,7 +24,7 @@ fn finish(race: &mut Race, slot: usize, tick: u64) {
 fn a_race_in_progress_has_no_results() {
     let mut race = race_with_a_grid();
     race.tick(&PlayerInputs::none());
-    assert!(!race.sim.finished());
+    assert!(!race.core.sim.finished());
     assert!(race.results().is_none());
 }
 
@@ -32,14 +32,20 @@ fn a_race_in_progress_has_no_results() {
 fn the_board_is_taken_on_the_tick_the_race_finishes() {
     let mut race = race_with_a_grid();
     finish(&mut race, 0, 5_000);
-    race.sim.world.primary_race_mut().finished = true;
+    race.core.sim.world.primary_race_mut().finished = true;
     race.tick(&PlayerInputs::none());
     let board = race
         .results()
         .expect("the race finished, so it has a board");
-    assert_eq!(board.rows.len(), usize::from(race.sim.world.ship_count));
-    assert_eq!(board.laps_target, race.sim.world.laps_target());
-    assert_eq!(board.tick, oag_race::race_clock_ticks(race.sim.world.tick));
+    assert_eq!(
+        board.rows.len(),
+        usize::from(race.core.sim.world.ship_count)
+    );
+    assert_eq!(board.laps_target, race.core.sim.world.laps_target());
+    assert_eq!(
+        board.tick,
+        oag_race::race_clock_ticks(race.core.sim.world.tick)
+    );
 }
 
 /// The board's times are the racing clock: the original's clocks start on the
@@ -50,7 +56,7 @@ fn a_finish_time_excludes_the_start_line_countdown() {
     let mut race = race_with_a_grid();
     finish(&mut race, 0, 5_000);
     finish(&mut race, 2, 5_100);
-    race.sim.world.primary_race_mut().finished = true;
+    race.core.sim.world.primary_race_mut().finished = true;
     race.capture_results();
     let board = race.results().expect("a board");
 
@@ -66,7 +72,7 @@ fn a_finish_time_excludes_the_start_line_countdown() {
 fn the_board_is_not_revised_after_it_is_taken() {
     let mut race = race_with_a_grid();
     finish(&mut race, 0, 1_000);
-    race.sim.world.primary_race_mut().finished = true;
+    race.core.sim.world.primary_race_mut().finished = true;
     race.capture_results();
     let taken = race.results().cloned().expect("a board");
 
@@ -80,7 +86,7 @@ fn a_finisher_is_placed_ahead_of_everyone_still_racing() {
     let mut race = race_with_a_grid();
     finish(&mut race, 5, 900);
     finish(&mut race, 0, 1_000);
-    race.sim.world.primary_race_mut().finished = true;
+    race.core.sim.world.primary_race_mut().finished = true;
     race.capture_results();
     let board = race.results().expect("a board");
 
@@ -96,7 +102,7 @@ fn a_finisher_is_placed_ahead_of_everyone_still_racing() {
 fn there_is_one_row_per_grid_slot() {
     let mut race = race_with_a_grid();
     finish(&mut race, 0, 1_000);
-    race.sim.world.primary_race_mut().finished = true;
+    race.core.sim.world.primary_race_mut().finished = true;
     race.capture_results();
     let board = race.results().expect("a board");
     assert_eq!(board.rows.len(), 8);
@@ -112,7 +118,7 @@ fn the_places_are_a_permutation_of_the_field() {
     let mut race = race_with_a_grid();
     finish(&mut race, 2, 800);
     finish(&mut race, 0, 1_000);
-    race.sim.world.primary_race_mut().finished = true;
+    race.core.sim.world.primary_race_mut().finished = true;
     race.capture_results();
     let board = race.results().expect("a board");
     let mut places: Vec<u8> = board.rows.iter().map(|row| row.place).collect();
@@ -126,27 +132,27 @@ fn the_places_are_a_permutation_of_the_field() {
 #[test]
 fn a_race_with_two_people_ends_when_both_have_finished() {
     let mut race = race_with_a_grid();
-    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
-    assert!(race.sim.world.person_flown(1));
+    race.core.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    assert!(race.core.sim.world.person_flown(1));
 
     finish(&mut race, 0, 1_000);
-    race.sim.world.race[0].finished = true;
+    race.core.sim.world.race[0].finished = true;
     race.tick(&PlayerInputs::none());
     assert!(
-        !race.sim.finished(),
+        !race.core.sim.finished(),
         "the race ended with a person still racing"
     );
-    assert!(!race.sim.runs_on_after_the_line());
+    assert!(!race.core.sim.runs_on_after_the_line());
     assert!(race.results().is_none(), "the board was taken early");
 
     finish(&mut race, 1, 1_200);
-    race.sim.world.race[1].finished = true;
+    race.core.sim.world.race[1].finished = true;
     race.tick(&PlayerInputs::none());
     assert!(
-        race.sim.finished(),
+        race.core.sim.finished(),
         "both people finished and the race did not"
     );
-    assert!(race.sim.runs_on_after_the_line());
+    assert!(race.core.sim.runs_on_after_the_line());
     let board = race.results().expect("the last person finished");
     let players: Vec<u8> = board
         .rows
@@ -163,19 +169,19 @@ fn a_race_with_two_people_ends_when_both_have_finished() {
 #[test]
 fn the_second_person_finishing_first_does_not_end_the_race() {
     let mut race = race_with_a_grid();
-    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
-    race.sim.world.race[1].finished = true;
-    assert!(!race.sim.finished());
+    race.core.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    race.core.sim.world.race[1].finished = true;
+    assert!(!race.core.sim.finished());
 }
 
 /// Two people on the straight, split in two, the first having crossed the line on
 /// `tick`: the view of the person who finished while the other is still racing.
 fn first_person_finished(tick: u64) -> Race {
     let mut race = race_with_a_grid();
-    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    race.core.sim.world.controllers[1] = oag_gameplay::Controller::Local;
     assert_eq!(race.set_viewport_count(2), 2);
     finish(&mut race, 0, tick);
-    race.sim.world.race[0].finished = true;
+    race.core.sim.world.race[0].finished = true;
     race.tick(&PlayerInputs::none());
     race
 }
@@ -186,7 +192,10 @@ fn first_person_finished(tick: u64) -> Race {
 #[test]
 fn a_person_who_has_finished_sees_it_while_the_other_races_on() {
     let race = first_person_finished(5_000);
-    assert!(!race.sim.finished(), "the second person is still racing");
+    assert!(
+        !race.core.sim.finished(),
+        "the second person is still racing"
+    );
     assert_eq!(race.views_drawn(), 2, "the split stays until the race ends");
 
     let line = |readout: &oag_hud::Readout| {
@@ -210,7 +219,7 @@ fn a_person_who_has_finished_sees_it_while_the_other_races_on() {
 fn one_person_gets_no_finished_line() {
     let mut race = race_with_a_grid();
     finish(&mut race, 0, 5_000);
-    race.sim.world.race[0].finished = true;
+    race.core.sim.world.race[0].finished = true;
     race.tick(&PlayerInputs::none());
     assert!(
         race.readout_for(0).messages[oag_hud::messages::SLOTS - 1].is_none(),
@@ -225,9 +234,9 @@ fn one_person_gets_no_finished_line() {
 fn the_end_screens_sit_over_one_view_and_the_split_is_kept() {
     let mut race = first_person_finished(5_000);
     finish(&mut race, 1, 5_300);
-    race.sim.world.race[1].finished = true;
+    race.core.sim.world.race[1].finished = true;
     race.tick(&PlayerInputs::none());
-    assert!(race.sim.finished());
+    assert!(race.core.sim.finished());
     assert_eq!(race.views_drawn(), 1);
     assert_eq!(race.viewport_count(), 2);
 }
@@ -238,13 +247,16 @@ fn the_end_screens_sit_over_one_view_and_the_split_is_kept() {
 #[test]
 fn the_operators_autopilot_flies_every_local_seat_and_no_other() {
     let mut race = race_with_a_grid();
-    race.sim.set_autopilot(true);
-    assert!(race.sim.flown_for_the_player(0));
-    assert!(!race.sim.flown_for_the_player(1), "an AI slot");
-    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
-    assert!(race.sim.flown_for_the_player(1), "a second local seat");
-    race.sim.world.controllers[1] = oag_gameplay::Controller::Remote;
-    assert!(!race.sim.flown_for_the_player(1), "somebody else's craft");
+    race.core.sim.set_autopilot(true);
+    assert!(race.core.sim.flown_for_the_player(0));
+    assert!(!race.core.sim.flown_for_the_player(1), "an AI slot");
+    race.core.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    assert!(race.core.sim.flown_for_the_player(1), "a second local seat");
+    race.core.sim.world.controllers[1] = oag_gameplay::Controller::Remote;
+    assert!(
+        !race.core.sim.flown_for_the_player(1),
+        "somebody else's craft"
+    );
 }
 
 /// A network race names its people on the board it leaves: the name each seat raced under, on a
@@ -254,7 +266,7 @@ fn a_person_s_row_carries_the_name_they_raced_under() {
     let mut race = race_with_a_grid();
     race.set_person_names(vec!["Ada".into(), String::new(), "Eve".into()]);
     finish(&mut race, 0, 5_000);
-    race.sim.world.primary_race_mut().finished = true;
+    race.core.sim.world.primary_race_mut().finished = true;
     race.capture_results();
     let board = race.results().expect("a board");
     let name = |slot| {
@@ -278,9 +290,9 @@ fn a_person_s_row_carries_the_name_they_raced_under() {
 fn player_won() -> Race {
     let mut race = race_with_a_grid();
     finish(&mut race, 0, 1_000);
-    race.sim.world.primary_race_mut().finished = true;
+    race.core.sim.world.primary_race_mut().finished = true;
     race.tick(&PlayerInputs::none());
-    assert!(race.sim.runs_on_after_the_line());
+    assert!(race.core.sim.runs_on_after_the_line());
     assert!(race.results().is_some());
     race
 }
@@ -325,7 +337,7 @@ fn the_players_row_and_the_finish_tick_stay_as_the_finish_took_them() {
     let mut race = race_with_a_grid();
     race.set_person_names(vec!["Ada".into()]);
     finish(&mut race, 0, 1_000);
-    race.sim.world.primary_race_mut().finished = true;
+    race.core.sim.world.primary_race_mut().finished = true;
     race.tick(&PlayerInputs::none());
     let (player, tick) = (row_of(&race, 0), race.results().expect("a board").tick);
 
@@ -380,8 +392,8 @@ fn refreshing_the_board_moves_no_state_hash() {
         refreshed.tick_finished();
         plain.tick(&PlayerInputs::none());
         assert_eq!(
-            refreshed.sim.state_hash(),
-            plain.sim.state_hash(),
+            refreshed.core.sim.state_hash(),
+            plain.core.sim.state_hash(),
             "diverged at run-on tick {tick}"
         );
     }
@@ -397,10 +409,10 @@ fn refreshing_the_board_moves_no_state_hash() {
 #[test]
 fn a_race_that_did_not_end_on_the_line_keeps_its_board() {
     let mut race = race_with_a_grid();
-    race.sim.world.primary_race_mut().finished = true;
+    race.core.sim.world.primary_race_mut().finished = true;
     race.tick(&PlayerInputs::none());
     assert!(race.results().is_some());
-    assert!(!race.sim.runs_on_after_the_line());
+    assert!(!race.core.sim.runs_on_after_the_line());
     let (held, revision) = (race.results().cloned(), race.results_revision());
     finish(&mut race, 3, 1_200);
     race.refresh_results();

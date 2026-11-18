@@ -241,8 +241,8 @@ impl Race {
     /// race without a transit.
     pub(super) fn advance_transits(&mut self) -> u32 {
         let mut out = 0;
-        for slot in 0..self.sim.world.ship_count as usize {
-            let Some(transit) = &mut self.sim.world.ships[slot].transit else {
+        for slot in 0..self.core.sim.world.ship_count as usize {
+            let Some(transit) = &mut self.core.sim.world.ships[slot].transit else {
                 continue;
             };
             transit.ticks_left = transit.ticks_left.saturating_sub(1);
@@ -255,7 +255,7 @@ impl Race {
                 exit_speed,
                 ..
             } = *transit;
-            self.sim.world.ships[slot].transit = None;
+            self.core.sim.world.ships[slot].transit = None;
             let exit = Exit {
                 to: to as usize,
                 route,
@@ -277,21 +277,22 @@ impl Race {
     /// charged. `false` when the course or the spline has nothing to place on, and the
     /// craft stays where it is.
     pub fn move_to(&mut self, slot: usize, exit: Exit, speed: f32) -> bool {
-        let Some(course) = &self.sim.course else {
+        let Some(course) = &self.core.sim.course else {
             return false;
         };
         let to = exit.to;
-        let Some(target) = self.sim.exit_position(exit) else {
+        let Some(target) = self.core.sim.exit_position(exit) else {
             return false;
         };
-        let Some(relocation) = crate::breadcrumbs::emerge(&self.sim.spline, target, speed) else {
+        let Some(relocation) = crate::breadcrumbs::emerge(&self.core.sim.spline, target, speed)
+        else {
             return false;
         };
         // The stamp a crossing driven in this tick's step gets: the lap counters run
         // after the world's count has moved on (`Race::tick_body`).
-        let tick = self.sim.world.tick + 1;
-        let laps_target = self.sim.world.laps_target();
-        let ship = &mut self.sim.world.ships[slot];
+        let tick = self.core.sim.world.tick + 1;
+        let laps_target = self.core.sim.world.laps_target();
+        let ship = &mut self.core.sim.world.ships[slot];
         let body = &mut ship.physics.body;
         body.position = relocation.pose.position;
         body.orientation = relocation.pose.orientation;
@@ -299,21 +300,21 @@ impl Race {
         body.angular_velocity = Vec3::ZERO;
         ship.standing.jumped(course, to, tick, laps_target);
         // Only a person's clock runs (`advance_player_rules`); an AI slot's is never read.
-        if self.sim.world.person_flown(slot) {
-            self.sim.world.race[slot].jumped(course, to);
+        if self.core.sim.world.person_flown(slot) {
+            self.core.sim.world.race[slot].jumped(course, to);
         }
-        self.sim.jumps[slot] = self.sim.jumps[slot].wrapping_add(1);
-        self.sim.pad_previous_position[slot] = None;
+        self.core.sim.jumps[slot] = self.core.sim.jumps[slot].wrapping_add(1);
+        self.core.sim.pad_previous_position[slot] = None;
         // A lane snap computed from where it was would put it back.
-        if let Some(rail) = self.sim.autopilot_rail.get_mut(slot) {
+        if let Some(rail) = self.core.sim.autopilot_rail.get_mut(slot) {
             *rail = None;
         }
-        self.sim.breadcrumbs[slot] =
+        self.core.sim.breadcrumbs[slot] =
             crate::breadcrumbs::Breadcrumbs::seeded(relocation.pose.position);
         self.reseat(slot, relocation.pose.position);
         // Told which line it is on, as a route's own samples are the nearest to a craft there.
         if let Some(route) = usize::from(exit.route).checked_sub(1) {
-            self.sim.seat_on_route(slot, route);
+            self.core.sim.seat_on_route(slot, route);
         }
         true
     }

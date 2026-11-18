@@ -126,7 +126,7 @@ fn a_second_persons_held_cross_skips_the_flyby() {
     let mut race = race::Race::start(loaded.setup);
     assert_eq!(race.set_viewport_count(2), 2);
     race.set_windows(vec![seats(&[0]), seats(&[1])]);
-    race.sim.world.controllers[1] = Controller::Local;
+    race.core.sim.world.controllers[1] = Controller::Local;
     assert!(race.begin_intro());
     let mut buttons = Input::EMPTY;
     buttons.begin_frame(Button::Cross.bit());

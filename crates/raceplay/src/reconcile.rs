@@ -31,7 +31,7 @@ impl Race {
     /// ([`RaceSim`], "Why it is `Clone`"), so this is 27 to 32 KiB and a few microseconds.
     #[must_use]
     pub fn snapshot_sim(&self) -> RaceSim {
-        self.sim.clone()
+        self.core.sim.clone()
     }
 
     /// Puts a snapshot back, leaving the view untouched.
@@ -48,7 +48,7 @@ impl Race {
     /// camera, draws sparks, shakes on impact and raises sound cues again.
     /// Replay through [`Self::tick_sim_only`] instead.
     pub fn restore_sim(&mut self, snapshot: &RaceSim) {
-        self.sim = snapshot.clone();
+        self.core.sim = snapshot.clone();
     }
 
     /// [`Self::restore_sim`] for a race that is being watched, not played: the state is put back
@@ -113,18 +113,18 @@ impl Race {
     /// recording is its own piece of work.
     pub fn tick_sim_only(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluations {
         let queued = (
-            self.sim.cues.len(),
-            self.sim.announcements.len(),
-            self.sim.class_announcements.len(),
-            self.sim.mod_sounds.len(),
+            self.core.sim.cues.len(),
+            self.core.sim.announcements.len(),
+            self.core.sim.class_announcements.len(),
+            self.core.sim.mod_sounds.len(),
         );
         let was_quiet = std::mem::replace(&mut self.quiet, true);
         let evaluations = self.tick(inputs);
         self.quiet = was_quiet;
-        self.sim.cues.truncate(queued.0);
-        self.sim.announcements.truncate(queued.1);
-        self.sim.class_announcements.truncate(queued.2);
-        self.sim.mod_sounds.truncate(queued.3);
+        self.core.sim.cues.truncate(queued.0);
+        self.core.sim.announcements.truncate(queued.1);
+        self.core.sim.class_announcements.truncate(queued.2);
+        self.core.sim.mod_sounds.truncate(queued.3);
         evaluations
     }
 

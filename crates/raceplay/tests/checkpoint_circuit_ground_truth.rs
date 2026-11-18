@@ -92,7 +92,7 @@ fn start(
     .expect("loading the race");
     let race = race::Race::start(loaded.setup);
     assert_eq!(
-        race.sim.route_count(),
+        race.core.sim.route_count(),
         1,
         "the pit lane is the track's one route"
     );
@@ -105,7 +105,8 @@ fn ready() -> Option<(race::extensions::Source, std::path::PathBuf)> {
 }
 
 fn blob(race: &race::Race) -> Vec<u8> {
-    race.sim
+    race.core
+        .sim
         .extension_state(0)
         .expect("the module's state")
         .to_vec()
@@ -116,11 +117,11 @@ fn left(blob: &[u8], slot: usize) -> u16 {
 }
 
 fn shield(race: &race::Race, slot: usize) -> f32 {
-    race.sim.world.ships[slot].physics.shield
+    race.core.sim.world.ships[slot].physics.shield
 }
 
 fn shield_max(race: &race::Race, slot: usize) -> f32 {
-    race.sim.world.ships[slot].handling.dimensions.shield
+    race.core.sim.world.ships[slot].handling.dimensions.shield
 }
 
 #[test]
@@ -132,7 +133,7 @@ fn a_craft_that_never_reaches_its_checkpoint_drains_every_tick_past_zero_and_is_
     // Nobody flies the craft: it sits on the grid and never reaches checkpoint 1.
     let mut modded = start(&file, Some(&source), false);
     let mut vanilla = start(&file, None, false);
-    assert!(modded.sim.is_modded() && !vanilla.sim.is_modded());
+    assert!(modded.core.sim.is_modded() && !vanilla.core.sim.is_modded());
     let max = shield_max(&modded, 0);
     let step = max * DRAIN_SHARE;
     let mut zero_at = None;
@@ -151,7 +152,7 @@ fn a_craft_that_never_reaches_its_checkpoint_drains_every_tick_past_zero_and_is_
         if zero_at.is_none() && b[NEXT_AT] != 0 && left(&b, 0) == 0 {
             zero_at = Some(t);
         }
-        if modded.sim.world.ships[0].physics.craft_state != CraftState::Racing {
+        if modded.core.sim.world.ships[0].physics.craft_state != CraftState::Racing {
             wrecked_at = Some(t);
             println!("tick {t}: wrecked, energy {after:.3} of {max}");
             break;
@@ -193,8 +194,8 @@ fn a_craft_that_reaches_its_checkpoint_in_time_has_its_clock_reset_and_loses_not
     // This project's driver flies the craft round: every checkpoint well inside 20 s.
     let mut modded = start(&file, Some(&source), false);
     let mut vanilla = start(&file, None, false);
-    modded.sim.set_autopilot(true);
-    vanilla.sim.set_autopilot(true);
+    modded.core.sim.set_autopilot(true);
+    vanilla.core.sim.set_autopilot(true);
     let mut reached = Vec::new();
     let mut lowest = CHECKPOINT_TICKS;
     let mut previous = blob(&modded);
@@ -230,7 +231,7 @@ fn a_craft_that_reaches_its_checkpoint_in_time_has_its_clock_reset_and_loses_not
     assert!(lowest > 0, "the clock never ran out");
     // Each gate cleared is announced on the channel the manifest publishes (an undeclared
     // one would have faulted the module), for a listener or a track animation to hear.
-    assert_eq!(modded.sim.extension_reports()[0].faulted, None);
+    assert_eq!(modded.core.sim.extension_reports()[0].faulted, None);
     let announced = modded.channel_started(oag_mesh::mesh::Start {
         channel: oag_ext_abi::channel_key("oag.checkpoint-circuit/checkpoint"),
         value: None,
@@ -259,10 +260,10 @@ fn run(
     ticks: u32,
 ) -> Run {
     let mut race = start(file, module, true);
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     let max = std::array::from_fn(|slot| shield_max(&race, slot));
     for &slot in low {
-        race.sim.world.ships[slot].physics.shield = max[slot] * (AI_LOW_SHARE - 0.01);
+        race.core.sim.world.ships[slot].physics.shield = max[slot] * (AI_LOW_SHARE - 0.01);
     }
     let mut out = Run {
         routes: Vec::new(),
@@ -273,14 +274,14 @@ fn run(
     };
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
-        let ships = &race.sim.world.ships;
+        let ships = &race.core.sim.world.ships;
         out.routes
             .push(std::array::from_fn(|s| ships[s].driver.branching.route));
         out.visits
             .push(std::array::from_fn(|s| ships[s].driver.branching.visits));
         out.shields
             .push(std::array::from_fn(|s| ships[s].physics.shield));
-        let b = race.sim.extension_state(0).map(<[u8]>::to_vec);
+        let b = race.core.sim.extension_state(0).map(<[u8]>::to_vec);
         out.pits.push(std::array::from_fn(|s| {
             b.as_ref().map_or(0, |b| b[PIT_AT + s])
         }));
@@ -393,12 +394,16 @@ fn a_checkpoint_race_run_twice_hashes_the_same_every_tick() {
     let mut second = start(&file, Some(&source), true);
     for race in [&mut first, &mut second] {
         let max = shield_max(race, 2);
-        race.sim.world.ships[2].physics.shield = max * 0.2;
+        race.core.sim.world.ships[2].physics.shield = max * 0.2;
     }
     for t in 0..1800 {
         first.tick(&PlayerInputs::none());
         second.tick(&PlayerInputs::none());
-        assert_eq!(first.sim.state_hash(), second.sim.state_hash(), "tick {t}");
+        assert_eq!(
+            first.core.sim.state_hash(),
+            second.core.sim.state_hash(),
+            "tick {t}"
+        );
     }
 }
 
@@ -471,7 +476,10 @@ fn a_held_preference_is_hashed_even_where_it_changes_no_craft() {
         holding.tick(&PlayerInputs::none());
         silent.tick(&PlayerInputs::none());
         for s in 0..8 {
-            let (a, b) = (&holding.sim.world.ships[s], &silent.sim.world.ships[s]);
+            let (a, b) = (
+                &holding.core.sim.world.ships[s],
+                &silent.core.sim.world.ships[s],
+            );
             assert_eq!(
                 a.physics.body.position, b.physics.body.position,
                 "tick {t}: slot {s} moved; the preference must match the coin here"
@@ -481,10 +489,10 @@ fn a_held_preference_is_hashed_even_where_it_changes_no_craft() {
                 "tick {t}"
             );
         }
-        took_pit |= holding.sim.world.ships[slot].driver.branching.route == PIT_ROUTE;
+        took_pit |= holding.core.sim.world.ships[slot].driver.branching.route == PIT_ROUTE;
         assert_ne!(
-            holding.sim.state_hash(),
-            silent.sim.state_hash(),
+            holding.core.sim.state_hash(),
+            silent.core.sim.state_hash(),
             "tick {t}: the held preference is simulation state"
         );
     }

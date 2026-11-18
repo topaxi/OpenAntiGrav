@@ -202,7 +202,7 @@ impl Race {
     /// [`Race::advance_repulser_visual`].
     pub(crate) fn advance_repulser_fields(&mut self) {
         for index in 0..POOL_SIZE {
-            let Some(repulser) = self.sim.world.repulsers[index] else {
+            let Some(repulser) = self.core.sim.world.repulsers[index] else {
                 self.view.repulser_fields[index] = None;
                 continue;
             };
@@ -219,12 +219,12 @@ impl Race {
     pub(crate) fn repulser_field_draws(&self) -> [Option<(Mat4, f32, f32)>; POOL_SIZE] {
         std::array::from_fn(|index| {
             let field = self.view.repulser_fields[index]?;
-            let repulser = self.sim.world.repulsers[index]?;
-            let firer = self.sim.world.ships[repulser.owner as usize]
+            let repulser = self.core.sim.world.repulsers[index]?;
+            let firer = self.core.sim.world.ships[repulser.owner as usize]
                 .physics
                 .body
                 .position;
-            let (_, sample, _) = self.sim.spline.nearest(firer)?;
+            let (_, sample, _) = self.core.sim.spline.nearest(firer)?;
             let matrix = field_matrix(
                 firer,
                 Vec3::from_array(sample.lateral),

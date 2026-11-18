@@ -62,7 +62,7 @@ fn load_mode(mode: oag_race::Mode) -> Option<race::Race> {
         );
     }
     let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     Some(race)
 }
 
@@ -86,12 +86,12 @@ fn fly(drop_edges: bool, audio: Option<&mut oag_sound::Audio>) -> (Log, Vec<i16>
     let mut audio = audio;
     let mut log = Log::default();
     let mut was = [false; 8];
-    let n = usize::from(race.sim.ship_count());
+    let n = usize::from(race.core.sim.ship_count());
     for tick in 0..TICKS {
         race.tick(&PlayerInputs::none());
-        let raised = race.sim.pending_cues().to_vec();
+        let raised = race.core.sim.pending_cues().to_vec();
         if audio.is_none() {
-            race.sim.drain_cues();
+            race.core.sim.drain_cues();
         }
         for event in &raised {
             match event.cue {

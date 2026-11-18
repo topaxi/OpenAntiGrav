@@ -101,9 +101,9 @@ fn a_decliner_is_not_ticked_costs_nothing_and_leaves_the_race_unmodded_and_vanil
     let (race, hashes) = run(grid(prepared(&left)), 600);
     let (vanilla, plain) = run(grid(crate::extensions::Prepared::default()), 600);
     assert_eq!(hashes, plain, "the race hashes as a race with no mod");
-    assert!(!race.sim.is_modded());
-    assert!(race.sim.extension_reports().is_empty());
-    assert_eq!(race.sim.world.ships, vanilla.sim.world.ships);
+    assert!(!race.core.sim.is_modded());
+    assert!(race.core.sim.extension_reports().is_empty());
+    assert_eq!(race.core.sim.world.ships, vanilla.core.sim.world.ships);
 }
 
 #[test]
@@ -111,8 +111,8 @@ fn the_same_module_unfiltered_would_have_been_ticked_and_faulted() {
     // The control for the test above: its guest traps on its first tick, so a race that
     // loads it shows a fault in the report and is modded.
     let (race, _) = run(grid(prepared(&[picky("test.declines", "i32.const 0")])), 5);
-    assert!(race.sim.is_modded());
-    assert!(race.sim.extension_reports()[0].faulted.is_some());
+    assert!(race.core.sim.is_modded());
+    assert!(race.core.sim.extension_reports()[0].faulted.is_some());
 }
 
 #[test]
@@ -123,8 +123,8 @@ fn a_module_that_accepts_runs_as_it_always_did() {
     let left = admit(vec![accepts], "wipeout-pulse", None, &options, &mut report);
     assert_eq!(left.len(), 1);
     let (race, _) = run(grid(prepared(&left)), 5);
-    assert!(race.sim.is_modded());
-    assert_eq!(race.sim.extension_reports()[0].faulted, None);
+    assert!(race.core.sim.is_modded());
+    assert_eq!(race.core.sim.extension_reports()[0].faulted, None);
 }
 
 #[test]

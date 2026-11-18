@@ -29,7 +29,7 @@ fn a_craft_no_tick_has_located_is_in_a_section() {
     })
     .expect("loading Talon's Junction");
     let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.sim.world.ships[0].physics.body.position = TUNNEL;
+    race.core.sim.world.ships[0].physics.body.position = TUNNEL;
     let (craft, _camera) = race.visibility_sections();
     assert_ne!(
         craft, UNPLACED,

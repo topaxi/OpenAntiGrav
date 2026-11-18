@@ -35,7 +35,7 @@ fn a_flip_stops_the_craft_and_sends_it_back_up_the_circuit() {
     let mut race = oag_raceplay::Race::start(loaded.setup);
     let thrust = Button::Cross.bit();
     let speed = |race: &oag_raceplay::Race| {
-        race.sim.world.ships[0]
+        race.core.sim.world.ships[0]
             .physics
             .body
             .linear_velocity
@@ -46,15 +46,15 @@ fn a_flip_stops_the_craft_and_sends_it_back_up_the_circuit() {
         race.tick(&inputs(thrust, thrust));
         tick += 1;
     }
-    let before = race.sim.world.ships[0].physics.body.linear_velocity;
+    let before = race.core.sim.world.ships[0].physics.body.linear_velocity;
     let start = before.normalize();
-    let forward = race.sim.world.ships[0].physics.body.forward();
+    let forward = race.core.sim.world.ships[0].physics.body.forward();
     race.tick(&inputs(thrust | Button::Flip.bit(), thrust));
     let mut stopped = None;
     let mut reversed = None;
     for step in 1..360 {
         race.tick(&inputs(thrust, thrust));
-        let body = &race.sim.world.ships[0].physics.body;
+        let body = &race.core.sim.world.ships[0].physics.body;
         let along = body.linear_velocity.dot(start);
         if std::env::var_os("OAG_SWEEP").is_some() && step % 15 == 0 {
             println!(
@@ -72,7 +72,7 @@ fn a_flip_stops_the_craft_and_sends_it_back_up_the_circuit() {
             break;
         }
     }
-    let body = &race.sim.world.ships[0].physics.body;
+    let body = &race.core.sim.world.ships[0].physics.body;
     assert!(body.forward().dot(forward) < -0.5, "still turned round");
     // The original stopped 0.80 s after the press, counted in its 30 Hz steps. Ours takes about
     // a second, and the page names the gap.

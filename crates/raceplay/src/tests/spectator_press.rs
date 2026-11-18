@@ -7,7 +7,7 @@ use oag_gameplay::input::Button;
 
 fn a_finished_race_with_a_running_director() -> Race {
     let mut race = race_with_a_grid();
-    race.sim.world.ships[0].standing.finish_tick = Some(0);
+    race.core.sim.world.ships[0].standing.finish_tick = Some(0);
     let mut director = FinishCamera::new(
         vec![oag_render::camera::destroy::Station {
             eye: Vec3::new(400.0, 30.0, 0.0),
@@ -55,7 +55,7 @@ fn right_watches_the_next_slot() {
 #[test]
 fn the_d_pad_does_nothing_before_the_line() {
     let mut race = a_finished_race_with_a_running_director();
-    race.sim.world.ships[0].standing.finish_tick = None;
+    race.core.sim.world.ships[0].standing.finish_tick = None;
     assert!(!race.spectator_press(Button::Up));
     assert_eq!(race.spectator_mode(), Some(ViewMode::Track));
 }

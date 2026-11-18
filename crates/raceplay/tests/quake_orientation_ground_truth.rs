@@ -83,12 +83,16 @@ fn lean_with_the_track(image: &str, expect: Frame) {
     for _ in 0..5 {
         race.tick(&PlayerInputs::none());
     }
-    let stats = race.sim.quake_stats().expect("the title authors a Quake");
-    let length = race.sim.course().expect("a course").length();
+    let stats = race
+        .core
+        .sim
+        .quake_stats()
+        .expect("the title authors a Quake");
+    let length = race.core.sim.course().expect("a course").length();
     let (mut leaned, mut built, mut washed) = (0, 0, 0);
     for step in 0..40 {
         let progress = length * (step as f32 / 40.0);
-        race.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
+        race.core.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
             0, progress, 1.0, &stats,
         ));
         race.tick(&PlayerInputs::none());
@@ -98,7 +102,7 @@ fn lean_with_the_track(image: &str, expect: Frame) {
         built += 1;
         let point = race.quake_point().expect("a road point");
         let anchor = race.quake_anchor().expect("an anchor");
-        let (_, sample, _) = race.sim.spline().nearest(point).expect("a sample");
+        let (_, sample, _) = race.core.sim.spline().nearest(point).expect("a sample");
         let track_up = (-Vec3::from_array(sample.down)).normalize();
         let lift = anchor - point;
         if race.screen_wash().is_some() {

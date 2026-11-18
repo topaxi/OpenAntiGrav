@@ -175,7 +175,8 @@ fn a_campaign_cell_resolves_its_skill_off_its_circuits_stats() {
 }
 
 fn seconds(race: &oag_raceplay::Race) -> f32 {
-    race.sim
+    race.core
+        .sim
         .world
         .tick
         .saturating_sub(oag_race::COUNTDOWN_TICKS) as f32
@@ -223,7 +224,7 @@ fn fly_at(
     crate::perturb::apply(&mut setup, eps);
     let mut race = oag_raceplay::Race::start(setup);
     assert!(
-        race.sim.use_original_ai(None, 1),
+        race.core.sim.use_original_ai(None, 1),
         "Omega flies the original driver"
     );
     let mut lap = [1u32; 8];
@@ -232,19 +233,21 @@ fn fly_at(
     let mut walls = [0u32; 8];
     let mut last_hit = [None::<u64>; 8];
     let mut respawned = [0u32; 8];
-    while seconds(&race) <= 300.0 && !(1..8).all(|s| race.sim.world.ships[s].standing.finished()) {
+    while seconds(&race) <= 300.0
+        && !(1..8).all(|s| race.core.sim.world.ships[s].standing.finished())
+    {
         race.tick_sim_only(&PlayerInputs::none());
-        let tick = race.sim.world.tick;
+        let tick = race.core.sim.world.tick;
         for slot in 1..8 {
-            let now_walls = race.sim.wall_contact_ticks_of(slot);
-            let ship = &race.sim.world.ships[slot];
+            let now_walls = race.core.sim.wall_contact_ticks_of(slot);
+            let ship = &race.core.sim.world.ships[slot];
             if shield[slot] - ship.physics.shield >= HIT && now_walls == walls[slot] {
                 last_hit[slot] = Some(tick);
             }
             shield[slot] = ship.physics.shield;
             walls[slot] = now_walls;
-            if race.sim.respawns_of(slot) > respawned[slot] {
-                respawned[slot] = race.sim.respawns_of(slot);
+            if race.core.sim.respawns_of(slot) > respawned[slot] {
+                respawned[slot] = race.core.sim.respawns_of(slot);
                 assert!(
                     field_respawns > 0
                         && last_hit[slot].is_some_and(|hit| tick - hit <= hit_window),
@@ -260,13 +263,13 @@ fn fly_at(
     }
     println!("{track} {class}: {:.1} s", seconds(&race));
     for (slot, shields) in per_lap.iter().enumerate().skip(1) {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         println!(
             "  slot {slot}: finished {} lap {} respawns {} per-lap shield {shields:?}, \
              end-of-run shield {:.1}",
             ship.standing.finished(),
             ship.standing.lap,
-            race.sim.respawns_of(slot),
+            race.core.sim.respawns_of(slot),
             ship.physics.shield
         );
     }
@@ -274,7 +277,7 @@ fn fly_at(
     // `field_destroyed` of them.
     let mut destroyed = 0;
     for slot in 1..8 {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         if !ship.standing.finished() {
             assert!(
                 ship.physics.shield <= 0.0,
@@ -287,7 +290,7 @@ fn fly_at(
         destroyed <= field_destroyed,
         "{track}: {destroyed} opponent(s) destroyed"
     );
-    let total: u32 = (1..8).map(|slot| race.sim.respawns_of(slot)).sum();
+    let total: u32 = (1..8).map(|slot| race.core.sim.respawns_of(slot)).sum();
     assert!(
         total <= field_respawns,
         "{track}: {total} respawns in the field"

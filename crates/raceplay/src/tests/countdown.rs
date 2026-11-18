@@ -80,20 +80,20 @@ fn opponents_are_held_at_the_line_through_the_gated_span() {
     // countdown and the airborne reset fires on it - which launches the craft
     // down the track (`crate::breadcrumbs`), and a driver already moving at
     // release eases its throttle. The gate is the claim here, not the rescue.
-    race.sim.respawn_disabled = [true; oag_gameplay::MAX_SHIPS];
+    race.core.sim.respawn_disabled = [true; oag_gameplay::MAX_SHIPS];
     for tick in 0..oag_race::COUNTDOWN_TICKS {
         race.tick(&PlayerInputs::none());
-        for slot in 1..race.sim.ship_count() as usize {
+        for slot in 1..race.core.sim.ship_count() as usize {
             assert_eq!(
-                race.sim.world.ships[slot].physics.thrust, 0.0,
+                race.core.sim.world.ships[slot].physics.thrust, 0.0,
                 "opponent {slot} was moving on tick {tick}, before the gate released"
             );
         }
     }
     race.tick(&PlayerInputs::none());
-    for slot in 1..race.sim.ship_count() as usize {
+    for slot in 1..race.core.sim.ship_count() as usize {
         assert_eq!(
-            race.sim.world.ships[slot].physics.thrust,
+            race.core.sim.world.ships[slot].physics.thrust,
             oag_physics::controls::CONTROL_RANGE,
             "opponent {slot} did not release at the same tick as the player"
         );
@@ -109,8 +109,8 @@ fn voiced_start(countdown_voice: bool) -> Vec<(u64, oag_gameplay::cue::Cue)> {
     let mut raised = Vec::new();
     for _ in 0..400 {
         race.tick(&PlayerInputs::none());
-        let stepped = race.sim.world.tick - 1;
-        for event in race.sim.drain_cues() {
+        let stepped = race.core.sim.world.tick - 1;
+        for event in race.core.sim.drain_cues() {
             if matches!(
                 event.cue,
                 oag_gameplay::cue::Cue::Ready | oag_gameplay::cue::Cue::Go

@@ -308,7 +308,7 @@ impl Race {
     /// is: what [`Self::body_between`] returns at `1.0`.
     #[must_use]
     pub fn ship_tick_body(&self, slot: usize) -> oag_physics::Body {
-        let mut body = self.sim.world.ships[slot].physics.body;
+        let mut body = self.core.sim.world.ships[slot].physics.body;
         body.position = self.drawn_position(slot);
         body
     }
@@ -326,7 +326,7 @@ impl Race {
         let moved =
             |a: Vec3, b: Vec3| !a.is_finite() || !b.is_finite() || a.distance(b) > SNAP_DISTANCE;
         let model = self.drawn_model(slot);
-        (from.key == self.sim.ship_key(slot)
+        (from.key == self.core.sim.ship_key(slot)
             && !moved(from.model.w_axis.truncate(), model.w_axis.truncate())
             && !moved(from.position, self.drawn_position(slot)))
         .then_some(from.model)
@@ -342,24 +342,24 @@ impl Race {
             previous: self.view.poses.generations.current,
         };
         let pose = TickPose {
-            world_tick: self.sim.world.tick,
+            world_tick: self.core.sim.world.tick,
             camera: CameraPose {
                 view: self.tick_view(),
                 unshaken: self.tick_view_unshaken(),
                 forward_speed: self.tick_forward_speed(),
                 boost_kick: self.view.boost_kick,
-                fov_offset: self.sim.extension_fov_offset(self.player_slot()),
+                fov_offset: self.core.sim.extension_fov_offset(self.player_slot()),
                 key: self.camera_key(),
             },
             ships: std::array::from_fn(|slot| {
-                let ship = &self.sim.world.ships[slot];
+                let ship = &self.core.sim.world.ships[slot];
                 ShipPose {
                     model: self.drawn_model(slot),
                     position: self.drawn_position(slot),
                     orientation: ship.physics.body.orientation,
                     flaps: self.view.flaps[slot],
                     shield_swell: self.view.shield[slot].swell(),
-                    key: self.sim.ship_key(slot),
+                    key: self.core.sim.ship_key(slot),
                 }
             }),
         };
@@ -369,18 +369,25 @@ impl Race {
         self.decay_corrections();
         let mut projectiles = std::mem::take(&mut self.view.poses.projectiles);
         projectiles.clear();
-        projectiles.extend(self.sim.world.projectiles.slots.iter().enumerate().map(
-            |(slot, projectile)| {
-                let kind = projectile.kind?;
-                Some(ProjectilePose {
-                    kind,
-                    owner: projectile.owner,
-                    lifetime: projectile.lifetime,
-                    age: projectile.age,
-                    matrix: self.projectile_matrix(kind, slot, projectile),
-                })
-            },
-        ));
+        projectiles.extend(
+            self.core
+                .sim
+                .world
+                .projectiles
+                .slots
+                .iter()
+                .enumerate()
+                .map(|(slot, projectile)| {
+                    let kind = projectile.kind?;
+                    Some(ProjectilePose {
+                        kind,
+                        owner: projectile.owner,
+                        lifetime: projectile.lifetime,
+                        age: projectile.age,
+                        matrix: self.projectile_matrix(kind, slot, projectile),
+                    })
+                }),
+        );
         self.view.poses.projectiles = projectiles;
     }
 
@@ -434,7 +441,7 @@ impl Race {
             return self.camera_cut();
         };
         self.view.poses.previous.as_ref().is_some_and(|previous| {
-            previous.ships[slot].key.respawns != self.sim.placements_of(slot)
+            previous.ships[slot].key.respawns != self.core.sim.placements_of(slot)
         })
     }
 
@@ -483,7 +490,7 @@ impl Race {
     fn ship_alpha(&self, slot: usize) -> Option<f32> {
         let poses = &self.view.poses;
         let previous = poses.previous.as_ref()?;
-        (poses.alpha < 1.0 && previous.ships[slot].key == self.sim.ship_key(slot))
+        (poses.alpha < 1.0 && previous.ships[slot].key == self.core.sim.ship_key(slot))
             .then_some(poses.alpha)
     }
 
@@ -493,7 +500,8 @@ impl Race {
     fn world_alpha(&self) -> Option<f32> {
         let poses = &self.view.poses;
         let previous = poses.previous.as_ref()?;
-        (poses.alpha < 1.0 && previous.world_tick + 1 == self.sim.world.tick).then_some(poses.alpha)
+        (poses.alpha < 1.0 && previous.world_tick + 1 == self.core.sim.world.tick)
+            .then_some(poses.alpha)
     }
 
     /// The craft in `slot`'s body at the draw alpha, for a draw that reads the
@@ -630,7 +638,7 @@ impl Race {
     /// not step the world.
     #[must_use]
     pub fn clock_seconds(&self) -> f32 {
-        let tick = self.sim.world.tick as f32;
+        let tick = self.core.sim.world.tick as f32;
         match self.world_alpha() {
             Some(alpha) => (tick - (1.0 - alpha)) / 60.0,
             None => tick / 60.0,

@@ -69,7 +69,7 @@ does (`oag_physics::forces::Environment::auto_speed`,
 | 4 | Each person's craft | `Race::step_player`, `tick.rs:196` (`crates/raceplay/src/player_step.rs:136`) | `pad-crossed`, `volume-entered`/`-left`, `wall-contact` | `scale-thrust`, `impulse`, `hold-mag-lock`, `shield-delta`, `give-pickup`/`clear-pickup`, `give-shield`/`hold-shield`/`clear-shield`, `assist` |
 | 5 | Projectiles fly, hit | `oag_weapons::projectile::step`, `tick.rs:235`; impacts `tick.rs:267` | `hit` (the Quake, Leach Beam and Repulser steps raise it later in the tick; every source runs after the call) | |
 | 6 | Rescue, AI craft, pairs | `tick.rs:415` to `:422`; `Race::step_opponents` (`crates/raceplay/src/field.rs:689`) | `respawned`, `reset`; phase 4's events and `weapon-fired` for AI craft | phase 4's commands for AI craft |
-| 7 | Clock | `self.sim.world.tick += 1`, `tick.rs:446` | | |
+| 7 | Clock | `self.core.sim.world.tick += 1`, `tick.rs:446` | | |
 | 8 | Race rules per person | `Race::advance_player_rules`, `tick.rs:493` (`player_step.rs:381`); `eliminate_if_wrecked` at `tick.rs:476` | `lap-completed`, `eliminated` | `set-finished` |
 | 9 | Standings | `RaceSim::update_standings`, `tick.rs:501` (`field.rs:1019`) | `lap-completed` (AI craft) | `set-finished` (AI craft), `set-standing-key` |
 | 10 | Quake, leach beam, repulsers | `tick.rs:510` to `:530` | | |
@@ -98,7 +98,7 @@ rollback replays it. Names are the README's `event` variants.
 ### `pad-crossed`
 
 - **Raised at** the speed pad's entry edge in `Race::test_speedup_pads`
-  (`crates/raceplay/src/pads.rs:73`), at `if entered != self.sim.pad_current[slot]`
+  (`crates/raceplay/src/pads.rs:73`), at `if entered != self.core.sim.pad_current[slot]`
   (`pads.rs:113`), the edge the Zone score and the exhaust flare already hang off;
   and at the weapon pad's edge in `Race::test_weapon_pads` (`pads.rs:216`), at
   `pads.rs:258`. Both run for a person's craft from `step_player`
@@ -434,7 +434,7 @@ the backstop for a guest written without the SDK.
 - Both are **outputs of the simulation**, like cues
   ([ADR-0018](../adr/0018-audio-mixer-architecture.md)): the HUD's message board
   lives in the view half (`self.view.huds[slot].messages`, advanced at `tick.rs:83`)
-  and `oag-server` has no view. So the host queues them beside `self.sim.cues` and
+  and `oag-server` has no view. So the host queues them beside `self.core.sim.cues` and
   the view half drains them, as it drains cues; a sim-only replay drops them, and
   they never enter the hash.
 

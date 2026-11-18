@@ -23,7 +23,7 @@ const RUN: usize = 130;
 const EDGE: f32 = 25.0;
 
 fn progress(race: &oag_raceplay::Race, slot: usize) -> Option<f32> {
-    race.sim.world.ships[slot].standing.progress
+    race.core.sim.world.ships[slot].standing.progress
 }
 
 /// What an opponent's pickup looked like at the start of a tick.
@@ -36,7 +36,7 @@ struct Use {
 
 impl Use {
     fn of(race: &oag_raceplay::Race, slot: usize) -> Self {
-        let held = &race.sim.world.ships[slot].pickup;
+        let held = &race.core.sim.world.ships[slot].pickup;
         Self {
             weapon: held.weapon,
             dropping: held.is_dropping(),
@@ -70,12 +70,12 @@ fn watch(weapon: Weapon) -> (usize, usize) {
     .expect("loading the race");
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
     race.watch_laps(&loaded.hud, None);
-    race.sim.set_autopilot(true);
-    race.sim.set_fire_law(oag_raceplay::FireLaw::Ours);
+    race.core.sim.set_autopilot(true);
+    race.core.sim.set_fire_law(oag_raceplay::FireLaw::Ours);
     let (icon, low, high) = oag_hud::incoming::window(weapon).expect("a weapon with a window");
 
-    let opponents = 1..usize::from(race.sim.ship_count());
-    let length = race.sim.course().map(oag_race::Course::length);
+    let opponents = 1..usize::from(race.core.sim.ship_count());
+    let length = race.core.sim.course().map(oag_race::Course::length);
     let (mut judged_in, mut judged_out) = (0, 0);
     // The next tick's check on a fire just seen: whether the icon must be lit, and the gap
     // it was judged at.
@@ -83,7 +83,7 @@ fn watch(weapon: Weapon) -> (usize, usize) {
     let mut quiet_until = 0;
     for tick in 0..6000 {
         for slot in opponents.clone() {
-            let ship = &mut race.sim.world.ships[slot];
+            let ship = &mut race.core.sim.world.ships[slot];
             if ship.pickup.weapon.is_none() {
                 ship.pickup.weapon = Some(weapon);
             }

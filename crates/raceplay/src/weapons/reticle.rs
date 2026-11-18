@@ -60,20 +60,23 @@ impl Race {
         // The reticle is the primary person's; every other person-flown slot
         // reads the same lock through [`RaceSim::sight_target`] without one.
         let primary = self.player_slot();
-        if let Some(held) = self.sim.sight_held(primary) {
+        if let Some(held) = self.core.sim.sight_held(primary) {
             self.view.sight.set_held(held);
         }
-        let target = self.sim.sight_target(primary);
+        let target = self.core.sim.sight_target(primary);
         let screen = self.view.sight.screen();
         let projected = target.and_then(|slot| {
-            let world = self.sim.world.ships[slot as usize].physics.body.position;
+            let world = self.core.sim.world.ships[slot as usize]
+                .physics
+                .body
+                .position;
             self.project_for_sight(world, screen)
         });
         self.view.sight_aim = target.zip(projected);
         // The lock is the simulation's ([`RaceSim::advance_locks`]); this reticle
         // only puts the brackets on the craft and follows it.
-        let locked = self.sim.locks[primary].locked();
-        self.view.sight_state = self.view.sight.follow(self.sim.dt, projected, locked);
+        let locked = self.core.sim.locks[primary].locked();
+        self.view.sight_state = self.view.sight.follow(self.core.sim.dt, projected, locked);
         self.update_viewed_sights();
         self.advance_tag_fades();
     }
@@ -171,21 +174,24 @@ impl Race {
         }
         let primary = self.player_slot();
         for slot in (0..self.viewport_count()).filter(|&slot| slot != primary) {
-            if let Some(held) = self.sim.sight_held(slot) {
+            if let Some(held) = self.core.sim.sight_held(slot) {
                 self.view.huds[slot].sight.set_held(held);
             }
-            let target = self.sim.sight_target(slot);
+            let target = self.core.sim.sight_target(slot);
             let screen = self.view.huds[slot].sight.screen();
             // The camera accessors follow the viewpoint; put the player's back
             // after, as the draw does.
             self.set_viewpoint(slot);
             let projected = target.and_then(|target| {
-                let world = self.sim.world.ships[target as usize].physics.body.position;
+                let world = self.core.sim.world.ships[target as usize]
+                    .physics
+                    .body
+                    .position;
                 self.project_for_sight(world, screen)
             });
             self.reset_viewpoint();
-            let dt = self.sim.dt;
-            let locked = self.sim.locks[slot].locked();
+            let dt = self.core.sim.dt;
+            let locked = self.core.sim.locks[slot].locked();
             let hud = &mut self.view.huds[slot];
             hud.sight_aim = target.zip(projected);
             hud.sight_state = hud.sight.follow(dt, projected, locked);

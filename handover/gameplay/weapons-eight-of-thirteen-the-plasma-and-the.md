@@ -1691,7 +1691,7 @@ instruction-level evidence.
 `SfxVoices` can address that today; every held voice this engine plays is
 keyed by grid slot". `~PLASMATVL` needed the same shape and now has it:
 `SfxVoices::plasma_travel` is a `[Option<VoiceId>; MAX_PROJECTILES]`, read and
-written directly off `race.sim.world.projectiles.slots` every tick in
+written directly off `race.core.sim.world.projectiles.slots` every tick in
 `Audio::race_tick` rather than through a queued `CueEvent` - the same reason
 `Engine` reads craft position directly. **This does not generalise
 `MINERADAR` for free** - the array is Plasma-specific code, not a shared

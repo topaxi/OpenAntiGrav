@@ -206,10 +206,11 @@ impl Rumbler {
         }
         let rules = Rules {
             set,
-            drop_position: Mode::from_name(token) == Some(Mode::Original) && race.sim.people() <= 1,
+            drop_position: Mode::from_name(token) == Some(Mode::Original)
+                && race.core.sim.people() <= 1,
         };
         let seats: Vec<Seat> = (0..oag_gameplay::MAX_PLAYERS)
-            .filter(|&slot| race.sim.world.person_flown(slot) && race.heard_here(slot))
+            .filter(|&slot| race.core.sim.world.person_flown(slot) && race.heard_here(slot))
             .map(|slot| Seat {
                 slot,
                 feed: Feed::new(library.clone(), law, rules),
@@ -222,16 +223,21 @@ impl Rumbler {
     /// One simulation tick. Call it after `Race::tick` and before the sound
     /// drains the cues.
     pub fn tick(&mut self, race: &Race, paused: bool, out: &mut dyn MotorOutput) {
-        let dt = race.sim.dt();
+        let dt = race.core.sim.dt();
         for seat in &mut self.seats {
             let slot = seat.slot;
-            for event in race.sim.pending_cues() {
+            for event in race.core.sim.pending_cues() {
                 seat.feed.event(event, slot);
             }
             seat.feed.levels(levels_of(race, slot));
-            seat.feed
-                .wall(race.sim.wall_contact_of(slot).map(|c| (c.size, c.side)), dt);
-            let ship = race.sim.world.ships.get(slot);
+            seat.feed.wall(
+                race.core
+                    .sim
+                    .wall_contact_of(slot)
+                    .map(|c| (c.size, c.side)),
+                dt,
+            );
+            let ship = race.core.sim.world.ships.get(slot);
             let physics = ship.map(|s| &s.physics);
             // Touching down: grounded now and not on the tick before. The speed
             // is the last airborne tick's, since the hover response has already
@@ -275,16 +281,16 @@ impl Rumbler {
 
 /// The held conditions of `slot`'s ship this tick.
 fn levels_of(race: &Race, slot: usize) -> Levels {
-    let world = &race.sim.world;
+    let world = &race.core.sim.world;
     Levels {
         mag_strip: race.over_magstrip(slot),
         autopilot: world
             .ships
             .get(slot)
             .is_some_and(|ship| ship.autopilot_timer > 0.0),
-        leech_beam: race.sim.leach_beam_on(slot),
-        wrong_way: race.sim.wrong_way_for(slot),
-        exploding: race.sim.craft_destroyed(slot),
+        leech_beam: race.core.sim.leach_beam_on(slot),
+        wrong_way: race.core.sim.wrong_way_for(slot),
+        exploding: race.core.sim.craft_destroyed(slot),
         locked_on: slot == race.player_slot()
             && race.sight_state() == oag_race::sight::State::Locked,
     }

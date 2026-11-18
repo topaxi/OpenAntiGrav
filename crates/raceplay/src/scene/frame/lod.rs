@@ -23,7 +23,7 @@ impl super::Scene {
     /// keeps its finest tier anyway.
     pub(super) fn select_lod(&self, view: crate::drawable::ViewBlock, race: &Race, eye: LodEye) {
         self.track.select_lod(view, Mat4::IDENTITY, eye);
-        for slot in 0..usize::from(race.sim.ship_count()) {
+        for slot in 0..usize::from(race.core.sim.ship_count()) {
             if !race.ship_drawn(slot) {
                 continue;
             }

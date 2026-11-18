@@ -189,35 +189,36 @@ fn duel(extensions: Prepared) -> Race {
     setup.weapons = Some(table());
     setup.extensions = extensions;
     let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    race.sim.world.ships[1].handling.dimensions.shield = 100.0;
-    race.sim.world.ships[1].physics.shield = 100.0;
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    race.core.sim.world.ships[1].handling.dimensions.shield = 100.0;
+    race.core.sim.world.ships[1].physics.shield = 100.0;
     race
 }
 
 /// One tick of the duel. Slot 0 is pinned and fires a Rocket when `fire` is set; slot 1
 /// is pinned too. Returns whether a Rocket reached a craft this tick.
 fn step(race: &mut Race, buttons: &mut Buttons, fire: bool) -> bool {
-    race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-    let forward = race.sim.world.ships[0].physics.body.forward();
-    race.sim.world.ships[0].physics.body.linear_velocity = forward * 60.0;
-    race.sim.world.ships[1].physics.body.position = forward * 15.0;
-    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+    race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+    let forward = race.core.sim.world.ships[0].physics.body.forward();
+    race.core.sim.world.ships[0].physics.body.linear_velocity = forward * 60.0;
+    race.core.sim.world.ships[1].physics.body.position = forward * 15.0;
+    race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
     if fire {
-        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
+        race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
     }
     let snapshot = buttons.tick(if fire { SQUARE } else { 0 });
     race.tick(&PlayerInputs::single(snapshot));
-    race.sim
+    race.core
+        .sim
         .drain_cues()
         .into_iter()
         .any(|e| e.cue == oag_gameplay::cue::Cue::RocketHitShip)
 }
 
 fn word(race: &Race, at: i32) -> [u8; 4] {
-    let blob = race.sim.extensions.state(0).expect("a module runs");
+    let blob = race.core.sim.extensions.state(0).expect("a module runs");
     let at = (at - STATE) as usize;
     blob[at..at + 4].try_into().unwrap()
 }
@@ -231,18 +232,18 @@ fn float(race: &Race, at: i32) -> f32 {
 }
 
 fn energy(race: &Race) -> f32 {
-    race.sim.world.ships[1].physics.shield
+    race.core.sim.world.ships[1].physics.shield
 }
 
 fn shielded(race: &Race) -> bool {
-    race.sim.world.ships[1].physics.shield_pickup_timer > 0.0
+    race.core.sim.world.ships[1].physics.shield_pickup_timer > 0.0
 }
 
 /// Fires a Rocket and runs until it reaches slot 1. Returns the world tick it struck in.
 fn rocket(race: &mut Race, buttons: &mut Buttons) -> u64 {
     let mut fire = true;
     for _ in 0..120 {
-        let at = race.sim.world.tick;
+        let at = race.core.sim.world.tick;
         if step(race, buttons, fire) {
             return at;
         }
@@ -324,7 +325,7 @@ fn the_hit_that_breaks_the_armour_costs_nothing_and_the_next_one_lands() {
         "the next hit lands on the energy: no double-protected window"
     );
     assert_eq!(
-        race.sim.world.ships[1].physics.craft_state,
+        race.core.sim.world.ships[1].physics.craft_state,
         CraftState::Racing
     );
 }
@@ -365,15 +366,15 @@ fn a_race_without_a_module_hashes_the_same_run_twice_and_an_unshielded_craft_tak
     let mut hashes = Vec::new();
     for tick in 0..90 {
         step(&mut race, &mut buttons, tick == 0);
-        hashes.push(race.sim.state_hash());
+        hashes.push(race.core.sim.state_hash());
     }
     let mut plain = duel(Prepared::default());
     let mut buttons = Buttons::new();
     for (tick, hash) in hashes.iter().enumerate() {
         step(&mut plain, &mut buttons, tick == 0);
-        assert_eq!(plain.sim.state_hash(), *hash);
+        assert_eq!(plain.core.sim.state_hash(), *hash);
     }
-    assert!(!race.sim.is_modded());
+    assert!(!race.core.sim.is_modded());
     assert_eq!(
         energy(&race),
         100.0 - ROCKET_DAMAGE,

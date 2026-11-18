@@ -881,7 +881,7 @@ impl Race {
         // The first frame is the one the pause left: the lens it opens on is the camera on
         // screen, free to be flown from there.
         let on_screen = self.on_screen_camera();
-        let craft = self.sim.world.ships[subject].physics.body.position;
+        let craft = self.core.sim.world.ships[subject].physics.body.position;
         self.view.photo = Some(
             Photo::new(subject, track, restore)
                 .opening_on(on_screen, craft)
@@ -921,7 +921,7 @@ impl Race {
         accumulation: Option<oag_title::photo::Accumulation>,
         rewinds: bool,
     ) {
-        let live = self.sim.world.tick;
+        let live = self.core.sim.world.tick;
         if let Some(photo) = self.view.photo.take() {
             let mut photo = photo.offering(accumulation, rewinds);
             photo.effects_mut().set_live(live);
@@ -955,7 +955,7 @@ impl Race {
     pub fn photo_camera(&self) -> Option<CameraOverride> {
         let photo = self.view.photo.as_ref()?;
         let slot = photo.subject();
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.core.sim.world.ships[slot];
         let craft = Subject {
             slot,
             position: ship.physics.body.position,
@@ -996,7 +996,10 @@ impl Race {
         let Some(photo) = self.view.photo.as_ref().filter(|p| p.needs_free_seed()) else {
             return;
         };
-        let craft = self.sim.world.ships[photo.subject()].physics.body.position;
+        let craft = self.core.sim.world.ships[photo.subject()]
+            .physics
+            .body
+            .position;
         let Some(pose) = self.view.camera_override.or_else(|| self.photo_camera()) else {
             return;
         };
@@ -1031,6 +1034,7 @@ impl Race {
     /// nothing to change to.
     pub fn step_followed(&mut self, forward: bool) -> bool {
         let live: Vec<usize> = self
+            .core
             .sim
             .spectator_subjects()
             .iter()
@@ -1051,7 +1055,7 @@ impl Race {
     /// blur and the temporal history do not smear the old craft across the new one.
     pub fn follow(&mut self, slot: usize) {
         let before = self.player_slot();
-        self.set_seat((slot != self.sim.world.primary_slot()).then_some(slot));
+        self.set_seat((slot != self.core.sim.world.primary_slot()).then_some(slot));
         if self.player_slot() != before {
             #[cfg(feature = "view")]
             {
@@ -1063,6 +1067,7 @@ impl Race {
     /// One tick of photo mode, and the pose it leaves. [`Action::None`] when it is not open.
     pub fn photo_step(&mut self, pad: Pad) -> Action {
         let live: Vec<usize> = self
+            .core
             .sim
             .spectator_subjects()
             .iter()

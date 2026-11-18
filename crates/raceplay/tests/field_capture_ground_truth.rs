@@ -58,7 +58,7 @@ fn a_captured_field_and_hud_state_are_what_the_race_starts_with() {
     };
 
     let race = start(field.clone(), Some(hud));
-    let world = &race.sim.world;
+    let world = &race.core.sim.world;
     assert_eq!(world.ship_count, 8, "the grid's seven opponents stay alive");
     assert_eq!(world.ships[0].physics.body.position, player.position);
     for (n, pose) in field.iter().enumerate() {
@@ -83,7 +83,10 @@ fn a_captured_field_and_hud_state_are_what_the_race_starts_with() {
     // Neither is a default: with no field a posed player races alone, and with no
     // HUD state the readout is the race's own.
     let alone = start(Vec::new(), None);
-    assert_eq!(alone.sim.world.ship_count, 1, "a pose alone drops the grid");
+    assert_eq!(
+        alone.core.sim.world.ship_count, 1,
+        "a pose alone drops the grid"
+    );
     assert_ne!(alone.readout().race_ticks, 2_333);
 }
 
@@ -123,24 +126,24 @@ fn a_field_warm_up_gives_every_craft_a_trail_and_a_plume_and_leaves_the_poses_al
     let mut warm = start();
     let poses: Vec<(Vec3, Quat)> = (0..8)
         .map(|slot| {
-            let body = &warm.sim.world.ships[slot].physics.body;
+            let body = &warm.core.sim.world.ships[slot].physics.body;
             (body.position, body.orientation)
         })
         .collect();
     let motion: Vec<(Vec3, f32)> = (0..8)
         .map(|slot| {
-            let ship = &warm.sim.world.ships[slot].physics;
+            let ship = &warm.core.sim.world.ships[slot].physics;
             (ship.body.linear_velocity, ship.thrust)
         })
         .collect();
-    let ticks = warm.sim.field_warm_up_ticks();
+    let ticks = warm.core.sim.field_warm_up_ticks();
     warm.warm_up_field(&velocities, ticks, None);
     for (slot, (position, orientation)) in poses.into_iter().enumerate() {
-        let body = &warm.sim.world.ships[slot].physics.body;
+        let body = &warm.core.sim.world.ships[slot].physics.body;
         assert_eq!(
             (
                 body.linear_velocity,
-                warm.sim.world.ships[slot].physics.thrust
+                warm.core.sim.world.ships[slot].physics.thrust
             ),
             motion[slot],
             "slot {slot} is handed back at the speed and thrust it had: only its exhaust was replayed"
@@ -162,7 +165,7 @@ fn a_field_warm_up_gives_every_craft_a_trail_and_a_plume_and_leaves_the_poses_al
             "slot {slot} is drawn at its tick, so its newest sample is already at the nozzle"
         );
     }
-    assert_eq!(warm.sim.world.tick, 0, "no simulation tick ran");
+    assert_eq!(warm.core.sim.world.tick, 0, "no simulation tick ran");
 }
 
 #[test]
@@ -189,7 +192,7 @@ fn a_field_warm_up_arms_the_players_boost_at_its_age_and_nobody_elses() {
     let velocities = vec![Vec3::new(0.0, 0.0, 100.0); 8];
 
     let mut plain = start();
-    let ticks = plain.sim.field_warm_up_ticks();
+    let ticks = plain.core.sim.field_warm_up_ticks();
     plain.warm_up_field(&velocities, ticks, None);
     assert_eq!(plain.exhaust_of(0).boost_timer(), 0.0, "no age, no boost");
 

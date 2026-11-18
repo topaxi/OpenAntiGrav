@@ -65,7 +65,7 @@ fn crossing_a_weapon_pad_grants_the_pickup_its_class_weights() {
 fn a_weapons_off_mode_never_grants_anything() {
     for mode in [Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
         let mut race = race_with_weapon_pads(mode, enveloping_pad(), 1.0);
-        race.sim.world.ships[0].pickup.weapon = None;
+        race.core.sim.world.ships[0].pickup.weapon = None;
         for _ in 0..120 {
             race.tick(&PlayerInputs::none());
         }
@@ -88,7 +88,7 @@ fn sitting_on_a_weapon_pad_does_not_refill_the_slot() {
         race.tick(&PlayerInputs::none());
         if race.ship_pickup().is_some() {
             granted += 1;
-            race.sim.world.ships[0].pickup.weapon = None;
+            race.core.sim.world.ships[0].pickup.weapon = None;
         }
     }
     assert_eq!(granted, 1, "the pad fired {granted} times for one crossing");
@@ -126,14 +126,14 @@ fn a_pad_re_entered_within_its_cooldown_hands_out_nothing() {
     // Moves the pad under the ship or a long way from it, invalidating the
     // broadphase either way.
     let place = |race: &mut Race, pad: oag_vex::pads::PadVolume| {
-        Arc::make_mut(&mut race.sim.weapon_pads)[0] = pad;
+        Arc::make_mut(&mut race.core.sim.weapon_pads)[0] = pad;
         // Slot 0's row: these tests fly the player.
-        race.sim.weapon_pad_distance[0][0] = 0.0;
+        race.core.sim.weapon_pad_distance[0][0] = 0.0;
     };
 
     race.tick(&PlayerInputs::none());
     assert!(race.ship_pickup().is_some(), "the first crossing must pay");
-    race.sim.world.ships[0].pickup.weapon = None;
+    race.core.sim.world.ships[0].pickup.weapon = None;
 
     // Off the pad, then back on, well inside the cooldown.
     place(&mut race, far_away);
@@ -188,13 +188,14 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
         Some(oag_tables::weapons::Weapon::Turbo)
     );
 
-    let _ = fired.sim.drain_cues();
+    let _ = fired.core.sim.drain_cues();
     let boosted = fired.tick(&PlayerInputs::single(fired_buttons.tick(CROSS | SQUARE)));
     let ordinary = plain.tick(&PlayerInputs::single(plain_buttons.tick(CROSS)));
     // `Turbo_Fire` plays `TURBO` through the flare's boost call, as a pad does
     // `SPEEDUPPAD`.
     assert!(
         fired
+            .core
             .sim
             .drain_cues()
             .iter()
@@ -256,7 +257,7 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
     // forty-sixth read still sees a live boost. Harmless - a sixtieth of a
     // second - and pinned rather than tolerated so that a change to the
     // ordering shows up here.
-    let whole = (FIXTURE_TURBO_TIME / fired.sim.dt()).round() as u32;
+    let whole = (FIXTURE_TURBO_TIME / fired.core.sim.dt()).round() as u32;
     assert_eq!(
         ticks,
         whole + 1,
@@ -295,7 +296,8 @@ fn a_fired_shield_arms_the_timer_for_its_authored_duration() {
     // counted off - the countdown runs after the damage path reads it, which
     // is what protects the tick a shield is fired on.
     assert!(
-        (race.ship().physics.shield_pickup_timer - (FIXTURE_SHIELD_TIME - race.sim.dt())).abs()
+        (race.ship().physics.shield_pickup_timer - (FIXTURE_SHIELD_TIME - race.core.sim.dt()))
+            .abs()
             < 1e-5,
         "expected the authored {FIXTURE_SHIELD_TIME} less one tick, got {}",
         race.ship().physics.shield_pickup_timer
@@ -311,7 +313,7 @@ fn a_fired_shield_arms_the_timer_for_its_authored_duration() {
         ticks += 1;
         assert!(ticks < 600, "the shield never expired");
     }
-    let whole = (FIXTURE_SHIELD_TIME / race.sim.dt()).round() as u32;
+    let whole = (FIXTURE_SHIELD_TIME / race.core.sim.dt()).round() as u32;
     assert_eq!(
         ticks,
         whole + 1,
@@ -344,7 +346,7 @@ fn a_shield_fired_into_a_running_one_is_wasted_rather_than_stacked() {
     // so a pad-driven second Shield would take an unbounded number of ticks and
     // the timer would be most of the way down by then.
     race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shield);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shield);
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
 
     assert_eq!(
@@ -354,7 +356,7 @@ fn a_shield_fired_into_a_running_one_is_wasted_rather_than_stacked() {
     );
     // Two ticks have passed since the first arm, so the timer must have fallen
     // by exactly those two - not been reset to the authored duration.
-    let expected = after_first - 2.0 * race.sim.dt();
+    let expected = after_first - 2.0 * race.core.sim.dt();
     assert!(
         (race.ship().physics.shield_pickup_timer - expected).abs() < 1e-5,
         "the second Shield refreshed the timer: expected {expected}, got {}",
@@ -378,7 +380,7 @@ fn absorbing_a_shield_pays_the_shields_own_absorb() {
     );
     // Spend the pool first, or the payment lands against a full one and the
     // recovered clamp hides it.
-    race.sim.world.ships[0].physics.shield = 10.0;
+    race.core.sim.world.ships[0].physics.shield = 10.0;
     race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
 
     assert_eq!(race.ship_pickup(), None, "absorbing must spend the pickup");
@@ -408,7 +410,7 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
 
     for mode in [Mode::TimeTrial, Mode::SpeedLap] {
         let mut race = race_with_weapon_pads(mode, Vec::new(), 1.0);
-        race.sim.grant_free_turbo(0);
+        race.core.sim.grant_free_turbo(0);
         assert_eq!(
             race.ship_pickup(),
             Some(Weapon::Turbo),
@@ -420,15 +422,15 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
     // nothing; a single race has pads instead.
     for mode in [Mode::Zone, Mode::SingleRace] {
         let mut race = race_with_weapon_pads(mode, Vec::new(), 1.0);
-        race.sim.grant_free_turbo(0);
+        race.core.sim.grant_free_turbo(0);
         assert_eq!(race.ship_pickup(), None, "{mode:?} was given a free turbo");
     }
 
     // A held pickup is kept rather than replaced, so a player who saved last
     // lap's turbo does not lose this lap's for nothing.
     let mut race = race_with_weapon_pads(Mode::TimeTrial, Vec::new(), 1.0);
-    race.sim.grant_free_turbo(0);
-    race.sim.grant_free_turbo(0);
+    race.core.sim.grant_free_turbo(0);
+    race.core.sim.grant_free_turbo(0);
     assert_eq!(race.ship_pickup(), Some(Weapon::Turbo));
 
     // And a disc whose weapon table did not load hands out nothing rather
@@ -437,7 +439,7 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
     setup.mode = Mode::TimeTrial;
     setup.weapons = None;
     let mut race = Race::start(setup);
-    race.sim.grant_free_turbo(0);
+    race.core.sim.grant_free_turbo(0);
     assert_eq!(race.ship_pickup(), None);
 }
 
@@ -462,7 +464,7 @@ fn a_craft_that_never_reaches_the_line_is_never_given_a_turbo() {
                 race.ship_pickup(),
                 None,
                 "{mode:?} held a pickup on tick {}",
-                race.sim.world.tick
+                race.core.sim.world.tick
             );
         }
     }
@@ -492,7 +494,7 @@ fn absorbing_pays_the_pool_and_never_past_its_maximum() {
 
     // Now with room in the pool, so the payment itself is observable.
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
-    race.sim.world.ships[0].physics.shield = 1.0;
+    race.core.sim.world.ships[0].physics.shield = 1.0;
     race.tick(&PlayerInputs::none());
     let before = race.ship().physics.shield;
     let mut buttons = Buttons::new();
@@ -609,18 +611,19 @@ fn a_missile_with_nothing_to_lock_is_fired_unguided_and_spent() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_missile_table());
     race.tick(&PlayerInputs::none());
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     let mut buttons = Buttons::new();
     buttons.tick(0);
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
 
     assert_eq!(
-        race.sim.world.projectiles.live(),
+        race.core.sim.world.projectiles.live(),
         1,
         "the press with no lock put nothing in the air"
     );
     let missile = race
+        .core
         .sim
         .world
         .projectiles
@@ -657,13 +660,13 @@ fn an_unguided_missile_fired_by_hand_ends_itself_on_time() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_missile_table());
     race.tick(&PlayerInputs::none());
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     let mut buttons = Buttons::new();
     buttons.tick(0);
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
     assert_eq!(
-        race.sim.world.projectiles.live(),
+        race.core.sim.world.projectiles.live(),
         1,
         "nothing left the rail"
     );
@@ -674,7 +677,7 @@ fn an_unguided_missile_fired_by_hand_ends_itself_on_time() {
     // worth of rounding over three seconds, so an exact-tick assertion would be
     // a test of `f32` addition rather than of the rule.
     let mut ticks = 1_usize; // the firing tick already flew it once
-    while race.sim.world.projectiles.live() > 0 {
+    while race.core.sim.world.projectiles.live() > 0 {
         race.tick(&PlayerInputs::none());
         ticks += 1;
         assert!(
@@ -702,21 +705,21 @@ fn holding_a_missile_behind_a_craft_locks_it_after_the_recovered_hold() {
     use oag_race::sight;
 
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(Arc::new(one_missile_table()));
+    race.core.sim.weapons = Some(Arc::new(one_missile_table()));
 
     // Slot 1 parked squarely down slot 0's nose, inside the fixture table's
     // 10..400 longitudinal window. Placed rather than driven: this is about the
     // reticle, and an opponent that drove away would be testing the lock's
     // window instead.
-    let forward = race.sim.world.ships[0].physics.body.forward();
-    let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
+    let forward = race.core.sim.world.ships[0].physics.body.forward();
+    let ahead = race.core.sim.world.ships[0].physics.body.position + forward * 60.0;
 
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     let mut states = Vec::new();
     for _ in 0..180 {
-        race.sim.world.ships[1].physics.body.position = ahead;
-        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+        race.core.sim.world.ships[1].physics.body.position = ahead;
+        race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
         race.tick(&PlayerInputs::none());
         states.push(race.sight_state());
     }
@@ -746,13 +749,13 @@ fn holding_a_rocket_draws_no_reticle() {
     use oag_race::sight;
 
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(Arc::new(one_missile_table()));
-    let forward = race.sim.world.ships[0].physics.body.forward();
-    let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
+    race.core.sim.weapons = Some(Arc::new(one_missile_table()));
+    let forward = race.core.sim.world.ships[0].physics.body.forward();
+    let ahead = race.core.sim.world.ships[0].physics.body.position + forward * 60.0;
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
 
     for _ in 0..180 {
-        race.sim.world.ships[1].physics.body.position = ahead;
+        race.core.sim.world.ships[1].physics.body.position = ahead;
         race.tick(&PlayerInputs::none());
         assert_eq!(
             race.sight_state(),
@@ -834,12 +837,15 @@ fn an_opponent_that_declines_a_shot_does_not_absorb_the_pickup() {
         oag_tables::weapons::Weapon::Mine,
     ] {
         let mut race = race_with_a_grid();
-        race.sim.weapons = Some(Arc::new(rear_and_forward_table()));
+        race.core.sim.weapons = Some(Arc::new(rear_and_forward_table()));
 
         let slot = 1;
-        assert!(race.sim.world.ships[slot].active, "no opponent on the grid");
-        race.sim.world.ships[slot].physics.shield = 10.0;
-        race.sim.world.ships[slot].pickup.weapon = Some(weapon);
+        assert!(
+            race.core.sim.world.ships[slot].active,
+            "no opponent on the grid"
+        );
+        race.core.sim.world.ships[slot].physics.shield = 10.0;
+        race.core.sim.world.ships[slot].pickup.weapon = Some(weapon);
 
         race.spend_opponent_pickup(
             slot,
@@ -848,13 +854,13 @@ fn an_opponent_that_declines_a_shot_does_not_absorb_the_pickup() {
         );
 
         assert_eq!(
-            race.sim.world.ships[slot].physics.shield, 10.0,
+            race.core.sim.world.ships[slot].physics.shield, 10.0,
             "{weapon:?}: the opponent absorbed a pickup it never chose to fire - \
              `spend_opponent_pickup`'s `&&`-chain falls through to the absorb \
              branch whenever a `fire_*` helper declines"
         );
         assert_eq!(
-            race.sim.world.ships[slot].pickup.weapon,
+            race.core.sim.world.ships[slot].pickup.weapon,
             Some(weapon),
             "{weapon:?}: the pickup left the slot without anything being fired"
         );
@@ -884,22 +890,22 @@ fn rear_and_forward_table() -> oag_tables::weapons::WeaponStats {
 #[test]
 fn a_locked_reticle_follows_its_target_between_ticks() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(Arc::new(one_missile_table()));
+    race.core.sim.weapons = Some(Arc::new(one_missile_table()));
     // Past the countdown, which holds every craft still.
     for _ in 0..oag_race::COUNTDOWN_TICKS {
         race.tick(&PlayerInputs::none());
     }
-    let body = race.sim.world.ships[0].physics.body;
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
-    race.sim.world.ships[1].physics.body.position = body.position + body.forward() * 60.0;
+    let body = race.core.sim.world.ships[0].physics.body;
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.core.sim.world.ships[1].physics.body.position = body.position + body.forward() * 60.0;
     // The target flying down the nose at the player's own velocity until the
     // lock is taken, then the player's craft turning, so the chase camera
     // swings and the target slides on screen. Velocities only: a pose set
     // between ticks is not motion between ticks.
     let tick = |race: &mut Race, turn: f32| {
-        let velocity = race.sim.world.ships[0].physics.body.linear_velocity;
-        race.sim.world.ships[1].physics.body.linear_velocity = velocity;
-        race.sim.world.ships[0].physics.body.angular_velocity = Vec3::Y * turn;
+        let velocity = race.core.sim.world.ships[0].physics.body.linear_velocity;
+        race.core.sim.world.ships[1].physics.body.linear_velocity = velocity;
+        race.core.sim.world.ships[0].physics.body.angular_velocity = Vec3::Y * turn;
         race.tick(&PlayerInputs::none());
     };
     for _ in 0..70 {
@@ -956,8 +962,8 @@ fn an_unstamped_pad_pays_on_every_entry_and_never_once_per_tick() {
     let mut race = race_with_weapon_pads(Mode::Eliminator, enveloping_pad(), 0.0);
     let far_away = pad_at(Vec3::splat(1.0e6), 1.0);
     let place = |race: &mut Race, pad: oag_vex::pads::PadVolume| {
-        Arc::make_mut(&mut race.sim.weapon_pads)[0] = pad;
-        race.sim.weapon_pad_distance[0][0] = 0.0;
+        Arc::make_mut(&mut race.core.sim.weapon_pads)[0] = pad;
+        race.core.sim.weapon_pad_distance[0][0] = 0.0;
     };
 
     let mut granted = 0;
@@ -965,10 +971,10 @@ fn an_unstamped_pad_pays_on_every_entry_and_never_once_per_tick() {
         race.tick(&PlayerInputs::none());
         if race.ship_pickup().is_some() {
             granted += 1;
-            race.sim.world.ships[0].pickup.weapon = None;
+            race.core.sim.world.ships[0].pickup.weapon = None;
         }
         assert_eq!(
-            race.sim.weapon_pad_refresh_left(),
+            race.core.sim.weapon_pad_refresh_left(),
             [0.0],
             "an unstamped pad greyed"
         );

@@ -14,7 +14,7 @@ impl Race {
     /// (`oag_ai::plan`) and cost seconds a long circuit (HD's default: 3.0 to
     /// 3.7 s of a 5.2 to 5.9 s start, release; the per-hull adapted plans and
     /// the route plans on top). The head of [`Self::tick`] learns them
-    /// ([`Self::ensure_speed_plans`]) only if something will read them, after
+    /// ([`SimRace::ensure_speed_plans`]) only if something will read them, after
     /// the caller has had its say on whose driver flies
     /// ([`RaceSim::use_original_ai`]); [`Self::speed_plan`] and [`Self::plan_of`]
     /// learn them first, so no reader sees a plan missing that was there.
@@ -676,159 +676,168 @@ impl Race {
             crate::breadcrumbs::Breadcrumbs::seeded(world.ships[slot].physics.body.position)
         });
         let race = Self {
-            sim: RaceSim {
-                extensions: crate::extensions::Extensions::new(extensions),
-                racing_line: Arc::new(line),
-                ai_order: order.into(),
-                routes: routes.into(),
-                // Built below, once the field is seated: see
-                // `RaceSim::field_speed_plan`.
-                speed_plan: None,
-                plans_built: false,
-                plan_reference: None,
-                hull_plans: Arc::default(),
-                ship_plan: [None; oag_gameplay::MAX_SHIPS],
-                plan_steps: Arc::default(),
-                // **Degraded from the measured tuning**, never boosted toward it -
-                // see `oag_ai::Difficulty`. At the top level this is the
-                // measurement unchanged.
-                ai_tuning: difficulty.tune(&oag_ai::Tuning::default()),
-                ai_pilots: Arc::new(ai_pilots),
-                finished_thrust,
-                original_tables: original_tables.map(Arc::new),
-                original_ai: None,
-                race_seed: seed,
-                people,
-                // `--autopilot-skill` sets this after `Self::start` returns - see
-                // `RaceSim::set_autopilot_tuning`. Every race starts with the two
-                // tunings agreeing.
-                autopilot_tuning: None,
-                autopilots: std::array::from_fn(|_| None),
-                autopilot_rail: [None; oag_gameplay::MAX_PLAYERS],
-                autopilot_ours: false,
-                opponent_autopilot,
-                world,
-                collision: Arc::new(collision),
-                spline: Arc::new(spline),
-                course: course.map(Arc::new),
-                // Only Zone reads these, so the other two modes carry `None` and the
-                // engine keeps its ordinary throttle path.
-                zone: zone.filter(|_| mode == Mode::Zone),
-                // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
-                // is one place the rate is decided.
-                dt: TickClock::new(TickRate::DEFAULT).rate().dt(),
-                respawn_cooldown: [0; oag_gameplay::MAX_SHIPS],
-                respawns_in_a_row: [0; oag_gameplay::MAX_SHIPS],
-                respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
-                respawns: [0; oag_gameplay::MAX_SHIPS],
-                jumps: [0; oag_gameplay::MAX_SHIPS],
-                last_respawn_cause: [None; oag_gameplay::MAX_SHIPS],
-                cage_reset: [false; oag_gameplay::MAX_SHIPS],
-                breadcrumbs,
-                weapons_on,
-                eliminator_kill_target: eliminator_kill_target
-                    .unwrap_or(Mode::ELIMINATOR_KILL_TARGET_DEFAULT),
-                last_damager: [None; oag_gameplay::MAX_SHIPS],
-                locks: [sight.lock_sight(); oag_gameplay::MAX_SHIPS],
-                lock_rig: chase,
-                laid_from_rear,
-                last_weapon_hit: [0; oag_gameplay::MAX_SHIPS],
-                respawn_delay: [0.0; oag_gameplay::MAX_SHIPS],
-                wreck_voice: [0.0; oag_gameplay::MAX_SHIPS],
-                rolls_armed: [0; oag_gameplay::MAX_SHIPS],
-                rolls_spent: [0.0; oag_gameplay::MAX_SHIPS],
-                wall_contact_ticks: [0; oag_gameplay::MAX_SHIPS],
-                wall_inbound_ticks: [0; oag_gameplay::MAX_SHIPS],
-                wall_damage: [0.0; oag_gameplay::MAX_SHIPS],
-                pair_damage: [0.0; oag_gameplay::MAX_SHIPS],
-                pair_contact_ticks: [0; oag_gameplay::MAX_SHIPS],
-                wall_racing_ticks: [0; oag_gameplay::MAX_SHIPS],
-                beneath_ticks: [0; oag_gameplay::MAX_SHIPS],
-                beneath_wide: [false; oag_gameplay::MAX_SHIPS],
-                stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
-                distant_ticks: [0; oag_gameplay::MAX_SHIPS],
-                rescue_distance,
-                player_rescue_distance,
-                last_on_track,
-                zone_stages,
-                countdown_voice,
-                countdown_beat,
-                launch_hover,
-                hover_rig: rig,
-                steer_ramp_clamped,
-                air_pitch_bias,
-                pitch_gate,
-                sideshift_grid_gate,
-                turbo_running_laws,
-                eliminator_wrong_way_kill,
-                inertia_frame,
-                physics_laws,
-                autopilot_engine,
-                weapon_pad_glow,
-                leach_beams: leach_beams.min(oag_weapons::projectile::leach_beam::POOL_SIZE as u8),
-                leach_drain,
-                blast_push,
-                quake_hit,
-                autopilot_absorb_cancels,
-                autopilot_pad_grants,
-                launch_normal_is_track_up,
-                floor_arms_steer_to_ride_point,
-                plasma_release_at_display_scale,
-                own_craft_box_hides_track,
-                reset_triggers,
-                contact_cues,
-                score_law,
-                score_pace,
-                flip_law,
-                fire_terms: crate::field::fire_terms(opponent_fire, weapon_ai.as_ref(), difficulty),
-                autopilot: false,
-                cues: Vec::new(),
-                mod_sounds: Vec::new(),
-                announcements: Vec::new(),
-                class_announcements: Vec::new(),
-                contact_cue_cooldown: [0.0; oag_gameplay::MAX_SHIPS],
-                contact_impulse: [crate::cues::ContactImpulse::default(); oag_gameplay::MAX_SHIPS],
-                wall_contact: [None; oag_gameplay::MAX_SHIPS],
-                // Every pad starts due for a real test. `Pad_Bind` zeroes the same
-                // cache at load, so the first tick measures rather than trusting a
-                // distance nothing has computed yet.
-                pad_distance: std::array::from_fn(|_| vec![0.0; speedup_pads.len()]),
-                speedup_pads: speedup_pads.into(),
-                // The same broadphase, and the same "due for a real test" start.
-                weapon_pad_distance: std::array::from_fn(|_| vec![0.0; weapon_pads.len()]),
-                // Every pad starts collectable. The original's `+0x1a0` is zero
-                // until something stamps it, and nothing stamps it at load.
-                weapon_pad_refresh_left: vec![0.0; weapon_pads.len()],
-                weapon_pads: weapon_pads.into(),
-                weapon_pad_current: [None; MAX_SHIPS],
-                weapon_pad_refresh,
-                weapon_pad_line: weapon_pad_line.into(),
-                // A score Eliminator steers for no pad (`crate::score_pace`).
-                pad_seeking: if score_pace.is_some() {
-                    super::PadSeeking::Off
-                } else {
-                    super::PadSeeking::for_mode(mode)
+            core: SimRace {
+                sim: RaceSim {
+                    extensions: crate::extensions::Extensions::new(extensions),
+                    racing_line: Arc::new(line),
+                    ai_order: order.into(),
+                    routes: routes.into(),
+                    // Built below, once the field is seated: see
+                    // `RaceSim::field_speed_plan`.
+                    speed_plan: None,
+                    plans_built: false,
+                    plan_reference: None,
+                    hull_plans: Arc::default(),
+                    ship_plan: [None; oag_gameplay::MAX_SHIPS],
+                    plan_steps: Arc::default(),
+                    // **Degraded from the measured tuning**, never boosted toward it -
+                    // see `oag_ai::Difficulty`. At the top level this is the
+                    // measurement unchanged.
+                    ai_tuning: difficulty.tune(&oag_ai::Tuning::default()),
+                    ai_pilots: Arc::new(ai_pilots),
+                    finished_thrust,
+                    original_tables: original_tables.map(Arc::new),
+                    original_ai: None,
+                    race_seed: seed,
+                    people,
+                    // `--autopilot-skill` sets this after `Self::start` returns - see
+                    // `RaceSim::set_autopilot_tuning`. Every race starts with the two
+                    // tunings agreeing.
+                    autopilot_tuning: None,
+                    autopilots: std::array::from_fn(|_| None),
+                    autopilot_rail: [None; oag_gameplay::MAX_PLAYERS],
+                    autopilot_ours: false,
+                    opponent_autopilot,
+                    world,
+                    collision: Arc::new(collision),
+                    spline: Arc::new(spline),
+                    course: course.map(Arc::new),
+                    // Only Zone reads these, so the other two modes carry `None` and the
+                    // engine keeps its ordinary throttle path.
+                    zone: zone.filter(|_| mode == Mode::Zone),
+                    // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
+                    // is one place the rate is decided.
+                    dt: TickClock::new(TickRate::DEFAULT).rate().dt(),
+                    respawn_cooldown: [0; oag_gameplay::MAX_SHIPS],
+                    respawns_in_a_row: [0; oag_gameplay::MAX_SHIPS],
+                    respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
+                    respawns: [0; oag_gameplay::MAX_SHIPS],
+                    jumps: [0; oag_gameplay::MAX_SHIPS],
+                    last_respawn_cause: [None; oag_gameplay::MAX_SHIPS],
+                    cage_reset: [false; oag_gameplay::MAX_SHIPS],
+                    breadcrumbs,
+                    weapons_on,
+                    eliminator_kill_target: eliminator_kill_target
+                        .unwrap_or(Mode::ELIMINATOR_KILL_TARGET_DEFAULT),
+                    last_damager: [None; oag_gameplay::MAX_SHIPS],
+                    locks: [sight.lock_sight(); oag_gameplay::MAX_SHIPS],
+                    lock_rig: chase,
+                    laid_from_rear,
+                    last_weapon_hit: [0; oag_gameplay::MAX_SHIPS],
+                    respawn_delay: [0.0; oag_gameplay::MAX_SHIPS],
+                    wreck_voice: [0.0; oag_gameplay::MAX_SHIPS],
+                    rolls_armed: [0; oag_gameplay::MAX_SHIPS],
+                    rolls_spent: [0.0; oag_gameplay::MAX_SHIPS],
+                    wall_contact_ticks: [0; oag_gameplay::MAX_SHIPS],
+                    wall_inbound_ticks: [0; oag_gameplay::MAX_SHIPS],
+                    wall_damage: [0.0; oag_gameplay::MAX_SHIPS],
+                    pair_damage: [0.0; oag_gameplay::MAX_SHIPS],
+                    pair_contact_ticks: [0; oag_gameplay::MAX_SHIPS],
+                    wall_racing_ticks: [0; oag_gameplay::MAX_SHIPS],
+                    beneath_ticks: [0; oag_gameplay::MAX_SHIPS],
+                    beneath_wide: [false; oag_gameplay::MAX_SHIPS],
+                    stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
+                    distant_ticks: [0; oag_gameplay::MAX_SHIPS],
+                    rescue_distance,
+                    player_rescue_distance,
+                    last_on_track,
+                    zone_stages,
+                    countdown_voice,
+                    countdown_beat,
+                    launch_hover,
+                    hover_rig: rig,
+                    steer_ramp_clamped,
+                    air_pitch_bias,
+                    pitch_gate,
+                    sideshift_grid_gate,
+                    turbo_running_laws,
+                    eliminator_wrong_way_kill,
+                    inertia_frame,
+                    physics_laws,
+                    autopilot_engine,
+                    weapon_pad_glow,
+                    leach_beams: leach_beams
+                        .min(oag_weapons::projectile::leach_beam::POOL_SIZE as u8),
+                    leach_drain,
+                    blast_push,
+                    quake_hit,
+                    autopilot_absorb_cancels,
+                    autopilot_pad_grants,
+                    launch_normal_is_track_up,
+                    floor_arms_steer_to_ride_point,
+                    plasma_release_at_display_scale,
+                    own_craft_box_hides_track,
+                    reset_triggers,
+                    contact_cues,
+                    score_law,
+                    score_pace,
+                    flip_law,
+                    fire_terms: crate::field::fire_terms(
+                        opponent_fire,
+                        weapon_ai.as_ref(),
+                        difficulty,
+                    ),
+                    autopilot: false,
+                    cues: Vec::new(),
+                    mod_sounds: Vec::new(),
+                    announcements: Vec::new(),
+                    class_announcements: Vec::new(),
+                    contact_cue_cooldown: [0.0; oag_gameplay::MAX_SHIPS],
+                    contact_impulse: [crate::cues::ContactImpulse::default();
+                        oag_gameplay::MAX_SHIPS],
+                    wall_contact: [None; oag_gameplay::MAX_SHIPS],
+                    // Every pad starts due for a real test. `Pad_Bind` zeroes the same
+                    // cache at load, so the first tick measures rather than trusting a
+                    // distance nothing has computed yet.
+                    pad_distance: std::array::from_fn(|_| vec![0.0; speedup_pads.len()]),
+                    speedup_pads: speedup_pads.into(),
+                    // The same broadphase, and the same "due for a real test" start.
+                    weapon_pad_distance: std::array::from_fn(|_| vec![0.0; weapon_pads.len()]),
+                    // Every pad starts collectable. The original's `+0x1a0` is zero
+                    // until something stamps it, and nothing stamps it at load.
+                    weapon_pad_refresh_left: vec![0.0; weapon_pads.len()],
+                    weapon_pads: weapon_pads.into(),
+                    weapon_pad_current: [None; MAX_SHIPS],
+                    weapon_pad_refresh,
+                    weapon_pad_line: weapon_pad_line.into(),
+                    // A score Eliminator steers for no pad (`crate::score_pace`).
+                    pad_seeking: if score_pace.is_some() {
+                        super::PadSeeking::Off
+                    } else {
+                        super::PadSeeking::for_mode(mode)
+                    },
+                    fire_law: if weapon_ai.is_some() {
+                        super::FireLaw::Original
+                    } else {
+                        super::FireLaw::Ours
+                    },
+                    weapon_ai: weapon_ai.map(Arc::new),
+                    weapons: weapons.map(Arc::new),
+                    allowed_weapons: allowed_weapons.into(),
+                    class: class.into(),
+                    class_gravity_scale,
+                    class_gravity_term,
+                    start_boost,
+                    field_start_boost,
+                    pilot_assist,
+                    pilot_assist_levels: Default::default(),
+                    barrel_rolls: true,
+                    pad_current: [None; MAX_SHIPS],
+                    pad_previous_position: [None; MAX_SHIPS],
+                    xp: None,
+                    scheme: ControlScheme::default(),
                 },
-                fire_law: if weapon_ai.is_some() {
-                    super::FireLaw::Original
-                } else {
-                    super::FireLaw::Ours
-                },
-                weapon_ai: weapon_ai.map(Arc::new),
-                weapons: weapons.map(Arc::new),
-                allowed_weapons: allowed_weapons.into(),
-                class: class.into(),
-                class_gravity_scale,
-                class_gravity_term,
-                start_boost,
-                field_start_boost,
-                pilot_assist,
-                pilot_assist_levels: Default::default(),
-                barrel_rolls: true,
-                pad_current: [None; MAX_SHIPS],
-                pad_previous_position: [None; MAX_SHIPS],
-                xp: None,
-                scheme: ControlScheme::default(),
+                plans: None,
             },
             #[cfg(not(feature = "view"))]
             view: Box::new(RaceView {
@@ -1041,7 +1050,6 @@ impl Race {
             #[cfg(feature = "view")]
             replay: replay::ReplayState::requested(request),
             quiet: false,
-            speed_plan_job: None,
             #[cfg(feature = "view")]
             journal: Default::default(),
             #[cfg(test)]

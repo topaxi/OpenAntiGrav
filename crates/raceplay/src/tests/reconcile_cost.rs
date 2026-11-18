@@ -130,9 +130,9 @@ fn reconcile_cost_sweep() {
         );
         for _ in 0..oag_race::COUNTDOWN_TICKS + 600 {
             race.tick(&inputs);
-            race.sim.drain_cues();
+            race.core.sim.drain_cues();
         }
-        let ships = race.sim.ship_count();
+        let ships = race.core.sim.ship_count();
         let s0 = race.snapshot_sim();
 
         // M3: a snapshot, whole and track half, in time and in resident bytes.
@@ -146,14 +146,14 @@ fn reconcile_cost_sweep() {
             whole.push(t.elapsed().as_secs_f64() * 1e6 / 50.0);
             let t = Instant::now();
             for _ in 0..50 {
-                std::hint::black_box(track_half(&race.sim));
+                std::hint::black_box(track_half(&race.core.sim));
             }
             half.push(t.elapsed().as_secs_f64() * 1e6 / 50.0);
         }
         let (w, wmin, wmax) = spread(&mut whole);
         let (h, hmin, hmax) = spread(&mut half);
         let whole_kib = held_kib(|| race.snapshot_sim());
-        let half_kib = held_kib(|| track_half(&race.sim));
+        let half_kib = held_kib(|| track_half(&race.core.sim));
         println!(
             "{id} ships {ships} M3 snapshot: whole {w:.0} us ({wmin:.0}-{wmax:.0}) {whole_kib:.0} KiB; \
              track half {h:.0} us ({hmin:.0}-{hmax:.0}) {half_kib:.0} KiB; load {}",
@@ -174,7 +174,7 @@ fn reconcile_cost_sweep() {
                     } else {
                         race.tick(&inputs);
                     }
-                    race.sim.drain_cues();
+                    race.core.sim.drain_cues();
                 }
                 let us = t.elapsed().as_secs_f64() * 1e6 / f64::from(TICKS);
                 if first_quiet {
@@ -204,14 +204,14 @@ fn reconcile_cost_sweep() {
                     race.tick_sim_only(&inputs);
                 }
                 quiet.push(t.elapsed().as_secs_f64() * 1e3);
-                race.sim.drain_cues();
+                race.core.sim.drain_cues();
                 let t = Instant::now();
                 race.restore_sim(&s0);
                 for _ in 0..window {
                     race.tick(&inputs);
                 }
                 normal.push(t.elapsed().as_secs_f64() * 1e3);
-                race.sim.drain_cues();
+                race.core.sim.drain_cues();
             }
             let (n, nmin, nmax) = spread(&mut normal);
             let (q, qmin, qmax) = spread(&mut quiet);

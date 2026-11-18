@@ -57,18 +57,18 @@ fn the_countdown_holds_the_state_hash_and_go_releases_it() {
         frame(&mut race, &mut state, 0, now);
         now += FRAME;
     }
-    assert!(race.sim.world.tick > 272, "the race is under way");
+    assert!(race.core.sim.world.tick > 272, "the race is under way");
 
     frame(&mut race, &mut state, P1, now);
     now += FRAME;
     assert!(!state.ticks(), "Start pauses");
-    let frozen = race.sim.state_hash();
-    let tick = race.sim.world.tick;
+    let frozen = race.core.sim.state_hash();
+    let tick = race.core.sim.world.tick;
     for _ in 0..30 {
         frame(&mut race, &mut state, 0, now);
         now += FRAME;
     }
-    assert_eq!(race.sim.state_hash(), frozen, "paused: the hash holds");
+    assert_eq!(race.core.sim.state_hash(), frozen, "paused: the hash holds");
 
     frame(&mut race, &mut state, P1, now);
     assert!(matches!(state, State::Resuming { .. }), "{state:?}");
@@ -81,11 +81,11 @@ fn the_countdown_holds_the_state_hash_and_go_releases_it() {
         frames += 1;
         if !went {
             assert_eq!(
-                race.sim.state_hash(),
+                race.core.sim.state_hash(),
                 frozen,
                 "frame {frames} of the countdown stepped the race"
             );
-            assert_eq!(race.sim.world.tick, tick);
+            assert_eq!(race.core.sim.world.tick, tick);
         }
         assert!(frames < 400, "the countdown never ended");
     }
@@ -100,8 +100,8 @@ fn the_countdown_holds_the_state_hash_and_go_releases_it() {
         now += FRAME;
         frame(&mut race, &mut state, 0, now);
     }
-    assert_ne!(race.sim.state_hash(), frozen, "after GO the race runs");
-    assert!(race.sim.world.tick > tick);
+    assert_ne!(race.core.sim.state_hash(), frozen, "after GO the race runs");
+    assert!(race.core.sim.world.tick > tick);
 }
 
 #[test]
@@ -117,7 +117,7 @@ fn start_during_the_countdown_pauses_again_without_a_tick() {
         now += FRAME;
     }
     frame(&mut race, &mut state, P1, now);
-    let frozen = race.sim.state_hash();
+    let frozen = race.core.sim.state_hash();
     now += FRAME;
     frame(&mut race, &mut state, P1, now);
     assert!(matches!(state, State::Resuming { .. }));
@@ -132,7 +132,11 @@ fn start_during_the_countdown_pauses_again_without_a_tick() {
         now += FRAME;
         frame(&mut race, &mut state, 0, now);
     }
-    assert_eq!(race.sim.state_hash(), frozen, "no tick through any of it");
+    assert_eq!(
+        race.core.sim.state_hash(),
+        frozen,
+        "no tick through any of it"
+    );
 }
 
 #[test]
@@ -144,30 +148,31 @@ fn the_start_voice_cues_are_raised_on_every_title_that_voices_the_start() {
     pulse.raise_start_cue(Cue::Ready);
     pulse.raise_start_cue(Cue::Go);
     let raised: Vec<Cue> = pulse
+        .core
         .sim
         .pending_cues()
         .iter()
         .map(|event| event.cue)
         .collect();
     assert_eq!(raised, vec![Cue::Ready, Cue::Go]);
-    let hash = pulse.sim.state_hash();
+    let hash = pulse.core.sim.state_hash();
     pulse.raise_start_cue(Cue::Go);
     assert_eq!(
-        pulse.sim.state_hash(),
+        pulse.core.sim.state_hash(),
         hash,
         "a cue is an output, not state"
     );
     // The session raises GO at the top of the tick that lets the race move; that
     // tick must not drop it before the sound step drains it.
-    let queued = pulse.sim.pending_cues().len();
+    let queued = pulse.core.sim.pending_cues().len();
     pulse.tick(&PlayerInputs::none());
     assert!(
-        pulse.sim.pending_cues().len() >= queued,
+        pulse.core.sim.pending_cues().len() >= queued,
         "a tick dropped a raised cue: {:?}",
-        pulse.sim.pending_cues()
+        pulse.core.sim.pending_cues()
     );
     assert_eq!(
-        pulse.sim.pending_cues()[..queued]
+        pulse.core.sim.pending_cues()[..queued]
             .iter()
             .map(|event| event.cue)
             .collect::<Vec<_>>(),
@@ -183,6 +188,7 @@ fn the_start_voice_cues_are_raised_on_every_title_that_voices_the_start() {
     pure.raise_start_cue(Cue::Ready);
     pure.raise_start_cue(Cue::Go);
     let raised: Vec<Cue> = pure
+        .core
         .sim
         .pending_cues()
         .iter()

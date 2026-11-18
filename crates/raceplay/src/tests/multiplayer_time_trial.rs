@@ -22,8 +22,8 @@ fn race_of(mode: Mode, people: u8, opponents: bool, no_opponents: bool) -> Race 
         forward: [1.0, 0.0, 0.0],
     });
     let mut race = Race::start(setup);
-    for slot in 0..usize::from(people).min(usize::from(race.sim.world.ship_count)) {
-        race.sim.world.controllers[slot] = Controller::Local;
+    for slot in 0..usize::from(people).min(usize::from(race.core.sim.world.ship_count)) {
+        race.core.sim.world.controllers[slot] = Controller::Local;
     }
     race
 }
@@ -38,7 +38,7 @@ fn the_field_is_the_people_and_nobody_else() {
             [(false, false), (true, false), (false, true), (true, true)]
         {
             let race = race_of(Mode::TimeTrial, people, opponents, no_opponents);
-            let world = &race.sim.world;
+            let world = &race.core.sim.world;
             assert_eq!(
                 world.ship_count, people,
                 "{people} people (hatch {opponents}, no driver {no_opponents})"
@@ -56,7 +56,7 @@ fn the_field_is_the_people_and_nobody_else() {
 fn every_person_starts_on_a_row_of_their_own() {
     let race = race_of(Mode::TimeTrial, 4, false, false);
     let mut rows: Vec<f32> = (0..4)
-        .map(|slot| race.sim.world.ships[slot].physics.body.position.x)
+        .map(|slot| race.core.sim.world.ships[slot].physics.body.position.x)
         .collect();
     assert!(
         rows.windows(2).all(|pair| pair[0] < pair[1]),
@@ -70,7 +70,7 @@ fn every_person_starts_on_a_row_of_their_own() {
 #[test]
 fn one_person_is_the_ordinary_time_trial() {
     let race = race_of(Mode::TimeTrial, 1, false, false);
-    assert_eq!(race.sim.world.ship_count, 1);
+    assert_eq!(race.core.sim.world.ship_count, 1);
 }
 
 /// Speed Lap has no multiplayer twin in the original and keeps what it had: two people in
@@ -78,17 +78,17 @@ fn one_person_is_the_ordinary_time_trial() {
 #[test]
 fn speed_lap_with_two_people_is_left_as_it_was() {
     let race = race_of(Mode::SpeedLap, 2, true, false);
-    assert_eq!(race.sim.world.ship_count, 8);
+    assert_eq!(race.core.sim.world.ship_count, 8);
     let race = race_of(Mode::SpeedLap, 2, false, false);
-    assert_eq!(race.sim.world.ship_count, 1);
+    assert_eq!(race.core.sim.world.ship_count, 1);
 }
 
 /// Two craft on top of each other and closing.
 fn overlap(race: &mut Race) {
-    let at = race.sim.world.ships[0].physics.body.position;
-    race.sim.world.ships[1].physics.body.position = at + Vec3::new(0.0, 0.0, 1.0);
-    race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
-    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
+    let at = race.core.sim.world.ships[0].physics.body.position;
+    race.core.sim.world.ships[1].physics.body.position = at + Vec3::new(0.0, 0.0, 1.0);
+    race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
+    race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
 }
 
 /// Craft pass through each other in a Multiplayer Time Trial, and the same overlap in a Single
@@ -99,16 +99,16 @@ fn people_in_a_multiplayer_time_trial_pass_through_each_other() {
     let mut race = race_of(Mode::TimeTrial, 2, false, false);
     overlap(&mut race);
     let before = [
-        race.sim.world.ships[0].physics.body,
-        race.sim.world.ships[1].physics.body,
+        race.core.sim.world.ships[0].physics.body,
+        race.core.sim.world.ships[1].physics.body,
     ];
     race.resolve_craft_pairs();
     assert!(
         race.pair_contacts.is_empty(),
         "no contact between the people"
     );
-    assert_eq!(race.sim.world.ships[0].physics.body, before[0]);
-    assert_eq!(race.sim.world.ships[1].physics.body, before[1]);
+    assert_eq!(race.core.sim.world.ships[0].physics.body, before[0]);
+    assert_eq!(race.core.sim.world.ships[1].physics.body, before[1]);
 
     let mut race = race_of(Mode::SingleRace, 2, false, false);
     overlap(&mut race);
@@ -125,7 +125,7 @@ fn people_in_a_multiplayer_time_trial_pass_through_each_other() {
 #[test]
 fn one_person_among_hatch_opponents_still_collides() {
     let mut race = race_of(Mode::TimeTrial, 1, true, false);
-    assert!(race.sim.world.ship_count > 1);
+    assert!(race.core.sim.world.ship_count > 1);
     overlap(&mut race);
     race.resolve_craft_pairs();
     assert_eq!(race.pair_contacts, [(0, 1)]);
@@ -136,14 +136,14 @@ fn one_person_among_hatch_opponents_still_collides() {
 #[test]
 fn the_board_ranks_the_people_by_total_time() {
     let mut race = race_of(Mode::TimeTrial, 3, false, false);
-    let laps = race.sim.world.laps_target().unwrap_or(0);
+    let laps = race.core.sim.world.laps_target().unwrap_or(0);
     for (slot, tick) in [(0_usize, 9_000_u64), (1, 8_500), (2, 8_800)] {
-        let standing = &mut race.sim.world.ships[slot].standing;
+        let standing = &mut race.core.sim.world.ships[slot].standing;
         standing.lap = laps + 1;
         standing.finish_tick = Some(tick);
     }
     for slot in 0..3 {
-        race.sim.world.race[slot].finished = true;
+        race.core.sim.world.race[slot].finished = true;
     }
     race.capture_results();
     let board = race

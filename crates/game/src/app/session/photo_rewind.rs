@@ -268,7 +268,7 @@ impl super::Session {
             open.rewind = Rewind::begin(keeper, &mut stage.race);
         }
         let resimulates = open.rewind.as_ref().is_some_and(Rewind::resimulates);
-        let tick = stage.race.sim.world.tick;
+        let tick = stage.race.core.sim.world.tick;
         let Some(photo) = stage.race.photo() else {
             return Err(pending);
         };

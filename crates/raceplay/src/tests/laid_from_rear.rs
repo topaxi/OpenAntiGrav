@@ -7,13 +7,14 @@ use oag_gameplay::PlayerInputs;
 /// own forward, after one tick of a one-charge drop.
 fn laid_back_by(from_rear: bool) -> f32 {
     let mut race = race_with_a_grid();
-    race.sim.laid_from_rear = from_rear;
-    race.sim.weapons = Some(Arc::new(one_mine_table()));
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
-    race.sim.world.ships[0].pickup.begin_drop(1);
+    race.core.sim.laid_from_rear = from_rear;
+    race.core.sim.weapons = Some(Arc::new(one_mine_table()));
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+    race.core.sim.world.ships[0].pickup.begin_drop(1);
     race.tick(&PlayerInputs::none());
-    let body = race.sim.world.ships[0].physics.body;
+    let body = race.core.sim.world.ships[0].physics.body;
     let laid = race
+        .core
         .sim
         .world
         .projectiles

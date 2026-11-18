@@ -40,7 +40,7 @@ fn hit_at(loaded: race::Loaded, shield: f32) -> u32 {
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[0].physics.shield = shield;
+    race.core.sim.world.ships[0].physics.shield = shield;
     race.force_weapon_hit(0);
     race.damage_smokes_started_for_tests()
 }

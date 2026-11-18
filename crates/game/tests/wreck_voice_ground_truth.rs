@@ -50,11 +50,11 @@ fn a_wrecked_opponent_voices_cont_elim_in_a_single_race() {
     let mut raised = Vec::new();
     for tick in 0..RENDER_TICKS {
         if tick == WRECKED_AT {
-            race.sim.world.ships[3].physics.craft_state = oag_physics::CraftState::Eliminated;
+            race.core.sim.world.ships[3].physics.craft_state = oag_physics::CraftState::Eliminated;
         }
         race.tick(&PlayerInputs::none());
-        let stepped = race.sim.world.tick - 1;
-        for event in race.sim.pending_cues() {
+        let stepped = race.core.sim.world.tick - 1;
+        for event in race.core.sim.pending_cues() {
             if event.cue == Cue::ContElim {
                 raised.push((stepped, event.slot));
             }

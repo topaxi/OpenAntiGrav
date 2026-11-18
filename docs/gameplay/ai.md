@@ -1884,7 +1884,7 @@ person is slot 0, and no capture shows the original's field with two players.
 **The speed plan is learned only when something reads it (2026-10-13).** This
 project's driver follows a speed plan (`oag_ai::plan`), and the original driver
 reads none. `Race::start` no longer learns it: the head of `Race::tick` does
-(`Race::ensure_speed_plans`), when an opponent flies this project's driver
+(`SimRace::ensure_speed_plans`), when an opponent flies this project's driver
 (`--ai ours`, a fallback, several humans), when the player's autopilot is on, or
 when the circuit has a fork, and `Race::speed_plan` and `Race::plan_of` learn it
 first, so a reader never sees a plan missing that used to be there. (Until
@@ -1893,11 +1893,11 @@ for it: see the test-data budget in `docs/architecture/workspace-layout.md`.) A
 test shows the plans are the same whether asked for before the first tick or at
 it.
 
-**Off the frame thread (2026-10-31).** A menu launch calls `Race::begin_speed_plans`
+**Off the frame thread (2026-10-31).** A menu launch calls `SimRace::begin_speed_plans`
 once the race is fully set up (after `ai_choice::apply`): the plans are learned by
 the same function (`speed_plan::learn_speed_plans`) on a copy of the simulation on a
 `speed-plans` thread, the hand-over from the loading screen waits for
-`Race::speed_plans_ready`, and the first tick adopts them
+`SimRace::speed_plans_ready`, and the first tick adopts them
 (`ensure_speed_plans`, 25 us). Callers that build a race another
 way (headless, `--race`, tests, a mid-race autopilot) keep the lazy path. Bit-identity:
 `speed_plan_ground_truth::plans_learned_ahead_are_the_plans_the_first_tick_learns`
@@ -1907,7 +1907,7 @@ equal). Measured in `docs/rendering/frame-thread-cpu.md`.
 **Started on the race-load thread, overlapped (2026-10-31, `speed-plan-overlap`).**
 On a forked circuit the job starts as soon as the circuit is read: the race-load
 thread runs `Race::start` (natively too, as the web worker always did) and
-`Race::begin_speed_plans_ahead`, so the plans learn beside the scene build and its
+`SimRace::begin_speed_plans_ahead`, so the plans learn beside the scene build and its
 warm-up instead of after them. A fork reads the plans whichever driver flies, so
 nothing the launch decides later can make the job unwanted. A circuit without a
 fork waits for the launch's own `begin_speed_plans`, which knows whether anything

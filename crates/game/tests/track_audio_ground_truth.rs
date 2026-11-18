@@ -63,7 +63,7 @@ fn lap(image: &Path, track: &str) -> Option<(race::Race, TrackEmitters)> {
     let mut race = race::Race::start(loaded.setup);
     // The player is flown by their own racing line, so the ears go all the way
     // round rather than into the first wall. See `RaceSim::set_autopilot`.
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     Some((race, emitters))
 }
 
@@ -78,7 +78,7 @@ fn measure(name: &str, race: &mut race::Race, emitters: &TrackEmitters) -> usize
     let mut histogram = vec![0usize; total_emitters + 1];
     let mut ever = vec![false; total_emitters];
     let mut ticks = 0usize;
-    while ticks < TICK_CAP && race.sim.world.primary_race().laps_completed() < 1 {
+    while ticks < TICK_CAP && race.core.sim.world.primary_race().laps_completed() < 1 {
         race.tick(&PlayerInputs::none());
         let listener = listener_of(race);
         let mut live = 0;

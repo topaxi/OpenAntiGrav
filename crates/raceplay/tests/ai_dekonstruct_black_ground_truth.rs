@@ -61,19 +61,19 @@ fn run(class: &str, seed: u64, reversed: bool) -> Option<(u32, f32)> {
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
     let mut race = race::Race::start(setup);
-    race.sim.world.ships[0].active = false;
-    let count = race.sim.ship_count() as usize;
+    race.core.sim.world.ships[0].active = false;
+    let count = race.core.sim.ship_count() as usize;
     let mut dead = vec![false; count];
     for _ in 0..TICKS {
         race.tick_sim_only(&PlayerInputs::none());
         for (slot, flag) in dead.iter_mut().enumerate().skip(1) {
-            if race.sim.world.ships[slot].physics.craft_state != CraftState::Racing {
+            if race.core.sim.world.ships[slot].physics.craft_state != CraftState::Racing {
                 *flag = true;
             }
         }
     }
     let bumps = (1..count)
-        .map(|slot| race.sim.pair_shield_lost_of(slot))
+        .map(|slot| race.core.sim.pair_shield_lost_of(slot))
         .sum();
     Some((dead.iter().filter(|flag| **flag).count() as u32, bumps))
 }

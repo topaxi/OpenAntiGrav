@@ -21,9 +21,9 @@ fn race_with_noise(noise: bool) -> Race {
         setup.cockpit_hit_noise = Some(oag_fx::exhaust::FlareTexture::placeholder(64));
     }
     let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
     race.tick(&PlayerInputs::none());
     race
 }
@@ -113,7 +113,7 @@ fn a_quake_that_reaches_the_player_throws_the_static() {
 #[test]
 fn another_seats_view_wears_none() {
     let mut race = race_with_noise(true);
-    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    race.core.sim.world.controllers[1] = oag_gameplay::Controller::Local;
     assert_eq!(race.set_viewport_count(2), 2);
     race.view.camera_view = CameraView::Internal;
     race.force_weapon_hit(0);

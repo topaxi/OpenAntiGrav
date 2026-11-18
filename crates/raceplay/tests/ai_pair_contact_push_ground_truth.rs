@@ -37,12 +37,12 @@ fn start() -> Option<race::Race> {
     })
     .expect("loading");
     let mut race = race::Race::start(loaded.setup);
-    assert!(race.sim.use_original_ai(None, 0));
+    assert!(race.core.sim.use_original_ai(None, 0));
     let mut moving = 0;
     for _ in 0..SETTLE + 2000 {
         race.tick(&PlayerInputs::none());
-        let racing = (1..race.sim.ship_count() as usize).any(|s| {
-            race.sim.world.ships[s]
+        let racing = (1..race.core.sim.ship_count() as usize).any(|s| {
+            race.core.sim.world.ships[s]
                 .physics
                 .body
                 .linear_velocity
@@ -58,7 +58,7 @@ fn start() -> Option<race::Race> {
 }
 
 fn targets(race: &race::Race, a: usize, b: usize) -> (f32, f32) {
-    let field = race.sim.original_ai_field().expect("original field");
+    let field = race.core.sim.original_ai_field().expect("original field");
     (
         field.drivers[a].planner.target,
         field.drivers[b].planner.target,
@@ -68,11 +68,11 @@ fn targets(race: &race::Race, a: usize, b: usize) -> (f32, f32) {
 /// Moves `b` into `a`'s flank on the side `b` already rides, at `a`'s pose and
 /// speed, closing. `+1.0` when that is `a`'s left.
 fn force_side_by_side(race: &mut race::Race, a: usize, b: usize) -> f32 {
-    let body = race.sim.world.ships[a].physics.body;
+    let body = race.core.sim.world.ships[a].physics.body;
     let left = -body.right();
-    let across = left.dot(race.sim.world.ships[b].physics.body.position - body.position);
+    let across = left.dot(race.core.sim.world.ships[b].physics.body.position - body.position);
     let side = if across >= 0.0 { 1.0 } else { -1.0 };
-    let ship = &mut race.sim.world.ships[b];
+    let ship = &mut race.core.sim.world.ships[b];
     ship.physics.body.position = body.position + left * (side * OFFSET);
     ship.physics.body.orientation = body.orientation;
     ship.physics.body.linear_velocity = body.linear_velocity - left * (side * CLOSING);
@@ -82,8 +82,9 @@ fn force_side_by_side(race: &mut race::Race, a: usize, b: usize) -> f32 {
 
 /// `+1.0` when `b` is on `a`'s left.
 fn side_of(race: &race::Race, a: usize, b: usize) -> f32 {
-    let body = race.sim.world.ships[a].physics.body;
-    let across = (-body.right()).dot(race.sim.world.ships[b].physics.body.position - body.position);
+    let body = race.core.sim.world.ships[a].physics.body;
+    let across =
+        (-body.right()).dot(race.core.sim.world.ships[b].physics.body.position - body.position);
     if across >= 0.0 { 1.0 } else { -1.0 }
 }
 
@@ -97,7 +98,7 @@ fn two_opponents_forced_side_by_side_push_their_lanes_apart() {
     let (a, b) = (1, 2);
     let before = targets(&forced, a, b);
     assert_eq!(before, targets(&control, a, b), "the two runs diverged");
-    let contacts_before = forced.sim.pair_contact_ticks_of(a);
+    let contacts_before = forced.core.sim.pair_contact_ticks_of(a);
 
     let placed = force_side_by_side(&mut forced, a, b);
     // The side the push reads is the rival's at the contact, not at the placement: closing
@@ -106,12 +107,12 @@ fn two_opponents_forced_side_by_side_push_their_lanes_apart() {
     for _ in 0..WATCH {
         forced.tick(&PlayerInputs::none());
         control.tick(&PlayerInputs::none());
-        if side.is_none() && forced.sim.pair_contact_ticks_of(a) > contacts_before {
+        if side.is_none() && forced.core.sim.pair_contact_ticks_of(a) > contacts_before {
             side = Some(side_of(&forced, a, b));
         }
     }
     let side = side.unwrap_or(placed);
-    let contact_ticks = forced.sim.pair_contact_ticks_of(a) - contacts_before;
+    let contact_ticks = forced.core.sim.pair_contact_ticks_of(a) - contacts_before;
     assert!(
         contact_ticks > 0,
         "the forced placement never made a pair contact"

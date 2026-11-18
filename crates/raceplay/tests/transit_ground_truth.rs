@@ -40,7 +40,7 @@ fn race_on(track: &str) -> Option<race::Race> {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     Some(race)
 }
 
@@ -67,22 +67,26 @@ fn drive_until(race: &mut race::Race, limit: u32, done: impl Fn(&race::Race) -> 
 /// A transit of most of a lap on, entered `ticks` before it exits: returns the stamp the
 /// lap counters give its exit tick (the world's count after that tick's step).
 fn jump(race: &mut race::Race, ticks: u16) -> u64 {
-    let entry = race.sim.world.ships[0].physics.body.position;
-    race.sim
+    let entry = race.core.sim.world.ships[0].physics.body.position;
+    race.core
+        .sim
         .begin_transit(0, ticks, Distance::Lap(0.9), 0.95)
         .expect("a racing craft on the course");
     for _ in 1..ticks {
         race.tick(&throttle());
         assert_eq!(
-            race.sim.world.ships[0].physics.body.position, entry,
+            race.core.sim.world.ships[0].physics.body.position, entry,
             "frozen"
         );
-        assert!(!race.sim.ship_active(0), "not drawn");
+        assert!(!race.core.sim.ship_active(0), "not drawn");
     }
     race.tick(&throttle());
-    let exit = race.sim.world.tick;
-    assert_eq!(race.sim.world.ships[0].transit, None, "out after its ticks");
-    let out = race.sim.world.ships[0].physics.body.position;
+    let exit = race.core.sim.world.tick;
+    assert_eq!(
+        race.core.sim.world.ships[0].transit, None,
+        "out after its ticks"
+    );
+    let out = race.core.sim.world.ships[0].physics.body.position;
     assert!(
         out.distance(entry) > 100.0,
         "came out elsewhere: {out:?} from {entry:?}"
@@ -98,14 +102,14 @@ fn a_transit_over_the_line_is_a_lap_and_a_finish_on_its_exit_tick() {
     };
     // Off the grid, over the line once (the clock starts), and a few seconds into lap 1.
     drive_until(&mut race, 1200, |r| {
-        r.sim.world.ships[0].standing.lap_start_tick.is_some()
+        r.core.sim.world.ships[0].standing.lap_start_tick.is_some()
     });
     for _ in 0..300 {
         race.tick(&throttle());
     }
-    let ship = |r: &race::Race| r.sim.world.ships[0];
+    let ship = |r: &race::Race| r.core.sim.world.ships[0];
     assert_eq!(ship(&race).standing.lap, 1);
-    let respawns = race.sim.respawns();
+    let respawns = race.core.sim.respawns();
 
     let exit = jump(&mut race, 60);
     let standing = ship(&race).standing;
@@ -118,7 +122,7 @@ fn a_transit_over_the_line_is_a_lap_and_a_finish_on_its_exit_tick() {
         Some(exit),
         "the lap is timed at the exit tick"
     );
-    let person = &race.sim.world.race[0];
+    let person = &race.core.sim.world.race[0];
     assert_eq!(person.lap, 2);
     assert_eq!(person.lap_start_tick, exit, "the person's clock agrees");
     assert_eq!(
@@ -135,10 +139,14 @@ fn a_transit_over_the_line_is_a_lap_and_a_finish_on_its_exit_tick() {
     let kmh = after.physics.body.linear_velocity.length() * oag_core::math::SPEED_TO_KMH;
     assert!(kmh > 100.0, "driving at {kmh} km/h");
     assert!(after.standing.progress.unwrap() > progress, "further round");
-    assert_eq!(race.sim.respawns(), respawns, "no rescue after the exit");
+    assert_eq!(
+        race.core.sim.respawns(),
+        respawns,
+        "no rescue after the exit"
+    );
 
     // On to the last lap, then over the line by a transit: the finish is the exit tick.
-    let target = race.sim.world.laps_target().expect("a lap target");
+    let target = race.core.sim.world.laps_target().expect("a lap target");
     while ship(&race).standing.lap < target {
         jump(&mut race, 2);
         for _ in 0..60 {
@@ -155,11 +163,14 @@ fn a_transit_over_the_line_is_a_lap_and_a_finish_on_its_exit_tick() {
         Some(exit),
         "finished on the exit tick"
     );
-    assert!(race.sim.world.race[0].finished, "the person's race is over");
+    assert!(
+        race.core.sim.world.race[0].finished,
+        "the person's race is over"
+    );
     println!(
         "laps {:?}, finish at {exit}, respawns {}",
         standing.lap_splits,
-        race.sim.respawns()
+        race.core.sim.respawns()
     );
 }
 
@@ -170,10 +181,10 @@ fn a_clearance_probe_reads_the_real_track() {
         return;
     };
     drive_until(&mut race, 1200, |r| {
-        r.sim.world.ships[0].standing.lap_start_tick.is_some()
+        r.core.sim.world.ships[0].standing.lap_start_tick.is_some()
     });
-    let (fits, ahead) = race.sim.clearance(0, Distance::Units(200.0), 4.0);
-    let (wide, _) = race.sim.clearance(0, Distance::Units(200.0), 60.0);
+    let (fits, ahead) = race.core.sim.clearance(0, Distance::Units(200.0), 4.0);
+    let (wide, _) = race.core.sim.clearance(0, Distance::Units(200.0), 60.0);
     println!("radius 4 fits {fits} at {ahead}; radius 60 fits {wide}");
     assert!(fits, "a small portal fits the road 200 units on");
     assert!(!wide, "a 120-unit-wide one does not");
@@ -182,8 +193,8 @@ fn a_clearance_probe_reads_the_real_track() {
 
 /// The nearest the craft is to a sample of course route `route` and to a ring point, in units.
 fn offsets(race: &race::Race, route: usize) -> (f32, f32) {
-    let course = race.sim.course().expect("a course");
-    let at = race.sim.world.ships[0].physics.body.position;
+    let course = race.core.sim.course().expect("a course");
+    let at = race.core.sim.world.ships[0].physics.body.position;
     let nearest = |points: &mut dyn Iterator<Item = oag_core::math::Vec3>| {
         points.map(|p| p.distance(at)).fold(f32::INFINITY, f32::min)
     };
@@ -200,7 +211,7 @@ fn an_exit_on_a_forks_route_seats_the_craft_and_its_driver_on_the_route() {
         return;
     };
     let (route, half) = {
-        let course = race.sim.course().expect("a course");
+        let course = race.core.sim.course().expect("a course");
         let route = &course.routes()[0];
         let span = (course.progress_at(route.merge).unwrap()
             - course.progress_at(route.split).unwrap())
@@ -209,14 +220,14 @@ fn an_exit_on_a_forks_route_seats_the_craft_and_its_driver_on_the_route() {
     };
     // Past the first lap's gate, so the move is a plain jump.
     drive_until(&mut race, 1200, |r| {
-        r.sim.world.ships[0].standing.lap_start_tick.is_some()
+        r.core.sim.world.ships[0].standing.lap_start_tick.is_some()
     });
     let exit = race::transit::Exit {
         to: half,
         route: u16::try_from(route + 1).unwrap(),
     };
     assert!(race.move_to(0, exit, 150.0));
-    let driver = race.sim.world.ships[0].driver;
+    let driver = race.core.sim.world.ships[0].driver;
     assert_eq!(
         usize::from(driver.branching.route),
         route + 1,
@@ -230,12 +241,12 @@ fn an_exit_on_a_forks_route_seats_the_craft_and_its_driver_on_the_route() {
     );
 
     // It drives the detour: still the route's driver a second on, never back at the ring.
-    let respawns = race.sim.respawns();
+    let respawns = race.core.sim.respawns();
     for _ in 0..60 {
         race.tick(&throttle());
     }
-    assert_eq!(race.sim.respawns(), respawns, "no rescue");
-    let driver = race.sim.world.ships[0].driver;
+    assert_eq!(race.core.sim.respawns(), respawns, "no rescue");
+    let driver = race.core.sim.world.ships[0].driver;
     assert_eq!(usize::from(driver.branching.route), route + 1);
     let (on_route, on_ring) = offsets(&race, route);
     assert!(on_route * 3.0 < on_ring, "{on_route:.1} vs {on_ring:.1}");
@@ -243,8 +254,8 @@ fn an_exit_on_a_forks_route_seats_the_craft_and_its_driver_on_the_route() {
     // The same ring point as a ring exit is the ring: the route is the exit's own to name.
     let mut ring = race_on(FORKED).unwrap();
     drive_until(&mut ring, 1200, |r| {
-        r.sim.world.ships[0].standing.lap_start_tick.is_some()
+        r.core.sim.world.ships[0].standing.lap_start_tick.is_some()
     });
     assert!(ring.move_to(0, race::transit::Exit::ring(half), 150.0));
-    assert_eq!(ring.sim.world.ships[0].driver.branching.route, 0);
+    assert_eq!(ring.core.sim.world.ships[0].driver.branching.route, 0);
 }

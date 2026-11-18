@@ -41,7 +41,7 @@ impl Race {
     pub fn telemetry(&self) -> Telemetry {
         let ship = self.ship();
         let position = ship.physics.body.position;
-        let (spline_distance, height_above_spline) = self.sim.spline.nearest(position).map_or(
+        let (spline_distance, height_above_spline) = self.core.sim.spline.nearest(position).map_or(
             (f32::NAN, f32::NAN),
             |(_, sample, distance)| {
                 let up = (-Vec3::from_array(sample.down)).normalize_or_zero();
@@ -50,11 +50,11 @@ impl Race {
         );
 
         Telemetry {
-            tick: self.sim.world.tick,
+            tick: self.core.sim.world.tick,
             position,
             speed: ship.physics.body.linear_velocity.length(),
             pickup: ship.pickup.weapon,
-            projectiles: self.sim.world.projectiles.live(),
+            projectiles: self.core.sim.world.projectiles.live(),
             grounded: ship.physics.grounded,
             spline_distance,
             height_above_spline,
@@ -78,7 +78,7 @@ impl Race {
     /// round: a spurious warning is worse than a missing one.
     #[must_use]
     pub fn wrong_way(&self) -> bool {
-        self.sim.wrong_way_for(self.player_slot())
+        self.core.sim.wrong_way_for(self.player_slot())
     }
 }
 
@@ -123,18 +123,18 @@ impl Race {
     #[must_use]
     pub fn readout_for(&self, slot: usize) -> oag_hud::Readout {
         let primary = slot == self.player_slot();
-        let ship = &self.sim.world.ships[slot];
-        let race = &self.sim.world.race[slot];
+        let ship = &self.core.sim.world.ships[slot];
+        let race = &self.core.sim.world.race[slot];
         let hud = &self.view.huds[slot];
         // Zero still means "unknown", and a track with no closed ring still has
         // no lap counter - the widget is omitted rather than reading 1 of 3 on a
         // course that cannot tell.
-        let counted = self.sim.course.is_some();
+        let counted = self.core.sim.course.is_some();
         // A person's view after their own crossing, while the others race on: the
         // lap counter holds at the target, the clocks at the moment they finished,
         // and a standing line says so. See `Self::finished_view`.
         let finished = self.finished_view(slot);
-        let held = self.sim.held_for_hud(slot);
+        let held = self.core.sim.held_for_hud(slot);
         let mut readout = oag_hud::Readout {
             speed_kmh: ship.physics.body.linear_velocity.length() * oag_fx::exhaust::SPEED_TO_KMH,
             // The ship's own pool, which wall contact spends and absorbing a
@@ -162,27 +162,27 @@ impl Race {
             // race on a track with no authored `Start Position` node. `1 / 1` is
             // arithmetic rather than a standing, and the widget group is omitted
             // the same way the lap group is on a track that cannot count.
-            place: if counted && self.sim.world.ship_count > 1 {
-                self.sim.field_place(slot)
+            place: if counted && self.core.sim.world.ship_count > 1 {
+                self.core.sim.field_place(slot)
             } else {
                 0
             },
-            ships: u32::from(self.sim.world.ship_count),
+            ships: u32::from(self.core.sim.world.ship_count),
             // The racing clock, not the raw tick: the original's clocks read
             // zero through the whole start-line countdown and start on the
             // release. `oag_race::race_clock_ticks` has the measurement.
             // The gates and animations that need the raw tick read
             // `world.tick` themselves.
             race_ticks: finished.map_or_else(
-                || oag_race::race_clock_ticks(self.sim.world.tick),
+                || oag_race::race_clock_ticks(self.core.sim.world.tick),
                 |held| held.race_ticks,
             ),
             lap_ticks: if let Some(held) = finished {
                 held.lap_ticks
             } else if counted {
-                race.lap_ticks(self.sim.world.tick)
+                race.lap_ticks(self.core.sim.world.tick)
             } else {
-                oag_race::race_clock_ticks(self.sim.world.tick)
+                oag_race::race_clock_ticks(self.core.sim.world.tick)
             },
             best_lap_ticks: race.best_lap_ticks,
             // Gated the same as `lap`/`laps` above: a track with no closed ring
@@ -194,7 +194,7 @@ impl Race {
             },
             // Facing back is the move here: no frame of the original's flips shows the
             // warning (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Ours").
-            wrong_way: self.sim.flip_law.is_none() && self.sim.wrong_way_for(slot),
+            wrong_way: self.core.sim.flip_law.is_none() && self.core.sim.wrong_way_for(slot),
             zone: race.zone.into(),
             score: race.score,
             // The colour grade lives on `crate::Scene`, not on the
@@ -210,9 +210,9 @@ impl Race {
             pickup: held,
             ext: oag_hud::ext_draws::Outputs {
                 pickup_look: hud.pickup_look.clone(),
-                ..self.sim.extensions.hud(slot, self.sim.world.tick)
+                ..self.core.sim.extensions.hud(slot, self.core.sim.world.tick)
             },
-            sub_weapon: self.sim.sub_weapon(slot),
+            sub_weapon: self.core.sim.sub_weapon(slot),
             campaign_event: self.view.campaign_event,
             // The reticle, whatever it is doing. `Sight::visible` is what
             // decides whether anything reaches the screen, so this is passed
@@ -232,13 +232,17 @@ impl Race {
             pickup_releasing: hud
                 .pickup_last
                 .filter(|_| held.is_none() && hud.pickup_pop[1] > 0.0),
-            race_xp: self.sim.xp_tally().map(crate::xp_tally::XpTally::total),
+            race_xp: self
+                .core
+                .sim
+                .xp_tally()
+                .map(crate::xp_tally::XpTally::total),
             pickup_fade: hud.pickup_fade,
             thrust_chase_percent: hud.thrust_chase_percent,
             thrust_percent: ship.physics.thrust.max(0.0),
-            pilot_assist: self.sim.pilot_assist_shown(slot),
+            pilot_assist: self.core.sim.pilot_assist_shown(slot),
             assist: hud.assist_indicator.readout(),
-            mode: self.sim.world.mode(),
+            mode: self.core.sim.world.mode(),
             // Not this struct's to know: it needs the campaign cell and the
             // stored best, which live on `RaceStage`, one level up -
             // `RaceStage::draw_hud` fills it in after this method returns,
@@ -247,12 +251,12 @@ impl Race {
             time_trial_pace: None,
             head_to_head: self.head_to_head(slot),
             kill_tags: self.kill_tags(slot),
-            score_rows: self.sim.score_law.is_some()
-                && self.sim.world.mode() == oag_race::Mode::Eliminator,
-            race_line: self.sim.race_line(slot),
+            score_rows: self.core.sim.score_law.is_some()
+                && self.core.sim.world.mode() == oag_race::Mode::Eliminator,
+            race_line: self.core.sim.race_line(slot),
             player_tags: self.player_tags_for(slot),
-            kill_target: if self.sim.world.mode() == oag_race::Mode::Eliminator {
-                self.sim.eliminator_kill_target
+            kill_target: if self.core.sim.world.mode() == oag_race::Mode::Eliminator {
+                self.core.sim.eliminator_kill_target
             } else {
                 0
             },
@@ -318,11 +322,11 @@ impl Race {
     /// that crossing, the place the field gives them (frozen at the finish tick,
     /// see [`oag_race::Standing::finish_tick`]) and a standing line.
     pub(super) fn finished_view(&self, slot: usize) -> Option<FinishedView> {
-        if self.viewport_count() <= 1 || !self.sim.world.person_flown(slot) {
+        if self.viewport_count() <= 1 || !self.core.sim.world.person_flown(slot) {
             return None;
         }
-        let finish = self.sim.world.ships[slot].standing.finish_tick?;
-        let race = &self.sim.world.race[slot];
+        let finish = self.core.sim.world.ships[slot].standing.finish_tick?;
+        let race = &self.core.sim.world.race[slot];
         let target = race.laps_target?;
         let laps = usize::try_from(target).unwrap_or(usize::MAX);
         Some(FinishedView {
@@ -381,14 +385,14 @@ impl Race {
     /// draws it - see [`oag_hud::kill_tags`]. Empty in every other mode, and
     /// for a slot with no team on record (a `Setup` built by hand).
     fn kill_tags(&self, player: usize) -> Vec<oag_hud::KillTag> {
-        let world = &self.sim.world;
+        let world = &self.core.sim.world;
         if world.mode() != oag_race::Mode::Eliminator {
             return Vec::new();
         }
         let slots: Vec<usize> = (0..world.ship_count as usize)
             .filter(|&slot| world.ships[slot].active)
             .collect();
-        let scored = self.sim.score_law.is_some();
+        let scored = self.core.sim.score_law.is_some();
         let counts: Vec<u32> = slots
             .iter()
             .map(|&slot| {
@@ -472,11 +476,11 @@ impl Race {
     /// engine's `craft+0xad0` with the same lap-1 wrap fix, in the same
     /// arc-length units. See `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
     fn head_to_head(&self, player: usize) -> Option<oag_hud::HeadToHead> {
-        if self.sim.world.mode() != oag_race::Mode::Head2Head {
+        if self.core.sim.world.mode() != oag_race::Mode::Head2Head {
             return None;
         }
-        let course = self.sim.course.as_deref()?;
-        let world = &self.sim.world;
+        let course = self.core.sim.course.as_deref()?;
+        let world = &self.core.sim.world;
         let opponent = (0..world.ship_count as usize)
             .find(|&slot| slot != player && world.ships[slot].active)?;
         // **Measured between the two craft, not read off [`Self::places`].** A place is
@@ -487,7 +491,7 @@ impl Race {
             - world.ships[opponent].standing.distance(course);
         // Two people: both rows carry a team name, each view's own first. One person: the
         // player's row is the profile tag in the original, which this build has none of.
-        let named = self.sim.people > 1;
+        let named = self.core.sim.people > 1;
         let team = |slot: usize| self.view.slot_teams.get(slot).cloned();
         Some(oag_hud::HeadToHead {
             gap: ahead.abs(),

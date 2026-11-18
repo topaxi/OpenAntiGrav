@@ -217,6 +217,7 @@ fn timeline(image: &str, mode: oag_race::Mode, class: &str) -> Option<Vec<Beat>>
     for _ in 0..oag_race::COUNTDOWN_TICKS + 30 {
         race.tick(&PlayerInputs::none());
         let go = race
+            .core
             .sim
             .pending_cues()
             .iter()
@@ -848,7 +849,7 @@ fn pulse_pad_music_controls_move_the_song_and_leave_the_simulation_alone() {
         audio.step_music_line(60, settings.music_volume);
         audio.start_race_music(&discs, oag_sound::MusicSource::Auto, &cache);
         out.line_after_restart = audio.music_line_ticks();
-        out.hash = race.sim.state_hash();
+        out.hash = race.core.sim.state_hash();
         out
     };
     let with = run(true);

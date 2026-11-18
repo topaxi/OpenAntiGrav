@@ -142,24 +142,24 @@ pub fn start_recorded(setup: Setup, header: &Header) -> Result<Race> {
 ///
 /// A launch setting this build does not know.
 pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
-    crate::extensions::check_recorded(&header.mods, race.sim.mods_used()).map_err(|why| {
+    crate::extensions::check_recorded(&header.mods, race.core.sim.mods_used()).map_err(|why| {
         anyhow::anyhow!("the replay's simulation modules are not this race's: {why}")
     })?;
     let launch = Launch::from_table(&header.options)?;
-    race.sim.apply_launch(&launch);
+    race.core.sim.apply_launch(&launch);
     for &slot in &header.slots {
-        if let Some(controller) = race.sim.world.controllers.get_mut(usize::from(slot)) {
+        if let Some(controller) = race.core.sim.world.controllers.get_mut(usize::from(slot)) {
             *controller = Controller::Local;
         }
     }
     // After the seats: an online room's people are remote, not local.
     if let Some(room) = super::Room::from_table(&header.options)? {
-        race.sim.apply_room(&room);
+        race.core.sim.apply_room(&room);
     }
     // After the seats, as the session applies the AI choice: which driver flies reads who is
     // human.
     if let Some(ai) = launch.original_ai {
-        race.sim.use_original_ai(ai.skill, ai.level);
+        race.core.sim.use_original_ai(ai.skill, ai.level);
     }
     Ok(())
 }

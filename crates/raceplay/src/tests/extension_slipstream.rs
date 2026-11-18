@@ -266,7 +266,7 @@ fn a_race_hands_its_module_the_titles_key() {
     ] {
         let mut race = super::extensions::grid(prepared_for(title, &[title_reader()]));
         race.tick(&oag_gameplay::PlayerInputs::none());
-        let blob = race.sim.extensions.blob_for_tests(0);
+        let blob = race.core.sim.extensions.blob_for_tests(0);
         assert_eq!(
             u32::from_le_bytes(blob[..4].try_into().unwrap()),
             oag_ext_abi::channel_key(title),
@@ -345,7 +345,7 @@ fn a_race_hands_its_module_the_picks_its_source_carries() {
         source.options = crate::extensions::Picks::all_sim([pick, 0, 0, 0]);
         let mut race = super::extensions::grid(prepared_for("wipeout-pulse", &[source]));
         race.tick(&oag_gameplay::PlayerInputs::none());
-        assert_eq!(race.sim.extensions.blob_for_tests(0)[0], pick);
+        assert_eq!(race.core.sim.extensions.blob_for_tests(0)[0], pick);
     }
 }
 

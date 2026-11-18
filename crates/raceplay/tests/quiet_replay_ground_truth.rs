@@ -71,18 +71,22 @@ fn start() -> Option<race::Race> {
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
     let mut race = race::Race::start(setup);
-    assert_eq!(race.sim.ship_count(), 8, "the field is not eight craft");
-    race.sim.world.controllers[1] = Controller::Remote;
+    assert_eq!(
+        race.core.sim.ship_count(),
+        8,
+        "the field is not eight craft"
+    );
+    race.core.sim.world.controllers[1] = Controller::Remote;
     Some(race)
 }
 
 /// What each slot's craft and rules look like, as text.
 fn slots(race: &race::Race) -> Vec<String> {
-    (0..usize::from(race.sim.ship_count()))
+    (0..usize::from(race.core.sim.ship_count()))
         .map(|slot| {
             format!(
                 "{:?} {:?}",
-                race.sim.world.ships[slot], race.sim.world.race[slot]
+                race.core.sim.world.ships[slot], race.core.sim.world.race[slot]
             )
         })
         .collect()
@@ -114,10 +118,10 @@ fn compare(
         }
         normal.tick(&pads_n.tick(tick, false));
         quiet.tick(&pads_q.tick(tick, false));
-        normal.sim.drain_cues();
-        quiet.sim.drain_cues();
+        normal.core.sim.drain_cues();
+        quiet.core.sim.drain_cues();
     }
-    assert_eq!(normal.sim.state_hash(), quiet.sim.state_hash());
+    assert_eq!(normal.core.sim.state_hash(), quiet.core.sim.state_hash());
     let ignited_before = quiet.spark_ignitions();
 
     let mut seen = Window::default();
@@ -129,17 +133,17 @@ fn compare(
         }
         normal.tick(&pads_n.tick(tick, fire(step)));
         quiet.tick_sim_only(&pads_q.tick(tick, fire(step)));
-        seen.cues += normal.sim.drain_cues().len();
+        seen.cues += normal.core.sim.drain_cues().len();
         assert!(
-            quiet.sim.pending_cues().is_empty(),
+            quiet.core.sim.pending_cues().is_empty(),
             "a quiet tick queued cues on window tick {step}"
         );
         assert_eq!(
-            normal.sim.state_hash(),
-            quiet.sim.state_hash(),
+            normal.core.sim.state_hash(),
+            quiet.core.sim.state_hash(),
             "the quiet path left the normal one at window tick {step}"
         );
-        for projectile in &normal.sim.world.projectiles.slots {
+        for projectile in &normal.core.sim.world.projectiles.slots {
             if projectile.kind.is_some() {
                 seen.projectile_ticks += 1;
                 if projectile.owner == 0 && projectile.target.is_some() {
@@ -154,11 +158,11 @@ fn compare(
     // counters and dwell timers outside `state_hash`, and a skipped helper that
     // wrote one would pass every check above.
     for race in [&mut normal, &mut quiet] {
-        race.sim.drain_announcements();
-        race.sim.drain_class_announcements();
+        race.core.sim.drain_announcements();
+        race.core.sim.drain_class_announcements();
     }
     assert!(
-        format!("{:?}", normal.sim) == format!("{:?}", quiet.sim),
+        format!("{:?}", normal.core.sim) == format!("{:?}", quiet.core.sim),
         "the quiet path left the sim differing from the normal one outside the hash"
     );
     assert_eq!(
@@ -193,7 +197,7 @@ fn a_quiet_replay_fires_the_same_locked_missile() {
         30,
         140,
         60,
-        |race| race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile),
+        |race| race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile),
         |step| step == 2,
     ) else {
         return;
@@ -214,7 +218,7 @@ fn a_quiet_replay_fires_the_same_locked_missile_in_a_moving_pack() {
         COUNTDOWN + 540,
         COUNTDOWN + 600,
         120,
-        |race| race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile),
+        |race| race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile),
         // Step 90, not 40 (2026-10-20): under Pulse's measured world-axis inertia the
         // scripted pack sits elsewhere at window step 40 and nobody is in the lock
         // cone. The scenario moved; the claim did not.
@@ -239,7 +243,7 @@ fn a_quiet_replay_locks_a_missile_inside_the_window() {
         COUNTDOWN + 600,
         COUNTDOWN + 600,
         160,
-        |race| race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile),
+        |race| race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile),
         |step| step == 100,
     ) else {
         return;
@@ -264,7 +268,7 @@ fn a_quiet_replay_reaches_the_hash_of_a_normal_one_in_a_pack() {
             let weapons = [Weapon::Rocket, Weapon::Bomb, Weapon::Mine, Weapon::Missile];
             for slot in 0..8usize {
                 if slot != 1 {
-                    race.sim.world.ships[slot].pickup.weapon = Some(weapons[slot % 4]);
+                    race.core.sim.world.ships[slot].pickup.weapon = Some(weapons[slot % 4]);
                 }
             }
         },

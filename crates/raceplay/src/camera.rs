@@ -271,7 +271,7 @@ impl Race {
             // height lifts the eye only where the title's law says it does -
             // see `oag_title::weapons::QuakeHit::lifts_cockpit_eye`; the
             // height itself is computed either way, for the hit gate.
-            let quake_lift = if self.sim.quake_hit.lifts_cockpit_eye() {
+            let quake_lift = if self.core.sim.quake_hit.lifts_cockpit_eye() {
                 self.ship().quake_lift
             } else {
                 0.0
@@ -442,7 +442,8 @@ impl Race {
     /// Queues `cue` for the player, to sound with this tick's.
     pub fn raise_cue(&mut self, cue: oag_gameplay::cue::Cue) {
         let slot = self.player_slot();
-        self.sim
+        self.core
+            .sim
             .cues
             .push(oag_gameplay::cue::CueEvent::new(cue, slot));
     }
@@ -525,7 +526,7 @@ impl Race {
         // network client, not slot 0's. An opponent recovering across the circuit must not
         // blank the shot.
         let slot = self.viewed_slot();
-        if self.sim.respawn_cooldown[slot] > 0 {
+        if self.core.sim.respawn_cooldown[slot] > 0 {
             return (UNPLACED, UNPLACED);
         }
         let ship = self.viewed_ship();
@@ -535,19 +536,22 @@ impl Race {
         // would cost more per frame than the culling it enables saves.
         // `u16::MAX` is the never-located sentinel, and it is out of range of
         // any real table, so the bounds check covers both.
-        let Some(index) = self.sim.located_sample(ship) else {
+        let Some(index) = self.core.sim.located_sample(ship) else {
             return (UNPLACED, UNPLACED);
         };
-        let craft = self.sim.section_of(index, ship.physics.body.position);
+        let craft = self.core.sim.section_of(index, ship.physics.body.position);
         // The camera is a chase spring a few units behind, so it is a few
         // samples away in the same table. See `Spline::nearest_within` for why
         // a local search is allowed to miss.
-        let camera = match self.sim.spline.nearest_within(
+        let camera = match self.core.sim.spline.nearest_within(
             self.camera_position(),
             index,
             CAMERA_SEARCH_SAMPLES,
         ) {
-            Some((camera_index, _, _)) => self.sim.section_of(camera_index, self.camera_position()),
+            Some((camera_index, _, _)) => self
+                .core
+                .sim
+                .section_of(camera_index, self.camera_position()),
             None => UNPLACED,
         };
         (craft, camera)
@@ -596,7 +600,7 @@ impl Race {
             return None;
         }
         self.drawn_craft_of_a_station_camera()
-            .map(|slot| self.sim.section_of_slot(slot))
+            .map(|slot| self.core.sim.section_of_slot(slot))
     }
 
     /// The section the draws are masked with during the pre-race flyby: that of the spline
@@ -614,7 +618,7 @@ impl Race {
         if !self.in_intro() {
             return None;
         }
-        let (_, sample, _) = self.sim.spline.nearest(self.camera_position())?;
+        let (_, sample, _) = self.core.sim.spline.nearest(self.camera_position())?;
         Some(sample.section_id)
     }
 
@@ -667,18 +671,21 @@ impl Race {
     /// one).
     pub(super) fn section_of_framed(&self) -> u8 {
         let slot = self.framed_slot();
-        let ship = &self.sim.world.ships[slot];
-        let index = if self.sim.world.person_flown(slot) {
-            self.sim.located_sample(ship)
+        let ship = &self.core.sim.world.ships[slot];
+        let index = if self.core.sim.world.person_flown(slot) {
+            self.core.sim.located_sample(ship)
         } else {
             let line = usize::try_from(ship.driver.index).unwrap_or(usize::MAX);
-            self.sim.located_from(
+            self.core.sim.located_from(
                 ship,
-                self.sim.sample_index_for(slot, line).unwrap_or(usize::MAX),
+                self.core
+                    .sim
+                    .sample_index_for(slot, line)
+                    .unwrap_or(usize::MAX),
             )
         };
         index.map_or(UNPLACED, |index| {
-            self.sim.section_of(index, ship.physics.body.position)
+            self.core.sim.section_of(index, ship.physics.body.position)
         })
     }
 }
@@ -860,7 +867,7 @@ impl Race {
         let authored = setting.apply(widened_deg.to_radians());
         // At the draw alpha with the speed terms, so a module's ramp does not step at the tick.
         let offset = self.camera_scalar_between(
-            self.sim.extension_fov_offset(self.player_slot()),
+            self.core.sim.extension_fov_offset(self.player_slot()),
             |previous| previous.fov_offset,
         );
         finish_vertical_fov(

@@ -45,7 +45,7 @@ fn honest(params: &RaceParams, ticks: u32) -> (u64, Vec<TickRecord>) {
             crate::race::presence(&mut race, 0);
             race.tick_sim_only(&snapshots);
             TickRecord {
-                hash: race.sim.state_hash(),
+                hash: race.core.sim.state_hash(),
                 inputs,
                 retired: 0,
             }

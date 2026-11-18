@@ -90,15 +90,16 @@ fn word(blob: &[u8], at: usize) -> u32 {
 fn two_mods_each_hand_out_a_pickup_of_their_own_kind_and_neither_faults() {
     let mut race = grid(prepared(&[gives_to("test.a", 0), gives_to("test.b", 1)]));
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.sim.world.ships[0].pickup.weapon, kind(0));
-    assert_eq!(race.sim.world.ships[1].pickup.weapon, kind(1));
+    assert_eq!(race.core.sim.world.ships[0].pickup.weapon, kind(0));
+    assert_eq!(race.core.sim.world.ships[1].pickup.weapon, kind(1));
     assert!(
-        race.sim
+        race.core
+            .sim
             .extension_reports()
             .iter()
             .all(|r| r.faulted.is_none()),
         "{:?}",
-        race.sim.extension_reports()
+        race.core.sim.extension_reports()
     );
 }
 
@@ -109,9 +110,9 @@ fn a_module_sees_its_own_kind_as_ours_and_another_mods_as_a_code_of_its_own() {
         watches_slot_one("test.a"),
         watches_slot_one("test.b"),
     ]));
-    race.sim.world.ships[1].pickup.weapon = kind(1);
+    race.core.sim.world.ships[1].pickup.weapon = kind(1);
     race.tick(&PlayerInputs::none());
-    let seen = |module| race.sim.extensions.blob_for_tests(module)[4];
+    let seen = |module| race.core.sim.extensions.blob_for_tests(module)[4];
     assert_eq!(seen(0), Pickup::Other(1).code(), "a sees b's kind");
     assert_eq!(seen(1), Pickup::Ours.code(), "b sees its own");
     assert_eq!(Pickup::from_code(seen(0)), Some(Pickup::Other(1)));
@@ -123,20 +124,20 @@ fn a_fire_and_an_absorb_reach_the_module_of_the_kind_the_craft_held_and_no_other
         counts_its_pickup_events("test.a"),
         counts_its_pickup_events("test.b"),
     ]));
-    race.sim.world.ships[0].pickup.weapon = kind(1);
+    race.core.sim.world.ships[0].pickup.weapon = kind(1);
     race.tick(&pressed(Button::Square));
     race.tick(&PlayerInputs::none());
     let (a, b) = (
-        race.sim.extensions.blob_for_tests(0),
-        race.sim.extensions.blob_for_tests(1),
+        race.core.sim.extensions.blob_for_tests(0),
+        race.core.sim.extensions.blob_for_tests(1),
     );
     assert_eq!((word(&b, 0), word(&b, 4)), (1, 0), "b was raised the fire");
     assert_eq!((word(&a, 0), word(&a, 4)), (0, 0), "a was raised nothing");
     race.tick(&pressed(Button::Circle));
     race.tick(&PlayerInputs::none());
     let (a, b) = (
-        race.sim.extensions.blob_for_tests(0),
-        race.sim.extensions.blob_for_tests(1),
+        race.core.sim.extensions.blob_for_tests(0),
+        race.core.sim.extensions.blob_for_tests(1),
     );
     assert_eq!((word(&b, 0), word(&b, 4)), (1, 1), "and the absorb");
     assert_eq!((word(&a, 0), word(&a, 4)), (0, 0), "a still nothing");
@@ -172,7 +173,7 @@ fn the_pads_draw_every_mods_pickup_at_its_own_odds_in_kind_order() {
         odds_module("test.b", 5.0),
     ]));
     crate::extensions::fault_for_tests(&mut race, 0);
-    let rows = race.sim.extensions.pickup_odds("VENOM");
+    let rows = race.core.sim.extensions.pickup_odds("VENOM");
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].0, kind(1).unwrap());
 }
@@ -182,8 +183,8 @@ fn a_pad_can_hand_out_either_mods_pickup() {
     let mut seen = [false; 2];
     for seed in 0..40_u64 {
         let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
-        race.sim.world.rng = oag_core::Rng::new(seed + 1);
-        race.sim.extensions = crate::extensions::Extensions::new(prepared(&[
+        race.core.sim.world.rng = oag_core::Rng::new(seed + 1);
+        race.core.sim.extensions = crate::extensions::Extensions::new(prepared(&[
             odds_module("test.a", 1.0e6),
             odds_module("test.b", 1.0e6),
         ]));
@@ -205,7 +206,7 @@ fn a_roll_turns_a_grant_into_the_rolling_modules_kind_alone() {
     race.tick(&PlayerInputs::none());
     let mut rolled = Vec::new();
     for _ in 0..2 {
-        rolled.push(race.sim.extensions.rolls(0, Weapon::Turbo));
+        rolled.push(race.core.sim.extensions.rolls(0, Weapon::Turbo));
     }
     assert_eq!(
         rolled,
@@ -221,8 +222,8 @@ fn the_held_kind_is_hashed_state() {
             module("test.a", "i32.const 0"),
             module("test.b", "i32.const 0"),
         ]));
-        race.sim.world.ships[0].pickup.weapon = held;
-        race.sim.state_hash()
+        race.core.sim.world.ships[0].pickup.weapon = held;
+        race.core.sim.state_hash()
     };
     assert_ne!(hash_with(kind(0)), hash_with(kind(1)));
     assert_ne!(hash_with(kind(0)), hash_with(None));
@@ -267,7 +268,7 @@ fn the_hud_draws_the_look_of_the_kind_held_and_another_mods_look_command_does_no
     let key = |mod_id, icon| LookIcon::Mod(crate::extensions::mod_icon_src(mod_id, icon));
 
     let mut race = grid(prepared(&[a.clone(), b.clone()]));
-    race.sim.world.ships[0].pickup.weapon = kind(1);
+    race.core.sim.world.ships[0].pickup.weapon = kind(1);
     race.tick(&PlayerInputs::none());
     let look = race.view.huds[0].pickup_look.clone().expect("a look");
     assert_eq!(
@@ -281,7 +282,7 @@ fn the_hud_draws_the_look_of_the_kind_held_and_another_mods_look_command_does_no
     );
 
     let mut race = grid(prepared(&[a, b]));
-    race.sim.world.ships[0].pickup.weapon = kind(0);
+    race.core.sim.world.ships[0].pickup.weapon = kind(0);
     race.tick(&PlayerInputs::none());
     let look = race.view.huds[0].pickup_look.clone().expect("a look");
     assert_eq!(
@@ -309,15 +310,18 @@ fn a_stale_roll_bit_never_hands_a_dead_mods_pickup_back_as_another_mods() {
     ]));
     race.tick(&PlayerInputs::none());
     // Slot 0 was rolled into a's kind once and spent it: the roll bit stays set.
-    assert_eq!(race.sim.extensions.rolls(0, Weapon::Turbo), ModKind::new(0));
-    race.sim.world.ships[0].pickup.weapon = None;
+    assert_eq!(
+        race.core.sim.extensions.rolls(0, Weapon::Turbo),
+        ModKind::new(0)
+    );
+    race.core.sim.world.ships[0].pickup.weapon = None;
     // A pad then draws b's kind by its odds: the craft's `last` is that kind.
-    race.sim.world.ships[0]
+    race.core.sim.world.ships[0]
         .pickup
         .grant(Weapon::Extension(ModKind::new(1).unwrap()));
     crate::extensions::fault_for_tests(&mut race, 1);
     assert_eq!(
-        race.sim.world.ships[0].pickup.weapon, None,
+        race.core.sim.world.ships[0].pickup.weapon, None,
         "b's pickup is taken away, not handed back as b's kind"
     );
 }

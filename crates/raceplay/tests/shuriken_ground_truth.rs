@@ -109,7 +109,8 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 
 /// Every blade slot 0 has in the air.
 fn blades(race: &race::Race) -> Vec<oag_weapons::projectile::Projectile> {
-    race.sim
+    race.core
+        .sim
         .world
         .projectiles
         .slots
@@ -143,6 +144,7 @@ fn the_discs_shuriken_block_decodes_with_its_blast_pair() {
     let Some(loaded) = single_race() else { return };
     let race = race::Race::start(loaded.setup);
     let shuriken = race
+        .core
         .sim
         .shuriken_stats()
         .expect("the disc authors a Shuriken");
@@ -221,14 +223,15 @@ fn a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse() {
     // player's own launch trajectory on this track to take a direct hit on
     // the blade's first tick of flight, which correctly detonates it - not a
     // bug, but not what this test measures either.
-    for ship in &mut race.sim.world.ships[1..] {
+    for ship in &mut race.core.sim.world.ships[1..] {
         ship.active = false;
     }
     let shuriken = race
+        .core
         .sim
         .shuriken_stats()
         .expect("the disc authors a Shuriken");
-    let speed = race.sim.world.ships[0]
+    let speed = race.core.sim.world.ships[0]
         .physics
         .body
         .linear_velocity
@@ -238,10 +241,10 @@ fn a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse() {
         "the craft is barely moving at {speed:.1} units/s"
     );
 
-    let forward = race.sim.world.ships[0].physics.body.forward();
-    let up = race.sim.world.ships[0].physics.body.up();
+    let forward = race.core.sim.world.ships[0].physics.body.forward();
+    let up = race.core.sim.world.ships[0].physics.body.up();
     let right = forward.cross(up);
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Shuriken);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Shuriken);
 
     let mut buttons = Input::new();
     buttons.begin_frame(0);
@@ -310,7 +313,7 @@ fn a_thrown_blade_rides_its_head_and_trail_and_has_a_model_pose() {
         return;
     };
     let (mut race, _) = moving(loaded);
-    for ship in &mut race.sim.world.ships[1..] {
+    for ship in &mut race.core.sim.world.ships[1..] {
         ship.active = false;
     }
     // Let the sparks the pack's contacts threw while the others were still in the race finish, so
@@ -319,7 +322,7 @@ fn a_thrown_blade_rides_its_head_and_trail_and_has_a_model_pose() {
         race.tick(&PlayerInputs::none());
     }
     let before = race.stage().playing_count();
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Shuriken);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Shuriken);
     let mut buttons = Input::new();
     buttons.begin_frame(0);
     let mut fire = oag_gameplay::InputSnapshot::new();

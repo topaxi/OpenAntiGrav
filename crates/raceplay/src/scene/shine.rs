@@ -102,13 +102,13 @@ impl Scene {
         race: &'a Race,
         frustum: Option<&'f Frustum>,
     ) -> impl Iterator<Item = (usize, &'a Drawable)> + 'f {
-        let drawn = usize::from(race.sim.ship_count());
+        let drawn = usize::from(race.core.sim.ship_count());
         self.shine
             .iter()
             .enumerate()
             .take(drawn)
             .filter_map(move |(slot, shine)| {
-                if !race.sim.ship_active(slot)
+                if !race.core.sim.ship_active(slot)
                     || self.hull_skipped(race, slot)
                     || !self.hull_seen(race, slot, frustum)
                 {

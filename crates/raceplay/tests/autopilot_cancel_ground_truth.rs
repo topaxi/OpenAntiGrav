@@ -48,12 +48,12 @@ fn started(source: String) -> oag_raceplay::Race {
 
 /// One row of the trace: the press, the timer, whether the pilot has the craft, the slot.
 fn row(race: &oag_raceplay::Race, label: &str, mask: u32) {
-    let ship = &race.sim.world.ships[0];
+    let ship = &race.core.sim.world.ships[0];
     println!(
         "tick {:>4}  {label:<8} buttons {mask:#06x}  timer {:>7.3}  flown {:<5}  slot {:?}",
-        race.sim.world.tick,
+        race.core.sim.world.tick,
         ship.autopilot_timer,
-        race.sim.flown_for_the_player(0),
+        race.core.sim.flown_for_the_player(0),
         ship.pickup.weapon,
     );
 }
@@ -70,50 +70,50 @@ fn flown_after_absorb(source: String) -> bool {
         race.tick(&pad.tick(CROSS));
     }
 
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Autopilot);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Autopilot);
     race.tick(&pad.tick(CROSS | SQUARE));
     row(&race, "arm", CROSS | SQUARE);
     assert!(
-        race.sim.flown_for_the_player(0),
+        race.core.sim.flown_for_the_player(0),
         "the Autopilot did not arm"
     );
-    assert_eq!(race.sim.world.ships[0].pickup.weapon, None);
+    assert_eq!(race.core.sim.world.ships[0].pickup.weapon, None);
     race.tick(&pad.tick(CROSS));
     row(&race, "release", CROSS);
 
-    let before = race.sim.world.ships[0].autopilot_timer;
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Rocket);
+    let before = race.core.sim.world.ships[0].autopilot_timer;
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Rocket);
     race.tick(&pad.tick(CROSS | SQUARE));
     row(&race, "fire", CROSS | SQUARE);
     assert!(
-        race.sim.flown_for_the_player(0),
+        race.core.sim.flown_for_the_player(0),
         "a fire press cancelled it"
     );
     assert_eq!(
-        race.sim.world.ships[0].pickup.weapon,
+        race.core.sim.world.ships[0].pickup.weapon,
         Some(Weapon::Rocket),
         "a fire press under the Autopilot fired the held pickup"
     );
     assert!(
-        race.sim.world.ships[0].autopilot_timer < before,
+        race.core.sim.world.ships[0].autopilot_timer < before,
         "the timer did not run on"
     );
     assert_eq!(
-        race.sim.world.projectiles.live(),
+        race.core.sim.world.projectiles.live(),
         0,
         "a projectile left the craft"
     );
 
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Autopilot);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Autopilot);
     race.tick(&pad.tick(CROSS));
     race.tick(&pad.tick(CROSS | SQUARE));
     row(&race, "refire", CROSS | SQUARE);
     assert_eq!(
-        race.sim.world.ships[0].pickup.weapon,
+        race.core.sim.world.ships[0].pickup.weapon,
         Some(Weapon::Autopilot),
         "a held Autopilot was fired into a running one"
     );
-    race.sim.world.ships[0].pickup.weapon = None;
+    race.core.sim.world.ships[0].pickup.weapon = None;
 
     race.tick(&pad.tick(CROSS));
     row(&race, "release", CROSS);
@@ -121,7 +121,7 @@ fn flown_after_absorb(source: String) -> bool {
     row(&race, "absorb", CROSS | CIRCLE);
     race.tick(&pad.tick(CROSS));
     row(&race, "after", CROSS);
-    race.sim.flown_for_the_player(0)
+    race.core.sim.flown_for_the_player(0)
 }
 
 #[test]

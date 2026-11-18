@@ -53,7 +53,7 @@ impl Race {
 
     /// `CockpitHitFx_Update`, once a drawn tick.
     pub(super) fn advance_cockpit_hit(&mut self) {
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         if let Some(hit) = &mut self.view.cockpit_hit {
             hit.node.advance(dt, &mut hit.rng);
         }

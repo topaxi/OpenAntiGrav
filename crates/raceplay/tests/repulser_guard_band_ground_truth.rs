@@ -30,7 +30,7 @@ fn no_wave_start_quad_leaves_the_guard_band() {
     for _ in 0..oag_race::COUNTDOWN_TICKS + 5 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Repulser);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Repulser);
     let mut buttons = Input::new();
     buttons.begin_frame(0);
     let mut fire = oag_gameplay::InputSnapshot::new();

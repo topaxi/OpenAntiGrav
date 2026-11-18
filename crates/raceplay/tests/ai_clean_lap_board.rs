@@ -136,33 +136,33 @@ fn solo_on(track: &str, class: &str, tuning: Option<oag_ai::Tuning>) -> Option<S
     .ok()?;
     let mut race = race::Race::start(loaded.setup);
     if let Some(tuning) = tuning {
-        race.sim.set_ai_tuning(tuning);
+        race.core.sim.set_ai_tuning(tuning);
     }
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
 
     let mut best: Option<u64> = None;
-    let mut lap = race.sim.world.ships[LONE].standing.lap;
+    let mut lap = race.core.sim.world.ships[LONE].standing.lap;
     let mut started = 0u64;
     let mut recovered_this_lap = false;
     let mut per_lap = Vec::new();
-    let mut shield_at_lap = race.sim.world.ships[LONE].physics.shield;
+    let mut shield_at_lap = race.core.sim.world.ships[LONE].physics.shield;
     // Buckets rather than a full per-index table: the whole point is to name
     // one stretch of road, and a sparse map would be a `HashMap` iteration
     // order feeding a printed report.
-    let line_len = race.sim.racing_line().len() as u32;
+    let line_len = race.core.sim.racing_line().len() as u32;
     let mut clusters = vec![0.0f32; (line_len / CLUSTER + 2) as usize];
     let mut charged = 0.0f32;
     for tick in 0..TICKS {
-        let before = race.sim.respawns_of(LONE);
-        let was_at = race.sim.world.ships[LONE].driver.index;
+        let before = race.core.sim.respawns_of(LONE);
+        let was_at = race.core.sim.world.ships[LONE].driver.index;
         race.tick(&PlayerInputs::none());
-        if race.sim.respawns_of(LONE) != before {
+        if race.core.sim.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
-        let now_charged = race.sim.wall_shield_charged_of(LONE);
+        let now_charged = race.core.sim.wall_shield_charged_of(LONE);
         if now_charged > charged {
             // Charged against where the craft *entered* the tick, which is the
             // index a reader casts from when they go looking - the same
@@ -173,9 +173,9 @@ fn solo_on(track: &str, class: &str, tuning: Option<oag_ai::Tuning>) -> Option<S
             }
             charged = now_charged;
         }
-        let now = race.sim.world.ships[LONE].standing.lap;
+        let now = race.core.sim.world.ships[LONE].standing.lap;
         if now != lap {
-            let shield = race.sim.world.ships[LONE].physics.shield;
+            let shield = race.core.sim.world.ships[LONE].physics.shield;
             per_lap.push(shield_at_lap - shield);
             shield_at_lap = shield;
             // The first lap is the standing start, and a lap the craft had to
@@ -199,18 +199,18 @@ fn solo_on(track: &str, class: &str, tuning: Option<oag_ai::Tuning>) -> Option<S
 
     Some(Solo {
         best,
-        respawns: race.sim.respawns_of(LONE),
+        respawns: race.core.sim.respawns_of(LONE),
         laps: lap,
         finished: lap.saturating_sub(1) >= target,
-        state: race.sim.world.ships[LONE].physics.craft_state,
-        end_shield: race.sim.world.ships[LONE].physics.shield,
+        state: race.core.sim.world.ships[LONE].physics.craft_state,
+        end_shield: race.core.sim.world.ships[LONE].physics.shield,
         per_lap,
-        contact_ticks: race.sim.wall_contact_ticks_of(LONE),
-        inbound_ticks: race.sim.wall_inbound_ticks_of(LONE),
+        contact_ticks: race.core.sim.wall_contact_ticks_of(LONE),
+        inbound_ticks: race.core.sim.wall_inbound_ticks_of(LONE),
         wall_charged: charged,
         worst_cluster,
         line_len,
-        racing_ticks: race.sim.racing_ticks_of(LONE),
+        racing_ticks: race.core.sim.racing_ticks_of(LONE),
     })
 }
 
@@ -643,18 +643,19 @@ fn what_the_airbrakes_do_through_a_hairpin() {
         .ok()
         .and_then(|v| v.trim().parse::<f32>().ok())
     {
-        race.sim
+        race.core
+            .sim
             .set_ai_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning {
                 curvature_chord: Some(chord),
                 ..oag_ai::Tuning::default()
             }));
     }
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
 
-    let turn = race.sim.world.ships[LONE].handling.airbrake.turn;
+    let turn = race.core.sim.world.ships[LONE].handling.airbrake.turn;
     let denominator = -oag_physics::passive::YAW_DAMPING / oag_physics::forces::YAW_INVERSE_INERTIA;
     let mut report = format!(
         "\n=== {circuit}_Track {class}, driver index {first}-{last}, lone Ace ===\n\
@@ -665,12 +666,12 @@ fn what_the_airbrakes_do_through_a_hairpin() {
     let mut charged = 0.0f32;
     for tick in 0..6_000u64 {
         race.tick(&PlayerInputs::none());
-        let ship = &race.sim.world.ships[LONE];
+        let ship = &race.core.sim.world.ships[LONE];
         let index = ship.driver.index;
         if index < first || index > last {
             continue;
         }
-        let now = race.sim.wall_shield_charged_of(LONE);
+        let now = race.core.sim.wall_shield_charged_of(LONE);
         let hit = now > charged;
         charged = now;
         let state = &ship.physics;
@@ -836,7 +837,7 @@ fn what_is_wrong_with_the_line() {
     let reach = loaded.setup.handling.antigrav.ride_height;
     let collision = loaded.setup.collision.clone();
     let race = race::Race::start(loaded.setup);
-    let line = race.sim.racing_line();
+    let line = race.core.sim.racing_line();
 
     let mut report = format!(
         "\n=== {circuit}_Track racing line, idx {first}-{last}, ride height {reach:.2} ===\n\
@@ -844,7 +845,7 @@ fn what_is_wrong_with_the_line() {
     );
     let mut previous: Option<oag_core::math::Vec3> = None;
     for index in first..=last.min(line.len().saturating_sub(1)) {
-        let Some(sample) = race.sim.ai_sample(index) else {
+        let Some(sample) = race.core.sim.ai_sample(index) else {
             continue;
         };
         let point = line.point(index);
@@ -859,7 +860,8 @@ fn what_is_wrong_with_the_line() {
         let lateral = oag_core::math::Vec3::from_array(sample.lateral).normalize_or_zero();
         report.push_str(&format!(
             "{index:<6} {:<6} {gap:<6.2} {:<8} {:<8} {:<8.5} {:<8.5} {:<6.2} {:<6.2} {:.2}\n",
-            race.sim
+            race.core
+                .sim
                 .ai_sample_index(index)
                 .map_or_else(|| "-".to_string(), |o| o.to_string()),
             hit.map_or_else(

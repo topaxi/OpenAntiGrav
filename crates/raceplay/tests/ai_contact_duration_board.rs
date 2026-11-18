@@ -57,10 +57,10 @@ fn run(entry: &str, class: &str, seed: u64) -> Option<(Vec<u32>, Vec<u32>, u32)>
     .expect("loading");
     let mut race = race::Race::start(loaded.setup);
     if std::env::var("OAG_AI").as_deref() != Ok("ours") {
-        assert!(race.sim.use_original_ai(None, env_or("OAG_LEVEL", 0)));
+        assert!(race.core.sim.use_original_ai(None, env_or("OAG_LEVEL", 0)));
     }
-    let count = race.sim.ship_count() as usize;
-    let player = race.sim.world.human_slots().next().unwrap_or(0);
+    let count = race.core.sim.ship_count() as usize;
+    let player = race.core.sim.world.human_slots().next().unwrap_or(0);
     let opponents: Vec<usize> = (0..count).filter(|s| *s != player).collect();
     let ticks: u64 = env_or("OAG_TICKS", 5400);
     let mut go = None;
@@ -72,7 +72,7 @@ fn run(entry: &str, class: &str, seed: u64) -> Option<(Vec<u32>, Vec<u32>, u32)>
     for tick in 0..ticks + 2000 {
         race.tick(&PlayerInputs::none());
         for s in &opponents {
-            let now = race.sim.pair_contact_ticks_of(*s);
+            let now = race.core.sim.pair_contact_ticks_of(*s);
             if now > seen[*s] {
                 run_len[*s] += 1;
             } else if run_len[*s] > 0 {
@@ -82,12 +82,12 @@ fn run(entry: &str, class: &str, seed: u64) -> Option<(Vec<u32>, Vec<u32>, u32)>
                 run_len[*s] = 0;
             }
             seen[*s] = now;
-            wrecked[*s] |=
-                race.sim.world.ships[*s].physics.craft_state == oag_physics::CraftState::Destroyed;
+            wrecked[*s] |= race.core.sim.world.ships[*s].physics.craft_state
+                == oag_physics::CraftState::Destroyed;
         }
         if go.is_none()
             && opponents.iter().any(|s| {
-                race.sim.world.ships[*s]
+                race.core.sim.world.ships[*s]
                     .physics
                     .body
                     .linear_velocity
@@ -97,13 +97,13 @@ fn run(entry: &str, class: &str, seed: u64) -> Option<(Vec<u32>, Vec<u32>, u32)>
         {
             go = Some(tick);
             for (s, start) in at_30.iter_mut().enumerate() {
-                *start = race.sim.pair_contact_ticks_of(s);
+                *start = race.core.sim.pair_contact_ticks_of(s);
             }
         }
         if let Some(g) = go {
             if tick == g + 1800 {
                 for (s, start) in at_30.iter_mut().enumerate() {
-                    *start = race.sim.pair_contact_ticks_of(s) - *start;
+                    *start = race.core.sim.pair_contact_ticks_of(s) - *start;
                 }
             }
             if tick == g + ticks {
@@ -114,7 +114,7 @@ fn run(entry: &str, class: &str, seed: u64) -> Option<(Vec<u32>, Vec<u32>, u32)>
     let first: Vec<u32> = opponents.iter().map(|s| at_30[*s]).collect();
     let whole: Vec<u32> = opponents
         .iter()
-        .map(|s| race.sim.pair_contact_ticks_of(*s))
+        .map(|s| race.core.sim.pair_contact_ticks_of(*s))
         .collect();
     let destroyed = opponents.iter().filter(|s| wrecked[**s]).count() as u32;
     episodes.extend(run_len.iter().copied().filter(|r| *r > 0));

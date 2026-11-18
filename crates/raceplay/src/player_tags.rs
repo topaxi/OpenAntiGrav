@@ -48,16 +48,17 @@ impl Race {
         if !self.view.player_tags_on {
             return;
         }
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         let viewers: Vec<usize> = self.tag_viewers().collect();
         for viewer in viewers {
             for target in 0..MAX_SHIPS {
                 let fade = self.view.huds[viewer].tag_fade[target];
-                self.view.huds[viewer].tag_fade[target] = if self.sim.tagged_for(viewer, target) {
-                    step_fade(fade, dt)
-                } else {
-                    0.0
-                };
+                self.view.huds[viewer].tag_fade[target] =
+                    if self.core.sim.tagged_for(viewer, target) {
+                        step_fade(fade, dt)
+                    } else {
+                        0.0
+                    };
             }
         }
     }
@@ -98,7 +99,7 @@ impl Race {
             self.set_viewpoint(viewer);
         }
         let tags = (0..MAX_SHIPS)
-            .filter(|&target| self.sim.tagged_for(viewer, target))
+            .filter(|&target| self.core.sim.tagged_for(viewer, target))
             .filter_map(|target| {
                 let fade = self.view.huds[viewer].tag_fade[target];
                 let body = self.body_between(target);

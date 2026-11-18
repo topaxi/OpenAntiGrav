@@ -124,9 +124,9 @@ impl Race {
         let Some(mut wakes) = self.view.magstrip_wake.take() else {
             return;
         };
-        let dt = self.sim.dt;
-        for slot in 0..usize::from(self.sim.world.ship_count).min(MAX_SHIPS) {
-            let blend = self.sim.world.ships[slot].physics.mag_lock_blend;
+        let dt = self.core.sim.dt;
+        for slot in 0..usize::from(self.core.sim.world.ship_count).min(MAX_SHIPS) {
+            let blend = self.core.sim.world.ships[slot].physics.mag_lock_blend;
             let was_over = wakes.over[slot];
             let over = super::mag_floor_fx::contact_this_tick(wakes.previous_blend[slot], blend);
             wakes.previous_blend[slot] = blend;
@@ -134,9 +134,14 @@ impl Race {
             let (edge, armed) = sound_edge(wakes.armed[slot], was_over, over);
             wakes.armed[slot] = armed;
             match edge {
-                Some(SoundEdge::Start) => self.sim.cues.push(CueEvent::new(Cue::Magstrip, slot)),
+                Some(SoundEdge::Start) => {
+                    self.core.sim.cues.push(CueEvent::new(Cue::Magstrip, slot))
+                }
                 Some(SoundEdge::Stop) => {
-                    self.sim.cues.push(CueEvent::new(Cue::MagstripStop, slot));
+                    self.core
+                        .sim
+                        .cues
+                        .push(CueEvent::new(Cue::MagstripStop, slot));
                 }
                 None => {}
             }
@@ -149,14 +154,14 @@ impl Race {
             if !wakes.arcs {
                 continue;
             }
-            if !self.sim.ship_active(slot) || !(over || wakes.wakes[slot].live() > 0) {
+            if !self.core.sim.ship_active(slot) || !(over || wakes.wakes[slot].live() > 0) {
                 continue;
             }
             let Some(craft) = self.wake_craft(slot, anchor) else {
                 continue;
             };
-            let from = self.sim.world.ships[slot].physics.body.position;
-            let walk = |ahead: f32| self.sim.walk_track(from, ahead);
+            let from = self.core.sim.world.ships[slot].physics.body.position;
+            let walk = |ahead: f32| self.core.sim.walk_track(from, ahead);
             wakes.wakes[slot].advance(dt, over, &craft, &walk);
         }
         self.view.magstrip_wake = Some(wakes);
@@ -169,10 +174,10 @@ impl Race {
         let Some(handles) = wakes.pob.as_mut() else {
             return;
         };
-        let live = over && self.sim.ship_active(slot);
+        let live = over && self.core.sim.ship_active(slot);
         match (handles[slot], live) {
             (None, true) => {
-                let trigger = if self.sim.world.mode() == Mode::Zone {
+                let trigger = if self.core.sim.world.mode() == Mode::Zone {
                     Trigger::MagstripZone
                 } else {
                     Trigger::MagstripSparks
@@ -215,7 +220,7 @@ impl Race {
             position: model.w_axis.truncate(),
             forward: model.z_axis.truncate().normalize_or_zero(),
             up: world_anchor.y_axis.truncate().normalize_or_zero(),
-            speed: self.sim.world.ships[slot]
+            speed: self.core.sim.world.ships[slot]
                 .physics
                 .body
                 .linear_velocity
@@ -229,8 +234,8 @@ impl Race {
     /// values when the track has no sample under the craft.
     fn wake_craft(&self, slot: usize, anchor: Mat4) -> Option<Craft> {
         let mut craft = self.wake_pose(slot, anchor);
-        let position = self.sim.world.ships[slot].physics.body.position;
-        if let Some((_, sample, _)) = self.sim.spline.nearest(position) {
+        let position = self.core.sim.world.ships[slot].physics.body.position;
+        if let Some((_, sample, _)) = self.core.sim.spline.nearest(position) {
             let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();
             let across = Vec3::from_array(sample.lateral).normalize_or_zero();
             craft.with_track = craft.forward.dot(tangent) >= 0.0;
@@ -294,11 +299,11 @@ impl Race {
             return (atlas, contact);
         };
         let eye = self.camera_position();
-        for slot in 0..usize::from(self.sim.world.ship_count).min(MAX_SHIPS) {
+        for slot in 0..usize::from(self.core.sim.world.ship_count).min(MAX_SHIPS) {
             let Some(anchor) = wakes.anchors[slot] else {
                 continue;
             };
-            if !self.sim.ship_active(slot) || wakes.wakes[slot].live() == 0 {
+            if !self.core.sim.ship_active(slot) || wakes.wakes[slot].live() == 0 {
                 continue;
             }
             let craft = self.wake_pose(slot, anchor);

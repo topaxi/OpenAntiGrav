@@ -10,20 +10,20 @@ fn wake_race() -> Race {
     race.view.magstrip_wake = Some(Wakes::new([Some(Mat4::IDENTITY); MAX_SHIPS]));
     // Mid-track: the fixture's grid sits past the end of its 70-unit straight,
     // where every arc lands far astern and is shed at once.
-    race.sim.world.ships[SLOT].physics.body.position = Vec3::new(30.0, 6.0, 0.0);
+    race.core.sim.world.ships[SLOT].physics.body.position = Vec3::new(30.0, 6.0, 0.0);
     race
 }
 
 /// Feeds `SLOT` one probe result a tick through the blend's own ramp, the way
 /// the simulation does, and returns each tick's `(starts, stops)` for `SLOT`.
 fn run(race: &mut Race, probes: &[bool]) -> Vec<(usize, usize)> {
-    let mut blend = race.sim.world.ships[SLOT].physics.mag_lock_blend;
+    let mut blend = race.core.sim.world.ships[SLOT].physics.mag_lock_blend;
     let mut out = Vec::new();
     for &hit in probes {
         blend = ramp(blend, hit);
-        race.sim.world.ships[SLOT].physics.mag_lock_blend = blend;
+        race.core.sim.world.ships[SLOT].physics.mag_lock_blend = blend;
         race.advance_magstrip_wake();
-        let cues = race.sim.drain_cues();
+        let cues = race.core.sim.drain_cues();
         let count = |cue| {
             cues.iter()
                 .filter(|e| e.cue == cue && usize::from(e.slot) == SLOT)
@@ -150,7 +150,7 @@ fn pob_race(triggers: &[Trigger]) -> Race {
             .expect("the hand-laid effect parses");
         race.view.handles.insert(trigger, effect);
     }
-    race.sim.world.ships[SLOT].physics.body.position = Vec3::new(30.0, 6.0, 0.0);
+    race.core.sim.world.ships[SLOT].physics.body.position = Vec3::new(30.0, 6.0, 0.0);
     race
 }
 
@@ -204,7 +204,7 @@ fn zone_picks_the_zone_effect_and_other_modes_the_sparks_one() {
         (oag_race::Mode::SingleRace, Trigger::MagstripZone, false),
     ] {
         let mut race = pob_race(&[only]);
-        for state in &mut race.sim.world.race {
+        for state in &mut race.core.sim.world.race {
             state.mode = mode;
         }
         run(&mut race, &[true; 4]);

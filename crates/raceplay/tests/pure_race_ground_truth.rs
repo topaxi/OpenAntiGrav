@@ -301,7 +301,7 @@ fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
         let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
         let mut race = race::Race::start(loaded.setup);
         for slot in 1..oag_gameplay::MAX_SHIPS {
-            race.sim.world.ships[slot].active = false;
+            race.core.sim.world.ships[slot].active = false;
         }
 
         // Cross is thrust; see `oag_gameplay::controls`.
@@ -310,27 +310,27 @@ fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
             .buttons
             .begin_frame(oag_gameplay::input::Button::Cross.bit());
 
-        let start = race.sim.world.ships[0].physics.body.position;
+        let start = race.core.sim.world.ships[0].physics.body.position;
         let mut furthest_from_spline = 0.0f32;
         let mut travelled = 0.0f32;
         for _ in 0..1_200 {
             race.tick(&PlayerInputs::single(input));
-            let at = race.sim.world.ships[0].physics.body.position;
+            let at = race.core.sim.world.ships[0].physics.body.position;
             // Distance to the spline is the honest measure of "on the circuit":
             // these tracks climb and bank, so comparing height against the start
             // would read a hill as a fall.
-            if let Some(distance) = race.sim.spline().distance_to(at) {
+            if let Some(distance) = race.core.sim.spline().distance_to(at) {
                 furthest_from_spline = furthest_from_spline.max(distance);
             }
             travelled = travelled.max(at.distance(start));
         }
-        let resting = race.sim.world.ships[0].physics.body.position;
+        let resting = race.core.sim.world.ships[0].physics.body.position;
 
         println!(
             "{label}: travelled {travelled:.0} units, furthest from the spline \
              {furthest_from_spline:.1}, resting {:.1} out, respawns {}",
-            race.sim.spline().distance_to(resting).unwrap_or(-1.0),
-            race.sim.respawns()
+            race.core.sim.spline().distance_to(resting).unwrap_or(-1.0),
+            race.core.sim.respawns()
         );
 
         assert!(
@@ -592,23 +592,23 @@ fn pure_crafts_fly_without_the_pitch_gate_and_pulse_crafts_with_it() {
         })
         .unwrap_or_else(|e| panic!("{label}: loading its default race: {e:#}"));
         let mut race = race::Race::start(loaded.setup);
-        let count = race.sim.world.ship_count as usize;
+        let count = race.core.sim.world.ship_count as usize;
         assert!(count > 1, "{label}: a single race seats a field");
         for slot in 0..count {
             assert_eq!(
-                race.sim.world.ships[slot].physics.pitch_gate, gated,
+                race.core.sim.world.ships[slot].physics.pitch_gate, gated,
                 "{label}: slot {slot} pitch gate at seating"
             );
         }
         for slot in 0..count {
-            let body = &race.sim.world.ships[slot].physics.body;
+            let body = &race.core.sim.world.ships[slot].physics.body;
             let pose = oag_gameplay::spawn::Pose {
                 position: body.position,
                 orientation: body.orientation,
             };
-            race.sim.world.ships[slot].place_at(pose);
+            race.core.sim.world.ships[slot].place_at(pose);
             assert_eq!(
-                race.sim.world.ships[slot].physics.pitch_gate, gated,
+                race.core.sim.world.ships[slot].physics.pitch_gate, gated,
                 "{label}: slot {slot} pitch gate after a reset"
             );
         }

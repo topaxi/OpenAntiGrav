@@ -123,7 +123,7 @@ fn a_beam_draws_nothing_with_a_craft_out_of_the_world() {
     race.tick(&PlayerInputs::none());
     let eye = Vec3::new(0.0, 500.0, 0.0);
     assert_eq!(race.mod_surfaces(Vec3::X, Vec3::Y, eye).len(), 1);
-    race.sim.world.ships[2].active = false;
+    race.core.sim.world.ships[2].active = false;
     assert!(race.mod_surfaces(Vec3::X, Vec3::Y, eye).is_empty());
 }
 
@@ -174,7 +174,7 @@ fn a_fill_naming_no_shader_of_the_mods_faults_it_and_draws_nothing() {
     };
     let mut race = race(&[fill]);
     race.tick(&PlayerInputs::none());
-    let (_, why) = race.sim.extension_reports()[0]
+    let (_, why) = race.core.sim.extension_reports()[0]
         .faulted
         .clone()
         .expect("faulted");
@@ -204,7 +204,7 @@ fn shader_draws_never_reach_the_hash() {
         (0..30)
             .map(|_| {
                 race.tick(&PlayerInputs::none());
-                race.sim.state_hash()
+                race.core.sim.state_hash()
             })
             .collect::<Vec<_>>()
     };
@@ -252,7 +252,7 @@ fn an_effect_naming_a_shader_lands_on_its_list_when_fired() {
         vec![Some(own_effect())],
     )]));
     race.tick(&PlayerInputs::none());
-    let at = race.sim.world.ships[0].physics.body.position;
+    let at = race.core.sim.world.ships[0].physics.body.position;
     race.play_fired(
         0,
         &Fired::OwnAt {
@@ -288,7 +288,7 @@ fn a_stopped_effect_ends_its_surfaces_for_that_slot_alone() {
         vec![Some(own_effect()), Some(own_effect())],
     )]));
     race.tick(&PlayerInputs::none());
-    let at = race.sim.world.ships[0].physics.body.position;
+    let at = race.core.sim.world.ships[0].physics.body.position;
     let placed = |slot, index| {
         (
             slot,

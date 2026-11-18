@@ -51,32 +51,32 @@ impl Race {
     /// raises (`+0x3c |= 4`) leads to in `MinePool_Update` and `BombPool_Update`
     /// ([mine.md](../../../../../docs/ghidra/functions/psp-pulse-usa/mine.md)).
     pub(crate) fn advance_repulsers(&mut self) {
-        let Some(course) = self.sim.course.as_deref() else {
+        let Some(course) = self.core.sim.course.as_deref() else {
             return;
         };
-        let rules = self.sim.damage_rules();
-        let dt = self.sim.dt;
+        let rules = self.core.sim.damage_rules();
+        let dt = self.core.sim.dt;
         let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
         let mut credits: Vec<(usize, u8)> = Vec::new();
-        for index in 0..self.sim.world.repulsers.len() {
-            let Some(mut repulser) = self.sim.world.repulsers[index] else {
+        for index in 0..self.core.sim.world.repulsers.len() {
+            let Some(mut repulser) = self.core.sim.world.repulsers[index] else {
                 continue;
             };
-            let owner_index = self.sim.world.ships[repulser.owner as usize]
+            let owner_index = self.core.sim.world.ships[repulser.owner as usize]
                 .standing
                 .course_index
                 .map(|i| i as usize);
             let alive = repulser.advance(course, owner_index, dt);
             let struck = repulser.apply_hits(
-                &mut self.sim.world.ships,
-                self.sim.world.ship_count,
+                &mut self.core.sim.world.ships,
+                self.core.sim.world.ship_count,
                 course,
                 rules,
                 &mut hits,
             );
             for (slot, &was_struck) in struck.iter().enumerate() {
                 if was_struck {
-                    self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                    self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                         oag_gameplay::cue::Cue::RepulsorHit,
                         slot,
                     ));
@@ -84,7 +84,7 @@ impl Race {
                 }
             }
             if repulser.waves_running() {
-                for laid in &mut self.sim.world.projectiles.slots {
+                for laid in &mut self.core.sim.world.projectiles.slots {
                     if !matches!(
                         laid.kind,
                         Some(oag_tables::weapons::Weapon::Mine | oag_tables::weapons::Weapon::Bomb)
@@ -102,9 +102,9 @@ impl Race {
                     }
                 }
             }
-            self.sim.world.repulsers[index] = alive.then_some(repulser);
+            self.core.sim.world.repulsers[index] = alive.then_some(repulser);
         }
-        self.sim.extensions.weapon_hits(&hits);
+        self.core.sim.extensions.weapon_hits(&hits);
         for (slot, hit) in hits.iter().enumerate() {
             if hit.absorbed {
                 self.shield_hit(slot);
@@ -114,8 +114,10 @@ impl Race {
         self.throw_hit_sparks(&hits, false);
         for (slot, owner) in credits {
             if hits[slot].landed {
-                self.sim.record_pending_hit(slot, owner);
-                self.sim.credit_hit_points(slot, owner, hits[slot].amount);
+                self.core.sim.record_pending_hit(slot, owner);
+                self.core
+                    .sim
+                    .credit_hit_points(slot, owner, hits[slot].amount);
             }
         }
     }
@@ -140,18 +142,18 @@ impl Race {
     /// unscaled basis turned by its spin, the matrix `+0x1a0` it is anchored
     /// to (`Repulser_UpdateFieldModel`, `0x08876168`).
     pub(crate) fn advance_repulser_visual(&mut self) {
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         self.advance_repulser_fields();
-        for index in 0..self.sim.world.repulsers.len() {
+        for index in 0..self.core.sim.world.repulsers.len() {
             let handles = self.view.repulser_effects[index];
-            let Some(repulser) = self.sim.world.repulsers[index] else {
+            let Some(repulser) = self.core.sim.world.repulsers[index] else {
                 for playing in handles.into_iter().flatten() {
                     self.view.stage.release(playing);
                 }
                 self.view.repulser_effects[index] = [None; 4];
                 continue;
             };
-            let firer = self.sim.world.ships[repulser.owner as usize]
+            let firer = self.core.sim.world.ships[repulser.owner as usize]
                 .physics
                 .body
                 .position;
@@ -173,7 +175,7 @@ impl Race {
             if let (Some(playing), Some(field), Some((_, sample, _))) = (
                 self.view.repulser_effects[index][0],
                 self.view.repulser_fields[index],
-                self.sim.spline.nearest(firer),
+                self.core.sim.spline.nearest(firer),
             ) {
                 let (side, up, _) = crate::repulser_field::field_basis(
                     Vec3::from_array(sample.lateral),
@@ -234,7 +236,7 @@ impl Race {
                 // the track's width. The same frame and width here, from the
                 // nearest spline sample to the wave's centre.
                 if let Some(playing) = playing
-                    && let Some((_, sample, _)) = self.sim.spline.nearest(front.point)
+                    && let Some((_, sample, _)) = self.core.sim.spline.nearest(front.point)
                 {
                     let lateral = Vec3::from_array(sample.lateral);
                     let backward = slot == 1;

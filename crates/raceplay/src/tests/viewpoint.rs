@@ -30,7 +30,7 @@ fn an_extra_view_follows_its_own_craft_and_the_players_is_untouched() {
     // player's camera, or nothing.
     for slot in 1..4 {
         race.set_viewpoint(slot);
-        let target = target_of(&race.sim.world.ships[slot]);
+        let target = target_of(&race.core.sim.world.ships[slot]);
         let params = race.view.chase_far;
         let expected = Chase::snapped(target, &params).view(target, &params);
         assert_eq!(race.view(), expected, "view {slot} follows slot {slot}");
@@ -61,7 +61,7 @@ fn the_count_is_clamped_to_the_craft_fielded() {
     let mut grid = race_with_a_grid();
     assert_eq!(
         grid.set_viewport_count(99),
-        usize::from(grid.sim.world.ship_count).min(8)
+        usize::from(grid.core.sim.world.ship_count).min(8)
     );
     assert_eq!(grid.set_viewport_count(0), 1);
 }
@@ -86,8 +86,8 @@ fn viewports_leave_the_simulation_hash_unchanged() {
         }
         split.reset_viewpoint();
         assert_eq!(
-            plain.sim.state_hash(),
-            split.sim.state_hash(),
+            plain.core.sim.state_hash(),
+            split.core.sim.state_hash(),
             "diverged at tick {tick}"
         );
     }
@@ -121,7 +121,7 @@ fn the_cut_is_one_answer_for_every_view_rectangle_and_is_not_simulation() {
     assert_eq!(race.cut(), Cut::Horizontal, "rows until a cut is chosen");
     let rows = race.view_rects(AREA);
     assert_eq!(rows[0].2, 1920.0, "full width");
-    let hash = race.sim.state_hash();
+    let hash = race.core.sim.state_hash();
 
     race.set_cut(Cut::Vertical);
     assert_eq!(race.cut(), Cut::Vertical);
@@ -129,7 +129,11 @@ fn the_cut_is_one_answer_for_every_view_rectangle_and_is_not_simulation() {
     assert_eq!(columns.len(), 2);
     assert_eq!(columns[0].3, 1080.0, "full height");
     assert!(columns[1].0 > columns[0].0, "side by side");
-    assert_eq!(race.sim.state_hash(), hash, "the cut is a view, not state");
+    assert_eq!(
+        race.core.sim.state_hash(),
+        hash,
+        "the cut is a view, not state"
+    );
 
     race.set_viewport_count(4);
     assert_eq!(

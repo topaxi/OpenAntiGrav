@@ -84,25 +84,26 @@ fn run(cell: &Cell) -> Vec<Craft> {
         setup.spline = setup.spline.clone().with_cage(None);
     }
     let mut race = race::Race::start(setup);
-    race.sim.world.ships[0].active = false;
-    let count = race.sim.ship_count() as usize;
+    race.core.sim.world.ships[0].active = false;
+    let count = race.core.sim.ship_count() as usize;
     let mut crafts = vec![Craft::default(); count];
     let mut prev_wall = vec![0.0f32; count];
     let mut prev_roll = vec![0.0f32; count];
     let mut prev_resp = vec![0u32; count];
     for tick in 1..=TICKS {
         let before: Vec<f32> = (0..count)
-            .map(|s| race.sim.world.ships[s].physics.shield)
+            .map(|s| race.core.sim.world.ships[s].physics.shield)
             .collect();
         race.tick(&PlayerInputs::none());
         for s in 1..count {
-            let ship = &race.sim.world.ships[s];
-            let wall = race.sim.wall_shield_charged_of(s);
-            let roll = race.sim.roll_shield_spent_of(s);
-            let resp = race.sim.respawns_of(s);
+            let ship = &race.core.sim.world.ships[s];
+            let wall = race.core.sim.wall_shield_charged_of(s);
+            let roll = race.core.sim.roll_shield_spent_of(s);
+            let resp = race.core.sim.respawns_of(s);
             let (dwall, droll) = (wall - prev_wall[s], roll - prev_roll[s]);
             if resp != prev_resp[s] {
                 let cause = race
+                    .core
                     .sim
                     .last_respawn_cause_of(s)
                     .map_or("unknown", |cause| cause.label());
@@ -233,20 +234,20 @@ fn lone_craft_shield() {
         .expect("loading");
         let mut race = race::Race::start(loaded.setup);
         for slot in 2..8 {
-            race.sim.world.ships[slot].active = false;
+            race.core.sim.world.ships[slot].active = false;
         }
-        race.sim.world.ships[0].active = false;
-        let mut lap = race.sim.world.ships[1].standing.lap;
+        race.core.sim.world.ships[0].active = false;
+        let mut lap = race.core.sim.world.ships[1].standing.lap;
         let mut per_lap = Vec::new();
         for _ in 0..TICKS {
             race.tick(&PlayerInputs::none());
-            let ship = &race.sim.world.ships[1];
+            let ship = &race.core.sim.world.ships[1];
             if ship.standing.lap != lap {
                 lap = ship.standing.lap;
                 per_lap.push(format!("{:.1}", ship.physics.shield));
             }
         }
-        (per_lap, race.sim.world.ships[1].physics.shield)
+        (per_lap, race.core.sim.world.ships[1].physics.shield)
     });
     for ((id, _), (per_lap, end)) in tracks.iter().zip(&rows) {
         println!(

@@ -48,24 +48,24 @@ fn finished_time_trial_at(difficulty: oag_ai::Difficulty) -> Option<race::Race> 
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
-    while !race.sim.finished() && race.sim.world.tick < CAP {
+    race.core.sim.set_autopilot(true);
+    while !race.core.sim.finished() && race.core.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        race.sim.finished(),
+        race.core.sim.finished(),
         "the Time Trial never finished in {CAP} ticks"
     );
     assert!(
-        race.sim.world.ships[0].standing.finished(),
+        race.core.sim.world.ships[0].standing.finished(),
         "the lone craft ended the race by something other than the line"
     );
-    race.sim.set_autopilot(false);
+    race.core.sim.set_autopilot(false);
     Some(race)
 }
 
 fn speed(race: &race::Race) -> f32 {
-    race.sim.world.ships[0]
+    race.core.sim.world.ships[0]
         .physics
         .body
         .linear_velocity
@@ -79,10 +79,10 @@ fn the_craft_goes_on_lapping_with_no_input_after_the_line() {
         return;
     };
     assert!(
-        race.sim.flown_for_the_player(0),
+        race.core.sim.flown_for_the_player(0),
         "the finish line did not hand the craft to the driver"
     );
-    let at_line = race.sim.world.ships[0].physics.body.position;
+    let at_line = race.core.sim.world.ships[0].physics.body.position;
     let mut travelled = 0.0_f32;
     let mut previous = at_line;
     let mut slowest = f32::MAX;
@@ -90,14 +90,14 @@ fn the_craft_goes_on_lapping_with_no_input_after_the_line() {
     // the line's momentum for a few seconds cannot pass.
     for _ in 0..70 * 60 {
         race.tick(&PlayerInputs::none());
-        let here = race.sim.world.ships[0].physics.body.position;
+        let here = race.core.sim.world.ships[0].physics.body.position;
         travelled += (here - previous).length();
         previous = here;
         slowest = slowest.min(speed(&race));
     }
     println!(
         "after the line: {travelled:.0} units in 70 s, slowest {slowest:.1}, state {:?}",
-        race.sim.world.ships[0].physics.craft_state
+        race.core.sim.world.ships[0].physics.craft_state
     );
     assert!(
         travelled > 3_000.0,
@@ -110,7 +110,7 @@ fn the_craft_goes_on_lapping_with_no_input_after_the_line() {
          held 90 or more for 35 s"
     );
     assert_eq!(
-        race.sim.world.ships[0].physics.craft_state,
+        race.core.sim.world.ships[0].physics.craft_state,
         oag_physics::CraftState::Racing,
         "the craft left the racing state after the line"
     );
@@ -122,28 +122,31 @@ fn the_result_is_frozen_at_the_line_while_the_race_runs_on() {
     let Some(mut race) = finished_time_trial() else {
         return;
     };
-    let standing = race.sim.world.ships[0].standing;
+    let standing = race.core.sim.world.ships[0].standing;
     let board = race.results().cloned();
-    let lap = race.sim.world.primary_race().lap;
-    let ghost_lap = race.sim.world.ships[0].standing.best_lap_ticks;
+    let lap = race.core.sim.world.primary_race().lap;
+    let ghost_lap = race.core.sim.world.ships[0].standing.best_lap_ticks;
     // Long enough for the craft to come all the way round to the line again, which
     // is the moment a lap counter that kept counting would move.
     for _ in 0..90 * 60 {
         race.tick(&PlayerInputs::none());
     }
     assert_eq!(
-        race.sim.world.ships[0].standing, standing,
+        race.core.sim.world.ships[0].standing, standing,
         "the player's standing moved after the finish: its laps, splits and best lap are \
          frozen at the line (the original only records a lap in craft state 1)"
     );
-    assert_eq!(race.sim.world.primary_race().lap, lap);
-    assert_eq!(race.sim.world.ships[0].standing.best_lap_ticks, ghost_lap);
+    assert_eq!(race.core.sim.world.primary_race().lap, lap);
+    assert_eq!(
+        race.core.sim.world.ships[0].standing.best_lap_ticks,
+        ghost_lap
+    );
     assert_eq!(
         race.results().cloned(),
         board,
         "the board taken at the line was revised"
     );
-    assert!(race.sim.finished(), "the race un-finished itself");
+    assert!(race.core.sim.finished(), "the race un-finished itself");
 }
 
 /// The ten `Camera` nodes of `16_Track` as the original's own camera object held them while
@@ -197,7 +200,7 @@ fn the_spectator_camera_takes_over_sixty_one_frames_after_the_line() {
     let Some(mut race) = finished_time_trial() else {
         return;
     };
-    let finish = race.sim.world.ships[0]
+    let finish = race.core.sim.world.ships[0]
         .standing
         .finish_tick
         .expect("finished");
@@ -232,7 +235,7 @@ fn the_spectator_camera_takes_over_sixty_one_frames_after_the_line() {
             }
             last_eye = Some(eye);
         }
-        assert_eq!(race.sim.world.tick - finish, since);
+        assert_eq!(race.core.sim.world.tick - finish, since);
     }
     assert!(
         race.spectator_mode().is_some(),
@@ -261,6 +264,7 @@ fn the_finished_craft_flies_at_the_originals_post_finish_thrust() {
         return;
     };
     let cap = race
+        .core
         .sim
         .finished_thrust_cap(0)
         .expect("Venom's AIRaceStats and 16_Track's stats.xml are on the disc");
@@ -269,15 +273,15 @@ fn the_finished_craft_flies_at_the_originals_post_finish_thrust() {
         "first place at Venom Easy: the original read 56.7 %, the law gives {cap}"
     );
     let mut travelled = 0.0_f32;
-    let mut previous = race.sim.world.ships[0].physics.body.position;
+    let mut previous = race.core.sim.world.ships[0].physics.body.position;
     let (mut highest, mut at_cap) = (0.0_f32, 0_u32);
     let ticks = 35 * 60;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
-        let here = race.sim.world.ships[0].physics.body.position;
+        let here = race.core.sim.world.ships[0].physics.body.position;
         travelled += (here - previous).length();
         previous = here;
-        let throttle = race.sim.world.ships[0].physics.thrust;
+        let throttle = race.core.sim.world.ships[0].physics.thrust;
         highest = highest.max(throttle);
         at_cap += u32::from((throttle - 100.0 * cap).abs() < 0.01);
     }

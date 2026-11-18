@@ -55,7 +55,7 @@ fn held_throttle_from_rest_follows_the_originals_speed_curve() {
     })
     .expect("loading the race");
     let mut race = Race::start(loaded.setup);
-    while race.sim.world.tick < ONSET {
+    while race.core.sim.world.tick < ONSET {
         race.tick(&cross(false));
     }
     // (ticks of thrust, the original's forward speed then).
@@ -67,7 +67,7 @@ fn held_throttle_from_rest_follows_the_originals_speed_curve() {
         (210, 121.52),
     ];
     for (ticks, original) in measured {
-        while race.sim.world.tick < ONSET + ticks {
+        while race.core.sim.world.tick < ONSET + ticks {
             race.tick(&cross(true));
         }
         let ours = forward_speed(&race);

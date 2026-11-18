@@ -20,7 +20,7 @@ pub(super) fn perfect_start() -> Vec<Cue> {
         } else {
             0
         })));
-        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.core.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }

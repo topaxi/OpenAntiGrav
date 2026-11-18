@@ -77,12 +77,12 @@ fn fly(pose: ([f32; 3], f32), ticks: usize) -> Option<(Vec<Option<Vec3>>, f32)> 
     .expect("loading Talon's Junction");
     let mut race = race::Race::start(loaded.setup);
     let rest = (
-        race.sim.world.ships[0].physics.body.position,
-        race.sim.world.ships[0].physics.body.orientation,
+        race.core.sim.world.ships[0].physics.body.position,
+        race.core.sim.world.ships[0].physics.body.orientation,
     );
     let hold = |race: &mut race::Race| {
         race.place_player(rest.0, rest.1);
-        let body = &mut race.sim.world.ships[0].physics.body;
+        let body = &mut race.core.sim.world.ships[0].physics.body;
         body.linear_velocity = Vec3::ZERO;
         body.angular_velocity = Vec3::ZERO;
     };
@@ -92,7 +92,7 @@ fn fly(pose: ([f32; 3], f32), ticks: usize) -> Option<(Vec<Option<Vec3>>, f32)> 
         race.tick(&PlayerInputs::single(snap(&mut input, 0)));
         hold(&mut race);
     }
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
     let mut positions = Vec::new();
     let mut launch_kmh = 0.0;
     for k in 0..ticks {
@@ -102,6 +102,7 @@ fn fly(pose: ([f32; 3], f32), ticks: usize) -> Option<(Vec<Option<Vec3>>, f32)> 
             hold(&mut race);
         }
         let bolt = race
+            .core
             .sim
             .world
             .projectiles

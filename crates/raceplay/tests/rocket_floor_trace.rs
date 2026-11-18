@@ -254,20 +254,24 @@ fn trace_a_rocket_volley_along_the_floor() {
         return;
     };
     let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
-    let dt = race.sim.dt();
+    race.core.sim.set_autopilot(true);
+    let dt = race.core.sim.dt();
 
-    let (up, down, flat) = floor_winding(race.sim.collision());
+    let (up, down, flat) = floor_winding(race.core.sim.collision());
     let mut log = String::new();
     writeln!(
         log,
         "# {title} {} floor triangles: {up} normal.y>0, {down} normal.y<0, {flat} degenerate; \
          max half-width {:.2}",
         track.unwrap_or("(default)"),
-        race.sim.spline().max_half_width()
+        race.core.sim.spline().max_half_width()
     )
     .unwrap();
-    let stats = race.sim.rocket_stats().expect("the disc authors a Rocket");
+    let stats = race
+        .core
+        .sim
+        .rocket_stats()
+        .expect("the disc authors a Rocket");
     let cruise = stats.speed_for_named("VENOM").unwrap_or(0.0) / 3.6;
     writeln!(
         log,
@@ -290,7 +294,7 @@ fn trace_a_rocket_volley_along_the_floor() {
     for tick in 0..ticks {
         let fire = tick >= 240 && tick % every == 0;
         if fire {
-            race.sim.world.ships[0].pickup.weapon = Some(Weapon::Rocket);
+            race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Rocket);
         }
         let bits = if fire {
             Button::Cross.bit() | Button::Square.bit()
@@ -302,26 +306,27 @@ fn trace_a_rocket_volley_along_the_floor() {
 
         // Predict this tick for every live rocket from its pre-tick state.
         let mut predicted: [Option<Tick>; MAX_PROJECTILES] = [None; MAX_PROJECTILES];
-        for (slot, p) in race.sim.world.projectiles.slots.iter().enumerate() {
+        for (slot, p) in race.core.sim.world.projectiles.slots.iter().enumerate() {
             if p.kind == Some(Weapon::Rocket) {
-                let count = race.sim.world.ship_count as usize;
+                let count = race.core.sim.world.ship_count as usize;
                 predicted[slot] = Some(replicate(
                     p,
                     dt,
-                    race.sim.collision(),
-                    race.sim
+                    race.core.sim.collision(),
+                    race.core
+                        .sim
                         .spline()
                         .cage()
                         .map(|c| c as &dyn oag_physics::cage::Containment),
-                    &race.sim.world.ships[..count],
+                    &race.core.sim.world.ships[..count],
                 ));
             }
         }
         race.tick(&PlayerInputs::single(snap));
 
-        let ship = race.sim.world.ships[0].physics.body.position;
+        let ship = race.core.sim.world.ships[0].physics.body.position;
         for slot in 0..MAX_PROJECTILES {
-            let now = race.sim.world.projectiles.slots[slot];
+            let now = race.core.sim.world.projectiles.slots[slot];
             let Some(t) = predicted[slot] else {
                 if now.kind == Some(Weapon::Rocket) {
                     born[slot] = tick;
@@ -333,18 +338,19 @@ fn trace_a_rocket_volley_along_the_floor() {
                         ship.x, ship.y, ship.z
                     )
                     .unwrap();
-                    let count = race.sim.world.ship_count as usize;
+                    let count = race.core.sim.world.ship_count as usize;
                     alive[slot] = Some((
                         tick,
                         replicate(
                             &now,
                             dt,
-                            race.sim.collision(),
-                            race.sim
+                            race.core.sim.collision(),
+                            race.core
+                                .sim
                                 .spline()
                                 .cage()
                                 .map(|c| c as &dyn oag_physics::cage::Containment),
-                            &race.sim.world.ships[..count],
+                            &race.core.sim.world.ships[..count],
                         ),
                     ));
                 }
@@ -428,7 +434,7 @@ fn trace_a_rocket_volley_along_the_floor() {
         )
         .unwrap();
     }
-    writeln!(summary, "# player respawns {}", race.sim.respawns()).unwrap();
+    writeln!(summary, "# player respawns {}", race.core.sim.respawns()).unwrap();
     println!("{}", log.lines().take(2).collect::<Vec<_>>().join("\n"));
     println!("{summary}");
     std::fs::write(&out, format!("{log}{summary}")).expect("writing the log");

@@ -60,8 +60,9 @@ impl Race {
             return self.projectile_model_matrices(oag_tables::weapons::Weapon::Cannon);
         };
         use oag_fx::weapon_quads::{geometry, random};
-        let tick = self.sim.world.tick as u32;
-        self.sim
+        let tick = self.core.sim.world.tick as u32;
+        self.core
+            .sim
             .flashing_cannon_rounds()
             .filter_map(|(slot, projectile)| {
                 let (position, axes) = self.cannon_muzzle_matrix(draw, projectile)?;
@@ -88,7 +89,7 @@ impl Race {
     /// [`Self::projectile_sprites`] takes. **The flash's rotation, size and
     /// alpha are rolled from [`oag_fx::weapon_quads::random`], seeded from
     /// the round's own slot index and [`World::tick`] - not from
-    /// `self.sim.world.rng`.** Rolling it from the simulation's own seeded
+    /// `self.core.sim.world.rng`.** Rolling it from the simulation's own seeded
     /// stream would advance that stream once per live round per tick for a
     /// value nothing in `oag_gameplay` ever reads back, moving every committed
     /// determinism hash for a purely cosmetic reason.
@@ -111,8 +112,8 @@ impl Race {
     ) {
         use oag_fx::weapon_quads::{geometry, random};
         let dt = TickRate::DEFAULT.dt();
-        let tick = self.sim.world.tick as u32;
-        for projectile in &self.sim.world.projectiles.slots {
+        let tick = self.core.sim.world.tick as u32;
+        for projectile in &self.core.sim.world.projectiles.slots {
             if projectile.kind != Some(oag_tables::weapons::Weapon::Cannon) {
                 continue;
             }
@@ -130,7 +131,7 @@ impl Race {
                 None => geometry::bolt_vertices(prev, curr, right, up),
             });
         }
-        for (slot, projectile) in self.sim.flashing_cannon_rounds() {
+        for (slot, projectile) in self.core.sim.flashing_cannon_rounds() {
             let (centre, (rotation, half_size, alpha)) = match draw.look {
                 Some(look) => {
                     let Some((position, _)) = self.cannon_muzzle_matrix(draw, projectile) else {
@@ -196,7 +197,7 @@ impl Race {
         projectile: &oag_weapons::projectile::Projectile,
     ) -> Option<(Vec3, [Vec3; 3])> {
         let slot = usize::from(projectile.owner);
-        let body = &self.sim.world.ships.get(slot)?.physics.body;
+        let body = &self.core.sim.world.ships.get(slot)?.physics.body;
         let left = (projectile.position - body.position).dot(body.right()) < 0.0;
         let local = draw.muzzles.get(slot)?[usize::from(!left)]?;
         let world = self.ship_model_matrix_of(slot) * local;

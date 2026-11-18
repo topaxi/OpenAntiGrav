@@ -465,7 +465,7 @@ impl Session {
             // rule: a mouse cannot lift player 2's pause inside their timeout.
             if self.photo.is_none()
                 && !self.in_demo()
-                && matches!(&self.stage, Stage::Race(stage) if !stage.race.sim.finished())
+                && matches!(&self.stage, Stage::Race(stage) if !stage.race.core.sim.finished())
             {
                 let paused = matches!(self.pause, crate::pause::State::Paused { .. });
                 let click = pointer.clicked && paused;
@@ -519,7 +519,7 @@ impl Session {
             if self.photo.is_none()
                 && matches!(&self.stage, Stage::Race(stage)
                 if crate::app::race_stage::endrace::results_table_takes_confirm(
-                    stage.race.sim.finished(),
+                    stage.race.core.sim.finished(),
                     stage.endrace.is_some(),
                 ))
                 && [Button::Cross, Button::Start]
@@ -842,7 +842,7 @@ impl Session {
                         break;
                     }
                 }
-                Stage::Race(stage) if stage.race.sim.finished() => {
+                Stage::Race(stage) if stage.race.core.sim.finished() => {
                     // The built-in results table waits for cross or start
                     // and draws nothing to aim at, so a click is the press -
                     // the rising edge the block above this match reads next
@@ -1019,7 +1019,7 @@ impl Session {
                     // A server that ends a race nobody had finished (the host left, a link
                     // died) leaves a frozen world: after a second of it, back to the menus.
                     match self.net.as_ref().and_then(crate::net_play::NetPlay::over) {
-                        Some(why) if !stage.race.sim.finished() => {
+                        Some(why) if !stage.race.core.sim.finished() => {
                             self.net_over_ticks += 1;
                             if self.net_over_ticks == NET_OVER_TICKS {
                                 log::error!("the network race ended before the finish: {why}");
@@ -1041,7 +1041,7 @@ impl Session {
                     }
                     crate::sound::race_tick(&mut self.audio, &mut stage.race);
                     if self.log_every > 0
-                        && stage.race.sim.world.tick % u64::from(self.log_every) == 0
+                        && stage.race.core.sim.world.tick % u64::from(self.log_every) == 0
                     {
                         println!("{}", race::describe(&stage.race.telemetry()));
                     }
@@ -1077,7 +1077,7 @@ impl Session {
             }
             let campaign_title = self.campaign_title();
             if let Stage::Race(stage) = &mut self.stage
-                && stage.race.sim.finished()
+                && stage.race.core.sim.finished()
                 && !stage.result_saved
                 // A split screen's result is nobody's record: the results are
                 // slot 0's, which a second person was racing.
@@ -1141,7 +1141,7 @@ impl Session {
                         observation.campaign_medal,
                         None,
                     );
-                    let banked = stage.race.sim.xp_tally_mut().map(|tally| {
+                    let banked = stage.race.core.sim.xp_tally_mut().map(|tally| {
                         let earned = self.records.bank_event_xp(
                             tally,
                             prior,
@@ -1174,8 +1174,8 @@ impl Session {
                         crate::app::race_stage::hd_loyalty::HdRace {
                             mode: options.mode,
                             laps: observation.laps_completed,
-                            kills: stage.race.sim.world.ships[0].standing.kills,
-                            zones: u32::from(stage.race.sim.world.primary_race().zone),
+                            kills: stage.race.core.sim.world.ships[0].standing.kills,
+                            zones: u32::from(stage.race.core.sim.world.primary_race().zone),
                             difficulty: stage.campaign_difficulty,
                         },
                     );
@@ -1220,7 +1220,7 @@ impl Session {
         // seat is its own submission. A no-op with one window.
         self.draw_screens();
         let tick = match &self.stage {
-            Stage::Race(stage) => stage.race.sim.world.tick,
+            Stage::Race(stage) => stage.race.core.sim.world.tick,
             _ => 0,
         };
         self.phases.end_frame(tick);

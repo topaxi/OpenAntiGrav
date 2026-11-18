@@ -23,7 +23,7 @@ fn started(track: &str) -> Option<race::Race> {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     Some(race)
 }
 
@@ -99,8 +99,8 @@ fn compare(track: &str, ticks: u32) -> Option<Census> {
         original.tick(&PlayerInputs::none());
         enhanced.tick(&PlayerInputs::none());
         assert_eq!(
-            original.sim.state_hash(),
-            enhanced.sim.state_hash(),
+            original.core.sim.state_hash(),
+            enhanced.core.sim.state_hash(),
             "the setting is render-side: the simulation must not notice it"
         );
         assert!(original.scenery_fx().weather().splashes().is_empty());
@@ -150,9 +150,10 @@ fn compare(track: &str, ticks: u32) -> Option<Census> {
                 "{point:?} is a splash under a roof"
             );
             let above = enhanced
+                .core
                 .sim
                 .floor_above(point, Vec3::Y)
-                .or_else(|| enhanced.sim.floor_above(point, -Vec3::Y));
+                .or_else(|| enhanced.core.sim.floor_above(point, -Vec3::Y));
             assert!(above.is_some(), "{point:?} is not on a floor");
         }
     }

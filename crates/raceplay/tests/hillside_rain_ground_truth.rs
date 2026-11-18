@@ -98,8 +98,8 @@ fn weather(
         weather.lens().alive_count(),
         weather.wet_road(),
         weather.drop_segments().len(),
-        race.sim.is_modded(),
-        race.sim.extension_sky(),
+        race.core.sim.is_modded(),
+        race.core.sim.extension_sky(),
     )
 }
 
@@ -143,9 +143,12 @@ fn a_disc_circuit_never_runs_the_track_module() {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        !race.sim.is_modded(),
+        !race.core.sim.is_modded(),
         "the module is bound to Hillside's file"
     );
     assert!(!race.scenery_fx().weather().is_driven_active());
-    assert_eq!(race.sim.extension_sky(), race::extensions::Sky::default());
+    assert_eq!(
+        race.core.sim.extension_sky(),
+        race::extensions::Sky::default()
+    );
 }

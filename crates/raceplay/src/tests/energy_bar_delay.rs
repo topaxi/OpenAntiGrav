@@ -83,7 +83,7 @@ fn the_trail_reads_above_the_fraction_for_a_few_ticks_after_a_drop() {
     let before = race.readout().energy_bar_delay_fraction;
     assert!((before - 1.0).abs() < 1e-3, "should have caught up to full");
 
-    race.sim.world.ships[0].physics.shield = 40.0;
+    race.core.sim.world.ships[0].physics.shield = 40.0;
     race.tick(&PlayerInputs::none());
     let readout = race.readout();
     assert!(

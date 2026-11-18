@@ -34,6 +34,7 @@ pub fn apply(race: &mut Race, players: usize, cut: oag_render::viewport::Cut) ->
     let count = race.set_viewport_count(players);
     race.set_cut(cut);
     for controller in race
+        .core
         .sim
         .world
         .controllers
@@ -471,7 +472,7 @@ pub fn follow_devices<D: Copy + PartialEq>(race: &mut Race, assignment: &Assignm
         } else {
             Controller::Ai
         };
-        let have = race.sim.world.controllers[slot];
+        let have = race.core.sim.world.controllers[slot];
         if have != want
             && matches!(have, Controller::Local | Controller::Ai)
             && race.set_controller(slot, want)

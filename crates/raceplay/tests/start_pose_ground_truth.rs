@@ -180,7 +180,7 @@ fn every_grid_slot_points_along_the_tracks_own_frame_as_the_original_does() {
         // and the opponents on 1 to 7, which is the original's order too, but
         // matching by position does not depend on that.
         let ship = (0..8)
-            .map(|slot| &race.sim.world.ships[slot].physics.body)
+            .map(|slot| &race.core.sim.world.ships[slot].physics.body)
             .min_by(|a, b| {
                 (a.position.x - x)
                     .abs()

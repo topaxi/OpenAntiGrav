@@ -100,7 +100,7 @@ pub(super) fn hull_of(hull_plans: &[HullPlans], chosen: Option<u8>) -> Option<&H
 
 impl RaceSim {
     /// Whether anything in this race will read the speed plans; see
-    /// [`Race::ensure_speed_plans`].
+    /// [`SimRace::ensure_speed_plans`].
     fn needs_speed_plans(&self) -> bool {
         self.world.ship_count >= 2
             && (self.original_ai.is_none() || self.autopilot || !self.routes.is_empty())
@@ -137,8 +137,8 @@ impl RaceSim {
 
 /// Learns the ring's, each hull's and the routes' speed plans into `sim`. The
 /// one place they are learned, on the frame thread
-/// ([`Race::ensure_speed_plans`]) or on a copy of `sim` on another
-/// ([`Race::begin_speed_plans`]): the same function on the same state.
+/// ([`SimRace::ensure_speed_plans`]) or on a copy of `sim` on another
+/// ([`SimRace::begin_speed_plans`]): the same function on the same state.
 ///
 /// Three stages, each a pure function of the one before, so they finish in the
 /// same plans whatever order the threads run in:
@@ -262,7 +262,7 @@ impl LearnedPlans {
         self.route_plans.iter().flatten().count()
     }
 
-    // Only a job reads it, and the web starts none (`Race::begin_speed_plans`).
+    // Only a job reads it, and the web starts none (`SimRace::begin_speed_plans`).
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub(super) fn of(sim: RaceSim) -> Self {
         Self {
@@ -294,7 +294,7 @@ pub(super) struct SpeedPlanJob {
 /// setters move that without touching a plan input. A mod event's pilot writes
 /// each opponent's `driver.pilot` ([`RaceSim::set_opponent_pilot`]), and the
 /// original driver ([`RaceSim::use_original_ai`]) only decides whether a plan is
-/// read, which [`Race::ensure_speed_plans`] asks itself. Split seating does
+/// read, which [`SimRace::ensure_speed_plans`] asks itself. Split seating does
 /// change one (`person_flown`, which orders the reference's candidates in
 /// [`RaceSim::field_speed_plan`]), and so does anything that moves a craft.
 #[derive(Debug, PartialEq)]
@@ -490,8 +490,8 @@ impl Race {
         stages_at: Option<u32>,
         stuck: Option<u32>,
     ) -> Option<RouteProbe> {
-        self.ensure_speed_plans();
-        let sim = &self.sim;
+        self.core.ensure_speed_plans();
+        let sim = &self.core.sim;
         let route = sim.routes.get(k)?;
         let (plan, report, rows, stages) = RaceSim::with_plan_course_on(
             sim,
@@ -531,14 +531,14 @@ impl Race {
     /// ring.
     #[must_use]
     pub fn probe_ring_plan(&mut self, stuck: Option<u32>) -> RouteProbe {
-        self.ensure_speed_plans();
+        self.core.ensure_speed_plans();
         let (plan, report, rows) = RaceSim::with_plan_course_on(
-            &self.sim,
-            &self.sim.racing_line,
-            &self.sim.ai_order,
+            &self.core.sim,
+            &self.core.sim.racing_line,
+            &self.core.sim.ai_order,
             1,
             None,
-            self.sim.plan_reference,
+            self.core.sim.plan_reference,
             |c, craft| {
                 let tuning = oag_ai::Tuning::default();
                 let (plan, report) = oag_ai::SpeedPlan::build(c, craft, &tuning);
@@ -551,11 +551,11 @@ impl Race {
             report,
             rows,
             stages: None,
-            order: self.sim.ai_order.to_vec(),
-            kept: self.sim.racing_line.len(),
+            order: self.core.sim.ai_order.to_vec(),
+            kept: self.core.sim.racing_line.len(),
             merge: 0,
-            ring_len: self.sim.racing_line.len(),
-            line: (*self.sim.racing_line).clone(),
+            ring_len: self.core.sim.racing_line.len(),
+            line: (*self.core.sim.racing_line).clone(),
         }
     }
 }
@@ -676,7 +676,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// Whether anything in this race will read the speed plans: an opponent on
     /// this project's driver (`--ai ours`, a fallback from
     /// [`RaceSim::use_original_ai`], a mode the original does not fly), the
@@ -694,8 +694,8 @@ impl Race {
 
     /// Learns the ring's, each hull's and the routes' speed plans, once, if
     /// anything will read them ([`Self::needs_speed_plans`]). Called at the
-    /// head of [`Race::tick`] and by [`Self::speed_plan`] and
-    /// [`Self::plan_of`]. On a race that has not ticked it is before any craft
+    /// head of [`Race::tick`] and by [`Race::speed_plan`] and
+    /// [`Race::plan_of`]. On a race that has not ticked it is before any craft
     /// has moved, so the plans are learned from the grid `Race::start` used to
     /// learn them from and are bit-identical to what it built. (A player's
     /// autopilot switched on mid-race would learn them from wherever slot 1
@@ -711,7 +711,7 @@ impl Race {
         if self.sim.plans_built || !self.needs_speed_plans() {
             return;
         }
-        if let Some(mut job) = self.speed_plan_job.take() {
+        if let Some(mut job) = self.plans.take() {
             let learned = job.task.join().and_then(Result::ok);
             if let Some(learned) = learned
                 && job.matches(&self.sim)
@@ -729,9 +729,7 @@ impl Race {
     /// (`Some(false)`), or there is none. A diagnostic for the tests.
     #[must_use]
     pub fn speed_plan_job_fits(&self) -> Option<bool> {
-        self.speed_plan_job
-            .as_ref()
-            .map(|job| job.matches(&self.sim))
+        self.plans.as_ref().map(|job| job.matches(&self.sim))
     }
 
     /// [`Self::begin_speed_plans`] straight after [`Race::start`], before the
@@ -765,7 +763,7 @@ impl Race {
     pub fn begin_speed_plans(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         if !self.sim.plans_built && self.needs_speed_plans() {
-            if let Some(job) = self.speed_plan_job.as_ref() {
+            if let Some(job) = self.plans.as_ref() {
                 if job.matches(&self.sim) {
                     return;
                 }
@@ -779,7 +777,7 @@ impl Race {
                 learn_speed_plans(&mut copy);
                 LearnedPlans::of(copy)
             });
-            self.speed_plan_job = Some(SpeedPlanJob { task, inputs });
+            self.plans = Some(SpeedPlanJob { task, inputs });
         }
     }
 
@@ -787,9 +785,7 @@ impl Race {
     /// was started. Never waits.
     #[must_use]
     pub fn speed_plans_ready(&self) -> bool {
-        self.speed_plan_job
-            .as_ref()
-            .is_none_or(|job| job.task.is_finished())
+        self.plans.as_ref().is_none_or(|job| job.task.is_finished())
     }
 }
 
@@ -1134,21 +1130,21 @@ impl RaceSim {
 
 impl Race {
     /// The plan the field is following, if any, learned first if nothing has
-    /// yet ([`Self::ensure_speed_plans`]). For a diagnostic that has to compare
+    /// yet ([`SimRace::ensure_speed_plans`]). For a diagnostic that has to compare
     /// a craft's speed against the target it was given; `None` where the
     /// original driver flies a circuit without a fork.
     #[must_use]
     pub fn speed_plan(&mut self) -> Option<&oag_ai::SpeedPlan> {
-        self.ensure_speed_plans();
-        self.sim.speed_plan.as_deref()
+        self.core.ensure_speed_plans();
+        self.core.sim.speed_plan.as_deref()
     }
 
     /// What learning this race's route plans cost, learned first if nothing
     /// has yet. A diagnostic for `route_plan_board`.
     #[must_use]
     pub fn plan_steps(&mut self) -> &PlanSteps {
-        self.ensure_speed_plans();
-        &self.sim.plan_steps
+        self.core.ensure_speed_plans();
+        &self.core.sim.plan_steps
     }
 }
 

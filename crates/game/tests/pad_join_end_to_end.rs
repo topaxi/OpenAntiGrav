@@ -26,22 +26,22 @@ const SEED: u64 = 0xC0FFEE;
 /// them apart and hide what a stick did.
 fn race(craft: usize) -> Race {
     let mut race = Race::start(Setup::headless(Mode::SingleRace, SEED));
-    race.sim.world.ships[0].handling.turning = oag_physics::params::Turning {
+    race.core.sim.world.ships[0].handling.turning = oag_physics::params::Turning {
         amount: 60.0,
         falloff: 5.0,
         gain: 5.0,
     };
     for slot in 1..craft {
-        let mut ship = race.sim.world.ships[0];
+        let mut ship = race.core.sim.world.ships[0];
         let pose = oag_gameplay::Pose {
             position: ship.physics.body.position + ship.physics.body.right() * (60.0 * slot as f32),
             orientation: ship.physics.body.orientation,
         };
         ship.place_at(pose);
         ship.active = true;
-        race.sim.world.ships[slot] = ship;
+        race.core.sim.world.ships[slot] = ship;
     }
-    race.sim.world.ship_count = u8::try_from(craft).unwrap();
+    race.core.sim.world.ship_count = u8::try_from(craft).unwrap();
     race
 }
 
@@ -58,7 +58,7 @@ fn fly(keyboard_slot: Option<usize>) -> Race {
     for _ in 0..60 {
         let inputs = controls.player_snapshots();
         race.tick(&inputs);
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
     }
     race
 }
@@ -72,7 +72,7 @@ fn the_device_on_slot_one_steers_slot_ones_craft_only() {
     let on_one = fly(Some(1));
     let on_zero = fly(Some(0));
 
-    let heading = |race: &Race, slot: usize| race.sim.world.ships[slot].physics.body.forward();
+    let heading = |race: &Race, slot: usize| race.core.sim.world.ships[slot].physics.body.forward();
     assert_ne!(
         heading(&on_one, 1),
         heading(&idle, 1),
@@ -113,7 +113,7 @@ fn a_three_seat_lobby_makes_a_three_way_split_with_each_device_on_its_slot() {
 
     assert_eq!(race.viewport_count(), 3);
     for slot in 0..MAX_PLAYERS {
-        let local = race.sim.world.controllers[slot] == Controller::Local;
+        let local = race.core.sim.world.controllers[slot] == Controller::Local;
         assert_eq!(local, slot < 3, "slot {slot}");
     }
     assert_eq!(assignment.slot_of(5), Some(0));
@@ -141,7 +141,7 @@ fn a_lobby_of_one_changes_nothing() {
         1
     );
     assert_eq!(race.viewport_count(), 1);
-    assert_eq!(race.sim.world.human_slots().count(), 1);
+    assert_eq!(race.core.sim.world.human_slots().count(), 1);
     assert!(assignment.is_single_player());
 }
 
@@ -156,7 +156,8 @@ fn a_local_slot_without_a_device_is_flown_by_the_ai_and_returns_with_its_pad() {
     assignment.claim_keyboard(0);
     assignment.assign_pad(5, 1);
     split_screen::apply(&mut race, 3, oag_render::viewport::Cut::Horizontal);
-    let local = |race: &Race, slot: usize| race.sim.world.controllers[slot] == Controller::Local;
+    let local =
+        |race: &Race, slot: usize| race.core.sim.world.controllers[slot] == Controller::Local;
 
     assignment.reconcile(&[5]);
     assert_eq!(split_screen::follow_devices(&mut race, &assignment), 1);
@@ -164,7 +165,7 @@ fn a_local_slot_without_a_device_is_flown_by_the_ai_and_returns_with_its_pad() {
     assert!(local(&race, 1), "pad 5's slot");
     assert!(!local(&race, 2), "nobody is on slot 2");
     assert!(
-        !race.sim.world.person_flown(2),
+        !race.core.sim.world.person_flown(2),
         "the end rule would wait on it"
     );
 
@@ -175,12 +176,12 @@ fn a_local_slot_without_a_device_is_flown_by_the_ai_and_returns_with_its_pad() {
     assignment.reconcile(&[9]);
     split_screen::follow_devices(&mut race, &assignment);
     assert!(!local(&race, 1), "pad 5 left, so its slot flies as the AI");
-    assert!(race.sim.world.person_flown(0));
+    assert!(race.core.sim.world.person_flown(0));
 
-    race.sim.world.controllers[2] = Controller::Remote;
+    race.core.sim.world.controllers[2] = Controller::Remote;
     assignment.reconcile(&[]);
     split_screen::follow_devices(&mut race, &assignment);
-    assert_eq!(race.sim.world.controllers[2], Controller::Remote);
+    assert_eq!(race.core.sim.world.controllers[2], Controller::Remote);
 }
 
 /// Closing a window hands every seat it held to the AI **even though their pads are still
@@ -230,7 +231,7 @@ fn a_closed_window_hands_all_its_seats_to_the_ai_and_the_pads_cannot_take_them_b
     );
     assignment.reconcile(&[7, 8]);
     split_screen::follow_devices(&mut race, &assignment);
-    let controller = |race: &Race, slot: usize| race.sim.world.controllers[slot];
+    let controller = |race: &Race, slot: usize| race.core.sim.world.controllers[slot];
     assert_eq!(controller(&race, 1), Controller::Local);
     assert_eq!(controller(&race, 2), Controller::Local);
 
@@ -265,12 +266,12 @@ fn a_closed_window_hands_all_its_seats_to_the_ai_and_the_pads_cannot_take_them_b
 fn merged_devices_leave_the_controllers_alone() {
     let mut race = race(2);
     split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
-    let before = race.sim.state_hash();
+    let before = race.core.sim.state_hash();
     assert_eq!(
         split_screen::follow_devices(&mut race, &Assignment::<u32>::default()),
         0
     );
-    assert_eq!(race.sim.state_hash(), before);
+    assert_eq!(race.core.sim.state_hash(), before);
 }
 
 /// A restart from the end screens skips the menus: the seats the first race left
@@ -304,8 +305,8 @@ fn a_restart_rebuilds_the_same_split_and_a_visit_to_the_menus_ends_it() {
         oag_render::viewport::Cut::Horizontal,
     );
     assert_eq!(again.viewport_count(), 2, "the restart is the same split");
-    assert_eq!(again.sim.world.controllers[0], Controller::Local);
-    assert_eq!(again.sim.world.controllers[1], Controller::Local);
+    assert_eq!(again.core.sim.world.controllers[0], Controller::Local);
+    assert_eq!(again.core.sim.world.controllers[1], Controller::Local);
 
     // Back on the menus (`Session::unseat_after_split_race`): the next race is one view.
     controls.merge_devices();

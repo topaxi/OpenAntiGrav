@@ -350,7 +350,8 @@ impl Race {
             .as_ref()
             .map_or(0, intro_camera::IntroCamera::cuts);
         let photo = self.view.photo.as_ref().map_or(0, photo::Photo::cuts);
-        self.sim
+        self.core
+            .sim
             .placements_of(0)
             .wrapping_add(self.view.destroy_camera.cuts)
             .wrapping_add(spectator)
@@ -560,7 +561,7 @@ impl Race {
     pub fn player_slot(&self) -> usize {
         self.view
             .seat
-            .unwrap_or_else(|| self.sim.world.primary_slot())
+            .unwrap_or_else(|| self.core.sim.world.primary_slot())
     }
 
     /// Whether `slot`'s person is one this machine's speakers are for.
@@ -579,8 +580,8 @@ impl Race {
         match self.view.seat {
             Some(seat) => slot == seat,
             None => {
-                slot == self.sim.world.primary_slot()
-                    || self.sim.world.controllers.get(slot)
+                slot == self.core.sim.world.primary_slot()
+                    || self.core.sim.world.controllers.get(slot)
                         == Some(&oag_gameplay::Controller::Local)
             }
         }
@@ -605,7 +606,7 @@ impl Race {
     /// The player's ship.
     #[must_use]
     pub fn ship(&self) -> &Ship {
-        &self.sim.world.ships[self.player_slot()]
+        &self.core.sim.world.ships[self.player_slot()]
     }
 
     /// The player's lap, place and finish tick.

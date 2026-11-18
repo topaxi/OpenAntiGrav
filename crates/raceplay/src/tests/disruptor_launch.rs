@@ -23,10 +23,10 @@ const TABLE: &str = r#"<WeaponStats>
 /// the hull's muzzle at `muzzle`.
 fn grid_firing_a_disruptor(launch: bool, muzzle: Option<Vec3>) -> Race {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(Arc::new(
+    race.core.sim.weapons = Some(Arc::new(
         oag_tables::weapons::parse(TABLE).expect("the table parses"),
     ));
-    race.sim.world.ships[0].muzzle = muzzle;
+    race.core.sim.world.ships[0].muzzle = muzzle;
     if launch {
         let effect =
             super::trail_hits::a_one_shot_burst(oag_title::engine_effects::DISRUPTOR_LAUNCH_EFFECT);

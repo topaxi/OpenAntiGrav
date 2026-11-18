@@ -220,7 +220,7 @@ fn an_opponents_first_lap_pays_through_the_tick() {
     let pay = law.lap * law.opponent_scale;
     let mut race = oag_raceplay::Race::start(loaded.setup);
     let snapshot = |race: &oag_raceplay::Race| {
-        let world = &race.sim.world;
+        let world = &race.core.sim.world;
         std::array::from_fn::<_, 8, _>(|slot| {
             let standing = &world.ships[slot].standing;
             (standing.lap, standing.score)
@@ -297,7 +297,7 @@ fn sweep_score_changes() {
     })
     .expect("loading an HD Eliminator");
     let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     let mut out =
         String::from("t,craft,score,kills,w6f78,shield,lap,lap2,state,attacker,dmgcause,lastdmg\n");
     let mut last = [(f32::NAN, 0u32, 0u32, 0u32); 8];
@@ -305,7 +305,7 @@ fn sweep_score_changes() {
     let mut events = String::new();
     for tick in 0..60_000u32 {
         race.tick(&PlayerInputs::none());
-        for (slot, ship) in race.sim.world.ships.iter().enumerate().take(8) {
+        for (slot, ship) in race.core.sim.world.ships.iter().enumerate().take(8) {
             let now = ship.pickup.weapon;
             if now != held[slot] {
                 events.push_str(&format!(
@@ -317,7 +317,7 @@ fn sweep_score_changes() {
                 held[slot] = now;
             }
         }
-        for (slot, ship) in race.sim.world.ships.iter().enumerate().take(8) {
+        for (slot, ship) in race.core.sim.world.ships.iter().enumerate().take(8) {
             let s = &ship.standing;
             let now = (s.score, s.kills, s.deaths, s.lap);
             if now.0.to_bits() != last[slot].0.to_bits()
@@ -360,7 +360,7 @@ struct Outcome {
 fn assert_board_ranked_on_points(race: &oag_raceplay::Race) {
     let board = race.results().expect("the race reached its target");
     assert!(board.scored(), "a score race's board ranks on points");
-    let world = &race.sim.world;
+    let world = &race.core.sim.world;
     for row in &board.rows {
         let standing = &world.ships[usize::from(row.slot)].standing;
         let points = row.points.expect("every row carries its points");
@@ -386,7 +386,7 @@ fn assert_board_ranked_on_points(race: &oag_raceplay::Race) {
 
 /// The laps the opponent with the most points has completed.
 fn leader_laps(race: &oag_raceplay::Race) -> u32 {
-    let world = &race.sim.world;
+    let world = &race.core.sim.world;
     let leader = (1..world.ship_count as usize)
         .max_by(|&a, &b| {
             world.ships[a]
@@ -421,11 +421,11 @@ fn race_to_target(
     .expect("loading an HD Eliminator");
     let mut race = oag_raceplay::Race::start(loaded.setup);
     assert_eq!(
-        race.sim.pad_seeking(),
+        race.core.sim.pad_seeking(),
         oag_raceplay::PadSeeking::Off,
         "a score Eliminator's opponents steer for no pad"
     );
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     for tick in 0..60_000u64 {
         race.tick_sim_only(&PlayerInputs::none());
         if race.results().is_some() {

@@ -52,10 +52,12 @@ fn start(title: &str) -> Option<race::Race> {
 /// The first surface straight down from `from`, within 200 units.
 fn surface_below(race: &race::Race, from: Vec3) -> Option<Surface> {
     let mut out = [None; 8];
-    let count =
-        race.sim
-            .collision()
-            .raycast_all(Ray::new(from, -Vec3::Y, 200.0), None, true, &mut out);
+    let count = race.core.sim.collision().raycast_all(
+        Ray::new(from, -Vec3::Y, 200.0),
+        None,
+        true,
+        &mut out,
+    );
     out[..count]
         .iter()
         .flatten()
@@ -68,6 +70,7 @@ fn every_grid_slot_has_ground_under_it(title: &str) {
         return;
     };
     let floors = race
+        .core
         .sim
         .collision()
         .colliders()
@@ -75,7 +78,7 @@ fn every_grid_slot_has_ground_under_it(title: &str) {
         .filter(|c| c.surface() == Surface::Floor && c.triangle_count() > 0)
         .count();
     assert!(floors > 0, "{title} sol loaded no floor collider");
-    let world = &race.sim.world;
+    let world = &race.core.sim.world;
     for slot in 0..world.ship_count as usize {
         let at = world.ships[slot].physics.body.position;
         let below = surface_below(&race, at);
@@ -118,12 +121,12 @@ fn field(title: &str, level: oag_ai::Difficulty) -> Option<(Vec<u32>, Vec<u32>, 
     })
     .unwrap_or_else(|e| panic!("{title} sol does not load: {e:#}"));
     let mut race = race::Race::start(loaded.setup);
-    race.sim.world.ships[0].active = false;
-    let count = race.sim.ship_count() as usize;
+    race.core.sim.world.ships[0].active = false;
+    let count = race.core.sim.ship_count() as usize;
     let whole_window = std::env::var_os("OAG_SWEEP").is_some();
     let causes = std::env::var_os("OAG_SWEEP_CAUSES").is_some();
     let mut lap: Vec<u32> = (0..count)
-        .map(|slot| race.sim.world.ships[slot].standing.lap)
+        .map(|slot| race.core.sim.world.ships[slot].standing.lap)
         .collect();
     let mut flying = vec![0u32; count];
     let mut respawns = vec![0u32; count];
@@ -132,16 +135,16 @@ fn field(title: &str, level: oag_ai::Difficulty) -> Option<(Vec<u32>, Vec<u32>, 
         race.tick(&oag_gameplay::PlayerInputs::none());
         ticks = tick + 1;
         for slot in 1..count {
-            let ship = &race.sim.world.ships[slot];
-            if causes && race.sim.respawns_of(slot) != respawns[slot] {
+            let ship = &race.core.sim.world.ships[slot];
+            if causes && race.core.sim.respawns_of(slot) != respawns[slot] {
                 println!(
                     "{title} sol {level:?}: slot {slot} tick {tick} lap {} {:?}@{}",
                     ship.standing.lap,
-                    race.sim.last_respawn_cause_of(slot),
+                    race.core.sim.last_respawn_cause_of(slot),
                     ship.driver.index
                 );
             }
-            respawns[slot] = race.sim.respawns_of(slot);
+            respawns[slot] = race.core.sim.respawns_of(slot);
             if ship.standing.lap != lap[slot] {
                 flying[slot] += u32::from(lap[slot] > 1);
                 lap[slot] = ship.standing.lap;
@@ -233,29 +236,29 @@ fn gap_run_up_trace() {
     })
     .unwrap();
     let mut race = race::Race::start(loaded.setup);
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
     if std::env::var_os("OAG_SOL_LONE").is_some() {
-        for slot in 1..race.sim.ship_count() as usize {
-            race.sim.world.ships[slot].active = slot == watch;
+        for slot in 1..race.core.sim.ship_count() as usize {
+            race.core.sim.world.ships[slot].active = slot == watch;
         }
     }
     if std::env::var_os("OAG_SOL_PLAIN").is_some() {
-        race.sim.world.ships[watch].driver.seed = 0;
+        race.core.sim.world.ships[watch].driver.seed = 0;
     }
-    for slot in 1..race.sim.ship_count() as usize {
-        let ship = &race.sim.world.ships[slot];
+    for slot in 1..race.core.sim.ship_count() as usize {
+        let ship = &race.core.sim.world.ships[slot];
         println!(
             "HULL {slot} engine {:.3} accelcap {:.1} air trim {:.2}, slot {watch}'s hull: {}",
             ship.handling.engine.amount,
             ship.handling.engine.accelcap,
             oag_ai::air_trim(&ship.handling, ship.physics.air_pitch_bias),
-            ship.handling == race.sim.world.ships[watch].handling
+            ship.handling == race.core.sim.world.ships[watch].handling
         );
     }
     if std::env::var_os("OAG_SOL_HULLS").is_some() {
         for slot in [1usize, 3, 5, 7] {
             let mut last = 0;
-            for row in &race.sim.probe_speed_plan(slot, 1000.0, 2600) {
+            for row in &race.core.sim.probe_speed_plan(slot, 1000.0, 2600) {
                 let i = row.index as usize;
                 if (from..to).contains(&i) && (i / 20 != last / 20 || row.failure.is_some()) {
                     println!(
@@ -302,13 +305,13 @@ fn gap_run_up_trace() {
     }
     for tick in 0..ticks {
         race.tick(&oag_gameplay::PlayerInputs::none());
-        let ship = &race.sim.world.ships[watch];
+        let ship = &race.core.sim.world.ships[watch];
         let index = ship.driver.index as usize;
         if !(from..to).contains(&index) {
             continue;
         }
         let body = &ship.physics.body;
-        let line = race.sim.line_of(watch);
+        let line = race.core.sim.line_of(watch);
         println!(
             "T {tick} {index} v {:.1} climb {:.1} grounded {:.0} air {:.2} pad {:.2} off {:.1} y {:.1} thrust {:.0} brake {:.0} respawns {}",
             body.linear_velocity.dot(body.forward()),
@@ -320,7 +323,7 @@ fn gap_run_up_trace() {
             body.position.y - line.point(index).y,
             ship.physics.thrust,
             ship.physics.brake,
-            race.sim.respawns_of(watch),
+            race.core.sim.respawns_of(watch),
         );
     }
 }

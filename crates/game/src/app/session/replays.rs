@@ -562,7 +562,7 @@ impl Session {
         let reached = match active.shot {
             Some((tick, hash)) if moved == Moved::Seeked && at == tick => {
                 active.shot = None;
-                Some((stage.race.sim.state_hash(), hash))
+                Some((stage.race.core.sim.state_hash(), hash))
             }
             _ => None,
         };

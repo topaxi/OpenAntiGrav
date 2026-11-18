@@ -109,7 +109,7 @@ impl Race {
         }
         let pulse = if slot == self.player_slot() {
             self.view.zoom.as_mut()
-        } else if self.sim.world.person_flown(slot) {
+        } else if self.core.sim.world.person_flown(slot) {
             self.view.viewpoints.zoom[slot].as_mut()
         } else {
             None
@@ -121,7 +121,7 @@ impl Race {
 
     /// One tick of the pulses.
     pub(super) fn advance_zoom(&mut self) {
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         for pulse in std::iter::once(&mut self.view.zoom)
             .chain(self.view.viewpoints.zoom.iter_mut())
             .flatten()

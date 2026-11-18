@@ -31,7 +31,7 @@ fn race_with_smoke_inheriting(smoke: bool, inherit: f32) -> Race {
 }
 
 fn hit_leaving(race: &mut Race, shield: f32, leach: bool) {
-    race.sim.world.ships[0].physics.shield = shield;
+    race.core.sim.world.ships[0].physics.shield = shield;
     let mut hits = [WeaponHit::default(); MAX_SHIPS];
     hits[0].landed = true;
     race.throw_hit_sparks(&hits, leach);
@@ -43,7 +43,7 @@ fn the_shield_left_picks_which_smoke_plays() {
     hit_leaving(&mut race, 90.0, false);
     assert_eq!(race.damage_smokes_started_for_tests(), 1, "mild");
 
-    let ticks = (crate::damage_fx::HOLD / race.sim.dt()) as usize + 2;
+    let ticks = (crate::damage_fx::HOLD / race.core.sim.dt()) as usize + 2;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
     }
@@ -70,7 +70,7 @@ fn a_repeat_inside_the_hold_is_silent_and_a_change_is_not() {
     hit_leaving(&mut race, 65.0, false);
     assert_eq!(race.damage_smokes_started_for_tests(), 2, "state changed");
 
-    let ticks = (crate::damage_fx::HOLD / race.sim.dt()) as usize + 2;
+    let ticks = (crate::damage_fx::HOLD / race.core.sim.dt()) as usize + 2;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
     }
@@ -86,7 +86,7 @@ fn the_smoke_rides_the_drawn_pose() {
     let offset = Vec3::new(3.0, 0.0, 0.0);
     race.view.correction[0] = offset;
     hit_leaving(&mut race, 90.0, false);
-    let sim_at = race.sim.world.ships[0].physics.body.position;
+    let sim_at = race.core.sim.world.ships[0].physics.body.position;
     let placed = race.damage_smoke_anchors_for_tests();
     assert!(!placed.is_empty());
     assert!(
@@ -214,14 +214,14 @@ fn a_state_change_kills_the_previous_smoke_with_its_particles() {
 fn the_damage_smoke_carries_the_crafts_velocity() {
     let farthest_after_hit = |velocity: Vec3| {
         let mut race = race_with_smoke_inheriting(true, 1.0);
-        race.sim.world.ships[0].physics.body.linear_velocity = velocity;
+        race.core.sim.world.ships[0].physics.body.linear_velocity = velocity;
         hit_leaving(&mut race, 90.0, false);
-        let at = race.sim.world.ships[0].physics.body.position;
-        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        let at = race.core.sim.world.ships[0].physics.body.position;
+        race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
         for _ in 0..10 {
             race.view
                 .stage
-                .advance(race.sim.dt(), &mut oag_core::Rng::new(1));
+                .advance(race.core.sim.dt(), &mut oag_core::Rng::new(1));
         }
         let (additive, _) = race.view.stage.vertices(Vec3::X, Vec3::Y);
         assert!(!additive.is_empty(), "the smoke drew nothing");

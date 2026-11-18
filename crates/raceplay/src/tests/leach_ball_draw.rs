@@ -13,9 +13,9 @@ fn locked_race(owner_at: Vec3, target_at: Vec3, elapsed: f32) -> Race {
     let stats = one_leach_beam_table()
         .leach_beam()
         .expect("the fixture authors a LeachBeam");
-    race.sim.world.leach_beams[0] = Some(Beam::locked(0, 1, &stats));
-    race.sim.world.ships[0].physics.body.position = owner_at;
-    race.sim.world.ships[1].physics.body.position = target_at;
+    race.core.sim.world.leach_beams[0] = Some(Beam::locked(0, 1, &stats));
+    race.core.sim.world.ships[0].physics.body.position = owner_at;
+    race.core.sim.world.ships[1].physics.body.position = target_at;
     race.view.leach_ball_elapsed[0] = elapsed;
     race
 }
@@ -24,11 +24,11 @@ fn locked_race(owner_at: Vec3, target_at: Vec3, elapsed: f32) -> Race {
 /// read the way the original does: the period from the two craft's gap along
 /// the course, not their distance in space.
 fn fraction(race: &Race, elapsed: f32) -> f32 {
-    let ships = &race.sim.world.ships;
+    let ships = &race.core.sim.world.ships;
     let gap = oag_weapons::projectile::leach_beam::trip::gap(
         ships[0].standing.progress,
         ships[1].standing.progress,
-        race.sim.leach_course_length(),
+        race.core.sim.leach_course_length(),
     );
     (elapsed / oag_weapons::projectile::leach_beam::trip::period(gap)).clamp(0.0, 1.0)
 }
@@ -39,8 +39,8 @@ fn fraction(race: &Race, elapsed: f32) -> f32 {
 fn without_a_strip_the_ball_sits_on_the_chord_at_the_track_gaps_fraction() {
     let (owner, target) = (Vec3::new(30.0, 0.0, 0.0), Vec3::ZERO);
     let mut race = locked_race(owner, target, 0.2);
-    race.sim.world.ships[0].standing.progress = Some(50.0);
-    race.sim.world.ships[1].standing.progress = Some(110.0);
+    race.core.sim.world.ships[0].standing.progress = Some(50.0);
+    race.core.sim.world.ships[1].standing.progress = Some(110.0);
     let expected = oag_fx::beam::hd_ball::position(fraction(&race, 0.2), owner, target);
     let matrix = race
         .leach_ball_model_matrix(0)
@@ -74,8 +74,8 @@ fn the_ball_follows_the_strip_from_the_target_to_the_shooter() {
     ));
     assert!(race.force_leach_path(vec![target, corner, shooter]));
     // The target ahead: the walked end, sample 0, is the target's.
-    race.sim.world.ships[0].standing.progress = Some(50.0);
-    race.sim.world.ships[1].standing.progress = Some(110.0);
+    race.core.sim.world.ships[0].standing.progress = Some(50.0);
+    race.core.sim.world.ships[1].standing.progress = Some(110.0);
     let period = 0.2 / fraction(&race, 0.2);
     let at = |race: &mut Race, part: f32| {
         race.view.leach_ball_elapsed[0] = part * period;
@@ -105,7 +105,7 @@ fn the_ball_follows_the_strip_from_the_target_to_the_shooter() {
 #[test]
 fn nothing_locked_draws_no_ball() {
     let race = Race::start(setup(hulled_handling()));
-    assert!(race.sim.world.leach_beams[0].is_none());
+    assert!(race.core.sim.world.leach_beams[0].is_none());
     assert!(race.leach_ball_model_matrix(0).is_none());
 }
 
@@ -119,7 +119,7 @@ fn an_unlocked_beam_draws_no_ball_either() {
         .leach_beam()
         .expect("the fixture authors a LeachBeam");
     let mut race = Race::start(setup(hulled_handling()));
-    race.sim.world.leach_beams[0] = Some(Beam::unlocked(0, &stats));
+    race.core.sim.world.leach_beams[0] = Some(Beam::unlocked(0, &stats));
     assert!(race.leach_ball_model_matrix(0).is_none());
 }
 

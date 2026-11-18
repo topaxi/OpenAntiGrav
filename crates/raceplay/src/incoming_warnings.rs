@@ -26,14 +26,19 @@ impl Race {
             return;
         }
         let viewer = self.player_slot();
-        let ships = &self.sim.world.ships;
+        let ships = &self.core.sim.world.ships;
         let (Some(here), Some(there)) = (
             ships[viewer].standing.progress,
             ships[slot].standing.progress,
         ) else {
             return;
         };
-        let length = self.sim.course.as_deref().map(oag_race::Course::length);
+        let length = self
+            .core
+            .sim
+            .course
+            .as_deref()
+            .map(oag_race::Course::length);
         let gap =
             oag_weapons::projectile::missile::wrapped_gap(here - there, length.unwrap_or(0.0));
         if let Some(icon) = oag_hud::incoming::classify(weapon, gap) {
@@ -47,10 +52,10 @@ impl Race {
     fn incoming_warnings_drawn(&self) -> bool {
         self.view.huds[self.player_slot()].incoming_enabled
             && self.viewport_count() <= 1
-            && self.sim.people() <= 1
+            && self.core.sim.people() <= 1
             && self.view.seat.is_none()
             && matches!(
-                self.sim.world.mode(),
+                self.core.sim.world.mode(),
                 oag_race::Mode::SingleRace
                     | oag_race::Mode::Tournament
                     | oag_race::Mode::Eliminator

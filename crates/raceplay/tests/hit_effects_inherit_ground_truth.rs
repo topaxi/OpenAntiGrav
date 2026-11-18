@@ -58,7 +58,7 @@ fn pure_throws_hit_sparks_and_the_wreck_node_effects_and_its_own_big_blast() {
         race.hit_sparks_started_for_tests() > 0,
         "a weapon hit threw no spark on Pure"
     );
-    race.sim.force_destroy(0);
+    race.core.sim.force_destroy(0);
     for _ in 0..60 {
         race.tick(&PlayerInputs::single(snapshot(0)));
     }
@@ -83,13 +83,13 @@ fn pure_throws_hit_sparks_and_the_wreck_node_effects_and_its_own_big_blast() {
 /// the title's real hulls: the number of craft-hit sparks started.
 fn cannon_craft_hit_sparks(image: &str) -> Option<u32> {
     let mut race = started(image)?;
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
     for _ in 0..90 {
-        race.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
-        let forward = race.sim.world.ships[0].physics.body.forward();
-        let ahead = race.sim.world.ships[0].physics.body.position + forward * 15.0;
-        race.sim.world.ships[1].physics.body.position = ahead;
-        race.sim.world.ships[1].physics.body.linear_velocity = oag_core::math::Vec3::ZERO;
+        race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
+        let forward = race.core.sim.world.ships[0].physics.body.forward();
+        let ahead = race.core.sim.world.ships[0].physics.body.position + forward * 15.0;
+        race.core.sim.world.ships[1].physics.body.position = ahead;
+        race.core.sim.world.ships[1].physics.body.linear_velocity = oag_core::math::Vec3::ZERO;
         race.tick(&PlayerInputs::single(snapshot(Button::Square.bit())));
     }
     Some(race.weapon_sparks_started_for_tests())

@@ -51,7 +51,7 @@ fn a_drop_flashes_on_the_same_tick_it_lands() {
     race.tick(&PlayerInputs::none());
     assert!(!race.readout().shield_flashing, "no drop yet");
 
-    race.sim.world.ships[0].physics.shield = 40.0;
+    race.core.sim.world.ships[0].physics.shield = 40.0;
     race.tick(&PlayerInputs::none());
     assert!(
         race.readout().shield_flashing,

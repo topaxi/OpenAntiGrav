@@ -55,7 +55,7 @@ pub fn resimulate(
     options.extensions = extensions.to_vec();
     let loaded = crate::load(&options).context("loading the shot's race")?;
     let mut race = super::start_recorded(loaded.setup, &replay.header)?;
-    let mut verifier = match Verifier::new(replay, race.sim.state_hash()) {
+    let mut verifier = match Verifier::new(replay, race.core.sim.state_hash()) {
         Ok(verifier) => verifier,
         Err(desync) => {
             return Ok(Resimulated {
@@ -72,18 +72,19 @@ pub fn resimulate(
             break;
         };
         for event in verifier.events_due() {
-            race.sim
+            race.core
+                .sim
                 .apply_event(event)
                 .with_context(|| format!("an event before tick {}", verifier.tick()))?;
         }
         race.tick(&inputs);
-        race.sim.drain_cues();
-        if let Err(found) = verifier.after_tick(|| race.sim.state_hash()) {
+        race.core.sim.drain_cues();
+        if let Err(found) = verifier.after_tick(|| race.core.sim.state_hash()) {
             desync = Some(found);
             break;
         }
     }
-    let found = race.sim.state_hash();
+    let found = race.core.sim.state_hash();
     Ok(Resimulated {
         expected: record.hash,
         found,

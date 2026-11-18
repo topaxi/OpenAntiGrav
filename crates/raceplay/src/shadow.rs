@@ -40,7 +40,8 @@ impl Race {
     /// shadow at its last known height.
     #[must_use]
     pub fn shadow_placements(&self) -> Vec<Placement> {
-        self.sim
+        self.core
+            .sim
             .shadow_placements_of(|slot| self.body_between(slot))
     }
 }

@@ -179,7 +179,7 @@ fn a_missile_in_hand_locks_a_craft_on_a_real_circuit() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     let mut seeking = false;
     let mut locked_at = None;
@@ -310,7 +310,7 @@ fn a_leachbeam_in_hand_locks_a_craft_on_a_real_circuit() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
 
     let mut seeking_at = None;
     let mut locked_at = None;
@@ -397,7 +397,7 @@ fn pure_locks_a_craft_and_draws_the_psp_reticle() {
 
     let mut race = race::Race::start(loaded.setup);
     assert!(
-        race.sim.missile_stats().is_some(),
+        race.core.sim.missile_stats().is_some(),
         "Pure's weapon table did not parse - its Missile authors one `speed` \
          where Pulse authors four, and no `launchSpeed` at all"
     );
@@ -406,7 +406,7 @@ fn pure_locks_a_craft_and_draws_the_psp_reticle() {
         "Pure never locked a craft on its own starting grid"
     );
     assert_eq!(
-        race.sim.leach_beam_stats(),
+        race.core.sim.leach_beam_stats(),
         None,
         "Pure authors a LeachBeam block after all, which would mean its \
          `leach: None` sight set is now reachable and draws nothing"
@@ -440,7 +440,7 @@ fn only_pulse_and_hd_author_a_leachbeam_block() {
             continue;
         };
         let race = race::Race::start(race_on(&path).setup);
-        let authored = race.sim.leach_beam_stats().is_some();
+        let authored = race.core.sim.leach_beam_stats().is_some();
         println!("{name}: authors a LeachBeam block = {authored}");
         assert_eq!(
             authored, expected,
@@ -549,7 +549,7 @@ fn hd_draws_its_own_four_leachbeam_sight_widgets_when_held() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
     let mut seeking = false;
     for _ in 0..240u32 {
         race.tick(&PlayerInputs::none());
@@ -644,6 +644,7 @@ fn hd_locks_a_craft_and_draws_its_own_concentric_reticle() {
         "HD's reticle is projecting into somebody else's screen"
     );
     let stats = race
+        .core
         .sim
         .missile_stats()
         .expect("HD authors a Missile with lock distances");
@@ -661,7 +662,7 @@ fn locks_within(race: &mut race::Race, ticks: u32) -> bool {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
         if race.sight_state() == sight::State::Locked {
@@ -682,7 +683,7 @@ fn hd_ticks_to_lock(weapon: oag_tables::weapons::Weapon) -> Option<(u32, u32)> {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[0].pickup.weapon = Some(weapon);
+    race.core.sim.world.ships[0].pickup.weapon = Some(weapon);
     let (mut first_seen, mut locked) = (None, None);
     for tick in 0..240u32 {
         race.tick(&PlayerInputs::none());
@@ -768,8 +769,8 @@ fn pursuit(setup: race::Setup, ticks: u32) -> Pursuit {
     let mut held = race::HeldButtons::new(Button::Cross.bit());
     let mut seen = Pursuit::default();
     for tick in 0..ticks {
-        if race.sim.world.ships[0].pickup.weapon.is_none() {
-            race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+        if race.core.sim.world.ships[0].pickup.weapon.is_none() {
+            race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
         }
         let inputs = if tick < 400 {
             PlayerInputs::single(held.snapshot())
@@ -777,7 +778,7 @@ fn pursuit(setup: race::Setup, ticks: u32) -> Pursuit {
             PlayerInputs::none()
         };
         race.tick(&inputs);
-        let moving = race.sim.world.ships[0]
+        let moving = race.core.sim.world.ships[0]
             .physics
             .body
             .linear_velocity

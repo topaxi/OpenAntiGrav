@@ -351,14 +351,14 @@ impl Race {
     /// cross. No authored `<Weapon type="Autopilot"><Stats time>` is anywhere
     /// near that short.
     pub(super) fn tick_autopilot(&mut self, slot: usize) {
-        let timer = self.sim.world.ships[slot].autopilot_timer;
+        let timer = self.core.sim.world.ships[slot].autopilot_timer;
         if timer <= 0.0 {
             return;
         }
-        let now = timer - self.sim.dt;
-        self.sim.world.ships[slot].autopilot_timer = now.max(0.0);
+        let now = timer - self.core.sim.dt;
+        self.core.sim.world.ships[slot].autopilot_timer = now.max(0.0);
         if now <= 0.0 {
-            self.sim.world.ships[slot].handback = false;
+            self.core.sim.world.ships[slot].handback = false;
         }
         if now < AUTOPILOT_WARNING_SECONDS && timer > AUTOPILOT_WARNING_SECONDS {
             self.raise_disengaging(slot);
@@ -370,8 +370,8 @@ impl Race {
     /// The announcer speaks to a person; an opponent's stint is silent, and so is
     /// another machine's person's: the call is dry, so it would be in this ear.
     fn raise_disengaging(&mut self, slot: usize) {
-        if self.sim.world.person_flown(slot) && self.heard_here(slot) {
-            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+        if self.core.sim.world.person_flown(slot) && self.heard_here(slot) {
+            self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                 oag_gameplay::cue::Cue::Disengaging,
                 slot,
             ));
@@ -409,18 +409,19 @@ impl Race {
     /// left the original's `now < 1.0 && previous > 1.0` edge is crossed. It is
     /// raised here, a tick before the original's, and has not been heard live.
     pub(super) fn spend_pickup_under_autopilot(&mut self, slot: usize, absorb: bool) {
-        let handback = self.sim.world.ships[slot].handback;
+        let handback = self.core.sim.world.ships[slot].handback;
         // A hand-back is cancellable on every title, whatever its Autopilot pickup does.
-        if !absorb || !(self.sim.autopilot_absorb_cancels || handback) {
+        if !absorb || !(self.core.sim.autopilot_absorb_cancels || handback) {
             return;
         }
-        let ship = &self.sim.world.ships[slot];
-        if !self.sim.world.mode().pickups_absorb() && !ship.pickup.is_empty() && !ship.handback {
+        let ship = &self.core.sim.world.ships[slot];
+        if !self.core.sim.world.mode().pickups_absorb() && !ship.pickup.is_empty() && !ship.handback
+        {
             self.eliminator_absorb(slot);
         }
-        let left = self.sim.world.ships[slot].autopilot_timer;
-        self.sim.world.ships[slot].autopilot_timer = 0.0;
-        self.sim.world.ships[slot].handback = false;
+        let left = self.core.sim.world.ships[slot].autopilot_timer;
+        self.core.sim.world.ships[slot].autopilot_timer = 0.0;
+        self.core.sim.world.ships[slot].handback = false;
         if left > AUTOPILOT_WARNING_SECONDS {
             self.raise_disengaging(slot);
         }
@@ -451,16 +452,16 @@ impl Race {
         slot: usize,
         driver: &mut Option<oag_ai::Driver>,
     ) -> oag_physics::ShipControls {
-        let kept = self.sim.clone();
+        let kept = self.core.sim.clone();
         match driver {
-            Some(own) => self.sim.world.ships[slot].driver = *own,
-            None => self.sim.locate_player_driver(slot),
+            Some(own) => self.core.sim.world.ships[slot].driver = *own,
+            None => self.core.sim.locate_player_driver(slot),
         }
         // This project's driver: the original's keeps state outside the
         // world, which the restore below would reset every call.
-        let wants = self.sim.our_autopilot_controls(slot);
-        *driver = Some(self.sim.world.ships[slot].driver);
-        self.sim = kept;
+        let wants = self.core.sim.our_autopilot_controls(slot);
+        *driver = Some(self.core.sim.world.ships[slot].driver);
+        self.core.sim = kept;
         wants
     }
 }
@@ -751,25 +752,26 @@ impl Race {
     /// **What it still does not get**: reaction latency, and adaptation between
     /// races - which was blocked on per-craft lap times and is not any more.
     pub(super) fn step_opponents(&mut self) {
-        let damage_rules = self.sim.damage_rules();
+        let damage_rules = self.core.sim.damage_rules();
         // Once for the whole grid: every craft's view needs the same ordering.
         let places = self.places();
         // The campaign's original field, when on: its round robin advances
         // once a tick before any driver, as `AiManager_Update` does.
-        let lane_slot = self.sim.original_ai_begin_tick();
+        let lane_slot = self.core.sim.original_ai_begin_tick();
         #[cfg(feature = "view")]
         {
             self.view.field_sparks.walls = [None; oag_gameplay::MAX_SHIPS];
         }
-        for slot in 0..self.sim.world.ship_count as usize {
+        for slot in 0..self.core.sim.world.ship_count as usize {
             // A craft a person flies is stepped by `Race::tick`'s player step,
             // not here. With one person in slot 0 this skips slot 0, which the
             // loop used to start past.
             // A craft in a transit is out of the world and not stepped (`crate::transit`).
-            if !self.sim.world.ships[slot].in_world() || self.sim.world.person_flown(slot) {
+            if !self.core.sim.world.ships[slot].in_world() || self.core.sim.world.person_flown(slot)
+            {
                 continue;
             }
-            self.sim.seed_vacated_driver(slot);
+            self.core.sim.seed_vacated_driver(slot);
 
             // **A wrecked opponent stops driving, and is still stepped.** A single
             // race runs with `Damage` on - see `oag_gameplay::damage_rules` - so
@@ -786,10 +788,10 @@ impl Race {
             // after state 8's wait; anywhere else it stays a wreck, as the
             // original's state 6 does (measured live). See
             // `oag_physics::damage::CraftState` and `crate::eliminator`.
-            let pilot = self.sim.ai_pilots[slot];
-            let field = self.sim.field_for(slot, &places);
-            self.sim.steer_branching(slot, false);
-            let ship = &mut self.sim.world.ships[slot];
+            let pilot = self.core.sim.ai_pilots[slot];
+            let field = self.core.sim.field_for(slot, &places);
+            self.core.sim.steer_branching(slot, false);
+            let ship = &mut self.core.sim.world.ships[slot];
             let route = ship.driver.branching.route;
             let handling = ship.handling;
             let position = ship.physics.body.position;
@@ -799,17 +801,21 @@ impl Race {
             let was_racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
             let mut rail = None;
             let flown = if was_racing && lane_slot.is_none() {
-                self.sim.opponent_autopilot_controls(slot)
+                self.core.sim.opponent_autopilot_controls(slot)
             } else {
                 None
             };
-            let ship = &mut self.sim.world.ships[slot];
+            let ship = &mut self.core.sim.world.ships[slot];
             let mut controls = if let Some((controls, flown_rail)) = flown {
                 // Kept warm for the handover and for the weapon rolls, as
                 // under the original field below.
                 ship.driver.attend(&oag_ai::Context {
-                    line: super::routes::line_for(&self.sim.routes, &self.sim.racing_line, route),
-                    tuning: &self.sim.ai_tuning,
+                    line: super::routes::line_for(
+                        &self.core.sim.routes,
+                        &self.core.sim.racing_line,
+                        route,
+                    ),
+                    tuning: &self.core.sim.ai_tuning,
                     pilot: &pilot,
                     field: &field,
                     yaw_ceiling: None,
@@ -822,20 +828,24 @@ impl Race {
                 // The original's own opponent (`crate::original_ai`): this
                 // project's driver only locates the craft on the line, which
                 // still decides its hover surface below and its respawn.
-                let line = super::routes::line_for(&self.sim.routes, &self.sim.racing_line, route);
+                let line = super::routes::line_for(
+                    &self.core.sim.routes,
+                    &self.core.sim.racing_line,
+                    route,
+                );
                 ship.driver.locate(line, position);
                 // The weapon gates still read this driver's noise and what
                 // it noticed; `Driver::attend` keeps them moving.
                 ship.driver.attend(&oag_ai::Context {
                     line,
-                    tuning: &self.sim.ai_tuning,
+                    tuning: &self.core.sim.ai_tuning,
                     pilot: &pilot,
                     field: &field,
                     yaw_ceiling: None,
                     air_trim: 0.0,
                     plan: None,
                 });
-                let output = self.sim.drive_original(slot, lane_slot, &places);
+                let output = self.core.sim.drive_original(slot, lane_slot, &places);
                 rail = output.and_then(|output| output.rail);
                 output.map_or_else(oag_physics::ShipControls::default, |output| output.controls)
             } else if was_racing {
@@ -844,11 +854,11 @@ impl Race {
                     &oag_ai::Context {
                         air_trim: oag_ai::air_trim(&handling, ship.physics.air_pitch_bias),
                         line: super::routes::line_for(
-                            &self.sim.routes,
-                            &self.sim.racing_line,
+                            &self.core.sim.routes,
+                            &self.core.sim.racing_line,
                             route,
                         ),
-                        tuning: &self.sim.ai_tuning,
+                        tuning: &self.core.sim.ai_tuning,
                         pilot: &pilot,
                         field: &field,
                         // **This craft's own hull, not the field's average.**
@@ -859,11 +869,11 @@ impl Race {
                         // `oag_ai::hull_yaw_ceiling`.
                         yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&handling, &ship.physics.body)),
                         plan: super::routes::plan_for(
-                            &self.sim.routes,
-                            self.sim.speed_plan.as_deref(),
+                            &self.core.sim.routes,
+                            self.core.sim.speed_plan.as_deref(),
                             super::speed_plan::hull_of(
-                                &self.sim.hull_plans,
-                                self.sim.ship_plan[slot],
+                                &self.core.sim.hull_plans,
+                                self.core.sim.ship_plan[slot],
                             ),
                             route,
                         ),
@@ -877,17 +887,17 @@ impl Race {
             // line the instant the race loads while the player is still held for
             // the "3, 2, 1, go" countdown, which is not a driving skill gap, just
             // an ungated AI path.
-            if RaceState::thrust_gated(self.sim.world.tick) {
+            if RaceState::thrust_gated(self.core.sim.world.tick) {
                 controls.thrust = 0.0;
             }
             // An Eliminator leader waits for the pack; only ever a reduction.
-            controls.thrust *= self.sim.eliminator_pack_scale(slot);
+            controls.thrust *= self.core.sim.eliminator_pack_scale(slot);
             // An opponent under a Disruptor: always AI-driven, so the Stall
             // passes it by and the rest apply. See `RaceSim::disrupted_controls`.
-            controls = self.sim.disrupted_controls(slot, controls, true);
+            controls = self.core.sim.disrupted_controls(slot, controls, true);
             // A person's seat whose link has dropped crawls round: the driver in their
             // place must never be a shortcut (`Race::set_away`).
-            let away = self.sim.world.controllers[slot] == oag_gameplay::Controller::Away;
+            let away = self.core.sim.world.controllers[slot] == oag_gameplay::Controller::Away;
             if away {
                 controls.thrust = controls.thrust.min(AWAY_THRUST);
             }
@@ -900,22 +910,25 @@ impl Race {
             if !away {
                 self.test_weapon_pads(slot, position, moved, &sweep);
             }
-            self.sim
+            self.core
+                .sim
                 .extensions
-                .test_triggers(slot, &sweep, self.sim.world.tick);
+                .test_triggers(slot, &sweep, self.core.sim.world.tick);
             if !away {
                 self.spend_opponent_pickup(slot, &controls, &field);
             }
 
             // The driver just located itself, and the line is index-parallel to
             // `ai_order`, so this costs a lookup rather than a search.
-            let index = self.sim.world.ships[slot].driver.index as usize;
+            let index = self.core.sim.world.ships[slot].driver.index as usize;
             let track_sample = self
+                .core
                 .sim
                 .ai_sample_for(slot, index)
                 .map(Spline::track_sample);
-            self.sim.record_track_up(slot, track_sample);
+            self.core.sim.record_track_up(slot, track_sample);
             let track_sample_next = self
+                .core
                 .sim
                 .ai_sample_for(slot, index + 1)
                 .map(Spline::track_sample)
@@ -923,9 +936,11 @@ impl Race {
             // The beam's one-shot throttle, consumed here exactly as slot
             // 0's is above - a beam locks onto an opponent as readily as onto
             // the player.
-            let thrust_scale =
-                std::mem::replace(&mut self.sim.world.ships[slot].pending_thrust_scale, 1.0);
-            let extension_thrust = self.sim.extensions.take_boost(slot);
+            let thrust_scale = std::mem::replace(
+                &mut self.core.sim.world.ships[slot].pending_thrust_scale,
+                1.0,
+            );
+            let extension_thrust = self.core.sim.extensions.take_boost(slot);
             let env = Environment {
                 track_sample,
                 track_sample_next,
@@ -938,12 +953,12 @@ impl Race {
                 // pad does not touch, and the field falls away from a player who
                 // uses them.
                 pad_hit,
-                class_gravity_scale: self.sim.class_gravity_scale,
-                class_gravity_term: self.sim.class_gravity_term,
-                laws: self.sim.physics_laws,
-                start_boost: self.sim.field_start_boost,
+                class_gravity_scale: self.core.sim.class_gravity_scale,
+                class_gravity_term: self.core.sim.class_gravity_term,
+                laws: self.core.sim.physics_laws,
+                start_boost: self.core.sim.field_start_boost,
                 damage_rules,
-                barrel_rolls: self.sim.barrel_rolls,
+                barrel_rolls: self.core.sim.barrel_rolls,
                 ..Environment::default()
             };
             // `Ai_SnapToLane`'s body write: inside the AI update, one of which
@@ -952,50 +967,51 @@ impl Race {
             // this tick's controls and its step.
             if let Some(rail) = rail {
                 oag_physics::rail::apply(
-                    &mut self.sim.world.ships[slot].physics.body,
+                    &mut self.core.sim.world.ships[slot].physics.body,
                     rail.velocity,
                     rail.position,
                 );
             }
             let evaluated = oag_physics::step(
-                &mut self.sim.world.ships[slot].physics,
+                &mut self.core.sim.world.ships[slot].physics,
                 &controls,
                 &handling,
                 &env,
-                &*self.sim.collision,
-                self.sim.dt,
+                &*self.core.sim.collision,
+                self.core.sim.dt,
             );
             #[cfg(feature = "view")]
             if self.draws() {
                 self.view.field_sparks.walls[slot] = Some(evaluated.wall);
             }
-            let reset_contact = self.sim.reset_zone_contact(slot, &env, position);
-            let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
+            let reset_contact = self.core.sim.reset_zone_contact(slot, &env, position);
+            let eliminator_route = self.core.sim.world.mode() == Mode::Eliminator;
             let cage = oag_gameplay::cage::pass(
-                self.sim.spline.cage(),
-                &mut self.sim.world.ships[slot].physics,
+                self.core.sim.spline.cage(),
+                &mut self.core.sim.world.ships[slot].physics,
                 &handling,
                 &evaluated.wall,
                 eliminator_route,
             );
-            self.sim.cage_reset[slot] = cage.reset;
+            self.core.sim.cage_reset[slot] = cage.reset;
             #[cfg(feature = "view")]
             self.throw_cage_sparks(slot, &cage);
-            self.sim.lay_crumb(
+            self.core.sim.lay_crumb(
                 slot,
-                self.sim
+                self.core
+                    .sim
                     .ai_sample_for(slot, index)
                     .map(|sample| sample.flags),
             );
             if lane_slot.is_some() {
-                self.sim.original_ai_contacts(slot, &evaluated.wall);
+                self.core.sim.original_ai_contacts(slot, &evaluated.wall);
             }
             // **An opponent's hull sounds too**, on its own 0.8-second re-arm
             // and off its own emitter. `shielded` is `false` because nothing
             // hands an opponent a Shield yet - the same gap the shell bulge
             // below records - so the silent branch is unreachable here rather
             // than suppressed.
-            self.sim.raise_wall_cue(slot, &evaluated.wall, false);
+            self.core.sim.raise_wall_cue(slot, &evaluated.wall, false);
             // The wall counters, on the same footing as the roll ones below:
             // bookkeeping, outside `state_hash`, and the only thing in this
             // project that can see the standard an Ace is held to - lapping
@@ -1015,7 +1031,8 @@ impl Race {
             // ticks against 328 before a tuning change that *halved* what the
             // walls charged it, and `07_Track` charged 122.05 against a pool of
             // 95.00. Both are the wreck, not the driving.
-            self.sim
+            self.core
+                .sim
                 .count_wall_contact(slot, was_racing, &evaluated.wall, damage_rules);
             // Bookkeeping for the deviation, not state the race reads back: our
             // opponents barrel-roll and the original's never do, so what an
@@ -1024,8 +1041,8 @@ impl Race {
             // what makes the cost derivable rather than measured off a shield
             // that a wall may also have moved this tick.
             if evaluated.roll_armed {
-                self.sim.rolls_armed[slot] += 1;
-                self.sim.rolls_spent[slot] +=
+                self.core.sim.rolls_armed[slot] += 1;
+                self.core.sim.rolls_spent[slot] +=
                     handling.roll_cost * 0.01 * handling.dimensions.shield;
             }
             // The same shell bulge slot 0 gets in `tick`. Nothing hands an
@@ -1048,15 +1065,16 @@ impl Race {
             // sample the craft was on before the step - the last place it is
             // known to have been on the track. Mapped out of the driver's index
             // space, because [`Self::respawn`] speaks the sample table's.
-            let last_good = self.sim.sample_index_of(index);
-            self.sim.respawn_cooldown[slot] = self.sim.respawn_cooldown[slot].saturating_sub(1);
+            let last_good = self.core.sim.sample_index_of(index);
+            self.core.sim.respawn_cooldown[slot] =
+                self.core.sim.respawn_cooldown[slot].saturating_sub(1);
             // Unconditionally, and before the `||` could skip it: **both** dwell
             // counters have to see every tick or a craft banks time it never
             // spent away. Two `let`s rather than two terms of the `if`, because
             // `||` short-circuits and the second counter would then only advance
             // on ticks the first one happened not to fire.
-            let beneath = self.sim.beneath_too_long(slot);
-            let stalled = self.sim.stalled(slot);
+            let beneath = self.core.sim.beneath_too_long(slot);
+            let stalled = self.core.sim.stalled(slot);
             // **Not a wreck.** A destroyed craft is coasting by definition, so
             // the stall dwell would fire on it and `Race::respawn` - whose
             // `place_at` rebuilds the physics state - would put it back on
@@ -1065,14 +1083,14 @@ impl Race {
             // properly. That is what used to happen, and it is why the
             // clean-lap gate never saw those deaths. The dwells still count,
             // so a craft that comes back stalled is rescued on time.
-            let alive =
-                self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
-            let reset = self.sim.reset_zone_touched(slot, reset_contact);
-            let airborne = self.sim.airborne_too_long(slot);
-            let located = self.sim.located_sample_of(slot, index);
-            let distant = self.sim.far_from_the_sample(slot, located);
-            let cage = std::mem::take(&mut self.sim.cage_reset[slot])
-                && self.sim.armed(slot, self.sim.reset_triggers.cage);
+            let alive = self.core.sim.world.ships[slot].physics.craft_state
+                == oag_physics::CraftState::Racing;
+            let reset = self.core.sim.reset_zone_touched(slot, reset_contact);
+            let airborne = self.core.sim.airborne_too_long(slot);
+            let located = self.core.sim.located_sample_of(slot, index);
+            let distant = self.core.sim.far_from_the_sample(slot, located);
+            let cage = std::mem::take(&mut self.core.sim.cage_reset[slot])
+                && self.core.sim.armed(slot, self.core.sim.reset_triggers.cage);
             if alive && (beneath || stalled || airborne || distant || reset || cage) {
                 let cause = if beneath {
                     respawn::RespawnCause::Beneath
@@ -1087,7 +1105,7 @@ impl Race {
                 } else {
                     respawn::RespawnCause::ResetZone
                 };
-                self.sim.last_respawn_cause[slot] = Some(cause);
+                self.core.sim.last_respawn_cause[slot] = Some(cause);
                 // The two triggers the original has go through its reset
                 // state's relocation; this project's own dwells keep theirs.
                 if cause.is_the_originals() {
@@ -1095,12 +1113,12 @@ impl Race {
                 } else {
                     self.respawn(slot, last_good);
                 }
-            } else if self.sim.respawn_cooldown[slot] == 0 {
-                self.sim.respawns_in_a_row[slot] = 0;
+            } else if self.core.sim.respawn_cooldown[slot] == 0 {
+                self.core.sim.respawns_in_a_row[slot] = 0;
             }
         }
         // The race manager's field-wide writes the next tick's drivers read.
-        self.sim.original_ai_end_tick(&places);
+        self.core.sim.original_ai_end_tick(&places);
     }
 }
 
@@ -1156,7 +1174,7 @@ impl Race {
     /// reads [`RaceSim::ship_count`] first.
     #[must_use]
     pub fn places(&self) -> [u8; MAX_SHIPS] {
-        self.sim.places()
+        self.core.sim.places()
     }
 }
 
@@ -1304,28 +1322,30 @@ impl Race {
         {
             self.view.pair_contacts = [None; oag_gameplay::MAX_SHIPS];
         }
-        let people = self.sim.world.human_slots().count();
-        if !self.sim.world.mode().craft_collide(people) {
+        let people = self.core.sim.world.human_slots().count();
+        if !self.core.sim.world.mode().craft_collide(people) {
             return;
         }
-        let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
-        let rules = self.sim.damage_rules();
+        let eliminator_route = self.core.sim.world.mode() == Mode::Eliminator;
+        let rules = self.core.sim.damage_rules();
         let mut touched = [false; oag_gameplay::MAX_SHIPS];
-        for a in 0..self.sim.world.ship_count as usize {
-            for b in (a + 1)..self.sim.world.ship_count as usize {
-                if !self.sim.world.ships[a].in_world() || !self.sim.world.ships[b].in_world() {
+        for a in 0..self.core.sim.world.ship_count as usize {
+            for b in (a + 1)..self.core.sim.world.ship_count as usize {
+                if !self.core.sim.world.ships[a].in_world()
+                    || !self.core.sim.world.ships[b].in_world()
+                {
                     continue;
                 }
                 if !oag_physics::damage::solid_to_craft(
-                    &self.sim.world.ships[a].physics,
+                    &self.core.sim.world.ships[a].physics,
                     eliminator_route,
                 ) || !oag_physics::damage::solid_to_craft(
-                    &self.sim.world.ships[b].physics,
+                    &self.core.sim.world.ships[b].physics,
                     eliminator_route,
                 ) {
                     continue;
                 }
-                let (first, second) = self.sim.world.ships.split_at_mut(b);
+                let (first, second) = self.core.sim.world.ships.split_at_mut(b);
                 let ship_a = &mut first[a];
                 let ship_b = &mut second[0];
                 let a_size = ship_a.handling.dimensions;
@@ -1365,16 +1385,17 @@ impl Race {
                     // (collision-cues.md, "A pair record has no normal"). The stale normal
                     // that slot otherwise holds is not modelled.
                     for slot in [a, b] {
-                        self.sim
+                        self.core
+                            .sim
                             .note_contact_impulse(slot, contact.impulse, true, 0.0);
                     }
                     // The original driver reads the record next tick: its lane
                     // planner pushes away from the rival and its rail lets go.
                     for slot in [a, b] {
-                        self.sim.original_ai_pair_contact(slot, contact.point);
+                        self.core.sim.original_ai_pair_contact(slot, contact.point);
                     }
                     for slot in [a, b] {
-                        let ship = &mut self.sim.world.ships[slot];
+                        let ship = &mut self.core.sim.world.ships[slot];
                         let racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
                         let shielded = ship.physics.shield_pickup_timer > 0.0;
                         let dimensions = ship.handling.dimensions;
@@ -1384,7 +1405,7 @@ impl Race {
                             contact.impulse,
                             rules,
                         );
-                        self.sim.pair_damage[slot] += report.lost;
+                        self.core.sim.pair_damage[slot] += report.lost;
                         #[cfg(feature = "view")]
                         {
                             self.view.pair_spoil[slot] |= racing && !shielded;
@@ -1403,7 +1424,7 @@ impl Race {
                 }
             }
         }
-        for (ticks, on) in self.sim.pair_contact_ticks.iter_mut().zip(touched) {
+        for (ticks, on) in self.core.sim.pair_contact_ticks.iter_mut().zip(touched) {
             *ticks += u32::from(on);
         }
     }

@@ -42,8 +42,8 @@ fn a_rooms_rolls_assists_and_zone_target_reach_the_race() {
     let none = oag_gameplay::PlayerInputs::none();
 
     let (plain, _) = oag_net::race::load(&params(), &source).expect("loads");
-    assert!(plain.sim.barrel_rolls());
-    assert_eq!(plain.sim.pilot_assist_level_of(0), Level::Off);
+    assert!(plain.core.sim.barrel_rolls());
+    assert_eq!(plain.core.sim.pilot_assist_level_of(0), Level::Off);
 
     let room = RaceParams {
         no_barrel_rolls: true,
@@ -52,11 +52,11 @@ fn a_rooms_rolls_assists_and_zone_target_reach_the_race() {
         ..params()
     };
     let (mut race, _) = oag_net::race::load(&room, &source).expect("loads");
-    assert!(!race.sim.barrel_rolls(), "rolls are off");
+    assert!(!race.core.sim.barrel_rolls(), "rolls are off");
     assert_eq!(
         (
-            race.sim.pilot_assist_level_of(0),
-            race.sim.pilot_assist_level_of(1)
+            race.core.sim.pilot_assist_level_of(0),
+            race.core.sim.pilot_assist_level_of(1)
         ),
         (Level::Extreme, Level::Normal),
         "each seat flies its own level"
@@ -73,7 +73,7 @@ fn a_rooms_rolls_assists_and_zone_target_reach_the_race() {
     for tick in 0..2_400 {
         race.tick_sim_only(&none);
         free.tick_sim_only(&none);
-        if ended.is_none() && race.sim.world.race[0].finished {
+        if ended.is_none() && race.core.sim.world.race[0].finished {
             ended = Some(tick);
         }
     }
@@ -83,7 +83,7 @@ fn a_rooms_rolls_assists_and_zone_target_reach_the_race() {
         "ended at tick {ended}, after the first zone and not before"
     );
     assert!(
-        !free.sim.world.race[0].finished,
+        !free.core.sim.world.race[0].finished,
         "with no target the Zone race runs on"
     );
 }

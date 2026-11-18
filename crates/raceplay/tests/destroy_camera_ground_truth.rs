@@ -72,11 +72,11 @@ fn a_wrecked_player_is_seen_from_the_circuits_own_camera() {
     }
     let chase_eye = race.camera_position();
 
-    race.sim.force_destroy(0);
+    race.core.sim.force_destroy(0);
     for _ in 0..200 {
         race.tick(&PlayerInputs::none());
     }
-    let craft = race.sim.world.ships[0].physics.body.position;
+    let craft = race.core.sim.world.ships[0].physics.body.position;
     let eye = race.camera_position();
     assert!(
         (eye - chase_eye).length() > 10.0,

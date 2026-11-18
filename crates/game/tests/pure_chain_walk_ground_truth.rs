@@ -113,8 +113,9 @@ fn load_leg(
     .expect("the race loads");
     let _ = campaign;
     let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
-    race.sim
+    race.core.sim.set_autopilot(true);
+    race.core
+        .sim
         .set_autopilot_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning::default()));
     race
 }
@@ -123,7 +124,7 @@ fn fly_to_the_line(race: &mut race::Race, ticks: u32) -> bool {
     let inputs = oag_gameplay::PlayerInputs::none();
     for _ in 0..ticks {
         race.tick(&inputs);
-        if race.sim.finished() {
+        if race.core.sim.finished() {
             return true;
         }
     }

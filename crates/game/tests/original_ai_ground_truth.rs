@@ -26,7 +26,7 @@ fn race(level: usize, skill: f32) -> Option<oag_raceplay::Race> {
     .expect("loading 16_Track");
     let mut race = oag_raceplay::Race::start(loaded.setup);
     assert!(
-        race.sim.use_original_ai(Some(skill), level),
+        race.core.sim.use_original_ai(Some(skill), level),
         "VENOM's AI tables read"
     );
     Some(race)
@@ -34,7 +34,8 @@ fn race(level: usize, skill: f32) -> Option<oag_raceplay::Race> {
 
 /// Seconds since the green light, the race time the law reads.
 fn race_time(race: &oag_raceplay::Race) -> f32 {
-    race.sim
+    race.core
+        .sim
         .world
         .tick
         .saturating_sub(oag_race::COUNTDOWN_TICKS) as f32
@@ -56,11 +57,11 @@ fn held(level: usize, skill: f32, from: f32, to: f32) -> Option<Held> {
         race.tick(&PlayerInputs::none());
         if race_time(&race) >= from {
             let places = race.places();
-            let field = race.sim.original_ai_field().expect("the field is on");
+            let field = race.core.sim.original_ai_field().expect("the field is on");
             out.extend((1..8).map(|s| (places[s], field.drivers[s].held_thrust)));
             // The throttle state the engine read this tick: above `100` it
             // lifts the acceleration cap, so nothing on the way may clamp it.
-            engine.extend((1..8).map(|s| race.sim.world.ships[s].physics.thrust));
+            engine.extend((1..8).map(|s| race.core.sim.world.ships[s].physics.thrust));
         }
     }
     Some(Held {
@@ -134,7 +135,7 @@ fn the_original_field_gets_round_talons_junction_without_a_respawn() {
     for _ in 0..60 * 200 {
         race.tick(&PlayerInputs::none());
         for slot in 1..8 {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             if ship.standing.lap != lap[slot] {
                 lap[slot] = ship.standing.lap;
                 per_lap[slot].push(ship.physics.shield);
@@ -142,12 +143,12 @@ fn the_original_field_gets_round_talons_junction_without_a_respawn() {
         }
     }
     for (slot, shields) in per_lap.iter().enumerate().skip(1) {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         println!(
             "slot {slot}: lap {} respawns {} wall-contact ticks {} shield at each crossing {:?}, end {:.1}",
             ship.standing.lap,
-            race.sim.respawns_of(slot),
-            race.sim.wall_contact_ticks_of(slot),
+            race.core.sim.respawns_of(slot),
+            race.core.sim.wall_contact_ticks_of(slot),
             shields,
             ship.physics.shield
         );
@@ -156,7 +157,7 @@ fn the_original_field_gets_round_talons_junction_without_a_respawn() {
             "slot {slot} on lap {}",
             ship.standing.lap
         );
-        assert_eq!(race.sim.respawns_of(slot), 0, "slot {slot}");
+        assert_eq!(race.core.sim.respawns_of(slot), 0, "slot {slot}");
     }
 }
 
@@ -181,8 +182,8 @@ fn a_race_that_does_not_ask_keeps_this_projects_driver() {
     for _ in 0..600 {
         race.tick(&PlayerInputs::none());
     }
-    assert!(!race.sim.original_ai_active());
-    assert!(race.sim.original_ai_field().is_none());
+    assert!(!race.core.sim.original_ai_active());
+    assert!(race.core.sim.original_ai_field().is_none());
 }
 
 /// Pulse PSP USA's `16_Track` single race, unstarted, for the choice tests.
@@ -218,11 +219,11 @@ fn a_single_race_flies_the_original_by_default() {
         AiChoice::default(),
         Source::Free(oag_ai::Difficulty::default())
     ));
-    assert!(race.sim.original_ai_active());
+    assert!(race.core.sim.original_ai_active());
     for _ in 0..600 {
         race.tick(&PlayerInputs::none());
     }
-    assert!(race.sim.original_ai_field().is_some());
+    assert!(race.core.sim.original_ai_field().is_some());
 }
 
 /// `--ai ours` keeps this project's driver in the same race.
@@ -239,7 +240,7 @@ fn ai_ours_keeps_this_projects_driver() {
         AiChoice::Ours,
         Source::Free(oag_ai::Difficulty::default())
     ));
-    assert!(!race.sim.original_ai_active());
+    assert!(!race.core.sim.original_ai_active());
 }
 
 /// A race whose tables did not read keeps this project's driver and still
@@ -261,7 +262,7 @@ fn a_race_without_tables_falls_back_to_this_projects_driver() {
     for _ in 0..600 {
         race.tick(&PlayerInputs::none());
     }
-    assert!(!race.sim.original_ai_active());
+    assert!(!race.core.sim.original_ai_active());
 }
 
 fn loaded_on(track: &str) -> Option<oag_raceplay::Loaded> {
@@ -289,7 +290,7 @@ fn the_original_field_on_a_circuit_without_a_fork_learns_no_speed_plan() {
         return;
     };
     let mut race = oag_raceplay::Race::start(loaded.setup);
-    assert!(race.sim.use_original_ai(None, 1));
+    assert!(race.core.sim.use_original_ai(None, 1));
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
     }
@@ -318,9 +319,9 @@ fn the_plans_are_the_same_whether_asked_for_before_the_first_tick_or_at_it() {
         let mut ticked = oag_raceplay::Race::start(second.setup);
         for race in [&mut asked, &mut ticked] {
             if original {
-                assert!(race.sim.use_original_ai(None, 1));
+                assert!(race.core.sim.use_original_ai(None, 1));
             }
-            race.sim.set_autopilot(autopilot);
+            race.core.sim.set_autopilot(autopilot);
         }
         assert!(
             asked.speed_plan().is_some(),

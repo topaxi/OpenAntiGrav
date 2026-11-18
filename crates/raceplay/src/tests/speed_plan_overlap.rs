@@ -26,8 +26,8 @@ fn pulse_outpost_7() -> Option<Race> {
 
 /// The two learners on the same race, every field they write compared.
 fn assert_overlapped_is_serial(label: &str, race: &Race) -> LearnedPlans {
-    let mut overlapped = race.sim.clone();
-    let mut serial = race.sim.clone();
+    let mut overlapped = race.core.sim.clone();
+    let mut serial = race.core.sim.clone();
     let started = std::time::Instant::now();
     learn_speed_plans(&mut overlapped);
     let took = started.elapsed();
@@ -41,7 +41,7 @@ fn assert_overlapped_is_serial(label: &str, race: &Race) -> LearnedPlans {
     assert_eq!(overlapped, LearnedPlans::of(serial));
     // And the plans, step counts included, that every run from the grid driven
     // in full learns (`oag_ai::plan::Course::drive_again`).
-    let mut in_full = race.sim.clone();
+    let mut in_full = race.core.sim.clone();
     let started = std::time::Instant::now();
     DRIVE_AGAIN.store(true, std::sync::atomic::Ordering::Relaxed);
     learn_speed_plans(&mut in_full);
@@ -57,7 +57,7 @@ fn overlapped_plans_are_the_serial_plans_on_outpost_7() {
     let Some(race) = pulse_outpost_7() else {
         return;
     };
-    assert!(!race.sim.routes.is_empty(), "07_Track has a fork");
+    assert!(!race.core.sim.routes.is_empty(), "07_Track has a fork");
     let learned = assert_overlapped_is_serial("07_Track", &race);
     assert!(learned.speed_plan().is_some(), "the ring's plan verifies");
 }
@@ -79,7 +79,7 @@ fn overlapped_plans_are_the_serial_plans_on_2048_altima() {
     })
     .expect("loading altima");
     let race = Race::start(loaded.setup);
-    assert!(!race.sim.routes.is_empty(), "altima has forks");
+    assert!(!race.core.sim.routes.is_empty(), "altima has forks");
     let learned = assert_overlapped_is_serial("altima", &race);
     assert!(
         learned.route_plan_count() > 0,
@@ -90,19 +90,23 @@ fn overlapped_plans_are_the_serial_plans_on_2048_altima() {
 /// The menus' setters as a campaign cell runs them, between the load
 /// thread's start and the hand-over.
 fn launch_setters(race: &mut Race) {
-    race.sim.set_autopilot(false);
-    race.sim.set_control_scheme(crate::ControlScheme::default());
-    race.sim.set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
-        0.5,
-        &oag_ai::Tuning::default(),
-    ));
-    race.sim.set_finished_thrust_skill(0.5);
+    race.core.sim.set_autopilot(false);
+    race.core
+        .sim
+        .set_control_scheme(crate::ControlScheme::default());
+    race.core
+        .sim
+        .set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
+            0.5,
+            &oag_ai::Tuning::default(),
+        ));
+    race.core.sim.set_finished_thrust_skill(0.5);
     // What `set_opponent_pilot` writes into the world.
-    for slot in 1..usize::from(race.sim.world.ship_count) {
-        race.sim.world.ships[slot].driver.pilot ^= 0x5a5a;
+    for slot in 1..usize::from(race.core.sim.world.ship_count) {
+        race.core.sim.world.ships[slot].driver.pilot ^= 0x5a5a;
     }
     assert!(
-        race.sim.use_original_ai(None, 1),
+        race.core.sim.use_original_ai(None, 1),
         "Pulse has the original tables"
     );
 }
@@ -118,21 +122,21 @@ fn a_job_started_on_the_load_thread_survives_the_launch() {
         return;
     };
     let mut lazy = pulse_outpost_7().expect("loaded once already");
-    assert!(!ahead.sim.routes.is_empty(), "07_Track has a fork");
-    ahead.begin_speed_plans_ahead();
-    assert_eq!(ahead.speed_plan_job_fits(), Some(true));
+    assert!(!ahead.core.sim.routes.is_empty(), "07_Track has a fork");
+    ahead.core.begin_speed_plans_ahead();
+    assert_eq!(ahead.core.speed_plan_job_fits(), Some(true));
     launch_setters(&mut ahead);
     launch_setters(&mut lazy);
     assert_eq!(
-        ahead.speed_plan_job_fits(),
+        ahead.core.speed_plan_job_fits(),
         Some(true),
         "no plan input moved"
     );
-    ahead.begin_speed_plans();
-    assert_eq!(ahead.speed_plan_job_fits(), Some(true), "kept");
+    ahead.core.begin_speed_plans();
+    assert_eq!(ahead.core.speed_plan_job_fits(), Some(true), "kept");
 
-    ahead.ensure_speed_plans();
-    lazy.ensure_speed_plans();
+    ahead.core.ensure_speed_plans();
+    lazy.core.ensure_speed_plans();
     assert_eq!(ahead.speed_plan().cloned(), lazy.speed_plan().cloned());
     for slot in 0..8 {
         assert_eq!(
@@ -144,7 +148,11 @@ fn a_job_started_on_the_load_thread_survives_the_launch() {
     for tick in 0..120 {
         ahead.tick(&oag_gameplay::PlayerInputs::none());
         lazy.tick(&oag_gameplay::PlayerInputs::none());
-        assert_eq!(ahead.sim.state_hash(), lazy.sim.state_hash(), "tick {tick}");
+        assert_eq!(
+            ahead.core.sim.state_hash(),
+            lazy.core.sim.state_hash(),
+            "tick {tick}"
+        );
     }
 }
 
@@ -154,13 +162,13 @@ fn a_second_person_seated_restarts_the_job_at_the_hand_over() {
     let Some(mut race) = pulse_outpost_7() else {
         return;
     };
-    race.begin_speed_plans_ahead();
-    race.sim.world.controllers[1] = Controller::Local;
+    race.core.begin_speed_plans_ahead();
+    race.core.sim.world.controllers[1] = Controller::Local;
     assert_eq!(
-        race.speed_plan_job_fits(),
+        race.core.speed_plan_job_fits(),
         Some(false),
         "a person in slot 1"
     );
-    race.begin_speed_plans();
-    assert_eq!(race.speed_plan_job_fits(), Some(true), "started again");
+    race.core.begin_speed_plans();
+    assert_eq!(race.core.speed_plan_job_fits(), Some(true), "started again");
 }

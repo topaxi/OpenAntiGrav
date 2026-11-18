@@ -156,8 +156,8 @@ fn the_shield_holds_its_loops_until_it_drops(grid: &mut Grid) {
         grid,
         "_SHIELD_PC",
         5,
-        |race| race.sim.world.ships[0].physics.shield_pickup_timer = 1_000.0,
-        |race| race.sim.world.ships[0].physics.shield_pickup_timer = 0.0,
+        |race| race.core.sim.world.ships[0].physics.shield_pickup_timer = 1_000.0,
+        |race| race.core.sim.world.ships[0].physics.shield_pickup_timer = 0.0,
     );
 }
 
@@ -166,8 +166,8 @@ fn the_autopilot_holds_its_loops_until_it_expires(grid: &mut Grid) {
         grid,
         "_AUTOPILOT_PC",
         5,
-        |race| race.sim.world.ships[0].autopilot_timer = 1_000.0,
-        |race| race.sim.world.ships[0].autopilot_timer = 0.0,
+        |race| race.core.sim.world.ships[0].autopilot_timer = 1_000.0,
+        |race| race.core.sim.world.ships[0].autopilot_timer = 0.0,
     );
 }
 
@@ -187,8 +187,8 @@ fn a_shuriken_holds_its_travel_loop_while_it_flies(grid: &mut Grid) {
         "_SHURIKENTRAVEL",
         3,
         |race| {
-            let position = race.sim.world.ships[0].physics.body.position;
-            race.sim.world.projectiles.slots[0] = oag_weapons::projectile::Projectile {
+            let position = race.core.sim.world.ships[0].physics.body.position;
+            race.core.sim.world.projectiles.slots[0] = oag_weapons::projectile::Projectile {
                 kind: Some(oag_tables::weapons::Weapon::Shuriken),
                 position,
                 owner: 0,
@@ -197,7 +197,8 @@ fn a_shuriken_holds_its_travel_loop_while_it_flies(grid: &mut Grid) {
             };
         },
         |race| {
-            race.sim.world.projectiles.slots[0] = oag_weapons::projectile::Projectile::default();
+            race.core.sim.world.projectiles.slots[0] =
+                oag_weapons::projectile::Projectile::default();
         },
     );
 }
@@ -208,8 +209,11 @@ fn the_leach_attach_plays_once_while_the_beam_holds(grid: &mut Grid) {
         "_NGP_LEACHATTACH",
         0,
         |race| {
-            assert!(race.sim.ship_count() > 1, "the beam needs a second craft");
-            race.sim.world.leach_beams[0] = Some(oag_weapons::projectile::leach_beam::Beam {
+            assert!(
+                race.core.sim.ship_count() > 1,
+                "the beam needs a second craft"
+            );
+            race.core.sim.world.leach_beams[0] = Some(oag_weapons::projectile::leach_beam::Beam {
                 owner: 0,
                 target: 1,
                 kind: oag_weapons::projectile::leach_beam::Kind::Locked,
@@ -226,7 +230,7 @@ fn the_leach_attach_plays_once_while_the_beam_holds(grid: &mut Grid) {
                 trip: None,
             });
         },
-        |race| race.sim.world.leach_beams[0] = None,
+        |race| race.core.sim.world.leach_beams[0] = None,
     );
 }
 

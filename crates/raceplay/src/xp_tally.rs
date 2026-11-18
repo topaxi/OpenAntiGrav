@@ -353,10 +353,10 @@ impl crate::Race {
     /// racing (`FUN_8100d2a6` is false on the grid and after the finish). The boost start and the
     /// N-seconds-ahead awards skip this gate in the original and do not ask it.
     fn xp_racing(&self) -> bool {
-        self.sim.xp.is_some() && {
-            let standing = &self.sim.world.ships[self.player_slot()].standing;
+        self.core.sim.xp.is_some() && {
+            let standing = &self.core.sim.world.ships[self.player_slot()].standing;
             standing.finish_tick.is_none()
-                && !oag_race::RaceState::thrust_gated(self.sim.world.tick)
+                && !oag_race::RaceState::thrust_gated(self.core.sim.world.tick)
         }
     }
 
@@ -365,21 +365,21 @@ impl crate::Race {
     pub(super) fn observe_xp(&mut self) {
         let slot = self.player_slot();
         // Before the racing gate: the launch award is paid without one.
-        let launched = self.sim.world.controllers[slot].is_human()
-            && self.sim.world.ships[slot].physics.launch.grade
+        let launched = self.core.sim.world.controllers[slot].is_human()
+            && self.core.sim.world.ships[slot].physics.launch.grade
                 == oag_physics::launch::Grade::Perfect;
-        if let Some(xp) = self.sim.xp.as_mut() {
+        if let Some(xp) = self.core.sim.xp.as_mut() {
             xp.observe_launch(launched);
         }
         if !self.xp_racing() {
             return;
         }
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.core.sim.world.ships[slot];
         let (kills, shield) = (ship.standing.kills, ship.physics.shield);
         let crossed = ship.standing.lap_start_tick.is_some();
-        let place = self.sim.places()[slot];
-        let field = usize::from(self.sim.world.ship_count);
-        if let Some(xp) = self.sim.xp.as_mut() {
+        let place = self.core.sim.places()[slot];
+        let field = usize::from(self.core.sim.world.ship_count);
+        if let Some(xp) = self.core.sim.xp.as_mut() {
             xp.observe_kills(kills);
             xp.observe_place(place, field);
             xp.observe_health(shield);
@@ -391,9 +391,9 @@ impl crate::Race {
 
     /// The player completed a lap this tick.
     pub(super) fn xp_lap_completed(&mut self) {
-        let ship = &self.sim.world.ships[self.player_slot()];
+        let ship = &self.core.sim.world.ships[self.player_slot()];
         let (shield, max) = (ship.physics.shield, ship.handling.dimensions.shield);
-        if let Some(xp) = self.sim.xp.as_mut() {
+        if let Some(xp) = self.core.sim.xp.as_mut() {
             xp.lap_completed(shield, max);
         }
     }
@@ -402,7 +402,7 @@ impl crate::Race {
     pub(super) fn xp_weapon_pad(&mut self, slot: usize) {
         if slot == self.player_slot()
             && self.xp_racing()
-            && let Some(xp) = self.sim.xp.as_mut()
+            && let Some(xp) = self.core.sim.xp.as_mut()
         {
             xp.weapon_pad_taken();
         }
@@ -421,7 +421,7 @@ impl crate::Race {
             return;
         }
         let me = self.player_slot();
-        let Some(xp) = self.sim.xp.as_mut() else {
+        let Some(xp) = self.core.sim.xp.as_mut() else {
             return;
         };
         if hits[me].absorbed

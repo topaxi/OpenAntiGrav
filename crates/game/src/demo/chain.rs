@@ -164,27 +164,28 @@ pub fn run(
             crate::ai_choice::Source::Free(difficulty),
         );
         super::hand_over(&mut race, &demo, 1);
-        let craft = usize::from(race.sim.world.ship_count);
+        let craft = usize::from(race.core.sim.world.ship_count);
         let start: Vec<_> = (0..craft)
-            .map(|slot| race.sim.world.ships[slot].physics.body.position)
+            .map(|slot| race.core.sim.world.ships[slot].physics.body.position)
             .collect();
         let mut run = Run::new(false);
         let leave = loop {
             race.tick(&PlayerInputs::default());
-            if let Some(leave) = run.tick(length.min(timing.length), race.sim.finished(), true) {
+            if let Some(leave) = run.tick(length.min(timing.length), race.core.sim.finished(), true)
+            {
                 break leave;
             }
         };
         let moved = (0..craft)
             .filter(|&slot| {
-                let at = race.sim.world.ships[slot].physics.body.position;
+                let at = race.core.sim.world.ships[slot].physics.body.position;
                 (at - start[slot]).length() >= MOVED
             })
             .count();
         reports.push(Report {
             track: tracks[chosen.track].id.clone(),
             team: teams[chosen.team].to_string(),
-            humans: race.sim.world.human_slots().count(),
+            humans: race.core.sim.world.human_slots().count(),
             craft,
             moved,
             ticks: run.ticks(),

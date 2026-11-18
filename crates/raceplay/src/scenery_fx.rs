@@ -251,12 +251,12 @@ impl super::Race {
             i32::from(section)
         };
         let camera = self.camera_frame();
-        let rain = self.sim.extensions.sky().rain.unwrap_or(0.0);
+        let rain = self.core.sim.extensions.sky().rain.unwrap_or(0.0);
         self.view.scenery_fx.weather_mut().drive(rain);
         // Ours, chosen: the lens's drops slide outward while the viewed craft boosts, with
         // the enhanced weather on only; off, the lens keeps the original's law untouched.
         let boosting = self.enhanced_weather() && {
-            let ship = &self.sim.world.ships[self.framed_slot()].physics;
+            let ship = &self.core.sim.world.ships[self.framed_slot()].physics;
             ship.pad_timer > 0.0 || ship.turbo_timer > 0.0
         };
         self.view
@@ -296,7 +296,7 @@ impl super::Race {
         let hits: Vec<(Vec3, Vec3)> = weather
             .drop_segments()
             .into_iter()
-            .filter_map(|(from, to)| self.sim.floor_crossing(from, to))
+            .filter_map(|(from, to)| self.core.sim.floor_crossing(from, to))
             .filter(|&(at, _)| !self.point_is_under_cover(at))
             .collect();
         let wet = self.view.scenery_fx.weather().wet_road();
@@ -323,10 +323,10 @@ impl super::Race {
     /// spline cannot place (off the track) counts as open**: no cover is
     /// evidence for it. Chosen, not measured.
     pub fn point_is_under_cover(&self, point: Vec3) -> bool {
-        let Some((index, _, _)) = self.sim.spline.nearest(point) else {
+        let Some((index, _, _)) = self.core.sim.spline.nearest(point) else {
             return false;
         };
-        let section = self.sim.section_of(index, point);
+        let section = self.core.sim.section_of(index, point);
         section != oag_render::pvs::UNPLACED
             && self
                 .view

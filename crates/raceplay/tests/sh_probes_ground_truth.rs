@@ -93,7 +93,7 @@ fn an_omega_circuit_loads_its_probes_and_a_craft_blends_its_lane() {
     for _ in 0..100 {
         race.tick(&oag_gameplay::PlayerInputs::single(Default::default()));
     }
-    let taps = probes.locate(race.sim.ship_probe_position(0));
+    let taps = probes.locate(race.core.sim.ship_probe_position(0));
     assert_eq!(taps.from % 3, 2, "{taps:?}");
     assert_eq!(taps.to % 3, 2, "{taps:?}");
 }

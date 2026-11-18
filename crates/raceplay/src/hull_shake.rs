@@ -139,13 +139,13 @@ impl Race {
         if !self.view.hull_shake_on {
             return;
         }
-        for slot in 0..self.sim.world.ship_count as usize {
-            let ship = &self.sim.world.ships[slot];
+        for slot in 0..self.core.sim.world.ship_count as usize {
+            let ship = &self.core.sim.world.ships[slot];
             if !ship.in_world() {
                 continue;
             }
             let speed = ship.physics.body.linear_velocity.length();
-            let dt = self.sim.dt;
+            let dt = self.core.sim.dt;
             self.view.hull_shake[slot]
                 .get_or_insert_with(|| Shake::new(&law, slot))
                 .advance(&law, dt, speed);

@@ -25,15 +25,15 @@ fn grid(mode: Mode) -> Race {
 /// moved slot 1.
 fn pushed(mode: Mode, down: CraftState, timer: f32) -> f32 {
     let mut race = grid(mode);
-    let at = race.sim.world.ships[0].physics.body.position;
-    race.sim.world.ships[1].physics.body.position = at + Vec3::new(0.0, 0.0, 1.0);
-    race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
-    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
-    race.sim.world.ships[1].physics.craft_state = down;
-    race.sim.world.ships[1].physics.state_timer = timer;
-    let before = race.sim.world.ships[1].physics.body.position;
+    let at = race.core.sim.world.ships[0].physics.body.position;
+    race.core.sim.world.ships[1].physics.body.position = at + Vec3::new(0.0, 0.0, 1.0);
+    race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
+    race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
+    race.core.sim.world.ships[1].physics.craft_state = down;
+    race.core.sim.world.ships[1].physics.state_timer = timer;
+    let before = race.core.sim.world.ships[1].physics.body.position;
     race.resolve_craft_pairs();
-    race.sim.world.ships[1]
+    race.core.sim.world.ships[1]
         .physics
         .body
         .position
@@ -67,14 +67,14 @@ fn an_eliminator_wreck_is_solid_until_it_respawns() {
 #[test]
 fn the_craft_driving_through_a_wreck_is_left_alone_too() {
     let mut race = grid(Mode::SingleRace);
-    let at = race.sim.world.ships[0].physics.body.position;
-    race.sim.world.ships[1].physics.body.position = at + Vec3::new(0.0, 0.0, 1.0);
-    race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
-    race.sim.world.ships[1].physics.craft_state = CraftState::Eliminated;
-    race.sim.world.ships[1].physics.state_timer = 0.0;
+    let at = race.core.sim.world.ships[0].physics.body.position;
+    race.core.sim.world.ships[1].physics.body.position = at + Vec3::new(0.0, 0.0, 1.0);
+    race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
+    race.core.sim.world.ships[1].physics.craft_state = CraftState::Eliminated;
+    race.core.sim.world.ships[1].physics.state_timer = 0.0;
     race.resolve_craft_pairs();
     assert_eq!(
-        race.sim.world.ships[0].physics.body.linear_velocity,
+        race.core.sim.world.ships[0].physics.body.linear_velocity,
         Vec3::new(0.0, 0.0, 8.0),
         "the live craft was slowed by a wreck that is not solid"
     );

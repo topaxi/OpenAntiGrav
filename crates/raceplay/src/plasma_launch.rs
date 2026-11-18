@@ -46,7 +46,7 @@ impl Race {
     pub(crate) fn advance_plasma_launch(&mut self) {
         let effect = self.view.handles.get(Trigger::PlasmaLaunch).cloned();
         for slot in 0..oag_weapons::projectile::MAX_PROJECTILES {
-            let projectile = &self.sim.world.projectiles.slots[slot];
+            let projectile = &self.core.sim.world.projectiles.slots[slot];
             let released = projectile.kind == Some(oag_tables::weapons::Weapon::Plasma)
                 && projectile.charge <= 0.0;
             let just_released = released && !self.view.plasma_launch.released[slot];
@@ -57,7 +57,7 @@ impl Race {
             let owner = usize::from(projectile.owner);
             let at = self.muzzle_of(owner).unwrap_or(projectile.position);
             // The node's own matrix: the hull's, whose `+Y` is the craft's up.
-            let up = self.sim.world.ships[owner].physics.body.up();
+            let up = self.core.sim.world.ships[owner].physics.body.up();
             if let Some(playing) = self.view.stage.play_riding(effect, at, 1.0) {
                 self.view.stage.orient(playing, up);
                 // Its three emitters are local-space (flag `0x2`): drawn through the
@@ -69,7 +69,7 @@ impl Race {
         }
         let mut riding = std::mem::take(&mut self.view.plasma_launch.riding);
         riding.retain(|&(owner, playing)| {
-            let ship = &self.sim.world.ships[owner];
+            let ship = &self.core.sim.world.ships[owner];
             if !ship.in_world() || !self.view.stage.is_emitting(playing) {
                 self.view.stage.detach(playing);
                 return false;

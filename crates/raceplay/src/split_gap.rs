@@ -138,15 +138,20 @@ impl super::Race {
             return;
         }
         let player = self.player_slot();
-        let now = oag_race::race_clock_ticks(self.sim.world.tick) as f32 / 60.0;
+        let now = oag_race::race_clock_ticks(self.core.sim.world.tick) as f32 / 60.0;
         let mut events = GapEvents::default();
         let mut live = 0;
-        let ships = usize::from(self.sim.ship_count());
+        let ships = usize::from(self.core.sim.ship_count());
         let places = self.places();
-        let length = self.sim.course.as_deref().map(oag_race::Course::length);
+        let length = self
+            .core
+            .sim
+            .course
+            .as_deref()
+            .map(oag_race::Course::length);
         let reached: Vec<(usize, usize, f32, bool)> = (0..ships)
             .map(|slot| {
-                let ship = &self.sim.world.ships[slot];
+                let ship = &self.core.sim.world.ships[slot];
                 if ship.active && ship.physics.craft_state != oag_physics::CraftState::Eliminated {
                     live += 1;
                 }
@@ -164,7 +169,7 @@ impl super::Race {
             })
             .collect();
         let timed = matches!(
-            self.sim.world.mode(),
+            self.core.sim.world.mode(),
             oag_race::Mode::TimeTrial | oag_race::Mode::SpeedLap
         );
         let Some(split) = self.view.split_gap.as_mut() else {
@@ -193,7 +198,7 @@ impl super::Race {
             }
         }
         split.display.advance(
-            self.sim.dt,
+            self.core.sim.dt,
             now,
             events,
             live,

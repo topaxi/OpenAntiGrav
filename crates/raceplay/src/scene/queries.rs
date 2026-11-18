@@ -79,18 +79,18 @@ impl Scene {
     /// `Environment_UpdateStageBlend`'s own consumer is still unfound. Worth
     /// knowing before a title with both ever loads.
     pub fn sync_zone_grade(&mut self, race: &Race) -> bool {
-        let zone = race.sim.world.primary_race().zone;
+        let zone = race.core.sim.world.primary_race().zone;
         let Some(grade) = self.zone_grade.as_mut() else {
             return false;
         };
-        let primary = race.sim.world.primary_race();
+        let primary = race.core.sim.world.primary_race();
         if primary.mode == oag_race::Mode::Detonator {
             // Detonator's stage is its lap counter (`Mode::detonator_stage`), and the
             // step happened on the tick the current lap began.
             let laps = primary.laps_completed();
             let stepped = grade.follow_laps(
                 laps,
-                primary.lap_ticks(race.sim.world.tick),
+                primary.lap_ticks(race.core.sim.world.tick),
                 race.ship().physics.body.position.to_array(),
             );
             if stepped {
@@ -120,8 +120,8 @@ impl Scene {
         // `ZoneGrade::follow`.
         grade.follow(
             zone,
-            race.sim.world.primary_race().zone_timer,
-            race.sim.dt(),
+            race.core.sim.world.primary_race().zone_timer,
+            race.core.sim.dt(),
             race.ship().physics.body.position.to_array(),
         );
         stepped

@@ -13,10 +13,10 @@ use oag_raceplay as race;
 
 /// The grid's ships ordered from the back row to the front, read off `race`.
 fn back_to_front(race: &race::Race) -> Vec<usize> {
-    let ships = &race.sim.world.ships;
+    let ships = &race.core.sim.world.ships;
     let forward = ships[0].physics.body.orientation * oag_core::math::Vec3::NEG_Z;
     let along = |ship: usize| ships[ship].physics.body.position.dot(forward);
-    let mut order: Vec<usize> = (0..usize::from(race.sim.world.ship_count)).collect();
+    let mut order: Vec<usize> = (0..usize::from(race.core.sim.world.ship_count)).collect();
     order.sort_by(|&a, &b| along(a).total_cmp(&along(b)));
     order
 }

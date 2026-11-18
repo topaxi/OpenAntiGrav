@@ -21,7 +21,7 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
   `<Pickupodds class="...">` blocks: `Venom` (line 52), `Flash` (93), `Rapier`
   (134), `Phantom` (175) and `SuperPhantom` (216). `oag_weapons::pickup::table_for`
   (`crates/weapons/src/pickup.rs:509`) matches the name case-insensitively, and the
-  caller `crates/raceplay/src/pads.rs:316` passes `self.sim.class`. A fifth class
+  caller `crates/raceplay/src/pads.rs:316` passes `self.core.sim.class`. A fifth class
   needs no code for the odds. (The `SpeedClass` enum has four rungs, as
   `docs/formats/2048-campaign.md:219` records; the odds do not go through it.)
 - **Rocket count: a per-craft modifier, not a class and not a weapon entry.** Each

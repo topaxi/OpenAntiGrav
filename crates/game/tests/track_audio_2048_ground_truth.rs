@@ -144,7 +144,7 @@ fn render(image: &Path, name: &str, keep: bool) -> Render {
         loaded.setup.track_emitters = TrackEmitters::default();
     }
     let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     let wav = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../data/shots")
         .join(name);

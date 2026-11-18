@@ -74,11 +74,11 @@ impl Race {
     /// nothing on one that does not. Like [`Self::tick_countdown_voice`] it is an
     /// output and no world state.
     pub fn raise_start_cue(&mut self, cue: Cue) {
-        if !self.sim.countdown_voice {
+        if !self.core.sim.countdown_voice {
             return;
         }
         let player = self.player_slot();
-        self.sim.cues.push(CueEvent::new(cue, player));
+        self.core.sim.cues.push(CueEvent::new(cue, player));
     }
 
     /// Raises `ready` and `go` on their ticks, on a title that voices its start.
@@ -87,19 +87,22 @@ impl Race {
     /// being stepped. A cue is a per-tick output and no world state: nothing
     /// here can move a state hash.
     pub(super) fn tick_countdown_voice(&mut self) {
-        if !self.sim.countdown_voice {
+        if !self.core.sim.countdown_voice {
             return;
         }
-        let cue = match self.sim.world.tick {
+        let cue = match self.core.sim.world.tick {
             READY_TICK => Cue::Ready,
             GO_TICK => Cue::Go,
             _ => return,
         };
         let player = self.player_slot();
-        self.sim.cues.push(CueEvent::new(cue, player));
+        self.core.sim.cues.push(CueEvent::new(cue, player));
         // HD plays `HBEAT` beside `ready`, 8 audio ticks (33 ms) after it: the same tick here.
-        if cue == Cue::Ready && self.sim.countdown_beat {
-            self.sim.cues.push(CueEvent::new(Cue::StartBeat, player));
+        if cue == Cue::Ready && self.core.sim.countdown_beat {
+            self.core
+                .sim
+                .cues
+                .push(CueEvent::new(Cue::StartBeat, player));
         }
     }
 }

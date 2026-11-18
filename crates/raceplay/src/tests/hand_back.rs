@@ -13,7 +13,7 @@ use oag_tables::weapons::Weapon;
 /// Two people (slot 1 away and returning), slot 1 holding a Turbo.
 fn returning() -> Race {
     let mut race = two_people(Some(0), true);
-    race.sim.world.ships[1].pickup.weapon = Some(Weapon::Turbo);
+    race.core.sim.world.ships[1].pickup.weapon = Some(Weapon::Turbo);
     race
 }
 
@@ -22,11 +22,14 @@ fn an_away_seat_keeps_the_pickup_it_held() {
     let mut race = returning();
     assert!(race.set_away(1));
     assert!(!race.set_away(1), "once");
-    assert_eq!(race.sim.world.controllers[1], Controller::Away);
+    assert_eq!(race.core.sim.world.controllers[1], Controller::Away);
     for _ in 0..120 {
         race.tick(&PlayerInputs::none());
     }
-    assert_eq!(race.sim.world.ships[1].pickup.weapon, Some(Weapon::Turbo));
+    assert_eq!(
+        race.core.sim.world.ships[1].pickup.weapon,
+        Some(Weapon::Turbo)
+    );
 }
 
 #[test]
@@ -46,17 +49,23 @@ fn a_hand_back_counts_down_as_an_autopilot_over_the_held_pickup() {
     let mut race = returning();
     race.set_away(1);
     race.hand_back(1);
-    assert_eq!(race.sim.world.controllers[1], Controller::Remote);
+    assert_eq!(race.core.sim.world.controllers[1], Controller::Remote);
     let shown = race.readout_for(1);
     assert_eq!(shown.pickup, Some(Weapon::Autopilot));
     assert_eq!(
         shown.sub_weapon,
         Some(SubWeapon::Autopilot(crate::replay::HAND_BACK_SECONDS))
     );
-    assert_eq!(race.sim.world.ships[1].pickup.weapon, Some(Weapon::Turbo));
-    assert!(race.sim.flown_for_the_player(1), "the driver has the craft");
     assert_eq!(
-        race.sim.autopilot_engine_flags(1).speedup,
+        race.core.sim.world.ships[1].pickup.weapon,
+        Some(Weapon::Turbo)
+    );
+    assert!(
+        race.core.sim.flown_for_the_player(1),
+        "the driver has the craft"
+    );
+    assert_eq!(
+        race.core.sim.autopilot_engine_flags(1).speedup,
         None,
         "a hand-back gives no Autopilot boost"
     );
@@ -77,24 +86,27 @@ fn a_hand_back_counts_down_as_an_autopilot_over_the_held_pickup() {
     let after = race.readout_for(1);
     assert_eq!(after.pickup, Some(Weapon::Turbo), "the pickup is back");
     assert_eq!(after.sub_weapon, None);
-    let ship = &race.sim.world.ships[1];
+    let ship = &race.core.sim.world.ships[1];
     assert!(!ship.handback);
     assert_eq!(ship.autopilot_timer, 0.0);
-    assert!(!race.sim.flown_for_the_player(1), "the person flies again");
+    assert!(
+        !race.core.sim.flown_for_the_player(1),
+        "the person flies again"
+    );
 }
 
 /// Absorb cancels the countdown on every title, and it does not pay out the held pickup.
 #[test]
 fn absorb_cancels_a_hand_back_and_keeps_the_pickup() {
     let mut race = returning();
-    race.sim.autopilot_absorb_cancels = false;
+    race.core.sim.autopilot_absorb_cancels = false;
     race.set_away(1);
     race.hand_back(1);
     let mut buttons = Buttons::new();
     let mut inputs = PlayerInputs::none();
     inputs.set(1, buttons.tick(CIRCLE));
     race.tick(&inputs);
-    let ship = &race.sim.world.ships[1];
+    let ship = &race.core.sim.world.ships[1];
     assert_eq!(ship.autopilot_timer, 0.0, "the countdown was cancelled");
     assert!(!ship.handback);
     assert_eq!(
@@ -108,9 +120,9 @@ fn absorb_cancels_a_hand_back_and_keeps_the_pickup() {
 #[test]
 fn a_real_autopilot_is_not_a_hand_back() {
     let mut race = returning();
-    race.sim.world.ships[1].autopilot_timer = 2.0;
-    assert!(!race.sim.world.ships[1].handback);
-    assert_eq!(race.sim.autopilot_engine_flags(1).speedup, Some(1.2));
+    race.core.sim.world.ships[1].autopilot_timer = 2.0;
+    assert!(!race.core.sim.world.ships[1].handback);
+    assert_eq!(race.core.sim.autopilot_engine_flags(1).speedup, Some(1.2));
 }
 
 /// The state the recording replays: a re-drive that applies the two events reaches the state
@@ -123,12 +135,13 @@ fn presence_events_reproduce_the_change() {
         if steps > 1 {
             race.hand_back(1);
         }
-        race.sim.state_hash()
+        race.core.sim.state_hash()
     };
     let applied = |values: &[u32]| {
         let mut race = returning();
         for &value in values {
-            race.sim
+            race.core
+                .sim
                 .apply_event(&oag_replay::Event::new(
                     0,
                     1,
@@ -137,14 +150,15 @@ fn presence_events_reproduce_the_change() {
                 ))
                 .expect("applies");
         }
-        race.sim.state_hash()
+        race.core.sim.state_hash()
     };
     assert_eq!(applied(&[0]), live(1));
     assert_eq!(applied(&[0, 1]), live(2));
     assert_ne!(live(1), live(2));
-    assert_ne!(live(1), returning().sim.state_hash());
+    assert_ne!(live(1), returning().core.sim.state_hash());
     assert!(
         returning()
+            .core
             .sim
             .apply_event(&oag_replay::Event::new(0, 1, oag_replay::Kind::Presence, 2))
             .is_err()
@@ -165,7 +179,7 @@ fn a_deliberate_input_takes_the_craft_back_after_a_short_grace() {
         let mut inputs = PlayerInputs::none();
         inputs.set(1, snapshot);
         race.tick(&inputs);
-        let ship = &race.sim.world.ships[1];
+        let ship = &race.core.sim.world.ships[1];
         assert_eq!(
             ship.pickup.weapon,
             Some(Weapon::Turbo),
@@ -200,25 +214,28 @@ fn a_deliberate_input_takes_the_craft_back_after_a_short_grace() {
 #[test]
 fn a_lone_person_who_goes_away_is_not_stepped_as_the_player() {
     let mut race = two_people(Some(0), true);
-    race.sim.world.controllers[1] = Controller::Ai;
-    assert!(race.sim.world.person_flown(0));
+    race.core.sim.world.controllers[1] = Controller::Ai;
+    assert!(race.core.sim.world.person_flown(0));
     assert!(race.set_away(0));
-    assert_eq!(race.sim.world.controllers[0], Controller::Away);
+    assert_eq!(race.core.sim.world.controllers[0], Controller::Away);
     assert_eq!(
-        race.sim.world.primary_slot(),
+        race.core.sim.world.primary_slot(),
         0,
         "the view stays on their craft"
     );
-    assert!(!race.sim.world.person_flown(0), "the driver flies it");
+    assert!(!race.core.sim.world.person_flown(0), "the driver flies it");
     let mut held = PlayerInputs::none();
     held.set(0, oag_gameplay::InputSnapshot::EMPTY);
     for _ in 0..600 {
         race.tick(&held);
     }
     assert!(
-        race.sim.world.ships[0].physics.body.position.x.abs() > 1.0,
+        race.core.sim.world.ships[0].physics.body.position.x.abs() > 1.0,
         "a driver moved the craft that no input was holding"
     );
     assert!(race.hand_back(0));
-    assert!(race.sim.world.person_flown(0), "the person flies it again");
+    assert!(
+        race.core.sim.world.person_flown(0),
+        "the person flies it again"
+    );
 }

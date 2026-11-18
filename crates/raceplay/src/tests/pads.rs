@@ -41,7 +41,7 @@ fn a_speed_pad_boosts_every_craft_and_not_only_the_player() {
 
     for slot in 0..8 {
         assert!(
-            race.sim.world.ships[slot].physics.pad_timer > 0.0,
+            race.core.sim.world.ships[slot].physics.pad_timer > 0.0,
             "slot {slot} crossed the pad and was not boosted"
         );
     }
@@ -58,19 +58,21 @@ fn a_speed_pad_boosts_every_craft_and_not_only_the_player() {
 fn one_craft_s_pad_row_does_not_move_another_s() {
     let mut race = grid_on_a_speed_pad();
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.sim.pad_distance.len(), MAX_SHIPS);
+    assert_eq!(race.core.sim.pad_distance.len(), MAX_SHIPS);
 
-    let others: Vec<_> = (1..8).map(|slot| race.sim.pad_distance[slot][0]).collect();
-    race.sim.pad_distance[0][0] += 1234.0;
+    let others: Vec<_> = (1..8)
+        .map(|slot| race.core.sim.pad_distance[slot][0])
+        .collect();
+    race.core.sim.pad_distance[0][0] += 1234.0;
     for (index, slot) in (1..8).enumerate() {
         assert_eq!(
-            race.sim.pad_distance[slot][0], others[index],
+            race.core.sim.pad_distance[slot][0], others[index],
             "moving slot 0's row moved slot {slot}'s"
         );
     }
     for slot in 0..8 {
         assert_eq!(
-            race.sim.pad_current[slot],
+            race.core.sim.pad_current[slot],
             Some(0),
             "slot {slot} does not know it is on the pad"
         );
@@ -135,7 +137,7 @@ fn the_boost_outlives_the_pad_and_then_expires() {
     assert!(race.ship().physics.pad_timer > 0.0);
 
     // Take the pad away, which is the same to the trigger as driving off it.
-    race.sim.speedup_pads = Vec::new().into();
+    race.core.sim.speedup_pads = Vec::new().into();
     let mut boosted_ticks = 0;
     for _ in 0..120 {
         if race.tick(&PlayerInputs::none()).speedup_pad != Vec3::ZERO {
@@ -222,13 +224,13 @@ fn the_flare_outlives_the_force_and_ignores_the_class_tunable() {
     race.tick(&PlayerInputs::none());
     // Armed with the constant, not with the class's `time`.
     assert!(
-        (race.exhaust().boost_timer() - (exhaust::BOOST_SECONDS - race.sim.dt())).abs() < 1e-4,
+        (race.exhaust().boost_timer() - (exhaust::BOOST_SECONDS - race.core.sim.dt())).abs() < 1e-4,
         "the flare was armed with {} rather than {}",
         race.exhaust().boost_timer(),
         exhaust::BOOST_SECONDS
     );
 
-    race.sim.speedup_pads = Vec::new().into();
+    race.core.sim.speedup_pads = Vec::new().into();
     let mut force_ticks = 0;
     let mut flare_ticks = 0;
     for _ in 0..120 {
@@ -255,7 +257,7 @@ fn zone_scores_once_for_entering_a_pad_and_not_again_while_inside() {
         bare.tick(&PlayerInputs::none());
     }
     assert_eq!(
-        padded.sim.world.primary_race().score - bare.sim.world.primary_race().score,
+        padded.core.sim.world.primary_race().score - bare.core.sim.world.primary_race().score,
         oag_race::zone::SPEEDUP_PAD_SCORE,
         "a pad held for {TICKS} ticks must pay exactly once"
     );
@@ -275,7 +277,7 @@ fn only_zone_mode_scores_for_a_speed_pad() {
             "{mode:?}: the pad did not fire at all, so the score assertion proves nothing"
         );
         assert_eq!(
-            race.sim.world.primary_race().score,
+            race.core.sim.world.primary_race().score,
             0,
             "{mode:?} scored for a pad"
         );
@@ -288,7 +290,7 @@ fn only_zone_mode_scores_for_a_speed_pad() {
 #[test]
 fn entering_a_pad_counts_one_boost_on_the_current_lap_and_not_again_while_inside() {
     let mut race = race_with_pads(Mode::TimeTrial, enveloping_pad());
-    let lap = race.sim.world.primary_race().lap;
+    let lap = race.core.sim.world.primary_race().lap;
     for _ in 0..90 {
         race.tick(&PlayerInputs::none());
     }
@@ -304,7 +306,7 @@ fn an_opponent_entering_a_pad_is_not_a_boost_on_the_players_lap() {
     let mut race = grid_on_a_speed_pad();
     race.tick(&PlayerInputs::none());
     assert!(
-        (0..8).all(|slot| race.sim.pad_current[slot] == Some(0)),
+        (0..8).all(|slot| race.core.sim.pad_current[slot] == Some(0)),
         "the whole grid should be on the pad"
     );
     assert_eq!(race.run_stats().boosts_by_lap.iter().sum::<u32>(), 1);

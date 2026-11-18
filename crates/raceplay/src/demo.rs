@@ -26,9 +26,9 @@ impl Race {
     /// Not a recorded controller change ([`Race::set_controller`] writes one): a demo records
     /// nothing.
     pub fn fly_as_demo(&mut self, demo: &oag_title::demo::Demo) {
-        self.sim.world.controllers = [Controller::Ai; MAX_PLAYERS];
-        self.sim.set_autopilot(true);
-        self.sim.fire_terms.use_scale = demo.rules.ai_weapon_use.value;
+        self.core.sim.world.controllers = [Controller::Ai; MAX_PLAYERS];
+        self.core.sim.set_autopilot(true);
+        self.core.sim.fire_terms.use_scale = demo.rules.ai_weapon_use.value;
         #[cfg(feature = "view")]
         {
             self.view.camera_shake_on = demo.rules.camera_shake.value;
@@ -37,7 +37,7 @@ impl Race {
         if demo.camera.value == oag_title::demo::Camera::Spectator
             && let Some(director) = &mut self.view.finish_camera
         {
-            director.reseed(self.sim.race_seed);
+            director.reseed(self.core.sim.race_seed);
             self.view.spectates_from_start = true;
         }
     }
@@ -54,20 +54,20 @@ mod tests {
     fn a_demo_has_no_person_and_every_craft_is_flown_by_the_ai() {
         let mut race = Race::start(Setup::headless(Mode::SingleRace, 1));
         assert_eq!(
-            race.sim.world.human_slots().count(),
+            race.core.sim.world.human_slots().count(),
             1,
             "the default grid has a person"
         );
         race.fly_as_demo(&oag_title::demo::Demo::PULSE);
-        assert_eq!(race.sim.world.human_slots().count(), 0);
-        let camera_slot = race.sim.world.primary_slot();
+        assert_eq!(race.core.sim.world.human_slots().count(), 0);
+        let camera_slot = race.core.sim.world.primary_slot();
         assert!(
-            race.sim.flown_for_the_player(camera_slot),
+            race.core.sim.flown_for_the_player(camera_slot),
             "the camera slot is stepped as a player and nobody holds its pad: the autopilot must"
         );
-        for slot in 0..usize::from(race.sim.world.ship_count) {
+        for slot in 0..usize::from(race.core.sim.world.ship_count) {
             assert!(
-                slot == camera_slot || !race.sim.world.person_flown(slot),
+                slot == camera_slot || !race.core.sim.world.person_flown(slot),
                 "slot {slot} is flown by a person"
             );
         }
@@ -122,8 +122,8 @@ mod tests {
     #[test]
     fn a_demo_doubles_the_opponents_weapon_use_and_a_race_does_not() {
         let mut race = Race::start(Setup::headless(Mode::SingleRace, 1));
-        assert_eq!(race.sim.fire_terms.use_scale, 1.0);
+        assert_eq!(race.core.sim.fire_terms.use_scale, 1.0);
         race.fly_as_demo(&oag_title::demo::Demo::PULSE);
-        assert_eq!(race.sim.fire_terms.use_scale, 2.0);
+        assert_eq!(race.core.sim.fire_terms.use_scale, 2.0);
     }
 }

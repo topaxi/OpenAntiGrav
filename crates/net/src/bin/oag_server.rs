@@ -171,7 +171,7 @@ fn main() -> Result<()> {
     params.title = title.to_string();
     println!(
         "racing {title} from {source}: {} craft, {} people, weapons {}, seed {}",
-        race.sim.world.ship_count,
+        race.core.sim.world.ship_count,
         params.people,
         if params.weapons { "on" } else { "off" },
         params.seed

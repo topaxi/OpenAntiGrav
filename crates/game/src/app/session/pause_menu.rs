@@ -19,7 +19,7 @@ use super::Session;
 fn pause_mode(stage: &RaceStage) -> &str {
     match &stage.campaign_cell {
         Some(cell) if oag_tables::pure_campaign::is_free_play(&cell.name) => "free_play",
-        _ => stage.race.sim.world.mode().name(),
+        _ => stage.race.core.sim.world.mode().name(),
     }
 }
 
@@ -42,7 +42,7 @@ impl Session {
             // A demo is not paused into: leaving it is the main menu. Nor is a recording being
             // watched: the viewer's exit lands on REPLAYS and nothing is parked to resume or quit.
             Stage::Race(stage)
-                if !stage.race.sim.finished() && stage.demo.is_none() && !stage.watching =>
+                if !stage.race.core.sim.finished() && stage.demo.is_none() && !stage.watching =>
             {
                 Some(&**stage)
             }
@@ -138,7 +138,7 @@ impl Session {
         let Some(parked) = self.suspended_race.as_mut() else {
             return;
         };
-        if parked.race.sim.pilot_assist_level() == level {
+        if parked.race.core.sim.pilot_assist_level() == level {
             return;
         }
         // Applied and recorded together: the recording keeps going and the change is an

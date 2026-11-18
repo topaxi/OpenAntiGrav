@@ -403,21 +403,21 @@ fn solos_on(track: &str, class: &str, offset: f32) -> Option<Vec<Solo>> {
 fn solo(setup: race::Setup) -> Solo {
     let mut race = race::Race::start(setup);
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
 
     let mut best: Option<u64> = None;
-    let mut lap = race.sim.world.ships[LONE].standing.lap;
+    let mut lap = race.core.sim.world.ships[LONE].standing.lap;
     let mut started = 0u64;
     let mut recovered_this_lap = false;
     for tick in 0..TICKS {
-        let before = race.sim.respawns_of(LONE);
+        let before = race.core.sim.respawns_of(LONE);
         race.tick_sim_only(&PlayerInputs::none());
-        if race.sim.respawns_of(LONE) != before {
+        if race.core.sim.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
-        let now = race.sim.world.ships[LONE].standing.lap;
+        let now = race.core.sim.world.ships[LONE].standing.lap;
         if now != lap {
             if lap > 1 && !recovered_this_lap {
                 let taken = tick - started;
@@ -431,9 +431,9 @@ fn solo(setup: race::Setup) -> Solo {
 
     Solo {
         best,
-        contact_ticks: race.sim.wall_contact_ticks_of(LONE),
-        state: race.sim.world.ships[LONE].physics.craft_state,
-        deaths: race.sim.world.ships[LONE].standing.deaths,
+        contact_ticks: race.core.sim.wall_contact_ticks_of(LONE),
+        state: race.core.sim.world.ships[LONE].physics.craft_state,
+        deaths: race.core.sim.world.ships[LONE].standing.deaths,
     }
 }
 

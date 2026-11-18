@@ -56,7 +56,7 @@ fn zz_contact_sweep() {
         };
         race.tick(&PlayerInputs::single(input));
         let mut seen = std::collections::BTreeSet::new();
-        for event in race.sim.drain_cues() {
+        for event in race.core.sim.drain_cues() {
             if !matches!(
                 event.cue,
                 Cue::Collision | Cue::Grind | Cue::CollisionShield | Cue::GrindShield

@@ -124,15 +124,15 @@ fn run(
     .ok()?;
     let mut race = race::Race::start(loaded.setup);
     if let Some(tuning) = tuning {
-        race.sim.set_ai_tuning(tuning);
+        race.core.sim.set_ai_tuning(tuning);
     }
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
 
     let mut best: Option<u64> = None;
-    let mut lap = race.sim.world.ships[LONE].standing.lap;
+    let mut lap = race.core.sim.world.ships[LONE].standing.lap;
     let mut started = 0u64;
     let mut recovered_this_lap = false;
     let mut respawn_indices = Vec::new();
@@ -142,14 +142,14 @@ fn run(
     let mut window_ticks = 0u32;
 
     for tick in 0..TICKS {
-        let before = race.sim.respawns_of(LONE);
-        let index_before = race.sim.world.ships[LONE].driver.index;
+        let before = race.core.sim.respawns_of(LONE);
+        let index_before = race.core.sim.world.ships[LONE].driver.index;
         race.tick(&PlayerInputs::none());
-        if race.sim.respawns_of(LONE) != before {
+        if race.core.sim.respawns_of(LONE) != before {
             recovered_this_lap = true;
             respawn_indices.push(index_before);
         }
-        let now = race.sim.world.ships[LONE].standing.lap;
+        let now = race.core.sim.world.ships[LONE].standing.lap;
         if now != lap {
             if lap > 1 && !recovered_this_lap {
                 let taken = tick - started;
@@ -160,8 +160,8 @@ fn run(
             recovered_this_lap = false;
         }
 
-        let airborne_now = race.sim.world.ships[LONE].physics.time_airborne > 0.0;
-        let index_now = race.sim.world.ships[LONE].driver.index;
+        let airborne_now = race.core.sim.world.ships[LONE].physics.time_airborne > 0.0;
+        let index_now = race.core.sim.world.ships[LONE].driver.index;
         if airborne_now && !was_airborne {
             window_start_index = index_now;
             window_ticks = 0;
@@ -182,12 +182,12 @@ fn run(
     Some(Record {
         respawn_indices,
         laps: lap,
-        respawns: race.sim.respawns_of(LONE),
-        shield: race.sim.world.ships[LONE].physics.shield,
-        capacity: race.sim.world.ships[LONE].handling.dimensions.shield,
+        respawns: race.core.sim.respawns_of(LONE),
+        shield: race.core.sim.world.ships[LONE].physics.shield,
+        capacity: race.core.sim.world.ships[LONE].handling.dimensions.shield,
         best,
         airborne,
-        line_len: race.sim.racing_line().len() as u32,
+        line_len: race.core.sim.racing_line().len() as u32,
     })
 }
 

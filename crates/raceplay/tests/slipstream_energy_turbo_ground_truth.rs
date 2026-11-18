@@ -54,28 +54,28 @@ fn both_mods_hand_out_and_use_their_own_pickups_in_one_race_with_no_fault() {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     assert_eq!(
-        race.sim.extension_reports().len(),
+        race.core.sim.extension_reports().len(),
         2,
         "both mods are on: {:?}",
         loaded.report
     );
-    let ships = usize::from(race.sim.world.ship_count);
+    let ships = usize::from(race.core.sim.world.ship_count);
     let mut carried: Vec<Option<Weapon>> = vec![None; ships];
     let mut handed = [0_u32; 2];
     let mut transits = 0_u32;
     let mut was_out = vec![false; ships];
     let drain_share = 0.008;
     let mut boost_ticks = 0_u32;
-    let mut prior: Vec<f32> = race.sim.world.ships[..ships]
+    let mut prior: Vec<f32> = race.core.sim.world.ships[..ships]
         .iter()
         .map(|ship| ship.physics.shield)
         .collect();
     for _ in 0..10_800 {
         race.tick(&throttle());
         for slot in 0..ships {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             let now = ship.pickup.weapon;
             if carried[slot].is_none()
                 && let Some(Weapon::Extension(kind)) = now
@@ -105,7 +105,7 @@ fn both_mods_hand_out_and_use_their_own_pickups_in_one_race_with_no_fault() {
     assert!(handed[1] > 0, "the slipstream was handed out");
     assert!(transits > 0, "a slipstream was used by its mod");
     assert!(boost_ticks > 0, "an energy turbo was used by its mod");
-    let reports = race.sim.extension_reports();
+    let reports = race.core.sim.extension_reports();
     assert!(
         reports.iter().all(|r| r.faulted.is_none()),
         "no fault: {reports:?}"

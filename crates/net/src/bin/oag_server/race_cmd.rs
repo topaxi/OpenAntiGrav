@@ -54,7 +54,7 @@ fn race(args: &Args) -> Result<()> {
     let (race, title) = oag_net::race::load(&job.params, &args.image)?;
     println!(
         "racing {title} from {}: {} craft, {} people, seed {}",
-        args.image, race.sim.world.ship_count, job.params.people, job.params.seed
+        args.image, race.core.sim.world.ship_count, job.params.people, job.params.seed
     );
     let mut host = Host::new(race, job.params.clone());
     let identity = oag_net::wt::Identity::self_signed(&[])?;

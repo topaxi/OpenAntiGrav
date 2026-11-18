@@ -1154,7 +1154,7 @@ project's driver's speed plan, hd-opponent-variant-2's per-hull adapted plans
 and the route plans, whether or not anything flew them (`spawn_heading`'s PS2
 test never ticks). `Race::start` now learns nothing; the head of
 `Race::tick`, `Race::speed_plan` and `Race::plan_of` learn the plans
-(`Race::ensure_speed_plans`) when an opponent flies this project's driver, the
+(`SimRace::ensure_speed_plans`) when an opponent flies this project's driver, the
 player's autopilot is on, or the circuit has a fork. See
 [ai.md](../gameplay/ai.md), "Which AI flies".
 

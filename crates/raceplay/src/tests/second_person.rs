@@ -16,16 +16,16 @@ use oag_tables::weapons::Weapon;
 /// a few ticks run so the standings have located every craft.
 fn second_person_holding(weapon: Weapon, table: oag_tables::weapons::WeaponStats) -> Race {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(Arc::new(table));
-    race.sim.world.controllers[1] = Controller::Local;
+    race.core.sim.weapons = Some(Arc::new(table));
+    race.core.sim.world.controllers[1] = Controller::Local;
     assert!(
-        race.sim.world.person_flown(1),
+        race.core.sim.world.person_flown(1),
         "slot 1 must be person-flown"
     );
     for _ in 0..10 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[1].pickup.weapon = Some(weapon);
+    race.core.sim.world.ships[1].pickup.weapon = Some(weapon);
     race
 }
 
@@ -43,6 +43,7 @@ fn a_second_persons_rocket_volley_is_theirs() {
     let mut race = second_person_holding(Weapon::Rocket, one_rocket_table());
     press_in_slot_1(&mut race);
     let shots: Vec<u8> = race
+        .core
         .sim
         .world
         .projectiles
@@ -63,6 +64,7 @@ fn a_second_persons_plasma_charge_and_cue_are_theirs() {
     let mut race = second_person_holding(Weapon::Plasma, one_plasma_table());
     press_in_slot_1(&mut race);
     let owner = race
+        .core
         .sim
         .world
         .projectiles
@@ -76,6 +78,7 @@ fn a_second_persons_plasma_charge_and_cue_are_theirs() {
         "slot 1's plasma charge is owned by {owner:?}"
     );
     let cue = race
+        .core
         .sim
         .drain_cues()
         .into_iter()
@@ -89,6 +92,7 @@ fn a_second_persons_shuriken_is_theirs() {
     let mut race = second_person_holding(Weapon::Shuriken, one_shuriken_table());
     press_in_slot_1(&mut race);
     let owners: Vec<u8> = race
+        .core
         .sim
         .world
         .projectiles
@@ -108,7 +112,12 @@ fn a_second_persons_shuriken_is_theirs() {
 fn a_second_persons_quake_wave_is_theirs() {
     let mut race = second_person_holding(Weapon::Quake, one_quake_table());
     press_in_slot_1(&mut race);
-    let wave = race.sim.world.quake.expect("slot 1's press fired no wave");
+    let wave = race
+        .core
+        .sim
+        .world
+        .quake
+        .expect("slot 1's press fired no wave");
     assert_eq!(wave.owner, 1, "the wave would hit its own firer");
 }
 
@@ -117,6 +126,7 @@ fn a_second_persons_repulser_is_theirs() {
     let mut race = second_person_holding(Weapon::Repulser, one_repulser_table());
     press_in_slot_1(&mut race);
     let owners: Vec<u8> = race
+        .core
         .sim
         .world
         .repulsers
@@ -133,22 +143,24 @@ fn a_second_persons_repulser_is_theirs() {
 #[test]
 fn the_missiles_reticle_hold_follows_the_primary_slot() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(Arc::new(one_missile_table()));
-    race.sim.world.controllers[0] = Controller::Ai;
-    race.sim.world.controllers[1] = Controller::Local;
-    assert_eq!(race.sim.world.primary_slot(), 1);
+    race.core.sim.weapons = Some(Arc::new(one_missile_table()));
+    race.core.sim.world.controllers[0] = Controller::Ai;
+    race.core.sim.world.controllers[1] = Controller::Local;
+    assert_eq!(race.core.sim.world.primary_slot(), 1);
     let stats = race
+        .core
         .sim
         .weapons
         .as_deref()
         .and_then(oag_tables::weapons::WeaponStats::missile)
         .expect("the fixture authors a Missile");
-    let forward = race.sim.world.ships[1].physics.body.forward();
+    let forward = race.core.sim.world.ships[1].physics.body.forward();
     // Slot 0 is dead ahead of slot 1, and slot 1 dead ahead of nothing.
-    race.sim.world.ships[0].physics.body.position =
-        race.sim.world.ships[1].physics.body.position + forward * 60.0;
+    race.core.sim.world.ships[0].physics.body.position =
+        race.core.sim.world.ships[1].physics.body.position + forward * 60.0;
     let target_of = |race: &Race, owner: u8| {
-        race.sim
+        race.core
+            .sim
             .world
             .projectiles
             .slots
@@ -156,7 +168,7 @@ fn the_missiles_reticle_hold_follows_the_primary_slot() {
             .find(|p| p.kind == Some(Weapon::Missile) && p.owner == owner)
             .map(|p| p.target)
     };
-    assert!(race.sim.fire_missile(1, &stats));
+    assert!(race.core.sim.fire_missile(1, &stats));
     assert_eq!(
         target_of(&race, 1),
         Some(None),
@@ -174,19 +186,19 @@ fn the_rubber_band_reads_the_best_placed_person() {
     places[1] = 1;
     places[2] = 2;
     assert_eq!(
-        race.sim.rubber_band_reference(&places),
+        race.core.sim.rubber_band_reference(&places),
         0,
         "one person: the AI in first place is nobody to chase"
     );
-    race.sim.world.controllers[1] = Controller::Local;
-    race.sim.world.controllers[2] = Controller::Local;
-    assert_eq!(race.sim.rubber_band_reference(&places), 1);
+    race.core.sim.world.controllers[1] = Controller::Local;
+    race.core.sim.world.controllers[2] = Controller::Local;
+    assert_eq!(race.core.sim.rubber_band_reference(&places), 1);
     places[0] = 1;
     places[1] = 2;
-    assert_eq!(race.sim.rubber_band_reference(&places), 0);
+    assert_eq!(race.core.sim.rubber_band_reference(&places), 0);
     places[1] = 1;
     assert_eq!(
-        race.sim.rubber_band_reference(&places),
+        race.core.sim.rubber_band_reference(&places),
         0,
         "a tie takes the lowest slot"
     );
@@ -197,12 +209,12 @@ fn the_rubber_band_reads_the_best_placed_person() {
 #[test]
 fn the_original_fields_opponents_are_the_craft_nobody_flies() {
     let mut race = race_with_a_grid();
-    let count = race.sim.world.ship_count as usize;
-    let (list, n) = race.sim.ai_flown_slots();
+    let count = race.core.sim.world.ship_count as usize;
+    let (list, n) = race.core.sim.ai_flown_slots();
     assert_eq!(&list[..n], &(1..count).collect::<Vec<_>>()[..]);
-    race.sim.world.controllers[0] = Controller::Ai;
-    race.sim.world.controllers[2] = Controller::Local;
-    let (list, n) = race.sim.ai_flown_slots();
+    race.core.sim.world.controllers[0] = Controller::Ai;
+    race.core.sim.world.controllers[2] = Controller::Local;
+    let (list, n) = race.core.sim.ai_flown_slots();
     let expected: Vec<usize> = (0..count).filter(|&s| s != 2).collect();
     assert_eq!(&list[..n], &expected[..]);
 }
@@ -212,16 +224,16 @@ fn the_original_fields_opponents_are_the_craft_nobody_flies() {
 #[test]
 fn no_person_seeks_a_weapon_pad() {
     let mut race = race_with_a_grid();
-    race.sim.pad_seeking = PadSeeking::Every;
-    race.sim.weapon_pad_line = vec![Some((6, 0.0))].into();
-    race.sim.weapon_pad_refresh_left = vec![0.0];
+    race.core.sim.pad_seeking = PadSeeking::Every;
+    race.core.sim.weapon_pad_line = vec![Some((6, 0.0))].into();
+    race.core.sim.weapon_pad_refresh_left = vec![0.0];
     assert!(
-        race.sim.pad_for(1).is_some(),
+        race.core.sim.pad_for(1).is_some(),
         "the AI craft sees the pad: fixture is too weak"
     );
-    race.sim.world.controllers[1] = Controller::Local;
+    race.core.sim.world.controllers[1] = Controller::Local;
     assert!(
-        race.sim.pad_for(1).is_none(),
+        race.core.sim.pad_for(1).is_none(),
         "a second person was sent for a pad"
     );
 }
@@ -232,17 +244,20 @@ fn no_person_seeks_a_weapon_pad() {
 #[test]
 fn an_ai_flown_slot_zero_gets_a_driver_of_its_own() {
     let mut race = race_with_a_grid();
-    race.sim.world.controllers[0] = Controller::Ai;
-    race.sim.world.controllers[1] = Controller::Local;
-    assert_eq!(race.sim.world.ships[0].driver, oag_ai::Driver::default());
+    race.core.sim.world.controllers[0] = Controller::Ai;
+    race.core.sim.world.controllers[1] = Controller::Local;
+    assert_eq!(
+        race.core.sim.world.ships[0].driver,
+        oag_ai::Driver::default()
+    );
     race.tick(&PlayerInputs::none());
-    let driver = race.sim.world.ships[0].driver;
+    let driver = race.core.sim.world.ships[0].driver;
     assert_ne!(
         driver.seed, 0,
         "slot 0 still drives as the seedless default"
     );
-    let line = &race.sim.racing_line;
-    let here = race.sim.world.ships[0].physics.body.position;
+    let line = &race.core.sim.racing_line;
+    let here = race.core.sim.world.ships[0].physics.body.position;
     assert_eq!(
         driver.index as usize,
         line.nearest(here, 0, line.len()),
@@ -256,8 +271,8 @@ fn an_ai_flown_slot_zero_gets_a_driver_of_its_own() {
 #[test]
 fn the_weapon_ai_sees_a_second_person_ahead() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(Arc::new(one_rocket_table()));
-    race.sim.weapon_ai = Some(Arc::new(
+    race.core.sim.weapons = Some(Arc::new(one_rocket_table()));
+    race.core.sim.weapon_ai = Some(Arc::new(
         oag_tables::weapons::ai::parse(
             r#"<WeaponAIStats>
                  <Rockets useAgainstPlayer="1.1" useAgainstAI="1.2" absorb="1.0"/>
@@ -265,14 +280,15 @@ fn the_weapon_ai_sees_a_second_person_ahead() {
         )
         .expect("the fixture table must parse"),
     ));
-    race.sim.world.controllers[1] = Controller::Local;
+    race.core.sim.world.controllers[1] = Controller::Local;
     let progress = |race: &mut Race, slot: usize, at: f32| {
-        race.sim.world.ships[slot].standing.progress = Some(at);
+        race.core.sim.world.ships[slot].standing.progress = Some(at);
     };
     progress(&mut race, 0, 10.0);
     progress(&mut race, 2, 40.0);
     progress(&mut race, 1, 70.0);
     let situation = race
+        .core
         .sim
         .fire_situation(2, Weapon::Rocket, true)
         .expect("a rocket with odds and a course has a situation");
@@ -302,25 +318,25 @@ fn a_second_person_draws_from_the_human_column_of_a_weapon_pad() {
     )
     .expect("the fixture table must parse");
     let mut race = race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 0.0, table);
-    let mut second = race.sim.world.ships[0];
+    let mut second = race.core.sim.world.ships[0];
     second.place_at(oag_gameplay::Pose {
         position: second.physics.body.position + second.physics.body.right() * 60.0,
         orientation: second.physics.body.orientation,
     });
-    race.sim.world.ships[1] = second;
-    race.sim.world.ships[1].pickup.weapon = None;
-    race.sim.world.ship_count = 2;
-    race.sim.world.controllers[1] = Controller::Local;
+    race.core.sim.world.ships[1] = second;
+    race.core.sim.world.ships[1].pickup.weapon = None;
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.controllers[1] = Controller::Local;
     for _ in 0..3 {
         race.tick(&PlayerInputs::none());
     }
     assert_eq!(
-        race.sim.world.ships[0].pickup.weapon,
+        race.core.sim.world.ships[0].pickup.weapon,
         Some(Weapon::Turbo),
         "the control: the first person draws from the human column"
     );
     assert_eq!(
-        race.sim.world.ships[1].pickup.weapon,
+        race.core.sim.world.ships[1].pickup.weapon,
         Some(Weapon::Turbo),
         "the second person was dealt from the AI column"
     );
@@ -336,10 +352,11 @@ fn a_plasma_craft_hit_spawns_two_blasts_at_the_bolt_and_the_craft() {
     let aimed_at_slot_1 = |hd: bool| {
         let mut race = second_person_holding(Weapon::Plasma, one_plasma_table());
         race.view.hd_plasma_blast = hd;
-        let craft = race.sim.world.ships[1].physics.body.position;
+        let craft = race.core.sim.world.ships[1].physics.body.position;
         // Slot 1 is not the firer, and the bolt starts 3 units short of it.
         let speed = Vec3::Z * 60.0;
-        race.sim
+        race.core
+            .sim
             .world
             .projectiles
             .spawn(Weapon::Plasma, craft - Vec3::Z * 3.0, speed, 0);
@@ -348,7 +365,7 @@ fn a_plasma_craft_hit_spawns_two_blasts_at_the_bolt_and_the_craft() {
 
     let mut race = aimed_at_slot_1(false);
     let before = live(&race);
-    let craft = race.sim.world.ships[1].physics.body.position;
+    let craft = race.core.sim.world.ships[1].physics.body.position;
     race.tick(&PlayerInputs::none());
     let at: Vec<Vec3> = race
         .view

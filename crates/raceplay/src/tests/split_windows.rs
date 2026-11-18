@@ -19,8 +19,8 @@ fn window(seats: &[usize]) -> WindowViews {
 /// Moves every craft forward and ticks, so each camera has travelled since the last frame.
 fn step(race: &mut Race) {
     for slot in 0..3 {
-        let forward = race.sim.world.ships[slot].physics.body.forward();
-        race.sim.world.ships[slot].physics.body.position += forward * (3.0 + slot as f32);
+        let forward = race.core.sim.world.ships[slot].physics.body.forward();
+        race.core.sim.world.ships[slot].physics.body.position += forward * (3.0 + slot as f32);
     }
     race.tick(&oag_gameplay::PlayerInputs::none());
 }

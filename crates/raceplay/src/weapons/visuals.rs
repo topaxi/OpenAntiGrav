@@ -41,7 +41,7 @@ impl Race {
             // The charge: up exactly while the craft holds a LeachBeam and is
             // in state 1, which is the whole of `FUN_0883f540`'s own gate, run
             // for every craft. Nothing chosen here.
-            let ship = &self.sim.world.ships[slot];
+            let ship = &self.core.sim.world.ships[slot];
             let holding =
                 ship.pickup.weapon == Some(oag_tables::weapons::Weapon::LeachBeam) && ship.active;
             let holder = ship.physics.body.position;
@@ -95,7 +95,7 @@ impl Race {
     /// ribbon, effect and ball clock of an entry follow its beam, and are torn
     /// down when the entry holds none (or an unlocked one).
     fn advance_leach_beam_ribbon_at(&mut self, at: usize) {
-        let locked = self.sim.world.leach_beams[at]
+        let locked = self.core.sim.world.leach_beams[at]
             .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked);
         let Some(beam) = locked else {
             self.view.leach_beam_ribbon[at] = None;
@@ -105,15 +105,15 @@ impl Race {
             }
             return;
         };
-        let owner = self.sim.world.ships[beam.owner as usize]
+        let owner = self.core.sim.world.ships[beam.owner as usize]
             .physics
             .body
             .position;
-        let target = self.sim.world.ships[beam.target as usize]
+        let target = self.core.sim.world.ships[beam.target as usize]
             .physics
             .body
             .position;
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         // Split the two fields rather than borrowing `self.view` twice at
         // once - the same idiom `Race::force_trail_sparks`'s own
         // `(player, rng)` pair uses.
@@ -123,7 +123,7 @@ impl Race {
         );
         let ribbon = ribbon.get_or_insert_with(|| oag_fx::beam::Ribbon::new(rng));
         let pulsed = ribbon.advance(dt, (target - owner).length(), beam.range, rng);
-        let spline = &self.sim.spline;
+        let spline = &self.core.sim.spline;
         let point = ribbon.energy_point(owner, target, beam.range, &|p| spline.tube_frame(p));
 
         // `LEACHENERGY`: the same pulse block that re-spawns
@@ -135,10 +135,13 @@ impl Race {
         // already makes the very first `advance` call pulse, so the two agree
         // on tick one anyway.
         if pulsed && let Some(point) = point {
-            self.sim.cues.push(oag_gameplay::cue::CueEvent::at_point(
-                oag_gameplay::cue::Cue::LeachEnergy,
-                point,
-            ));
+            self.core
+                .sim
+                .cues
+                .push(oag_gameplay::cue::CueEvent::at_point(
+                    oag_gameplay::cue::Cue::LeachEnergy,
+                    point,
+                ));
         }
 
         let effect = self.view.handles.get(Trigger::LeachbeamEnergy).cloned();
@@ -177,7 +180,7 @@ impl Race {
         beam: oag_weapons::projectile::leach_beam::Beam,
         dt: f32,
     ) {
-        let gap = self.sim.leach_trip_gap(beam);
+        let gap = self.core.sim.leach_trip_gap(beam);
         let wrapped = match beam.trip {
             // The simulation's clock wrapped this tick (the drain landed):
             // it went down since the last frame read it.
@@ -199,7 +202,7 @@ impl Race {
         // `*(path + 0x0) + 0x6944`'s matrix, the shooter's
         // (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "The ball rides the
         // strip"), where the ball has just arrived.
-        let point = self.sim.world.ships[beam.owner as usize]
+        let point = self.core.sim.world.ships[beam.owner as usize]
             .physics
             .body
             .position;
@@ -229,7 +232,7 @@ impl Race {
     /// still applies correctly if the model's own materials ask for it.
     #[must_use]
     pub fn leach_ball_model_matrix(&self, entry: usize) -> Option<Mat4> {
-        let beam = self.sim.world.leach_beams[entry]
+        let beam = self.core.sim.world.leach_beams[entry]
             .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked)?;
         let at = self.leach_ball_point(beam, self.view.leach_ball_elapsed[entry]);
         Some(Mat4::from_translation(at))
@@ -259,9 +262,9 @@ impl Race {
         beam: oag_weapons::projectile::leach_beam::Beam,
         elapsed: f32,
     ) -> Vec3 {
-        let fraction = leach_ball_fraction(elapsed, self.sim.leach_trip_gap(beam));
+        let fraction = leach_ball_fraction(elapsed, self.core.sim.leach_trip_gap(beam));
         self.leach_ball_on_strip(beam, fraction).unwrap_or_else(|| {
-            let ships = &self.sim.world.ships;
+            let ships = &self.core.sim.world.ships;
             oag_fx::beam::hd_ball::position(
                 fraction,
                 ships[beam.owner as usize].physics.body.position,
@@ -280,6 +283,7 @@ impl Race {
     #[must_use]
     pub fn leach_overlay_pulse(&self, slot: usize) -> Option<f32> {
         let (at, _) = self
+            .core
             .sim
             .world
             .leach_beams
@@ -328,7 +332,7 @@ impl Race {
         use oag_weapons::projectile::leach_beam::{DISCONNECT_LINGER_SECONDS, Kind};
 
         let (Some(beam), Some(ribbon)) = (
-            self.sim.world.leach_beams[at],
+            self.core.sim.world.leach_beams[at],
             &self.view.leach_beam_ribbon[at],
         ) else {
             return Vec::new();
@@ -342,14 +346,14 @@ impl Race {
                 (1.0 - (beam.age - disconnected_at) / DISCONNECT_LINGER_SECONDS).clamp(0.0, 1.0)
             }
         };
-        let shooter = &self.sim.world.ships[beam.owner as usize];
+        let shooter = &self.core.sim.world.ships[beam.owner as usize];
         // The shooter's node basis: the drawn hull's own rotation, the body's
         // orientation with its visual roll - `drawable::model_matrix_of`
         // without the model-space yaw and scale.
         let rotation = crate::drawable::display_orientation(shooter);
         let frame = oag_fx::beam::Frame {
             owner: shooter.physics.body.position,
-            target: self.sim.world.ships[beam.target as usize]
+            target: self.core.sim.world.ships[beam.target as usize]
                 .physics
                 .body
                 .position,
@@ -360,7 +364,7 @@ impl Race {
             range: beam.range,
             alpha,
         };
-        let spline = &self.sim.spline;
+        let spline = &self.core.sim.spline;
         oag_fx::beam::build(ribbon, &frame, &|p| spline.tube_frame(p))
     }
 
@@ -434,7 +438,7 @@ impl Race {
         // HD's Missile explosion model: entered only when the missile reaches
         // a craft, at that craft - `missile_blast`.
         if let (oag_tables::weapons::Weapon::Missile, Some(slot)) = (kind, struck) {
-            let ship = &self.sim.world.ships[slot];
+            let ship = &self.core.sim.world.ships[slot];
             self.spawn_hd_missile_blast(ship.physics.body.position, ship.physics.body.orientation);
         }
         // Each detonation's own `ScreenFlash_Start`, whether or not its
@@ -444,7 +448,7 @@ impl Race {
             &mut self.view.screen_flash,
         ) {
             #[expect(clippy::cast_precision_loss, reason = "at most a few seconds of ticks")]
-            flash.start_aged(kind, at, age_ticks as f32 * self.sim.dt);
+            flash.start_aged(kind, at, age_ticks as f32 * self.core.sim.dt);
         }
         let effect = self.view.handles.get(trigger).cloned()?;
         // Neutral severity: the field the collision sparks derive from an
@@ -506,9 +510,9 @@ impl Race {
     ) -> Option<(Trigger, Vec3)> {
         match kind {
             oag_tables::weapons::Weapon::Rocket => Some(match struck {
-                Some(slot) if self.sim.world.ships[slot].active => (
+                Some(slot) if self.core.sim.world.ships[slot].active => (
                     Trigger::CraftBlast,
-                    self.sim.world.ships[slot].physics.body.position
+                    self.core.sim.world.ships[slot].physics.body.position
                         - Vec3::Y * oag_title::engine_effects::CRAFT_BLAST_DROP,
                 ),
                 // A craft that has gone inactive since the hit falls back to
@@ -570,7 +574,13 @@ impl Race {
             return None;
         }
         // A craft gone inactive since the hit has no pose to read.
-        let ship = self.sim.world.ships.get(slot).filter(|ship| ship.active)?;
+        let ship = self
+            .core
+            .sim
+            .world
+            .ships
+            .get(slot)
+            .filter(|ship| ship.active)?;
         Some(ship.physics.body.position)
     }
 
@@ -602,7 +612,7 @@ impl Race {
         &mut self,
         before: &[u8; oag_weapons::projectile::MAX_PROJECTILES],
     ) {
-        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
+        for (slot, projectile) in self.core.sim.world.projectiles.slots.iter().enumerate() {
             if !bounced_this_tick(projectile.kind, before[slot], projectile.bounces) {
                 continue;
             }
@@ -641,7 +651,7 @@ impl Race {
             return;
         };
         for slot in 0..MAX_SHIPS {
-            let nozzle = self.sim.world.ships[slot]
+            let nozzle = self.core.sim.world.ships[slot]
                 .active
                 .then(|| self.nozzle_of(slot))
                 .flatten();
@@ -706,7 +716,7 @@ impl Race {
             .handles
             .get(Trigger::PlasmaFlare)
             .is_some_and(|effect| effect.rides_owner_frame);
-        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
+        for (slot, projectile) in self.core.sim.world.projectiles.slots.iter().enumerate() {
             let name = flare_effect_for(projectile.kind);
             let (primary, orbiting) = match projectile.kind {
                 Some(oag_tables::weapons::Weapon::Missile) => {
@@ -771,7 +781,7 @@ impl Race {
             // A shot first drawn mid-flight (a network client learns of another person's
             // fire late) is given its effect where it was fired from, and the effect is aged
             // along the flight below: `docs/networking/README.md`, "A fire seen late".
-            let late = late_attach(projectile, self.sim.dt);
+            let late = late_attach(projectile, self.core.sim.dt);
             let back = late.map_or(Vec3::ZERO, |(_, back)| back);
             let fresh = self.view.projectile_flare[slot].is_none();
             let fresh_orbit = self.view.projectile_flare_orbit[slot].is_none();
@@ -849,7 +859,7 @@ impl Race {
                 }
             }
             if let Some((ticks, _)) = late {
-                let dt = self.sim.dt;
+                let dt = self.core.sim.dt;
                 let riders = [
                     (fresh, self.view.projectile_flare[slot], primary),
                     (
@@ -902,7 +912,7 @@ impl Race {
         modelled: impl Fn(oag_tables::weapons::Weapon) -> bool,
     ) -> Vec<oag_mesh::mesh::GpuVertex> {
         let mut vertices = Vec::new();
-        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
+        for (slot, projectile) in self.core.sim.world.projectiles.slots.iter().enumerate() {
             let Some(kind) = projectile.kind else {
                 continue;
             };
@@ -1003,7 +1013,8 @@ impl Race {
     #[must_use]
     pub fn missile_head_model_matrices(&self) -> Vec<Mat4> {
         let kind = oag_tables::weapons::Weapon::Missile;
-        self.sim
+        self.core
+            .sim
             .world
             .projectiles
             .slots
@@ -1090,7 +1101,8 @@ impl Race {
     /// executable's own measured pose - see `laid`.
     #[must_use]
     fn projectile_model_matrices(&self, kind: oag_tables::weapons::Weapon) -> Vec<Mat4> {
-        self.sim
+        self.core
+            .sim
             .world
             .projectiles
             .slots

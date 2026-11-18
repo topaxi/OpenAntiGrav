@@ -1217,7 +1217,7 @@ impl Session {
         match &self.stage {
             Stage::Launcher(_) | Stage::Frontend(_) | Stage::Menu(_) => true,
             Stage::Loading(_) => false,
-            Stage::Race(stage) => self.paused() || stage.race.sim.finished(),
+            Stage::Race(stage) => self.paused() || stage.race.core.sim.finished(),
         }
     }
 

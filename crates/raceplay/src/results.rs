@@ -145,8 +145,8 @@ impl Race {
     /// measured. Zone is not included: it ends the same way but was not looked at.
     #[must_use]
     pub fn runs_on_after_the_wreck(&self) -> bool {
-        self.sim.finished()
-            && self.sim.world.mode() == Mode::SingleRace
+        self.core.sim.finished()
+            && self.core.sim.world.mode() == Mode::SingleRace
             && self.view.wreck_ended_tick.is_some()
     }
 
@@ -156,7 +156,7 @@ impl Race {
     /// ([`Self::runs_on_after_the_wreck`]).
     #[must_use]
     pub fn runs_on_after_the_end(&self) -> bool {
-        self.sim.runs_on_after_the_line() || self.runs_on_after_the_wreck()
+        self.core.sim.runs_on_after_the_line() || self.runs_on_after_the_wreck()
     }
 
     #[cfg(feature = "view")]
@@ -170,7 +170,7 @@ impl Race {
     /// screen flashes and the destroy camera's ease. They are all presentation
     /// state on [`RaceView`] (the particle stage, the shake, the flash, the blast
     /// pool, the camera's easing) and none of them reaches
-    /// [`RaceSim::state_hash`]; this writes nothing under `self.sim`, `world.tick`
+    /// [`RaceSim::state_hash`]; this writes nothing under `self.core.sim`, `world.tick`
     /// included, so the standings and the board stay frozen exactly as
     /// [`RaceSim::runs_on_after_the_line`]'s own rows say. In [`Race::tick`]'s order.
     ///
@@ -181,7 +181,7 @@ impl Race {
     pub fn tick_cosmetics(&mut self) {
         // Before the destroy camera eases - see `between_ticks`.
         self.capture_poses();
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         self.view.contact.shake.advance(dt);
         self.advance_seat_shakes(dt);
         self.advance_bomb_blast_models(dt);
@@ -278,7 +278,7 @@ impl Race {
     /// Scored races (Eliminator) end on a kill target with no lap target, so
     /// they never run on after the line and their points do not change here.
     pub fn refresh_results(&mut self) {
-        if !self.sim.runs_on_after_the_line() {
+        if !self.core.sim.runs_on_after_the_line() {
             return;
         }
         let Some(held) = &self.view.results else {
@@ -298,9 +298,9 @@ impl Race {
     /// taken at the finish. A network client's: its board was taken on the tick
     /// its *prediction* finished, and the server's confirmed state is the race's
     /// truth, so the board is taken once more when that finishes. A no-op until
-    /// the race in `self.sim` is finished.
+    /// the race in `self.core.sim` is finished.
     pub fn recapture_results(&mut self) {
-        if self.sim.finished() {
+        if self.core.sim.finished() {
             self.view.results = None;
             self.capture_results();
         }
@@ -311,10 +311,10 @@ impl Race {
     /// Called at the end of [`Race::tick`], after the standings have been
     /// advanced, so the last crossing is already in the table it reads.
     pub(super) fn capture_results(&mut self) {
-        if !self.sim.finished() || self.view.results.is_some() {
+        if !self.core.sim.finished() || self.view.results.is_some() {
             return;
         }
-        let board = self.take_board(oag_race::race_clock_ticks(self.sim.world.tick));
+        let board = self.take_board(oag_race::race_clock_ticks(self.core.sim.world.tick));
         self.view.results = Some(board);
         self.view.results_revision = self.view.results_revision.wrapping_add(1);
     }
@@ -328,21 +328,22 @@ impl Race {
     /// as the first key and again as the tie-break: chosen, not measured.
     #[must_use]
     pub fn eliminator_place(&self) -> u8 {
-        let scored = self.sim.score_law.is_some();
-        let field: Vec<oag_race::score::Finisher> = (0..usize::from(self.sim.world.ship_count))
-            .map(|slot| {
-                let standing = &self.sim.world.ships[slot].standing;
-                oag_race::score::Finisher {
-                    points: if scored {
-                        standing.whole_score()
-                    } else {
-                        standing.kills
-                    },
-                    kills: standing.kills,
-                    person: self.sim.world.person_flown(slot),
-                }
-            })
-            .collect();
+        let scored = self.core.sim.score_law.is_some();
+        let field: Vec<oag_race::score::Finisher> =
+            (0..usize::from(self.core.sim.world.ship_count))
+                .map(|slot| {
+                    let standing = &self.core.sim.world.ships[slot].standing;
+                    oag_race::score::Finisher {
+                        points: if scored {
+                            standing.whole_score()
+                        } else {
+                            standing.kills
+                        },
+                        kills: standing.kills,
+                        person: self.core.sim.world.person_flown(slot),
+                    }
+                })
+                .collect();
         oag_race::score::final_places(&field)
             .get(self.player_slot())
             .copied()
@@ -361,13 +362,13 @@ impl Race {
         // cut. That table is what the HUD's own position readout comes from,
         // and a scoreboard that renumbered would contradict the number the
         // player was just looking at.
-        let scored = self.sim.score_law.is_some();
-        let crafts: Vec<Craft> = (0..usize::from(self.sim.world.ship_count))
+        let scored = self.core.sim.score_law.is_some();
+        let crafts: Vec<Craft> = (0..usize::from(self.core.sim.world.ship_count))
             .map(|slot| {
-                let ship = &self.sim.world.ships[slot];
+                let ship = &self.core.sim.world.ships[slot];
                 Craft {
                     slot: u8::try_from(slot).unwrap_or(u8::MAX),
-                    person: self.sim.world.person_flown(slot),
+                    person: self.core.sim.world.person_flown(slot),
                     place: places[slot],
                     lap: ship.standing.lap,
                     // The racing clock: the board prints this as the craft's
@@ -382,7 +383,7 @@ impl Race {
                 }
             })
             .collect();
-        let mut board = scoreboard::build(&crafts, self.sim.world.laps_target(), tick);
+        let mut board = scoreboard::build(&crafts, self.core.sim.world.laps_target(), tick);
         // A race names the people it was given names for (the lobby's, or seat 1's stored name).
         for row in board.rows.iter_mut().filter(|row| row.player) {
             row.name = self

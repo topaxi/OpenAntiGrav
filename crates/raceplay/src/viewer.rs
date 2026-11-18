@@ -336,7 +336,7 @@ impl Viewer {
 
     fn advance(&mut self, race: &mut Race) {
         for event in self.replay.events_at(self.at) {
-            if race.sim.apply_event(event).is_err() {
+            if race.core.sim.apply_event(event).is_err() {
                 // The pass refuses an event this build does not apply before the prefix reaches
                 // it, so a played tick never meets one.
                 break;
@@ -363,15 +363,15 @@ impl Viewer {
         if self.timeline.seek(from).is_err() {
             return Moved::Still;
         }
-        race.restore_for_viewing(&self.timeline.probe().sim);
+        race.restore_for_viewing(&self.timeline.probe().core.sim);
         self.at = self.timeline.tick();
         while self.at < target {
             self.advance(race);
             // The tick being replayed already sounded once, and a seek is silent up to its
             // target.
-            drop(race.sim.drain_cues());
-            drop(race.sim.drain_announcements());
-            drop(race.sim.drain_class_announcements());
+            drop(race.core.sim.drain_cues());
+            drop(race.core.sim.drain_announcements());
+            drop(race.core.sim.drain_class_announcements());
         }
         if wanted > target {
             self.at = wanted;

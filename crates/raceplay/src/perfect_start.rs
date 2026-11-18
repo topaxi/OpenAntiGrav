@@ -35,15 +35,15 @@ impl Race {
     /// [`Grade::Perfect`] this tick. The grade is written once, on the
     /// first-thrust edge, so a change is that edge.
     pub(super) fn fire_perfect_starts(&mut self, before: &[Grade; oag_gameplay::MAX_SHIPS]) {
-        let count = self.sim.world.ship_count as usize;
+        let count = self.core.sim.world.ship_count as usize;
         for (slot, &was) in before.iter().enumerate().take(count) {
-            if !self.sim.world.controllers[slot].is_human() {
+            if !self.core.sim.world.controllers[slot].is_human() {
                 continue;
             }
-            let now = self.sim.world.ships[slot].physics.launch.grade;
+            let now = self.core.sim.world.ships[slot].physics.launch.grade;
             if now == Grade::Perfect && was != Grade::Perfect {
                 self.boost_plume(slot);
-                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::Turbo,
                     slot,
                 ));

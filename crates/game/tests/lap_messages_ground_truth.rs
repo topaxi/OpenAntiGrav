@@ -59,7 +59,7 @@ fn drawn(loaded: &oag_raceplay::Loaded, readout: &oag_hud::Readout) -> Vec<Strin
 /// its slot held something else (or nothing) on the tick before.
 fn time_trial_ids(loaded: &oag_raceplay::Loaded, stored_best: Option<u32>) -> (Vec<String>, usize) {
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, stored_best);
     let mut ids: Vec<String> = Vec::new();
     let mut before: [Option<String>; 4] = Default::default();
@@ -73,7 +73,7 @@ fn time_trial_ids(loaded: &oag_raceplay::Loaded, stored_best: Option<u32>) -> (V
             }
             before[slot] = now;
         }
-        if race.sim.world.primary_race().finished {
+        if race.core.sim.world.primary_race().finished {
             after_finish += 1;
             if after_finish > 600 {
                 break;
@@ -81,10 +81,11 @@ fn time_trial_ids(loaded: &oag_raceplay::Loaded, stored_best: Option<u32>) -> (V
         }
     }
     assert!(
-        race.sim.world.primary_race().finished,
+        race.core.sim.world.primary_race().finished,
         "the autopilot finishes the time trial"
     );
     let laps = race
+        .core
         .sim
         .world
         .primary_race()
@@ -139,7 +140,7 @@ fn a_single_race_shows_the_lap_line_gap_in_the_originals_format() {
     };
     let loaded = load(&image, oag_race::Mode::SingleRace);
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, None);
     let mut gaps = Vec::new();
     for _ in 0..7000 {
@@ -211,7 +212,7 @@ fn pure_raises_its_own_keys_white_and_words_the_gap_as_a_sentence() {
         oag_pure::race::DEFAULT_TRACK,
     );
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, None);
     let mut sentences = Vec::new();
     let mut lines_seen = 0;
@@ -285,7 +286,7 @@ fn hd_skips_the_record_line_in_time_trial_and_a_lone_craft_stamps_nothing() {
     );
 
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, None);
     for tick in 0..9000 {
         race.tick(&PlayerInputs::none());
@@ -357,21 +358,22 @@ fn lapped(loaded: &oag_raceplay::Loaded, wav: &str, voices: bool) -> Lapped {
         false,
     );
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, Some(60 * 600));
     let perfect_id = loaded.hud.art.lap_hud.expect("read").perfect_lap;
     let (mut cues, mut perfect_lines) = (Vec::new(), 0);
-    let mut lap = race.sim.world.primary_race().lap;
+    let mut lap = race.core.sim.world.primary_race().lap;
     let mut before: [Option<String>; 4] = Default::default();
     let mut after_finish = 0;
     for step in 0..30_000_u64 {
-        race.sim.world.ships[0].physics.shield_pickup_timer = 1.0;
+        race.core.sim.world.ships[0].physics.shield_pickup_timer = 1.0;
         race.tick(&PlayerInputs::none());
-        let completed = race.sim.world.primary_race().lap != lap;
-        lap = race.sim.world.primary_race().lap;
+        let completed = race.core.sim.world.primary_race().lap != lap;
+        lap = race.core.sim.world.primary_race().lap;
         let tick = step;
         cues.extend(
-            race.sim
+            race.core
+                .sim
                 .pending_cues()
                 .iter()
                 .filter(|e| matches!(e.cue, Cue::PerfectLap | Cue::NewLapRecord))
@@ -388,7 +390,7 @@ fn lapped(loaded: &oag_raceplay::Loaded, wav: &str, voices: bool) -> Lapped {
             voices || !matches!(e.cue, Cue::PerfectLap | Cue::NewLapRecord)
         });
         audio.tick();
-        if race.sim.world.primary_race().finished {
+        if race.core.sim.world.primary_race().finished {
             after_finish += 1;
             if after_finish > 240 {
                 break;

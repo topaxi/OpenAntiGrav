@@ -19,7 +19,7 @@ const LAW: oag_title::weapons::DisruptorCraftFx = oag_title::weapons::DisruptorC
 fn grid_with_a_disrupted_craft(law: Option<oag_title::weapons::DisruptorCraftFx>) -> Race {
     let mut race = race_with_a_grid();
     race.view.disruptor_craft_law = law;
-    race.sim.world.ships[1].disruption = Disruption {
+    race.core.sim.world.ships[1].disruption = Disruption {
         kind: Some(DisruptorEffectKind::Stall),
         timer: 0.5,
     };
@@ -88,6 +88,6 @@ fn a_title_with_no_craft_effect_draws_none() {
 #[test]
 fn an_undisrupted_craft_draws_none() {
     let mut race = grid_with_a_disrupted_craft(Some(LAW));
-    race.sim.world.ships[1].disruption = Disruption::default();
+    race.core.sim.world.ships[1].disruption = Disruption::default();
     assert!(tints_over(&mut race, 10).iter().all(Option::is_none));
 }

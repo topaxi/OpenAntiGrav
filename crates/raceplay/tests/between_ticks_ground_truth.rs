@@ -60,7 +60,7 @@ fn run(hz: u64, alpha: impl Fn(&TickClock) -> f32) -> Option<Run> {
         let eye = race.camera_position();
         race.set_draw_alpha(1.0);
         // At alpha 1 the accessor is the tick itself, bit for bit.
-        let body = race.sim.world.ships[0].physics.body;
+        let body = race.core.sim.world.ships[0].physics.body;
         assert_eq!(
             race.ship_model_matrix_of(0).w_axis.truncate(),
             body.position,

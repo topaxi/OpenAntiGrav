@@ -78,7 +78,7 @@ impl LoadWorker {
     /// held for the scene - see [`super::TextureSink`].
     ///
     /// `plan_ahead` starts the race on this thread once the circuit is read and
-    /// begins learning its speed plans there ([`crate::Race::begin_speed_plans_ahead`]),
+    /// begins learning its speed plans there ([`crate::SimRace::begin_speed_plans_ahead`]),
     /// for a launch that will seat no one else and take no network host's race:
     /// the menus' own. The scene build then takes the started race
     /// ([`Loaded::started`]).
@@ -165,7 +165,7 @@ impl LoadWorker {
                         .is_some_and(|course| !course.routes().is_empty());
                     if plan_ahead && forked {
                         let mut race = crate::Race::start(loaded.setup.clone());
-                        race.begin_speed_plans_ahead();
+                        race.core.begin_speed_plans_ahead();
                         loaded.started = Some(Box::new(race));
                     }
                     loaded

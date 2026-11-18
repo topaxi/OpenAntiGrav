@@ -132,7 +132,7 @@ fn a_held_turbo_draws_its_own_authored_green_on_a_real_race() {
         .expect("Pure's arcade layout parses; a context is buildable");
 
     let mut race = race::Race::start(loaded.setup);
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
     race.tick(&PlayerInputs::none());
 
     let readout = race.readout();
@@ -273,7 +273,7 @@ fn each_held_weapon_draws_its_own_glyph_in_its_own_colour_at_the_top_middle() {
     let mut masks: Vec<(W, Vec<bool>)> = Vec::new();
     for (weapon, rgb) in weapons {
         let mut race = race::Race::start(loaded.setup.clone());
-        race.sim.world.ships[0].pickup.weapon = Some(weapon);
+        race.core.sim.world.ships[0].pickup.weapon = Some(weapon);
         race.tick(&PlayerInputs::none());
         let frame = oag_hud::draw_list(&context, &race.readout());
         let draws: Vec<_> = frame

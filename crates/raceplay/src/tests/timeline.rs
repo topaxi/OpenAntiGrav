@@ -26,21 +26,21 @@ fn inputs(tick: u64) -> PlayerInputs {
 fn recording(ticks: u64, events: &[(u64, Level)]) -> (Replay, Vec<String>) {
     let mut race = Race::start(fixture());
     race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
-    let mut text = vec![format!("{:?}", race.sim)];
+    let mut text = vec![format!("{:?}", race.core.sim)];
     for tick in 0..ticks {
         for (_, level) in events.iter().filter(|(at, _)| *at == tick) {
             race.change_pilot_assist(*level);
         }
         race.tick(&inputs(tick));
-        race.sim.drain_cues();
-        text.push(format!("{:?}", race.sim));
+        race.core.sim.drain_cues();
+        text.push(format!("{:?}", race.core.sim));
     }
     (race.recorded().expect("recording"), text)
 }
 
 /// The first bytes that differ, since a whole `RaceSim` is more text than a failure can print.
 fn same_as_recorded(timeline: &Timeline, recorded: &str, tick: u64) {
-    let text = format!("{:?}", timeline.probe().sim);
+    let text = format!("{:?}", timeline.probe().core.sim);
     if let Some(at) = text.bytes().zip(recorded.bytes()).position(|(a, b)| a != b) {
         let window = |s: &str| s[at.saturating_sub(120)..(at + 80).min(s.len())].to_string();
         panic!(
@@ -87,10 +87,13 @@ fn an_event_on_a_keyframes_own_tick_applies_after_it() {
     let (replay, _) = recording(TICKS, &[(at, Level::Extreme)]);
     let mut timeline = opened(replay);
     timeline.seek(at).expect("in the prefix");
-    let before = timeline.probe().sim.pilot_assist_level();
+    let before = timeline.probe().core.sim.pilot_assist_level();
     timeline.seek(at + 1).expect("in the prefix");
-    assert_ne!(before, timeline.probe().sim.pilot_assist_level());
-    assert_eq!(timeline.probe().sim.pilot_assist_level(), Level::Extreme);
+    assert_ne!(before, timeline.probe().core.sim.pilot_assist_level());
+    assert_eq!(
+        timeline.probe().core.sim.pilot_assist_level(),
+        Level::Extreme
+    );
 }
 
 #[test]
@@ -101,7 +104,7 @@ fn stepping_matches_seeking_and_stops_at_the_prefix() {
     for tick in 1..=130 {
         assert_eq!(timeline.step(), Ok(Some(tick)));
     }
-    assert!(format!("{:?}", timeline.probe().sim) == text[130]);
+    assert!(format!("{:?}", timeline.probe().core.sim) == text[130]);
     assert_eq!(timeline.step(), Ok(None));
     assert_eq!(
         timeline.seek(131),
@@ -153,14 +156,14 @@ fn the_wrong_race_is_refused_at_tick_zero() {
 #[test]
 fn past_the_ceiling_the_interval_doubles_and_a_seek_still_arrives() {
     let (replay, text) = recording(TICKS, &[]);
-    let one = Race::start(fixture()).sim.snapshot_bytes();
+    let one = Race::start(fixture()).core.sim.snapshot_bytes();
     let mut timeline =
         Timeline::open_within(fixture(), replay, 4 * one + one / 2).expect("the race it records");
     assert_eq!(timeline.wait(), Pass::Complete);
     assert_eq!(timeline.interval(), 2 * KEYFRAME_TICKS);
     assert_eq!(timeline.keyframes(), 4, "ticks 0, 120, 240 and 360");
     assert_eq!(timeline.seek(239), Ok(239));
-    assert!(format!("{:?}", timeline.probe().sim) == text[239]);
+    assert!(format!("{:?}", timeline.probe().core.sim) == text[239]);
 }
 
 /// A restored probe shares the keyframes' constant half, so a timeline holds one.
@@ -169,9 +172,15 @@ fn a_keyframe_holds_the_shared_half_not_a_copy_of_it() {
     let (replay, _) = recording(130, &[]);
     let mut timeline = opened(replay);
     timeline.seek(61).expect("in the prefix");
-    let reference = timeline.probe().sim.clone();
+    let reference = timeline.probe().core.sim.clone();
     timeline.seek(125).expect("in the prefix");
-    assert!(timeline.probe().sim.shares_constant_half_with(&reference));
+    assert!(
+        timeline
+            .probe()
+            .core
+            .sim
+            .shares_constant_half_with(&reference)
+    );
 }
 
 /// One race goes through a visit and one does not: same hash at every tick, and the same text
@@ -187,22 +196,29 @@ fn a_visit_leaves_the_live_race_as_it_found_it() {
     let mut timeline = Timeline::live(fixture(), &visited);
     for tick in 0..TICKS {
         alone.tick(&inputs(tick));
-        alone.sim.drain_cues();
+        alone.core.sim.drain_cues();
         visited.tick(&inputs(tick));
-        visited.sim.drain_cues();
+        visited.core.sim.drain_cues();
         timeline.keep(&visited);
         if tick == 299 {
-            let before = format!("{:?}", visited.sim);
+            let before = format!("{:?}", visited.core.sim);
             timeline.visit(&visited);
             for target in [12, 299, 61, 300, 150] {
                 assert_eq!(timeline.seek(target), Ok(target));
             }
-            assert!(format!("{:?}", timeline.probe().sim.world.tick) != before);
-            assert!(format!("{:?}", visited.sim) == before, "the visit wrote");
+            assert!(format!("{:?}", timeline.probe().core.sim.world.tick) != before);
+            assert!(
+                format!("{:?}", visited.core.sim) == before,
+                "the visit wrote"
+            );
         }
-        assert_eq!(alone.sim.state_hash(), visited.sim.state_hash(), "{tick}");
+        assert_eq!(
+            alone.core.sim.state_hash(),
+            visited.core.sim.state_hash(),
+            "{tick}"
+        );
     }
-    assert!(format!("{:?}", alone.sim) == format!("{:?}", visited.sim));
+    assert!(format!("{:?}", alone.core.sim) == format!("{:?}", visited.core.sim));
 }
 
 /// With nothing recorded there are no inputs to resimulate, so a seek stops at a keyframe.
@@ -212,12 +228,12 @@ fn a_race_that_records_nothing_rewinds_to_whole_keyframes() {
     let mut timeline = Timeline::live(fixture(), &race);
     for tick in 0..130 {
         race.tick(&inputs(tick));
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
         timeline.keep(&race);
     }
     timeline.visit(&race);
     assert_eq!(timeline.seek(100), Ok(60));
-    assert_eq!(timeline.probe().sim.world.tick, 60);
+    assert_eq!(timeline.probe().core.sim.world.tick, 60);
     assert_eq!(timeline.step(), Ok(None));
 }
 
@@ -230,7 +246,7 @@ fn a_seat_handed_to_the_driver_reproduces_and_without_its_event_desyncs() {
     use oag_gameplay::Controller;
     let at = 330;
     let mut race = Race::start(fixture());
-    race.sim.world.controllers[1] = Controller::Local;
+    race.core.sim.world.controllers[1] = Controller::Local;
     race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
     for tick in 0..TICKS {
         if tick == at {
@@ -241,7 +257,7 @@ fn a_seat_handed_to_the_driver_reproduces_and_without_its_event_desyncs() {
             );
         }
         race.tick(&inputs(tick));
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
     }
     let replay = race.recorded().expect("recording");
     assert_eq!(
@@ -256,7 +272,7 @@ fn a_seat_handed_to_the_driver_reproduces_and_without_its_event_desyncs() {
     assert_eq!(whole.wait(), Pass::Complete, "with the event it reproduces");
     // A seek past it holds the seat the driver has.
     whole.seek(TICKS - 1).expect("in the prefix");
-    assert_eq!(whole.probe().sim.world.controllers[1], Controller::Ai);
+    assert_eq!(whole.probe().core.sim.world.controllers[1], Controller::Ai);
 
     let mut stripped = replay;
     stripped.events.clear();

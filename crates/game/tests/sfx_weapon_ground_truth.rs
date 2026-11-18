@@ -98,7 +98,7 @@ fn repulsortravel_binds_no_sound_on_pulse_psp() {
 /// `~SHURIKENTRAVEL` and `~LEACHATTACH` are all in `BY_LEVEL` in
 /// `race::tests::cues::every_cue_has_something_that_raises_it`, exactly
 /// because none of them is a `CueEvent` - each is read directly off
-/// `race.sim.world` every tick by its own bespoke tracker (`TravelVoices`,
+/// `race.core.sim.world` every tick by its own bespoke tracker (`TravelVoices`,
 /// `SfxVoices::leach_attach`), the same shape `~PLASMATVL` already has. So
 /// unlike every one-shot cue, "does this fire" cannot be answered by
 /// draining the queue; it has to be answered the same way `~SHIELD`'s own
@@ -128,7 +128,7 @@ fn the_four_travel_voices_open_together_and_close_together() {
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
     assert!(
-        race.sim.ship_count() > 1,
+        race.core.sim.ship_count() > 1,
         "the fixture raced alone, so the LeachBeam below has no target"
     );
     let mut audio = oag_sound::Audio::open(
@@ -151,7 +151,7 @@ fn the_four_travel_voices_open_together_and_close_together() {
     }
     let idle = voices(&audio);
 
-    let origin = race.sim.world.ships[0].physics.body.position;
+    let origin = race.core.sim.world.ships[0].physics.body.position;
     let rocket = oag_weapons::projectile::Projectile {
         kind: Some(oag_tables::weapons::Weapon::Rocket),
         position: origin,
@@ -174,13 +174,13 @@ fn the_four_travel_voices_open_together_and_close_together() {
         lifetime: 5.0,
         ..Default::default()
     };
-    race.sim.world.projectiles.slots[0] = rocket;
-    race.sim.world.projectiles.slots[1] = missile;
-    race.sim.world.projectiles.slots[2] = shuriken;
+    race.core.sim.world.projectiles.slots[0] = rocket;
+    race.core.sim.world.projectiles.slots[1] = missile;
+    race.core.sim.world.projectiles.slots[2] = shuriken;
     // A locked beam between slots 0 and 1, built directly rather than fired -
     // this test needs a `Kind::Locked` instance to exist, not a lock to be
     // acquired. The numbers are otherwise inert: nothing here calls `advance`.
-    race.sim.world.leach_beams[0] = Some(oag_weapons::projectile::leach_beam::Beam {
+    race.core.sim.world.leach_beams[0] = Some(oag_weapons::projectile::leach_beam::Beam {
         owner: 0,
         target: 1,
         kind: oag_weapons::projectile::leach_beam::Kind::Locked,
@@ -209,10 +209,10 @@ fn the_four_travel_voices_open_together_and_close_together() {
     );
 
     // Clear the rest and confirm every held voice this test opened closes.
-    race.sim.world.projectiles.slots[0] = oag_weapons::projectile::Projectile::default();
-    race.sim.world.projectiles.slots[1] = oag_weapons::projectile::Projectile::default();
-    race.sim.world.projectiles.slots[2] = oag_weapons::projectile::Projectile::default();
-    race.sim.world.leach_beams[0] = None;
+    race.core.sim.world.projectiles.slots[0] = oag_weapons::projectile::Projectile::default();
+    race.core.sim.world.projectiles.slots[1] = oag_weapons::projectile::Projectile::default();
+    race.core.sim.world.projectiles.slots[2] = oag_weapons::projectile::Projectile::default();
+    race.core.sim.world.leach_beams[0] = None;
     oag_game::sound::race_tick(&mut audio, &mut race);
     audio.tick();
     assert_eq!(
@@ -257,9 +257,9 @@ fn a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts() {
     }
     let idle = voices(&audio);
 
-    let stats = race.sim.quake_stats().expect("Pulse authors a Quake");
-    let length = race.sim.course().expect("a course").length();
-    race.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
+    let stats = race.core.sim.quake_stats().expect("Pulse authors a Quake");
+    let length = race.core.sim.course().expect("a course").length();
+    race.core.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
         0,
         length * 0.5,
         1.0,
@@ -276,7 +276,7 @@ fn a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts() {
     audio.tick();
     assert_eq!(voices(&audio), idle + 1, "~QUAKETRAVEL did not stay open");
 
-    race.sim.world.quake = None;
+    race.core.sim.world.quake = None;
     race.tick(&PlayerInputs::none());
     oag_game::sound::race_tick(&mut audio, &mut race);
     audio.tick();
@@ -331,7 +331,7 @@ fn the_autopilot_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // reads, and granting a real pickup would be testing the pad table
     // instead. Long enough to clear both the `autopilot_eng` one-shot below
     // and the wait for it to end.
-    race.sim.world.ships[0].autopilot_timer = 10.0;
+    race.core.sim.world.ships[0].autopilot_timer = 10.0;
     race.tick(&PlayerInputs::none());
     oag_game::sound::race_tick(&mut audio, &mut race);
     assert!(
@@ -365,7 +365,7 @@ fn the_autopilot_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // own `<= 0.0f` arm is where the held handle is released, per
     // `autopilot.md`'s "`Autopilot_Update` counts it down" section - the
     // warning fires a tick earlier and changes nothing about the loop.
-    race.sim.world.ships[0].autopilot_timer = 0.0;
+    race.core.sim.world.ships[0].autopilot_timer = 0.0;
     race.tick(&PlayerInputs::none());
     oag_game::sound::race_tick(&mut audio, &mut race);
     assert_eq!(
@@ -416,7 +416,7 @@ fn the_lock_tone_runs_through_the_race_and_stops_with_the_target() {
         return;
     }
     let (mut race, mut audio) = race_and_audio();
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
     let mut counts = Vec::new();
     for _ in 0..130 {
         race.tick(&PlayerInputs::none());
@@ -440,7 +440,7 @@ fn the_lock_tone_runs_through_the_race_and_stops_with_the_target() {
         "locked beeps are 52 ms in every 58: {locked}"
     );
 
-    race.sim.world.ships[0].pickup.weapon = None;
+    race.core.sim.world.ships[0].pickup.weapon = None;
     for _ in 0..6 {
         race.tick(&PlayerInputs::none());
         oag_game::sound::race_tick(&mut audio, &mut race);
@@ -467,7 +467,7 @@ fn the_explosion_re_keys_through_the_race_and_stops_when_it_ends() {
         audio.tick();
     }
     let floor = sounding(&audio);
-    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
+    race.core.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
     assert!(race.craft_is_exploding());
     let mut peak = 0;
     for _ in 0..60 {
@@ -479,7 +479,7 @@ fn the_explosion_re_keys_through_the_race_and_stops_when_it_ends() {
         peak >= floor + 2,
         "the loop and its re-keys never sounded together: {peak} over {floor}"
     );
-    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Racing;
+    race.core.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Racing;
     for _ in 0..2 {
         oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();

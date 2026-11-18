@@ -27,12 +27,12 @@ fn run_recorded(mut race: Race, ticks: u32) -> Race {
 fn two_crossings(mut race: Race) -> Race {
     race.start_recording(header());
     for lap_start in [5_u64, 30] {
-        while race.sim.world.tick < lap_start {
+        while race.core.sim.world.tick < lap_start {
             race.tick(&PlayerInputs::none());
         }
-        let standing = &mut race.sim.world.ships[0].standing;
+        let standing = &mut race.core.sim.world.ships[0].standing;
         standing.lap += 1;
-        standing.lap_start_tick = Some(race.sim.world.tick);
+        standing.lap_start_tick = Some(race.core.sim.world.tick);
         race.tick(&PlayerInputs::none());
     }
     race
@@ -51,7 +51,7 @@ fn a_vanilla_race_keeps_the_lap_it_drove_as_a_ghost() {
 fn a_modded_race_sets_and_offers_no_ghost() {
     let source = on::module("test.ghost", "i32.const 0");
     let mut race = two_crossings(grid(on::prepared(&[source])));
-    assert!(race.sim.is_modded() && race.recording());
+    assert!(race.core.sim.is_modded() && race.recording());
     assert!(race.take_new_best_ghost().is_none());
     assert!(race.ghost().is_none(), "none raced either");
     assert!(race.recorded().expect("recording").ghost.is_none());
@@ -89,12 +89,12 @@ fn a_modded_race_records_and_names_its_module() {
     let read = oag_replay::Replay::from_bytes(&replay.to_bytes()).expect("reads");
     assert_eq!(read.header.mods, replay.header.mods);
     let mut again = grid(on::prepared(&[on::module("test.names", "i32.const 0")]));
-    let found = Verifier::run(&read, again.sim.state_hash(), |events, inputs| {
+    let found = Verifier::run(&read, again.core.sim.state_hash(), |events, inputs| {
         for event in events {
-            again.sim.apply_event(event).unwrap();
+            again.core.sim.apply_event(event).unwrap();
         }
         again.tick(inputs);
-        again.sim.state_hash()
+        again.core.sim.state_hash()
     });
     assert!(found.is_ok(), "{found:?}");
 }
@@ -197,7 +197,7 @@ fn the_preflight_refuses_a_missing_module_and_another_build_by_name() {
 
     let source = on::module("test.keep", "i32.const 0");
     let race = grid(on::prepared(std::slice::from_ref(&source)));
-    let recorded = race.sim.mods_used().to_vec();
+    let recorded = race.core.sim.mods_used().to_vec();
     assert_eq!(recorded.len(), 1);
     let offered = |extensions: Vec<crate::extensions::Source>, recorded| Options {
         extensions,

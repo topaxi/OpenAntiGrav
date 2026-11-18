@@ -108,20 +108,21 @@ impl Race {
     /// per-craft weapon update in this module follows.
     pub(crate) fn advance_quake(&mut self) {
         let (oag_title::weapons::QuakeHit::WaveHeight { .. }
-        | oag_title::weapons::QuakeHit::WaveHeightEyeLevel { .. }) = self.sim.quake_hit;
-        let dt = self.sim.dt;
+        | oag_title::weapons::QuakeHit::WaveHeightEyeLevel { .. }) = self.core.sim.quake_hit;
+        let dt = self.core.sim.dt;
         let length = self
+            .core
             .sim
             .course
             .as_deref()
             .map_or(0.0, |course| course.length());
-        let mut wave = self.sim.world.quake;
+        let mut wave = self.core.sim.world.quake;
         if let Some(live) = wave.as_mut()
-            && self.sim.course.is_some()
+            && self.core.sim.course.is_some()
         {
             live.advance(length, dt);
             if live.expired() {
-                self.sim.world.quake = None;
+                self.core.sim.world.quake = None;
                 wave = None;
             }
         }
@@ -129,34 +130,34 @@ impl Race {
         // decaying after the wave is dropped.
         oag_weapons::projectile::quake::Wave::update_lift(
             wave.as_ref(),
-            &mut self.sim.world.ships,
-            self.sim.world.ship_count,
+            &mut self.core.sim.world.ships,
+            self.core.sim.world.ship_count,
             length,
             dt,
         );
-        let Some(course) = self.sim.course.as_deref() else {
+        let Some(course) = self.core.sim.course.as_deref() else {
             return;
         };
         let Some(mut wave) = wave else {
             return;
         };
-        let rules = self.sim.damage_rules();
+        let rules = self.core.sim.damage_rules();
         let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
         // Snapshotted before `apply_hits` runs, for `Cue::QuakeHit`'s own
         // rising edge below - the same before/after shape `Race::tick`'s own
         // `bounces_before` already takes for the Missile's bounce cue.
         let hit_before = wave.hit;
         wave.apply_hits(
-            &mut self.sim.world.ships,
-            self.sim.world.ship_count,
+            &mut self.core.sim.world.ships,
+            self.core.sim.world.ship_count,
             rules,
             &mut hits,
         );
-        self.sim.extensions.weapon_hits(&hits);
+        self.core.sim.extensions.weapon_hits(&hits);
         #[cfg(feature = "view")]
         for (slot, hit) in hits.iter().enumerate() {
             // `self.quiet` rather than `shield_hit`: `course` above borrows
-            // `self.sim` for the whole function.
+            // `self.core.sim` for the whole function.
             if hit.absorbed && !self.quiet {
                 self.view.shield[slot].hit();
             }
@@ -167,7 +168,7 @@ impl Race {
         // slot means for a `Placement::Craft` cue.
         for (slot, &now) in wave.hit.iter().enumerate() {
             if now && !hit_before[slot] {
-                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::QuakeHit,
                     slot,
                 ));
@@ -185,6 +186,7 @@ impl Race {
         // update was not read for a Quake test, and one is not assumed. See
         // `docs/ghidra/functions/psp-pulse-usa/mine.md`.
         let tripped: Vec<(usize, Vec3)> = self
+            .core
             .sim
             .world
             .projectiles
@@ -201,7 +203,8 @@ impl Race {
             .collect();
         #[cfg_attr(not(feature = "view"), allow(unused_variables))]
         for (slot, point) in tripped {
-            self.sim.world.projectiles.slots[slot] = oag_weapons::projectile::Projectile::default();
+            self.core.sim.world.projectiles.slots[slot] =
+                oag_weapons::projectile::Projectile::default();
             // Identity: only a Mine reaches this filter above, and
             // `ignite_blast`'s `orientation` is unused by every arm but the
             // Bomb's.
@@ -225,11 +228,13 @@ impl Race {
         );
         for (slot, hit) in hits.iter().enumerate() {
             if hit.landed {
-                self.sim.record_pending_hit(slot, wave.owner);
-                self.sim.credit_hit_points(slot, wave.owner, hit.amount);
+                self.core.sim.record_pending_hit(slot, wave.owner);
+                self.core
+                    .sim
+                    .credit_hit_points(slot, wave.owner, hit.amount);
             }
         }
-        self.sim.world.quake = Some(wave);
+        self.core.sim.world.quake = Some(wave);
     }
 
     /// One tick of every live LeachBeam link, in pool order: age it, test it,
@@ -246,8 +251,8 @@ impl Race {
     /// last tick's stale reading" rule every other per-craft weapon update in
     /// this module follows.
     pub(crate) fn advance_leach_beam(&mut self) {
-        for at in 0..self.sim.world.leach_beams.len() {
-            if let Some(beam) = self.sim.world.leach_beams[at] {
+        for at in 0..self.core.sim.world.leach_beams.len() {
+            if let Some(beam) = self.core.sim.world.leach_beams[at] {
                 self.advance_one_leach_beam(at, beam);
             }
         }
@@ -299,14 +304,14 @@ impl Race {
         at: usize,
         mut beam: oag_weapons::projectile::leach_beam::Beam,
     ) {
-        let rules = self.sim.damage_rules();
-        let course_length = self.sim.leach_course_length();
+        let rules = self.core.sim.damage_rules();
+        let course_length = self.core.sim.leach_course_length();
         let report = beam.advance(
-            &mut self.sim.world.ships,
-            self.sim.world.ship_count,
+            &mut self.core.sim.world.ships,
+            self.core.sim.world.ship_count,
             rules,
             course_length,
-            self.sim.dt,
+            self.core.sim.dt,
         );
         // A swallowed hit is the only thing that makes the target's shell
         // visibly react - the same out-parameter `Race::advance_quake` spends
@@ -320,15 +325,17 @@ impl Race {
                 hit.amount = report.asked;
                 hit.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
             }
-            self.sim.extensions.weapon_hits(&hits);
+            self.core.sim.extensions.weapon_hits(&hits);
         }
         // A drain that got through sparks the target's hull with the
         // LeachBeam's own variant, once per locator per 0.8 s like every
         // other hit - see `race::hit_sparks`.
         if report.landed {
-            self.sim
+            self.core
+                .sim
                 .record_pending_hit(beam.target as usize, beam.owner);
-            self.sim
+            self.core
+                .sim
                 .credit_hit_points(beam.target as usize, beam.owner, report.asked);
             let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
             if let Some(hit) = hits.get_mut(beam.target as usize) {
@@ -337,6 +344,6 @@ impl Race {
             #[cfg(feature = "view")]
             self.throw_hit_sparks(&hits, true);
         }
-        self.sim.world.leach_beams[at] = if report.retired { None } else { Some(beam) };
+        self.core.sim.world.leach_beams[at] = if report.retired { None } else { Some(beam) };
     }
 }

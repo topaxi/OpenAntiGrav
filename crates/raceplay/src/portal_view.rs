@@ -63,14 +63,15 @@ impl Race {
         request: &PortalRequest,
         projection: Mat4,
     ) -> Option<PortalShot> {
-        let course = self.sim.course.as_ref()?;
+        let course = self.core.sim.course.as_ref()?;
         let entrance = Exit::ring(course.index_at_progress(request.entrance)?);
         let entrance_section = self
+            .core
             .sim
             .road_sample(entrance)
             .map_or(UNPLACED, |sample| sample.section_id);
-        let entrance = self.sim.portal_frame(entrance, Face::Oncoming)?;
-        let exit = self.sim.portal_frame(request.exit?, Face::Departing)?;
+        let entrance = self.core.sim.portal_frame(entrance, Face::Oncoming)?;
+        let exit = self.core.sim.portal_frame(request.exit?, Face::Departing)?;
         // A craft in a transit has flown on past its entrance; its pair is seen from its seat.
         let main = self.pair_view();
         let centre = entrance.w_axis.truncate();
@@ -83,7 +84,7 @@ impl Race {
         }
         let reach = Reach {
             sections: crate::spline::section_bit(entrance_section)
-                | self.sim.spline.sections_within(centre, request.radius),
+                | self.core.sim.spline.sections_within(centre, request.radius),
             centre,
             radius: request.radius,
         };

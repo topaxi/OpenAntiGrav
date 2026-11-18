@@ -27,7 +27,7 @@ fn a_screen_fill_washes_its_slots_view_alone() {
     };
     for views in [2, 4] {
         let mut race = local_people(views, false);
-        race.sim.extensions = crate::extensions::Extensions::new(prepared(&[scripted(
+        race.core.sim.extensions = crate::extensions::Extensions::new(prepared(&[scripted(
             "test.fill",
             "",
             &[fill],
@@ -48,7 +48,7 @@ fn a_screen_fill_washes_its_slots_view_alone() {
 fn a_screen_fill_beside_a_flash_adds_to_it_and_without_one_the_flash_is_untouched() {
     let mut race = local_people(2, false);
     race.view.screen_flash = Some(oag_fx::flash::ScreenFlash::default());
-    let at = race.sim.world.ships[0].physics.body.position;
+    let at = race.core.sim.world.ships[0].physics.body.position;
     race.view
         .screen_flash
         .as_mut()
@@ -60,7 +60,7 @@ fn a_screen_fill_beside_a_flash_adds_to_it_and_without_one_the_flash_is_untouche
         .unwrap()
         .advance(1.0 / 60.0, at);
     let flash = race.screen_wash().expect("a flash is running");
-    race.sim.extensions = crate::extensions::Extensions::new(prepared(&[scripted(
+    race.core.sim.extensions = crate::extensions::Extensions::new(prepared(&[scripted(
         "test.fill",
         "",
         &[Command::ScreenFill {
@@ -101,11 +101,11 @@ fn a_fov_offset_reaches_its_slots_view_alone() {
         degrees: 12.0,
     };
     let mut race = local_people(2, false);
-    race.sim.extensions =
+    race.core.sim.extensions =
         crate::extensions::Extensions::new(prepared(&[scripted("test.fov", "", &[offset], &[])]));
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.sim.extension_fov_offset(1), 12.0);
-    assert_eq!(race.sim.extension_fov_offset(0), 0.0);
+    assert_eq!(race.core.sim.extension_fov_offset(1), 12.0);
+    assert_eq!(race.core.sim.extension_fov_offset(0), 0.0);
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn a_fire_effect_ahead_queues_the_mods_effect_on_the_road_in_front_of_its_craft(
         .map(|name| (name.to_string(), format!("fx/{name}.toml")))
         .to_vec();
     let mut race = grid(prepared(&[source]));
-    let ship = &mut race.sim.world.ships[1];
+    let ship = &mut race.core.sim.world.ships[1];
     ship.physics.body.position.x = 10.0;
     ship.physics.body.position.z = 0.0;
     ship.standing = oag_race::Standing::default();
@@ -128,8 +128,8 @@ fn a_fire_effect_ahead_queues_the_mods_effect_on_the_road_in_front_of_its_craft(
         race.tick(&PlayerInputs::none());
     }
     race.tick_sim_only(&PlayerInputs::none());
-    let from = race.sim.world.ships[1].physics.body.position;
-    let queued = race.sim.extensions.effects_for_tests();
+    let from = race.core.sim.world.ships[1].physics.body.position;
+    let queued = race.core.sim.extensions.effects_for_tests();
     let [
         (
             1,
@@ -215,14 +215,14 @@ fn a_guests_pickup_and_motion_commands_for_a_wrecked_craft_are_ignored() {
     ];
     let run = |state: CraftState| {
         let mut race = grid(prepared(&[scripted("test.wreck", "", &cmds, &[])]));
-        let ship = &mut race.sim.world.ships[1];
+        let ship = &mut race.core.sim.world.ships[1];
         ship.pickup.weapon = Some(oag_tables::weapons::Weapon::Extension(
             oag_tables::weapons::ModKind::FIRST,
         ));
         ship.physics.body.linear_velocity = oag_core::math::Vec3::new(30.0, 0.0, 0.0);
         ship.physics.craft_state = state;
         race.tick_sim_only(&PlayerInputs::none());
-        let ship = &race.sim.world.ships[1];
+        let ship = &race.core.sim.world.ships[1];
         (
             ship.pickup.weapon,
             ship.physics.body.linear_velocity.length(),
@@ -343,7 +343,7 @@ fn a_warning_raised_for_a_person_among_several_is_dropped() {
         warning: oag_ext_abi::Warning::Title(oag_ext_abi::WarningIcon::Missile),
     };
     let mut race = local_people(2, false);
-    race.sim.extensions =
+    race.core.sim.extensions =
         crate::extensions::Extensions::new(prepared(&[scripted("test.warn", "", &[once], &[])]));
     race.view.huds[0].incoming_enabled = true;
     race.tick(&PlayerInputs::none());
@@ -404,7 +404,7 @@ fn an_icon_the_mod_does_not_declare_faults_the_module_naming_it() {
         true,
     );
     race.tick(&PlayerInputs::none());
-    let (_, why) = race.sim.extension_reports()[0]
+    let (_, why) = race.core.sim.extension_reports()[0]
         .faulted
         .clone()
         .expect("faulted");
@@ -449,10 +449,10 @@ fn a_fired_mod_effect_leaves_its_craft_along_its_files_axis() {
         race.view.handles = std::mem::take(&mut race.view.handles)
             .with_own(ModEffects(vec![("test.axis".to_string(), vec![Some(own)])]));
         race.tick(&PlayerInputs::none());
-        let body = &race.sim.world.ships[0].physics.body;
+        let body = &race.core.sim.world.ships[0].physics.body;
         let (forward, up) = (body.forward(), body.up());
-        let nozzle =
-            body.position - forward * (race.sim.world.ships[0].handling.dimensions.length * 0.5);
+        let nozzle = body.position
+            - forward * (race.core.sim.world.ships[0].handling.dimensions.length * 0.5);
         race.play_fired(
             0,
             &Fired::Own {

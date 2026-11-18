@@ -580,13 +580,13 @@ pub(crate) fn verify(image: &Path, replay: &oag_replay::Replay) -> Result<u64, o
     let loaded = oag_raceplay::load(&options).expect("loads");
     let mut race =
         oag_raceplay::replay::start_recorded(loaded.setup, &replay.header).expect("starts");
-    oag_replay::Verifier::run(replay, race.sim.state_hash(), |events, inputs| {
+    oag_replay::Verifier::run(replay, race.core.sim.state_hash(), |events, inputs| {
         for event in events {
-            race.sim.apply_event(event).expect("applies");
+            race.core.sim.apply_event(event).expect("applies");
         }
         race.tick(inputs);
-        race.sim.drain_cues();
-        race.sim.state_hash()
+        race.core.sim.drain_cues();
+        race.core.sim.state_hash()
     })
 }
 

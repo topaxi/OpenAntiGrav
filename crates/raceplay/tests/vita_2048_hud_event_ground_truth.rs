@@ -260,7 +260,8 @@ fn pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths() {
             })
     };
     assert_eq!(icon_uv(&race), None, "no icon with the assist off");
-    race.sim
+    race.core
+        .sim
         .set_pilot_assist(oag_physics::pilot_assist::Level::Extreme);
     let uv = icon_uv(&race).expect("the icon is up with Extreme on");
     assert_eq!(&uv[2..], &[256.0, 128.0], "the whole texture: {uv:?}");
@@ -295,11 +296,11 @@ fn a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame(
     let slot = race.player_slot();
     // Whatever the race held before, a few ticks of nothing re-arm the pop-in (the height runs out
     // at 10/s, then the next frame resets it).
-    race.sim.world.ships[slot].pickup.weapon = None;
+    race.core.sim.world.ships[slot].pickup.weapon = None;
     for _ in 0..20 {
         race.tick(&oag_gameplay::PlayerInputs::none());
     }
-    race.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.core.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     // The icon is the one 85x86 sprite (`PickupIcon`'s size) and the frame the one 95 high
     // (`PickupBgFrame`'s height, which the fly leaves alone).

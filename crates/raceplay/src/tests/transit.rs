@@ -14,21 +14,21 @@ use oag_gameplay::PlayerInputs;
 /// then given 30 units a second down the track (it sits through the countdown).
 fn moving() -> Race {
     let mut race = grid(Prepared::default());
-    let ship = &mut race.sim.world.ships[1];
+    let ship = &mut race.core.sim.world.ships[1];
     ship.physics.body.position.x = 10.0;
     ship.physics.body.position.z = 0.0;
     ship.standing = oag_race::Standing::default();
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
     }
-    assert!(race.sim.world.ships[1].standing.course_index.is_some());
-    race.sim.world.ships[1].physics.body.linear_velocity =
+    assert!(race.core.sim.world.ships[1].standing.course_index.is_some());
+    race.core.sim.world.ships[1].physics.body.linear_velocity =
         oag_core::math::Vec3::new(30.0, 0.0, 0.0);
     race
 }
 
 fn speed(race: &Race, slot: usize) -> f32 {
-    race.sim.world.ships[slot]
+    race.core.sim.world.ships[slot]
         .physics
         .body
         .linear_velocity
@@ -38,24 +38,25 @@ fn speed(race: &Race, slot: usize) -> f32 {
 #[test]
 fn a_craft_in_transit_is_out_of_the_world_then_comes_out_further_round() {
     let mut race = moving();
-    let entry = race.sim.world.ships[1].physics.body.position;
+    let entry = race.core.sim.world.ships[1].physics.body.position;
     let entry_speed = speed(&race, 1);
-    let entry_progress = race.sim.world.ships[1].standing.progress.unwrap();
-    let length = race.sim.course.as_ref().unwrap().length();
+    let entry_progress = race.core.sim.world.ships[1].standing.progress.unwrap();
+    let length = race.core.sim.course.as_ref().unwrap().length();
     assert!(entry_speed > 1.0, "slot 1 is moving: {entry_speed}");
     let drawn = race.ship_model_matrices().len();
-    let placements = race.sim.placements_of(1);
-    let respawns = race.sim.respawns_of(1);
-    let ai_clock = race.sim.world.race.get(1).cloned();
-    race.sim
+    let placements = race.core.sim.placements_of(1);
+    let respawns = race.core.sim.respawns_of(1);
+    let ai_clock = race.core.sim.world.race.get(1).cloned();
+    race.core
+        .sim
         .begin_transit(1, 30, Distance::Units(20.0), 0.5)
         .unwrap();
     for tick in 1..30 {
         race.tick(&PlayerInputs::none());
-        let ship = &race.sim.world.ships[1];
+        let ship = &race.core.sim.world.ships[1];
         assert!(ship.transit.is_some(), "tick {tick}");
         assert_eq!(ship.physics.body.position, entry, "frozen on tick {tick}");
-        assert!(!race.sim.ship_active(1), "not drawn");
+        assert!(!race.core.sim.ship_active(1), "not drawn");
         assert!(
             !oag_weapons::Craft::active(ship),
             "nothing hits or locks it"
@@ -64,14 +65,14 @@ fn a_craft_in_transit_is_out_of_the_world_then_comes_out_further_round() {
         assert!(ship.active, "the slot still holds its craft");
     }
     race.tick(&PlayerInputs::none());
-    let ship = &race.sim.world.ships[1];
+    let ship = &race.core.sim.world.ships[1];
     assert_eq!(ship.transit, None, "out on the 30th tick");
     // A cut for the cameras and the between-ticks blend, and not a respawn.
-    assert_eq!(race.sim.placements_of(1), placements + 1);
-    assert_eq!(race.sim.respawns_of(1), respawns);
+    assert_eq!(race.core.sim.placements_of(1), placements + 1);
+    assert_eq!(race.core.sim.respawns_of(1), respawns);
     // An AI slot's own clock is never run, so the move leaves it alone.
-    assert_eq!(race.sim.world.race.get(1).cloned(), ai_clock);
-    assert!(race.sim.ship_active(1));
+    assert_eq!(race.core.sim.world.race.get(1).cloned(), ai_clock);
+    assert!(race.core.sim.ship_active(1));
     // Twenty units further round, give or take the ring's point spacing and a tick.
     let on = (ship.standing.progress.unwrap() - entry_progress).rem_euclid(length);
     assert!(
@@ -94,16 +95,20 @@ fn a_craft_in_transit_is_out_of_the_world_then_comes_out_further_round() {
 #[test]
 fn a_craft_in_transit_keeps_reporting_the_progress_it_went_in_at() {
     let mut race = moving();
-    let entry = race.sim.world.ships[1].standing.progress;
+    let entry = race.core.sim.world.ships[1].standing.progress;
     assert!(entry.is_some());
-    race.sim
+    race.core
+        .sim
         .begin_transit(1, 30, Distance::Units(20.0), 0.5)
         .unwrap();
     for tick in 1..30 {
         race.tick(&PlayerInputs::none());
-        assert!(race.sim.world.ships[1].transit.is_some(), "tick {tick}");
+        assert!(
+            race.core.sim.world.ships[1].transit.is_some(),
+            "tick {tick}"
+        );
         assert_eq!(
-            race.sim.world.ships[1].standing.progress, entry,
+            race.core.sim.world.ships[1].standing.progress, entry,
             "tick {tick}"
         );
     }
@@ -112,7 +117,7 @@ fn a_craft_in_transit_keeps_reporting_the_progress_it_went_in_at() {
 #[test]
 fn a_transit_the_course_or_the_craft_cannot_take_is_refused_and_changes_nothing() {
     let mut race = moving();
-    let lap = race.sim.course.as_ref().unwrap().length();
+    let lap = race.core.sim.course.as_ref().unwrap().length();
     for (ticks, distance, factor) in [
         (0, Distance::Units(10.0), 1.0),
         (601, Distance::Units(10.0), 1.0),
@@ -124,16 +129,21 @@ fn a_transit_the_course_or_the_craft_cannot_take_is_refused_and_changes_nothing(
         (30, Distance::Units(10.0), 2.5),
     ] {
         assert!(
-            race.sim.begin_transit(1, ticks, distance, factor).is_err(),
+            race.core
+                .sim
+                .begin_transit(1, ticks, distance, factor)
+                .is_err(),
             "{ticks} {distance:?} {factor}"
         );
-        assert_eq!(race.sim.world.ships[1].transit, None);
+        assert_eq!(race.core.sim.world.ships[1].transit, None);
     }
-    race.sim
+    race.core
+        .sim
         .begin_transit(1, 30, Distance::Seconds(0.1), 1.0)
         .unwrap();
     assert!(
-        race.sim
+        race.core
+            .sim
             .begin_transit(1, 30, Distance::Units(10.0), 1.0)
             .is_err(),
         "already in one"
@@ -145,21 +155,26 @@ fn a_transit_the_course_or_the_craft_cannot_take_is_refused_and_changes_nothing(
 #[test]
 fn a_transit_to_a_place_on_the_lap_comes_out_there() {
     let mut race = moving();
-    let course = race.sim.course.clone().unwrap();
-    let entry = race.sim.world.ships[1].standing.progress.unwrap();
+    let course = race.core.sim.course.clone().unwrap();
+    let entry = race.core.sim.world.ships[1].standing.progress.unwrap();
     // A ring point just past the start line, behind the craft: reached forward, that is
     // most of a lap on (the fixture's ring closes over one 68-unit step, so the target is
     // a ring point rather than a share of the lap).
     let target = course.progress_at(2).unwrap();
     assert!(target < entry, "{target} behind {entry}");
-    let (to, ahead) = race.sim.point_ahead(1, Distance::Progress(target)).unwrap();
+    let (to, ahead) = race
+        .core
+        .sim
+        .point_ahead(1, Distance::Progress(target))
+        .unwrap();
     assert!(ahead > course.length() * 0.5, "{ahead} on");
-    race.sim
+    race.core
+        .sim
         .begin_transit(1, 2, Distance::Progress(target), 1.0)
         .unwrap();
     race.tick(&PlayerInputs::none());
     race.tick(&PlayerInputs::none());
-    let ship = &race.sim.world.ships[1];
+    let ship = &race.core.sim.world.ships[1];
     assert_eq!(ship.transit, None);
     let at = course.progress_at(to).unwrap();
     let off = (ship.standing.progress.unwrap() - at).abs();
@@ -175,7 +190,8 @@ fn a_transit_reports_a_camera_cut_on_its_exit_tick_alone() {
         race.set_draw_alpha(alpha);
         assert!(!race.camera_cut(), "before, at alpha {alpha}");
     }
-    race.sim
+    race.core
+        .sim
         .begin_transit(0, 3, Distance::Units(20.0), 1.0)
         .unwrap();
     let mut cuts = Vec::new();
@@ -199,7 +215,8 @@ fn a_seat_reports_its_own_camera_cut_not_the_players() {
     for (moved, other) in [(1, 0), (0, 1)] {
         let mut race = moving();
         assert_eq!(race.set_viewport_count(2), 2);
-        race.sim
+        race.core
+            .sim
             .begin_transit(moved, 3, Distance::Units(20.0), 1.0)
             .unwrap();
         let mut seen = vec![Vec::new(); 2];
@@ -229,17 +246,18 @@ fn a_seat_reports_its_own_camera_cut_not_the_players() {
 #[test]
 fn a_craft_in_transit_has_its_reset_triggers_held() {
     let mut race = moving();
-    race.sim
+    race.core
+        .sim
         .begin_transit(1, 100, Distance::Units(20.0), 1.0)
         .unwrap();
-    let respawns = race.sim.respawns[1];
+    let respawns = race.core.sim.respawns[1];
     for _ in 0..90 {
         race.tick(&PlayerInputs::none());
-        assert!(race.sim.reset_held(1));
-        assert!(!race.sim.armed(1, race.sim.reset_triggers.cage));
+        assert!(race.core.sim.reset_held(1));
+        assert!(!race.core.sim.armed(1, race.core.sim.reset_triggers.cage));
     }
-    assert_eq!(race.sim.respawns[1], respawns);
-    assert_eq!(race.sim.stalled_ticks[1], 0);
+    assert_eq!(race.core.sim.respawns[1], respawns);
+    assert_eq!(race.core.sim.stalled_ticks[1], 0);
 }
 
 /// A transit that begins on the tick the last one ended (a guest answering `transit-end`
@@ -249,19 +267,20 @@ fn a_craft_in_transit_has_its_reset_triggers_held() {
 #[test]
 fn a_transit_begun_as_the_last_one_ended_is_followed_from_its_own_seat() {
     let mut race = moving();
-    race.sim
+    race.core
+        .sim
         .begin_transit(1, 30, Distance::Units(20.0), 1.0)
         .unwrap();
     for _ in 0..20 {
         race.tick(&PlayerInputs::none());
     }
     assert!(race.view.transit_seats[1].is_some(), "the fixture seats it");
-    let craft = race.sim.world.ships[1].physics.body.position;
+    let craft = race.core.sim.world.ships[1].physics.body.position;
     let flown_on = (race.followed(1).position - craft).length();
     assert!(flown_on > 5.0, "the first camera has flown on: {flown_on}");
     // What the seats see when a second transit took the place of the first inside a tick.
-    let first = race.sim.world.ships[1].transit.unwrap();
-    race.sim.world.ships[1].transit = Some(oag_gameplay::Transit {
+    let first = race.core.sim.world.ships[1].transit.unwrap();
+    race.core.sim.world.ships[1].transit = Some(oag_gameplay::Transit {
         ticks_left: 30,
         ..first
     });
@@ -275,11 +294,14 @@ fn a_transit_begun_as_the_last_one_ended_is_followed_from_its_own_seat() {
 #[test]
 fn a_clearance_probe_reads_the_width_and_the_geometry() {
     let race = moving();
-    let (fits, ahead) = race.sim.clearance(1, Distance::Units(20.0), 8.0);
+    let (fits, ahead) = race.core.sim.clearance(1, Distance::Units(20.0), 8.0);
     assert!(fits);
     assert_eq!(ahead, 20.0);
-    assert!(!race.sim.clearance(1, Distance::Units(20.0), 13.0).0);
-    assert_eq!(race.sim.clearance(1, Distance::Lap(1.5), 8.0), (false, 0.0));
+    assert!(!race.core.sim.clearance(1, Distance::Units(20.0), 13.0).0);
+    assert_eq!(
+        race.core.sim.clearance(1, Distance::Lap(1.5), 8.0),
+        (false, 0.0)
+    );
 }
 
 #[cfg(feature = "extensions")]
@@ -336,13 +358,13 @@ mod guest {
         let mut out = 0;
         for _ in 0..600 {
             race.tick(&PlayerInputs::none());
-            out += u32::from(race.sim.world.ships[1].transit.is_some());
+            out += u32::from(race.core.sim.world.ships[1].transit.is_some());
         }
-        let blob = race.sim.extension_state(0).unwrap().to_vec();
-        assert_eq!(race.sim.extension_reports()[0].faulted, None);
+        let blob = race.core.sim.extension_state(0).unwrap().to_vec();
+        assert_eq!(race.core.sim.extension_reports()[0].faulted, None);
         assert_eq!(blob[11], 1, "transit-end was sent: {blob:?}");
         assert_eq!(blob[12], 1, "clearance was sent: {blob:?}");
-        assert_eq!(race.sim.world.ships[1].transit, None);
+        assert_eq!(race.core.sim.world.ships[1].transit, None);
         // Landed at tick N's call, the craft is out for the steps of N..N+19 and comes out
         // at N+20's, before its step: twenty ticks end with it out.
         assert_eq!(out, 20, "out of the world for its twenty ticks");
@@ -379,8 +401,8 @@ mod guest {
             race.tick(&PlayerInputs::none());
         }
         let (listened, probed) = (
-            race.sim.extension_state(0).unwrap().to_vec(),
-            race.sim.extension_state(1).unwrap().to_vec(),
+            race.core.sim.extension_state(0).unwrap().to_vec(),
+            race.core.sim.extension_state(1).unwrap().to_vec(),
         );
         assert_eq!(probed[12], 1, "the prober has its answer: {probed:?}");
         assert_eq!(listened[12], 0, "and nobody else has it: {listened:?}");
@@ -397,10 +419,14 @@ mod guest {
         for _ in 0..600 {
             race.tick(&PlayerInputs::none());
         }
-        let reports = race.sim.extension_reports();
+        let reports = race.core.sim.extension_reports();
         assert_eq!(reports[0].faulted, None);
         assert_eq!(reports[1].faulted, None, "the craft was already out");
-        assert_eq!(race.sim.extension_state(1).unwrap()[11], 1, "it still runs");
+        assert_eq!(
+            race.core.sim.extension_state(1).unwrap()[11],
+            1,
+            "it still runs"
+        );
     }
 
     /// Every call stops slot 1 dead (`scale-speed` 0): it keeps only the one tick of
@@ -420,7 +446,7 @@ mod guest {
         );
         let (vanilla, _) = super::super::extensions::run(grid(Prepared::default()), 600);
         let (stopped, _) = super::super::extensions::run(grid(prepared(&[stopper])), 600);
-        assert_eq!(stopped.sim.extension_reports()[0].faulted, None);
+        assert_eq!(stopped.core.sim.extension_reports()[0].faulted, None);
         let (v, s) = (speed(&vanilla, 1), speed(&stopped, 1));
         assert!(v > 1.0 && s < v * 0.1, "{s} against {v}");
     }
@@ -430,6 +456,6 @@ mod guest {
         let (a, ha) = super::super::extensions::run(grid(prepared(&[porter()])), 600);
         let (b, hb) = super::super::extensions::run(grid(prepared(&[porter()])), 600);
         assert_eq!(ha, hb);
-        assert_eq!(a.sim.world.ships, b.sim.world.ships);
+        assert_eq!(a.core.sim.world.ships, b.core.sim.world.ships);
     }
 }

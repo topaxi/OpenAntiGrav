@@ -47,7 +47,7 @@ fn load() -> Option<race::Race> {
         "HD_electric_arc_8x8 and HD_ElectricArc_Contact must both decode"
     );
     let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     Some(race)
 }
 
@@ -75,12 +75,12 @@ fn fly(
     let mut audio = audio;
     let mut log = Log::default();
     let mut was = [false; 8];
-    let n = usize::from(race.sim.ship_count());
+    let n = usize::from(race.core.sim.ship_count());
     for tick in 0..TICKS {
         race.tick(&PlayerInputs::none());
-        let raised = race.sim.pending_cues().to_vec();
+        let raised = race.core.sim.pending_cues().to_vec();
         if audio.is_none() {
-            race.sim.drain_cues();
+            race.core.sim.drain_cues();
         }
         for event in &raised {
             match event.cue {
@@ -275,7 +275,7 @@ fn rumble_runs(give_autopilot: bool, variants: &[(&str, Option<u64>)]) -> Option
         }
     }
     if give_autopilot {
-        race.sim.world.ships[0].autopilot_timer = 4.0;
+        race.core.sim.world.ships[0].autopilot_timer = 4.0;
     }
     let mut runs: Vec<Run> = variants
         .iter()
@@ -292,7 +292,7 @@ fn rumble_runs(give_autopilot: bool, variants: &[(&str, Option<u64>)]) -> Option
     for tick in 0..TICKS {
         race.tick(&PlayerInputs::none());
         let (mut pad_cues, mut bot_pad_cues) = (0, 0);
-        for event in race.sim.pending_cues() {
+        for event in race.core.sim.pending_cues() {
             if event.cue == Cue::SpeedupPad {
                 if event.slot == 0 {
                     pad_cues += 1;
@@ -318,7 +318,7 @@ fn rumble_runs(give_autopilot: bool, variants: &[(&str, Option<u64>)]) -> Option
                 );
             }
         }
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
     }
     for (run, rumbler) in runs.iter_mut().zip(&rumblers) {
         if let Some(rumbler) = rumbler {
@@ -425,9 +425,9 @@ fn flown_into_the_wall(stick: f32) -> Option<(Run2, race::Race)> {
     };
     for _ in 0..3600u64 {
         race.tick(&inputs);
-        run.contact_ticks += u32::from(race.sim.wall_contact_of(0).is_some());
+        run.contact_ticks += u32::from(race.core.sim.wall_contact_of(0).is_some());
         rumbler.tick(&race, false, &mut run.pad);
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
     }
     run.fired = rumbler.fired();
     Some((run, race))

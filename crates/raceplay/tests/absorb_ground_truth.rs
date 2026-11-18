@@ -66,7 +66,7 @@ fn absorb_and_watch(loaded: race::Loaded) -> Vec<u32> {
         race.tick(&PlayerInputs::single(throttle(0)));
     }
     let before = race.absorb_started_for_tests();
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.tick(&PlayerInputs::single(throttle(Button::Circle.bit())));
     assert_eq!(
         race.ship_pickup(),
@@ -262,7 +262,7 @@ fn assert_overlay_window(loaded: race::Loaded) {
         race.tick(&PlayerInputs::single(throttle(0)));
     }
     assert_eq!(race.absorb_overlay_pulse(0), None, "lit before any absorb");
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.tick(&PlayerInputs::single(throttle(Button::Circle.bit())));
     let mut pulses = vec![race.absorb_overlay_pulse(0)];
     for _ in 0..70 {
@@ -330,7 +330,7 @@ fn hd_fades_the_absorb_shell_in_over_the_timer_and_out_after() {
         race.tick(&PlayerInputs::single(throttle(0)));
     }
     assert_eq!(race.absorb_shell_fader(0), None, "shown before any absorb");
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.tick(&PlayerInputs::single(throttle(Button::Circle.bit())));
     let mut fades = vec![race.absorb_shell_fader(0)];
     for _ in 0..150 {

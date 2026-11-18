@@ -11,13 +11,13 @@ use oag_title::weapons::BlastPush;
 fn player_struck_by_a_rocket(push: BlastPush) -> Race {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
-    race.sim.blast_push = push;
+    race.core.sim.blast_push = push;
     for _ in 0..oag_race::COUNTDOWN_TICKS + 2 {
         race.tick(&PlayerInputs::none());
     }
-    let body = race.sim.world.ships[0].physics.body;
-    let before = race.sim.world.ships[0].physics.shield;
-    race.sim.world.projectiles.spawn(
+    let body = race.core.sim.world.ships[0].physics.body;
+    let before = race.core.sim.world.ships[0].physics.shield;
+    race.core.sim.world.projectiles.spawn(
         oag_tables::weapons::Weapon::Rocket,
         body.position - body.forward() * 3.0,
         body.forward() * 600.0,
@@ -27,7 +27,7 @@ fn player_struck_by_a_rocket(push: BlastPush) -> Race {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        race.sim.world.ships[0].physics.shield < before,
+        race.core.sim.world.ships[0].physics.shield < before,
         "the rocket never struck the player - not what this test means to check"
     );
     race
@@ -40,7 +40,7 @@ fn player_struck_by_a_rocket(push: BlastPush) -> Race {
 fn a_posted_blast_stuns_the_player_it_strikes() {
     let race = player_struck_by_a_rocket(BlastPush::Posted);
     assert!(
-        race.sim.world.ships[0].physics.stun_timer > 0.0,
+        race.core.sim.world.ships[0].physics.stun_timer > 0.0,
         "a posted blast armed no stun"
     );
 }
@@ -49,7 +49,7 @@ fn a_posted_blast_stuns_the_player_it_strikes() {
 #[test]
 fn an_immediate_blast_shoves_the_player_without_a_stun() {
     let race = player_struck_by_a_rocket(BlastPush::Immediate);
-    let physics = &race.sim.world.ships[0].physics;
+    let physics = &race.core.sim.world.ships[0].physics;
     assert_eq!(physics.stun_timer, 0.0, "an immediate blast stunned");
     assert!(
         physics.body.linear_velocity.length() > 0.0,

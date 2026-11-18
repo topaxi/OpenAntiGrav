@@ -18,30 +18,30 @@ fn field_race(blob: &[u8]) -> Race {
     setup.handles.insert(Trigger::CollisionSpark, effect);
     setup.mode = Mode::SingleRace;
     let mut race = Race::start(setup);
-    race.sim.world.ship_count = 3;
+    race.core.sim.world.ship_count = 3;
     for slot in 1..3 {
-        race.sim.world.ships[slot].active = true;
-        race.sim.world.ships[slot].handling = hulled_handling();
+        race.core.sim.world.ships[slot].active = true;
+        race.core.sim.world.ships[slot].handling = hulled_handling();
     }
     race
 }
 
 /// The seat resting where it is, and the view's eye after a tick has settled the camera.
 fn settled_eye(race: &mut Race) -> Vec3 {
-    race.sim.world.ships[0].physics.body.position = Vec3::new(20.0, 0.0, 0.0);
-    race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
-    race.sim.world.ships[1].physics.body.position = Vec3::new(20.0, 0.0, 900.0);
-    race.sim.world.ships[2].physics.body.position = Vec3::new(20.0, 0.0, 950.0);
+    race.core.sim.world.ships[0].physics.body.position = Vec3::new(20.0, 0.0, 0.0);
+    race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+    race.core.sim.world.ships[1].physics.body.position = Vec3::new(20.0, 0.0, 900.0);
+    race.core.sim.world.ships[2].physics.body.position = Vec3::new(20.0, 0.0, 950.0);
     race.tick(&PlayerInputs::none());
     race.camera_frame().position
 }
 
 /// Slots 1 and 2 touching head on at `centre`, 20 units a second each.
 fn collide(race: &mut Race, centre: Vec3) {
-    let a = &mut race.sim.world.ships[1].physics;
+    let a = &mut race.core.sim.world.ships[1].physics;
     a.body.position = centre;
     a.body.linear_velocity = Vec3::new(0.0, 0.0, 20.0);
-    let b = &mut race.sim.world.ships[2].physics;
+    let b = &mut race.core.sim.world.ships[2].physics;
     b.body.position = centre + Vec3::new(0.0, 0.0, 1.0);
     b.body.linear_velocity = Vec3::new(0.0, 0.0, -20.0);
 }
@@ -95,7 +95,7 @@ fn an_opponent_pair_contact_within_a_hundred_units_of_the_view_throws_the_spark(
 fn a_shielded_opponent_throws_no_spark() {
     let mut race = field_race(&looping());
     let eye = settled_eye(&mut race);
-    race.sim.world.ships[1].physics.shield_pickup_timer = 5.0;
+    race.core.sim.world.ships[1].physics.shield_pickup_timer = 5.0;
     collide(&mut race, eye + Vec3::new(0.0, 0.0, 60.0));
     race.tick(&PlayerInputs::none());
     assert!(!held(&race, 1), "a Shield did not stop the spark");
@@ -110,10 +110,10 @@ fn an_opponent_spark_ends_with_its_contact() {
     collide(&mut race, eye + Vec3::new(0.0, 0.0, 60.0));
     race.tick(&PlayerInputs::none());
     assert!(held(&race, 1));
-    let a = &mut race.sim.world.ships[1].physics;
+    let a = &mut race.core.sim.world.ships[1].physics;
     a.body.position = eye + Vec3::new(0.0, 0.0, 60.0);
     a.body.linear_velocity = Vec3::ZERO;
-    let b = &mut race.sim.world.ships[2].physics;
+    let b = &mut race.core.sim.world.ships[2].physics;
     b.body.position = eye + Vec3::new(0.0, 0.0, 400.0);
     b.body.linear_velocity = Vec3::ZERO;
     race.tick(&PlayerInputs::none());
@@ -164,7 +164,7 @@ fn the_seats_attached_spark_plays_at_the_attached_strength() {
     super::respawn::push_toward_wall(&mut race);
     let evaluated = race.tick(&PlayerInputs::none());
     assert!(evaluated.wall.impact);
-    let speed = race.sim.world.ships[0]
+    let speed = race.core.sim.world.ships[0]
         .physics
         .body
         .linear_velocity
@@ -179,7 +179,7 @@ fn the_seats_attached_spark_plays_at_the_attached_strength() {
 #[test]
 fn an_opponent_wall_contact_throws_the_spark_inside_a_hundred_units_only() {
     let drive_into_wall = |race: &mut Race, at: Vec3| {
-        let body = &mut race.sim.world.ships[1].physics.body;
+        let body = &mut race.core.sim.world.ships[1].physics.body;
         body.position = Vec3::new(at.x, -39.7, at.z);
         body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
         body.orientation = oag_core::math::Quat::IDENTITY;

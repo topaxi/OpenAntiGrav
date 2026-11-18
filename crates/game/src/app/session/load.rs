@@ -611,7 +611,7 @@ impl Session {
         // The speed plans start learning on the load thread, beside the scene build, unless
         // something will change who flies which craft: a network host's race
         // (`NetPlay::begin_join`) or split seating (`split_screen::seat_for_launch`).
-        // `Race::begin_speed_plans` at the hand-over keeps the job when the race still fits it.
+        // `SimRace::begin_speed_plans` at the hand-over keeps the job when the race still fits it.
         let plan_ahead = self.net.is_none()
             && self.split_lobby.is_none()
             && self.controls.assignment().humans().is_none();
@@ -673,7 +673,7 @@ impl Session {
         // A campaign event the front end asked for, or the menus' own race.
         // The speed plans start learning on the load thread, beside the scene
         // build, when `plan_ahead` (nothing will change who flies which craft: not a
-        // network host's race, not split seating): `Race::begin_speed_plans` at the
+        // network host's race, not split seating): `SimRace::begin_speed_plans` at the
         // hand-over keeps the job when the race still fits it.
         let card = self.pending_card.take();
         let worker = match self.pending_event.take() {
@@ -839,7 +839,7 @@ impl Session {
                             open_windows,
                         );
                     }
-                    race_stage.race.begin_speed_plans();
+                    race_stage.race.core.begin_speed_plans();
                     race_stage.demo = Some(run);
                     // Never the player's best-lap ghost.
                     race_stage.race.set_ghost_visible(false);
@@ -903,7 +903,7 @@ impl Session {
                     // The finished player's thrust reads the same scale:
                     // `AI_ResolveSkillScale` is its one source too.
                     if let Some(scale) = race_stage.campaign_ai_skill_scale {
-                        race_stage.race.sim.apply_campaign_skill(scale);
+                        race_stage.race.core.sim.apply_campaign_skill(scale);
                     }
                     // **Whose driver flies the opponents** (`crate::ai_choice`):
                     // the original's, in every race with opponents, unless
@@ -926,7 +926,11 @@ impl Session {
                         race_stage.campaign_difficulty,
                     );
                     if let Some(pilot) = custom.as_ref().and_then(|c| c.pilot.as_ref()) {
-                        race_stage.race.sim.set_opponent_pilot(pilot, ai_difficulty);
+                        race_stage
+                            .race
+                            .core
+                            .sim
+                            .set_opponent_pilot(pilot, ai_difficulty);
                     }
                     let source = if let Some(custom) = custom.as_ref()
                         && custom.ai == crate::campaign::custom::Ai::Ours
@@ -969,7 +973,7 @@ impl Session {
                     // first tick does not (a fork's route plans cost 1.6 s on the Deck).
                     // A fork's job started on the load thread already
                     // (`plan_ahead` in `launch_race`) and is kept if it still fits.
-                    race_stage.race.begin_speed_plans();
+                    race_stage.race.core.begin_speed_plans();
                     // After everything above that writes to the race, so the recording's
                     // tick-zero hash is the one a rebuild from its header must reproduce.
                     if self.settings.replay.record && crate::replays::SAVES {
@@ -1087,7 +1091,7 @@ impl Session {
                         .built_race
                         .as_ref()
                         .and_then(|built| built.as_ref().ok())
-                        .is_none_or(|ready| ready.race.speed_plans_ready()) =>
+                        .is_none_or(|ready| ready.race.core.speed_plans_ready()) =>
             {
                 stage
                     .built_race

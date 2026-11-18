@@ -73,8 +73,8 @@ fn slice(class: &str, reversed: bool) {
                 let mut setup = loaded.setup.clone();
                 perturb::apply(&mut setup, eps);
                 let race = race::Race::start(setup);
-                let (plan, report) = race.sim.build_player_speed_plan();
-                assert_eq!(plan.len(), race.sim.racing_line().len());
+                let (plan, report) = race.core.sim.build_player_speed_plan();
+                assert_eq!(plan.len(), race.core.sim.racing_line().len());
                 (plan, report)
             })
             .collect();
@@ -131,7 +131,7 @@ slice_test!(speed_plan_rapier_reversed, "RAPIER", true);
 slice_test!(speed_plan_phantom_forward, "PHANTOM", false);
 slice_test!(speed_plan_phantom_reversed, "PHANTOM", true);
 
-/// Plans learned ahead on a thread (`Race::begin_speed_plans`, what the load
+/// Plans learned ahead on a thread (`SimRace::begin_speed_plans`, what the load
 /// screen starts) are the plans the first tick would have learned, and adopting
 /// them is not the cost of learning them. Outpost 7 (`07_Track`) has a fork, so
 /// its race learns plans even under the original driver; run to 120 ticks, the
@@ -159,15 +159,15 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
     let mut lazy = race::Race::start(loaded.setup.clone());
     let mut ahead = race::Race::start(loaded.setup);
     assert!(
-        lazy.sim.use_original_ai(None, 1) && ahead.sim.use_original_ai(None, 1),
+        lazy.core.sim.use_original_ai(None, 1) && ahead.core.sim.use_original_ai(None, 1),
         "the original driver flies, so only the fork asks for plans"
     );
 
     let starting = Instant::now();
-    ahead.begin_speed_plans();
+    ahead.core.begin_speed_plans();
     println!("starting the job took {:?}", starting.elapsed());
     let waited = Instant::now();
-    while !ahead.speed_plans_ready() {
+    while !ahead.core.speed_plans_ready() {
         assert!(
             waited.elapsed() < Duration::from_secs(300),
             "the plans never landed"
@@ -175,10 +175,10 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
         std::thread::sleep(Duration::from_millis(10));
     }
     let adopting = Instant::now();
-    ahead.ensure_speed_plans();
+    ahead.core.ensure_speed_plans();
     let adopted = adopting.elapsed();
     let learning = Instant::now();
-    lazy.ensure_speed_plans();
+    lazy.core.ensure_speed_plans();
     let learned = learning.elapsed();
     println!("adopting {adopted:?}, learning on the frame thread {learned:?}");
     assert!(
@@ -197,7 +197,11 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
     for tick in 0..120 {
         ahead.tick_sim_only(&oag_gameplay::PlayerInputs::none());
         lazy.tick_sim_only(&oag_gameplay::PlayerInputs::none());
-        assert_eq!(ahead.sim.state_hash(), lazy.sim.state_hash(), "tick {tick}");
+        assert_eq!(
+            ahead.core.sim.state_hash(),
+            lazy.core.sim.state_hash(),
+            "tick {tick}"
+        );
     }
 }
 
@@ -220,7 +224,7 @@ fn ring_plan_verifies(source: &std::path::Path, track: &str, class: &str) -> boo
         .map(|&eps| {
             let mut setup = loaded.setup.clone();
             perturb::apply(&mut setup, eps);
-            let (_, report) = race::Race::start(setup).sim.build_player_speed_plan();
+            let (_, report) = race::Race::start(setup).core.sim.build_player_speed_plan();
             println!(
                 "{track} {class} {eps}: failures {}, respawns {}, lap {:?}, unresolved {:?}",
                 report.verify_failures,

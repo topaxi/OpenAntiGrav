@@ -35,14 +35,14 @@ pub(super) fn local_people(views: usize, zoom: bool) -> Race {
     });
     let mut race = Race::start(setup);
     for slot in 1..4 {
-        race.sim.world.controllers[slot] = Controller::Local;
+        race.core.sim.world.controllers[slot] = Controller::Local;
     }
     assert_eq!(race.set_viewport_count(views), views);
     race
 }
 
 fn push_toward_wall(race: &mut Race, slot: usize) {
-    let body = &mut race.sim.world.ships[slot].physics.body;
+    let body = &mut race.core.sim.world.ships[slot].physics.body;
     body.position = Vec3::new(20.0, -39.7, 10.0 * slot as f32);
     body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
     body.orientation = oag_core::math::Quat::IDENTITY;
@@ -125,7 +125,7 @@ fn a_local_seats_shake_decays_as_the_players_does() {
     push_toward_wall(&mut race, 1);
     race.tick(&PlayerInputs::none());
     assert!(view_is_shaken(&race, 1));
-    race.sim.world.ships[1].physics.body.position = Vec3::new(20.0, 100.0, 10.0);
+    race.core.sim.world.ships[1].physics.body.position = Vec3::new(20.0, 100.0, 10.0);
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
     }
@@ -156,9 +156,9 @@ fn a_seats_own_explosions_shake_its_view() {
         for seat in 1..views {
             let mut race = local_people(views, false);
             race.advance_craft_flashes();
-            race.sim.world.ships[seat].physics.craft_state = CraftState::Destroyed;
+            race.core.sim.world.ships[seat].physics.craft_state = CraftState::Destroyed;
             race.advance_craft_flashes();
-            race.sim.world.ships[seat].physics.craft_state = CraftState::Eliminated;
+            race.core.sim.world.ships[seat].physics.craft_state = CraftState::Eliminated;
             race.advance_craft_flashes();
             for view in 0..views {
                 assert_eq!(
@@ -177,7 +177,7 @@ fn a_local_seats_boost_kicks_its_own_field_of_view() {
         for seat in 1..views {
             let mut race = local_people(views, false);
             race.view.boost_fov_kick = BoostFovKick::DEFAULT;
-            race.sim.world.ships[seat].physics.pad_timer = 1.0;
+            race.core.sim.world.ships[seat].physics.pad_timer = 1.0;
             race.tick(&PlayerInputs::none());
             let fov = |view| {
                 race.set_viewpoint(view);
@@ -218,7 +218,7 @@ fn a_local_seats_airbrake_swings_its_own_flaps() {
     for views in VIEWS {
         for seat in 1..views {
             let mut race = local_people(views, false);
-            race.sim.world.ships[seat].physics.airbrake_left = 100.0;
+            race.core.sim.world.ships[seat].physics.airbrake_left = 100.0;
             race.tick(&PlayerInputs::none());
             for slot in 0..4 {
                 assert_eq!(
@@ -239,10 +239,10 @@ fn the_players_screen_wash_does_not_cover_another_seats_view() {
     for views in VIEWS {
         let mut race = local_people(views, false);
         race.view.screen_flash = Some(oag_fx::flash::ScreenFlash::default());
-        let at = race.sim.world.ships[0].physics.body.position;
-        race.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
+        let at = race.core.sim.world.ships[0].physics.body.position;
+        race.core.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
         race.advance_craft_flashes();
-        race.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
+        race.core.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
         race.advance_craft_flashes();
         race.view
             .screen_flash
@@ -263,10 +263,10 @@ fn the_players_screen_wash_does_not_cover_another_seats_view() {
 #[test]
 fn a_seat_given_back_to_the_ai_folds_its_flaps() {
     let mut race = local_people(2, false);
-    race.sim.world.ships[1].physics.airbrake_left = 100.0;
+    race.core.sim.world.ships[1].physics.airbrake_left = 100.0;
     race.tick(&PlayerInputs::none());
     assert!(race.airbrake_flaps_of(1)[0] > 0.0);
-    race.sim.world.controllers[1] = Controller::Ai;
+    race.core.sim.world.controllers[1] = Controller::Ai;
     for _ in 0..240 {
         race.tick(&PlayerInputs::none());
     }

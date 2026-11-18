@@ -108,7 +108,7 @@ impl Race {
     /// world, so the effect freezes with the craft it hangs under.
     pub(crate) fn advance_mag_floor_fx(&mut self) {
         for (slot, shown) in self.view.mag_floor_fx.iter_mut().enumerate() {
-            let blend = self.sim.world.ships[slot].physics.mag_lock_blend;
+            let blend = self.core.sim.world.ships[slot].physics.mag_lock_blend;
             shown.on = contact_this_tick(shown.previous_blend, blend);
             shown.previous_blend = blend;
         }
@@ -121,15 +121,15 @@ impl Race {
     pub(crate) fn mag_floor_fx_draws(&self) -> [Option<[Mat4; 2]>; MAX_SHIPS] {
         let forced = std::env::var_os(FORCE_ENV).is_some_and(|v| v == "on");
         std::array::from_fn(|slot| {
-            if slot >= usize::from(self.sim.world.ship_count)
-                || !self.sim.ship_active(slot)
+            if slot >= usize::from(self.core.sim.world.ship_count)
+                || !self.core.sim.ship_active(slot)
                 || !(forced || self.view.mag_floor_fx[slot].on)
             {
                 return None;
             }
             let model = self.ship_model_matrix_of(slot);
-            let position = self.sim.world.ships[slot].physics.body.position;
-            let (_, sample, _) = self.sim.spline.nearest(position)?;
+            let position = self.core.sim.world.ships[slot].physics.body.position;
+            let (_, sample, _) = self.core.sim.spline.nearest(position)?;
             Some([
                 ride_matrix(model),
                 lie_matrix(model, Vec3::from_array(sample.down)),

@@ -92,23 +92,23 @@ fn solo_lap_at(tuning: oag_ai::Tuning) -> Option<u64> {
     })
     .expect("loading 16_Track");
     let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.sim.set_ai_tuning(tuning);
+    race.core.sim.set_ai_tuning(tuning);
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
 
     const LONE: usize = 1;
     // `ai_span_sweep.rs`'s own budget - a Novice-scaled driver on a
     // technical circuit can take several times a measured lap to complete
     // one clean.
     const TICKS: u64 = 18_000;
-    let mut lap = race.sim.world.ships[LONE].standing.lap;
+    let mut lap = race.core.sim.world.ships[LONE].standing.lap;
     let mut started = 0u64;
     let mut best: Option<u64> = None;
     for tick in 0..TICKS {
         race.tick(&PlayerInputs::none());
-        let now = race.sim.world.ships[LONE].standing.lap;
+        let now = race.core.sim.world.ships[LONE].standing.lap;
         if now != lap {
             if lap > 1 {
                 let taken = tick - started;

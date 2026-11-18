@@ -54,19 +54,19 @@ fn autopiloted_hd_race() -> Option<race::Race> {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     Some(race)
 }
 
 fn race_to_the_flag(race: &mut race::Race) {
-    while !race.sim.finished() && race.sim.world.tick < CAP {
+    while !race.core.sim.finished() && race.core.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        race.sim.finished(),
+        race.core.sim.finished(),
         "the race was still running after {CAP} ticks; the player reached lap {} of {:?}",
-        race.sim.world.primary_race().lap,
-        race.sim.world.laps_target()
+        race.core.sim.world.primary_race().lap,
+        race.core.sim.world.laps_target()
     );
 }
 
@@ -258,7 +258,7 @@ fn a_craft_that_crosses_behind_the_results_screen_replaces_racing_with_its_time(
     };
     race_to_the_flag(&mut race);
     assert!(
-        race.sim.runs_on_after_the_line(),
+        race.core.sim.runs_on_after_the_line(),
         "the autopilot crossed the line"
     );
     let first = race.results().expect("a finished race has results").clone();
@@ -288,7 +288,7 @@ fn a_craft_that_crosses_behind_the_results_screen_replaces_racing_with_its_time(
         racing_at_the_flag
     );
 
-    let hash_at_the_flag = race.sim.state_hash();
+    let hash_at_the_flag = race.core.sim.state_hash();
     let mut shown = first.clone();
     let revision = race.results_revision();
     for _ in 0..CAP {
@@ -307,7 +307,11 @@ fn a_craft_that_crosses_behind_the_results_screen_replaces_racing_with_its_time(
         now_racing < racing_at_the_flag,
         "no craft finished behind the screen"
     );
-    assert_ne!(race.sim.state_hash(), hash_at_the_flag, "the field ran on");
+    assert_ne!(
+        race.core.sim.state_hash(),
+        hash_at_the_flag,
+        "the field ran on"
+    );
 
     let after = results_texts(&shown, &race, &screens, &strings);
     assert_eq!(

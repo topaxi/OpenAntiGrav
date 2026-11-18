@@ -40,12 +40,13 @@ fn the_ai_drives_the_field_along_the_track() {
     let bound = envelope(&loaded);
     let mut race = race::Race::start(loaded.setup);
     assert_eq!(
-        race.sim.ship_count(),
+        race.core.sim.ship_count(),
         8,
         "a single race should field a full grid without an override"
     );
 
     let start: Vec<_> = race
+        .core
         .sim
         .world
         .ships
@@ -53,6 +54,7 @@ fn the_ai_drives_the_field_along_the_track() {
         .map(|ship| ship.physics.body.position)
         .collect();
     let heading: Vec<_> = race
+        .core
         .sim
         .world
         .ships
@@ -67,7 +69,7 @@ fn the_ai_drives_the_field_along_the_track() {
     }
 
     for slot in 1..8 {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         let moved = ship.physics.body.position - start[slot];
 
         assert!(
@@ -85,6 +87,7 @@ fn the_ai_drives_the_field_along_the_track() {
         );
 
         let distance = race
+            .core
             .sim
             .spline()
             .distance_to(ship.physics.body.position)
@@ -124,13 +127,13 @@ fn every_craft_burns_trails_and_boosts_on_its_own() {
         return;
     };
     let mut race = race::Race::start(loaded.setup);
-    assert_eq!(race.sim.ship_count(), 8);
+    assert_eq!(race.core.sim.ship_count(), 8);
     assert!(
         race.nozzle().is_some(),
         "the disc's hull authors an Engine Flare node, so every craft has a nozzle"
     );
     assert!(
-        !race.sim.speedup_pads().is_empty(),
+        !race.core.sim.speedup_pads().is_empty(),
         "the third claim needs a track with authored speed pads"
     );
 
@@ -224,7 +227,7 @@ fn the_field_spreads_across_the_ai_corridor() {
         return;
     };
     let mut race = race::Race::start(loaded.setup);
-    assert_eq!(race.sim.ship_count(), 8);
+    assert_eq!(race.core.sim.ship_count(), 8);
 
     // Ten seconds, the same window the driving test uses: long enough that each
     // craft has left the grid's own lateral stagger behind and settled onto the
@@ -236,8 +239,9 @@ fn the_field_spreads_across_the_ai_corridor() {
     let mut offsets = Vec::new();
     let mut room = f32::INFINITY;
     for slot in 1..8 {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         let sample = race
+            .core
             .sim
             .spline()
             .sample(ship.driver.index as usize)
@@ -289,12 +293,12 @@ fn a_driven_field_replays_identically() {
 
     for slot in 0..8 {
         assert_eq!(
-            first.sim.world.ships[slot].physics.body.position,
-            second.sim.world.ships[slot].physics.body.position,
+            first.core.sim.world.ships[slot].physics.body.position,
+            second.core.sim.world.ships[slot].physics.body.position,
             "slot {slot} diverged between two runs of the same race"
         );
         assert_eq!(
-            first.sim.world.ships[slot].driver, second.sim.world.ships[slot].driver,
+            first.core.sim.world.ships[slot].driver, second.core.sim.world.ships[slot].driver,
             "slot {slot}'s driver diverged between two runs of the same race"
         );
     }
@@ -334,13 +338,13 @@ fn the_field_is_placed_by_how_far_round_it_is() {
         .iter()
         .position(|&place| place == 1)
         .expect("somebody is first");
-    let course = race.sim.course().expect("16_Track closes");
+    let course = race.core.sim.course().expect("16_Track closes");
     let furthest = (0..8)
         .max_by(|&a, &b| {
-            race.sim.world.ships[a]
+            race.core.sim.world.ships[a]
                 .standing
                 .distance(course)
-                .total_cmp(&race.sim.world.ships[b].standing.distance(course))
+                .total_cmp(&race.core.sim.world.ships[b].standing.distance(course))
         })
         .expect("eight craft");
     assert_eq!(
@@ -368,7 +372,7 @@ fn the_players_place_reaches_the_hud() {
     };
     let mut race = race::Race::start(loaded.setup);
     assert_eq!(
-        race.sim.ship_count(),
+        race.core.sim.ship_count(),
         8,
         "a single race with no field cannot test a place"
     );
@@ -378,10 +382,10 @@ fn the_players_place_reaches_the_hud() {
     }
 
     let readout = race.readout();
-    let course = race.sim.course().expect("16_Track closes");
+    let course = race.core.sim.course().expect("16_Track closes");
     let places = race.places();
     for (slot, place) in places.iter().enumerate() {
-        let standing = race.sim.world.ships[slot].standing;
+        let standing = race.core.sim.world.ships[slot].standing;
         println!(
             "slot {slot}: place {place}, lap {}, progress {:?}, distance {:.1}",
             standing.lap,
@@ -451,8 +455,8 @@ fn an_opponent_fires_at_a_craft_ahead_on_a_real_circuit() {
         return;
     };
     let mut race = race::Race::start(loaded.setup);
-    race.sim.set_fire_law(race::FireLaw::Ours);
-    assert_eq!(race.sim.ship_count(), 8);
+    race.core.sim.set_fire_law(race::FireLaw::Ours);
+    assert_eq!(race.core.sim.ship_count(), 8);
 
     let mut fired = 0usize;
     let mut owners = std::collections::BTreeSet::new();
@@ -460,12 +464,13 @@ fn an_opponent_fires_at_a_craft_ahead_on_a_real_circuit() {
     // question is only ever whether the driver wants to use it.
     for _ in 0..7_200 {
         for slot in 1..8 {
-            if race.sim.world.ships[slot].pickup.weapon.is_none() {
-                race.sim.world.ships[slot].pickup.weapon =
+            if race.core.sim.world.ships[slot].pickup.weapon.is_none() {
+                race.core.sim.world.ships[slot].pickup.weapon =
                     Some(oag_tables::weapons::Weapon::Rocket);
             }
         }
         let before = race
+            .core
             .sim
             .world
             .projectiles
@@ -474,12 +479,13 @@ fn an_opponent_fires_at_a_craft_ahead_on_a_real_circuit() {
             .filter(|p| p.kind.is_some())
             .count();
         race.tick(&PlayerInputs::none());
-        for projectile in race.sim.world.projectiles.slots.iter() {
+        for projectile in race.core.sim.world.projectiles.slots.iter() {
             if projectile.kind.is_some() && projectile.owner != 0 {
                 owners.insert(projectile.owner);
             }
         }
         let after = race
+            .core
             .sim
             .world
             .projectiles

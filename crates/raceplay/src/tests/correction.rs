@@ -57,13 +57,13 @@ fn a_correction_leaves_the_drawn_craft_where_it_was() {
         authoritative,
     } = scene();
     let before = drawn(&client, 1);
-    let sim_before = client.sim.world.ships[1].physics.body.position;
+    let sim_before = client.core.sim.world.ships[1].physics.body.position;
     // Replaying the same wrong guess from the server's state reaches the same place;
     // the correction proper is the true input over the window.
     let truth = (START..START + WINDOW).map(|t| sc.truth(t));
     let reconciled = client.reconcile(&authoritative, truth);
     assert_eq!(reconciled.ticks, WINDOW);
-    let sim_after = client.sim.world.ships[1].physics.body.position;
+    let sim_after = client.core.sim.world.ships[1].physics.body.position;
     assert!(
         reconciled.pops[1] > 0.5,
         "the scene must mispredict: {}",
@@ -144,7 +144,10 @@ fn smoothing_changes_the_picture_and_not_the_hash() {
     plain
         .client
         .reconcile(&authoritative, (START..START + WINDOW).map(|t| sc.truth(t)));
-    assert_eq!(client.sim.state_hash(), plain.client.sim.state_hash());
+    assert_eq!(
+        client.core.sim.state_hash(),
+        plain.client.core.sim.state_hash()
+    );
     assert!(client.correction_offset_of(1).length() > 0.5);
     assert_eq!(plain.client.correction_offset_of(1), Vec3::ZERO);
     assert!(
@@ -154,7 +157,10 @@ fn smoothing_changes_the_picture_and_not_the_hash() {
     for _ in 0..30 {
         client.tick(&sc.truth(START + WINDOW));
         plain.client.tick(&sc.truth(START + WINDOW));
-        assert_eq!(client.sim.state_hash(), plain.client.sim.state_hash());
+        assert_eq!(
+            client.core.sim.state_hash(),
+            plain.client.core.sim.state_hash()
+        );
     }
 }
 
@@ -183,8 +189,8 @@ fn a_seat_one_camera_follows_seat_one() {
         client.tick(&sc.truth(START + t.min(59)));
     }
     let eye = client.tick_view().inverse().w_axis.truncate();
-    let own = client.sim.world.ships[1].physics.body.position;
-    let other = client.sim.world.ships[0].physics.body.position;
+    let own = client.core.sim.world.ships[1].physics.body.position;
+    let other = client.core.sim.world.ships[0].physics.body.position;
     println!(
         "eye to seat 1: {}, eye to slot 0: {}",
         (eye - own).length(),
@@ -208,17 +214,17 @@ fn every_seat_camera_follows_its_own_craft() {
             client.set_seat(Some(seat));
             // The grid packs the craft within a hull's length of each other, closer than
             // the far chase view stands off; spread them so "nearest craft" is the question.
-            for (slot, ship) in client.sim.world.ships.iter_mut().enumerate() {
+            for (slot, ship) in client.core.sim.world.ships.iter_mut().enumerate() {
                 ship.physics.body.position.z += 300.0 * slot as f32;
             }
             // Far from the toy track the distance trigger would put them back; this
             // test is about the camera.
-            client.sim.respawn_disabled.fill(true);
+            client.core.sim.respawn_disabled.fill(true);
             for t in 0..120 {
                 client.tick(&sc.truth(START + t.min(59)));
             }
             let eye = client.camera_position();
-            let ships = &client.sim.world.ships;
+            let ships = &client.core.sim.world.ships;
             let own = (eye - ships[seat].physics.body.position).length();
             for other in (0..ships.len()).filter(|&o| o != seat) {
                 let away = (eye - ships[other].physics.body.position).length();
@@ -284,7 +290,7 @@ fn the_own_craft_and_its_camera_glide_together() {
         "the own craft carries the offset: {offset:?}"
     );
     let drawn_at = client.ship_tick_body(0).position;
-    let sim_at = client.sim.world.ships[0].physics.body.position;
+    let sim_at = client.core.sim.world.ships[0].physics.body.position;
     assert!(
         ((drawn_at - sim_at) - offset).length() < 1.0e-4,
         "the hull is drawn with the offset"
@@ -305,7 +311,7 @@ fn the_own_craft_and_its_camera_glide_together() {
 fn the_own_glide_is_view_only_and_a_snap_is_not_glided() {
     let (_, _, on) = own_craft_corrected(true, 3.0);
     let (_, _, off) = own_craft_corrected(false, 3.0);
-    assert_eq!(on.sim.state_hash(), off.sim.state_hash());
+    assert_eq!(on.core.sim.state_hash(), off.core.sim.state_hash());
     assert_eq!(off.correction_offset_of(0), Vec3::ZERO);
     let (turned, _, far) = own_craft_corrected(true, crate::correction::SNAP_DISTANCE + 5.0);
     assert_eq!(far.correction_offset_of(0), Vec3::ZERO);
@@ -325,8 +331,8 @@ fn a_hit_that_first_shows_in_a_correction_is_not_softened() {
         } = scene();
         client.set_seat(Some(0));
         // The fixture's craft have no shield pool; give this one a pool of 100.
-        client.sim.world.ships[0].handling.dimensions.shield = 100.0;
-        client.sim.world.ships[0].physics.shield = 90.0;
+        client.core.sim.world.ships[0].handling.dimensions.shield = 100.0;
+        client.core.sim.world.ships[0].physics.shield = 90.0;
         client.view.contact.shake.cancel();
         let mut shifted = authoritative;
         shifted.world.ships[0].handling.dimensions.shield = 100.0;
@@ -361,8 +367,8 @@ fn a_hit_seen_in_a_correction_shakes_once() {
         authoritative,
     } = scene();
     client.set_seat(Some(0));
-    client.sim.world.ships[0].handling.dimensions.shield = 100.0;
-    client.sim.world.ships[0].physics.shield = 90.0;
+    client.core.sim.world.ships[0].handling.dimensions.shield = 100.0;
+    client.core.sim.world.ships[0].physics.shield = 90.0;
     let mut hit = authoritative;
     hit.world.ships[0].handling.dimensions.shield = 100.0;
     hit.world.ships[0].physics.shield = 60.0;

@@ -46,7 +46,7 @@ pub fn ticks_to_centiseconds(ticks: u64) -> i64 {
 #[must_use]
 pub fn live_value(mode: &Mode, race: &Race) -> Option<i64> {
     match mode {
-        Mode::Zone => Some(i64::from(race.sim.world.primary_race().zone)),
+        Mode::Zone => Some(i64::from(race.core.sim.world.primary_race().zone)),
         Mode::SpeedLap => race
             .player_standing()
             .best_lap_ticks

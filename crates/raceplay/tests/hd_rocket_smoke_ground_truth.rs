@@ -71,7 +71,7 @@ fn a_volley_lays_three_ribbons_that_age_out_after_the_rockets() {
         .ramp
         .clone();
     let mut race = race::Race::start(loaded.setup);
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
     let mut buttons = oag_core::buttons::Input::new();
     let mut peak = 0;
     let mut drew = false;

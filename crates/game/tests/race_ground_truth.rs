@@ -309,7 +309,7 @@ fn a_ship_stays_on_the_track_for_ten_seconds() {
         "worst spline distance {worst_distance:.1} of {bound:.1} at tick {worst_at}, \
          top speed {top_speed:.1}, grounded on {grounded_ticks} of 600, \
          {} respawn(s)",
-        race.sim.respawns()
+        race.core.sim.respawns()
     );
     assert!(
         worst_distance < bound,
@@ -505,29 +505,29 @@ fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai:
     };
     let mut race = race::Race::start(loaded.setup);
     if let Some(tuning) = tuning {
-        race.sim.set_ai_tuning(tuning);
+        race.core.sim.set_ai_tuning(tuning);
     }
     // Everyone but one opponent off the track, so nothing it does is about
     // anybody else.
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
 
     let mut best: Option<u64> = None;
-    let mut lap = race.sim.world.ships[1].standing.lap;
+    let mut lap = race.core.sim.world.ships[1].standing.lap;
     let mut started = 0u64;
     let mut recovered_this_lap = false;
     let mut lost_at = Vec::new();
     for tick in 0..18_000u64 {
-        let before = race.sim.respawns_of(1);
-        let was_at = race.sim.world.ships[1].driver.index;
+        let before = race.core.sim.respawns_of(1);
+        let was_at = race.core.sim.world.ships[1].driver.index;
         race.tick(&PlayerInputs::none());
-        if race.sim.respawns_of(1) != before {
+        if race.core.sim.respawns_of(1) != before {
             recovered_this_lap = true;
             lost_at.push(was_at);
         }
-        let now = race.sim.world.ships[1].standing.lap;
+        let now = race.core.sim.world.ships[1].standing.lap;
         if now != lap {
             // The first lap is the standing start, and a lap the craft had to
             // be recovered during is not a lap it drove.
@@ -542,10 +542,10 @@ fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai:
     }
     Solo {
         best,
-        respawns: race.sim.respawns_of(1),
+        respawns: race.core.sim.respawns_of(1),
         laps: lap,
         lost_at,
-        line_len: race.sim.racing_line().len() as u32,
+        line_len: race.core.sim.racing_line().len() as u32,
     }
 }
 
@@ -696,9 +696,10 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
         let race = race::Race::start(loaded.setup);
         checked += 1;
 
-        for slot in 1..race.sim.ship_count() as usize {
-            let ship = &race.sim.world.ships[slot];
+        for slot in 1..race.core.sim.ship_count() as usize {
+            let ship = &race.core.sim.world.ships[slot];
             let sample = race
+                .core
                 .sim
                 .ai_sample_for(slot, ship.driver.index as usize)
                 .expect("the driver stands on a sample");
@@ -896,14 +897,14 @@ fn the_racing_line_has_track_under_it_where_it_is_known_to() {
         let reach = loaded.setup.handling.antigrav.ride_height;
         let collision = loaded.setup.collision.clone();
         let race = race::Race::start(loaded.setup);
-        let line = race.sim.racing_line();
+        let line = race.core.sim.racing_line();
 
         // Two casts per unsupported sample: one probe reach, which is what a
         // craft holds onto, then sixty, which says whether there is a surface
         // down there at all.
         let (mut gaps, mut below) = (Vec::new(), 0u32);
         for index in 0..line.len() {
-            let Some(sample) = race.sim.ai_sample(index) else {
+            let Some(sample) = race.core.sim.ai_sample(index) else {
                 continue;
             };
             let up = (-Vec3::from_array(sample.down)).normalize_or_zero();

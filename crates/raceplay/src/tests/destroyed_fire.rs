@@ -8,7 +8,8 @@ use oag_physics::CraftState;
 use oag_tables::weapons::Weapon;
 
 fn rockets(race: &Race, owner: u8) -> usize {
-    race.sim
+    race.core
+        .sim
         .world
         .projectiles
         .slots
@@ -19,9 +20,9 @@ fn rockets(race: &Race, owner: u8) -> usize {
 
 fn eliminator_holding_a_rocket(state: CraftState) -> Race {
     let mut race = race_with_weapon_table(Mode::Eliminator, Vec::new(), 1.0, one_rocket_table());
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Rocket);
-    race.sim.world.ships[0].physics.craft_state = state;
-    race.sim.world.ships[0].physics.state_timer = 20.0;
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Rocket);
+    race.core.sim.world.ships[0].physics.craft_state = state;
+    race.core.sim.world.ships[0].physics.state_timer = 20.0;
     race
 }
 
@@ -70,13 +71,13 @@ fn a_destroyed_opponent_uses_nothing() {
         for _ in 0..10 {
             race.tick(&PlayerInputs::none());
         }
-        race.sim.world.ships[1].pickup.weapon = Some(Weapon::Turbo);
-        race.sim.world.ships[1].physics.craft_state = state;
-        race.sim.world.ships[1].physics.state_timer = 20.0;
+        race.core.sim.world.ships[1].pickup.weapon = Some(Weapon::Turbo);
+        race.core.sim.world.ships[1].physics.craft_state = state;
+        race.core.sim.world.ships[1].physics.state_timer = 20.0;
         let mut ticks_down = 0;
         for _ in 0..300 {
             race.tick(&PlayerInputs::none());
-            if race.sim.world.ships[1].physics.craft_state != CraftState::Racing {
+            if race.core.sim.world.ships[1].physics.craft_state != CraftState::Racing {
                 ticks_down += 1;
             } else if state != CraftState::Racing {
                 break;
@@ -86,7 +87,7 @@ fn a_destroyed_opponent_uses_nothing() {
             state == CraftState::Racing || ticks_down > 30,
             "the wreck was up too briefly to test"
         );
-        race.sim.world.ships[1].pickup.weapon.is_none()
+        race.core.sim.world.ships[1].pickup.weapon.is_none()
     };
     assert!(
         spent(CraftState::Racing),
@@ -108,6 +109,7 @@ fn cues_over(
     for _ in 0..ticks {
         race.tick(&inputs());
         seen += race
+            .core
             .sim
             .drain_cues()
             .iter()
@@ -119,23 +121,23 @@ fn cues_over(
 
 fn eliminator_holding(weapon: Weapon, table: oag_tables::weapons::WeaponStats) -> Race {
     let mut race = race_with_weapon_table(Mode::Eliminator, Vec::new(), 1.0, table);
-    race.sim.world.ships[0].pickup.weapon = Some(weapon);
+    race.core.sim.world.ships[0].pickup.weapon = Some(weapon);
     race
 }
 
 fn down(race: &mut Race) {
-    race.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
-    race.sim.world.ships[0].physics.state_timer = 20.0;
+    race.core.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
+    race.core.sim.world.ships[0].physics.state_timer = 20.0;
 }
 
 fn respawn(race: &mut Race) {
-    race.sim.world.ships[0].physics.craft_state = CraftState::Racing;
+    race.core.sim.world.ships[0].physics.craft_state = CraftState::Racing;
 }
 
 #[test]
 fn a_racing_craft_lays_its_whole_mine_cluster() {
     let mut race = eliminator_holding(Weapon::Mine, one_mine_table());
-    race.sim.world.ships[0]
+    race.core.sim.world.ships[0]
         .pickup
         .begin_drop(oag_weapons::projectile::mine::CLUSTER);
     let laid = cues_over(&mut race, Cue::MineLaunch, 120, PlayerInputs::none);
@@ -145,7 +147,7 @@ fn a_racing_craft_lays_its_whole_mine_cluster() {
 #[test]
 fn a_mine_drop_cut_short_by_destruction_does_not_resume_after_the_respawn() {
     let mut race = eliminator_holding(Weapon::Mine, one_mine_table());
-    race.sim.world.ships[0]
+    race.core.sim.world.ships[0]
         .pickup
         .begin_drop(oag_weapons::projectile::mine::CLUSTER);
     let before = cues_over(&mut race, Cue::MineLaunch, 1, PlayerInputs::none);
@@ -155,7 +157,7 @@ fn a_mine_drop_cut_short_by_destruction_does_not_resume_after_the_respawn() {
     respawn(&mut race);
     let after = cues_over(&mut race, Cue::MineLaunch, 120, PlayerInputs::none);
     assert_eq!((during, after), (0, 0), "the drop went on");
-    assert!(!race.sim.world.ships[0].pickup.is_dropping());
+    assert!(!race.core.sim.world.ships[0].pickup.is_dropping());
     assert_eq!(race.ship_pickup(), None, "the part-laid cluster survived");
 }
 
@@ -180,7 +182,7 @@ fn a_cannon_burst_cut_short_by_destruction_does_not_resume_after_the_respawn() {
     }
     assert_eq!(before, 1);
     assert!(
-        race.sim.world.ships[0].pickup.cannon_rounds > 0,
+        race.core.sim.world.ships[0].pickup.cannon_rounds > 0,
         "a spent magazine"
     );
     down(&mut race);
@@ -197,8 +199,8 @@ fn quake_holder() -> Race {
     setup.weapons = Some(one_quake_table());
     let mut race = Race::start(setup);
     race.tick(&PlayerInputs::none());
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Quake);
-    race.sim.world.ships[0].pickup.quake_armed = true;
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Quake);
+    race.core.sim.world.ships[0].pickup.quake_armed = true;
     race
 }
 
@@ -220,7 +222,7 @@ fn an_armed_quake_cut_short_by_destruction_does_not_fire_after_the_respawn() {
     for _ in 0..20 {
         race.tick(&PlayerInputs::none());
     }
-    assert!(race.sim.world.quake.is_none(), "the armed press fired");
+    assert!(race.core.sim.world.quake.is_none(), "the armed press fired");
     assert_eq!(
         race.ship_pickup(),
         Some(Weapon::Quake),
@@ -235,24 +237,27 @@ fn an_armed_quake_cut_short_by_destruction_does_not_fire_after_the_respawn() {
 /// which goes through the same `spend_opponent_pickup` gate.
 fn opponent_rockets(state: CraftState, resume_at: usize) -> usize {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(Arc::new(one_rocket_table()));
+    race.core.sim.weapons = Some(Arc::new(one_rocket_table()));
     for _ in 0..oag_race::COUNTDOWN_TICKS {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[1].pickup.weapon = Some(Weapon::Rocket);
-    race.sim.world.ships[1].physics.craft_state = state;
-    race.sim.world.ships[1].physics.state_timer = 1000.0;
+    race.core.sim.world.ships[1].pickup.weapon = Some(Weapon::Rocket);
+    race.core.sim.world.ships[1].physics.craft_state = state;
+    race.core.sim.world.ships[1].physics.state_timer = 1000.0;
     let mut fired = 0;
     for tick in 0..600 {
         if tick == resume_at {
-            race.sim.world.ships[1].physics.craft_state = CraftState::Racing;
+            race.core.sim.world.ships[1].physics.craft_state = CraftState::Racing;
         }
-        let body = race.sim.world.ships[1].physics.body;
-        race.sim.world.ships[0].physics.body.position = body.position + body.forward() * 60.0;
+        let body = race.core.sim.world.ships[1].physics.body;
+        race.core.sim.world.ships[0].physics.body.position = body.position + body.forward() * 60.0;
         race.tick(&PlayerInputs::none());
         if tick < resume_at {
             assert_eq!(rockets(&race, 1), 0, "a {state:?} opponent fired");
-            assert_eq!(race.sim.world.ships[1].pickup.weapon, Some(Weapon::Rocket));
+            assert_eq!(
+                race.core.sim.world.ships[1].pickup.weapon,
+                Some(Weapon::Rocket)
+            );
         }
         fired += rockets(&race, 1);
     }

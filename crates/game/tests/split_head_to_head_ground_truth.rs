@@ -60,8 +60,8 @@ fn two_people_on(
     let hud = loaded.hud;
     let mut race = race::Race::start(loaded.setup);
     oag_game::split_screen::apply(&mut race, 2, cut);
-    race.sim.world.controllers[1] = Controller::Remote;
-    race.sim.set_autopilot(true);
+    race.core.sim.world.controllers[1] = Controller::Remote;
+    race.core.sim.set_autopilot(true);
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
     }

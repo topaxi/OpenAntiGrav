@@ -315,22 +315,28 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
         };
         for race in [&mut native, &mut from_file] {
             for slot in 2..8 {
-                race.sim.world.ships[slot].active = false;
+                race.core.sim.world.ships[slot].active = false;
             }
-            race.sim.world.ships[0].active = false;
+            race.core.sim.world.ships[0].active = false;
         }
         let inputs = oag_gameplay::PlayerInputs::none();
         let mut first_difference = None;
         for tick in 0..3_600u64 {
             native.tick(&inputs);
             from_file.tick(&inputs);
-            if first_difference.is_none() && native.sim.state_hash() != from_file.sim.state_hash() {
+            if first_difference.is_none()
+                && native.core.sim.state_hash() != from_file.core.sim.state_hash()
+            {
                 first_difference = Some(tick);
             }
         }
         assert_eq!(first_difference, None, "{track}: first differing tick");
-        let moved = native.sim.world.ships[1].standing.lap;
-        let travelled = native.sim.world.ships[1].physics.body.position.length();
+        let moved = native.core.sim.world.ships[1].standing.lap;
+        let travelled = native.core.sim.world.ships[1]
+            .physics
+            .body
+            .position
+            .length();
         println!("{track}: lap {moved}, |position| {travelled:.0}");
         assert!(travelled > 100.0, "{track}: the AI craft did not drive");
     }
@@ -429,9 +435,9 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
         let loaded = race::load(&o).expect("loads");
         let mut race = race::Race::start(loaded.setup);
         for slot in 2..8 {
-            race.sim.world.ships[slot].active = false;
+            race.core.sim.world.ships[slot].active = false;
         }
-        race.sim.world.ships[0].active = false;
+        race.core.sim.world.ships[0].active = false;
         race
     };
     let (mut direct, mut converted) = (start(wtrk), start(manifest));
@@ -440,12 +446,21 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
     for tick in 0..3_600u64 {
         direct.tick(&inputs);
         converted.tick(&inputs);
-        if first_difference.is_none() && direct.sim.state_hash() != converted.sim.state_hash() {
+        if first_difference.is_none()
+            && direct.core.sim.state_hash() != converted.core.sim.state_hash()
+        {
             first_difference = Some(tick);
         }
     }
     assert_eq!(first_difference, None, "first differing tick");
-    assert!(direct.sim.world.ships[1].physics.body.position.length() > 100.0);
+    assert!(
+        direct.core.sim.world.ships[1]
+            .physics
+            .body
+            .position
+            .length()
+            > 100.0
+    );
     std::fs::remove_dir_all(dir).ok();
 }
 
@@ -497,17 +512,17 @@ fn lone_craft_gets_round(file: &str, id: &str, title: &str, art: &[&str]) {
     assert_eq!(loaded.setup.foreign.as_deref(), Some(id));
     let mut race = race::Race::start(loaded.setup);
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
     let inputs = oag_gameplay::PlayerInputs::none();
     for _ in 0..7_200 {
         race.tick(&inputs);
     }
-    let lap = race.sim.world.ships[1].standing.lap;
+    let lap = race.core.sim.world.ships[1].standing.lap;
     println!(
         "{file}: lap {lap} after 7200 ticks, respawns {}",
-        race.sim.respawns_of(1)
+        race.core.sim.respawns_of(1)
     );
     assert!(lap >= 2, "got round at all: lap {lap}");
 }
@@ -786,16 +801,16 @@ fn a_zone_race_on_a_track_file_flies_the_hosts_zone_ramp_round_the_files_loop() 
         );
         assert!(loaded.setup.zone.is_some(), "{}", file.display());
         let mut race = race::Race::start(loaded.setup);
-        race.sim.set_autopilot(true);
+        race.core.sim.set_autopilot(true);
         let inputs = oag_gameplay::PlayerInputs::none();
         for _ in 0..15_200 {
             race.tick(&inputs);
         }
-        let zone = race.sim.world.race[0].zone;
+        let zone = race.core.sim.world.race[0].zone;
         println!("{}: zone {zone} after 15200 ticks", file.display());
         assert!(zone >= 24, "{}: zone {zone}", file.display());
-        assert_eq!(race.sim.respawns_of(0), 0, "{}", file.display());
-        assert!(!race.sim.finished(), "{}", file.display());
+        assert_eq!(race.core.sim.respawns_of(0), 0, "{}", file.display());
+        assert!(!race.core.sim.finished(), "{}", file.display());
     }
 }
 
@@ -876,12 +891,12 @@ fn a_zone_race_on_a_track_file_loads_and_climbs_on_every_title() {
             .unwrap_or_else(|| panic!("{image}: no host speed pads line: {:#?}", loaded.report));
         println!("{image}: {pads}");
         let mut race = race::Race::start(loaded.setup);
-        race.sim.set_autopilot(true);
+        race.core.sim.set_autopilot(true);
         let inputs = oag_gameplay::PlayerInputs::none();
         for _ in 0..1_800 {
             race.tick(&inputs);
         }
-        let zone = race.sim.world.race[0].zone;
+        let zone = race.core.sim.world.race[0].zone;
         assert!(zone >= 1, "{image}: zone {zone} after 1800 ticks");
         checked.push(image);
     }

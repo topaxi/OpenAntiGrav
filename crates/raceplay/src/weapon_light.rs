@@ -201,6 +201,7 @@ impl Race {
     fn hd_weapon_lights(&self) -> Vec<SpuLight> {
         let missiles = self.hd_missile_blast_lights();
         let rockets = self
+            .core
             .sim
             .world
             .projectiles

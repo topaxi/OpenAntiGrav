@@ -82,8 +82,9 @@ impl Race {
     /// refused by name. It sets no ghost and offers none to save: a module changes the run, so
     /// no lap of it is a lap to race against (`docs/architecture/wasm-extensions/README.md`, 4.4).
     pub fn start_recording(&mut self, mut header: Header) {
-        header.mods = self.sim.mods_used().to_vec();
+        header.mods = self.core.sim.mods_used().to_vec();
         header.slots = self
+            .core
             .sim
             .world
             .human_slots()
@@ -91,18 +92,18 @@ impl Race {
             .collect();
         header.tick_rate = TickRate::DEFAULT.hz();
         header.setup = self.replay.request.clone();
-        let recorder = Recorder::new(header, self.sim.state_hash());
+        let recorder = Recorder::new(header, self.core.sim.state_hash());
         let standing = self.player_standing();
-        let mut track = PoseRecorder::new(usize::from(self.sim.ship_count()));
-        track.push(&self.sim.grid_poses());
+        let mut track = PoseRecorder::new(usize::from(self.core.sim.ship_count()));
+        track.push(&self.core.sim.grid_poses());
         self.replay.recording = Some(Recording {
             recorder,
             track,
             poses: vec![self.player_pose()],
-            base: self.sim.world.tick,
+            base: self.core.sim.world.tick,
             last_lap: standing.lap,
             last_start: standing.lap_start_tick,
-            ghosts: !self.sim.is_modded(),
+            ghosts: !self.core.sim.is_modded(),
             best: None,
             best_unsaved: false,
         });
@@ -170,10 +171,10 @@ impl Race {
     #[must_use]
     pub fn ghost_pose(&self) -> Option<(Pose, Pose)> {
         let ghost = self.replay.ghost.as_ref()?;
-        if self.sim.finished() || self.replay.ghost_hidden {
+        if self.core.sim.finished() || self.replay.ghost_hidden {
             return None;
         }
-        let ticks = self.player_standing().lap_ticks(self.sim.world.tick)?;
+        let ticks = self.player_standing().lap_ticks(self.core.sim.world.tick)?;
         let now = ghost.lap.pose_at(ticks)?;
         let before = ticks
             .checked_sub(1)
@@ -238,16 +239,16 @@ impl Race {
             Some(run) => run.clone(),
             None => self.recorded()?,
         };
-        let tick = self.sim.world.tick;
+        let tick = self.core.sim.world.tick;
         (replay.ticks() >= tick)
-            .then(|| oag_replay::ShotRecord::new(replay, tick, self.sim.state_hash()))
+            .then(|| oag_replay::ShotRecord::new(replay, tick, self.core.sim.state_hash()))
     }
 
     /// The player's craft as a pose: its position, and its orientation with
     /// the barrel roll and the steering lean folded in exactly as [`model_matrix_of`]
     /// folds them.
     fn player_pose(&self) -> Pose {
-        self.sim.craft_pose(self.player_slot())
+        self.core.sim.craft_pose(self.player_slot())
     }
 }
 
@@ -277,8 +278,8 @@ impl Race {
     /// positions are written over its state, the roll and lean are zero because the pose already
     /// has them folded in, and the craft's velocity is zero.
     pub fn show_poses(&mut self, track: &oag_replay::PoseTrack, at: f64) {
-        let count = usize::from(self.sim.ship_count()).min(track.crafts());
-        for (slot, ship) in self.sim.world.ships.iter_mut().enumerate().take(count) {
+        let count = usize::from(self.core.sim.ship_count()).min(track.crafts());
+        for (slot, ship) in self.core.sim.world.ships.iter_mut().enumerate().take(count) {
             let Some(pose) = track.pose(slot, at) else {
                 continue;
             };
@@ -293,7 +294,7 @@ impl Race {
         let target = self.camera_target();
         self.view
             .camera
-            .advance(target, &self.view.chase_params, self.sim.dt);
+            .advance(target, &self.view.chase_params, self.core.sim.dt);
         self.advance_viewpoints();
         self.tick_cosmetics();
     }
@@ -315,13 +316,13 @@ impl Race {
         let Some(recording) = self.replay.recording.as_mut() else {
             return;
         };
-        let sim = &self.sim;
+        let sim = &self.core.sim;
         recording.recorder.record(inputs, || sim.state_hash());
 
         let pose = self.player_pose();
-        let grid = self.sim.grid_poses();
+        let grid = self.core.sim.grid_poses();
         let standing = *self.player_standing();
-        let tick = self.sim.world.tick;
+        let tick = self.core.sim.world.tick;
         let Some(recording) = self.replay.recording.as_mut() else {
             return;
         };

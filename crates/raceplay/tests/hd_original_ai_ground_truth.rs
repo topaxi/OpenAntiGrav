@@ -32,7 +32,7 @@ fn race(level: usize, skill: f32) -> Option<oag_raceplay::Race> {
     crate::perturb::apply(&mut setup, 0.0);
     let mut race = oag_raceplay::Race::start(setup);
     assert!(
-        race.sim.use_original_ai(Some(skill), level),
+        race.core.sim.use_original_ai(Some(skill), level),
         "HD flies the original driver"
     );
     Some(race)
@@ -43,7 +43,8 @@ fn race(level: usize, skill: f32) -> Option<oag_raceplay::Race> {
 fn held(level: usize, skill: f32, from: f32, to: f32) -> Option<Vec<(u8, f32)>> {
     let mut race = race(level, skill)?;
     let time = |race: &oag_raceplay::Race| {
-        race.sim
+        race.core
+            .sim
             .world
             .tick
             .saturating_sub(oag_race::COUNTDOWN_TICKS) as f32
@@ -54,7 +55,7 @@ fn held(level: usize, skill: f32, from: f32, to: f32) -> Option<Vec<(u8, f32)>> 
         race.tick_sim_only(&PlayerInputs::none());
         if time(&race) >= from {
             let places = race.places();
-            let field = race.sim.original_ai_field().expect("the field is on");
+            let field = race.core.sim.original_ai_field().expect("the field is on");
             out.extend((1..8).map(|s| (places[s], field.drivers[s].held_thrust)));
         }
     }
@@ -187,7 +188,7 @@ fn the_original_field_gets_round_talons_junction_on_hd() {
     for _ in 0..60 * 150 {
         race.tick_sim_only(&PlayerInputs::none());
         for slot in 1..8 {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             if ship.standing.lap != lap[slot] {
                 lap[slot] = ship.standing.lap;
                 per_lap[slot].push(ship.physics.shield);
@@ -195,12 +196,12 @@ fn the_original_field_gets_round_talons_junction_on_hd() {
         }
     }
     for (slot, shields) in per_lap.iter().enumerate().skip(1) {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         println!(
             "slot {slot}: lap {} respawns {} wall-contact ticks {} per-lap shield {:?}, end-of-run shield {:.1}",
             ship.standing.lap,
-            race.sim.respawns_of(slot),
-            race.sim.wall_contact_ticks_of(slot),
+            race.core.sim.respawns_of(slot),
+            race.core.sim.wall_contact_ticks_of(slot),
             shields,
             ship.physics.shield
         );
@@ -209,7 +210,7 @@ fn the_original_field_gets_round_talons_junction_on_hd() {
             "slot {slot} on lap {}",
             ship.standing.lap
         );
-        assert_eq!(race.sim.respawns_of(slot), 0, "slot {slot}");
+        assert_eq!(race.core.sim.respawns_of(slot), 0, "slot {slot}");
     }
 }
 
@@ -230,8 +231,8 @@ fn ubermall(class: &str) -> Option<Option<(f32, f32)>> {
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
     let mut race = oag_raceplay::Race::start(setup);
-    assert!(race.sim.use_original_ai(Some(2.0), 1));
-    Some(race.sim.original_ai_field()?.laws().halved_lookahead)
+    assert!(race.core.sim.use_original_ai(Some(2.0), 1));
+    Some(race.core.sim.original_ai_field()?.laws().halved_lookahead)
 }
 
 #[test]

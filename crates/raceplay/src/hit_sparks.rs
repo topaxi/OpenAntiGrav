@@ -293,7 +293,7 @@ impl Race {
         let Some(anchors) = self.view.hit_sparks.weapon_anchors.get(slot) else {
             return;
         };
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.core.sim.world.ships[slot];
         if anchors.is_empty() || !ship.in_world() {
             return;
         }
@@ -350,7 +350,7 @@ impl Race {
         impulse: f32,
         damaged: bool,
     ) {
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.core.sim.world.ships[slot];
         if !ship.in_world() || ship.physics.shield_pickup_timer > 0.0 {
             return;
         }
@@ -407,18 +407,18 @@ impl Race {
     /// `.COLLISIONS` cue the fire raises. **Chosen, not measured:** the straight path (the
     /// original's hull curved) and each seed's severity when it is not read.
     pub fn warm_up_contact_sparks(&mut self, velocities: &[Vec3], seeds: &[ContactSeed]) {
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         let ticks_before = |seed: &ContactSeed| (seed.age / dt).round() as u32;
         let Some(oldest) = seeds.iter().map(ticks_before).max() else {
             return;
         };
-        let count = (self.sim.world.ship_count as usize).min(velocities.len());
+        let count = (self.core.sim.world.ship_count as usize).min(velocities.len());
         let at: Vec<Vec3> = (0..count)
-            .map(|slot| self.sim.world.ships[slot].physics.body.position)
+            .map(|slot| self.core.sim.world.ships[slot].physics.body.position)
             .collect();
         for behind in (0..=oldest).rev() {
             for slot in 0..count {
-                self.sim.world.ships[slot].physics.body.position =
+                self.core.sim.world.ships[slot].physics.body.position =
                     at[slot] - velocities[slot] * (dt * behind as f32);
             }
             for seed in seeds.iter().filter(|seed| ticks_before(seed) == behind) {
@@ -432,7 +432,7 @@ impl Race {
             }
         }
         for (slot, at) in at.into_iter().enumerate() {
-            self.sim.world.ships[slot].physics.body.position = at;
+            self.core.sim.world.ships[slot].physics.body.position = at;
         }
     }
 
@@ -446,8 +446,10 @@ impl Race {
             return;
         }
         sparks.cooldown[slot][node] = oag_gameplay::cue::COLLISION_COOLDOWN;
-        if self.draws() && self.sim.contact_cues == oag_title::contact_cue::ContactCues::Rearmed {
-            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+        if self.draws()
+            && self.core.sim.contact_cues == oag_title::contact_cue::ContactCues::Rearmed
+        {
+            self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                 oag_gameplay::cue::Cue::Collision,
                 slot,
             ));
@@ -456,7 +458,7 @@ impl Race {
             return;
         };
         let anchor = self.view.hit_sparks.anchors[slot][node];
-        let model = model_matrix_of(&self.sim.world.ships[slot]);
+        let model = model_matrix_of(&self.core.sim.world.ships[slot]);
         let at = model.transform_point3(anchor.position);
         let up = model.transform_vector3(anchor.up).normalize_or(Vec3::Y);
         let Some(playing) = self.view.stage.play_riding(&effect, at, severity) else {
@@ -476,7 +478,7 @@ impl Race {
     /// locator, letting go once it stops emitting. Before `Stage::advance`,
     /// like the absorb bursts.
     pub(super) fn advance_hit_sparks(&mut self) {
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         for slot in &mut self.view.hit_sparks.cooldown {
             for left in slot {
                 *left = (*left - dt).max(0.0);
@@ -484,7 +486,7 @@ impl Race {
         }
         let mut riding = std::mem::take(&mut self.view.hit_sparks.riding);
         riding.retain(|spark| {
-            let ship = &self.sim.world.ships[spark.slot];
+            let ship = &self.core.sim.world.ships[spark.slot];
             if !ship.in_world() || !self.view.stage.is_emitting(spark.playing) {
                 self.view.stage.detach(spark.playing);
                 return false;

@@ -69,13 +69,13 @@ impl Facts {
         if let Some(record) = &self.context.restage {
             oag_raceplay::extensions::check_recorded(
                 &record.replay.header.mods,
-                race.sim.mods_used(),
+                race.core.sim.mods_used(),
             )
             .map_err(|why| anyhow::anyhow!("--from-png cannot make this shot again: {why}"))?;
             if let Err(why) = oag_raceplay::replay::apply_recorded(race, &record.replay.header) {
                 log::warn!("--from-png: {why:#}");
             }
-            let found = race.sim.state_hash();
+            let found = race.core.sim.state_hash();
             if found != record.replay.initial_hash {
                 println!(
                     "from-png: the rebuilt race differs before tick 0 ({:#018x}, the shot began at {:#018x})",
@@ -105,9 +105,9 @@ impl Facts {
     ) -> anyhow::Result<()> {
         use anyhow::Context as _;
         let record = race.shot_record(None);
-        let tick = race.sim.world.tick;
+        let tick = race.core.sim.world.tick;
         if let Some(want) = &self.context.restage {
-            let found = race.sim.state_hash();
+            let found = race.core.sim.state_hash();
             println!(
                 "from-png: state hash at tick {tick}: {} (recorded {:#018x} at tick {}, found {:#018x})",
                 if found == want.hash && tick == want.tick {
@@ -121,7 +121,7 @@ impl Facts {
             );
         }
         let slot = race.player_slot();
-        let body = &race.sim.world.ships[slot].physics.body;
+        let body = &race.core.sim.world.ships[slot].physics.body;
         let race_info = shot_meta::Race {
             track: self.circuit.clone(),
             mode: self.header.mode.clone(),
@@ -142,7 +142,7 @@ impl Facts {
             format: shot_meta::FORMAT,
             shot: shot_meta::Shot {
                 tick,
-                state_hash: shot_meta::hex(race.sim.state_hash()),
+                state_hash: shot_meta::hex(race.core.sim.state_hash()),
                 width: size.0,
                 height: size.1,
                 source: "screenshot".to_string(),
@@ -162,6 +162,7 @@ impl Facts {
             craft: Some(craft),
             render: self.context.render.clone(),
             mods: race
+                .core
                 .sim
                 .mods_used()
                 .iter()
