@@ -120,8 +120,8 @@ impl Prompt {
         match &self.model {
             Model::Keyboard(keyboard) => keyboard.accepts(c),
             Model::TagEntry(_) => match self.purpose {
-                Purpose::PlayerName => crate::app::settings::player::allowed(c),
-                Purpose::PlayerTag => crate::app::settings::player::allowed_in_tag(c),
+                Purpose::PlayerName => crate::settings::player::allowed(c),
+                Purpose::PlayerTag => crate::settings::player::allowed_in_tag(c),
                 _ => oag_ui_screens::prompt::accepts(c),
             },
             Model::Confirm(_) => oag_ui_screens::prompt::accepts(c),

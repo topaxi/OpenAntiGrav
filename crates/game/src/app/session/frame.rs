@@ -1099,7 +1099,7 @@ impl Session {
                 // into the row: `PersonalBest::compare` wants the row as it
                 // stood *before* this race, and `Store::record` mutates it in
                 // place - so this is the last point the "before" value can
-                // still be read. See `crate::app::scoreboard`'s own "personal
+                // still be read. See `crate::scoreboard`'s own "personal
                 // best" line, the one reader of this field.
                 stage.personal_best = Some(records::PersonalBest::compare(
                     self.records.get(&key),

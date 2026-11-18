@@ -14,8 +14,8 @@ use oag_ui_screens::campaign::footer::NavigationLegend;
 use oag_ui_screens::{prompt, tag_entry};
 
 use crate::app::overlay::{Prompt, Purpose};
-use crate::app::settings::player::{self, Ask};
 use crate::app::stage::Stage;
+use crate::settings::player::{self, Ask};
 
 use super::Session;
 
@@ -146,7 +146,7 @@ impl Session {
             Purpose::PlayerTag if self.settings.player.set_tag(text) => {}
             _ => return,
         }
-        if let Err(e) = crate::app::settings::save(&self.settings) {
+        if let Err(e) = crate::settings::save(&self.settings) {
             warn!("cannot remember the player name: {e:#}");
         }
         if let Stage::Menu(stage) = &mut self.stage {
@@ -170,7 +170,7 @@ impl Session {
 /// `legend` with the stored tag set where `title` uses one, for a stage about to draw it.
 pub(crate) fn tagged(
     legend: Option<NavigationLegend>,
-    player: &crate::app::settings::Player,
+    player: &crate::settings::Player,
     title: &oag_title::Title,
 ) -> Option<NavigationLegend> {
     legend.map(|legend| legend.with_tag(player.footer_tag(&title.profile)))

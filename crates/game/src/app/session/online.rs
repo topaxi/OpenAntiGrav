@@ -43,7 +43,7 @@ mod rejoin;
 
 /// The name the lobby's name field opens on: the shared player name (the lobby's keys are lower
 /// case), else what the last connection went by, else the login name.
-fn lobby_name(saved: &str, player: &crate::app::settings::Player) -> String {
+fn lobby_name(saved: &str, player: &crate::settings::Player) -> String {
     if let Some(name) = player.name() {
         name.to_ascii_lowercase()
     } else if !saved.is_empty() {
@@ -1410,13 +1410,13 @@ impl Session {
             return;
         };
         online.step = Step::Hub;
-        self.settings.online = crate::app::settings::Online {
+        self.settings.online = crate::settings::Online {
             address: online.address.clone(),
             hash: online.hash.clone(),
             name: online.name.clone(),
             host_port: self.settings.online.host_port,
         };
-        if let Err(e) = crate::app::settings::save(&self.settings) {
+        if let Err(e) = crate::settings::save(&self.settings) {
             warn!("online: cannot remember the lobby: {e:#}");
         }
         if let Stage::Menu(stage) = &mut self.stage {
@@ -1477,37 +1477,4 @@ enum Rows {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::lobby_name;
-    use crate::app::settings::Player;
-
-    fn player(name: &str) -> Player {
-        Player {
-            name: name.into(),
-            tag: String::new(),
-        }
-    }
-
-    #[test]
-    fn the_lobby_name_field_opens_on_the_stored_player_name() {
-        assert_eq!(lobby_name("", &player("Zoe-7")), "zoe-7");
-    }
-
-    #[test]
-    fn the_player_name_wins_over_the_name_the_last_connection_used() {
-        assert_eq!(lobby_name("bob", &player("Zoe")), "zoe");
-    }
-
-    #[test]
-    fn with_no_player_name_the_last_connections_name_is_kept() {
-        assert_eq!(lobby_name("bob", &player("")), "bob");
-    }
-
-    #[test]
-    fn with_no_player_name_the_login_name_is_the_default() {
-        assert_eq!(
-            lobby_name("", &player("")),
-            super::super::lan::player_name()
-        );
-    }
-}
+mod tests;

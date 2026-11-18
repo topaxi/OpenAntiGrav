@@ -153,7 +153,7 @@ impl Session {
             .iter()
             .map(|person| keys[*person].clone())
             .collect();
-        if let Err(e) = crate::app::settings::save(&self.settings) {
+        if let Err(e) = crate::settings::save(&self.settings) {
             log::error!("could not save settings: {e:#}");
         }
         log::info!(

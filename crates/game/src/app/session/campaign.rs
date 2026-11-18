@@ -63,7 +63,7 @@ impl Session {
         // risks silently changing an already-resolved id elsewhere on a
         // disagreement this pass has not audited, where this touches only
         // the four ids this screen needs. Shared with
-        // `crate::app::capture::campaign_page`'s own `--menu-page
+        // `crate::capture::campaign_page`'s own `--menu-page
         // campaign-select` path through `crate::campaign::hd_selection_string_overlay`
         // so the two cannot resolve these ids differently.
         if shell.title.campaign.selection_strings

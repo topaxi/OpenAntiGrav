@@ -1,5 +1,5 @@
 //! REJOIN RACE: the offer to take the seat of an online race back after the game was closed or
-//! crashed under it (`crate::app::rejoin_record`, `docs/networking/server-roadmap.md`, V1).
+//! crashed under it (`crate::rejoin_record`, `docs/networking/server-roadmap.md`, V1).
 //!
 //! ONLINE looks for a fresh record before it asks for a lobby. If there is one the race
 //! server is dialled first (the record only says the race was running a short while ago, the

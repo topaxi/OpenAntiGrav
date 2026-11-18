@@ -704,7 +704,7 @@ impl Session {
             .filter(|path| oag_raceplay::foreign::is_track_file(path))
             .and_then(|path| match oag_trackfile::read_loading(path) {
                 Ok(loading) => loading.map(|loading| {
-                    crate::app::loading::TrackLoading::read(
+                    crate::loading::TrackLoading::read(
                         path.parent().unwrap_or_else(|| std::path::Path::new("")),
                         &loading,
                     )
@@ -723,7 +723,7 @@ impl Session {
             &shell.sprites,
             &self.loading_assets,
             self.races_launched,
-            crate::app::loading::executable_mode(options_mode),
+            crate::loading::executable_mode(options_mode),
             self.trace,
             self.settings.language.as_deref(),
             shell.title_font.as_ref(),

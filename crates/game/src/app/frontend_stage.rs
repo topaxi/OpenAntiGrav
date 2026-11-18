@@ -185,7 +185,7 @@ impl FrontendStage {
     /// inferred.** `Show Logo` sits on the looping backdrop, so the sequence's
     /// last screen asks for a different file than its first one does; taking the
     /// frame from the intro's feed instead would draw a picture rather than fail,
-    /// which is the trap `crate::app::capture` already documents. The two share one
+    /// which is the trap `crate::capture` already documents. The two share one
     /// set of planes, which is safe only because `boot::load` declines to set the
     /// backdrop at all unless its geometry matches the intro's.
     ///

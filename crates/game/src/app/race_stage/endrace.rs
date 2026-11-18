@@ -181,7 +181,7 @@ impl EndRaceRuntime {
 
     /// # Errors
     ///
-    /// Propagates [`crate::app::render::Renderer::new`]'s own pipeline-build
+    /// Propagates [`crate::render::Renderer::new`]'s own pipeline-build
     /// errors.
     #[allow(
         clippy::too_many_arguments,

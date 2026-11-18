@@ -116,10 +116,7 @@ impl Session {
         let render = self
             .settings
             .render_profiles
-            .get(&crate::app::settings::profile_key(
-                shell.title,
-                shell.platform,
-            ))
+            .get(&crate::settings::profile_key(shell.title, shell.platform))
             .and_then(|profile| toml::Value::try_from(profile).ok())
             .and_then(|value| match value {
                 toml::Value::Table(table) => Some(table),

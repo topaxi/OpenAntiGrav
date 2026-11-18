@@ -181,7 +181,7 @@ pub(crate) struct CampaignStage {
     ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     /// Seconds since this campaign screen opened, advanced by
     /// [`Self::tick_ticker`] - the ticker's own clock. Never reset between
-    /// `Grid Selection` and `Cell Selection`, unlike `crate::app::marquee::Timer`:
+    /// `Grid Selection` and `Cell Selection`, unlike `oag_ui_screens::marquee::Timer`:
     /// the original ticker is not observed to restart on a screen change
     /// (see `docs/ui/campaign-screens.md`), so this build keeps it running.
     ticker_elapsed: f32,
@@ -234,7 +234,7 @@ pub(crate) struct CampaignStage {
     /// **HD only** - Pulse's own `Track Line` never needs this fold (see
     /// `oag_ui_screens::campaign::draw::track_line`'s own doc), so this is
     /// `CircuitNames::default()` on every other title and costs nothing to
-    /// carry. `crate::app::boot::Shell::circuit_names`, read once when the
+    /// carry. `crate::boot::Shell::circuit_names`, read once when the
     /// campaign opens.
     circuit_names: oag_ui::language::CircuitNames,
     /// A snapshot of the player's own saved progress, taken once when the
@@ -457,7 +457,7 @@ impl CampaignStage {
     }
 
     /// Advances the ticker's own clock - called once a frame from
-    /// `MenuStage::tick`, the same place `crate::app::marquee::Timer` (its
+    /// `MenuStage::tick`, the same place `oag_ui_screens::marquee::Timer` (its
     /// sibling clock for a menu row's overflowing value) is driven from.
     pub(crate) fn tick_ticker(&mut self, dt: f32) {
         self.ticker_elapsed += dt.max(0.0);

@@ -23,7 +23,7 @@ use super::{Session, picker, queries};
 /// Moved to `crate::scoreboard::speed_class_choices`, re-exported here
 /// under its own name so every call site in this module (and
 /// `crate::app::records_page`, which names this exact path in its own doc)
-/// keeps working unchanged. It moved because `crate::app::capture::menu_page` -
+/// keeps working unchanged. It moved because `crate::capture::menu_page` -
 /// the `--menu-page records` still - needs the identical list for the
 /// RECORDS page's own per-class table, and this binary's `session` module is
 /// not reachable from the library crate that lives in. See that function's

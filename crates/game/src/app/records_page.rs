@@ -17,7 +17,7 @@
 //! **The pure resolution lives in `crate::scoreboard::records_table`, not
 //! here.** It used to live in this module, split out the same way
 //! `oag_raceplay::pilots::axis_preview_for` is - but that kept it reachable only
-//! from this binary, and `crate::app::capture::menu_page` (the `--menu-page
+//! from this binary, and `crate::capture::menu_page` (the `--menu-page
 //! records` still, in the library crate) needed the identical resolution so
 //! the live page and its own capture cannot silently disagree about which
 //! classes exist or which column a mode draws. This module is now the thin
@@ -54,7 +54,7 @@ use crate::app::session::Shell;
 /// menu opened before a shell finished loading.
 ///
 /// This is a thin wrapper over `scoreboard::records_table`, supplying the
-/// one thing that differs from `crate::app::capture::menu_page`'s own still of
+/// one thing that differs from `crate::capture::menu_page`'s own still of
 /// this page: `Shell::tracks_for(mode)` carries a distinct Zone track list,
 /// which a `--menu-page records` capture's own boot survey does not - see
 /// that function's own doc. Not unit-tested here for the same reason

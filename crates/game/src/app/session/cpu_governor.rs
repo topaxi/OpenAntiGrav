@@ -19,8 +19,8 @@ use oag_mesh::mesh::ModelDetail;
 use oag_present::governor::{Governor, Kind, MAX_LEVEL, Sample};
 
 use super::Session;
-use crate::app::settings::RenderProfile;
 use crate::app::stage::Stage;
+use crate::settings::RenderProfile;
 
 /// One step down: what the field is set to, in the order the governor takes them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

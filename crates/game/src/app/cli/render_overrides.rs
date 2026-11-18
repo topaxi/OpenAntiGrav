@@ -21,7 +21,7 @@ impl Cli {
     /// that can fail.
     pub(crate) fn apply_render_overrides(
         &self,
-        profile: &mut crate::app::settings::RenderProfile,
+        profile: &mut crate::settings::RenderProfile,
         render_scale: Option<oag_display::display::Scale>,
     ) {
         if let Some(render_scale) = render_scale {

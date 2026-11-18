@@ -15,7 +15,7 @@ use oag_raceplay::{Options, catalogue};
 use oag_ui::{menu, strings};
 
 use crate::app::hints;
-use crate::app::settings::{self, Settings};
+use crate::settings::{self, Settings};
 
 use super::Session;
 use super::menus::combine_variant;

@@ -180,7 +180,7 @@ impl Session {
         }
     }
 
-    fn touch_setup(settings: &crate::app::settings::Settings) -> oag_input::touch::Setup {
+    fn touch_setup(settings: &crate::settings::Settings) -> oag_input::touch::Setup {
         settings.controls.touch_setup()
     }
 

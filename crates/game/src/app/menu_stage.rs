@@ -806,7 +806,7 @@ impl MenuStage {
             let flat = layers.flatten();
             // The ticker's own clip: `Renderer::render_with`'s `clip` is
             // keyed on a draw's index in the *flattened* list
-            // (`crate::app::marquee`'s own row-value scroll works the same way),
+            // (`oag_ui_screens::marquee`'s own row-value scroll works the same way),
             // so this finds `ticker_draw`'s value again by equality rather
             // than carrying an index computed before `flatten` reordered
             // nothing - a Fury/HD frame has no ticker at all, and
@@ -1047,7 +1047,7 @@ impl MenuStage {
         // default the pilot-editor prompt above picked for itself.
         // `oag_ui_screens::prompt::message_draw` is the shared drawing code -
         // `--menu-page --menu-prompt binding`'s own headless capture calls
-        // the same function, off `crate::app::capture::menu_page::prompt_draws`,
+        // the same function, off `crate::capture::menu_page::prompt_draws`,
         // so this and that flag cannot draw two different pictures for the
         // same state.
         let list: Vec<Draw> = match binding_prompt {
@@ -1120,7 +1120,7 @@ mod tests {
     use super::*;
 
     /// `Renderer`'s own clip-space mapping, reimplemented independently of
-    /// `crate::app::render`'s `ui.wgsl`/`to_clip` rather than calling it, so this
+    /// `crate::render`'s `ui.wgsl`/`to_clip` rather than calling it, so this
     /// cannot pass by sharing a mistake with the code under test.
     fn to_clip_x(x: f32, screen_width: f32, scale_x: f32) -> f32 {
         (2.0 * (x / screen_width) - 1.0) * scale_x
