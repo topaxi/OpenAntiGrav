@@ -430,8 +430,10 @@ class Session:
 
 
 def pixel(path, x, y):
-    return tuple(int(v) for v in subprocess.run(["magick", str(path), "-crop", "1x1+%d+%d" % (x, y), "+repage", "-depth", "8", "txt:-"],
-                                                capture_output=True, text=True, check=True).stdout.splitlines()[-1].split("(")[1].split(")")[0].split(",")[:3])
+    # A black frame (the window before the first draw) comes back from ImageMagick as one grey value, not three.
+    v = tuple(int(v) for v in subprocess.run(["magick", str(path), "-crop", "1x1+%d+%d" % (x, y), "+repage", "-depth", "8", "txt:-"],
+                                             capture_output=True, text=True, check=True).stdout.splitlines()[-1].split("(")[1].split(")")[0].split(",")[:3])
+    return v * 3 if len(v) == 1 else v
 
 
 def on_game_mode(path):
@@ -860,6 +862,209 @@ def run(cmd, **kw):
     return subprocess.run([str(c) for c in cmd], check=True, **kw)
 
 
+#: The craft array of 2048's race (eight pointers, `ship+0x7060` the local slot: 0 on the player, `0xffffffff` on the others) and the player's
+#: body, `*(ship+0x5f84)`: basis rows at `+0x08`, `+0x18`, `+0x28` (right, up, forward; w 0), position at `+0x38` (w 1), the transpose at `+0x48`,
+#: `+0x58`, `+0x68`, linear velocity at `+0x90` (`docs/ghidra/functions/vita-2048-eu-v104/player-body.md`).
+CRAFT_ARRAY = 0x818A6BF8
+SHIP_BODY = 0x5F84
+SHIP_ROLE = 0x7060
+BODY_BASIS = 0x08
+BODY_POS = 0x38
+BODY_VEL = 0x90
+
+
+def read_guest_at(mem, addr, n):
+    mem.seek(GUEST_BASE + addr)
+    return mem.read(n)
+
+
+def find_player_body(pid):
+    """`(ship, body)` of the craft whose role word is 0, read out of the guest (`/proc/<pid>/mem`, Vita3K this process's child); the body's basis
+    must be three unit rows, so a stale array does not pass for the race's. Raises RuntimeError when there is not exactly one."""
+    import struct
+    with open("/proc/%d/mem" % pid, "rb", 0) as mem:
+        found = []
+        for ship in struct.unpack("<8I", read_guest_at(mem, CRAFT_ARRAY, 32)):
+            if not ship or struct.unpack("<I", read_guest_at(mem, ship + SHIP_ROLE, 4))[0] != 0:
+                continue
+            body = struct.unpack("<I", read_guest_at(mem, ship + SHIP_BODY, 4))[0]
+            if not body:
+                continue
+            rows = struct.unpack("<12f", read_guest_at(mem, body + BODY_BASIS, 48))
+            if all(abs(sum(v * v for v in rows[i * 4:i * 4 + 3]) - 1.0) < 0.01 for i in range(3)):
+                found.append((ship, body))
+    if len(found) != 1:
+        raise RuntimeError("%d craft with role word 0 and a unit basis in the array at %#x" % (len(found), CRAFT_ARRAY))
+    return found[0]
+
+
+def body_pose_blob(pos, rows):
+    """The bytes of body `+0x08..+0x78` for `pos` and the basis `rows` (right, up, forward, unit): the rows, the position with w 1, the transpose."""
+    import struct
+    basis = b"".join(struct.pack("<4f", *r, 0.0) for r in rows)
+    cols = [tuple(rows[r][c] for r in range(3)) for c in range(3)]
+    return basis + struct.pack("<4f", *pos, 1.0) + b"".join(struct.pack("<4f", *c, 0.0) for c in cols)
+
+
+def read_body_pose(pid, body):
+    """`(position, rows, velocity)` of the body now."""
+    import struct
+    with open("/proc/%d/mem" % pid, "rb", 0) as mem:
+        raw = read_guest_at(mem, body + BODY_BASIS, 0x70)
+        vel = struct.unpack("<3f", read_guest_at(mem, body + BODY_VEL, 12))
+    f = struct.unpack("<28f", raw)
+    return f[12:15], [f[0:3], f[4:7], f[8:11]], vel
+
+
+class PoseHold:
+    """Writes a pose into the player's body every few milliseconds on a thread of its own, with the velocity zeroed, so the craft neither falls
+    nor flies on while the guest runs (the guest recomputes every world-space copy of the craft, the camera's follow target included, from the
+    body on its next tick: `place` at `docs/reverse-engineering/vita3k-capture.md`). `max_drift` is the largest distance, from the second write on (the first read is the jump itself), between
+    the position the body held just before a write and the position written (what the guest's own physics moved it by in one interval)."""
+
+    def __init__(self, pid, body, pos, rows, interval=0.004):
+        import threading
+        self.pid, self.body, self.interval = pid, body, interval
+        self.blob = body_pose_blob(pos, rows)
+        self.pos = tuple(pos)
+        self.stop_flag = threading.Event()
+        self.writes = 0
+        self.max_drift = 0.0
+        self.window_drift = 0.0
+        self.pulled = []
+        self.t0 = time.monotonic()
+        self.thread = threading.Thread(target=self.run, daemon=True)
+
+    def mark(self):
+        """Starts the window `window_drift` is measured over (the grabs, once the settle is over)."""
+        self.window_drift = 0.0
+
+    def run(self):
+        import struct
+        zero = bytes(12)
+        with open("/proc/%d/mem" % self.pid, "r+b", 0) as mem:
+            while not self.stop_flag.is_set():
+                mem.seek(GUEST_BASE + self.body + BODY_POS)
+                now = struct.unpack("<3f", mem.read(12))
+                if self.writes:
+                    d = sum((a - b) ** 2 for a, b in zip(now, self.pos)) ** 0.5
+                    self.max_drift = max(self.max_drift, d)
+                    self.window_drift = max(self.window_drift, d)
+                    if d > 2.0:
+                        self.pulled.append(round(time.monotonic() - self.t0, 2))
+                mem.seek(GUEST_BASE + self.body + BODY_BASIS)
+                mem.write(self.blob)
+                mem.seek(GUEST_BASE + self.body + BODY_VEL)
+                mem.write(zero)
+                self.writes += 1
+                time.sleep(self.interval)
+
+    def start(self):
+        self.thread.start()
+        return self
+
+    def stop(self):
+        self.stop_flag.set()
+        self.thread.join()
+
+
+
+def place_main(args, out, pair, plat, profile_dir, which, env):
+    """The placed pair: the original is walked into a race, its player's body is written to `--place X,Y,Z,YAW` (ours' `--pose` numbers: the craft's
+    position and its yaw off the spline) and held there while the chase camera settles, a frame is grabbed with the clock beside it, and ours is
+    drawn at the same pose with `--pose-hold`, the close chase camera rigidly behind it and the original's scenery clock. The original is
+    not driven: its race runs (the others fly off the grid) and only the player's craft is held."""
+    import math
+    import signal
+    import rpcs3_place
+    if not (args.walk and args.track):
+        sys.exit("--place needs --walk (the guest's memory is only open to a Vita3K this script launched) and --track (ours' circuit)")
+    x, y, z, yaw = (float(v) for v in args.place.split(","))
+    scratch = out / "ours-profile"
+    for sub in ("cfg", "data", "state"):
+        (scratch / "profile" / sub).mkdir(parents=True, exist_ok=True)
+    fwd, up = rpcs3_place.our_attitude(args.oag_game, args.source, args.track, [x, y, z, yaw], scratch)
+    rows = rpcs3_place.basis_rows(fwd, up)
+    pos = (x, y, z)
+    s = Session(args.display, out / "frames")
+    boot_and_walk(s, args)
+    pid = args.vita_pid
+    ship, body = find_player_body(pid)
+    before = read_body_pose(pid, body)
+    print("player ship %#x body %#x at %s before the write" % (ship, body, ["%.1f" % v for v in before[0]]), file=sys.stderr, flush=True)
+    hold = PoseHold(pid, body, pos, rows).start()
+    try:
+        time.sleep(args.place_settle)
+        hold.mark()
+        frames = []
+        for i in range(3):
+            frames.append(s.shot("place%d.png" % i))
+            time.sleep(0.3)
+        clock_cache = {}
+        world_clock = read_scenery_clock(pid, clock_cache)
+        os.kill(pid, signal.SIGSTOP)
+        try:
+            held = read_body_pose(pid, body)
+            hulls = scan_hull_matrices(pid)
+        finally:
+            os.kill(pid, signal.SIGCONT)
+    finally:
+        hold.stop()
+    near = [h for h in hulls if math.dist(h[1], pos) < 1.0]
+    pair.check("the player's body was written and read back at the pose", math.dist(held[0], pos) < 0.05,
+               "read back %s against %s" % (["%.2f" % v for v in held[0]], ["%.2f" % v for v in pos]))
+    pair.check("the hold kept the body at the pose (largest move the guest made between two writes)", hold.window_drift < 2.0,
+               "%.3f units over the grabs; %.3f over all %d writes; %d reads pulled off the pose, the last at %s s of %.1f s" % (
+                   hold.window_drift, hold.max_drift, hold.writes, len(hold.pulled), hold.pulled[-1] if hold.pulled else "-", time.monotonic() - hold.t0))
+    pair.check("a drawn-hull matrix of the frame's stop is at the pose (the camera and hull follow the body)", bool(near),
+               "%d matrices at the pose, the most seen %d times" % (len(near), near[0][0] if near else 0))
+    shutil.copyfile(frames[-1], out / "theirs.png")
+    pair.rec["original"]["emulator"] = dict(plat["emulator"])
+    pair.rec["original"]["hull_shake"] = {"state": "patched out", "camera_tripod_shake": "on", **args.hull_shake} if args.hull_shake else "on"
+    if args.track_rename:
+        pair.rec["original"]["track_rename"] = {**args.track_rename, "method": "write to /proc/<pid>/mem of the 0x18-byte track name of each grid cell "
+                                                "record (Locked byte at -1, NUL padded, `FUN_810bbfce` +0xea) before the first node was tapped"}
+    pair.rec["original"]["placed"] = {
+        "pose": {"position": list(pos), "yaw_deg": yaw, "rows_right_up_forward": [list(r) for r in rows]},
+        "player": {"ship": ship, "body": body, "before": {"position": list(before[0]), "velocity": list(before[2])},
+                   "held": {"position": list(held[0]), "velocity": list(held[2])}},
+        "method": "the player's body (*(ship+0x5f84), ship with role word +0x7060 == 0) written every %g ms from a thread through /proc/<pid>/mem: basis, position, "
+                  "transpose, velocity zeroed; %g s before the first of three grabs 0.3 s apart" % (hold.interval * 1000, args.place_settle),
+        "writes": hold.writes, "max_drift": hold.max_drift, "window_drift": hold.window_drift, "pulled_off_pose_at_s": hold.pulled[-20:], "hull_matrices_at_pose": len(near), "attitude": "ours' --pose rule (spline plus yaw)"}
+    pair.rec["original"]["world_clock_s"] = world_clock
+    pair.check("the scenery clock was read at the grab", world_clock is not None, "world clock %s" % world_clock)
+    cp.build(pair, args, "scenery", "cold_boot", None,
+             {"value": 0, "unit": "ticks", "basis": "not measured on Vita3K: the pose is held, so the picture agrees with the body to the guest's frame",
+              "what": "picture against the held body"})
+    cam, fov = rigid_chase_camera(pos, [v * 0.75 for r in rows for v in r])
+    base = [args.oag_game, args.source, "--race"] + which + ["--ticks", 0] + ce.ours_flags(plat)
+    flags = ["--pose=%.4f,%.4f,%.4f,%.4f" % (x, y, z, yaw), "--pose-hold", "--camera-pose=" + ",".join("%.5f" % v for v in cam), "--camera-fov", "%g" % fov]
+    if world_clock is not None:
+        flags += ["--world-clock-offset", "%.3f" % world_clock]
+        pair.rec["ours"]["world_clock_offset_s"] = world_clock
+    pair.rec["ours"]["flags"] = [str(c) for c in base[2:] + flags]
+    pair.rec["ours"]["ticks"] = 0
+    pair.rec["ours"]["event"] = args.track
+    pair.rec["ours"]["binary"] = ce.binary_record(args.oag_game)
+    pair.rec["ours"]["camera"] = {"kind": "rigid close chase camera behind the posed craft", **CHASE_CLOSE,
+                                  "note": "the original's camera is not read; its eye is sprung, held still for the settle"}
+    run(base + flags + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL, env=env)
+    got, bad = ce.read_back(plat, profile_dir)
+    pair.rec["ours"]["settings_readback"] = got
+    for b in bad:
+        pair.check("ours settings", False, b)
+    pair.check("ours settings read back", not bad, "%d keys equal the profile" % (len(got) - len(bad)))
+    pair.check_size("ours", out / "ours.png")
+    pair.check_equal("original window size", ce.image_size(out / "theirs.png"), list(plat["output"]))
+    pair.caveat("the original's HUD shows a running race (clock, lap, position); ours draws none here. The original's AI race on, so another craft "
+                "may be in view")
+    run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
+    if args.meta:
+        pair.rec["meta"] = json.loads(args.meta)
+    pair.finish()
+    print("wrote", out / "side.png")
+
+
 def zone_main(args, out, pair, plat, profile_dir, which, env):
     """The Zone pair: the original is walked into a Zone race and flown (it needs no input), sampled in flight (`zone_capture`), and ours is
     drawn at tick 0 on the original's hull matrix with `--hud-state ...,ZONE,SCORE,...` and `--zone-stage`, the way `rpcs3-hd-pair.py --zone`
@@ -1059,6 +1264,10 @@ def main():
     ap.add_argument("--zone-hull", type=int, default=None, help="with --zone: use this candidate of the sample's list instead of the first moving one")
     ap.add_argument("--zone-frame", type=int, default=None, help="with --zone: the sample whose HUD shows the zone")
     ap.add_argument("--zone-from", type=Path, default=None, help="with --zone: reuse the samples of an earlier --zone-capture run in this directory")
+    ap.add_argument("--place", metavar="X,Y,Z,YAW", default=None,
+                    help="with --walk and --track: write the original's player craft to ours' `--pose` X,Y,Z,YAW, hold it there and photograph both "
+                         "(`place_main`; the 2048 craft teleport)")
+    ap.add_argument("--place-settle", type=float, default=3.0, help="with --place: seconds the pose is held before the first grab (the chase camera's spring settles)")
     ap.add_argument("--walk", action="store_true", help="boot and walk from the title to the HUD (else Vita3K is on a race already)")
     ap.add_argument("--display", type=int, default=int(os.environ.get("OAG_VITA3K_DISPLAY", 0)) or None)
     ap.add_argument("--socket", default=None, help="weston's socket name (with --walk, if the display is not up)")
@@ -1109,6 +1318,9 @@ def main():
     env = {**os.environ, **ce.ours_env(profile_dir)}
     if args.zone or args.zone_capture:
         zone_main(args, out, pair, plat, profile_dir, which, env)
+        return
+    if args.place:
+        place_main(args, out, pair, plat, profile_dir, which, env)
         return
     ours_trace = None
     if args.read_pose:

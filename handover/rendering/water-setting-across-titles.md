@@ -257,7 +257,7 @@ Ranked. Hours are for one member on an idle machine.
    kind `VITA_SEA_KIND`, `build_circuit(.., law)`, `oag_2048::TITLE.water.original_differs`,
    counts pinned in `omega_transparency_ground_truth`'s walk), **`fc17` landed** (`water-fc17`:
    kinds 7 and 8, the edge's alpha chain pinned by `vita_fc17_edge_lit_path`). Left: a Vita3K
-   frame pair on Altima at two times (attempted, not reached: needs a teleport to the pond, water.md Open 4a) (it tests the edge's chosen `Watercolour` and the
+   frame pair on Altima at two times (the teleport is built; one pair at the pond pose exists, the speckle difference is recorded and the world clock is unverified, water.md Open 4a) (it tests the edge's chosen `Watercolour` and the
    `pa0.w`/`pa4.w` lane pairing). `is_drawn(Vita2048)` stays
    false on purpose: it is the borrowed `2048` choice on other titles, which nothing draws yet.
 6. **LANDED (`water-omega`): Omega's own water** on its 2048 circuits (`oag_rcs::gcn::sea`,

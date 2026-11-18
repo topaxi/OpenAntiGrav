@@ -909,8 +909,19 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    floor at 0:47 to 0:50 is a glowing track-side deck, not water; Park shows grass, brick and the same deck. The
    samples are 2 to 3 s apart (about 150 to 300 units), so a short glimpse could fall between them, and ours' pond
    and sea poses (`-250,-8,1372` and `1000,200,-3500`) are free cameras no craft flight reproduces. A comparison
-   needs the teleport (never built, [vita3k-capture.md](../reverse-engineering/vita3k-capture.md), 2048 craft
+   needs the teleport (built 2026-11-18 below, [vita3k-capture.md](../reverse-engineering/vita3k-capture.md), 2048 craft
    teleport) or a denser sample around where the spline passes the water.
+   **Pair taken 2026-11-18 (`vita-teleport`, two boots)**: the teleport places the original's craft at ours' Altima pond pose
+   `-250,-8,1372` (yaw 0) and the same scenery, the pond and its boat are in view on both sides
+   (`vita3k-capture.md`, "The teleport that works"). Read by eye on a 3x crop: (1) **ours draws a grey-white stipple** along the pond's shore and right edge, on the rock face
+   at the top right and on a dotted band along the far track edge, none of which the original shows (its shore is a smooth dark
+   gradient), so the stipple is on several surfaces at this pose and **its pass is not isolated** (not shown to be the water);
+   (2) the original's basin is a dark navy with a faint lighter band under the boat, ours near-black; (3) ripple scroll and glint
+   are not judged from a still. Ripple scale, glint colour and `fc17` edge colour are not measured. **Caveat: the scenery clock
+   the pair recorded reads 2.0039 s on every boot (HUD 0:12), a value that looks like a fixed node, not the clock, and ours was rendered
+   at it (`--world-clock-offset 2.004`): treat `world_clock_offset_s` as unverified, so no ripple or scroll comparison and no
+   adoption of the pair until it is re-read.** Park's sea pose is not placed (Park's Time Trial does not load, see
+   `vita3k-capture.md`; its Race cell loaded in `water-2048cmp`).
 5. `sea`, `seareflect`, `seaweed` class nodes: a class census over PSP `.vex`.
 6. Blue Ridge's `Water` texture is embedded and bound by no batch; whether a node of
    another class draws it is unread.
