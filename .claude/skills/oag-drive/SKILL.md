@@ -19,6 +19,7 @@ in isolated worktrees.
    | haiku, anything else | 0.5 |
    | sonnet | 1 |
    | opus | 2 |
+   | fable (only with the maintainer's OK) | 3 |
 
    The budget caps *concurrent* members (3 is either three sonnets or one opus
    and one sonnet). You are excluded, and so is a read-only haiku `oag-scout`
