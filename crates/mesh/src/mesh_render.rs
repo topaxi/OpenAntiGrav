@@ -487,6 +487,9 @@ pub fn build_with(
         if pipeline_cache::scope_rig_is_on() && specialise::plain_is_lit(model, &plain.draws) {
             constants.push(("lit_by_rig", 1.0));
         }
+        if !specialise::reads_second(model, &model.draws, &plain.draws, plain.present) {
+            constants.push(("second_read", 0.0));
+        }
         constants
     });
 
@@ -507,6 +510,9 @@ pub fn build_with(
             && specialise::plain_list_is_lit(model, &model.transparent_draws, &plain.draws)
         {
             constants.push(("lit_by_rig", 1.0));
+        }
+        if !specialise::reads_second(model, &model.transparent_draws, &plain.draws, plain.present) {
+            constants.push(("second_read", 0.0));
         }
         constants
     });

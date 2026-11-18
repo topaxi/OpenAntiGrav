@@ -115,6 +115,13 @@ fn sh_hull_ambient(n: vec3<f32>, shadow: f32) -> vec4<f32> {
 // 8.23 to 7.65 ms and Pulse's 3.38 to 1.64, byte-identical (`docs/rendering/hires-gpu-levers.md`).
 override slots_present: u32 = 4294967295u;
 
+// **Whether any draw of this pipeline reads the second texture at the diffuse coordinate**
+// (`mesh_render::specialise::reads_second`): 0.0 where no vertex carries a role bit that reads
+// it, names no emissive row (the pane and twin readers) and has no glow mask sourced from it, so
+// the fetch goes; 1.0, fetched, by default. Where it is 0.0 every reader below sees zero and no
+// reader runs.
+override second_read: f32 = 1.0;
+
 @diagnostic(off, derivative_uniformity)
 fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // Our own shield draws no texture and takes none of the lighting below.
@@ -641,7 +648,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     } else {
         first = material_sample(MATERIAL_ALBEDO, first_uv);
     }
-    let second = material_sample(MATERIAL_LIGHTMAP, in.texcoord);
+    var second = vec4<f32>(0.0);
+    if second_read != 0.0 {
+        second = material_sample(MATERIAL_LIGHTMAP, in.texcoord);
+    }
     var picture = select(first, second, (in.slots & 2u) != 0u);
     // **HD's Sebenco ice pool** (`slots::ICE`, `oag_mesh::mesh::rcs::ice`): the
     // picture is replaced by the program's own lerp,
