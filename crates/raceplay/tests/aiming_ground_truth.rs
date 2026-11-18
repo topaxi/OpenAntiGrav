@@ -91,7 +91,7 @@ fn on_the_starting_grid_a_craft_ahead_reads_ahead_and_centred_and_one_across_doe
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let ships = usize::from(race.core.sim.world.ship_count).min(AIM_SLOTS);
     assert!(ships >= 4, "a full field: {ships} crafts");
 

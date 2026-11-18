@@ -161,9 +161,10 @@ impl Race {
                 // as an opponent's plume rather than as the player's - the
                 // original arms `ExhaustFlare_OnSpeedupPad` from inside the
                 // per-craft update, with that craft's own flare.
-                self.boost_plume(slot);
                 #[cfg(feature = "view")]
-                self.fire_zoom_boost(slot);
+                crate::stage::stage!(self).boost_plume(slot);
+                #[cfg(feature = "view")]
+                crate::stage::stage!(self).fire_zoom_boost(&self.core, slot);
                 // The sound is on the same edge and from the same branch:
                 // `Ship_ApplySpeedupPad` calls `Sound_Play(..., "SPEEDUPPAD",
                 // ...)` here, immediately beside `ExhaustFlare_OnSpeedupPad`.
@@ -349,7 +350,7 @@ impl SimRace {
         let last = self.sim.world.ships[slot].pickup.last;
         // `None` for every non-2048 race and for a 2048 event whose weapon
         // set decodes to nothing recognised - the same "empty is no
-        // restriction" reading `Setup::allowed_weapons`'s own doc comment
+        // restriction" reading `SimSetup::allowed_weapons`'s own doc comment
         // gives. AI slots are gated the same as the player's: which weapons
         // an event's own `WeaponSetDefinition` allows is stated about the
         // pads, not about who crosses them - **chosen, not measured**, since

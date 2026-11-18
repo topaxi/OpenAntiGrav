@@ -46,7 +46,7 @@ fn load() -> Option<race::Race> {
         loaded.ribbon_textures.magstrip.is_some(),
         "HD_electric_arc_8x8 and HD_ElectricArc_Contact must both decode"
     );
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     Some(race)
 }
@@ -408,7 +408,7 @@ fn flown_into_the_wall(stick: f32) -> Option<(Run2, race::Race)> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut rumbler = oag_game::rumble::Rumbler::new(&race, "ps3", oag_hd::TITLE.rumble)
         .expect("HD builds a rumbler");
     let mut buttons = oag_gameplay::input::Input::EMPTY;

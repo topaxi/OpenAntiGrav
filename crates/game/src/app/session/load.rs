@@ -879,7 +879,7 @@ impl Session {
                     if crate::split_screen::deals_the_panes(open_windows, &self.pane_people) {
                         let layout = crate::split_screen::layout_for(
                             Some(&wanted_layout),
-                            race_stage.race.viewport_count(),
+                            race_stage.race.view_state().viewport_count(),
                             open_windows,
                             cut,
                         );
@@ -894,7 +894,7 @@ impl Session {
                     // Applied here, once, before the stage ever ticks - see
                     // `Session::campaign_ai_skill_scale`'s own doc.
                     // `oag_ai::Difficulty::tune_at_scale` is the continuous
-                    // generalisation of `Setup::difficulty`'s own discrete
+                    // generalisation of `SimSetup::difficulty`'s own discrete
                     // `tune()`, which `race::Race::start` already ran once with
                     // whatever ambient difficulty the RACE page had selected -
                     // this overrides it with the campaign's own resolved
@@ -1010,7 +1010,11 @@ impl Session {
                 oag_raceplay::loader_log::lines(&loaded.report);
                 // The viewer's timeline starts its own race from the same setup.
                 if let Some(watching) = self.watching.as_mut() {
-                    watching.setup = Some(loaded.setup.clone());
+                    watching.setup = Some((
+                        loaded.setup.clone(),
+                        loaded.view.clone(),
+                        loaded.modules.clone(),
+                    ));
                 }
                 let request = crate::app::race_build::Request {
                     gpu: self.gpu.handles(),

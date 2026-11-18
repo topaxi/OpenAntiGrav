@@ -417,15 +417,16 @@ pub fn prepare(
         }
         Prepared {
             beacons,
-            ..Prepared::default()
+            ..crate::extensions::Prepared::default()
         }
     }
+
     #[cfg(feature = "extensions")]
     {
         if sources.is_empty() {
             return Prepared {
                 beacons,
-                ..Prepared::default()
+                ..crate::extensions::Prepared::default()
             };
         }
         let region = match track::encode(track) {
@@ -440,7 +441,7 @@ pub fn prepare(
                 );
                 return Prepared {
                     beacons,
-                    ..Prepared::default()
+                    ..crate::extensions::Prepared::default()
                 };
             }
         };
@@ -579,6 +580,7 @@ pub fn mod_icons(
         let _ = (sources, title, foreign_track, report);
         ModIcons::default()
     }
+
     #[cfg(feature = "extensions")]
     {
         let mut seen = std::collections::BTreeSet::new();
@@ -1210,7 +1212,7 @@ impl crate::Race {
             self.run_warnings();
             let gave = self.core.sim.extensions.take_shield_gives();
             for slot in (0..oag_gameplay::MAX_SHIPS).filter(|slot| gave & (1 << slot) != 0) {
-                self.shield_activate(slot);
+                crate::stage::stage!(self).shield_activate(slot);
             }
         }
         #[cfg(not(feature = "extensions"))]
@@ -1316,7 +1318,7 @@ impl crate::Race {
     #[cfg(feature = "view")]
     pub(super) fn draw_extension_effects(&mut self) {
         for (slot, fired) in self.core.sim.extensions.take_effects() {
-            self.play_fired(slot, &fired);
+            self.view.play_fired(&self.core, slot, &fired);
         }
     }
 }

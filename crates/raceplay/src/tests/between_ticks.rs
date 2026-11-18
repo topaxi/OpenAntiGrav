@@ -103,11 +103,14 @@ fn the_frame_alpha_is_the_clock_s_only_while_the_race_steps() {
 #[test]
 fn outside_a_draw_every_reader_is_the_tick_exactly() {
     let race = gliding_race();
-    assert_eq!(race.draw_alpha(), 1.0);
-    assert_eq!(race.view(), race.tick_view());
-    assert_eq!(race.view_unshaken(), race.tick_view_unshaken());
+    assert_eq!(race.view.draw_alpha(), 1.0);
+    assert_eq!(race.view.view(&race.core), race.view.tick_view(&race.core));
     assert_eq!(
-        race.ship_model_matrix_of(0),
+        race.view_unshaken(),
+        race.view.tick_view_unshaken(&race.core)
+    );
+    assert_eq!(
+        race.view.ship_model_matrix_of(&race.core, 0),
         crate::drawable::model_matrix_of(&race.core.sim.world.ships[0])
     );
 }
@@ -118,32 +121,35 @@ fn a_draw_sits_between_the_last_two_ticks() {
     let before = translation(crate::drawable::model_matrix_of(
         &race.core.sim.world.ships[0],
     ));
-    let eye_before = race.camera_position();
+    let eye_before = race.view.camera_position(&race.core);
     race.tick(&PlayerInputs::none());
     let after = translation(crate::drawable::model_matrix_of(
         &race.core.sim.world.ships[0],
     ));
-    let eye_after = race.camera_position();
+    let eye_after = race.view.camera_position(&race.core);
     assert!(
         before.distance(after) > 1e-4,
         "the fixture did not move the craft"
     );
 
     race.set_draw_alpha(0.25);
-    let drawn = translation(race.ship_model_matrix_of(0));
+    let drawn = translation(race.view.ship_model_matrix_of(&race.core, 0));
     assert!(
         drawn.abs_diff_eq(before.lerp(after, 0.25), 1e-4),
         "drawn at {drawn}, not a quarter of {before} -> {after}"
     );
-    let eye = race.camera_position();
+    let eye = race.view.camera_position(&race.core);
     assert!(
         eye.abs_diff_eq(eye_before.lerp(eye_after, 0.25), 1e-3),
         "eye at {eye}, not a quarter of {eye_before} -> {eye_after}"
     );
 
     race.set_draw_alpha(1.0);
-    assert_eq!(translation(race.ship_model_matrix_of(0)), after);
-    assert_eq!(race.camera_position(), eye_after);
+    assert_eq!(
+        translation(race.view.ship_model_matrix_of(&race.core, 0)),
+        after
+    );
+    assert_eq!(race.view.camera_position(&race.core), eye_after);
 }
 
 #[test]
@@ -156,11 +162,11 @@ fn every_tick_path_captures_first_and_puts_the_alpha_back() {
         let held = crate::drawable::model_matrix_of(&race.core.sim.world.ships[0]);
         race.set_draw_alpha(0.5);
         step(race);
-        assert_eq!(race.draw_alpha(), 1.0, "{name} left a draw alpha set");
+        assert_eq!(race.view.draw_alpha(), 1.0, "{name} left a draw alpha set");
         // What the previous pose is: the one the step started from, read
         // back through a blend at alpha zero.
         race.set_draw_alpha(0.0);
-        let previous = race.ship_model_matrix_of(0);
+        let previous = race.view.ship_model_matrix_of(&race.core, 0);
         race.set_draw_alpha(1.0);
         assert!(
             previous.abs_diff_eq(held, 1e-4),
@@ -188,14 +194,18 @@ fn a_respawn_snaps_the_craft_and_cuts_the_camera() {
     race.core.sim.respawns[0] += 1;
     race.set_draw_alpha(0.5);
     assert_eq!(
-        race.ship_model_matrix_of(0),
+        race.view.ship_model_matrix_of(&race.core, 0),
         crate::drawable::model_matrix_of(&race.core.sim.world.ships[0]),
         "a respawned craft swept from where it was"
     );
-    assert_eq!(race.view(), race.tick_view(), "a cut was swept");
+    assert_eq!(
+        race.view.view(&race.core),
+        race.view.tick_view(&race.core),
+        "a cut was swept"
+    );
     // Another craft, which did not respawn, still blends.
     assert_ne!(
-        race.ship_model_matrix_of(1),
+        race.view.ship_model_matrix_of(&race.core, 1),
         crate::drawable::model_matrix_of(&race.core.sim.world.ships[1])
     );
 }
@@ -206,12 +216,12 @@ fn a_view_cycle_snaps_the_camera() {
     race.tick(&PlayerInputs::none());
     race.set_draw_alpha(0.5);
     assert_ne!(
-        race.view(),
-        race.tick_view(),
+        race.view.view(&race.core),
+        race.view.tick_view(&race.core),
         "the fixture camera did not move"
     );
     race.set_camera_view(oag_display::display::CameraView::Internal);
-    assert_eq!(race.view(), race.tick_view());
+    assert_eq!(race.view.view(&race.core), race.view.tick_view(&race.core));
 }
 
 #[test]
@@ -220,23 +230,36 @@ fn settling_draws_the_current_tick() {
     race.tick(&PlayerInputs::none());
     race.settle_poses();
     race.set_draw_alpha(0.5);
-    assert_eq!(race.view(), race.tick_view());
+    assert_eq!(race.view.view(&race.core), race.view.tick_view(&race.core));
 }
 
 /// The whole claim the simulation depends on: a draw alpha set and read
 /// between every tick, as the window does, moves no state hash.
 #[test]
 fn a_draw_alpha_reaches_no_state_hash() {
-    let mut drawn = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
-    let mut plain = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
+    let mut drawn = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
+    let mut plain = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
     for tick in 0..120u32 {
         drawn.set_draw_alpha((tick % 7) as f32 / 7.0);
         let _ = (
-            drawn.view(),
-            drawn.camera_position(),
-            drawn.ship_model_matrix_of(0),
-            drawn.projection(16.0 / 9.0, 1000.0, oag_display::display::Fov::default()),
-            drawn.nozzle_of(0),
+            drawn.view.view(&drawn.core),
+            drawn.view.camera_position(&drawn.core),
+            drawn.view.ship_model_matrix_of(&drawn.core, 0),
+            drawn.view.projection(
+                &drawn.core,
+                16.0 / 9.0,
+                1000.0,
+                oag_display::display::Fov::default(),
+            ),
+            drawn.view.nozzle_of(&drawn.core, 0),
         );
         drawn.tick(&PlayerInputs::none());
         plain.tick(&PlayerInputs::none());
@@ -300,11 +323,11 @@ fn the_trail_head_follows_the_drawn_nozzle_and_only_between_ticks() {
     race.set_draw_alpha(0.5);
     assert_eq!(
         race.trail_head_of(0).map(|head| head.position),
-        race.nozzle_of(0)
+        race.view.nozzle_of(&race.core, 0)
     );
     assert_eq!(race.trail_head_of(0).map(|head| head.alpha), Some(0.5));
     assert_ne!(
-        race.nozzle_of(0),
+        race.view.nozzle_of(&race.core, 0),
         Some(
             crate::drawable::model_matrix_of(&race.core.sim.world.ships[0])
                 .transform_point3(Vec3::new(0.0, 0.0, 4.0))
@@ -371,16 +394,19 @@ fn the_body_a_blob_shadow_casts_from_is_the_drawn_one() {
     race.tick(&PlayerInputs::none());
     let after = race.core.sim.world.ships[0].physics.body.position;
     assert_eq!(
-        race.body_between(0),
+        race.view.body_between(&race.core, 0),
         race.core.sim.world.ships[0].physics.body
     );
     race.set_draw_alpha(0.25);
-    let drawn = race.body_between(0).position;
+    let drawn = race.view.body_between(&race.core, 0).position;
     assert!(
         drawn.abs_diff_eq(before.lerp(after, 0.25), 1e-4),
         "cast from {drawn}, not a quarter of {before} -> {after}"
     );
-    assert!(drawn.abs_diff_eq(translation(race.ship_model_matrix_of(0)), 1e-4));
+    assert!(drawn.abs_diff_eq(
+        translation(race.view.ship_model_matrix_of(&race.core, 0)),
+        1e-4
+    ));
 }
 
 /// The airbrake flaps and the shield shell's swell are drawn between their

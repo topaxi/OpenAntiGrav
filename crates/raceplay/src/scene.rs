@@ -210,7 +210,7 @@ pub struct Scene {
     /// craft, because only the player's camera can ever be inside one.
     ///
     /// Drawn *instead of* the player's entry in [`Self::shield`] while
-    /// `Race::draws_own_ship` is false, which is exactly the branch
+    /// `RaceView::draws_own_ship` is false, which is exactly the branch
     /// `ShipShield_Update` takes on `craft+0x6d`. `None` on a source that does
     /// not carry `Data\Weapons\vr_shield_cockpit.vex`.
     shield_cockpit: Option<Drawable>,

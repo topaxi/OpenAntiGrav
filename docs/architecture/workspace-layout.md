@@ -90,8 +90,10 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 
 ## Crates that do not exist yet
 
-Added when their milestone opens. Empty placeholder crates are noise, and a
-crate created before its shape is understood tends to get the wrong shape.
+Added when their milestone opens, and a new crate lands with a short
+`README.md` in its root: what it is for, plus the relations that matter (its
+layer, what it must not depend on, its counterpart). Empty placeholder crates
+are noise, and a crate created before its shape is understood tends to get the wrong shape.
 `oag-net`, reserved here for M8, was created on 2026-10-14 once the transport was
 decided ([ADR-0070](adr/0070-the-network-transport-is-webtransport.md)).
 
@@ -304,6 +306,41 @@ lines before, 280 after; a clean release build of the server alone (no compiler
 cache): 768 CPU-s before, 254 CPU-s after (152 s and 26 s wall at load averages
 of 90 and 25-36). The static build is `scripts/build-server-portable.sh musl`
 ([networking](../networking/README.md), "Running a server on another machine").
+
+**The two setups and the two load phases (2026-11-18).** `Setup` has since split
+into `SimSetup`, what `Race::start` builds the simulation from (no field names the
+disc, a renderer, audio, a window or the extension host), and `ViewSetup`, what only
+the picture and the sound read; a build without `view` has an empty `ViewSetup`.
+The compiled simulation modules (`extensions::Prepared`) travel beside them, so
+`Race::start(setup, view, modules)` and `Loaded { setup, view, modules, .. }`. `load`
+is `load_sim` (`load/sim.rs`, no `cfg`) and then, with `view`, `load_view`
+(`load/view.rs`), which reads off what the sim phase read. The sim phase runs its
+steps in the old single pass's order and marks a `load::seams::Seam` wherever a view
+step stood; the view phase writes its report lines at those seams, so `loader_log`
+reads exactly as one pass did. Two lean-build values became the view build's: the
+lock-on rig carries the title's chase shear (nothing the rig computes reads it; it
+shows in Pure's `RaceSim` Debug text only), and a capture's Zone counters are
+`SimSetup::capture_zone`, written at the same statement of `Race::start` in both
+builds. The view phase checks, in a debug build, that the HUD's lock grid and law,
+the drawn far chase rig and `vex_geometry` equal what the sim phase gave the
+simulation.
+
+**The view work the tick calls (2026-11-18).** Every method the tick reaches that does
+view work (effects, camera, sparks, exhausts, trails, blasts, shield flashes, HUD
+messages, the reticle, the recording and the presentation journal) is a `RaceView`
+method, or a `Stage` method where it also reads the recording, the journal or whether
+the tick draws (`stage.rs`: `Stage` is the view, the recording and the journal borrowed
+apart from `SimRace`, built with `stage!`). Each takes the `SimRace` it reads as an
+argument and is called at the statement the old `Race` method or inline view block
+stood at; the view statements that stood inline are named hooks in `stage/hooks.rs`.
+Cues stay the simulation's output: a view method that raises one takes the tick's queue
+as `cues`, lent by `SimRace::lending_cues`, and the two view decisions that raise a cue
+(the HUD message boards, the seat's shield edge) return it for the tick to queue.
+`before_projectile_step` reads the projectile pool off `World` before the step for the
+drawn bounce and blast. No simulation statement moved: the golden hashes, the ADR-0087
+restore sweep and a 59-artefact headless set (Pulse PSP, HD and 2048 frames with their
+`state_hash`, WAV dumps and a ghost) are identical before and after. Other crates read
+the view through `Race::view_state()`, e.g. `race.view_state().camera_position(&race.core)`.
 
 ## Which GPU the tests use
 

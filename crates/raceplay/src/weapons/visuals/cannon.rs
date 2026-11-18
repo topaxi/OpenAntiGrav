@@ -200,7 +200,7 @@ impl Race {
         let body = &self.core.sim.world.ships.get(slot)?.physics.body;
         let left = (projectile.position - body.position).dot(body.right()) < 0.0;
         let local = draw.muzzles.get(slot)?[usize::from(!left)]?;
-        let world = self.ship_model_matrix_of(slot) * local;
+        let world = self.view.ship_model_matrix_of(&self.core, slot) * local;
         let x = world.x_axis.truncate().normalize_or_zero();
         let authored_y = world.y_axis.truncate();
         let y = (authored_y - x * x.dot(authored_y)).normalize_or_zero();

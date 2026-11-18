@@ -15,7 +15,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_mesh::mesh::rcs::psp2::{self, Animation};
-use oag_mesh::mesh::{Model, slots};
+use oag_mesh::mesh::{Model, PROGRAM_VERTEX_BLEND, slots};
 use oag_mesh::mesh_render::TexAnims;
 
 fn package() -> Option<PathBuf> {
@@ -92,7 +92,12 @@ fn arenas_glow_layers_carry_their_authored_rates_and_a_bound_emissive_texture() 
         assert!((1..=model.emissive.len()).contains(&slot));
     }
     // `TimeScaler` as authored on the three: 0.05, 1.0 and 3.0.
-    let mut rates: Vec<f32> = model.emissive.iter().map(|e| e.rate).collect();
+    let mut rates: Vec<f32> = model
+        .emissive
+        .iter()
+        .filter(|e| e.program[0] != PROGRAM_VERTEX_BLEND)
+        .map(|e| e.rate)
+        .collect();
     rates.sort_by(f32::total_cmp);
     rates.dedup();
     assert_eq!(rates, vec![0.05, 1.0, 3.0], "{:?}", model.emissive);
@@ -129,7 +134,15 @@ fn altima_scrolls_its_plain_materials_and_draws_the_rest_still() {
     };
     assert_eq!(report.glow_layers, 0, "{}", report.describe());
     assert_eq!(report.scrolling_materials, 12, "{}", report.describe());
-    assert!(model.emissive.is_empty());
+    // The vertex-red blend's entry is the one glow-table entry Altima carries: it adds no glow.
+    assert!(
+        model
+            .emissive
+            .iter()
+            .all(|e| e.program[0] == PROGRAM_VERTEX_BLEND),
+        "{:?}",
+        model.emissive
+    );
 }
 
 /// Altima's start-grid laser (`fc01_effects_vscroll_emissive_alpha_glow`, one draw on its

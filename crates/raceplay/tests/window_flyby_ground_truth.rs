@@ -37,7 +37,7 @@ fn every_window_plays_the_flyby_and_then_its_own_seats() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(race.set_viewport_count(4), 4);
     race.set_windows(vec![seats(&[0, 1]), seats(&[2, 3]), seats(&[])]);
     assert_eq!(race.window_drawn(0), vec![0, 1], "no flyby yet");
@@ -47,7 +47,7 @@ fn every_window_plays_the_flyby_and_then_its_own_seats() {
     let player = race.core.player_slot();
     let area = (0.0, 0.0, 1280.0, 720.0);
     let mut ticks = 0;
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         for window in 0..2 {
             assert_eq!(
                 race.window_drawn(window),
@@ -90,14 +90,14 @@ fn a_skip_ends_the_flyby_in_every_window_at_once() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(race.set_viewport_count(2), 2);
     race.set_windows(vec![seats(&[0]), seats(&[1])]);
     assert!(race.begin_intro());
     assert_eq!(race.window_drawn(1), vec![race.core.player_slot()]);
     race.skip_intro();
     let mut ticks = 0;
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         race.tick_intro(&PlayerInputs::none());
         ticks += 1;
         assert!(ticks < 60 * 60, "a skip ends the flyby");
@@ -123,7 +123,7 @@ fn a_second_persons_held_cross_skips_the_flyby() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(race.set_viewport_count(2), 2);
     race.set_windows(vec![seats(&[0]), seats(&[1])]);
     race.core.sim.world.controllers[1] = Controller::Local;
@@ -139,7 +139,7 @@ fn a_second_persons_held_cross_skips_the_flyby() {
         },
     );
     let mut ticks = 0;
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         race.tick_intro(&held);
         ticks += 1;
         assert!(ticks < 3000, "window 2's held Cross did not end the flyby");

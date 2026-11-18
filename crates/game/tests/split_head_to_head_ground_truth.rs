@@ -58,7 +58,7 @@ fn two_people_on(
     })
     .expect("loading the race");
     let hud = loaded.hud;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     oag_game::split_screen::apply(&mut race, 2, cut);
     race.core.sim.world.controllers[1] = Controller::Remote;
     race.core.sim.set_autopilot(true);

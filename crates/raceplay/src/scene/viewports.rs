@@ -2,7 +2,7 @@
 //!
 //! One target, `N` rectangles of it ([`oag_render::viewport::layout`]), each drawn
 //! by an ordinary [`Scene::render`] from its own camera
-//! ([`Race::set_viewpoint`]). Five things make that more than a loop, and each
+//! ([`crate::RaceView::set_viewpoint`]). Five things make that more than a loop, and each
 //! is a way to get a plausible picture that is wrong:
 //!
 //! - **One encoder per view, and each view's writes ahead of its commands.**
@@ -152,7 +152,7 @@ impl Scene {
         shared: bool,
         effects: WindowEffects<'_>,
     ) -> SceneStats {
-        race.set_viewpoint(slot);
+        race.view.set_viewpoint(&race.core, slot);
         self.layer.set(Layer::Window);
         self.reuse_frame_work.set(shared);
         self.begin_split_frame(shared);
@@ -180,7 +180,7 @@ impl Scene {
         self.layer.set(Layer::Whole);
         self.reuse_frame_work.set(false);
         self.history.set(0);
-        race.reset_viewpoint();
+        race.view.reset_viewpoint();
         stats
     }
 
@@ -197,7 +197,7 @@ impl Scene {
     /// (the caller `begin`s them); empty everywhere but the render bench, which
     /// is the only caller that reads them. A view past the slice's end is untimed.
     ///
-    /// For a race that was never split ([`Race::viewport_count`] of one) this is
+    /// For a race that was never split ([`crate::RaceView::viewport_count`] of one) this is
     /// not the call to make: use [`Scene::render`], which is what keeps a race
     /// without a split exactly as it was.
     #[allow(clippy::too_many_arguments)]
@@ -520,7 +520,7 @@ impl Scene {
         self.layer.set(Layer::Whole);
         self.reuse_frame_work.set(false);
         self.history.set(0);
-        race.reset_viewpoint();
+        race.view.reset_viewpoint();
         // HD's and Omega's chains, one run per view with its own adaptation
         // (`split_exposure`).
         let post_ran =

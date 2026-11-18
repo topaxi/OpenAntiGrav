@@ -203,7 +203,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
     // And this is what the window does next.
     let Some(loaded) = load() else { return };
     let bound = envelope(&loaded);
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut held = race::HeldButtons::new(Button::Cross.bit());
     let mut grounded_ticks = 0u32;
 
@@ -280,7 +280,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
 fn a_ship_stays_on_the_track_for_ten_seconds() {
     let Some(loaded) = load() else { return };
     let bound = envelope(&loaded);
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut held = race::HeldButtons::new(Button::Cross.bit());
 
     let mut worst_distance: f32 = 0.0;
@@ -503,7 +503,7 @@ fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai:
     }) else {
         return Solo::default();
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     if let Some(tuning) = tuning {
         race.core.sim.set_ai_tuning(tuning);
     }
@@ -693,7 +693,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
         }) else {
             continue;
         };
-        let race = race::Race::start(loaded.setup);
+        let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         checked += 1;
 
         for slot in 1..race.core.sim.ship_count() as usize {
@@ -896,7 +896,7 @@ fn the_racing_line_has_track_under_it_where_it_is_known_to() {
         };
         let reach = loaded.setup.handling.antigrav.ride_height;
         let collision = loaded.setup.collision.clone();
-        let race = race::Race::start(loaded.setup);
+        let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         let line = race.core.sim.racing_line();
 
         // Two casts per unsupported sample: one probe reach, which is what a

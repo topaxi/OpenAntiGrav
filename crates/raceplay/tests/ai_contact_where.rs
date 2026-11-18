@@ -58,7 +58,11 @@ fn contact_where() {
     let rows = in_parallel::map(&jobs, 16, |&(offset, eps)| {
         let mut setup = race::load(&options).expect("loading").setup;
         perturb::apply_at(&mut setup, eps, offset);
-        let mut race = race::Race::start(setup);
+        let mut race = race::Race::start(
+            setup,
+            oag_raceplay::ViewSetup::headless(),
+            oag_raceplay::extensions::Prepared::default(),
+        );
         for slot in 2..8 {
             race.core.sim.world.ships[slot].active = false;
         }
@@ -178,7 +182,11 @@ fn contact_trace() {
     .expect("loading")
     .setup;
     perturb::apply_at(&mut setup, eps, offset);
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(
+        setup,
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
     for slot in 2..8 {
         race.core.sim.world.ships[slot].active = false;
     }

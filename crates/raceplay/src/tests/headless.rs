@@ -1,4 +1,4 @@
-//! [`Setup::headless`] and what the `oag-headless-sim` binary asserts about it.
+//! [`SimSetup::headless`] and what the `oag-headless-sim` binary asserts about it.
 //!
 //! The binary is not run by `just test` - a `[[bin]]` is compiled by
 //! `--all-targets` and executed by nothing - so its claim lives here as well,
@@ -14,7 +14,11 @@ use oag_gameplay::{Controller, PlayerInputs};
 /// GPU and no window anywhere in the process.
 #[test]
 fn a_disc_free_race_ticks_and_moves_its_hash() {
-    let mut race = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
+    let mut race = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
     let before = race.core.sim.state_hash();
 
     for _ in 0..30 {
@@ -35,8 +39,16 @@ fn a_disc_free_race_ticks_and_moves_its_hash() {
 /// nothing would say so.
 #[test]
 fn marking_extra_slots_human_is_visible_to_the_hash() {
-    let one = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
-    let mut three = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
+    let one = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
+    let mut three = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(
         one.core.sim.state_hash(),
         three.core.sim.state_hash(),
@@ -59,8 +71,16 @@ fn marking_extra_slots_human_is_visible_to_the_hash() {
 /// change no craft.
 #[test]
 fn a_snapshot_in_an_unflown_slot_changes_nothing() {
-    let mut quiet = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
-    let mut noisy = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
+    let mut quiet = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
+    let mut noisy = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
 
     let mut loud = PlayerInputs::none();
     for slot in 1..oag_gameplay::MAX_PLAYERS {
@@ -92,7 +112,11 @@ fn a_snapshot_in_an_unflown_slot_changes_nothing() {
 /// flown whatever the controllers say.
 #[test]
 fn a_human_slot_with_no_craft_is_not_person_flown() {
-    let mut race = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
+    let mut race = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
     for slot in 1..3 {
         race.core.sim.world.controllers[slot] = Controller::Local;
     }

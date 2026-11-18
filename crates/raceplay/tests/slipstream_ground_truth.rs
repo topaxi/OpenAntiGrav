@@ -130,7 +130,7 @@ fn race_with_hud(
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     Some((race, loaded.hud))
 }
@@ -584,7 +584,13 @@ fn loads_it(mode: oag_race::Mode, weapons: bool) -> Option<bool> {
         .iter()
         .any(|l| l.contains("oag.slipstream") && l.contains("not run in this race"));
     assert_eq!(modded, !declined, "{:?}", loaded.report);
-    assert_eq!(race::Race::start(loaded.setup).core.sim.is_modded(), modded);
+    assert_eq!(
+        race::Race::start(loaded.setup, loaded.view, loaded.modules)
+            .core
+            .sim
+            .is_modded(),
+        modded
+    );
     Some(modded)
 }
 

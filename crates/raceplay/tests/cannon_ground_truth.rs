@@ -99,7 +99,7 @@ fn rounds(race: &race::Race) -> Vec<oag_weapons::projectile::Projectile> {
 
 fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
     let loaded = single_race()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));
@@ -114,7 +114,7 @@ fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
 #[ignore = "needs a disc image in data/images/"]
 fn the_discs_cannon_block_decodes() {
     let Some(loaded) = single_race() else { return };
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let cannon = race
         .core
         .sim

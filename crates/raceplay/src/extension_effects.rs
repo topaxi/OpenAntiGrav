@@ -240,16 +240,16 @@ mod view {
         })
     }
 
-    impl crate::Race {
+    impl crate::RaceView {
         /// Plays one `fire-effect` at its craft's nozzle (the hull's back end): the
         /// title's effect for a trigger, or the mod's own; one that is absent draws
         /// nothing.
-        pub(crate) fn play_fired(&mut self, slot: usize, fired: &Fired) {
+        pub(crate) fn play_fired(&mut self, core: &crate::SimRace, slot: usize, fired: &Fired) {
             let (effect, axis) = match fired {
-                Fired::Title(trigger) => (self.view.handles.get(*trigger).cloned(), Axis::Up),
+                Fired::Title(trigger) => (self.handles.get(*trigger).cloned(), Axis::Up),
                 Fired::Stop { mod_id, index } => {
-                    let stage = &mut self.view.stage;
-                    self.view.surfaces.retain(|held| {
+                    let stage = &mut self.stage;
+                    self.surfaces.retain(|held| {
                         let hit = (held.slot, held.mod_id.as_str(), held.index)
                             == (slot, mod_id.as_str(), *index);
                         if hit {
@@ -260,7 +260,7 @@ mod view {
                     return;
                 }
                 Fired::Own { mod_id, index } | Fired::OwnAt { mod_id, index, .. } => {
-                    let own = self.view.handles.own(mod_id, *index);
+                    let own = self.handles.own(mod_id, *index);
                     (
                         own.map(|own| own.effect.clone()),
                         own.map_or(Axis::Up, |own| own.axis),
@@ -277,12 +277,12 @@ mod view {
                 up,
             } = fired
             {
-                if let Some(playing) = self.view.stage.play_held(&effect, *at, 1.0) {
-                    self.view.stage.orient_surface(playing, *up);
-                    if self.view.surfaces.len() >= MAX_SURFACES {
-                        self.view.surfaces.remove(0);
+                if let Some(playing) = self.stage.play_held(&effect, *at, 1.0) {
+                    self.stage.orient_surface(playing, *up);
+                    if self.surfaces.len() >= MAX_SURFACES {
+                        self.surfaces.remove(0);
                     }
-                    self.view.surfaces.push(Surface {
+                    self.surfaces.push(Surface {
                         slot,
                         mod_id: mod_id.clone(),
                         index: *index,
@@ -291,18 +291,16 @@ mod view {
                 }
                 return;
             }
-            let ship = &self.core.sim.world.ships[slot];
+            let ship = &core.sim.world.ships[slot];
             // The nozzle is the hull's back end along the body's heading; a mod's rear
             // effect points its cone axis away from the nose.
             let body = &ship.physics.body;
             let back = -body.forward();
             let at = body.position + back * (ship.handling.dimensions.length * 0.5);
             if matches!(fired, Fired::Own { .. }) {
-                self.view
-                    .stage
-                    .play_aimed(&effect, at, axis, back, body.up());
+                self.stage.play_aimed(&effect, at, axis, back, body.up());
             } else {
-                self.view.stage.play(&effect, at, 1.0);
+                self.stage.play(&effect, at, 1.0);
             }
         }
     }

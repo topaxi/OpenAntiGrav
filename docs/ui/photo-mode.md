@@ -198,7 +198,7 @@ photo mode on another craft was culled to the seat's section where the camera co
 drew everything where it could not (more than 96 samples away), so the symptom was not
 reproduced as missing geometry on `main`. With the rule, PVS on is pixel-identical to PVS off
 on Pulse (7 subjects) and HD (7 subjects). The weather's section and the boost lens follow the
-framed craft (`Race::framed_slot`; an opponent's `Ship::segment` is never written, so its
+framed craft (`RaceView::framed_slot`; an opponent's `Ship::segment` is never written, so its
 driver's index is mapped through the racing line). 2048 and Omega: **checked, applies, not run
 as a frame**: the same `visible_set`, and a circuit with no sections is never culled.
 Frame time with the mode open, 1280x800, debug build, drive `screenshot` frames (CPU record and
@@ -453,7 +453,7 @@ for one while a shot is under way (`photo_job` in the state, `drawn/frames`).
   the shot's tick and the craft smears.
 - **Depth of field**, chosen, not measured: the same tick drawn 7 times with the eye moved across the
   lens (a centre sample and a ring of six) and aimed at the focus plane, so that plane stays sharp
-  (`LensShift`, applied after the blend in `Race::view`). The ring's radius is half of the widest
+  (`LensShift`, applied after the blend in `RaceView::view`). The ring's radius is half of the widest
   blur the single-frame pass draws at the aperture; each frame keeps the other half as that pass. The
   intent is a total as wide as the preview's; the saved shot was not compared with the preview.
 - **Both on**: the frames of the blur, the lens samples taken in turn.

@@ -159,7 +159,7 @@ impl Race {
             // `self.quiet` rather than `shield_hit`: `course` above borrows
             // `self.core.sim` for the whole function.
             if hit.absorbed && !self.quiet {
-                self.view.shield[slot].hit();
+                self.view.bulge_shield(slot);
             }
         }
         // `QUAKEHIT` (confidence 85), on the rising edge of the wave's own
@@ -209,7 +209,8 @@ impl Race {
             // `ignite_blast`'s `orientation` is unused by every arm but the
             // Bomb's.
             #[cfg(feature = "view")]
-            self.note_blast(
+            crate::stage::stage!(self).note_blast(
+                &self.core,
                 oag_tables::weapons::Weapon::Mine,
                 point,
                 None,
@@ -220,7 +221,9 @@ impl Race {
         // `race::hit_sparks`. Last, once `course`'s borrow has ended.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.throw_hit_sparks(&hits, false);
+            self.core.lending_cues(|core, cues| {
+                crate::stage::stage!(self).throw_hit_sparks(core, cues, &hits, false)
+            });
         }
         self.core.xp_weapon_hits(
             &hits,
@@ -316,8 +319,9 @@ impl Race {
         // A swallowed hit is the only thing that makes the target's shell
         // visibly react - the same out-parameter `Race::advance_quake` spends
         // on `self.view.shield[slot].hit()`, narrowed to the beam's one victim.
+        #[cfg(feature = "view")]
         if report.absorbed {
-            self.shield_hit(beam.target as usize);
+            crate::stage::stage!(self).shield_hit(&self.core, beam.target as usize);
         }
         if report.asked > 0.0 {
             let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
@@ -342,7 +346,9 @@ impl Race {
                 hit.landed = true;
             }
             #[cfg(feature = "view")]
-            self.throw_hit_sparks(&hits, true);
+            self.core.lending_cues(|core, cues| {
+                crate::stage::stage!(self).throw_hit_sparks(core, cues, &hits, true)
+            });
         }
         self.core.sim.world.leach_beams[at] = if report.retired { None } else { Some(beam) };
     }

@@ -33,7 +33,7 @@ fn race_on(track: &str) -> Option<race::Race> {
     {
         println!("{line}");
     }
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 fn playing_after(race: &mut race::Race, ticks: u32) -> (usize, usize) {

@@ -101,7 +101,7 @@ fn a_held_pose_takes_the_engine_ribbon_with_the_hull() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading the race");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     let held = oag_game::race_capture::pose_hold::StartPose::of(&race);
     let input = oag_gameplay::PlayerInputs::none();
     for _ in 0..120 {

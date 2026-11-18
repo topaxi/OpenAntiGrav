@@ -117,6 +117,7 @@ pub mod material;
 pub mod nodes;
 pub mod normal_map;
 pub mod specular_picture;
+pub mod vertex_blend;
 pub mod vertex_decl;
 
 /// The word every 2048 `.rcsmodel` opens with.

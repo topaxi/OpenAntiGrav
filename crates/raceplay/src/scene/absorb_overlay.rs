@@ -36,7 +36,7 @@ impl Scene {
             .take(drawn)
             .filter_map(move |(slot, overlay)| {
                 let overlay = overlay.as_ref()?;
-                if !race.core.sim.ship_active(slot) || (slot == 0 && !race.draws_own_ship()) {
+                if !race.core.sim.ship_active(slot) || (slot == 0 && !race.view.draws_own_ship()) {
                     return None;
                 }
                 let pulse = match which {
@@ -78,7 +78,7 @@ impl Scene {
                 overlay.write(
                     queue,
                     view_projection,
-                    race.ship_model_matrix_of(slot),
+                    race.view.ship_model_matrix_of(&race.core, slot),
                     prev_vp * prev.ship(slot, race),
                 );
                 let a = oag_fx::hull_overlay::alpha(pulse);

@@ -99,7 +99,7 @@ impl Race {
     }
 
     /// Draws the next views from `view` until it is put back with `None`. Draw-side state behind
-    /// a shared reference, as [`Self::set_viewpoint`] is.
+    /// a shared reference, as [`crate::RaceView::set_viewpoint`] is.
     pub(crate) fn set_portal_camera(&self, view: Option<Mat4>) {
         self.view.viewpoints.set_portal(view);
     }

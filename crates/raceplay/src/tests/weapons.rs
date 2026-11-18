@@ -460,7 +460,11 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::TimeTrial;
     setup.weapons = None;
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.grant_free_turbo(0);
     assert_eq!(race.core.ship_pickup(), None);
 }
@@ -537,7 +541,7 @@ fn absorbing_pays_the_pool_and_never_past_its_maximum() {
 }
 
 /// The HUD readout's own absorb flag - `Readout::shield_absorbing` - mirrors
-/// [`Race::absorb_window_active`] the same tick the pickup is spent and
+/// [`RaceView::absorb_window_active`] the same tick the pickup is spent and
 /// clears once [`oag_fx::hull_overlay::WINDOW`] has passed. See
 /// `crates/hud/src/shield_tests.rs` for what the readout draws once
 /// this is set.
@@ -821,13 +825,13 @@ fn the_cockpit_view_swaps_the_shield_shell_for_its_sphere() {
 
     // External: the hull is drawn and so is the shell around it.
     race.set_camera_view(CameraView::Far);
-    assert!(race.draws_own_ship());
+    assert!(race.view.draws_own_ship());
 
     // Internal: neither the hull nor the shell, and the sphere instead - at the
     // recovered `1.8` times the shell's own scale, which is what carries it past
     // a hull the camera is sitting inside.
     race.set_camera_view(CameraView::Internal);
-    assert!(!race.draws_own_ship());
+    assert!(!race.view.draws_own_ship());
     let state = race.shield_of(0);
     assert!(
         (state.cockpit_scale() - state.scale() * oag_render::shield::COCKPIT_SCALE).abs() < 1e-5

@@ -42,7 +42,7 @@ fn lent_from_hd() -> Option<race::TrailHits> {
 /// Slot 1 posed eight units behind slot 0 on slot 0's heading, both flying 60 units a second,
 /// and the exhaust and trail-hit history of that flight replayed - `--field-warmup`'s path.
 fn tucked_in_a_rivals_trail(loaded: race::Loaded) -> race::Race {
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(
         !race.hd_trail_active(),
         "Pulse draws the PSP ribbon, not HD's tube"

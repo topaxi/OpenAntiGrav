@@ -66,18 +66,18 @@ fn a_wrecked_player_is_seen_from_the_circuits_own_camera() {
             .any(|line| line.contains("destroy camera: 10 authored Camera node(s)")),
         "the loader says how many cameras it found"
     );
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    let chase_eye = race.camera_position();
+    let chase_eye = race.view_state().camera_position(&race.core);
 
     race.core.sim.force_destroy(0);
     for _ in 0..200 {
         race.tick(&PlayerInputs::none());
     }
     let craft = race.core.sim.world.ships[0].physics.body.position;
-    let eye = race.camera_position();
+    let eye = race.view_state().camera_position(&race.core);
     assert!(
         (eye - chase_eye).length() > 10.0,
         "the chase camera was not left"
@@ -97,7 +97,12 @@ fn a_wrecked_player_is_seen_from_the_circuits_own_camera() {
     );
 
     let fov = race
-        .vertical_fov(480.0 / 272.0, oag_display::display::Fov::AUTHORED)
+        .view_state()
+        .vertical_fov(
+            &race.core,
+            480.0 / 272.0,
+            oag_display::display::Fov::AUTHORED,
+        )
         .to_degrees();
     let want = destroy::framing_fov_degrees(destroy::FRAME_SIZE, eye.distance(craft));
     assert!((fov - want).abs() < 0.02, "field {fov}, framing {want}");

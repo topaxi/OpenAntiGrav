@@ -170,7 +170,7 @@ What's missing beyond the shared prerequisite:
 **2026-10-13: the viewport half landed**, `--players N` (1 to 8) on a direct
 `--race`, written up in [split-screen.md](../../docs/rendering/split-screen.md):
 `oag_render::viewport` lays out 1 to 8 views, `oag_raceplay` keeps a view-side chase
-camera per extra view (`Race::set_viewpoint`) and `Scene::render_viewports` draws one
+camera per extra view (`RaceView::set_viewpoint`) and `Scene::render_viewports` draws one
 scene per view, each in its own encoder and submit with only the first clearing.
 Slots `0..N` are marked `Controller::Local`; view `i` follows slot `i`. One view is
 byte-identical to before. Layout, the shared far-chase rig, no shake on extra views,
@@ -389,7 +389,7 @@ What's missing beyond the shared prerequisite:
 **2026-10-13: the viewport half landed**, `--players N` (1 to 8) on a direct
 `--race`, written up in [split-screen.md](../../docs/rendering/split-screen.md):
 `oag_render::viewport` lays out 1 to 8 views, `oag_raceplay` keeps a view-side chase
-camera per extra view (`Race::set_viewpoint`) and `Scene::render_viewports` draws one
+camera per extra view (`RaceView::set_viewpoint`) and `Scene::render_viewports` draws one
 scene per view, each in its own encoder and submit with only the first clearing.
 Slots `0..N` are marked `Controller::Local`; view `i` follows slot `i`. One view is
 byte-identical to before. Layout, the shared far-chase rig, no shake on extra views,

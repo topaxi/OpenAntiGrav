@@ -114,8 +114,8 @@ fn started(source: String, track: &str, team: &str) -> Started {
     for line in loaded.report.iter().filter(|l| l.contains("engine light")) {
         println!("{line}");
     }
-    let authored = loaded.setup.engine_lights.clone();
-    let mut race = race::Race::start(loaded.setup);
+    let authored = loaded.view.engine_lights.clone();
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..5 {
         race.tick(&PlayerInputs::none());
     }

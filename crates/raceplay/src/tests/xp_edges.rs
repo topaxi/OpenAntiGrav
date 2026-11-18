@@ -38,7 +38,11 @@ fn past_the_countdown(race: &mut Race, ticks: u64) {
 /// Fails if the launch edge stops feeding the tally.
 #[test]
 fn a_perfect_launch_pays_boost_start() {
-    let mut race = armed(Race::start(perfect_start::launch_setup()));
+    let mut race = armed(Race::start(
+        perfect_start::launch_setup(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ));
     let mut buttons = Buttons::new();
     for tick in 0..oag_race::COUNTDOWN_TICKS + 40 {
         let press = tick >= oag_race::COUNTDOWN_TICKS + 12;
@@ -106,7 +110,11 @@ fn two_craft_race() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_rocket_table());
-    let mut race = armed(Race::start(setup));
+    let mut race = armed(Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ));
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -181,7 +189,11 @@ fn a_quake_the_player_fires_pays_hit_with_quake() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    let mut race = armed(Race::start(setup));
+    let mut race = armed(Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ));
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();

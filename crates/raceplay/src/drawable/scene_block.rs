@@ -14,7 +14,7 @@
 //! commands recorded, without reading or writing another view's, which is what recording the
 //! views of a split on separate threads needs and what a queue write landing before the
 //! *submission's* commands (not at its place in the encoder) forbids a shared block. The view
-//! is the slot of the craft it follows ([`Race::viewed_slot`]): a craft is followed by one
+//! is the slot of the craft it follows ([`crate::RaceView::viewed_slot`]): a craft is followed by one
 //! seat, so it is unique within a frame. The offset travels as a [`ViewBlock`] handed to the
 //! draw calls, **not stored in the drawable**: a drawable is shared by every view, so any state
 //! in it is shared mutable state between views at record time.

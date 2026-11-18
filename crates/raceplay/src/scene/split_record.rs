@@ -143,6 +143,7 @@ fn native_core_capacities() -> Vec<u32> {
     {
         oag_gpu::split_finish::core_capacities()
     }
+
     #[cfg(not(all(target_os = "linux", not(target_arch = "wasm32"))))]
     {
         Vec::new()
@@ -518,7 +519,7 @@ impl Scene {
 
     /// Points the scene's per-view cells at view `index` of a split, following `slot`.
     pub(super) fn enter_view(&self, race: &Race, index: usize, slot: usize) {
-        race.set_viewpoint(slot);
+        race.view.set_viewpoint(&race.core, slot);
         // This seat's own camera history: the previous view-projection its velocity is
         // measured against and the shake the blur takes out, never another view's.
         self.history.set(motion::split_history(slot));
@@ -600,7 +601,7 @@ impl Views {
         let uploads = Uploads::begin(
             gpu.queue,
             &scene.uniform_blocks,
-            SceneBlocks::view(race.viewed_slot()),
+            SceneBlocks::view(race.view.viewed_slot(&race.core)),
             std::mem::take(&mut self.staging),
         );
         // The first view's writes land before the first submission, which is its own: only

@@ -32,7 +32,9 @@ use super::*;
 
 /// The half of a race that exists to be looked at and listened to.
 ///
-/// Reached as `Race::view`. Every field is out of the determinism hash by
+/// Held by [`Race`] as its `view` field, and read from outside the crate through
+/// [`Race::view_state`]. Its tick-time methods take the [`SimRace`] they read as an
+/// argument (see [`crate::stage`]). Every field is out of the determinism hash by
 /// construction - see the module doc comment - so a change here can move a
 /// picture and cannot move a race.
 #[derive(Debug)]
@@ -100,7 +102,7 @@ pub struct RaceView {
     pub(super) photo: Option<super::photo::Photo>,
     /// How many times a viewer has put the race back to another tick
     /// ([`Race::restore_for_viewing`]): each is a cut, so the motion blur and a temporal
-    /// upscaler do not read the jump as motion ([`Race::camera_cuts`]).
+    /// upscaler do not read the jump as motion ([`crate::RaceView::camera_cuts`]).
     pub(super) restores: u32,
     /// The external block the chase camera is currently flying, which is
     /// whichever of [`Self::chase_far`] / [`Self::chase_close`]
@@ -155,29 +157,29 @@ pub struct RaceView {
     pub(super) hd_trail: [exhaust::hd::Tube; MAX_SHIPS],
     pub(super) hd_trail_active: bool,
     pub(super) hd_trail_red: [f32; MAX_SHIPS],
-    /// The PSP-preset ribbon draws by the PS2's law; see [`Race::trail_law`].
+    /// The PSP-preset ribbon draws by the PS2's law; see [`crate::RaceView::trail_law`].
     pub(super) ps2_trail: bool,
     /// Whether a Plasma detonation plays Wipeout HD's own three-model scale
     /// ease rather than Pulse's baked anim-time scrub. See
-    /// `options::Setup::hd_plasma_blast`.
+    /// `options::ViewSetup::hd_plasma_blast`.
     pub(super) hd_plasma_blast: bool,
-    /// See `options::Setup::plasma_blast_law`.
+    /// See `options::ViewSetup::plasma_blast_law`.
     pub(super) plasma_blast_law: Option<oag_title::weapons::PlasmaBlastLaw>,
-    /// See `options::Setup::disruptor_halo_law`.
+    /// See `options::ViewSetup::disruptor_halo_law`.
     pub(super) disruptor_halo_law: Option<oag_title::weapons::DisruptorHalo>,
     /// Live Disruptor explosion halos, one per [`blast_models::PLASMA_BLAST_SLOTS`].
     pub(super) disruptor_halos:
         [Option<blast_models::DisruptorHaloBlast>; blast_models::PLASMA_BLAST_SLOTS],
-    /// See `options::Setup::disruptor_craft_law`.
+    /// See `options::ViewSetup::disruptor_craft_law`.
     pub(super) disruptor_craft_law: Option<oag_title::weapons::DisruptorCraftFx>,
     /// Each craft's live on-craft Disruptor effect, by slot.
     pub(super) disruptor_craft: [Option<blast_models::DisruptorCraftBlast>; MAX_SHIPS],
-    /// See `options::Setup::pulse_laid_pose`.
+    /// See `options::ViewSetup::pulse_laid_pose`.
     pub(super) pulse_laid_pose: bool,
-    /// See `options::Setup::laid_pose_scaled`.
+    /// See `options::ViewSetup::laid_pose_scaled`.
     pub(super) laid_pose_scaled: bool,
     /// The weapon detonations' full-screen wash; `Some` on Pulse's PSP
-    /// source alone - see `options::Setup::screen_flash`.
+    /// source alone - see `options::ViewSetup::screen_flash`.
     pub(super) screen_flash: Option<oag_fx::flash::ScreenFlash>,
     /// The washes a craft's state edges start - see `race::craft_flash`.
     pub(super) craft_flashes: super::craft_flash::CraftFlashes,
@@ -187,12 +189,12 @@ pub struct RaceView {
     /// The camera the player is cut to when their craft goes out - see
     /// `race::destroy_camera`.
     pub(super) destroy_camera: super::destroy_camera::DestroyCamera,
-    /// See `Setup::absorb_burst`.
+    /// See `ViewSetup::absorb_burst`.
     pub(super) absorb_burst: Option<oag_title::Burst>,
-    /// See `Setup::absorb_anchors`.
+    /// See `ViewSetup::absorb_anchors`.
     pub(super) absorb_anchors: Vec<Vec<Vec3>>,
     /// Every absorb burst scheduled or still playing - see
-    /// `Race::advance_absorb_bursts`.
+    /// `RaceView::advance_absorb_bursts`.
     pub(super) absorb_bursts: Vec<super::absorb::PendingAbsorb>,
     /// How many of them have started, ever - a count the tests read, since
     /// the stage's own is shared with every other effect in the race.
@@ -216,14 +218,14 @@ pub struct RaceView {
     pub(super) absorb_shell: [oag_fx::absorb_shell::AbsorbShell; MAX_SHIPS],
     /// Origin-to-nozzle distance per craft, world units - the trail-hit reach.
     pub(super) hull_reach: [f32; MAX_SHIPS],
-    /// `--trail-sparks`: see [`Race::force_trail_sparks`].
+    /// `--trail-sparks`: see [`crate::RaceView::force_trail_sparks`].
     pub(super) trail_sparks: bool,
-    /// [`Setup::campaign_event`]: what the HUD's `RaceXPTxt` and `ObjectiveTxt` ask.
+    /// [`ViewSetup::campaign_event`]: what the HUD's `RaceXPTxt` and `ObjectiveTxt` ask.
     pub(super) campaign_event: bool,
     /// Who is inside whose trail, one bit per intruder; level, not edge.
     pub(super) trail_inside: [u8; MAX_SHIPS],
     /// Per owner, the intruders whose lent burst sits out this tick: see
-    /// [`Race::trail_hit_due`].
+    /// [`crate::RaceView::trail_hit_due`].
     pub(super) trail_hit_rest: [u8; MAX_SHIPS],
     pub(super) hd_flame: [exhaust::hd::Flame; MAX_SHIPS],
     pub(super) hd_sprite: [exhaust::hd::Sprite; MAX_SHIPS],
@@ -248,7 +250,7 @@ pub struct RaceView {
     pub(super) huds: [super::slot_hud::SlotHud; MAX_SHIPS],
     /// Whether a craft-to-craft contact resolved on `slot` last tick and no shield
     /// swallowed it: the pair path's twin of the wall's `craft+0x860 & 0x20`
-    /// spoil, read and cleared by `Race::observe_lap`. Render-side, out of the hash.
+    /// spoil, read and cleared by `Stage::observe_lap`. Render-side, out of the hash.
     pub(super) pair_spoil: [bool; MAX_SHIPS],
     /// The lap-line time gap, on and off with the primary slot's lap watch.
     pub(super) split_gap: Option<super::split_gap::SplitGap>,
@@ -262,12 +264,12 @@ pub struct RaceView {
     /// land, at which point the locator moves with the model rather than with the
     /// race.
     pub(super) nozzles: Vec<Option<Vec3>>,
-    /// The engine light per slot (HD, 2048, Omega) - see [`Setup::engine_lights`] and
+    /// The engine light per slot (HD, 2048, Omega) - see [`ViewSetup::engine_lights`] and
     /// `race::engine_light`. Render-side, out of the hash.
     pub(super) engine_lights: Vec<Option<oag_livery::engine_light::EngineLight>>,
     /// The circuit's `"Lighting.Enable spu vertex lights"`, on by default.
     pub(super) spu_vertex_lights: bool,
-    /// Pulse's point and spot lights for a hull, see [`Setup::hull_points`].
+    /// Pulse's point and spot lights for a hull, see [`ViewSetup::hull_points`].
     pub(super) hull_points: oag_mesh::mesh_render::HullPointLights,
     /// Whether the weapons add their point lights; see `race::weapon_light`.
     pub(super) hd_weapon_lights: bool,
@@ -279,9 +281,9 @@ pub struct RaceView {
     /// Authored hull spark anchors per slot, model space.
     pub(super) spark_anchors: Vec<Vec<Vec3>>,
     /// The `Ship Collision Fx` locators in model space - see
-    /// [`Setup::collision_fx`].
+    /// [`ViewSetup::collision_fx`].
     pub(super) collision_fx: Vec<oag_livery::SparkAnchor>,
-    /// Every `.pob` this race loaded - see [`Setup::effects`].
+    /// Every `.pob` this race loaded - see [`ViewSetup::effects`].
     pub(super) effects: psys::Library,
     /// Each [`Trigger`] resolved against [`Self::effects`] once at load.
     pub(super) handles: EffectHandles,
@@ -324,7 +326,7 @@ pub struct RaceView {
     pub(super) quake_effect: Option<psys::Playing>,
     /// Per [`oag_gameplay::World::repulsers`] slot, the four instances a live
     /// Repulser carries: its blast, its forward and backward wave, then its
-    /// fork wave. See `Race::advance_repulser_visual`.
+    /// fork wave. See `RaceView::advance_repulser_visual`.
     pub(super) repulser_effects:
         [[Option<psys::Playing>; 4]; oag_weapons::projectile::repulser::POOL_SIZE],
     /// Per [`oag_gameplay::World::repulsers`] slot, its field model's eases -
@@ -358,7 +360,7 @@ pub struct RaceView {
     /// on any craft whose held-weapon id is the LeachBeam's `10`, and despawns
     /// it the moment that stops being true, so a player sees the pickup
     /// charging before they ever press fire, and so does every opponent holding
-    /// one; see [`Race::advance_leach_beam_visual`].
+    /// one; see [`crate::RaceView::advance_leach_beam_visual`].
     pub(super) leach_charge_effect: [Option<psys::Playing>; MAX_SHIPS],
     /// The LeachBeam ribbon's own render-side state - the amplitude table and
     /// scroll phase [`oag_weapons::projectile::leach_beam::Beam`]
@@ -389,20 +391,20 @@ pub struct RaceView {
     /// The Plasma's own render-side detonation instances, one per
     /// [`blast_models::PLASMA_BLAST_SLOTS`] - see that module's own doc
     /// comment for why this lives here rather than in `World`, and
-    /// [`Race::spawn_plasma_blast_model`] for what fills a slot.
+    /// [`crate::RaceView::spawn_plasma_blast_model`] for what fills a slot.
     pub(super) plasma_blasts: [Option<blast_models::PlasmaBlast>; blast_models::PLASMA_BLAST_SLOTS],
     /// The Bomb's own render-side detonation instances, one per
     /// [`bomb_blast::BOMB_BLAST_SLOTS`] - see that module's own doc comment,
-    /// and [`Race::spawn_bomb_blast_model`] for what fills a slot.
+    /// and [`crate::RaceView::spawn_bomb_blast_model`] for what fills a slot.
     pub(super) bomb_blasts: [Option<bomb_blast::BombBlast>; bomb_blast::BOMB_BLAST_SLOTS],
     /// Wipeout HD's Bomb detonations, a pool of their own: eleven drawables a
     /// blast, so [`bomb_blast::hd::SLOTS`] of them rather than a projectile
     /// pool's worth.
     pub(super) hd_bomb_blasts: [Option<bomb_blast::hd::HdBlast>; bomb_blast::hd::SLOTS],
     /// Whether a Bomb detonation plays HD's blast object rather than
-    /// Pulse's. See `options::Setup::hd_bomb_blast`.
+    /// Pulse's. See `options::ViewSetup::hd_bomb_blast`.
     pub(super) hd_bomb_blast: bool,
-    /// See `options::Setup::bomb_shockwave_fades`.
+    /// See `options::ViewSetup::bomb_shockwave_fades`.
     pub(super) bomb_shockwave_fades: bool,
     /// Wipeout HD's Missile explosions, a pool of the original's sixteen. See
     /// [`missile_blast`].
@@ -411,24 +413,24 @@ pub struct RaceView {
     /// draws none. See [`missile_blast::streaks`].
     pub(super) hd_missile_streaks: Option<missile_blast::streaks::Streaks>,
     /// Whether a Missile that reaches a craft plays HD's explosion model. See
-    /// `options::Setup::hd_missile_blast`.
+    /// `options::ViewSetup::hd_missile_blast`.
     pub(super) hd_missile_blast: bool,
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     pub(super) stage_rng: Rng,
-    /// The decoded sound cues, straight out of [`Setup::sounds`]. Data, not a
+    /// The decoded sound cues, straight out of [`ViewSetup::sounds`]. Data, not a
     /// device - the mixer and the held voices are [`oag_sound::Audio`]'s.
     pub(super) sounds: oag_sound::sfx::Banks,
     /// The circuit's own authored emitters, straight out of
-    /// [`Setup::track_emitters`]. Data, on the same terms [`Self::sounds`] is:
+    /// [`ViewSetup::track_emitters`]. Data, on the same terms [`Self::sounds`] is:
     /// the held voices they open live in [`oag_sound::Audio`].
     pub(super) track_emitters: oag_sound::sfx::TrackEmitters,
-    /// Zone mode's milestone announcer, straight out of [`Setup::announcer`].
+    /// Zone mode's milestone announcer, straight out of [`ViewSetup::announcer`].
     pub(super) announcer: oag_sound::sfx::Announcer,
     /// Zone mode's speed-class announcer, straight out of
-    /// [`Setup::class_announcer`].
+    /// [`ViewSetup::class_announcer`].
     pub(super) class_announcer: oag_sound::sfx::ClassAnnouncer,
-    /// [`Setup::rumble`].
+    /// [`ViewSetup::rumble`].
     pub(super) rumble: oag_tables::rumble::Library,
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///
@@ -486,7 +488,7 @@ pub struct RaceView {
     ///
     /// A setter for the same reason [`Race::set_boost_fov_kick`] is one - it is
     /// a preference out of the settings file and a headless race has none - but
-    /// unlike the kick it is read by [`Race::update_sight`] rather than by the
+    /// unlike the kick it is read by [`crate::RaceView::update_sight`] rather than by the
     /// camera, because a reticle drawn with the authored field while the player
     /// widened theirs sits off the craft it is supposed to be over. Defaults to
     /// [`oag_display::display::Fov::AUTHORED`], which is the identity.

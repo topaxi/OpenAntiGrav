@@ -198,7 +198,7 @@ of anything beyond the string beside it.
 `docs/formats/pob.md`'s 35-name list and in the 24-entry full-path table at
 `0x08a7c3e4`, and **no read call site plays it**. Whether it is the muzzle
 flash, the detonation, or the charge-up the section below is about, is open. It
-is deliberately not guessed at: `Race::blast_for` returns `None` for the Plasma,
+is deliberately not guessed at: `RaceView::blast_for` returns `None` for the Plasma,
 which is the honest "not implemented" state and not "it does not explode" - the
 damage and impulse in `oag_weapons::projectile::blast` still land.
 
@@ -514,7 +514,7 @@ corroboration, not the same finding counted twice. This engine already
 modelled the byte as `oag_display::CameraView::draws_own_ship` before this
 page ever asked what `+0x6d` was for, so the Plasma's own consumer is a third
 site rather than a new one - `weapons::visuals::plasma_flare_scale` now takes
-a `cockpit` parameter, `projectile.owner == 0 && !Race::draws_own_ship()`,
+a `cockpit` parameter, `projectile.owner == 0 && !RaceView::draws_own_ship()`,
 since the flag is only ever written for the player's own craft (an
 opponent's charging bolt reads a byte the original never sets).
 
@@ -665,7 +665,7 @@ same string run (`0x08a7c190`), which is a neighbour reading and nothing more -
 it is named here so the next person to open the Bomb's teardown knows the
 string exists.
 
-**What this engine draws.** `Race::blast_for` now returns `WO_PLASMA_FLASH`
+**What this engine draws.** `RaceView::blast_for` now returns `WO_PLASMA_FLASH`
 for the Plasma, at the impact point, for every ending - the teardown pass does
 not branch on what was struck. The three models are **not** drawn: nothing is
 substituted for them, which is the honest partial rather than an invention.
@@ -1300,7 +1300,7 @@ here since the Bomb's teardown is outside this page's own function set.
   match, since that raise was recorded there before but never actually
   applied). `weapons::visuals::plasma_flare_scale` now takes the `cockpit`
   parameter this page's own "not ported" note used to flag as unread -
-  `projectile.owner == 0 && !Race::draws_own_ship()`, since the byte is only
+  `projectile.owner == 0 && !RaceView::draws_own_ship()`, since the byte is only
   ever written for the player's own craft.
 - **2026-09-16, later pass.** A direct craft hit is a third ending the
   morning pass did not enumerate. `Plasmas_Update`'s own `if (p->flags & 1)`
@@ -1434,7 +1434,7 @@ struct nor `+0x60`'s exact meaning ("local player index", guessed) is
 corroborated anywhere else, so it is left as `FUN_0883e37c` rather than
 renamed on one reading.
 
-**Ported 2026-10-30 (`pulse-plasma-craft-hit`).** `Race::plasma_craft_hit_blast_point`
+**Ported 2026-10-30 (`pulse-plasma-craft-hit`).** `RaceView::plasma_craft_hit_blast_point`
 (`crates/raceplay/src/weapons/visuals.rs`) returns the struck craft's body position for a
 Plasma impact with `struck: Some(_)`, and `Race::tick` plays a second `note_blast` there on top
 of the bolt's own: each is a model blast plus its `WO_PLASMA_FLASH` and screen flash. A wall hit
@@ -1496,7 +1496,7 @@ Re-confirmed: the first flash peak matches within 3 counts per channel (239,210,
 | 2 | (`0x0885f680`) Blast tail, whole frame, k96-140: purple lingers longer (R at k120 190 against 125, B 238 against 188) | 87,625 | 22.2 | 1.95 M | The same three models; the scrubbed baked animation or the tint (0.07 on the halo only) decays faster in ours | re-first: conf 40 |
 | 3 | (`Plasma_Init` `0x0885bd18`, texture bind `FUN_08916610`) Bolt head and charge glow, head box (200,112,90,80), k36-72 (k64-72: 40.6): the original is a **growing purple orb with a dark core and swirling arcs, about 50 px at k44-72**; ours is a 6 px white-blue star and one thin arc | 7,200 | 32.8 | 0.24 M (box) | `WO_PLASMA_HEAD`: root emitter (2x2 atlas, 39 tick life) and `plasma_spikes` (4 per tick, 10 tick life, cap 256) plus three child sprites. The charge scale `(1 - remaining) * 0.75` is ported, yet ours does not grow. **The root emitter's texture is the open item** (`oag_pob::texture`: its slot names `shuriken_trail_anim.tga`, the positional texture is a dark arc pattern): the dark core and the arc ring are probably it | re-first: needs a GE dump of the head's prims at fire+36 (recipe below), conf 55 |
 | 4 | **Closed 2026-10-31, see "the detonation leg fixed" below.** (`Plasma_SpeedForClass` `0x0885c5a4`, `Plasma_Update` `0x0885c6cc`) Detonation timing: ours 3 ticks early (73 against 76 ticks after the press) | whole frame | 26 against 10.6 aligned | | The bolt's flight: original launches at +59 and detonates at +76 (17 frames), ours 12-13. The launch ramp and speed law are read (`Plasma_SpeedForClass`, this page); which one is short is not isolated | ready-to-wire after one probe on ours; conf 60 |
-| 5 | (`Plasma_SweepCraftHit` `0x0886afb8`, `Plasmas_Update` `0x0886b490`) Craft hit: **not captured** (Time Trial has no opponent, and the bolt is not aimed) | | | | Two `Plasma_SpawnDetonation` calls (the struck craft's body position, then the bolt's), read at conf 88 above; ours spawns **one** (`Race::blast_for` returns a single `(Trigger, Vec3)`, `ignite_blast` spawns one model blast) | ready-to-wire, about 1 h with a test; conf 85 |
+| 5 | (`Plasma_SweepCraftHit` `0x0886afb8`, `Plasmas_Update` `0x0886b490`) Craft hit: **not captured** (Time Trial has no opponent, and the bolt is not aimed) | | | | Two `Plasma_SpawnDetonation` calls (the struck craft's body position, then the bolt's), read at conf 88 above; ours spawns **one** (`RaceView::blast_for` returns a single `(Trigger, Vec3)`, `ignite_blast` spawns one model blast) | ready-to-wire, about 1 h with a test; conf 85 |
 
 Not findings: the HUD weapon hexagon (ours keeps the held-pickup icon because `--give` refills
 the slot, as the Rocket's pair found); the "Running slow" toast on some original frames
@@ -2002,10 +2002,10 @@ were not byte-matched, but they need not be: `WO_PLASMA_FLASH` has two emitters,
 updates after the burst the glow quad is **125.2 x 66.8** units (the dump's 125 x 67) and the root
 is 192 alpha-over vertices (the dump's prim 62 x 35, ours 62.9 x 31.5). Confidence **85** (two
 sizes and a count agree, blend class and texture shapes agree; the texel bytes were not compared).
-The effect is the one `Race::blast_for` already spawns at the detonation, so nothing is left to wire:
+The effect is the one `RaceView::blast_for` already spawns at the detonation, so nothing is left to wire:
 the whole-frame onset is the known one-shot lateness (ours k79 at 228,189,244 against the
 original's k78 ramping 209 to 239 at k80), which `pulse-plasma-timing` traced to the `391 + k`
-mapping. Race severity: `Race::ignite_blast` plays the effect at 1.0, the severity measured here. Test:
+mapping. Race severity: `RaceView::ignite_blast` plays the effect at 1.0, the severity measured here. Test:
 `plasma_blast_models_ground_truth::the_onset_flash_of_the_original_is_the_plasma_flash_effect` (disc;
 it pins the effect's sizes and counts to the dump, and passes on `main` too: not a red-before test). The onset whole-frame metric (k78 and k80, `weapon-pair-score.py`): 1,002,886 before,
 982,035 after (the arcs' ride only).
@@ -2280,7 +2280,7 @@ the body on the next frame) is this node one frame earlier: 4.24 minus one craft
 
 Wired: `oag-vex`'s version 6 table names the class (`Classes::ship_muzzle`; Pure's version 4 id, `0x394`, was recovered afterwards),
 `oag-livery` reads the locator beside the engine flare (`Livery::muzzle`), and a charging Plasma's flare anchor is the
-slot's model matrix (0.75 rows, `MODEL_YAW`) times that locator (`Race::muzzle_of`), on the source whose head rides
+slot's model matrix (0.75 rows, `MODEL_YAW`) times that locator (`RaceView::muzzle_of`), on the source whose head rides
 its owner's frame (Pulse's PSP file); a hull with none keeps the bolt's hold point. `plasma_ride_scale` is 0.75 for the
 whole life of the head. Tests: `a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node` (red with the anchor
 dropped: 2.23 against 4.24), `the_plasma_heads_matrix_carries_the_craft_scale_through_the_charge`, and

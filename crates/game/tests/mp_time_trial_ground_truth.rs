@@ -35,7 +35,7 @@ fn people_race(mode: oag_race::Mode, people: usize) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     oag_game::split_screen::apply(&mut race, people, oag_render::viewport::Cut::Horizontal);
     Some(race)
 }
@@ -163,7 +163,7 @@ fn two_windows_are_the_multiplayer_time_trial_too() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         let layout = oag_game::split_screen::deal(2, 2, oag_render::viewport::Cut::Horizontal);
         assert_eq!(oag_game::split_screen::apply_windows(&mut race, &layout), 2);
         race
@@ -174,7 +174,11 @@ fn two_windows_are_the_multiplayer_time_trial_too() {
     assert_eq!(world.human_slots().count(), 2, "both flown by a person");
     assert!(race.windowed());
     assert_eq!(race.core.sim.people(), 2);
-    assert_eq!(race.viewport_count(), 2, "the views the records gate reads");
+    assert_eq!(
+        race.view_state().viewport_count(),
+        2,
+        "the views the records gate reads"
+    );
 
     let apart = |race: &mut race::Race| {
         let there = race.core.sim.world.ships[0].physics.body.position;

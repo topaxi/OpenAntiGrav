@@ -251,6 +251,11 @@ impl Server {
         };
         let hash = crate::fair::params_hash(&job.params);
         let race_params = job.params.clone();
+        let host_build = self
+            .rooms
+            .edition_of(host, &race_params.title)
+            .map(|e| e.build.clone())
+            .unwrap_or_default();
         if let Some(rec) = self.hosts.get(&host) {
             let seated = seats
                 .iter()
@@ -259,7 +264,14 @@ impl Server {
                 .collect();
             self.referee.races.insert(
                 room,
-                super::referee::RaceCase::new(host, rec.key, rec.addr, race_params, seated),
+                super::referee::RaceCase::new(
+                    host,
+                    rec.key,
+                    rec.addr,
+                    host_build,
+                    race_params,
+                    seated,
+                ),
             );
         }
         log::info!(

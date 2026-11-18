@@ -434,7 +434,7 @@ for a quarter of a second. `FUN_0883e064` arms `(0.3, 0.4, camera, 3)` at state 
 
 **Ported for a PSP disc only**: the aim point was read off the PSP's `track.vex` and the PS2's
 was not looked at, so `race::destroy_camera` keys on the loader's `pulse_psp` flag. The cut
-counts as a camera cut for the temporal upscaler's history (`Race::camera_cuts`); the motion
+counts as a camera cut for the temporal upscaler's history (`RaceView::camera_cuts`); the motion
 blur is stateless and smears the cut frame and the largest shake frames as it does a respawn.
 
 **Not read or not ported.** The camera hands over to another craft after ten seconds
@@ -736,7 +736,7 @@ What this section is for instead is the two facts underneath it that the
 projection genuinely does depend on, and that were inferred before and are
 measured now: the fov field is **vertical degrees**, and the aspect is a
 hardcoded **480.0/272.0**. Both are literals in `Camera_PublishTripod`, and
-both are already what `Race::projection` assumes.
+both are already what `RaceView::projection` assumes.
 
 ## The 3/4 factor is `g_craft_scale`, a code literal, and it is the scale this project already knew
 

@@ -85,6 +85,8 @@ pub(super) struct RaceCase {
     pub(super) host_addr: SocketAddr,
     pub(super) params: RaceParams,
     pub(super) hash: [u8; 32],
+    /// The build the host said at its hello (`Edition::build`), empty when it named none.
+    pub(super) host_build: String,
     /// `(client, name, player key)` by seat.
     pub(super) seats: Vec<(ClientId, String, [u8; 32])>,
     pub(super) launched: Instant,
@@ -99,6 +101,7 @@ impl RaceCase {
         host: ClientId,
         host_key: [u8; 32],
         host_addr: SocketAddr,
+        host_build: String,
         params: RaceParams,
         seats: Vec<(ClientId, String, [u8; 32])>,
     ) -> Self {
@@ -108,6 +111,7 @@ impl RaceCase {
             host_addr,
             hash: crate::fair::params_hash(&params),
             params,
+            host_build,
             seats,
             launched: Instant::now(),
             up: None,
@@ -342,6 +346,19 @@ impl Server {
         );
         match proof.claim {
             Claim::Desync => {
+                // A re-simulation by this build says nothing about a host running another one.
+                let ours = self.rooms.own_build();
+                if race.host_build != ours {
+                    let why = format!(
+                        "the host runs another build ({} vs {ours})",
+                        if race.host_build.is_empty() {
+                            "unknown"
+                        } else {
+                            &race.host_build
+                        }
+                    );
+                    return self.decide(&case, Verdict::NotCheckable(why));
+                }
                 if self.referee.queue.len() >= MAX_QUEUED {
                     let why = "the lobby is judging other reports: try later".into();
                     return self.refuse_report(id, room, &case.reporter, why);

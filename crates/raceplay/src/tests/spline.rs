@@ -125,12 +125,16 @@ fn a_track_with_no_ring_still_gets_every_sample_in_file_order() {
 #[test]
 fn an_ai_index_reads_the_sample_the_lap_puts_there() {
     let ai = split_track();
-    let mut race = Race::start(Setup {
-        ai: ai.clone(),
-        spline: Spline::from_track(&ai),
-        course: Course::from_track(&ai, None),
-        ..setup(hulled_handling())
-    });
+    let mut race = Race::start(
+        SimSetup {
+            ai: ai.clone(),
+            spline: Spline::from_track(&ai),
+            course: Course::from_track(&ai, None),
+            ..setup(hulled_handling())
+        },
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ships[0].active = true;
 
     let length = race.core.sim.racing_line().len();
@@ -200,7 +204,11 @@ fn a_local_search_that_misses_reports_a_distance_the_caller_will_reject() {
 /// nothing, so the visible set becomes everything.
 #[test]
 fn a_position_off_the_track_refuses_to_name_a_section() {
-    let race = Race::start(setup(Handling::default()));
+    let race = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let spline = race.core.sim.spline();
     let sample = *spline.sample(4).expect("a sample");
     let on_line = Vec3::from_array(sample.pos);

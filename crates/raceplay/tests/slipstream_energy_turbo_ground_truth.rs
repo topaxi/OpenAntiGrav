@@ -53,7 +53,7 @@ fn both_mods_hand_out_and_use_their_own_pickups_in_one_race_with_no_fault() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     assert_eq!(
         race.core.sim.extension_reports().len(),

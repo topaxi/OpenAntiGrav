@@ -1,4 +1,4 @@
-//! The trail-hit trigger's state machine: `Race::advance_trail_hits`.
+//! The trail-hit trigger's state machine: `RaceView::advance_trail_hits`.
 //!
 //! **What is measured and what is not.** That a craft flying through an engine
 //! trail sparks is read out of `EBOOT.elf` - the flag, the consumer, the
@@ -27,7 +27,7 @@ fn race_with_a_trail() -> Race {
 /// Sits slot 1 at `at` and runs one tick of the trigger.
 fn place_and_step(race: &mut Race, at: Vec3) {
     race.core.sim.world.ships[1].physics.body.position = at;
-    race.advance_trail_hits();
+    race.view.advance_trail_hits(&race.core);
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn the_mask_tracks_presence_every_tick_rather_than_only_its_edge() {
 fn a_craft_is_never_inside_its_own_trail() {
     let mut race = race_with_a_trail();
     race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-    race.advance_trail_hits();
+    race.view.advance_trail_hits(&race.core);
     assert_eq!(race.view.trail_inside[0] & 0b1, 0);
 }
 
@@ -498,7 +498,7 @@ fn a_detonation_started_while_trail_hits_stream_still_plays_to_completion() {
     let mut rng = oag_core::Rng::new(3);
     let dt = 1.0 / oag_fx::psys::TICK_HZ;
     let mut step = |race: &mut Race| {
-        race.advance_trail_hits();
+        race.view.advance_trail_hits(&race.core);
         race.view.stage.advance(dt, &mut rng);
     };
 

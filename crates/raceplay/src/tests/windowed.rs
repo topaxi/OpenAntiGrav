@@ -31,7 +31,7 @@ fn each_window_cuts_its_own_seats_by_its_own_cut() {
     assert!(!race.windowed());
 
     race.set_windows(two_and_two());
-    assert_eq!(race.viewport_count(), 4, "four cameras, four seats");
+    assert_eq!(race.view.viewport_count(), 4, "four cameras, four seats");
     assert_eq!(race.window_drawn(0), vec![0, 1]);
     assert_eq!(race.window_drawn(1), vec![2, 3]);
     let left_right = race.window_rects(0, area);
@@ -131,7 +131,7 @@ fn removing_a_window_keeps_the_others_and_never_removes_window_one() {
     assert_eq!(race.windows().len(), 1);
     assert_eq!(race.window_drawn(0), vec![0, 1]);
     assert_eq!(
-        race.viewport_count(),
+        race.view.viewport_count(),
         4,
         "the closed window's seats are still in the race"
     );
@@ -220,7 +220,7 @@ fn draw_window_with(
     );
     queue.submit(Some(encoder.finish()));
     assert_eq!(
-        race.extra_viewpoint(),
+        race.view.extra_viewpoint(),
         None,
         "window {window} puts the player's view back"
     );
@@ -475,9 +475,9 @@ fn a_demo_watched_in_three_windows_follows_three_craft_and_moves_no_hash() {
     let views: Vec<_> = drawn
         .iter()
         .map(|seats| {
-            watched.set_viewpoint(seats[0]);
-            let view = watched.view();
-            watched.reset_viewpoint();
+            watched.view.set_viewpoint(&watched.core, seats[0]);
+            let view = watched.view.view(&watched.core);
+            watched.view.reset_viewpoint();
             view
         })
         .collect();
@@ -491,10 +491,10 @@ fn a_demo_watched_in_three_windows_follows_three_craft_and_moves_no_hash() {
         .collect();
     assert_eq!(
         ten[0],
-        ten[watched.viewport_count()],
+        ten[watched.view.viewport_count()],
         "more windows than cameras cycle the craft"
     );
     watched.watch_in_windows(1);
     assert!(!watched.windowed());
-    assert_eq!(watched.viewport_count(), 1);
+    assert_eq!(watched.view.viewport_count(), 1);
 }

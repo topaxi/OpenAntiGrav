@@ -31,7 +31,7 @@ fn loaded(mode: oag_race::Mode, seed: u64) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// Pulse names its `WeaponAIstats.xml`, the loader reads it, and a race runs

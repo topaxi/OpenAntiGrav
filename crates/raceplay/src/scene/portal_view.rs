@@ -100,16 +100,18 @@ impl Scene {
         if self.mod_shaders.borrow().is_none() {
             return;
         }
-        let drawing = race.viewed_slot();
+        let drawing = race.view.viewed_slot(&race.core);
         let wanted = views.iter().find_map(|&(slot, rect)| {
             let request = race.core.sim.extension_portal_view(slot)?;
             if let Some(held) = self.held_snapshot(slot, &request) {
                 self.portal_engine.set(Some((slot, held)));
                 return None;
             }
-            race.set_viewpoint(slot);
+            race.view.set_viewpoint(&race.core, slot);
             let aspect = rect.2.max(1.0) / rect.3.max(1.0);
-            let projection = race.projection(aspect, self.far, settings.fov);
+            let projection = race
+                .view
+                .projection(&race.core, aspect, self.far, settings.fov);
             let shot = race.portal_shot(&request, projection)?;
             if self.reach_masked_out(race, &shot.reach, projection, settings) {
                 return None;
@@ -124,7 +126,7 @@ impl Scene {
         if self.portal_engine.get().is_none()
             && let Some((slot, request, shot, pass)) = wanted
         {
-            race.set_viewpoint(slot);
+            race.view.set_viewpoint(&race.core, slot);
             self.encode_portal_view(device, queue, race, &shot, pass, settings);
             self.portal_engine
                 .set(Some((slot, shot.engine_view_projection)));
@@ -136,7 +138,7 @@ impl Scene {
                 });
             }
         }
-        race.set_viewpoint(drawing);
+        race.view.set_viewpoint(&race.core, drawing);
     }
 
     /// Whether the viewed seat's own visible sets (the ones its scene pass is masked with) leave
@@ -157,7 +159,7 @@ impl Scene {
             return false;
         };
         if visibility.has_sections() {
-            let visible = race.visible_set(visibility, &(projection * race.view()));
+            let visible = race.visible_set(visibility, &(projection * race.view.view(&race.core)));
             if !visible.allows(reach.sections) {
                 return true;
             }
@@ -275,6 +277,6 @@ impl Scene {
     /// texture is not this view's.
     pub(crate) fn portal_engine_of(&self, race: &Race) -> Option<[[f32; 4]; 4]> {
         let (slot, matrix) = self.portal_engine.get()?;
-        (slot == race.viewed_slot()).then(|| matrix.to_cols_array_2d())
+        (slot == race.view.viewed_slot(&race.core)).then(|| matrix.to_cols_array_2d())
     }
 }

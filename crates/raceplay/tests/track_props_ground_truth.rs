@@ -229,7 +229,7 @@ fn run(track: &Path, with: Vec<race::extensions::Source>) -> Option<(Vec<Tick>, 
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     let pads = race.core.sim.speedup_pads().to_vec();
     let mut input = oag_gameplay::input::Input::new();
@@ -446,7 +446,7 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        let race = race::Race::start(loaded.setup);
+        let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         let length = race.core.sim.course().expect("a course").length();
         (
             ring_point_at(&race, 150.0),
@@ -466,7 +466,7 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     let mut input = oag_gameplay::input::Input::new();
     let mut tick = |race: &mut race::Race| {

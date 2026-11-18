@@ -372,7 +372,7 @@ the backstop for a guest written without the SDK.
   screen. Guests format numbers and times with `oag_ext::Line`.
 - **`set-weather`, `set-sun`, `grade-sky`** are race-wide (slot 0), held in
   `Extensions` (`Sky`) for the tick, cleared at the next call, and read by the view half:
-  `Race::advance_weather` drives the track module's rain (`Weather::drive`), `Scene`'s lens
+  `RaceView::advance_weather` drives the track module's rain (`Weather::drive`), `Scene`'s lens
   flare placement scales the rings' alpha, and the sky draw writes `Uniforms::sky_grey`.
 - None of the outputs is hashed. The README's "What is built" has the table.
 

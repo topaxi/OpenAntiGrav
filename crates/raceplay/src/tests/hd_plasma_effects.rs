@@ -30,8 +30,8 @@ fn grid_with_a_bolt(hd: bool, charge: f32) -> Race {
 }
 
 fn advance(race: &mut Race) {
-    race.advance_projectile_flares();
-    race.advance_plasma_launch();
+    race.view.advance_projectile_flares(&race.core);
+    race.view.advance_plasma_launch(&race.core);
 }
 
 /// **Red to green.** `Plasma_Init` starts the wind-up effect with the bolt, and
@@ -79,7 +79,7 @@ fn a_title_with_neither_effect_plays_none() {
 fn the_bolt_ball_is_squashed_along_its_heading_at_the_measured_scale() {
     let race = grid_with_a_bolt(false, 0.0);
     let bolt = race.core.sim.world.projectiles.slots[0];
-    let matrix = race.projectile_matrix(Weapon::Plasma, 0, &bolt);
+    let matrix = race.view.projectile_matrix(Weapon::Plasma, 0, &bolt);
     let (x, y, z) = (
         matrix.x_axis.truncate(),
         matrix.y_axis.truncate(),

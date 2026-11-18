@@ -123,7 +123,7 @@ fn blades(race: &race::Race) -> Vec<oag_weapons::projectile::Projectile> {
 /// A race with the craft already up to speed, and full throttle to keep it
 /// there.
 fn moving(loaded: race::Loaded) -> (race::Race, oag_gameplay::InputSnapshot) {
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));
@@ -142,7 +142,7 @@ fn moving(loaded: race::Loaded) -> (race::Race, oag_gameplay::InputSnapshot) {
 #[ignore = "needs a disc image in data/images/"]
 fn the_discs_shuriken_block_decodes_with_its_blast_pair() {
     let Some(loaded) = single_race() else { return };
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let shuriken = race
         .core
         .sim

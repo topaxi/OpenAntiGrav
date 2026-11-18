@@ -48,7 +48,7 @@ fn residuals(disc: &str, track: &str) -> Option<Fired> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let dt = race.core.sim.dt();
     let mut input: Option<Input> = None;
     let mut seen = [None::<u32>; oag_weapons::projectile::MAX_PROJECTILES];
@@ -177,7 +177,7 @@ fn a_missile_fired_on_a_bank_is_born_riding_the_located_tracks_up() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     let stats = race
         .core

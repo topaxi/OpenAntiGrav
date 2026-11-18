@@ -8,6 +8,10 @@
 //! [`oag_title::weapons::WeaponModels::missile_trail`] is set and whose texture and
 //! ramp load draws it, which today is HD alone.
 
+#[cfg(feature = "view")]
+use crate::RaceView;
+#[cfg(feature = "view")]
+use crate::SimRace;
 use oag_core::math::Vec3;
 use oag_fx::exhaust::FlareTexture;
 use oag_fx::fat_line::{Ribbon, Spec};
@@ -154,6 +158,28 @@ impl Smoke {
 }
 
 impl Race {
+    /// Every live element's triangle list, built for a camera at `eye`, alphas
+    /// from `ramp`. Empty where the title draws no Missile ribbons.
+    #[must_use]
+    pub fn missile_smoke_vertices(&self, eye: Vec3, ramp: &OpacityRamp) -> Vec<GpuVertex> {
+        let mut out = Vec::new();
+        if let Some(smoke) = &self.view.missile_smoke {
+            for ribbon in smoke.stubs.iter().chain(&smoke.helices).flatten() {
+                ribbon.extend_vertices(&mut out, eye, ramp);
+            }
+        }
+        out
+    }
+
+    /// How many elements are alive, owned or ageing out.
+    #[must_use]
+    pub fn missile_smoke_live(&self) -> usize {
+        self.view.missile_smoke.as_ref().map_or(0, Smoke::live)
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
     /// One tick of every missile's ribbons: `Missile`'s update pushes a node into
     /// each of its four elements at the two heads' places, then
     /// `RibbonEffects_UpdatePools` ages every element and frees the empty ones.
@@ -162,13 +188,13 @@ impl Race {
     /// ([`rocket_rows`]): **chosen, not measured**, as the head model's own placement
     /// is (`Race::missile_head_model_matrices`); the original's stores its two
     /// matrices at `missile + 0xf0` and `+0x130` (`0x0011e640`, unread).
-    pub(crate) fn advance_missile_smoke(&mut self) {
-        let dt = self.core.sim.dt;
-        let Some(smoke) = self.view.missile_smoke.as_mut() else {
+    pub(crate) fn advance_missile_smoke(&mut self, core: &SimRace) {
+        let dt = core.sim.dt;
+        let Some(smoke) = self.missile_smoke.as_mut() else {
             return;
         };
         let (stub, helix) = (spec(smoke.trail.stub), spec(smoke.trail.helix));
-        for (slot, projectile) in self.core.sim.world.projectiles.slots.iter().enumerate() {
+        for (slot, projectile) in core.sim.world.projectiles.slots.iter().enumerate() {
             if projectile.kind != Some(oag_tables::weapons::Weapon::Missile) {
                 smoke.owners[slot] = None;
                 continue;
@@ -217,24 +243,5 @@ impl Race {
                 }
             }
         }
-    }
-
-    /// Every live element's triangle list, built for a camera at `eye`, alphas
-    /// from `ramp`. Empty where the title draws no Missile ribbons.
-    #[must_use]
-    pub fn missile_smoke_vertices(&self, eye: Vec3, ramp: &OpacityRamp) -> Vec<GpuVertex> {
-        let mut out = Vec::new();
-        if let Some(smoke) = &self.view.missile_smoke {
-            for ribbon in smoke.stubs.iter().chain(&smoke.helices).flatten() {
-                ribbon.extend_vertices(&mut out, eye, ramp);
-            }
-        }
-        out
-    }
-
-    /// How many elements are alive, owned or ageing out.
-    #[must_use]
-    pub fn missile_smoke_live(&self) -> usize {
-        self.view.missile_smoke.as_ref().map_or(0, Smoke::live)
     }
 }

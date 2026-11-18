@@ -43,7 +43,7 @@ fn run(source: &std::path::Path, track: &str, class: &str) -> Run {
     if std::env::var_os("OAG_BENEATH_OFF").is_some() {
         setup.reset_triggers.beneath.enabled = false;
     }
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
     let count = race.core.sim.ship_count() as usize;
     race.core.sim.world.ships[0].active = false;
     let laps_target = race.core.sim.world.laps_target().unwrap_or(3) as usize;
@@ -275,7 +275,7 @@ fn beneath_census_all_titles() {
                 continue;
             }
         };
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         let count = race.core.sim.ship_count() as usize;
         race.core.sim.world.ships[0].active = false;
         let mut respawns = vec![0u32; count];

@@ -4,7 +4,7 @@
 //! frame as `-(+0x20)` of the record `AiTrack_LocatePosition` fills at the
 //! span's midpoint - the track's interpolated `down` axis negated - and not as
 //! world up. On a banked stretch the two differ; dropping the `orient` call in
-//! `Race::advance_quake_visual` takes this to world up everywhere. The anchor
+//! `RaceView::advance_quake_visual` takes this to world up everywhere. The anchor
 //! is the midpoint itself.
 //!
 //! **HD's** wave takes the same path, and only because its `Title` lifts the
@@ -79,7 +79,7 @@ fn lean_with_the_track(image: &str, expect: Frame) {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..5 {
         race.tick(&PlayerInputs::none());
     }

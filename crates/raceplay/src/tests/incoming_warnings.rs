@@ -23,7 +23,11 @@ fn grid_in(mode: Mode, weapon: Weapon, table: oag_tables::weapons::WeaponStats, 
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.weapons = Some(Arc::new(table));
     for _ in 0..5 {
         race.tick(&PlayerInputs::none());
@@ -39,7 +43,7 @@ fn grid_in(mode: Mode, weapon: Weapon, table: oag_tables::weapons::WeaponStats, 
 #[test]
 fn the_viewers_own_fire_raises_nothing() {
     let mut race = grid_with_fire(Weapon::Quake, one_quake_table(), 300.0);
-    race.note_incoming_fire(0, Weapon::Quake);
+    race.view.note_incoming_fire(&race.core, 0, Weapon::Quake);
     assert!(race.view.incoming_raises.is_empty());
 }
 
@@ -47,7 +51,7 @@ fn the_viewers_own_fire_raises_nothing() {
 fn a_title_without_the_law_raises_nothing() {
     let mut race = grid_with_fire(Weapon::Quake, one_quake_table(), 300.0);
     race.view.huds[0].incoming_enabled = false;
-    race.note_incoming_fire(1, Weapon::Quake);
+    race.view.note_incoming_fire(&race.core, 1, Weapon::Quake);
     assert!(race.view.incoming_raises.is_empty());
 }
 
@@ -63,7 +67,7 @@ fn only_the_racing_modes_raise() {
         (Mode::Zone, false),
     ] {
         let mut race = grid_in(mode, Weapon::Quake, one_quake_table(), 300.0);
-        race.note_incoming_fire(1, Weapon::Quake);
+        race.view.note_incoming_fire(&race.core, 1, Weapon::Quake);
         assert_eq!(!race.view.incoming_raises.is_empty(), raises, "{mode:?}");
     }
 }
@@ -71,14 +75,14 @@ fn only_the_racing_modes_raise() {
 #[test]
 fn the_raise_reaches_the_readout_unlit_then_blinks() {
     let mut race = grid_with_fire(Weapon::Quake, one_quake_table(), 300.0);
-    race.note_incoming_fire(1, Weapon::Quake);
-    race.advance_slot_huds();
+    race.view.note_incoming_fire(&race.core, 1, Weapon::Quake);
+    race.view.advance_slot_huds(&race.core);
     assert_eq!(
         race.readout().incoming.rear,
         None,
         "the raise frame is unlit"
     );
-    race.advance_slot_huds();
+    race.view.advance_slot_huds(&race.core);
     assert_eq!(
         race.readout().incoming.rear,
         Some(oag_hud::incoming::Look::Title(Icon::Quake))

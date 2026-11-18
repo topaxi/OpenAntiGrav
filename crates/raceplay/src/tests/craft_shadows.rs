@@ -62,10 +62,11 @@ fn every_craft_takes_the_square_its_distance_rank_earns() {
         &mut [],
     );
     let records = scene.craft_shadows();
-    let eye = race.camera_position();
+    let eye = race.view.camera_position(&race.core);
     let distance = |slot: usize| {
         (race
-            .ship_model_matrix_of(slot)
+            .view
+            .ship_model_matrix_of(&race.core, slot)
             .transform_point3(oag_core::math::Vec3::ZERO)
             - eye)
             .length_squared()

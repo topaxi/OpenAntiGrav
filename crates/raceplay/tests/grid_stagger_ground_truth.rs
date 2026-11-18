@@ -50,7 +50,7 @@ fn start(circuit: &Circuit) -> Option<race::Race> {
         ..race::Options::default()
     })
     .ok()?;
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 struct Slot {
@@ -146,7 +146,7 @@ fn lone_craft_respawns() {
         ..race::Options::default()
     })
     .expect("load");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for slot in 2..8 {
         race.core.sim.world.ships[slot].active = false;
     }
@@ -314,7 +314,7 @@ fn player_departures() {
                 ..race::Options::default()
             })
             .expect("load");
-            let mut race = race::Race::start(loaded.setup);
+            let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
             for slot in 1..oag_gameplay::MAX_SHIPS {
                 race.core.sim.world.ships[slot].active = false;
             }

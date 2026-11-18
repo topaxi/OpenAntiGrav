@@ -83,7 +83,7 @@ fn run(cell: &Cell) -> Vec<Craft> {
     if !cell.cage {
         setup.spline = setup.spline.clone().with_cage(None);
     }
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
     race.core.sim.world.ships[0].active = false;
     let count = race.core.sim.ship_count() as usize;
     let mut crafts = vec![Craft::default(); count];
@@ -232,7 +232,7 @@ fn lone_craft_shield() {
             ..race::Options::default()
         })
         .expect("loading");
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         for slot in 2..8 {
             race.core.sim.world.ships[slot].active = false;
         }

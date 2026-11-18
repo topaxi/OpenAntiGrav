@@ -37,7 +37,10 @@ fn started_in(track: &str, mode: oag_race::Mode) -> Option<(Race, Vec<String>)> 
     })
     .expect("loading the race");
     let report = loaded.report.clone();
-    Some((Race::start(loaded.setup), report))
+    Some((
+        Race::start(loaded.setup, loaded.view, loaded.modules),
+        report,
+    ))
 }
 
 fn cross(down: bool) -> PlayerInputs {
@@ -76,11 +79,14 @@ fn it_loops_until_a_press_and_a_held_cross_alone_does_not_skip_it() {
     // Past the 188 s of animation: a title that ended at `AnimEnd` would be over by 11,300.
     for _ in 0..12_000 {
         race.tick_intro(&cross(true));
-        assert!(race.in_intro(), "a held cross must not skip HD's flyby");
+        assert!(
+            race.view_state().in_intro(),
+            "a held cross must not skip HD's flyby"
+        );
     }
     race.tick_intro(&cross(false));
     race.tick_intro(&cross(true));
-    assert!(!race.in_intro(), "a press ends it");
+    assert!(!race.view_state().in_intro(), "a press ends it");
     assert_eq!(
         race.core.sim.state_hash(),
         before,

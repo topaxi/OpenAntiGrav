@@ -18,22 +18,23 @@ pub(super) fn local_people(views: usize, zoom: bool) -> Race {
         hulled_handling(),
         vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
+    let mut view = crate::tests::fixture_view();
     setup.mode = Mode::SingleRace;
     let effect = oag_fx::psys::Effect::parse(
         &one_emitter_pob("WO_TEST_SPARK", 0),
         oag_fx::psys::ColourScale::Full,
     )
     .expect("the hand-laid effect parses");
-    setup.handles.insert(Trigger::CollisionSpark, effect);
-    setup.zoom_ring = zoom.then_some(&oag_hd::race::ZOOM_RING);
-    setup.zoom_borrowed = zoom;
+    view.handles.insert(Trigger::CollisionSpark, effect);
+    view.zoom_ring = zoom.then_some(&oag_hd::race::ZOOM_RING);
+    view.zoom_borrowed = zoom;
     setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     for slot in 1..4 {
         race.core.sim.world.controllers[slot] = Controller::Local;
     }
@@ -51,10 +52,10 @@ fn push_toward_wall(race: &mut Race, slot: usize) {
 
 /// The shake on `slot`'s view: whether it is the picture's and not the unshaken one's.
 fn view_is_shaken(race: &Race, slot: usize) -> bool {
-    race.set_viewpoint(slot);
-    let shaken = race.view() != race.view_unshaken();
+    race.view.set_viewpoint(&race.core, slot);
+    let shaken = race.view.view(&race.core) != race.view_unshaken();
     let rotated = race.view_shake_rotation() != Mat4::IDENTITY;
-    race.reset_viewpoint();
+    race.view.reset_viewpoint();
     assert_eq!(shaken, rotated, "slot {slot}: the lens map disagrees");
     shaken
 }
@@ -155,11 +156,11 @@ fn a_seats_own_explosions_shake_its_view() {
     for views in VIEWS {
         for seat in 1..views {
             let mut race = local_people(views, false);
-            race.advance_craft_flashes();
+            race.view.advance_craft_flashes(&race.core);
             race.core.sim.world.ships[seat].physics.craft_state = CraftState::Destroyed;
-            race.advance_craft_flashes();
+            race.view.advance_craft_flashes(&race.core);
             race.core.sim.world.ships[seat].physics.craft_state = CraftState::Eliminated;
-            race.advance_craft_flashes();
+            race.view.advance_craft_flashes(&race.core);
             for view in 0..views {
                 assert_eq!(
                     view_is_shaken(&race, view),
@@ -180,9 +181,9 @@ fn a_local_seats_boost_kicks_its_own_field_of_view() {
             race.core.sim.world.ships[seat].physics.pad_timer = 1.0;
             race.tick(&PlayerInputs::none());
             let fov = |view| {
-                race.set_viewpoint(view);
-                let fov = race.extra_vertical_fov(1.6, Fov::AUTHORED);
-                race.reset_viewpoint();
+                race.view.set_viewpoint(&race.core, view);
+                let fov = race.view.extra_vertical_fov(&race.core, 1.6, Fov::AUTHORED);
+                race.view.reset_viewpoint();
                 fov
             };
             let kicked = fov(seat).expect("a view");
@@ -199,14 +200,14 @@ fn a_local_seats_boost_pulse_draws_in_its_view_alone() {
     for views in VIEWS {
         for seat in 0..views {
             let mut race = local_people(views, true);
-            race.fire_zoom_boost(seat);
+            crate::stage::stage!(race).fire_zoom_boost(&race.core, seat);
             for _ in 0..6 {
-                race.advance_zoom();
+                race.view.advance_zoom(&race.core);
             }
             for view in 0..views {
-                race.set_viewpoint(view);
+                race.view.set_viewpoint(&race.core, view);
                 let boost = race.hd_zoom_frame().expect("a ring").boost;
-                race.reset_viewpoint();
+                race.view.reset_viewpoint();
                 assert_eq!(boost > 0.0, view == seat, "{views} views: {seat} -> {view}");
             }
         }
@@ -241,18 +242,18 @@ fn the_players_screen_wash_does_not_cover_another_seats_view() {
         race.view.screen_flash = Some(oag_fx::flash::ScreenFlash::default());
         let at = race.core.sim.world.ships[0].physics.body.position;
         race.core.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
-        race.advance_craft_flashes();
+        race.view.advance_craft_flashes(&race.core);
         race.core.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
-        race.advance_craft_flashes();
+        race.view.advance_craft_flashes(&race.core);
         race.view
             .screen_flash
             .as_mut()
             .expect("a flash")
             .advance(1.0 / 60.0, at);
         for view in 0..views {
-            race.set_viewpoint(view);
+            race.view.set_viewpoint(&race.core, view);
             let wash = race.screen_wash();
-            race.reset_viewpoint();
+            race.view.reset_viewpoint();
             assert_eq!(wash.is_some(), view == 0, "{views} views, view {view}");
         }
     }

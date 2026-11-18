@@ -58,7 +58,11 @@ fn drawn(loaded: &oag_raceplay::Loaded, readout: &oag_hud::Readout) -> Vec<Strin
 /// in the order they came up, against `stored_best` ticks. A line is new when
 /// its slot held something else (or nothing) on the tick before.
 fn time_trial_ids(loaded: &oag_raceplay::Loaded, stored_best: Option<u32>) -> (Vec<String>, usize) {
-    let mut race = oag_raceplay::Race::start(loaded.setup.clone());
+    let mut race = oag_raceplay::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     race.core.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, stored_best);
     let mut ids: Vec<String> = Vec::new();
@@ -139,7 +143,11 @@ fn a_single_race_shows_the_lap_line_gap_in_the_originals_format() {
         return;
     };
     let loaded = load(&image, oag_race::Mode::SingleRace);
-    let mut race = oag_raceplay::Race::start(loaded.setup.clone());
+    let mut race = oag_raceplay::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     race.core.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, None);
     let mut gaps = Vec::new();
@@ -211,7 +219,11 @@ fn pure_raises_its_own_keys_white_and_words_the_gap_as_a_sentence() {
         oag_race::Mode::SingleRace,
         oag_pure::race::DEFAULT_TRACK,
     );
-    let mut race = oag_raceplay::Race::start(loaded.setup.clone());
+    let mut race = oag_raceplay::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     race.core.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, None);
     let mut sentences = Vec::new();
@@ -285,7 +297,11 @@ fn hd_skips_the_record_line_in_time_trial_and_a_lone_craft_stamps_nothing() {
         "{ids:?}"
     );
 
-    let mut race = oag_raceplay::Race::start(loaded.setup.clone());
+    let mut race = oag_raceplay::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     race.core.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, None);
     for tick in 0..9000 {
@@ -357,7 +373,11 @@ fn lapped(loaded: &oag_raceplay::Loaded, wav: &str, voices: bool) -> Lapped {
         oag_audio::MIN_BUFFER,
         false,
     );
-    let mut race = oag_raceplay::Race::start(loaded.setup.clone());
+    let mut race = oag_raceplay::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     race.core.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, Some(60 * 600));
     let perfect_id = loaded.hud.art.lap_hud.expect("read").perfect_lap;

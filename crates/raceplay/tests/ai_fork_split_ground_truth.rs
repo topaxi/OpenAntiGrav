@@ -41,7 +41,7 @@ fn run(source: &str, track: &str, ticks: u32, ribbon: bool) -> Option<(Forks, us
     .unwrap_or_else(|e| panic!("loading {track}: {e:#}"));
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     let count = race.core.sim.ship_count() as usize;
     assert!(count >= 2, "{track}: no field to split");
@@ -219,7 +219,7 @@ fn a_craft_shoved_onto_the_other_side_of_a_fork_follows_that_side() {
     .expect("loading 05_Track");
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
     for slot in 2..8 {
         race.core.sim.world.ships[slot].active = false;
     }

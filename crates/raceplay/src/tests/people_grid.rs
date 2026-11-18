@@ -18,7 +18,11 @@ fn race_with(people: u8) -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// Ships ordered from the back of the grid to the front.
@@ -128,7 +132,11 @@ fn head_to_head_with(people: u8) -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// The `x` of grid row `row` (1 front, 8 back) of the full grid, read off an eight-craft race.

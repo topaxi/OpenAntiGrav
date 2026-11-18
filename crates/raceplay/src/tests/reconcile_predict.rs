@@ -127,8 +127,12 @@ fn held_only(last: &InputSnapshot) -> InputSnapshot {
 }
 
 /// A race with every grid slot flown by an input stream, none by the AI.
-fn person_race(setup: &Setup) -> Race {
-    let mut race = Race::start(setup.clone());
+fn person_race(setup: &SimSetup) -> Race {
+    let mut race = Race::start(
+        setup.clone(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core
         .sim
         .set_control_scheme(oag_gameplay::ControlScheme::Veteran);
@@ -148,8 +152,12 @@ fn person_race(setup: &Setup) -> Race {
 /// the way a player holds it, because the countdown's own gate zeroes the recorded
 /// value and a stream that pressed Cross on the release tick would hand every craft
 /// the same first mispredict.
-fn record_pack(setup: &Setup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, usize) {
-    let mut race = Race::start(setup.clone());
+fn record_pack(setup: &SimSetup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, usize) {
+    let mut race = Race::start(
+        setup.clone(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let slots = race.core.sim.world.ship_count as usize;
     for slot in 0..slots {
         race.core.sim.world.controllers[slot] = Controller::Remote;
@@ -198,7 +206,7 @@ fn record_pack(setup: &Setup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, usize) 
 /// Every craft flown by a [`crate::hand::Hand`] on the driver's wants, closed loop: the
 /// stream is what a thumb on an analog pad would have sent, and the race it drives is the
 /// one it was recorded from. Also returns the laps the first craft completed.
-fn record_hand_pack(setup: &Setup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, u32) {
+fn record_hand_pack(setup: &SimSetup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, u32) {
     let (streams, lap, _) = record_hand_pack_measured(setup, ticks, false);
     (streams, lap)
 }
@@ -206,7 +214,7 @@ fn record_hand_pack(setup: &Setup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, u3
 /// [`record_hand_pack`], and how far craft 0 travelled over the run, with the hand or
 /// (`straight`) with the driver's wants passed to the sim unfiltered, as a baseline.
 fn record_hand_pack_measured(
-    setup: &Setup,
+    setup: &SimSetup,
     ticks: usize,
     straight: bool,
 ) -> (Vec<Vec<InputSnapshot>>, u32, f32) {
@@ -290,8 +298,8 @@ struct Outcome {
 /// One client against one server over the scenario. Counts only ticks from
 /// `scored_from` on, so the countdown's grid is not in the numbers.
 fn run(
-    build: fn(&Setup) -> Race,
-    setup: &Setup,
+    build: fn(&SimSetup) -> Race,
+    setup: &SimSetup,
     sc: &Scenario,
     window: usize,
     policy: Policy,
@@ -519,7 +527,7 @@ impl Pool {
     }
 }
 
-fn sweep_scenario(setup: &Setup, sc: &Scenario, pool: &mut Pool) {
+fn sweep_scenario(setup: &SimSetup, sc: &Scenario, pool: &mut Pool) {
     let scored_from = oag_race::COUNTDOWN_TICKS as usize;
     for &window in &WINDOWS {
         for policy in std::iter::once(Policy::Every).chain(THRESHOLDS.map(Policy::Threshold)) {
@@ -540,7 +548,7 @@ fn load_circuit(
     mode: Mode,
     team: Option<String>,
     seed: Option<u64>,
-) -> Option<Setup> {
+) -> Option<SimSetup> {
     crate::load(&crate::Options {
         source: image.display().to_string(),
         class: class.to_string(),
@@ -584,7 +592,15 @@ fn reconcile_predict_ai_sweep() {
             .expect("loading the circuit");
         let (streams, fractional) = record_pack(&setup, ticks);
         let slots = streams.len();
-        let hull = Race::start(setup.clone()).core.sim.world.ships[0]
+        let hull = Race::start(
+            setup.clone(),
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+        )
+        .core
+        .sim
+        .world
+        .ships[0]
             .handling
             .dimensions;
         println!("{id}: craft 0 hull {:?}", hull);
@@ -756,11 +772,11 @@ fn reconcile_predict_human_sweep() {
 
 /// [`person_race`] with the off-track rescue off, so a craft that wanders off the
 /// fixture's short straight is not teleported back and hidden behind a respawn.
-pub(super) fn held_to_the_track(setup: &Setup) -> Race {
+pub(super) fn held_to_the_track(setup: &SimSetup) -> Race {
     without_player_rescue(person_race(setup))
 }
 
-pub(super) fn fixture() -> Setup {
+pub(super) fn fixture() -> SimSetup {
     let mut handling = hulled_handling();
     handling.engine.amount = 20.0;
     handling.engine.accelcap = 1000.0;

@@ -468,19 +468,19 @@ fn the_flyby_plays_full_screen_and_the_split_starts_after_it() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
-    assert_eq!(race.viewport_count(), 2, "a two-person split");
+    assert_eq!(race.view_state().viewport_count(), 2, "a two-person split");
     assert_eq!(
         race.views_drawn(),
         2,
         "a flyby that has not begun leaves the split alone"
     );
     assert!(race.begin_intro(), "a Pulse single race opens on its flyby");
-    assert!(race.in_intro());
+    assert!(race.view_state().in_intro());
 
     let mut flyby_ticks = 0;
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         assert_eq!(race.views_drawn(), 1, "the flyby is one full-screen view");
         race.tick_intro(&PlayerInputs::none());
         flyby_ticks += 1;

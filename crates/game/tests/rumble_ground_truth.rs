@@ -248,7 +248,7 @@ mod race {
             ..oag_raceplay::Options::default()
         })
         .expect("the race loads");
-        let mut race = oag_raceplay::Race::start(loaded.setup);
+        let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
         race.core.sim.set_autopilot(true);
         let mut out = Recorder::default();
         let rumbler = oag_game::rumble::Rumbler::new(&race, token, title.rumble);

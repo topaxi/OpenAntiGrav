@@ -11,7 +11,11 @@ use oag_render::shield::{SWELL_ON_HIT, SWELL_REST};
 fn bump(shielded: [bool; 2]) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -95,7 +99,11 @@ fn duel() -> Race {
         ))
         .expect("the fixture table must parse"),
     );
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -166,7 +174,11 @@ fn leach_duel(shielded: [bool; 2]) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_leach_beam_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();

@@ -6,7 +6,11 @@ use oag_gameplay::PlayerInputs;
 use oag_race::recovery::{DISTANCE_RESET_TICKS, DISTANCE_RESET_UNITS};
 
 fn far_race() -> (Race, Vec3) {
-    let mut race = Race::start(setup(hulled_handling()));
+    let mut race = Race::start(
+        setup(hulled_handling()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let away = Vec3::new(20.0, 6.0, 5_000.0);
     assert!(
         race.core.sim.spline().distance_to(away).expect("a sample") > DISTANCE_RESET_UNITS,
@@ -53,7 +57,11 @@ fn coming_back_inside_zeroes_the_distance_dwell() {
 fn shield_after_a_reset(shield: f32) -> f32 {
     let mut handling = hulled_handling();
     handling.dimensions.shield = 100.0;
-    let mut race = Race::start(setup(handling));
+    let mut race = Race::start(
+        setup(handling),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.weapons_on = true;
     race.core.sim.world.ships[0].physics.shield = shield;
     race.reset(0, None);
@@ -74,7 +82,11 @@ fn a_reset_costs_a_person_min_5_and_shield_less_1() {
 fn a_reset_costs_an_opponent_nothing() {
     let mut handling = hulled_handling();
     handling.dimensions.shield = 100.0;
-    let mut race = Race::start(setup(handling));
+    let mut race = Race::start(
+        setup(handling),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.weapons_on = true;
     race.core.sim.world.ships[3].physics.shield = 50.0;
     let before = race.core.sim.world.ships[3].physics.shield;

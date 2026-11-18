@@ -80,7 +80,7 @@ fn single_race() -> Option<race::Loaded> {
 /// blind spot.
 fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
     let loaded = single_race()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // **This project's fire law, which never absorbs.** Since 2026-10-19 the
     // original's law has its absorb half too (`oag_ai::weapon_ai::Decision`),
     // so under it a weapon turning into energy is sometimes the law and not
@@ -269,7 +269,7 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
         let opponents = 1..usize::from(race.core.sim.ship_count());
         let full: f32 = race.core.sim.world.ships[1].handling.dimensions.shield;

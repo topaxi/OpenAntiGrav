@@ -393,9 +393,14 @@ instruction, 2026-11-17 (`water-2048`), confidence 85:**
 
 Altima authors `ColourConstant` `(0.133, 0.173, 0.219)` and `SpecularPower` 250,
 `water_lapping_waves2_n.gxt` as `NormalMap`. **`liveLighting0specular` is drawn as the sun's
-diffuse colour, chosen, not measured**: 2048's envsettings author no sun specular colour or
-intensity (Omega's carry both, `docs/formats/envsettings.md`), so the glint's brightness rests
-on that stand-in; the engine's own `specular x0.00` line is the absent key, not a measured zero.
+diffuse colour, chosen, not measured**: 2048's envsettings author no sun specular intensity or
+scale, so the glint's brightness rests on that stand-in; the engine's own `specular x0.00` line
+is the absent key, not a measured zero. *Corrected 2026-11-18 (`w2048-fc17`):* an earlier line
+here said 2048 authors no sun specular **colour** either. Altima's `track.EnvSettings` does
+(`"Lighting.Sun specular colour"=1.968627 1.482260 1.042214`, beside a diffuse of `2.0 1.804
+1.702`); the executable registers the key and its consumer is unlocated
+([lighting-schema.md](../ghidra/functions/vita-2048-eu-v104/lighting-schema.md)), so it is
+**not wired** as `liveLighting0specular` and no frame here shows a glint to set it against.
 Whether the `time` uniform is in seconds is not recorded (our clock is). The literal of `@1` (`sa18.x`, `2.0039` in
 `f16`) and `c15.y` (1) are not traced to a register by name; the shape is unambiguous.
 
@@ -434,12 +439,17 @@ lerp (`@25`, `@26`). Confidence 85 on those.
   bytes at offset 24 of Altima's 32-byte edge vertex). `oag_rcs::rcsmodel::psp2::SubMesh::
   colours` never carried it (`vertex_colour1` filters the PS4's type 11), so the loader gains
   `vita_vertex_colour1`, read for these two lanes only.
-- **`Watercolour` is not authored on Altima's edge** (its four parameters are `Opacity`,
-  `SpecularColour`, `SpecularPower`, `Speed`), and the program's uniform image holds only
-  the literals (`2.0`, `0`), no default. **The edge takes the circuit's `fc15` pond
-  `ColourConstant` as its `Watercolour`, chosen, not measured** (a neighbour authored by the
-  same shader family, `(0.133, 0.173, 0.219)` against Park's own `Watercolour`
-  `(0.133, 0.173, 0.218)`).
+- **`Watercolour` is authored on Altima's edge: `(0.13318, 0.17261, 0.21765)`**, three halves,
+  Omega's value on the same material to the fourth digit and Park's own. *Corrected 2026-11-18
+  (`w2048-fc17`):* this bullet said the edge authors four parameters and no `Watercolour`, and
+  the build took the pond's `ColourConstant` as a stand-in. The instance's entry table holds
+  eight entries (`NormalMap`, `lightmap`, `Opacity`, `SpecularColour`, `SpecularPower`,
+  `Speed`, `Watercolour`, `time`; `cargo run -p oag-rcs --example psp2_material_dump --
+  data/art/published/environments/altima/track.rcsmodel -250,1385,60 <data.psarc>` prints
+  `param fe51d093 [0.13317871, 0.17260742, 0.21765137, 0.0]` under material 519), the loader
+  always read it, and the stand-in never ran; it is removed. The material file says which
+  entry a program takes: see "Which instance entry a program's uniform takes" in
+  [gxp.md](../formats/gxp.md).
 
 Drawn as kinds 7 and 8 of the water entry (`mesh::rcs::psp2::water`, `VITA_WATER_KIND`,
 `VITA_EDGE_KIND`, `shade.wesl`'s `vita_fc17` and `vita_edge`), classified by interface
@@ -451,6 +461,107 @@ colour's `x` and `y` the second coordinate pair (`vita_edge` reads them as the c
 through the pipeline, five readings; drop the map's alpha, `vc.x`, `vc.y` or `Opacity` and
 one fails) and the batches by `omega_transparency_ground_truth`'s walk: Altima 5 `fc15` +
 5 edge, Park 4 `fc17`, Mall 3, Tower 4, Square 4, 25 in all, 9 of them `fc17`, 5 blended.
+
+**The constant is not squared (2026-11-18, `w2048-fc17`).** Every `fc15` and `fc17` fragment
+permutation read multiplies the light by the material's colour uniform **as it is**, where a
+picture program squares its texel first (`fc07`'s `mul r0.xyz, pa0.xyz, pa0.xyz`,
+[gxp.md](../formats/gxp.md)). `scripts/vita-usse.py disasm` on the base `data.psarc`:
+
+| File, program | Line | Reads |
+| --- | --- | --- |
+| Altima `fc15`, #1 ambient-only | secondary 0 `mad sa0, sa0, sa2, -sa4` | `ambient * ColourConstant - fog`, once per draw |
+| Altima `fc15`, #3 lit | `@22 mul pa2.xyz, pa4.xyz, sa10.xyz` | `light * ColourConstant` |
+| Altima `fc15`, #5 vertex-lit | `@23 mul pa2.xyz, pa4.xyz, sa10.xyz` | the same |
+| Altima `fc15`, #16 lightmapped | `@24 mul pa4.xyz, pa4.xyz, sa12.xyz` | the same |
+| Altima edge, #1 ambient-only | secondary 0 `mad sa2, sa2, sa4, -sa6` | `ambient * Watercolour - fog` |
+| Altima edge, #3 lit | `@23 mul pa0.xyz, pa8.xyz, sa12.xyz` | `light * Watercolour` |
+| Altima edge, #16 lightmapped | `@24 mul pa4.xyz, pa10.xyz, sa14.xyz` | the same (its five batches bind a lightmap; which of the four lightmapped permutations draws them is not read) |
+| Park `fc17`, #16 lightmapped | `@24 mul pa4.xyz, pa2.xyz, sa12.xyz` | the same |
+
+Confidence 90 (eight listings in three files, one shape, and the frame below). No live
+register was read, and whether the executable changes the value before it uploads it is not
+read; the frame says it does not, because a squared constant is what this engine drew and it
+was five times too dark.
+
+**What was wrong here.** The build handed the constant to the lit path as a picture (the
+entry's tint on kinds 7 and 8, a one-texel texture on kind 6), and on 2048's scene every
+picture is squared (`SceneStore::Squared`): `Watercolour` `(0.133, 0.173, 0.218)` reached the
+light as `(0.018, 0.030, 0.047)`. `shade.wesl` now passes the entry's constant through
+`encode`, the inverse of the picture decode, on kinds 6, 7 and 8, so the light is multiplied
+by the uniform itself on every target. Pinned by
+`vita_fc17_edge_lit_path::the_water_colour_multiplies_the_light_undecoded` (two constants
+through the pipeline on each of the three kinds: a raw multiply moves the picture by
+`2^(1/2.2)`, a decoded constant by 2, a constant the entry does not feed by 1) and by the
+authored values in `altimas_sea_draws_its_law_under_original_and_nothing_under_off`.
+
+**Against the original** (Vita3K, Altima, craft placed at `-250,25,1385` yaw -15, 960x544,
+exposure held at 1.15; the frame of [gxp.md](../formats/gxp.md)'s `fc07` section, with ours at
+its pose; boxes `x0,y0,x1,y1` fixed on the original's frame before the change was drawn; the
+edge boxes take only the pixels the edge covers, which are the pixels that move by more than 8
+levels when its material is hidden with `OAG_SKIP_MATERIAL=wateredge`; mean RGB):
+
+| Box | Pixels | Original | Ours before | Ours after | Worst channel, before to after |
+| --- | ---: | --- | --- | --- | --- |
+| Edge sheet over the road, near `150,390,330,500` | 17,132 | 18.8 / 19.8 / 26.2 | 3.4 / 3.5 / 5.4 | **16.9 / 17.9 / 23.7** | 20.7 to 2.5 |
+| Edge sheet over the road, far `200,320,400,380` | 11,117 | 19.0 / 20.2 / 26.8 | 3.4 / 3.4 / 5.4 | **17.2 / 18.8 / 24.5** | 21.3 to 2.2 |
+| Edge sheet on the left shore `20,300,200,360` | 1,951 | 19.2 / 19.0 / 23.9 | 9.3 / 8.7 / 10.1 | **18.6 / 18.4 / 22.7** | 13.8 to 1.2 |
+| Edge sheet between the wall and the gravel `600,330,700,470` | 6,266 | 42.1 / 44.8 / 52.1 | 13.1 / 14.5 / 17.4 | 51.4 / 54.8 / 62.9 | 34.7 to 10.8 (now over) |
+| Pond basin, `fc15`, `600,230,700,280` | 5,000 | 28.3 / 28.2 / 31.6 | 17.0 / 16.2 / 17.4 | **26.0 / 26.0 / 29.7** | 14.1 to 2.4 |
+| The "rim" `533,172,541,196` (Open 4a's box) | 192 | 35.4 / 34.7 / 60.4 | 16.4 / 16.3 / 18.0 | 16.4 / 16.3 / 18.0 | 42.4, unmoved: not the edge, below |
+
+The picture: the original's edge is a smooth navy sheet lying over the road where the track
+fords the pond and over the shore, opaque in its middle and fading out at its border; ours
+drew the same shape near black and now draws it navy, and the basin went from black to the
+original's dark blue. The alpha chain was already right (the sheet's outline and its fade
+agree with the original's, which is what the frame adds to the 88 above). The box between the
+wall and the gravel overshoots by 9 to 11: the sheet is partly clear there and the gravel
+under it is the `fc07` shore whose light is still off
+([gxp.md](../formats/gxp.md), "Not closed by this").
+
+**The "rim" is not the edge.** Open 4a read a lavender band on the pond's left rim (box
+`533,172,541,196`) as the edge's colour. With the edge's material hidden, none of that box's
+192 pixels changes in ours; hiding `fc18_phong_alpha_tintspec_normal_specpow` (the road's
+run-off strip, `track_a_floor_runoff_ds`) changes 122 of them, `fc16_phong_alphaspec_normal_
+emissive` (road and wall) 66, `fc06_lambert_emmissive_alpha` (the wall's edge lights, `Tint`
+`(0.175, 1.0, 0.958)`) 4. So the band sits on the wall and run-off beside the pond, and what
+lights it violet in the original is **not read**; the same violet shows as a dotted line along
+the far track edge and a patch near `500,95`, with teal and orange marks on the road, none of
+which ours draws at this pose.
+
+**The lightmapped edge's light, as listed (confidence 75, not wired).** Program #16,
+secondary 0 to 2 and `@17` to `@29`, `lm` the lightmap texel, `s` =
+`shadowLightSpecularDiffuse`, `scale` and `bias` = `novaScaleBiasPower.xy`:
+
+```text
+light = bias + scale * lm.rgb + (1 - s.w) * liveLighting0diffuse * lm.a * sat(N.L)
+        + s.w * max(0, R.L) * lm.rgb^2
+rgb   = light * Watercolour
+        + liveLighting0specular * SpecularColour * lm.a * max(0, R.L)^SpecularPower
+```
+
+`1` in `1 - s.w` is the literal `sa22.x`, taken as 1 and not read off the literal table. The
+first three terms are the generic lightmapped light this engine draws; the `s.w` weights are
+not drawn (what `shadowLightSpecularDiffuse` holds is unread). The sheet boxes above close to
+within 2.5 levels without them.
+
+**Other circuits, before against after** (1280x720, tick 100, exposure held at 1.15; no
+original exists for any of these): Park's sea (`fc17`, kind 7) from straight above
+(`--camera-pose=1150,300,-3900,0,-1,0,0,0,-1 --pvs false`) was a black void and is dark
+rippled water under the bake's shadows, mean 8.6 / 9.1 / 10.1 to 37.3 / 36.6 / 38.9 over the
+208,611 pixels that move; Queens Mall's harbour (`fc15`, `--camera-pose=800,120,1800,0,-0.3,
+0.954,0,1,0 --pvs false`) goes from black water with glints to a grey-brown rippled sea,
+29.7 / 28.8 / 26.5 to 55.3 / 51.7 / 45.5 over 290,790 pixels. The grids of Altima, Park and
+Mall, which show no water, are pixel-identical.
+
+**Omega: checked, applies, not wired.** Omega's GCN programs multiply the constant the same
+way (`Watercolour * light` in the listing of "Omega (PS4)" below, and the Zone models' `fc17`
+edge), and `shade.wesl` passes Omega's constant (kinds 9 and 10) through the picture decode,
+there the sRGB curve: Altima's `(0.0546, 0.0546, 0.0546)` reaches the light as `0.0044`. It is
+left as it was: no frame of Omega's own sea exists to set it against (none was taken, and the
+compare page's Queens Mall pair, the grid, shows no water). Dropping the `omega_sea` arm of the
+`select` beside `encode` is the change. Omega's
+frames are pixel-identical before and after this one (0 of 921,600 at Altima's grid, at
+Altima's pond pose `-250,25,1385,-15` and at Queens Mall's harbour).
 
 Of the HD circuits' materials on the Vita, `reflectplane_dc_seawater` declares
 `screenSpaceReflectionTex` and `time` (34 programs each), `dc_seawater`
@@ -574,11 +685,10 @@ variants, `oag_rcs::gcn::scrolled_edge`), the map decoded `2t - 1` on all of `.x
 `T`, `B`, `N`, `(ambient + diffuse sat(N.L)) * Watercolour`, the `SpecularColour` Phong
 highlight, and the alpha `vc.y * Opacity + (1 - vc.y) * a * vc.x` (`@0x158 v_mul_f32 v13, v8,
 v22`; `@0x2e4 v_mad_f32 v2, Opacity, v11, v13`; `@0x2f4 v_mac_f32 v2, v13, -v11`), confidence
-85. Two things differ from the Vita:
+85. One thing differs from the Vita (the authored `Watercolour`, `(0.1332, 0.1726, 0.2176)`,
+is the Vita edge's own to the fourth digit; an earlier line here said the Vita authors none,
+corrected in "2048 (Vita)"):
 
-- **Omega authors `Watercolour` on the edge**, `(0.1332, 0.1726, 0.2176)`, where the Vita
-  authors none; the Vita edge's chosen stand-in (the pond's `ColourConstant`,
-  `(0.133, 0.173, 0.219)`) agrees with it to the third digit.
 - **The lit program adds `Reflectivity * cubeReflectionTex(Rv)`** (two layers of a cube array
   mixed by the blur lanes, `@0x1c4`..`@0x350`; `Reflectivity` 1.0), a term the Vita program
   does not have. Read, not drawn.
@@ -647,8 +757,8 @@ the place to start.
 | HD `sebenco_ice` | the three-colour lerp (`mesh::rcs::ice`) | bump-perturbed facing, own specular |
 | HD `reflectplane_dc_seawater` | under `original`: `light * ColourConstant + sun * SpecularColour * sat(N.H)^SpecularPower * sat(8 N.L)` over the two scrolled taps, through the chunk's frame (`mesh::rcs::water`); under `off`, the generic reading, where the non-lightmapped slots (Ubermall, Chenghou, Modesto's plain slot) add `DiffuseTexture1`, a normal map, as a glow | the planar reflection (`Reflectivity * R`) |
 | HD `water` (Amphiseum) | under `original`: the two taps, `light * ColourConstant + Reflectivity * probeTint(sky)`; under `off`, generic | nothing known |
-| 2048 `fc15_effects_vscroll_water` | under `original`: the constant colour times light through one RGB normal map scrolled `u + 0.05 t` and the tangent frame, plus the map-alpha-weighted Phong highlight (`mesh::rcs::psp2::water`, kind `VITA_SEA_KIND`, HD's `sea_block` layout with the second tap at weight zero); under `off`, the flat colour | the program's `liveLighting0specular` is the scene sun here, not read per circuit |
-| 2048 `fc17_*` (Altima's lavender sheets, Park) | under `original`: the constant `Watercolour` (the edge's a chosen stand-in) times light through the normal map scrolled `v + Speed t`, plus `SpecularColour` Phong; the edge blended by `vc.y * Opacity + (1 - vc.y) a vc.x` (`mesh::rcs::psp2::water`, kinds 7 and 8); under `off`, the normal map drawn as a picture (`VITA_FAULTS`) | the Vita3K frame of the original (4a) |
+| 2048 `fc15_effects_vscroll_water` | under `original`: the constant colour, unsquared, times light through one RGB normal map scrolled `u + 0.05 t` and the tangent frame, plus the map-alpha-weighted Phong highlight (`mesh::rcs::psp2::water`, kind `VITA_SEA_KIND`, HD's `sea_block` layout with the second tap at weight zero); under `off`, the flat colour | the program's `liveLighting0specular` is the scene sun here (the circuit's authored `Sun specular colour` is not wired); Altima's basin is within 2.4 levels of the original, no other circuit's sea is compared |
+| 2048 `fc17_*` (Altima's edge sheets, Park) | under `original`: the authored `Watercolour`, unsquared, times light through the normal map scrolled `v + Speed t`, plus `SpecularColour` Phong; the edge blended by `vc.y * Opacity + (1 - vc.y) a vc.x` (`mesh::rcs::psp2::water`, kinds 7 and 8); under `off`, the normal map drawn as a picture (`VITA_FAULTS`) | the lightmapped program's `shadowLightSpecularDiffuse` weights; Altima's edge is within 2.5 levels of the original on three of four boxes, Park's sea is not compared |
 | Omega reflective seas (`reflectplane_mid`, `_edge`, `_pond`, `_dc_seawater_new`, `_tow`) | under `original`: `Watercolour` times light through the two `.ag` taps scrolled `+-u + 0.05 Speed t`, the `SpecularColour` Phong highlight in the sun's specular colour, the sky at the mapped normal times the program's Fresnel weight, the edge blended by `VertexColour1.y * Opacity` (`mesh::rcs::psp2::water`, kinds 9 and 10); under `off`, what was drawn before (a flat sheet in the colour slot's map) | the planar reflection (the sky stands in), the Fresnel's own normal `Nf` |
 | Omega Zone models' `fc17` edge | under `original`: the Zone permutation's alpha chain over the scrolled map's alpha (kind 8, no mapped normal, no highlight); built and pinned, not seen on a frame (the Zone race does not load `trackZone.rcsmodel`) | the lit program's `Reflectivity * cubeReflectionTex` |
 | Omega `reflectplane_dc_seawater` (Park, HD circuits), `water`, `reflectplane_rt_seawateredging` | the constant colour times light, flat (`psp2::lighting_only`) on the families whose instance is 2048's | HD's law through `psp2` (checked, applies, not wired) |
@@ -833,9 +943,9 @@ water normal map painted as a picture. Under this change the wedges are gone: th
 the dark water it is elsewhere, and the sheets only shade it, with the shoreline's gravel
 visible through them and the ferry sitting in dark water instead of a lavender fan. The
 sheets are translucent (the alpha chain, with `vc.x` and `vc.y` as the loader reads them),
-not a hard-edged foam strip; whether the original's edge shows a lighter foam colour is open,
-because `Watercolour` is unauthored on the edge and our stand-in is the pond's own colour (a
-Vita3K frame would settle it; **not taken**, see Open 4a). Park's sea changes by at most 4
+not a hard-edged foam strip; whether the original's edge shows a lighter foam colour was open
+(settled 2026-11-18: the edge authors its own `Watercolour` and the original draws it a smooth
+navy, "The constant is not squared" above). Park's sea changes by at most 4
 levels and over 1,391 pixels above one level (the sun is far from the mirror angle from that
 view and the colour was already `Watercolour`): the effect there is the moving ripple shading
 and the glint only. `off` is **pixel-identical** to a build of the parent commit (0 differing
@@ -867,7 +977,7 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
 | --- | --- | --- | --- |
 | Sea law (two taps, planar reflection) | checked, applies on its HD circuits (`reflectplane_dc_seawater` declares `screenSpaceReflectionTex` and `time`), not wired: its draw goes through `psp2`, which classifies by the GXP program's interface and has no tap reader; the `0.05` and `1.15` literals are not checked in the GXP | checked, applies (HD's interface exactly), not wired: same `psp2` path, the literals unread in the GCN program | taps drawn without the planar term (`mesh::rcs::water`) |
 | Reflect set (bit 3 / `wohdmeshreflect`) | checked, applies (name tag, 353 and 52), not wired | checked, applies (268 and 73), not wired | measured here |
-| 2048 own water (`fc15`/`fc17`) | `fc15` and `fc17` measured and drawn here | **checked, differs**: Omega's 2048 mode replaces both with `reflectplane_*` on the same meshes, read and drawn ("Omega (PS4)"); Omega's Zone models keep `fc17`'s edge and no `fc15` ships there: **ported** as its Zone permutation's reading (the GCN programs read, 5 batches pinned, not seen on a frame) | not applicable |
+| 2048 own water (`fc15`/`fc17`) | `fc15` and `fc17` measured and drawn here; the colour uniform multiplies the light unsquared (Altima's edge and basin against a Vita3K frame) | the unsquared constant: **checked, applies, not wired** (Omega's programs multiply `Watercolour` raw too and kinds 9 and 10 still decode it; no Omega sea frame). The materials: **checked, differs**: Omega's 2048 mode replaces both with `reflectplane_*` on the same meshes, read and drawn ("Omega (PS4)"); Omega's Zone models keep `fc17`'s edge and no `fc15` ships there: **ported** as its Zone permutation's reading (the GCN programs read, 5 batches pinned, not seen on a frame) | not applicable |
 | Omega reflective sea (`reflectplane_mid` and siblings) | **checked, applies, not wired** as the `omega` choice: the meshes carry what the law reads, but no lender's archive is opened in a race load and 2048 has no sky map or sun specular ("Omega (PS4)", "The 2048 side") | measured and drawn here | not applicable (HD's sea is the older law: `1.15` on the second tap, a constant `Reflectivity`, a `sat(8 N.L)` gate) |
 | Amphiseum `water` | not checked (the Vita's Amphiseum shows no water material by name) | checked, differs (cube probe) | drawn (`mesh::rcs::water`) |
 | Vineta K scroll table | checked, differs (`dc_seawater`) | checked, applies (`water_test_2_castnoshipshadows`), `water_noref` replaced by `temp_water`, not wired | drawn (`mesh::rcs::water`) |
@@ -886,9 +996,10 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    Omega's own sea to set the stand-in against; HD's law through `psp2` for
    `reflectplane_dc_seawater` (Park and the HD circuits); the shore strip
    `reflectplane_rt_seawateredging`; the `omega` choice on 2048's circuits (recipe in "Omega
-   (PS4)"); loading `trackZone.rcsmodel` in a Zone race, which is what would show the Zone edge.
-   (2048's `fc17` edge: its `Watercolour` is unauthored and drawn as the pond's
-   `ColourConstant`, chosen; Omega authors `(0.1332, 0.1726, 0.2176)` on the same material.)
+   (PS4)"); loading `trackZone.rcsmodel` in a Zone race, which is what would show the Zone edge;
+   the sea's constant, which Omega's programs multiply raw and kinds 9 and 10 still pass through
+   the sRGB decode ("The constant is not squared", "Omega": the change is one `select` arm, the
+   frame to set it against is what is missing).
 4a. No Vita3K frame of Altima's sea exists: the look of `fc15` and `fc17` is not compared against the
    original (`water-fc17` did not take the 45-minute capture; the edge's stand-in `Watercolour`
    and the lane pairing of `pa0.w`/`pa4.w`, 75, are what a frame would test: walk Empire Climb in
@@ -945,8 +1056,12 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    places on main and at most 20 with the fix. Frames, the Altima pose and Park: the stipple is gone from the "5" sign, the right-hand
    board and the orange sign on Park too; Mall (no vertex-lit speckle) is unchanged. **Omega: checked, not affected** (the `2 + mask`
    marker is set for the Vita reader only, and Omega's Altima at the grid is pixel-identical before and after, 0 differing pixels).
-   Not from this lane and still open: the gravel shore itself is brighter and greyer than the original's (dark, with a green grass
-   edge: the `fc07_blend_vertred_lambert_2diff` second picture and its vertex-red blend are not read), and `OAG_TINT_MATERIALS`,
+   The gravel shore's grey (brighter and bluer than the original's, no earth band or green grass edge) was the
+   `fc07_blend_vertred_lambert_2diff` second picture and its vertex-red blend, read and wired 2026-11-18
+   ([gxp.md](../formats/gxp.md), "`fc07_blend_vertred_lambert_2diff` mixes two pictures by the vertex red"): the shore box
+   `760,300,920,420` at the Altima pose went from 17.8 levels off the original's mean to 3.6. The gravel beside the
+   pond wall stays 16 to 19 levels darker than the original's (the light there, not the picture). Still open here:
+   `OAG_TINT_MATERIALS`,
    `OAG_ALBEDO_ONLY` and `OAG_OPAQUE_ONLY` do not reach the Vita track (`OAG_SKIP_MATERIAL` and `OAG_SKIP_SLOT` do).
    *Superseded reading below, kept for the evidence it recorded:*
    (2) **The stipple is not the water setting, not the shadows, not MSAA** (the falsifier, "survives with the water off", fired
@@ -964,6 +1079,13 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    blue lift; no glint is drawn on either side from these poses (the sun is not reflected at this angle), so the glint colour stays
    unmeasured. (5) **Ripple scale and scroll direction are not readable**: the basin is near black on both sides and a still has no
    scroll; it needs a brighter sea (a pose facing the sun) and two frames of one held pose, not taken here.
+   **Items (3) and (4) closed 2026-11-18 (`w2048-fc17`), and (3)'s reading was wrong:** the lavender band of (3) is not the
+   `fc17` edge (no pixel of its box is the edge's; it sits on the road's run-off strip and wall, and what lights it is unread),
+   the edge **does** author `Watercolour`, and both the edge and the basin were dark because this engine squared the colour
+   uniform the programs multiply raw. Wired; the edge's sheet is within 2.5 levels of this frame on three of four boxes and the
+   basin within 2.4 ("2048 (Vita)", "The constant is not squared", with the boxes). Still open from this pose: the violet band
+   and the violet, teal and orange marks on the road and walls that the original draws and ours does not; the edge sheet between
+   the wall and the gravel (10 over); ripple scale and scroll, (5).
    (6) **Park's sea pose `1000,200,-3500` was refused by the hold**: the guest pulled the body 725.6 units over the grabs at 200
    units up (120 reads pulled off the pose, the last at 16 s), so the original's camera was not at the pose; its frame does show a
    large flat red-brown plane below the park where ours draws terrain, which would be the sea but is not a matched pose. Ours

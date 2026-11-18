@@ -11,6 +11,10 @@
 //! its own random stream, apart from the weather's drops and the splashes'.
 //! Art is the splash art's dot cell ([`super::splash`]).
 
+#[cfg(feature = "view")]
+use crate::RaceView;
+#[cfg(feature = "view")]
+use crate::SimRace;
 use oag_core::Rng;
 use oag_core::math::{SPEED_TO_KMH, Vec3};
 use oag_mesh::mesh::GpuVertex;
@@ -305,14 +309,18 @@ impl Spray {
     }
 }
 
-impl crate::Race {
+#[cfg(test)]
+mod tests;
+
+#[cfg(feature = "view")]
+impl RaceView {
     /// Every racing craft's emitter on this draw: the road under it, found
     /// along its own down axis within [`REACH_HULLS`] hull heights, and left out
     /// where that road lies in a covered section.
-    pub fn spray_emitters(&self) -> Vec<Emitter> {
+    pub fn spray_emitters(&self, core: &SimRace) -> Vec<Emitter> {
         let mut out = Vec::new();
-        for slot in 0..self.core.sim.world.ship_count as usize {
-            let ship = &self.core.sim.world.ships[slot];
+        for slot in 0..core.sim.world.ship_count as usize {
+            let ship = &core.sim.world.ships[slot];
             if !ship.in_world() {
                 continue;
             }
@@ -320,10 +328,10 @@ impl crate::Race {
             if speed_kmh < MIN_SPEED_KMH {
                 continue;
             }
-            let body = self.body_between(slot);
+            let body = self.body_between(core, slot);
             let reach = ship.handling.dimensions.height * REACH_HULLS;
             let mut hits = [None; 4];
-            let found = self.core.sim.collision.raycast_all(
+            let found = core.sim.collision.raycast_all(
                 Ray::new(body.position, -body.up(), reach),
                 None,
                 false,
@@ -338,7 +346,7 @@ impl crate::Race {
             else {
                 continue;
             };
-            if self.point_is_under_cover(hit.point) {
+            if self.point_is_under_cover(core, hit.point) {
                 continue;
             }
             let forward = body.forward();
@@ -354,6 +362,3 @@ impl crate::Race {
         out
     }
 }
-
-#[cfg(test)]
-mod tests;

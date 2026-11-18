@@ -167,12 +167,26 @@ map.**
   chain, 5 batches on Altima's Zone model) and **not seen on a frame**: a Zone race on an
   Omega 2048 circuit loads the race model, not `trackZone.rcsmodel`. Whether the Vita's Zone
   permutation also drops the mapped normal and highlight is unread.
-- 2048's `fc17` edge and sea
-  are read whole and drawn (water.md, "2048 (Vita)"; the lane pairing of `pa0.w`/`pa4.w`
-  is 75, no iterator table confirms it); Altima's edge `Watercolour` is unauthored and
-  drawn as the pond's `ColourConstant` (chosen; Omega authors `(0.1332, 0.1726, 0.2176)` on the
-  same material, which agrees to the third digit, and its named vertex inputs raise the lane
-  pairing to 88). No Vita3K frame of Altima's or Park's sea exists: attempted 2026-11-18 (`water-2048cmp`), the original shows no `fc15`/`fc17` water from its racing line and Zone mode posterises; a pair needs a 2048 teleport (water.md, Open 4a).
+- 2048's `fc17` edge and sea are read whole and drawn (water.md, "2048 (Vita)"; the lane pairing
+  of `pa0.w`/`pa4.w` is 88). **Compared against a Vita3K frame of Altima's pond, 2026-11-18
+  (`w2048-fc17`):** the edge authors its own `Watercolour` (the "unauthored" note was wrong, the
+  stand-in is gone), and the edge and the `fc15` basin were dark because the colour uniform was
+  squared as a picture is; the programs multiply it raw. Wired on kinds 6, 7 and 8: the edge is
+  within 2.5 levels of the original on three of four boxes, the basin within 2.4 (water.md,
+  "The constant is not squared"). Left open by it, none of it started:
+  - **Omega's seas (kinds 9 and 10) still pass their constant through the sRGB decode** where
+    Omega's programs multiply it raw: checked, applies, not wired. One `select` arm in
+    `shade.wesl`; what is missing is a frame of Omega's own sea to set it against.
+  - **The lavender band on the pond's rim is not water.** It sits on the road's run-off strip
+    and wall (`fc18_phong_alpha_tintspec_normal_specpow`, `fc16_phong_alphaspec_normal_emissive`);
+    the original also draws a violet dotted line along the far track edge and teal and orange
+    marks on the road that ours does not at the pose `-250,25,1385,-15`. What lights them is
+    unread; start with those two families' programs and `fc06_lambert_emmissive_alpha`'s `Tint`.
+  - **Altima's `track.EnvSettings` authors `Lighting.Sun specular colour`** (`1.969 1.482
+    1.042`); the highlight of kinds 6 to 8 still uses the sun's diffuse colour. No frame shows a
+    glint to set it against, and the key's consumer in the executable is unlocated.
+  - The lightmapped edge program's `shadowLightSpecularDiffuse` weights (listed in water.md) are
+    not drawn; Park's and Queens Mall's seas changed with the fix and have no original to compare.
 - Pure's caustic pass on Vineta K landed (2026-11-18, `pure-caustics`; [caustic-pass.md](../../docs/ghidra/functions/psp-pure-usa/caustic-pass.md)): Pulse's law from the 16 frames embedded in the `.vex`, 352 of 1,335 batches flagged, no other Pure circuit. Open: a PPSSPP GE list of the tunnel seabed (the picture is confidence 70), and the `(int)(t * 30) & 0xf` binder in Pure's executable.
 - Pulse's caustic pass is read on the PSP code only (PS2 executable checked, ported; a PCSX2 frame open) and reached only by PS2
   disc data or the PSP download pack.
@@ -256,9 +270,10 @@ Ranked. Hours are for one member on an idle machine.
 5. **2048's own water, `fc15` landed** (`water-2048`: `mesh::rcs::psp2::water`,
    kind `VITA_SEA_KIND`, `build_circuit(.., law)`, `oag_2048::TITLE.water.original_differs`,
    counts pinned in `omega_transparency_ground_truth`'s walk), **`fc17` landed** (`water-fc17`:
-   kinds 7 and 8, the edge's alpha chain pinned by `vita_fc17_edge_lit_path`). Left: a Vita3K
-   frame pair on Altima at two times (the teleport is built; one pair at the pond pose exists, the speckle difference is recorded and the world clock is unverified, water.md Open 4a) (it tests the edge's chosen `Watercolour` and the
-   `pa0.w`/`pa4.w` lane pairing). `is_drawn(Vita2048)` stays
+   kinds 7 and 8, the edge's alpha chain pinned by `vita_fc17_edge_lit_path`), **colour compared
+   against a Vita3K frame and fixed** (`w2048-fc17`: the constant is multiplied raw). Left: a
+   frame pair on Altima at two times for the ripple scale and scroll (one pose, one time so far),
+   and the four items under "Open" above. `is_drawn(Vita2048)` stays
    false on purpose: it is the borrowed `2048` choice on other titles, which nothing draws yet.
 6. **LANDED (`water-omega`): Omega's own water** on its 2048 circuits (`oag_rcs::gcn::sea`,
    `mesh::rcs::psp2::water` kinds 9 and 10, `oag_omega::TITLE.water.original_differs`).

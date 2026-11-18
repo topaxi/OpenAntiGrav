@@ -64,8 +64,14 @@ fn two_bot_clients_race_a_real_circuit_at_100_ms_and_agree_with_the_server() {
     params.title = title.to_string();
     let mut host = Host::new(race, params.clone());
     let clock = oag_net::link::Clock::default();
-    let mut clients: Vec<_> = (0..2)
-        .map(|n| {
+    // Every race is loaded before any link joins (the host's hello timeout is wall-clock).
+    let races: Vec<_> = (0..2)
+        .map(|_| oag_net::race::load(&params, &source).expect("loads").0)
+        .collect();
+    let mut clients: Vec<_> = races
+        .into_iter()
+        .zip(0..2)
+        .map(|(race, n)| {
             let (server_end, client_end) = Loopback::pair();
             host.join(Box::new(server_end));
             let link: Box<dyn Link> = Box::new(Shim::with_clock(
@@ -78,7 +84,6 @@ fn two_bot_clients_race_a_real_circuit_at_100_ms_and_agree_with_the_server() {
                 clock.clone(),
             ));
             let client = Client::connect(link, &format!("bot {n}"));
-            let (race, _) = oag_net::race::load(&params, &source).expect("loads");
             let pilot: Pilot = Box::new(|client, race| client.bot_input(race));
             (client, race, pilot)
         })
@@ -131,8 +136,14 @@ fn a_predicting_clients_recording_is_the_confirmed_run_and_re_drives() {
     params.title = title.to_string();
     let mut host = Host::new(race, params.clone());
     let clock = oag_net::link::Clock::default();
-    let mut clients: Vec<_> = (0..2)
-        .map(|n| {
+    // Every race is loaded before any link joins (the host's hello timeout is wall-clock).
+    let races: Vec<_> = (0..2)
+        .map(|_| oag_net::race::load(&params, &source).expect("loads").0)
+        .collect();
+    let mut clients: Vec<_> = races
+        .into_iter()
+        .zip(0..2)
+        .map(|(mut race, n)| {
             let (server_end, client_end) = Loopback::pair();
             host.join(Box::new(server_end));
             let link: Box<dyn Link> = Box::new(Shim::with_clock(
@@ -145,7 +156,6 @@ fn a_predicting_clients_recording_is_the_confirmed_run_and_re_drives() {
                 clock.clone(),
             ));
             let client = Client::connect(link, &format!("bot {n}"));
-            let (mut race, _) = oag_net::race::load(&params, &source).expect("loads");
             race.start_recording(recording_header(&params));
             let pilot: Pilot = Box::new(|client, race| client.bot_input(race));
             (client, race, pilot)

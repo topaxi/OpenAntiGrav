@@ -9,6 +9,19 @@
 use super::*;
 
 impl Race {
+    /// A simulation mod's `raise-warning`: lights `look`'s group on the viewer's HUD for
+    /// `slot`, as a weapon fired at the viewer would. Dropped for a slot that is not the
+    /// viewer and where the warnings are not drawn ([`crate::RaceView::incoming_warnings_drawn`]).
+    #[cfg(feature = "extensions")]
+    pub(super) fn raise_mod_warning(&mut self, slot: usize, look: oag_hud::incoming::Look) {
+        if slot == self.core.player_slot() && self.view.incoming_warnings_drawn(&self.core) {
+            self.view.incoming_raises.push(look);
+        }
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
     /// Records that `slot` fired `weapon` this tick: raises the viewer's warning when the
     /// along-track gap `progress(viewer) - progress(slot)` is inside the weapon's window.
     ///
@@ -21,55 +34,45 @@ impl Race {
     /// person (the original's multiplayer modes never raise; a split-screen or network
     /// seat's own warnings are not wired). Every racing craft is a valid pair: the
     /// original's own refusal of a pair (its flag byte) is unread.
-    pub(super) fn note_incoming_fire(&mut self, slot: usize, weapon: oag_tables::weapons::Weapon) {
-        if slot == self.core.player_slot() || !self.incoming_warnings_drawn() {
+    pub(super) fn note_incoming_fire(
+        &mut self,
+        core: &SimRace,
+        slot: usize,
+        weapon: oag_tables::weapons::Weapon,
+    ) {
+        if slot == core.player_slot() || !self.incoming_warnings_drawn(core) {
             return;
         }
-        let viewer = self.core.player_slot();
-        let ships = &self.core.sim.world.ships;
+        let viewer = core.player_slot();
+        let ships = &core.sim.world.ships;
         let (Some(here), Some(there)) = (
             ships[viewer].standing.progress,
             ships[slot].standing.progress,
         ) else {
             return;
         };
-        let length = self
-            .core
-            .sim
-            .course
-            .as_deref()
-            .map(oag_race::Course::length);
+        let length = core.sim.course.as_deref().map(oag_race::Course::length);
         let gap =
             oag_weapons::projectile::missile::wrapped_gap(here - there, length.unwrap_or(0.0));
         if let Some(icon) = oag_hud::incoming::classify(weapon, gap) {
-            self.view.incoming_raises.push(icon.into());
+            self.incoming_raises.push(icon.into());
         }
     }
 
     /// Whether the viewer's warnings are drawn in this race: the title raises them, there is
     /// one view and one person, and the mode is one of those that raise them. Every raise,
     /// the original's and a mod's, goes through it.
-    fn incoming_warnings_drawn(&self) -> bool {
-        self.view.huds[self.core.player_slot()].incoming_enabled
+    fn incoming_warnings_drawn(&self, core: &SimRace) -> bool {
+        self.huds[core.player_slot()].incoming_enabled
             && self.viewport_count() <= 1
-            && self.core.sim.people() <= 1
-            && self.core.outcome.seat.is_none()
+            && core.sim.people() <= 1
+            && core.outcome.seat.is_none()
             && matches!(
-                self.core.sim.world.mode(),
+                core.sim.world.mode(),
                 oag_race::Mode::SingleRace
                     | oag_race::Mode::Tournament
                     | oag_race::Mode::Eliminator
                     | oag_race::Mode::Head2Head
             )
-    }
-
-    /// A simulation mod's `raise-warning`: lights `look`'s group on the viewer's HUD for
-    /// `slot`, as a weapon fired at the viewer would. Dropped for a slot that is not the
-    /// viewer and where the warnings are not drawn ([`Self::incoming_warnings_drawn`]).
-    #[cfg(feature = "extensions")]
-    pub(super) fn raise_mod_warning(&mut self, slot: usize, look: oag_hud::incoming::Look) {
-        if slot == self.core.player_slot() && self.incoming_warnings_drawn() {
-            self.view.incoming_raises.push(look);
-        }
     }
 }

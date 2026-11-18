@@ -112,6 +112,7 @@ fn each_craft_s_exhaust_follows_its_own_throttle() {
 #[test]
 fn every_craft_lays_its_own_ribbon() {
     let mut setup = setup(hulled_handling());
+    let mut view = crate::tests::fixture_view();
     setup.mode = Mode::SingleRace;
     setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
@@ -125,8 +126,8 @@ fn every_craft_lays_its_own_ribbon() {
     // what the test needs is only that the eight are far enough apart to tell
     // one craft's ribbon from another's, and the grid's own 19.79-unit step
     // is 25 times this.
-    setup.nozzles = vec![Some(Vec3::new(0.0, 0.0, -0.8)); MAX_SHIPS];
-    let mut race = Race::start(setup);
+    view.nozzles = vec![Some(Vec3::new(0.0, 0.0, -0.8)); MAX_SHIPS];
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     // `Exhaust::trail_ready` gates the ribbon on a full ring, which is the
     // original's own gate, so this needs one tick per sample.
     for _ in 0..oag_fx::exhaust::TRAIL_SAMPLES {
@@ -135,7 +136,8 @@ fn every_craft_lays_its_own_ribbon() {
 
     let nozzles: Vec<Vec3> = (0..8)
         .map(|slot| {
-            race.nozzle_of(slot)
+            race.view
+                .nozzle_of(&race.core, slot)
                 .expect("the fixture's hull authors a nozzle")
         })
         .collect();
@@ -323,7 +325,9 @@ fn a_missile_places_two_heads_on_its_flare_anchors() {
     let projectile = &race.core.sim.world.projectiles.slots[slot];
     let age = oag_weapons::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
     let (a, b) = crate::weapons::missile_flare_anchors(projectile.position, velocity, age);
-    let body = race.projectile_matrix(oag_tables::weapons::Weapon::Missile, slot, projectile);
+    let body = race
+        .view
+        .projectile_matrix(oag_tables::weapons::Weapon::Missile, slot, projectile);
     for (head, anchor) in heads.iter().zip([a, b]) {
         let want = body.w_axis.truncate() + (anchor - projectile.position);
         assert!(
@@ -527,7 +531,7 @@ fn a_rocket_flying_along_world_up_does_not_collapse_its_basis() {
 /// by `CRAFT_BLAST_DROP` rather than at the impact point. This engine drew
 /// one invented flash at the impact point for both until 2026-08-12.
 ///
-/// Asserted through [`Race::blast_for`] rather than through the pool,
+/// Asserted through [`RaceView::blast_for`] rather than through the pool,
 /// because *which file and where* is the recovered fact and it holds on a
 /// headless fixture with no disc to load either file from.
 #[test]
@@ -539,7 +543,8 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
     let impact = Vec3::new(5.0, 1.0, -3.0);
 
     assert_eq!(
-        race.blast_for(Weapon::Rocket, impact, None),
+        race.view
+            .blast_for(&race.core, Weapon::Rocket, impact, None),
         Some((Trigger::TrackBlast, impact)),
         "no craft struck means the track effect, where the rocket struck"
     );
@@ -549,7 +554,8 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
     let craft = Vec3::new(-20.0, 4.0, 11.0);
     race.core.sim.world.ships[struck].physics.body.position = craft;
     assert_eq!(
-        race.blast_for(Weapon::Rocket, impact, Some(struck)),
+        race.view
+            .blast_for(&race.core, Weapon::Rocket, impact, Some(struck)),
         Some((
             Trigger::CraftBlast,
             craft - Vec3::Y * oag_title::engine_effects::CRAFT_BLAST_DROP
@@ -580,34 +586,37 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
     let point = Vec3::new(1.0, 2.0, 3.0);
 
     assert_eq!(
-        race.blast_for(Weapon::Missile, point, None),
+        race.view
+            .blast_for(&race.core, Weapon::Missile, point, None),
         Some((Trigger::MissileExplo, point)),
         "the Missile's own explosion, at the impact point, whatever it hit"
     );
     assert_eq!(
-        race.blast_for(Weapon::Mine, point, None),
+        race.view.blast_for(&race.core, Weapon::Mine, point, None),
         Some((Trigger::MineExplo, point)),
         "the Mine's own explosion (Mine_SpawnExplosion), at the impact point"
     );
     assert_eq!(
-        race.blast_for(Weapon::Plasma, point, None),
+        race.view.blast_for(&race.core, Weapon::Plasma, point, None),
         Some((Trigger::PlasmaBlast, point)),
         "the Plasma's own detonation (Plasma_SpawnDetonation), at the impact \
          point, whatever it hit"
     );
     assert_eq!(
-        race.blast_for(Weapon::Plasma, point, Some(2)),
+        race.view
+            .blast_for(&race.core, Weapon::Plasma, point, Some(2)),
         Some((Trigger::PlasmaBlast, point)),
         "one file for every ending - the teardown pass does not branch on \
          what was struck, unlike the Rocket's"
     );
     assert_eq!(
-        race.blast_for(Weapon::Disruptor, point, None),
+        race.view
+            .blast_for(&race.core, Weapon::Disruptor, point, None),
         Some((Trigger::DisruptorExplo, point)),
         "the Disruptor's own explosion (DisruptorExplo_Construct), at a hit and at the timeout"
     );
     assert_eq!(
-        race.blast_for(Weapon::Bomb, point, None),
+        race.view.blast_for(&race.core, Weapon::Bomb, point, None),
         Some((Trigger::BombSmokering, point)),
         "the Bomb's own smoke ring (BombBlast_Construct), at the impact \
          point - one third of the detonation; the other two are the \
@@ -615,7 +624,8 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
          separately, see `bomb_blast`"
     );
     assert_eq!(
-        race.blast_for(Weapon::Shuriken, point, None),
+        race.view
+            .blast_for(&race.core, Weapon::Shuriken, point, None),
         Some((Trigger::ShurikenExpire, point)),
         "the blade's teardown (FUN_08870c78) plays WO_SHURIKEN_EXPIRE at the \
          blade, on a fuse running out and on a craft hit alike"
@@ -651,12 +661,13 @@ fn a_cannon_round_sparks_on_a_wall_and_silently_on_a_craft() {
     let point = Vec3::new(4.0, 0.5, -1.0);
 
     assert_eq!(
-        race.blast_for(Weapon::Cannon, point, None),
+        race.view.blast_for(&race.core, Weapon::Cannon, point, None),
         Some((Trigger::CannonSparks, point)),
         "no craft struck means the wall/track spark, at the impact point"
     );
     assert_eq!(
-        race.blast_for(Weapon::Cannon, point, Some(1)),
+        race.view
+            .blast_for(&race.core, Weapon::Cannon, point, Some(1)),
         None,
         "a craft hit applies damage and a sound cue but throws no spark"
     );
@@ -665,7 +676,7 @@ fn a_cannon_round_sparks_on_a_wall_and_silently_on_a_craft() {
 /// A rocket in the air carries a flare, and gives it back when it is gone.
 ///
 /// `Rocket_Init` attaches `WO_ROCKET_FLARE` at launch and it rides the
-/// rocket for the whole flight - see [`Race::advance_projectile_flares`].
+/// rocket for the whole flight - see [`RaceView::advance_projectile_flares`].
 /// The bookkeeping is asserted here without a disc; what the flare *looks*
 /// like is `crates/fx/tests/psys_ground_truth.rs`' business.
 #[test]
@@ -678,7 +689,7 @@ fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
         Vec3::Z,
         0,
     );
-    race.advance_projectile_flares();
+    race.view.advance_projectile_flares(&race.core);
     // No disc in a headless fixture, so no effect loaded and no instance
     // is taken - the trigger still has to run, and still has to be a
     // no-op rather than a panic.
@@ -691,7 +702,7 @@ fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
     // With the slot vacated the bookkeeping must clear either way, or the
     // next projectile in that slot inherits a flare it never started.
     race.core.sim.world.projectiles.slots[0].kind = None;
-    race.advance_projectile_flares();
+    race.view.advance_projectile_flares(&race.core);
     assert_eq!(race.view.projectile_flare[0], None);
     assert_eq!(race.stage().playing_count(), 0);
 }
@@ -709,7 +720,7 @@ fn a_hull_takes_the_point_light_standing_over_it() {
         [[0.0; 4]; 2],
         "no rig, no slot"
     );
-    let at = race.ship_model_matrix_of(0).w_axis;
+    let at = race.view.ship_model_matrix_of(&race.core, 0).w_axis;
     let over = WorldLight {
         position: [at.x, at.y + 3.0, at.z],
         colour: [1.0, 0.5, 0.0],

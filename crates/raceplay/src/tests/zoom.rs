@@ -10,7 +10,7 @@ fn grid_on_a_speed_pad(ring: bool) -> Race {
 }
 
 /// The same fixture with the ring HD's own (`borrowed` false) or borrowed by a
-/// title that draws none (`borrowed` true), as `load` sets `Setup::zoom_borrowed`.
+/// title that draws none (`borrowed` true), as `load` sets `ViewSetup::zoom_borrowed`.
 fn grid_on_a_pad_with(ring: bool, borrowed: bool) -> Race {
     let mut handling = hulled_handling();
     handling.speedup_pads = oag_physics::params::SpeedupPads {
@@ -18,17 +18,18 @@ fn grid_on_a_pad_with(ring: bool, borrowed: bool) -> Race {
         time: 0.5,
     };
     let mut setup = setup(handling);
+    let mut view = crate::tests::fixture_view();
     setup.mode = Mode::SingleRace;
     setup.speedup_pads = enveloping_pad();
-    setup.zoom_ring = ring.then_some(&oag_hd::race::ZOOM_RING);
-    setup.zoom_borrowed = ring && borrowed;
+    view.zoom_ring = ring.then_some(&oag_hd::race::ZOOM_RING);
+    view.zoom_borrowed = ring && borrowed;
     setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(setup, view, crate::extensions::Prepared::default())
 }
 
 /// The pad every craft crosses fires the *player's* pulse, which then runs the

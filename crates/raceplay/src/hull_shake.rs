@@ -18,6 +18,9 @@
 //! Every craft shakes, not only the player's: the calls sit inside the per-ship update and no
 //! player test above them was read.
 
+use crate::RaceView;
+#[cfg(feature = "view")]
+use crate::SimRace;
 use oag_core::Rng;
 use oag_core::math::{Mat4, Quat, Vec3};
 use oag_title::hull_shake::HullShake as Law;
@@ -130,33 +133,39 @@ impl Race {
             }
         }
     }
+}
 
+#[cfg(feature = "view")]
+impl RaceView {
+    /// `slot`'s shake matrix this tick, identity where there is none.
+    pub(super) fn hull_shake_of(&self, slot: usize) -> Mat4 {
+        self.hull_shake[slot]
+            .as_ref()
+            .map_or(Mat4::IDENTITY, Shake::local)
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
     /// Every active craft's shake, one tick.
-    pub(super) fn advance_hull_shakes(&mut self) {
-        let Some(law) = self.view.hull_shake_law else {
+    pub(super) fn advance_hull_shakes(&mut self, core: &SimRace) {
+        let Some(law) = self.hull_shake_law else {
             return;
         };
-        if !self.view.hull_shake_on {
+        if !self.hull_shake_on {
             return;
         }
-        for slot in 0..self.core.sim.world.ship_count as usize {
-            let ship = &self.core.sim.world.ships[slot];
+        for slot in 0..core.sim.world.ship_count as usize {
+            let ship = &core.sim.world.ships[slot];
             if !ship.in_world() {
                 continue;
             }
             let speed = ship.physics.body.linear_velocity.length();
-            let dt = self.core.sim.dt;
-            self.view.hull_shake[slot]
+            let dt = core.sim.dt;
+            self.hull_shake[slot]
                 .get_or_insert_with(|| Shake::new(&law, slot))
                 .advance(&law, dt, speed);
         }
-    }
-
-    /// `slot`'s shake matrix this tick, identity where there is none.
-    pub(super) fn hull_shake_of(&self, slot: usize) -> Mat4 {
-        self.view.hull_shake[slot]
-            .as_ref()
-            .map_or(Mat4::IDENTITY, Shake::local)
     }
 }
 

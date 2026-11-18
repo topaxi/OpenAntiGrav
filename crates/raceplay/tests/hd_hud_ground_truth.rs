@@ -1223,7 +1223,7 @@ fn a_held_stick_reaches_the_hud_as_the_drawn_leans_follower() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading the race");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     let held = |stick_x: f32| {
         let mut buttons = Input::new();
         buttons.begin_frame(Button::Cross.bit());

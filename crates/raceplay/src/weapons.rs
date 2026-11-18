@@ -23,7 +23,7 @@ pub(crate) use visuals::{CannonAssets, CannonDraw};
 // `bounced_this_tick` reaches beyond this module now: `crate::tick`'s
 // own sibling loop needs it too, for `Cue::MissileHitWall` and
 // `Cue::ShurikenHit`, the same `bounces_before`/after edge
-// `Race::ignite_missile_bounces` already reads for the visual. Not
+// `RaceView::ignite_missile_bounces` already reads for the visual. Not
 // `#[cfg(test)]` any more for that reason - production code calls through
 // this path, not only `race/tests/weapons.rs`.
 #[cfg(feature = "view")]
@@ -278,9 +278,10 @@ impl Race {
                         oag_gameplay::cue::Cue::Turbo,
                         slot,
                     ));
-                    self.boost_plume(slot);
                     #[cfg(feature = "view")]
-                    self.fire_zoom_boost(slot);
+                    crate::stage::stage!(self).boost_plume(slot);
+                    #[cfg(feature = "view")]
+                    crate::stage::stage!(self).fire_zoom_boost(&self.core, slot);
                 }
                 oag_tables::weapons::Weapon::Shield => {
                     let Some(simple) = weapons.simple(weapon) else {
@@ -301,7 +302,8 @@ impl Race {
                     // nothing having happened, and here something did.
                     if self.core.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0 {
                         self.core.sim.world.ships[slot].physics.shield_pickup_timer = simple.time;
-                        self.shield_activate(slot);
+                        #[cfg(feature = "view")]
+                        crate::stage::stage!(self).shield_activate(slot);
                     }
                 }
                 oag_tables::weapons::Weapon::Autopilot => {
@@ -681,7 +683,8 @@ impl Race {
             // `WO_WEAPON_ABSORB` burst staggered over the hull's locators.
             // See `race::absorb` and `docs/ghidra/functions/psp-pulse-usa/shield.md`.
             #[cfg(feature = "view")]
-            self.play_absorb_feedback(slot, true);
+            self.core
+                .lending_cues(|_, cues| self.view.play_absorb_feedback(cues, slot, true));
         }
         // `Held::take` rather than a direct write - see its doc comment for
         // why an absorb mid-drop has to clear more than the visible weapon.
@@ -943,7 +946,8 @@ impl Race {
             // would restart on every round and never reach a lit phase.
             #[cfg(feature = "view")]
             if remaining + 1 == rounds {
-                self.note_incoming_fire(slot, oag_tables::weapons::Weapon::Cannon);
+                self.view
+                    .note_incoming_fire(&self.core, slot, oag_tables::weapons::Weapon::Cannon);
             }
         }
     }

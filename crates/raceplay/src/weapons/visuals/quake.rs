@@ -1,4 +1,4 @@
-//! The Quake wave's riding effect: [`Race::advance_quake_visual`].
+//! The Quake wave's riding effect: [`crate::RaceView::advance_quake_visual`].
 //!
 //! Split out of `visuals.rs` under the 1,000-line rule; a move.
 
@@ -29,12 +29,13 @@ fn surface_wave(left: Vec3, right: Vec3, up: Vec3, age: f32) -> oag_mesh::mesh_r
     }
 }
 
-impl Race {
+#[cfg(feature = "view")]
+impl RaceView {
     /// Keeps [`Trigger::Quake`] and its own transform riding the travelling
     /// wave, one instance for the whole race.
     ///
-    /// Needs `self.core.sim.course` (to place the wave along the ring) and
-    /// `self.core.sim.spline` (to read the track's own width there), which is why this
+    /// Needs `core.sim.course` (to place the wave along the ring) and
+    /// `core.sim.spline` (to read the track's own width there), which is why this
     /// cannot live in `oag_weapons::projectile::quake` at all - see that
     /// module's own doc comment on the split.
     ///
@@ -67,20 +68,20 @@ impl Race {
     /// (`oag_title::QuakeLook`, `psp-pure-usa/quake.md`).
     ///
     /// Releases the instance the tick the wave goes away
-    /// (`self.core.sim.world.quake` becomes `None`), as `Quake_Update` does
+    /// (`core.sim.world.quake` becomes `None`), as `Quake_Update` does
     /// (`Psys_ReleaseHandle`, `now != 0`): the same "hand the slot back, free
     /// the templates, let the particles fade" shape
-    /// [`Race::advance_projectile_flares`] takes.
-    pub(crate) fn advance_quake_visual(&mut self) {
-        let Some(wave) = self.core.sim.world.quake else {
-            self.view.quake_point = None;
-            self.view.quake_surface = None;
-            if let Some(playing) = self.view.quake_effect.take() {
-                self.view.stage.release(playing);
+    /// [`crate::RaceView::advance_projectile_flares`] takes.
+    pub(crate) fn advance_quake_visual(&mut self, core: &SimRace) {
+        let Some(wave) = core.sim.world.quake else {
+            self.quake_point = None;
+            self.quake_surface = None;
+            if let Some(playing) = self.quake_effect.take() {
+                self.stage.release(playing);
             }
             return;
         };
-        let Some(course) = self.core.sim.course.as_deref() else {
+        let Some(course) = core.sim.course.as_deref() else {
             return;
         };
         let Some(index) = course_index_near_progress(course, wave.progress) else {
@@ -89,7 +90,7 @@ impl Race {
         let Some(position) = course.position(index) else {
             return;
         };
-        let Some((_, sample, _)) = self.core.sim.spline.nearest(position) else {
+        let Some((_, sample, _)) = core.sim.spline.nearest(position) else {
             return;
         };
         let lateral = Vec3::from_array(sample.lateral);
@@ -97,20 +98,20 @@ impl Race {
         let left = centre - lateral * sample.half_width_left;
         let right = centre + lateral * sample.half_width_right;
         let midpoint = (left + right) * 0.5;
-        self.view.quake_point = Some(midpoint);
+        self.quake_point = Some(midpoint);
         let track_up = (-Vec3::from_array(sample.down))
             .try_normalize()
             .unwrap_or(Vec3::Y);
         // The road itself: lifted wherever a surface carries
         // `GpuVertex::quake`, which is where the disc ships a `StaticQuake`
         // program, so only Wipeout HD's (`Race::quake_wave`).
-        self.view.quake_surface = Some(surface_wave(left, right, track_up, wave.age));
+        self.quake_surface = Some(surface_wave(left, right, track_up, wave.age));
         let scale = (right - left).length() / 50.0;
         // The frame's `X` runs edge to edge: `Quake_Update`'s basis starts
         // from `normalize(B - A)` as its first row (`0x0891da08`).
         let across = right - left;
 
-        let Some(effect) = self.view.handles.get(Trigger::Quake).cloned() else {
+        let Some(effect) = self.handles.get(Trigger::Quake).cloned() else {
             return;
         };
         // Where the extent law is on (Pulse on the PSP), severity stays
@@ -121,7 +122,7 @@ impl Race {
         // (`psys::Effect::without_extents`).
         let stretches = effect.has_extents();
         let severity = if stretches { 1.0 } else { scale };
-        let frame = self.view.handles.quake_look();
+        let frame = self.handles.quake_look();
         let frame_up = match frame.up {
             oag_title::QuakeUp::Track => track_up,
             oag_title::QuakeUp::World => Vec3::Y,
@@ -135,14 +136,14 @@ impl Race {
             }
             _ => midpoint,
         };
-        let playing = match self.view.quake_effect {
+        let playing = match self.quake_effect {
             None => {
-                self.view.quake_effect = self.view.stage.attach(&effect, anchor, severity);
-                self.view.quake_effect
+                self.quake_effect = self.stage.attach(&effect, anchor, severity);
+                self.quake_effect
             }
             Some(playing) => {
-                self.view.stage.follow(playing, anchor);
-                self.view.stage.rescale(playing, severity);
+                self.stage.follow(playing, anchor);
+                self.stage.rescale(playing, severity);
                 Some(playing)
             }
         };
@@ -154,13 +155,13 @@ impl Race {
         // lists `WO_QUAKE` in `Effects::extents`): `frame_up` is the title's
         // own, the track's up on Pulse and world up on Pure.
         if let (true, Some(playing)) = (stretches, playing) {
-            self.view.stage.stretch(playing, scale, across);
-            self.view.stage.orient(playing, frame_up);
+            self.stage.stretch(playing, scale, across);
+            self.stage.orient(playing, frame_up);
         }
         // Every frame the wave's instance lives, at the span's first edge
         // point - `left` here, the same reading `across` makes (chosen: which
         // of `Quake_SampleSpan`'s two points is `A` is not read).
-        if let (Some(_), Some(flash)) = (playing, &mut self.view.screen_flash) {
+        if let (Some(_), Some(flash)) = (playing, &mut self.screen_flash) {
             flash.start(oag_fx::flash::QUAKE, left);
         }
     }

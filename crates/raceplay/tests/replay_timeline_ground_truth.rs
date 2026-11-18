@@ -125,7 +125,7 @@ pub(crate) fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::Path
     let source = source(title)?;
     let loaded = race::load(&single_race(&source)).expect("loading the race");
     let seed = loaded.setup.seed;
-    let mut race = Race::start(loaded.setup);
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.apply_launch(&launch());
     race.start_recording(header_of(title, oag_race::Mode::SingleRace, seed));
     let assist = assist_level(&race);
@@ -198,15 +198,40 @@ fn same_text(title: &str, tick: u64, timeline: &Timeline, recorded: &str) {
     assert_eq!(text.len(), recorded.len(), "{title}: tick {tick}");
 }
 
+/// What `Race::start` takes, kept together so a test can start the same race again.
+#[derive(Clone)]
+struct Start {
+    setup: race::SimSetup,
+    view: race::ViewSetup,
+    modules: race::extensions::Prepared,
+}
+
+impl Start {
+    fn of(loaded: race::Loaded) -> Self {
+        Self {
+            setup: loaded.setup,
+            view: loaded.view,
+            modules: loaded.modules,
+        }
+    }
+
+    fn race(self) -> Race {
+        Race::start(self.setup, self.view, self.modules)
+    }
+}
+
 /// The race a file names, loaded from its header alone.
-fn file_setup(source: &Path, run: &Run) -> race::Setup {
-    race::replay::load_recorded(&run.replay.header, &source.display().to_string())
-        .expect("rebuilds")
+fn file_setup(source: &Path, run: &Run) -> Start {
+    Start::of(
+        race::replay::load_recorded(&run.replay.header, &source.display().to_string())
+            .expect("rebuilds"),
+    )
 }
 
 /// Opens the file as a viewer does, seeking to the prefix's end while the pass runs.
-fn opened(title: &str, setup: race::Setup, run: &Run) -> Timeline {
-    let mut timeline = Timeline::open(setup, run.replay.clone()).expect("agrees at tick zero");
+fn opened(title: &str, start: Start, run: &Run) -> Timeline {
+    let mut timeline = Timeline::open(start.setup, start.view, start.modules, run.replay.clone())
+        .expect("agrees at tick zero");
     let mut during = 0;
     while timeline.pass() == Pass::Running {
         if let Some(prefix) = timeline.prefix() {
@@ -276,14 +301,14 @@ fn seeks_reproduce(title: &str, timeline: &mut Timeline, run: &Run) {
 
 /// A second drive of the run with a visit in the middle: the live race's hash stays the
 /// recorded one at every tick after it, and its text is the same either side.
-fn a_visit_changes_nothing(title: &str, setup: race::Setup, run: &Run) {
+fn a_visit_changes_nothing(title: &str, start: Start, run: &Run) {
     let visit_at = 1_500;
-    let seed = setup.seed;
-    let mut live = Race::start(setup.clone());
+    let seed = start.setup.seed;
+    let mut live = start.clone().race();
     live.core.sim.apply_launch(&launch());
     live.start_recording(header_of(title, oag_race::Mode::SingleRace, seed));
     let assist = assist_level(&live);
-    let mut timeline = Timeline::live(setup, &live);
+    let mut timeline = Timeline::live(start.setup, start.view, start.modules, &live);
     let early = 12;
     let mut early_text = String::new();
     for tick in 0..visit_at + 300 {
@@ -324,10 +349,17 @@ fn a_visit_changes_nothing(title: &str, setup: race::Setup, run: &Run) {
 
 /// The file's rebuild and pass reproduce; a ceiling a third of the keyframes doubles the
 /// interval twice and a seek still arrives, from further away.
-fn thinned(title: &str, setup: race::Setup, run: &Run, whole: &Timeline) {
+fn thinned(title: &str, start: Start, run: &Run, whole: &Timeline) {
     let one = 32 * 1024;
     let ceiling = whole.keyframes() * one / 3;
-    let mut timeline = Timeline::open_within(setup, run.replay.clone(), ceiling).expect("opens");
+    let mut timeline = Timeline::open_within(
+        start.setup,
+        start.view,
+        start.modules,
+        run.replay.clone(),
+        ceiling,
+    )
+    .expect("opens");
     assert_eq!(timeline.wait(), Pass::Complete, "{title}");
     assert_eq!(timeline.interval(), 4 * KEYFRAME_TICKS, "{title}");
     let target = 240 * 5 + 239;
@@ -381,13 +413,13 @@ fn a_rewind_changes_nothing(title: &str) {
     let Some((source, run)) = record(title, Some(1_900)) else {
         return;
     };
-    let setup = file_setup(&source, &run);
-    let seed = setup.seed;
-    let mut live = Race::start(setup.clone());
+    let start = file_setup(&source, &run);
+    let seed = start.setup.seed;
+    let mut live = start.clone().race();
     live.core.sim.apply_launch(&launch());
     live.start_recording(header_of(title, oag_race::Mode::SingleRace, seed));
     let assist = assist_level(&live);
-    let mut keeper = Keeper::new(setup, &live);
+    let mut keeper = Keeper::new(start.setup, start.view, start.modules, &live);
     let visit_at = 1_500;
     for tick in 0..visit_at + 300 {
         write_between_ticks(&mut live, assist, tick);
@@ -466,9 +498,9 @@ fn a_split_screen_recording_reproduces() {
         mode,
         ..single_race(&source)
     };
-    let setup = race::load(&options).expect("loading the race").setup;
-    let seed = setup.seed;
-    let mut race = Race::start(setup.clone());
+    let start = Start::of(race::load(&options).expect("loading the race"));
+    let seed = start.setup.seed;
+    let mut race = start.clone().race();
     let unseated = race.core.sim.state_hash();
     race.core.sim.apply_launch(&launch());
     assert_eq!(race.set_viewport_count(2), 2);
@@ -528,7 +560,8 @@ fn the_opening_pass_costs() {
     };
     let setup = file_setup(&source, &run);
     let clock = Instant::now();
-    let mut timeline = Timeline::open(setup, run.replay.clone()).expect("opens");
+    let mut timeline =
+        Timeline::open(setup.setup, setup.view, setup.modules, run.replay.clone()).expect("opens");
     let opened = clock.elapsed().as_secs_f64();
     while timeline.prefix().is_none() {
         std::hint::spin_loop();
@@ -588,7 +621,7 @@ fn dump_the_recordings_for_a_compressor() {
     let options = single_race(&source);
     let loaded = race::load(&options).expect("loading the race");
     let seed = loaded.setup.seed;
-    let mut race = Race::start(loaded.setup);
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.apply_launch(&launch());
     race.start_recording(header_of(&title, oag_race::Mode::SingleRace, seed));
     race.core.sim.set_autopilot(true);

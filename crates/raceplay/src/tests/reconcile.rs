@@ -54,7 +54,11 @@ fn loopback_race() -> Race {
     let mut handling = hulled_handling();
     handling.engine.amount = 20.0;
     handling.engine.accelcap = 1000.0;
-    without_player_rescue(Race::start(setup(handling)))
+    without_player_rescue(Race::start(
+        setup(handling),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ))
 }
 
 /// One tick's input for the player's slot, steering by `stick_x`.

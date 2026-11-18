@@ -157,7 +157,7 @@ pub fn run(
             }
         });
         let (timing, difficulty) = (Timing::of(&demo, config), loaded.setup.difficulty);
-        let mut race = Race::start(loaded.setup);
+        let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
         crate::ai_choice::apply(
             &mut race,
             crate::ai_choice::AiChoice::default(),
@@ -190,7 +190,7 @@ pub fn run(
             moved,
             ticks: run.ticks(),
             leave,
-            cuts: race.camera_cuts(),
+            cuts: race.view_state().camera_cuts(&race.core),
             spectated: race.spectator_mode().is_some(),
             screen,
             screen_notes,

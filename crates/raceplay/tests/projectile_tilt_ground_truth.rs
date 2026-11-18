@@ -92,7 +92,7 @@ fn start(image: &str, track: &str) -> Option<race::Race> {
     // that falls outside the settling window (`docs/gameplay/projectile-floor.md`,
     // "HD Plasma, launch boost on").
     loaded.setup.start_boost = None;
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// Fires `weapon` from the autopilot's craft every 30 ticks for `ticks` ticks,

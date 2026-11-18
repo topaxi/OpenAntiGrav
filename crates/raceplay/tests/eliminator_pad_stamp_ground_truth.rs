@@ -28,7 +28,7 @@ fn refresh(source: &std::path::Path, track: Option<&str>, mode: Mode) -> f32 {
     let refresh = loaded.setup.weapon_pad_refresh;
     if mode == Mode::Eliminator {
         assert!(
-            !race::Race::start(loaded.setup)
+            !race::Race::start(loaded.setup, loaded.view, loaded.modules)
                 .core
                 .sim
                 .weapon_pads()

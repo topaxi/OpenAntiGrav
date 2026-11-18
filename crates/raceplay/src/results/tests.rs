@@ -239,7 +239,7 @@ fn the_end_screens_sit_over_one_view_and_the_split_is_kept() {
     race.tick(&PlayerInputs::none());
     assert!(race.core.sim.finished());
     assert_eq!(race.views_drawn(), 1);
-    assert_eq!(race.viewport_count(), 2);
+    assert_eq!(race.view.viewport_count(), 2);
 }
 
 /// A craft the autopilot flies is the primary's, and in a split every other local

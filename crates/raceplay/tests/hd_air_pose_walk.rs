@@ -79,7 +79,7 @@ fn the_original_hd_capture_stepped_once_per_row() {
     })
     .expect("loading the race");
     let gravity = loaded.setup.class_gravity_scale;
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     // `OAG_HD_OPENLOOP=<ticks>`: fly our own race with no input and print the player's clamp and
     // body height per tick, to set against a `--ramp` capture's `timer` and `py`.
     if let Ok(ticks) = std::env::var("OAG_HD_OPENLOOP") {

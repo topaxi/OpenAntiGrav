@@ -138,7 +138,7 @@ impl super::super::Scene {
             let (centre, radius) = ship.bound();
             super::super::craft_cull::hull_in_view(
                 frustum,
-                race.ship_model_matrix_of(slot),
+                race.view.ship_model_matrix_of(&race.core, slot),
                 centre,
                 radius,
             )
@@ -339,7 +339,7 @@ impl super::super::Scene {
         models.extend(
             (0..drawn.min(self.ships.len()))
                 .filter(|&slot| race.core.sim.ship_active(slot))
-                .map(|slot| (slot, race.ship_model_matrix_of(slot))),
+                .map(|slot| (slot, race.view.ship_model_matrix_of(&race.core, slot))),
         );
         rank_by_distance(
             models
@@ -381,15 +381,13 @@ impl super::super::Scene {
     /// not measured**: the original has one camera.
     fn rank_references(&self, race: &Race, points: &mut Vec<Vec3>) {
         points.clear();
-        points.push(race.camera_position());
+        points.push(race.view.camera_position(&race.core));
         if race.core.sim.people() > 1 {
-            points.extend(
-                race.core
-                    .sim
-                    .world
-                    .human_slots()
-                    .map(|slot| race.ship_model_matrix_of(slot).transform_point3(Vec3::ZERO)),
-            );
+            points.extend(race.core.sim.world.human_slots().map(|slot| {
+                race.view
+                    .ship_model_matrix_of(&race.core, slot)
+                    .transform_point3(Vec3::ZERO)
+            }));
         }
     }
 }
@@ -509,7 +507,7 @@ impl super::super::Scene {
             if !self.hull_seen(race, slot, frustum) {
                 continue;
             }
-            let model = race.ship_model_matrix_of(slot);
+            let model = race.view.ship_model_matrix_of(&race.core, slot);
             // Fitted to the craft alone, in the box the coverage maps use
             // ([`oag_render::shadow::map::Fit::craft`]). **Not the drawable's
             // bounding radius**: an HD `Ship.vex` measures over 200 units
@@ -600,7 +598,7 @@ impl super::super::Scene {
                 drawable.write_hull(
                     queue,
                     view_projection,
-                    race.ship_model_matrix_of(slot),
+                    race.view.ship_model_matrix_of(&race.core, slot),
                     prev_vp * prev.ship(slot, race),
                     HullLayers {
                         sun_occlusion: self.sun_occlusion_layer(slot),
@@ -697,14 +695,14 @@ impl super::super::Scene {
         if self.layer.get() == Layer::Whole {
             0
         } else {
-            race.viewed_slot()
+            race.view.viewed_slot(&race.core)
         }
     }
 
     /// The `mapped` tier's fit around the craft in `slot`.
     pub(crate) fn mapped_fit_for(&self, race: &Race, slot: usize) -> oag_render::shadow::map::Fit {
         mapped_fit(
-            race.ship_model_matrix_of(slot),
+            race.view.ship_model_matrix_of(&race.core, slot),
             mapped_light(&self.light, race.scenery_fx().sun(self.anim_clock.get())),
             self.shadow_resolution.depth_size(),
         )
@@ -717,7 +715,7 @@ impl super::super::Scene {
         slot: usize,
     ) -> oag_render::shadow::map::Fit {
         mapped_far_fit(
-            race.ship_model_matrix_of(slot),
+            race.view.ship_model_matrix_of(&race.core, slot),
             mapped_light(&self.light, race.scenery_fx().sun(self.anim_clock.get())),
             self.shadow_resolution.depth_size(),
         )
@@ -819,7 +817,7 @@ impl super::super::Scene {
         let mut bodies = Vec::new();
         let drawn = usize::from(race.core.sim.ship_count());
         for slot in 0..drawn.min(self.ships.len()) {
-            let model = race.ship_model_matrix_of(slot);
+            let model = race.view.ship_model_matrix_of(&race.core, slot);
             if self.is_wrecked(race, slot) {
                 if let Some(wreck) = self.wrecks.hull(slot) {
                     bodies.push((wreck, model));

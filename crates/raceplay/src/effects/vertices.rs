@@ -5,20 +5,6 @@
 use super::*;
 
 impl Race {
-    /// Forgets every particle pool's last tick of motion
-    /// (`oag_fx::psys::System::hold_still`), at the start of every tick path:
-    /// a pool the path then advances takes this tick's move, and one it does
-    /// not draws still between the ticks rather than replaying a stale move.
-    /// The weather's fields need none: they draw with no move at all.
-    pub(crate) fn hold_particles_still(&mut self) {
-        self.view.stage.hold_still();
-        self.view.contact.sparks.hold_still();
-        for fx in self.view.viewpoints.contact.iter_mut().flatten() {
-            fx.sparks.hold_still();
-        }
-        self.view.scenery_fx.hold_still();
-    }
-
     /// The collision sparks' geometry this frame, split by blend class.
     ///
     /// The pool and the effect it plays are handed out together because
@@ -54,7 +40,7 @@ impl Race {
     /// That source is the one whose flash answers every kind; Pure's
     /// Quake-only wash is not a sign of it.
     pub(crate) fn stage_guard_band(&self) -> Option<psys::guard::GuardBand> {
-        let camera = self.camera_frame();
+        let camera = self.view.camera_frame(&self.core);
         self.view
             .screen_flash
             .as_ref()
@@ -80,7 +66,7 @@ impl Race {
         right: Vec3,
         up: Vec3,
     ) {
-        let camera = self.camera_frame();
+        let camera = self.view.camera_frame(&self.core);
         let guard = self.stage_guard_band();
         self.view
             .stage
@@ -93,7 +79,7 @@ impl Race {
             .scenery_fx
             .weather()
             .extend_vertices(additive, alpha_over, camera, right, up);
-        if self.enhanced_weather() {
+        if self.view.enhanced_weather() {
             self.view
                 .scenery_fx
                 .weather()
@@ -130,5 +116,22 @@ impl Race {
             .scenery_fx
             .stage()
             .extend_distort_vertices(out, right, up);
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Forgets every particle pool's last tick of motion
+    /// (`oag_fx::psys::System::hold_still`), at the start of every tick path:
+    /// a pool the path then advances takes this tick's move, and one it does
+    /// not draws still between the ticks rather than replaying a stale move.
+    /// The weather's fields need none: they draw with no move at all.
+    pub(crate) fn hold_particles_still(&mut self) {
+        self.stage.hold_still();
+        self.contact.sparks.hold_still();
+        for fx in self.viewpoints.contact.iter_mut().flatten() {
+            fx.sparks.hold_still();
+        }
+        self.scenery_fx.hold_still();
     }
 }

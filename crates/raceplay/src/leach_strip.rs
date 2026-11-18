@@ -11,6 +11,10 @@
 //! ribbon does not.
 
 use crate::RaceSim;
+#[cfg(feature = "view")]
+use crate::RaceView;
+#[cfg(feature = "view")]
+use crate::SimRace;
 use oag_core::math::{Mat4, Vec3};
 use oag_fx::exhaust::FlareTexture;
 use oag_fx::leach_strip::{self as law, AnchorTrail, Phase};
@@ -107,27 +111,6 @@ impl Race {
             None => false,
         }
     }
-
-    /// The craft's anchor this tick: its `arc_anchor_point` node's position
-    /// pushed [`law::ANCHOR_OFFSET`] along the node's row 1, unnormalised: the
-    /// model matrix carries the craft scale, as the original's world matrix
-    /// does (row length 0.75, read live). A hull with no
-    /// locator takes the body the same way, as the original's own fallback
-    /// does (`0x001169f8`).
-    fn leach_anchor(&self, anchors: &[Option<Mat4>; MAX_SHIPS], slot: usize) -> Vec3 {
-        let model = self.ship_model_matrix_of(slot);
-        match anchors[slot] {
-            Some(anchor) => {
-                let node = model * anchor;
-                law::anchor_point(node.w_axis.truncate(), node.y_axis.truncate())
-            }
-            // The body's own rows are unit length, unlike a node's scaled ones.
-            None => law::anchor_point(
-                model.w_axis.truncate(),
-                model.y_axis.truncate().normalize_or_zero(),
-            ),
-        }
-    }
 }
 
 impl RaceSim {
@@ -138,20 +121,6 @@ impl RaceSim {
         let standing = &self.world.ships[slot].standing;
         standing.lap.saturating_sub(1) as f32 * self.leach_course_length()
             + standing.progress.unwrap_or(0.0)
-    }
-}
-
-impl Race {
-    /// The craft's trail record as of now: anchor, progress and the body's
-    /// rows 0 and 1 (`+0x1d0`, `+0x1e0`), here the physics body's own axes.
-    fn leach_record(&self, anchors: &[Option<Mat4>; MAX_SHIPS], slot: usize) -> law::Record {
-        let orientation = self.core.sim.world.ships[slot].physics.body.orientation;
-        law::Record {
-            anchor: self.leach_anchor(anchors, slot),
-            progress: self.core.sim.leach_progress(slot),
-            row0: orientation * Vec3::X,
-            row1: orientation * Vec3::Y,
-        }
     }
 }
 
@@ -166,31 +135,6 @@ impl RaceSim {
 }
 
 impl Race {
-    /// `LeachTrail_RecordAnchor`, every tick, every craft; and the wobble's
-    /// phases, which step once a tick while a beam lives and **carry over to the
-    /// next beam**: read live: the original's phases
-    /// start at 0 with the race, stand still between beams and go on from where
-    /// the last beam left them (0.133 at one fire, then 0.15, 0.583, 0.917
-    /// through states 2, 3 and 4), never reset at a fire.
-    pub(crate) fn advance_leach_strip(&mut self) {
-        let Some(mut strip) = self.view.leach_strip.take() else {
-            return;
-        };
-        for slot in 0..usize::from(self.core.sim.world.ship_count).min(MAX_SHIPS) {
-            if !self.core.sim.ship_active(slot) {
-                continue;
-            }
-            let record = self.leach_record(&strip.anchors, slot);
-            strip.trails[slot].record(record);
-        }
-        // One set of phases for the whole race, stepped once a tick while any beam
-        // lives (chosen: the original has one beam to read them off).
-        if self.core.sim.leach_beams_live().next().is_some() {
-            law::advance_wobble(&mut strip.phases);
-        }
-        self.view.leach_strip = Some(strip);
-    }
-
     /// The strip's triangle list for this frame, empty while there is no
     /// live beam, while the ball still flies, or once the link broke (HD draws
     /// states 3 and 4 only: no linger fade).
@@ -253,8 +197,8 @@ impl Race {
     ) -> WalkedPath {
         let (shooter, target) = (usize::from(beam.owner), usize::from(beam.target));
         let (shooter_record, target_record) = (
-            self.leach_record(&strip.anchors, shooter),
-            self.leach_record(&strip.anchors, target),
+            self.view.leach_record(&self.core, &strip.anchors, shooter),
+            self.view.leach_record(&self.core, &strip.anchors, target),
         );
         let shooter_walked = target_record.progress < shooter_record.progress;
         let (leader, leader_record, trailer_record) = if shooter_walked {
@@ -325,3 +269,77 @@ struct WalkedPath {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// `LeachTrail_RecordAnchor`, every tick, every craft; and the wobble's
+    /// phases, which step once a tick while a beam lives and **carry over to the
+    /// next beam**: read live: the original's phases
+    /// start at 0 with the race, stand still between beams and go on from where
+    /// the last beam left them (0.133 at one fire, then 0.15, 0.583, 0.917
+    /// through states 2, 3 and 4), never reset at a fire.
+    pub(crate) fn advance_leach_strip(&mut self, core: &SimRace) {
+        let Some(mut strip) = self.leach_strip.take() else {
+            return;
+        };
+        for slot in 0..usize::from(core.sim.world.ship_count).min(MAX_SHIPS) {
+            if !core.sim.ship_active(slot) {
+                continue;
+            }
+            let record = self.leach_record(core, &strip.anchors, slot);
+            strip.trails[slot].record(record);
+        }
+        // One set of phases for the whole race, stepped once a tick while any beam
+        // lives (chosen: the original has one beam to read them off).
+        if core.sim.leach_beams_live().next().is_some() {
+            law::advance_wobble(&mut strip.phases);
+        }
+        self.leach_strip = Some(strip);
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The craft's anchor this tick: its `arc_anchor_point` node's position
+    /// pushed [`law::ANCHOR_OFFSET`] along the node's row 1, unnormalised: the
+    /// model matrix carries the craft scale, as the original's world matrix
+    /// does (row length 0.75, read live). A hull with no
+    /// locator takes the body the same way, as the original's own fallback
+    /// does (`0x001169f8`).
+    fn leach_anchor(
+        &self,
+        core: &SimRace,
+        anchors: &[Option<Mat4>; MAX_SHIPS],
+        slot: usize,
+    ) -> Vec3 {
+        let model = self.ship_model_matrix_of(core, slot);
+        match anchors[slot] {
+            Some(anchor) => {
+                let node = model * anchor;
+                law::anchor_point(node.w_axis.truncate(), node.y_axis.truncate())
+            }
+            // The body's own rows are unit length, unlike a node's scaled ones.
+            None => law::anchor_point(
+                model.w_axis.truncate(),
+                model.y_axis.truncate().normalize_or_zero(),
+            ),
+        }
+    }
+
+    /// The craft's trail record as of now: anchor, progress and the body's
+    /// rows 0 and 1 (`+0x1d0`, `+0x1e0`), here the physics body's own axes.
+    fn leach_record(
+        &self,
+        core: &SimRace,
+        anchors: &[Option<Mat4>; MAX_SHIPS],
+        slot: usize,
+    ) -> law::Record {
+        let orientation = core.sim.world.ships[slot].physics.body.orientation;
+        law::Record {
+            anchor: self.leach_anchor(core, anchors, slot),
+            progress: core.sim.leach_progress(slot),
+            row0: orientation * Vec3::X,
+            row1: orientation * Vec3::Y,
+        }
+    }
+}

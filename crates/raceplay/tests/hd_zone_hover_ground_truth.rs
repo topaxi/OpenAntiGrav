@@ -33,7 +33,7 @@ fn zone() -> Option<Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(Race::start(loaded.setup))
+    Some(Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// The craft's centre above the surface straight below it, along that surface's normal.

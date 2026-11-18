@@ -557,7 +557,7 @@ impl Session {
                 let timed = if stage.race.windowed() {
                     stage.race.window_drawn(0).len() == 1
                 } else {
-                    stage.race.viewport_count() <= 1
+                    stage.race.view_state().viewport_count() <= 1
                 };
                 if !timed && let Some(timer) = self.pass_timer.as_mut() {
                     timer.abandon();

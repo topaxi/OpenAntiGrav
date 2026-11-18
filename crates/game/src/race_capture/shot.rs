@@ -27,7 +27,7 @@ impl Facts {
         launch.autopilot = options.autopilot;
         launch.pilot_assist = options.pilot_assist;
         let team = loaded
-            .setup
+            .view
             .request
             .as_ref()
             .and_then(|request| request.team.clone())

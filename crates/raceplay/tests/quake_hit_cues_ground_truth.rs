@@ -9,7 +9,7 @@
 //! until the sparks' gate also raised `Cue::Collision`.
 //!
 //! The rival's wave is launched with `SimRace::force_quake`, the same aid
-//! `--force-quake` is. Dropping the cue from `Race::throw_hit_spark` takes the
+//! `--force-quake` is. Dropping the cue from `Stage::throw_hit_spark` takes the
 //! `.COLLISIONS` count to zero here.
 //!
 //! **`#[ignore]`d and never run in CI**: it needs a disc image.
@@ -30,7 +30,7 @@ fn a_quake_hit_on_the_player_plays_quakehit_and_the_hull_s_collision_cues() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..oag_race::COUNTDOWN_TICKS + 30 {
         race.tick(&PlayerInputs::none());
     }

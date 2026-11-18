@@ -221,7 +221,7 @@ impl Race {
             // target" would cut off.
             sight: Some(self.drawn_sight(slot)),
             shield_flashing: hud.shield_flash_timer > 0.0,
-            shield_absorbing: self.absorb_window_active(slot),
+            shield_absorbing: self.view.absorb_window_active(slot),
             shield_blink_phase: hud.shield_blink_timer,
             shield_flashing_whole: hud.shield_flash_timer_whole > 0.0,
             shield_blink_phase_whole: hud.shield_blink_timer_whole,
@@ -322,7 +322,7 @@ impl Race {
     /// that crossing, the place the field gives them (frozen at the finish tick,
     /// see [`oag_race::Standing::finish_tick`]) and a standing line.
     pub(super) fn finished_view(&self, slot: usize) -> Option<FinishedView> {
-        if self.viewport_count() <= 1 || !self.core.sim.world.person_flown(slot) {
+        if self.view.viewport_count() <= 1 || !self.core.sim.world.person_flown(slot) {
             return None;
         }
         let finish = self.core.sim.world.ships[slot].standing.finish_tick?;
@@ -383,7 +383,7 @@ impl SimRace {
     #[cfg(feature = "view")]
     /// The Eliminator's kill column, top row first, in the order the original
     /// draws it - see [`oag_hud::kill_tags`]. Empty in every other mode, and
-    /// for a slot with no team on record (a `Setup` built by hand).
+    /// for a slot with no team on record (a `SimSetup` built by hand).
     fn kill_tags(&self, player: usize) -> Vec<oag_hud::KillTag> {
         let world = &self.sim.world;
         if world.mode() != oag_race::Mode::Eliminator {

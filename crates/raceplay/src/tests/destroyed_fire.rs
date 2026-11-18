@@ -67,7 +67,11 @@ fn a_destroyed_opponent_uses_nothing() {
             up: [0.0, 1.0, 0.0],
             forward: [1.0, 0.0, 0.0],
         });
-        let mut race = Race::start(setup);
+        let mut race = Race::start(
+            setup,
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+        );
         for _ in 0..10 {
             race.tick(&PlayerInputs::none());
         }
@@ -205,7 +209,11 @@ fn quake_holder() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.tick(&PlayerInputs::none());
     race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Quake);
     race.core.sim.world.ships[0].pickup.quake_armed = true;

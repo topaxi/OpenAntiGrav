@@ -417,6 +417,8 @@ pub fn capture(
     let Loaded {
         shadows,
         setup,
+        view,
+        modules,
         mut hud,
         track_panel,
         demo_overlay,
@@ -471,11 +473,9 @@ pub fn capture(
         previous.and_then(|record| record.best_total_ticks),
         previous.and_then(|record| record.best_lap_ticks),
     );
-    let weapons_on = setup.weapons_on();
-    // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
-    // fallback when the flag was not given. See `main::stage::build_race_stage`.
-    let difficulty = setup.difficulty;
-    let mut race = Race::start(setup);
+    // Read before `Race::start` takes `setup`; `difficulty` is `--autopilot-skill`'s fallback.
+    let (weapons_on, difficulty) = (setup.weapons_on(), setup.difficulty);
+    let mut race = Race::start(setup, view, modules);
     let start_pose = options.pose_hold.start(&race);
     // With a field warm-up and no ticks to run, the player's boost is armed inside the warm-up so it rides the
     // warmed trail; `force_boost_state` would clear that trail for a straight one (`Race::warm_up_field`).
@@ -862,7 +862,7 @@ pub fn capture(
             let mut primer = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("race capture primer"),
             });
-            if race.viewport_count() > 1 {
+            if race.view_state().viewport_count() > 1 {
                 // A split primes every view's own camera history (it submits its own buffers;
                 // `primer` stays empty).
                 scene.render_viewports(
@@ -954,7 +954,7 @@ pub fn capture(
     // rather than `#[cfg]`, so the harness still type-checks without
     // `perf-probe` and cannot rot between the runs that use it.
     if cfg!(feature = "perf-probe") {
-        let split = race.viewport_count() > 1;
+        let split = race.view_state().viewport_count() > 1;
         let pacer = bench::TickPacer::from_env();
         if !split && !race.windowed() {
             bench::run(&device, &queue, |encoder, timestamps| {
@@ -1151,7 +1151,7 @@ pub fn capture(
             );
             shared_work = true;
             stats
-        } else if race.viewport_count() > 1 {
+        } else if race.view_state().viewport_count() > 1 {
             scene.render_viewports(
                 &device,
                 &queue,
@@ -1320,7 +1320,7 @@ pub fn capture(
                     let observation = describe::observation(&race);
                     // A split's result is nobody's record (slot 0's was a race a second
                     // person was in): no personal-best lines, as the window draws none.
-                    let personal_best = (race.viewport_count() <= 1).then(|| {
+                    let personal_best = (race.view_state().viewport_count() <= 1).then(|| {
                         crate::records::PersonalBest::compare(
                             options.previous_best.as_ref(),
                             &observation,

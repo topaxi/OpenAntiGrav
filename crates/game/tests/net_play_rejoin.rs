@@ -15,7 +15,7 @@ use oag_net::host::Host;
 use oag_net::link::{Cutter, Link, Loopback};
 use oag_net::redial::{Dialed, Dialer};
 use oag_net::wire::RaceParams;
-use oag_raceplay::{Race, Setup};
+use oag_raceplay::{Race, SimSetup};
 
 fn params() -> RaceParams {
     RaceParams {
@@ -30,10 +30,11 @@ fn params() -> RaceParams {
 }
 
 fn race(params: &RaceParams) -> Box<Race> {
-    let mut race = Box::new(Race::start(Setup::headless(
-        oag_race::Mode::SingleRace,
-        params.seed,
-    )));
+    let mut race = Box::new(Race::start(
+        SimSetup::headless(oag_race::Mode::SingleRace, params.seed),
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    ));
     oag_net::race::prepare(&mut race, params).expect("prepares");
     race
 }

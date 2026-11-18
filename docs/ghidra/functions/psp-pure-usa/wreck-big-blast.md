@@ -43,7 +43,7 @@ Pure has no `WO_SHIP_EXPLOSION`. Its executable names `WO_SHIP_FXNODE_BIGEXPLO`,
 ## What is wired
 
 `oag_title::Trigger::WreckBigNode`, `WreckDebris`, `WreckSmoke` in `oag_pure::EFFECTS`, thrown by
-`Race::throw_wreck_explosion` 1.5 s after the state 5 edge (`docs/rendering/hull-sparks.md`, "Other
+`RaceView::throw_wreck_explosion` 1.5 s after the state 5 edge (`docs/rendering/hull-sparks.md`, "Other
 titles"). Unread: the 0xa0 object at step 3 (Pulse's equivalent is the ship shockwave; Pure throws none),
 the per-title sound, the effects' scale (the craft row scale `0.75` is carried from Pulse), and the
 particle parent of step 5 (placed in the world, like Pulse's).

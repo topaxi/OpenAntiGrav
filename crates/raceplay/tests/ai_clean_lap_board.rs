@@ -134,7 +134,7 @@ fn solo_on(track: &str, class: &str, tuning: Option<oag_ai::Tuning>) -> Option<S
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     if let Some(tuning) = tuning {
         race.core.sim.set_ai_tuning(tuning);
     }
@@ -636,7 +636,7 @@ fn what_the_airbrakes_do_through_a_hairpin() {
     }) else {
         return;
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // The same `OAG_SWEEP_CHORD` the board honours, so a stretch can be probed
     // under the estimator that breaks it rather than only under the shipped one.
     if let Some(chord) = std::env::var("OAG_SWEEP_CHORD")
@@ -836,7 +836,7 @@ fn what_is_wrong_with_the_line() {
     };
     let reach = loaded.setup.handling.antigrav.ride_height;
     let collision = loaded.setup.collision.clone();
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let line = race.core.sim.racing_line();
 
     let mut report = format!(

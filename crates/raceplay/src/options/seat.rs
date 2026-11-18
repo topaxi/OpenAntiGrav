@@ -24,7 +24,7 @@ pub struct SeatPick {
 
 impl crate::Options {
     /// How many people fly this race: [`crate::Options::people`], else one per view
-    /// ([`crate::Options::views`]), at least one. What [`crate::Setup::people`] is built from.
+    /// ([`crate::Options::views`]), at least one. What [`crate::SimSetup::people`] is built from.
     #[must_use]
     pub fn people_flying(&self) -> u8 {
         if self.people == 0 {

@@ -122,7 +122,7 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
     for line in &loaded.report {
         println!("{line}");
     }
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core
         .sim
         .plasma_stats()
@@ -312,7 +312,7 @@ fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core
         .sim
         .plasma_stats()

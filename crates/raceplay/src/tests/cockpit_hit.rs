@@ -15,12 +15,13 @@ fn race_with_noise(noise: bool) -> Race {
     let mut handling = hulled_handling();
     handling.dimensions.shield = 100.0;
     let mut setup = setup(handling);
+    let mut view = crate::tests::fixture_view();
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
     if noise {
-        setup.cockpit_hit_noise = Some(oag_fx::exhaust::FlareTexture::placeholder(64));
+        view.cockpit_hit_noise = Some(oag_fx::exhaust::FlareTexture::placeholder(64));
     }
-    let mut race = Race::start(setup);
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -39,16 +40,22 @@ fn landed_on(slot: usize) -> [WeaponHit; MAX_SHIPS] {
 #[test]
 fn a_weapon_hit_on_the_player_arms_the_static_and_a_rivals_does_not() {
     let mut race = race_with_noise(true);
-    race.throw_hit_sparks(&landed_on(1), false);
+    race.core.lending_cues(|core, cues| {
+        crate::stage::stage!(race).throw_hit_sparks(core, cues, &landed_on(1), false)
+    });
     assert!(
         !race.cockpit_hit_running_for_tests(),
         "a rival's hit armed it"
     );
-    race.throw_hit_sparks(&landed_on(0), false);
+    race.core.lending_cues(|core, cues| {
+        crate::stage::stage!(race).throw_hit_sparks(core, cues, &landed_on(0), false)
+    });
     assert!(race.cockpit_hit_running_for_tests());
 
     let mut bare = race_with_noise(false);
-    bare.throw_hit_sparks(&landed_on(0), false);
+    bare.core.lending_cues(|core, cues| {
+        crate::stage::stage!(bare).throw_hit_sparks(core, cues, &landed_on(0), false)
+    });
     assert!(
         !bare.cockpit_hit_running_for_tests(),
         "a title with no noise armed a static"
@@ -119,9 +126,9 @@ fn another_seats_view_wears_none() {
     race.force_weapon_hit(0);
     race.tick(&PlayerInputs::none());
     assert!(race.cockpit_hit_strips().is_some());
-    race.set_viewpoint(1);
+    race.view.set_viewpoint(&race.core, 1);
     assert!(race.cockpit_hit_strips().is_none());
-    race.reset_viewpoint();
+    race.view.reset_viewpoint();
     assert!(race.cockpit_hit_strips().is_some());
 }
 

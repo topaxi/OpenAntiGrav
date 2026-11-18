@@ -78,7 +78,7 @@ pub(super) struct Viewpoints {
     /// [`Self::cams`]: the sparks at its craft and the shake on its camera.
     pub(super) contact: [Option<Box<ContactFx>>; MAX_SHIPS],
     /// The boost zoom-streak pulse of each extra person's view, a fresh one of the player's
-    /// tuning, fired by that seat's own speed pad and Turbo ([`Race::fire_zoom_boost`]).
+    /// tuning, fired by that seat's own speed pad and Turbo ([`crate::stage::Stage::fire_zoom_boost`]).
     pub(super) zoom: [Option<oag_post::hd_zoom::Pulse>; MAX_SHIPS],
 }
 
@@ -120,17 +120,9 @@ impl Viewpoints {
     }
 }
 
-impl Race {
-    /// How many views this race draws. `1` is no split.
-    #[must_use]
-    pub fn viewport_count(&self) -> usize {
-        self.view.viewpoints.count.max(1)
-    }
-}
-
 impl RaceSim {
-    /// How many people fly this race, across every window ([`Setup::people`](super::Setup::people)).
-    /// Not [`Race::viewport_count`]: a `--window-seats 1,1` race draws one view per window and
+    /// How many people fly this race, across every window ([`SimSetup::people`](super::SimSetup::people)).
+    /// Not [`crate::RaceView::viewport_count`]: a `--window-seats 1,1` race draws one view per window and
     /// has two people.
     #[must_use]
     pub fn people(&self) -> usize {
@@ -148,7 +140,10 @@ impl Race {
         if self.windowed() {
             return self.window_cut(0);
         }
-        self.view.viewpoints.cut.for_views(self.viewport_count())
+        self.view
+            .viewpoints
+            .cut
+            .for_views(self.view.viewport_count())
     }
 
     /// Whether the views are dealt across OS windows. See [`Viewpoints::windows`].
@@ -228,9 +223,9 @@ impl Race {
             .seats
             .iter()
             .copied()
-            .filter(|&slot| slot < self.viewport_count())
+            .filter(|&slot| slot < self.view.viewport_count())
             .collect();
-        let flyby = self.in_intro() && !seats.is_empty();
+        let flyby = self.view.in_intro() && !seats.is_empty();
         if flyby || (!seats.is_empty() && self.core.sim.finished()) {
             vec![player]
         } else {
@@ -290,7 +285,7 @@ impl Race {
                 .find(|w| w.seats.contains(&slot))
             {
                 Some(window) => (window.seats.len(), window.cut),
-                None => (race.viewport_count(), race.view.viewpoints.cut),
+                None => (race.view.viewport_count(), race.view.viewpoints.cut),
             };
             cut.for_views(seats) == oag_render::viewport::Cut::Vertical
         };
@@ -298,7 +293,7 @@ impl Race {
         let pick = |vertical: bool| if vertical { columns } else { rows };
         let screen = pick(vertical(self, primary));
         self.view.sight.set_screen(screen);
-        for slot in 0..self.viewport_count() {
+        for slot in 0..self.view.viewport_count() {
             let screen = pick(vertical(self, slot));
             self.view.huds[slot].sight.set_screen(screen);
         }
@@ -311,7 +306,7 @@ impl Race {
         oag_render::viewport::layout(self.views_drawn(), area, self.cut())
     }
 
-    /// How many views are drawn right now: [`Self::viewport_count`] while the race
+    /// How many views are drawn right now: [`crate::RaceView::viewport_count`] while the race
     /// runs, and **one while the intro flyby plays and once the race is over**
     /// (every person has finished). The flyby is the player's own camera and the
     /// extra views have none, so it plays full screen and the split starts when it
@@ -321,7 +316,7 @@ impl Race {
     /// when the split appears.
     ///
     /// **Chosen, not measured**: the original's split screen is not read. The split
-    /// itself ([`Self::viewport_count`]) is left alone, because it is also the
+    /// itself ([`crate::RaceView::viewport_count`]) is left alone, because it is also the
     /// answer to "was this a split race" (no record, no ghost, restart keeps it),
     /// and it picks the draw path: a split race keeps `Scene::render_viewports`,
     /// with no blur, jitter or upscaler history, for its one last view too.
@@ -332,10 +327,10 @@ impl Race {
         if self.windowed() {
             return self.window_drawn(0).len().max(1);
         }
-        if self.in_intro() || self.core.sim.finished() {
+        if self.view.in_intro() || self.core.sim.finished() {
             1
         } else {
-            self.viewport_count()
+            self.view.viewport_count()
         }
     }
 
@@ -375,18 +370,149 @@ impl Race {
         count
     }
 
+    /// How many times the picture being drawn has jumped to a different shot - what a camera
+    /// history watches to throw its previous frame away. The player's view is
+    /// [`crate::RaceView::camera_cuts`]; an extra seat's chase camera jumps when that craft respawns, and
+    /// nothing else of the player's cuts (the flyby, the spectator and destroy cameras) is its.
+    #[must_use]
+    pub fn viewed_camera_cuts(&self) -> u32 {
+        match self.view.extra_viewpoint() {
+            Some(slot) => self
+                .core
+                .sim
+                .placements_of(slot)
+                .wrapping_add(self.view.restores),
+            None => self.view.camera_cuts(&self.core),
+        }
+    }
+
+    /// The craft the view being drawn follows: the player's, or the extra slot.
+    #[must_use]
+    pub fn viewed_ship(&self) -> &Ship {
+        &self.core.sim.world.ships[self.view.viewed_slot(&self.core)]
+    }
+
+    /// [`crate::RaceView::extra_view`] without the shake: where the seat's camera is really pointed.
+    pub(super) fn extra_view_unshaken(&self) -> Option<Mat4> {
+        if let Some(view) = self.view.viewpoints.portal.get() {
+            return Some(view);
+        }
+        self.view
+            .extra_viewpoint()
+            .map(|slot| self.view.viewpoints.view(slot, self.view.draw_alpha()))
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// How many views this race draws. `1` is no split.
+    #[must_use]
+    pub fn viewport_count(&self) -> usize {
+        self.viewpoints.count.max(1)
+    }
+
+    /// The extra slot being drawn, `None` for the player's own view.
+    pub(super) fn extra_viewpoint(&self) -> Option<usize> {
+        self.viewpoints.drawing.get().map(usize::from)
+    }
+
+    /// An extra view's blended camera with its seat's impact shake, `None` for the player's
+    /// own. The shake is the seat's state this tick, turned about the blended view as the
+    /// player's is ([`oag_render::camera::shake::Shake::apply`]).
+    pub(super) fn extra_view(&self) -> Option<Mat4> {
+        if let Some(view) = self.viewpoints.portal.get() {
+            return Some(view);
+        }
+        let slot = self.extra_viewpoint()?;
+        let base = self.viewpoints.view(slot, self.draw_alpha());
+        Some(match self.viewpoints.shake_of(slot) {
+            Some(shake) => shake.apply(base),
+            None => base,
+        })
+    }
+
+    /// An extra view's vertical field of view, the authored far rig widened by
+    /// the viewed craft's speed as the player's is. `None` for the player's own.
+    pub(super) fn extra_vertical_fov(
+        &self,
+        core: &SimRace,
+        aspect: f32,
+        setting: oag_display::display::Fov,
+    ) -> Option<f32> {
+        let slot = self.extra_viewpoint()?;
+        let body = &core.sim.world.ships[slot].physics.body;
+        let speed = body.forward().dot(body.linear_velocity);
+        let degrees = (self.chase_far.fov + SPEED_FOV_GAIN_DEG * speed)
+            .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
+        let authored = setting.apply(degrees.to_radians());
+        // The player's order and its zero case (`finish_vertical_fov`).
+        let kick = self.viewpoints.cams[slot].map_or(0.0, |cam| cam.boost_kick);
+        Some(super::camera::finish_vertical_fov(
+            authored,
+            core.sim.extension_fov_offset(slot),
+            kick,
+            self.boost_fov_kick.gain(),
+            aspect,
+        ))
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The wall-contact effects of `slot`'s seat: the player's own for the player's slot, an
+    /// extra person's beside their camera, `None` for a craft nobody sits in. The one
+    /// place a shake or a spark is routed to the seat it belongs to.
+    pub(super) fn seat_contact_mut(
+        &mut self,
+        core: &SimRace,
+        slot: usize,
+    ) -> Option<&mut ContactFx> {
+        if slot == core.player_slot() {
+            return Some(&mut self.contact);
+        }
+        if !core.sim.world.person_flown(slot) {
+            return None;
+        }
+        self.viewpoints.contact.get_mut(slot)?.as_deref_mut()
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The slot of the craft the view being drawn follows: the player's, or the
+    /// extra slot.
+    #[must_use]
+    pub fn viewed_slot(&self, core: &SimRace) -> usize {
+        self.extra_viewpoint().unwrap_or_else(|| core.player_slot())
+    }
+
+    /// The craft the picture being drawn frames: photo mode's subject while the mode is open,
+    /// else [`Self::viewed_slot`]. What places the weather and the boost lens;
+    /// [`Self::viewed_slot`] stays the key of the view's scene blocks and histories, which a
+    /// change of subject must not move.
+    #[must_use]
+    pub fn framed_slot(&self, core: &SimRace) -> usize {
+        match (self.extra_viewpoint(), self.photo.as_ref()) {
+            (None, Some(photo)) => photo.subject(),
+            _ => self.viewed_slot(core),
+        }
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
     /// Steps every extra camera one tick, from this tick's craft poses. A no-op
     /// with no split. Called from the tick right after the player's own camera.
-    pub(super) fn advance_viewpoints(&mut self) {
-        let params = self.view.chase_far;
-        let dt = self.core.sim.dt;
-        let kicks = self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF;
+    pub(super) fn advance_viewpoints(&mut self, core: &SimRace) {
+        let params = self.chase_far;
+        let dt = core.sim.dt;
+        let kicks = self.boost_fov_kick != oag_display::display::BoostFovKick::OFF;
         for slot in 0..MAX_SHIPS {
-            let boosting = self.core.sim.world.ships[slot].physics.pad_timer > 0.0;
-            let respawns = self.core.sim.placements_of(slot);
-            let target = self.followed(slot);
-            let step = self.camera_step(slot);
-            let Some(cam) = self.view.viewpoints.cams[slot].as_mut() else {
+            let boosting = core.sim.world.ships[slot].physics.pad_timer > 0.0;
+            let respawns = core.sim.placements_of(slot);
+            let target = self.followed(core, slot);
+            let step = self.camera_step(core, slot);
+            let Some(cam) = self.viewpoints.cams[slot].as_mut() else {
                 continue;
             };
             if respawns != cam.respawns {
@@ -396,7 +522,7 @@ impl Race {
                 cam.chase.advance(target, &params, step);
             }
             if kicks {
-                cam.boost_kick = super::tick::step_boost_kick(cam.boost_kick, boosting, dt);
+                cam.boost_kick = crate::stage::hooks::step_boost_kick(cam.boost_kick, boosting, dt);
             }
             cam.previous = cam.current;
             cam.current = cam.chase.view(target, &params);
@@ -410,16 +536,15 @@ impl Race {
     /// is draw-side state behind a shared reference, and anything that reads the
     /// camera afterwards - the HUD's reticle, the next tick's audio listener -
     /// means the player's.
-    pub fn set_viewpoint(&self, slot: usize) {
-        let extra = (slot != self.core.player_slot() && self.view.viewpoints.cams[slot].is_some())
+    pub fn set_viewpoint(&self, core: &SimRace, slot: usize) {
+        let extra = (slot != core.player_slot() && self.viewpoints.cams[slot].is_some())
             .then(|| u8::try_from(slot).unwrap_or(0));
-        self.view.viewpoints.drawing.set(extra);
+        self.viewpoints.drawing.set(extra);
     }
 
     /// The eye of every extra view, from the camera of the last tick.
     pub(super) fn viewpoint_eyes(&self) -> impl Iterator<Item = Vec3> + '_ {
-        self.view
-            .viewpoints
+        self.viewpoints
             .cams
             .iter()
             .flatten()
@@ -428,122 +553,14 @@ impl Race {
 
     /// The player's own view again. See [`Self::set_viewpoint`].
     pub fn reset_viewpoint(&self) {
-        self.view.viewpoints.drawing.set(None);
-    }
-
-    /// The extra slot being drawn, `None` for the player's own view.
-    pub(super) fn extra_viewpoint(&self) -> Option<usize> {
-        self.view.viewpoints.drawing.get().map(usize::from)
-    }
-
-    /// The slot of the craft the view being drawn follows: the player's, or the
-    /// extra slot.
-    #[must_use]
-    pub fn viewed_slot(&self) -> usize {
-        self.extra_viewpoint()
-            .unwrap_or_else(|| self.core.player_slot())
-    }
-
-    /// The craft the picture being drawn frames: photo mode's subject while the mode is open,
-    /// else [`Self::viewed_slot`]. What places the weather and the boost lens;
-    /// [`Self::viewed_slot`] stays the key of the view's scene blocks and histories, which a
-    /// change of subject must not move.
-    #[must_use]
-    pub fn framed_slot(&self) -> usize {
-        match (self.extra_viewpoint(), self.view.photo.as_ref()) {
-            (None, Some(photo)) => photo.subject(),
-            _ => self.viewed_slot(),
-        }
-    }
-
-    /// How many times the picture being drawn has jumped to a different shot - what a camera
-    /// history watches to throw its previous frame away. The player's view is
-    /// [`Self::camera_cuts`]; an extra seat's chase camera jumps when that craft respawns, and
-    /// nothing else of the player's cuts (the flyby, the spectator and destroy cameras) is its.
-    #[must_use]
-    pub fn viewed_camera_cuts(&self) -> u32 {
-        match self.extra_viewpoint() {
-            Some(slot) => self
-                .core
-                .sim
-                .placements_of(slot)
-                .wrapping_add(self.view.restores),
-            None => self.camera_cuts(),
-        }
-    }
-
-    /// The craft the view being drawn follows: the player's, or the extra slot.
-    #[must_use]
-    pub fn viewed_ship(&self) -> &Ship {
-        &self.core.sim.world.ships[self.viewed_slot()]
-    }
-
-    /// An extra view's blended camera with its seat's impact shake, `None` for the player's
-    /// own. The shake is the seat's state this tick, turned about the blended view as the
-    /// player's is ([`oag_render::camera::shake::Shake::apply`]).
-    pub(super) fn extra_view(&self) -> Option<Mat4> {
-        if let Some(view) = self.view.viewpoints.portal.get() {
-            return Some(view);
-        }
-        let slot = self.extra_viewpoint()?;
-        let base = self.view.viewpoints.view(slot, self.draw_alpha());
-        Some(match self.view.viewpoints.shake_of(slot) {
-            Some(shake) => shake.apply(base),
-            None => base,
-        })
-    }
-
-    /// [`Self::extra_view`] without the shake: where the seat's camera is really pointed.
-    pub(super) fn extra_view_unshaken(&self) -> Option<Mat4> {
-        if let Some(view) = self.view.viewpoints.portal.get() {
-            return Some(view);
-        }
-        self.extra_viewpoint()
-            .map(|slot| self.view.viewpoints.view(slot, self.draw_alpha()))
-    }
-
-    /// The wall-contact effects of `slot`'s seat: the player's own for the player's slot, an
-    /// extra person's beside their camera, `None` for a craft nobody sits in. The one
-    /// place a shake or a spark is routed to the seat it belongs to.
-    pub(super) fn seat_contact_mut(&mut self, slot: usize) -> Option<&mut ContactFx> {
-        if slot == self.core.player_slot() {
-            return Some(&mut self.view.contact);
-        }
-        if !self.core.sim.world.person_flown(slot) {
-            return None;
-        }
-        self.view.viewpoints.contact.get_mut(slot)?.as_deref_mut()
+        self.viewpoints.drawing.set(None);
     }
 
     /// Steps every extra seat's shake one tick, as the player's is. See
     /// [`Self::advance_seat_contact_fx`](super::tick).
     pub(super) fn advance_seat_shakes(&mut self, dt: f32) {
-        for fx in self.view.viewpoints.contact.iter_mut().flatten() {
+        for fx in self.viewpoints.contact.iter_mut().flatten() {
             fx.shake.advance(dt);
         }
-    }
-
-    /// An extra view's vertical field of view, the authored far rig widened by
-    /// the viewed craft's speed as the player's is. `None` for the player's own.
-    pub(super) fn extra_vertical_fov(
-        &self,
-        aspect: f32,
-        setting: oag_display::display::Fov,
-    ) -> Option<f32> {
-        let slot = self.extra_viewpoint()?;
-        let body = &self.core.sim.world.ships[slot].physics.body;
-        let speed = body.forward().dot(body.linear_velocity);
-        let degrees = (self.view.chase_far.fov + SPEED_FOV_GAIN_DEG * speed)
-            .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
-        let authored = setting.apply(degrees.to_radians());
-        // The player's order and its zero case (`finish_vertical_fov`).
-        let kick = self.view.viewpoints.cams[slot].map_or(0.0, |cam| cam.boost_kick);
-        Some(super::camera::finish_vertical_fov(
-            authored,
-            self.core.sim.extension_fov_offset(slot),
-            kick,
-            self.view.boost_fov_kick.gain(),
-            aspect,
-        ))
     }
 }

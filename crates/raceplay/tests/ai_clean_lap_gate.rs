@@ -400,8 +400,12 @@ fn solos_on(track: &str, class: &str, offset: f32) -> Option<Vec<Solo>> {
 
 /// One lone race from `setup`. Ticked with `tick_sim_only`: the gate reads simulation state alone
 /// (respawns, laps, wall contact, craft state), and a sim-only tick skips the drawn effects.
-fn solo(setup: race::Setup) -> Solo {
-    let mut race = race::Race::start(setup);
+fn solo(setup: race::SimSetup) -> Solo {
+    let mut race = race::Race::start(
+        setup,
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
     for slot in 2..8 {
         race.core.sim.world.ships[slot].active = false;
     }

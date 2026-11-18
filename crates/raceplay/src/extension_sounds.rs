@@ -24,6 +24,7 @@ pub fn load(
         let _ = (sources, title, foreign_track, report);
         ModSounds::default()
     }
+
     #[cfg(feature = "extensions")]
     {
         read(sources, title, foreign_track, report)

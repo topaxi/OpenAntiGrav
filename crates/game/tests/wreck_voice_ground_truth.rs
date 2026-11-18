@@ -33,7 +33,7 @@ fn a_wrecked_opponent_voices_cont_elim_in_a_single_race() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let wav = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../data/shots/wreck-voice-single-race.wav");
     let mut audio = oag_sound::Audio::open(

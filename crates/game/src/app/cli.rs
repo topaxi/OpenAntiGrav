@@ -698,7 +698,7 @@ pub(crate) struct Cli {
     /// from one that played and drew nothing. With this on, a burst re-ignites
     /// at the player's nozzle every half second: if the screen stays empty the
     /// fault is in the draw path, and if it does not, the trigger is what to
-    /// look at. See `Race::advance_trail_hits`.
+    /// look at. See `RaceView::advance_trail_hits`.
     #[arg(long)]
     pub(crate) trail_sparks: bool,
 

@@ -47,12 +47,12 @@ fn flyby(held: bool) -> Option<(Vec<bool>, bool)> {
     oag_game::sound::hold_race_song(&mut audio, loaded.title);
     audio.start_race_music(&discs, oag_sound::MusicSource::Auto, &cache);
     audio.settle_music();
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(race.begin_intro());
     oag_game::sound::prepare_intro_voice(&mut audio, &discs, &race);
     audio.settle_pre_race_voice();
     let mut sounding = Vec::new();
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         race.tick_intro(&if held { cross() } else { PlayerInputs::none() });
         oag_game::sound::intro_cues(&mut audio, &mut race);
         oag_game::sound::flyby_tick(&mut audio, &mut race);
@@ -114,14 +114,14 @@ fn effects_gain(held: bool) -> Option<Vec<f32>> {
         oag_audio::MIN_BUFFER,
         true,
     );
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(race.begin_intro());
     let mut gains = Vec::new();
     let step = |audio: &mut oag_sound::Audio, gains: &mut Vec<f32>| {
         audio.tick();
         gains.push(audio.output().with_mixer(|mixer| mixer.bus_gain(Bus::Sfx)));
     };
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         race.tick_intro(&if held { cross() } else { PlayerInputs::none() });
         oag_game::sound::intro_cues(&mut audio, &mut race);
         oag_game::sound::flyby_tick(&mut audio, &mut race);
@@ -185,10 +185,10 @@ fn flyby_mix() -> Option<Vec<(f32, usize, usize)>> {
         true,
     );
     oag_game::sound::hold_race_song(&mut audio, loaded.title);
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(race.begin_intro());
     let mut mix = Vec::new();
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         race.tick_intro(&PlayerInputs::none());
         oag_game::sound::intro_cues(&mut audio, &mut race);
         oag_game::sound::flyby_tick(&mut audio, &mut race);

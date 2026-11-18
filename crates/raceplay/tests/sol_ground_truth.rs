@@ -46,7 +46,7 @@ fn start(title: &str) -> Option<race::Race> {
         ..race::Options::default()
     })
     .unwrap_or_else(|e| panic!("{title} sol does not load: {e:#}"));
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// The first surface straight down from `from`, within 200 units.
@@ -120,7 +120,7 @@ fn field(title: &str, level: oag_ai::Difficulty) -> Option<(Vec<u32>, Vec<u32>, 
         ..race::Options::default()
     })
     .unwrap_or_else(|e| panic!("{title} sol does not load: {e:#}"));
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.world.ships[0].active = false;
     let count = race.core.sim.ship_count() as usize;
     let whole_window = std::env::var_os("OAG_SWEEP").is_some();
@@ -235,7 +235,7 @@ fn gap_run_up_trace() {
         ..race::Options::default()
     })
     .unwrap();
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.world.ships[0].active = false;
     if std::env::var_os("OAG_SOL_LONE").is_some() {
         for slot in 1..race.core.sim.ship_count() as usize {

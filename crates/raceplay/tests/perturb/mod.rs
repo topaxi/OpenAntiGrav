@@ -10,7 +10,7 @@
 //!
 //! **The perturbation is data, not code.** [`apply`] scales every craft's
 //! `Physical::flight_gravity` (the airborne-only gravity term,
-//! `oag_physics::passive::gravity`) by `1 + eps` on the loaded `Setup`, before
+//! `oag_physics::passive::gravity`) by `1 + eps` on the loaded `SimSetup`, before
 //! `Race::start`. No simulation crate changes, so the determinism scan and the
 //! committed hashes never see it, and `eps = 0` is the unperturbed race
 //! bit for bit. It reaches the race and every speed plan the race learns,
@@ -29,7 +29,7 @@
 
 #![allow(dead_code)]
 
-use oag_raceplay::Setup;
+use oag_raceplay::SimSetup;
 
 /// The perturbation set: `0` (the unperturbed run) and four magnitudes either
 /// side. `1e-6` is about eight `f32` ulps of `1.0`. Nine, so a median ignores
@@ -73,13 +73,13 @@ pub fn offset() -> f32 {
 /// Scales every craft's airborne gravity on `setup` by `1 + eps` (and by
 /// `1 + offset()`). A no-op at `eps = 0` with no offset; a single-run test
 /// calls it with `0` so the sweep switch reaches it too.
-pub fn apply(setup: &mut Setup, eps: f32) {
+pub fn apply(setup: &mut SimSetup, eps: f32) {
     apply_at(setup, eps, offset());
 }
 
 /// [`apply`] with the offset given rather than read: what a bound generator
 /// sweeps [`BOUND_OFFSETS`] with.
-pub fn apply_at(setup: &mut Setup, eps: f32, offset: f32) {
+pub fn apply_at(setup: &mut SimSetup, eps: f32, offset: f32) {
     let factor = (1.0 + eps) * (1.0 + offset);
     if factor == 1.0 {
         return;

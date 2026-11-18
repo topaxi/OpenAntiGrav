@@ -1081,7 +1081,7 @@ impl Session {
                 && !stage.result_saved
                 // A split screen's result is nobody's record: the results are
                 // slot 0's, which a second person was racing.
-                && stage.race.viewport_count() <= 1
+                && stage.race.view_state().viewport_count() <= 1
                 && self.net.is_none()
             {
                 stage.result_saved = true;

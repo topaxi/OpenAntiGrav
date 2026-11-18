@@ -18,7 +18,7 @@ The ribbon is the object at ship `+0x144`: built by `FUN_001d4310` (`FUN_001efbc
 
 ## Wiring
 
-`Looks::ps2_trail` (Pulse, PS2 only, Measured) -> `Race::trail_law()` -> `oag_fx::exhaust::TrailLaw::Baked`: layers from `PS2_FIRST_LAYER`, colours x `255/128`, no ramp, no glow stamp. PSP and every other title keep `Ramped`. Tests: `the_ps2_law_draws_the_baked_ribbon_at_rest_without_the_widest_layer`, `title_effects` rule test. Sheets: `data/reference/ps2-plume/` (not committed).
+`Looks::ps2_trail` (Pulse, PS2 only, Measured) -> `RaceView::trail_law()` -> `oag_fx::exhaust::TrailLaw::Baked`: layers from `PS2_FIRST_LAYER`, colours x `255/128`, no ramp, no glow stamp. PSP and every other title keep `Ramped`. Tests: `the_ps2_law_draws_the_baked_ribbon_at_rest_without_the_widest_layer`, `title_effects` rule test. Sheets: `data/reference/ps2-plume/` (not committed).
 
 ## The engine flare is one quad, and `WO_SHIP_ENGINEFLARE` is never played (2026-10-20, `ps2-flare-halo`, confidence 85)
 

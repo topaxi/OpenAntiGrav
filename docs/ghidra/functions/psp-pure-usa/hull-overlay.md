@@ -52,7 +52,7 @@ the stamp reads `-10.0` until the update after the held id drops to 0, then the 
 ## In the port
 
 `oag_pure::effects::LOOKS.hull_overlay` is on (`Platforms::Any`, `Origin::Measured`): the roster loader builds the overlay over Pure's
-hulls through the shared `oag_fx::hull_overlay` and `Race::play_absorb_feedback(.., pickup)` stamps it, as for Pulse. Pure's
+hulls through the shared `oag_fx::hull_overlay` and `RaceView::play_absorb_feedback(.., pickup)` stamps it, as for Pulse. Pure's
 `absorb_surface.mip` is the same 2,064-byte 32x32 8-bit paletted file as Pulse's (`weapons.md`).
 Ground truth: `crates/raceplay/tests/absorb_ground_truth.rs`, `pure_lights_the_hull_for_one_second_after_a_pickup_absorb`.
 Pairs and scores: [`weapon-absorb-pairs.md`](../../../rendering/weapon-absorb-pairs.md), "Pure PSP".

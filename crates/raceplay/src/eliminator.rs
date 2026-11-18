@@ -264,7 +264,7 @@ impl Race {
     /// `Ship_AddShield`'s clamp, then plays the absorb feedback -
     /// `Ship_PlayAbsorbFeedback` (`0x08840640`), the `ABSORB` cue and the
     /// staggered `WO_WEAPON_ABSORB` bursts, both through
-    /// [`Race::play_absorb_feedback`]. See
+    /// [`crate::RaceView::play_absorb_feedback`]. See
     /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     ///
     /// The original's `last_crossings != 0` gate - the grid-exit crossing
@@ -292,7 +292,8 @@ impl Race {
             dimensions.shield * LAP_REFILL_FRACTION,
         );
         #[cfg(feature = "view")]
-        self.play_absorb_feedback(slot, false);
+        self.core
+            .lending_cues(|_, cues| self.view.play_absorb_feedback(cues, slot, false));
     }
 
     /// An absorb in the Eliminator: the held weapon is spent on a Shield, and
@@ -333,7 +334,8 @@ impl Race {
             && self.core.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0
         {
             self.core.sim.world.ships[slot].physics.shield_pickup_timer = time;
-            self.shield_activate(slot);
+            #[cfg(feature = "view")]
+            crate::stage::stage!(self).shield_activate(slot);
         }
     }
 }

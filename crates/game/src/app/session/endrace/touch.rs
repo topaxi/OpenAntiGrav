@@ -39,7 +39,7 @@ impl Session {
                 .core
                 .results()
                 .is_some_and(|board| board.persons() > 1);
-        if stage.race.viewport_count() > 1 || several_over_the_network {
+        if stage.race.view_state().viewport_count() > 1 || several_over_the_network {
             log::debug!("several people: keeping the built-in results table over the touch pages");
             self.mark_endrace_unavailable();
             return;

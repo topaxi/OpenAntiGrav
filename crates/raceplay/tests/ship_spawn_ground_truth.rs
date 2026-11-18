@@ -72,7 +72,7 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
     let Some(loaded) = load() else { return };
     let bound = envelope(&loaded);
     let handling = loaded.setup.handling;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     // The spawn itself: on the track's authored `Start Position`, the suspension's
     // resting height above the surface, the right way up, and with the mass the force

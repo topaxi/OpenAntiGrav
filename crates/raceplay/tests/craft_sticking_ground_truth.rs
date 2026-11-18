@@ -215,7 +215,7 @@ fn measure_sticking(image: &Path) -> Sticking {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     let count = usize::from(race.core.sim.world.ship_count);
     let mut streak = vec![0u32; count * count];

@@ -50,50 +50,6 @@ pub(super) struct MissileBlast {
 }
 
 impl Race {
-    /// Starts an explosion at the struck craft, dropped when the pool is full
-    /// (the original's `count < 16` test).
-    pub(crate) fn spawn_hd_missile_blast(&mut self, position: Vec3, orientation: Quat) {
-        if !self.view.hd_missile_blast {
-            return;
-        }
-        if let Some(slot) = self.view.hd_missile_blasts.iter().position(Option::is_none) {
-            log::debug!("HD missile blast starts at {position:?}");
-            if let Some(pool) = self.view.hd_missile_streaks.as_mut() {
-                pool.start(slot, position, orientation);
-            }
-            self.view.hd_missile_blasts[slot] = Some(MissileBlast {
-                position,
-                orientation,
-                age: 0.0,
-            });
-        }
-    }
-
-    /// `MissileExplosion_Update` for every live explosion: the age advances, the entry is
-    /// freed on the first update past a second (strictly, `age > 1.0`, with no streak step
-    /// on that update), otherwise its streaks step. Then the streak pool ages, so a streak
-    /// outlives its blast by its nodes' life.
-    pub(crate) fn advance_hd_missile_blasts(&mut self, dt: f32) {
-        for (index, slot) in self.view.hd_missile_blasts.iter_mut().enumerate() {
-            let Some(blast) = slot else { continue };
-            blast.age += dt;
-            let spent = blast.age > LIFETIME_SECONDS;
-            if let Some(pool) = self.view.hd_missile_streaks.as_mut() {
-                if spent {
-                    pool.retire(index);
-                } else {
-                    pool.step(index, blast.age);
-                }
-            }
-            if spent {
-                *slot = None;
-            }
-        }
-        if let Some(pool) = self.view.hd_missile_streaks.as_mut() {
-            pool.advance(dt);
-        }
-    }
-
     /// Streak pool elements taken, owned by a live explosion or ageing out.
     #[must_use]
     pub fn missile_streaks_live(&self) -> usize {
@@ -142,3 +98,53 @@ impl Race {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Starts an explosion at the struck craft, dropped when the pool is full
+    /// (the original's `count < 16` test).
+    pub(crate) fn spawn_hd_missile_blast(&mut self, position: Vec3, orientation: Quat) {
+        if !self.hd_missile_blast {
+            return;
+        }
+        if let Some(slot) = self.hd_missile_blasts.iter().position(Option::is_none) {
+            log::debug!("HD missile blast starts at {position:?}");
+            if let Some(pool) = self.hd_missile_streaks.as_mut() {
+                pool.start(slot, position, orientation);
+            }
+            self.hd_missile_blasts[slot] = Some(MissileBlast {
+                position,
+                orientation,
+                age: 0.0,
+            });
+        }
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// `MissileExplosion_Update` for every live explosion: the age advances, the entry is
+    /// freed on the first update past a second (strictly, `age > 1.0`, with no streak step
+    /// on that update), otherwise its streaks step. Then the streak pool ages, so a streak
+    /// outlives its blast by its nodes' life.
+    pub(crate) fn advance_hd_missile_blasts(&mut self, dt: f32) {
+        for (index, slot) in self.hd_missile_blasts.iter_mut().enumerate() {
+            let Some(blast) = slot else { continue };
+            blast.age += dt;
+            let spent = blast.age > LIFETIME_SECONDS;
+            if let Some(pool) = self.hd_missile_streaks.as_mut() {
+                if spent {
+                    pool.retire(index);
+                } else {
+                    pool.step(index, blast.age);
+                }
+            }
+            if spent {
+                *slot = None;
+            }
+        }
+        if let Some(pool) = self.hd_missile_streaks.as_mut() {
+            pool.advance(dt);
+        }
+    }
+}

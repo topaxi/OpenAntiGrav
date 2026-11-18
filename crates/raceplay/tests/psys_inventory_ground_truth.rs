@@ -53,7 +53,7 @@ const SYSTEMS: usize = 35;
 const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     // **Not `WO_SHIP_COLL_SPARK_NODAMAGE`**, as of 2026-10-26: it is the collision cage's contact
     // spark (`Ship_DispatchCollisionFx`'s `damaged` is the record's friction above zero, the cage's
-    // is `0`), wired as `Trigger::CollisionSparkNoDamage` off `Race::throw_cage_sparks`.
+    // is `0`), wired as `Trigger::CollisionSparkNoDamage` off `Stage::throw_cage_sparks`.
     (
         "WO_SHIP_COLL_SPARK_TRAIL_SMOKE",
         "a sibling of the `_TRAIL` the damage tree embeds, and nothing reads \
@@ -68,7 +68,7 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     // **Not `WO_PLASMA_FLASH`** either, as of 2026-09-09 - it is the Plasma's
     // *detonation*, spawned by `PlasmaBlast_Construct` (`0x0885fd90`) off
     // `Plasma_SpawnDetonation` (`0x0886ac88`) in `Plasmas_Update`'s
-    // (`0x0886b490`) teardown pass, and it is wired through `Race::blast_for`.
+    // (`0x0886b490`) teardown pass, and it is wired through `RaceView::blast_for`.
     // It sat in this list from 2026-09-02 to 2026-09-09 with "no call site was
     // found for it"; the call site is the pool teardown that read had not
     // followed.

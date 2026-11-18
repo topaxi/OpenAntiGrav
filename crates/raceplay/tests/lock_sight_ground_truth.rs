@@ -173,7 +173,7 @@ fn a_missile_in_hand_locks_a_craft_on_a_real_circuit() {
     use oag_race::sight;
 
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // A few ticks to settle the grid, then hand slot 0 a Missile the way a pad
     // would. Slot 0 starts at the back, so the field is ahead of it.
     for _ in 0..30 {
@@ -302,11 +302,11 @@ fn a_leachbeam_in_hand_locks_a_craft_on_a_real_circuit() {
     use oag_race::sight;
 
     let Some(loaded) = single_race() else { return };
-    // **No dialect call: `Race::start` takes it from the load** (`Setup::sight`),
+    // **No dialect call: `Race::start` takes it from the load** (`SimSetup::sight`),
     // so this is Pulse's reticle and the LeachBeam's own law, which is what the
     // game runs - not the Missile's with the LeachBeam's art. A start that stopped
     // applying it would lock at tick 48, not 20, and fail below.
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
@@ -395,7 +395,7 @@ fn pure_locks_a_craft_and_draws_the_psp_reticle() {
         "Pure authors LeachBeam sights, which would mean it has the weapon"
     );
 
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(
         race.core.sim.missile_stats().is_some(),
         "Pure's weapon table did not parse - its Missile authors one `speed` \
@@ -439,7 +439,8 @@ fn only_pulse_and_hd_author_a_leachbeam_block() {
         let Some(path) = image_named(image) else {
             continue;
         };
-        let race = race::Race::start(race_on(&path).setup);
+        let loaded = race_on(&path);
+        let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         let authored = race.core.sim.leach_beam_stats().is_some();
         println!("{name}: authors a LeachBeam block = {authored}");
         assert_eq!(
@@ -545,7 +546,7 @@ fn hd_draws_its_own_four_leachbeam_sight_widgets_when_held() {
     // And it actually draws: hand the player slot a LeachBeam, wait for the
     // reticle to come up over a real target, and check the four names above
     // - not the Missile's `MissileSight*` - are what is on screen.
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
@@ -582,7 +583,7 @@ fn hd_draws_its_own_four_leachbeam_sight_widgets_when_held() {
 /// **That screen is why this test exists.** A reticle projecting into the PSP's
 /// 480x272 while the layout draws in 1920x1080 lands in the top-left ninth of
 /// the picture and never leaves it - which is what HD did until
-/// `Setup::sight`, and which reads on screen as a stray widget rather
+/// `SimSetup::sight`, and which reads on screen as a stray widget rather
 /// than as a missing one.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -637,7 +638,7 @@ fn hd_locks_a_craft_and_draws_its_own_concentric_reticle() {
         );
     }
 
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(
         race.sight().screen(),
         [1920.0, 1080.0],
@@ -679,7 +680,7 @@ fn hd_ticks_to_lock(weapon: oag_tables::weapons::Weapon) -> Option<(u32, u32)> {
 
     let image = image_named("hdfury-ps3-eu-dec.iso")?;
     let loaded = race_on(&image);
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
@@ -761,11 +762,11 @@ struct Pursuit {
 ///
 /// The craft drives the circuit with the field around it, so a target crosses the screen at
 /// several pixels a tick: the case a lock on a standing target never meets.
-fn pursuit(setup: race::Setup, ticks: u32) -> Pursuit {
+fn pursuit(loaded: race::Loaded, ticks: u32) -> Pursuit {
     use oag_gameplay::input::Button;
     use oag_race::sight;
 
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut held = race::HeldButtons::new(Button::Cross.bit());
     let mut seen = Pursuit::default();
     for tick in 0..ticks {
@@ -820,7 +821,7 @@ fn hd_missile_holds_its_lock_on_a_craft_it_is_chasing_across_the_screen() {
         loaded.setup.sight.chase_gain, 4.0,
         "HD's chase gain does not reach the race"
     );
-    let seen = pursuit(loaded.setup, 1_500);
+    let seen = pursuit(loaded, 1_500);
     println!("HD pursuit: {seen:?}");
     assert!(
         seen.visible_moving > 200 && seen.locked_moving * 100 >= seen.visible_moving * 80,

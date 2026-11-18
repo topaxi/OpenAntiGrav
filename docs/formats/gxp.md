@@ -113,6 +113,8 @@ independently re-derived from the bytes** by the sweep in
 | `+0x14` | `u32` | `program_flags`; **bit 0 set = fragment** | 90 |
 | `+0x24` | `u32` | parameter count | 100 |
 | `+0x28` | `u32` | parameter table offset, self-relative | 100 |
+| `+0x2c` | `u32` | input block offset, self-relative (read on fragment programs: [the input records](#which-pa-register-holds-which-sampler-the-fragment-input-records-2026-11-18-w2048-fc07)) | 75 |
+| `+0x30` | `u16` | primary register count, the `pa` words a program reads | 70 |
 | `+0x3c` | `u32` | primary instruction count | 95 |
 | `+0x40` | `u32` | primary code offset, self-relative | 95 |
 | `+0x44` | `u32` | secondary instruction count | 95 |
@@ -147,9 +149,9 @@ every program.
 
 Every other header word is **left unread**, per
 [the confidence rubric](../reverse-engineering/confidence-rubric.md) - below 50
-nothing gets a name. `+0x2c`, `+0x30`, `+0x38`, `+0x5c`, `+0x64`, `+0x68`,
-`+0x98` and `+0xa8` all carry non-constant values and none of them survived a
-sweep for a meaning.
+nothing gets a name. `+0x38`, `+0x5c`, `+0x64`, `+0x68`, `+0x98` and `+0xa8`
+all carry non-constant values and none of them survived a sweep for a meaning
+(`+0x2c` and the low half of `+0x30` did, 2026-11-18, above).
 
 ### Category and type, checked against the names they carry
 
@@ -775,6 +777,222 @@ Omega unchanged at its slice (its colour was right; its glow was missing). Headl
 the Chenghou start gantry (camera `-288,32,451` looking `-0.74,-0.30,-0.55`): violet before,
 red glow with metal after, on 2048 and on Omega; Omega Vineta K's blue floor panels now glow
 (the same plain family). Not compared against an original frame (no pair exists for Chenghou).
+
+## Which `pa` register holds which sampler: the fragment input records (2026-11-18, `w2048-fc07`)
+
+A fragment program's texels arrive in `pa` registers with no `smp` instruction (the
+non-dependent fetch), so which register is which sampler was until now read off a program's
+shape (confidence 80 on the two readings above). The container states it.
+
+`+0x2c` (self-relative) points at an input block. At block `+0x0c` a `u16` record count, at
+`+0x10` a self-relative `u32` offset to 16-byte records:
+
+```text
++0x00 u32  info      bits 12-15: the interpolant iterated into the next registers, 0xf none
+                     bits 0-3:   the interpolant a texture fetch takes its coordinate from, 0xf none
++0x04 u32  resource  the fetched sampler's resource index (the parameter table's)
++0x08 u32  size      ((size >> 4) & 3) + 1 words for the interpolant,
+                     ((size >> 6) & 3) + 1 words for the texel after it
++0x0c u32  component info, unread (0x20 on every texel record of the file below)
+```
+
+A record can do both: iterate an interpolant and then fetch a texel. Registers are handed out in
+record order, the interpolant before its texel. `python3 scripts/vita-gxp.py dump <source>
+<index>` lists them (`fragment inputs`), and `census` counts the programs whose records add up to
+the `u16` at `+0x30`:
+
+| Source | Fragment programs | Records add up to `+0x30` |
+| --- | ---: | ---: |
+| `data.psarc` | 8,123 | 7,844 |
+| `dlc1.psarc` | 6,195 | 6,097 |
+| `dlc2.psarc` | 4,493 | 4,436 |
+| base `eboot.elf` | 64 | 62 |
+| all | 18,875 | **18,439** |
+
+The other 436 list 2 words (107 programs) or 3 words (329) fewer than `+0x30` says, in a dozen
+record shapes that are all unlit programs with one sampler or none (`cf_alpha4glow`,
+`fc01_colour_emissive`, the eboot's `lightColour` program): what holds their extra registers is
+**not read**. Confidence 75 on the record layout where it adds up (a count that closes on 97.7 %
+of the corpus, and on every program checked by hand it puts the texels where the code squares or
+multiplies them); the field names are ours. Vita3K's translator was read for the idea that such a
+table exists; the layout above is re-derived from the bytes and the counts.
+
+On `fc07_blend_vertred_lambert_2diff`'s vertex-lit program (#12 of Altima's copy):
+
+```text
+pa0   interpolant 0, 2 words            rgb = NOVAColor.rgb * scale + bias, w = the blend weight
+pa2   texel of sampler 0 (DiffuseMap) at interpolant 3
+pa4   interpolant 1, 2 words            NOVAColor as stored; w = the sun mask
+pa6   texel of sampler 1 (DiffuseMap01) at interpolant 3
+pa8   interpolant 2, 2 words            eye vector, w = fog visibility
+pa10  interpolant 4, 2 words            normal
+```
+
+**Omega: not checkable by this reader** (its programs are GCN, whose reflection already names
+each sampler's slot, `gcn_dump`).
+
+## `fc07_blend_vertred_lambert_2diff` mixes two pictures by the vertex red (2026-11-18, `w2048-fc07`)
+
+**The law: `albedo = mix(DiffuseMap^2, DiffuseMap01^2, VertexColour1.r)`, then the light, then
+the fog.** A vertex painted red 0 shows `DiffuseMap`, one painted red 255 shows `DiffuseMap01`:
+Altima's rock faces go to grass (`rift_wall_*_d` to `rift_grass_d_01`) and its gravel shore to
+grass and earth (`rocks01_d` to `rift_grass_d_01`, `rocks01_d` to `rift_wall_lower_03_d`).
+**Confidence 90**: one operand listing repeated on every picture program of every copy, the
+sampler in each register stated by the program's own input records, the weight traced into the
+vertex programs, Omega's GCN compile agreeing term for term, and a frame of the original at a
+matched pose (below). No live register readout.
+
+**The ambient-only program** (`python3 scripts/vita-usse.py disasm
+"data/extracted/vita/PCSF00007/base/PSP2/data.psarc:altima/materials/fc07_blend_vertred_lambert_2diff.rcsmaterial" 1`;
+`constantAmbientColour` at `sa0`, `fogColour` at `sa2`; inputs `pa0` the `DiffuseMap` texel, `pa2`
+the `DiffuseMap01` texel, `pa4` interpolant 1):
+
+```text
+ 1  10a44384a0040000  mul.f16 r0.xyz, pa0.xyz, pa0.xyz                 ; D0^2
+ 2  04a0928e80001040  mad.f16 pa0.xyzw, pa2.xyzw, pa2.xyzw, -r0.xyzw   ; D1^2 - D0^2
+ 3  0480928680002000  mad.f16 pa0.xyzw, pa4.xxxx, pa0.xyzw, r0.xyzw    ; w * (...) + D0^2
+ 4  04a0928ef0000001  mad.f16 pa0.xyzw, pa0.xyzw, sa0.xyzw, -sa2.xyzw  ; * ambient - fog
+ 5  04809286b0042001  mad.f16 pa0.xyzw, pa4.yyyy, pa0.xyzw, sa2.xyzw   ; fog mix by the visibility
+ 6  10c117869004000f  mul.f16 pa0.xyzw, pa0.xyz0, c15.yyyy
+```
+
+Its vertex program (#0) copies the `VertexColour1` word out as interpolant 1 and overwrites
+its second lane with the fog visibility (`pck pa4.-y, pa0.-x`, `or o6, pa4`), so `pa4.x` is
+`VertexColour1.x`. **The other eight picture programs** (lit, vertex-lit, lightmapped, lightmapped
+with the occlusion and shadow maps, each with and without the vertex lights: #3, #5, #12, #14,
+#16, #18, #20, #22) run the same three words on their own registers with the weight in the
+fourth lane of the first interpolant, which every one of their vertex programs writes with `mov
+o.-y, pa(VertexColour1).-x`. The vertex-lit one (#12, the family of Altima's shore and cliffs):
+
+```text
+ 4  mul.f16 pa4.xyz, pa2.xyz, pa2.xyz                 ; D0^2 (pa4.w keeps NOVAColor.a)
+ 5  mad.f16 pa2.xyzw, pa6.xyzw, pa6.xyzw, -pa4.xyzw   ; D1^2 - D0^2
+ 6  mad.f16 pa6.xyzw, pa0.wwww, pa2.xyzw, pa4.xyzw    ; the mix
+ 7-10                                                 ; sun * max(0, N.L) * NOVAColor.a + (NOVAColor.rgb * scale + bias)
+11  mad.f16 pa0.xyzw, pa0.xyzw, pa6.xyzw, -sa4.xyzw   ; light * mix - fog
+12  mad.f16 pa0.xyzw, pa8.wwww, pa0.xyzw, sa4.xyzw    ; fog mix
+```
+
+**Every copy agrees.** The file ships nine times (base `altima`, `arena`, `park`, `square`,
+`subway`, `shared/objectlibrary` and Moa Therma; DLC1 Moa Therma; DLC2 Tech de Ra; eight distinct
+by hash). A listing match of the three words against the registers the input records name finds
+the mix in 9 of 9 picture programs of each, and `VertexColour1.x` written out by every vertex
+program that declares the attribute (69 of 69 in the base copies, 78 of 78 in the DLC ones). The
+file's other five fragment programs sample no picture (the lightmap pass and the four Zone ones).
+
+**Where it is** (`track.rcsmodel` of each circuit; every submesh of the family carries
+`VertexColour1`, four unsigned bytes):
+
+| Circuit | Materials | Submeshes | Triangles | Vertex-lit / lightmapped |
+| --- | ---: | ---: | ---: | --- |
+| Altima | 21 | 203 | 75,597 | 189 / 14 |
+| Park | 68 | 462 | 37,924 | 20 / 442 |
+| Tech de Ra (DLC2, both directions) | 3 | 79 | 57,178 | 50 / 29 |
+| Square | 11 | 15 | 3,727 | 0 / 15 |
+| Moa Therma (DLC1, both directions) | 1 | 8 | 3,368 | 8 / 0 |
+| Arena | 11 | 14 | 1,694 | 3 / 11 |
+| Subway | 1 | 1 | 524 | 1 / 0 |
+| Cathedral | 4 | 13 | 484 | 0 / 13 |
+
+Altima's 49,615 family vertices: red 0 on 21,893, 255 on 4,156, between on 23,566. Park's ground
+is the family (`grass_plain` to `rift_top_drivable10`, `grass_scorched` to `grass_plain`). Park's
+`fc14_blend_vertred_phong` (1 material, 4 submeshes) binds the same two samplers; its programs are
+**not read** and it is not wired.
+
+**Omega: checked, applies, not wired.** Omega ships the plain file on its 2048 circuits (Altima
+12 materials on 14 submeshes, Park 3 on 3, Subway 1 on 1, plus unused copies) with GCN programs of
+the same permutations. Its ambient pixel program (`cargo run -p oag-rcs --example gcn_dump --
+data/extracted/ps4/omega-eu/uroot/data04.psarc
+Data/environments2048/altima/materials/fc07_Blend_VertRed_lambert_2Diff.rcsmaterial --at 0x2e04`,
+65 instructions) fetches `DiffuseMap01` (slot 1) and `DiffuseMap` (slot 0) with `dmask:0x7`,
+computes `D0 + (D1 - D0) * attr2.x` and then `ambient * v * mix + fog * (1 - v)`; its vertex
+program (`--at 0x29c4`) fetches one lane of `VertexColour1` and exports it as that parameter. The
+same mix with no squares (Omega's texels are decoded by the texture unit). It is not wired: most
+of Omega's surfaces use the re-authored `fc07_blend_vertred_lambert_2diff_new` (Altima, 38
+materials on 189 submeshes) and `fc07_blend_vertred_lambert_2diffnormal` (Park, 34 on 325), whose
+programs are unread. Omega's Altima and Park grids are pixel-identical before and after this
+change (0 of 921,600 pixels, 1280x720, tick 100).
+
+**Wired 2026-11-18** (`oag_rcs::rcsmodel::psp2::vertex_blend` names the two samplers and the
+lane; `mesh::rcs::psp2::vertex_blend` binds `DiffuseMap01` third, writes the weight into the
+second coordinate pair's `x` and takes one glow-table entry of `PROGRAM_VERTEX_BLEND`;
+`shade.wesl` mixes the two decoded texels before the light). Tests:
+`psp2_vertex_blend_lit_path` (a fixture through the shader) and
+`the_blend_family_mixes_its_second_picture_by_the_vertex_red` over every circuit model of
+`data.psarc` (`omega_transparency_ground_truth.rs`: the materials admitted per circuit, the pair
+bound, and the weights drawn against the file's reds, value for value).
+
+**Against the original** (Vita3K, Altima, craft placed at `-250,25,1385` yaw -15, two boots,
+960x544; ours at the same pose with the rigid close camera, `--hold-exposure 1.15`,
+`--anisotropy off`; boxes `x0,y0,x1,y1` fixed on the original's frame before ours was drawn with
+the mix; mean RGB):
+
+| Box | Original | Ours before | Ours after |
+| --- | --- | --- | --- |
+| Shore: gravel, earth band and grass edge `760,300,920,420` | 82.6 / 74.4 / 65.9 | 89.5 / 84.1 / 83.7 | **79.1 / 71.1 / 62.7** |
+| Grass edge at the cliff base `840,260,940,330` | 58.7 / 50.4 / 36.6 | 60.5 / 52.2 / 42.5 | 56.9 / 48.8 / 35.0 |
+| Cliff face `800,60,940,200` | 55.9 / 47.5 / 35.3 | 54.2 / 45.4 / 36.7 | 54.5 / 46.2 / 34.0 |
+| Gravel beside the pond wall `700,330,800,430` | 73.8 / 71.1 / 73.5 | 61.8 / 59.4 / 61.4 | 57.3 / 54.2 / 54.8 |
+| Left shore `60,260,260,330` | 18.3 / 17.8 / 20.9 | 14.8 / 14.3 / 16.6 | 13.3 / 12.5 / 14.2 |
+
+The shore box went from 17.8 levels off (blue) to 3.6; the original's two boots agree to 0.2
+levels in every box. The picture: ours' shore was one grey gravel and its cliff plain rock, and
+now runs gravel to earth to a green edge under a cliff with grass on it, as the original's does.
+**Not closed by this:** the gravel beside the pond wall is 16 to 19 levels darker than the
+original's and the mix made it 5 darker (ours draws a hard dark band along the wall where the
+original has a soft gradient: the light there, not the picture), and the original's gravel is
+crisper. No 2048 original exists for Park, the circuit that changes most (its whole ground;
+Omega's own frame of that grid shows worn grass where ours drew near-black before, by eye, a
+different title).
+
+Other circuits' grids, before against after (1280x720, tick 100): Altima 4.5 % of pixels, Park
+97 % (the ground, and the composite's exposure follows it), Arena 322 pixels, Cathedral 163, Tech
+de Ra 13; Square, Subway and Moa Therma 0 (the family is out of view there), Mall, which has
+none, 0.
+
+## Which instance entry a program's uniform takes: the record before a program (2026-11-18, `w2048-fc17`)
+
+Inside a `.rcsmaterial` a `0x30`-byte record sits before a program and says where each of its
+uniforms and samplers comes from. Offsets in it are relative to the payload base, the `u32` at
+file `+0x0c` (`0x1400` on the two files read by hand):
+
+```text
++0x00 u32  hash-shaped, unread
++0x04 u32  the program's size, rounded up
++0x08 u16  count of uniforms and samplers      +0x0a u16  count of attributes
++0x0c u32  the program
++0x10 u32  one (u16 source, u16 register) pair per uniform or sampler
++0x14 u32  their names, ~crc32(name), in the same order
++0x18 u32  the attributes' pairs               +0x1c u32  the attributes' names
+```
+
+`register` is the uniform's `resource_index`, or `0x8000 | unit` for a sampler. `source` is
+`0xffff` for what the engine supplies (`fogColour`, `liveLighting0diffuse`, `occlusionMap`),
+`0x4000` on `time`, and otherwise **the index of an entry in the model's material instance
+table** ([2048-material-params.md](2048-material-params.md)). On Altima's
+`fc17_effects_vscroll_wateredge_vertexcol`, fragment program #14:
+
+```text
+NormalMap 0 -> unit 0     lightmap 1 -> unit 1     occlusionMap, shadowMap ffff -> units 2, 3
+Opacity 2 -> sa0          SpecularPower 4 -> sa12  Watercolour 6 -> sa14   SpecularColour 3 -> sa16
+```
+
+and the instance's table in `altima/track.rcsmodel` lists, in order, `NormalMap`, `lightmap`,
+`Opacity`, `SpecularColour`, `SpecularPower`, `Speed`, `Watercolour`, `time`. Park's
+`fc17_effects_vscroll_water` has no `Opacity`: its records say `SpecularColour` 2,
+`SpecularPower` 3, `Speed` 4, `Watercolour` 5, and Park's instance lists exactly that order.
+So a program's `Watercolour` is the instance's entry of that name, by position, and both
+tables carry the name's hash.
+
+**How far it is checked.** Taking the record to be the `0x30` bytes before the program (its
+`+0x0c` points at the program and its size fits), it is found on 24,866 of the 44,536 programs
+in the 693 material files of the base `data.psarc`; on every one of those the two counts are
+the program's own and the name hashes are the program's uniform and sampler names. The other
+19,680 records are not at that distance (a program that follows another's tables) and were not
+located; the variant table that would say where is not read. Confidence 75 for the layout
+where found, 70 for `source` as the instance entry's index (two material files against two
+instances, entry for entry; not read in the executable). **Omega: not checked** (its container
+around the GCN programs is a different one, `gcn_dump` reads the programs' own reflection).
 
 ## The composite family, and the Zone one
 

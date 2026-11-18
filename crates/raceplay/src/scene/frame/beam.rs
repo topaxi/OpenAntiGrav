@@ -24,7 +24,7 @@ impl super::super::Scene {
         vp: &[[f32; 4]; 4],
     ) {
         if let Some(beam) = &self.beam {
-            let camera = race.view();
+            let camera = race.view.view(&race.core);
             let right =
                 oag_core::math::Vec3::new(camera.x_axis.x, camera.y_axis.x, camera.z_axis.x);
             let up = oag_core::math::Vec3::new(camera.x_axis.y, camera.y_axis.y, camera.z_axis.y);

@@ -27,7 +27,7 @@ pub struct Outcome {
     /// Bookkeeping for [`crate::SimRace::runs_on_after_the_end`] and the spectator director's
     /// clock; nothing [`RaceSim`](crate::RaceSim) reads.
     pub(crate) wreck_ended_tick: Option<u64>,
-    /// The team id each slot flies - [`Setup::slot_teams`](crate::Setup::slot_teams).
+    /// The team id each slot flies - [`SimSetup::slot_teams`](crate::SimSetup::slot_teams).
     pub(crate) slot_teams: Vec<String>,
     /// The results table, taken on the tick the race reached its finish
     /// condition, and `None` before that.

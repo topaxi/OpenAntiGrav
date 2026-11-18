@@ -112,7 +112,7 @@ impl Session {
         // nothing is announced; the table names every person. Chosen, not
         // measured - the original's split screen is not read beyond the PS2's
         // authored `EndRace Results Split`, `docs/ui/split-end-race.md`.
-        let split = stage.race.viewport_count() > 1;
+        let split = stage.race.view_state().viewport_count() > 1;
         let board = stage.race.core.results().cloned();
         let board_revision = stage.race.core.results_revision();
         // A network race several people flew names every person in its table (by the name
@@ -658,7 +658,7 @@ impl Session {
         // same people seated (`Session::reenter_multiplayer`): change the track, race again.
         let multiplayer = matches!(
             &self.stage,
-            Stage::Race(stage) if stage.race.viewport_count() >= 2 && stage.campaign_cell.is_none()
+            Stage::Race(stage) if stage.race.view_state().viewport_count() >= 2 && stage.campaign_cell.is_none()
         );
         // Whether the tournament just finished its last leg or is being
         // abandoned early, there is nothing to carry past this point - see

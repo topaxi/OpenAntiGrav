@@ -73,7 +73,7 @@ fn clocks(track: &str, ticks: u64) -> Option<Vec<Clock>> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     let mut clocks = vec![Clock::default(); oag_gameplay::MAX_SHIPS];
     // Last tick's `lap_start_tick` per slot. Completing a lap restamps the field

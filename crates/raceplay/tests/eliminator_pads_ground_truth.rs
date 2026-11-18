@@ -31,7 +31,7 @@ fn eliminator(seed: u64) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// Pickups the opponents collected, and the craft-ticks they spent racing
@@ -108,7 +108,7 @@ fn a_single_race_does_not_steer_for_pads() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(
         !race.core.sim.weapon_pads().is_empty(),
         "a Single Race arms its pads"

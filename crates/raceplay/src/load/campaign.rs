@@ -206,7 +206,7 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     // only decodes the bits this project has pinned at confidence >= 70 - see
     // `docs/formats/2048-campaign.md`'s "The weapon set gate" section - so an
     // event whose set authors only low-confidence bits races unrestricted,
-    // the same "an empty `Setup::allowed_weapons` is no override" reading
+    // the same "an empty `SimSetup::allowed_weapons` is no override" reading
     // every other race is already in, rather than this project guessing at
     // the bits it could not pin.
     if let Some(weapon_set) = event
@@ -264,7 +264,7 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     // `321_NGP` and `Go_NGP` where a named mode's is `ready` and `go`
     // (`docs/ghidra/functions/vita-2048-eu-v104/countdown-voice.md`).
     #[cfg(feature = "view")]
-    if loaded.setup.sounds.use_event_start() {
+    if loaded.view.sounds.use_event_start() {
         loaded
             .report
             .push("sfx: this race is a campaign event: its start plays the event pair".to_string());
@@ -272,7 +272,7 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     // The HUD binds the current `SP.xml` event at `hud+4`; this is what says one exists.
     #[cfg(feature = "view")]
     {
-        loaded.setup.campaign_event = true;
+        loaded.view.campaign_event = true;
     }
     let (objectives, xp_tables, xp_column) =
         oag_2048::campaign::event_progress(&mut archives, &doc, &event);

@@ -61,7 +61,7 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
         ..race::Options::default()
     })
     .expect("loading");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let count = race.core.sim.ship_count() as usize;
     let slots: Vec<usize> = if field {
         (1..count).collect()
@@ -303,7 +303,7 @@ fn field_trace() {
         ..race::Options::default()
     })
     .unwrap();
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let count = race.core.sim.ship_count() as usize;
     for slot in 0..count {
         if slot == 0
@@ -368,7 +368,7 @@ fn line_profile() {
         ..race::Options::default()
     })
     .unwrap();
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let line = race.core.sim.racing_line();
     let from: usize = std::env::var("OAG_FROM")
         .ok()

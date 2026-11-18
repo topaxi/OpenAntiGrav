@@ -53,7 +53,11 @@ fn a_raised_medal_phrase_reads_as_the_disc_words_it_and_expires() {
     };
     for mode in [oag_race::Mode::Zone, oag_race::Mode::SpeedLap] {
         let loaded = load(&image, mode);
-        let mut race = oag_raceplay::Race::start(loaded.setup.clone());
+        let mut race = oag_raceplay::Race::start(
+            loaded.setup.clone(),
+            loaded.view.clone(),
+            loaded.modules.clone(),
+        );
         let context = loaded.hud.context().expect("Pulse's layout parses");
         for id in ["ER_GMA", "ER_SMA", "ER_BMA"] {
             assert_ne!(
@@ -178,7 +182,11 @@ fn a_real_speed_lap_crossing_raises_the_banner_and_leaves_a_standing_line() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading 14_Track");
-    let mut race = oag_raceplay::Race::start(loaded.setup.clone());
+    let mut race = oag_raceplay::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     race.core.sim.set_autopilot(true);
     let gold = loaded
         .hud
@@ -278,7 +286,11 @@ fn hd_speed_lap_raises_the_medal_and_its_voice_on_every_new_best_lap() {
             oag_audio::MIN_BUFFER,
             false,
         );
-        let mut race = oag_raceplay::Race::start(loaded.setup.clone());
+        let mut race = oag_raceplay::Race::start(
+            loaded.setup.clone(),
+            loaded.view.clone(),
+            loaded.modules.clone(),
+        );
         race.core.sim.set_autopilot(true);
         race.watch_laps(&loaded.hud, None);
         let (mut earned, mut raised, mut best) = (None, Vec::new(), None);

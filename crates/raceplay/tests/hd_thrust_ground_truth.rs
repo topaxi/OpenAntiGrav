@@ -54,7 +54,7 @@ fn held_throttle_from_rest_follows_the_originals_speed_curve() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = Race::start(loaded.setup);
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     while race.core.sim.world.tick < ONSET {
         race.tick(&cross(false));
     }

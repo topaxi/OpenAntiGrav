@@ -9,7 +9,11 @@ use super::*;
 use oag_weapons::projectile::leach_beam::Beam;
 
 fn locked_race(owner_at: Vec3, target_at: Vec3, elapsed: f32) -> Race {
-    let mut race = Race::start(setup(hulled_handling()));
+    let mut race = Race::start(
+        setup(hulled_handling()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let stats = one_leach_beam_table()
         .leach_beam()
         .expect("the fixture authors a LeachBeam");
@@ -100,11 +104,15 @@ fn the_ball_follows_the_strip_from_the_target_to_the_shooter() {
     );
 }
 
-/// No beam at all draws no ball - the gate [`Race::advance_leach_beam_ribbon`]
+/// No beam at all draws no ball - the gate [`RaceView::advance_leach_beam_ribbon`]
 /// takes for the ribbon and the burst alike.
 #[test]
 fn nothing_locked_draws_no_ball() {
-    let race = Race::start(setup(hulled_handling()));
+    let race = Race::start(
+        setup(hulled_handling()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert!(race.core.sim.world.leach_beams[0].is_none());
     assert!(race.leach_ball_model_matrix(0).is_none());
 }
@@ -118,7 +126,11 @@ fn an_unlocked_beam_draws_no_ball_either() {
     let stats = one_leach_beam_table()
         .leach_beam()
         .expect("the fixture authors a LeachBeam");
-    let mut race = Race::start(setup(hulled_handling()));
+    let mut race = Race::start(
+        setup(hulled_handling()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.leach_beams[0] = Some(Beam::unlocked(0, &stats));
     assert!(race.leach_ball_model_matrix(0).is_none());
 }

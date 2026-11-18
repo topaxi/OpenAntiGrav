@@ -21,7 +21,11 @@ fn race_of(mode: Mode, people: u8, opponents: bool, no_opponents: bool) -> Race 
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     for slot in 0..usize::from(people).min(usize::from(race.core.sim.world.ship_count)) {
         race.core.sim.world.controllers[slot] = Controller::Local;
     }

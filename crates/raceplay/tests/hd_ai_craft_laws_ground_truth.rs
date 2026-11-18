@@ -48,7 +48,7 @@ fn started_seeded(track: &str, seed: Option<u64>) -> Option<Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(Race::start(loaded.setup))
+    Some(Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// Every opponent carries HD's laws from seating, which is when its speed plan was built, and

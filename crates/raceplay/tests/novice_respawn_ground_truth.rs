@@ -122,7 +122,7 @@ fn run(
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     if let Some(tuning) = tuning {
         race.core.sim.set_ai_tuning(tuning);
     }

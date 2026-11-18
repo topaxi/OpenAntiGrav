@@ -868,7 +868,7 @@ impl Race {
         square: bool,
         zoom: Option<&'static oag_title::ZoomRing>,
     ) -> bool {
-        if self.viewport_count() > 1 || self.windowed() || self.view.photo.is_some() {
+        if self.view.viewport_count() > 1 || self.windowed() || self.view.photo.is_some() {
             return false;
         }
         let track = self
@@ -900,7 +900,8 @@ impl Race {
             return over;
         }
         let (_, orientation, eye) = self
-            .tick_view_unshaken()
+            .view
+            .tick_view_unshaken(&self.core)
             .inverse()
             .to_scale_rotation_translation();
         let authored = if self.view.camera_view == oag_display::display::CameraView::Internal {

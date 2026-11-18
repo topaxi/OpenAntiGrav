@@ -178,7 +178,7 @@ commands revision 3, each with its own fold):
     wet road and the lens drops' target count, and the mist overlay's alpha.
     **Forced enhanced:** while this weather runs the enhanced effects (splashes, the wet road,
     craft spray, the rising mist) are on whatever the WEATHER setting says
-    (`Race::enhanced_weather`); the setting keeps governing a disc circuit's authored weather.
+    (`RaceView::enhanced_weather`); the setting keeps governing a disc circuit's authored weather.
     Idle at strength 0: it neither runs nor draws, and keeps its pool and clock.
   - `set-sun{intensity}` (`set_sun`): scales the lens flare's ring alpha at the draw
     (`scene/lens_flare.rs`), 0 off; untouched at 1.0. **On a track file only the flare fades**:

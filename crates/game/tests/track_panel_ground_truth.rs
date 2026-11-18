@@ -142,7 +142,7 @@ fn a_race_carries_the_panel_from_the_flyby_to_seven_tenths_after_it() {
         return;
     };
     assert!(loaded.track_panel.is_some());
-    let mut race = Race::start(loaded.setup);
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(
         race.track_panel_progress().is_none(),
         "before the flyby the race draws as always"
@@ -151,7 +151,7 @@ fn a_race_carries_the_panel_from_the_flyby_to_seven_tenths_after_it() {
     race.tick_intro(&PlayerInputs::none());
     let first = race.track_panel_progress().expect("up from the first tick");
     assert!(first.left.is_none() && first.alpha() < 0.1);
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         race.tick_intro(&cross());
     }
     // The tick the flyby ends on shows the chase view with the panel still up, fading.
@@ -173,11 +173,11 @@ fn a_pointer_press_skips_the_flyby_when_the_lock_lifts_and_not_before() {
     let Some(loaded) = load(r"Data\Environments\16_Track\track.vex") else {
         return;
     };
-    let mut race = Race::start(loaded.setup);
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(race.begin_intro());
     race.skip_intro();
     let mut ticks = 0u32;
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         race.tick_intro(&PlayerInputs::none());
         ticks += 1;
         assert!(ticks < 3000, "a press did not end the flyby");

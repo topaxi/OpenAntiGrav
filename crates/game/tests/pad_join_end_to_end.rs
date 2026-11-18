@@ -13,7 +13,7 @@ use oag_input::Controls;
 use oag_input::lobby::{Device, Lobby};
 use oag_input::pad::Assignment;
 use oag_race::Mode;
-use oag_raceplay::{Race, Setup};
+use oag_raceplay::{Race, SimSetup};
 use winit::keyboard::{Key, NamedKey};
 
 const SEED: u64 = 0xC0FFEE;
@@ -25,7 +25,11 @@ const SEED: u64 = 0xC0FFEE;
 /// its right, because sharing a spawn point would have the pair resolver fling
 /// them apart and hide what a stick did.
 fn race(craft: usize) -> Race {
-    let mut race = Race::start(Setup::headless(Mode::SingleRace, SEED));
+    let mut race = Race::start(
+        SimSetup::headless(Mode::SingleRace, SEED),
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
     race.core.sim.world.ships[0].handling.turning = oag_physics::params::Turning {
         amount: 60.0,
         falloff: 5.0,
@@ -111,7 +115,7 @@ fn a_three_seat_lobby_makes_a_three_way_split_with_each_device_on_its_slot() {
         3
     );
 
-    assert_eq!(race.viewport_count(), 3);
+    assert_eq!(race.view_state().viewport_count(), 3);
     for slot in 0..MAX_PLAYERS {
         let local = race.core.sim.world.controllers[slot] == Controller::Local;
         assert_eq!(local, slot < 3, "slot {slot}");
@@ -140,7 +144,7 @@ fn a_lobby_of_one_changes_nothing() {
         ),
         1
     );
-    assert_eq!(race.viewport_count(), 1);
+    assert_eq!(race.view_state().viewport_count(), 1);
     assert_eq!(race.core.sim.world.human_slots().count(), 1);
     assert!(assignment.is_single_player());
 }
@@ -293,7 +297,7 @@ fn a_restart_rebuilds_the_same_split_and_a_visit_to_the_menus_ends_it() {
         &mut first,
         oag_render::viewport::Cut::Horizontal,
     );
-    assert_eq!(first.viewport_count(), 2);
+    assert_eq!(first.view_state().viewport_count(), 2);
     assert_eq!(controls.assignment().humans(), Some(2));
 
     // `RACE AGAIN`: no lobby, the seats are still held.
@@ -304,7 +308,11 @@ fn a_restart_rebuilds_the_same_split_and_a_visit_to_the_menus_ends_it() {
         &mut again,
         oag_render::viewport::Cut::Horizontal,
     );
-    assert_eq!(again.viewport_count(), 2, "the restart is the same split");
+    assert_eq!(
+        again.view_state().viewport_count(),
+        2,
+        "the restart is the same split"
+    );
     assert_eq!(again.core.sim.world.controllers[0], Controller::Local);
     assert_eq!(again.core.sim.world.controllers[1], Controller::Local);
 
@@ -317,7 +325,7 @@ fn a_restart_rebuilds_the_same_split_and_a_visit_to_the_menus_ends_it() {
         &mut fresh,
         oag_render::viewport::Cut::Horizontal,
     );
-    assert_eq!(fresh.viewport_count(), 1);
+    assert_eq!(fresh.view_state().viewport_count(), 1);
 }
 
 /// The cut a SPLIT SCREEN VERTICAL row chose reaches the race through the seating call
@@ -330,13 +338,13 @@ fn the_cut_the_row_chose_reaches_the_race_for_two_views_only() {
     controls.seat_default(2);
     let mut vertical = race(2);
     split_screen::seat_for_launch(&mut None, &mut controls, &mut vertical, Cut::Vertical);
-    assert_eq!(vertical.viewport_count(), 2);
+    assert_eq!(vertical.view_state().viewport_count(), 2);
     assert_eq!(vertical.cut(), Cut::Vertical);
 
     controls.seat_default(3);
     let mut three = race(3);
     split_screen::seat_for_launch(&mut None, &mut controls, &mut three, Cut::Vertical);
-    assert_eq!(three.viewport_count(), 3);
+    assert_eq!(three.view_state().viewport_count(), 3);
     assert_eq!(
         three.cut(),
         Cut::Horizontal,
