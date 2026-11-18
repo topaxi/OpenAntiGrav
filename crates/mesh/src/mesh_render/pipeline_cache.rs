@@ -89,6 +89,8 @@ struct Cache {
     constants: Vec<(&'static str, f64)>,
     /// Whether the scope's light is an authored rig that is on - see [`Scope::lit_by`].
     rig_on: bool,
+    /// [`Scope::simplified_lighting`]'s choice.
+    simplified_lighting: bool,
     texture_calls: u32,
     texture_hits: u32,
     shader_calls: u32,
@@ -143,6 +145,9 @@ impl Scope {
         if light.enabled == 0.0 {
             self.constant("light_rig");
         }
+        if light.specular_scale == 0.0 {
+            self.constant("rig_specular");
+        }
         // The other end of the same fact: a rig that is on stays on (a Zone grade carries
         // the flag), which lets a pipeline whose vertices are all lit drop the stand-in
         // result its last mix weighs at zero (`specialise::plain_is_lit`).
@@ -161,6 +166,18 @@ impl Scope {
         if !zone {
             self.constant("zone_race");
         }
+    }
+
+    /// Every circuit built in this scope shades its plain draws with the player's CIRCUIT
+    /// LIGHTING `simplified` (`oag_display::display::CircuitLighting`), where its rig is on: the
+    /// `simplified_lighting` override on those pipelines alone. Call it before the first
+    /// `build()`, as [`Self::lit_by`].
+    pub fn simplified_lighting(&self, on: bool) {
+        CACHE.with(|cell| {
+            if let Some(cache) = cell.borrow_mut().as_mut() {
+                cache.simplified_lighting = on;
+            }
+        });
     }
 
     /// Pins the override `name` to `0.0` on every pipeline this scope builds.
@@ -288,6 +305,15 @@ fn with_open_cache<R>(read: impl FnOnce(&Cache) -> R) -> R {
 /// `false` with no scope open.
 pub(crate) fn scope_rig_is_on() -> bool {
     CACHE.with(|cell| cell.borrow().as_ref().is_some_and(|cache| cache.rig_on))
+}
+
+/// Whether the open scope asked for [`Scope::simplified_lighting`]; `false` with no scope open.
+pub(crate) fn scope_simplified_lighting() -> bool {
+    CACHE.with(|cell| {
+        cell.borrow()
+            .as_ref()
+            .is_some_and(|cache| cache.simplified_lighting)
+    })
 }
 
 pub(crate) fn scope_constants() -> Vec<(&'static str, f64)> {

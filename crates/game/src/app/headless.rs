@@ -641,6 +641,10 @@ pub(crate) fn run_race(
         crate::water_setting::profile_for_source(settings, &options.source)
             .map_or_else(Default::default, |profile| profile.shadow_resolution)
     });
+    options.circuit_lighting = cli.circuit_lighting.unwrap_or_else(|| {
+        crate::water_setting::profile_for_source(settings, &options.source)
+            .map_or_else(Default::default, |profile| profile.circuit_lighting)
+    });
     options.scene_precision = cli.scene_precision.unwrap_or_else(|| {
         crate::water_setting::profile_for_source(settings, &options.source)
             .map_or_else(Default::default, |profile| profile.scene_precision)

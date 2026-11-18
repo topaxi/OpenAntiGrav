@@ -127,6 +127,10 @@ pub struct Options {
     /// scene does not store encoded values ignores it. See
     /// [`oag_display::display::ScenePrecision`].
     pub scene_precision: oag_display::display::ScenePrecision,
+    /// The player's `graphics.circuit_lighting`: how much of the authored rig a circuit's plain
+    /// surfaces compute, read when the scene is built. See
+    /// [`oag_display::display::CircuitLighting`].
+    pub circuit_lighting: oag_display::display::CircuitLighting,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///
@@ -902,6 +906,9 @@ pub struct Loaded {
     /// [`mesh_render::Light::stand_in`] for every title that authors none,
     /// which is all of them but Wipeout HD.
     pub light: mesh_render::Light,
+    /// The player's [`Options::circuit_lighting`], for the scene build.
+    #[cfg(feature = "view")]
+    pub circuit_lighting: oag_display::display::CircuitLighting,
     /// The circuit's baked probes, which a hull's ambient is blended from: HD's `track.probes`
     /// or Omega's `track.shprobes` - see [`crate::env_probes::Baked`]. Empty where the circuit
     /// ships none (every other title, Omega's Zone circuits), and where a file did not read

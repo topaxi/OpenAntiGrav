@@ -804,6 +804,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         fog_volumes,
         clouds,
         light,
+        circuit_lighting: options.circuit_lighting,
         probes,
         authored_fog,
         hd_bloom: hd_bloom.map(|p| p.with_eight_bit(options.scene_precision.is_eight_bit())),

@@ -582,6 +582,19 @@ impl Definition {
         }
     }
 
+    /// Drops the CIRCUIT LIGHTING row on a title whose circuits are not shaded from their own
+    /// materials (`oag_title::Looks::material_render_state` unread): Pulse and Pure, whose
+    /// circuits have no authored rig, specular or normal map for the row to drop. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_circuit_lighting(&mut self, title: &oag_title::Title) {
+        if title.looks.material_render_state.applies_everywhere() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.circuit_lighting"));
+        }
+    }
+
     /// Drops the TRAIL HITS row on a title whose original plays the trail-hit burst by itself
     /// (`oag_title::Effects::plays_trail_hits_natively`): Wipeout HD alone. 2048 and Omega author
     /// the burst but never fire it, so they keep the row, as Pulse and Pure do. Same

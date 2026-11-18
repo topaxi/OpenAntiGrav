@@ -178,6 +178,7 @@ impl Pending {
             water: oag_display::display::Water::default(),
             shadow_resolution: oag_display::display::ShadowResolution::default(),
             scene_precision: oag_display::display::ScenePrecision::default(),
+            circuit_lighting: oag_display::display::CircuitLighting::default(),
             foreign_track: self
                 .foreign_entry
                 .as_ref()

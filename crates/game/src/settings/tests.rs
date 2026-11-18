@@ -192,6 +192,17 @@ target_fps = \"default\"
     assert_eq!(read(&written).render_profiles[&key].target_fps, target);
 }
 
+/// An existing profile written before CIRCUIT LIGHTING existed keeps the original's shading.
+#[test]
+fn a_profile_without_circuit_lighting_keeps_the_originals() {
+    let settings = read("[render_profiles.\"Wipeout HD\"]\nrender_scale = 100\n");
+    let key = profile_key(oag_hd::TITLE, oag_disc::Platform::Ps3);
+    assert_eq!(
+        settings.render_profiles[&key].circuit_lighting,
+        oag_display::display::CircuitLighting::Original
+    );
+}
+
 #[test]
 fn a_refresh_rate_frame_limit_round_trips_as_the_word() {
     let settings = read("[display]\nframe_limit = \"refresh_rate\"\n");

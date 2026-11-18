@@ -44,6 +44,55 @@ fn present_for(carried: u32) -> u32 {
     carried | ALWAYS | material
 }
 
+/// The `slots` bits whose role reads the second texture at the diffuse coordinate: the albedo and
+/// the alpha taken from it, and the facing-ramp sheen's grid.
+const SECOND_ROLES: u32 =
+    slots::ALBEDO_FROM_SECOND | slots::ALPHA_FROM_SECOND | slots::FACING_RAMP_SHEEN;
+
+/// Whether a vertex `glow` value names the second texture as its mask's source: `shade.wesl`'s
+/// `program_glow` decode of `mesh::rcs::glow::texel_glow`, source 1.
+fn glow_reads_second(glow: f32) -> bool {
+    glow < 0.0 && ((-glow / 8.0).floor() as u32) >> 2 == 1
+}
+
+/// The value of `shade.wesl`'s `second_read` override for the `plain` draws of `draws`, whose
+/// `slots_present` is `present`: `false` where nothing they draw reads the second texture at the
+/// diffuse coordinate. Its readers are [`SECOND_ROLES`], a glow mask sourced from it, and the
+/// pane and twin programs, which need an emissive row (`emissive_rows`).
+pub(super) fn reads_second(
+    model: &Model,
+    draws: &[crate::mesh::DrawCall],
+    plain: &[bool],
+    present: u32,
+) -> bool {
+    if present & SECOND_ROLES != 0 || emissive_rows(present) != 0 {
+        return true;
+    }
+    draws
+        .iter()
+        .zip(plain)
+        .filter(|&(_, &plain)| plain)
+        .any(|(draw, _)| {
+            model.indices[draw.range.start as usize..draw.range.end as usize]
+                .iter()
+                .any(|&index| glow_reads_second(model.vertices[index as usize].glow))
+        })
+}
+
+/// Whether any vertex of `model` carries a tangent (`GpuVertex::tangent`'s `xyz` bytes not all
+/// zero, the test `vs_main` makes): `false` lets its pipelines fold the normal-map branches.
+pub(super) fn tangents_present(model: &Model) -> bool {
+    model.vertices.iter().any(|v| v.tangent & 0x00ff_ffff != 0)
+}
+
+/// Whether any vertex of `model` is a 2048 vertex-lit one (`sun_mask` 2 or above, read by
+/// `shade.wesl` as `>= 1.5`): `false` lets its pipelines fold `nova_vertex` to false. An
+/// interpolated `sun_mask` never exceeds its vertices', so a model none of whose vertices
+/// reaches 1.5 never draws a pixel that does.
+pub(super) fn nova_vertices(model: &Model) -> bool {
+    model.vertices.iter().any(|v| v.sun_mask >= 1.5)
+}
+
 /// The value of `bindings.wesl`'s `emissive_rows` override for a pipeline whose `slots_present`
 /// is `present`: `0` where no vertex can name a row, so every read of the table is its all-zero
 /// row 0 (`Emissives::of`) and the driver can drop the tests on it.
@@ -188,6 +237,20 @@ mod tests {
         assert!(every_one([1.0, 1.0].into_iter()));
         assert!(!every_one([1.0, 0.0, 1.0].into_iter()));
         assert!(!every_one([1.0, 0.999].into_iter()));
+    }
+
+    #[test]
+    fn only_a_glow_mask_from_the_second_texture_reads_it() {
+        // `mesh::rcs::glow::texel_glow`'s packing, `-(scale + 8 * (4 * source + channel))`.
+        let texel =
+            |source: f32, channel: f32, scale: f32| -(scale + 8.0 * (4.0 * source + channel));
+        assert!(glow_reads_second(texel(1.0, 3.0, 7.5)));
+        assert!(glow_reads_second(texel(1.0, 0.0, 0.0)));
+        for source in [0.0, 2.0, 3.0] {
+            assert!(!glow_reads_second(texel(source, 2.0, 1.0)));
+        }
+        assert!(!glow_reads_second(0.5));
+        assert!(!glow_reads_second(0.0));
     }
 
     #[test]

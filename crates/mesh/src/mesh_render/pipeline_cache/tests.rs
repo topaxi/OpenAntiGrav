@@ -337,12 +337,28 @@ fn lit_by_compiles_the_nova_curve_out_only_under_a_rig_that_never_takes_it() {
     assert!(super::scope_rig_is_on(), "an authored rig is on");
     drop(scope);
 
-    // A stand-in light has no rig at all, so that path goes as well.
+    // A rig whose specular scale is zero (2048's and Omega's circuits author none) drops the
+    // generic specular, which is a product with it.
+    let scope = Scope::open();
+    let mut matte = authored;
+    matte.specular_scale = 0.0;
+    scope.lit_by(&matte);
+    assert_eq!(
+        super::scope_constants(),
+        vec![("nova_prelit", 0.0), ("rig_specular", 0.0)]
+    );
+    drop(scope);
+
+    // A stand-in light has no rig at all, so that path goes as well, and its specular with it.
     let scope = Scope::open();
     scope.lit_by(&mesh_render::Light::stand_in());
     assert_eq!(
         super::scope_constants(),
-        vec![("nova_prelit", 0.0), ("light_rig", 0.0)]
+        vec![
+            ("nova_prelit", 0.0),
+            ("light_rig", 0.0),
+            ("rig_specular", 0.0)
+        ]
     );
     assert!(!super::scope_rig_is_on(), "a stand-in is no rig");
     drop(scope);
