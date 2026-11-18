@@ -40,6 +40,7 @@ pub mod endrace;
 pub mod endrace_voice;
 pub mod flyer;
 pub mod ghosts;
+pub mod heap;
 pub mod hud_countdown;
 pub mod hud_overlay;
 pub mod hud_views;
