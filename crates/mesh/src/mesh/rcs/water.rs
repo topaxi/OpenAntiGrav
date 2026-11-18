@@ -90,7 +90,10 @@ pub(crate) const WATER_FLAG: f32 = 2.0;
 /// value only while this holds (`docs/rendering/water.md`, "Open"). A law is always drawn on
 /// its own title as `original` (HD's taps are, under `original` on HD), so a borrowed value
 /// becomes true only once a borrower draws it: `Hd` with the lane that borrows HD's law onto
-/// Pulse, Pure, 2048 and Omega. `Enhanced` is drawn by `mesh::vex_water` on the titles that
+/// Pulse, Pure, 2048 and Omega. Omega's own law is drawn on Omega as its `original`
+/// (`mesh::rcs::psp2::water`), and `Omega` stays false until a title borrows it: that needs the
+/// lender's archive opened in the borrower's race load, which nothing does yet
+/// (`docs/rendering/water.md`, "Omega (PS4)"). `Enhanced` is drawn by `mesh::vex_water` on the titles that
 /// name their water surfaces.
 #[must_use]
 pub const fn is_drawn(law: Water) -> bool {
@@ -832,6 +835,57 @@ mod tests {
         ] {
             assert_eq!(reading(law) == Reading::Taps, taps, "{law}");
         }
+    }
+
+    /// Omega's sea: both taps move `K * Speed` along `u` per second, the second with `u`
+    /// negated, neither scaled (HD's second tap is `1.15` times; `reflectplane_mid` pixel
+    /// `@0x7c`, `@0x84`), and the reflection's weight is
+    /// `Strength * (Min + Scale * facing^Power)`.
+    #[test]
+    fn the_reflective_sea_is_two_opposite_unscaled_taps_and_a_fresnel_weight() {
+        let [first, second] = Tap::reflective(0.05, [1.0, -1.0], 0.5);
+        assert_eq!(first.at([0.25, 0.75], 2.0), [0.25 + 0.05, 0.75]);
+        assert_eq!(second.at([0.25, 0.75], 2.0), [-0.25 + 0.05, 0.75]);
+        assert_eq!((first.weight, second.weight), (1.0, 1.0));
+        assert_eq!((first.scale, second.scale), ([1.0, 1.0], [-1.0, 1.0]));
+        let fresnel = Fresnel {
+            min: 0.15,
+            scale: 2.0,
+            power: 7.0,
+            strength: 0.7,
+        };
+        assert_eq!(fresnel.weight(0.0), 0.7 * 0.15);
+        assert_eq!(fresnel.weight(1.0), 0.7 * (0.15 + 2.0));
+        assert_eq!(fresnel.weight(0.5), 0.7 * (0.15 + 2.0 * 0.5_f32.powf(7.0)));
+        assert_eq!(fresnel.weight(3.0), fresnel.weight(1.0));
+        // The entry: `sea_block`'s lanes untouched, the weight's two products and the power
+        // in the lanes the tap entries leave free.
+        let block = reflective_block(
+            OMEGA_EDGE_KIND,
+            [0.1, 0.2, 0.3],
+            0.9,
+            250.0,
+            [0.4, 0.5, 0.6],
+            [&first, &second],
+            fresnel,
+        );
+        let plain = sea_block(
+            OMEGA_EDGE_KIND,
+            [0.1, 0.2, 0.3],
+            0.9,
+            250.0,
+            [0.4, 0.5, 0.6],
+            [&first, &second],
+        );
+        assert_eq!(block[0], plain[0]);
+        assert_eq!(block[0].program, [PROGRAM_WATER, 10.0]);
+        assert_eq!((block[0].offset, block[0].scale), (0.9, 250.0));
+        assert_eq!(block[1].tint, [1.0, 1.0, 0.05 * 0.5]);
+        assert_eq!(block[2].tint, [-1.0, 1.0, 0.05 * 0.5]);
+        assert_eq!(block[1].rate, 0.7 * 0.15);
+        assert_eq!(block[2].rate, 0.7 * 2.0);
+        assert_eq!(block[1].program, [0.4, 0.5]);
+        assert_eq!(block[2].program, [0.6, 7.0]);
     }
 
     /// A tap's entry carries its numbers in the order `water.wesl` reads them.

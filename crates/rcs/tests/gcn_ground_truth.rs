@@ -542,4 +542,23 @@ fn the_reflective_sea_programs_carry_the_two_opposite_taps_in_every_variant() {
         let bytes = read(&format!("data/environments2048/{entry}.rcsmaterial"));
         assert_eq!(gcn::sea(&bytes), None, "{entry}");
     }
+    // The Zone models keep 2048's blended edge: its vertex programs scroll `uv1.y` by
+    // `time * Speed` and its pixel programs read the map under `Opacity`. No reflective sea
+    // is one.
+    let edge = read(
+        "data/environments2048/altima/materials/fc17_effects_vscroll_wateredge_vertexcol.rcsmaterial",
+    );
+    let found = gcn::scrolled_edge(&edge).expect("the Zone edge is a scrolled edge");
+    println!("fc17 edge: {found:?}");
+    assert_eq!(
+        found,
+        gcn::ScrolledEdge {
+            vertex_programs: 72,
+            pixel_programs: 13
+        }
+    );
+    for (entry, ..) in seas {
+        let bytes = read(&format!("data/environments2048/{entry}.rcsmaterial"));
+        assert_eq!(gcn::scrolled_edge(&bytes), None, "{entry}");
+    }
 }

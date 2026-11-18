@@ -54,7 +54,7 @@ mod sea;
 pub use factor::{Factor, input_is_factor};
 pub use lightning::{LightningRates, lightning_rates};
 pub use sample::{SignedSamplers, SignedTextures, signed_samplers};
-pub use sea::{Sea, SeaTaps, sea};
+pub use sea::{ScrolledEdge, Sea, SeaTaps, scrolled_edge, sea};
 
 use core::fmt;
 use core::ops::Range;

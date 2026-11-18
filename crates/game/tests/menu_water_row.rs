@@ -35,9 +35,9 @@ fn the_shipped_row_lists_every_water_value_in_order() {
     assert_eq!(offered(&built_in()), every);
 }
 
-/// The row is hidden where nothing it offers changes the picture: Omega (its `original` is `off`,
-/// and nothing borrowed is drawn), Pulse and Pure without `enhanced`; shown on HD and 2048, whose
-/// `original` draws the sea's scrolled normal map, and on Pulse and Pure, which offer `enhanced`.
+/// The row is hidden where nothing it offers changes the picture (a title whose `original` is
+/// `off` and which offers nothing else; none today); shown on HD, 2048 and Omega, whose
+/// `original` draws the sea's scrolled normal maps, and on Pulse and Pure, which offer `enhanced`.
 #[test]
 fn the_row_is_shown_only_where_it_changes_the_picture() {
     let none = |_: &str| false;
@@ -46,7 +46,7 @@ fn the_row_is_shown_only_where_it_changes_the_picture() {
         (oag_pulse::TITLE, true),
         (oag_pure::TITLE, true),
         (oag_hd::TITLE, true),
-        (oag_omega::TITLE, false),
+        (oag_omega::TITLE, true),
         (oag_2048::TITLE, true),
     ] {
         for present in [&none as &dyn Fn(&str) -> bool, &with_every_disc] {
@@ -58,6 +58,14 @@ fn the_row_is_shown_only_where_it_changes_the_picture() {
             );
         }
     }
+    let dry = oag_title::Title {
+        water: oag_title::water::Water::NONE,
+        ..*oag_omega::TITLE
+    };
+    assert!(!oag_game::water_setting::row_changes_picture(
+        &dry,
+        &with_every_disc
+    ));
 }
 
 #[test]
@@ -66,7 +74,7 @@ fn with_no_lender_disc_the_row_offers_what_the_title_changes() {
         (oag_pulse::TITLE, &["off", "original", "enhanced"][..]),
         (oag_pure::TITLE, &["off", "original", "enhanced"][..]),
         (oag_hd::TITLE, &["off", "original"][..]),
-        (oag_omega::TITLE, &[][..]),
+        (oag_omega::TITLE, &["off", "original"][..]),
         (oag_2048::TITLE, &["off", "original"][..]),
     ] {
         assert_eq!(row_after(title, &[]), want, "{}", title.name);
@@ -106,7 +114,8 @@ fn each_lender_is_available_only_with_its_disc_and_never_on_itself() {
 
 /// Each choice is hidden until its law is drawn: with every lender disc present the row still
 /// holds only the laws `water_law_is_drawn` admits. A lane that lands a law flips that flag and
-/// this list grows with it.
+/// this list grows with it. Omega's own law is drawn on Omega as its `original`; no title
+/// borrows it yet, so `omega` is not in the list.
 #[test]
 fn with_every_lender_present_only_drawn_laws_are_offered() {
     let drawn: Vec<&str> = Water::ALL
@@ -129,7 +138,7 @@ fn with_every_lender_present_only_drawn_laws_are_offered() {
         (oag_pulse::TITLE, &drawn[..]),
         (oag_pure::TITLE, &drawn[..]),
         (oag_hd::TITLE, &["off", "original"][..]),
-        (oag_omega::TITLE, &[][..]),
+        (oag_omega::TITLE, &["off", "original"][..]),
         (oag_2048::TITLE, &["off", "original"][..]),
     ] {
         assert_eq!(row_after(title, &present), want, "{}", title.name);
@@ -189,11 +198,24 @@ fn the_boot_trim_applies_the_water_row_trim() {
         ["off", "original", "enhanced"],
         "undrawn laws stay hidden"
     );
+    // Every shipped title's row changes its picture now, so the hidden row is shown on a title
+    // made for it: Omega with no water law of its own.
+    let dry: &'static oag_title::Title = Box::leak(Box::new(oag_title::Title {
+        water: oag_title::water::Water::NONE,
+        ..*oag_omega::TITLE
+    }));
     let mut definition = built_in();
-    oag_game::menu_tree::finish_definition(&mut definition, oag_omega::TITLE, &strings, &|_| true);
+    oag_game::menu_tree::finish_definition(&mut definition, dry, &strings, &|_| true);
     assert!(
         offered(&definition).is_empty(),
         "the row is gone where nothing in it changes the picture"
+    );
+    let mut definition = built_in();
+    oag_game::menu_tree::finish_definition(&mut definition, oag_omega::TITLE, &strings, &|_| true);
+    assert_eq!(
+        offered(&definition),
+        ["off", "original"],
+        "Omega's own seas draw under original, so the row stays"
     );
     let mut definition = built_in();
     oag_game::menu_tree::finish_definition(&mut definition, oag_2048::TITLE, &strings, &|_| true);

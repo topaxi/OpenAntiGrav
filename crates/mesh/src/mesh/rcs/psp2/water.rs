@@ -31,6 +31,13 @@
 //! drawn in this engine, so the sky at the mapped normal stands in for it (chosen, not
 //! measured, as HD's sea).
 //!
+//! **Omega's Zone models** keep 2048's blended edge, recompiled
+//! ([`oag_rcs::gcn::scrolled_edge`]). A Zone race draws it through its Zone permutation: the
+//! Zone colour, the vertex normal's light, and the same alpha chain over the map's alpha
+//! scrolled `v + Speed t`. That reading is what is laid (kind [`VITA_EDGE_KIND`], the taps
+//! weighing nothing in the normal, no highlight); its lit permutation, which adds
+//! `Reflectivity * cubeReflectionTex`, is read and not drawn.
+//!
 //! Classified by the programs' declared interface, not by name: a Vita material by its GXP
 //! programs, a PS4 material by its GCN programs. Under `off` nothing is laid, so the draw is
 //! the flat colour it was.
@@ -77,6 +84,9 @@ enum Law {
     Edge,
     /// Omega's reflective sea, as its PS4 programs declare it.
     Reflective(oag_rcs::gcn::Sea),
+    /// Omega's copy of [`Law::Edge`] on its Zone models, drawn as its Zone permutation reads
+    /// it: the scrolled map's alpha in the chain, no mapped normal and no highlight.
+    ZoneEdge,
 }
 
 impl Law {
@@ -84,7 +94,7 @@ impl Law {
         match self {
             Self::Pond => VITA_SEA_KIND,
             Self::Water => VITA_WATER_KIND,
-            Self::Edge => VITA_EDGE_KIND,
+            Self::Edge | Self::ZoneEdge => VITA_EDGE_KIND,
             Self::Reflective(sea) if sea.opacity => OMEGA_EDGE_KIND,
             Self::Reflective(_) => OMEGA_SEA_KIND,
         }
@@ -94,7 +104,7 @@ impl Law {
     /// pair for the alpha.
     fn blended_edge(&self) -> bool {
         match self {
-            Self::Edge => true,
+            Self::Edge | Self::ZoneEdge => true,
             Self::Reflective(sea) => sea.opacity,
             Self::Pond | Self::Water => false,
         }
@@ -142,6 +152,10 @@ pub struct Census {
     pub reflective_drawn: usize,
     /// Of those drawn, the blended edge.
     pub reflective_edge_drawn: usize,
+    /// Submeshes of Omega's copy of 2048's blended edge (its Zone models), and of those the
+    /// ones drawn with the alpha chain; counted in none of the above.
+    pub zone_edge: usize,
+    pub zone_edge_drawn: usize,
 }
 
 impl Census {
@@ -158,6 +172,12 @@ impl Census {
             line += &format!(
                 "; Omega's reflective sea: {} of {} submesh(es) draw their two taps, the sky standing in for the planar reflection ({} blended edge)",
                 self.reflective_drawn, self.reflective, self.reflective_edge_drawn
+            );
+        }
+        if self.zone_edge != 0 {
+            line += &format!(
+                "; Omega's Zone water edge: {} of {} submesh(es) blend by the scrolled map's alpha chain",
+                self.zone_edge_drawn, self.zone_edge
             );
         }
         line
@@ -217,12 +237,14 @@ pub(super) fn plan(
                     if !ps4 {
                         return sampler_use::sampler_use(&blob).and_then(|uses| Law::of(&uses));
                     }
-                    let marker = b"ReflectivityStrength";
-                    blob.windows(marker.len())
-                        .any(|w| w == marker)
-                        .then(|| oag_rcs::gcn::sea(&blob))
+                    let names = |marker: &[u8]| blob.windows(marker.len()).any(|w| w == marker);
+                    if names(b"ReflectivityStrength") {
+                        return oag_rcs::gcn::sea(&blob).map(Law::Reflective);
+                    }
+                    (names(b"Watercolour") && names(b"VertexColour1") && names(b"Opacity"))
+                        .then(|| oag_rcs::gcn::scrolled_edge(&blob))
                         .flatten()
-                        .map(Law::Reflective)
+                        .map(|_| Law::ZoneEdge)
                 })
                 .clone()
         })
@@ -278,11 +300,19 @@ pub(super) fn plan(
             normals.bind(index, map);
             true
         });
-        if let Law::Reflective(sea) = law {
-            report.sea.reflective += 1;
-            report.sea.reflective_drawn += usize::from(laid);
-            report.sea.reflective_edge_drawn += usize::from(laid && sea.opacity);
-            continue;
+        match law {
+            Law::Reflective(sea) => {
+                report.sea.reflective += 1;
+                report.sea.reflective_drawn += usize::from(laid);
+                report.sea.reflective_edge_drawn += usize::from(laid && sea.opacity);
+                continue;
+            }
+            Law::ZoneEdge => {
+                report.sea.zone_edge += 1;
+                report.sea.zone_edge_drawn += usize::from(laid);
+                continue;
+            }
+            Law::Pond | Law::Water | Law::Edge => {}
         }
         report.sea.submeshes += 1;
         report.sea.drawn += usize::from(laid);
@@ -335,6 +365,21 @@ fn block(
                 scalar(OPACITY).unwrap_or(1.0),
                 power,
                 rgb(SPECULAR_COLOUR)?,
+                [&taps[0], &taps[1]],
+            ))
+        }
+        Law::ZoneEdge => {
+            // The Zone permutation reads the map's alpha alone (`dmask:0x8`), lights the vertex
+            // normal and has no highlight: both taps weigh nothing in the normal, and the first
+            // still places the alpha fetch at `(u, v + Speed t)`.
+            let mut taps = Tap::vita_water(scalar(SPEED)?);
+            taps[0].weight = 0.0;
+            Some(sea_block(
+                law.kind(),
+                rgb(WATERCOLOUR)?,
+                scalar(OPACITY)?,
+                power,
+                [0.0; 3],
                 [&taps[0], &taps[1]],
             ))
         }

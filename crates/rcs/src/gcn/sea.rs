@@ -130,7 +130,10 @@ impl Program<'_> {
         else {
             return None;
         };
-        let buffer = self.constant_buffer_at(at, base)?;
+        // A program with one constant buffer needs no record to say which was read.
+        let buffer = self
+            .constant_buffer_at(at, base)
+            .or_else(|| reflection.constant_buffer())?;
         reflection
             .constant_at(buffer, dword + u32::from(sgpr - first))
             .map(|(constant, _)| constant.name.as_str())
@@ -314,4 +317,83 @@ pub fn sea(file: &[u8]) -> Option<Sea> {
         });
     }
     found.map(|sea| Sea { opacity, ..sea })
+}
+
+/// What [`scrolled_edge`] found: how many vertex programs scroll the coordinate, and how many
+/// pixel programs read the map under `Opacity`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScrolledEdge {
+    pub vertex_programs: usize,
+    pub pixel_programs: usize,
+}
+
+impl Program<'_> {
+    /// Whether this vertex program adds `time * Speed` to the second lane of `uv1`: either
+    /// in place (`v_mac_f32 uv1.y, time, Speed`) or into another register while the lane still
+    /// holds what was fetched (`v_mad_f32 d, time, Speed, uv1.y`). The constants are found by
+    /// data flow.
+    fn scrolls_v_by_speed(&self) -> bool {
+        let Some((input, _)) = self.input_named("uv1") else {
+            return false;
+        };
+        let lane = input.vgpr + 1;
+        let is_lane = |operand: Option<Operand>| matches!(operand, Some(Operand::Vgpr { first, .. }) if first == lane);
+        self.instructions.iter().enumerate().any(|(k, i)| {
+            let adds_to_lane = match i.name {
+                Some("v_mac_f32") => is_lane(i.dst[0]),
+                Some("v_mad_f32") => {
+                    is_lane(i.src[2]) && i.neg == 0 && self.writer_of(k, lane).is_none()
+                }
+                _ => false,
+            };
+            if !adds_to_lane {
+                return false;
+            }
+            let mut factors = [
+                self.constant_operand(k, i.src[0]),
+                self.constant_operand(k, i.src[1]),
+            ];
+            factors.sort_unstable();
+            factors == [Some("Speed"), Some("time")]
+        })
+    }
+}
+
+/// Omega's copy of 2048's blended water edge (`fc17_effects_vscroll_wateredge_vertexcol`, on
+/// the Zone models): every vertex program that declares `time` and `Speed` fetches
+/// `VertexColour1` and scrolls `uv1.y` by `time * Speed`, every pixel program that declares
+/// `Opacity` samples `NormalMap`, and none declares a second normal map. `None` for any other
+/// file. The alpha chain those programs compute is on `docs/rendering/water.md`, "Omega (PS4)".
+#[must_use]
+pub fn scrolled_edge(file: &[u8]) -> Option<ScrolledEdge> {
+    let mut found = ScrolledEdge {
+        vertex_programs: 0,
+        pixel_programs: 0,
+    };
+    for (_, program) in super::scan(file) {
+        let Ok(program) = program else { continue };
+        let Ok(reflection) = &program.reflection else {
+            continue;
+        };
+        let declares = |name: &str| reflection.constants.iter().any(|c| c.name == name);
+        let has = |name: &str| reflection.resources.iter().any(|r| r.name == name);
+        match program.stage {
+            Stage::Vertex if declares("time") || declares("Speed") => {
+                let coloured = reflection.inputs.iter().any(|a| a.name == "VertexColour1");
+                if !(coloured && program.scrolls_v_by_speed()) {
+                    return None;
+                }
+                found.vertex_programs += 1;
+            }
+            Stage::Pixel if has(NORMAL_MAP1) => return None,
+            Stage::Pixel if declares("Opacity") => {
+                if !has(NORMAL_MAP) {
+                    return None;
+                }
+                found.pixel_programs += 1;
+            }
+            _ => {}
+        }
+    }
+    (found.vertex_programs > 0 && found.pixel_programs > 0).then_some(found)
 }
