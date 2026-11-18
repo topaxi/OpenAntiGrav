@@ -286,7 +286,11 @@ fn a_tripped_mine_that_finishes_the_craft_credits_the_layer() {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
     race.core.sim.world.ships[0].pickup.begin_drop(1);
     race.tick(&PlayerInputs::none());
@@ -380,7 +384,11 @@ fn a_tripped_mine_pays_its_layer_through_the_tick() {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.eliminator_kill_target = 1000;
     race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
     race.core.sim.world.ships[0].pickup.begin_drop(1);

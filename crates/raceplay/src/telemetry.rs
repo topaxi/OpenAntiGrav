@@ -383,7 +383,7 @@ impl SimRace {
     #[cfg(feature = "view")]
     /// The Eliminator's kill column, top row first, in the order the original
     /// draws it - see [`oag_hud::kill_tags`]. Empty in every other mode, and
-    /// for a slot with no team on record (a `Setup` built by hand).
+    /// for a slot with no team on record (a `SimSetup` built by hand).
     fn kill_tags(&self, player: usize) -> Vec<oag_hud::KillTag> {
         let world = &self.sim.world;
         if world.mode() != oag_race::Mode::Eliminator {

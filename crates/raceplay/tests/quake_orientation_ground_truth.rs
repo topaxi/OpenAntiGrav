@@ -79,7 +79,7 @@ fn lean_with_the_track(image: &str, expect: Frame) {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..5 {
         race.tick(&PlayerInputs::none());
     }

@@ -460,7 +460,11 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::TimeTrial;
     setup.weapons = None;
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.grant_free_turbo(0);
     assert_eq!(race.core.ship_pickup(), None);
 }

@@ -77,7 +77,7 @@ fn fly(ticks: usize) -> Option<(Vec<Option<Sample>>, Option<usize>)> {
         ..race::Options::default()
     })
     .expect("loading Talon's Junction");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
     let mut input = Input::new();
     let cross = Button::Cross.bit();

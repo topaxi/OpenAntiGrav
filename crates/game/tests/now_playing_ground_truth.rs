@@ -88,7 +88,7 @@ fn pulse_shows_the_song_from_the_green_light_and_takes_it_down_again() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading a Pulse race");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     let song = oag_sound::NowPlaying {
         serial: 1,
         name: Some(name),
@@ -211,7 +211,7 @@ fn timeline(image: &str, mode: oag_race::Mode, class: &str) -> Option<Vec<Beat>>
     oag_game::sound::hold_race_song(&mut audio, loaded.title);
     audio.start_race_music(&discs, oag_sound::MusicSource::Auto, &cache);
     audio.settle_music();
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     let mut beats = Vec::new();
     for _ in 0..oag_race::COUNTDOWN_TICKS + 30 {
@@ -362,7 +362,7 @@ fn a_title_that_starts_its_song_at_load_has_it_from_the_first_step() {
     audio.hold_race_song(false);
     audio.start_race_music(&discs, oag_sound::MusicSource::Auto, &cache);
     audio.settle_music();
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.tick(&PlayerInputs::none());
     oag_game::sound::race_tick(&mut audio, &mut race);
     assert!(audio.playhead_race().is_some(), "sounding at step 0");
@@ -411,7 +411,7 @@ fn pure_borrows_pulses_display_and_names_its_own_songs() {
             .filter(|l| l.contains("now playing"))
             .collect::<Vec<_>>()
     );
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.note_song(Some(&oag_sound::NowPlaying {
         serial: 1,
         name: Some(name),
@@ -449,7 +449,10 @@ fn race_with_a_named_song_and(
         ..oag_raceplay::Options::default()
     })
     .expect("loading the race");
-    Some((oag_raceplay::Race::start(loaded.setup), name))
+    Some((
+        oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules),
+        name,
+    ))
 }
 
 /// Pulse's `Dynamic HUD` set to `FE_OFF` shows no song (`ShowNowPlaying` clears the display and
@@ -594,7 +597,7 @@ fn hd_shows_its_own_item_with_the_bar_art_from_its_sheet() {
             .collect::<Vec<_>>()
     );
     let sheet = loaded.hud.sheet.clone();
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.note_song(Some(&oag_sound::NowPlaying {
         serial: 1,
         name: Some(name),
@@ -655,7 +658,7 @@ fn omega_shows_hds_item_and_names_its_seventeen_songs() {
             .collect::<Vec<_>>()
     );
     let sheet = loaded.hud.sheet.clone();
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.note_song(Some(&oag_sound::NowPlaying {
         serial: 1,
         name: Some(name),
@@ -709,7 +712,7 @@ fn the_2048_borrows_hds_display_and_names_its_own_songs() {
             .filter(|l| l.contains("now playing"))
             .collect::<Vec<_>>()
     );
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.note_song(Some(&oag_sound::NowPlaying {
         serial: 1,
         name: Some(name),
@@ -783,7 +786,7 @@ fn pulse_pad_music_controls_move_the_song_and_leave_the_simulation_alone() {
         oag_game::sound::hold_race_song(&mut audio, loaded.title);
         audio.start_race_music(&discs, oag_sound::MusicSource::Auto, &cache);
         audio.settle_music();
-        let mut race = oag_raceplay::Race::start(loaded.setup);
+        let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
 
         let mut out = Outcome {
             hash: 0,

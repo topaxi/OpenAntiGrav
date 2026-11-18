@@ -76,15 +76,15 @@ fn options(source: &Path, mode: oag_race::Mode) -> race::Options {
     }
 }
 
-fn setup(title: &str) -> Option<race::Setup> {
+fn setup(title: &str) -> Option<race::Loaded> {
     setup_in(title, oag_race::Mode::TimeTrial)
 }
 
-fn setup_in(title: &str, mode: oag_race::Mode) -> Option<race::Setup> {
+fn setup_in(title: &str, mode: oag_race::Mode) -> Option<race::Loaded> {
     let source = source(title)?;
     let loaded =
         race::load(&options(&source, mode)).unwrap_or_else(|e| panic!("loading {title}: {e:#}"));
-    Some(loaded.setup)
+    Some(loaded)
 }
 
 /// A pad, flown by a driver that is not in the world.
@@ -172,9 +172,9 @@ const SHOT_AT: u64 = 1_237;
 /// Drives a recorded run of [`TICKS`] and hands back the race, its recording and the screenshot
 /// record taken of it at [`SHOT_AT`].
 fn record(title: &str) -> Option<(race::Race, Replay, oag_replay::ShotRecord)> {
-    let setup = setup(title)?;
-    let seed = setup.seed;
-    let mut race = race::Race::start(setup);
+    let loaded = setup(title)?;
+    let seed = loaded.setup.seed;
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.start_recording(header(title, seed));
     let mut pad = Pad::new(title);
     let mut shot = None;
@@ -374,8 +374,10 @@ fn ghost_changes_nothing(title: &str, replay: &Replay) {
         .ghost
         .clone()
         .unwrap_or_else(|| panic!("{title}: the pad completed no lap in {TICKS} ticks"));
-    let mut plain = race::Race::start(setup(title).expect("present"));
-    let mut haunted = race::Race::start(setup(title).expect("present"));
+    let plain = setup(title).expect("present");
+    let mut plain = race::Race::start(plain.setup, plain.view, plain.modules);
+    let haunted = setup(title).expect("present");
+    let mut haunted = race::Race::start(haunted.setup, haunted.view, haunted.modules);
     haunted.set_ghost(race::Ghost {
         lap,
         team: "default".to_string(),
@@ -438,10 +440,10 @@ fn wipeout_2048_replays_reproduce_and_ghosts_change_nothing() {
 #[test]
 #[ignore = "needs data/images/pure-psp-eu.chd"]
 fn a_bare_pad_starts_on_the_line_where_the_grid_is_far_from_sample_zero() {
-    let Some(setup) = setup("pure") else {
+    let Some(loaded) = setup("pure") else {
         return;
     };
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut pad = Pad::new("pure");
     pad.race_driver = None;
     let _ = pad.inputs(&mut race);
@@ -470,7 +472,7 @@ fn recorded_at_tick_zero(
     })
     .unwrap_or_else(|e| panic!("loading {title} {}: {e:#}", mode.name()));
     let seed = loaded.setup.seed;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let launch = race::Launch {
         scheme: oag_gameplay::ControlScheme::Novice,
         difficulty: oag_ai::Difficulty::Ace,

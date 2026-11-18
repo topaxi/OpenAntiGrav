@@ -47,7 +47,7 @@ fn finished_time_trial_at(difficulty: oag_ai::Difficulty) -> Option<race::Race> 
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     while !race.core.sim.finished() && race.core.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());

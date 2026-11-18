@@ -17,7 +17,11 @@ fn thrust_capable_race() -> Race {
     let mut handling = hulled_handling();
     handling.engine.amount = 20.0;
     handling.engine.accelcap = 1000.0;
-    without_player_rescue(Race::start(setup(handling)))
+    without_player_rescue(Race::start(
+        setup(handling),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ))
 }
 
 /// Cross held from tick 0: every tick inside the measured 272-tick span
@@ -105,7 +109,11 @@ fn opponents_are_held_at_the_line_through_the_gated_span() {
 fn voiced_start(countdown_voice: bool) -> Vec<(u64, oag_gameplay::cue::Cue)> {
     let mut setup = setup(hulled_handling());
     setup.countdown_voice = countdown_voice;
-    let mut race = without_player_rescue(Race::start(setup));
+    let mut race = without_player_rescue(Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ));
     let mut raised = Vec::new();
     for _ in 0..400 {
         race.tick(&PlayerInputs::none());

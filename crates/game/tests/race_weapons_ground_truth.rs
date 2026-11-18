@@ -111,7 +111,7 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        race::Race::start(loaded.setup)
+        race::Race::start(loaded.setup, loaded.view, loaded.modules)
     };
     let race_at_pad = |mode: oag_race::Mode| race_at_pad_seeded(mode, None);
 
@@ -268,7 +268,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        race::Race::start(loaded.setup)
+        race::Race::start(loaded.setup, loaded.view, loaded.modules)
     };
 
     // The class's authored odds decide this, so scan rather than pin - see the

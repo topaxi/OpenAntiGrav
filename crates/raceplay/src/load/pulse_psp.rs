@@ -105,16 +105,16 @@ fn light_hulls(
                 hull.ambient, hull.diffuse
             ));
             let directionals = hull.direction.iter().filter(|d| d[3] > 0.5).count();
-            loaded.setup.hull_points =
+            loaded.view.hull_points =
                 mesh_render::HullPointLights::from_track(track_blob, nodes, directionals);
             loaded.report.push(format!(
                 "hull point lights: {} wopoint/wospot nodes, {} free slot(s) after {directionals} directional(s)",
-                loaded.setup.hull_points.len(),
+                loaded.view.hull_points.len(),
                 4 - directionals.min(4),
             ));
             loaded.light.hull = hull;
             if shine_lit {
-                loaded.setup.hull_points.pass =
+                loaded.view.hull_points.pass =
                     mesh_render::HullPassColour::from_track(track_blob, nodes);
                 loaded.report.push(
                     "hull shine: drawn in the circuit's accumulated light colour, per craft".into(),
@@ -138,7 +138,7 @@ fn place_scenery_fx(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::ve
     names.dedup();
     for name in names {
         let count = placed.iter().filter(|p| p.name == name).count();
-        let state = if loaded.setup.effects.get(name).is_some() {
+        let state = if loaded.view.effects.get(name).is_some() {
             "played from load on its node"
         } else {
             "not loaded, so not drawn"
@@ -147,7 +147,7 @@ fn place_scenery_fx(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::ve
             .report
             .push(format!("placed effect: {count} x {name}, {state}"));
     }
-    loaded.setup.scenery_fx.placed = placed;
+    loaded.view.scenery_fx.placed = placed;
 }
 
 #[cfg(feature = "view")]
@@ -194,7 +194,7 @@ fn place_weather(
     ));
     let mist_texture = mist_texture(archives, config.tex.as_deref(), &mut loaded.report);
     let splash_cell = splash_art(loaded, archives);
-    loaded.setup.scenery_fx.weather = Some(crate::scenery_fx::weather::Setup {
+    loaded.view.scenery_fx.weather = Some(crate::scenery_fx::weather::Setup {
         config,
         anchors,
         mist_texture,
@@ -237,7 +237,7 @@ pub(super) fn place_driven_weather(
     ));
     let mist_texture = mist_texture(archives, config.tex.as_deref(), &mut loaded.report);
     let splash_cell = splash_art(loaded, archives);
-    loaded.setup.scenery_fx.weather = Some(crate::scenery_fx::weather::Setup {
+    loaded.view.scenery_fx.weather = Some(crate::scenery_fx::weather::Setup {
         config,
         anchors: Vec::new(),
         mist_texture,
@@ -257,7 +257,7 @@ fn splash_art(loaded: &mut Loaded, archives: &mut oag_assets::Archives) -> Optio
         .read_name(name)
         .ok()
         .and_then(|blob| oag_fx::psys::sprite::Sprite::from_mask(&blob));
-    let cell = sprite.and_then(|sprite| loaded.setup.effects.place_sprite(&sprite));
+    let cell = sprite.and_then(|sprite| loaded.view.effects.place_sprite(&sprite));
     loaded.report.push(match cell {
         Some(_) => format!("weather: splash art {name} (ours), for the enhanced setting only"),
         None => format!("weather: splash art {name} did not load, the enhanced setting draws none"),

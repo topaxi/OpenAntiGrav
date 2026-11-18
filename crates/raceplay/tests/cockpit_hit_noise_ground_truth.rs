@@ -26,7 +26,7 @@ fn noise_of(image: &str) -> Option<Noise> {
     })
     .expect("loading the race");
     let size = loaded
-        .setup
+        .view
         .cockpit_hit_noise
         .as_ref()
         .map(|noise| (noise.width, noise.height));

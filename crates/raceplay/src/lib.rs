@@ -376,15 +376,17 @@ pub use load::authored_length;
 #[cfg(feature = "view")]
 pub use load::load_event;
 #[cfg(feature = "view")]
+pub use load::load_view;
+#[cfg(feature = "view")]
 pub use load::ripple::{Ripples, SpanPlaces};
+pub use load::{SimLoad, export_track, load, load_sim};
 #[cfg(feature = "view")]
 pub use load::{authored_light, hd_bloom_params};
-pub use load::{export_track, load};
 #[cfg(feature = "view")]
 pub(crate) use oag_title::Trigger;
 pub use options::{
     CameraOverride, Campaign2048Progress, CaptureHud, CaptureZone, Loaded, Options, PoseRequest,
-    SeatPick, Setup, Sighting, TrailHits, WingtipContrails,
+    SeatPick, Sighting, SimSetup, TrailHits, ViewSetup, WingtipContrails,
 };
 pub use replay::{ApplyError, Launch, OriginalAi, UnknownOption, rebuild};
 #[cfg(feature = "view")]

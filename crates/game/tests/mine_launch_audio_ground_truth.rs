@@ -76,7 +76,7 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
     for line in &loaded.report {
         println!("{line}");
     }
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.mine_stats().expect("the disc authors a Mine");
 
     let throttle = held(Button::Cross);

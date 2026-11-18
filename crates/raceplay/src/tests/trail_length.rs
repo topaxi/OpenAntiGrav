@@ -9,6 +9,7 @@ use oag_gameplay::PlayerInputs;
 /// A grid whose hulls author a nozzle, so every tick pushes a sample.
 fn racing_grid() -> Race {
     let mut setup = setup(hulled_handling());
+    let mut view = crate::tests::fixture_view();
     setup.mode = Mode::SingleRace;
     setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
@@ -16,8 +17,8 @@ fn racing_grid() -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    setup.nozzles = vec![Some(Vec3::new(0.0, 0.0, -0.8)); MAX_SHIPS];
-    let mut race = Race::start(setup);
+    view.nozzles = vec![Some(Vec3::new(0.0, 0.0, -0.8)); MAX_SHIPS];
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     race.view.hd_trail_active = false;
     race
 }

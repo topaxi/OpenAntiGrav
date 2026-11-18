@@ -43,7 +43,7 @@ fn chenghou_jumps_per_tick() {
     if env_or("OAG_CAGE", "on") == "off" {
         loaded.setup.spline = loaded.setup.spline.clone().with_cage(None);
     }
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     // `OAG_PLACE=x,y,z,fx,fy,fz,ux,uy,uz,speed`: after the idle ticks (past GO), put the
     // player there, velocity along forward, no spin, then hold thrust alone, as
     // `scripts/rpcs3_place.py` does on the original.

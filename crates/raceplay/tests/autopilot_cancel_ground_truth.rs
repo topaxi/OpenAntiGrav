@@ -43,7 +43,7 @@ fn started(source: String) -> oag_raceplay::Race {
         ..oag_raceplay::Options::default()
     })
     .expect("loading the race");
-    oag_raceplay::Race::start(loaded.setup)
+    oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules)
 }
 
 /// One row of the trace: the press, the timer, whether the pilot has the craft, the slot.

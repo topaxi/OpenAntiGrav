@@ -52,7 +52,7 @@ fn run(eps: f32, cage: bool) -> (u32, usize) {
     if !cage {
         setup.spline = setup.spline.clone().with_cage(None);
     }
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
     race.core.sim.world.ships[0].active = false;
     let mut cues = 0;
     for _ in 0..TICKS {

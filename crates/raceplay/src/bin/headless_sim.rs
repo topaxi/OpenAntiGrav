@@ -15,7 +15,7 @@
 //! wrong shape" - applies to a protocol written before the loopback
 //! client/server test that would justify it.
 //!
-//! **The race it runs means nothing.** [`Setup::headless`] authors no track, no
+//! **The race it runs means nothing.** [`SimSetup::headless`] authors no track, no
 //! handling and no weapon table, so the craft fall in a vacuum and no lap is
 //! ever counted. A hash that moves is the whole assertion: it says the tick ran
 //! and changed state, not that it produced a result anyone should read.
@@ -26,7 +26,7 @@
 //! ```
 
 use oag_gameplay::{Controller, PlayerInputs};
-use oag_raceplay::{Race, Setup};
+use oag_raceplay::{Race, SimSetup, ViewSetup};
 
 /// Ticks to run when the command line says nothing.
 const DEFAULT_TICKS: u32 = 120;
@@ -49,7 +49,11 @@ fn main() {
             std::process::exit(2);
         });
 
-    let mut race = Race::start(Setup::headless(oag_race::Mode::SingleRace, SEED));
+    let mut race = Race::start(
+        SimSetup::headless(oag_race::Mode::SingleRace, SEED),
+        ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
 
     // Three people and five drivers. Written here rather than by `Race::start`
     // because the front end is what decides how many people are racing, and
@@ -59,7 +63,7 @@ fn main() {
     }
     let humans: Vec<usize> = race.core.sim.world.human_slots().collect();
     // One craft, not eight: `opponents` asks for a grid and a grid is spawned
-    // along a racing line, which `Setup::headless` does not author. Said out
+    // along a racing line, which `SimSetup::headless` does not author. Said out
     // loud rather than papered over - the slots past the first consume a
     // snapshot and reach the hash, which is what this binary is checking, and
     // a full grid needs a track this deliberately has not got.

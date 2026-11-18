@@ -87,7 +87,7 @@ fn weather(
     ticks: u32,
 ) -> (bool, usize, usize, f32, usize, bool, race::extensions::Sky) {
     let loaded = race::load(&options).expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
     }
@@ -138,7 +138,7 @@ fn a_disc_circuit_never_runs_the_track_module() {
         return;
     };
     let loaded = race::load(&options(1, None, vec![source]).unwrap()).expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..900 {
         race.tick(&PlayerInputs::none());
     }

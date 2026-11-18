@@ -204,7 +204,7 @@ fn circuits_omega() -> Vec<Circuit> {
     }]
 }
 
-fn load(circuit: &Circuit, class: &str, seed: u64) -> Option<race::Setup> {
+fn load(circuit: &Circuit, class: &str, seed: u64) -> Option<race::SimSetup> {
     let loaded = race::load(&race::Options {
         source: circuit.source.clone(),
         mode: oag_race::Mode::SingleRace,
@@ -232,8 +232,12 @@ fn load(circuit: &Circuit, class: &str, seed: u64) -> Option<race::Setup> {
 
 /// A race on `setup` driving `plans`' plans: the simulation copied before
 /// the first tick, so nothing is learned again.
-fn with_plans(setup: &race::Setup, plans: &race::Race) -> race::Race {
-    let mut race = race::Race::start(setup.clone());
+fn with_plans(setup: &race::SimSetup, plans: &race::Race) -> race::Race {
+    let mut race = race::Race::start(
+        setup.clone(),
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
     race.core.sim = plans.core.sim.clone();
     race
 }
@@ -276,7 +280,7 @@ fn watch(race: &race::Race, slot: usize, tick: u32, w: &mut Watch, tally: &mut [
 
 /// One craft alone in `slot`, sent down route `want` (`k + 1`) at every visit
 /// to its fork.
-fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tally {
+fn solo(setup: &race::SimSetup, plans: &race::Race, slot: usize, want: u16) -> Tally {
     let mut race = with_plans(setup, plans);
     let count = race.core.sim.ship_count() as usize;
     for other in 0..count {
@@ -363,7 +367,7 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
     tally.swap_remove(usize::from(want))
 }
 
-fn field(setup: &race::Setup, plans: &race::Race) -> (Vec<Tally>, Vec<u32>, u32) {
+fn field(setup: &race::SimSetup, plans: &race::Race) -> (Vec<Tally>, Vec<u32>, u32) {
     let mut race = with_plans(setup, plans);
     fly_ours(&mut race);
     let count = race.core.sim.ship_count() as usize;
@@ -399,7 +403,11 @@ fn board_at(circuit: &Circuit, class: &str, seed: u64) {
         let Some(setup) = load(circuit, class, seed) else {
             return;
         };
-        let mut plans = race::Race::start(setup.clone());
+        let mut plans = race::Race::start(
+            setup.clone(),
+            oag_raceplay::ViewSetup::headless(),
+            oag_raceplay::extensions::Prepared::default(),
+        );
         let routes = plans.core.sim.route_count();
         if routes == 0 {
             emit(&format!("noforks\t{}\t{class}\t{seed}", circuit.label));
@@ -512,7 +520,11 @@ fn route_verify_probe() {
                 let Some(setup) = load(circuit, &class, seed) else {
                     continue;
                 };
-                let mut race = race::Race::start(setup);
+                let mut race = race::Race::start(
+                    setup,
+                    oag_raceplay::ViewSetup::headless(),
+                    oag_raceplay::extensions::Prepared::default(),
+                );
                 if std::env::var_os("OAG_ROUTE_PROBE_RING").is_some()
                     && std::env::var_os("OAG_ROUTE_PROBE_FLOOR").is_none()
                 {
@@ -857,7 +869,11 @@ fn route_original_probe() {
                 let Some(setup) = load(circuit, &class, seed) else {
                     continue;
                 };
-                let mut race = race::Race::start(setup);
+                let mut race = race::Race::start(
+                    setup,
+                    oag_raceplay::ViewSetup::headless(),
+                    oag_raceplay::extensions::Prepared::default(),
+                );
                 for other in 1..race.core.sim.ship_count() as usize {
                     race.core.sim.world.ships[other].active = false;
                 }

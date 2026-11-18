@@ -64,7 +64,7 @@ fn every_craft_on_the_grid_casts_a_blob_shadow_onto_the_floor() {
     let Some(loaded) = load_with_opponents() else {
         return;
     };
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let placements = race.shadow_placements();
     assert_eq!(
         placements.len(),
@@ -128,7 +128,7 @@ fn the_projected_hull_lands_on_the_surface_under_the_craft() {
         return;
     };
     let hulls = loaded.shadows.hulls.clone();
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let placements = race.shadow_placements();
     let placement = &placements[0];
     let hull = hulls[0].as_ref().expect("the player's craft authors one");

@@ -183,7 +183,7 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
         .setup
         .start_position
         .expect("16_Track authors a Start Position");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     let start = race.core.telemetry();
     println!(
@@ -237,7 +237,7 @@ fn the_whole_grid_lands_on_the_track() {
     };
     let bound = envelope(&loaded);
     let colliders = loaded.setup.collision.clone();
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     assert_eq!(
         race.core.sim.ship_count(),
@@ -352,7 +352,7 @@ fn our_grid_is_the_originals_grid() {
     let Some(loaded) = load_with_opponents() else {
         return;
     };
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(race.core.sim.ship_count(), 8);
 
     // Array index 0 is the player and grid slot 8; indices 1..=7 are slots 1..=7.

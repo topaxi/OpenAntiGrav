@@ -36,7 +36,7 @@ fn start() -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(race.core.sim.use_original_ai(None, 0));
     let mut moving = 0;
     for _ in 0..SETTLE + 2000 {

@@ -224,7 +224,7 @@ fn start(circuit: &str) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 fn cage_of(race: &race::Race) -> &dyn Containment {
@@ -505,7 +505,7 @@ fn outpost_7_ramp_launch_normal_is_the_tracks_up() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let craft_up = Vec3::new(-0.014, 0.996, -0.090).normalize();
     let track_up = plasma_rides_the_located_up(race, 186, |_| craft_up);
     // The recorded normal prints as `(-0.000, 1.000, 0.000)`: the sample is 0.26 degrees from
@@ -535,7 +535,7 @@ fn an_hd_plasma_bolt_rides_the_located_tracks_up() {
         ..race::Options::default()
     })
     .expect("loading an HD race");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // HD's own floor arms are unread, so it keeps the parallel turn
     // (`Weapons::floor_arms_steer_to_ride_point`).
     assert_eq!(
@@ -693,7 +693,7 @@ fn the_grid_craft_holds_its_own_first_probes_on_pure() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(
         race.core.sim.own_craft_probe(),
         oag_weapons::projectile::OwnCraftProbe::CraftBoxHolds

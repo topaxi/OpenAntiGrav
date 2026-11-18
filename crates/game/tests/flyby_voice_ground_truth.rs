@@ -47,7 +47,7 @@ fn flyby(held: bool) -> Option<(Vec<bool>, bool)> {
     oag_game::sound::hold_race_song(&mut audio, loaded.title);
     audio.start_race_music(&discs, oag_sound::MusicSource::Auto, &cache);
     audio.settle_music();
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(race.begin_intro());
     oag_game::sound::prepare_intro_voice(&mut audio, &discs, &race);
     audio.settle_pre_race_voice();
@@ -114,7 +114,7 @@ fn effects_gain(held: bool) -> Option<Vec<f32>> {
         oag_audio::MIN_BUFFER,
         true,
     );
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(race.begin_intro());
     let mut gains = Vec::new();
     let step = |audio: &mut oag_sound::Audio, gains: &mut Vec<f32>| {
@@ -185,7 +185,7 @@ fn flyby_mix() -> Option<Vec<(f32, usize, usize)>> {
         true,
     );
     oag_game::sound::hold_race_song(&mut audio, loaded.title);
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(race.begin_intro());
     let mut mix = Vec::new();
     while race.in_intro() {

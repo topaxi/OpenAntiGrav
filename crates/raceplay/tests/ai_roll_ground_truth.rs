@@ -108,7 +108,7 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     if let Some(pilot) = pilot {
         // Tempered here rather than in the caller, so a sweep across tiers is
         // asking about the same character at four levels.
@@ -228,7 +228,7 @@ fn grid_rolls_on(level: oag_ai::Difficulty, track: &str, seed: u64) -> Option<Ve
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let opponents: Vec<usize> = (1..usize::from(race.core.sim.ship_count())).collect();
     measure_grid(&mut race, &opponents)
 }
@@ -264,7 +264,7 @@ fn grid_rolls_mixed_on(
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let opponents: Vec<usize> = (1..usize::from(race.core.sim.ship_count())).collect();
     for (slot, &tier) in opponents.iter().zip(tiers.iter()) {
         race.core

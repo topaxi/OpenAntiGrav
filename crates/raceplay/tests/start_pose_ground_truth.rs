@@ -59,7 +59,7 @@ fn start() -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// Yaw about world up, in degrees from `+X` toward `-Z`, the way the capture
@@ -173,7 +173,7 @@ fn every_grid_slot_points_along_the_tracks_own_frame_as_the_original_does() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut worst = 0.0f32;
     for (x, yaw_original) in ORIGINAL_GRID {
         // The slot is found by where it stands: ours puts the player on slot 8

@@ -26,7 +26,7 @@ fn two_people(tags: bool) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
     race.set_player_tags(tags);
     Some(race)

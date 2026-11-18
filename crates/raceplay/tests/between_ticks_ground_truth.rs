@@ -32,7 +32,7 @@ fn run(hz: u64, alpha: impl Fn(&TickClock) -> f32) -> Option<Run> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut held = race::HeldButtons::new(Button::Cross.bit());
     // Past the countdown and two seconds up to speed.
     for _ in 0..oag_race::COUNTDOWN_TICKS + 120 {

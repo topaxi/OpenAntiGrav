@@ -21,7 +21,7 @@ fn pulse_outpost_7() -> Option<Race> {
         ..Options::default()
     })
     .expect("loading 07_Track");
-    Some(Race::start(loaded.setup))
+    Some(Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// The two learners on the same race, every field they write compared.
@@ -78,7 +78,7 @@ fn overlapped_plans_are_the_serial_plans_on_2048_altima() {
         ..Options::default()
     })
     .expect("loading altima");
-    let race = Race::start(loaded.setup);
+    let race = Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(!race.core.sim.routes.is_empty(), "altima has forks");
     let learned = assert_overlapped_is_serial("altima", &race);
     assert!(

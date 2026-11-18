@@ -13,11 +13,12 @@ fn field_race(blob: &[u8]) -> Race {
         hulled_handling(),
         vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
+    let mut view = crate::tests::fixture_view();
     let effect = oag_fx::psys::Effect::parse(blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    setup.handles.insert(Trigger::CollisionSpark, effect);
+    view.handles.insert(Trigger::CollisionSpark, effect);
     setup.mode = Mode::SingleRace;
-    let mut race = Race::start(setup);
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     race.core.sim.world.ship_count = 3;
     for slot in 1..3 {
         race.core.sim.world.ships[slot].active = true;
@@ -131,16 +132,15 @@ fn a_burst_effect_leaves_the_opponents_and_the_seats_law_alone() {
     assert!(!held(&race, 1) && !held(&race, 2));
     assert_eq!(race.view.stage.playing_count(), 0);
 
-    let mut seat = Race::start({
-        let mut setup = setup_with(
-            hulled_handling(),
-            vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
-        );
-        let blob = one_emitter_pob("WO_TEST_SPARK", 0);
-        let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full).unwrap();
-        setup.handles.insert(Trigger::CollisionSpark, effect);
-        setup
-    });
+    let setup = setup_with(
+        hulled_handling(),
+        vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
+    );
+    let mut view = crate::tests::fixture_view();
+    let blob = one_emitter_pob("WO_TEST_SPARK", 0);
+    let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full).unwrap();
+    view.handles.insert(Trigger::CollisionSpark, effect);
+    let mut seat = Race::start(setup, view, crate::extensions::Prepared::default());
     super::respawn::push_toward_wall(&mut seat);
     let evaluated = seat.tick(&PlayerInputs::none());
     assert!(evaluated.wall.impact);
@@ -154,13 +154,14 @@ fn a_burst_effect_leaves_the_opponents_and_the_seats_law_alone() {
 /// record's impulse, with the craft's velocity carried.
 #[test]
 fn the_seats_attached_spark_plays_at_the_attached_strength() {
-    let mut setup = setup_with(
+    let setup = setup_with(
         hulled_handling(),
         vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
+    let mut view = crate::tests::fixture_view();
     let effect = oag_fx::psys::Effect::parse(&looping(), oag_fx::psys::ColourScale::Full).unwrap();
-    setup.handles.insert(Trigger::CollisionSpark, effect);
-    let mut race = Race::start(setup);
+    view.handles.insert(Trigger::CollisionSpark, effect);
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     super::respawn::push_toward_wall(&mut race);
     let evaluated = race.tick(&PlayerInputs::none());
     assert!(evaluated.wall.impact);

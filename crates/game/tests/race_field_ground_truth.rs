@@ -38,7 +38,7 @@ fn the_ai_drives_the_field_along_the_track() {
         return;
     };
     let bound = envelope(&loaded);
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(
         race.core.sim.ship_count(),
         8,
@@ -126,7 +126,7 @@ fn every_craft_burns_trails_and_boosts_on_its_own() {
     let Some(loaded) = load_single_race() else {
         return;
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(race.core.sim.ship_count(), 8);
     assert!(
         race.nozzle().is_some(),
@@ -226,7 +226,7 @@ fn the_field_spreads_across_the_ai_corridor() {
     let Some(loaded) = load_single_race() else {
         return;
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(race.core.sim.ship_count(), 8);
 
     // Ten seconds, the same window the driving test uses: long enough that each
@@ -283,8 +283,8 @@ fn a_driven_field_replays_identically() {
     let (Some(first), Some(second)) = (load_single_race(), load_single_race()) else {
         return;
     };
-    let mut first = race::Race::start(first.setup);
-    let mut second = race::Race::start(second.setup);
+    let mut first = race::Race::start(first.setup, first.view, first.modules);
+    let mut second = race::Race::start(second.setup, second.view, second.modules);
 
     for _ in 0..300 {
         first.tick(&PlayerInputs::none());
@@ -317,7 +317,7 @@ fn the_field_is_placed_by_how_far_round_it_is() {
     let Some(loaded) = load_single_race() else {
         return;
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..900 {
         race.tick(&PlayerInputs::none());
     }
@@ -370,7 +370,7 @@ fn the_players_place_reaches_the_hud() {
     let Some(loaded) = load_single_race() else {
         return;
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(
         race.core.sim.ship_count(),
         8,
@@ -454,7 +454,7 @@ fn an_opponent_fires_at_a_craft_ahead_on_a_real_circuit() {
     let Some(loaded) = load_single_race() else {
         return;
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_fire_law(race::FireLaw::Ours);
     assert_eq!(race.core.sim.ship_count(), 8);
 

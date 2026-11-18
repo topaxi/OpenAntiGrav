@@ -140,7 +140,7 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // Slot 0 flown too, so the grid stays together and craft actually end up
     // level with each other. A parked player is a race with seven craft in it.
     race.core.sim.set_autopilot(true);

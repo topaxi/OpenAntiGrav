@@ -181,7 +181,11 @@ fn an_eliminator_grid() -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// The Eliminator's state 8: the player comes back `1.0` s after state 5's
@@ -268,7 +272,11 @@ fn zone_grid(mode: Mode) -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// A camera that stands on an authored station is masked by the section of the craft it

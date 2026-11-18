@@ -75,7 +75,7 @@ fn start(track: &str) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// Forward speed and position after each tick from the release frame (tick
@@ -289,7 +289,7 @@ fn pulse_ps2_times_its_launch_like_the_psp() {
             ..race::Options::default()
         })
         .expect("loading the PS2 race");
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         for _ in 0..COUNTDOWN_TICKS - 1 {
             race.tick(&PlayerInputs::single(held(false)));
         }

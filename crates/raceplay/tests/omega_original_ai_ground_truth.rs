@@ -222,7 +222,7 @@ fn fly_at(
     };
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, eps);
-    let mut race = oag_raceplay::Race::start(setup);
+    let mut race = oag_raceplay::Race::start(setup, loaded.view, loaded.modules);
     assert!(
         race.core.sim.use_original_ai(None, 1),
         "Omega flies the original driver"

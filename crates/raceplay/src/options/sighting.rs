@@ -1,5 +1,5 @@
 //! [`Sighting`]: the two facts a race needs to run a lock-on and draw its reticle,
-//! carried in [`super::Setup`] so [`crate::Race::start`] applies them and a
+//! carried in [`super::SimSetup`] so [`crate::Race::start`] applies them and a
 //! server or a replay player is correct with no extra call.
 
 use oag_race::sight::Sight;
@@ -38,7 +38,7 @@ pub struct Sighting {
 }
 
 impl Default for Sighting {
-    /// The PSP's screen and the Missile's law: what a hand-made `Setup` ran
+    /// The PSP's screen and the Missile's law: what a hand-made `SimSetup` ran
     /// before this existed.
     fn default() -> Self {
         Self {

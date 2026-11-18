@@ -27,10 +27,14 @@ struct Run {
 fn race(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay::Race> {
     let mut setup = setup(image, track, weapons)?;
     crate::perturb::apply(&mut setup, 0.0);
-    Some(oag_raceplay::Race::start(setup))
+    Some(oag_raceplay::Race::start(
+        setup,
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    ))
 }
 
-fn setup(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay::Setup> {
+fn setup(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay::SimSetup> {
     let image = oag_testdata::image(image)?;
     let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
@@ -97,7 +101,14 @@ fn finishes_without_a_rescue(id: &str) {
         .map(|&eps| {
             let mut setup = setup.clone();
             crate::perturb::apply(&mut setup, eps);
-            let r = run_from(oag_raceplay::Race::start(setup), 15_000);
+            let r = run_from(
+                oag_raceplay::Race::start(
+                    setup,
+                    oag_raceplay::ViewSetup::headless(),
+                    oag_raceplay::extensions::Prepared::default(),
+                ),
+                15_000,
+            );
             (r.finish, r.respawns, r.rescued_from)
         })
         .collect();
@@ -270,7 +281,7 @@ fn flies_the_original_autopilot(image: &str) {
         ..oag_raceplay::Options::default()
     })
     .unwrap_or_else(|e| panic!("{image}: {e}"));
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     for _ in 0..1_800 {
         race.tick_sim_only(&PlayerInputs::none());
@@ -339,7 +350,7 @@ fn opponent_fork(
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     race.core.sim.set_opponent_autopilot(false);
     for _ in 0..trigger {
@@ -480,7 +491,7 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(race.core.sim.use_original_ai(None, 1), "the AI tables read");
     race.core.sim.set_autopilot(true);
     let mut out = WallRun::default();
@@ -760,7 +771,7 @@ fn an_opponent_flies_its_autopilot_by_class_and_difficulty() {
                 ..oag_raceplay::Options::default()
             })
             .expect("loading the track");
-            let mut race = oag_raceplay::Race::start(loaded.setup);
+            let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
             assert_eq!(
                 race.core.sim.engage_opponent_autopilot(1),
                 flies,

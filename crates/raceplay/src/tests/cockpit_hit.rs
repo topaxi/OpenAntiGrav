@@ -15,12 +15,13 @@ fn race_with_noise(noise: bool) -> Race {
     let mut handling = hulled_handling();
     handling.dimensions.shield = 100.0;
     let mut setup = setup(handling);
+    let mut view = crate::tests::fixture_view();
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
     if noise {
-        setup.cockpit_hit_noise = Some(oag_fx::exhaust::FlareTexture::placeholder(64));
+        view.cockpit_hit_noise = Some(oag_fx::exhaust::FlareTexture::placeholder(64));
     }
-    let mut race = Race::start(setup);
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();

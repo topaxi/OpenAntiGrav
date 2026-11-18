@@ -40,7 +40,11 @@ fn inputs(tick: u64) -> PlayerInputs {
 
 /// A recorded run and its `RaceSim` text at every tick.
 fn recording(ticks: u64) -> (Replay, Vec<String>) {
-    let mut race = Race::start(fixture());
+    let mut race = Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
     let mut text = vec![format!("{:?}", race.core.sim)];
     for tick in 0..ticks {
@@ -53,8 +57,23 @@ fn recording(ticks: u64) -> (Replay, Vec<String>) {
 
 /// A viewer over the fixture and a race not yet handed to it.
 fn unbegun(replay: Replay) -> (Box<Viewer>, Box<Race>) {
-    let viewer = Box::new(Viewer::open(fixture(), replay).expect("the race it records"));
-    (viewer, Box::new(Race::start(fixture())))
+    let viewer = Box::new(
+        Viewer::open(
+            fixture(),
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+            replay,
+        )
+        .expect("the race it records"),
+    );
+    (
+        viewer,
+        Box::new(Race::start(
+            fixture(),
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+        )),
+    )
 }
 
 /// A viewer over the fixture and the race it draws, handed over as the session hands it.
@@ -184,7 +203,11 @@ fn a_seek_lands_on_the_recorded_run_wherever_it_goes() {
 
 /// The clocks a HUD reads at tick `k` of the recorded run, at index `k`: `(lap_ticks, race_ticks)`.
 fn clocks(ticks: u64) -> Vec<(u64, u64)> {
-    let mut race = Race::start(fixture());
+    let mut race = Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let at = |race: &Race| {
         let readout = race.readout();
         (readout.lap_ticks, readout.race_ticks)
@@ -435,7 +458,12 @@ fn a_tick_zero_mismatch_with_a_pose_track_opens_in_pose_view() {
 fn a_tick_zero_mismatch_without_a_pose_track_is_refused_by_name() {
     let mut replay = rehashed(recording(TICKS).0);
     replay.pose_track = None;
-    let Err(refusal) = Viewer::open(fixture(), replay) else {
+    let Err(refusal) = Viewer::open(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        replay,
+    ) else {
         panic!("nothing to play instead");
     };
     assert!(matches!(
@@ -449,7 +477,12 @@ fn a_tick_zero_mismatch_without_a_pose_track_is_refused_by_name() {
         id: "absent".to_string(),
         ..Default::default()
     });
-    let Err(refusal) = Viewer::open(fixture(), replay) else {
+    let Err(refusal) = Viewer::open(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        replay,
+    ) else {
         panic!("a header this build cannot load");
     };
     assert!(matches!(refusal, crate::timeline::OpenError::Start(_)));

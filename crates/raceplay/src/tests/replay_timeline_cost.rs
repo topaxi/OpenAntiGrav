@@ -426,13 +426,17 @@ fn replay_timeline_cost_sweep() {
         ..crate::Options::default()
     })
     .expect("loading the race");
-    let setup = loaded.setup.clone();
+    let (setup, view, modules) = (
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
 
     let started = Instant::now();
-    let mut race = Race::start(setup.clone());
+    let mut race = Race::start(setup.clone(), view.clone(), modules.clone());
     let start_ms = started.elapsed().as_secs_f64() * 1e3;
     let started = Instant::now();
-    let copy = Race::start(setup.clone());
+    let copy = Race::start(setup.clone(), view.clone(), modules.clone());
     let copy_ms = started.elapsed().as_secs_f64() * 1e3;
     drop(copy);
     println!(

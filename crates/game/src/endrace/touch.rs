@@ -194,7 +194,7 @@ pub fn finished_event(
         .campaign_2048_event
         .clone()
         .context("the event carries no progress")?;
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.arm_event_xp(&progress);
     race.core.sim.set_autopilot(true);
     while !race.core.sim.finished() && race.core.sim.world.tick < cap {

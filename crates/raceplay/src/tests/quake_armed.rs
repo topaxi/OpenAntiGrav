@@ -11,7 +11,11 @@ fn quake_race() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// What a run saw: the ticks a wave was first seen on, the ticks no wave was up,

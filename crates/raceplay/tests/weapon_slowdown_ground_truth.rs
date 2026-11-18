@@ -46,7 +46,7 @@
 //!
 //! # The control run
 //!
-//! Speed is asserted against **the same race run twice from one `Setup`**, one
+//! Speed is asserted against **the same race run twice from one `SimSetup`**, one
 //! copy hit and one not, rather than against a threshold or against another
 //! craft. The simulation is deterministic, so the two runs are bit-identical up
 //! to the detonation and every difference afterwards is the blast - which is
@@ -187,9 +187,13 @@ fn a_plasma_hit_costs_a_craft_its_engine_and_it_recovers() {
     let Some(loaded) = single_race() else { return };
     let throttle = held(Button::Cross);
 
-    // One `Setup`, two races. Everything is identical until the detonation.
-    let mut hit = race::Race::start(loaded.setup.clone());
-    let mut control = race::Race::start(loaded.setup);
+    // One `SimSetup`, two races. Everything is identical until the detonation.
+    let mut hit = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
+    let mut control = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..WARM_UP_TICKS {
         hit.tick(&PlayerInputs::single(throttle));
         control.tick(&PlayerInputs::single(throttle));
@@ -301,7 +305,7 @@ fn a_plasma_hit_costs_a_craft_its_engine_and_it_recovers() {
 fn a_second_plasma_inside_the_window_does_not_extend_the_timer() {
     let Some(loaded) = single_race() else { return };
     let throttle = held(Button::Cross);
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));
     }
@@ -374,7 +378,7 @@ fn a_second_plasma_inside_the_window_does_not_extend_the_timer() {
 #[ignore = "needs a disc image in data/images/"]
 fn every_decoded_weapon_authors_a_slowdown_inside_the_ceiling() {
     let Some(loaded) = single_race() else { return };
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let limit = race
         .core
         .sim

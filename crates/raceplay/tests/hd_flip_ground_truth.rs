@@ -32,7 +32,7 @@ fn a_flip_stops_the_craft_and_sends_it_back_up_the_circuit() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading an HD Eliminator");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     let thrust = Button::Cross.bit();
     let speed = |race: &oag_raceplay::Race| {
         race.core.sim.world.ships[0]

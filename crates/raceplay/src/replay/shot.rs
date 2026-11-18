@@ -54,7 +54,8 @@ pub fn resimulate(
     options.dlc = dlc.to_vec();
     options.extensions = extensions.to_vec();
     let loaded = crate::load(&options).context("loading the shot's race")?;
-    let mut race = super::start_recorded(loaded.setup, &replay.header)?;
+    let mut race =
+        super::start_recorded(loaded.setup, loaded.view, loaded.modules, &replay.header)?;
     let mut verifier = match Verifier::new(replay, race.core.sim.state_hash()) {
         Ok(verifier) => verifier,
         Err(desync) => {

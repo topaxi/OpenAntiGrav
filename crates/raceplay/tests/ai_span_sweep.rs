@@ -89,7 +89,7 @@ fn solo_on(track: &str, tuning: oag_ai::Tuning) -> Option<Solo> {
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_ai_tuning(tuning);
     for slot in 2..8 {
         race.core.sim.world.ships[slot].active = false;
@@ -221,7 +221,7 @@ fn field_run(cap: Option<f32>) -> Option<FieldRun> {
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(lap_times.setup);
+    let mut race = race::Race::start(lap_times.setup, lap_times.view, lap_times.modules);
     race.core.sim.set_ai_tuning(tuned(oag_ai::Difficulty::Ace));
     for _ in 0..9_000 {
         race.tick(&PlayerInputs::none());
@@ -248,7 +248,7 @@ fn field_run(cap: Option<f32>) -> Option<FieldRun> {
     };
     let level = options.difficulty;
     let mines = race::load(&options).ok()?;
-    let mut race = race::Race::start(mines.setup);
+    let mut race = race::Race::start(mines.setup, mines.view, mines.modules);
     race.core.sim.set_ai_tuning(tuned(level));
     let opponents = 1..usize::from(race.core.sim.ship_count());
     let full = race.core.sim.world.ships[1].handling.dimensions.shield;

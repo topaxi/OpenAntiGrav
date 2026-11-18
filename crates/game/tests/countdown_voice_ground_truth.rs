@@ -117,7 +117,7 @@ fn countdown(source: &Path, class: &str, mode: oag_race::Mode, name: &str, ticks
     {
         println!("{line}");
     }
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     let wav = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../data/shots")

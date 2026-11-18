@@ -62,7 +62,7 @@ fn sweep_one(source: &str, track: &str, label: &str) {
         println!("{label:<10} did not load");
         return;
     };
-    let mut zone = race::Race::start(loaded.setup);
+    let mut zone = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     zone.core.sim.set_autopilot(true);
     let mut lap = zone.core.sim.world.ships[0].standing.lap;
     let mut lap_shield = Vec::new();

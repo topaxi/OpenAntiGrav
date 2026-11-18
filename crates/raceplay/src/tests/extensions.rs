@@ -12,14 +12,13 @@ use oag_gameplay::PlayerInputs;
 pub(super) fn grid(extensions: crate::extensions::Prepared) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
-    setup.extensions = extensions;
     setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
+    let mut race = Race::start(setup, crate::tests::fixture_view(), extensions);
     let engine = &mut race.core.sim.world.ships[1].handling.engine;
     engine.amount = 20.0;
     engine.accelcap = 1000.0;
@@ -135,7 +134,7 @@ pub(super) mod on {
                 .linear_velocity
                 .length()
         };
-        let (vanilla, plain) = run(grid(Prepared::default()), 600);
+        let (vanilla, plain) = run(grid(crate::extensions::Prepared::default()), 600);
         let (boosted, _) = run(grid(prepared(&[scaler("test.boost", 1.5)])), 600);
         assert!(
             speed(&boosted) > speed(&vanilla),
@@ -619,7 +618,10 @@ pub(super) mod on {
             crate::extensions::Sky::default()
         );
         assert_eq!(
-            grid(Prepared::default()).core.sim.extension_sky(),
+            grid(crate::extensions::Prepared::default())
+                .core
+                .sim
+                .extension_sky(),
             crate::extensions::Sky::default()
         );
     }
@@ -1013,7 +1015,7 @@ colour = "#ff2010"
         assert!(first.core.sim.is_modded());
         assert_eq!(a, b);
         assert_ne!(fold(&a), VANILLA_FOLD, "the blob is in the hash");
-        let (vanilla, _) = run(grid(Prepared::default()), 600);
+        let (vanilla, _) = run(grid(crate::extensions::Prepared::default()), 600);
         let speed = |race: &Race| {
             race.core.sim.world.ships[1]
                 .physics
@@ -1183,7 +1185,12 @@ mod triggers {
         // between, so it is driven into and out of once (the fixture's ring sends the
         // craft back round after that).
         let x_at = |ticks| {
-            run(grid(Prepared::default()), ticks).0.core.sim.world.ships[1]
+            run(grid(crate::extensions::Prepared::default()), ticks)
+                .0
+                .core
+                .sim
+                .world
+                .ships[1]
                 .physics
                 .body
                 .position

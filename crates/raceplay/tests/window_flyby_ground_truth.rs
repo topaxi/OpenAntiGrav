@@ -37,7 +37,7 @@ fn every_window_plays_the_flyby_and_then_its_own_seats() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(race.set_viewport_count(4), 4);
     race.set_windows(vec![seats(&[0, 1]), seats(&[2, 3]), seats(&[])]);
     assert_eq!(race.window_drawn(0), vec![0, 1], "no flyby yet");
@@ -90,7 +90,7 @@ fn a_skip_ends_the_flyby_in_every_window_at_once() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(race.set_viewport_count(2), 2);
     race.set_windows(vec![seats(&[0]), seats(&[1])]);
     assert!(race.begin_intro());
@@ -123,7 +123,7 @@ fn a_second_persons_held_cross_skips_the_flyby() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(race.set_viewport_count(2), 2);
     race.set_windows(vec![seats(&[0]), seats(&[1])]);
     race.core.sim.world.controllers[1] = Controller::Local;

@@ -57,7 +57,11 @@ fn load(
     .unwrap_or_else(|e| panic!("{image}: {e}"));
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, eps);
-    Some(oag_raceplay::Race::start(setup))
+    Some(oag_raceplay::Race::start(
+        setup,
+        loaded.view,
+        loaded.modules,
+    ))
 }
 
 fn run_branch(race: &mut oag_raceplay::Race, slot: usize, stint: u64, trace: bool) -> Branch {

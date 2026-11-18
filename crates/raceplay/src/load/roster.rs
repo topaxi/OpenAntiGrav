@@ -198,12 +198,9 @@ pub(super) fn apply_seat_picks(
 }
 
 #[cfg(feature = "view")]
-/// Everything the grid's own slot list decides: who flies where, what each
-/// one draws, and HD's per-slot trail flag.
+/// What the grid's slot list decides for the picture: what each slot draws, and HD's
+/// per-slot trail flag.
 pub(super) struct Grid {
-    /// Which team flies each slot, the player first - Pulse's own draw, see
-    /// [`oag_race::roster::teams_for_slots`].
-    pub slot_teams: Vec<String>,
     /// Wipeout HD's red-trail flag per slot; see [`hd_trail_red`].
     pub hd_trail_red: [f32; oag_gameplay::MAX_SHIPS],
     /// One hull, plume, nozzle and shield per slot.
@@ -287,33 +284,10 @@ pub(super) fn shield_target(
     })
 }
 
-/// Fills the grid: slot teams out of `available`, then a [`oag_livery`] per
-/// slot off `archives`.
-///
-/// Here rather than in `load.rs` under the 1,000-line rule in
-/// `scripts/check-file-size.py`, and this is the file that already answers
-/// "which team flies which slot" - `available` above is its own first half. A
-/// move with no behaviour change, taken when the player's paint job joined the
-/// player's hull override as a second per-slot-0 pick.
-///
-/// **Two things here are the player's alone**, and both land on slot 0 because
-/// nothing offers an opponent a choice of their own: `hull_variant`, which
-/// swaps the model file ([`oag_title::race::HullVariant`]), and
-/// [`crate::Options::skin`], which repaints the model this slot just
-/// built. The second is resolved here against what the source's own definition
-/// declares for the team - see [`oag_livery::ship_skin`], and note that
-/// **which** skin a race flies is this project's choice rather than the
-/// original's.
-///
-/// # Errors
-///
-/// Propagates [`oag_livery::load`]: only the player's own hull failing to
-/// read or build, which is not a race.
 /// The team each grid slot flies, slot 0 the player's: Pulse's roster draw
 /// off the race seed, then the event's authored grid, the seat picks and the
-/// title's variant family, in that order. The half of [`grid`] the
-/// simulation needs (each slot's handling follows its team), and all of it a
-/// build without the `view` feature reads.
+/// title's variant family, in that order. What the simulation reads of the
+/// grid (each slot's handling follows its team); [`grid`] paints it.
 pub(super) fn teams(
     craft_title: &'static oag_title::Title,
     options: &crate::Options,
@@ -336,20 +310,26 @@ pub(super) fn teams(
     slot_teams
 }
 
+/// What the player's craft is painted with, read before the grid's teams are drawn: the
+/// first half of [`grid`], which a race reads in this order.
 #[cfg(feature = "view")]
-pub(super) fn grid(
+pub(super) struct Looks {
+    skin: Option<String>,
+    zone_liveries: Vec<(String, String)>,
+    player_livery: Option<(String, String)>,
+    forced_skins: Vec<(String, String)>,
+}
+
+/// The player's skin, the Zone liveries, the player's livery folder and the skins a mode
+/// forces, with their report lines.
+#[cfg(feature = "view")]
+pub(super) fn looks(
     archives: &mut oag_assets::Archives,
     craft_title: &'static oag_title::Title,
     options: &crate::Options,
     team: &str,
-    available: &[String],
-    (hull_variant, circuit_hull, store): (
-        Option<&str>,
-        Option<&'static str>,
-        oag_gpu::formats::SceneStore,
-    ),
     report: &mut Vec<String>,
-) -> anyhow::Result<Grid> {
+) -> Looks {
     let skin = super::skin::resolve(
         archives,
         craft_title,
@@ -368,8 +348,58 @@ pub(super) fn grid(
         report,
     );
     let forced_skins = super::skin::forced(archives, craft_title, options.mode, report);
+    Looks {
+        skin,
+        zone_liveries,
+        player_livery,
+        forced_skins,
+    }
+}
+
+/// Fills the grid: a [`oag_livery`] per slot of `slot_teams` off `archives`,
+/// painted by [`looks`].
+///
+/// Here rather than in `load.rs` under the 1,000-line rule in
+/// `scripts/check-file-size.py`, and this is the file that already answers
+/// "which team flies which slot" - `available` above is its own first half. A
+/// move with no behaviour change, taken when the player's paint job joined the
+/// player's hull override as a second per-slot-0 pick.
+///
+/// **Two things here are the player's alone**, and both land on slot 0 because
+/// nothing offers an opponent a choice of their own: `hull_variant`, which
+/// swaps the model file ([`oag_title::race::HullVariant`]), and
+/// [`crate::Options::skin`], which repaints the model this slot just
+/// built. The second is resolved here against what the source's own definition
+/// declares for the team - see [`oag_livery::ship_skin`], and note that
+/// **which** skin a race flies is this project's choice rather than the
+/// original's.
+///
+/// # Errors
+///
+/// Propagates [`oag_livery::load`]: only the player's own hull failing to
+/// read or build, which is not a race.
+#[cfg(feature = "view")]
+#[allow(clippy::too_many_arguments)]
+pub(super) fn grid(
+    archives: &mut oag_assets::Archives,
+    craft_title: &'static oag_title::Title,
+    options: &crate::Options,
+    looks: Looks,
+    slot_teams: &[String],
+    (hull_variant, circuit_hull, store): (
+        Option<&str>,
+        Option<&'static str>,
+        oag_gpu::formats::SceneStore,
+    ),
+    report: &mut Vec<String>,
+) -> anyhow::Result<Grid> {
+    let Looks {
+        skin,
+        zone_liveries,
+        player_livery,
+        forced_skins,
+    } = looks;
     let seed = options.seed.unwrap_or(crate::SEED);
-    let slot_teams = teams(craft_title, options, team, available, report);
     let seat_skins: Vec<Option<String>> = options
         .seat_picks
         .iter()
@@ -395,7 +425,7 @@ pub(super) fn grid(
         .collect();
     let liveries = oag_livery::load(
         archives,
-        &slot_teams,
+        slot_teams,
         &oag_livery::LoadContext {
             store,
             race: craft_title.race,
@@ -451,8 +481,7 @@ pub(super) fn grid(
         slot_teams.join(", ")
     ));
     Ok(Grid {
-        hd_trail_red: hd_trail_red(&slot_teams),
-        slot_teams,
+        hd_trail_red: hd_trail_red(slot_teams),
         liveries,
     })
 }

@@ -20,7 +20,7 @@ fn started(weapons_override: Option<bool>) -> Option<race::Race> {
     })
     .expect("loading the race");
     assert_eq!(loaded.setup.weapons_on(), weapons_override.unwrap_or(true));
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 #[test]

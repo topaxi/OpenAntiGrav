@@ -578,8 +578,13 @@ pub(crate) fn verify(image: &Path, replay: &oag_replay::Replay) -> Result<u64, o
     // The packs the game mounted from the repository's `data/dlc`, as WATCH mounts the session's.
     options.dlc = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/dlc")];
     let loaded = oag_raceplay::load(&options).expect("loads");
-    let mut race =
-        oag_raceplay::replay::start_recorded(loaded.setup, &replay.header).expect("starts");
+    let mut race = oag_raceplay::replay::start_recorded(
+        loaded.setup,
+        loaded.view,
+        loaded.modules,
+        &replay.header,
+    )
+    .expect("starts");
     oag_replay::Verifier::run(replay, race.core.sim.state_hash(), |events, inputs| {
         for event in events {
             race.core.sim.apply_event(event).expect("applies");

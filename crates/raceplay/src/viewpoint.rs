@@ -129,7 +129,7 @@ impl Race {
 }
 
 impl RaceSim {
-    /// How many people fly this race, across every window ([`Setup::people`](super::Setup::people)).
+    /// How many people fly this race, across every window ([`SimSetup::people`](super::SimSetup::people)).
     /// Not [`Race::viewport_count`]: a `--window-seats 1,1` race draws one view per window and
     /// has two people.
     #[must_use]

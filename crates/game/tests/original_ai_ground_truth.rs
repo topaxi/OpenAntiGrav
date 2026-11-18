@@ -24,7 +24,7 @@ fn race(level: usize, skill: f32) -> Option<oag_raceplay::Race> {
         ..oag_raceplay::Options::default()
     })
     .expect("loading 16_Track");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(
         race.core.sim.use_original_ai(Some(skill), level),
         "VENOM's AI tables read"
@@ -178,7 +178,7 @@ fn a_race_that_does_not_ask_keeps_this_projects_driver() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading 16_Track");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..600 {
         race.tick(&PlayerInputs::none());
     }
@@ -213,7 +213,7 @@ fn a_single_race_flies_the_original_by_default() {
     let Some(loaded) = loaded_single_race() else {
         return;
     };
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(apply(
         &mut race,
         AiChoice::default(),
@@ -234,7 +234,7 @@ fn ai_ours_keeps_this_projects_driver() {
     let Some(loaded) = loaded_single_race() else {
         return;
     };
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(!apply(
         &mut race,
         AiChoice::Ours,
@@ -253,7 +253,7 @@ fn a_race_without_tables_falls_back_to_this_projects_driver() {
         return;
     };
     loaded.setup.original_tables = None;
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(!apply(
         &mut race,
         AiChoice::Original,
@@ -289,7 +289,7 @@ fn the_original_field_on_a_circuit_without_a_fork_learns_no_speed_plan() {
     let Some(loaded) = loaded_on("16_Track") else {
         return;
     };
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(race.core.sim.use_original_ai(None, 1));
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
@@ -315,8 +315,8 @@ fn the_plans_are_the_same_whether_asked_for_before_the_first_tick_or_at_it() {
         let (Some(first), Some(second)) = (loaded_on(track), loaded_on(track)) else {
             return;
         };
-        let mut asked = oag_raceplay::Race::start(first.setup);
-        let mut ticked = oag_raceplay::Race::start(second.setup);
+        let mut asked = oag_raceplay::Race::start(first.setup, first.view, first.modules);
+        let mut ticked = oag_raceplay::Race::start(second.setup, second.view, second.modules);
         for race in [&mut asked, &mut ticked] {
             if original {
                 assert!(race.core.sim.use_original_ai(None, 1));

@@ -349,7 +349,7 @@ impl SimRace {
         let last = self.sim.world.ships[slot].pickup.last;
         // `None` for every non-2048 race and for a 2048 event whose weapon
         // set decodes to nothing recognised - the same "empty is no
-        // restriction" reading `Setup::allowed_weapons`'s own doc comment
+        // restriction" reading `SimSetup::allowed_weapons`'s own doc comment
         // gives. AI slots are gated the same as the player's: which weapons
         // an event's own `WeaponSetDefinition` allows is stated about the
         // pads, not about who crosses them - **chosen, not measured**, since

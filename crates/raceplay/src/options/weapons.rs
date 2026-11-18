@@ -1,6 +1,6 @@
 //! Whether a race runs with weapons, and at which rung, asked of the options.
 
-use super::{Options, Setup};
+use super::{Options, SimSetup};
 
 impl Options {
     /// Whether this race runs with weapons: the override when one is set,
@@ -24,7 +24,7 @@ impl Options {
     }
 }
 
-impl Setup {
+impl SimSetup {
     /// [`Options::weapons_on`], on the half of the options a running race keeps.
     #[must_use]
     pub fn weapons_on(&self) -> bool {

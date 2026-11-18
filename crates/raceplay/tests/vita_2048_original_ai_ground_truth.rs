@@ -57,7 +57,7 @@ fn race_at(event: &str, skill: Option<f32>, offset: f32) -> Option<oag_raceplay:
         .expect("a race event with the original's AI");
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, offset);
-    let mut race = oag_raceplay::Race::start(setup);
+    let mut race = oag_raceplay::Race::start(setup, loaded.view, loaded.modules);
     assert!(
         race.core
             .sim
@@ -400,7 +400,7 @@ fn super_phantom_challenges_fly_the_original_driver() {
             .unwrap_or_else(|| panic!("{event} authors the original's AI"));
         let mut setup = loaded.setup;
         crate::perturb::apply(&mut setup, 0.0);
-        let mut race = oag_raceplay::Race::start(setup);
+        let mut race = oag_raceplay::Race::start(setup, loaded.view, loaded.modules);
         assert!(
             race.core
                 .sim
@@ -481,7 +481,7 @@ fn a_super_phantom_race_box_race_runs_without_opponents() {
         {
             let mut setup = loaded.setup;
             crate::perturb::apply(&mut setup, 0.0);
-            oag_raceplay::Race::start(setup)
+            oag_raceplay::Race::start(setup, loaded.view, loaded.modules)
         }
         .core
         .sim

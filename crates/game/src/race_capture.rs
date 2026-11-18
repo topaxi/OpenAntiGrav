@@ -419,6 +419,8 @@ pub fn capture(
     let Loaded {
         shadows,
         setup,
+        view,
+        modules,
         mut hud,
         track_panel,
         demo_overlay,
@@ -472,11 +474,9 @@ pub fn capture(
         previous.and_then(|record| record.best_total_ticks),
         previous.and_then(|record| record.best_lap_ticks),
     );
-    let weapons_on = setup.weapons_on();
-    // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
-    // fallback when the flag was not given. See `main::stage::build_race_stage`.
-    let difficulty = setup.difficulty;
-    let mut race = Race::start(setup);
+    // Read before `Race::start` takes `setup`; `difficulty` is `--autopilot-skill`'s fallback.
+    let (weapons_on, difficulty) = (setup.weapons_on(), setup.difficulty);
+    let mut race = Race::start(setup, view, modules);
     let start_pose = options.pose_hold.start(&race);
     // With a field warm-up and no ticks to run, the player's boost is armed inside the warm-up so it rides the
     // warmed trail; `force_boost_state` would clear that trail for a straight one (`Race::warm_up_field`).

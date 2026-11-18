@@ -1184,7 +1184,7 @@ impl RaceSim {
     /// The track's speed-pad trigger volumes.
     ///
     /// Empty on a track that authors none, which is an ordinary state rather than
-    /// a failure - see [`Setup::speedup_pads`].
+    /// a failure - see [`SimSetup::speedup_pads`].
     #[must_use]
     pub fn speedup_pads(&self) -> &[oag_vex::pads::PadVolume] {
         &self.speedup_pads

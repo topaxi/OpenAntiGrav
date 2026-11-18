@@ -98,21 +98,21 @@ const OWN_ROCKET: [(oag_title::Trigger, &str); 3] = [
 fn rockets_are_the_discs_or_ours(off: &race::Loaded, on: &race::Loaded, image: &str) {
     for (trigger, name) in OWN_ROCKET {
         assert!(
-            off.setup.effects.get(name).is_none(),
+            off.view.effects.get(name).is_none(),
             "{image}: off loaded {name}"
         );
         let ours = on
-            .setup
+            .view
             .effects
             .get(name)
             .unwrap_or_else(|| panic!("{image}: on did not load {name}"));
-        let playing = on.setup.handles.get(trigger);
+        let playing = on.view.handles.get(trigger);
         assert!(
             playing.is_some_and(|effect| std::sync::Arc::ptr_eq(effect, ours)),
             "{image}: {trigger:?} does not play {name}"
         );
         assert!(
-            off.setup
+            off.view
                 .handles
                 .get(trigger)
                 .is_none_or(|effect| !std::sync::Arc::ptr_eq(effect, ours)),
@@ -153,7 +153,7 @@ fn pulse_and_pure_draw_their_own_shell_only_with_the_setting_on() {
             assert!(!shell.own_shield, "{image}: off keeps the disc's");
         }
         assert_ne!(
-            off.setup.shield_palette,
+            off.view.shield_palette,
             oag_render::shield::OWN_PALETTE,
             "{image}: off keeps the disc's palette"
         );
@@ -169,7 +169,7 @@ fn pulse_and_pure_draw_their_own_shell_only_with_the_setting_on() {
             stands_off(own, hull, image);
             assert!(own.textures.is_empty(), "{image}: no texture is read");
         }
-        assert_eq!(on.setup.shield_palette, oag_render::shield::OWN_PALETTE);
+        assert_eq!(on.view.shield_palette, oag_render::shield::OWN_PALETTE);
         assert_eq!(on.shield_cockpit.as_ref().map(|m| m.own_shield), Some(true));
         assert!(
             on.report.iter().any(|l| l.contains("our own shield shell")),
@@ -195,9 +195,9 @@ fn hd_ignores_the_setting() {
             .iter()
             .all(|l| l.shield.as_ref().is_none_or(|m| !m.own_shield))
     );
-    assert_eq!(on.setup.shield_palette, oag_render::shield::HD_PALETTE);
+    assert_eq!(on.view.shield_palette, oag_render::shield::HD_PALETTE);
     for (_, name) in OWN_ROCKET {
-        assert!(on.setup.effects.get(name).is_none(), "HD loaded {name}");
+        assert!(on.view.effects.get(name).is_none(), "HD loaded {name}");
     }
     assert!(on.report.iter().all(|l| !l.contains("own rockets")));
 }

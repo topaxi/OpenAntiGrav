@@ -14,7 +14,11 @@ fn cannon_race() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_cannon_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
     race
 }

@@ -112,7 +112,7 @@ fn load_leg(
     })
     .expect("the race loads");
     let _ = campaign;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     race.core
         .sim

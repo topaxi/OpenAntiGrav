@@ -28,7 +28,7 @@ fn a_zone_craft_stands_still_through_the_countdown_and_moves_after_go() {
     })
     .expect("loading the zone race");
 
-    let mut zone = race::Race::start(loaded.setup);
+    let mut zone = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let start = zone.core.ship().physics.body.position;
     let mut furthest_before_go = 0.0_f32;
     let go = oag_race::COUNTDOWN_TICKS;

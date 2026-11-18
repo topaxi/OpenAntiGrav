@@ -68,7 +68,11 @@ fn watch(weapon: Weapon) -> (usize, usize) {
         ..oag_raceplay::Options::default()
     })
     .expect("loading the race");
-    let mut race = oag_raceplay::Race::start(loaded.setup.clone());
+    let mut race = oag_raceplay::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     race.watch_laps(&loaded.hud, None);
     race.core.sim.set_autopilot(true);
     race.core.sim.set_fire_law(oag_raceplay::FireLaw::Ours);

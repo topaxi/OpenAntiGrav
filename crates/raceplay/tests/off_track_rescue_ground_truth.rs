@@ -73,7 +73,7 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for slot in 1..oag_gameplay::MAX_SHIPS {
         race.core.sim.world.ships[slot].active = false;
     }
@@ -118,7 +118,7 @@ fn shoved_player(track: &str, index: usize, degrees: f32, speed: f32, ticks: u64
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for slot in 1..oag_gameplay::MAX_SHIPS {
         race.core.sim.world.ships[slot].active = false;
     }
@@ -243,7 +243,7 @@ fn a_player_thrown_off_a_real_circuit_at_speed_comes_back() {
         .count();
     println!("14_Track reversed authors {reset_colliders} Reset collider(s)");
 
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for slot in 1..oag_gameplay::MAX_SHIPS {
         race.core.sim.world.ships[slot].active = false;
     }

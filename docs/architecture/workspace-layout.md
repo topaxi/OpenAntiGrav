@@ -307,6 +307,24 @@ cache): 768 CPU-s before, 254 CPU-s after (152 s and 26 s wall at load averages
 of 90 and 25-36). The static build is `scripts/build-server-portable.sh musl`
 ([networking](../networking/README.md), "Running a server on another machine").
 
+**The two setups and the two load phases (2026-11-18).** `Setup` has since split
+into `SimSetup`, what `Race::start` builds the simulation from (no field names the
+disc, a renderer, audio, a window or the extension host), and `ViewSetup`, what only
+the picture and the sound read; a build without `view` has an empty `ViewSetup`.
+The compiled simulation modules (`extensions::Prepared`) travel beside them, so
+`Race::start(setup, view, modules)` and `Loaded { setup, view, modules, .. }`. `load`
+is `load_sim` (`load/sim.rs`, no `cfg`) and then, with `view`, `load_view`
+(`load/view.rs`), which reads off what the sim phase read. The sim phase runs its
+steps in the old single pass's order and marks a `load::seams::Seam` wherever a view
+step stood; the view phase writes its report lines at those seams, so `loader_log`
+reads exactly as one pass did. Two lean-build values became the view build's: the
+lock-on rig carries the title's chase shear (nothing the rig computes reads it; it
+shows in Pure's `RaceSim` Debug text only), and a capture's Zone counters are
+`SimSetup::capture_zone`, written at the same statement of `Race::start` in both
+builds. The view phase checks, in a debug build, that the HUD's lock grid and law,
+the drawn far chase rig and `vex_geometry` equal what the sim phase gave the
+simulation.
+
 ## Which GPU the tests use
 
 Every in-process GPU test but the capture ones below gets its adapter from

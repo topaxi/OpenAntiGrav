@@ -39,7 +39,7 @@ fn beamed(ticks: usize) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle()));
     }

@@ -91,7 +91,7 @@ fn solo_lap_at(tuning: oag_ai::Tuning) -> Option<u64> {
         ..oag_raceplay::Options::default()
     })
     .expect("loading 16_Track");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_ai_tuning(tuning);
     for slot in 2..8 {
         race.core.sim.world.ships[slot].active = false;

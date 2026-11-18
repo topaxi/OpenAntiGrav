@@ -47,7 +47,7 @@ fn started(source: String, mode: oag_race::Mode, terms: &str) -> race::Race {
         "no weapon-AI line naming {terms}'s terms in the loader report: {:#?}",
         loaded.report
     );
-    race::Race::start(loaded.setup)
+    race::Race::start(loaded.setup, loaded.view, loaded.modules)
 }
 
 /// Seconds of racing after the green light [`opponents_fire_under_the_original_driver`]

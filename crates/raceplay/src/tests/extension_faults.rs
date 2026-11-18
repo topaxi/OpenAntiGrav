@@ -258,7 +258,7 @@ fn a_fault_found_while_applying_lands_none_of_the_modules_commands_that_tick() {
         )
     };
     let ticks = 600;
-    let (vanilla, _) = run(grid(Prepared::default()), ticks);
+    let (vanilla, _) = run(grid(crate::extensions::Prepared::default()), ticks);
     // Within the cap, the thrust commands land and the blob is kept.
     let (fine, _) = run(
         grid(prepared(&[around(oag_ext_abi::MAX_EMITS_PER_TICK)])),

@@ -51,7 +51,7 @@ fn start() -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// A body whose forward is `forward` and whose up is as close to `up` as it

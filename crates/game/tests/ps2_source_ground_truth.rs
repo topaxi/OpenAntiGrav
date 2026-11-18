@@ -186,7 +186,7 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
     };
     let bound = loaded.setup.spline.max_half_width() * 2.0;
     let handling = loaded.setup.handling;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     let start = race.core.telemetry();
     assert!(start.position.is_finite(), "{:?}", start.position);

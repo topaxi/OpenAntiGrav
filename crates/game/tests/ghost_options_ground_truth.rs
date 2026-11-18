@@ -37,7 +37,7 @@ fn a_hidden_ghost_is_raced_but_reports_no_pose_to_draw() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading the race");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.set_ghost(standing_ghost());
     // Flown by the autopilot, so the lap clock starts at the line.
     race.core.sim.set_autopilot(true);

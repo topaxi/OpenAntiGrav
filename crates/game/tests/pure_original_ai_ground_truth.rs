@@ -247,7 +247,7 @@ fn fly_allowing(track: &str, class: &str, start: PureClass, respawns: u32, destr
     })
     .expect("loading the circuit");
     let race_table = tables(start).expect("the same disc").race;
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(
         race.core.sim.use_original_ai(None, 1),
         "Pure flies its original driver"

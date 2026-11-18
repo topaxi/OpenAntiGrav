@@ -89,7 +89,10 @@ fn load(
     })
     .expect("loading the race");
     let report = loaded.report.clone();
-    (Race::start(loaded.setup), report)
+    (
+        Race::start(loaded.setup, loaded.view, loaded.modules),
+        report,
+    )
 }
 
 fn laws(path: &str, class: &str) -> Option<(Laws, Vec<String>)> {
@@ -299,7 +302,7 @@ fn no_opponent_ever_gets_either_level() {
             ..race::Options::default()
         })
         .unwrap();
-        let mut race = Race::start(loaded.setup);
+        let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
         race.core.sim.set_pilot_assist(level);
         let inputs = thrust();
         for _ in 0..900 {

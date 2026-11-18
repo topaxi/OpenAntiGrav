@@ -83,14 +83,20 @@ pub struct Viewer {
 }
 
 impl Viewer {
-    /// Opens `replay` over the race `setup` starts and begins the opening pass.
+    /// Opens `replay` over the race `setup`, `view` and `modules` start and begins the opening
+    /// pass.
     ///
     /// # Errors
     ///
     /// [`OpenError`]: the race cannot be started from the header, or it is not the recorded one
     /// (a tick-zero mismatch) and the file has no pose track to play instead.
-    pub fn open(setup: crate::Setup, replay: Replay) -> Result<Self, OpenError> {
-        let timeline = Box::new(Timeline::open(setup, replay.clone())?);
+    pub fn open(
+        setup: crate::SimSetup,
+        view: crate::ViewSetup,
+        modules: crate::extensions::Prepared,
+        replay: Replay,
+    ) -> Result<Self, OpenError> {
+        let timeline = Box::new(Timeline::open(setup, view, modules, replay.clone())?);
         Ok(Self {
             replay,
             timeline,

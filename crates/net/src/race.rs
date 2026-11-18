@@ -234,7 +234,7 @@ pub fn load(params: &RaceParams, source: &str) -> Result<(Box<Race>, &'static st
     let title = loaded.title.name;
     // Boxed where it is made: a `Race` is 141 KB, and moved by value up an
     // unoptimised call chain its copies overflowed a test thread's 2 MiB stack.
-    let mut race = Box::new(Race::start(loaded.setup));
+    let mut race = Box::new(Race::start(loaded.setup, loaded.view, loaded.modules));
     prepare(&mut race, params)?;
     Ok((race, title))
 }

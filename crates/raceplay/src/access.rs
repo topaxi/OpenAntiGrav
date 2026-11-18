@@ -32,8 +32,8 @@ impl RaceSim {
     /// Chooses which control scheme maps the pilot's buttons.
     ///
     /// A setter for the same reason `set_boost_fov_kick` is one: it is a
-    /// preference read from the settings file, and `Setup` is what a *headless*
-    /// race needs. Unlike the kick it changes what the simulation sees, so it is
+    /// preference read from the settings file, and a load's setups are what a
+    /// *headless* race needs too. Unlike the kick it changes what the simulation sees, so it is
     /// set once before the first tick and not touched again - a scheme swapped
     /// mid-race would leave a half-finished gesture armed in `ShipState`.
     pub fn set_control_scheme(&mut self, scheme: ControlScheme) {
@@ -92,8 +92,8 @@ impl Race {
     /// Sets how strong the boost's field-of-view kick is. `[graphics]
     /// boost_fov_kick`.
     ///
-    /// A setter rather than a [`Setup`] field because the kick is a display
-    /// choice and `Setup` is what a headless race needs; threading a graphics
+    /// A setter rather than a [`ViewSetup`] field because the kick is a display
+    /// choice the loader cannot see; threading a graphics
     /// setting through the loader would put it in front of every caller that has
     /// no screen. [`oag_display::display::BoostFovKick::OFF`] leaves [`Race::projection`]
     /// bit-identical to what it returned before the effect existed.

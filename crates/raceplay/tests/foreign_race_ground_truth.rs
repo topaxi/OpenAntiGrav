@@ -74,7 +74,7 @@ fn solo(track: PathBuf) -> Option<Solo> {
     let mut o = options(track)?;
     o.difficulty = oag_ai::Difficulty::Ace;
     let loaded = race::load(&o).ok()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for slot in 2..8 {
         race.core.sim.world.ships[slot].active = false;
     }

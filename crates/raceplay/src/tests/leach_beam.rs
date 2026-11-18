@@ -279,7 +279,7 @@ fn an_opponent_holding_a_leach_beam_charges_and_the_player_who_is_not_does_not()
 }
 
 /// A held LeachBeam's reticle runs the LeachBeam's own law when the title's
-/// reticle dialect runs it (`Setup::sight`: Pulse's and Wipeout HD's, not 2048's): the arrowheads turn,
+/// reticle dialect runs it (`SimSetup::sight`: Pulse's and Wipeout HD's, not 2048's): the arrowheads turn,
 /// and they lock on arrival rather than after the Missile's hold.
 ///
 /// **Through `Race::tick`** because the gate, the projection and the law meet

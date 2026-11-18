@@ -654,7 +654,11 @@ mod advance_tests {
     use super::*;
 
     fn race() -> Race {
-        Race::start(Setup::headless(oag_race::Mode::TimeTrial, 1))
+        Race::start(
+            SimSetup::headless(oag_race::Mode::TimeTrial, 1),
+            crate::ViewSetup::headless(),
+            crate::extensions::Prepared::default(),
+        )
     }
 
     /// [`MotionState::advance`]'s snapshot, copied out so a test can advance again while

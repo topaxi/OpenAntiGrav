@@ -216,7 +216,7 @@ fn measure_airtime(
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     if let Some(pilot) = pilot {
         // Tempered here, so a sweep across tiers is asking about the same
         // character at four levels rather than whichever one slot 1 drew.

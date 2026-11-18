@@ -11,7 +11,11 @@ pub(super) fn one_round(ticks: usize) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_cannon_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
     let mut buttons = Buttons::new();
     let mut fired = None;

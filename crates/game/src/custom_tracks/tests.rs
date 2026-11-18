@@ -379,7 +379,7 @@ mod disc {
         assert_eq!(from_menu.foreign_track, from_cli.foreign_track);
         let start = |options: &oag_raceplay::Options| {
             let loaded = oag_raceplay::load(options).expect("loads");
-            let mut race = oag_raceplay::Race::start(loaded.setup);
+            let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
             for slot in 2..8 {
                 race.core.sim.world.ships[slot].active = false;
             }

@@ -26,21 +26,23 @@ fn six_locators() -> Vec<SparkAnchor> {
 /// A race whose slot 0 carries `locators` and whose two hit-spark effects
 /// are one-emitter stand-ins.
 fn race_with_locators(locators: Vec<SparkAnchor>) -> Race {
-    Race::start(setup_with_locators(locators))
+    let (setup, view) = setup_with_locators(locators);
+    Race::start(setup, view, crate::extensions::Prepared::default())
 }
 
-fn setup_with_locators(locators: Vec<SparkAnchor>) -> Setup {
+fn setup_with_locators(locators: Vec<SparkAnchor>) -> (SimSetup, ViewSetup) {
     let mut handling = hulled_handling();
     handling.dimensions.shield = 100.0;
-    let mut setup = setup(handling);
+    let setup = setup(handling);
+    let mut view = crate::tests::fixture_view();
     for trigger in [HitSpark, LeachHitSpark] {
         let blob = super::respawn::one_emitter_pob(super::respawn::trigger_name(trigger), 0);
         let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
             .expect("the hand-laid effect parses");
-        setup.handles.insert(trigger, effect);
+        view.handles.insert(trigger, effect);
     }
-    setup.hit_spark_anchors = vec![locators];
-    setup
+    view.hit_spark_anchors = vec![locators];
+    (setup, view)
 }
 
 fn landed_on_player() -> [WeaponHit; MAX_SHIPS] {
@@ -138,9 +140,10 @@ fn each_hit_spark_plays_one_collision_cue_behind_the_same_gate() {
 fn the_collision_cue_needs_no_spark_effect_and_follows_the_struck_craft() {
     let mut handling = hulled_handling();
     handling.dimensions.shield = 100.0;
-    let mut setup = setup(handling);
-    setup.hit_spark_anchors = vec![six_locators()];
-    let mut race = Race::start(setup);
+    let setup = setup(handling);
+    let mut view = crate::tests::fixture_view();
+    view.hit_spark_anchors = vec![six_locators()];
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     let _ = race.core.sim.drain_cues();
     race.throw_hit_sparks(&landed_on_player(), false);
     assert_eq!(race.hit_sparks_started_for_tests(), 0);
@@ -167,10 +170,10 @@ fn the_collision_cue_needs_no_spark_effect_and_follows_the_struck_craft() {
 /// hull's own one or two `.COLLISIONS`, one for every spark thrown.
 #[test]
 fn a_quake_hit_plays_quakehit_and_the_collision_pair() {
-    let mut setup = setup_with_locators(six_locators());
+    let (mut setup, view) = setup_with_locators(six_locators());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -207,7 +210,11 @@ fn force_quake_launches_one_rivals_wave_and_nothing_else() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -320,6 +327,7 @@ fn a_weapon_hit_shakes_the_players_camera_and_nobody_elses() {
 /// `weapon_anchors` as the title built them: HD's craft-hit spark count.
 fn cannon_strikes_a_craft(weapon_anchors: Vec<Vec<SparkAnchor>>) -> u32 {
     let mut setup = setup(hulled_handling());
+    let mut view = crate::tests::fixture_view();
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_cannon_table());
     let blob = super::respawn::one_emitter_pob(
@@ -328,9 +336,9 @@ fn cannon_strikes_a_craft(weapon_anchors: Vec<Vec<SparkAnchor>>) -> u32 {
     );
     let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    setup.handles.insert(Trigger::WeaponSpark, effect);
-    setup.weapon_spark_anchors = weapon_anchors;
-    let mut race = Race::start(setup);
+    view.handles.insert(Trigger::WeaponSpark, effect);
+    view.weapon_spark_anchors = weapon_anchors;
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -397,9 +405,9 @@ fn hd_2048_and_omega_throw_the_cannon_craft_hit_spark() {
 /// locator's 0.8 s gate holds a second hit on the same pair.
 #[test]
 fn a_craft_to_craft_contact_sparks_both_hulls_once_per_gate() {
-    let mut setup = setup_with_locators(six_locators());
+    let (mut setup, view) = setup_with_locators(six_locators());
     setup.mode = Mode::SingleRace;
-    let mut race = Race::start(setup);
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -481,17 +489,16 @@ fn a_recorded_contact_spark_is_thrown_early_and_aged_to_the_frame() {
 /// nothing for a shielded craft.
 #[test]
 fn a_cage_contact_throws_the_no_damage_spark_from_the_nearest_locator() {
-    let mut setup = setup_with_locators(six_locators());
+    let (setup, mut view) = setup_with_locators(six_locators());
     let blob = super::respawn::one_emitter_pob(
         super::respawn::trigger_name(oag_title::Trigger::CollisionSparkNoDamage),
         0,
     );
     let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    setup
-        .handles
+    view.handles
         .insert(oag_title::Trigger::CollisionSparkNoDamage, effect);
-    let mut race = Race::start(setup);
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     let at = race.core.sim.world.ships[0].physics.body.position;
     let mut response = oag_physics::cage::CageResponse::default();
     response.resolved[0] = oag_physics::cage::CageContact {

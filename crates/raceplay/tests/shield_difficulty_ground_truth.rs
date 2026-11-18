@@ -39,7 +39,10 @@ fn started(
     })
     .expect("loading the race");
     let teams = loaded.setup.slot_teams.clone();
-    (Race::start(loaded.setup), teams)
+    (
+        Race::start(loaded.setup, loaded.view, loaded.modules),
+        teams,
+    )
 }
 
 /// `team`'s `<Misc>`, as its own file authors it.
@@ -172,7 +175,7 @@ fn pools_in(
 ) -> (usize, Vec<String>) {
     let report = loaded.report.clone();
     let teams = loaded.setup.slot_teams.clone();
-    let race = Race::start(loaded.setup);
+    let race = Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut archives = oag_assets::Archives::open(source, title).expect("opening the archives");
     let mut moved = 0;
     for (slot, team) in teams.iter().enumerate() {
@@ -346,7 +349,10 @@ fn pulses_novice_field_starts_on_each_teams_easyshield() {
         })
         .expect("loading the race");
         let teams = loaded.setup.slot_teams.clone();
-        (Race::start(loaded.setup), teams)
+        (
+            Race::start(loaded.setup, loaded.view, loaded.modules),
+            teams,
+        )
     };
     for (difficulty, easy) in [
         (oag_ai::Difficulty::Novice, true),

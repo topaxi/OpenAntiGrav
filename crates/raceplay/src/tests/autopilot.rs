@@ -448,7 +448,11 @@ pub(super) fn two_people(seat: Option<usize>, remote: bool) -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let controller = if remote {
         oag_gameplay::Controller::Remote
     } else {

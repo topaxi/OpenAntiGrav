@@ -54,7 +54,12 @@ fn gate(from: f32, to: f32, channel: &str) -> TrackProps {
 /// the stretch it drives between 284 and 312 ticks: it is entered once.
 fn gate_on_the_road(channel: &str) -> TrackProps {
     let x_at = |ticks| {
-        run(grid(Prepared::default()), ticks).0.core.sim.world.ships[1]
+        run(grid(crate::extensions::Prepared::default()), ticks)
+            .0
+            .core
+            .sim
+            .world
+            .ships[1]
             .physics
             .body
             .position
@@ -70,7 +75,7 @@ fn a_trigger_raises_its_channel_with_no_module_and_a_race_without_one_hashes_as_
     let props = gate_on_the_road("test.track/passed");
     let beacons = prepared_on(&[], &props);
     let (race, with) = run(grid(beacons), 320);
-    let (_, without) = run(grid(Prepared::default()), 320);
+    let (_, without) = run(grid(crate::extensions::Prepared::default()), 320);
     assert_eq!(with, without, "an emitting trigger moved a hash");
     assert!(!race.core.sim.is_modded());
     let started = race.channel_started(any(key("test.track/passed")));
@@ -348,7 +353,7 @@ mod with_modules {
 
     #[test]
     fn a_race_with_no_module_hashes_as_before() {
-        let (_, plain) = run(grid(Prepared::default()), 120);
+        let (_, plain) = run(grid(crate::extensions::Prepared::default()), 120);
         let (_, none) = run(race_of(&[]), 120);
         assert_eq!(plain, none);
     }

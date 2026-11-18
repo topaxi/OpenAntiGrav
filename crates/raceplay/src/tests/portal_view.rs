@@ -126,14 +126,17 @@ fn sectioned_race(commands: &[Command]) -> Race {
     setup.course = Course::from_track(&ai, None);
     setup.ai = ai;
     setup.mode = Mode::SingleRace;
-    setup.extensions = prepared(std::slice::from_ref(&source));
     setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    settled(Race::start(setup), &source)
+    let modules = prepared(std::slice::from_ref(&source));
+    settled(
+        Race::start(setup, crate::tests::fixture_view(), modules),
+        &source,
+    )
 }
 
 /// Sections 1 to 8, each seeing only itself: a wall between any two of them.
@@ -829,8 +832,8 @@ fn a_split_screen_draws_one_extra_scene_a_frame_for_all_its_seats() {
 /// Pulse PSP EU's `05_Track`: a fork whose first route runs on a deck above the ring.
 const FORKED: &str = "Data\\Environments\\05_Track\\track.vex";
 
-/// The setup of a `05_Track` race, the disc's. `None` without the image.
-fn forked_setup() -> Option<Setup> {
+/// The load of a `05_Track` race, the disc's. `None` without the image.
+fn forked_setup() -> Option<crate::Loaded> {
     let image = oag_testdata::image("data/images/pulse-psp-eu.chd")?;
     let loaded = crate::load(&crate::Options {
         source: image.display().to_string(),
@@ -841,19 +844,22 @@ fn forked_setup() -> Option<Setup> {
         ..crate::Options::default()
     })
     .expect("loading the race");
-    Some(loaded.setup)
+    Some(loaded)
 }
 
 /// A `05_Track` race with the mod's shader and a trigger volume standing on route 0 of the fork,
 /// whose guest asks for a view from a ring point ahead of the player's camera to `exit` (a
 /// progress, or trigger 0), its chase camera settled. `None` without the disc image.
 fn forked_race(exit: oag_ext_abi::Distance) -> Option<(Race, crate::extensions::PortalRequest)> {
-    let mut bare = Race::start(forked_setup()?);
+    let bare = forked_setup()?;
+    let mut bare = Race::start(bare.setup, bare.view, bare.modules);
     for _ in 0..90 {
         bare.tick(&PlayerInputs::none());
     }
     let entrance = pair_ahead(&bare).0;
-    let mut setup = forked_setup()?;
+    let crate::Loaded {
+        mut setup, view, ..
+    } = forked_setup()?;
     let course = setup.course.take().expect("a course");
     let route = &course.routes()[0];
     let span = (course.progress_at(route.merge).unwrap()
@@ -884,7 +890,7 @@ fn forked_race(exit: oag_ext_abi::Distance) -> Option<(Race, crate::extensions::
     };
     let source = shaded(&[command], GOOD);
     let mut report = Vec::new();
-    setup.extensions = crate::extensions::prepare(
+    let modules = crate::extensions::prepare(
         std::slice::from_ref(&source),
         "wipeout-pulse",
         None,
@@ -900,7 +906,7 @@ fn forked_race(exit: oag_ext_abi::Distance) -> Option<(Race, crate::extensions::
         &mut report,
     );
     setup.course = Some(course);
-    let mut race = Race::start(setup);
+    let mut race = Race::start(setup, view, modules);
     for _ in 0..90 {
         race.tick(&PlayerInputs::none());
     }

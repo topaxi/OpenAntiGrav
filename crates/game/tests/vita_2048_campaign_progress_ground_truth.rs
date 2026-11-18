@@ -400,7 +400,7 @@ fn an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors() {
     let loaded = race::load_event(&options, "2048 - Event 1").expect("the event loads");
     let progress = loaded.campaign_2048_event.clone().expect("an event");
     let awards = progress.xp_awards.clone().expect("the table loads");
-    let mut run = race::Race::start(loaded.setup);
+    let mut run = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     run.core.sim.arm_event_xp(&progress);
     run.core.sim.set_autopilot(true);
     let max = run.core.sim.world.ships[0].handling.dimensions.shield;

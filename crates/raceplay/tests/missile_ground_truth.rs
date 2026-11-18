@@ -91,7 +91,7 @@ fn press(button: Button) -> oag_gameplay::InputSnapshot {
 #[ignore = "needs a disc image in data/images/"]
 fn a_missile_turns_toward_the_craft_it_locked() {
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // A few ticks so the grid settles onto its footprints and the standings take
     // a first fix - the lock's along-track screen reads `Standing::progress`.
     for _ in 0..30 {
@@ -215,7 +215,7 @@ fn a_missile_turns_toward_the_craft_it_locked() {
 #[ignore = "needs a disc image in data/images/"]
 fn a_missile_never_locks_its_own_firer() {
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
@@ -284,7 +284,7 @@ fn a_missile_never_locks_its_own_firer() {
 #[ignore = "needs a disc image in data/images/"]
 fn a_missile_glances_off_the_circuits_barriers() {
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
@@ -396,7 +396,8 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
     );
 
     // And firing one spends it, through the button path rather than by hand.
-    let mut race = race::Race::start(single_race().expect("the image is present").setup);
+    let loaded = single_race().expect("the image is present");
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
@@ -443,7 +444,7 @@ fn a_missile_with_no_lock_still_flies_a_real_circuit_and_ends_itself() {
     use oag_weapons::projectile::missile::SELF_DETONATE_SECONDS;
 
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }

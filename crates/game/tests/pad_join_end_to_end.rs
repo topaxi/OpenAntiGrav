@@ -13,7 +13,7 @@ use oag_input::Controls;
 use oag_input::lobby::{Device, Lobby};
 use oag_input::pad::Assignment;
 use oag_race::Mode;
-use oag_raceplay::{Race, Setup};
+use oag_raceplay::{Race, SimSetup};
 use winit::keyboard::{Key, NamedKey};
 
 const SEED: u64 = 0xC0FFEE;
@@ -25,7 +25,11 @@ const SEED: u64 = 0xC0FFEE;
 /// its right, because sharing a spawn point would have the pair resolver fling
 /// them apart and hide what a stick did.
 fn race(craft: usize) -> Race {
-    let mut race = Race::start(Setup::headless(Mode::SingleRace, SEED));
+    let mut race = Race::start(
+        SimSetup::headless(Mode::SingleRace, SEED),
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
     race.core.sim.world.ships[0].handling.turning = oag_physics::params::Turning {
         amount: 60.0,
         falloff: 5.0,

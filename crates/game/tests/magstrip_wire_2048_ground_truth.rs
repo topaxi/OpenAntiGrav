@@ -57,11 +57,11 @@ fn load_mode(mode: oag_race::Mode) -> Option<race::Race> {
     );
     for name in ["WO_MAGSTRIP_SPARKS", "WO_MAGSTRIP_ZONE"] {
         assert!(
-            loaded.setup.effects.get(name).is_some(),
+            loaded.view.effects.get(name).is_some(),
             "{name} must load from Data/Particles2048"
         );
     }
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     Some(race)
 }

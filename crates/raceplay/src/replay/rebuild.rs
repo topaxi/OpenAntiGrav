@@ -11,7 +11,8 @@ use oag_gameplay::Controller;
 use oag_replay::Header;
 
 use super::Launch;
-use crate::{Options, Race, Setup};
+use crate::extensions::Prepared;
+use crate::{Loaded, Options, Race, SimSetup, ViewSetup};
 
 impl Options {
     /// The options a header's race was loaded with, over `source`.
@@ -107,18 +108,18 @@ impl Options {
     }
 }
 
-/// The setup of the race `header` was recorded from, loaded from `source`.
+/// The race `header` was recorded from, loaded from `source`.
 ///
 /// # Errors
 ///
 /// [`Options::for_replay`]'s or the load's.
-pub fn load_recorded(header: &Header, source: &str) -> Result<Setup> {
+pub fn load_recorded(header: &Header, source: &str) -> Result<Loaded> {
     let options = Options::for_replay(header, source)?;
-    let loaded = crate::load(&options).context("loading the replay's race")?;
-    Ok(loaded.setup)
+    crate::load(&options).context("loading the replay's race")
 }
 
-/// The race `header` was recorded from, started from `setup` with the recorded launch settings
+/// The race `header` was recorded from, started from `setup`, `view` and `modules` with the
+/// recorded launch settings
 /// and its recorded seats, before its first tick.
 ///
 /// The seats are the header's: a split screen makes its slots [`Controller::Local`] after
@@ -128,8 +129,13 @@ pub fn load_recorded(header: &Header, source: &str) -> Result<Setup> {
 /// # Errors
 ///
 /// A launch setting this build does not know.
-pub fn start_recorded(setup: Setup, header: &Header) -> Result<Race> {
-    let mut race = Race::start(setup);
+pub fn start_recorded(
+    setup: SimSetup,
+    view: ViewSetup,
+    modules: Prepared,
+    header: &Header,
+) -> Result<Race> {
+    let mut race = Race::start(setup, view, modules);
     apply_recorded(&mut race, header)?;
     Ok(race)
 }
@@ -171,5 +177,6 @@ pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
 ///
 /// [`load_recorded`]'s and [`start_recorded`]'s.
 pub fn rebuild(header: &Header, source: &str) -> Result<Race> {
-    start_recorded(load_recorded(header, source)?, header)
+    let loaded = load_recorded(header, source)?;
+    start_recorded(loaded.setup, loaded.view, loaded.modules, header)
 }

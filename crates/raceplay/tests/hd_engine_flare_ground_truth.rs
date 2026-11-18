@@ -570,10 +570,10 @@ fn the_trail_hit_effects_are_on_the_disc_and_load(loaded: &race::Loaded) {
 /// trusting the fallback never to be reached.
 fn every_hd_hull_authors_the_spark_anchors_a_trail_hit_lands_on(loaded: &race::Loaded) {
     assert!(
-        !loaded.setup.spark_anchors.is_empty(),
+        !loaded.view.spark_anchors.is_empty(),
         "no slots carry anchors at all"
     );
-    for (slot, anchors) in loaded.setup.spark_anchors.iter().enumerate() {
+    for (slot, anchors) in loaded.view.spark_anchors.iter().enumerate() {
         assert!(
             !anchors.is_empty(),
             "slot {slot}: no Ship Collision Fx locators, so a trail hit would \
@@ -594,7 +594,7 @@ fn every_hd_hull_authors_the_spark_anchors_a_trail_hit_lands_on(loaded: &race::L
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn a_craft_inside_a_trail_sparks_from_its_leading_half() {
     let Some(loaded) = load() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     for _ in 0..300 {
         race.tick(&PlayerInputs::none());
@@ -629,7 +629,7 @@ fn a_craft_inside_a_trail_sparks_from_its_leading_half() {
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn the_anchor_test_fires_later_than_the_sphere_it_replaced() {
     let Some(loaded) = load() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     for _ in 0..300 {
         race.tick(&PlayerInputs::none());
@@ -677,7 +677,7 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
     use oag_core::math::Vec3;
     use oag_fx::exhaust::{self, hd};
     let Some(loaded) = load() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // Calibrated against the far chase view's eye. The default became the close
     // view on 2026-10-01 (a fresh Pulse profile starts on `OPT_CLOSE`), which sits
     // three units nearer the craft, and this fixture's numbers depend on the

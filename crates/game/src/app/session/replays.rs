@@ -134,8 +134,12 @@ pub(crate) struct Watching {
     pub(crate) replay: Box<Replay>,
     /// The file it came from, which the list dims if the rebuild refuses it.
     pub(crate) path: PathBuf,
-    /// The setup the circuit's load produced, for the viewer's own race.
-    pub(crate) setup: Option<oag_raceplay::Setup>,
+    /// The setups and modules the circuit's load produced, for the viewer's own race.
+    pub(crate) setup: Option<(
+        oag_raceplay::SimSetup,
+        oag_raceplay::ViewSetup,
+        oag_raceplay::extensions::Prepared,
+    )>,
     /// The tick and state hash of the screenshot this recording was cut from: the viewer opens
     /// paused on that tick (`session::shot_open`).
     pub(crate) shot: Option<(u64, u64)>,
@@ -222,8 +226,8 @@ pub(crate) fn open_viewer(
         shot,
         dropped,
     } = watching;
-    let setup = setup.context("the race's setup was not kept")?;
-    let viewer = Viewer::open(setup, *replay).map_err(|e| {
+    let (setup, view, modules) = setup.context("the race's setup was not kept")?;
+    let viewer = Viewer::open(setup, view, modules, *replay).map_err(|e| {
         let why = match &e {
             OpenError::NoPoseTrack(_) => page::NO_POSE_TRACK.to_string(),
             OpenError::Start(start) => format!("{start:#}"),

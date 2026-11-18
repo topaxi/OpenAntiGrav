@@ -101,7 +101,7 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for slot in 2..oag_gameplay::MAX_SHIPS {
         race.core.sim.world.ships[slot].active = false;
     }

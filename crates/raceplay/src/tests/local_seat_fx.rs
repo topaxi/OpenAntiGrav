@@ -18,22 +18,23 @@ pub(super) fn local_people(views: usize, zoom: bool) -> Race {
         hulled_handling(),
         vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
+    let mut view = crate::tests::fixture_view();
     setup.mode = Mode::SingleRace;
     let effect = oag_fx::psys::Effect::parse(
         &one_emitter_pob("WO_TEST_SPARK", 0),
         oag_fx::psys::ColourScale::Full,
     )
     .expect("the hand-laid effect parses");
-    setup.handles.insert(Trigger::CollisionSpark, effect);
-    setup.zoom_ring = zoom.then_some(&oag_hd::race::ZOOM_RING);
-    setup.zoom_borrowed = zoom;
+    view.handles.insert(Trigger::CollisionSpark, effect);
+    view.zoom_ring = zoom.then_some(&oag_hd::race::ZOOM_RING);
+    view.zoom_borrowed = zoom;
     setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     for slot in 1..4 {
         race.core.sim.world.controllers[slot] = Controller::Local;
     }

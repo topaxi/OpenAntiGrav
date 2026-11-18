@@ -34,7 +34,7 @@ fn player_struck_by_a_rocket(push: BlastPush) -> Race {
 }
 
 /// Pulse's law: the push is posted and drained by the craft's own step, which arms the
-/// collision stun. Dropping the wiring (the match in `Race::tick`, the `Setup` field) leaves
+/// collision stun. Dropping the wiring (the match in `Race::tick`, the `SimSetup` field) leaves
 /// the craft unstunned.
 #[test]
 fn a_posted_blast_stuns_the_player_it_strikes() {

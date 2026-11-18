@@ -111,7 +111,7 @@ fn race_in(mode: oag_race::Mode, extensions: Vec<race::extensions::Source>) -> O
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// The player's speed, km/h, every tick for `ticks` ticks, throttle held from the start.
