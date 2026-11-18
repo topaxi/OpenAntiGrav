@@ -408,6 +408,13 @@ the floor's blue panels are an **emissive** layer (`diffuse_normal_specular_emmi
 `EmissiveMap`, `lightmap`) that ours does not draw on this family; `Lighting.Exposure*`/`BloomFactor`
 act on the composite only; the floor's own normal map and `shadowMap`/`occlusionMap` terms.
 
+**The marker's tests sit inside its range (`2048-stipple`).** `sun_mask` is interpolated, so the
+`>= 2` and `< 0` tests moved to `>= 1.5` and `< -0.5` in `shade.wesl`: a vertex-lit surface
+occluded to within a byte of `2.0` flipped between the two readings pixel by pixel and drew the
+sun at full strength (Altima's banners, shore and cliffs, Park's signs;
+`crates/mesh/tests/psp2_nova_sun_mask_smooth.rs`, `docs/rendering/water.md` Open 4a). Omega:
+pixel-identical on Altima, since the `2 + mask` marker is set by the Vita reader only.
+
 **Against Omega:** the lightmapped law is *ported* (shared `with_nova_prelit` path, power held at
 1 for 2048). The vertex-lit `NOVAColor` family is wired for 2048 only (`slots`: `sun_mask >= 2`
 marker in `shade.wesl`); Omega's `NOVAColor` variant stays *checked, applies, not wired* (its

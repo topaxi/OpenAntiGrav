@@ -931,6 +931,24 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    `ghidra/functions/vita-2048-eu-v104/world-clock.md`, "The place path took a constant". Placement by it is **not tested to better than a
    few seconds**: the boat is the only element in view that ours moves with the clock (offsets 40 to 50 s move it by a few to about ten px,
    read off 4x crops) and the original's boat sits within that range at the read clock, nothing sharper.
+   **The stipple is closed (2026-11-18, `2048-stipple`, confidence 90): it was the vertex-lit sun mask's flag tests, not the water and not a
+   texture.** Altima at `--pose=-250,25,1385,-15 --pose-hold` (headless, 1280x720): the banner board, the hanging banner strips, the dark
+   shore beside the gravel and the cliff face drew a binary grey-white speckle. A temporary shader probe showed the picture (the albedo)
+   clean, the vertex colour smooth, and the sun mask local to `lit_texel` speckled on exactly those surfaces. 2048's vertex-lit surfaces
+   (`NOVAColor`) carry `2 + a/255` in `sun_mask` and `shade.wesl` told them from a plain mask with `sun_mask >= 2.0` on the **interpolated**
+   value; a surface occluded to within a byte of `2.0` landed either side of that test pixel by pixel (perspective-correct interpolation is
+   not bit-exact), so the pixels that fell under read as a plain mask of about 2 and drew the sun at full strength. The `< 0.0` test for
+   the hull factor marker has the same shape. Both now sit half a unit inside their range (`>= 1.5`, `< -0.5`). The `fc07` gravel, the
+   banner and the shore are all `fc06`/`fc07` vertex-lit families, which is why no water, shadow, MSAA or anisotropy setting moved it
+   (anisotropy changes the gravel's own texture grain, which is a different thing: see below).
+   Test `psp2_nova_sun_mask_smooth` (`crates/mesh/tests/`): a perspective-tilted triangle with vertices `2.0, 2.0, 2 + 1/255` reads 255 in
+   places on main and at most 20 with the fix. Frames, the Altima pose and Park: the stipple is gone from the "5" sign, the right-hand
+   board and the orange sign on Park too; Mall (no vertex-lit speckle) is unchanged. **Omega: checked, not affected** (the `2 + mask`
+   marker is set for the Vita reader only, and Omega's Altima at the grid is pixel-identical before and after, 0 differing pixels).
+   Not from this lane and still open: the gravel shore itself is brighter and greyer than the original's (dark, with a green grass
+   edge: the `fc07_blend_vertred_lambert_2diff` second picture and its vertex-red blend are not read), and `OAG_TINT_MATERIALS`,
+   `OAG_ALBEDO_ONLY` and `OAG_OPAQUE_ONLY` do not reach the Vita track (`OAG_SKIP_MATERIAL` and `OAG_SKIP_SLOT` do).
+   *Superseded reading below, kept for the evidence it recorded:*
    (2) **The stipple is not the water setting, not the shadows, not MSAA** (the falsifier, "survives with the water off", fired
    against the water: `graphics.water = off`, `--shadows off` and `--msaa 4x` leave the same speckle; `--anisotropy 16x` changes its
    grain, so it is a texture sampled at a grazing angle; it **moves with the world clock**, so a scrolled surface). It sits where the
