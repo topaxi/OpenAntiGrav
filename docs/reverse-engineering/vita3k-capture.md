@@ -187,8 +187,9 @@ different in kind from a human adapting the recipe above by eye.
 
 ## Reading and writing guest memory, and the 2048 craft teleport (2026-10-07, vita3k-teleport)
 
-**Verdict: the memory mechanism works (confidence 90); `place` is not built, because
-the player's physics body was not isolated (negative, see below).**
+**Verdict (2026-11-18, `vita-teleport`): the memory mechanism works (confidence 90) and `place` is built
+(`vita-2048-pair.py --walk --track ... --place X,Y,Z,YAW`, "The teleport that works" below). The October
+negative below (the ship-index-7 body is not the camera's) was the grid hold, not a wrong body.**
 
 ### The mechanism that works: `/proc/<pid>/mem` on a child process
 
@@ -267,7 +268,42 @@ No transform to `oag-game` was measured: our build could not resolve the DLC's
 Vineta K entry name (`Data\art\published\environments\<stem>\track.vex` with
 `vineta`, `vineta_k`, `vinetak`, `vinetta` all missing), so no pair was taken.
 
-**Omega: not checkable** (no PS4 emulator). **HD:** the same body shape as
+### The teleport that works (2026-11-18, `vita-teleport`)
+
+**The player's body is the one whose ship has the role word `ship+0x7060 == 0`**, with `*(ship+0x5f84)` a unit-basis body
+(`find_player_body`, `scripts/vita-2048-pair.py`; confidence 85: two boots, the written pose is where the chase camera and the drawn
+hull went). The ship's index in the craft array differs per boot, so it is found by the role word, not by index 7.
+
+**Why October saw a body that "was pulled back"**: for the first ~3.8 s after the HUD's first frame (the grid hold of the countdown) the guest
+rewrites the body to the grid pose every tick. A write every 4 ms from a thread of its own sees 113-114 reads pulled off the pose in that window
+and none after it (two boots: the last at 3.79 s and 3.77 s of 17.5 s and 17.7 s; the pulled-back position is the grid slot,
+`(355.1, 2.1, 253.5)` against the pose, 1,260.2 units away). After it the body holds: velocity written zero every write, the guest
+neither falls nor respawns it, `read back == written` exactly, and the largest move between two writes over the three grabs is 0.000.
+So `place` writes basis rows, position, transpose and zero velocity every 4 ms from the first frame and grabs after `--place-settle 15`.
+The earlier refusal ("1,271.7 units over 1,281 writes") was the first read before the first write plus this grid window, now measured
+over the grabs only (`window_drift`, whole-run `max_drift` and the pulled-off times are kept in `pair.json`, `original.placed`).
+
+**Attitude and coordinates**: the basis rows are ours' `--pose` rows for the same X,Y,Z,YAW (`rpcs3_place.our_attitude`), and **no transform
+between 2048's coordinates and ours' is needed on Altima**: with the body written at ours' pond pose `-250,-8,1372` the original's chase
+camera shows the same scenery as ours at that pose (the cave wall, the track edge, the pond with its boat, the green pad; two boots,
+`pairs` below), to within the sprung camera's offset (the original's camera is not rigid, ours' is). Confidence 85 for Altima; other circuits
+unchecked. The hull shake is patched out (`pair.json`, `original.hull_shake`); the camera tripod shake is still on and the two frames
+show no visible shake at the grab.
+
+**What a player sees**: the original's craft is centred below the camera on the pad-side of the pond, as the player's would be at that
+place; the HUD reads 0:12.0 (a race running, the countdown long over), position 8/8. The pond is in view: a near-black flat basin with the
+boat, a smooth shore gradient (no glints, no speckle). Ours at the same pose has the same basin and boat but a stippled grey-white speckle
+along the shore (water.md, 2048, Open 4a).
+
+**Not traced**: the chain from `Ship_UpdateCameraRigs` (`0x811bd89a`) to the body is not read (the picture and 14 and 38 hull matrices at the
+pose in the three scans are the evidence, not the chain), so nothing here is a rename; `camera.md` already has `bodyPos = *(*(ship+0x5f84)+0x38)`.
+A steering-only discriminator was not needed.
+
+**Omega** (CLAUDE.md, 2048 and Omega): **checked, differs / partly open**. shadPS4 exposes no readable guest memory (`compare-page.md`, clock census),
+so no write there; the native `wipeout_pc` port's memory is readable through `/proc/<pid>/mem` of the launching process, so the same
+write is **not tried** there: Omega's body layout (8-byte pointers) is unread.
+
+**HD:** the same body shape as
 `rpcs3_place.py` (basis rows, w-0 rows, position w 1, transpose after them), with
 different offsets and little-endian; the role-word trick carries over.
 

@@ -909,8 +909,17 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    floor at 0:47 to 0:50 is a glowing track-side deck, not water; Park shows grass, brick and the same deck. The
    samples are 2 to 3 s apart (about 150 to 300 units), so a short glimpse could fall between them, and ours' pond
    and sea poses (`-250,-8,1372` and `1000,200,-3500`) are free cameras no craft flight reproduces. A comparison
-   needs the teleport (never built, [vita3k-capture.md](../reverse-engineering/vita3k-capture.md), 2048 craft
+   needs the teleport (built 2026-11-18 below, [vita3k-capture.md](../reverse-engineering/vita3k-capture.md), 2048 craft
    teleport) or a denser sample around where the spline passes the water.
+   **Pair taken 2026-11-18 (`vita-teleport`, two boots)**: the teleport places the original's craft at ours' Altima pond pose
+   `-250,-8,1372` (yaw 0) and the same scenery, the pond and its boat are in view on both sides
+   (`vita3k-capture.md`, "The teleport that works"). Read by eye on a 3x crop, **ours differs**: (1) a stippled grey-white
+   speckle along the shore and the basin's right edge that the original does not have (the original's shore is a smooth
+   dark gradient); (2) the original's basin is a dark navy with a faint lighter band under the boat, ours near-black;
+   (3) no glint or ripple movement is judged from a still. Ripple scale and scroll, glint colour and `fc17` edge colour are
+   not measured from one still pair per boot; the speckle is the first difference to chase (a dither of the shore alpha or
+   `fc17` edge in ours, not a feature of the original). Park's sea pose is not placed (Park's Time Trial does not load, see
+   `vita3k-capture.md`; its Race cell loaded in `water-2048cmp`).
 5. `sea`, `seareflect`, `seaweed` class nodes: a class census over PSP `.vex`.
 6. Blue Ridge's `Water` texture is embedded and bound by no batch; whether a node of
    another class draws it is unread.
