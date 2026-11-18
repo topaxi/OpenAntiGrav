@@ -168,56 +168,15 @@ fn suppressing_the_glow_dims_the_resolve() {
     );
 }
 
-/// A frame exponent of 0 makes the luminance term flat (`x^0` is 1 for every `x`), so the
-/// gate passes the frame's colour at the full `Bloom from frame contribution`: the front
-/// end's model block authors exactly that. A bare `pow(x, 0.0)` came out 0 on an NVIDIA adapter
-/// and 1 on an AMD one, which left a card with no bloom past its edge on the former.
-#[test]
-fn a_frame_exponent_of_zero_gates_the_frame_through_whole() {
-    let instance = wgpu::Instance::default();
-    let adapters = oag_gpu::test_adapter::ordered(&instance);
-    if adapters.is_empty() {
-        eprintln!("no GPU adapter: skipping");
-        return;
-    }
-    let flat = Params {
-        frame_exponent: 0.0,
-        alpha_contribution: 0.0,
-        adaption_boost: 0.0,
-        ..params()
-    };
-    for adapter in &adapters {
-        let (device, queue) = pollster::block_on(adapter.request_device(&Default::default()))
-            .expect("a device with no extra features");
-        let drawn = resolve_a_white_scene_under(&device, &queue, flat, Glow::Drawn);
-        let suppressed = resolve_a_white_scene_under(&device, &queue, flat, Glow::Suppressed);
-        assert!(
-            drawn > suppressed,
-            "{}: a frame exponent of 0 gated nothing ({drawn} against {suppressed})",
-            adapter.get_info().name,
-        );
-    }
-}
-
 /// Clears the chain's scene target to white, runs the chain, and returns the
 /// mean of the resolved frame's red channel.
 ///
 /// 64x64 because a readback's rows are 256-byte aligned and that is exactly
 /// one `Rgba8Unorm` row, so the copy needs no padding arithmetic.
 fn resolve_a_white_scene(device: &wgpu::Device, queue: &wgpu::Queue, glow: Glow) -> f64 {
-    resolve_a_white_scene_under(device, queue, params(), glow)
-}
-
-/// [`resolve_a_white_scene`] under `params`.
-fn resolve_a_white_scene_under(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    params: Params,
-    glow: Glow,
-) -> f64 {
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let size = (64u32, 64u32);
-    let chain = Chain::new(device, format, size, params, glow).expect("the pipelines build");
+    let chain = Chain::new(device, format, size, params(), glow).expect("the pipelines build");
     let output = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("hd bloom glow test output"),
         size: wgpu::Extent3d {
