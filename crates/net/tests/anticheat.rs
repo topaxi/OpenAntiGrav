@@ -1,9 +1,11 @@
 //! A player host that cheats is caught, over real WebTransport sockets on localhost, no disc
 //! (`docs/architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md`,
 //! "The anti-cheat path"): a host that alters the simulation is proven by the lobby's
-//! re-simulation and banned, a host that forges a guest's input cannot show the guest's signed
-//! datagram and is banned, a host that races another job is refused at the welcome, an honest
-//! race reports nothing, and a malformed or oversized report is refused before any judging.
+//! re-simulation and struck, a host that forges a guest's input cannot show the guest's signed
+//! datagram and is struck, two strikes from two races and two reporters ban the host for an
+//! hour (one reporter twice does not), a host that races another job is refused at the welcome,
+//! an honest race reports nothing, and a malformed or oversized report is refused before any
+//! judging.
 //!
 //! The hosts cheat through `oag_net::host::Cheat` (the `test-cheats` feature this crate's tests
 //! turn on). The test forwards a client's report and the host's answer to a challenge the way
@@ -295,7 +297,7 @@ fn two_proven_cases_reported_by_the_same_player_are_one_strikes_worth() {
 }
 
 #[test]
-fn a_host_that_forges_a_guests_input_cannot_show_the_signed_datagram_and_is_banned() {
+fn a_host_that_forges_a_guests_input_cannot_show_the_signed_datagram_and_is_struck() {
     let mut race = hosted(Cheat::Forge, 100_000, None);
     let reason = race.until_closed();
     assert!(

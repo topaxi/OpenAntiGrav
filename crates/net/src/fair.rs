@@ -445,7 +445,7 @@ pub fn answer_holds(
 /// What the lobby concluded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
-    /// The host cheated, and how: the lobby bans it.
+    /// The host cheated, and how: the lobby strikes its key (enough strikes ban it).
     Proven(String),
     /// The report does not hold: the host did what it said.
     Dismissed(String),

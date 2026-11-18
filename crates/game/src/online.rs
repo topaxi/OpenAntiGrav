@@ -23,8 +23,8 @@ use crate::net_play::Connect;
 /// ([`crate::net_play::NetPlay`]) in a `--online` run.
 #[derive(Debug, Default)]
 pub struct LobbyLine {
-    /// The lobby closed the room under this person (its host left, or was banned), and why:
-    /// said from outside the race, it ends the race.
+    /// The lobby closed the room under this person (its host left, was caught cheating, or was
+    /// banned), and why: said from outside the race, it ends the race.
     pub closed: Mutex<Option<String>>,
     /// This machine hosts the race and has not yet told the lobby how it ended: a process
     /// that is about to exit waits a moment for this, so the room gets its board.

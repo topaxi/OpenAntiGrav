@@ -8,8 +8,8 @@
 //! and the lobby, which ran no race, is told the result; a host that is killed ends the race
 //! for the guest with the lobby's reason; a host whose key is on the lobby's ban file is
 //! refused with the ban's reason; a host that alters its race (the tests' own build cheats on
-//! `OAG_TEST_CHEAT`) is reported by the guest, proven by the lobby's re-simulation and banned
-//! with a dated line, and the guest is told why (ADR-0092, "The anti-cheat path").
+//! `OAG_TEST_CHEAT`) is reported by the guest, proven by the lobby's re-simulation and struck
+//! with a dated line but not banned (one strike is no ban), and the guest is told why (ADR-0092, "The anti-cheat path").
 //!
 //! The games are spawned by `net_rejoin_ground_truth::Lab` (`CARGO_BIN_EXE_oag-game`), so this
 //! module is in nextest's `gpu-vram` group like that one.
@@ -174,7 +174,7 @@ fn a_host_whose_profile_key_is_on_the_ban_file_is_refused_with_the_reason() {
 
 #[test]
 #[ignore = "needs a disc image"]
-fn a_host_that_alters_its_race_is_proven_by_the_lobby_and_banned_and_the_guest_is_told_why() {
+fn a_host_that_alters_its_race_is_proven_by_the_lobby_and_struck_and_the_guest_is_told_why() {
     let Some(image) = image() else {
         return;
     };
@@ -208,7 +208,7 @@ fn a_host_that_alters_its_race_is_proven_by_the_lobby_and_banned_and_the_guest_i
     );
     let lobby = lab.read("lobby");
     assert!(
-        lobby.contains("\"b\"'s report is proven") && lobby.contains("is banned"),
+        lobby.contains("\"b\"'s report is proven") && lobby.contains("gets a strike (1 of 2"),
         "the lobby proved it:\n{}",
         tail(&lobby)
     );
@@ -221,14 +221,18 @@ fn a_host_that_alters_its_race_is_proven_by_the_lobby_and_banned_and_the_guest_i
     )
     .expect("the host's key");
     let hex: String = key.public().iter().map(|b| format!("{b:02x}")).collect();
-    let written = std::fs::read_to_string(&bans).expect("the ban was written");
+    let written = std::fs::read_to_string(&bans).expect("the strike was written");
     assert!(
         written
             .lines()
-            .any(|line| line.starts_with(&format!("key {hex} 20"))
-                && line.contains("caught cheating")),
-        "the host's key is banned with its date: {written}"
+            .any(|line| line.starts_with(&format!("strike {hex} 20")) && line.contains(" by ")),
+        "the host's key is struck with its date and reporter: {written}"
     );
+    assert!(
+        !written.lines().any(|line| line.starts_with("key ")),
+        "one proven case bans nobody: {written}"
+    );
+    assert!(!lobby.contains("banned for"), "{}", tail(&lobby));
     let status = b.finish(60);
     assert!(status.is_some(), "the guest's race ended by itself");
     drop(a);

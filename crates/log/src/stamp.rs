@@ -45,6 +45,39 @@ pub fn leads(line: &str) -> bool {
     })
 }
 
+/// The time a stamp names, back from [`format`]'s text: `None` unless `word` is exactly one
+/// stamp of a real date.
+#[must_use]
+pub fn parse(word: &str) -> Option<SystemTime> {
+    if word.len() != WIDTH || !leads(word) {
+        return None;
+    }
+    let num = |from: usize, to: usize| word[from..to].parse::<i64>().ok();
+    let (year, month, day) = (num(0, 4)?, num(5, 7)?, num(8, 10)?);
+    let (hour, minute, second, milli) = (num(11, 13)?, num(14, 16)?, num(17, 19)?, num(20, 23)?);
+    if !(1..=12).contains(&month) || hour > 23 || minute > 59 || second > 59 {
+        return None;
+    }
+    let days = days_from_civil(year, month, day);
+    if day < 1 || civil_from_days(days) != (year, month, day) {
+        return None;
+    }
+    let secs = u64::try_from(days * 86_400 + hour * 3600 + minute * 60 + second).ok()?;
+    let millis = u64::try_from(milli).ok()?;
+    UNIX_EPOCH.checked_add(Duration::from_secs(secs) + Duration::from_millis(millis))
+}
+
+/// Howard Hinnant's `days_from_civil`: (year, month, day) to days since 1970-01-01.
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = year.div_euclid(400);
+    let yoe = year.rem_euclid(400);
+    let mp = if month > 2 { month - 3 } else { month + 9 };
+    let doy = (153 * mp + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
 /// Howard Hinnant's `civil_from_days`: days since 1970-01-01 to (year, month, day).
 fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let z = days + 719_468;
@@ -56,4 +89,31 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     (yoe + era * 400 + i64::from(month <= 2), month, day)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_stamp_reads_back_as_the_time_it_was_written_for() {
+        for secs in [0_u64, 951_782_400, 1_763_456_096, 4_102_444_799] {
+            let at = UNIX_EPOCH + Duration::from_millis(secs * 1000 + 789);
+            assert_eq!(parse(&format(at)), Some(at), "{}", format(at));
+        }
+        assert_eq!(
+            parse("2026-11-18T12:34:56.789Z").map(|t| format(t)),
+            Some("2026-11-18T12:34:56.789Z".to_string())
+        );
+        for bad in [
+            "2026-02-30T00:00:00.000Z",
+            "2026-13-01T00:00:00.000Z",
+            "2026-11-18T24:00:00.000Z",
+            "2026-11-18T12:34:56.789Z trailing",
+            "2026-11-18",
+            "not a stamp at all here!",
+        ] {
+            assert_eq!(parse(bad), None, "{bad}");
+        }
+    }
 }

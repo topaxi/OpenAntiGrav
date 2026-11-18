@@ -5,6 +5,7 @@
 
 use std::net::{IpAddr, SocketAddr};
 use std::sync::mpsc;
+use std::time::SystemTime;
 
 use web_time::{Duration, Instant};
 
@@ -120,8 +121,8 @@ impl Server {
             let text = "the hosting offer is not signed for this lobby and session".into();
             return self.refuse_host(id, Refusal::BadHost, text);
         }
-        if let Some(reason) = self.bans.bans().banned(&offer.key, ip) {
-            let text = format!("you may not host on this lobby: {reason}");
+        if let Some(refused) = self.bans.bans().banned(&offer.key, ip, SystemTime::now()) {
+            let text = format!("you may not host on this lobby: {refused}");
             return self.refuse_host(id, Refusal::Banned, text);
         }
         if let Err((code, text)) = self.rooms.vet_hosted(id, &settings) {
@@ -391,11 +392,12 @@ impl Server {
             }
         }
         if self.bans.refresh() {
+            let now = SystemTime::now();
             let banned: Vec<(u32, String, [u8; 32], SocketAddr)> = self
                 .hosts
                 .iter()
                 .filter_map(|(id, host)| {
-                    let reason = self.bans.bans().banned(&host.key, host.addr.ip())?;
+                    let reason = self.bans.bans().banned(&host.key, host.addr.ip(), now)?;
                     Some((
                         self.rooms.hosted_by(*id)?,
                         reason.to_string(),

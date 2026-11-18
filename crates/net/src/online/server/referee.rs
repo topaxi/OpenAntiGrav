@@ -1,8 +1,9 @@
 //! The lobby as the referee of player-hosted races: a client's case against its host arrives in
 //! parts, is bounded, checked against the host's signed checkpoint, and then either
 //! re-simulated from the job the lobby issued (a state the host's own inputs do not give) or
-//! put to the host as a challenge (an input its seat never sent). A proven case bans the host's
-//! key and closes its room with the reason
+//! put to the host as a challenge (an input its seat never sent). A proven case is a strike on
+//! the host's key (`crate::online::moderation`, which bans on enough of them) and closes its
+//! room with the reason
 //! (`docs/architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md`,
 //! "The anti-cheat path").
 //!
@@ -20,6 +21,7 @@ use web_time::{Duration, Instant};
 use super::hosting::short;
 use super::{ClientId, Server};
 use crate::fair::{Claim, MAX_PROOF_BYTES, PART_BYTES, Proof, Verdict};
+use crate::online::moderation::{STRIKES_TO_BAN, Strike, race_id, span};
 use crate::online::race_proc::Loader;
 use crate::wire::online::{Message, Refusal};
 use crate::wire::{Confirmed, Held, RaceParams};
@@ -514,20 +516,36 @@ impl Server {
         }
     }
 
-    /// Acts on a verdict: a proven case bans the host's key and closes its room.
+    /// Acts on a verdict: a proven case strikes the host's key, which may ban it, and closes its
+    /// room.
     fn decide(&mut self, case: &Case, verdict: Verdict) {
         let (room, race) = (case.room, &case.race);
         match &verdict {
             Verdict::Proven(why) => {
+                let now = std::time::SystemTime::now();
+                let strike = Strike {
+                    key: race.host_key,
+                    at: now,
+                    race: race_id(&race.hash),
+                    by: race
+                        .seats
+                        .get(usize::from(case.seat))
+                        .map_or([0; 32], |seat| seat.2),
+                    reason: why.clone(),
+                };
+                let standing = self.bans.strike(&strike, now);
+                let banned = standing
+                    .ban
+                    .map(|length| format!(", banned for {}", span(length)))
+                    .unwrap_or_default();
                 log::info!(
-                    "host-log: room {room}: {:?}'s report is proven: {why}: key {} addr {} is \
-                     banned",
+                    "host-log: room {room}: {:?}'s report is proven: {why}: key {} addr {} gets a \
+                     strike ({} of {STRIKES_TO_BAN} counted){banned}",
                     case.reporter,
                     short(&race.host_key),
-                    race.host_addr
+                    race.host_addr,
+                    standing.counted
                 );
-                self.bans
-                    .ban(race.host_key, &format!("caught cheating: {why}"));
                 if self.hosted.get(&room).is_some_and(|h| h.host == race.host) {
                     self.hosted.remove(&room);
                 }

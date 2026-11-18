@@ -52,9 +52,11 @@ pub struct Args {
     /// Write the lobby's certificate hash to this file as well as printing it.
     #[arg(long)]
     hash_out: Option<std::path::PathBuf>,
-    /// The ban list for players who host a race: lines `key <64 hex> <date> [reason]` or
-    /// `addr <ip> <date> [reason]`, the date a UTC stamp (`2026-11-18T12:34:56.000Z`), read
-    /// again when the file changes. The lobby appends its own bans on a proven cheat.
+    /// The moderation file for players who host a race: lines `key <64 hex> <date> [until
+    /// <date>] [reason]` or `addr <ip> <date> [until <date>] [reason]` (no `until`: permanent),
+    /// each date a UTC stamp (`2026-11-18T12:34:56.000Z`), read again when the file changes. The
+    /// lobby appends a `strike` line for each proven cheat and a timed `key` ban when a key's
+    /// strikes reach the threshold (`oag_net::online::moderation`).
     #[arg(long)]
     ban_file: Option<std::path::PathBuf>,
     /// The base of the races' seeds.
