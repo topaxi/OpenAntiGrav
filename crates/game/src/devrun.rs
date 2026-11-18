@@ -199,6 +199,11 @@ pub struct Dev {
     /// says, so a script counts ticks rather than milliseconds and a slow machine cannot change
     /// what it does. A window never sets it.
     pub lockstep: bool,
+    /// Set by `--drive` for a frame it spends waiting on something (`until`, a page
+    /// transition): the menus' backdrop does not advance on it, so its picture at a script's
+    /// shot depends on the ticks the script counted and not on how many a slow machine spent
+    /// waiting.
+    pub waiting: bool,
 }
 
 #[cfg(test)]

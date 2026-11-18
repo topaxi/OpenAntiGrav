@@ -146,7 +146,10 @@ impl Driver {
     /// A frame spent waiting for something to happen: [`Self::frame`], held to real time.
     fn wait_frame(&mut self) -> Result<()> {
         let began = Instant::now();
-        self.frame(None)?;
+        self.session.dev.waiting = true;
+        let framed = self.frame(None);
+        self.session.dev.waiting = false;
+        framed?;
         if self.last.stage != "loading" {
             std::thread::sleep(WAIT_FRAME.saturating_sub(began.elapsed()));
         }

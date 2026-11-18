@@ -908,6 +908,7 @@ impl DevArgs {
             frame_log: self.frame_log
                 || std::env::var_os("OAG_FRAME_LOG").is_some_and(|v| v != "0"),
             lockstep: self.drive.is_some() || self.drive_file.is_some(),
+            waiting: false,
         })
     }
 

@@ -202,6 +202,14 @@ newlines or `;`, and a word with spaces is quoted (`select "TRACK TITLE"`). `--s
 sends the state lines to a file, stderr otherwise. `--drive` needs one disc image (`--source`, or one on the search path) and refuses `--race`, `--screenshot`, `--dry-run` and `--launcher`. Run it with a profile of its own
 (`XDG_CONFIG_HOME` and friends): the menus save settings as a window does.
 
+A drive counts ticks, but a step that waits (`until`, `select` on a row not there yet, a page
+transition) spends a number of them that depends on how fast the machine ran. The menus'
+backdrop (the movie and the Fury cloud's clip) does not advance on those waiting frames, so
+its picture at a `screenshot` depends on the ticks the script counted (`ticks N`, `press`) and
+not on how loaded the machine was. Without this, two shots of the HD ship select 241 ticks
+apart showed different embers under load, and the hull edges measured against the first moved
+by 0.04 of the width against a 0.01 tolerance.
+
 | Step | Does |
 | --- | --- |
 | `boot` | Tap Start and Cross in turn while the disc's own front end is up (logo, language list) until our menus open. Those screens are the disc's and have no rows to select. |
