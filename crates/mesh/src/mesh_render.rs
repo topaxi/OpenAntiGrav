@@ -490,9 +490,6 @@ pub fn build_with(
         if !specialise::reads_second(model, &model.draws, &plain.draws, plain.present) {
             constants.push(("second_read", 0.0));
         }
-        if specialise::plain_list_is_unlit(model, &model.draws, &plain.draws) {
-            constants.push(("unlit_plain", 1.0));
-        }
         if pipeline_cache::scope_rig_is_on() && pipeline_cache::scope_simplified_lighting() {
             constants.push(("simplified_lighting", 1.0));
         }
@@ -519,9 +516,6 @@ pub fn build_with(
         }
         if !specialise::reads_second(model, &model.transparent_draws, &plain.draws, plain.present) {
             constants.push(("second_read", 0.0));
-        }
-        if specialise::plain_list_is_unlit(model, &model.transparent_draws, &plain.draws) {
-            constants.push(("unlit_plain", 1.0));
         }
         if pipeline_cache::scope_rig_is_on() && pipeline_cache::scope_simplified_lighting() {
             constants.push(("simplified_lighting", 1.0));

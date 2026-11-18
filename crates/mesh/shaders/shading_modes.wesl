@@ -32,11 +32,6 @@ override lit_by_rig: f32 = 0.0;
 // `nova_vertex` is the constant false; 1.0, the vertex deciding, by default.
 override nova_vertices: f32 = 1.0;
 
-// 1.0 on a pipeline every vertex of which has `lit` 0.0
-// (`mesh_render::specialise::plain_list_is_unlit`), the other end of `lit_by_rig`: `lit_texel`'s last mix weighs the rig's result at zero, so the
-// rig's block, and the normal map and specular only it reads, go uncomputed. 0.0 by default.
-override unlit_plain: f32 = 0.0;
-
 // **1.0 on a circuit's plain pipeline when the player chose CIRCUIT LIGHTING `simplified`**
 // (`oag_display::display::CircuitLighting`, `BuildCacheScope::simplified_lighting`): a departure
 // from the original for speed. No specular, no normal map, no Wipeout HD SPU vertex lights; the

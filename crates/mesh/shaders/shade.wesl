@@ -12,7 +12,7 @@ import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
 import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encode, encoded_out, linear_out};
-import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, simplified_lighting, unlit_plain, zone_race};
+import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, simplified_lighting, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::water::{enhanced_water, reflective_sea_weight, water_kind, water_normal, water_specular_colour, water_tap_uv};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
@@ -133,7 +133,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // Under `lit_by_rig` the rig is on and every vertex has `lit` 1.0 (what that override
     // promises), so both weights are the constant one and the driver folds their multiplies.
     let rig_on = select(select(0.0, scene.light.enabled, light_rig != 0.0), 1.0, lit_by_rig != 0.0);
-    in.lit_light.x = select(select(raw.lit_light.x, 1.0, lit_by_rig != 0.0), 0.0, unlit_plain != 0.0);
+    in.lit_light.x = select(raw.lit_light.x, 1.0, lit_by_rig != 0.0);
     let zone_on = select(0.0, scene.zone.enabled, zone_race != 0.0);
     // **A chunk a Zone race draws on its plain program** (`slots::ZONE_PLAIN`, the speed and weapon
     // pads, signs and screens; `docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`): none of
@@ -1171,9 +1171,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     var authored_rgb = vec3<f32>(0.0);
     // What the sun adds to `authored_rgb`, in its output space.
     var sun_removed = vec3<f32>(0.0);
-    // Under `unlit_plain` the result below is weighed at zero (`rig_on * lit`, `lit` 0), and so is
-    // the sun it would hand `shadowed`: it is left at zero uncomputed.
-    if rig_on != 0.0 && unlit_plain == 0.0 {
+    if rig_on != 0.0 {
         let half_vector = to_eye + scene.light.direction;
         let ndh = clamp(
             dot(half_vector, n_lit) / max(length(half_vector), 1e-6),
