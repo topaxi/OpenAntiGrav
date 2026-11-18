@@ -149,11 +149,21 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 // index folds to. Every `emissive_*` read goes through these two.
 override emissive_rows: u32 = 1u;
 
+// **Whether any row of `emissives` carries a program** (`Emissive::program`, a row's `scale.zw`;
+// `mesh_render::specialise::programs_present`). 0.0 where every row's is zero, so each program
+// test reads the constant zero and the driver drops it: a craft hull names rows for its glow
+// alone, and so kept every title's program branches. 1.0, the table deciding, by default.
+override programs_present: f32 = 1.0;
+
 fn emissive_scale(entry: u32) -> vec4<f32> {
     if emissive_rows == 0u {
         return vec4<f32>(0.0);
     }
-    return emissives.scale[entry];
+    let row = emissives.scale[entry];
+    if programs_present == 0.0 {
+        return vec4<f32>(row.xy, 0.0, 0.0);
+    }
+    return row;
 }
 
 fn emissive_tint(entry: u32) -> vec4<f32> {

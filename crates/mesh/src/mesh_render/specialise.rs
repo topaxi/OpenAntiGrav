@@ -93,6 +93,23 @@ pub(super) fn nova_vertices(model: &Model) -> bool {
     model.vertices.iter().any(|v| v.sun_mask >= 1.5)
 }
 
+/// Whether any row of `model`'s emissive table, as uploaded (`Emissives::of`), carries a program
+/// (`Emissive::program`, the `zw` of its `scale` row): `false` lets its pipelines read every
+/// row's `zw` as the zero they all are, so every program test on the table folds. Nothing
+/// rewrites those lanes after the upload (the pad cycle writes tints alone).
+pub(super) fn programs_present(model: &Model) -> bool {
+    super::Emissives::of(model)
+        .scale
+        .iter()
+        .any(|row| row[2] != 0.0 || row[3] != 0.0)
+}
+
+/// Whether every vertex of `model` has `lit` exactly 1.0: under a rig that is on, each pixel of
+/// every one of its draws then weighs the rig's result at one ([`plain_is_lit`] for a whole model).
+pub(super) fn every_vertex_lit(model: &Model) -> bool {
+    every_one(model.vertices.iter().map(|v| v.lit))
+}
+
 /// The value of `bindings.wesl`'s `emissive_rows` override for a pipeline whose `slots_present`
 /// is `present`: `0` where no vertex can name a row, so every read of the table is its all-zero
 /// row 0 (`Emissives::of`) and the driver can drop the tests on it.
@@ -258,5 +275,42 @@ mod tests {
         let present = present_for(slots::RIM_GLOW);
         assert_eq!(present, u32::MAX);
         assert_eq!(emissive_rows(present), 1);
+    }
+
+    fn glow(program: [f32; 2]) -> crate::mesh::Emissive {
+        crate::mesh::Emissive {
+            tint: [1.0, 0.5, 0.25],
+            offset: 0.5,
+            scale: 2.0,
+            rate: 1.0,
+            program,
+        }
+    }
+
+    /// A craft hull names rows for its glow alone (HD's twelve hulls: every program `[0, 0]`),
+    /// so the table's program lanes are all zero and fold; one program anywhere keeps them.
+    #[test]
+    fn a_table_of_plain_glows_carries_no_program() {
+        let mut model = Model::none("hull");
+        assert!(!programs_present(&model));
+        model.emissive = vec![glow([0.0, 0.0]), glow([0.0, 0.0])];
+        assert!(!programs_present(&model));
+        model.emissive.push(glow([crate::mesh::PROGRAM_WATER, 0.0]));
+        assert!(programs_present(&model));
+        model.emissive = vec![glow([0.0, 2.0])];
+        assert!(programs_present(&model));
+    }
+
+    #[test]
+    fn a_hull_is_lit_by_the_rig_only_where_every_vertex_is() {
+        let vertex = |lit: f32| crate::mesh::GpuVertex {
+            lit,
+            ..bytemuck::Zeroable::zeroed()
+        };
+        let mut model = Model::none("hull");
+        model.vertices = vec![vertex(1.0), vertex(1.0)];
+        assert!(every_vertex_lit(&model));
+        model.vertices.push(vertex(0.0));
+        assert!(!every_vertex_lit(&model));
     }
 }

@@ -475,7 +475,17 @@ pub fn build_with(
         "emissive_rows",
         f64::from(specialise::emissive_rows(present)),
     ));
+    if !specialise::programs_present(model) {
+        constants.push(("programs_present", 0.0));
+    }
     constants.extend(pipeline_cache::scope_constants());
+    if pipeline_cache::scope_craft() {
+        constants.retain(|(name, _)| *name != "zone_race");
+        constants.push(("zone_race", 0.0));
+        if pipeline_cache::scope_rig_is_on() && specialise::every_vertex_lit(model) {
+            constants.push(("lit_by_rig", 1.0));
+        }
+    }
     let constants = constants.as_slice();
     // The plain half of a prepassed model's opaque list and what its shading is told.
     let plain = prepass.then(|| specialise::plain_draws(model)).flatten();
@@ -487,7 +497,10 @@ pub fn build_with(
             "emissive_rows",
             f64::from(specialise::emissive_rows(plain.present)),
         ));
-        if pipeline_cache::scope_rig_is_on() && specialise::plain_is_lit(model, &plain.draws) {
+        if pipeline_cache::scope_rig_is_on()
+            && specialise::plain_is_lit(model, &plain.draws)
+            && !constants.iter().any(|(name, _)| *name == "lit_by_rig")
+        {
             constants.push(("lit_by_rig", 1.0));
         }
         if !specialise::reads_second(model, &model.draws, &plain.draws, plain.present) {
@@ -514,6 +527,7 @@ pub fn build_with(
         ));
         if pipeline_cache::scope_rig_is_on()
             && specialise::plain_list_is_lit(model, &model.transparent_draws, &plain.draws)
+            && !constants.iter().any(|(name, _)| *name == "lit_by_rig")
         {
             constants.push(("lit_by_rig", 1.0));
         }
