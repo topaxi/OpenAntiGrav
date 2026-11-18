@@ -36,7 +36,13 @@ fn rows(definition: &Definition, id: &str) -> Vec<String> {
         .collect()
 }
 
-fn advanced(pulse_like: bool, weather: bool, trail_hits: bool, encoded: bool) -> Vec<&'static str> {
+fn advanced(
+    pulse_like: bool,
+    weather: bool,
+    trail_hits: bool,
+    encoded: bool,
+    materials: bool,
+) -> Vec<&'static str> {
     // WINGTIP CONTRAILS is on the titles with no `wingtip` class of their own: the PSP pair, as
     // TRAIL ORDER and BOOST ZOOM are.
     let wingtip = pulse_like;
@@ -49,6 +55,10 @@ fn advanced(pulse_like: bool, weather: bool, trail_hits: bool, encoded: bool) ->
     // SCENE PRECISION is on the title whose scene stores encoded values: HD.
     if encoded {
         rows.push("graphics.scene_precision");
+    }
+    // CIRCUIT LIGHTING is on the titles whose circuits are shaded from their own materials.
+    if materials {
+        rows.push("graphics.circuit_lighting");
     }
     rows.extend([
         "graphics.water",
@@ -93,6 +103,7 @@ fn the_graphics_page_keeps_the_original_and_performance_rows_and_opens_advanced(
         definition.drop_unavailable_boost_zoom(title);
         definition.drop_unavailable_trail_hits(title);
         definition.drop_unavailable_scene_precision(title);
+        definition.drop_unavailable_circuit_lighting(title);
         definition.drop_unavailable_wingtip_contrails(title);
         definition.drop_unavailable_own_shield(title);
         definition.drop_unavailable_own_rockets(title);
@@ -118,6 +129,7 @@ fn advanced_holds_the_look_extras_and_the_mixed_rows_in_order() {
         definition.drop_unavailable_boost_zoom(title);
         definition.drop_unavailable_trail_hits(title);
         definition.drop_unavailable_scene_precision(title);
+        definition.drop_unavailable_circuit_lighting(title);
         definition.drop_unavailable_wingtip_contrails(title);
         definition.drop_unavailable_own_shield(title);
         definition.drop_unavailable_own_rockets(title);
@@ -132,6 +144,7 @@ fn advanced_holds_the_look_extras_and_the_mixed_rows_in_order() {
                 title.weather.is_played(),
                 trail_hits,
                 title.looks.blends_encoded.applies_everywhere(),
+                title.looks.material_render_state.applies_everywhere(),
             ),
             "{}",
             title.name

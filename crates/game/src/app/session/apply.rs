@@ -638,6 +638,19 @@ impl Session {
                     return;
                 }
             },
+            // Read when the next race builds its scene: the circuit's plain pipelines are
+            // specialised for it.
+            "graphics.circuit_lighting" => match text.parse::<display::CircuitLighting>() {
+                Ok(lighting) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.circuit_lighting = lighting;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             // Read when the next race loads its circuit: the water families
             // are classified into their material slots there
             // (`oag_mesh::mesh::WaterLaw`).

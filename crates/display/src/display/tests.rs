@@ -669,3 +669,17 @@ fn a_scene_precision_round_trips_and_defaults_to_the_originals_8_bits() {
     assert!(ScenePrecision::Original.is_eight_bit());
     assert!(!ScenePrecision::Float.is_eight_bit());
 }
+
+#[test]
+fn circuit_lighting_round_trips_and_defaults_to_the_originals() {
+    for value in CircuitLighting::ALL {
+        assert_eq!(value.name().parse::<CircuitLighting>(), Ok(value));
+    }
+    assert_eq!(
+        "SIMPLIFIED".parse::<CircuitLighting>(),
+        Ok(CircuitLighting::Simplified)
+    );
+    assert!("fast".parse::<CircuitLighting>().is_err());
+    assert_eq!(CircuitLighting::default(), CircuitLighting::Original);
+    assert!(!CircuitLighting::Original.is_simplified());
+}

@@ -411,6 +411,24 @@ pub fn craft_shadow(fit: &Fit, rank: usize, resolution: Resolution) -> CraftShad
     }
 }
 
+/// `records` whose `painted` flag is set, in order, then [`CraftShadow::NONE`].
+fn packed(
+    records: &[CraftShadow; MAX_CASTERS],
+    painted: &[bool; MAX_CASTERS],
+) -> [CraftShadow; MAX_CASTERS] {
+    let mut out = [CraftShadow::NONE; MAX_CASTERS];
+    for (to, record) in out.iter_mut().zip(
+        records
+            .iter()
+            .zip(painted)
+            .filter(|&(_, &painted)| painted)
+            .map(|(record, _)| record),
+    ) {
+        *to = *record;
+    }
+    out
+}
+
 /// One craft's map to render: which craft, how near it ranks, the box to fit
 /// and what to draw.
 #[derive(Debug, Clone, Copy)]
@@ -450,6 +468,8 @@ pub struct Map {
     /// left them, for the receiver; [`CraftShadow::NONE`] for a craft that
     /// drew nothing.
     crafts: [CraftShadow; MAX_CASTERS],
+    /// Per slot, whether [`Self::crafts`]'s record had its square drawn: the rest read zero.
+    painted: [bool; MAX_CASTERS],
     /// How many casters it actually drew.
     drawn: usize,
     /// The `mapped` tier's depth target, its view and the pipeline that fills
@@ -718,6 +738,7 @@ impl Map {
             uniforms,
             bind,
             crafts: [CraftShadow::NONE; MAX_CASTERS],
+            painted: [false; MAX_CASTERS],
             drawn: 0,
             depth,
             depth_view,
@@ -900,6 +921,17 @@ impl Map {
         self.crafts
     }
 
+    /// The records the receiver loops over: those of [`Self::craft_shadows`] whose square was
+    /// drawn, in slot order, packed to the front and [`CraftShadow::NONE`] after.
+    /// `craft_shadow_coverage` stops at the first empty record, so a one-craft race tests one
+    /// record a pixel and not [`MAX_CASTERS`]. Exact: a record left out is one whose square was
+    /// cleared and not drawn, which multiplies the coverage product by `1 - 0`, and the kept
+    /// records multiply in the same order.
+    #[must_use]
+    pub fn receiver_shadows(&self) -> [CraftShadow; MAX_CASTERS] {
+        packed(&self.crafts, &self.painted)
+    }
+
     /// How many casters the last pass drew - an observable, since a map that
     /// was cleared and a map that was never rendered look identical.
     #[must_use]
@@ -930,6 +962,7 @@ impl Map {
     ) {
         let crafts = &crafts[..crafts.len().min(MAX_CASTERS)];
         self.crafts = [CraftShadow::NONE; MAX_CASTERS];
+        self.painted = [false; MAX_CASTERS];
         self.drawn = crafts.len();
         if crafts.is_empty() && self.atlas_clear {
             return;
@@ -940,6 +973,7 @@ impl Map {
             let record = craft_shadow(&craft.fit, craft.rank, self.resolution);
             if let Some(slot) = self.crafts.get_mut(craft.slot) {
                 *slot = record;
+                self.painted[craft.slot] = !craft.caster.ranges.is_empty() && craft.seen;
             }
             let mvp = Mat4::from_cols_array_2d(&record.matrix) * craft.caster.model;
             queue.write_buffer(

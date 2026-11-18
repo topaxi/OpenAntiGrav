@@ -3833,6 +3833,45 @@ against the already-wired lightmap curve's own uniforms. Confidence on it
 materials measured stay cool regardless, so this is a partial, precisely-
 scoped fix, not a closing one.
 
+### The vertex curve is per vertex (2026-11-18, `circuit-lighting-rungs`, confidence 90)
+
+**Where the `IleVertex` curve runs: in the vertex program, so the original interpolates the curved
+value.** Read off a circuit's own track material, `talons_junction/materials/bluemetal.rcsmaterial`
+(`DATA00.PSARC`), with `scripts/ps3-microcode.py vp-file`. Vertex block 18 binds the colour set
+(attribute `0x1aaf7631`) at slot 3 and computes:
+
+```
+@0x04  LG2 R0.x, v[3].xxxx   (and .y @0x05, .z @0x06)
+@0x09  MUL R0.z, R0.zzzz, c[207].zzzz   (and .y, .x @0x0a, @0x0b)
+@0x0c  EX2 R0.x, R0.xxxx     (and .y, .z @0x0d, @0x0e)
+@0x13  MUL o[TC0].xyz, R0.xyzx, c[208].xyzx
+```
+
+`c[207]` and `c[208]` are the parameter table's registers 463 and 464, declared by hashes
+`0x002c73e8` and `0x8670f0be`: `~crc32("prelitBias")` and `~crc32("prelitScaleSpecular")`, the
+two engine parameters named above. So `o[TC0] = pow(colourSet, prelitBias) * prelitScaleSpecular`
+per vertex, and the fragment program reads the interpolated `f[TC0]`. Blocks 19 to 22 of the same
+file have the same `LG2`/`MUL`/`EX2` triple on `v[3]`. Confidence 90: the microcode and both
+hash preimages are read directly. Not established: that every `IleVertex` permutation on every
+circuit has the same vertex block (one file's five blocks were read).
+
+**Wired**: `mesh.wesl`'s `vs_main` computes the curve and hands it on in `lit_light.yzw`;
+`lit_texel` reads it where the colour set is a light. Per vertex, a convex curve (power above 1)
+of the interpolation is brighter than the interpolation of the curve, so HD's vertex-lit chunks
+come out a little brighter: 9,083 of 1,024,000 pixels move by up to 19 levels on the default
+frame. Against the 13 HD race pairs (`data/reference/compare-page/hd`, blur sigma 7, mean absolute
+RGB against `theirs.png` on the pixels that move), 7 move toward the original (Talon's Junction
+8.93 to 8.55, Modesto Heights 6.09 to 5.32, Anulpha Pass 5.37 to 4.96), 5 move away (The
+Amphiseum 7.31 to 7.44, Ubermall 6.28 to 6.52, Tech de Ra 5.69 to 5.78), Sebenco Climb has no
+vertex-lit pixel in frame. Where ours is already too bright for other reasons (The Amphiseum's
+signed error +3.5), the original's order adds to it. The speed is in
+`docs/rendering/hires-gpu-levers.md`, "Circuit shading: exact cuts, the vertex curve and a
+lighting rung".
+
+**2048 and Omega: checked, differs.** Their vertex-lit circuits (`NOVAColor`) run the Nova form
+`scale * colour + bias`, which is linear, so per vertex and per pixel are the same value; it stays
+in the fragment stage. Omega's and 2048's frames are byte-identical with and without this change.
+
 ### `uvanim_diffuse_emissive`'s own colour is read, and its largest populations do not confirm the warm reading (2026-09-18)
 
 **Answers this thread's own open item**: does `uvanim_diffuse_emissive`,

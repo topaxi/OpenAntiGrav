@@ -587,6 +587,7 @@ impl Scene {
         msaa: oag_display::display::Msaa,
         fog_volumes: Vec<oag_vex::fog::FogVolume>,
         light: mesh_render::Light,
+        circuit_lighting: oag_display::display::CircuitLighting,
         probes: crate::env_probes::Baked,
         authored_fog: Option<mesh_render::Fog>,
         hd_bloom: Option<oag_post::hd_bloom::Params>,
@@ -606,6 +607,7 @@ impl Scene {
         let crate::adverts::Billboards { gantry, adverts } = billboards;
         let cache_scope = mesh_render::BuildCacheScope::open();
         cache_scope.lit_by(&light);
+        cache_scope.simplified_lighting(circuit_lighting.is_simplified());
         cache_scope.zoned(zone_grade.is_some());
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or

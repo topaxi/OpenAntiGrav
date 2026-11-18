@@ -1182,6 +1182,10 @@ pub fn menu_seeds(
             "graphics.scene_precision",
             text(&profile.scene_precision.to_string()),
         ),
+        (
+            "graphics.circuit_lighting",
+            text(&profile.circuit_lighting.to_string()),
+        ),
         ("graphics.water", text(&profile.water.to_string())),
         (
             "graphics.model_detail",

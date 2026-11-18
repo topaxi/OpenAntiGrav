@@ -65,7 +65,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
         out.tangent = vec4<f32>((uniforms.model * (node * vec4<f32>(t, 0.0))).xyz, in.tangent.w);
     }
     out.colour = in.colour;
-    out.lit = in.lit;
+    out.lit_light.x = in.lit;
     out.glow = in.glow;
     // **A PSP hull (Pulse, Pure), lit the way the GE lights it**: per vertex, the circuit's
     // own ambient plus each directional light's `N . L`, clamped to `0..1` and
@@ -99,8 +99,15 @@ fn vs_main(in: VertexInput) -> VertexOutput {
             sum = sum + colour * max(dot(n, p.xyz), 0.0);
         }
         out.colour = vec4<f32>(clamp(sum, vec3<f32>(0.0), vec3<f32>(1.0)), in.colour.a);
-        out.lit = 0.0;
+        out.lit_light.x = 0.0;
     }
+    // The `IleVertex` curve of the colour set, per vertex as the original's vertex program runs
+    // it (see `VertexOutput::lit_light`); the fragment reads it only where the colour set is a
+    // baked light.
+    out.lit_light = vec4<f32>(
+        out.lit_light.x,
+        scene.light.prelit_scale * pow(out.colour.rgb, scene.light.prelit_power),
+    );
     // Not run through the texture-animation transform below: an animated
     // surface scrolls its diffuse across itself, while its patch in the
     // circuit's lightmap atlas stays where the bake put it.

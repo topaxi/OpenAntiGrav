@@ -529,6 +529,7 @@ impl Session {
         }
         options.shadow_resolution = self.render_profile().shadow_resolution;
         options.scene_precision = self.render_profile().scene_precision;
+        options.circuit_lighting = self.render_profile().circuit_lighting;
         // And for the WATER row: the profile's choice, resolved against the discs this machine has.
         if let Some(shell) = self.shell.as_ref() {
             options.water = crate::water_setting::resolve(

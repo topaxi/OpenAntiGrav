@@ -195,8 +195,7 @@ pub struct CaptureOptions {
     /// frustum culling passed. Frustum culling stays off in a capture either
     /// way, so the two images differ by this tier alone.
     pub pvs_culling: bool,
-    /// Pins the animation clock, in seconds, instead of deriving it from the
-    /// tick.
+    /// Pins the animation clock, in seconds, instead of deriving it from the tick.
     ///
     /// `None` in a race, and set by `--anim-seconds`. Two captures at two times
     /// are how an animated surface is shown to move at all headlessly, and a
@@ -406,8 +405,7 @@ pub struct Presented {
 ///
 /// # Errors
 ///
-/// Propagates adapter and device creation, pipeline building, the readback map and
-/// the file write.
+/// Propagates adapter and device creation, pipeline building, the readback map and the file write.
 pub fn capture(
     loaded: Loaded,
     options: &CaptureOptions,
@@ -443,6 +441,7 @@ pub fn capture(
         countdown_model,
         fog_volumes,
         light,
+        circuit_lighting,
         probes,
         authored_fog,
         hd_bloom,
@@ -661,6 +660,7 @@ pub fn capture(
         options.msaa,
         fog_volumes,
         light,
+        circuit_lighting,
         probes,
         authored_fog,
         hd_bloom,
