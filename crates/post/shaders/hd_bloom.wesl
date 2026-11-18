@@ -162,9 +162,9 @@ fn surface(texel: vec4<f32>) -> vec4<f32> {
 // downsample and the resolve) when the scene stores encoded values.
 override scene_encoded: f32 = 0.0;
 
-// 1.0 on the same two pipelines when they read the 8-bit scene through its sRGB
-// view: the texture unit has decoded every texel before it filtered, so a
-// bilinear tap is already light, and the resolve takes one hardware tap.
+// 1.0 on the resolve when it reads the 8-bit scene through its sRGB view: the
+// texture unit has decoded every texel before it filtered, so a bilinear tap is
+// already light, and the resolve takes one hardware tap.
 override scene_srgb_view: f32 = 0.0;
 
 // A tap of the scene target, in linear light.

@@ -249,8 +249,21 @@ impl SceneRead {
         }
     }
 
-    /// The pipeline constants of the first downsample and the resolve.
-    fn constants(self) -> &'static [(&'static str, f64)] {
+    /// The pipeline constants of the first downsample, which reads the target as stored
+    /// on every title: a bilinear tap of the encoded values, decoded after. Its view is
+    /// the target's own, never the sRGB one, so its law is the float target's
+    /// (`docs/rendering/hd-track-tone.md`, "The scene target is 8-bit by default").
+    fn downsample_constants(self) -> &'static [(&'static str, f64)] {
+        match self {
+            Self::Float => &[],
+            Self::FloatEncoded | Self::EightBitDecoded | Self::EightBitSrgbView => {
+                &[("scene_encoded", 1.0)]
+            }
+        }
+    }
+
+    /// The pipeline constants of the resolve.
+    fn resolve_constants(self) -> &'static [(&'static str, f64)] {
         match self {
             Self::Float => &[],
             Self::FloatEncoded | Self::EightBitDecoded => &[("scene_encoded", 1.0)],
@@ -559,14 +572,13 @@ impl Chain {
             })
         };
         let read = SceneRead::of(device, &params);
-        let encoded = read.constants();
         let copy = pipeline("hd bloom copy", "fs_copy", SCENE_FORMAT, None, &[]);
         let copy_scene = pipeline(
             "hd bloom copy scene",
             "fs_copy",
             SCENE_FORMAT,
             None,
-            encoded,
+            read.downsample_constants(),
         );
         let reduce_first = pipeline(
             "hd bloom reduce first",
@@ -594,7 +606,7 @@ impl Chain {
             "fs_encode",
             surface_format.remove_srgb_suffix(),
             None,
-            encoded,
+            read.resolve_constants(),
         );
         let sized = Self::sized(device, &layout, &sampler, size, params, read);
         let zoom = Self::zoom_for(device, &params, &sized, read.format())?;
@@ -691,8 +703,8 @@ impl Chain {
                 &[]
             },
         );
-        // What the two passes that read the scene sample: the sRGB view of the 8-bit
-        // target, which decodes on fetch, or the target itself.
+        // What the resolve samples: the sRGB view of the 8-bit target, which decodes on
+        // fetch, or the target itself. The first downsample reads the target itself.
         let scene_sampled = if read == SceneRead::EightBitSrgbView {
             scene.texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some("hd scene, sRGB read"),
@@ -752,7 +764,7 @@ impl Chain {
         let mut downsamples = vec![
             pass(
                 "hd bloom to-half",
-                &scene_sampled,
+                &scene.view,
                 &scene_read,
                 &half_target.view,
                 half,
