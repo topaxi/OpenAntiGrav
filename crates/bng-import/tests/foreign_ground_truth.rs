@@ -7,7 +7,6 @@ use oag_core::math::Vec3;
 use oag_gameplay::collision::collision_world;
 use oag_physics::{Ray, Raycaster};
 use oag_race::Course;
-use oag_raceplay::foreign;
 
 fn originals() -> Option<Vec<std::path::PathBuf>> {
     let root = oag_testdata::exact("data/ballisticng/workshop-473770")?;
@@ -23,8 +22,7 @@ fn originals() -> Option<Vec<std::path::PathBuf>> {
             if p.extension().and_then(|x| x.to_str()) != Some("wtrk") {
                 continue;
             }
-            let file = std::fs::read(&p).ok()?;
-            let w = oag_ballisticng::wtrk::Wtrk::parse(&file).ok()?;
+            let w = oag_bng_import::header(&p).ok()?;
             if w.has_tag("Original") && !w.has_tag("Port/Remake") {
                 out.push(p);
             }
@@ -40,7 +38,7 @@ fn the_originals_map_and_hold_the_pulse_conventions() {
     assert_eq!(items.len(), 27);
     let mut refused = Vec::new();
     for path in items {
-        let t = match foreign::read(&path) {
+        let t = match oag_bng_import::read(&path) {
             Ok(t) => t,
             Err(e) => {
                 refused.push(format!("{}: {e}", path.display()));
@@ -114,7 +112,7 @@ fn lions_den_maps_as_the_probe_read_it() {
         .unwrap()
         .unwrap()
         .path();
-    let t = foreign::read(&path).expect("maps");
+    let t = oag_bng_import::read(&path).expect("maps");
     for l in &t.notes {
         println!("{l}");
     }

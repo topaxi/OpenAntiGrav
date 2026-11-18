@@ -136,9 +136,9 @@ lint:
 # builds and lints the code behind it, and runs the tests that only exist with
 # it on (the custom-track survey and its cache, the survey listings), so it does
 # not rot. The disc-backed `foreign_*` ground-truth tests behind it run by hand:
-# `cargo nextest run -p oag-raceplay --features ballisticng --run-ignored only -E 'test(foreign)'`.
+# `cargo nextest run -p oag-bng-import -p oag-raceplay --features oag-raceplay/ballisticng --run-ignored only -E 'test(foreign)'`.
 check-ballisticng:
-    cargo clippy -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --all-targets -- -D warnings
+    cargo clippy -p oag-bng-import -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --all-targets -- -D warnings
     cargo nextest run -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --tests --cargo-profile quick -E 'test(custom_tracks::) | test(survey::)'
 
 # The `extensions` feature (simulation mods in WebAssembly through `oag-modhost` and

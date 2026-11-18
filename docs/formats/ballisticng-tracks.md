@@ -134,10 +134,10 @@ every truncation and bit flip a named refusal.
 
 2026-10-11: the mapping's output is `oag_trackfile::Track`, this project's own track model ([track-file.md](track-file.md), ADR-0063): a mapped track can be written in that format (`oag_trackfile::write`) and raced from the file with the same per-tick world hash, checked on Lion's Den and round-tripped on all 27 `Original` tracks.
 
-`oag_raceplay::foreign` turns a read track into the plain data a race consumes;
+`oag-bng-import` (`crates/bng-import`) turns a read track into the plain data a race consumes;
 `oag_raceplay::load` has one early return for it (`load/track_inputs.rs`). A race
 on a foreign track runs on the host title's ship, physics and rules (Pulse in every
-measurement below). Every constant is in `foreign::choice`:
+measurement below). Every constant is in `oag_bng_import::choice`:
 
 | Choice | Value | Why |
 | --- | --- | --- |
@@ -153,7 +153,7 @@ is on the floor (a ray from 3 above along `down` meets it at 3.04), `lateral = t
 (`cross(tangent, down) . lateral = -1.000`), floor triangle normals point up
 (+1.000), `half_width_left/right` are the floor either side (20.3 and 20.7 mean),
 and a closed ring may be two paths with two junctions. The mapped output holds
-the same on all 27 `Original` tracks (`crates/raceplay/tests/foreign_ground_truth.rs`):
+the same on all 27 `Original` tracks (`crates/bng-import/tests/foreign_ground_truth.rs`):
 floor under the line on at least 88 percent of the ring (the rest are the authored
 jumps and unspanned sections), normals up, racing line inside the corridor, the
 ring closes as a `Course`, floor under the start slot, every pad contains its own centre.

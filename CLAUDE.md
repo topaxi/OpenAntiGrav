@@ -181,6 +181,7 @@ Add a crate only when its milestone opens; no placeholder crates.
 | `oag-video` | `.PMF`, `IPUF`, Bink, and the IVF/AV1 cache. Depends on `oag-bytes` only. |
 | `oag-unity` | Generic Unity asset-bundle reader; knows no game; depends on `oag-bytes` only ([ADR-0062](docs/architecture/adr/0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md)). |
 | `oag-ballisticng` | BallisticNG Workshop content on `oag-unity`: `.wtrk`, `.csf`, track data as typed structs. Reads; maps nothing into this engine. |
+| `oag-bng-import` | Maps a BallisticNG Workshop track (`.wtrk`, read by `oag-ballisticng`) into `oag_trackfile::Track`, with every chosen mapping constant. `oag-raceplay` reaches `oag-ballisticng` and `oag-unity` only through it (its `ballisticng` feature). Forbidden to gameplay crates. |
 | `oag-trackfile` | Own custom-track format: glTF 2.0 binary plus TOML manifest; refuses an unknown major by name. The BallisticNG importer is `oag_raceplay::foreign`. Forbidden to gameplay crates ([ADR-0063](docs/architecture/adr/0063-the-own-track-format-is-glb-plus-a-toml-manifest.md)). |
 | `oag-schema` | The `[toml-schema]` header of every TOML of ours ([ADR-0064](docs/architecture/adr/0064-project-toml-files-declare-a-toml-schema.md)); `validate` feature is tests-only. |
 | `oag-assets` | Runtime `Archive`: a WAD by path or out of a disc image, by index/name/hash. |
@@ -238,7 +239,7 @@ Six dependency rules, enforced by `just check-deps`
 2. No crate depends on `oag-game`, and no engine crate on the guest SDK `oag-ext`.
 3. No generic render-side crate (`oag-fx`, `oag-gpu`, `oag-mesh`, `oag-post`) reaches a title package (`oag-pulse`, `oag-pure`, `oag-hd`, `oag-omega`, `oag-2048`); tables are injected by the caller. `oag-render` still reads `oag-pulse`'s presentation tables and is not listed.
 4. `oag-unity` depends on no workspace crate but `oag-bytes` (allowlist). A content layer is a separate crate on top, never the reverse.
-5. `oag-ballisticng` reaches `oag-unity`, `oag-texture`, `oag-formats`, `oag-bytes` only; no gameplay crate may depend on it or on `oag-unity`. How a foreign track maps into this engine is the consumer's choice.
+5. `oag-ballisticng` reaches `oag-unity`, `oag-texture`, `oag-formats`, `oag-bytes` only; no gameplay crate may depend on it or on `oag-unity`. How a foreign track maps into this engine is the consumer's choice: `oag-bng-import` is that consumer, and the one crate that depends on both.
 6. `oag-server` (`oag-net` built with default features) links no renderer, window, audio or UI crate: `cargo tree -p oag-net -e normal` reaches none of `wgpu`, `winit`, `cpal` or the drawing crates (`oag-render`, `oag-fx`, `oag-audio`, `oag-sound`, `oag-mesh`, `oag-ui`, `oag-hud`, `oag-input`). Checked per package, because the workspace's unified features hide it.
 
 Two size rules, `just check-size` (`scripts/check-file-size.py`), ratchets over

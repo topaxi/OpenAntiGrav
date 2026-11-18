@@ -74,6 +74,9 @@ FORBIDDEN_FOR_GAMEPLAY = {
     # reaches a simulation crate as plain data a loader built. ADR-0062.
     "oag-unity",
     "oag-ballisticng",
+    # The importer that maps a Workshop track into this project's track model:
+    # the race loader calls it, the simulation never does.
+    "oag-bng-import",
     # This project's own track file: read by the race loader, and what a
     # foreign importer or a disc exporter writes. ADR-0063.
     "oag-trackfile",

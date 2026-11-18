@@ -1,53 +1,20 @@
-//! A foreign track: a Unity circuit read by `oag-ballisticng` and mapped into
-//! this project's own track model, `oag_trackfile::Track` (ADR-0062, decision 4;
-//! ADR-0063), the plain data the race consumes.
-//!
-//! **Nothing here is measured off the original game.** [`map`] turns what the
-//! content layer *read* into this engine's shapes, and every constant that turns
-//! a reading into a number is in [`choice`], each labelled *chosen, not
-//! measured*. What the content does not author, or this mapping has no
-//! counterpart for, is named in [`Track::notes`] - drawn as nothing, not
-//! stood in for.
+//! A foreign track: this project's own track model, `oag_trackfile::Track`
+//! (ADR-0063), read from a `*.track.toml` manifest or, with the `ballisticng`
+//! feature, mapped from a BallisticNG Workshop `.wtrk` by `oag-bng-import`
+//! (ADR-0062, decision 4).
 //!
 //! A race on a foreign track runs on a host title's physics, rules and ship. The
-//! output is `oag_vex::track` spline data, collision nodes, pad volumes and a
+//! track is `oag_vex::track` spline data, collision nodes, pad volumes and a
 //! start slot; the simulation reads them like a disc circuit's and learns nothing
 //! of where they came from.
 
 #[cfg(feature = "view")]
 pub mod art;
-#[cfg(feature = "ballisticng")]
-pub mod choice;
-#[cfg(feature = "ballisticng")]
-mod frame;
-#[cfg(feature = "ballisticng")]
-mod map;
 pub mod survey;
 
 use std::path::Path;
 
 use oag_trackfile::Track;
-
-/// Reads the `.wtrk` at `path` and maps it.
-///
-/// # Errors
-///
-/// A file the wrapper or the Unity reader refuses, a track class the content
-/// layer refuses, or a track with no lap loop. The message names which.
-#[cfg(feature = "ballisticng")]
-pub fn read(path: &Path) -> anyhow::Result<Track> {
-    let file =
-        std::fs::read(path).map_err(|e| anyhow::anyhow!("reading {}: {e}", path.display()))?;
-    let wtrk = oag_ballisticng::wtrk::Wtrk::parse(&file)
-        .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
-    let bundle = oag_unity::bundle::Bundle::parse(wtrk.bundle(&file))
-        .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
-    let assets = oag_unity::assets::Assets::open(&bundle)
-        .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
-    let track = oag_ballisticng::track::Track::read(&assets)
-        .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
-    map::map(&wtrk, &track)
-}
 
 /// Whether `path` is one of this project's own track manifests (`*.track.toml`)
 /// rather than a Workshop `.wtrk`.
@@ -62,12 +29,12 @@ pub fn is_track_file(path: &Path) -> bool {
 ///
 /// # Errors
 ///
-/// As [`read`] for a `.wtrk`, and as [`oag_trackfile::read`] for a manifest.
+/// As `oag_bng_import::read` for a `.wtrk`, and as [`oag_trackfile::read`] for a manifest.
 pub fn read_any(path: &Path) -> anyhow::Result<(Track, Vec<String>)> {
     if !is_track_file(path) {
         #[cfg(feature = "ballisticng")]
         {
-            let track = read(path)?;
+            let track = oag_bng_import::read(path)?;
             let report = track.notes.clone();
             return Ok((track, report));
         }
@@ -214,12 +181,7 @@ pub fn entry(path: &Path) -> anyhow::Result<crate::catalogue::Track> {
 /// The Workshop id a `.wtrk` carries, which keys its records and ghosts.
 #[cfg(feature = "ballisticng")]
 fn workshop_id(path: &Path) -> anyhow::Result<String> {
-    let file =
-        std::fs::read(path).map_err(|e| anyhow::anyhow!("reading {}: {e}", path.display()))?;
-    Ok(oag_ballisticng::wtrk::Wtrk::parse(&file)
-        .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?
-        .workshop_id
-        .to_string())
+    oag_bng_import::workshop_id(path)
 }
 
 #[cfg(not(feature = "ballisticng"))]
