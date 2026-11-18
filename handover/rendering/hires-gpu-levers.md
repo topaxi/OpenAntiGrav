@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse, 2048, omega]
 updated: 2026-11-18
-summary: "Deck native 4K: HD misses 60 Hz (18 ms p50); 2048 and Omega hold it. Left: shadow redraw, Omega prepass and tone map, f16"
+summary: "Deck native 4K: HD misses 60 Hz (18 ms p50), 2048 holds it, Omega at the line (p95 15.9 ms offscreen). Left: shadow redraw, Omega prepass"
 categories: [rendering, tooling]
 ---
 
@@ -70,7 +70,9 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
 - **2026-11-18, `deck-vita-ps4-perf`** (`docs/rendering/hires-gpu-levers.md`, "2048 and Omega on
   the Deck, pass by pass"). Landed: a circuit's plain blended draws shade through their own
   pipelines (Omega `track blended` 6.70 to 2.55 ms at 4K, whole-race frame p95 19.85 to 15.92 ms)
-  and 2048's exposure readback over 256 invocations (0.27 to 0.09 ms at 4K). At 800p both titles
+  and 2048's exposure readback over 256 invocations (0.27 to 0.09 ms at 4K). Omega's 15.9 ms
+  is offscreen; a presented 4K output adds about 1 ms (unmeasured for Omega), so measure it
+  presented before calling Omega 4K60. At 800p both titles
   are bound by the CPU. Left, largest first:
   1. **Omega's depth prepass, 1.2 to 2.0 ms, flat** (vertex-bound). A position-only prepass entry
      needs `@invariant` and a depth-equal proof. Measure: the `track solid` span at 800p.

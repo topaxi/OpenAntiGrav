@@ -920,12 +920,15 @@ original.**
   buys battery, not frames.
 - **At 1080p (docked)** 2048 is still CPU-bound (3.01 ms frame, 2.31 CPU). Omega is near balance
   (6.21 frame, 4.09 CPU).
-- **2048 holds 60 Hz at native 4K** (frame p50 8.50 ms, p95 12.10). Its circuit's shading is 56 %
-  of the spans there.
+- **2048 holds 60 Hz at native 4K** (frame p50 8.50 ms, p95 12.10 offscreen, about 13 with a
+  presented output). Its circuit's shading is 56 % of the spans there.
 - **Omega missed 60 Hz at native 4K on p95 only** (p50 13.44, p95 19.91 ms). Its circuit's
   blended list (the road's decal layers) was 30 % of the spans and shading-bound. One cut,
   exact by construction, takes that list from 6.70 to 2.55 ms at 4K. **Omega's whole-race frame
-  p95 at native 4K went from 19.85 to 15.92 ms**, so it now holds 60 Hz on p95 too.
+  p95 at native 4K went from 19.85 to 15.92 ms offscreen.** That is at the 60 Hz line, not under
+  it: a presented 4K output adds about 1 ms of resolve, composite and HUD (HD's figure, "What a
+  4K output costs after this" above), which was not measured for Omega. Docked at 1080p the same
+  cut takes Omega's frame p50 from 6.18 to 5.60 ms (-9.4 %).
 - The second cut, 2048's exposure readback, is exact but below what a whole race resolves.
 
 ### Method
@@ -1041,8 +1044,7 @@ over, additive, none, each authored equation), built with that half's `slots_pre
 `emissive_rows` and, under a rig that lights every one of its vertices, `lit_by_rig`.
 `Drawable::draw_lists_into` picks per draw and keeps the draw order. The exactness argument is the
 opaque one: each draw's bits are a subset of what its pipeline is told. The split is for a
-prepassed model (a circuit) only, because an overlay draws its opaque list through its blended
-pipelines.
+prepassed model (a circuit) only, the same scope as `Prepass::plain`.
 
 | Deck, us, 2 rounds | 1280x800 | 1920x1080 | 3840x2160 |
 |---|---|---|---|
@@ -1074,8 +1076,16 @@ went 106 to 54 at 4K.
   differs in 0 to 15 pixels by one level.
 - **Why**: the same float-order rounding as the opaque split above. Every pixel was compared
   decoded, because the PNG bytes of two binaries differ in their metadata.
-- **2048: ported.** The split runs on Altima's blended list too, and its pictures are identical.
-  Its blended list is 594 fragments, so it gains nothing there.
+- **2048: checked, not timed.** Its pictures are identical. Whether Altima's blended list splits
+  at all was not checked. Its opaque list names no row (the census table above), so its blended
+  list most likely has nothing to split. Either way that list is 594 fragments, so there is
+  nothing to gain.
+- **Load cost not measured.** The split adds up to two pipelines for each blended class and each
+  authored equation of a circuit. The cold shader cache race load (`MESA_SHADER_CACHE_DISABLE=true
+  --ticks 1`, as for the opaque split) was not run.
+- **The 2048 speckle fix** (`shade.wesl`'s sun-mask tests at -0.5 and 1.5) landed on `main` after
+  these numbers. It moves two comparison constants and no instruction. The 2048 rows were not
+  re-measured; to re-measure, rerun the span command on a build of `main`.
 
 ### Landed: 2048's exposure readback over 256 invocations
 
