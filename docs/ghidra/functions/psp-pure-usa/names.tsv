@@ -322,3 +322,5 @@
 0x0886d414	function	Texture_LoadEffectSurfaces	78	caustic-pass.md
 0x08a8f500	data	g_caustic_tint	75	caustic-pass.md
 0x08a8f50c	data	g_caustic_uv_scale	80	caustic-pass.md
+0x08a8c5f4	data	g_world_state	75	world-clock.md
+0x0888681c	function	WorldNode_AdvanceAnimation	65	world-clock.md
