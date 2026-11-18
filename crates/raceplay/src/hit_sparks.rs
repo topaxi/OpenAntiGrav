@@ -330,6 +330,7 @@ impl RaceView {
         }
         self.arm_cockpit_hit(core, slot);
     }
+
     /// HD's Cannon on a craft: `Cannon_ApplyCraftHit` (`0x0010f730`) calls
     /// `Ship_DispatchCollisionFx(craft, contact, 1)`, which picks the
     /// `Ship Collision Fx` locator nearest the contact (squared distance, ten
@@ -360,6 +361,7 @@ impl RaceView {
             self.hit_sparks.weapon_started += 1;
         }
     }
+
     /// Counts the cooldowns down and keeps every emitting spark on its
     /// locator, letting go once it stops emitting. Before `Stage::advance`,
     /// like the absorb bursts.
@@ -414,6 +416,7 @@ impl Stage<'_> {
             }
         }
     }
+
     fn throw_hit_spark(
         &mut self,
         core: &SimRace,
@@ -440,6 +443,7 @@ impl Stage<'_> {
             self.fire_locator(core, cues, slot, node, trigger, HIT_SPARK_SEVERITY);
         }
     }
+
     /// A craft-to-craft or cage contact on `slot` at `point`, impulse magnitude `impulse`:
     /// `FUN_088418e0`'s contact-ring loop reaching `Ship_DispatchCollisionFx`
     /// (`0x0883de90`) with `min(|p| * 0.0125, 1.0)`. It fires the locator nearest `point`,
@@ -491,6 +495,7 @@ impl Stage<'_> {
         };
         self.fire_locator(core, cues, slot, node, trigger, severity);
     }
+
     /// The collision cage's contacts on `slot` this tick, each through the same ring-loop dispatch
     /// ([`Self::throw_contact_spark`]) with `damaged` clear: the cage's record carries friction `0`.
     /// Nothing is lost to a shield (the loop's shield branch precedes the dispatch) and nothing is
@@ -511,6 +516,7 @@ impl Stage<'_> {
         }
         self.view.hit_sparks.cage_started += self.view.hit_sparks.started - before;
     }
+
     /// `ShipCollisionFx_Trigger` on one locator: the locator's 0.8 s gate (`instance + 100`)
     /// opens the cue and the spark together, so the sound plays whether or not the spark's
     /// particle file loaded.

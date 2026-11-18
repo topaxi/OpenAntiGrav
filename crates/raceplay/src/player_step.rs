@@ -568,8 +568,6 @@ impl SimRace {
     }
 }
 
-impl Race {}
-
 #[cfg(feature = "view")]
 /// Whether this tick's contact sets the original's `0x20` bit of `craft+0x860`
 /// (`contact-response.md`, reaction #2): the hull-damage branch of
@@ -587,7 +585,6 @@ impl Stage<'_> {
     /// Feeds each local person's craft to its own lap watch. A replayed tick
     /// (`tick_sim_only`) does not feed it, because the predicted tick it re-runs
     /// already did. **Chosen, not measured.**
-    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn observe_lap(
         &mut self,
         core: &SimRace,
@@ -596,9 +593,7 @@ impl Stage<'_> {
         outcome: &oag_race::Outcome,
         evaluated: &Evaluated,
     ) {
-        #[cfg(feature = "view")]
         let pair = std::mem::take(&mut self.view.pair_spoil[slot]);
-        #[cfg(feature = "view")]
         if self.draws() && core.watches_laps_of(slot) {
             self.view.raise_lap_messages(
                 core,

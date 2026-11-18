@@ -1019,7 +1019,7 @@ impl Scene {
         //
         // **The player's own flare is not skipped in the cockpit view**, and that
         // is deliberate rather than overlooked: the nozzle sits behind the eye, so
-        // it falls outside the frustum on its own. See `Race::draws_own_ship`,
+        // it falls outside the frustum on its own. See `RaceView::draws_own_ship`,
         // which skips the *hull* because a hull drawn around the camera really
         // does put polygons across the middle of the screen.
         oag_gpu::perfprobe::mark("pre-exhaust");
@@ -1186,7 +1186,7 @@ impl Scene {
         // Skipped outright in the cockpit view rather than moved or scaled away:
         // the original sets one flag on the craft and draws no hull, and a draw
         // call not issued is the only version of that with no chance of a stray
-        // polygon across the middle of the screen. See `Race::draws_own_ship`.
+        // polygon across the middle of the screen. See `RaceView::draws_own_ship`.
         // Only the *player's* hull is skipped in the cockpit view. The opponents
         // in front are exactly what a cockpit view is for.
         draws.mark("craft, weapons, shields");

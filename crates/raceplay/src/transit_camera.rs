@@ -47,8 +47,6 @@ pub(super) struct Seat {
     left: u16,
 }
 
-impl crate::Race {}
-
 impl crate::RaceSim {
     /// The seat of `slot`'s craft as its transit starts. `None` with no course or road to
     /// frame the pair on, which leaves the camera on the frozen craft.
@@ -201,12 +199,14 @@ impl RaceView {
             up: turned(target.up, seat.target.up),
         }
     }
+
     /// `slot`'s craft as a camera follows it this tick.
     pub(super) fn followed(&self, core: &SimRace, slot: usize) -> Target {
         let mut target = crate::camera::target_of(&core.sim.world.ships[slot]);
         target.position = self.drawn_position(core, slot);
         self.seated(slot, target)
     }
+
     /// The model matrix of `slot`'s craft where its camera follows it in a transit; `None`
     /// for a craft in the world, which is where the simulation has it.
     pub(super) fn flown_model(&self, core: &SimRace, slot: usize) -> Option<Mat4> {
@@ -237,6 +237,7 @@ impl RaceView {
             self.transit_seats[slot] = seat;
         }
     }
+
     /// The step the spring of `slot`'s camera takes this tick: the tick's own, or
     /// [`SEAT_SPRING`] of them while it is closing on a seat.
     pub(super) fn camera_step(&self, core: &SimRace, slot: usize) -> f32 {

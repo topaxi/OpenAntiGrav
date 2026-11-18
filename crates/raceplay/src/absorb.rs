@@ -2,7 +2,7 @@
 //! played at the hull's own authored locators on a stagger.
 //!
 //! The sound (`Cue::Absorb`) was always raised; this is the picture that goes
-//! with it. Both are one call in the original, so [`Race::play_absorb_feedback`]
+//! with it. Both are one call in the original, so [`crate::RaceView::play_absorb_feedback`]
 //! raises both, and both absorb paths call it: `Race::spend_pickup`'s absorb
 //! arm and the Eliminator lap refill.
 //!
@@ -166,6 +166,7 @@ impl RaceView {
             });
         }
     }
+
     /// Counts every scheduled burst down, starts the ones that are due, and
     /// keeps every started one on its locator.
     ///
@@ -241,7 +242,7 @@ impl RaceView {
     /// `HullOverlay_AbsorbWindowActive(craft)`, `0.0 <= elapsed <= 1.0` on the
     /// same clock the hull overlay reads.
     ///
-    /// Reuses [`Self::absorb_overlay_pulse`]'s own state
+    /// Reuses [`crate::Race::absorb_overlay_pulse`]'s own state
     /// (`self.absorb_overlay`) rather than a second timer: that `Vec`
     /// already holds `Some(elapsed)` exactly while `0.0 <= elapsed <= WINDOW`
     /// ([`advance_absorb_bursts`](Self::advance_absorb_bursts) filters it),

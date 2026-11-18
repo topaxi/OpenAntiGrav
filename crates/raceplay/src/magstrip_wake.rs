@@ -230,7 +230,7 @@ mod tests;
 #[cfg(feature = "view")]
 impl RaceView {
     /// One tick of every craft's wake, after the simulation. Called from
-    /// [`Race::tick`] beside [`Race::advance_mag_floor_fx`], and for the same
+    /// [`Race::tick`] beside [`crate::RaceView::advance_mag_floor_fx`], and for the same
     /// reason not from `tick_cosmetics`: a frozen world freezes its wake.
     pub(crate) fn advance_magstrip_wake(
         &mut self,
@@ -277,6 +277,7 @@ impl RaceView {
         }
         self.magstrip_wake = Some(wakes);
     }
+
     /// One craft's `.pob` magstrip effect: started riding the anchor on contact,
     /// followed while over the strip, detached on leaving or when the craft is
     /// out of play. Nothing plays when the effect did not load.
@@ -320,6 +321,7 @@ impl RaceView {
             (None, false) => {}
         }
     }
+
     /// What the wake reads of craft `slot` this frame to draw it. `with_track` and `lateral`
     /// are the spawn's alone: [`Self::wake_craft`] fills them in.
     fn wake_pose(&self, core: &SimRace, slot: usize, anchor: Mat4) -> Craft {
@@ -339,6 +341,7 @@ impl RaceView {
             lateral: 0.0,
         }
     }
+
     /// [`Self::wake_pose`] with the spawn's `with_track` and `lateral`, left at their neutral
     /// values when the track has no sample under the craft.
     fn wake_craft(&self, core: &SimRace, slot: usize, anchor: Mat4) -> Option<Craft> {

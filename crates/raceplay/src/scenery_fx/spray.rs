@@ -309,8 +309,6 @@ impl Spray {
     }
 }
 
-impl crate::Race {}
-
 #[cfg(test)]
 mod tests;
 

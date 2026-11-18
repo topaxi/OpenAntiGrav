@@ -536,7 +536,7 @@ fn the_sprite_flares_constants_are_the_discs_own() {
 
 /// **The two `WO_TRAIL_HITSHIP` systems are on the disc and load.**
 ///
-/// What `Race::advance_trail_hits` plays when a craft flies into a trail. The
+/// What `RaceView::advance_trail_hits` plays when a craft flies into a trail. The
 /// loader reports one line per effect and says "will not be drawn" when a name
 /// is not in the mounted archives, so the report is the evidence - the same
 /// line a screenshot could not tell apart from "the effect never fired".
@@ -564,7 +564,7 @@ fn the_trail_hit_effects_are_on_the_disc_and_load(loaded: &race::Loaded) {
 /// **Every HD hull authors `Ship Collision Fx` locators**, which is what the
 /// trail-hit burst is anchored to.
 ///
-/// Without them `Race::spark_anchor_of` answers `None` on every craft and the
+/// Without them `RaceView::spark_anchor_of` answers `None` on every craft and the
 /// burst silently falls back to a derived point clear of the hull - the exact
 /// failure a player reported. So this asserts the data is there rather than
 /// trusting the fallback never to be reached.

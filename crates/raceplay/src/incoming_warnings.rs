@@ -11,7 +11,7 @@ use super::*;
 impl Race {
     /// A simulation mod's `raise-warning`: lights `look`'s group on the viewer's HUD for
     /// `slot`, as a weapon fired at the viewer would. Dropped for a slot that is not the
-    /// viewer and where the warnings are not drawn ([`Self::incoming_warnings_drawn`]).
+    /// viewer and where the warnings are not drawn ([`crate::RaceView::incoming_warnings_drawn`]).
     #[cfg(feature = "extensions")]
     pub(super) fn raise_mod_warning(&mut self, slot: usize, look: oag_hud::incoming::Look) {
         if slot == self.core.player_slot() && self.view.incoming_warnings_drawn(&self.core) {
@@ -58,6 +58,7 @@ impl RaceView {
             self.incoming_raises.push(icon.into());
         }
     }
+
     /// Whether the viewer's warnings are drawn in this race: the title raises them, there is
     /// one view and one person, and the mode is one of those that raise them. Every raise,
     /// the original's and a mod's, goes through it.

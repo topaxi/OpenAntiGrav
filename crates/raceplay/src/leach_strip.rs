@@ -325,6 +325,7 @@ impl RaceView {
             ),
         }
     }
+
     /// The craft's trail record as of now: anchor, progress and the body's
     /// rows 0 and 1 (`+0x1d0`, `+0x1e0`), here the physics body's own axes.
     fn leach_record(

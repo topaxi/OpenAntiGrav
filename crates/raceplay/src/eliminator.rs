@@ -264,7 +264,7 @@ impl Race {
     /// `Ship_AddShield`'s clamp, then plays the absorb feedback -
     /// `Ship_PlayAbsorbFeedback` (`0x08840640`), the `ABSORB` cue and the
     /// staggered `WO_WEAPON_ABSORB` bursts, both through
-    /// [`Race::play_absorb_feedback`]. See
+    /// [`crate::RaceView::play_absorb_feedback`]. See
     /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     ///
     /// The original's `last_crossings != 0` gate - the grid-exit crossing

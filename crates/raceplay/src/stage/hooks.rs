@@ -45,9 +45,9 @@ impl RaceView {
     /// queue's order is the one it always had (ADR-0018: a cue is an output of the tick).
     pub(crate) fn message_cue(&mut self, core: &SimRace) -> Option<CueEvent> {
         let mut shown = false;
-        for slot in 0..MAX_SHIPS {
+        for (slot, hud) in self.huds.iter_mut().enumerate() {
             if core.sim.world.person_flown(slot) {
-                let board = &mut self.huds[slot].messages;
+                let board = &mut hud.messages;
                 board.advance();
                 let showing = board.just_shown();
                 shown |= showing && core.heard_here(slot);
@@ -217,7 +217,7 @@ impl RaceView {
 
 /// One tick of the boost's field-of-view kick: open while the boost's own timer runs, close once
 /// it has expired, both as an exponential approach so neither edge is a step. The player's
-/// ([`RaceView::boost_kick`](super::view::RaceView::boost_kick)) and every other local seat's
+/// ([`RaceView::boost_kick`](crate::view::RaceView::boost_kick)) and every other local seat's
 /// (`Cam::boost_kick`) are this one rule.
 pub(crate) fn step_boost_kick(kick: f32, boosting: bool, dt: f32) -> f32 {
     let (target, rate) = if boosting {
@@ -281,6 +281,7 @@ impl RaceView {
             },
         );
     }
+
     /// Every other local person's sparks and shake, from their own craft's wall contact.
     /// A split screen's or a window's extra seat has a [`ContactFx`](crate::contact_fx::ContactFx)
     /// beside its camera; the seat `own` is the one [`Self::advance_contact_fx`] ran.

@@ -92,7 +92,7 @@ fn an_opponents_wreck_leaves_the_players_camera_alone() {
 }
 
 /// The race's own tick starts it, not only a direct call: the wiring a test
-/// of [`Race::advance_destroy_camera`] alone would miss.
+/// of [`RaceView::advance_destroy_camera`] alone would miss.
 #[test]
 fn a_tick_with_the_player_destroyed_cuts_to_the_circuits_camera() {
     let mut race = with_a_station();

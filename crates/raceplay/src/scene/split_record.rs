@@ -143,6 +143,7 @@ fn native_core_capacities() -> Vec<u32> {
     {
         oag_gpu::split_finish::core_capacities()
     }
+
     #[cfg(not(all(target_os = "linux", not(target_arch = "wasm32"))))]
     {
         Vec::new()

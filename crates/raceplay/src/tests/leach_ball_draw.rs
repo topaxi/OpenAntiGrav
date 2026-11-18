@@ -104,7 +104,7 @@ fn the_ball_follows_the_strip_from_the_target_to_the_shooter() {
     );
 }
 
-/// No beam at all draws no ball - the gate [`Race::advance_leach_beam_ribbon`]
+/// No beam at all draws no ball - the gate [`RaceView::advance_leach_beam_ribbon`]
 /// takes for the ribbon and the burst alike.
 #[test]
 fn nothing_locked_draws_no_ball() {

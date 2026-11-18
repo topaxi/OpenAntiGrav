@@ -758,7 +758,6 @@ pub(super) fn chase_block_for(
 
 #[cfg(feature = "view")]
 impl RaceView {
-    #[cfg(feature = "view")]
     /// Whether the player's own hull should be drawn this frame.
     ///
     /// False in the cockpit view alone. Read by [`Scene::render`], which skips
@@ -777,7 +776,7 @@ impl RaceView {
         // own craft on the grid from the circuit's camera ([`super::intro_camera`]).
         self.in_intro() || self.camera_view.draws_own_ship()
     }
-    #[cfg(feature = "view")]
+
     /// How many times the player's picture has jumped to a different shot: each
     /// of their respawns, and the destroy camera taking over and letting go
     /// ([`super::destroy_camera`]), and the spectator camera's take-over and cuts

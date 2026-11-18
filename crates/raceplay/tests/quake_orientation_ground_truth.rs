@@ -4,7 +4,7 @@
 //! frame as `-(+0x20)` of the record `AiTrack_LocatePosition` fills at the
 //! span's midpoint - the track's interpolated `down` axis negated - and not as
 //! world up. On a banked stretch the two differ; dropping the `orient` call in
-//! `Race::advance_quake_visual` takes this to world up everywhere. The anchor
+//! `RaceView::advance_quake_visual` takes this to world up everywhere. The anchor
 //! is the midpoint itself.
 //!
 //! **HD's** wave takes the same path, and only because its `Title` lifts the

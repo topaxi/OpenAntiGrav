@@ -456,7 +456,7 @@ impl Race {
     /// and over the director's camera too: a shot must not lose scenery to a visibility set
     /// that was authored for a craft in a race (the draws still go through the frustum test).
     /// Otherwise the one row of the section a station camera is placed by
-    /// ([`Self::station_camera_section`]) or the pre-race flyby's camera stands in
+    /// ([`crate::RaceView::station_camera_section`]) or the pre-race flyby's camera stands in
     /// ([`Self::flyby_camera_section`]), or the craft's and the camera's own sections with
     /// padding for every other camera ([`Self::visibility_sections`]), narrowed to the view.
     pub(super) fn visible_set(
@@ -639,6 +639,7 @@ impl RaceView {
     pub(super) fn camera_target(&self, core: &SimRace) -> Target {
         self.followed(core, core.player_slot())
     }
+
     /// Where the camera is and what it is aimed at, as a view matrix.
     ///
     /// This is the one place a [`CameraOverride`] takes effect: everything else
@@ -668,6 +669,7 @@ impl RaceView {
         }
         self.lens_sampled(self.view_between(core, self.tick_view(core), |previous| previous.view))
     }
+
     /// `view` through the lens sample an accumulated depth of field frame is drawn with
     /// ([`crate::photo::LensShift`]), or `view` itself with none.
     fn lens_sampled(&self, view: Mat4) -> Mat4 {
@@ -676,6 +678,7 @@ impl RaceView {
             None => view,
         }
     }
+
     /// [`Self::view`] as this tick leaves it, never blended.
     pub(super) fn tick_view(&self, core: &SimRace) -> Mat4 {
         let base = self.tick_view_unshaken(core);
@@ -686,6 +689,7 @@ impl RaceView {
         // see `oag_render::camera::shake::Shake::apply`.
         self.contact.shake.apply(base)
     }
+
     /// [`crate::Race::view_unshaken`] as this tick leaves it, never blended.
     pub(super) fn tick_view_unshaken(&self, core: &SimRace) -> Mat4 {
         if let Some(over) = &self.camera_override {
@@ -722,6 +726,7 @@ impl RaceView {
             self.camera.view(target, &self.chase_params)
         }
     }
+
     /// The camera's own world position, from the view matrix it produces.
     ///
     /// A view matrix is the inverse of the camera's world transform, so
@@ -732,6 +737,7 @@ impl RaceView {
     pub fn camera_position(&self, core: &SimRace) -> Vec3 {
         self.view(core).inverse().w_axis.truncate()
     }
+
     /// The projection for a viewport of the given aspect ratio, with the
     /// player's field-of-view setting applied.
     ///
@@ -797,6 +803,7 @@ impl RaceView {
             far,
         )
     }
+
     /// The vertical field of view, in radians, that [`Self::projection`] is
     /// built from - every term that doc lists, composed in its order.
     ///

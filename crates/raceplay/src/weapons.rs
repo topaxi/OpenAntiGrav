@@ -23,7 +23,7 @@ pub(crate) use visuals::{CannonAssets, CannonDraw};
 // `bounced_this_tick` reaches beyond this module now: `crate::tick`'s
 // own sibling loop needs it too, for `Cue::MissileHitWall` and
 // `Cue::ShurikenHit`, the same `bounces_before`/after edge
-// `Race::ignite_missile_bounces` already reads for the visual. Not
+// `RaceView::ignite_missile_bounces` already reads for the visual. Not
 // `#[cfg(test)]` any more for that reason - production code calls through
 // this path, not only `race/tests/weapons.rs`.
 #[cfg(feature = "view")]

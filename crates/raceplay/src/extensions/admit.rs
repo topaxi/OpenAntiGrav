@@ -104,6 +104,7 @@ pub fn admit(
         let _ = (title, foreign_track, options, report);
         sources
     }
+
     #[cfg(feature = "extensions")]
     {
         let race = describe(options, title);

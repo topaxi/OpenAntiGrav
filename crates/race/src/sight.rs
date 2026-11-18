@@ -558,7 +558,7 @@ impl Sight {
 
     /// Records which lockable weapon the reticle is now being drawn for.
     ///
-    /// Called once a tick from `Race::update_sight`, and only when the held
+    /// Called once a tick from `RaceView::update_sight`, and only when the held
     /// weapon is one of the two that lock - see [`Sight::held`] for why it is
     /// sticky the rest of the time.
     pub fn set_held(&mut self, held: Held) {

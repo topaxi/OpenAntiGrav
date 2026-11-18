@@ -106,6 +106,7 @@ impl RaceView {
         };
         std::iter::once(primary).chain((0..own_views).filter(move |&slot| slot != primary))
     }
+
     /// One tick of every view's fades: a tagged craft's rises at 1.2 a second, any other is
     /// held at zero.
     pub(super) fn advance_tag_fades(&mut self, core: &SimRace) {
@@ -115,10 +116,9 @@ impl RaceView {
         let dt = core.sim.dt;
         let viewers: Vec<usize> = self.tag_viewers(core).collect();
         for viewer in viewers {
-            for target in 0..MAX_SHIPS {
-                let fade = self.huds[viewer].tag_fade[target];
-                self.huds[viewer].tag_fade[target] = if core.sim.tagged_for(viewer, target) {
-                    step_fade(fade, dt)
+            for (target, fade) in self.huds[viewer].tag_fade.iter_mut().enumerate() {
+                *fade = if core.sim.tagged_for(viewer, target) {
+                    step_fade(*fade, dt)
                 } else {
                     0.0
                 };

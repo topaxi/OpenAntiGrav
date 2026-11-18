@@ -8,7 +8,7 @@
 //! plays.
 //!
 //! The replay therefore *journals* the weapon events it raises instead of discarding them
-//! ([`Race::note_cues`], [`Race::note_blast`], [`Race::note_shield_hit`]), a drawn tick logs the
+//! ([`crate::stage::Stage::note_cues`], [`crate::stage::Stage::note_blast`], [`crate::stage::Stage::note_shield_hit`]), a drawn tick logs the
 //! same events as presented, and [`Race::settle_presentation`] matches the two after the replay. An event the
 //! replay raised that the client had not presented is started now, at its current age. One it
 //! had presented is left alone, so nothing fires twice.
@@ -246,6 +246,7 @@ impl Stage<'_> {
             self.journal.presented.push_back(entry);
         }
     }
+
     /// Logs the weapon cues raised since the queue was `queued` long: presented on a drawn tick,
     /// missed on a replayed one.
     pub(super) fn note_cues(&mut self, core: &SimRace, queued: usize) {
@@ -262,6 +263,7 @@ impl Stage<'_> {
             self.record(core, What::Cue(event));
         }
     }
+
     /// A weapon's blast: played on a drawn tick, journalled on a replayed one.
     pub(super) fn note_blast(
         &mut self,
@@ -285,6 +287,7 @@ impl Stage<'_> {
             },
         );
     }
+
     /// A shield bulge: journalled whichever kind of tick it was; [`Self::shield_hit`] draws it.
     pub(super) fn note_shield_hit(&mut self, core: &SimRace, slot: usize) {
         self.record(core, What::ShieldHit(slot));

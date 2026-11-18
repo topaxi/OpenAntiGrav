@@ -379,7 +379,7 @@ impl Race {
                     .push(oag_gameplay::cue::CueEvent::at_point(cue, impact.point));
             }
             // HD's Cannon throws its own spark on the craft it strikes, from
-            // the weapon's side - see `Race::throw_weapon_spark`. A no-op
+            // the weapon's side - see `RaceView::throw_weapon_spark`. A no-op
             // unless the title built weapon anchors (HD only).
             #[cfg(feature = "view")]
             if let (Weapon::Cannon, Some(struck)) = (impact.kind, impact.struck)

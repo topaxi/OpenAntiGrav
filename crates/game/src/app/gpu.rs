@@ -478,7 +478,7 @@ impl Gpu {
         // honours the requested size with it. Borderless has to be resizable,
         // because the compositor is about to resize it to the monitor.
         //
-        // The renderer does not depend on either: `Race::projection` fits the
+        // The renderer does not depend on either: `RaceView::projection` fits the
         // field of view to whatever viewport it is given, and `display::viewport`
         // shapes that viewport, so any window still frames the track correctly.
         let monitor = choose_monitor(event_loop.available_monitors().collect(), &settings.monitor);

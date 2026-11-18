@@ -531,7 +531,7 @@ fn a_rocket_flying_along_world_up_does_not_collapse_its_basis() {
 /// by `CRAFT_BLAST_DROP` rather than at the impact point. This engine drew
 /// one invented flash at the impact point for both until 2026-08-12.
 ///
-/// Asserted through [`Race::blast_for`] rather than through the pool,
+/// Asserted through [`RaceView::blast_for`] rather than through the pool,
 /// because *which file and where* is the recovered fact and it holds on a
 /// headless fixture with no disc to load either file from.
 #[test]
@@ -676,7 +676,7 @@ fn a_cannon_round_sparks_on_a_wall_and_silently_on_a_craft() {
 /// A rocket in the air carries a flare, and gives it back when it is gone.
 ///
 /// `Rocket_Init` attaches `WO_ROCKET_FLARE` at launch and it rides the
-/// rocket for the whole flight - see [`Race::advance_projectile_flares`].
+/// rocket for the whole flight - see [`RaceView::advance_projectile_flares`].
 /// The bookkeeping is asserted here without a disc; what the flare *looks*
 /// like is `crates/fx/tests/psys_ground_truth.rs`' business.
 #[test]

@@ -163,6 +163,7 @@ impl RaceView {
             MAX_NODES,
         );
     }
+
     /// Each of `triggers` at the first `cap` wreck locators of `slot`, node by node.
     fn ride_wreck_nodes(&mut self, core: &SimRace, slot: usize, triggers: &[Trigger], cap: usize) {
         let nodes = self.wreck_fx.anchors.get(slot).map_or(0, Vec::len);
@@ -191,6 +192,7 @@ impl RaceView {
             }
         }
     }
+
     /// What the wreck throws when its state times out, `model` being the matrix the craft was
     /// wrecked with (a wreck lies still, so it is the one the original reads 1.5 s on; a craft
     /// put back on the track in between is not where the blast goes). A source with no wreck
@@ -227,6 +229,7 @@ impl RaceView {
             }
         }
     }
+
     /// One wreck effect placed in the world and let go; whether it started.
     fn play_wreck_world_effect(
         &mut self,
@@ -243,6 +246,7 @@ impl RaceView {
         self.wreck_fx.started += 1;
         true
     }
+
     /// Keeps every emitting wreck effect on its locator, letting go once it
     /// stops emitting. Before `Stage::advance`, like the hit sparks.
     pub(super) fn advance_wreck_fx(&mut self, core: &SimRace) {

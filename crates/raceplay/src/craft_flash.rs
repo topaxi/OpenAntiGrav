@@ -20,13 +20,13 @@
 //! # What this port does with it
 //!
 //! [`oag_physics::CraftState`] carries the two edges (`Destroyed` to
-//! `Eliminated` is state 4 to 5) and [`Race::respawn`] is the one place a craft
+//! `Eliminated` is state 4 to 5) and [`crate::Race::respawn`] is the one place a craft
 //! is put back, so the flash follows those rather than a state number this
 //! engine does not have. **Chosen, not measured:**
 //!
 //! - the player's own state-5 wash is started like any craft's now that the
 //!   destroy camera ([`super::destroy_camera`]) is the active camera by then;
-//! - every [`Race::respawn`] of the player flashes kind 6, including the
+//! - every [`crate::Race::respawn`] of the player flashes kind 6, including the
 //!   invented off-track rescue, because a teleport is what the player sees;
 //! - the big explosion's flash is armed at the state 5 edge and fires
 //!   [`BLOWUP_DELAY`] later whether or not the craft has been put back by
@@ -36,12 +36,12 @@
 //!   `(0.8, 0.6, mode 1)` with the big explosion, and a running shake is
 //!   cancelled as state 4 begins. Both play out under the results of a race
 //!   the wreck ended, because a finished race steps its cosmetics
-//!   ([`Race::tick_cosmetics`]).
+//!   ([`crate::Race::tick_cosmetics`]).
 //!
 //! The state 5 edge also throws `WO_SHIP_FXNODE_EXPLO` and
 //! `WO_SHIP_DEATH_SPARKS` at each wreck node ([`super::wreck_fx`]).
 //! `WO_SHIP_EXPLOSION`, [`BLOWUP_DELAY`] later, is thrown with the big flash,
-//! at the live model's matrix ([`Race::throw_wreck_explosion`]).
+//! at the live model's matrix ([`crate::RaceView::throw_wreck_explosion`]).
 
 #[cfg(feature = "view")]
 use crate::RaceView;
@@ -63,7 +63,7 @@ const STATE_5_SHAKE: (f32, f32, Side) = (0.3, 0.4, Side::Ahead);
 /// `FUN_088407b0`'s `Camera_ArmShake(0.8, 0.6, camera, 1)` at state 6.
 const STATE_6_SHAKE: (f32, f32, Side) = (0.8, 0.6, Side::Elsewhere);
 
-/// Per-craft edge state for [`Race::advance_craft_flashes`].
+/// Per-craft edge state for [`crate::RaceView::advance_craft_flashes`].
 #[derive(Debug, Clone, Default)]
 pub(super) struct CraftFlashes {
     previous: [CraftState; MAX_SHIPS],
@@ -134,6 +134,7 @@ impl RaceView {
             }
         }
     }
+
     /// `Camera_ArmShake(magnitude, duration, camera, mode)` as the craft's two
     /// explosions call it, for a person's own craft: the player's and every other local seat's.
     fn arm_player_blast_shake(
@@ -147,6 +148,7 @@ impl RaceView {
                 .arm_with(magnitude, duration, side, &mut fx.shake_rng);
         }
     }
+
     pub(super) fn start_flash(&mut self, kind: oag_fx::flash::Kind, at: Vec3) {
         if let Some(flash) = &mut self.screen_flash {
             flash.start(kind, at);

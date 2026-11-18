@@ -134,9 +134,6 @@ fn centis(ticks: u32) -> u64 {
     u64::from(ticks) * 100 / 60
 }
 
-#[cfg(feature = "view")]
-impl super::Race {}
-
 #[cfg(test)]
 mod tests;
 

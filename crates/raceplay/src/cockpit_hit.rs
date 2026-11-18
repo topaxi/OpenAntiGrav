@@ -86,6 +86,7 @@ impl RaceView {
             hit.node.arm();
         }
     }
+
     /// `CockpitHitFx_Update`, once a drawn tick.
     pub(super) fn advance_cockpit_hit(&mut self, core: &SimRace) {
         let dt = core.sim.dt;

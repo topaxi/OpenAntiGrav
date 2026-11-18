@@ -138,7 +138,7 @@ impl Race {
     /// Races `ghost` from the player's next lap clock reading on.
     ///
     /// The lap this run itself sets, once one beats it, replaces it - see
-    /// [`Self::record_tick`].
+    /// [`crate::stage::Stage::record_tick`].
     pub fn set_ghost(&mut self, ghost: Ghost) {
         self.replay.ghost = Some(ghost);
     }

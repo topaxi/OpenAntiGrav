@@ -1,4 +1,4 @@
-//! The trail-hit trigger's state machine: `Race::advance_trail_hits`.
+//! The trail-hit trigger's state machine: `RaceView::advance_trail_hits`.
 //!
 //! **What is measured and what is not.** That a craft flying through an engine
 //! trail sparks is read out of `EBOOT.elf` - the flag, the consumer, the

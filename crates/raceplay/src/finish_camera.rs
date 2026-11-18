@@ -625,6 +625,7 @@ impl RaceView {
             .saturating_sub(delay);
         self.step_director(core, since, wreck);
     }
+
     /// One tick of the director, `since` ticks into its life, imposing its pose.
     fn step_director(&mut self, core: &SimRace, since: u64, wreck: Option<Wreck>) {
         let player = core.player_slot();

@@ -462,9 +462,9 @@ impl RaceView {
     /// Starts a render-side blast at `position`, oriented by `orientation` -
     /// dropped silently if all [`BOMB_BLAST_SLOTS`] are already live, the
     /// same "no evicting a running effect" rule
-    /// [`Race::spawn_plasma_blast_model`] takes.
+    /// [`crate::RaceView::spawn_plasma_blast_model`] takes.
     ///
-    /// Called from [`Race::ignite_blast`] for every Bomb detonation.
+    /// Called from [`crate::RaceView::ignite_blast`] for every Bomb detonation.
     pub(crate) fn spawn_bomb_blast_model(&mut self, position: Vec3, orientation: Quat) {
         // HD's blast is its own object with its own pool - see [`hd`].
         if self.hd_bomb_blast {
@@ -517,12 +517,13 @@ impl RaceView {
             shockwave_alpha: SHIP_SHOCKWAVE_ALPHA.start,
         });
     }
+
     /// Ages every live blast one tick, steps its three eases and retires
     /// whichever just crossed [`LIFETIME_SECONDS`].
     ///
     /// Called from [`Race::tick`], after the impacts loop that can spawn a
     /// new one this same tick - the same one-tick order
-    /// [`Race::advance_plasma_blast_models`] already runs a freshly-spawned
+    /// [`crate::RaceView::advance_plasma_blast_models`] already runs a freshly-spawned
     /// blast in.
     pub(crate) fn advance_bomb_blast_models(&mut self, dt: f32) {
         self.advance_hd_bomb_blasts(dt);
@@ -551,6 +552,7 @@ impl RaceView {
             }
         }
     }
+
     /// Ages every live HD blast one tick, plays `WO_BOMB_RAYS` at the one that
     /// just crossed half a second, and frees whichever outlived three. Called
     /// from [`Self::advance_bomb_blast_models`].

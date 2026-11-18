@@ -17,7 +17,7 @@ impl Race {
     #[cfg(feature = "view")]
     /// `slot`'s reticle as this draw shows it.
     ///
-    /// The reticle's law runs once a tick ([`Self::update_sight`]) off the
+    /// The reticle's law runs once a tick ([`crate::RaceView::update_sight`]) off the
     /// tick's camera and target. A frame drawn between two ticks draws the
     /// camera and the target craft blended, so the reticle is moved by how far
     /// the target's projection moved between the tick's and this draw's: the
@@ -147,7 +147,6 @@ impl RaceSim {
 
 #[cfg(feature = "view")]
 impl RaceView {
-    #[cfg(feature = "view")]
     /// One tick of the lock-on reticle, and the tone state that goes with it.
     ///
     /// **Recovered** from `HudSight_Update` (`0x0881dbcc`) - the law itself is
@@ -210,7 +209,7 @@ impl RaceView {
         self.update_viewed_sights(core);
         self.advance_tag_fades(core);
     }
-    #[cfg(feature = "view")]
+
     /// The reticle of every other slot a split-screen view follows.
     ///
     /// **Display only, and view-side.** Each is a [`sight::Sight`] of its own in
@@ -255,7 +254,6 @@ impl RaceView {
 
 #[cfg(feature = "view")]
 impl RaceView {
-    #[cfg(feature = "view")]
     /// Where `world` lands on a reticle's `screen`, through the camera being
     /// drawn (at the tick inside a tick, blended inside a draw).
     ///

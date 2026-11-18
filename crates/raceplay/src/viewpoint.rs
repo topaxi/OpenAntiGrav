@@ -78,7 +78,7 @@ pub(super) struct Viewpoints {
     /// [`Self::cams`]: the sparks at its craft and the shake on its camera.
     pub(super) contact: [Option<Box<ContactFx>>; MAX_SHIPS],
     /// The boost zoom-streak pulse of each extra person's view, a fresh one of the player's
-    /// tuning, fired by that seat's own speed pad and Turbo ([`Race::fire_zoom_boost`]).
+    /// tuning, fired by that seat's own speed pad and Turbo ([`crate::stage::Stage::fire_zoom_boost`]).
     pub(super) zoom: [Option<oag_post::hd_zoom::Pulse>; MAX_SHIPS],
 }
 
@@ -410,10 +410,12 @@ impl RaceView {
     pub fn viewport_count(&self) -> usize {
         self.viewpoints.count.max(1)
     }
+
     /// The extra slot being drawn, `None` for the player's own view.
     pub(super) fn extra_viewpoint(&self) -> Option<usize> {
         self.viewpoints.drawing.get().map(usize::from)
     }
+
     /// An extra view's blended camera with its seat's impact shake, `None` for the player's
     /// own. The shake is the seat's state this tick, turned about the blended view as the
     /// player's is ([`oag_render::camera::shake::Shake::apply`]).
@@ -428,6 +430,7 @@ impl RaceView {
             None => base,
         })
     }
+
     /// An extra view's vertical field of view, the authored far rig widened by
     /// the viewed craft's speed as the player's is. `None` for the player's own.
     pub(super) fn extra_vertical_fov(
@@ -482,6 +485,7 @@ impl RaceView {
     pub fn viewed_slot(&self, core: &SimRace) -> usize {
         self.extra_viewpoint().unwrap_or_else(|| core.player_slot())
     }
+
     /// The craft the picture being drawn frames: photo mode's subject while the mode is open,
     /// else [`Self::viewed_slot`]. What places the weather and the boost lens;
     /// [`Self::viewed_slot`] stays the key of the view's scene blocks and histories, which a
@@ -524,6 +528,7 @@ impl RaceView {
             cam.current = cam.chase.view(target, &params);
         }
     }
+
     /// Draws the next [`Scene::render`](super::Scene::render) from slot `slot`'s
     /// camera. The player's own slot is the ordinary view, exactly.
     ///
@@ -536,6 +541,7 @@ impl RaceView {
             .then(|| u8::try_from(slot).unwrap_or(0));
         self.viewpoints.drawing.set(extra);
     }
+
     /// The eye of every extra view, from the camera of the last tick.
     pub(super) fn viewpoint_eyes(&self) -> impl Iterator<Item = Vec3> + '_ {
         self.viewpoints
@@ -544,10 +550,12 @@ impl RaceView {
             .flatten()
             .map(|cam| cam.current.inverse().w_axis.truncate())
     }
+
     /// The player's own view again. See [`Self::set_viewpoint`].
     pub fn reset_viewpoint(&self) {
         self.viewpoints.drawing.set(None);
     }
+
     /// Steps every extra seat's shake one tick, as the player's is. See
     /// [`Self::advance_seat_contact_fx`](super::tick).
     pub(super) fn advance_seat_shakes(&mut self, dt: f32) {

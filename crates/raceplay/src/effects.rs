@@ -45,7 +45,7 @@ pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec
 /// narrow one: their consumer, spawner and colour select are all read, and
 /// only the geometric *test* - which runs in the `Trails` SPU job - is not.
 /// Nothing about the effect is invented, only the moment it fires, and
-/// [`Race::advance_trail_hits`] names each approximation. The red variant is
+/// [`crate::RaceView::advance_trail_hits`] names each approximation. The red variant is
 /// authored only in HD's Fury archive (`DATA06`) - the inventory test's
 /// `hd::the_red_hit_spark_variant_is_only_in_the_fury_archive` pins the disc's
 /// own archive membership, independent of the executable's variant-select
@@ -227,7 +227,7 @@ impl Race {
         let camera = self.view.view(&self.core);
         let forward = -Vec3::new(camera.x_axis.z, camera.y_axis.z, camera.z_axis.z);
         let eye = camera.inverse().w_axis.truncate();
-        // The hull's axis as this draw places it (`Race::body_between`).
+        // The hull's axis as this draw places it (`RaceView::body_between`).
         let nozzle_axis = -self.view.body_between(&self.core, slot).forward();
         let sprite = &self.view.hd_sprite[slot];
         let Some(fade) = sprite.fade(
@@ -449,7 +449,7 @@ impl Race {
     /// carries the original's burst on its nose, re-raised every frame it stays inside
     /// (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The trail-hit burst, measured").
     /// On an HD race each replayed tick therefore also runs the effect stage and then
-    /// [`Self::advance_trail_hits`], in the order a real tick runs them, so a posed frame shows
+    /// [`crate::RaceView::advance_trail_hits`], in the order a real tick runs them, so a posed frame shows
     /// the burst at the age a racing frame would. Off HD the stage is left alone.
     ///
     /// **Chosen, not measured:** the straight path and the fixed heading (the original's craft
@@ -885,6 +885,7 @@ impl RaceView {
             }
         }
     }
+
     /// Fires `WO_TRAIL_HITSHIP` on a craft that has flown into a trail.
     ///
     /// **The mechanism is read; the test is not.** Wipeout HD's `Trails` SPU
@@ -1003,6 +1004,7 @@ impl RaceView {
             }
         }
     }
+
     /// Whether the burst for the craft `bit` names, inside `owner`'s trail, fires this tick.
     ///
     /// Every tick when the title plays its own burst (HD, 2048, Omega). A burst
@@ -1019,6 +1021,7 @@ impl RaceView {
         *rest ^= bit;
         due
     }
+
     /// `--trail-sparks`: the burst, every tick, on the player's own ribbon.
     ///
     /// **A verification aid for the *drawing*, and the two failures it
@@ -1030,7 +1033,7 @@ impl RaceView {
     /// Everything but the *placement* and the *rate* is the real path - the same
     /// effect and the same [`hd_trail_red`](RaceView::hd_trail_red) colour select.
     /// The rate is HD's every tick, also on a title whose lent burst fires every
-    /// other tick for a real hit ([`Race::trail_hit_due`]).
+    /// other tick for a real hit ([`crate::RaceView::trail_hit_due`]).
     /// The placement is the one thing chosen rather than derived: two units
     /// above the player's nozzle, which is on screen and clear of the exhaust
     /// plume. Three alternatives were measured and each looks like nothing or
@@ -1077,6 +1080,7 @@ impl RaceView {
             self.trail_hit_tint(),
         );
     }
+
     /// The hue of the burst a craft raises inside a rival's trail, when the burst is lent.
     ///
     /// **A derivation, not a measurement.** Wipeout HD picks its burst by the ribbon's owner:
@@ -1092,6 +1096,7 @@ impl RaceView {
             .is_lent(Trigger::TrailHitship)
             .then(|| psys::Tint::towards(self.trail_law().ribbon_colour()))
     }
+
     /// Whether this race tests for trail hits: HD's tube (HD, 2048 and Omega), or a burst lent to
     /// a title that authors none (`graphics.trail_hits`, see `load::trail_hits`). With the setting
     /// off a Pulse or Pure race has neither, so the whole path is inert. 2048 and Omega keep the
@@ -1099,6 +1104,7 @@ impl RaceView {
     fn trail_hits_on(&self) -> bool {
         self.hd_trail_active || self.handles.get(Trigger::TrailHitship).is_some()
     }
+
     /// Whether `owner`'s trail has a centre line to test against: HD's tube once seeded, or the
     /// title's own ribbon once its ring is full.
     fn trail_ready(&self, owner: usize) -> bool {
@@ -1108,6 +1114,7 @@ impl RaceView {
             self.exhaust[owner].trail_ready()
         }
     }
+
     /// The closest point on `owner`'s trail centre line to `point`, and how far it is. **The
     /// title's own trail**: HD's tube where the race draws it, the PSP-preset ribbon otherwise.
     /// The ribbon's line ends where it is drawn below [`exhaust::TRAIL_HIT_MIN_BRIGHTNESS`] of
@@ -1120,6 +1127,7 @@ impl RaceView {
             self.exhaust[owner].trail_nearest(point)
         }
     }
+
     /// How far `owner`'s trail reaches either side of its centre line: HD's measured half-width,
     /// or the PSP ribbon's drawn width at its head.
     fn trail_half_width(&self, owner: usize) -> f32 {
@@ -1129,6 +1137,7 @@ impl RaceView {
             self.exhaust[owner].trail_half_width()
         }
     }
+
     fn trail_touches(&self, core: &SimRace, slot: usize, owner: usize) -> bool {
         let bounds = if self.hd_trail_active {
             self.hd_trail[owner].bounds()
@@ -1170,6 +1179,7 @@ impl RaceView {
             .iter()
             .any(|local| near(matrix.transform_point3(*local), half_width))
     }
+
     /// The craft's own authored hull spark anchor nearest `contact`, in world
     /// space, or `None` where the hull authors none.
     ///
@@ -1221,6 +1231,7 @@ impl RaceView {
                     .total_cmp(&(*b - contact).length_squared())
             })
     }
+
     /// How the PSP-preset ribbon's colours reach the screen on this disc: the PS2's
     /// law when the title's `ps2_trail` rule applies to the disc's platform.
     #[must_use]
@@ -1231,6 +1242,7 @@ impl RaceView {
             exhaust::TrailLaw::Ramped
         }
     }
+
     /// Advances every craft's shield shell, and starts the fade on the tick its
     /// timer runs out.
     ///
@@ -1256,6 +1268,7 @@ impl RaceView {
             self.shield[slot].advance(core.sim.dt);
         }
     }
+
     /// Runs the circuit's placed effects one step on the scenery clock - see
     /// `race::scenery_fx`.
     pub(super) fn advance_scenery_fx(&mut self, core: &SimRace, dt: f32) {
@@ -1263,9 +1276,10 @@ impl RaceView {
         self.scenery_fx.advance(&self.effects, dt, seconds);
         self.advance_weather(core, dt);
     }
+
     /// One craft's `engine_flare` locator in **world** space.
     ///
-    /// [`Self::nozzle`] one slot over. The *model-space* locator is the same for
+    /// [`crate::Race::nozzle`] one slot over. The *model-space* locator is the same for
     /// every craft while the whole field wears the player's hull; what differs is
     /// the matrix it is carried through, which is that craft's own pose.
     ///
@@ -1280,6 +1294,7 @@ impl RaceView {
                 .transform_point3(local),
         )
     }
+
     /// The `engine_flare` locator in **model space** - the pivot a transform
     /// composed with the craft's own matrix wants, where [`Self::nozzle_of`]
     /// is the world-space point the trail is laid from. Mixing the two up

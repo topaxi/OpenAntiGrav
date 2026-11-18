@@ -10,7 +10,7 @@
 //! tick nothing asks for it.
 //!
 //! Only where the title authors the spark looping: a burst title (Pulse, Pure) throws its
-//! opponents' sparks from the hull locators instead ([`Race::throw_contact_spark`]) and this
+//! opponents' sparks from the hull locators instead ([`crate::stage::Stage::throw_contact_spark`]) and this
 //! plays nothing.
 //!
 //! **Nothing here is simulation state.**
@@ -41,7 +41,7 @@ struct Held {
 #[derive(Debug, Clone)]
 pub(super) struct FieldSparks {
     held: [Option<Held>; MAX_SHIPS],
-    /// Set by `step_opponents`, read by [`Race::advance_field_sparks`] after the pairs resolve.
+    /// Set by `step_opponents`, read by [`crate::RaceView::advance_field_sparks`] after the pairs resolve.
     pub(super) walls: [Option<oag_physics::wall::WallResponse>; MAX_SHIPS],
 }
 
@@ -71,6 +71,7 @@ impl RaceView {
             .chain(self.viewpoint_eyes())
             .collect()
     }
+
     /// Starts, holds or lets go of the spark of every craft no person flies, from the wall
     /// contact `step_opponents` stashed and the pair contact of this tick.
     pub(super) fn advance_field_sparks(&mut self, core: &SimRace) {

@@ -115,7 +115,7 @@ fn quake(extent_law: bool) -> Option<oag_fx::psys::Effect> {
 
 /// HD's own `WO_QUAKE` has five emitters, all five sprites decode, and its line
 /// emitters spread across the road only when the title lists the effect: the
-/// Quake's driver (`Race::advance_quake_visual`) keys its extent feed, frame and
+/// Quake's driver (`RaceView::advance_quake_visual`) keys its extent feed, frame and
 /// severity on `has_extents`.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]

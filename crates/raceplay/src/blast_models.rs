@@ -34,7 +34,7 @@
 //! technically keeps computing to 1.7 s, but nothing after 1.3 s is visible
 //! once Collapse has run - the two facts do not contradict, they answer
 //! different questions). Nothing here derives one title's numbers from the
-//! other's: [`Race::advance_plasma_blast_models`] and
+//! other's: [`crate::RaceView::advance_plasma_blast_models`] and
 //! [`Race::plasma_blast_draws`] both branch on `RaceView::hd_plasma_blast`
 //! and run one body or the other, never a blend. **Placement differs too**:
 //! Pulse's hemispheres sit in a world-fixed track frame and its halo takes
@@ -544,7 +544,7 @@ impl RaceView {
     /// takes. The hemispheres' frame is read off the track here, see
     /// [`RaceSim::track_frame_at`].
     ///
-    /// Called from [`Race::ignite_blast`] for every Plasma detonation - a
+    /// Called from [`crate::RaceView::ignite_blast`] for every Plasma detonation - a
     /// wall hit and a 10 s timeout alike, since `Plasmas_Update`'s own
     /// teardown pass does not branch on which ended the bolt.
     pub(crate) fn spawn_plasma_blast_model(&mut self, core: &SimRace, position: Vec3) {
@@ -562,6 +562,7 @@ impl RaceView {
             });
         }
     }
+
     /// Starts a Disruptor explosion halo at `position`, in the first free slot,
     /// when the title authors one; dropped when the pool is full.
     pub(crate) fn spawn_disruptor_halo(&mut self, position: Vec3) {
@@ -595,6 +596,7 @@ impl RaceView {
             }
         }
     }
+
     /// Runs the on-craft Disruptor effect's lifecycle one tick: built (`cur` `0`, target `target`)
     /// when a craft becomes disrupted, eased towards its target every tick, its target dropped
     /// to `0` when the disruption ends and freed once `cur` is under the law's floor
@@ -623,6 +625,7 @@ impl RaceView {
             }
         }
     }
+
     /// Ages every live blast one tick, steps its three scale eases and
     /// retires whichever just crossed its title's own lifetime -
     /// `PlasmaBlastLaw::life` on Pulse and Pure, [`HD_BLAST_LIFETIME_SECONDS`]
@@ -634,7 +637,7 @@ impl RaceView {
     /// Called from [`Race::tick`], after the impacts loop that can spawn a
     /// new one this same tick - a blast spawned this tick draws at `age ==
     /// 0.0` for the rest of the frame before its first advance, the same
-    /// one-tick order [`Race::advance_projectile_flares`] already runs a
+    /// one-tick order [`crate::RaceView::advance_projectile_flares`] already runs a
     /// freshly-placed flare in.
     pub(crate) fn advance_plasma_blast_models(&mut self, core: &SimRace, dt: f32) {
         self.advance_disruptor_halos(dt);

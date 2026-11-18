@@ -133,8 +133,6 @@ impl SplitGap {
     }
 }
 
-impl super::Race {}
-
 #[cfg(test)]
 mod tests;
 

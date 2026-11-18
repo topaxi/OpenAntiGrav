@@ -420,6 +420,7 @@ pub fn prepare(
             ..crate::extensions::Prepared::default()
         }
     }
+
     #[cfg(feature = "extensions")]
     {
         if sources.is_empty() {
@@ -579,6 +580,7 @@ pub fn mod_icons(
         let _ = (sources, title, foreign_track, report);
         ModIcons::default()
     }
+
     #[cfg(feature = "extensions")]
     {
         let mut seen = std::collections::BTreeSet::new();

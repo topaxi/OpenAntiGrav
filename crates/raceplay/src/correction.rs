@@ -374,6 +374,7 @@ impl RaceView {
             offset => Mat4::from_translation(offset) * model,
         }
     }
+
     /// `slot`'s body position as drawn at this tick.
     pub(super) fn drawn_position(&self, core: &SimRace, slot: usize) -> Vec3 {
         core.sim.world.ships[slot].physics.body.position + self.correction[slot]

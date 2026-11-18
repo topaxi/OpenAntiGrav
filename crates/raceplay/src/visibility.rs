@@ -209,7 +209,7 @@ impl TrackVisibility {
 
     /// What may be drawn with the camera placed by `section` alone: that section's own row,
     /// with no padding and no second viewpoint, as the original masks a camera that stands on
-    /// an authored station ([`Race::station_camera_section`]).
+    /// an authored station ([`crate::RaceView::station_camera_section`]).
     #[must_use]
     pub(super) fn set_exact(
         &self,

@@ -1,4 +1,4 @@
-//! The Quake wave's riding effect: [`Race::advance_quake_visual`].
+//! The Quake wave's riding effect: [`crate::RaceView::advance_quake_visual`].
 //!
 //! Split out of `visuals.rs` under the 1,000-line rule; a move.
 
@@ -71,7 +71,7 @@ impl RaceView {
     /// (`core.sim.world.quake` becomes `None`), as `Quake_Update` does
     /// (`Psys_ReleaseHandle`, `now != 0`): the same "hand the slot back, free
     /// the templates, let the particles fade" shape
-    /// [`Race::advance_projectile_flares`] takes.
+    /// [`crate::RaceView::advance_projectile_flares`] takes.
     pub(crate) fn advance_quake_visual(&mut self, core: &SimRace) {
         let Some(wave) = core.sim.world.quake else {
             self.quake_point = None;

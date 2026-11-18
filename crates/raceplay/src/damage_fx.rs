@@ -195,6 +195,7 @@ impl RaceView {
             self.damage_fx.hold[slot] = HOLD;
         }
     }
+
     /// A landed LeachBeam hit on `slot`, on a title whose hit spark is not
     /// thrown from the hull's locators (HD): one burst of
     /// [`Trigger::LeachHitSpark`] attached at the craft's damage-effect point.
@@ -221,6 +222,7 @@ impl RaceView {
             self.damage_fx.started += 1;
         }
     }
+
     /// Ends `slot`'s previous damage state outright, particles included (`0x002a1994`, which
     /// calls `0x0027f7b0(.., 1)` and `0x00285868`; `particle-triggers.md`, "the damage smoke
     /// re-read").
@@ -234,6 +236,7 @@ impl RaceView {
             !ends
         });
     }
+
     /// Counts the holds down and keeps every emitting smoke on its craft.
     /// Before `Stage::advance`, like the hit sparks.
     pub(super) fn advance_damage_smoke(&mut self, core: &SimRace) {

@@ -15,7 +15,7 @@
 //! sky, the fog and PVS eye, the billboards' axes, the reticle - follows),
 //! the speed terms of [`crate::RaceView::vertical_fov`], and [`crate::RaceView::ship_model_matrix_of`]
 //! (the hull, its shield, flame, plume, shadow map, exhaust nozzle and HD
-//! engine lights), and [`Race::body_between`] for what reads the body (the
+//! engine lights), and [`crate::RaceView::body_between`] for what reads the body (the
 //! blob shadow's ray). Then what
 //! moves on its own: every projectile's body and billboard
 //! ([`Race::projectile_between`]), the replay ghost
@@ -302,7 +302,7 @@ impl Race {
     /// between ticks would sweep from it to this one: `None` where the draw shows
     /// this tick as it is (no previous tick, a respawn or a change of whether it
     /// is racing, or a move past [`SNAP_DISTANCE`] in the model or the body).
-    /// The same cases [`crate::RaceView::ship_model_matrix_of`] and [`Self::body_between`]
+    /// The same cases [`crate::RaceView::ship_model_matrix_of`] and [`crate::RaceView::body_between`]
     /// skip a blend on.
     #[must_use]
     pub fn ship_swept_from(&self, slot: usize) -> Option<Mat4> {
@@ -541,6 +541,7 @@ impl RaceView {
     pub fn draw_alpha(&self) -> f32 {
         self.poses.alpha
     }
+
     fn camera_key(&self, core: &SimRace) -> CameraKey {
         CameraKey {
             cuts: self.camera_cuts(core),
@@ -548,6 +549,7 @@ impl RaceView {
             overridden: self.camera_override.is_some(),
         }
     }
+
     /// The previous tick's camera and the alpha to blend it by, `None` where
     /// this read is the current tick exactly.
     fn camera_between(&self, core: &SimRace) -> Option<(&CameraPose, f32)> {
@@ -556,6 +558,7 @@ impl RaceView {
         (poses.alpha < 1.0 && previous.camera.key == self.camera_key(core))
             .then_some((&previous.camera, poses.alpha))
     }
+
     /// A view matrix at the draw alpha: `current` is this tick's, `previous`
     /// picks the same matrix out of the previous tick's camera.
     pub(super) fn view_between(
@@ -569,6 +572,7 @@ impl RaceView {
             None => current,
         }
     }
+
     /// One of the camera's speed terms at the draw alpha, on the same terms
     /// as [`Self::view_between`].
     pub(super) fn camera_scalar_between(
@@ -585,6 +589,7 @@ impl RaceView {
             None => current,
         }
     }
+
     /// The craft in `slot`'s model matrix at the draw alpha, `current` being
     /// this tick's.
     pub(super) fn ship_between(&self, core: &SimRace, slot: usize, current: Mat4) -> Mat4 {
@@ -595,6 +600,7 @@ impl RaceView {
             _ => current,
         }
     }
+
     /// The alpha to blend by when the craft in `slot` is swept this draw,
     /// `None` when it is drawn at this tick.
     fn ship_alpha(&self, core: &SimRace, slot: usize) -> Option<f32> {
@@ -615,6 +621,7 @@ impl RaceView {
         body.position = self.drawn_position(core, slot);
         body
     }
+
     /// Keeps this tick's draw poses as the previous ones, before the tick
     /// moves them: the first thing every tick path does.
     pub(super) fn capture_poses(&mut self, core: &SimRace) {
@@ -666,6 +673,7 @@ impl RaceView {
         ));
         self.poses.projectiles = projectiles;
     }
+
     /// The craft in `slot`'s body at the draw alpha, for a draw that reads the
     /// body rather than the hull's matrix: its position lerped and orientation
     /// slerped from a tick ago, on the same snaps as

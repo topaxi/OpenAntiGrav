@@ -239,8 +239,6 @@ impl SceneryFx {
     }
 }
 
-impl super::Race {}
-
 impl super::RaceSim {
     /// Where the segment `from..to` crosses a floor from above, and that
     /// floor's normal: the same read-only cast the blob shadows make.
@@ -264,8 +262,6 @@ impl super::RaceSim {
             .map(|hit| (hit.point, hit.normal))
     }
 }
-
-impl super::Race {}
 
 #[cfg(feature = "view")]
 impl RaceView {
@@ -297,6 +293,7 @@ impl RaceView {
             .advance_weather(&self.effects, dt, camera, section);
         self.advance_splashes(core, dt);
     }
+
     /// Whether the enhanced weather's extras run: the player's setting, or a track
     /// module's rain, which forces them on whatever the setting says. A circuit's own
     /// authored weather stays under the setting alone.
@@ -304,6 +301,7 @@ impl RaceView {
     pub fn enhanced_weather(&self) -> bool {
         self.weather.is_enhanced() || self.scenery_fx.weather().is_driven_active()
     }
+
     /// The enhanced weather's one step: ages the splashes and throws one
     /// where a drop's last move crossed a floor. **Nothing runs at `original`**
     /// beyond clearing what a switch back left behind, so that frame is the
@@ -342,6 +340,7 @@ impl RaceView {
             splashes.spawn(at, normal, snow);
         }
     }
+
     /// Whether `point`, a hit on the track, lies in a covered section: the
     /// section of the spline sample nearest it, tested with the original's
     /// own mask (`Section_IsCovered`), wherever the camera is. **A point the
@@ -358,6 +357,7 @@ impl RaceView {
                 .weather()
                 .section_is_covered(i32::from(section))
     }
+
     /// The lens as a world frame: where it is and where its axes point.
     pub(super) fn camera_frame(&self, core: &SimRace) -> psys::field::Frame {
         let world = self.view(core).inverse();

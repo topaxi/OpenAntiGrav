@@ -154,29 +154,24 @@ impl Race {
 #[cfg(feature = "view")]
 impl Stage<'_> {
     /// A shell bulge on `slot`, if this tick is drawn. View-only.
-    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn shield_hit(&mut self, core: &SimRace, slot: usize) {
-        #[cfg(feature = "view")]
         self.note_shield_hit(core, slot);
-        #[cfg(feature = "view")]
         if self.draws()
             && let Some(shell) = self.view.shield.get_mut(slot)
         {
             shell.hit();
         }
     }
+
     /// `slot`'s shield coming up, if this tick is drawn. View-only.
-    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn shield_activate(&mut self, slot: usize) {
-        #[cfg(feature = "view")]
         if self.draws() {
             self.view.shield[slot].activate();
         }
     }
+
     /// `slot`'s boost plume lighting, if this tick is drawn. View-only.
-    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn boost_plume(&mut self, slot: usize) {
-        #[cfg(feature = "view")]
         if self.draws() {
             self.view.exhaust[slot].boost(exhaust::BOOST_SECONDS);
         }

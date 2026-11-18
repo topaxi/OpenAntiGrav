@@ -854,7 +854,7 @@ impl Gamma {
 /// original reason was that `<ExternalCameraFar fov>`'s unit was unrecovered, so
 /// a row letting a player type `90` would assert a unit this project had not
 /// established. **That reason expired on 2026-08-09**: the unit is vertical
-/// degrees at confidence 94 (see `oag_raceplay::Race::projection`).
+/// degrees at confidence 94 (see `oag_raceplay::RaceView::projection`).
 ///
 /// The row stays a percentage on a different and weaker argument, recorded so
 /// the next reader can overrule it rather than assume it was never revisited:
@@ -958,7 +958,7 @@ percentage!(Fov, AUTHORED, "field of view");
 /// a calibration instruction ("the measured original sits nearest the 32
 /// tier") and that reading is withdrawn.
 ///
-/// See `oag_raceplay::Race::projection` for where it is applied and
+/// See `oag_raceplay::RaceView::projection` for where it is applied and
 /// `oag_raceplay::BOOST_FOV_OPEN_RATE`/`BOOST_FOV_CLOSE_RATE` for how it moves.
 ///
 /// **A number, the same idiom as [`Fov`] itself**, rather than a named tier:
@@ -973,7 +973,7 @@ percentage!(Fov, AUTHORED, "field of view");
 pub struct BoostFovKick(u32);
 
 impl BoostFovKick {
-    /// No kick at all. `oag_raceplay::Race::projection` returns the input
+    /// No kick at all. `oag_raceplay::RaceView::projection` returns the input
     /// bit-identical here, the same escape hatch [`Fov::AUTHORED`] is.
     pub const OFF: Self = Self(0);
 
@@ -992,7 +992,7 @@ impl BoostFovKick {
     /// The tiers the menus offer: off, then three doublings.
     pub const OFFERED: [Self; 4] = [Self::OFF, Self::SUBTLE, Self::DEFAULT, Self(32)];
 
-    /// The multiplier `oag_raceplay::Race::projection` widens the tangent by
+    /// The multiplier `oag_raceplay::RaceView::projection` widens the tangent by
     /// at full boost.
     #[must_use]
     pub fn gain(self) -> f32 {

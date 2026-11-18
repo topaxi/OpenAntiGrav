@@ -141,7 +141,7 @@ impl RaceView {
     ///   split. All four are released when the slot empties (`Repulser_Reset`).
     ///
     /// The field model `Data\Weapons\pulse_repulsorwave.vex` steps here too
-    /// ([`Race::advance_repulser_fields`]), and the blast takes the field's
+    /// ([`crate::RaceView::advance_repulser_fields`]), and the blast takes the field's
     /// unscaled basis turned by its spin, the matrix `+0x1a0` it is anchored
     /// to (`Repulser_UpdateFieldModel`, `0x08876168`).
     pub(crate) fn advance_repulser_visual(&mut self, core: &SimRace) {

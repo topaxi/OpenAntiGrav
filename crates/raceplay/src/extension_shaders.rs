@@ -66,6 +66,7 @@ pub fn load(
         let _ = (sources, title, foreign_track, report);
         ModShaders::default()
     }
+
     #[cfg(feature = "extensions")]
     {
         let mut out = ModShaders::default();

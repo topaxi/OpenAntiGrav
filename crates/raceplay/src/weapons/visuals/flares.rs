@@ -1,5 +1,5 @@
-//! The free functions behind [`Race::advance_projectile_flares`] and
-//! [`Race::ignite_missile_bounces`]: which effect a projectile rides, how
+//! The free functions behind [`crate::RaceView::advance_projectile_flares`] and
+//! [`crate::RaceView::ignite_missile_bounces`]: which effect a projectile rides, how
 //! one riding instance attaches, follows and detaches, the Missile's two
 //! orbiting anchors, the Plasma's charge-scaled glow, and the bounce burst's
 //! gate and name.
@@ -16,7 +16,7 @@ use super::super::*;
 /// Pure's laid Bomb's [`Trigger::BombGlow`] and Disruptor's [`Trigger::DisruptorHead`], or
 /// `None` for everything else, a Mine included.
 ///
-/// Split out of [`Race::advance_projectile_flares`] so the gate is testable
+/// Split out of [`crate::RaceView::advance_projectile_flares`] so the gate is testable
 /// without a loaded `psys` library: the bug this replaced (`kind.is_none()`,
 /// true for any live projectile) could only be seen with a real effect
 /// asset attached, which a headless unit test has no disc to load. See that
@@ -61,7 +61,7 @@ pub(crate) fn late_attach(
 
 /// One riding flare instance's whole state machine for one tick: attach,
 /// follow, or detach, by name and position - shared by
-/// [`Race::advance_projectile_flares`]'s primary anchor (every rider) and
+/// [`crate::RaceView::advance_projectile_flares`]'s primary anchor (every rider) and
 /// orbiting anchor (the Missile's second one only).
 ///
 /// A free function taking the stage and the library by reference rather than
@@ -287,7 +287,7 @@ pub(crate) fn missile_flare_anchors(position: Vec3, velocity: Vec3, age: f32) ->
 }
 
 /// Whether a projectile's own bounce counter says it glanced off a wall this
-/// tick - split out of [`Race::ignite_missile_bounces`] for the same reason
+/// tick - split out of [`crate::RaceView::ignite_missile_bounces`] for the same reason
 /// [`flare_effect_for`] is: testable without a loaded `psys` library.
 ///
 /// Only a Missile carries a counter that ever moves (see

@@ -7,7 +7,7 @@
 //!
 //! The primary slot's entry is exactly what the fields it replaced were, advanced
 //! at the same point of the tick; the other slots' entries are advanced only while
-//! a split is drawn ([`Race::advance_slot_huds`]), so a race with one view does
+//! a split is drawn ([`crate::RaceView::advance_slot_huds`]), so a race with one view does
 //! what it always did.
 
 use super::*;
@@ -299,7 +299,7 @@ impl RaceView {
     /// One tick of the HUD bars of every slot a view is drawn for: the primary
     /// always, and with a split the other viewed slots too.
     ///
-    /// Called from [`Self::tick`] at the place the primary's four separate
+    /// Called from [`crate::Race::tick`] at the place the primary's four separate
     /// advances used to be, after the shield pool's last writer and after
     /// [`Self::advance_absorb_bursts`].
     pub(super) fn advance_slot_huds(&mut self, core: &SimRace) {

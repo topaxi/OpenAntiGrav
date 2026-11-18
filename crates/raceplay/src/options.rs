@@ -418,7 +418,7 @@ pub struct Options {
     ///
     /// A verification aid for the draw path alone - see the `--trail-sparks`
     /// flag, which is the only thing that sets it, and
-    /// `Race::advance_trail_hits` for why the two need separating.
+    /// `RaceView::advance_trail_hits` for why the two need separating.
     pub trail_sparks: bool,
     /// The world generator's seed, or `None` for [`SEED`].
     ///

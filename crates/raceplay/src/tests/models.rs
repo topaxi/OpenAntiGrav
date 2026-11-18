@@ -1,4 +1,4 @@
-//! `Race::ship_model_matrix_of` and `RaceSim::ship_active`: the slot-indexed
+//! `RaceView::ship_model_matrix_of` and `RaceSim::ship_active`: the slot-indexed
 //! accessors `Scene::render`'s per-craft loops use instead of `zip`ping onto
 //! [`Race::ship_model_matrices`]' filtered, gap-closed list.
 //!
@@ -62,7 +62,7 @@ fn ship_model_matrix_of_does_not_move_when_another_slot_goes_inactive() {
 /// hold slot 3's matrix now holds slot 4's. `zip`ping that list onto
 /// slot-indexed drawables (`self.ships[3]`, `self.ships[4]`, ...) would have
 /// written slot 4's pose into drawable 3 and shifted every craft after it by
-/// one - which is exactly why the fix reads [`Race::ship_model_matrix_of`] by
+/// one - which is exactly why the fix reads [`RaceView::ship_model_matrix_of`] by
 /// slot instead. `Race::ship_model_matrices` itself is unchanged; it still
 /// filters, and callers that do not need slot alignment - none left in
 /// `Scene::render`, but the accessor is still public - can still use it.

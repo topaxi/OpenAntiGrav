@@ -1,4 +1,4 @@
-//! What a fired weapon *shows*: the blasts [`Race::ignite_blast`] plays, the
+//! What a fired weapon *shows*: the blasts [`crate::RaceView::ignite_blast`] plays, the
 //! flares riding each live projectile, the Missile's own wall-bounce burst,
 //! and the sprites/matrices a caller with no model draws them as instead.
 //!
@@ -29,11 +29,11 @@ pub(crate) const PLASMA_BALL_SCALE: [f32; 3] = [0.5625, 0.5625, 0.421_875];
 impl Race {
     /// Where the ball model of the beam in pool entry `entry` sits this frame,
     /// or `None` when nothing is drawn - no [`oag_weapons::projectile::leach_beam::Kind::Locked`]
-    /// beam this tick, the same gate [`Self::advance_leach_beam_ribbon`]
+    /// beam this tick, the same gate [`crate::RaceView::advance_leach_beam_ribbon`]
     /// takes for the ribbon.
     ///
     /// Reads the beam's path fresh rather than anything this tick's
-    /// [`Self::advance_leach_ball_hd`] captured, so a caller at draw time
+    /// [`crate::RaceView::advance_leach_ball_hd`] captured, so a caller at draw time
     /// (after the tick that moved the craft) places the ball on the strip as it
     /// is drawn now.
     ///
@@ -344,7 +344,7 @@ impl Race {
     /// **HD only** - `oag_gameplay`'s `Projectile` carries no charge/flight
     /// distinction the mesh needs to be hidden during, so this draws
     /// whenever a Plasma is live, charging or flying, the same set
-    /// [`Race::advance_projectile_flares`] rides the glow on. Velocity-
+    /// [`crate::RaceView::advance_projectile_flares`] rides the glow on. Velocity-
     /// oriented like the Rocket's and the Cannon round's: `Plasma_PostUpdate`
     /// (`0x00121418`) does place the bolt with a full basis, not a bare
     /// translation, but that function's own second axis (a carried surface
@@ -433,7 +433,7 @@ impl RaceView {
     /// not another weapon's.
     ///
     /// **Recovered for the Rocket, the Missile, the Mine and the Bomb.** See
-    /// [`Race::blast_for`] for the map and the reading behind each arm.
+    /// [`crate::RaceView::blast_for`] for the map and the reading behind each arm.
     /// `orientation` is the frozen pose a laid charge detonated with
     /// ([`oag_weapons::projectile::mine::frozen_pose`]) - unused by every
     /// arm but the Bomb's, which needs it to place its own two `.vex`
@@ -453,7 +453,7 @@ impl RaceView {
     /// would emit from the craft instead. It is one hull-mounted emitter, and
     /// this is why the stage exists alongside it.
     ///
-    /// [`blast_for`]: Race::blast_for
+    /// [`blast_for`]: crate::RaceView::blast_for
     pub(crate) fn ignite_blast(
         &mut self,
         core: &SimRace,
@@ -464,6 +464,7 @@ impl RaceView {
     ) -> Option<psys::Playing> {
         self.ignite_blast_aged(core, kind, point, struck, orientation, 0)
     }
+
     /// [`Self::ignite_blast`] for a detonation `age_ticks` ago, which a network client first
     /// learns of late (`crate::catch_up`): the screen flash joins its ramp at that age. The
     /// particle effect is returned fresh for the caller to pre-age.
@@ -517,8 +518,9 @@ impl RaceView {
         // read as feeding it. See `oag_fx::sparks::severity`.
         self.stage.play(&effect, at, 1.0)
     }
+
     /// Which explosion a hit plays and where, or `None` for a weapon with no
-    /// recovered detonation effect - split out from [`Race::ignite_blast`] so
+    /// recovered detonation effect - split out from [`crate::RaceView::ignite_blast`] so
     /// the recovered part can be asserted without a disc to load the effect
     /// from.
     ///
@@ -600,7 +602,7 @@ impl RaceView {
             // `WeaponExplosions_Start`, not `Plasma_SpawnDetonation`'s
             // `WO_PLASMA_FLASH`. `WO_PLASMA_LIGHTNING_COLLAPSE`, the other
             // half of HD's pair, fires later and is not from here - see
-            // `Race::advance_plasma_blast_models`.
+            // `RaceView::advance_plasma_blast_models`.
             oag_tables::weapons::Weapon::Plasma => Some((
                 if self.hd_plasma_blast {
                     Trigger::PlasmaLightningExpand
@@ -650,6 +652,7 @@ impl RaceView {
             }
         }
     }
+
     /// One tick of `LeachBeam_Advance`'s presentation half for as long as a
     /// *locked* beam exists - through its disconnect linger too, which the
     /// original also advances (measured: the ribbon's cursor steps and the
@@ -678,6 +681,7 @@ impl RaceView {
             self.advance_leach_beam_ribbon_at(core, cues, at);
         }
     }
+
     /// [`Self::advance_leach_beam_ribbon`] for the beam in pool entry `at`: the
     /// ribbon, effect and ball clock of an entry follow its beam, and are torn
     /// down when the entry holds none (or an unlocked one).
@@ -707,7 +711,7 @@ impl RaceView {
             .position;
         let dt = core.sim.dt;
         // Split the two fields rather than borrowing `(*self)` twice at
-        // once - the same idiom `Race::force_trail_sparks`'s own
+        // once - the same idiom `RaceView::force_trail_sparks`'s own
         // `(player, rng)` pair uses.
         let (ribbon, rng) = (&mut self.leach_beam_ribbon[at], &mut self.leach_beam_rng);
         let ribbon = ribbon.get_or_insert_with(|| oag_fx::beam::Ribbon::new(rng));
@@ -744,6 +748,7 @@ impl RaceView {
 
         self.advance_leach_ball_hd(core, at, beam, dt);
     }
+
     /// Wipeout HD's own LeachBall drain trip - `LeachBall_Advance`'s
     /// recovered law (`oag_weapons::projectile::leach_beam::trip`), run alongside Pulse's
     /// ribbon above rather than instead of it: both are driven from the same
@@ -753,7 +758,7 @@ impl RaceView {
     ///
     /// **Fires the burst.** The model's own per-frame placement is a
     /// separate read of the same accumulator - see
-    /// [`Self::leach_ball_model_matrix`] - since a draw call needs this
+    /// [`crate::Race::leach_ball_model_matrix`] - since a draw call needs this
     /// frame's position whether or not this tick happened to wrap.
     ///
     /// On a title that drains per trip the simulation carries the
@@ -796,6 +801,7 @@ impl RaceView {
             self.stage.play(effect, point, 1.0);
         }
     }
+
     /// The second detonation a Pulse Plasma craft hit spawns, at the struck
     /// craft's body position, or `None` when the hit has no second one.
     ///
@@ -822,6 +828,7 @@ impl RaceView {
         let ship = core.sim.world.ships.get(slot).filter(|ship| ship.active)?;
         Some(ship.physics.body.position)
     }
+
     /// Keeps an [`Trigger::EngineFlare`] instance on every active craft's
     /// nozzle, where the source authors one.
     ///
@@ -860,6 +867,7 @@ impl RaceView {
             }
         }
     }
+
     /// Keeps each live projectile's own flare instance riding it - the
     /// Rocket's [`Trigger::RocketFlare`], the Missile's [`Trigger::MissileFlare`]
     /// - and takes it off the ones that are gone.
@@ -876,7 +884,7 @@ impl RaceView {
     /// `kind.is_none()` alone would attach the Rocket's looping flare to a
     /// mine or a bomb the instant it was laid - a fire riding a charge from
     /// the moment it landed rather than from its detonation, which
-    /// [`Race::ignite_blast`] is the only thing that plays.
+    /// [`crate::RaceView::ignite_blast`] is the only thing that plays.
     ///
     /// A projectile that stops riding a flare **releases** it, not kills it
     /// (`Psys_ReleaseHandle` with `now != 0`, which `RocketPool_Update`,
@@ -1064,8 +1072,9 @@ impl RaceView {
             }
         }
     }
+
     /// One live projectile's model matrix as this tick leaves it, never
-    /// blended: [`Self::projectile_model_matrices`]'s per-slot body, shared
+    /// blended: [`crate::Race::projectile_model_matrices`]'s per-slot body, shared
     /// with the pose history in `between_ticks`.
     pub(crate) fn projectile_matrix(
         &self,

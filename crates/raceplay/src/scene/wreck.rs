@@ -113,7 +113,7 @@ impl Scene {
     }
 
     /// Whether the hull is left undrawn for `slot`: the player's own in the
-    /// cockpit view (`Race::draws_own_ship`), or any craft whose wreck is live.
+    /// cockpit view (`RaceView::draws_own_ship`), or any craft whose wreck is live.
     pub(super) fn hull_skipped(&self, race: &Race, slot: usize) -> bool {
         (slot == 0 && !race.view.draws_own_ship()) || self.is_wrecked(race, slot)
     }

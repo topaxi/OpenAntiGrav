@@ -229,7 +229,7 @@ mod tests;
 impl RaceView {
     /// Steps every live Repulser's field model one tick, starting one on the
     /// tick its slot fills and dropping it when the slot empties. Called from
-    /// [`Race::advance_repulser_visual`].
+    /// [`crate::RaceView::advance_repulser_visual`].
     pub(crate) fn advance_repulser_fields(&mut self, core: &SimRace) {
         for index in 0..POOL_SIZE {
             let Some(repulser) = core.sim.world.repulsers[index] else {

@@ -145,7 +145,6 @@ impl Stage<'_> {
     /// non-zero, and that is the node `ShipMuzzle_Importer` builds from the hull's
     /// own locator: a hull that authors none (`Ship::muzzle` is `None`) plays nothing
     /// (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor").
-    #[cfg(feature = "view")]
     pub(crate) fn play_disruptor_launch(&mut self, core: &SimRace, slot: usize) {
         if !self.draws() {
             return;
