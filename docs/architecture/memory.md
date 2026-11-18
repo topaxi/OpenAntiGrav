@@ -25,8 +25,16 @@ load 3 to 6):
 | iGPU, Race Box Single Race + `slipstream` first, then Time Trial twice, before | 1432 | 1993 | 2296 | |
 | same, after | 1226 | 1226 | 1235 | |
 
-`RssAnon` carries the whole growth; `RssFile` and `RssShmem` stay at 70 to 80 MB
-and 0, so GPU-mapped (GTT) buffers are not in this number on RADV.
+Every number is from `target/debug` (dependencies at opt-level 2); a release
+build was not measured. `RssAnon` carries the whole growth and `RssFile` and
+`RssShmem` stay at 70 to 80 MB and 0: the growth is anonymous heap, and the
+overlay line would not show a GPU-side leak on this driver.
+
+**Per-race or one-time?** Neither cleanly: it is allocator retention that jumps
+at race 2 (+570 MB on the iGPU, +560 with `slipstream` first) and tapers off
+(+0 to +60, then +300 in the `slipstream` flow). After the fix all races read
+within 40 MB of each other, including the flow that loads the WebAssembly host
+in race 1 only, so that host leaves nothing behind.
 
 **What survives a race.** Nothing at the Rust level. `mallinfo2` (through a
 `LD_PRELOAD` shim answering a signal) over four unfixed races shows the bytes in
@@ -52,14 +60,19 @@ where a lot was just freed, never on the frame thread:
 
 - the end of `race_build::build` (the load's decode buffers are free once the
   scene is built), on the `race-build` thread;
-- the `race-drop` thread, after it drops a parked or quit race;
-- a short `heap-trim` thread started at the race hand-off
-  (`Session::finish_race_loading`), for what the swap of the loading stage
-  frees.
+- the `race-drop` thread, after it drops a parked or quit race.
+
+A third trim at the race hand-off (a `heap-trim` thread in
+`Session::finish_race_loading`, for what the swap of the loading stage frees)
+was measured and dropped: with it off, the iGPU read 1090/1096/1108/1098,
+1108/1101/1111/1095 and 1081/1110/1102/1119 over three four-race runs, the same
+as with it on.
 
 A trim takes 6 to 20 ms (`RUST_LOG=oag_game=debug`, "returned freed heap").
 `a_race_let_go_is_dropped_and_the_heap_returned_by_the_drop_thread` pins the
-call (a canary dead and the release count up by one once the drop thread ends).
+drop thread's call (a canary dead and the release count up by one once the
+thread ends) and `race_build_polls_never_wait_on_the_build` (disc-backed) the
+build's.
 
 **Measuring it.** An in-race number is easy to take at the wrong moment: the
 drive's `ticks N` is unthrottled, a 3000-tick race lasts a quarter of a second,
@@ -82,6 +95,34 @@ frame time and the input latency of a presented frame need a window and were
 not measured on the Deck; an input is sampled once per tick into the
 `InputSnapshot`, which does not depend on the heap.
 
+
+**Reproducing it.** One process, several Race Box races, resident set read
+while the race is the stage (the walk's `ticks N` is unthrottled, so a 3000-tick
+race lasts a quarter of a second and a pause frees about 450 MB of the race's
+live state by itself: poll `VmRSS` every 20 ms and keep the last value of
+`"stage":"race"`, not a sample taken after the next state line):
+
+```sh
+# a profile of its own; MESA_VK_DEVICE_SELECT=1002:164e! is the Raphael iGPU, 1002:747e! the RX 7800 XT
+export XDG_CONFIG_HOME=$P/c XDG_DATA_HOME=$P/d XDG_STATE_HOME=$P/s
+env -u DISPLAY -u WAYLAND_DISPLAY MESA_VK_DEVICE_SELECT=1002:164e! \
+  oag-game data/images/hdfury-ps3-eu.iso --no-audio --no-intro --state-log state.jsonl --drive '
+    boot; select racebox; press cross; until page=race
+    select launch_race; press cross; until screen=picker within 600; press cross
+    until screen=picker within 600; press cross; until stage=race within 3000; ticks 3000; escape; ticks 60
+    select quit_race; press cross; until page=main within 600; select racebox; press cross; until page=race within 600
+    select launch_race; ...   # the same three lines again for each further race'
+```
+
+`slipstream` first: `OAG_MODS=assets/mods/official`, `[mods] enabled =
+["oag.slipstream"]` in the profile's `settings.toml`, `set race.mode=single_race`
+for race 1 and `set race.mode=time_trial` after. The live-versus-free split is
+`mallinfo2` read from inside the process: `LD_PRELOAD` a shared object whose
+constructor blocks `SIGUSR1`/`SIGUSR2` and starts a thread in `sigwait`; on
+`SIGUSR1` it appends `arena`, `hblkhd`, `uordblks` and `fordblks` of
+`mallinfo2()` to a file, on `SIGUSR2` it calls `malloc_trim(0)` first (a handler
+doing the same can deadlock inside a `malloc`). Send `SIGUSR1` from the poller.
+
 ## Open
 
 - A race holds about 1.1 GB in play on this build (debug, opt-level 2 for
@@ -90,6 +131,8 @@ not measured on the Deck; an input is sampled once per tick into the
   the race is parked behind the pause menu; what it is has not been attributed.
 - Windows and macOS were not measured; their allocators return memory
   differently and `release_freed` does nothing there.
+- Not yet checked: the Steam Deck itself, the campaign Time Trial path (the
+  walk used Race Box) and the second race's lag on a presented frame.
 - A race that ends by finishing is dropped in place on the frame thread
   (`Session::open_menus`), not through `drop_off_thread`; the next build's trim
   covers its memory.

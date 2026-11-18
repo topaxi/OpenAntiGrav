@@ -9,7 +9,8 @@
 //!
 //! [`release_freed`] is that call. It takes each arena's lock in turn, so it runs on the thread
 //! that has just finished the work that freed the memory (the race build and the race drop),
-//! never on the frame thread.
+//! never on the frame thread. A third call at the race hand-off, for what the loading stage's swap
+//! frees, moved no number and was dropped (`docs/architecture/memory.md`).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -31,18 +32,6 @@ pub fn release_freed() {
         let start = web_time::Instant::now();
         trim();
         log::debug!("returned freed heap to the system in {:?}", start.elapsed());
-    }
-}
-
-/// [`release_freed`] on a thread of its own, for a caller that is the frame thread. The thread
-/// is detached: the trim is harmless to cut off at exit.
-pub fn release_freed_off_thread() {
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Err(e) = std::thread::Builder::new()
-        .name("heap-trim".to_string())
-        .spawn(release_freed)
-    {
-        log::debug!("could not trim the heap off the frame thread: {e}");
     }
 }
 

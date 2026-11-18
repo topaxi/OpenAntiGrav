@@ -96,6 +96,7 @@ fn race_build_polls_never_wait_on_the_build() {
         anim_seconds: None,
     };
 
+    let releases_before = crate::heap::releases();
     let started = Instant::now();
     let mut worker = BuildWorker::spawn(request, loaded);
     let mut polls = 0u32;
@@ -138,6 +139,11 @@ fn race_build_polls_never_wait_on_the_build() {
             crate::app::loading_stage::RaceBuildError::Load(e)
             | crate::app::loading_stage::RaceBuildError::Gpu(e) => format!("{e:#}"),
         })
+    );
+    // The build hands the heap its decode buffers freed back before it returns.
+    assert!(
+        crate::heap::releases() > releases_before,
+        "the build ended without returning the freed heap"
     );
     // Structural, and immune to a contended machine: the build took many
     // frames, so the first poll cannot have been the one that waited for it.

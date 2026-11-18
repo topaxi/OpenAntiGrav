@@ -1198,9 +1198,6 @@ impl Session {
             ),
         }
         debug!("race music started in {:?}", music_start.elapsed());
-        // The loading screen and the load's last buffers went with the stage swap above, after
-        // the build's own trim: whatever they held is free but resident until this returns it.
-        crate::heap::release_freed_off_thread();
         self.gpu
             .output
             .window
