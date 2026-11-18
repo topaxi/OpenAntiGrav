@@ -319,6 +319,13 @@ impl Scene {
         stamps: &'a [Stamp],
         view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
     ) -> SceneStats {
+        // The recorder names the caustic frame by the animation clock, which a view's prepare
+        // sets; this frame's, not the last one's, is what the first view's recording reads.
+        self.anim_clock.set(
+            settings
+                .anim_seconds
+                .unwrap_or_else(|| race.world_clock_seconds()),
+        );
         let recorder = self.recorder();
         let last = slots.len() - 1;
         let mut stats = SceneStats::default();
