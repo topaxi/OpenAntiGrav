@@ -220,7 +220,7 @@ impl SimRace {
         self.outcome.run_stats
     }
 
-    /// The team id each grid slot flew, slot 0 the player's - [`Setup::slot_teams`].
+    /// The team id each grid slot flew, slot 0 the player's - [`SimSetup::slot_teams`].
     ///
     /// What a finished race's tables label a row with. Read here rather than
     /// rebuilt from the catalogue, because the roster is a seeded draw (see

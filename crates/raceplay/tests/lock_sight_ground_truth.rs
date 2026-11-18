@@ -302,7 +302,7 @@ fn a_leachbeam_in_hand_locks_a_craft_on_a_real_circuit() {
     use oag_race::sight;
 
     let Some(loaded) = single_race() else { return };
-    // **No dialect call: `Race::start` takes it from the load** (`Setup::sight`),
+    // **No dialect call: `Race::start` takes it from the load** (`SimSetup::sight`),
     // so this is Pulse's reticle and the LeachBeam's own law, which is what the
     // game runs - not the Missile's with the LeachBeam's art. A start that stopped
     // applying it would lock at tick 48, not 20, and fail below.
@@ -583,7 +583,7 @@ fn hd_draws_its_own_four_leachbeam_sight_widgets_when_held() {
 /// **That screen is why this test exists.** A reticle projecting into the PSP's
 /// 480x272 while the layout draws in 1920x1080 lands in the top-left ninth of
 /// the picture and never leaves it - which is what HD did until
-/// `Setup::sight`, and which reads on screen as a stray widget rather
+/// `SimSetup::sight`, and which reads on screen as a stray widget rather
 /// than as a missing one.
 #[test]
 #[ignore = "needs a disc image in data/images/"]

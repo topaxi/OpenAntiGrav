@@ -10,6 +10,9 @@ use log::{debug, info, warn};
 impl Race {
     /// Starts a race: one ship, on the racing line, at the start of the spline.
     ///
+    /// `setup` is what the simulation is built from, `view` what the picture and the sound
+    /// are, and `modules` the simulation modules the race runs ([`RaceSim::extensions`]).
+    ///
     /// **It does not learn the speed plans.** They are this project's driver's
     /// (`oag_ai::plan`) and cost seconds a long circuit (HD's default: 3.0 to
     /// 3.7 s of a 5.2 to 5.9 s start, release; the per-hull adapted plans and
@@ -391,7 +394,7 @@ impl Race {
         // confirmed on the running original, AI DIFFICULTY greyed to N/A the
         // same way WEAPONS is - so those three spawn the player alone, the way
         // the original does, and a single race fields the grid. `opponents` is
-        // the verification override [`Setup::opponents`] documents.
+        // the verification override [`SimSetup::opponents`] documents.
         //
         // Skipped entirely when the caller overrode the pose: an override exists
         // to put *one* craft somewhere specific, and surrounding it with a grid
@@ -797,8 +800,7 @@ impl Race {
                 viewpoints: Default::default(),
                 internal_params: internal,
                 // The default rather than the settings file's value, for the reason
-                // `set_boost_fov_kick` gives: `Setup` is what a *headless* race
-                // needs and a display preference must not be in front of a caller
+                // `set_boost_fov_kick` gives: a display preference must not be in front of a caller
                 // with no screen. `set_camera_view` is what applies the player's.
                 camera_view,
                 camera,

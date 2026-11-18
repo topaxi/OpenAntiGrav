@@ -42,7 +42,7 @@ use oag_title::Burst;
 
 /// The burst `title` plays on an absorb, off its [`oag_title::Effects`] table:
 /// `None` for a title whose absorb path is unread, which then plays nothing. Keyed on the title the craft comes from - the same footing
-/// `Setup::shield_palette` is chosen on.
+/// `ViewSetup::shield_palette` is chosen on.
 #[must_use]
 pub fn absorb_burst_for(title: &oag_title::Title) -> Option<Burst> {
     title

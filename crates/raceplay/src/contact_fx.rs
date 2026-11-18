@@ -189,7 +189,7 @@ impl ContactFx {
         // rather than spawn once and go silent.
         self.cooldown = (self.cooldown - dt).max(0.0);
         // The trigger rule runs whether or not the disc's own effect
-        // loaded - see `Setup::effects`. Only the pool needs it.
+        // loaded - see `ViewSetup::effects`. Only the pool needs it.
         let effect = handles.get(Trigger::CollisionSpark).cloned();
         // Two trigger modes, chosen by the effect's own flag and never by the
         // platform. A `LOOPING` emitter has no countdown, so an owner must let

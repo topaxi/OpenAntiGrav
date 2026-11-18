@@ -10,7 +10,7 @@ fn grid_on_a_speed_pad(ring: bool) -> Race {
 }
 
 /// The same fixture with the ring HD's own (`borrowed` false) or borrowed by a
-/// title that draws none (`borrowed` true), as `load` sets `Setup::zoom_borrowed`.
+/// title that draws none (`borrowed` true), as `load` sets `ViewSetup::zoom_borrowed`.
 fn grid_on_a_pad_with(ring: bool, borrowed: bool) -> Race {
     let mut handling = hulled_handling();
     handling.speedup_pads = oag_physics::params::SpeedupPads {

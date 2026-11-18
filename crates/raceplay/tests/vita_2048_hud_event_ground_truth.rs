@@ -14,7 +14,7 @@
 //! against are `data/reference/compare-page/2048-vita/empire-climb` (an event: `XP 0`, no
 //! `OBJECTIVE`) and `dlc-vineta-k` (the HD Campaign's Uplift Race: neither).
 //!
-//! What this fails on: dropping `Setup::campaign_event` from `load_event`, dropping either of
+//! What this fails on: dropping `ViewSetup::campaign_event` from `load_event`, dropping either of
 //! `text_for`'s two gates, or a layout that stops authoring the widgets (the vacuity guards).
 //!
 //! The DLC load also checks the composite's exposure keys

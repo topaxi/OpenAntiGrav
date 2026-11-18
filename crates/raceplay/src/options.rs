@@ -610,20 +610,20 @@ pub struct SimSetup {
     /// The chase camera's seven values, from `<ExternalCameraFar>`.
     pub chase: ChaseParams,
     /// Each slot's `Ship Muzzle` locator in its hull's model space, indexed like
-    /// [`Self::nozzles`] and read in both halves (`load::muzzle`): the weapon node a
+    /// [`ViewSetup::nozzles`] and read in both halves (`load::muzzle`): the weapon node a
     /// Plasma bolt charges on and leaves from (`oag_gameplay::world::Ship::muzzle`),
     /// and where its head draws while it charges. `None` for a hull that authors
     /// none or a version whose class id is unread.
     pub muzzles: Vec<Option<Vec3>>,
     /// This title's own zone-number-to-speed-class ladder, when it is recovered - the same
     /// [`oag_title::ZoneStages`] [`crate::zone_grade::ZoneGrade`] carries, copied here so
-    /// [`Self::class_announcer`] can be triggered off the same edge without reaching into the
+    /// [`ViewSetup::class_announcer`] can be triggered off the same edge without reaching into the
     /// render-facing scene state to get it. `None` on every title but HD/Fury.
     pub zone_stages: Option<&'static oag_title::ZoneStages>,
     /// Whether this title's `ready` and `go` voice has been measured, so the race raises
     /// [`oag_gameplay::cue::Cue::Ready`] and [`oag_gameplay::cue::Cue::Go`] at the ticks
     /// [`crate::countdown`] pins: `oag_title::RaceDefaults::countdown_voice` being `Some`. A flag
-    /// rather than the banks: which bank plays rides [`Self::sounds`]; whether the simulation asks
+    /// rather than the banks: which bank plays rides [`ViewSetup::sounds`]; whether the simulation asks
     /// for the cue at all is title data, and must not change with whether a bank decoded.
     pub countdown_voice: bool,
     /// Whether the start also plays the start beat, [`oag_gameplay::cue::Cue::StartBeat`], with

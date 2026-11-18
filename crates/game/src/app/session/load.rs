@@ -893,7 +893,7 @@ impl Session {
                     // Applied here, once, before the stage ever ticks - see
                     // `Session::campaign_ai_skill_scale`'s own doc.
                     // `oag_ai::Difficulty::tune_at_scale` is the continuous
-                    // generalisation of `Setup::difficulty`'s own discrete
+                    // generalisation of `SimSetup::difficulty`'s own discrete
                     // `tune()`, which `race::Race::start` already ran once with
                     // whatever ambient difficulty the RACE page had selected -
                     // this overrides it with the campaign's own resolved

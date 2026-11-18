@@ -371,7 +371,7 @@ fn setup(handling: Handling) -> SimSetup {
         // needs a pickup to exist.
         weapons: None,
         // No restriction - the same "empty is no override" state every
-        // non-2048 race is in. See `Setup::allowed_weapons`'s own doc
+        // non-2048 race is in. See `SimSetup::allowed_weapons`'s own doc
         // comment.
         weapon_ai: None,
         allowed_weapons: Vec::new(),
@@ -440,7 +440,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         spark_anchors: Vec::new(),
         // The nearer external view, deliberately a *different* set of round
         // numbers from `chase`: a test that cycles to it and back has to be
-        // able to tell the two apart. Note these go into `Setup` already
+        // able to tell the two apart. Note these go into `ViewSetup` already
         // converted, so unlike a real load no `chase_params` scale or sign
         // flip is applied to them.
         chase_close: ChaseParams {

@@ -159,25 +159,25 @@ pub struct RaceView {
     pub(super) ps2_trail: bool,
     /// Whether a Plasma detonation plays Wipeout HD's own three-model scale
     /// ease rather than Pulse's baked anim-time scrub. See
-    /// `options::Setup::hd_plasma_blast`.
+    /// `options::ViewSetup::hd_plasma_blast`.
     pub(super) hd_plasma_blast: bool,
-    /// See `options::Setup::plasma_blast_law`.
+    /// See `options::ViewSetup::plasma_blast_law`.
     pub(super) plasma_blast_law: Option<oag_title::weapons::PlasmaBlastLaw>,
-    /// See `options::Setup::disruptor_halo_law`.
+    /// See `options::ViewSetup::disruptor_halo_law`.
     pub(super) disruptor_halo_law: Option<oag_title::weapons::DisruptorHalo>,
     /// Live Disruptor explosion halos, one per [`blast_models::PLASMA_BLAST_SLOTS`].
     pub(super) disruptor_halos:
         [Option<blast_models::DisruptorHaloBlast>; blast_models::PLASMA_BLAST_SLOTS],
-    /// See `options::Setup::disruptor_craft_law`.
+    /// See `options::ViewSetup::disruptor_craft_law`.
     pub(super) disruptor_craft_law: Option<oag_title::weapons::DisruptorCraftFx>,
     /// Each craft's live on-craft Disruptor effect, by slot.
     pub(super) disruptor_craft: [Option<blast_models::DisruptorCraftBlast>; MAX_SHIPS],
-    /// See `options::Setup::pulse_laid_pose`.
+    /// See `options::ViewSetup::pulse_laid_pose`.
     pub(super) pulse_laid_pose: bool,
-    /// See `options::Setup::laid_pose_scaled`.
+    /// See `options::ViewSetup::laid_pose_scaled`.
     pub(super) laid_pose_scaled: bool,
     /// The weapon detonations' full-screen wash; `Some` on Pulse's PSP
-    /// source alone - see `options::Setup::screen_flash`.
+    /// source alone - see `options::ViewSetup::screen_flash`.
     pub(super) screen_flash: Option<oag_fx::flash::ScreenFlash>,
     /// The washes a craft's state edges start - see `race::craft_flash`.
     pub(super) craft_flashes: super::craft_flash::CraftFlashes,
@@ -187,9 +187,9 @@ pub struct RaceView {
     /// The camera the player is cut to when their craft goes out - see
     /// `race::destroy_camera`.
     pub(super) destroy_camera: super::destroy_camera::DestroyCamera,
-    /// See `Setup::absorb_burst`.
+    /// See `ViewSetup::absorb_burst`.
     pub(super) absorb_burst: Option<oag_title::Burst>,
-    /// See `Setup::absorb_anchors`.
+    /// See `ViewSetup::absorb_anchors`.
     pub(super) absorb_anchors: Vec<Vec<Vec3>>,
     /// Every absorb burst scheduled or still playing - see
     /// `Race::advance_absorb_bursts`.
@@ -218,7 +218,7 @@ pub struct RaceView {
     pub(super) hull_reach: [f32; MAX_SHIPS],
     /// `--trail-sparks`: see [`Race::force_trail_sparks`].
     pub(super) trail_sparks: bool,
-    /// [`Setup::campaign_event`]: what the HUD's `RaceXPTxt` and `ObjectiveTxt` ask.
+    /// [`ViewSetup::campaign_event`]: what the HUD's `RaceXPTxt` and `ObjectiveTxt` ask.
     pub(super) campaign_event: bool,
     /// Who is inside whose trail, one bit per intruder; level, not edge.
     pub(super) trail_inside: [u8; MAX_SHIPS],
@@ -262,12 +262,12 @@ pub struct RaceView {
     /// land, at which point the locator moves with the model rather than with the
     /// race.
     pub(super) nozzles: Vec<Option<Vec3>>,
-    /// The engine light per slot (HD, 2048, Omega) - see [`Setup::engine_lights`] and
+    /// The engine light per slot (HD, 2048, Omega) - see [`ViewSetup::engine_lights`] and
     /// `race::engine_light`. Render-side, out of the hash.
     pub(super) engine_lights: Vec<Option<oag_livery::engine_light::EngineLight>>,
     /// The circuit's `"Lighting.Enable spu vertex lights"`, on by default.
     pub(super) spu_vertex_lights: bool,
-    /// Pulse's point and spot lights for a hull, see [`Setup::hull_points`].
+    /// Pulse's point and spot lights for a hull, see [`ViewSetup::hull_points`].
     pub(super) hull_points: oag_mesh::mesh_render::HullPointLights,
     /// Whether the weapons add their point lights; see `race::weapon_light`.
     pub(super) hd_weapon_lights: bool,
@@ -279,9 +279,9 @@ pub struct RaceView {
     /// Authored hull spark anchors per slot, model space.
     pub(super) spark_anchors: Vec<Vec<Vec3>>,
     /// The `Ship Collision Fx` locators in model space - see
-    /// [`Setup::collision_fx`].
+    /// [`ViewSetup::collision_fx`].
     pub(super) collision_fx: Vec<oag_livery::SparkAnchor>,
-    /// Every `.pob` this race loaded - see [`Setup::effects`].
+    /// Every `.pob` this race loaded - see [`ViewSetup::effects`].
     pub(super) effects: psys::Library,
     /// Each [`Trigger`] resolved against [`Self::effects`] once at load.
     pub(super) handles: EffectHandles,
@@ -400,9 +400,9 @@ pub struct RaceView {
     /// pool's worth.
     pub(super) hd_bomb_blasts: [Option<bomb_blast::hd::HdBlast>; bomb_blast::hd::SLOTS],
     /// Whether a Bomb detonation plays HD's blast object rather than
-    /// Pulse's. See `options::Setup::hd_bomb_blast`.
+    /// Pulse's. See `options::ViewSetup::hd_bomb_blast`.
     pub(super) hd_bomb_blast: bool,
-    /// See `options::Setup::bomb_shockwave_fades`.
+    /// See `options::ViewSetup::bomb_shockwave_fades`.
     pub(super) bomb_shockwave_fades: bool,
     /// Wipeout HD's Missile explosions, a pool of the original's sixteen. See
     /// [`missile_blast`].
@@ -411,24 +411,24 @@ pub struct RaceView {
     /// draws none. See [`missile_blast::streaks`].
     pub(super) hd_missile_streaks: Option<missile_blast::streaks::Streaks>,
     /// Whether a Missile that reaches a craft plays HD's explosion model. See
-    /// `options::Setup::hd_missile_blast`.
+    /// `options::ViewSetup::hd_missile_blast`.
     pub(super) hd_missile_blast: bool,
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     pub(super) stage_rng: Rng,
-    /// The decoded sound cues, straight out of [`Setup::sounds`]. Data, not a
+    /// The decoded sound cues, straight out of [`ViewSetup::sounds`]. Data, not a
     /// device - the mixer and the held voices are [`oag_sound::Audio`]'s.
     pub(super) sounds: oag_sound::sfx::Banks,
     /// The circuit's own authored emitters, straight out of
-    /// [`Setup::track_emitters`]. Data, on the same terms [`Self::sounds`] is:
+    /// [`ViewSetup::track_emitters`]. Data, on the same terms [`Self::sounds`] is:
     /// the held voices they open live in [`oag_sound::Audio`].
     pub(super) track_emitters: oag_sound::sfx::TrackEmitters,
-    /// Zone mode's milestone announcer, straight out of [`Setup::announcer`].
+    /// Zone mode's milestone announcer, straight out of [`ViewSetup::announcer`].
     pub(super) announcer: oag_sound::sfx::Announcer,
     /// Zone mode's speed-class announcer, straight out of
-    /// [`Setup::class_announcer`].
+    /// [`ViewSetup::class_announcer`].
     pub(super) class_announcer: oag_sound::sfx::ClassAnnouncer,
-    /// [`Setup::rumble`].
+    /// [`ViewSetup::rumble`].
     pub(super) rumble: oag_tables::rumble::Library,
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///

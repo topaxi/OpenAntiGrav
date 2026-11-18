@@ -46,7 +46,7 @@
 //!
 //! # The control run
 //!
-//! Speed is asserted against **the same race run twice from one `Setup`**, one
+//! Speed is asserted against **the same race run twice from one `SimSetup`**, one
 //! copy hit and one not, rather than against a threshold or against another
 //! craft. The simulation is deterministic, so the two runs are bit-identical up
 //! to the detonation and every difference afterwards is the blast - which is
@@ -187,7 +187,7 @@ fn a_plasma_hit_costs_a_craft_its_engine_and_it_recovers() {
     let Some(loaded) = single_race() else { return };
     let throttle = held(Button::Cross);
 
-    // One `Setup`, two races. Everything is identical until the detonation.
+    // One `SimSetup`, two races. Everything is identical until the detonation.
     let mut hit = race::Race::start(
         loaded.setup.clone(),
         loaded.view.clone(),

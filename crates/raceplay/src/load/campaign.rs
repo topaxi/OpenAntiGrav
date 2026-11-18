@@ -206,7 +206,7 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     // only decodes the bits this project has pinned at confidence >= 70 - see
     // `docs/formats/2048-campaign.md`'s "The weapon set gate" section - so an
     // event whose set authors only low-confidence bits races unrestricted,
-    // the same "an empty `Setup::allowed_weapons` is no override" reading
+    // the same "an empty `SimSetup::allowed_weapons` is no override" reading
     // every other race is already in, rather than this project guessing at
     // the bits it could not pin.
     if let Some(weapon_set) = event

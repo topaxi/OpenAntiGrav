@@ -1,4 +1,4 @@
-//! [`Setup::headless`] and what the `oag-headless-sim` binary asserts about it.
+//! [`SimSetup::headless`] and what the `oag-headless-sim` binary asserts about it.
 //!
 //! The binary is not run by `just test` - a `[[bin]]` is compiled by
 //! `--all-targets` and executed by nothing - so its claim lives here as well,

@@ -42,7 +42,7 @@ pub struct ViewSetup {
     ///
     /// A title fact, not a per-craft one - every shield on one source shares
     /// a palette. Resolved from `craft_title`, the same title
-    /// [`assets::shield_entry_names`] and [`assets::boost_entry_name`]
+    /// [`oag_livery::entry::shield_entry_names`] and [`oag_livery::entry::boost_entry_name`]
     /// already key their own per-title path off, so a race whose craft model
     /// comes from HD draws HD's own colours rather than Pulse's borrowed
     /// ones. See [`oag_render::shield::Palette`]'s own doc comment for what
@@ -141,7 +141,7 @@ pub struct ViewSetup {
     pub intro_voice: Option<String>,
     /// How far and how fast the airbrake flaps move, from the same document.
     ///
-    /// Separate from [`Self::handling`] because it is per *team* rather than
+    /// Separate from [`SimSetup::handling`] because it is per *team* rather than
     /// per speed class, and because no force term reads it - see
     /// `oag_gameplay::airbrake_graphics_for`.
     pub airbrake_graphics: oag_gameplay::AirbrakeGraphics,

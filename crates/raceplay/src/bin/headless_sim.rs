@@ -15,7 +15,7 @@
 //! wrong shape" - applies to a protocol written before the loopback
 //! client/server test that would justify it.
 //!
-//! **The race it runs means nothing.** [`Setup::headless`] authors no track, no
+//! **The race it runs means nothing.** [`SimSetup::headless`] authors no track, no
 //! handling and no weapon table, so the craft fall in a vacuum and no lap is
 //! ever counted. A hash that moves is the whole assertion: it says the tick ran
 //! and changed state, not that it produced a result anyone should read.
@@ -63,7 +63,7 @@ fn main() {
     }
     let humans: Vec<usize> = race.core.sim.world.human_slots().collect();
     // One craft, not eight: `opponents` asks for a grid and a grid is spawned
-    // along a racing line, which `Setup::headless` does not author. Said out
+    // along a racing line, which `SimSetup::headless` does not author. Said out
     // loud rather than papered over - the slots past the first consume a
     // snapshot and reach the hash, which is what this binary is checking, and
     // a full grid needs a track this deliberately has not got.
