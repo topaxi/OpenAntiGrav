@@ -23,14 +23,15 @@
 //! - **The tick calls the view in the middle.** [`Race::tick`](super::Race::tick) and the
 //!   methods it reaches interleave simulation statements with `#[cfg(feature = "view")]`
 //!   blocks (effects, camera shake, HUD messages), and one runs the other way: a HUD
-//!   message board decides whether a `Cue::Message` is raised. The methods that read and
-//!   write this half alone are `impl RaceSim` methods, reached as `race.sim.x()`; the rest
-//!   stay on `Race`.
+//!   message board decides whether a `Cue::Message` is raised. Most methods that read and
+//!   write this half alone are `impl RaceSim` methods, reached as `race.sim.x()`; the ones
+//!   that read a view accessor (the seat's slot, the intro, who hears a cue) stay on `Race`.
 //! - **The extension runtime.** With the `extensions` feature, `extensions` holds the
 //!   module instances over `oag_modhost`, which `just check-deps` forbids to a gameplay
 //!   crate.
-//! - **The load.** `load` builds this struct, and reads `oag-trackfile`, `oag-source` and
-//!   `oag-assets` to do it; a gameplay crate may depend on none of them.
+//! - **The load.** `load` builds this struct, and reads `oag-trackfile` to do it, which
+//!   `just check-deps` forbids to a gameplay crate; it also opens the disc through
+//!   `oag-source` and `oag-assets`, which a simulation crate should not need.
 //!
 //! Every other field is an `oag_gameplay`, `oag_physics`, `oag_ai`, `oag_race`,
 //! `oag_tables`, `oag_vex` or `oag_title` type, a primitive, or a type from one of this

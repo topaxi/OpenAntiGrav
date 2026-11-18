@@ -762,7 +762,7 @@ pub use oag_gameplay::spawn::{box_inertia, capped_spawn_height, rig_spawn_height
 /// journal, the speed-plan job and the quiet flag of [`Race::tick_sim_only`]: none is
 /// either half's state.
 ///
-/// A method that reads and writes the simulation alone is an `impl RaceSim` method,
+/// Most methods that read and write the simulation alone are `impl RaceSim` methods,
 /// reached as `race.sim.x()` ([`RaceSim::state_hash`] among them). The methods on
 /// `Race` read both halves - drawing an exhaust needs a ship's position, and raising a
 /// cue needs the bank - or one of the fields beside them, and that is what `Race` is
