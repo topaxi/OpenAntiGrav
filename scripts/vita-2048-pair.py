@@ -919,7 +919,7 @@ def read_body_pose(pid, body):
 class PoseHold:
     """Writes a pose into the player's body every few milliseconds on a thread of its own, with the velocity zeroed, so the craft neither falls
     nor flies on while the guest runs (the guest recomputes every world-space copy of the craft, the camera's follow target included, from the
-    body on its next tick: `place` at `docs/reverse-engineering/vita3k-capture.md`). `deviations` is the largest distance, over the run, between
+    body on its next tick: `place` at `docs/reverse-engineering/vita3k-capture.md`). `max_drift` is the largest distance, from the second write on (the first read is the jump itself), between
     the position the body held just before a write and the position written (what the guest's own physics moved it by in one interval)."""
 
     def __init__(self, pid, body, pos, rows, interval=0.004):
@@ -930,7 +930,14 @@ class PoseHold:
         self.stop_flag = threading.Event()
         self.writes = 0
         self.max_drift = 0.0
+        self.window_drift = 0.0
+        self.pulled = []
+        self.t0 = time.monotonic()
         self.thread = threading.Thread(target=self.run, daemon=True)
+
+    def mark(self):
+        """Starts the window `window_drift` is measured over (the grabs, once the settle is over)."""
+        self.window_drift = 0.0
 
     def run(self):
         import struct
@@ -939,7 +946,12 @@ class PoseHold:
             while not self.stop_flag.is_set():
                 mem.seek(GUEST_BASE + self.body + BODY_POS)
                 now = struct.unpack("<3f", mem.read(12))
-                self.max_drift = max(self.max_drift, sum((a - b) ** 2 for a, b in zip(now, self.pos)) ** 0.5)
+                if self.writes:
+                    d = sum((a - b) ** 2 for a, b in zip(now, self.pos)) ** 0.5
+                    self.max_drift = max(self.max_drift, d)
+                    self.window_drift = max(self.window_drift, d)
+                    if d > 2.0:
+                        self.pulled.append(round(time.monotonic() - self.t0, 2))
                 mem.seek(GUEST_BASE + self.body + BODY_BASIS)
                 mem.write(self.blob)
                 mem.seek(GUEST_BASE + self.body + BODY_VEL)
@@ -983,6 +995,7 @@ def place_main(args, out, pair, plat, profile_dir, which, env):
     hold = PoseHold(pid, body, pos, rows).start()
     try:
         time.sleep(args.place_settle)
+        hold.mark()
         frames = []
         for i in range(3):
             frames.append(s.shot("place%d.png" % i))
@@ -1000,8 +1013,9 @@ def place_main(args, out, pair, plat, profile_dir, which, env):
     near = [h for h in hulls if math.dist(h[1], pos) < 1.0]
     pair.check("the player's body was written and read back at the pose", math.dist(held[0], pos) < 0.05,
                "read back %s against %s" % (["%.2f" % v for v in held[0]], ["%.2f" % v for v in pos]))
-    pair.check("the hold kept the body at the pose (largest move the guest made between two writes)", hold.max_drift < 2.0,
-               "%.3f units over %d writes" % (hold.max_drift, hold.writes))
+    pair.check("the hold kept the body at the pose (largest move the guest made between two writes)", hold.window_drift < 2.0,
+               "%.3f units over the grabs; %.3f over all %d writes; %d reads pulled off the pose, the last at %s s of %.1f s" % (
+                   hold.window_drift, hold.max_drift, hold.writes, len(hold.pulled), hold.pulled[-1] if hold.pulled else "-", time.monotonic() - hold.t0))
     pair.check("a drawn-hull matrix of the frame's stop is at the pose (the camera and hull follow the body)", bool(near),
                "%d matrices at the pose, the most seen %d times" % (len(near), near[0][0] if near else 0))
     shutil.copyfile(frames[-1], out / "theirs.png")
@@ -1016,7 +1030,7 @@ def place_main(args, out, pair, plat, profile_dir, which, env):
                    "held": {"position": list(held[0]), "velocity": list(held[2])}},
         "method": "the player's body (*(ship+0x5f84), ship with role word +0x7060 == 0) written every %g ms from a thread through /proc/<pid>/mem: basis, position, "
                   "transpose, velocity zeroed; %g s before the first of three grabs 0.3 s apart" % (hold.interval * 1000, args.place_settle),
-        "writes": hold.writes, "max_drift": hold.max_drift, "hull_matrices_at_pose": len(near), "attitude": "ours' --pose rule (spline plus yaw)"}
+        "writes": hold.writes, "max_drift": hold.max_drift, "window_drift": hold.window_drift, "pulled_off_pose_at_s": hold.pulled[-20:], "hull_matrices_at_pose": len(near), "attitude": "ours' --pose rule (spline plus yaw)"}
     pair.rec["original"]["world_clock_s"] = world_clock
     pair.check("the scenery clock was read at the grab", world_clock is not None, "world clock %s" % world_clock)
     cp.build(pair, args, "scenery", "cold_boot", None,
