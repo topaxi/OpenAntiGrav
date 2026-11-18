@@ -730,15 +730,18 @@ pub mod names {
     /// [`menu-backdrop.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md
     pub const FURY_SETTINGS: &str = "Data/fe/fury.envsettings";
 
-    /// The front end's `HDR and Bloom` block under the Fury style: the running
-    /// settings store reads these values on the Fury menus, and the backdrop's
-    /// picture ends in the same chain as a race (`menu-backdrop.md`, "The final
-    /// composite adapts").
+    /// The front end's `HDR and Bloom` block under the Fury style where no screen
+    /// has loaded [`FURY_MODEL_LIGHT`]: the running settings store reads these
+    /// values on `Main Menu`, and the backdrop's picture ends in the same chain as a
+    /// race (`menu-backdrop.md`, "The final composite adapts").
     pub const FURY_BLOOM_SETTINGS: &str = "Data/fe/fe.fury.track.envsettings";
 
     /// The settings the front end lights its models with in the Fury style, which
     /// `FrontEnd_LoadEnvSettings` loads for Ship Select (the non-track file;
-    /// `docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`).
+    /// `docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`). Its
+    /// `HDR and Bloom` block is the chain's on the screens that draw a model: read
+    /// live on `Campaign Selection`, both `Grid Selection`s, `Cell Selection` and
+    /// `Team Selection` (that page, "The flyer card is drawn before the resolve").
     pub const FURY_MODEL_LIGHT: &str = "Data/fe/fe.fury.EnvSettings";
 
     /// The HD style's file, loaded by the same function.

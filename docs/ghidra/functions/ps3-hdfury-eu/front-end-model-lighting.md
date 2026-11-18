@@ -178,7 +178,7 @@ walked `right cross right cross cross` to `Team Selection` (the frame read: Feis
 
 | Read | Value |
 | --- | --- |
-| `FunkLayer + 0x25c` (`0xc50ee0`), the adapted luma | 0.0157 in seven of ten, 0.0168, 0.0180 twice; **mean 0.0163** |
+| `FunkLayer + 0x25c` (`0xc50ee0`), the adapted luma (the frame's own luma: the lerped value is `+0x254`, "The flyer card is drawn before the resolve"; on this still page the two agree) | 0.0157 in seven of ten, 0.0168, 0.0180 twice; **mean 0.0163** |
 | the same, `+0x240` (the ladder's last mean) | 0.0118 to 0.0157, steps of 1/255: the readback is 8-bit |
 | `0x00c489f0 + 0x540`, `+0x544`, `+0x548`, `+0x52c` | `35.0`, `3.0`, `4.0`, `0.015` (the page's second falsifier holds) |
 | `*(0x009948ec) + 0x60`: ambient `+0x420` | `0.4392 0.4392 0.4392` |
@@ -239,6 +239,155 @@ the tone keys) and `ship_selects_hull_is_as_bright_as_the_original_on_both_paths
 (the parameter 8 reflection, `Ambient false direction`, which `oag_mesh::mesh_render::Light` has no field for, or
 the front end's bloom); the `+ bloom` summand of the resolve is not exposure-scaled and the preview draws after the
 chain, so the hull gets none; `iblScalePower`'s value. The HD style's frame is unmeasured (adapted luma taken at the clamp, no HD-style disc frame seen).
+
+## The flyer card is drawn before the resolve (2026-11-18, `hd-menu-cell`)
+
+Why the campaign's red card drew brighter than the original (pair `hd/menu-cell-select`: the flat red of
+`09_blitzed`'s back, texel 63, reads **103** in the original and read 126 in ours, over 56 % of the frame). **The
+original draws a flyer card into the scene `FunkLayer`'s chain reads, so the card's level is the front end's adapted
+exposure plus its bloom**, and both follow what the page shows. Ours drew the card over the finished page at a fitted
+gain (`FURY_GAIN` 2.0 in encoded values, 1.0 on the base campaign's cards and on `Campaign Selection`'s).
+
+### The frame: one linear-light factor, not an encoded gain
+
+On the pairs' own frames, pixels where both sides are flat red (a 7 by 7 range under 3 on both), ours' level halved
+back to the texel and both decoded with the sRGB curve:
+
+| Card | Texel (encoded) | Original | Linear factor |
+| --- | ---: | ---: | ---: |
+| `Cell Selection`, back of `09_blitzed` | 63 | 103 | 2.73 |
+| `Grid Selection Fury`, front of `09_blitzed` | 21, 27, 30, 33 | 39, 48, 52, 56 | 2.71, 2.70, 2.65, 2.60 |
+| | 38, 41, 45, 49, 82 | 63, 67, 73, 80, 129 | 2.57, 2.53, 2.54, 2.61, 2.60 |
+
+The encoded ratio falls from 1.86 to 1.57 over those nine levels while the linear one holds within 3 %: a multiply in
+linear light under the sRGB curve, which is what the resolve does (`scene * scale + bloom`, then the ROP's encode).
+Confidence 90 on the kind of law.
+
+### The live read: the exposure follows the card, and the block follows the screen
+
+RPCS3 cold-booted by `rpcs3-drive.py serve` on the compare profile (`OAG_COMPARE_PLATFORM=hd-fury`: 1920x1080, scale
+100, `Write Color Buffers: true`), walked with the pad, `FunkLayer` (`0x00c50ee0`) and the global block
+(`0x00c489f0`) read through `/proc/<pid>/mem` one second apart (`scripts/rpcs3-hd-fe-adapted.py`, which prints these
+fields since this lane):
+
+| Screen | Mean colour `+0x240..+0x248`, of 255 | Adapted luma `+0x254` | Boost, clamp, maximum, rate | Exposure |
+| --- | --- | ---: | --- | ---: |
+| `Main Menu` (two reads after boot) | (2, 0, 0), (11, 0, 0) | 0.017 to 0.019 | 20, 3, 4, 0.025 | 3.6 |
+| `Campaign Selection`, Fury chosen (11 reads) | (46..48, 24, 21..22) | 0.119 to 0.121 | 35, 3, 4, 0.015 | 1.00 |
+| `Campaign Selection`, `HD` chosen (5) | (67..71, 63..66, 58..60) | 0.251 to 0.253 | the same | 1.00 |
+| `Grid Selection Fury`, `09_blitzed` (13) | (31..36, 1..7, 1..6) | 0.046 to 0.052 | the same | 2.2 to 2.4 |
+| `Grid Selection Fury`, the next three grids (6 each) | (14..17, 1..4, 1..4) | 0.021 to 0.029 | the same | 3.0 to 3.3 |
+| `Cell Selection`, `09_blitzed` (13) | (34, 1, 1) in all | 0.0427 | the same | **2.50** |
+| `Grid Selection`, `01_uplift` (6) | (53, 57, 58) | 0.220 | the same | 1.00 |
+| `Cell Selection`, `01_uplift` (6) | (120..121, 121, 121) | 0.471 to 0.473 | the same | 1.00 |
+
+- **`+0x25c` is not the adapted luma.** It is the luma of the mean colour beside it, `0.3 r + 0.59 g + 0.11 b` of the
+  8-bit `+0x240..+0x248`, new every frame: `0.119137` for `(46, 24, 22)` to the last digit. `+0x254` (and `+0x258`)
+  is that value lerped at the adaption rate, which is what the resolve's `scale` follows. On a still page the two
+  agree, which is why "The live read" above could take `+0x25c` on Ship Select; on `Grid Selection Fury`, whose card
+  animates, the frame's luma swings 0.039 to 0.061 and the lerped one 0.046 to 0.052. Confidence 85 (the lerped value
+  moves smoothly between reads and settles on the frame's luma when the page is still).
+- **The tone and bloom block is the screen's.** `Main Menu` holds the track file's constants (20, rate 0.025:
+  `fe.fury.track.envsettings`, as [menu-backdrop.md](menu-backdrop.md), "The final composite adapts", read them), and
+  every campaign page holds `fe.fury.EnvSettings`' (35, rate 0.015), the file `FrontEnd_LoadEnvSettings(0)` names and
+  the one "The live read" found on `Team Selection`. So the loader's argument is per screen and the running chain
+  takes the new constants while it keeps its adapted luma. Confidence 90 on the campaign pages and `Main Menu` (six
+  screens, one boot); the argument of the callers not walked (Track Select, Racebox, Options) stays unread.
+- **The three fitted gains are this one law.** A dark red page adapts low and is exposed 2.2 to 3.3 times; the base
+  campaign's pale cards and `Campaign Selection` adapt past `3 / 35` = 0.086, where the exposure is at its floor of 1
+  and the frame bloom's fade is at zero. That is `FURY_GAIN` 2.0 against `BASE_GAIN` and `CAMPAIGN_GAIN` 1.0.
+- **The unfocused card's tint is the colour the screen writes, in linear light.** `UNFOCUSED_COLOUR` is `0xff505050`,
+  `80 / 255` = 0.3137, and the frame's fitted factor on the white panel was 0.596: the sRGB encode of 0.3137 is
+  0.5958. So the parameter multiplies light, and the "1.9 times" the fit could not explain is the encode.
+
+### The law, checked on the frame of that read
+
+With `fe.fury.EnvSettings`' block (`Bloom from frame contribution` 0.5, `exponent` 0, `Bloom from alpha
+contribution` 0.75, `Bloom adaption boost` 38.75) the chain's own arithmetic
+([renderer.md](renderer.md), "The bloom chain, read pass by pass") gives, for a flat field with a clear glow mask:
+
+```text
+scale = 4 - min(35 * 0.04274, 3)                  = 2.504
+fade  = 1 - min(0.04274 * 38.75 * 0.25, 1)        = 0.586
+gate  = rgb * (a * 0.75 + lum^0 * 0.5 * fade)     = rgb * 0.293      (a = 0)
+out   = encode(decode(63 / 255) * (2.504 + 0.293)) = 104.2
+```
+
+The frame grabbed at that read shows **104** on the card (the pair's frame, another boot, 103). With the alpha term
+(`a` = 1) the card would read 116, so the card's scene alpha is clear, which is what `basicnonalpha`'s program
+writes. No number here is fitted. Confidence 85 that the card is in the scene the chain reads and resolved by it.
+
+**The scene mean is the card less the black hexagon field.** A scene holding the card alone (its silhouette on the
+pair's frame is 1,157,939 pixels, 55.84 %, with 8,494 at the stripes' 197 and 12,859 white in the wordmark) averages
+`(36.9, 1.6, 1.6)`; the read is `(34, 1, 1)`. Taking out the 101,853 dark pixels of the 32 `bBg_x_y` hexagons gives
+`(33.8, 1.6, 1.6)`; were the grey and white widgets in the scene at their own values, its green would be about 5,
+which the read excludes. So the black hexagons are in the scene when the ladder reads it and the text is not. Which
+pass draws them is unread: the screen's XML gives `bBg_x_y` no attribute the other images lack. Confidence 60 (one
+page; `Cell Selection` of `01_uplift` was read, `(121, 121, 121)`, but its frame was grabbed trimmed, so its shares
+are not measured).
+
+### Wired (2026-11-18)
+
+- **The card goes into the Fury backdrop's finished field**, after its scanlines and before the field is presented to
+  the chain (`oag_game::render::SceneLayer`, `FuryBackdrop::prepare`), as the encoded bytes the field holds, so its
+  blended layers combine encoded values as the console's do and the chain's present decodes it with the texture
+  unit's curve. `oag_game::flyer::render_list` hands the backdrop the cards (`Layer::Scene`) and no longer draws them
+  over the page; a still's settle frames carry them too (`Renderer::settle_fury_backdrop`), since the exposure adapts
+  over those frames. The card's opaque draws write the glow mask their programs name (0 on the back's
+  `basicnonalpha`) and its blended ones leave it.
+- **A frame with a scene layer runs under the model screens' block**: `FuryAssets::model_bloom`, read from
+  `oag_hd::frontend::names::FURY_MODEL_LIGHT` by the reader a circuit's block takes, handed to the running chain by
+  `oag_post::hd_bloom::Chain::set_settings`, which keeps the adapted luma. The backdrop's own block
+  (`fe.fury.track.envsettings`) stands on every other page.
+- **Where no Fury backdrop draws** (the HD style, Omega) a card is drawn over the page at its gain as before
+  (`Layer::Page`); `FURY_GAIN` is now labelled as the stand-in it is.
+- **Not wired, and why.** The black hexagon field is not drawn into the scene, so ours' scene is the card alone:
+  the exposure is 2.33 where the original's is 2.50 and the card reads **100** against 103 and 104. Ship Select's
+  backdrop still runs the track block (the hull is not in the scene: its level is the constant "Wired (2026-11-12)"
+  above), though the read there is the model screens' block.
+
+**Frames** (the pairs re-rendered with their own recorded flags, same day, base `751a96067` against this lane; mean
+grey difference, RMSE, edge correlation):
+
+| Pair | Base | Now |
+| --- | --- | --- |
+| `hd/menu-cell-select` | 5.06, 0.0813, 0.456 | **3.00**, 0.0684, 0.454 |
+| `hd/menu-grid-select` | 7.68, 0.1269, 0.308 | 7.28, 0.1239, 0.325 |
+| `hd/menu-campaign-select` | 5.12, 0.0739, 0.229 | 4.77, 0.0698, 0.236 |
+| `hd/menu-ship-select`, `menu-track-select`, `loading-loading` | 5.72, 11.62, 2.07 | unchanged to the digit |
+| `omega/menu-*` (five) | 43.10, 12.61, 15.81, 29.15, 19.10 | unchanged to the digit |
+
+**On `Grid Selection Fury` the card's nine flat levels land within one of the original's**, the same pixels as the
+table at the top of this section (texel; original; ours before, at twice the texel; ours now):
+
+| Texel | 21 | 27 | 30 | 33 | 38 | 41 | 45 | 49 | 82 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Original | 39 | 48 | 52 | 56 | 63 | 67 | 73 | 80 | 129 |
+| Ours before | 42 | 54 | 60 | 66 | 76 | 82 | 90 | 98 | 164 |
+| Ours now | 38 | 47 | 52 | 56 | 64 | 68 | 74 | 80 | 130 |
+
+That page's scene is the card and the backdrop with no widget over the card, which is why it lands where `Cell
+Selection`'s card, short of the hexagon field, reads 100 against 103.
+
+On the cell pair the card's box (`200,160` to `1720,920`) goes from a mean of 7.21 to 3.59 and the plain red beside
+the wordmark (`600,180` to `1200,280`) from 4.89 to 0.64; the wordmark's box (`230,165` to `580,280`) from 40.5 to
+29.6, where what is left is the wordmark standing 6 pixels right of the original's. The bloom past the card's left
+edge reads 2, 4, 8, 13 at eight to two pixels out against the original's 1, 2, 6, 11, and the green of the glow beside
+a stroke of the wordmark 18, 38, 58, 78 against 15, 30, 51, 81: the chain's own blur, nothing drawn for it. Walked live as well
+(windowed on software Vulkan, pointer): `Campaign Selection`, `Grid Selection Fury` and `Cell Selection` draw their
+cards through the chain.
+
+Tests: `hd_flyer_ground_truth::the_cell_page_card_is_exposed_and_bloomed_by_the_front_ends_chain` (the page through
+the real binary: the card's red and the bloom past its edge; 126 with the layer dropped, 108 with the block switch
+dropped), `hd_fury_backdrop_ground_truth::a_model_screens_block_is_the_one_read_live_on_the_campaign_pages` (the two
+blocks against the reads, and the arithmetic above against the frame's 104),
+`render::backdrop::tests::a_scene_layer_is_exposed_under_the_block_a_model_screen_loads` and
+`hd_bloom::tests::a_chain_runs_under_the_settings_it_was_last_handed`.
+
+**Lineage.** Omega: **checked, differs**. It runs the HD style ("Omega" below), whose backdrop is the scene widget
+with no `FunkLayer` chain here, so its cards keep the page draw and `fury_card_gain` 1.0; its five menu pairs are
+unchanged to the digit. Whether its front end resolves through a tone stage is unread (no memory readout). 2048: no
+flyer cards (`docs/ui/campaign-screens.md`).
 
 ## Omega
 

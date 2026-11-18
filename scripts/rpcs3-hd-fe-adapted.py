@@ -4,13 +4,15 @@
     OAG_COMPARE_PLATFORM=hd-fury  (when the serve is started: the 1920x1080 scale-100 profile)
     OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-hd-fe-adapted.py [reads] [seconds]
 
-Prints, every `seconds` (default 4), `FunkLayer + 0x25c` (the PPU's adapted luma, object `0x00c50ee0`) and
-`+0x240` (the raw last ladder mean), the tone constants of the global block `0x00c489f0` (`+0x540` boost,
-`+0x544` clamp, `+0x548` maximum, `+0x52c` adaption rate) and the front end's own block at `*(0x009948ec) + 0x60`
+Prints, every `seconds` (default 4), `FunkLayer + 0x25c` (object `0x00c50ee0`: the luma of the last ladder mean,
+this frame's), `+0x254` (the adapted luma, that value lerped at the adaption rate) and `+0x240..+0x248` (the mean
+colour itself, 8-bit), the tone constants of the global block `0x00c489f0` (`+0x540` boost, `+0x544` clamp,
+`+0x548` maximum, `+0x52c` adaption rate) and the front end's own block at `*(0x009948ec) + 0x60`
 (ambient `+0x420`, sun `+0x430`, sun direction `+0x450`, fog `+0x4e0`, fog density `+0x500`). Stand on the screen
-first (Ship Select: `right cross right cross cross` from Main Menu). The exposure is
-`maximum - min(adapted * boost, clamp)`. `docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`,
-"The live read".
+first (Ship Select: `right cross right cross cross` from Main Menu; the campaign's pages: `cross`, `cross`,
+`cross`). The exposure is `maximum - min(adapted * boost, clamp)`; the tone constants are the screen's, they change
+when a screen loads its block. `docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`, "The live read"
+and "The flyer card is drawn before the resolve".
 """
 import importlib.util
 import struct
@@ -43,9 +45,11 @@ def main():
         return [round(x, 4) for x in struct.unpack(">%df" % n, read(addr, 4 * n))]
 
     for i in range(reads):
-        adapted, raw = floats(FUNK_LAYER + 0x25C, 1)[0], floats(FUNK_LAYER + 0x240, 1)[0]
+        luma, adapted = floats(FUNK_LAYER + 0x25C, 1)[0], floats(FUNK_LAYER + 0x254, 1)[0]
+        mean = [round(c * 255) for c in floats(FUNK_LAYER + 0x240, 3)]
         tone = [floats(GLOBAL_BLOCK + off, 1)[0] for off in (0x540, 0x544, 0x548, 0x52C)]
-        print(i, "adapted(+0x25c)=%.6f raw(+0x240)=%.6f boost/clamp/max/rate=%s" % (adapted, raw, tone), flush=True)
+        print(i, "luma(+0x25c)=%.6f adapted(+0x254)=%.6f mean(+0x240, of 255)=%s boost/clamp/max/rate=%s exposure=%.3f" % (
+            luma, adapted, mean, tone, tone[2] - min(adapted * tone[0], tone[1])), flush=True)
         fe = struct.unpack(">I", read(FE_BLOCK_PTR, 4))[0]
         if fe and i == 0:
             block = fe + 0x60

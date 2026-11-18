@@ -1215,8 +1215,10 @@ back face is the one with no recoverable stride.
   for the flyer's picture (`flyer_dummy_` is a format string in the executable);
   ours draws no body under a card, so a flyer whose artwork does not cover its
   face shows black there where RPCS3 shows the mid-transition grey.
-- **The glow around the card and the bloom on Fury's reds.** RPCS3's Fury
-  frames are brighter and saturated where ours are the texture's own colour.
+- ~~**The glow around the card and the bloom on Fury's reds.**~~ Drawn on the Fury style since 2026-11-18
+  (`hd-menu-cell`): the card goes through the backdrop's bloom chain, whose exposure and bloom they are
+  (`docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`, "The flyer card is drawn before the
+  resolve").
 - **The light on Fury's cards.** Its materials are lit (above) and the three
   parameters are written by code nobody has found: their names sit in a table
   at `0x007b3658`/`0x007b36b8`/`0x007b36e0` whose only reference is another
@@ -4721,6 +4723,15 @@ card drew. The picture is `Data\FE\Flyers\<grid>\flyer_Back.vex` (`bgplane`,
 - **The outline is the front's, mirrored.** `00_flyer.vex`'s `cardShape` (chamfer
   top-left, notches) cut the back at its chamfer top-right with the notches on the
   other edge, as the frame shows; no reflection under it.
+- **Superseded 2026-11-18 (`hd-menu-cell`): the gain is the front end's bloom chain.** The original draws a card
+  into the scene `FunkLayer`'s chain reads, so its level is the adapted exposure plus the bloom, which follow the
+  page (read live: 2.5 on this card, 2.2 to 3.3 on Fury's grid cards, the floor of 1 on the base campaign's and
+  on `Campaign Selection`). The frame this bullet measured is of 2026-10-08, before the capture profile wrote
+  RPCS3's colour buffers back (`docs/reverse-engineering/rpcs3-capture.md`), and read 130; on the compare profile
+  the back panel reads 103. On the Fury style the card is now drawn into the
+  backdrop's chain and `FURY_GAIN` stays only as the stand-in where no chain runs
+  (`docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`, "The flyer card is drawn before the
+  resolve"). The bullet as written:
 - **Fury's cards are drawn at twice their texel colour: `FURY_GAIN` 2.0,
   measured, mechanism unread.** The back panel's texel is 63 and the frame shows
   130; the stripe texel 197 shows 255; `Grid Selection`'s front card's dominant red
@@ -4733,8 +4744,8 @@ card drew. The picture is `Data\FE\Flyers\<grid>\flyer_Back.vex` (`bgplane`,
   texels, and no RPCS3 frame of a base `Cell Selection` exists to measure its back
   against. Which materials carry the factor is unread (`basicnonalpha`'s fragment
   block multiplies by a patched `float1`, slot `0x2c`; the value was not read).
-- Not drawn: the wordmark's glow and bloom (the thread's open item), the
-  `blitzed` sliver above the wordmark's ascenders (a layer clipped by the window).
+- Not drawn: the `blitzed` sliver above the wordmark's ascenders (a layer clipped by the window). The wordmark's
+  glow and the bloom past the card's edge draw since 2026-11-18, as the chain's own bloom (the same page).
 
 **The hex field is 32 black hexes.** `bBg_x_y` (black `Hexagon_HD.mip`, colour
 `0xff000000`) and `Bg_x_y` (`Hexagon_HD_OUTLINE.mip`, `CM_HEX_Bg`) draw on every
@@ -4776,6 +4787,13 @@ and no base frame exists, so they keep the authored colour. `SINGLE RACE`/`VENOM
 counter are in capitals where the string table holds `Single Race`/`Venom` (every
 campaign, a case rule), and `GridNum`'s `font="Title"` draws in the title face. `CAMPAIGN RECORD` reads
 `NONE` with no saved record (the frame does).
+
+**A base frame exists since 2026-11-18** (`hd-menu-cell`: RPCS3 on the compare profile, `Campaign Selection`,
+`right`, `cross`, `cross`: `Cell Selection` of `01_uplift`, first cell). Measured on it, **not wired**: the card is
+`233, 234, 233`, the headings `82, 82, 82`, every value (`SINGLE RACE`, `VINETA K`, `VENOM`, `ON`, `3`, `NONE`,
+`0/3`, `0/18 POINTS`, `1ST` to `3RD`) `0, 178, 231`, and the selected cell's outline the same cyan
+(`39, 175, 215` on its antialiased edge) where Fury's is white. One frame, confidence 70. Ours keeps the authored
+`TitleColor` on this page.
 
 **Frame chrome (item 3).**
 

@@ -642,6 +642,21 @@ impl Chain {
         })
     }
 
+    /// Replaces the authored constants with `params`' from the next run on and keeps the
+    /// adapted luma: a front end whose screen loads another `HDR and Bloom` block into the
+    /// running chain. What the chain was built for stays as built (the scene's store and
+    /// precision, the half-texel read, the zoom ring).
+    pub fn set_settings(&mut self, params: Params) {
+        self.params = Params {
+            final_half_texel: self.params.final_half_texel,
+            zoom: self.params.zoom,
+            store: self.params.store,
+            eight_bit: self.params.eight_bit,
+            ..params
+        };
+        self.written.set(None);
+    }
+
     /// What the scene target holds, which every pipeline drawing into it is
     /// built for ([`Params::store`]).
     #[must_use]

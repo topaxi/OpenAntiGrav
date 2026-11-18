@@ -104,7 +104,7 @@ fn draw_to_music(
         frame
     });
     let frames: Vec<_> = leading_up.collect();
-    renderer.settle_fury_backdrop(&device, &queue, frames.into_iter(), (width, height));
+    renderer.settle_fury_backdrop(&device, &queue, frames.into_iter(), (width, height), None);
     let frame = model.frame(height as f32, aspect, tint(0));
     let target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("fury ship select test"),

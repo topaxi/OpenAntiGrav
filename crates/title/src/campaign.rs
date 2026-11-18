@@ -163,8 +163,9 @@ pub struct Campaign {
     /// `DATA02`'s older copy carries one flat set, equal to the hard rung.
     /// `None` reads every grid by precedence.
     pub grid_archive: Option<&'static str>,
-    /// The factor Fury's flyer card texels are multiplied by where it is not
-    /// `oag_game::flyer::FURY_GAIN` (HD's 2.0, where the PS3 materials double them).
+    /// The factor Fury's flyer card texels are multiplied by where a card is drawn over the
+    /// page (no tone stage behind the menus) and it is not `oag_game::flyer::FURY_GAIN`, HD's
+    /// stand-in for the exposure its front end applies.
     /// Omega: 1.0, fitted off one shadPS4 frame (red field 0x40 against 0x80 at 2.0), not read off a shader.
     pub fury_card_gain: Option<f32>,
     /// Where `Grid Selection`'s flyer card stands where it is not

@@ -21,6 +21,13 @@
 //! 6. **Band** - the smear band, which reads the field it writes, so the field
 //!    is copied to a second target first.
 //! 7. **Scanlines** - every fourth row multiplied by a dark blue.
+//!
+//!    Then **the page's 3-D models**, when it has any (a campaign's flyer card),
+//!    into the finished field as the encoded bytes it holds ([`SceneLayer`]): the
+//!    original draws them into the scene the ladder reads, so they share the
+//!    backdrop's adapted exposure and bloom, and they raise the luma it adapts to
+//!    (`docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`, "The
+//!    flyer card is drawn before the resolve").
 //! 8. **Present** - the field as light into the chain's float scene target, with
 //!    no offset: the original's ladder reads the field directly.
 //! 9. **The bloom chain** - `oag_post::hd_bloom`, the race's own: the menu runs
@@ -108,6 +115,27 @@ const READ_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 /// How a pass writes one, and the page reads it: the bytes as they stand.
 const STORED_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
+/// The format a [`SceneLayer`] draws into: the finished field's own, holding encoded
+/// values, so a pipeline built for it writes and blends as it does on a gamma page.
+pub const SCENE_LAYER_FORMAT: wgpu::TextureFormat = STORED_FORMAT;
+
+/// The finished field of one frame, handed to whatever a page draws into the scene the
+/// bloom chain reads: after the backdrop's own passes, before the field is presented to
+/// the chain. A draw into `view` keeps what is there (the backdrop) under it and leaves
+/// the alpha alone, which is the chain's glow mask and stays clear.
+#[derive(Debug)]
+pub struct SceneLayer<'a> {
+    pub device: &'a wgpu::Device,
+    pub queue: &'a wgpu::Queue,
+    pub encoder: &'a mut wgpu::CommandEncoder,
+    /// The field, [`SCENE_LAYER_FORMAT`], `size` pixels: the page's viewport.
+    pub view: &'a wgpu::TextureView,
+    pub size: (u32, u32),
+}
+
+/// What draws a page's models into a [`SceneLayer`].
+pub type DrawSceneLayer<'f> = &'f mut dyn FnMut(SceneLayer<'_>);
+
 /// One uploaded cloud.
 struct Cloud {
     instances: wgpu::Buffer,
@@ -169,6 +197,12 @@ pub struct FuryBackdrop {
     /// The final composite and what feeds it, reading the present's output,
     /// built off the front end's `HDR and Bloom` block.
     chain: hd_bloom::Chain,
+    /// That block, and the one a screen that draws models loads in its place
+    /// (`oag_hd::frontend::names::FURY_MODEL_LIGHT`), when it read.
+    settings: hd_bloom::Params,
+    model_settings: Option<hd_bloom::Params>,
+    /// Whether the chain now holds [`Self::model_settings`].
+    on_model_settings: bool,
     /// Which of each pair of targets the frame before left its result in.
     last: usize,
     /// The frame last drawn, so a display faster than the frame rate shows it
@@ -186,7 +220,8 @@ impl std::fmt::Debug for FuryBackdrop {
 
 impl FuryBackdrop {
     /// Uploads `clouds` and builds the pipelines, the last one's for a page
-    /// of `page_format`.
+    /// of `page_format`. `bloom` is the chain's block and the one a frame with a
+    /// [`SceneLayer`] runs under.
     ///
     /// # Errors
     ///
@@ -196,7 +231,7 @@ impl FuryBackdrop {
         queue: &wgpu::Queue,
         page_format: wgpu::TextureFormat,
         clouds: &[PointCloud],
-        bloom: hd_bloom::Params,
+        (bloom, model_bloom): (hd_bloom::Params, Option<hd_bloom::Params>),
     ) -> Result<Self> {
         let chain =
             hd_bloom::Chain::new(device, STORED_FORMAT, (1, 1), bloom, hd_bloom::Glow::Drawn)?;
@@ -483,9 +518,18 @@ impl FuryBackdrop {
             trail_sampler,
             targets: None,
             chain,
+            settings: bloom,
+            model_settings: model_bloom,
+            on_model_settings: false,
             last: 0,
             drawn: None,
         })
+    }
+
+    /// Whether a page's models can be drawn into the scene: their block read.
+    #[must_use]
+    pub fn takes_models(&self) -> bool {
+        self.model_settings.is_some()
     }
 
     /// How many clouds are uploaded.
@@ -497,6 +541,11 @@ impl FuryBackdrop {
     /// The offscreen passes for `frame`, into targets sized to the viewport.
     /// Encoded before the page's own pass, which is what [`Self::composite`]
     /// then reads from. The second call for the same frame draws nothing.
+    ///
+    /// `layer` draws the page's own models into the finished field, where the
+    /// chain's ladder, exposure and bloom see them with the backdrop, and the frame
+    /// runs under the block a screen with models loads: the original swaps the
+    /// running chain's constants screen by screen and keeps its adapted luma.
     pub fn prepare(
         &mut self,
         device: &wgpu::Device,
@@ -504,6 +553,7 @@ impl FuryBackdrop {
         encoder: &mut wgpu::CommandEncoder,
         frame: &Frame,
         viewport: (u32, u32),
+        layer: Option<DrawSceneLayer<'_>>,
     ) {
         let size = (viewport.0.max(1), viewport.1.max(1));
         if self.targets.as_ref().is_none_or(|t| t.size != size) {
@@ -518,6 +568,14 @@ impl FuryBackdrop {
             return;
         };
         self.drawn = Some(frame.clock);
+        let models = layer.is_some() && self.model_settings.is_some();
+        if models != self.on_model_settings {
+            self.on_model_settings = models;
+            self.chain.set_settings(match self.model_settings {
+                Some(settings) if models => settings,
+                _ => self.settings,
+            });
+        }
         queue.write_buffer(
             &self.point_uniforms,
             0,
@@ -624,6 +682,15 @@ impl FuryBackdrop {
             pass.draw(0..12, 0..1);
             pass.set_pipeline(&self.scanline_pipeline);
             pass.draw(0..3, 0..1);
+        }
+        if let Some(layer) = layer {
+            layer(SceneLayer {
+                device,
+                queue,
+                encoder,
+                view: &targets.finished.write,
+                size,
+            });
         }
         {
             let mut pass = full_pass(encoder, "fury present", self.chain.scene_view(), true);
@@ -873,7 +940,10 @@ impl super::Renderer {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         clouds: &[PointCloud],
-        bloom: oag_post::hd_bloom::Params,
+        bloom: (
+            oag_post::hd_bloom::Params,
+            Option<oag_post::hd_bloom::Params>,
+        ),
     ) {
         match FuryBackdrop::new(device, queue, self.target_format, clouds, bloom) {
             Ok(fury) => self.fury = Some(fury),
@@ -884,20 +954,62 @@ impl super::Renderer {
     /// Runs the Fury backdrop's passes over `frames`, a still's history, so the
     /// frame drawn after them shows the trail and glow a player's would.
     /// Submitted frame by frame: each writes the constants the next replaces.
+    ///
+    /// `layer` is the page's own models ([`SceneLayer`]), drawn into every one of
+    /// those frames: the chain's exposure adapts to the scene over them, so a still
+    /// that drew its card into the last frame alone would show the backdrop's
+    /// exposure on it.
     pub fn settle_fury_backdrop(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         frames: impl Iterator<Item = Frame>,
         viewport: (u32, u32),
+        mut layer: Option<DrawSceneLayer<'_>>,
     ) {
         let Some(fury) = &mut self.fury else {
             return;
         };
         for frame in frames {
             let mut encoder = device.create_command_encoder(&Default::default());
-            fury.prepare(device, queue, &mut encoder, &frame, viewport);
+            fury.prepare(
+                device,
+                queue,
+                &mut encoder,
+                &frame,
+                viewport,
+                layer
+                    .as_mut()
+                    .map(|layer| &mut **layer as DrawSceneLayer<'_>),
+            );
             queue.submit(Some(encoder.finish()));
+        }
+    }
+
+    /// Whether a list drawn now would put its models through the Fury backdrop's
+    /// chain: the backdrop is installed with the block such a screen runs under, and
+    /// `list` carries its frame.
+    #[must_use]
+    pub fn fury_scene_frame<'l>(&self, list: &'l [oag_ui::frontend::Draw]) -> Option<&'l Frame> {
+        self.fury.as_ref().filter(|fury| fury.takes_models())?;
+        list.iter().find_map(|draw| match draw {
+            oag_ui::frontend::Draw::FuryBackdrop(frame) => Some(&**frame),
+            _ => None,
+        })
+    }
+
+    /// The Fury backdrop's passes for `frame`, ahead of the page's own pass, with
+    /// `layer` drawn into its finished field. The page's pass then finds the frame
+    /// already prepared and composites it where the list puts the backdrop.
+    pub fn prepare_fury_scene(
+        &mut self,
+        (device, queue, encoder): (&wgpu::Device, &wgpu::Queue, &mut wgpu::CommandEncoder),
+        frame: &Frame,
+        viewport: (u32, u32),
+        layer: DrawSceneLayer<'_>,
+    ) {
+        if let Some(fury) = &mut self.fury {
+            fury.prepare(device, queue, encoder, frame, viewport, Some(layer));
         }
     }
 
@@ -925,7 +1037,7 @@ impl super::Renderer {
         viewport: (u32, u32),
     ) {
         if let (Some(frame), Some(fury)) = (fury, &mut self.fury) {
-            fury.prepare(device, queue, encoder, frame, viewport);
+            fury.prepare(device, queue, encoder, frame, viewport, None);
         }
         if let (Some(frame), Some(scene)) = (scene, &mut self.scene) {
             scene.prepare(device, queue, encoder, frame, viewport);

@@ -1143,12 +1143,20 @@ pub fn run(
     if let Some(assets) = &fury_backdrop {
         assets.install(&mut renderer, &device, &queue);
         if let Some(page) = &options.menu_page {
+            // A campaign page's card is in the scene the backdrop's chain adapts to.
+            let inset = renderer.inset();
+            let mut layer = flyer_shot
+                .as_ref()
+                .map(|shot| shot.scene_layer(space, inset));
             assets.settle(
                 &mut renderer,
                 (&device, &queue),
                 page,
                 oag_display::display::viewport((width, height), options.settings.display.aspect),
                 (options.anim_seconds, options.fury_path),
+                layer
+                    .as_mut()
+                    .map(|layer| layer as crate::render::DrawSceneLayer<'_>),
             );
         }
     }

@@ -57,9 +57,12 @@ impl MenuBackdrop {
     /// way the sprite sheet is.
     pub fn install(&self, renderer: &mut Renderer, device: &wgpu::Device, queue: &wgpu::Queue) {
         match self {
-            Self::Fury(assets) => {
-                renderer.set_fury_backdrop(device, queue, &assets.clouds, assets.bloom)
-            }
+            Self::Fury(assets) => renderer.set_fury_backdrop(
+                device,
+                queue,
+                &assets.clouds,
+                (assets.bloom, assets.model_bloom),
+            ),
             Self::Scene(assets) => renderer.set_scene_backdrop(device, queue, assets.model.clone()),
         }
     }
@@ -127,7 +130,8 @@ impl MenuBackdrop {
 impl MenuBackdrop {
     /// Draws the frames leading up to [`Self::still`]'s, a still of a backdrop
     /// that feeds back having no other way to come by its history. The scene
-    /// has none.
+    /// has none. `layer` is the page's own models, drawn into each of those frames
+    /// (`Renderer::settle_fury_backdrop`).
     pub fn settle(
         &self,
         renderer: &mut Renderer,
@@ -135,6 +139,7 @@ impl MenuBackdrop {
         page: &str,
         viewport: (f32, f32, f32, f32),
         (anim_seconds, fury_path): (Option<f32>, Option<usize>),
+        layer: Option<crate::render::DrawSceneLayer<'_>>,
     ) {
         let Self::Fury(assets) = self else {
             return;
@@ -153,7 +158,7 @@ impl MenuBackdrop {
             model.tick(&oag_ui::backdrop::SILENCE);
             frame
         });
-        renderer.settle_fury_backdrop(device, queue, leading_up, (w as u32, h as u32));
+        renderer.settle_fury_backdrop(device, queue, leading_up, (w as u32, h as u32), layer);
     }
 }
 

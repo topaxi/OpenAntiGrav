@@ -30,6 +30,10 @@ pub struct FuryAssets {
     pub settings: FuryBackdrop,
     /// The front end's `HDR and Bloom` block, which the picture ends in.
     pub bloom: oag_post::hd_bloom::Params,
+    /// The block a screen that draws a model loads in its place
+    /// (`oag_hd::frontend::names::FURY_MODEL_LIGHT`), or `None` when it does not read:
+    /// such a screen's models are then drawn over the page, outside the chain.
+    pub model_bloom: Option<oag_post::hd_bloom::Params>,
     /// The twelve clouds `Load` picked, in table order.
     pub clouds: Vec<PointCloud>,
     /// Their names, for the report.
@@ -75,7 +79,7 @@ pub(super) fn load(
     report: &mut Vec<String>,
 ) -> Option<Arc<FuryAssets>> {
     use oag_hd::frontend::names::{
-        FURY_BLOOM_SETTINGS, FURY_CLOUDS, FURY_CLOUDS_LOADED, FURY_SETTINGS,
+        FURY_BLOOM_SETTINGS, FURY_CLOUDS, FURY_CLOUDS_LOADED, FURY_MODEL_LIGHT, FURY_SETTINGS,
     };
     if !fury_style {
         return None;
@@ -101,6 +105,13 @@ pub(super) fn load(
         ));
         return None;
     };
+    let model_bloom = read_settings(archives, FURY_MODEL_LIGHT, report)
+        .and_then(|table| oag_raceplay::hd_bloom_params(&table));
+    if model_bloom.is_none() {
+        report.push(format!(
+            "menu backdrop: {FURY_MODEL_LIGHT} has no complete HDR and Bloom block - a screen's models draw over the page, outside the bloom chain"
+        ));
+    }
     // `Load`'s pick: `rand() % 19` into a used-set, re-rolled forward until a
     // free slot, twelve times.
     let mut rng = Rng::new(SEED);
@@ -155,6 +166,7 @@ pub(super) fn load(
     Some(Arc::new(FuryAssets {
         settings,
         bloom,
+        model_bloom,
         clouds,
         names,
         tints,

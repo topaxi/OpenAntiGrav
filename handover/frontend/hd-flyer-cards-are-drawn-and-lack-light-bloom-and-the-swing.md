@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-10-08
-summary: "Fury flyer card light writer unfound; bloom, swing and the widget pose (0x001d3f08) open"
+updated: 2026-11-18
+summary: "Fury flyer cards go through the front end's bloom chain; light binding, hexagon field in the scene, swing and widget pose (0x001d3f08) open"
 ---
 
 # HD/Fury's flyer cards are drawn; light, bloom, the swing and the widget's own pose are open
@@ -24,16 +24,26 @@ are in `docs/ui/campaign-screens.md`, "The flyer behind `Grid Selection`" and
   table, and the front end loads no settings file. Cards draw at texture colour,
   so Fury's ship silhouette is flat white where RPCS3 shades its facets and its
   reds are duller. Try: watch the three parameters' patch slots in RPCS3.
-- **The bloom and glow** RPCS3 shows around every card.
-- **`FURY_GAIN` 2.0** (2026-10-08, hd-cell-select) doubles a Fury grid card's and
-  its back's texels: measured (63 to 130, 197 to 255, Grid's dominant red 198 to
-  255), mechanism unread. The base campaign's eight cards and the two `Campaign
-  Selection` cards keep gain 1.0 (clamped flat at 2.0). Find which materials carry it (`basicnonalpha`'s
-  fragment block multiplies by a patched `float1`, slot `0x2c`) and whether the
-  campaign cards' materials differ.
+- ~~**The bloom and glow** RPCS3 shows around every card.~~ ~~**`FURY_GAIN` 2.0**, mechanism unread.~~ LANDED
+  2026-11-18 (`hd-menu-cell`): both are the front end's bloom chain. The original draws a card into the scene
+  `FunkLayer` reads, under the block the screen loads (`fe.fury.EnvSettings` on every campaign page, read live), so
+  its level is the adapted exposure plus the bloom (2.5 on `Cell Selection` of `09_blitzed`, 2.2 to 3.3 on Fury's
+  grids, the floor of 1 on the base cards and `Campaign Selection`). Ours draws the card into the Fury backdrop's
+  finished field before its chain (`flyer::Layer::Scene`, `render::SceneLayer`); `FURY_GAIN` is the stand-in where
+  no chain runs. Evidence and the frames: `docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`, "The
+  flyer card is drawn before the resolve". Open from it:
+  - **The black hexagon field is in the original's scene and not in ours** (the ladder's mean reads `(34, 1, 1)`
+    where the card alone gives `(36.9, 1.6, 1.6)`; the 32 `bBg_x_y` hexagons account for it). Ours' exposure on
+    `Cell Selection` is 2.33 against 2.50 and the card reads 100 against 103 and 104. Needs the pass that draws
+    `bBg_x_y` read, then those quads drawn into the scene layer. Small (40).
+  - **Ship Select's backdrop runs the track block.** The read there is the model screens' block too; the hull is
+    not in the scene (its level is a constant exposure). Putting the hull into the scene layer would give it the
+    chain's bloom and retire `FrontEndTone::adapted_fury`. Medium (40).
+  - Track Select, Racebox and Options: which block their screens load is unread (the loader's other callers).
 - **The back card** draws on `Cell Selection` face-on (`CELL_POSE`, rectangle
-  measured, `BACK_STRETCH` chosen); its wordmark glow is open with the rest of the
-  bloom.
+  measured, `BACK_STRETCH` chosen); its wordmark glow draws (the chain's bloom). The wordmark stands 6 pixels right
+  of the original's and the stripes reach the card's right edge where the original leaves a margin (the pair
+  `hd/menu-cell-select`).
 - **The five effect textures hidden by name** (`UNREAD_EFFECTS`: `loops`,
   `flashes`, `noise_bar`, `failscreen`, `crash_screen`): materials that take UV
   offset/scale or alpha from native-animated parameters. Drawn at rest they are

@@ -903,6 +903,17 @@ impl Preview {
         &self.model
     }
 
+    /// A copy of the model as it was built, without the tint now written over its
+    /// vertices: what a second target format's preview of the same card is built from.
+    #[must_use]
+    pub fn untinted_model(&self) -> Model {
+        let mut model = self.model.clone();
+        for (vertex, base) in model.vertices.iter_mut().zip(&self.base_colours) {
+            vertex.colour[..3].copy_from_slice(base);
+        }
+        model
+    }
+
     fn depth_view(&mut self, device: &wgpu::Device, width: u32, height: u32) -> wgpu::TextureView {
         let stale = !matches!(&self.depth, Some((_, w, h)) if *w == width && *h == height);
         if stale {

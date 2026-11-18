@@ -218,3 +218,63 @@ fn the_constants_are_the_ones_rpcs3_uploads() {
         }
     }
 }
+
+/// The block a screen with models loads is `fe.fury.EnvSettings`' own `HDR and Bloom`, and it
+/// is what the running chain holds on the campaign's pages: the settings store read
+/// `Tone adaption boost` 35, clamp 3, maximum 4 and `Bloom adaption rate` 0.015 on
+/// `Campaign Selection`, both `Grid Selection`s and `Cell Selection`, where `Main Menu` read
+/// the track file's 20, 3, 4 and 0.025. The gate's keys are the file's, and with them the
+/// chain's law puts `Cell Selection`'s card, texel 63, at the level the frame of that read
+/// shows, from the scene mean read beside it
+/// (`docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`, "The flyer card is
+/// drawn before the resolve").
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn a_model_screens_block_is_the_one_read_live_on_the_campaign_pages() {
+    let Some(image) = image() else {
+        return;
+    };
+    let assets = fury(&image);
+    let tone = |block: &oag_post::hd_bloom::Params| {
+        [
+            block.tone_adaption_boost,
+            block.tone_darkening_clamp,
+            block.tone_maximum_brightness,
+            block.adaption_rate,
+        ]
+    };
+    let models = assets
+        .model_bloom
+        .expect("fe.fury.EnvSettings carries a whole HDR and Bloom block");
+    assert_eq!(tone(&models), [35.0, 3.0, 4.0, 0.015], "the campaign pages");
+    assert_eq!(tone(&assets.bloom), [20.0, 3.0, 4.0, 0.025], "Main Menu");
+    assert_eq!(
+        [
+            models.alpha_contribution,
+            models.frame_contribution,
+            models.frame_exponent,
+            models.adaption_boost,
+        ],
+        [0.75, 0.5, 0.0, 38.75]
+    );
+    // `Cell Selection` of `09_blitzed`: the ladder's mean read (34, 1, 1) of 255, the card's
+    // flat red 104 on the frame grabbed at that read, its texel 63 and its scene alpha clear.
+    let adapted = (0.3 * 34.0 + 0.59 + 0.11) / 255.0;
+    let exposure = oag_post::hd_bloom::exposure(
+        adapted,
+        models.tone_adaption_boost,
+        models.tone_darkening_clamp,
+        models.tone_maximum_brightness,
+    );
+    let fade =
+        1.0 - (adapted * models.adaption_boost * oag_post::hd_bloom::ADAPTION_FADE_SCALE).min(1.0);
+    let store = oag_gpu::formats::SceneStore::Encoded;
+    let card = store.texel_encode(
+        store.texel_decode(63.0 / 255.0) * (exposure + models.frame_contribution * fade),
+    ) * 255.0;
+    assert!(
+        (card - 104.0).abs() < 1.0,
+        "exposure {exposure:.3} and a frame bloom of {:.3} put the card at {card:.1}; the frame shows 104",
+        models.frame_contribution * fade
+    );
+}
