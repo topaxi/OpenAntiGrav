@@ -149,9 +149,21 @@ def _comm(pid):
         return None
 
 
-def _is_process(pid, name_substring):
+def _start_time(pid):
+    """Field 22 of `/proc/<pid>/stat` (clock ticks since boot), which a reused pid cannot share with the process that held it before."""
+    try:
+        with open("/proc/%d/stat" % pid) as handle:
+            return int(handle.read().rsplit(")", 1)[1].split()[19])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _is_process(pid, name_substring, start_time=None):
+    """Whether `pid` is a live `name_substring` process and, when `start_time` is given, the very process recorded then (a pid reused since is not)."""
     comm = _comm(pid)
-    return comm is not None and name_substring.lower() in comm.lower()
+    if comm is None or name_substring.lower() not in comm.lower():
+        return False
+    return start_time is None or _start_time(pid) == start_time
 
 
 def display_up(display_num):
@@ -260,6 +272,8 @@ def bring_up_display(display_num, socket, timeout=15.0):
         "socket": socket,
         "weston_pid": weston.pid,
         "xwayland_pid": xwayland.pid,
+        "weston_start": _start_time(weston.pid),
+        "xwayland_start": _start_time(xwayland.pid),
     }))
     log("display :%d up (weston %d, Xwayland %d)" % (display_num, weston.pid, xwayland.pid))
     return True
@@ -277,18 +291,18 @@ def tear_down_display(display_num):
     owned = json.loads(PIPELINE_MARKER.read_text())
     if owned.get("display") != display_num:
         return False
-    for key, name in (("xwayland_pid", "Xwayland"), ("weston_pid", "weston")):
-        pid = owned.get(key)
-        if isinstance(pid, int) and _is_process(pid, name):
+    mine = [(owned.get(key), name, owned.get(key.replace("_pid", "_start"))) for key, name in (("xwayland_pid", "Xwayland"), ("weston_pid", "weston"))]
+    mine = [(pid, name, start) for pid, name, start in mine if isinstance(pid, int) and isinstance(start, int)]
+    for pid, name, start in mine:
+        if _is_process(pid, name, start):
             subprocess.run(["kill", str(pid)], capture_output=True)
     for _ in range(20):
         time.sleep(0.25)
         if not display_up(display_num):
             break
     else:
-        for key, name in (("xwayland_pid", "Xwayland"), ("weston_pid", "weston")):
-            pid = owned.get(key)
-            if isinstance(pid, int) and _is_process(pid, name):
+        for pid, name, start in mine:
+            if _is_process(pid, name, start):
                 subprocess.run(["kill", "-9", str(pid)], capture_output=True)
     PIPELINE_MARKER.unlink(missing_ok=True)
     log("display :%d down" % display_num)
@@ -356,7 +370,7 @@ def launch_vita3k(title_id, display_num):
         cwd=str(CACHE),
         start_new_session=True,
     )
-    VITA3K_PID_FILE.write_text(str(proc.pid))
+    VITA3K_PID_FILE.write_text("%d %s" % (proc.pid, _start_time(proc.pid)))
     return proc.pid
 
 
@@ -464,10 +478,10 @@ def vita3k_alive():
     if not VITA3K_PID_FILE.exists():
         return None
     try:
-        pid = int(VITA3K_PID_FILE.read_text().strip())
+        pid, start = (int(v) for v in VITA3K_PID_FILE.read_text().split())
     except ValueError:
         return None
-    return pid if _is_process(pid, "vita3k") else None
+    return pid if _is_process(pid, "vita3k", start) else None
 
 
 def cmd_display(args):
