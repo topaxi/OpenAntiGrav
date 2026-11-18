@@ -309,6 +309,24 @@ impl Rooms {
         self.mismatch(id, title, host).is_none()
     }
 
+    /// The edition of `title` that `id` said at its hello, `None` for an unknown person or a
+    /// title it did not list.
+    #[must_use]
+    pub fn edition_of(&self, id: ClientId, title: &str) -> Option<&Edition> {
+        self.people
+            .get(&id)
+            .and_then(|p| p.titles.iter().find(|e| e.title == title))
+    }
+
+    /// The build this lobby runs: its own editions' (they all carry it), else this binary's.
+    #[must_use]
+    pub fn own_build(&self) -> &str {
+        self.config
+            .titles
+            .first()
+            .map_or(crate::BUILD_VERSION, |e| e.build.as_str())
+    }
+
     /// The person whose edition a room is judged against: its owner when the owner hosts.
     fn host_of(room: &Room) -> Option<ClientId> {
         room.hosted

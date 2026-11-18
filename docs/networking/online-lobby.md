@@ -1381,6 +1381,21 @@ the race, is the referee. Every value here is **chosen, not measured**; the cost
    when it bans). A start state the lobby cannot
    reproduce (content it lacks, mods) or a re-simulation out of time is "not checkable", kept as
    evidence, never a ban. A report that reproduces is dismissed.
+
+   **The build guard.** A desync report on a host whose build (the `Edition::build` of its
+   hello, `crate::BUILD_VERSION`) differs from the lobby's own is not checkable, decided before
+   any re-simulation is spent: `the host runs another build (<host> vs <lobby>)`, a `host-log:`
+   line, evidence only, no strike. The lobby's build is its editions' (`Rooms::own_build`); the
+   host's is recorded when the race launches (`RaceCase::host_build`). No second identity: it is
+   the string `Rooms::connect` already compares. That hello check refuses another build of a
+   title and pressing the lobby races, so the guard decides only what it lets through: a host of
+   a pressing the lobby does not race (another platform of one title) whose build differs. A
+   same-build host is judged as before. A forged-input challenge (item 4) is not guarded: a
+   missing signed datagram is proof on its own, needs no re-simulation, and a build difference
+   cannot explain it, so it still strikes. Tests: `crates/net/tests/anticheat.rs`
+   (`a_host_of_another_build_than_the_lobby_is_not_judged_by_a_re_simulation_and_not_struck`,
+   `a_host_of_another_build_that_hides_a_signed_input_is_still_struck`; the same-build strike is
+   `a_host_that_alters_its_simulation_is_proven_...`).
 4. **Signed inputs.** A hosted race's job names each seat's player key (from the lobby hello's
    `key`). Each client signs every input datagram (`Datagram::Inputs` with a signature, tag
    `0x12`, over `"OAG-INPUT-1" | params | seat | first | inputs`); the host drops one not signed
