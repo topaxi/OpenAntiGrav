@@ -1652,6 +1652,18 @@ pairs' recorded flags: `hd/menu-cell-select` 5.06, 0.0813, 0.456 to **3.00**, 0.
 7.68, 0.1269, 0.308 to 7.28, 0.1239, 0.325; `hd/menu-campaign-select` 5.12, 0.0739, 0.229 to 4.77, 0.0698, 0.236;
 `hd/menu-ship-select`, `menu-track-select`, `loading-loading` and the five `omega/menu-*` unchanged to the digit.
 
+**2026-11-18 (`hd-menu-ship`): HD's menu pairs were made with every team and circuit unlocked.** `rpcs3-hd-menu-pair.py`
+never wrote `[dev] unlock_everything = false` into ours' profile (the Pulse and Pure scripts do: `compare_menu.extra_settings(...,
+locked=True)`), so no HD pair records `ours.unlock_everything` and a debug build drew Ship Select's honeycomb with every team
+open, where the original's fresh walk shows its padlocks (37.6 % of that pair's grey difference). The script now builds the
+profile through `prepare_profile` (locked), and `check-compare-environment.py` holds it to that. A pair already made keeps
+its record: set `ours.unlock_everything = false` on it and re-render (`compare-rerender-ours.py`). Measured on the six HD pairs:
+only `hd/menu-ship-select` moves (5.72 to 5.09 with the locks, then to 4.55 with "The honeycomb fades" in
+[campaign-screens.md](../ui/campaign-screens.md)); the cell, campaign, grid and track pairs are unchanged to the digit locked or
+not, `hd/loading-loading` moves 2.0696 to 2.0718 locked (not adopted there). Omega's menu script has the same gap; its
+Ship Select original shows padlocks too but ours cannot be put on its selection, so locking it alone moves it 29.15 to 29.75
+and it is not changed.
+
 Gaps (no pair, the original's frame kept in `gap-*` beside the pairs with `gap.json`): HD Main Menu, Racebox setup and Options+
 (`Additional`); Omega Main Menu, Racebox setup and Options (Omega Campaign Select was a gap until 2026-11-05: `scripts/shadps4-omega-menu-pair.py`'s `WALK` row is now an XML page, so a re-run of `pairs` makes it a pair; adopting the pair made without the emulator from the kept frame: replace `omega/gap-campaign-select` with `omega/menu-campaign-select`, then add it to the `manifest` command below, 10 entries). The ranked list of differences is in the
 `menu-pairs-hd-omega` handover thread. Adopt: the pair directories are under `data/reference/compare-page/{hd,omega}/menu-*`;

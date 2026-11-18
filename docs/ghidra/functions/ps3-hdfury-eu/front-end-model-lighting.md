@@ -389,6 +389,32 @@ with no `FunkLayer` chain here, so its cards keep the page draw and `fury_card_g
 unchanged to the digit. Whether its front end resolves through a tone stage is unread (no memory readout). 2048: no
 flyer cards (`docs/ui/campaign-screens.md`).
 
+## Ship Select, per region (2026-11-18, `hd-menu-ship`)
+
+Pair `hd/menu-ship-select` re-rendered from its recorded flags, grey difference by region (disjoint boxes; each figure is the
+region's share of the frame's mean, summing to the whole, measured with a 601/587/114 luma so the whole reads 5.88 against the
+page's 5.72):
+
+| Region | Before | After the locks and the fade |
+| --- | ---: | ---: |
+| `NAVIGATE TEAM` honeycomb (`180,330` to `720,920`) | 2.21 | 1.14 |
+| model area (hull, `SHIP MODEL` frame, backdrop; `720,170` to `1920,770`) | 1.81 | 1.81 |
+| team card | 0.49 | 0.49 |
+| title bar, footer, statistics and loyalty, margins | 1.31 | 1.31 |
+
+Page metrics (mean grey, RMSE, edge correlation): 5.72, 0.0706, 0.406 to 5.09, 0.0644, 0.424 with ours' padlocks drawn (the pair
+had been made with every team open), to **4.55**, 0.0632, 0.426 with the fade ([campaign-screens.md](../../../ui/campaign-screens.md),
+"The honeycomb fades"). The model area is not moved. Split on the original's silhouette (pixels above luma 24, closed, filled): the hull
+(152,562 px) contributes 1.01 of the 5.29, its eight-pixel rim 0.12 and the backdrop inside the box 0.83. **The backdrop
+is the cloud pick**: ours draws a bright orange cloud (mean 3.0 there, 2.6 above the original's 0.4) where the original's frame is a
+near-black field with a faint red grain, and the Fury backdrop's cloud is `rand() % 12` per boot ([menu-backdrop.md](menu-backdrop.md)),
+which no pair records; choosing a dark one would be fitting, so the pair's backdrop difference stays. **The hull** reads 4 % dark
+overall (mean luma 127.5 against 131.9 over its eroded interior; the median red ratio 0.91, green 0.985, blue 0.973) and its
+mean absolute difference of 13.8 is mostly texture detail, not level: putting it into the backdrop's scene layer
+(the open item below) can move the 4 % and the red, not the detail. **Not done** (still open): the hull into the scene
+layer (`oag_game::capture::preview_pass`, `FrontEndTone::adapted_fury`), and Ship Select's backdrop under the model screens' block
+(the frame still runs the track block).
+
 ## Omega
 
 **Checked, differs; wired on Omega's own file.** Omega's patch (`data08.psarc`) and base (`data00.psarc`) ship the same
