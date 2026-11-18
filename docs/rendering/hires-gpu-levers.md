@@ -1367,10 +1367,112 @@ shading. Every run finished at tick 7,020 with hash `94a2261ef5045e63`.
 
 ### Left open
 
-- The rich pipelines (`programs_present`, cut 2 above) and the craft pass, which runs only rich
-  pipelines (3 ms at 4K on HD).
+- The rich pipelines (`programs_present`, cut 2 above): landed for every pipeline whose table
+  carries no program, the craft hulls among them ("The craft pass" below); the circuit's rich half,
+  whose table does carry programs, keeps its tests.
 - `tangents_present` is an OR over the whole model; a per-list OR, as `slots_present` has, may
   fold the normal-map branch for more plain draws exactly.
 - Omega's rung saving after cut 6 (7.8 % at 4K for 0.01 % to 12 % of the pixels): most of that work is
   shown on few pixels. A census of which plain Omega draws carry the specular or normal map would say whether
   those draws want a pipeline of their own.
+
+## The craft pass: the hulls fold their program lanes and the rig's mix (2026-11-19, `craft-pass-perf`)
+
+The question: what the `craft, weapons, shields` span (3.08 ms of a Deck 4K HD frame, 4.5 ns a
+fragment against the circuit's 1.4) spends, and what of it can go exactly. **Chosen workload, not
+measured against any original.**
+
+**Result.** On HD the span is the craft hulls and nothing else, and at 4K the player's own hull is
+nearly all of it. Its shading is 80 to 90 % of the span; overdraw, raster and the per-craft shadow
+lookup are small. Two exact folds for the hull pipelines took HD's span at 4K from 409 to 200 us
+on NVIDIA (-51 %) and from about 2.5 to 1.6 ms on the Intel iGPU (-38 %), with 2048, Omega, Pulse
+and Pure byte-identical and HD moved only by the driver's float order.
+
+### Method
+
+This workstation, no Deck (off for the night). `Intel(R) Graphics (ARL)` (Arrow Lake, Mesa anv,
+chosen with `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json`; `gt_cur_freq_mhz` read 2,300
+MHz busy) and `NVIDIA RTX PRO 2000 Blackwell Generation Laptop GPU` (`nvidia-smi` SM clock 1.7 to
+2.1 GHz busy; it idles between runs, so a short span can read high). GPU clocks unpinned, sampled
+every 0.25 s beside each run. Release `--features perf-probe` builds of `b091f09b6` (before) and
+the branch, the span command of "The 4K frame on the Deck pass by pass" above (`--race --mode
+single_race --seed 1 --autopilot --ticks 2500 --render-scale 100`, 100 redraws), arms interleaved
+A B B A, 2 rounds (Intel 4K 4 rounds), host load 2.5 to 42 (other lanes). HD Talon's Junction, 2048
+from `data/extracted/vita/PCSF00007` (Altima), Omega from `data/extracted/ps4` (Tech de Ra).
+RADV's `shaderstats` is not available on these adapters, and no instruction counts were taken.
+
+### What the span holds
+
+- On HD the span records the hulls alone: weapon bodies, flares, plumes and shield shells have
+  spans of their own, and the circuit's blended list draws inside the circuit there
+  (`Race::blended_after_craft` is false while HD's trail is active).
+- Per-hull marks (a throwaway build), 4K: the player's own hull 2,210 us on Intel and 403 on NVIDIA;
+  each other hull in view about 100 us on Intel and nothing measurable on NVIDIA. An HD hull is
+  23 to 38 opaque draws and 2 to 10 blended ones, about 20,000 triangles.
+- The hull's fragment shader a constant colour: Intel 2,287 to 499 us, NVIDIA 403 to 50, the same
+  fragments. So shading is 78 to 88 % of the span and overdraw and raster the rest.
+- `lit_texel` a constant with the craft-shadow lookup, fog and encode kept: Intel 544, NVIDIA 51.
+  The shadow lookup on a hull costs almost nothing; `lit_texel`'s body is the cost.
+
+### `ship_scene`, audited
+
+The craft draw under a scene block of their own (`ship_scene` in `scene/frame.rs`): the circuit's
+block with the Zone half off (`Zone::default()`), the light with its hull lights
+(`light` where the circuit gets `light.without_hull()`), and the craft's SPU lights. The shine
+block is the same with black fog. So for a hull pipeline:
+
+- the rig's `enabled` is the scope's (`BuildCacheScope::lit_by`), and the `lit_by_rig` fold holds
+  wherever every vertex has `lit` 1.0, which every HD, 2048 and Omega hull has (census below);
+  a hull with one vertex under 1.0 keeps the mix (`specialise::every_vertex_lit`);
+- `scene.zone.enabled` is zero in every race, Zone races included, so `zone_race` is 0 for a hull.
+
+The hulls are built inside `BuildCacheScope::craft(true)` (`race::Scene::new`), which carries both.
+
+### Landed: the program lanes fold where the table has none, and the hull takes the rig's result
+
+**`programs_present`** (`bindings.wesl`): where no row of a model's emissive table, as uploaded
+(`Emissives::of`), carries a program (`Emissive::program`, the row's `scale.zw`), every read of
+those lanes returns the constant zero, so each `PROGRAM_*` test and the glow program's tests
+compile out. Nothing rewrites the lanes after the upload (the pad cycle writes tints only). This is
+the brief's cut 2 for every table with no program, not a per-mode mask: the circuit's rich
+half carries programs and keeps its tests. Census: HD's twelve hulls carry one or two emissive rows,
+every one program `[0, 0]`; 2048's and Omega's hulls carry none (already folded by
+`emissive_rows`). Every hull vertex has `lit` 1.0 on all three titles.
+
+| `craft, weapons, shields`, us, before / after | 1280x800 | 1920x1080 | 3840x2160 |
+|---|---|---|---|
+| HD, NVIDIA | 101, 104 / 78, 71 (-28 %) | 136, 139 / 94, 90 (-33 %) | 414, 403 / 200, 200 (-51 %) |
+| HD, Intel | 1,002, 999 / 692, 691 (-31 %) | 1,420, 1,418 / 803, 864 (-41 %) | 2,263, 3,121, 2,789, 2,209 / 1,685, 1,474, 1,636, 1,268 (-38 % on medians) |
+| 2048, NVIDIA | 19 / 16, 18 | 30, 33 / 25, 26 (-20 %) | 121, 133 / 104, 106 (-17 %) |
+| 2048, Intel | 214, 215 / 192, 194 (-10 %) | 307, 309 / 278, 278 (-10 %) | 811, 809 / 712, 543 (-22 %) |
+| Omega, NVIDIA | 15, 16 / 14, 15 | 30, 33 / 29, 30 | 91, 99 / 89, 84 (-8 %) |
+| Omega, Intel | 218, 214 / 208, 214 | 304, 291 / 285, 279 (-5 %) | 555, 529 / 457, 533 (-8 %) |
+| HD Zone race, tick 1,500, NVIDIA | | 175, 175 / 214, 67 (noise) | 493, 529 / 208, 210 (-60 %) |
+
+One 2048 NVIDIA 800p round read 229 us before (an idle clock) and is left out. The circuit's span
+and the pipelined frame did not move beyond their noise.
+
+**Picture.** 2048, Omega, Pulse and Pure: byte-identical at every size on both adapters (Pulse and
+Pure 1280x800 NVIDIA). HD on NVIDIA: 0, 0 and 2 of 8,294,400 pixels, by one level. HD on Intel:
+182, 451 and 1,441 pixels (0.02 %), 149 of the 182 by one level and none past 7, scattered single
+pixels on the hull, the same in every round. A build with `programs_present` alone moves the same
+182, so it is the compiler's float order in the folded shader (the values the lanes return are the
+same zeros), not a change of what is computed. HD Zone race: byte-identical.
+
+**The Deck.** It should carry: these are branches and one mix on the rich pipeline, whose
+register count limits waves on RDNA2 (5,943 instructions at 168 VGPRs before). Re-measure:
+`OAG_RENDER_GPU_BENCH=100 OAG_RENDER_PERF=1 oag-game <hd image> --race --mode single_race --seed 1
+--autopilot --no-audio --size 3840x2160 --ticks 2500 --render-scale 100 --screenshot out.png`,
+the `craft, weapons, shields` row, `b091f09b6` against this commit, interleaved, at the three
+sizes; `RADV_DEBUG=shaderstats` beside it for the hull pipelines' VGPRs.
+
+### Left open
+
+- After the folds the player's hull still shades at about 1.6 ms (Intel) and 200 us (NVIDIA) at
+  4K against 0.5 ms and 50 us for a constant colour. What of `lit_texel` a hull still runs is
+  unread: `INTEL_DEBUG=fs` statistics of the hull pipelines (diffed against a build whose hulls
+  draw a constant, to find them), or `RADV_DEBUG=shaderstats` on the Deck.
+- The hulls' own `slots_present` keeps `ALWAYS` and the material index; a per-draw split of a hull,
+  as the circuit's plain half has, is untried.
+- The hull's depth prepass and overdraw: bounded by the constant-colour arm at about 20 % of the
+  span; not worth a pass of its own on these numbers.
