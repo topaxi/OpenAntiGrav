@@ -154,6 +154,24 @@ pub(super) fn plain_list_is_lit(
         })
 }
 
+/// Whether every vertex the `plain` draws of `draws` use is unlit (`lit` exactly 0.0): each of
+/// their pixels weighs the rig's result at zero, whatever the rig.
+pub(super) fn plain_list_is_unlit(
+    model: &Model,
+    draws: &[crate::mesh::DrawCall],
+    plain: &[bool],
+) -> bool {
+    draws
+        .iter()
+        .zip(plain)
+        .filter(|&(_, &plain)| plain)
+        .all(|(draw, _)| {
+            model.indices[draw.range.start as usize..draw.range.end as usize]
+                .iter()
+                .all(|&index| model.vertices[index as usize].lit == 0.0)
+        })
+}
+
 /// Whether each of `lit` is exactly 1.0.
 fn every_one(mut lit: impl Iterator<Item = f32>) -> bool {
     lit.all(|lit| lit == 1.0)
