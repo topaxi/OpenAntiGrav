@@ -227,6 +227,12 @@ halted until a client sends `vCont;c`. Use `/proc/<pid>/mem`.
   this machine because the user's `xwayland-satellite` session accepts any number;
   `display` reported "already up" and would have put Vita3K on the maintainer's
   desktop. Use a number that gives `unable to open display` first (`:96` here).
+  Since 2026-11-18 `vita3k-drive.py`'s `bring_up_display` refuses a display that answers
+  without its own ownership marker (exits with the reason) instead of reusing it;
+  `OAG_VITA3K_FOREIGN_DISPLAY=1` allows a foreign one deliberately. The maintainer's
+  desktop session ended five seconds after a member's ad-hoc kill line during a Vita3K
+  retry loop that day; the scripts were audited and only signal their own children, so
+  the cause stays unproven, but no tool reuses a display it did not start any more.
 - **A pref-path of its own**: `ux0/app`, `ux0/addcont` and `ux0/license` symlinked
   from the real one, `ux0/user` copied (4 MiB), config copied with `pref-path` and
   `audio-volume: 0` changed. The save in the copy is the user's progress, so the HD

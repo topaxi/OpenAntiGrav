@@ -177,12 +177,36 @@ def bring_up_display(display_num, socket, timeout=15.0):
     """Start the headless weston + rooted Xwayland pair if nothing is up.
 
     Returns True if this call started it, False if `:{display_num}` was
-    already answering (someone else's, or a previous call's still running).
-    Only the True case writes the ownership marker.
+    already answering with the pair a previous call started (the ownership
+    marker names this display and its Xwayland is alive). Only the True case
+    writes the marker.
+
+    A display that answers without our marker is refused: the desktop's
+    xwayland-satellite answers any number, and keys, clicks and a Vita3K
+    window sent there land on the maintainer's session
+    (`docs/reverse-engineering/vita3k-capture.md`, "Traps").
+    `OAG_VITA3K_FOREIGN_DISPLAY=1` allows it deliberately.
     """
     if display_up(display_num):
-        log("display :%d already up" % display_num)
-        return False
+        owned = {}
+        if PIPELINE_MARKER.exists():
+            try:
+                owned = json.loads(PIPELINE_MARKER.read_text())
+            except ValueError:
+                owned = {}
+        pid = owned.get("xwayland_pid")
+        ours = owned.get("display") == display_num and isinstance(pid, int) and _is_process(pid, "Xwayland")
+        if ours:
+            log("display :%d already up (ours, Xwayland %d)" % (display_num, pid))
+            return False
+        if os.environ.get("OAG_VITA3K_FOREIGN_DISPLAY") == "1":
+            log("display :%d already up and not ours; used because OAG_VITA3K_FOREIGN_DISPLAY=1" % display_num)
+            return False
+        sys.exit(
+            "display :%d answers but this tool did not start it (no marker for it in %s); "
+            "pick a number where `xdpyinfo -display :N` fails, or set OAG_VITA3K_FOREIGN_DISPLAY=1"
+            % (display_num, PIPELINE_MARKER)
+        )
 
     CACHE.mkdir(parents=True, exist_ok=True)
     weston_env = os.environ.copy()
