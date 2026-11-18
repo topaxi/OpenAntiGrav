@@ -95,6 +95,7 @@ mod psp2_scenery_animation_ground_truth;
 mod psp2_static_hologram_ground_truth;
 mod psp2_texture_dedupe_ground_truth;
 mod psp2_twin_blend_ground_truth;
+mod psp2_vertex_blend_lit_path;
 mod psp_slope_lod;
 mod rcs_siblings_ground_truth;
 mod velocity_target;

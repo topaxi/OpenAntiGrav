@@ -64,6 +64,7 @@ mod tarmac;
 mod transparency;
 mod twin_blend;
 mod uv_keys;
+mod vertex_blend;
 pub mod water;
 
 pub use chevron::PLASMA_COMBINE;
@@ -116,6 +117,19 @@ fn decode_texture_form(path: &str, blob: &[u8]) -> Option<(ModelTexture, Option<
 /// A diffuse decoded once per path, and the form to count again on each
 /// material that shares it, so the report reads as it did per material.
 type Decoded = (std::sync::Arc<ModelTexture>, Option<GnfForm>);
+
+/// Every picture the build decoded, by path: materials share a `.gxt` between them (Altima's
+/// track resolves 523 material slots to 164 distinct files), and a second picture
+/// (`vertex_blend`) is often another material's first.
+type Pictures = std::collections::HashMap<String, Result<Decoded, Unbound>>;
+
+/// One picture read and decoded, or why not.
+fn decode_picture(path: &str, textures: Textures<'_>) -> Result<Decoded, Unbound> {
+    let blob = textures(path).ok_or(Unbound::ArchiveMiss)?;
+    let (texture, form) = decode_texture_form(path, &blob).ok_or(Unbound::DecodeRefused)?;
+    let texture = crate::mesh_render::offer_to_texture_sink(texture);
+    Ok((std::sync::Arc::new(texture), form))
+}
 
 /// Builds every submesh of a 2048 `.rcsmodel` into one model.
 ///
@@ -331,6 +345,31 @@ fn build_planned(
         &mut *textures,
         &mut report,
     );
+    // `fc07_blend_vertred_lambert_2diff` mixes a second picture in by the vertex colour's red.
+    let mut pictures = Pictures::new();
+    let blend = {
+        let taken: Vec<bool> = (0..decoded.materials.len())
+            .map(|m| {
+                let m = Some(m);
+                glow.role(m) != 0
+                    || twin.of(m).is_some()
+                    || emissive_add.of(m).is_some()
+                    || normals.of(m).is_some()
+                    || tarmac.of(m).is_some()
+                    || chevron.of(m).is_some()
+                    || (crowd.role(m) | glass.role(m) | sea.role(m)) != 0
+            })
+            .collect();
+        vertex_blend::plan(
+            &decoded,
+            ps4,
+            &taken,
+            &mut glow.emissive,
+            &mut pictures,
+            &mut *textures,
+            &mut report,
+        )
+    };
     model.emissive = glow.emissive.clone();
     model.anim_tracks = glow.tracks.clone();
     let uv_keys = billboard_vex.map_or_else(uv_keys::Plan::default, |vex_blob| {
@@ -573,6 +612,10 @@ fn build_planned(
                 }
                 _ => texcoord2,
             };
+            // The blend family's weight, `VertexColour1`'s red, rides the same pair's `x`.
+            let texcoord2 = blend
+                .texcoord2(submesh.material, submesh.vita_vertex_colour1.get(i))
+                .unwrap_or(texcoord2);
             let (colour, sun_mask) = match submesh.colours.get(i) {
                 Some(&bytes) if hull_factor => hull_colour::vertex(bytes),
                 Some(&[r, g, b, a]) if nova_vertex => (
@@ -616,7 +659,8 @@ fn build_planned(
                     | crowd.role(submesh.material)
                     | chevron.role(submesh.material)
                     | glass.role(submesh.material)
-                    | sea.role(submesh.material),
+                    | sea.role(submesh.material)
+                    | blend.role(submesh.material),
                 xform: place.xform,
                 sun_mask,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
@@ -693,7 +737,16 @@ fn build_planned(
 
     bind_textures(
         &decoded,
-        (&glow, &twin, &normals, &emissive_add, &tarmac, &chevron),
+        (
+            &glow,
+            &twin,
+            &normals,
+            &emissive_add,
+            &tarmac,
+            &chevron,
+            &blend,
+        ),
+        pictures,
         &mut model,
         &mut report,
         textures,
@@ -711,6 +764,7 @@ type Plans<'a> = (
     &'a emissive_add::Plan,
     &'a tarmac::Plan,
     &'a chevron::Plan,
+    &'a vertex_blend::Plan,
 );
 
 /// Binds each draw to its own submesh's material's texture.
@@ -723,7 +777,8 @@ type Plans<'a> = (
 /// missing archive entry costs one lookup rather than one per submesh.
 fn bind_textures(
     decoded: &psp2::Model,
-    (glow, twin, normals, emissive_add, tarmac, chevron): Plans<'_>,
+    (glow, twin, normals, emissive_add, tarmac, chevron, blend): Plans<'_>,
+    mut diffuses: Pictures,
     model: &mut Model,
     report: &mut Report,
     textures: Textures<'_>,
@@ -743,11 +798,9 @@ fn bind_textures(
     // 2,048-square atlas is 16 MiB decoded, so decode each path once.
     let mut atlases: std::collections::HashMap<&str, Option<std::sync::Arc<ModelTexture>>> =
         std::collections::HashMap::new();
-    // Materials share a `.gxt` between them as well: Altima's track resolves
-    // 523 material slots to 164 distinct files. Each slot still gets its own
-    // entry, so a lightmap stays positionally beside its diffuse.
-    let mut diffuses: std::collections::HashMap<&str, Result<Decoded, Unbound>> =
-        std::collections::HashMap::new();
+    // `diffuses` decodes each `.gxt` once however many materials name it. Each
+    // slot still gets its own entry, so a lightmap stays positionally beside
+    // its diffuse.
     // One alpha-times-constant picture per (map, constant).
     type AlphaKey<'p> = (&'p str, [u32; 3]);
     let mut alpha_pictures: std::collections::HashMap<
@@ -809,13 +862,9 @@ fn bind_textures(
             let (texture, form) = match (alpha, path) {
                 (Some(picture), _) => (picture, None),
                 (None, Some(path)) => {
-                    let entry = diffuses.entry(path).or_insert_with(|| {
-                        let blob = textures(path).ok_or(Unbound::ArchiveMiss)?;
-                        let (texture, form) =
-                            decode_texture_form(path, &blob).ok_or(Unbound::DecodeRefused)?;
-                        let texture = crate::mesh_render::offer_to_texture_sink(texture);
-                        Ok((std::sync::Arc::new(texture), form))
-                    });
+                    let entry = diffuses
+                        .entry(path.to_string())
+                        .or_insert_with(|| decode_picture(path, &mut *textures));
                     match entry.clone() {
                         Ok(found) => found,
                         Err(why) => {
@@ -863,13 +912,14 @@ fn bind_textures(
             // Positionally beside the diffuse, as `Model::lightmaps` is
             // defined; left empty for a model no material of which names one,
             // which is every Vita model.
-            if twin.any() || normals.any() || emissive_add.any() {
+            if twin.any() || normals.any() || emissive_add.any() || blend.any() {
                 debug_assert_eq!(model.pad_masks.len(), at);
                 model.pad_masks.push(
                     twin_here
                         .map(|t| t.wipe.clone())
                         .or_else(|| emissive_add.mask(Some(index)).cloned())
-                        .or_else(|| normals.of(Some(index)).cloned()),
+                        .or_else(|| normals.of(Some(index)).cloned())
+                        .or_else(|| blend.second(Some(index)).cloned()),
                 );
             }
             if tarmac.any() || chevron.any() {

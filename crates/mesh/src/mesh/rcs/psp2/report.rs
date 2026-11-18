@@ -178,6 +178,12 @@ pub struct Report {
     /// Of that family, materials left to the generic reading: a submesh without both pairs, or a
     /// picture that would not decode.
     pub tarmac_unread: usize,
+    /// Materials of `fc07_blend_vertred_lambert_2diff` whose albedo mixes `DiffuseMap01` in by
+    /// the vertex colour's red (`psp2::vertex_blend`), Vita only.
+    pub vertex_blend_materials: usize,
+    /// Of that family, materials left to the generic reading: a submesh without `VertexColour1`,
+    /// a second picture that would not decode, another reading on the slot, or a full glow table.
+    pub vertex_blend_unread: usize,
     /// Omega's `crowd_sprite_diffuse_normal_alpha[_shadow]` materials lit by their `Shadowed` and
     /// `Ambient` (`psp2::crowd`).
     pub crowd_materials: usize,
@@ -363,6 +369,14 @@ impl Report {
                 self.tarmac_materials, self.tarmac_unread
             )
         };
+        let vertex_blend = if self.vertex_blend_materials + self.vertex_blend_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} vertex-blend material(s) mix DiffuseMap01 in by the vertex red ({} left to the generic reading)",
+                self.vertex_blend_materials, self.vertex_blend_unread
+            )
+        };
         let crowd = if self.crowd_materials + self.crowd_unread == 0 {
             String::new()
         } else {
@@ -438,7 +452,7 @@ impl Report {
         let hull_colour = self.hull_colour.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
