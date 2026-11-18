@@ -364,14 +364,15 @@ pub(crate) fn run_windowless(
 /// and the pilot assist applied.
 fn started_race(loaded: race::Loaded, cli: &Cli, scheme: ControlScheme) -> race::Race {
     let difficulty = loaded.setup.difficulty;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     crate::ai_choice::apply(
         &mut race,
         cli.driver.ai,
         crate::ai_choice::Source::Free(difficulty),
     );
-    race.sim.set_control_scheme(scheme);
-    race.sim
+    race.core.sim.set_control_scheme(scheme);
+    race.core
+        .sim
         .set_pilot_assist(cli.driver.pilot_assist.unwrap_or_default());
     race
 }
@@ -453,17 +454,21 @@ pub(crate) fn write_trace(
         .and(cli.pose_boost)
         .filter(|_| cli.ticks == 0);
     if let Some(velocities) = field_warmup_velocities(cli)? {
-        race.warm_up_field(&velocities, race.sim.field_warm_up_ticks(), warmed_boost);
+        race.warm_up_field(
+            &velocities,
+            race.core.sim.field_warm_up_ticks(),
+            warmed_boost,
+        );
     }
 
     // Built from the world rather than from `Telemetry`, which carries a summary
     // for the console and not the columns a comparison needs.
     let frame_of = |race: &race::Race, dt: f32| {
-        let ship = &race.sim.world.ships[0].physics;
+        let ship = &race.core.sim.world.ships[0].physics;
         let body = &ship.body;
         let exhaust = race.exhaust();
         Frame {
-            tick: race.sim.world.tick,
+            tick: race.core.sim.world.tick,
             dt,
             grounded: ship.grounded,
             throttle: ship.thrust,
@@ -530,7 +535,7 @@ pub(crate) fn write_trace(
         // second pilot in it would fill a second entry here and nothing
         // downstream would change.
         let mut inputs = oag_gameplay::PlayerInputs::none();
-        inputs.set(race.sim.world.primary_slot(), held.snapshot());
+        inputs.set(race.core.sim.world.primary_slot(), held.snapshot());
         race.tick(&inputs);
     }
     if let (Some(age), None) = (cli.pose_boost, warmed_boost) {

@@ -18,16 +18,20 @@ fn raised(mode: Mode, voiced: bool, down: &[usize]) -> Vec<(u64, usize)> {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
-    race.sim.countdown_voice = voiced;
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.countdown_voice = voiced;
     for &slot in down {
-        race.sim.world.ships[slot].physics.craft_state = CraftState::Eliminated;
+        race.core.sim.world.ships[slot].physics.craft_state = CraftState::Eliminated;
     }
     let mut out = Vec::new();
     for _ in 0..400 {
         race.tick(&PlayerInputs::none());
-        let stepped = race.sim.world.tick - 1;
-        for event in race.sim.drain_cues() {
+        let stepped = race.core.sim.world.tick - 1;
+        for event in race.core.sim.drain_cues() {
             if event.cue == Cue::ContElim {
                 out.push((stepped, usize::from(event.slot)));
             }

@@ -25,11 +25,15 @@ fn four_people_against_a_wall(seat: Option<usize>) -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     for slot in 1..4 {
-        race.sim.world.controllers[slot] = Controller::Local;
+        race.core.sim.world.controllers[slot] = Controller::Local;
         assert!(
-            race.sim.world.person_flown(slot),
+            race.core.sim.world.person_flown(slot),
             "slot {slot} person-flown"
         );
     }
@@ -40,7 +44,7 @@ fn four_people_against_a_wall(seat: Option<usize>) -> Race {
 /// Puts `slot`'s craft on an inbound wall approach, each person in their own
 /// lane so the pair never touch.
 fn push_toward_wall(race: &mut Race, slot: usize) {
-    let body = &mut race.sim.world.ships[slot].physics.body;
+    let body = &mut race.core.sim.world.ships[slot].physics.body;
     body.position = Vec3::new(20.0, -39.7, 10.0 * slot as f32);
     body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
     body.orientation = oag_core::math::Quat::IDENTITY;
@@ -48,7 +52,8 @@ fn push_toward_wall(race: &mut Race, slot: usize) {
 }
 
 fn collisions(race: &Race) -> Vec<usize> {
-    race.sim
+    race.core
+        .sim
         .pending_cues()
         .iter()
         .filter(|cue| cue.cue == Cue::Collision)
@@ -115,9 +120,9 @@ fn the_contact_cue_cadence_does_not_depend_on_the_seat() {
             push_toward_wall(&mut race, 3);
             race.tick(&PlayerInputs::none());
             heard.push(collisions(&race).len());
-            race.sim.drain_cues();
+            race.core.sim.drain_cues();
         }
-        (heard, race.sim.contact_cue_cooldown)
+        (heard, race.core.sim.contact_cue_cooldown)
     };
     let (heard, cooldowns) = cadence(Some(3));
     assert!(
@@ -133,9 +138,9 @@ fn the_contact_cue_cadence_does_not_depend_on_the_seat() {
 fn the_start_voice_is_the_seats() {
     for seat in SEATS {
         let mut race = four_people_against_a_wall(Some(seat));
-        race.sim.countdown_voice = true;
-        race.raise_start_cue(Cue::Ready);
-        assert_eq!(usize::from(race.sim.pending_cues()[0].slot), seat);
+        race.core.sim.countdown_voice = true;
+        race.core.raise_start_cue(Cue::Ready);
+        assert_eq!(usize::from(race.core.sim.pending_cues()[0].slot), seat);
     }
 }
 
@@ -143,11 +148,11 @@ fn the_start_voice_is_the_seats() {
 fn a_seated_reticle_is_drawn_for_the_seats_weapon() {
     for seat in SEATS {
         let mut race = four_people_against_a_wall(Some(seat));
-        race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
+        race.core.sim.weapons = Some(Arc::new(one_leach_beam_table()));
         for slot in 0..4 {
-            race.sim.world.ships[slot].pickup.weapon = None;
+            race.core.sim.world.ships[slot].pickup.weapon = None;
         }
-        race.sim.world.ships[seat].pickup.weapon = Some(Weapon::LeachBeam);
+        race.core.sim.world.ships[seat].pickup.weapon = Some(Weapon::LeachBeam);
         race.tick(&PlayerInputs::none());
         assert_eq!(
             race.sight().held(),
@@ -162,8 +167,8 @@ fn the_boost_kick_and_the_flaps_follow_the_seats_craft() {
     for seat in SEATS {
         let mut race = four_people_against_a_wall(Some(seat));
         race.view.boost_fov_kick = oag_display::display::BoostFovKick::DEFAULT;
-        race.sim.world.ships[seat].physics.pad_timer = 1.0;
-        race.sim.world.ships[seat].physics.airbrake_left = 100.0;
+        race.core.sim.world.ships[seat].physics.pad_timer = 1.0;
+        race.core.sim.world.ships[seat].physics.airbrake_left = 100.0;
         race.tick(&PlayerInputs::none());
         assert!(race.view.boost_kick > 0.0, "seat {seat}: no boost kick");
         assert!(race.airbrake_flaps()[0] > 0.0, "seat {seat}: no flap");

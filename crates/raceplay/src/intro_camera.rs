@@ -387,12 +387,12 @@ impl Race {
     pub fn tick_intro(&mut self, inputs: &PlayerInputs) {
         // Before the flyby moves the camera - see `between_ticks`.
         self.capture_poses();
-        let world = &self.sim.world;
+        let world = &self.core.sim.world;
         let held = (0..world.ship_count.into())
             .filter(|&slot| world.person_flown(slot))
             .chain([world.primary_slot()])
             .any(|slot| inputs.get(slot).buttons.is_held(Button::Cross));
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         let Some(intro) = &mut self.view.intro else {
             return;
         };
@@ -418,7 +418,7 @@ impl Race {
     /// tick 0), and every frame of it would be blurred against the first.
     #[must_use]
     pub fn motion_tick(&self) -> u64 {
-        self.sim.world.tick + self.view.intro.as_ref().map_or(0, |i| u64::from(i.ticks()))
+        self.core.sim.world.tick + self.view.intro.as_ref().map_or(0, |i| u64::from(i.ticks()))
     }
 
     /// Where the track-description panel is, while it is on screen: up through the flyby, then
@@ -432,7 +432,7 @@ impl Race {
             entered: intro.ticks() as f32 * tick,
             left: match intro {
                 intro if intro.playing() => None,
-                intro if intro.finished() => Some(self.sim.world.tick as f32 * tick),
+                intro if intro.finished() => Some(self.core.sim.world.tick as f32 * tick),
                 _ => return None,
             },
         };
@@ -448,7 +448,7 @@ impl Race {
         // have no flyby of their own. Chosen, not measured.
         match &self.view.intro {
             Some(intro) if intro.playing() => false,
-            Some(intro) if intro.finished() => self.sim.world.tick >= intro.hud_delay(),
+            Some(intro) if intro.finished() => self.core.sim.world.tick >= intro.hud_delay(),
             _ => true,
         }
     }

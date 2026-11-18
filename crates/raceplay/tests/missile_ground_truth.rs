@@ -91,7 +91,7 @@ fn press(button: Button) -> oag_gameplay::InputSnapshot {
 #[ignore = "needs a disc image in data/images/"]
 fn a_missile_turns_toward_the_craft_it_locked() {
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // A few ticks so the grid settles onto its footprints and the standings take
     // a first fix - the lock's along-track screen reads `Standing::progress`.
     for _ in 0..30 {
@@ -105,12 +105,13 @@ fn a_missile_turns_toward_the_craft_it_locked() {
     // assertion below cannot fail on homing. Four units to the craft's left puts the
     // target a few degrees off, which is asserted as a precondition.
     {
-        let body = &mut race.sim.world.ships[0].physics.body;
+        let body = &mut race.core.sim.world.ships[0].physics.body;
         let left = -body.right();
         body.position += left * 4.0;
     }
 
     let stats = race
+        .core
         .sim
         .missile_stats()
         .expect("the disc authors a Missile");
@@ -124,7 +125,7 @@ fn a_missile_turns_toward_the_craft_it_locked() {
     // - and that reticle only starts accumulating hold once the pickup is a
     // Missile. A second clears the recovered `sight::HOLD_SECONDS` (0.8) with
     // room for the f32 accumulation to land on either side of the boundary.
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
     }
@@ -134,12 +135,13 @@ fn a_missile_turns_toward_the_craft_it_locked() {
          full grid - the hold gate would silently turn this test's shot unguided"
     );
     assert!(
-        race.sim.fire_missile(0, &stats),
+        race.core.sim.fire_missile(0, &stats),
         "nothing on a full grid was lockable from the back of it - the lock's \
          window, cone or along-track screen is refusing everything on real geometry"
     );
 
     let launched = race
+        .core
         .sim
         .world
         .projectiles
@@ -160,6 +162,7 @@ fn a_missile_turns_toward_the_craft_it_locked() {
     for _ in 0..240 {
         race.tick(&PlayerInputs::none());
         let Some(current) = race
+            .core
             .sim
             .world
             .projectiles
@@ -174,7 +177,10 @@ fn a_missile_turns_toward_the_craft_it_locked() {
         last = current;
     }
 
-    let target_position = race.sim.world.ships[target as usize].physics.body.position;
+    let target_position = race.core.sim.world.ships[target as usize]
+        .physics
+        .body
+        .position;
     let homed = (last.position - target_position).length();
     let straight = (start + heading * travelled - target_position).length();
     println!(
@@ -209,11 +215,12 @@ fn a_missile_turns_toward_the_craft_it_locked() {
 #[ignore = "needs a disc image in data/images/"]
 fn a_missile_never_locks_its_own_firer() {
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
     let stats = race
+        .core
         .sim
         .missile_stats()
         .expect("the disc authors a Missile");
@@ -223,18 +230,18 @@ fn a_missile_never_locks_its_own_firer() {
     // would exercise the self-lock invariant against every opponent slot and
     // never against the player's own. Every other slot's candidate is used as
     // soon as `lock` finds one and needs no priming.
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
     }
 
     let mut locks = 0;
-    for slot in 0..race.sim.world.ship_count as usize {
-        if !race.sim.fire_missile(slot, &stats) {
+    for slot in 0..race.core.sim.world.ship_count as usize {
+        if !race.core.sim.fire_missile(slot, &stats) {
             continue;
         }
         locks += 1;
-        for projectile in race.sim.world.projectiles.slots.iter() {
+        for projectile in race.core.sim.world.projectiles.slots.iter() {
             if projectile.kind != Some(Weapon::Missile) {
                 continue;
             }
@@ -277,11 +284,12 @@ fn a_missile_never_locks_its_own_firer() {
 #[ignore = "needs a disc image in data/images/"]
 fn a_missile_glances_off_the_circuits_barriers() {
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
     let stats = race
+        .core
         .sim
         .missile_stats()
         .expect("the disc authors a Missile");
@@ -290,7 +298,7 @@ fn a_missile_glances_off_the_circuits_barriers() {
     // Aimed across the track from the player's craft, sweeping the whole circle
     // so the test does not depend on which side the barrier happens to be on at
     // this point of this circuit.
-    let ship = race.sim.world.ships[0].physics.body;
+    let ship = race.core.sim.world.ships[0].physics.body;
     let forward = ship.forward();
     let right = ship.right();
     let mut seen_bounce = false;
@@ -299,9 +307,9 @@ fn a_missile_glances_off_the_circuits_barriers() {
         let angle = std::f32::consts::TAU * step as f32 / 16.0;
         let (sin, cos) = angle.sin_cos();
         let heading = forward * cos + right * sin;
-        race.sim.world.projectiles.clear();
+        race.core.sim.world.projectiles.clear();
         assert!(
-            race.sim.world.projectiles.spawn_guided(
+            race.core.sim.world.projectiles.spawn_guided(
                 Weapon::Missile,
                 ship.position + heading * 2.0,
                 heading * 100.0,
@@ -316,6 +324,7 @@ fn a_missile_glances_off_the_circuits_barriers() {
         for _ in 0..90 {
             race.tick(&PlayerInputs::none());
             if race
+                .core
                 .sim
                 .world
                 .projectiles
@@ -387,29 +396,30 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
     );
 
     // And firing one spends it, through the button path rather than by hand.
-    let mut race = race::Race::start(single_race().expect("the image is present").setup);
+    let loaded = single_race().expect("the image is present");
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
     // `false` now means the pool was full and nothing else - a missing lock is
     // no longer a refusal, so this asserts the array had room rather than that
     // anything was lockable.
     assert!(
-        race.sim.fire_missile(0, &stats),
+        race.core.sim.fire_missile(0, &stats),
         "the projectile array was full"
     );
-    race.sim.world.projectiles.clear();
+    race.core.sim.world.projectiles.clear();
 
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
     race.tick(&PlayerInputs::single(press(Button::Square)));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         None,
         "firing a missile did not spend the pickup"
     );
     assert!(
-        race.sim.world.projectiles.live() > 0,
+        race.core.sim.world.projectiles.live() > 0,
         "the pickup was spent and nothing left the rail"
     );
 }
@@ -434,23 +444,25 @@ fn a_missile_with_no_lock_still_flies_a_real_circuit_and_ends_itself() {
     use oag_weapons::projectile::missile::SELF_DETONATE_SECONDS;
 
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
     let stats = race
+        .core
         .sim
         .missile_stats()
         .expect("the disc authors a Missile");
 
-    for slot in 0..race.sim.world.ship_count as usize {
+    for slot in 0..race.core.sim.world.ship_count as usize {
         assert!(
-            race.sim.fire_missile(slot, &stats),
+            race.core.sim.fire_missile(slot, &stats),
             "slot {slot} put nothing in the air - a press now fires whether or              not anything is lockable, so the only `false` left is a full pool"
         );
     }
 
     let unguided = race
+        .core
         .sim
         .world
         .projectiles
@@ -471,6 +483,7 @@ fn a_missile_with_no_lock_still_flies_a_real_circuit_and_ends_itself() {
     }
 
     let survivors = race
+        .core
         .sim
         .world
         .projectiles

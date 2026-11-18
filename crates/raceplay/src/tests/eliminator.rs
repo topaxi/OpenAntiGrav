@@ -14,18 +14,19 @@ fn eliminator() -> Race {
 #[test]
 fn a_completed_lap_gives_back_a_fifth_of_the_maximum_and_plays_absorb() {
     let mut race = eliminator();
-    let maximum = race.sim.world.ships[0].handling.dimensions.shield;
-    race.sim.world.ships[0].physics.shield = maximum * 0.3;
-    race.sim.drain_cues();
+    let maximum = race.core.sim.world.ships[0].handling.dimensions.shield;
+    race.core.sim.world.ships[0].physics.shield = maximum * 0.3;
+    race.core.sim.drain_cues();
 
     race.eliminator_lap_health_refill(0);
 
     assert_eq!(
-        race.sim.world.ships[0].physics.shield,
+        race.core.sim.world.ships[0].physics.shield,
         maximum * 0.3 + maximum * LAP_REFILL_FRACTION
     );
     assert!(
-        race.sim
+        race.core
+            .sim
             .pending_cues()
             .iter()
             .any(|cue| cue.cue == Cue::Absorb),
@@ -36,26 +37,26 @@ fn a_completed_lap_gives_back_a_fifth_of_the_maximum_and_plays_absorb() {
 #[test]
 fn the_refill_is_clamped_at_the_maximum() {
     let mut race = eliminator();
-    let maximum = race.sim.world.ships[0].handling.dimensions.shield;
-    race.sim.world.ships[0].physics.shield = maximum * 0.9;
+    let maximum = race.core.sim.world.ships[0].handling.dimensions.shield;
+    race.core.sim.world.ships[0].physics.shield = maximum * 0.9;
     race.eliminator_lap_health_refill(0);
-    assert_eq!(race.sim.world.ships[0].physics.shield, maximum);
+    assert_eq!(race.core.sim.world.ships[0].physics.shield, maximum);
 }
 
 #[test]
 fn a_craft_that_is_not_racing_and_a_mode_that_is_not_eliminator_get_nothing() {
     let mut race = eliminator();
-    let maximum = race.sim.world.ships[0].handling.dimensions.shield;
-    race.sim.world.ships[0].physics.shield = maximum * 0.3;
-    race.sim.world.ships[0].physics.craft_state = oag_physics::damage::CraftState::Destroyed;
+    let maximum = race.core.sim.world.ships[0].handling.dimensions.shield;
+    race.core.sim.world.ships[0].physics.shield = maximum * 0.3;
+    race.core.sim.world.ships[0].physics.craft_state = oag_physics::damage::CraftState::Destroyed;
     race.eliminator_lap_health_refill(0);
-    assert_eq!(race.sim.world.ships[0].physics.shield, maximum * 0.3);
+    assert_eq!(race.core.sim.world.ships[0].physics.shield, maximum * 0.3);
 
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_mine_table());
-    race.sim.world.ships[0].physics.shield = maximum * 0.3;
+    race.core.sim.world.ships[0].physics.shield = maximum * 0.3;
     race.eliminator_lap_health_refill(0);
-    assert_eq!(race.sim.world.ships[0].physics.shield, maximum * 0.3);
+    assert_eq!(race.core.sim.world.ships[0].physics.shield, maximum * 0.3);
 }
 
 /// A wrecked opponent in a single race stays down: state 5's dwell, then
@@ -70,28 +71,28 @@ fn a_destroyed_opponent_in_a_single_race_never_comes_back() {
 
     let mut race = race_with_a_grid();
     assert!(
-        race.sim.world.ships[1].active,
+        race.core.sim.world.ships[1].active,
         "the grid fixture fields opponents"
     );
     // Straight to the out-of-the-race state, the explosion already run.
-    race.sim.world.ships[1].physics.craft_state = CraftState::Eliminated;
-    race.sim.world.ships[1].physics.shield = 0.0;
+    race.core.sim.world.ships[1].physics.craft_state = CraftState::Eliminated;
+    race.core.sim.world.ships[1].physics.shield = 0.0;
 
     // Past state 5's 1.5 s, state 6's 0.8 s, the Eliminator's longest return
     // (2.5 s) and then the 13 s the live capture watched.
-    let ticks = ((DESTROYED_DWELL + 0.8 + 2.5 + 13.0) / race.sim.dt()).round() as usize;
+    let ticks = ((DESTROYED_DWELL + 0.8 + 2.5 + 13.0) / race.core.sim.dt()).round() as usize;
     for tick in 0..ticks {
         race.tick(&PlayerInputs::none());
         assert_eq!(
-            race.sim.world.ships[1].physics.craft_state,
+            race.core.sim.world.ships[1].physics.craft_state,
             CraftState::Eliminated,
             "the opponent came back at tick {tick}"
         );
     }
-    assert_eq!(race.sim.world.ships[1].physics.shield, 0.0);
-    assert_eq!(race.sim.world.ships[1].standing.deaths, 0);
+    assert_eq!(race.core.sim.world.ships[1].physics.shield, 0.0);
+    assert_eq!(race.core.sim.world.ships[1].standing.deaths, 0);
     assert!(
-        !race.sim.finished(),
+        !race.core.sim.finished(),
         "an opponent's death must not end the player's race"
     );
 }
@@ -102,26 +103,26 @@ fn the_players_destruction_in_a_single_race_still_ends_it() {
     use oag_physics::CraftState;
 
     let mut race = race_with_a_grid();
-    race.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
+    race.core.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
     for _ in 0..300 {
         race.tick(&PlayerInputs::none());
     }
     assert_eq!(
-        race.sim.world.ships[0].physics.craft_state,
+        race.core.sim.world.ships[0].physics.craft_state,
         CraftState::Eliminated
     );
-    assert!(race.sim.finished());
+    assert!(race.core.sim.finished());
 }
 
 /// Two craft in play, `victim` recorded as last struck by `killer`, its last
 /// weapon hit `age` ticks ago.
 fn struck(age: u64) -> Race {
     let mut race = eliminator();
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.tick = 5000;
-    race.sim.last_damager[1] = Some(0);
-    race.sim.last_weapon_hit[1] = 5000 + 1 - age;
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.tick = 5000;
+    race.core.sim.last_damager[1] = Some(0);
+    race.core.sim.last_weapon_hit[1] = 5000 + 1 - age;
     race
 }
 
@@ -129,8 +130,8 @@ fn struck(age: u64) -> Race {
 #[test]
 fn a_kill_is_credited_when_a_weapon_hit_finished_the_craft() {
     let mut race = struck(29);
-    race.sim.credit_kill(1);
-    assert_eq!(race.sim.world.ships[0].standing.kills, 1);
+    race.core.sim.credit_kill(1);
+    assert_eq!(race.core.sim.world.ships[0].standing.kills, 1);
 }
 
 /// A wall that finishes a craft off, long after the last weapon hit, credits
@@ -139,28 +140,28 @@ fn a_kill_is_credited_when_a_weapon_hit_finished_the_craft() {
 #[test]
 fn a_death_long_after_the_last_weapon_hit_credits_nobody() {
     let mut race = struck(1800);
-    race.sim.credit_kill(1);
-    assert_eq!(race.sim.world.ships[0].standing.kills, 0);
+    race.core.sim.credit_kill(1);
+    assert_eq!(race.core.sim.world.ships[0].standing.kills, 0);
 }
 
 /// Nobody is credited with their own death.
 #[test]
 fn a_craft_is_never_credited_with_its_own_death() {
     let mut race = struck(10);
-    race.sim.last_damager[1] = Some(1);
-    race.sim.credit_kill(1);
-    assert_eq!(race.sim.world.ships[1].standing.kills, 0);
+    race.core.sim.last_damager[1] = Some(1);
+    race.core.sim.credit_kill(1);
+    assert_eq!(race.core.sim.world.ships[1].standing.kills, 0);
 }
 
 /// Two craft in play, the victim's shield at `shield`, a beam or wave hit from
 /// slot 0 recorded this tick.
 fn pending_hit(shield: f32) -> Race {
     let mut race = eliminator();
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.tick = 5000;
-    race.sim.world.ships[1].physics.shield = shield;
-    race.sim.record_pending_hit(1, 0);
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.tick = 5000;
+    race.core.sim.world.ships[1].physics.shield = shield;
+    race.core.sim.record_pending_hit(1, 0);
     race
 }
 
@@ -169,8 +170,8 @@ fn pending_hit(shield: f32) -> Race {
 #[test]
 fn a_beam_or_quake_blow_that_empties_the_shield_is_credited() {
     let mut race = pending_hit(0.0);
-    race.sim.credit_kill(1);
-    assert_eq!(race.sim.world.ships[0].standing.kills, 1);
+    race.core.sim.credit_kill(1);
+    assert_eq!(race.core.sim.world.ships[0].standing.kills, 1);
 }
 
 /// A drain that leaves the shield standing is not the fatal blow: a wall that
@@ -178,8 +179,8 @@ fn a_beam_or_quake_blow_that_empties_the_shield_is_credited() {
 #[test]
 fn a_beam_hit_that_left_the_shield_standing_does_not_credit_a_wall_death() {
     let mut race = pending_hit(40.0);
-    race.sim.credit_kill(1);
-    assert_eq!(race.sim.world.ships[0].standing.kills, 0);
+    race.core.sim.credit_kill(1);
+    assert_eq!(race.core.sim.world.ships[0].standing.kills, 0);
 }
 
 /// The original writes the attacker in every mode but reads it only in mode 8,
@@ -187,10 +188,10 @@ fn a_beam_hit_that_left_the_shield_standing_does_not_credit_a_wall_death() {
 #[test]
 fn a_pending_hit_writes_nothing_outside_eliminator() {
     let mut race = race_with_a_grid();
-    race.sim.world.ships[1].physics.shield = 0.0;
-    let before = race.sim.state_hash();
-    race.sim.record_pending_hit(1, 0);
-    assert_eq!(race.sim.state_hash(), before);
+    race.core.sim.world.ships[1].physics.shield = 0.0;
+    let before = race.core.sim.state_hash();
+    race.core.sim.record_pending_hit(1, 0);
+    assert_eq!(race.core.sim.state_hash(), before);
 }
 
 /// The Eliminator's own table shape: a Mine on the pads, and a Shield authored
@@ -227,24 +228,27 @@ fn an_eliminator_absorb_spends_the_weapon_on_the_shield_and_pays_no_energy() {
     );
     let mut buttons = Buttons::new();
     race.tick(&PlayerInputs::single(buttons.tick(0)));
-    assert_eq!(race.ship_pickup(), Some(oag_tables::weapons::Weapon::Mine));
-    race.sim.world.ships[0].physics.shield = 10.0;
+    assert_eq!(
+        race.core.ship_pickup(),
+        Some(oag_tables::weapons::Weapon::Mine)
+    );
+    race.core.sim.world.ships[0].physics.shield = 10.0;
 
     race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
 
     assert_ne!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Mine),
         "the absorb must spend the held weapon"
     );
     assert!(
-        race.ship().physics.shield <= 10.0,
+        race.core.ship().physics.shield <= 10.0,
         "an Eliminator absorb pays nothing into the pool: {}",
-        race.ship().physics.shield
+        race.core.ship().physics.shield
     );
-    let timer = race.ship().physics.shield_pickup_timer;
+    let timer = race.core.ship().physics.shield_pickup_timer;
     assert!(
-        timer > 1.25 - 2.0 * race.sim.dt() && timer <= 1.25,
+        timer > 1.25 - 2.0 * race.core.sim.dt() && timer <= 1.25,
         "the Shield must run for its own authored time, timer {timer}"
     );
 }
@@ -260,10 +264,10 @@ fn a_single_race_absorb_still_pays_energy_and_raises_no_shield() {
     );
     let mut buttons = Buttons::new();
     race.tick(&PlayerInputs::single(buttons.tick(0)));
-    race.sim.world.ships[0].physics.shield = 10.0;
+    race.core.sim.world.ships[0].physics.shield = 10.0;
     race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
-    assert!((race.ship().physics.shield - 27.0).abs() < 1e-4);
-    assert_eq!(race.ship().physics.shield_pickup_timer, 0.0);
+    assert!((race.core.ship().physics.shield - 27.0).abs() < 1e-4);
+    assert_eq!(race.core.ship().physics.shield_pickup_timer, 0.0);
 }
 
 /// A Mine laid by one craft and tripped by another that its blast then finishes
@@ -282,11 +286,16 @@ fn a_tripped_mine_that_finishes_the_craft_credits_the_layer() {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
-    race.sim.world.ships[0].pickup.begin_drop(1);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+    race.core.sim.world.ships[0].pickup.begin_drop(1);
     race.tick(&PlayerInputs::none());
     let mine = race
+        .core
         .sim
         .world
         .projectiles
@@ -295,20 +304,20 @@ fn a_tripped_mine_that_finishes_the_craft_credits_the_layer() {
         .find(|p| p.kind == Some(oag_tables::weapons::Weapon::Mine))
         .expect("the drop laid a mine")
         .position;
-    race.sim.world.ships[1].physics.body.position = mine;
-    race.sim.world.ships[1].physics.shield = 1.0;
+    race.core.sim.world.ships[1].physics.body.position = mine;
+    race.core.sim.world.ships[1].physics.shield = 1.0;
     let mut left_racing = false;
     for _ in 0..240 {
         race.tick(&PlayerInputs::none());
         left_racing |=
-            race.sim.world.ships[1].physics.craft_state != oag_physics::CraftState::Racing;
+            race.core.sim.world.ships[1].physics.craft_state != oag_physics::CraftState::Racing;
     }
     assert!(
         left_racing,
         "the blast must finish a craft on one shield point"
     );
-    assert_eq!(race.sim.world.ships[0].standing.kills, 1);
-    assert_eq!(race.sim.world.ships[1].standing.kills, 0);
+    assert_eq!(race.core.sim.world.ships[0].standing.kills, 1);
+    assert_eq!(race.core.sim.world.ships[1].standing.kills, 0);
 }
 
 /// The wrong-way kill (`craft+0x1c0 & 0x2000`): an Eliminator craft turned to face back down
@@ -319,36 +328,36 @@ fn a_tripped_mine_that_finishes_the_craft_credits_the_layer() {
 fn only_an_eliminator_craft_facing_back_down_the_track_loses_its_engine() {
     use oag_core::math::Quat;
     let turn_round = |race: &mut Race| {
-        let body = &mut race.sim.world.ships[0].physics.body;
+        let body = &mut race.core.sim.world.ships[0].physics.body;
         body.orientation = Quat::from_rotation_y(std::f32::consts::PI) * body.orientation;
     };
 
     let mut race = eliminator();
-    race.sim.set_wrong_way_kill();
+    race.core.sim.set_wrong_way_kill();
     assert!(
-        !race.sim.world.ships[0].physics.wrong_way_kill,
+        !race.core.sim.world.ships[0].physics.wrong_way_kill,
         "facing forward"
     );
     turn_round(&mut race);
-    race.sim.set_wrong_way_kill();
+    race.core.sim.set_wrong_way_kill();
     assert!(
-        race.sim.world.ships[0].physics.wrong_way_kill,
+        race.core.sim.world.ships[0].physics.wrong_way_kill,
         "facing back down the track"
     );
 
-    race.sim.eliminator_wrong_way_kill = false;
-    race.sim.set_wrong_way_kill();
+    race.core.sim.eliminator_wrong_way_kill = false;
+    race.core.sim.set_wrong_way_kill();
     assert!(
-        !race.sim.world.ships[0].physics.wrong_way_kill,
+        !race.core.sim.world.ships[0].physics.wrong_way_kill,
         "a title without the law"
     );
 
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_mine_table());
     turn_round(&mut race);
-    race.sim.set_wrong_way_kill();
+    race.core.sim.set_wrong_way_kill();
     assert!(
-        !race.sim.world.ships[0].physics.wrong_way_kill,
+        !race.core.sim.world.ships[0].physics.wrong_way_kill,
         "not an Eliminator race"
     );
 }
@@ -375,12 +384,17 @@ fn a_tripped_mine_pays_its_layer_through_the_tick() {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
-    race.sim.eliminator_kill_target = 1000;
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
-    race.sim.world.ships[0].pickup.begin_drop(1);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.eliminator_kill_target = 1000;
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+    race.core.sim.world.ships[0].pickup.begin_drop(1);
     race.tick(&PlayerInputs::none());
     let mine = race
+        .core
         .sim
         .world
         .projectiles
@@ -389,12 +403,12 @@ fn a_tripped_mine_pays_its_layer_through_the_tick() {
         .find(|p| p.kind == Some(oag_tables::weapons::Weapon::Mine))
         .expect("the drop laid a mine")
         .position;
-    race.sim.world.ships[1].physics.body.position = mine;
-    race.sim.world.ships[1].physics.shield = 1.0;
+    race.core.sim.world.ships[1].physics.body.position = mine;
+    race.core.sim.world.ships[1].physics.shield = 1.0;
     for _ in 0..240 {
         race.tick(&PlayerInputs::none());
     }
-    assert_eq!(race.sim.world.ships[0].standing.kills, 1);
+    assert_eq!(race.core.sim.world.ships[0].standing.kills, 1);
     // The table's Mine deals 20 and the blow pays in full, not capped by the one shield point
     // left: 20 for the kill and 2 for the blow.
     near(score_of(&race, 0), 22.0);
@@ -402,14 +416,14 @@ fn a_tripped_mine_pays_its_layer_through_the_tick() {
 
 fn scored(target: u32) -> Race {
     let mut race = eliminator();
-    race.sim.score_law = Some(SCORE_LAW);
-    race.sim.eliminator_kill_target = target;
-    race.sim.world.ships[1].active = true;
+    race.core.sim.score_law = Some(SCORE_LAW);
+    race.core.sim.eliminator_kill_target = target;
+    race.core.sim.world.ships[1].active = true;
     race
 }
 
 fn score_of(race: &Race, slot: usize) -> f32 {
-    race.sim.world.ships[slot].standing.score
+    race.core.sim.world.ships[slot].standing.score
 }
 
 fn near(value: f32, expected: f32) {
@@ -422,49 +436,49 @@ fn near(value: f32, expected: f32) {
 #[test]
 fn a_hit_pays_the_attacker_and_the_scale_is_an_opponents_alone() {
     let mut race = scored(200);
-    race.sim.credit_hit_points(1, 0, 30.0);
+    race.core.sim.credit_hit_points(1, 0, 30.0);
     near(score_of(&race, 0), 3.0);
-    race.sim.credit_hit_points(0, 1, 80.0);
+    race.core.sim.credit_hit_points(0, 1, 80.0);
     near(score_of(&race, 1), 9.2);
 }
 
 #[test]
 fn a_craft_earns_nothing_for_hitting_itself() {
     let mut race = scored(200);
-    race.sim.credit_hit_points(1, 1, 80.0);
+    race.core.sim.credit_hit_points(1, 1, 80.0);
     near(score_of(&race, 1), 0.0);
 }
 
 #[test]
 fn a_kill_pays_twenty_on_top_of_its_count() {
     let mut race = scored(200);
-    race.sim.last_damager[1] = Some(0);
-    race.sim.last_weapon_hit[1] = race.sim.world.tick + 1;
-    race.sim.credit_kill(1);
-    assert_eq!(race.sim.world.ships[0].standing.kills, 1);
+    race.core.sim.last_damager[1] = Some(0);
+    race.core.sim.last_weapon_hit[1] = race.core.sim.world.tick + 1;
+    race.core.sim.credit_kill(1);
+    assert_eq!(race.core.sim.world.ships[0].standing.kills, 1);
     near(score_of(&race, 0), 20.0);
 }
 
 #[test]
 fn a_lap_pays_every_craft_and_nothing_outside_the_eliminator() {
     let mut race = scored(200);
-    race.sim.credit_lap_points(0);
-    race.sim.credit_lap_points(1);
+    race.core.sim.credit_lap_points(0);
+    race.core.sim.credit_lap_points(1);
     near(score_of(&race, 0), 5.0);
     near(score_of(&race, 1), 5.75);
 
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_mine_table());
-    race.sim.score_law = Some(SCORE_LAW);
-    race.sim.credit_lap_points(0);
+    race.core.sim.score_law = Some(SCORE_LAW);
+    race.core.sim.credit_lap_points(0);
     near(score_of(&race, 0), 0.0);
 }
 
 #[test]
 fn a_destroyed_craft_loses_five_once_and_stops_at_zero() {
     let mut race = scored(200);
-    race.sim.world.ships[0].standing.score = 7.0;
-    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Eliminated;
+    race.core.sim.world.ships[0].standing.score = 7.0;
+    race.core.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Eliminated;
     race.tick_destroyed_craft();
     race.tick_destroyed_craft();
     near(score_of(&race, 0), 2.0);
@@ -473,25 +487,28 @@ fn a_destroyed_craft_loses_five_once_and_stops_at_zero() {
 #[test]
 fn the_race_ends_on_the_score_target_and_not_on_kills() {
     let mut race = scored(200);
-    race.sim.world.ships[0].standing.kills = 200;
-    race.sim.world.ships[0].standing.score = 199.99;
+    race.core.sim.world.ships[0].standing.kills = 200;
+    race.core.sim.world.ships[0].standing.score = 199.99;
     race.tick_destroyed_craft();
-    assert!(!race.sim.world.race[0].finished, "199.99 truncates to 199");
-    race.sim.world.ships[0].standing.score = 200.0;
+    assert!(
+        !race.core.sim.world.race[0].finished,
+        "199.99 truncates to 199"
+    );
+    race.core.sim.world.ships[0].standing.score = 200.0;
     race.tick_destroyed_craft();
-    assert!(race.sim.world.race[0].finished);
+    assert!(race.core.sim.world.race[0].finished);
 }
 
 #[test]
 fn a_kill_race_scores_nothing_and_still_ends_on_kills() {
     let mut race = eliminator();
-    race.sim.eliminator_kill_target = 1;
-    race.sim.credit_hit_points(1, 0, 80.0);
-    race.sim.credit_lap_points(0);
+    race.core.sim.eliminator_kill_target = 1;
+    race.core.sim.credit_hit_points(1, 0, 80.0);
+    race.core.sim.credit_lap_points(0);
     near(score_of(&race, 0), 0.0);
-    race.sim.world.ships[0].standing.kills = 1;
+    race.core.sim.world.ships[0].standing.kills = 1;
     race.tick_destroyed_craft();
-    assert!(race.sim.world.race[0].finished);
+    assert!(race.core.sim.world.race[0].finished);
 }
 
 mod flip {
@@ -502,8 +519,8 @@ mod flip {
     /// Past the countdown, on the flip law `seconds` long.
     fn racing(law: Option<FlipLaw>) -> Race {
         let mut race = eliminator();
-        race.sim.flip_law = law;
-        while RaceState::thrust_gated(race.sim.world.tick) {
+        race.core.sim.flip_law = law;
+        while RaceState::thrust_gated(race.core.sim.world.tick) {
             race.tick(&PlayerInputs::default());
         }
         race
@@ -533,14 +550,14 @@ mod flip {
     #[test]
     fn the_press_turns_the_craft_half_about_in_twelve_ticks_through_the_tick() {
         let mut race = racing(LAW);
-        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
-        let before = race.sim.world.ships[0].physics.body.forward();
+        race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        let before = race.core.sim.world.ships[0].physics.body.forward();
         race.tick(&press(Button::Flip));
-        assert!(race.sim.world.ships[0].physics.flip.active);
+        assert!(race.core.sim.world.ships[0].physics.flip.active);
         for _ in 0..11 {
             race.tick(&held(Button::Flip));
         }
-        let physics = &race.sim.world.ships[0].physics;
+        let physics = &race.core.sim.world.ships[0].physics;
         assert!(!physics.flip.active, "twelve ticks at 60 Hz is 0.2 s");
         assert!(
             physics.body.forward().dot(before) < -0.95,
@@ -552,20 +569,20 @@ mod flip {
     #[test]
     fn holding_the_button_flips_once_and_a_new_press_flips_back() {
         let mut race = racing(LAW);
-        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
-        let before = race.sim.world.ships[0].physics.body.forward();
+        race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        let before = race.core.sim.world.ships[0].physics.body.forward();
         race.tick(&press(Button::Flip));
         for _ in 0..30 {
             race.tick(&held(Button::Flip));
         }
-        let turned = race.sim.world.ships[0].physics.body.forward();
+        let turned = race.core.sim.world.ships[0].physics.body.forward();
         assert!(turned.dot(before) < -0.9, "{turned} against {before}");
         race.tick(&PlayerInputs::default());
         race.tick(&press(Button::Flip));
         for _ in 0..30 {
             race.tick(&PlayerInputs::default());
         }
-        let forward = race.sim.world.ships[0].physics.body.forward();
+        let forward = race.core.sim.world.ships[0].physics.body.forward();
         assert!(forward.dot(before) > 0.9, "{forward} against {before}");
     }
 
@@ -573,20 +590,27 @@ mod flip {
     fn no_law_no_flip() {
         let mut race = racing(None);
         race.tick(&press(Button::Flip));
-        assert!(!race.sim.world.ships[0].physics.flip.active);
+        assert!(!race.core.sim.world.ships[0].physics.flip.active);
     }
 
     #[test]
     fn the_grid_and_a_destroyed_craft_refuse_it() {
         let mut race = eliminator();
-        race.sim.flip_law = LAW;
+        race.core.sim.flip_law = LAW;
         race.tick(&press(Button::Flip));
-        assert!(!race.sim.world.ships[0].physics.flip.active, "on the grid");
+        assert!(
+            !race.core.sim.world.ships[0].physics.flip.active,
+            "on the grid"
+        );
 
         let mut race = racing(LAW);
-        race.sim.world.ships[0].physics.craft_state = oag_physics::damage::CraftState::Destroyed;
+        race.core.sim.world.ships[0].physics.craft_state =
+            oag_physics::damage::CraftState::Destroyed;
         race.tick(&press(Button::Flip));
-        assert!(!race.sim.world.ships[0].physics.flip.active, "destroyed");
+        assert!(
+            !race.core.sim.world.ships[0].physics.flip.active,
+            "destroyed"
+        );
     }
 
     #[test]
@@ -601,10 +625,10 @@ mod flip {
             })
         };
         let mut armed = racing(LAW);
-        let controls = armed.sim.player_controls(0, shoulder().get(0));
+        let controls = armed.core.sim.player_controls(0, shoulder().get(0));
         assert_eq!(controls.airbrake_left, 0.0);
         let mut plain = racing(None);
-        let controls = plain.sim.player_controls(0, shoulder().get(0));
+        let controls = plain.core.sim.player_controls(0, shoulder().get(0));
         assert_eq!(controls.airbrake_left, 1.0);
     }
 }
@@ -614,30 +638,30 @@ mod flip {
 #[test]
 fn the_player_place_ties_on_points_break_on_fewer_kills_then_the_person() {
     let mut race = scored(200);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[0].standing.score = 177.9;
-    race.sim.world.ships[1].standing.score = 177.2;
-    race.sim.world.ships[0].standing.kills = 4;
-    race.sim.world.ships[1].standing.kills = 1;
-    assert_eq!(race.eliminator_place(), 2);
-    race.sim.world.ships[1].standing.kills = 4;
-    assert_eq!(race.eliminator_place(), 1);
-    race.sim.world.ships[1].standing.score = 178.0;
-    assert_eq!(race.eliminator_place(), 2);
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[0].standing.score = 177.9;
+    race.core.sim.world.ships[1].standing.score = 177.2;
+    race.core.sim.world.ships[0].standing.kills = 4;
+    race.core.sim.world.ships[1].standing.kills = 1;
+    assert_eq!(race.core.eliminator_place(), 2);
+    race.core.sim.world.ships[1].standing.kills = 4;
+    assert_eq!(race.core.eliminator_place(), 1);
+    race.core.sim.world.ships[1].standing.score = 178.0;
+    assert_eq!(race.core.eliminator_place(), 2);
 }
 
 /// A kill race (no score law: Omega's) ranks on kills.
 #[test]
 fn the_player_place_on_a_kill_race_ranks_on_kills() {
     let mut race = eliminator();
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ship_count = 2;
-    assert!(race.sim.score_law.is_none());
-    race.sim.world.ships[0].standing.kills = 2;
-    race.sim.world.ships[1].standing.kills = 3;
-    assert_eq!(race.eliminator_place(), 2);
-    race.sim.world.ships[0].standing.kills = 3;
-    assert_eq!(race.eliminator_place(), 1);
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ship_count = 2;
+    assert!(race.core.sim.score_law.is_none());
+    race.core.sim.world.ships[0].standing.kills = 2;
+    race.core.sim.world.ships[1].standing.kills = 3;
+    assert_eq!(race.core.eliminator_place(), 2);
+    race.core.sim.world.ships[0].standing.kills = 3;
+    assert_eq!(race.core.eliminator_place(), 1);
 }
 
 /// An opponent reaching the target ends the player's race too (the finished flag is set on
@@ -646,28 +670,28 @@ fn the_player_place_on_a_kill_race_ranks_on_kills() {
 #[test]
 fn a_player_beaten_to_the_score_target_finishes_second() {
     let mut race = scored(200);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[0].standing.score = 120.0;
-    race.sim.world.ships[1].standing.score = 201.0;
-    assert!(!race.sim.finished());
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[0].standing.score = 120.0;
+    race.core.sim.world.ships[1].standing.score = 201.0;
+    assert!(!race.core.sim.finished());
     race.tick(&PlayerInputs::none());
     assert!(
-        race.sim.finished(),
+        race.core.sim.finished(),
         "the leader's target ends the player's race"
     );
-    assert_eq!(race.eliminator_place(), 2);
+    assert_eq!(race.core.eliminator_place(), 2);
 }
 
 /// The same on a kill race, Omega's path.
 #[test]
 fn a_player_beaten_to_the_kill_target_finishes_second() {
     let mut race = eliminator();
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ship_count = 2;
-    race.sim.eliminator_kill_target = 5;
-    race.sim.world.ships[0].standing.kills = 2;
-    race.sim.world.ships[1].standing.kills = 5;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.eliminator_kill_target = 5;
+    race.core.sim.world.ships[0].standing.kills = 2;
+    race.core.sim.world.ships[1].standing.kills = 5;
     race.tick(&PlayerInputs::none());
-    assert!(race.sim.finished());
-    assert_eq!(race.eliminator_place(), 2);
+    assert!(race.core.sim.finished());
+    assert_eq!(race.core.eliminator_place(), 2);
 }

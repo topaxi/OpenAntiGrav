@@ -57,19 +57,22 @@ fn race_at(event: &str, skill: Option<f32>, offset: f32) -> Option<oag_raceplay:
         .expect("a race event with the original's AI");
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, offset);
-    let mut race = oag_raceplay::Race::start(setup);
+    let mut race = oag_raceplay::Race::start(setup, loaded.view, loaded.modules);
     assert!(
-        race.sim
+        race.core
+            .sim
             .use_original_ai(Some(skill.unwrap_or(ai.skill_scale)), ai.level),
         "2048 flies the original driver"
     );
-    race.sim
+    race.core
+        .sim
         .set_original_event_ai_skills(ai.pad_tracking, ai.weapon_avoidance);
     Some(race)
 }
 
 fn seconds(race: &oag_raceplay::Race) -> f32 {
-    race.sim
+    race.core
+        .sim
         .world
         .tick
         .saturating_sub(oag_race::COUNTDOWN_TICKS) as f32
@@ -84,8 +87,8 @@ fn held(skill: f32, from: f32, to: f32) -> Option<Vec<Vec<(u8, f32)>>> {
     while seconds(&race) <= to {
         race.tick_sim_only(&PlayerInputs::none());
         if seconds(&race) >= from {
-            let places = race.places();
-            let field = race.sim.original_ai_field().expect("the field is on");
+            let places = race.core.places();
+            let field = race.core.sim.original_ai_field().expect("the field is on");
             out.push(
                 (1..8)
                     .map(|s| (places[s], field.drivers[s].held_thrust))
@@ -116,7 +119,7 @@ fn event_4_reads_the_ai_vita3k_read() {
         })
     );
     let race = race("2048 - Event 4", None).expect("loaded above");
-    let field = race.sim.original_ai_field().expect("the field is on");
+    let field = race.core.sim.original_ai_field().expect("the field is on");
     assert!(field.laws().every_tick);
     for driver in &field.drivers {
         assert_eq!(f64::from(driver.planner.rate), 0.001_649_999_991_059_303_3);
@@ -246,23 +249,25 @@ fn fly_at(event: &str, respawns: u32, offset: f32) {
     let (mut pickups, mut fired) = (0u32, 0u32);
     let mut weapon = [None; 8];
     let mut owned = [0usize; 8];
-    while seconds(&race) <= limit && !(1..8).all(|s| race.sim.world.ships[s].standing.finished()) {
+    while seconds(&race) <= limit
+        && !(1..8).all(|s| race.core.sim.world.ships[s].standing.finished())
+    {
         race.tick_sim_only(&PlayerInputs::none());
         let mut now = [0usize; 8];
-        for projectile in &race.sim.world.projectiles.slots {
+        for projectile in &race.core.sim.world.projectiles.slots {
             if projectile.kind.is_some() && usize::from(projectile.owner) < 8 {
                 now[usize::from(projectile.owner)] += 1;
             }
         }
         for slot in 1..8 {
-            let held = race.sim.world.ships[slot].pickup.weapon;
+            let held = race.core.sim.world.ships[slot].pickup.weapon;
             pickups += u32::from(held.is_some() && held != weapon[slot]);
             weapon[slot] = held;
             fired += now[slot].saturating_sub(owned[slot]) as u32;
             owned[slot] = now[slot];
         }
         for slot in 1..8 {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             if ship.standing.lap != lap[slot] {
                 lap[slot] = ship.standing.lap;
                 per_lap[slot].push(ship.physics.shield);
@@ -274,13 +279,13 @@ fn fly_at(event: &str, respawns: u32, offset: f32) {
         seconds(&race)
     );
     for (slot, shields) in per_lap.iter().enumerate().skip(1) {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         println!(
             "  slot {slot}: finished {} lap {} respawns {} wall-contact ticks {} per-lap shield {shields:?}, end-of-run shield {:.1}",
             ship.standing.finished(),
             ship.standing.lap,
-            race.sim.respawns_of(slot),
-            race.sim.wall_contact_ticks_of(slot),
+            race.core.sim.respawns_of(slot),
+            race.core.sim.wall_contact_ticks_of(slot),
             ship.physics.shield
         );
     }
@@ -289,7 +294,7 @@ fn fly_at(event: &str, respawns: u32, offset: f32) {
         "{event}: {pickups} opponent pickups and nothing fired"
     );
     for slot in 1..8 {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         // **Or destroyed**: since 2026-10-19 the field fires, and a craft
         // another opponent wrecks stays a wreck (`Destroyed`, then `Eliminated`),
         // as the original's state 6 does (`oag_physics::CraftState`). Every other craft still finishes.
@@ -303,9 +308,9 @@ fn fly_at(event: &str, respawns: u32, offset: f32) {
             ship.standing.lap
         );
         assert!(
-            race.sim.respawns_of(slot) <= respawns,
+            race.core.sim.respawns_of(slot) <= respawns,
             "{event}: slot {slot} respawned {} times",
-            race.sim.respawns_of(slot)
+            race.core.sim.respawns_of(slot)
         );
     }
 }
@@ -395,9 +400,11 @@ fn super_phantom_challenges_fly_the_original_driver() {
             .unwrap_or_else(|| panic!("{event} authors the original's AI"));
         let mut setup = loaded.setup;
         crate::perturb::apply(&mut setup, 0.0);
-        let mut race = oag_raceplay::Race::start(setup);
+        let mut race = oag_raceplay::Race::start(setup, loaded.view, loaded.modules);
         assert!(
-            race.sim.use_original_ai(Some(ai.skill_scale), ai.level),
+            race.core
+                .sim
+                .use_original_ai(Some(ai.skill_scale), ai.level),
             "{event}: the Super Phantom tables read, so the original driver flies"
         );
     }
@@ -419,7 +426,7 @@ fn the_super_phantom_field_runs_square_clean() {
     while seconds(&race) <= 120.0 {
         race.tick_sim_only(&PlayerInputs::none());
         for slot in 1..8 {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             if ship.standing.lap != lap[slot] {
                 lap[slot] = ship.standing.lap;
                 per_lap[slot].push(ship.physics.shield);
@@ -427,11 +434,11 @@ fn the_super_phantom_field_runs_square_clean() {
         }
     }
     for (slot, shields) in per_lap.iter().enumerate().skip(1) {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         println!(
             "slot {slot}: lap {} respawns {} per-lap shield {:?}, end-of-run shield {:.1}",
             ship.standing.lap,
-            race.sim.respawns_of(slot),
+            race.core.sim.respawns_of(slot),
             shields,
             ship.physics.shield
         );
@@ -442,7 +449,7 @@ fn the_super_phantom_field_runs_square_clean() {
         // (median 0, max 2), laws on `1 2 0 1 4 2 0 0 0` (median 1, max 4): inside the bar.
         // In the unperturbed run slot 1 respawns twice (per-lap shield `[88.7, 130.7]`,
         // end-of-run shield `114.6`).
-        assert!(race.sim.respawns_of(slot) <= 2, "slot {slot}");
+        assert!(race.core.sim.respawns_of(slot) <= 2, "slot {slot}");
         assert!(
             ship.standing.lap >= 3,
             "slot {slot} laps at a Super Phantom pace"
@@ -474,8 +481,9 @@ fn a_super_phantom_race_box_race_runs_without_opponents() {
         {
             let mut setup = loaded.setup;
             crate::perturb::apply(&mut setup, 0.0);
-            oag_raceplay::Race::start(setup)
+            oag_raceplay::Race::start(setup, loaded.view, loaded.modules)
         }
+        .core
         .sim
         .world
         .ship_count

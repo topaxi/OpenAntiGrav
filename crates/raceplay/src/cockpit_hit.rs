@@ -43,7 +43,7 @@ impl Race {
     /// `CockpitHitFx_Arm` for a weapon hit on `slot`: the human's own craft
     /// only. An arm while a run is going is ignored by the node.
     pub(super) fn arm_cockpit_hit(&mut self, slot: usize) {
-        if slot != self.player_slot() {
+        if slot != self.core.player_slot() {
             return;
         }
         if let Some(hit) = &mut self.view.cockpit_hit {
@@ -53,7 +53,7 @@ impl Race {
 
     /// `CockpitHitFx_Update`, once a drawn tick.
     pub(super) fn advance_cockpit_hit(&mut self) {
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         if let Some(hit) = &mut self.view.cockpit_hit {
             hit.node.advance(dt, &mut hit.rng);
         }

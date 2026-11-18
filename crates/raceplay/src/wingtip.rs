@@ -323,12 +323,12 @@ impl Race {
     /// half was never watched live** - `wingtip-vortices.md`). The destroyed sequence (states
     /// 4 to 6) is [`CraftState::Destroyed`] and [`CraftState::Eliminated`].
     pub(crate) fn advance_wingtip(&mut self) {
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         let Some(mut contrails) = self.view.wingtip.take() else {
             return;
         };
-        for slot in 0..usize::from(self.sim.world.ship_count).min(MAX_SHIPS) {
-            let ship = &self.sim.world.ships[slot];
+        for slot in 0..usize::from(self.core.sim.world.ship_count).min(MAX_SHIPS) {
+            let ship = &self.core.sim.world.ships[slot];
             let body = &ship.physics.body;
             let craft = Craft {
                 triggered: ship.physics.pad_timer > 0.0 || ship.physics.turbo_timer > 0.0,

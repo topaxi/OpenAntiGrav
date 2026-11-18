@@ -36,6 +36,7 @@ impl Race {
     /// window, so its Disruptor never homes - which no shipped Pure table is.
     pub fn fire_disruptor(&mut self, slot: usize) -> bool {
         if self
+            .core
             .sim
             .weapons
             .as_deref()
@@ -46,28 +47,34 @@ impl Race {
             // pickup is kept, the rule every projectile arm follows.
             return false;
         }
-        let count = self.sim.world.ship_count as usize;
-        let ship = &self.sim.world.ships[slot];
+        let count = self.core.sim.world.ship_count as usize;
+        let ship = &self.core.sim.world.ships[slot];
         let (position, velocity, up) =
             oag_weapons::projectile::disruptor::launch(&ship.physics, &ship.handling.dimensions);
         let missile = self
+            .core
             .sim
             .weapons
             .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::missile);
         let target = missile.and_then(|missile| {
             oag_weapons::projectile::missile::lock(
-                &self.sim.world.ships[..count],
+                &self.core.sim.world.ships[..count],
                 slot as u8,
                 position,
                 ship.physics.body.forward(),
                 &missile,
-                self.sim.course.as_deref().map(oag_race::Course::length),
+                self.core
+                    .sim
+                    .course
+                    .as_deref()
+                    .map(oag_race::Course::length),
             )
         });
-        let roll = self.sim.world.rng.next_u32() % 8;
+        let roll = self.core.sim.world.rng.next_u32() % 8;
         let effect = oag_tables::weapons::DisruptorEffectKind::ROLLED[roll as usize];
         let fired = self
+            .core
             .sim
             .world
             .projectiles
@@ -106,15 +113,15 @@ impl Race {
     /// has no Disruptor row to read.
     pub(crate) fn fire_opponent_disruptor(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
         let context = oag_ai::Context {
-            line: self.sim.line_of(slot),
-            tuning: &self.sim.ai_tuning,
-            pilot: &self.sim.ai_pilots[slot],
+            line: self.core.sim.line_of(slot),
+            tuning: &self.core.sim.ai_tuning,
+            pilot: &self.core.sim.ai_pilots[slot],
             field,
             yaw_ceiling: None,
             air_trim: 0.0,
             plan: None,
         };
-        if self.sim.world.ships[slot]
+        if self.core.sim.world.ships[slot]
             .driver
             .wants_to_fire(&context)
             .is_none()

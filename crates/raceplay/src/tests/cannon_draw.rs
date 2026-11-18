@@ -11,15 +11,20 @@ pub(super) fn one_round(ticks: usize) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_cannon_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
     let mut buttons = Buttons::new();
     let mut fired = None;
     for _ in 0..120 {
-        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
         race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
         if race
+            .core
             .sim
             .world
             .projectiles
@@ -34,8 +39,8 @@ pub(super) fn one_round(ticks: usize) -> Race {
     fired.expect("held fire lays a Cannon round within two seconds");
     // Only the first round: clear any other so the window test reads one.
     for _ in 0..ticks {
-        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
         race.tick(&PlayerInputs::single(buttons.tick(0)));
     }
     race
@@ -53,7 +58,8 @@ fn hd_draw() -> CannonDraw {
 }
 
 fn cannon_rounds(race: &Race) -> usize {
-    race.sim
+    race.core
+        .sim
         .world
         .projectiles
         .slots
@@ -97,8 +103,9 @@ fn hd_draws_its_model_at_the_muzzle_only_inside_the_flash_window() {
 #[test]
 fn hd_flash_side_follows_the_side_the_round_left_from() {
     let race = one_round(0);
-    let body = &race.sim.world.ships[0].physics.body;
+    let body = &race.core.sim.world.ships[0].physics.body;
     let round = race
+        .core
         .sim
         .world
         .projectiles

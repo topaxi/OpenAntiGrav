@@ -124,14 +124,14 @@ impl Facts {
         // The race's own mode, not the menu's: an event launched off the map
         // carries its own, and `race_options.mode` still says what the RACE
         // page held.
-        let mode = race.sim.world.mode();
-        let standing = race.player_standing();
-        let finished = race.sim.finished();
+        let mode = race.core.sim.world.mode();
+        let standing = race.core.player_standing();
+        let finished = race.core.sim.finished();
         let total = oag_game_ticks(oag_race::race_clock_ticks(
-            standing.finish_tick.unwrap_or(race.sim.world.tick),
+            standing.finish_tick.unwrap_or(race.core.sim.world.tick),
         ));
-        let zone = race.sim.world.primary_race().zone;
-        let place = race.player_place();
+        let zone = race.core.sim.world.primary_race().zone;
+        let place = race.core.player_place();
         let shown = match mode {
             oag_race::Mode::TimeTrial => Standing::Time(total),
             oag_race::Mode::SpeedLap => standing
@@ -194,14 +194,14 @@ pub fn finished_event(
         .campaign_2048_event
         .clone()
         .context("the event carries no progress")?;
-    let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.sim.arm_event_xp(&progress);
-    race.sim.set_autopilot(true);
-    while !race.sim.finished() && race.sim.world.tick < cap {
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.arm_event_xp(&progress);
+    race.core.sim.set_autopilot(true);
+    while !race.core.sim.finished() && race.core.sim.world.tick < cap {
         race.tick(&oag_gameplay::PlayerInputs::none());
     }
     anyhow::ensure!(
-        race.sim.finished(),
+        race.core.sim.finished(),
         "{name} was still running after {cap} ticks"
     );
     let facts = Facts::from_race(&race, progress.objectives);
@@ -212,8 +212,8 @@ pub fn finished_event(
     };
     let mut profile = crate::records::Store::default();
     profile.bank_xp(prior_xp);
-    let place = Some(race.player_place());
-    let banked = race.sim.xp_tally_mut().map(|tally| {
+    let place = Some(race.core.player_place());
+    let banked = race.core.sim.xp_tally_mut().map(|tally| {
         let earned = profile.bank_event_xp(tally, prior_medal, medal, place);
         XpBanked {
             earned,

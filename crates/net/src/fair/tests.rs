@@ -1,5 +1,5 @@
 use super::*;
-use oag_raceplay::Setup;
+use oag_raceplay::SimSetup;
 
 fn params(seed: u64) -> RaceParams {
     RaceParams {
@@ -13,10 +13,11 @@ fn params(seed: u64) -> RaceParams {
 }
 
 fn race(params: &RaceParams) -> Box<Race> {
-    let mut race = Box::new(Race::start(Setup::headless(
-        oag_race::Mode::SingleRace,
-        params.seed,
-    )));
+    let mut race = Box::new(Race::start(
+        SimSetup::headless(oag_race::Mode::SingleRace, params.seed),
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    ));
     crate::race::prepare(&mut race, params).expect("prepares");
     race
 }
@@ -45,7 +46,7 @@ fn honest(params: &RaceParams, ticks: u32) -> (u64, Vec<TickRecord>) {
             crate::race::presence(&mut race, 0);
             race.tick_sim_only(&snapshots);
             TickRecord {
-                hash: race.sim.state_hash(),
+                hash: race.core.sim.state_hash(),
                 inputs,
                 retired: 0,
             }

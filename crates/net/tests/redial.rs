@@ -12,6 +12,7 @@ use crate::loopback::{Pace, Pilot, Seated, params, pilot, ready_all, tokened};
 fn holding_turbo(params: &oag_net::wire::RaceParams) -> Box<Race> {
     let mut race = crate::loopback::headless(params);
     for ship in race
+        .core
         .sim
         .world
         .ships
@@ -43,7 +44,7 @@ fn the_only_person_in_a_room_goes_away_and_comes_back() {
         host.poll();
         host.tick();
         let at = host.tick_number();
-        let world = &host.race().sim.world;
+        let world = &host.race().core.sim.world;
         if (700..900).contains(&at) {
             away_seen |= world.controllers[0] == Controller::Away;
             assert!(!world.person_flown(0), "the driver flies the away seat");
@@ -72,7 +73,10 @@ fn the_only_person_in_a_room_goes_away_and_comes_back() {
     assert!(handed_back, "and handed back on the return");
     assert_eq!(mismatches, 0);
     assert!(matches > 600, "{matches}");
-    assert_eq!(host.race().sim.world.controllers[0], Controller::Remote);
+    assert_eq!(
+        host.race().core.sim.world.controllers[0],
+        Controller::Remote
+    );
 }
 
 /// A client process that was killed mid-race: a fresh process builds a fresh race, says hello
@@ -138,9 +142,9 @@ fn a_fresh_process_with_the_token_takes_the_seat_and_catches_up() {
     assert_eq!(mismatches, 0);
     assert!(matches > 300, "caught up and checked the ticks: {matches}");
     assert!(
-        race.sim.world.tick > 1200,
+        race.core.sim.world.tick > 1200,
         "the fresh race is near the host's: {}",
-        race.sim.world.tick
+        race.core.sim.world.tick
     );
 }
 
@@ -254,7 +258,7 @@ fn a_client_whose_link_is_cut_redials_and_rejoins_without_a_relaunch() {
         if at == 600 {
             cutters[1].cut();
         }
-        away_seen |= host.race().sim.world.controllers[1] == Controller::Away;
+        away_seen |= host.race().core.sim.world.controllers[1] == Controller::Away;
         for (n, (client, race, pilot)) in clients.iter_mut().enumerate() {
             if n == 1 {
                 redial.step(client, &mut dialer, web_time::Instant::now());
@@ -284,7 +288,10 @@ fn a_client_whose_link_is_cut_redials_and_rejoins_without_a_relaunch() {
     assert_eq!(clients[1].0.phase(), &Phase::Racing);
     assert_eq!(mismatches, [0, 0]);
     assert!(matches[1] > 300, "{}", matches[1]);
-    assert_eq!(host.race().sim.world.controllers[1], Controller::Remote);
+    assert_eq!(
+        host.race().core.sim.world.controllers[1],
+        Controller::Remote
+    );
 }
 
 /// A seat nobody holds any more is not waited for for ever: the client gives up and says so.

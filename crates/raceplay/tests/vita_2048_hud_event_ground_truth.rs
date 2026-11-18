@@ -14,7 +14,7 @@
 //! against are `data/reference/compare-page/2048-vita/empire-climb` (an event: `XP 0`, no
 //! `OBJECTIVE`) and `dlc-vineta-k` (the HD Campaign's Uplift Race: neither).
 //!
-//! What this fails on: dropping `Setup::campaign_event` from `load_event`, dropping either of
+//! What this fails on: dropping `ViewSetup::campaign_event` from `load_event`, dropping either of
 //! `text_for`'s two gates, or a layout that stops authoring the widgets (the vacuity guards).
 //!
 //! The DLC load also checks the composite's exposure keys
@@ -53,7 +53,7 @@ fn options(source: &Path) -> oag_raceplay::Options {
 /// Every `HUD`-font string the loaded race's first frame draws, and whether the layout authors
 /// the two widgets at all.
 fn first_frame(loaded: oag_raceplay::Loaded) -> (Vec<String>, bool, bool) {
-    let race = oag_raceplay::Race::start(loaded.setup);
+    let race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     let readout = race.readout();
     let context = loaded.hud.context().expect("the layout parses");
     let authored = (
@@ -79,7 +79,7 @@ fn a_campaign_event_draws_xp_and_no_objective() {
     let Some(source) = source() else { return };
     let loaded = oag_raceplay::load_event(&options(&source), "2048 - Event 1").expect("it loads");
     assert!(loaded.campaign_2048_event.is_some());
-    assert!(loaded.setup.campaign_event);
+    assert!(loaded.view.campaign_event);
     let (text, xp_authored, objective_authored) = first_frame(loaded);
     assert!(xp_authored && objective_authored, "the layout authors both");
     assert!(text.iter().any(|text| text == "XP"), "{text:?}");
@@ -105,7 +105,7 @@ fn a_dlc_circuit_raced_with_no_event_draws_neither() {
     .expect("the DLC circuit loads");
     the_pack_copy_sets_the_exposure_held_for_a_comparison(&loaded);
     assert!(loaded.campaign_2048_event.is_none());
-    assert!(!loaded.setup.campaign_event);
+    assert!(!loaded.view.campaign_event);
     let (text, xp_authored, objective_authored) = first_frame(loaded);
     assert!(xp_authored && objective_authored, "the layout authors both");
     assert!(!text.iter().any(|text| text == "XP"), "{text:?}");
@@ -249,7 +249,7 @@ fn pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths() {
     })
     .expect("the DLC circuit loads");
     let context = loaded.hud.context().expect("the layout parses");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     let icon_uv = |race: &oag_raceplay::Race| {
         oag_hud::draw_list(&context, &race.readout())
             .sprites
@@ -260,7 +260,8 @@ fn pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths() {
             })
     };
     assert_eq!(icon_uv(&race), None, "no icon with the assist off");
-    race.sim
+    race.core
+        .sim
         .set_pilot_assist(oag_physics::pilot_assist::Level::Extreme);
     let uv = icon_uv(&race).expect("the icon is up with Extreme on");
     assert_eq!(&uv[2..], &[256.0, 128.0], "the whole texture: {uv:?}");
@@ -292,14 +293,14 @@ fn a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame(
     context: &oag_hud::Context<'_>,
     race: &mut oag_raceplay::Race,
 ) {
-    let slot = race.player_slot();
+    let slot = race.core.player_slot();
     // Whatever the race held before, a few ticks of nothing re-arm the pop-in (the height runs out
     // at 10/s, then the next frame resets it).
-    race.sim.world.ships[slot].pickup.weapon = None;
+    race.core.sim.world.ships[slot].pickup.weapon = None;
     for _ in 0..20 {
         race.tick(&oag_gameplay::PlayerInputs::none());
     }
-    race.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.core.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     // The icon is the one 85x86 sprite (`PickupIcon`'s size) and the frame the one 95 high
     // (`PickupBgFrame`'s height, which the fly leaves alone).

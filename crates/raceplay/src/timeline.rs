@@ -23,8 +23,9 @@ use std::sync::{Arc, Mutex};
 use oag_replay::{Desync, Replay, Verifier};
 use oag_thread::Task;
 
+use crate::extensions::Prepared;
 use crate::replay::{ApplyError, start_recorded};
-use crate::{Race, RaceSim, Setup};
+use crate::{Race, RaceSim, SimSetup, ViewSetup};
 
 /// The ticks between keyframes before any thinning. Chosen: it bounds a seek to 59 ticks.
 pub const KEYFRAME_TICKS: u64 = 60;
@@ -197,8 +198,13 @@ impl Timeline {
     ///
     /// [`OpenError`]: the race cannot be started, or it is not the recorded one and the file has
     /// no pose track to go on with.
-    pub fn open(setup: Setup, replay: Replay) -> Result<Self, OpenError> {
-        Self::open_within(setup, replay, KEYFRAME_CEILING)
+    pub fn open(
+        setup: SimSetup,
+        view: ViewSetup,
+        modules: Prepared,
+        replay: Replay,
+    ) -> Result<Self, OpenError> {
+        Self::open_within(setup, view, modules, replay, KEYFRAME_CEILING)
     }
 
     /// [`Self::open`] with `ceiling` bytes of keyframes instead of [`KEYFRAME_CEILING`].
@@ -206,9 +212,17 @@ impl Timeline {
     /// # Errors
     ///
     /// As [`Self::open`].
-    pub fn open_within(setup: Setup, replay: Replay, ceiling: usize) -> Result<Self, OpenError> {
-        let mut probe = start_recorded(setup.clone(), &replay.header).map_err(OpenError::Start)?;
-        if let Err(desync) = Verifier::new(&replay, probe.sim.state_hash()) {
+    pub fn open_within(
+        setup: SimSetup,
+        view: ViewSetup,
+        modules: Prepared,
+        replay: Replay,
+        ceiling: usize,
+    ) -> Result<Self, OpenError> {
+        let mut probe =
+            start_recorded(setup.clone(), view.clone(), modules.clone(), &replay.header)
+                .map_err(OpenError::Start)?;
+        if let Err(desync) = Verifier::new(&replay, probe.core.sim.state_hash()) {
             if !replay
                 .pose_track
                 .as_ref()
@@ -216,7 +230,7 @@ impl Timeline {
             {
                 return Err(OpenError::NoPoseTrack(desync));
             }
-            probe.ensure_speed_plans();
+            probe.core.ensure_speed_plans();
             let shared = Shared::new(ceiling, Pass::Desynced(desync));
             {
                 let mut built = shared.built();
@@ -230,7 +244,7 @@ impl Timeline {
         let pass = Task::spawn("oag-timeline", {
             let replay = Arc::clone(&replay);
             let shared = Arc::clone(&shared);
-            move || run_pass(&shared, &replay, setup)
+            move || run_pass(&shared, &replay, setup, view, modules)
         });
         Ok(Self {
             replay: Some(replay),
@@ -244,13 +258,17 @@ impl Timeline {
     /// A timeline over the race being driven, cut from where `race` stands now. Feed it with
     /// [`Self::keep`] and move it after [`Self::visit`].
     #[must_use]
-    pub fn live(setup: Setup, race: &Race) -> Self {
+    pub fn live(setup: SimSetup, view: ViewSetup, modules: Prepared, race: &Race) -> Self {
         let shared = Shared::new(KEYFRAME_CEILING, Pass::Complete);
         shared
             .built()
             .keyframes
-            .push(race.sim.world.tick, race.snapshot_sim());
-        Self::over(Race::start(setup), shared, race.sim.world.tick)
+            .push(race.core.sim.world.tick, race.snapshot_sim());
+        Self::over(
+            Race::start(setup, view, modules),
+            shared,
+            race.core.sim.world.tick,
+        )
     }
 
     /// A timeline over `replay` with no pass running: `shared` already holds all there is.
@@ -288,12 +306,12 @@ impl Timeline {
     /// Enters the live race as it stands: the probe moves to it, and every tick up to it can be
     /// sought. `race` is only read; the race goes on from exactly here when the visit ends.
     pub fn visit(&mut self, race: &Race) {
-        let tick = race.sim.world.tick;
+        let tick = race.core.sim.world.tick;
         #[cfg(feature = "view")]
         {
             self.replay = race.recorded().map(Arc::new);
         }
-        self.probe.restore_sim(&race.sim);
+        self.probe.restore_sim(&race.core.sim);
         self.at = tick;
         self.shared.built().prefix = Some(tick);
     }
@@ -412,7 +430,7 @@ impl Timeline {
             return Ok(());
         };
         for event in replay.events_at(self.at) {
-            self.probe.sim.apply_event(event)?;
+            self.probe.core.sim.apply_event(event)?;
         }
         self.probe.tick_sim_only(&replay.inputs_at(self.at));
         self.at += 1;
@@ -425,22 +443,27 @@ impl Timeline {
 /// never rewinds pays the keyframes alone (a few microseconds a second) and no second [`Race`].
 #[derive(Debug)]
 pub struct Keeper {
-    setup: Setup,
+    setup: SimSetup,
+    view: ViewSetup,
+    modules: Prepared,
     shared: Arc<Shared>,
     timeline: Option<Timeline>,
 }
 
 impl Keeper {
-    /// Keeps `race`, which stands at its first tick, and holds `setup` to start a probe from.
+    /// Keeps `race`, which stands at its first tick, and holds `setup`, `view` and `modules`
+    /// to start a probe from.
     #[must_use]
-    pub fn new(setup: Setup, race: &Race) -> Self {
+    pub fn new(setup: SimSetup, view: ViewSetup, modules: Prepared, race: &Race) -> Self {
         let shared = Shared::new(KEYFRAME_CEILING, Pass::Complete);
         shared
             .built()
             .keyframes
-            .push(race.sim.world.tick, race.snapshot_sim());
+            .push(race.core.sim.world.tick, race.snapshot_sim());
         Self {
             setup,
+            view,
+            modules,
             shared,
             timeline: None,
         }
@@ -459,7 +482,7 @@ impl Keeper {
     /// [`Self::keep`].
     pub fn recut_first(&mut self, race: &Race) {
         let mut built = self.shared.built();
-        let tick = race.sim.world.tick;
+        let tick = race.core.sim.world.tick;
         if built.keyframes.frames.len() == 1 && built.keyframes.frames[0].0 == tick {
             built.keyframes.frames.clear();
             built.keyframes.bytes = 0;
@@ -470,9 +493,13 @@ impl Keeper {
     /// The timeline over the keyframes so far, with its probe at the live race's tick
     /// ([`Timeline::visit`]). The first visit starts the probe.
     pub fn visit(&mut self, race: &Race) -> &mut Timeline {
-        let tick = race.sim.world.tick;
+        let tick = race.core.sim.world.tick;
         let timeline = self.timeline.get_or_insert_with(|| {
-            Timeline::over(probe_of(&self.setup, race), Arc::clone(&self.shared), tick)
+            Timeline::over(
+                probe_of(&self.setup, &self.view, &self.modules, race),
+                Arc::clone(&self.shared),
+                tick,
+            )
         });
         timeline.visit(race);
         timeline
@@ -490,29 +517,30 @@ impl Keeper {
     }
 }
 
-/// The probe for `race`: started from `setup` the way its recording says the race was launched
+/// The probe for `race`: started from `setup`, `view` and `modules` the way its recording says the race was launched
 /// (the scheme, the difficulty, the seats), so that what it plays between keyframes is what the
 /// race played. A race that records nothing gets the plain start.
-fn probe_of(setup: &Setup, race: &Race) -> Race {
+fn probe_of(setup: &SimSetup, view: &ViewSetup, modules: &Prepared, race: &Race) -> Race {
     #[cfg(feature = "view")]
     if let Some(replay) = race.recorded()
-        && let Ok(probe) = start_recorded(setup.clone(), &replay.header)
+        && let Ok(probe) =
+            start_recorded(setup.clone(), view.clone(), modules.clone(), &replay.header)
     {
         return probe;
     }
     #[cfg(not(feature = "view"))]
     let _ = race;
-    Race::start(setup.clone())
+    Race::start(setup.clone(), view.clone(), modules.clone())
 }
 
 fn keep_in(shared: &Shared, race: &Race) {
-    let tick = race.sim.world.tick;
+    let tick = race.core.sim.world.tick;
     let mut built = shared.built();
     if let Some((_, first)) = built.keyframes.frames.first_mut()
         && !first.plans_built
-        && race.sim.plans_built
+        && race.core.sim.plans_built
     {
-        first.share_plans_of(&race.sim);
+        first.share_plans_of(&race.core.sim);
     }
     if built.keyframes.wants(tick) {
         built.keyframes.push(tick, race.snapshot_sim());
@@ -527,14 +555,14 @@ impl Drop for Timeline {
 
 /// The opening pass, on its own race: every input played, every hash checked, a keyframe every
 /// [`KEYFRAME_TICKS`], published once a stored hash has vouched for it.
-fn run_pass(shared: &Shared, replay: &Replay, setup: Setup) {
-    let Ok(mut race) = start_recorded(setup, &replay.header) else {
+fn run_pass(shared: &Shared, replay: &Replay, setup: SimSetup, view: ViewSetup, modules: Prepared) {
+    let Ok(mut race) = start_recorded(setup, view, modules, &replay.header) else {
         return;
     };
     // Before keyframe 0, so that it carries the plans and a probe restored from it never
     // learns them on the caller's thread. The plans read the started race and no tick.
-    race.ensure_speed_plans();
-    let Ok(mut verifier) = Verifier::new(replay, race.sim.state_hash()) else {
+    race.core.ensure_speed_plans();
+    let Ok(mut verifier) = Verifier::new(replay, race.core.sim.state_hash()) else {
         return;
     };
     let mut unvouched = vec![(0, race.snapshot_sim())];
@@ -545,14 +573,14 @@ fn run_pass(shared: &Shared, replay: &Replay, setup: Setup) {
             return;
         }
         for event in verifier.events_due() {
-            if let Err(why) = race.sim.apply_event(event) {
+            if let Err(why) = race.core.sim.apply_event(event) {
                 shared.built().pass = Pass::Refused(why);
                 return;
             }
         }
         race.tick_sim_only(&inputs);
         let vouched = verifier.hash_due();
-        if let Err(desync) = verifier.after_tick(|| race.sim.state_hash()) {
+        if let Err(desync) = verifier.after_tick(|| race.core.sim.state_hash()) {
             shared.built().pass = Pass::Desynced(desync);
             return;
         }

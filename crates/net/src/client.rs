@@ -484,7 +484,7 @@ impl Client {
         let people = usize::from(welcome.params.people);
         race.set_seat(Some(welcome.seat));
         self.confirmed = Some(race.snapshot_sim());
-        self.confirmed_tick = u32::try_from(race.sim.world.tick).unwrap_or(0);
+        self.confirmed_tick = u32::try_from(race.core.sim.world.tick).unwrap_or(0);
         self.confirmed_edges = vec![Input::new(); people];
         self.remote_last = vec![Held::default(); people];
         #[cfg(not(target_arch = "wasm32"))]
@@ -593,7 +593,7 @@ impl Client {
             self.advance_confirmed(race);
             if self.pending.is_empty()
                 && let Some(confirmed) = &self.confirmed
-                && (!self.settled || race.sim.world.tick != u64::from(self.confirmed_tick))
+                && (!self.settled || race.core.sim.world.tick != u64::from(self.confirmed_tick))
             {
                 race.restore_sim(confirmed);
                 self.settled = true;
@@ -604,7 +604,7 @@ impl Client {
             return 0;
         }
         self.advance_confirmed(race);
-        let present = u32::try_from(race.sim.world.tick).unwrap_or(u32::MAX);
+        let present = u32::try_from(race.core.sim.world.tick).unwrap_or(u32::MAX);
         self.stats.window = present.saturating_sub(self.confirmed_tick);
         let mut ticks = 1;
         if self.stats.window >= MAX_WINDOW {
@@ -636,10 +636,10 @@ impl Client {
     /// draws. A shot the confirmed state has not held yet is this machine's own prediction,
     /// shown at once.
     fn note_shown(&mut self, race: &Race) {
-        let tick = u32::try_from(race.sim.world.tick).unwrap_or(u32::MAX);
+        let tick = u32::try_from(race.core.sim.world.tick).unwrap_or(u32::MAX);
         self.shown
             .retain(|held| held.last.saturating_add(HELD_KEPT_TICKS) >= tick);
-        for shot in weapon_sync::shots(&race.sim) {
+        for shot in weapon_sync::shots(&race.core.sim) {
             if let Some(held) = self.shown.iter_mut().find(|held| held.shot.is(&shot)) {
                 // A step predicts at most two ticks, so a longer absence is a shot put back.
                 let gap = tick.saturating_sub(held.last);
@@ -680,7 +680,7 @@ impl Client {
     }
 
     fn predict(&mut self, race: &mut Race, own: &InputSnapshot) {
-        let tick = u32::try_from(race.sim.world.tick).unwrap_or(u32::MAX);
+        let tick = u32::try_from(race.core.sim.world.tick).unwrap_or(u32::MAX);
         let held = Held::of(own);
         let snapshot = held.snapshot(&mut self.own_edges);
         let inputs = self.inputs_for(snapshot);
@@ -691,8 +691,8 @@ impl Client {
         self.sent_at.push_back((tick, Instant::now()));
         self.predicted.push_back((
             tick + 1,
-            positions(&race.sim),
-            weapon_sync::digest(&race.sim),
+            positions(&race.core.sim),
+            weapon_sync::digest(&race.core.sim),
         ));
         self.stats.predicted += 1;
         let seat = self.welcome.as_ref().map_or(0, |w| w.seat);
@@ -738,7 +738,7 @@ impl Client {
         let Some(confirmed) = self.confirmed.take() else {
             return;
         };
-        let present = std::mem::replace(&mut race.sim, confirmed);
+        let present = std::mem::replace(&mut race.core.sim, confirmed);
         let seat = self.welcome.as_ref().map_or(0, |w| w.seat);
         while let Some(record) = self.pending.remove(&self.confirmed_tick) {
             let mut inputs = PlayerInputs::none();
@@ -755,7 +755,7 @@ impl Client {
             crate::race::presence(race, record.retired);
             self.retired = record.retired;
             race.tick_confirmed(&inputs);
-            let matched = race.sim.state_hash() == record.hash;
+            let matched = race.core.sim.state_hash() == record.hash;
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(watch) = &mut self.watch {
                 watch.confirmed(self.confirmed_tick, &record, matched);
@@ -771,18 +771,18 @@ impl Client {
                 );
             }
             self.note_confirmed(self.confirmed_tick);
-            self.note_fired(&race.sim);
+            self.note_fired(&race.core.sim);
             self.confirmed_tick += 1;
             self.stats.confirmed += 1;
         }
         self.pending.retain(|&t, _| t >= self.confirmed_tick);
         // The board is the server's: taken again from the confirmed state the first
         // time it is finished (the prediction finished first and took its own).
-        if !self.board_confirmed && race.sim.finished() {
-            race.recapture_results();
+        if !self.board_confirmed && race.core.sim.finished() {
+            race.core.recapture_results();
             self.board_confirmed = true;
         }
-        let confirmed = std::mem::replace(&mut race.sim, present);
+        let confirmed = std::mem::replace(&mut race.core.sim, present);
         // The present follows the newest confirmed presence too, but the recording describes
         // the confirmed run alone.
         let paused = race.pause_recording();
@@ -795,7 +795,7 @@ impl Client {
         while self.predicted.front().is_some_and(|(t, _, _)| *t < now) {
             self.predicted.pop_front();
         }
-        let present_tick = u32::try_from(race.sim.world.tick).unwrap_or(0);
+        let present_tick = u32::try_from(race.core.sim.world.tick).unwrap_or(0);
         if present_tick <= now {
             // The server is ahead of this client's present: take its state.
             race.restore_sim(&confirmed);
@@ -868,7 +868,7 @@ impl Client {
         let own: Vec<InputSnapshot> = self.own.iter().map(|(_, _, snapshot)| *snapshot).collect();
         let inputs: Vec<PlayerInputs> = own.iter().map(|o| self.inputs_for(*o)).collect();
         let mut replayed = VecDeque::with_capacity(inputs.len());
-        let before = race.sim.clone();
+        let before = race.core.sim.clone();
         let reconciled = race.reconcile_observed(confirmed, inputs, |sim| {
             replayed.push_back((
                 u32::try_from(sim.world.tick).unwrap_or(0),
@@ -877,7 +877,7 @@ impl Client {
             ));
         });
         let seat = self.welcome.as_ref().map_or(0, |w| w.seat);
-        let change = weapon_sync::change(&before, &race.sim, seat);
+        let change = weapon_sync::change(&before, &race.core.sim, seat);
         self.stats.shots_appeared += change.appeared;
         self.stats.shots_vanished += change.vanished;
         self.stats.own_hit_added += u32::from(change.own_hit_added);
@@ -897,12 +897,12 @@ impl Client {
     /// countdown, the way a player holds it.
     pub fn bot_input(&mut self, race: &mut Race) -> InputSnapshot {
         let seat = self.welcome.as_ref().map_or(0, |w| w.seat);
-        let wants = race.autopilot_wants(seat, &mut self.bot);
-        let gated = oag_race::RaceState::thrust_gated(race.sim.world.tick);
+        let wants = race.core.autopilot_wants(seat, &mut self.bot);
+        let gated = oag_race::RaceState::thrust_gated(race.core.sim.world.tick);
         if let Some(hand) = &mut self.bot_hand {
             let mut snapshot = hand.apply(wants, gated);
             let mut mask = snapshot.buttons.masks()[0];
-            self.bot_held_for = if race.sim.world.ships[seat].pickup.weapon.is_some() {
+            self.bot_held_for = if race.core.sim.world.ships[seat].pickup.weapon.is_some() {
                 self.bot_held_for + 1
             } else {
                 0
@@ -921,7 +921,7 @@ impl Client {
         };
         // Fires what it holds after a pause that differs by seat, so the people of a race do
         // not all fire on one tick.
-        self.bot_held_for = if race.sim.world.ships[seat].pickup.weapon.is_some() {
+        self.bot_held_for = if race.core.sim.world.ships[seat].pickup.weapon.is_some() {
             self.bot_held_for + 1
         } else {
             0

@@ -212,7 +212,8 @@ fn the_tables_read_what_the_live_race_held() {
 }
 
 fn seconds(race: &oag_raceplay::Race) -> f32 {
-    race.sim
+    race.core
+        .sim
         .world
         .tick
         .saturating_sub(oag_race::COUNTDOWN_TICKS) as f32
@@ -246,19 +247,21 @@ fn fly_allowing(track: &str, class: &str, start: PureClass, respawns: u32, destr
     })
     .expect("loading the circuit");
     let race_table = tables(start).expect("the same disc").race;
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(
-        race.sim.use_original_ai(None, 1),
+        race.core.sim.use_original_ai(None, 1),
         "Pure flies its original driver"
     );
     let mut lap = [1u32; 8];
     let mut per_lap: [Vec<f32>; 8] = Default::default();
     let mut launch_checked = false;
-    while seconds(&race) <= 300.0 && !(1..8).all(|s| race.sim.world.ships[s].standing.finished()) {
+    while seconds(&race) <= 300.0
+        && !(1..8).all(|s| race.core.sim.world.ships[s].standing.finished())
+    {
         race.tick(&PlayerInputs::none());
         if !launch_checked && seconds(&race) > 0.1 {
             launch_checked = true;
-            let field = race.sim.original_ai_field().expect("the field is on");
+            let field = race.core.sim.original_ai_field().expect("the field is on");
             for slot in 1..8 {
                 let driver = &field.drivers[slot];
                 assert_eq!(
@@ -270,7 +273,7 @@ fn fly_allowing(track: &str, class: &str, start: PureClass, respawns: u32, destr
             }
         }
         for slot in 1..8 {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             if ship.standing.lap != lap[slot] {
                 lap[slot] = ship.standing.lap;
                 per_lap[slot].push(ship.physics.shield);
@@ -280,19 +283,19 @@ fn fly_allowing(track: &str, class: &str, start: PureClass, respawns: u32, destr
     assert!(launch_checked);
     println!("{track} {class}: {:.1} s", seconds(&race));
     for (slot, shields) in per_lap.iter().enumerate().skip(1) {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         println!(
             "  slot {slot}: finished {} lap {} respawns {} per-lap shield {shields:?}, \
              end-of-run shield {:.1}",
             ship.standing.finished(),
             ship.standing.lap,
-            race.sim.respawns_of(slot),
+            race.core.sim.respawns_of(slot),
             ship.physics.shield
         );
     }
     let mut wrecks = 0;
     for slot in 1..8 {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         if !ship.standing.finished() {
             assert!(
                 ship.physics.shield <= 0.0,
@@ -301,9 +304,9 @@ fn fly_allowing(track: &str, class: &str, start: PureClass, respawns: u32, destr
             wrecks += 1;
         }
         assert!(
-            race.sim.respawns_of(slot) <= respawns,
+            race.core.sim.respawns_of(slot) <= respawns,
             "{track}: slot {slot} respawned {} times",
-            race.sim.respawns_of(slot)
+            race.core.sim.respawns_of(slot)
         );
     }
     assert!(

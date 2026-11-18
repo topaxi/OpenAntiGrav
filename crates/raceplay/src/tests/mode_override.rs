@@ -18,8 +18,12 @@ fn laps_override_wins_over_the_per_class_table_for_time_trial() {
     setup.mode = Mode::TimeTrial;
     setup.class = "VENOM".to_string();
     setup.laps_override = Some(5);
-    let race = Race::start(setup);
-    assert_eq!(race.sim.world.laps_target(), Some(5));
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    assert_eq!(race.core.sim.world.laps_target(), Some(5));
 }
 
 /// The same override, for [`Mode::SingleRace`] - the other mode
@@ -30,8 +34,12 @@ fn laps_override_wins_over_the_per_class_table_for_single_race() {
     setup.mode = Mode::SingleRace;
     setup.class = "VENOM".to_string();
     setup.laps_override = Some(7);
-    let race = Race::start(setup);
-    assert_eq!(race.sim.world.laps_target(), Some(7));
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    assert_eq!(race.core.sim.world.laps_target(), Some(7));
 }
 
 /// `None` changes nothing - the ordinary Custom Race path, still reading
@@ -42,9 +50,13 @@ fn no_override_leaves_the_per_class_table_in_charge() {
     setup.mode = Mode::TimeTrial;
     setup.class = "VENOM".to_string();
     setup.laps_override = None;
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(
-        race.sim.world.laps_target(),
+        race.core.sim.world.laps_target(),
         Some(Mode::TIME_TRIAL_LAPS_BY_CLASS[SpeedClass::VENOM.index()])
     );
 }
@@ -74,9 +86,13 @@ fn an_override_would_still_apply_to_speed_lap_which_is_exactly_why_the_caller_mu
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SpeedLap;
     setup.laps_override = Some(2);
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(
-        race.sim.world.laps_target(),
+        race.core.sim.world.laps_target(),
         Some(2),
         "Race::start applies whatever it is given - the guard lives at the caller"
     );
@@ -90,8 +106,12 @@ fn eliminator_kill_target_overrides_the_default() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Eliminator;
     setup.eliminator_kill_target = Some(7);
-    let race = Race::start(setup);
-    assert_eq!(race.sim.eliminator_kill_target, 7);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    assert_eq!(race.core.sim.eliminator_kill_target, 7);
 }
 
 /// `None` falls back to the default, unchanged - every non-campaign
@@ -101,9 +121,13 @@ fn no_eliminator_kill_target_falls_back_to_the_default() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Eliminator;
     setup.eliminator_kill_target = None;
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(
-        race.sim.eliminator_kill_target,
+        race.core.sim.eliminator_kill_target,
         Mode::ELIMINATOR_KILL_TARGET_DEFAULT
     );
 }
@@ -119,24 +143,34 @@ fn a_single_race_with_weapons_off_has_no_pads_and_no_weapon_damage() {
         setup.mode = mode;
         setup.weapon_pads = enveloping_pad();
         setup.weapons_override = weapons_override;
-        Race::start(setup)
+        Race::start(
+            setup,
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+        )
     };
 
     let on = race_with(Mode::SingleRace, None);
-    assert!(!on.sim.weapon_pads.is_empty(), "the default keeps the pads");
-    assert!(on.sim.damage_rules().weapons);
+    assert!(
+        !on.core.sim.weapon_pads.is_empty(),
+        "the default keeps the pads"
+    );
+    assert!(on.core.sim.damage_rules().weapons);
 
     let off = race_with(Mode::SingleRace, Some(false));
-    assert!(off.sim.weapon_pads.is_empty(), "OFF drops the pads");
+    assert!(off.core.sim.weapon_pads.is_empty(), "OFF drops the pads");
     assert!(
-        !off.sim.damage_rules().weapons,
+        !off.core.sim.damage_rules().weapons,
         "OFF reaches the damage rules"
     );
 
     for mode in [Mode::TimeTrial, Mode::Eliminator] {
         let race = race_with(mode, None);
-        assert_eq!(race.sim.damage_rules().weapons, mode.weapons_enabled());
-        assert_eq!(race.sim.weapon_pads.is_empty(), !mode.weapons_enabled());
+        assert_eq!(race.core.sim.damage_rules().weapons, mode.weapons_enabled());
+        assert_eq!(
+            race.core.sim.weapon_pads.is_empty(),
+            !mode.weapons_enabled()
+        );
     }
 }
 
@@ -154,7 +188,15 @@ fn a_class_with_no_driver_fields_no_opponents() {
             forward: [1.0, 0.0, 0.0],
         });
         setup.no_opponents = no_opponents;
-        Race::start(setup).sim.world.ship_count
+        Race::start(
+            setup,
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+        )
+        .core
+        .sim
+        .world
+        .ship_count
     };
     assert_eq!(grid(false), 8);
     assert_eq!(grid(true), 1);

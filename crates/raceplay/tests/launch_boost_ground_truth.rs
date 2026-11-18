@@ -75,7 +75,7 @@ fn start(track: &str) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// Forward speed and position after each tick from the release frame (tick
@@ -90,7 +90,7 @@ fn fly(track: &str, edge: u64, frames: u64) -> Vec<(f32, oag_core::math::Vec3)> 
     (0..frames)
         .map(|frame| {
             race.tick(&PlayerInputs::single(held(frame >= edge)));
-            let body = &race.ship().physics.body;
+            let body = &race.core.ship().physics.body;
             (
                 body.linear_velocity
                     .dot(body.orientation * oag_core::math::Vec3::NEG_Z),
@@ -289,14 +289,14 @@ fn pulse_ps2_times_its_launch_like_the_psp() {
             ..race::Options::default()
         })
         .expect("loading the PS2 race");
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         for _ in 0..COUNTDOWN_TICKS - 1 {
             race.tick(&PlayerInputs::single(held(false)));
         }
         let mut speed = 0.0;
         for frame in 0..edge + frames {
             race.tick(&PlayerInputs::single(held(frame >= edge)));
-            let body = &race.ship().physics.body;
+            let body = &race.core.ship().physics.body;
             speed = body
                 .linear_velocity
                 .dot(body.orientation * oag_core::math::Vec3::NEG_Z);
@@ -334,12 +334,13 @@ fn only_a_perfect_start_fires_the_flare_and_turbo() {
         for _ in 0..COUNTDOWN_TICKS - 1 {
             race.tick(&PlayerInputs::single(held(false)));
         }
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
         let mut turbos = Vec::new();
         let mut armed_on_edge = false;
         for frame in 0..60 {
             race.tick(&PlayerInputs::single(held(frame >= edge)));
             let turbo = race
+                .core
                 .sim
                 .drain_cues()
                 .iter()

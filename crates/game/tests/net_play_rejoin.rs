@@ -15,7 +15,7 @@ use oag_net::host::Host;
 use oag_net::link::{Cutter, Link, Loopback};
 use oag_net::redial::{Dialed, Dialer};
 use oag_net::wire::RaceParams;
-use oag_raceplay::{Race, Setup};
+use oag_raceplay::{Race, SimSetup};
 
 fn params() -> RaceParams {
     RaceParams {
@@ -30,10 +30,11 @@ fn params() -> RaceParams {
 }
 
 fn race(params: &RaceParams) -> Box<Race> {
-    let mut race = Box::new(Race::start(Setup::headless(
-        oag_race::Mode::SingleRace,
-        params.seed,
-    )));
+    let mut race = Box::new(Race::start(
+        SimSetup::headless(oag_race::Mode::SingleRace, params.seed),
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    ));
     oag_net::race::prepare(&mut race, params).expect("prepares");
     race
 }
@@ -189,7 +190,7 @@ fn a_cut_link_is_redialled_by_the_game_without_a_relaunch() {
         if let Some(seconds) = room.nets[1].0.reconnect_seconds_left() {
             overlay = Some(seconds);
         }
-        away |= room.host.race().sim.world.controllers[1] == Controller::Away;
+        away |= room.host.race().core.sim.world.controllers[1] == Controller::Away;
         if room.nets[1].0.reconnecting() {
             std::thread::sleep(std::time::Duration::from_millis(30));
         }
@@ -216,7 +217,7 @@ fn a_cut_link_is_redialled_by_the_game_without_a_relaunch() {
     assert_eq!(bad, 0);
     assert!(ok > 400, "the hashes were checked after the return: {ok}");
     assert_eq!(
-        room.host.race().sim.world.controllers[1],
+        room.host.race().core.sim.world.controllers[1],
         Controller::Remote
     );
 }
@@ -251,7 +252,10 @@ fn a_killed_game_rejoins_from_the_seat_it_wrote_down() {
         rejoin_record::load_from(&file_b, "", rejoin_record::now()).is_some(),
         "a killed game leaves its seat behind"
     );
-    assert_eq!(room.host.race().sim.world.controllers[1], Controller::Away);
+    assert_eq!(
+        room.host.race().core.sim.world.controllers[1],
+        Controller::Away
+    );
 
     // A new process: reads the record, builds the race from nothing, says hello on the token.
     let seat = rejoin_record::load_from(&file_b, "", rejoin_record::now()).expect("a fresh seat");
@@ -289,7 +293,11 @@ fn a_killed_game_rejoins_from_the_seat_it_wrote_down() {
     let (ok, bad) = net.hashes();
     assert_eq!(bad, 0, "hashes agree");
     assert!(ok > 400, "caught up and checked: {ok}");
-    assert!(race.sim.world.tick > 1400, "{}", race.sim.world.tick);
+    assert!(
+        race.core.sim.world.tick > 1400,
+        "{}",
+        race.core.sim.world.tick
+    );
 
     // The race ends: the seat is deleted, and the offer would have nothing to show.
     room.host.end("the test is over");

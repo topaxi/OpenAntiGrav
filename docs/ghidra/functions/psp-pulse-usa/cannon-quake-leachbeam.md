@@ -3752,7 +3752,7 @@ Edge-heavy, symmetric, clear in the middle: the same shape and size as the origi
 draw is dropped (the lift is then -3.0, -1.5, 1.1, -3.0, -1.0, -0.1, -0.6).
 
 **`--force-quake TICK:SLOT`** launches the rival's wave with its bump on the player at the end of
-a tick (`Race::force_quake`, in the shape of `--force-missile-hit`), so a headless capture sees
+a tick (`SimRace::force_quake`, in the shape of `--force-missile-hit`), so a headless capture sees
 what a Quake hit shows and sounds.
 
 #### Per title

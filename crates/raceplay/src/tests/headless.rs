@@ -1,4 +1,4 @@
-//! [`Setup::headless`] and what the `oag-headless-sim` binary asserts about it.
+//! [`SimSetup::headless`] and what the `oag-headless-sim` binary asserts about it.
 //!
 //! The binary is not run by `just test` - a `[[bin]]` is compiled by
 //! `--all-targets` and executed by nothing - so its claim lives here as well,
@@ -14,18 +14,22 @@ use oag_gameplay::{Controller, PlayerInputs};
 /// GPU and no window anywhere in the process.
 #[test]
 fn a_disc_free_race_ticks_and_moves_its_hash() {
-    let mut race = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
-    let before = race.sim.state_hash();
+    let mut race = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
+    let before = race.core.sim.state_hash();
 
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
     }
 
-    assert_eq!(race.sim.world.tick, 30, "the clock did not advance");
+    assert_eq!(race.core.sim.world.tick, 30, "the clock did not advance");
     assert_ne!(
         before,
-        race.sim.state_hash(),
+        race.core.sim.state_hash(),
         "thirty ticks changed no state at all"
     );
 }
@@ -35,21 +39,29 @@ fn a_disc_free_race_ticks_and_moves_its_hash() {
 /// nothing would say so.
 #[test]
 fn marking_extra_slots_human_is_visible_to_the_hash() {
-    let one = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
-    let mut three = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
+    let one = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
+    let mut three = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(
-        one.sim.state_hash(),
-        three.sim.state_hash(),
+        one.core.sim.state_hash(),
+        three.core.sim.state_hash(),
         "two identical headless races disagree before either is touched"
     );
 
     for slot in 1..3 {
-        three.sim.world.controllers[slot] = Controller::Local;
+        three.core.sim.world.controllers[slot] = Controller::Local;
     }
-    assert_eq!(three.sim.world.human_slots().count(), 3);
+    assert_eq!(three.core.sim.world.human_slots().count(), 3);
     assert_ne!(
-        one.sim.state_hash(),
-        three.sim.state_hash(),
+        one.core.sim.state_hash(),
+        three.core.sim.state_hash(),
         "who flies a slot did not reach the hash"
     );
 }
@@ -59,8 +71,16 @@ fn marking_extra_slots_human_is_visible_to_the_hash() {
 /// change no craft.
 #[test]
 fn a_snapshot_in_an_unflown_slot_changes_nothing() {
-    let mut quiet = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
-    let mut noisy = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
+    let mut quiet = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
+    let mut noisy = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
 
     let mut loud = PlayerInputs::none();
     for slot in 1..oag_gameplay::MAX_PLAYERS {
@@ -74,14 +94,14 @@ fn a_snapshot_in_an_unflown_slot_changes_nothing() {
 
     for _ in 0..30 {
         quiet.tick(&PlayerInputs::none());
-        quiet.sim.drain_cues();
+        quiet.core.sim.drain_cues();
         noisy.tick(&loud);
-        noisy.sim.drain_cues();
+        noisy.core.sim.drain_cues();
     }
 
     assert_eq!(
-        quiet.sim.state_hash(),
-        noisy.sim.state_hash(),
+        quiet.core.sim.state_hash(),
+        noisy.core.sim.state_hash(),
         "input in a slot the AI flies reached the simulation"
     );
 }
@@ -92,21 +112,25 @@ fn a_snapshot_in_an_unflown_slot_changes_nothing() {
 /// flown whatever the controllers say.
 #[test]
 fn a_human_slot_with_no_craft_is_not_person_flown() {
-    let mut race = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
+    let mut race = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
     for slot in 1..3 {
-        race.sim.world.controllers[slot] = Controller::Local;
+        race.core.sim.world.controllers[slot] = Controller::Local;
     }
-    assert_eq!(race.sim.world.ship_count, 1);
+    assert_eq!(race.core.sim.world.ship_count, 1);
     let flown: Vec<usize> = (0..oag_gameplay::MAX_PLAYERS)
-        .filter(|&slot| race.sim.world.person_flown(slot))
+        .filter(|&slot| race.core.sim.world.person_flown(slot))
         .collect();
     assert_eq!(flown, [0], "an empty human slot was stepped as a player");
 
     for slot in 0..3 {
-        race.sim.world.controllers[slot] = Controller::Ai;
+        race.core.sim.world.controllers[slot] = Controller::Ai;
     }
     assert!(
-        race.sim.world.person_flown(0),
+        race.core.sim.world.person_flown(0),
         "the primary slot lost its player step when nobody was marked human"
     );
 }

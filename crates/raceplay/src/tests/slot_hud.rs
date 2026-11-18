@@ -10,22 +10,22 @@ fn a_slots_readout_is_off_its_own_craft() {
     for _ in 0..5 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[1].physics.shield = 25.0;
-    race.sim.world.ships[2].physics.shield = 75.0;
-    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(30.0, 0.0, 0.0);
+    race.core.sim.world.ships[1].physics.shield = 25.0;
+    race.core.sim.world.ships[2].physics.shield = 75.0;
+    race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(30.0, 0.0, 0.0);
 
     let (one, two) = (race.readout_for(1), race.readout_for(2));
     assert_eq!((one.shield, two.shield), (25.0, 75.0));
     assert!(one.speed_kmh > two.speed_kmh);
-    assert_eq!(one.place, u32::from(race.places()[1]));
-    assert_eq!(two.place, u32::from(race.places()[2]));
-    assert_eq!(race.readout(), race.readout_for(race.player_slot()));
+    assert_eq!(one.place, u32::from(race.core.places()[1]));
+    assert_eq!(two.place, u32::from(race.core.places()[2]));
+    assert_eq!(race.readout(), race.readout_for(race.core.player_slot()));
 }
 
 #[test]
 fn a_message_shows_in_the_view_of_the_slot_it_was_raised_for() {
     let mut race = race_with_a_grid();
-    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    race.core.sim.world.controllers[1] = oag_gameplay::Controller::Local;
     race.raise_message("IG_HUD_TEST", true);
     for _ in 0..2 {
         race.tick(&PlayerInputs::none());
@@ -40,7 +40,7 @@ fn a_viewed_slots_shield_bar_flashes_on_a_hit_and_an_unviewed_slots_does_not() {
     assert_eq!(race.set_viewport_count(2), 2);
     // A full pool on slots 1 (viewed) and 2 (not), settled, then a hit on each.
     for slot in [1, 2] {
-        let ship = &mut race.sim.world.ships[slot];
+        let ship = &mut race.core.sim.world.ships[slot];
         ship.handling.dimensions.shield = 100.0;
         ship.physics.shield = 100.0;
     }
@@ -48,7 +48,7 @@ fn a_viewed_slots_shield_bar_flashes_on_a_hit_and_an_unviewed_slots_does_not() {
         race.tick(&PlayerInputs::none());
     }
     for slot in [1, 2] {
-        race.sim.world.ships[slot].physics.shield = 50.0;
+        race.core.sim.world.ships[slot].physics.shield = 50.0;
     }
     race.tick(&PlayerInputs::none());
     assert!(
@@ -67,13 +67,13 @@ fn with_one_view_no_other_slots_bars_move() {
     for _ in 0..5 {
         race.tick(&PlayerInputs::none());
     }
-    let ship = &mut race.sim.world.ships[1];
+    let ship = &mut race.core.sim.world.ships[1];
     ship.handling.dimensions.shield = 100.0;
     ship.physics.shield = 100.0;
     for _ in 0..5 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[1].physics.shield = 50.0;
+    race.core.sim.world.ships[1].physics.shield = 50.0;
     race.tick(&PlayerInputs::none());
     assert!(!race.readout_for(1).shield_flashing);
 }
@@ -95,15 +95,15 @@ fn a_grant_announces_for_one_second_and_a_regrant_announces_again() {
     };
     assert_eq!(ticks_up(&mut race), 0, "nothing held, nothing announced");
 
-    let slot = race.player_slot();
-    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    let slot = race.core.player_slot();
+    race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
     let up = ticks_up(&mut race);
     assert!((59..=60).contains(&up), "a second at 60 Hz, got {up} ticks");
     assert!(!race.readout().pickup_announcing);
 
-    race.sim.world.ships[slot].pickup.weapon = None;
+    race.core.sim.world.ships[slot].pickup.weapon = None;
     race.tick(&PlayerInputs::none());
-    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
     race.tick(&PlayerInputs::none());
     assert!(race.readout().pickup_announcing);
 }
@@ -155,8 +155,8 @@ fn the_grant_flies_at_1800_pixels_a_second_once_the_announcement_ends() {
 fn a_grant_on_a_race_reads_its_flight_off_the_readout() {
     use oag_tables::weapons::Weapon;
     let mut race = race_with_a_grid();
-    let slot = race.player_slot();
-    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    let slot = race.core.player_slot();
+    race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
     let mut flights = Vec::new();
     for _ in 0..70 {
         race.tick(&PlayerInputs::none());
@@ -193,8 +193,8 @@ fn a_grant_on_a_race_reads_its_flight_off_the_readout() {
 fn a_held_weapon_plays_the_fade_and_the_last_one_fades_out_after_use() {
     use oag_tables::weapons::Weapon;
     let mut race = race_with_a_grid();
-    let slot = race.player_slot();
-    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    let slot = race.core.player_slot();
+    race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
@@ -203,12 +203,12 @@ fn a_held_weapon_plays_the_fade_and_the_last_one_fades_out_after_use() {
         "no rate seeded, no fade"
     );
 
-    race.sim.world.ships[slot].pickup.weapon = None;
+    race.core.sim.world.ships[slot].pickup.weapon = None;
     for _ in 0..200 {
         race.tick(&PlayerInputs::none());
     }
     race.view.huds[slot].pickup_fade_rate = 1.2;
-    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
     for _ in 0..12 {
         race.tick(&PlayerInputs::none());
     }
@@ -217,7 +217,7 @@ fn a_held_weapon_plays_the_fade_and_the_last_one_fades_out_after_use() {
     assert_eq!(look.weapon, Weapon::Missile);
     assert!(look.backdrop > 1.5, "mid-overshoot, got {}", look.backdrop);
 
-    race.sim.world.ships[slot].pickup.weapon = None;
+    race.core.sim.world.ships[slot].pickup.weapon = None;
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
@@ -279,10 +279,10 @@ fn the_grant_icon_pops_in_and_re_arms_only_once_it_has_shrunk_away() {
 fn a_grant_on_a_race_reads_its_pop_in_off_the_readout() {
     use oag_tables::weapons::Weapon;
     let mut race = race_with_a_grid();
-    let slot = race.player_slot();
+    let slot = race.core.player_slot();
     race.tick(&PlayerInputs::none());
     assert_eq!(race.readout().pickup_pop, Some([10.0, 0.0]));
-    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
     race.tick(&PlayerInputs::none());
     let [wide, high] = race.readout().pickup_pop.expect("a race reads it");
     assert!(wide < 10.0 && high > 0.0, "{wide} {high}");
@@ -295,16 +295,16 @@ fn a_grant_on_a_race_reads_its_pop_in_off_the_readout() {
 fn a_released_weapon_is_named_by_the_readout_until_its_icon_has_collapsed() {
     use oag_tables::weapons::Weapon;
     let mut race = race_with_a_grid();
-    let slot = race.player_slot();
+    let slot = race.core.player_slot();
     race.tick(&PlayerInputs::none());
     assert_eq!(race.readout().pickup_releasing, None);
-    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
     for _ in 0..20 {
         race.tick(&PlayerInputs::none());
     }
     assert_eq!(race.readout().pickup, Some(Weapon::Missile));
     assert_eq!(race.readout().pickup_releasing, None, "held");
-    race.sim.world.ships[slot].pickup.weapon = None;
+    race.core.sim.world.ships[slot].pickup.weapon = None;
     race.tick(&PlayerInputs::none());
     assert_eq!(race.readout().pickup, None);
     assert_eq!(race.readout().pickup_releasing, Some(Weapon::Missile));

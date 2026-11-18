@@ -37,7 +37,10 @@ fn started_in(track: &str, mode: oag_race::Mode) -> Option<(Race, Vec<String>)> 
     })
     .expect("loading the race");
     let report = loaded.report.clone();
-    Some((Race::start(loaded.setup), report))
+    Some((
+        Race::start(loaded.setup, loaded.view, loaded.modules),
+        report,
+    ))
 }
 
 fn cross(down: bool) -> PlayerInputs {
@@ -71,7 +74,7 @@ fn it_loops_until_a_press_and_a_held_cross_alone_does_not_skip_it() {
     let Some((mut race, _)) = started(TRACK) else {
         return;
     };
-    let before = race.sim.state_hash();
+    let before = race.core.sim.state_hash();
     assert!(race.begin_intro());
     // Past the 188 s of animation: a title that ended at `AnimEnd` would be over by 11,300.
     for _ in 0..12_000 {
@@ -81,8 +84,12 @@ fn it_loops_until_a_press_and_a_held_cross_alone_does_not_skip_it() {
     race.tick_intro(&cross(false));
     race.tick_intro(&cross(true));
     assert!(!race.in_intro(), "a press ends it");
-    assert_eq!(race.sim.state_hash(), before, "the flyby stepped the world");
-    assert_eq!(race.sim.world.tick, 0);
+    assert_eq!(
+        race.core.sim.state_hash(),
+        before,
+        "the flyby stepped the world"
+    );
+    assert_eq!(race.core.sim.world.tick, 0);
 }
 
 /// The file the loader reports flying for `mode` on `track`: the entry name after

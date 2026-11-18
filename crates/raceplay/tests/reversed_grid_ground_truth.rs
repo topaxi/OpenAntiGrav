@@ -50,14 +50,21 @@ fn the_reversed_grid_lands_on_the_track_too() {
     // track" scale `race_ground_truth.rs::envelope` uses.
     let bound = loaded.setup.spline.max_half_width() * 2.0;
     let colliders = loaded.setup.collision.clone();
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     assert_eq!(
-        race.sim.ship_count(),
+        race.core.sim.ship_count(),
         8,
         "16_Track reversed should field a full grid"
     );
-    let ships: Vec<_> = race.sim.world.ships.iter().filter(|s| s.active).collect();
+    let ships: Vec<_> = race
+        .core
+        .sim
+        .world
+        .ships
+        .iter()
+        .filter(|s| s.active)
+        .collect();
     assert_eq!(ships.len(), 8);
 
     let player = ships[0].physics.body;
@@ -73,6 +80,7 @@ fn the_reversed_grid_lands_on_the_track_too() {
     for (index, ship) in ships.iter().enumerate() {
         let position = ship.physics.body.position;
         let distance = race
+            .core
             .sim
             .spline()
             .distance_to(position)

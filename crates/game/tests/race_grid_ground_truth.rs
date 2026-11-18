@@ -183,9 +183,9 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
         .setup
         .start_position
         .expect("16_Track authors a Start Position");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
-    let start = race.telemetry();
+    let start = race.core.telemetry();
     println!(
         "spawned at {:?}, {:.3} above the slot's own authored y",
         start.position,
@@ -194,7 +194,7 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
 
     // Facing where the slot says, still, after the pose has been through a
     // quaternion and back out of the body.
-    let forward = race.ship().physics.body.forward();
+    let forward = race.core.ship().physics.body.forward();
     assert!(
         forward.dot(Vec3::from_array(slot.forward)) > 0.999,
         "the spawned ship faces {forward} and the slot says {:?}",
@@ -205,11 +205,11 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
     let mut held = race::HeldButtons::new(0);
     race.tick(&PlayerInputs::single(held.snapshot()));
     assert_eq!(
-        race.ship().physics.grounded,
+        race.core.ship().physics.grounded,
         1.0,
         "both hover probes must reach the track from the authored slot, got {}: {}",
-        race.ship().physics.grounded,
-        race::describe(&race.telemetry())
+        race.core.ship().physics.grounded,
+        race::describe(&race.core.telemetry())
     );
 
     // And the surface really is under it, at the height the spawn claims.
@@ -237,14 +237,21 @@ fn the_whole_grid_lands_on_the_track() {
     };
     let bound = envelope(&loaded);
     let colliders = loaded.setup.collision.clone();
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     assert_eq!(
-        race.sim.ship_count(),
+        race.core.sim.ship_count(),
         8,
         "16_Track should field a full grid"
     );
-    let ships: Vec<_> = race.sim.world.ships.iter().filter(|s| s.active).collect();
+    let ships: Vec<_> = race
+        .core
+        .sim
+        .world
+        .ships
+        .iter()
+        .filter(|s| s.active)
+        .collect();
     assert_eq!(ships.len(), 8);
 
     // The player is array index 0 and grid slot 8, so it is the rearmost. Every
@@ -263,7 +270,7 @@ fn the_whole_grid_lands_on_the_track() {
     // midpoint, the even slots on the node's side (`grid.md`). Two units: the
     // midpoint is read at the nearest resampled point, not the walked one.
     let off_midpoint = |p: Vec3| {
-        let (_, s, _) = race.sim.spline().nearest(p).expect("has samples");
+        let (_, s, _) = race.core.sim.spline().nearest(p).expect("has samples");
         let lateral =
             (p - Vec3::from_array(s.pos)).dot(Vec3::from_array(s.lateral).normalize_or_zero());
         lateral - 0.5 * (s.ai_bound_left + s.ai_bound_right)
@@ -288,6 +295,7 @@ fn the_whole_grid_lands_on_the_track() {
     for (index, ship) in ships.iter().enumerate() {
         let position = ship.physics.body.position;
         let distance = race
+            .core
             .sim
             .spline()
             .distance_to(position)
@@ -344,13 +352,14 @@ fn our_grid_is_the_originals_grid() {
     let Some(loaded) = load_with_opponents() else {
         return;
     };
-    let race = race::Race::start(loaded.setup);
-    assert_eq!(race.sim.ship_count(), 8);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    assert_eq!(race.core.sim.ship_count(), 8);
 
     // Array index 0 is the player and grid slot 8; indices 1..=7 are slots 1..=7.
     let slot_of = |index: usize| if index == 0 { 8 } else { index };
     let mut worst = 0.0f32;
     for (index, ship) in race
+        .core
         .sim
         .world
         .ships

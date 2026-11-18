@@ -483,7 +483,7 @@ pub fn judge(race: &mut Race, proof: &Proof, deadline: Instant) -> Verdict {
         }
         crate::race::presence(race, record.retired);
         race.tick_sim_only(&inputs);
-        let ours = race.sim.state_hash();
+        let ours = race.core.sim.state_hash();
         if ours != record.hash {
             return Verdict::Proven(format!(
                 "after tick {tick} the host claimed state {:#018x}; its own inputs give \

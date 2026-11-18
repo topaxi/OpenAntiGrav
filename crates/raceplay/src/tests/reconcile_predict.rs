@@ -127,12 +127,17 @@ fn held_only(last: &InputSnapshot) -> InputSnapshot {
 }
 
 /// A race with every grid slot flown by an input stream, none by the AI.
-fn person_race(setup: &Setup) -> Race {
-    let mut race = Race::start(setup.clone());
-    race.sim
+fn person_race(setup: &SimSetup) -> Race {
+    let mut race = Race::start(
+        setup.clone(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core
+        .sim
         .set_control_scheme(oag_gameplay::ControlScheme::Veteran);
-    for slot in 0..race.sim.world.ship_count as usize {
-        race.sim.world.controllers[slot] = Controller::Remote;
+    for slot in 0..race.core.sim.world.ship_count as usize {
+        race.core.sim.world.controllers[slot] = Controller::Remote;
     }
     race
 }
@@ -147,17 +152,21 @@ fn person_race(setup: &Setup) -> Race {
 /// the way a player holds it, because the countdown's own gate zeroes the recorded
 /// value and a stream that pressed Cross on the release tick would hand every craft
 /// the same first mispredict.
-fn record_pack(setup: &Setup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, usize) {
-    let mut race = Race::start(setup.clone());
-    let slots = race.sim.world.ship_count as usize;
+fn record_pack(setup: &SimSetup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, usize) {
+    let mut race = Race::start(
+        setup.clone(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    let slots = race.core.sim.world.ship_count as usize;
     for slot in 0..slots {
-        race.sim.world.controllers[slot] = Controller::Remote;
-        race.sim.world.ships[slot].autopilot_timer = 1.0e9;
+        race.core.sim.world.controllers[slot] = Controller::Remote;
+        race.core.sim.world.ships[slot].autopilot_timer = 1.0e9;
     }
     let mut controls = vec![Vec::new(); slots];
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
         for (slot, log) in controls.iter_mut().enumerate() {
             log.push(race.last_controls[slot]);
         }
@@ -197,7 +206,7 @@ fn record_pack(setup: &Setup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, usize) 
 /// Every craft flown by a [`crate::hand::Hand`] on the driver's wants, closed loop: the
 /// stream is what a thumb on an analog pad would have sent, and the race it drives is the
 /// one it was recorded from. Also returns the laps the first craft completed.
-fn record_hand_pack(setup: &Setup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, u32) {
+fn record_hand_pack(setup: &SimSetup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, u32) {
     let (streams, lap, _) = record_hand_pack_measured(setup, ticks, false);
     (streams, lap)
 }
@@ -205,24 +214,24 @@ fn record_hand_pack(setup: &Setup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, u3
 /// [`record_hand_pack`], and how far craft 0 travelled over the run, with the hand or
 /// (`straight`) with the driver's wants passed to the sim unfiltered, as a baseline.
 fn record_hand_pack_measured(
-    setup: &Setup,
+    setup: &SimSetup,
     ticks: usize,
     straight: bool,
 ) -> (Vec<Vec<InputSnapshot>>, u32, f32) {
     let mut race = person_race(setup);
-    let slots = race.sim.world.ship_count as usize;
+    let slots = race.core.sim.world.ship_count as usize;
     let mut drivers: Vec<Option<oag_ai::Driver>> = vec![None; slots];
     let mut hands: Vec<crate::hand::Hand> = (0..slots)
         .map(|slot| crate::hand::Hand::new(0x4841_4E44 + slot as u64))
         .collect();
     let mut streams = vec![Vec::with_capacity(ticks); slots];
     let mut travelled = 0.0;
-    let mut last = race.sim.world.ships[0].physics.body.position;
+    let mut last = race.core.sim.world.ships[0].physics.body.position;
     for _ in 0..ticks {
-        let gated = oag_race::RaceState::thrust_gated(race.sim.world.tick);
+        let gated = oag_race::RaceState::thrust_gated(race.core.sim.world.tick);
         let mut inputs = PlayerInputs::none();
         for slot in 0..slots {
-            let wants = race.autopilot_wants(slot, &mut drivers[slot]);
+            let wants = race.core.autopilot_wants(slot, &mut drivers[slot]);
             let snapshot = if straight {
                 let mut buttons = Input::new();
                 buttons.begin_frame(if gated || wants.thrust > 0.5 {
@@ -245,19 +254,23 @@ fn record_hand_pack_measured(
             inputs.set(slot, snapshot);
         }
         race.tick(&inputs);
-        race.sim.drain_cues();
-        let now = race.sim.world.ships[0].physics.body.position;
+        race.core.sim.drain_cues();
+        let now = race.core.sim.world.ships[0].physics.body.position;
         travelled += (now - last).length();
         last = now;
     }
-    (streams, race.sim.world.ships[0].standing.lap, travelled)
+    (
+        streams,
+        race.core.sim.world.ships[0].standing.lap,
+        travelled,
+    )
 }
 
 /// Where every craft is, for comparing two sims.
 type Positions = [Vec3; oag_gameplay::MAX_SHIPS];
 
 fn positions(race: &Race) -> Positions {
-    std::array::from_fn(|slot| race.sim.world.ships[slot].physics.body.position)
+    std::array::from_fn(|slot| race.core.sim.world.ships[slot].physics.body.position)
 }
 
 fn farthest(a: &Positions, b: &Positions, ships: usize) -> f32 {
@@ -285,8 +298,8 @@ struct Outcome {
 /// One client against one server over the scenario. Counts only ticks from
 /// `scored_from` on, so the countdown's grid is not in the numbers.
 fn run(
-    build: fn(&Setup) -> Race,
-    setup: &Setup,
+    build: fn(&SimSetup) -> Race,
+    setup: &SimSetup,
     sc: &Scenario,
     window: usize,
     policy: Policy,
@@ -294,10 +307,10 @@ fn run(
 ) -> Outcome {
     let mut server = build(setup);
     let mut client = build(setup);
-    let ships = server.sim.world.ship_count as usize;
+    let ships = server.core.sim.world.ship_count as usize;
     let mut out = Outcome::default();
     let mut server_hist: Vec<(Positions, u64)> =
-        vec![(positions(&server), server.sim.state_hash())];
+        vec![(positions(&server), server.core.sim.state_hash())];
     let mut client_hist = server_hist.clone();
     let mut ring: VecDeque<RaceSim> = VecDeque::new();
     ring.push_back(server.snapshot_sim());
@@ -305,20 +318,20 @@ fn run(
 
     for t in 0..sc.ticks() {
         server.tick(&sc.truth(t));
-        server.sim.drain_cues();
+        server.core.sim.drain_cues();
         let touching = !server.pair_contacts.is_empty();
         for &(a, b) in &server.pair_contacts {
             contact_last[a] = t as i64;
             contact_last[b] = t as i64;
         }
-        server_hist.push((positions(&server), server.sim.state_hash()));
+        server_hist.push((positions(&server), server.core.sim.state_hash()));
         ring.push_back(server.snapshot_sim());
         if ring.len() > window + 1 {
             ring.pop_front();
         }
 
         client.tick_sim_only(&sc.guess(t, t.checked_sub(window + 1)));
-        client_hist.push((positions(&client), client.sim.state_hash()));
+        client_hist.push((positions(&client), client.core.sim.state_hash()));
 
         if let Some(u) = t.checked_sub(window) {
             let (server_pos, server_hash) = server_hist[u + 1];
@@ -330,12 +343,12 @@ fn run(
             if needed {
                 let before = positions(&client);
                 client.restore_sim(&ring[0]);
-                if client.sim.state_hash() != server_hash {
+                if client.core.sim.state_hash() != server_hash {
                     out.bad_corrections += 1;
                 }
                 for v in (u + 1)..=t {
                     client.tick_sim_only(&sc.guess(v, Some(u)));
-                    client_hist[v + 1] = (positions(&client), client.sim.state_hash());
+                    client_hist[v + 1] = (positions(&client), client.core.sim.state_hash());
                 }
                 if t >= scored_from {
                     out.corrections += 1;
@@ -514,7 +527,7 @@ impl Pool {
     }
 }
 
-fn sweep_scenario(setup: &Setup, sc: &Scenario, pool: &mut Pool) {
+fn sweep_scenario(setup: &SimSetup, sc: &Scenario, pool: &mut Pool) {
     let scored_from = oag_race::COUNTDOWN_TICKS as usize;
     for &window in &WINDOWS {
         for policy in std::iter::once(Policy::Every).chain(THRESHOLDS.map(Policy::Threshold)) {
@@ -535,7 +548,7 @@ fn load_circuit(
     mode: Mode,
     team: Option<String>,
     seed: Option<u64>,
-) -> Option<Setup> {
+) -> Option<SimSetup> {
     crate::load(&crate::Options {
         source: image.display().to_string(),
         class: class.to_string(),
@@ -579,7 +592,15 @@ fn reconcile_predict_ai_sweep() {
             .expect("loading the circuit");
         let (streams, fractional) = record_pack(&setup, ticks);
         let slots = streams.len();
-        let hull = Race::start(setup.clone()).sim.world.ships[0]
+        let hull = Race::start(
+            setup.clone(),
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+        )
+        .core
+        .sim
+        .world
+        .ships[0]
             .handling
             .dimensions;
         println!("{id}: craft 0 hull {:?}", hull);
@@ -751,11 +772,11 @@ fn reconcile_predict_human_sweep() {
 
 /// [`person_race`] with the off-track rescue off, so a craft that wanders off the
 /// fixture's short straight is not teleported back and hidden behind a respawn.
-pub(super) fn held_to_the_track(setup: &Setup) -> Race {
+pub(super) fn held_to_the_track(setup: &SimSetup) -> Race {
     without_player_rescue(person_race(setup))
 }
 
-pub(super) fn fixture() -> Setup {
+pub(super) fn fixture() -> SimSetup {
     let mut handling = hulled_handling();
     handling.engine.amount = 20.0;
     handling.engine.accelcap = 1000.0;

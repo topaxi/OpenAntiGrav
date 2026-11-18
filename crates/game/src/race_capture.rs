@@ -107,7 +107,7 @@ pub struct CaptureOptions {
     pub force_bomb_trip: Option<(u32, usize)>,
     /// `--force-missile-hit TICK:SLOT`.
     pub force_missile_hit: Option<(u32, usize)>,
-    /// `--force-quake TICK:SLOT`: see [`Race::force_quake`].
+    /// `--force-quake TICK:SLOT`: see [`SimRace::force_quake`].
     pub force_quake: Option<(u32, usize)>,
     /// `--force-remote-correction`: see [`oag_raceplay::correction::Scene`].
     pub remote_correction: Option<oag_raceplay::correction::Scene>,
@@ -419,6 +419,8 @@ pub fn capture(
     let Loaded {
         shadows,
         setup,
+        view,
+        modules,
         mut hud,
         track_panel,
         demo_overlay,
@@ -472,11 +474,9 @@ pub fn capture(
         previous.and_then(|record| record.best_total_ticks),
         previous.and_then(|record| record.best_lap_ticks),
     );
-    let weapons_on = setup.weapons_on();
-    // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
-    // fallback when the flag was not given. See `main::stage::build_race_stage`.
-    let difficulty = setup.difficulty;
-    let mut race = Race::start(setup);
+    // Read before `Race::start` takes `setup`; `difficulty` is `--autopilot-skill`'s fallback.
+    let (weapons_on, difficulty) = (setup.weapons_on(), setup.difficulty);
+    let mut race = Race::start(setup, view, modules);
     let start_pose = options.pose_hold.start(&race);
     // With a field warm-up and no ticks to run, the player's boost is armed inside the warm-up so it rides the
     // warmed trail; `force_boost_state` would clear that trail for a straight one (`Race::warm_up_field`).
@@ -486,7 +486,8 @@ pub fn capture(
         .and(options.pose_boost)
         .filter(|_| options.ticks == 0);
     if let Some(velocities) = &options.field_warmup {
-        race.warm_up_field(velocities, race.sim.field_warm_up_ticks(), warmed_boost);
+        let ticks = race.core.sim.field_warm_up_ticks();
+        race.warm_up_field(velocities, ticks, warmed_boost);
         race.warm_up_contact_sparks(velocities, &options.pose_sparks);
     }
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,
@@ -522,7 +523,7 @@ pub fn capture(
     let best_lap = previous.and_then(|r| r.best_lap_ticks);
     race.watch_laps(&hud, best_lap);
     race.set_camera_view(options.camera_view);
-    race.sim.apply_launch(&oag_raceplay::Launch {
+    race.core.sim.apply_launch(&oag_raceplay::Launch {
         scheme: options.scheme,
         difficulty,
         autopilot: options.autopilot,
@@ -533,18 +534,18 @@ pub fn capture(
     });
     campaign_2048_event
         .iter()
-        .for_each(|event| race.sim.arm_event_xp(event));
+        .for_each(|event| race.core.sim.arm_event_xp(event));
     if options.demo {
         crate::demo::hand_over(&mut race, &title.demo, options.window_layout.len());
     }
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);
         if let Some(pilot) = options.autopilot_pilot {
-            race.sim.set_autopilot_pilot(pilot, skill);
+            race.core.sim.set_autopilot_pilot(pilot, skill);
         }
         if let Some(skill) = options.autopilot_skill {
-            race.sim
-                .set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
+            let tuning = skill.tune(&oag_ai::Tuning::default());
+            race.core.sim.set_autopilot_tuning(tuning);
         }
     }
 
@@ -585,12 +586,12 @@ pub fn capture(
         // The race ended inside the requested tick count, so the rest is not
         // driven, as the window stops stepping a finished race - except after the
         // player's own last crossing, which the window steps on
-        // ([`Race::runs_on_after_the_end`]); its cosmetics go on ([`Race::tick_cosmetics`]).
+        // ([`SimRace::runs_on_after_the_end`]); its cosmetics go on ([`Race::tick_cosmetics`]).
         // Said out loud, so a capture that ran short is not read as a lost tick.
-        if race.sim.finished() && !race.runs_on_after_the_end() {
+        if race.core.sim.finished() && !race.core.runs_on_after_the_end() {
             println!(
                 "the race finished on tick {} of the {} asked for; only its cosmetics are driven",
-                race.sim.world.tick, options.ticks
+                race.core.sim.world.tick, options.ticks
             );
             (tick + 1..options.ticks).for_each(|_| race.tick_cosmetics());
             finished_early = true;
@@ -931,8 +932,8 @@ pub fn capture(
     }
     println!(
         "after {} tick(s): {}",
-        race.sim.world.tick,
-        describe(&race.telemetry())
+        race.core.sim.world.tick,
+        describe(&race.core.telemetry())
     );
 
     // Both tiers follow their settings, because two captures differing only by
@@ -1197,7 +1198,7 @@ pub fn capture(
                 None,
             )
         };
-        oag_gpu::perfprobe::report_frame(race.sim.world.tick);
+        oag_gpu::perfprobe::report_frame(race.core.sim.world.tick);
         // What the captured frame submitted, so a `--pvs true` / `--pvs false`
         // pair (or `--lod`, or frustum culling) can be compared by count as well as
         // by picture. The overlay's own figures, which a screenshot cannot show
@@ -1206,7 +1207,7 @@ pub fn capture(
         // log, and a `--pvs` comparison reads it by eye.
         log::info!(
             "frame at tick {}: {} draw(s) submitted, {} culled, {} triangle(s)",
-            race.sim.world.tick,
+            race.core.sim.world.tick,
             stats.draws_submitted,
             stats.draws_culled,
             stats.triangles,
@@ -1308,12 +1309,12 @@ pub fn capture(
                 .as_ref()
                 .filter(|_| options.demo && !options.wallpaper),
             (&mut encoder, &hud_view, hud_viewport),
-            race.sim.world.tick as f32 / 60.0,
+            race.core.sim.world.tick as f32 / 60.0,
         );
         let scale = options.hud_scale;
         // Every window that holds a seat shows the board, as the window frame loop does
         // (`RaceStage::draw_end_screens`).
-        match race.results() {
+        match race.core.results() {
             Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
                 Ok(mut overlay) => {
                     let observation = describe::observation(&race);
@@ -1370,7 +1371,7 @@ pub fn capture(
                     // is already showing the count.
                     if let (Some((model, widget)), true) = (
                         countdown_model.clone(),
-                        RaceState::thrust_gated(race.sim.world.tick) && !scene.draws_gantry(),
+                        RaceState::thrust_gated(race.core.sim.world.tick) && !scene.draws_gantry(),
                     ) {
                         match crate::hud_countdown::Countdown::new(
                             &device, &queue, format, model, &widget,
@@ -1380,7 +1381,7 @@ pub fn capture(
                                 &queue,
                                 &mut encoder,
                                 &hud_view,
-                                race.sim.world.tick as f32 / 60.0,
+                                race.core.sim.world.tick as f32 / 60.0,
                                 None,
                                 hud_viewport,
                                 (width, height),

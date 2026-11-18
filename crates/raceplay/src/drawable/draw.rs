@@ -654,7 +654,10 @@ impl Drawable {
             }
             let pipeline = match foliage.filter(|_| mesh_render::Foliage::takes_part(draw)) {
                 Some(foliage) => &foliage.colour[usize::from(draw.culled)],
-                None => pipelines.select(draw),
+                None => match &self.plain_blend {
+                    Some(plain) if plain.takes(index) => plain.pipelines().select(draw),
+                    _ => pipelines.select(draw),
+                },
             };
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
                 oag_gpu::perfprobe::pipeline_set();

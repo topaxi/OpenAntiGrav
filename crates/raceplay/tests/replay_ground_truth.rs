@@ -76,15 +76,15 @@ fn options(source: &Path, mode: oag_race::Mode) -> race::Options {
     }
 }
 
-fn setup(title: &str) -> Option<race::Setup> {
+fn setup(title: &str) -> Option<race::Loaded> {
     setup_in(title, oag_race::Mode::TimeTrial)
 }
 
-fn setup_in(title: &str, mode: oag_race::Mode) -> Option<race::Setup> {
+fn setup_in(title: &str, mode: oag_race::Mode) -> Option<race::Loaded> {
     let source = source(title)?;
     let loaded =
         race::load(&options(&source, mode)).unwrap_or_else(|e| panic!("loading {title}: {e:#}"));
-    Some(loaded.setup)
+    Some(loaded)
 }
 
 /// A pad, flown by a driver that is not in the world.
@@ -97,7 +97,7 @@ pub(crate) struct Pad {
     tuning: oag_ai::Tuning,
     input: Input,
     /// `Some` when the pad is the race's own driver for the player's craft
-    /// ([`race::Race::autopilot_wants`]): the speed plan, the field and the
+    /// ([`race::SimRace::autopilot_wants`]): the speed plan, the field and the
     /// hull's yaw ceiling, kept outside the world, as `--net-bot` flies.
     race_driver: Option<Option<oag_ai::Driver>>,
     /// Whether the bare driver has been found on the line yet. Its search is
@@ -125,17 +125,17 @@ impl Pad {
     }
 
     pub(crate) fn inputs(&mut self, race: &mut race::Race) -> PlayerInputs {
-        let slot = race.sim.world.primary_slot();
+        let slot = race.core.sim.world.primary_slot();
         PlayerInputs::single(self.snapshot(race, slot))
     }
 
     /// What this pad holds this tick for the craft in `slot`.
     pub(crate) fn snapshot(&mut self, race: &mut race::Race, slot: usize) -> InputSnapshot {
         let controls = if let Some(driver) = self.race_driver.as_mut() {
-            race.autopilot_wants(slot, driver)
+            race.core.autopilot_wants(slot, driver)
         } else {
-            let line = race.sim.racing_line();
-            let physics = &race.sim.world.ships[slot].physics;
+            let line = race.core.sim.racing_line();
+            let physics = &race.core.sim.world.ships[slot].physics;
             if !self.seated {
                 let position = physics.body.position;
                 self.driver.index = line.nearest(position, 0, line.len()) as u32;
@@ -172,16 +172,16 @@ const SHOT_AT: u64 = 1_237;
 /// Drives a recorded run of [`TICKS`] and hands back the race, its recording and the screenshot
 /// record taken of it at [`SHOT_AT`].
 fn record(title: &str) -> Option<(race::Race, Replay, oag_replay::ShotRecord)> {
-    let setup = setup(title)?;
-    let seed = setup.seed;
-    let mut race = race::Race::start(setup);
+    let loaded = setup(title)?;
+    let seed = loaded.setup.seed;
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.start_recording(header(title, seed));
     let mut pad = Pad::new(title);
     let mut shot = None;
     for tick in 0..TICKS {
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
         if tick + 1 == SHOT_AT {
             shot = race.shot_record(None);
         }
@@ -201,15 +201,16 @@ fn verify(title: &str, replay: &Replay) -> Result<u64, oag_replay::Desync> {
     let source = source(title).expect("source present");
     let mut race = race::rebuild(&replay.header, &source.display().to_string())
         .unwrap_or_else(|e| panic!("{title}: rebuilding from the header: {e:#}"));
-    Verifier::run(replay, race.sim.state_hash(), |events, inputs| {
+    Verifier::run(replay, race.core.sim.state_hash(), |events, inputs| {
         for event in events {
-            race.sim
+            race.core
+                .sim
                 .apply_event(event)
                 .unwrap_or_else(|e| panic!("{title}: {e}"));
         }
         race.tick(inputs);
-        race.sim.drain_cues();
-        race.sim.state_hash()
+        race.core.sim.drain_cues();
+        race.core.sim.state_hash()
     })
 }
 
@@ -265,7 +266,7 @@ fn a_shot_survives_its_png_and_resimulates(
         again.found
     );
     assert!(again.matches(), "{title}: {:?}", again.desync);
-    assert_eq!(again.race.sim.world.tick, SHOT_AT, "{title}");
+    assert_eq!(again.race.core.sim.world.tick, SHOT_AT, "{title}");
 
     assert_ne!(
         again.found,
@@ -333,8 +334,8 @@ fn round_trip(title: &str, mut race: race::Race, replay: Replay) {
         "{title}: {} ticks, lap {} reached, best lap {:?} ticks; file {} bytes \
          (inputs {inputs} bytes = {:.2} bytes/tick, {} hashes, ghost {ghost} poses)",
         replay.ticks(),
-        race.player_standing().lap,
-        race.player_standing().best_lap_ticks,
+        race.core.player_standing().lap,
+        race.core.player_standing().best_lap_ticks,
         bytes.len(),
         inputs as f64 / replay.ticks() as f64,
         replay.hashes.len(),
@@ -373,8 +374,10 @@ fn ghost_changes_nothing(title: &str, replay: &Replay) {
         .ghost
         .clone()
         .unwrap_or_else(|| panic!("{title}: the pad completed no lap in {TICKS} ticks"));
-    let mut plain = race::Race::start(setup(title).expect("present"));
-    let mut haunted = race::Race::start(setup(title).expect("present"));
+    let plain = setup(title).expect("present");
+    let mut plain = race::Race::start(plain.setup, plain.view, plain.modules);
+    let haunted = setup(title).expect("present");
+    let mut haunted = race::Race::start(haunted.setup, haunted.view, haunted.modules);
     haunted.set_ghost(race::Ghost {
         lap,
         team: "default".to_string(),
@@ -386,12 +389,12 @@ fn ghost_changes_nothing(title: &str, replay: &Replay) {
     for tick in 0..replay.ticks() {
         let inputs = replay.inputs_at(tick);
         plain.tick(&inputs);
-        plain.sim.drain_cues();
+        plain.core.sim.drain_cues();
         haunted.tick(&inputs);
-        haunted.sim.drain_cues();
+        haunted.core.sim.drain_cues();
         assert_eq!(
-            plain.sim.state_hash(),
-            haunted.sim.state_hash(),
+            plain.core.sim.state_hash(),
+            haunted.core.sim.state_hash(),
             "{title}: tick {tick} hashes differently with a ghost"
         );
         if let Some((pose, _)) = haunted.ghost_pose() {
@@ -437,17 +440,17 @@ fn wipeout_2048_replays_reproduce_and_ghosts_change_nothing() {
 #[test]
 #[ignore = "needs data/images/pure-psp-eu.chd"]
 fn a_bare_pad_starts_on_the_line_where_the_grid_is_far_from_sample_zero() {
-    let Some(setup) = setup("pure") else {
+    let Some(loaded) = setup("pure") else {
         return;
     };
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut pad = Pad::new("pure");
     pad.race_driver = None;
     let _ = pad.inputs(&mut race);
-    let line = race.sim.racing_line();
+    let line = race.core.sim.racing_line();
     let gap = line
         .point(pad.driver.index as usize)
-        .distance(race.ship().physics.body.position);
+        .distance(race.core.ship().physics.body.position);
     assert!(
         gap < 20.0,
         "the pad's line sample is {gap} units from its craft"
@@ -469,7 +472,7 @@ fn recorded_at_tick_zero(
     })
     .unwrap_or_else(|e| panic!("loading {title} {}: {e:#}", mode.name()));
     let seed = loaded.setup.seed;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let launch = race::Launch {
         scheme: oag_gameplay::ControlScheme::Novice,
         difficulty: oag_ai::Difficulty::Ace,
@@ -479,7 +482,7 @@ fn recorded_at_tick_zero(
         campaign_skill: None,
         skill_level: None,
     };
-    race.sim.apply_launch(&launch);
+    race.core.sim.apply_launch(&launch);
     let mut header = Header::new(title, "default", mode.name(), "venom", "default", seed);
     header.options = launch.to_table();
     race.start_recording(header);
@@ -493,7 +496,7 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
     let Some((source, race, replay, launch)) = recorded_at_tick_zero(title, mode) else {
         return;
     };
-    assert_eq!(replay.initial_hash, race.sim.state_hash());
+    assert_eq!(replay.initial_hash, race.core.sim.state_hash());
     let read = Replay::from_bytes(&replay.to_bytes()).expect("reads back");
     let setup = read
         .header
@@ -508,14 +511,14 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
     assert_eq!(race::Launch::from_table(&read.header.options), Ok(launch));
 
     let rebuilt = race::rebuild(&read.header, &source.display().to_string()).expect("rebuilds");
-    Verifier::new(&read, rebuilt.sim.state_hash()).unwrap_or_else(|d| {
+    Verifier::new(&read, rebuilt.core.sim.state_hash()).unwrap_or_else(|d| {
         panic!(
             "{title} {}: the rebuild disagrees at tick zero: {d}",
             mode.name()
         )
     });
-    assert_eq!(rebuilt.sim.pilot_assist_level(), launch.pilot_assist);
-    assert_eq!(rebuilt.sim.control_scheme(), launch.scheme);
+    assert_eq!(rebuilt.core.sim.pilot_assist_level(), launch.pilot_assist);
+    assert_eq!(rebuilt.core.sim.control_scheme(), launch.scheme);
 
     // The request is what rebuilds it: the same file with another mode in it is another race,
     // refused at tick zero. Once per title (a third load), on its first mode.
@@ -525,7 +528,7 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
             oag_race::Mode::SingleRace.name().to_string();
         let rebuilt =
             race::rebuild(&swapped.header, &source.display().to_string()).expect("rebuilds");
-        let desync = Verifier::new(&swapped, rebuilt.sim.state_hash())
+        let desync = Verifier::new(&swapped, rebuilt.core.sim.state_hash())
             .expect_err("a request naming another mode is another race");
         assert_eq!(desync.tick, 0, "{title}");
     }
@@ -579,7 +582,7 @@ fn mid_race_events(title: &str) {
     let give_at = 10;
     let ticks = oag_race::state::COUNTDOWN_TICKS + 420;
     assert!(
-        race.sim.pilot_assist_available(Level::Extreme),
+        race.core.sim.pilot_assist_available(Level::Extreme),
         "{title}: no Extreme law, so the change would prove nothing"
     );
     let mut pad = Pad::new(title);
@@ -591,12 +594,12 @@ fn mid_race_events(title: &str) {
             assert!(
                 race.give_weapon(0, oag_tables::weapons::Weapon::Rocket),
                 "{title}: the slot holds {:?}",
-                race.sim.world.ships[0].pickup.weapon
+                race.core.sim.world.ships[0].pickup.weapon
             );
         }
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
     }
     let replay =
         Replay::from_bytes(&race.recorded().expect("recording").to_bytes()).expect("reads");

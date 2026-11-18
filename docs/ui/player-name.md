@@ -81,13 +81,13 @@ on a title that uses a tag (`Player::footer_tag`).
 
 ## Where the name goes in a race
 
-Seat 1 is `Race::player_slot()`, the grid's first human slot (slot 0 in every local session).
+Seat 1 is `SimRace::player_slot()`, the grid's first human slot (slot 0 in every local session).
 `oag_game::split_screen::name_first_seat` hands the stored name to
-`Race::set_person_names` as that slot's name, from `build_race_stage` (every windowed race) and
+`SimRace::set_person_names` as that slot's name, from `build_race_stage` (every windowed race) and
 `race_capture::capture` (`--race --screenshot`). The name then shows in three places that all
 read `person_names`:
 
-- the multiplayer tag over seat 1's craft in the other seat's view (`Race::tag_name`), where it
+- the multiplayer tag over seat 1's craft in the other seat's view (`SimRace::tag_name`), where it
   said `Player 1` before. Seat 2 has no stored name and keeps `Player 2`; with none stored
   seat 1 keeps `Player 1`;
 - seat 1's row on Pulse's multiplayer end table (`PersonName::Named`) and HD's field grid;

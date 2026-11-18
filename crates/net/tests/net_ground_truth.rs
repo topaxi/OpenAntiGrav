@@ -103,7 +103,7 @@ fn two_bot_clients_race_a_real_circuit_at_100_ms_and_agree_with_the_server() {
     // Both people really raced: their craft left the grid.
     let race = host.race();
     for slot in 0..2 {
-        let speed = race.sim.world.ships[slot]
+        let speed = race.core.sim.world.ships[slot]
             .physics
             .body
             .linear_velocity
@@ -168,9 +168,9 @@ fn a_predicting_clients_recording_is_the_confirmed_run_and_re_drives() {
             "client {n}: the recording holds the confirmed ticks, no more and no fewer"
         );
         let (mut again, _) = oag_net::race::load(&params, &source).expect("loads");
-        let found = oag_replay::Verifier::run(&replay, again.sim.state_hash(), |_, inputs| {
+        let found = oag_replay::Verifier::run(&replay, again.core.sim.state_hash(), |_, inputs| {
             again.tick_sim_only(inputs);
-            again.sim.state_hash()
+            again.core.sim.state_hash()
         })
         .unwrap_or_else(|why| panic!("client {n}: the recording does not reproduce: {why:?}"));
         assert_eq!(found, replay.ticks(), "client {n}");
@@ -179,7 +179,7 @@ fn a_predicting_clients_recording_is_the_confirmed_run_and_re_drives() {
         let rebuilt = oag_raceplay::replay::rebuild(&replay.header, &source)
             .unwrap_or_else(|why| panic!("client {n}: the viewer cannot rebuild it: {why:#}"));
         assert_eq!(
-            rebuilt.sim.state_hash(),
+            rebuilt.core.sim.state_hash(),
             replay.initial_hash,
             "client {n}: the rebuilt race is not the recorded one"
         );
@@ -188,9 +188,9 @@ fn a_predicting_clients_recording_is_the_confirmed_run_and_re_drives() {
         // hit the prediction missed is where the server had it.
         let mut shown = rebuilt;
         shown.start_recording(replay.header.clone());
-        oag_replay::Verifier::run(&replay, shown.sim.state_hash(), |_, inputs| {
+        oag_replay::Verifier::run(&replay, shown.core.sim.state_hash(), |_, inputs| {
             shown.tick(inputs);
-            shown.sim.state_hash()
+            shown.core.sim.state_hash()
         })
         .unwrap_or_else(|why| panic!("client {n}: the viewer's re-drive diverges: {why:?}"));
         let again = shown
@@ -498,10 +498,10 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
                 "person {who} was told the race ran to the finish line, not to a limit"
             );
             assert!(
-                race.sim.finished(),
+                race.core.sim.finished(),
                 "person {who}'s own state has every person finished"
             );
-            let board = race.results().expect("a finished race has a board");
+            let board = race.core.results().expect("a finished race has a board");
             assert_eq!(board.laps_target, Some(1));
             assert!(
                 board
@@ -637,7 +637,7 @@ fn a_retired_person_s_craft_is_flown_by_the_ai() {
             }
             race.tick_sim_only(&none);
         }
-        let ship = &race.sim.world.ships[1].physics.body;
+        let ship = &race.core.sim.world.ships[1].physics.body;
         (ship.linear_velocity.length(), ship.position)
     };
     let (idle_speed, idle_at) = flown(false);
@@ -661,6 +661,7 @@ fn a_retired_person_s_craft_is_flown_by_the_ai() {
 fn holding_turbo(params: &RaceParams, source: &str) -> Box<oag_raceplay::Race> {
     let (mut race, _) = oag_net::race::load(params, source).expect("loads");
     for ship in race
+        .core
         .sim
         .world
         .ships
@@ -713,9 +714,13 @@ fn a_dropped_link_returns_to_its_craft_and_its_pickup() {
         drop_and_return(&mut host, &mut clients, &tokens, (600, 900, 1500), |host| {
             let at = host.tick_number();
             let race = host.race();
-            let ship = &race.sim.world.ships[1];
+            let ship = &race.core.sim.world.ships[1];
             if (700..900).contains(&at) {
-                assert_eq!(race.sim.world.controllers[1], Controller::Away, "tick {at}");
+                assert_eq!(
+                    race.core.sim.world.controllers[1],
+                    Controller::Away,
+                    "tick {at}"
+                );
                 assert_eq!(ship.pickup.weapon, Some(Weapon::Turbo), "tick {at}");
                 away_speed = away_speed.max(ship.physics.body.linear_velocity.length());
             }
@@ -723,7 +728,7 @@ fn a_dropped_link_returns_to_its_craft_and_its_pickup() {
                 eprintln!(
                     "tick {at} seat 1 speed {:.1} {:?}",
                     ship.physics.body.linear_velocity.length(),
-                    race.sim.world.controllers[1]
+                    race.core.sim.world.controllers[1]
                 );
             }
             if handed_back_at.is_none() && at > 900 && ship.handback {
@@ -739,7 +744,7 @@ fn a_dropped_link_returns_to_its_craft_and_its_pickup() {
                     assert_eq!(shown.pickup, Some(Weapon::Turbo), "tick {at}");
                     assert_eq!(shown.sub_weapon, None, "tick {at}");
                     assert!(!ship.handback && ship.autopilot_timer == 0.0, "tick {at}");
-                    assert_eq!(race.sim.world.controllers[1], Controller::Remote);
+                    assert_eq!(race.core.sim.world.controllers[1], Controller::Remote);
                 }
             }
         });
@@ -763,10 +768,10 @@ fn a_dropped_link_returns_to_its_craft_and_its_pickup() {
     );
     race.tick_sim_only(&inputs);
     assert_eq!(
-        race.sim.world.ships[1].pickup.weapon, None,
+        race.core.sim.world.ships[1].pickup.weapon, None,
         "the Turbo was fired"
     );
-    assert!(race.sim.world.ships[1].physics.turbo_timer > 0.0);
+    assert!(race.core.sim.world.ships[1].physics.turbo_timer > 0.0);
 
     // The recording re-drives, drop and return included.
     let replay = clients[1].1.recorded().expect("the client records");
@@ -780,12 +785,12 @@ fn a_dropped_link_returns_to_its_craft_and_its_pickup() {
     assert_eq!(events[0], (600, 0));
     assert_eq!(events[1].1, 1);
     let mut again = holding_turbo(&params, &source);
-    let found = oag_replay::Verifier::run(&replay, again.sim.state_hash(), |due, inputs| {
+    let found = oag_replay::Verifier::run(&replay, again.core.sim.state_hash(), |due, inputs| {
         for event in due {
-            again.sim.apply_event(event).expect("applies");
+            again.core.sim.apply_event(event).expect("applies");
         }
         again.tick_sim_only(inputs);
-        again.sim.state_hash()
+        again.core.sim.state_hash()
     })
     .unwrap_or_else(|why| panic!("the recording across a drop does not reproduce: {why:?}"));
     assert_eq!(found, replay.ticks());
@@ -809,12 +814,12 @@ fn an_away_craft_loses_time_against_the_opponent_driver() {
             if tick == 300 {
                 race.set_away(1);
                 if !away {
-                    race.sim.world.controllers[1] = oag_gameplay::Controller::Ai;
+                    race.core.sim.world.controllers[1] = oag_gameplay::Controller::Ai;
                 }
             }
             race.tick_sim_only(&none);
         }
-        let ship = &race.sim.world.ships[1];
+        let ship = &race.core.sim.world.ships[1];
         (ship.driver.index, ship.pickup.weapon)
     };
     let (opponent, _) = flown(false);
@@ -895,7 +900,7 @@ fn sweep_what_judging_a_five_minute_hosted_race_costs_the_lobby() {
             oag_net::race::presence(&mut race, 0);
             race.tick_sim_only(&snapshots);
             TickRecord {
-                hash: race.sim.state_hash(),
+                hash: race.core.sim.state_hash(),
                 inputs,
                 retired: 0,
             }

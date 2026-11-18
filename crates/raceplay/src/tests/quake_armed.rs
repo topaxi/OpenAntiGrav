@@ -11,7 +11,11 @@ fn quake_race() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// What a run saw: the ticks a wave was first seen on, the ticks no wave was up,
@@ -36,17 +40,18 @@ fn run(race: &mut Race, grants: &[usize], presses: &[usize], ticks: usize) -> Ru
     let mut was_up = false;
     for tick in 0..ticks {
         if grants.contains(&tick) {
-            race.sim.world.ships[0].pickup.weapon = Some(Weapon::Quake);
+            race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Quake);
         }
         let snapshot = buttons.tick(if presses.contains(&tick) { SQUARE } else { 0 });
         race.tick(&PlayerInputs::single(snapshot));
         seen.launch_cues += race
+            .core
             .sim
             .drain_cues()
             .iter()
             .filter(|e| e.cue == Cue::QuakeLaunch)
             .count();
-        let up = race.sim.world.quake.is_some();
+        let up = race.core.sim.world.quake.is_some();
         if up && !was_up {
             seen.launched_on.push(tick);
         }
@@ -55,7 +60,7 @@ fn run(race: &mut Race, grants: &[usize], presses: &[usize], ticks: usize) -> Ru
         }
         was_up = up;
     }
-    seen.held = race.ship_pickup();
+    seen.held = race.core.ship_pickup();
     seen
 }
 

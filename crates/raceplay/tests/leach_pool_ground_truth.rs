@@ -26,21 +26,21 @@ fn throttle() -> oag_gameplay::InputSnapshot {
 
 fn two_beams(options: race::Options) {
     let loaded = race::load(&options).expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle()));
     }
-    let shield = |race: &race::Race, slot: usize| race.sim.world.ships[slot].physics.shield;
+    let shield = |race: &race::Race, slot: usize| race.core.sim.world.ships[slot].physics.shield;
     let before = (shield(&race, 1), shield(&race, 3));
     assert!(
-        race.sim.force_leach_lock(0, 1),
+        race.core.sim.force_leach_lock(0, 1),
         "the title authors a LeachBeam"
     );
     assert!(
-        race.sim.force_leach_lock(2, 3),
+        race.core.sim.force_leach_lock(2, 3),
         "a second beam must arm beside the first"
     );
-    assert_eq!(race.sim.world.leach_beams_live(), 2);
+    assert_eq!(race.core.sim.world.leach_beams_live(), 2);
     for _ in 0..120 {
         race.tick(&PlayerInputs::single(throttle()));
     }

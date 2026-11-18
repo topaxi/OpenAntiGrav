@@ -56,7 +56,7 @@ exactly what a counting allocator read for one snapshot on Pulse and 2048 (27,15
 Past it the interval doubles and every keyframe off the new interval goes, the first excepted.
 `open_within` takes another ceiling.
 
-**The plans.** The pass calls `Race::ensure_speed_plans` before it cuts keyframe 0, so that keyframe
+**The plans.** The pass calls `SimRace::ensure_speed_plans` before it cuts keyframe 0, so that keyframe
 carries them, and a live timeline's first keyframe is handed them once the first tick has learned
 them (`RaceSim::share_plans_of`). So a probe never learns plans on the caller's thread, and the
 ADR's "Bad" entry about a first tick on a file-opened probe does not apply. The price is that

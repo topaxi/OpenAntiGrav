@@ -268,6 +268,7 @@ pub mod now_playing;
 mod options;
 mod original_ai;
 mod original_tables;
+mod outcome;
 #[cfg(feature = "view")]
 mod own_rockets;
 mod pads;
@@ -309,6 +310,7 @@ pub mod sh_probes;
 #[cfg(feature = "view")]
 mod shadow;
 mod sim;
+mod sim_race;
 #[cfg(feature = "view")]
 mod slot_hud;
 mod spawn;
@@ -332,6 +334,7 @@ pub mod track_panel;
 pub mod transit;
 #[cfg(feature = "view")]
 mod transit_camera;
+#[cfg(feature = "view")]
 mod view;
 #[cfg(feature = "view")]
 pub mod viewer;
@@ -373,15 +376,17 @@ pub use load::authored_length;
 #[cfg(feature = "view")]
 pub use load::load_event;
 #[cfg(feature = "view")]
+pub use load::load_view;
+#[cfg(feature = "view")]
 pub use load::ripple::{Ripples, SpanPlaces};
+pub use load::{SimLoad, export_track, load, load_sim};
 #[cfg(feature = "view")]
 pub use load::{authored_light, hd_bloom_params};
-pub use load::{export_track, load};
 #[cfg(feature = "view")]
 pub(crate) use oag_title::Trigger;
 pub use options::{
     CameraOverride, Campaign2048Progress, CaptureHud, CaptureZone, Loaded, Options, PoseRequest,
-    SeatPick, Setup, Sighting, TrailHits, WingtipContrails,
+    SeatPick, Sighting, SimSetup, TrailHits, ViewSetup, WingtipContrails,
 };
 pub use replay::{ApplyError, Launch, OriginalAi, UnknownOption, rebuild};
 #[cfg(feature = "view")]
@@ -397,11 +402,13 @@ pub use scene::WindowEffects;
 #[cfg(feature = "view")]
 pub use scene::behind_glass::BehindGlassModels;
 pub use sim::RaceSim;
+pub use sim_race::SimRace;
 pub use speed_plan::{PlanSteps, RouteProbe};
 pub use spline::{Spline, circuit_length};
 pub use telemetry::{Telemetry, describe};
 #[cfg(feature = "view")]
 pub use texture_sink::TextureSink;
+#[cfg(feature = "view")]
 pub use view::RaceView;
 #[cfg(feature = "view")]
 pub use viewpoint::WindowViews;
@@ -757,13 +764,15 @@ pub use oag_gameplay::spawn::{box_inertia, capped_spawn_height, rig_spawn_height
 /// A race in progress: the world, the track it is on, and the camera behind it.
 ///
 /// **Two halves, and the few things that are neither.** [`RaceSim`] decides what
-/// happens; [`RaceView`] exists so it can be seen and heard, so no renderer handle can
-/// reach the simulation. Beside them sit the recording, the replay's presentation
-/// journal, the speed-plan job and the quiet flag of [`Race::tick_sim_only`]: none is
-/// either half's state.
+/// happens, held as `core` in a [`SimRace`] beside the speed-plan job; [`RaceView`]
+/// exists so it can be seen and heard, so no renderer handle can reach the simulation.
+/// Beside them sit the recording, the replay's presentation journal and the quiet flag
+/// of [`Race::tick_sim_only`]: none is either half's state.
 ///
 /// Most methods that read and write the simulation alone are `impl RaceSim` methods,
-/// reached as `race.sim.x()` ([`RaceSim::state_hash`] among them). The methods on
+/// reached as `race.core.sim.x()` ([`RaceSim::state_hash`] among them), and those that
+/// also read the race's outcome or the speed-plan job are `impl SimRace` methods, reached
+/// as `race.core.x()` ([`SimRace::results`], [`SimRace::player_slot`]). The methods on
 /// `Race` read both halves - drawing an exhaust needs a ship's position, and raising a
 /// cue needs the bank - or one of the fields beside them, and that is what `Race` is
 /// for.
@@ -772,18 +781,16 @@ pub use oag_gameplay::spawn::{box_inertia, capped_spawn_height, rig_spawn_height
 /// being one.
 #[derive(Debug)]
 pub struct Race {
-    /// Everything that decides what happens next: the world, the track, the
-    /// opponents and the rules.
-    ///
-    /// `pub` because `world` was, and a caller reaching a ship reaches it the
-    /// same way it always did with one more hop. See [`sim`].
-    pub sim: RaceSim,
+    /// The simulation and what sits beside it: the world, the track, the
+    /// opponents and the rules, and the speed-plan job. See [`SimRace`].
+    pub core: SimRace,
     /// Everything this race carries only so it can be shown or heard.
     ///
     /// The camera, the particles, the exhaust, the sound banks and the reticle,
     /// in one place instead of interleaved with the world above. Nothing in
     /// here reaches [`RaceSim::state_hash`], and nothing above it may be reached
     /// *from* here - see [`view`] for the argument.
+    #[cfg(feature = "view")]
     view: Box<RaceView>,
     /// The recording of this race, if one was asked for, and the ghost it
     /// races against, if any. Neither reaches [`RaceSim::state_hash`] - see
@@ -794,10 +801,6 @@ pub struct Race {
     /// half's state: it is the caller's statement that this tick is a replay
     /// whose picture and sound already happened. Read through [`Race::draws`].
     quiet: bool,
-    /// Speed plans being learned on a thread, see [`Race::begin_speed_plans`]. Not
-    /// state: it only moves work off the frame thread, and its result is adopted
-    /// only if the race still matches what it was learned from.
-    speed_plan_job: Option<speed_plan::SpeedPlanJob>,
     /// The weapon events a replay raised and a drawn tick presented, matched by
     /// [`Race::settle_presentation`]. Neither half's state: no hash reads it.
     #[cfg(feature = "view")]

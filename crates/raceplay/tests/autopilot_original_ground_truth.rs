@@ -27,10 +27,14 @@ struct Run {
 fn race(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay::Race> {
     let mut setup = setup(image, track, weapons)?;
     crate::perturb::apply(&mut setup, 0.0);
-    Some(oag_raceplay::Race::start(setup))
+    Some(oag_raceplay::Race::start(
+        setup,
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    ))
 }
 
-fn setup(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay::Setup> {
+fn setup(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay::SimSetup> {
     let image = oag_testdata::image(image)?;
     let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
@@ -59,12 +63,13 @@ fn the_autopilot_flies_the_original_player_driver_whatever_the_opponents_fly() {
     ) else {
         return;
     };
-    assert!(!race.sim.original_ai_active());
-    race.sim.set_autopilot(true);
+    assert!(!race.core.sim.original_ai_active());
+    race.core.sim.set_autopilot(true);
     for _ in 0..900 {
         race.tick_sim_only(&PlayerInputs::none());
     }
     let autopilot = race
+        .core
         .sim
         .original_autopilot(0)
         .expect("the original driver flies the autopilot");
@@ -73,7 +78,7 @@ fn the_autopilot_flies_the_original_player_driver_whatever_the_opponents_fly() {
         oag_ai::original::AUTOPILOT_THRUST
     );
     assert_eq!(autopilot.driver.planner.target, 0.0);
-    assert_eq!(race.sim.world.ships[0].physics.thrust, 100.0);
+    assert_eq!(race.core.sim.world.ships[0].physics.thrust, 100.0);
 }
 
 /// The autopilot gets round every Pulse circuit against the original field
@@ -96,7 +101,14 @@ fn finishes_without_a_rescue(id: &str) {
         .map(|&eps| {
             let mut setup = setup.clone();
             crate::perturb::apply(&mut setup, eps);
-            let r = run_from(oag_raceplay::Race::start(setup), 15_000);
+            let r = run_from(
+                oag_raceplay::Race::start(
+                    setup,
+                    oag_raceplay::ViewSetup::headless(),
+                    oag_raceplay::extensions::Prepared::default(),
+                ),
+                15_000,
+            );
             (r.finish, r.respawns, r.rescued_from)
         })
         .collect();
@@ -196,31 +208,31 @@ fn run(image: &str, track: &str, ticks: u64, weapons: Option<bool>) -> Option<Ru
 }
 
 fn run_from(mut race: oag_raceplay::Race, ticks: u64) -> Run {
-    assert!(race.sim.use_original_ai(None, 1), "the AI tables read");
-    race.sim.set_autopilot(true);
+    assert!(race.core.sim.use_original_ai(None, 1), "the AI tables read");
+    race.core.sim.set_autopilot(true);
     let mut out = Run::default();
-    let mut lap = race.sim.world.ships[0].standing.lap;
+    let mut lap = race.core.sim.world.ships[0].standing.lap;
     for _ in 0..ticks {
-        let before = race.sim.world.ships[0].physics.body.position;
-        let respawns = race.sim.respawns_of(0);
+        let before = race.core.sim.world.ships[0].physics.body.position;
+        let respawns = race.core.sim.respawns_of(0);
         race.tick_sim_only(&PlayerInputs::none());
-        if race.sim.respawns_of(0) != respawns {
+        if race.core.sim.respawns_of(0) != respawns {
             out.rescued_from.push(before);
         }
-        let ship = &race.sim.world.ships[0];
+        let ship = &race.core.sim.world.ships[0];
         if ship.standing.lap != lap {
             lap = ship.standing.lap;
             out.shield_per_lap.push(ship.physics.shield);
         }
         if ship.standing.finished() {
-            out.finish = Some(race.sim.world.tick);
+            out.finish = Some(race.core.sim.world.tick);
             break;
         }
     }
-    let ship = &race.sim.world.ships[0];
+    let ship = &race.core.sim.world.ships[0];
     out.laps = ship.standing.lap.saturating_sub(1);
-    out.place = race.places()[0];
-    out.respawns = race.sim.respawns_of(0);
+    out.place = race.core.places()[0];
+    out.respawns = race.core.sim.respawns_of(0);
     out.shield_end = ship.physics.shield;
     out
 }
@@ -269,12 +281,13 @@ fn flies_the_original_autopilot(image: &str) {
         ..oag_raceplay::Options::default()
     })
     .unwrap_or_else(|e| panic!("{image}: {e}"));
-    let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
     for _ in 0..1_800 {
         race.tick_sim_only(&PlayerInputs::none());
     }
     let autopilot = race
+        .core
         .sim
         .original_autopilot(0)
         .unwrap_or_else(|| panic!("{image}: the original driver flies the autopilot"));
@@ -283,7 +296,7 @@ fn flies_the_original_autopilot(image: &str) {
         oag_ai::original::AUTOPILOT_THRUST,
         "{image}"
     );
-    assert_eq!(race.sim.respawns_of(0), 0, "{image}");
+    assert_eq!(race.core.sim.respawns_of(0), 0, "{image}");
 }
 
 #[test]
@@ -337,38 +350,38 @@ fn opponent_fork(
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
-    race.sim.set_opponent_autopilot(false);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
+    race.core.sim.set_opponent_autopilot(false);
     for _ in 0..trigger {
         race.tick_sim_only(&PlayerInputs::none());
     }
     let snapshot = race.snapshot_sim();
-    let branch = |race: &mut oag_raceplay::Race, on: bool| {
-        race.restore_sim(&snapshot);
-        race.sim.set_opponent_autopilot(on);
-        if on {
-            // Weapons off, so no table: the Pulse table's `time`, 5 s.
-            race.sim.world.ships[slot].autopilot_timer = 5.0;
-        }
-        let d0 = race.sim.race_distance_of(slot).unwrap_or(0.0);
-        let mut flown = false;
-        for _ in 0..480 {
-            race.tick_sim_only(&PlayerInputs::none());
-            flown |= race
-                .sim
-                .original_autopilot(slot)
-                .is_some_and(|a| a.driver.held_thrust == oag_ai::original::AUTOPILOT_THRUST)
-                && race.sim.world.ships[slot].physics.thrust == 100.0;
-        }
-        (
+    let branch =
+        |race: &mut oag_raceplay::Race, on: bool| {
+            race.restore_sim(&snapshot);
+            race.core.sim.set_opponent_autopilot(on);
+            if on {
+                // Weapons off, so no table: the Pulse table's `time`, 5 s.
+                race.core.sim.world.ships[slot].autopilot_timer = 5.0;
+            }
+            let d0 = race.core.sim.race_distance_of(slot).unwrap_or(0.0);
+            let mut flown = false;
+            for _ in 0..480 {
+                race.tick_sim_only(&PlayerInputs::none());
+                flown |=
+                    race.core.sim.original_autopilot(slot).is_some_and(|a| {
+                        a.driver.held_thrust == oag_ai::original::AUTOPILOT_THRUST
+                    }) && race.core.sim.world.ships[slot].physics.thrust == 100.0;
+            }
             (
-                race.sim.race_distance_of(slot).unwrap_or(0.0) - d0,
-                race.sim.respawns_of(slot),
-            ),
-            flown,
-        )
-    };
+                (
+                    race.core.sim.race_distance_of(slot).unwrap_or(0.0) - d0,
+                    race.core.sim.respawns_of(slot),
+                ),
+                flown,
+            )
+        };
     let (absorbed, _) = branch(&mut race, false);
     let (autopilot, flown) = branch(&mut race, true);
     Some((absorbed, autopilot, flown))
@@ -431,12 +444,12 @@ fn an_original_field_opponent_is_not_handed_an_autopilot() {
     ) else {
         return;
     };
-    race.sim.set_opponent_autopilot(true);
-    assert!(race.sim.engage_opponent_autopilot(1), "ours flies it");
-    race.sim.world.ships[1].autopilot_timer = 0.0;
-    assert!(race.sim.use_original_ai(None, 1));
+    race.core.sim.set_opponent_autopilot(true);
+    assert!(race.core.sim.engage_opponent_autopilot(1), "ours flies it");
+    race.core.sim.world.ships[1].autopilot_timer = 0.0;
+    assert!(race.core.sim.use_original_ai(None, 1));
     assert!(
-        !race.sim.engage_opponent_autopilot(1),
+        !race.core.sim.engage_opponent_autopilot(1),
         "the original's absorbs it"
     );
 }
@@ -478,30 +491,30 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
-    assert!(race.sim.use_original_ai(None, 1), "the AI tables read");
-    race.sim.set_autopilot(true);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    assert!(race.core.sim.use_original_ai(None, 1), "the AI tables read");
+    race.core.sim.set_autopilot(true);
     let mut out = WallRun::default();
     let mut last = 0;
     let mut touching = false;
-    let mut lap = race.sim.world.ships[0].standing.lap;
+    let mut lap = race.core.sim.world.ships[0].standing.lap;
     for _ in 0..ticks {
         race.tick_sim_only(&PlayerInputs::none());
         out.ticks += 1;
-        let now = race.sim.wall_contact_ticks_of(0);
+        let now = race.core.sim.wall_contact_ticks_of(0);
         let touch = now != last;
         if touch && !touching {
             out.episodes += 1;
         }
         touching = touch;
         last = now;
-        if let Some(autopilot) = race.sim.original_autopilot(0)
-            && race.sim.world.tick > 300
+        if let Some(autopilot) = race.core.sim.original_autopilot(0)
+            && race.core.sim.world.tick > 300
         {
             out.lateral.push(autopilot.driver.rail.lateral.abs());
             out.blend.push(autopilot.driver.rail.blend);
             out.speed.push(
-                race.sim.world.ships[0]
+                race.core.sim.world.ships[0]
                     .physics
                     .body
                     .linear_velocity
@@ -509,22 +522,22 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
             );
         }
         if std::env::var_os("OAG_SWEEP_TRACE").is_some() {
-            let ship = &race.sim.world.ships[0];
-            let rail = race.sim.original_autopilot(0).map(|a| a.driver.rail);
+            let ship = &race.core.sim.world.ships[0];
+            let rail = race.core.sim.original_autopilot(0).map(|a| a.driver.rail);
             if std::env::var_os("OAG_SWEEP_TRACE_ALL").is_some()
-                || race.sim.world.tick.is_multiple_of(2)
-                || race.sim.respawns_of(0) != out.respawns
+                || race.core.sim.world.tick.is_multiple_of(2)
+                || race.core.sim.respawns_of(0) != out.respawns
             {
                 println!(
                     "trace {} pos {:?} speed {:.1} grounded {:.2} lateral {:?} blend {:?} respawns {} cause {:?} craft [{:.1}, {:.1}, {:.1}, {:.1}, {:.1}] fwd {:?} up {:?} vel {:?}",
-                    race.sim.world.tick,
+                    race.core.sim.world.tick,
                     ship.physics.body.position,
                     ship.physics.body.linear_velocity.length(),
                     ship.physics.grounded,
                     rail.map(|r| r.lateral),
                     rail.map(|r| r.blend),
-                    race.sim.respawns_of(0),
-                    race.sim.last_respawn_cause_of(0),
+                    race.core.sim.respawns_of(0),
+                    race.core.sim.last_respawn_cause_of(0),
                     ship.physics.thrust,
                     ship.physics.brake,
                     ship.physics.steer,
@@ -535,22 +548,22 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
                     ship.physics.body.linear_velocity
                 );
             }
-            out.respawns = race.sim.respawns_of(0);
+            out.respawns = race.core.sim.respawns_of(0);
         }
-        if race.sim.world.ships[0].standing.lap != lap {
-            lap = race.sim.world.ships[0].standing.lap;
+        if race.core.sim.world.ships[0].standing.lap != lap {
+            lap = race.core.sim.world.ships[0].standing.lap;
             out.shield_per_lap
-                .push(race.sim.world.ships[0].physics.shield);
+                .push(race.core.sim.world.ships[0].physics.shield);
         }
-        if race.sim.world.ships[0].standing.finished() {
-            out.finish = Some(race.sim.world.tick);
+        if race.core.sim.world.ships[0].standing.finished() {
+            out.finish = Some(race.core.sim.world.tick);
             break;
         }
     }
-    out.contact = race.sim.wall_contact_ticks_of(0);
-    out.inbound = race.sim.wall_inbound_ticks_of(0);
-    out.respawns = race.sim.respawns_of(0);
-    out.shield_end = race.sim.world.ships[0].physics.shield;
+    out.contact = race.core.sim.wall_contact_ticks_of(0);
+    out.inbound = race.core.sim.wall_inbound_ticks_of(0);
+    out.respawns = race.core.sim.respawns_of(0);
+    out.shield_end = race.core.sim.world.ships[0].physics.shield;
     Some(out)
 }
 
@@ -626,11 +639,11 @@ fn wall_sweep() {
 /// units further from the craft than the warm one), and the first wrong tick.
 fn cold_locates(track: &str, ticks: u64, every: u64) -> Option<(u32, u32, u32, Option<u64>)> {
     let mut race = race("pulse-psp-usa.chd", track, None)?;
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     let (mut n, mut on_route, mut wrong, mut first) = (0, 0, 0, None);
     for tick in 1..=ticks {
         race.tick_sim_only(&PlayerInputs::none());
-        let ship = &race.sim.world.ships[0];
+        let ship = &race.core.sim.world.ships[0];
         if !tick.is_multiple_of(every)
             || ship.physics.craft_state != oag_physics::CraftState::Racing
             || ship.standing.finished()
@@ -638,19 +651,19 @@ fn cold_locates(track: &str, ticks: u64, every: u64) -> Option<(u32, u32, u32, O
             continue;
         }
         let warm = ship.driver;
-        let warm_point = race.sim.line_of(0).point(warm.index as usize);
+        let warm_point = race.core.sim.line_of(0).point(warm.index as usize);
         let snapshot = race.snapshot_sim();
-        race.sim.set_autopilot(true);
-        let cold = race.sim.world.ships[0].driver;
-        let cold_point = race.sim.line_of(0).point(cold.index as usize);
+        race.core.sim.set_autopilot(true);
+        let cold = race.core.sim.world.ships[0].driver;
+        let cold_point = race.core.sim.line_of(0).point(cold.index as usize);
         race.restore_sim(&snapshot);
         n += 1;
         on_route += u32::from(warm.branching.route != 0);
-        let craft = race.sim.world.ships[0].physics.body.position;
+        let craft = race.core.sim.world.ships[0].physics.body.position;
         if cold_point.distance(craft) > warm_point.distance(craft) + 10.0 {
             wrong += 1;
             {
-                let ship = &race.sim.world.ships[0];
+                let ship = &race.core.sim.world.ships[0];
                 println!(
                     "  tick {tick} craft {:?} air {:.2} grounded {} warm {} {:?} at {warm_point:?}, cold {} {:?} at {cold_point:?}",
                     ship.physics.body.position,
@@ -758,9 +771,9 @@ fn an_opponent_flies_its_autopilot_by_class_and_difficulty() {
                 ..oag_raceplay::Options::default()
             })
             .expect("loading the track");
-            let mut race = oag_raceplay::Race::start(loaded.setup);
+            let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
             assert_eq!(
-                race.sim.engage_opponent_autopilot(1),
+                race.core.sim.engage_opponent_autopilot(1),
                 flies,
                 "{image} {class} {difficulty}"
             );

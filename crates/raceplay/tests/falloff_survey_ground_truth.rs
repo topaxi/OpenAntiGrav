@@ -127,41 +127,43 @@ fn measure(
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let slot = if population == "ai" { LONE } else { 0 };
     for other in 0..8 {
         if other != slot {
-            race.sim.world.ships[other].active = false;
+            race.core.sim.world.ships[other].active = false;
         }
     }
     if slot == 0 {
-        race.sim.set_autopilot(true);
-        race.sim.set_autopilot_pilot(oag_ai::Pilot::BALANCED, level);
+        race.core.sim.set_autopilot(true);
+        race.core
+            .sim
+            .set_autopilot_pilot(oag_ai::Pilot::BALANCED, level);
     } else {
-        race.sim.world.ships[slot].active = true;
+        race.core.sim.world.ships[slot].active = true;
     }
 
     let label = format!("{}{}", circuit.id, if circuit.reversed { "r" } else { "" });
     let mut ring: std::collections::VecDeque<Rec> = std::collections::VecDeque::new();
-    let mut prev_respawns = race.sim.respawns_of(slot);
-    let mut prev_wall_counter = race.sim.wall_contact_ticks_of(slot);
+    let mut prev_respawns = race.core.sim.respawns_of(slot);
+    let mut prev_wall_counter = race.core.sim.wall_contact_ticks_of(slot);
     let mut summary = RunSummary::default();
 
     for tick in 0..TICKS {
         race.tick(&PlayerInputs::none());
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         let position = ship.physics.body.position;
         let speed = ship.physics.body.linear_velocity.length();
         let t_air = ship.physics.time_airborne;
         let wall_now = if slot == 0 {
             ship.physics.wall_contact_prev
         } else {
-            let counter = race.sim.wall_contact_ticks_of(slot);
+            let counter = race.core.sim.wall_contact_ticks_of(slot);
             let hit = counter != prev_wall_counter;
             prev_wall_counter = counter;
             hit
         };
-        let (index, lat_frac, section) = match race.sim.spline().nearest(position) {
+        let (index, lat_frac, section) = match race.core.sim.spline().nearest(position) {
             Some((index, sample, _)) => {
                 let lateral = oag_core::math::Vec3::from_array(sample.lateral);
                 let lat = (position - oag_core::math::Vec3::from_array(sample.pos)).dot(lateral);
@@ -195,11 +197,12 @@ fn measure(
             ring.pop_front();
         }
         ring.push_back(rec);
-        let now_respawns = race.sim.respawns_of(slot);
+        let now_respawns = race.core.sim.respawns_of(slot);
         if now_respawns != prev_respawns {
             prev_respawns = now_respawns;
             summary.events += 1;
             let cause = race
+                .core
                 .sim
                 .last_respawn_cause_of(slot)
                 .map_or("?", RespawnCause::label);
@@ -211,7 +214,7 @@ fn measure(
             ring.clear();
         }
     }
-    summary.laps = race.sim.world.ships[slot].standing.lap;
+    summary.laps = race.core.sim.world.ships[slot].standing.lap;
     println!(
         "SUM|{label}|{level_name}|{population}|{class}|ticks {}|laps {}|events {}|air {}|wall {}|\
          maxlat {:.2}|over80 {}",
@@ -404,17 +407,18 @@ fn grid_slots_spawn_over_a_floor() {
             }) else {
                 return;
             };
-            let mut race = race::Race::start(loaded.setup);
+            let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
             for other in 0..8 {
                 if other != slot {
-                    race.sim.world.ships[other].active = false;
+                    race.core.sim.world.ships[other].active = false;
                 }
             }
             if slot == 0 {
-                race.sim.set_autopilot(true);
+                race.core.sim.set_autopilot(true);
             }
-            let spawn = race.sim.world.ships[slot].physics.body.position;
+            let spawn = race.core.sim.world.ships[slot].physics.body.position;
             let spawn_lat = race
+                .core
                 .sim
                 .spline()
                 .nearest(spawn)
@@ -432,7 +436,7 @@ fn grid_slots_spawn_over_a_floor() {
             let (mut run, mut longest) = (0u32, 0u32);
             for _ in 0..400 {
                 race.tick(&PlayerInputs::none());
-                if race.sim.world.ships[slot].physics.time_airborne > 0.0 {
+                if race.core.sim.world.ships[slot].physics.time_airborne > 0.0 {
                     run += 1;
                     longest = longest.max(run);
                 } else {
@@ -441,7 +445,7 @@ fn grid_slots_spawn_over_a_floor() {
             }
             row.push_str(&format!(
                 "|s{slot} lat {spawn_lat:+.2} air {longest}{}",
-                if race.sim.respawns_of(slot) > 0 {
+                if race.core.sim.respawns_of(slot) > 0 {
                     " RESP"
                 } else {
                     ""
@@ -505,9 +509,9 @@ fn shove_sweep() {
         }) else {
             return;
         };
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         for other in 1..8 {
-            race.sim.world.ships[other].active = false;
+            race.core.sim.world.ships[other].active = false;
         }
         let label = format!("{}{}", circuit.id, if circuit.reversed { "r" } else { "" });
         let throttle = throttle_held();
@@ -515,11 +519,11 @@ fn shove_sweep() {
         for _ in 0..600 {
             race.tick(&PlayerInputs::single(throttle));
         }
-        let height = oag_gameplay::spawn::spawn_height(&race.sim.world.ships[0].handling);
-        let len = race.sim.spline().len();
+        let height = oag_gameplay::spawn::spawn_height(&race.core.sim.world.ships[0].handling);
+        let len = race.core.sim.spline().len();
         let step = (len / positions).max(1);
         for index in (0..len).step_by(step) {
-            let Some(sample) = race.sim.spline().sample(index).copied() else {
+            let Some(sample) = race.core.sim.spline().sample(index).copied() else {
                 continue;
             };
             for side in [-1.0f32, 1.0] {
@@ -532,16 +536,16 @@ fn shove_sweep() {
                             oag_core::math::Quat::from_axis_angle(up, side * angle.to_radians());
                         pose.orientation = turn * pose.orientation;
                         let forward = pose.orientation * oag_core::math::Vec3::NEG_Z;
-                        race.sim.world.ships[0].place_at(pose);
-                        race.sim.world.ships[0].physics.body.linear_velocity = forward * speed;
-                        let respawns_before = race.sim.respawns_of(0);
+                        race.core.sim.world.ships[0].place_at(pose);
+                        race.core.sim.world.ships[0].physics.body.linear_velocity = forward * speed;
+                        let respawns_before = race.core.sim.respawns_of(0);
                         let (mut max_lat, mut out_run, mut worst_run, mut wall_ticks) =
                             (0.0f32, 0u32, 0u32, 0u32);
                         let mut crossed = 0u32;
-                        let mut previous = race.sim.world.ships[0].physics.body.position;
+                        let mut previous = race.core.sim.world.ships[0].physics.body.position;
                         for _ in 0..200 {
                             race.tick(&PlayerInputs::single(throttle));
-                            let ship = &race.sim.world.ships[0];
+                            let ship = &race.core.sim.world.ships[0];
                             wall_ticks += u32::from(ship.physics.wall_contact_prev);
                             {
                                 use oag_physics::{Ray, Raycaster, Surface};
@@ -552,6 +556,7 @@ fn shove_sweep() {
                                 if length > 1e-3
                                     && length < 20.0
                                     && race
+                                        .core
                                         .sim
                                         .collision()
                                         .raycast(
@@ -566,7 +571,7 @@ fn shove_sweep() {
                                 previous = now;
                             }
                             if let Some((_, s, _)) =
-                                race.sim.spline().nearest(ship.physics.body.position)
+                                race.core.sim.spline().nearest(ship.physics.body.position)
                             {
                                 let lat = (ship.physics.body.position
                                     - oag_core::math::Vec3::from_array(s.pos))
@@ -586,10 +591,10 @@ fn shove_sweep() {
                                 }
                             }
                         }
-                        let respawned = race.sim.respawns_of(0) - respawns_before;
+                        let respawned = race.core.sim.respawns_of(0) - respawns_before;
                         let far = worst_run >= 30;
                         let left = respawned > 0 || far;
-                        let gave_up = race.sim.respawn_given_up_of(0);
+                        let gave_up = race.core.sim.respawn_given_up_of(0);
                         println!(
                             "SHOVE|{label}|idx {index}|sec {}|side {}|ang {angle:.0}|spd {speed:.0}|\
                              left {}|wall {wall_ticks}|maxlat {max_lat:.2}|resp {respawned}|far {}|\
@@ -602,7 +607,7 @@ fn shove_sweep() {
                             sample.half_width_left.min(sample.half_width_right),
                         );
                         // Let any respawn cooldown drain and the ship settle.
-                        race.sim.world.ships[0].physics.body.linear_velocity =
+                        race.core.sim.world.ships[0].physics.body.linear_velocity =
                             oag_core::math::Vec3::ZERO;
                     }
                 }
@@ -650,16 +655,16 @@ fn edge_profile() {
         }) else {
             return;
         };
-        let race = race::Race::start(loaded.setup);
-        let collision = race.sim.collision();
+        let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+        let collision = race.core.sim.collision();
         let label = format!("{}{}", circuit.id, if circuit.reversed { "r" } else { "" });
-        let len = race.sim.spline().len();
+        let len = race.core.sim.spline().len();
         // [side][class]: walled, far-wall, shoulder, void
         let mut counts = [[0u32; 4]; 2];
         let mut void_runs: Vec<Vec<(usize, u8, f32)>> = vec![Vec::new(), Vec::new()];
         let mut sampled = 0u32;
         for index in (0..len).step_by(4) {
-            let Some(sample) = race.sim.spline().sample(index).copied() else {
+            let Some(sample) = race.core.sim.spline().sample(index).copied() else {
                 continue;
             };
             sampled += 1;
@@ -807,16 +812,22 @@ fn shove_trial_trace() {
         ..race::Options::default()
     })
     .expect("loading");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for other in 1..8 {
-        race.sim.world.ships[other].active = false;
+        race.core.sim.world.ships[other].active = false;
     }
     let throttle = throttle_held();
     for _ in 0..600 {
         race.tick(&PlayerInputs::single(throttle));
     }
-    let height = oag_gameplay::spawn::spawn_height(&race.sim.world.ships[0].handling);
-    let sample = race.sim.spline().sample(index).copied().expect("sample");
+    let height = oag_gameplay::spawn::spawn_height(&race.core.sim.world.ships[0].handling);
+    let sample = race
+        .core
+        .sim
+        .spline()
+        .sample(index)
+        .copied()
+        .expect("sample");
     let mut pose = oag_gameplay::Pose::from_sample(&sample, sample.racing_line, height);
     let up = pose.orientation * oag_core::math::Vec3::Y;
     pose.orientation =
@@ -863,7 +874,7 @@ fn shove_trial_trace() {
             ("left", -right),
         ] {
             for include_reset in [false, true] {
-                match race.sim.collision().raycast(
+                match race.core.sim.collision().raycast(
                     Ray::new(pose.position, direction, 120.0),
                     None,
                     include_reset,
@@ -877,13 +888,13 @@ fn shove_trial_trace() {
             }
         }
     }
-    race.sim.world.ships[0].place_at(pose);
-    race.sim.world.ships[0].physics.body.linear_velocity = forward * speed;
+    race.core.sim.world.ships[0].place_at(pose);
+    race.core.sim.world.ships[0].physics.body.linear_velocity = forward * speed;
     // `OAG_VEL=x,y,z` overrides the initial velocity outright, to seed a state
     // read off the original's first recorded tick.
     if let Ok(v) = std::env::var("OAG_VEL") {
         let v: Vec<f32> = v.split(',').map(|c| c.parse().expect("OAG_VEL")).collect();
-        race.sim.world.ships[0].physics.body.linear_velocity =
+        race.core.sim.world.ships[0].physics.body.linear_velocity =
             oag_core::math::Vec3::new(v[0], v[1], v[2]);
     }
     // `OAG_COAST=1` releases the throttle, for comparison with a placement in
@@ -900,9 +911,10 @@ fn shove_trial_trace() {
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(200);
     for tick in 0..ticks {
-        let ship = &race.sim.world.ships[0];
+        let ship = &race.core.sim.world.ships[0];
         let position = ship.physics.body.position;
         let lat = race
+            .core
             .sim
             .spline()
             .nearest(position)
@@ -926,11 +938,12 @@ fn shove_trial_trace() {
             ship.physics.body.up().x,
             ship.physics.body.up().y,
             ship.physics.body.up().z,
-            race.sim
+            race.core
+                .sim
                 .spline()
                 .nearest(position)
                 .map_or(0, |(index, _, _)| index),
-            race.sim.respawns(),
+            race.core.sim.respawns(),
         );
         race.tick(&PlayerInputs::single(input));
     }
@@ -965,15 +978,15 @@ fn window_trace() {
         ..race::Options::default()
     })
     .expect("loading");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for other in 0..8 {
-        race.sim.world.ships[other].active = other == slot;
+        race.core.sim.world.ships[other].active = other == slot;
     }
     for tick in 0..max_tick {
         race.tick(&PlayerInputs::none());
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         let body = &ship.physics.body;
-        let Some((index, _, _)) = race.sim.spline().nearest(body.position) else {
+        let Some((index, _, _)) = race.core.sim.spline().nearest(body.position) else {
             continue;
         };
         if index < from || index > to {
@@ -983,7 +996,8 @@ fn window_trace() {
         let v = body.linear_velocity;
         let below = {
             use oag_physics::{Ray, Raycaster};
-            race.sim
+            race.core
+                .sim
                 .collision()
                 .raycast(
                     Ray::new(body.position, oag_core::math::Vec3::NEG_Y, 40.0),
@@ -1008,7 +1022,7 @@ fn window_trace() {
             ship.physics.grounded,
             ship.physics.time_airborne,
             ship.physics.shield,
-            race.sim.wall_contact_ticks_of(slot),
+            race.core.sim.wall_contact_ticks_of(slot),
         );
     }
 }

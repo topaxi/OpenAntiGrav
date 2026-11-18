@@ -30,11 +30,11 @@ impl Race {
     /// Lights the flare and raises `TURBO` for each craft whose roll payout was
     /// armed this tick.
     pub(super) fn fire_roll_payouts(&mut self, before: &[f32; oag_gameplay::MAX_SHIPS]) {
-        let count = self.sim.world.ship_count as usize;
+        let count = self.core.sim.world.ship_count as usize;
         for (slot, &was) in before.iter().enumerate().take(count) {
-            if self.sim.world.ships[slot].physics.roll_payout_timer > was {
+            if self.core.sim.world.ships[slot].physics.roll_payout_timer > was {
                 self.boost_plume(slot);
-                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::Turbo,
                     slot,
                 ));

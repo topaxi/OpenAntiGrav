@@ -42,7 +42,7 @@ impl Session {
         if stage.demo.is_some() {
             return;
         }
-        if !stage.race.sim.finished() || stage.endrace.is_some() || stage.endrace_unavailable {
+        if !stage.race.core.sim.finished() || stage.endrace.is_some() || stage.endrace_unavailable {
             return;
         }
         // The prefetch still running on its worker: try again next frame rather than wait on it.
@@ -84,15 +84,16 @@ impl Session {
         // touched the page the room's owner set).
         let net = self.net.is_some();
         let mode = if net {
-            stage.race.sim.world.mode()
+            stage.race.core.sim.world.mode()
         } else {
             race_options.mode
         };
         let team = if net {
             stage
                 .race
+                .core
                 .slot_teams()
-                .get(stage.race.player_slot())
+                .get(stage.race.core.player_slot())
                 .cloned()
         } else {
             race_options.team.clone()
@@ -112,8 +113,8 @@ impl Session {
         // measured - the original's split screen is not read beyond the PS2's
         // authored `EndRace Results Split`, `docs/ui/split-end-race.md`.
         let split = stage.race.viewport_count() > 1;
-        let board = stage.race.results().cloned();
-        let board_revision = stage.race.results_revision();
+        let board = stage.race.core.results().cloned();
+        let board_revision = stage.race.core.results_revision();
         // A network race several people flew names every person in its table (by the name
         // they raced under), as a split screen's does, but is otherwise this machine's own
         // race: loyalty, the medal and the menu rows are as for any other.
@@ -122,7 +123,7 @@ impl Session {
         // The roster this race drew, slot 0 the player's - read off the race
         // rather than rebuilt, because the draw is seeded and only the race
         // knows its seed (`race::load::roster`).
-        let roster = stage.race.slot_teams().to_vec();
+        let roster = stage.race.core.slot_teams().to_vec();
         let observation = stage.observation();
         // A scored race (an HD Eliminator) is placed on its points, which `observation.place`
         // already is; its headline is that place, where a race position has no Eliminator headline.
@@ -131,8 +132,8 @@ impl Session {
             .filter(|board| board.scored() && !split)
             .and_then(|board| board.player())
             .map(|row| row.place);
-        let standing = &stage.race.sim.world.ships[0].standing;
-        let boosts = stage.race.run_stats().boosts_by_lap;
+        let standing = &stage.race.core.sim.world.ships[0].standing;
+        let boosts = stage.race.core.run_stats().boosts_by_lap;
         let laps: Vec<oag_ui_screens::endrace::LapSplit> = (0..oag_race::MAX_RECORDED_LAPS)
             .filter_map(|index| {
                 standing.lap_splits[index].map(|ticks| oag_ui_screens::endrace::LapSplit {
@@ -149,7 +150,7 @@ impl Session {
         // all is chosen). Both are the endings whose world keeps running; an
         // Eliminator or Zone ending was not looked at and keeps its panels at
         // once (`docs/gameplay/after-the-finish.md`).
-        let runs_on_after_the_end = stage.race.runs_on_after_the_end();
+        let runs_on_after_the_end = stage.race.core.runs_on_after_the_end();
 
         // `Race_ComputeLoyaltyAward`'s own inputs - see `LoyaltyInputs`'s own
         // doc for why `perfect_laps`/`perfect_zones`/`suggested_ship` are
@@ -159,7 +160,7 @@ impl Session {
             laps: observation.laps_completed,
             perfect_laps: 0,
             kills: standing.kills,
-            zones: u32::from(stage.race.sim.world.primary_race().zone),
+            zones: u32::from(stage.race.core.sim.world.primary_race().zone),
             perfect_zones: 0,
             difficulty: None,
             suggested_ship: false,
@@ -189,7 +190,7 @@ impl Session {
                     mode,
                     laps: observation.laps_completed,
                     kills: standing.kills,
-                    zones: u32::from(stage.race.sim.world.primary_race().zone),
+                    zones: u32::from(stage.race.core.sim.world.primary_race().zone),
                     difficulty: stage.campaign_difficulty,
                 });
                 let total = self.records.record_loyalty(title_ref, &team, award);
@@ -278,7 +279,7 @@ impl Session {
         let mut split_rewards = Vec::new();
         let split_results: Option<Vec<oag_ui_screens::endrace::Results>> =
             two_people.map(|board| {
-                let world = &stage.race.sim.world;
+                let world = &stage.race.core.sim.world;
                 crate::results_tables::split_people(board, world, &boosts)
                     .into_iter()
                     .map(|person| {
@@ -286,7 +287,7 @@ impl Session {
                         // one-person race does. Chosen: the PS2's authored Rewards Split
                         // shows a loyalty row and bar per person, which has nothing to
                         // show unless it was earned.
-                        let loyalty = stage.race.slot_teams().get(person.slot).map(|team| {
+                        let loyalty = stage.race.core.slot_teams().get(person.slot).map(|team| {
                             let award = loyalty_award(LoyaltyInputs {
                                 mode,
                                 laps: person.laps_completed,
@@ -325,7 +326,9 @@ impl Session {
                 oag_race::Mode::Tournament | oag_race::Mode::Eliminator | oag_race::Mode::Zone
             );
         let people = ((split || net_people) && !is_hd && split_results.is_none())
-            .then(|| crate::results_tables::people_rows(board.as_ref(), stage.race.slot_teams()))
+            .then(|| {
+                crate::results_tables::people_rows(board.as_ref(), stage.race.core.slot_teams())
+            })
             .flatten();
         let results = if let Some(split_results) = split_results {
             ResultsModel::PulseSplit(split_results)
@@ -334,20 +337,20 @@ impl Session {
         } else if let Some(tournament) = pulse_tournament {
             ResultsModel::PulseTournament(tournament)
         } else if !is_hd && mode == oag_race::Mode::Eliminator {
-            let world = &stage.race.sim.world;
+            let world = &stage.race.core.sim.world;
             ResultsModel::PulseElimination(elimination_results(
                 &world.ships[..usize::from(world.ship_count)],
                 slot_teams.as_deref(),
             ))
         } else if !is_hd && mode == oag_race::Mode::Zone {
             ResultsModel::PulseZone(zone_results(
-                stage.race.sim.world.primary_race(),
-                stage.race.run_stats(),
+                stage.race.core.sim.world.primary_race(),
+                stage.race.core.run_stats(),
             ))
         } else if is_hd {
             let rows = crate::results_tables::field_rows(
                 board.as_ref(),
-                &crate::results_tables::team_keys(title_ref, stage.race.slot_teams()),
+                &crate::results_tables::team_keys(title_ref, stage.race.core.slot_teams()),
             );
             ResultsModel::Hd(oag_ui_screens::endrace::FieldResults {
                 headline: if split {
@@ -372,9 +375,9 @@ impl Session {
         let field_roster = match &results {
             ResultsModel::Hd(_) => Some(crate::results_tables::team_keys(
                 title_ref,
-                stage.race.slot_teams(),
+                stage.race.core.slot_teams(),
             )),
-            ResultsModel::PulsePeople(_) => Some(stage.race.slot_teams().to_vec()),
+            ResultsModel::PulsePeople(_) => Some(stage.race.core.slot_teams().to_vec()),
             _ => None,
         };
         // The place and the medal, under the title's own law

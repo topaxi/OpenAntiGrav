@@ -270,7 +270,7 @@ pub(crate) fn straight_track_in_sections(
     track::parse(&out).expect("the synthetic track must parse")
 }
 
-fn setup(handling: Handling) -> Setup {
+fn setup(handling: Handling) -> SimSetup {
     let ai = straight_track();
     let spline = Spline::from_track(&ai);
     // **This does produce a ring, and the comment here said otherwise until
@@ -282,14 +282,8 @@ fn setup(handling: Handling) -> Setup {
     // do not read the course - but a test that wants the no-ring path has to
     // build its own `None` rather than assume this one is it.
     let course = Course::from_track(&ai, None);
-    Setup {
+    SimSetup {
         foreign: None,
-        extensions: crate::extensions::Prepared::default(),
-        airbrake_graphics: oag_gameplay::AirbrakeGraphics {
-            amount: 0.4363323,
-            up_speed: 30.0,
-            down_speed: 30.0,
-        },
         mode: Mode::TimeTrial,
         eliminator_kill_target: None,
         laps_override: None,
@@ -310,51 +304,12 @@ fn setup(handling: Handling) -> Setup {
         // The synthetic track has no authored slot, which is the fallback
         // path: every assertion below is about a ship placed on the spline.
         start_position: None,
-        // Not HD's tube: these tests drive the PSP ribbon and physics.
-        hd_trail: None,
-        ps2_trail: false,
-        // Pulse's own palette - these tests build a synthetic Pulse fixture.
-        shield_palette: oag_render::shield::PULSE_PALETTE,
-        shield_targets: Vec::new(),
-        // Pulse's own mechanism, same reasoning as `shield_palette` above.
-        hd_plasma_blast: false,
-        disruptor_halo_law: None,
-        disruptor_craft_law: None,
-        plasma_blast_law: oag_pulse::race::WEAPON_MODELS
-            .plasma_blast_pulse
-            .map(|blast| blast.law),
-        hd_bomb_blast: false,
-        hd_missile_blast: false,
-        bomb_shockwave_fades: false,
-        pulse_laid_pose: false,
-        laid_pose_scaled: false,
         laid_from_rear: false,
         grid_frame_from_sample: false,
-        screen_flash: false,
-        quake_flash: false,
-        absorb_burst: None,
-        absorb_anchors: Vec::new(),
-        hit_spark_anchors: Vec::new(),
-        weapon_spark_anchors: Vec::new(),
-        cockpit_hit_noise: None,
-        wreck_anchors: Vec::new(),
-        wreck_shockwave: true,
-        magstrip_wake: None,
-        magstrip_pob: false,
-        leach_strip: None,
-        missile_trail: None,
-        wingtip: None,
-        destroy_stations: Vec::new(),
         finished_thrust: None,
         original_tables: None,
-        intro_camera: None,
-        intro_voice: None,
         slot_teams: Vec::new(),
         sight: Sighting::default(),
-        trail_sparks: false,
-        request: None,
-        campaign_event: false,
-        spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),
         handling,
         opponent_handling: Vec::new(),
@@ -376,59 +331,7 @@ fn setup(handling: Handling) -> Setup {
             craft_scale: 1.0,
             view_sheared: false,
         },
-        // The nearer external view, deliberately a *different* set of round
-        // numbers from `chase`: a test that cycles to it and back has to be
-        // able to tell the two apart. Note these go into `Setup` already
-        // converted, so unlike a real load no `chase_params` scale or sign
-        // flip is applied to them.
-        chase_close: ChaseParams {
-            fov: 50.0,
-            lookat_height: 1.0,
-            lookat_length: 10.0,
-            pos_height: 1.0,
-            pos_length: 4.0,
-            spring_horiz: 4.0,
-            spring_vert: 2.0,
-            craft_scale: 1.0,
-            view_sheared: false,
-        },
-        // The cockpit view. `length` positive puts the eye ahead of the
-        // craft's origin, which is the sign the original's own measured
-        // sample pins - see `oag_render::camera::internal`.
-        internal: InternalParams {
-            fov: 65.0,
-            headtilt: Some(3.0),
-            height: 1.0,
-            length: 5.0,
-            pitch: 0.0,
-        },
-        // A synthetic setup has no ship model, so no locators either. The
-        // exhaust still ticks; it just has nowhere to be drawn, which is the
-        // same path a model with no `Engine Flare` node takes. Sparks
-        // likewise fall back to anchoring at the contact point.
-        nozzles: vec![None; MAX_SHIPS],
         muzzles: vec![None; MAX_SHIPS],
-        engine_lights: vec![None; MAX_SHIPS],
-        spu_vertex_lights: true,
-        hull_points: oag_mesh::mesh_render::HullPointLights::none(),
-        collision_fx: Vec::new(),
-        scenery_fx: Default::default(),
-        // No disc, so no `.pob` at all: every effect trigger runs and
-        // draws nothing, which is the same path a missing entry takes.
-        // A headless test that wants real particles parses a blob itself
-        // and inserts it here.
-        effects: psys::Library::new(),
-        handles: Default::default(),
-        // No disc, so no banks: a headless race raises its cues and plays none
-        // of them, which is the same path a source with no sound banks takes.
-        sounds: oag_sound::sfx::Banks::default(),
-        // No circuit `.vex` either, so no authored ambience - the same path a
-        // Zone circuit takes, which authors none of the three audio classes.
-        track_emitters: oag_sound::sfx::TrackEmitters::default(),
-        // Same path: no title data, so no ladder, so nothing decodes.
-        announcer: oag_sound::sfx::Announcer::default(),
-        class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
-        rumble: oag_tables::rumble::Library::default(),
         // No title data here either, so no zone-to-stage ladder to fire the
         // class announcer against - the same "not this title" reason `zone`
         // above is `None`.
@@ -436,13 +339,10 @@ fn setup(handling: Handling) -> Setup {
         countdown_voice: false,
         countdown_beat: false,
         launch_hover: None,
-        hull_shake: None,
         hover_rig: None,
         craft_laws: None,
         autopilot_engine: oag_title::autopilot_engine::MEASURED,
         opponent_autopilot: false,
-        zoom_ring: None,
-        zoom_borrowed: false,
         weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
         blast_push: oag_title::weapons::BlastPush::Posted,
@@ -471,7 +371,7 @@ fn setup(handling: Handling) -> Setup {
         // needs a pickup to exist.
         weapons: None,
         // No restriction - the same "empty is no override" state every
-        // non-2048 race is in. See `Setup::allowed_weapons`'s own doc
+        // non-2048 race is in. See `SimSetup::allowed_weapons`'s own doc
         // comment.
         weapon_ai: None,
         allowed_weapons: Vec::new(),
@@ -481,17 +381,124 @@ fn setup(handling: Handling) -> Setup {
         // capture aids with nothing to say here.
         pose_override: None,
         field_poses: Vec::new(),
-        capture_hud: None,
-        now_playing: None,
-        world_clock_offset: 0.0,
-        gantry_seconds: None,
-        camera_override: None,
         // The identity, so every assertion below is about the force law and
         // not about a scale. This is also what a race gets when the
         // engine-wide file is unreadable.
         class_gravity_scale: 1.0,
         start_boost: None,
         pilot_assist: Default::default(),
+        capture_zone: None,
+    }
+}
+
+/// The view half of [`setup`]'s race: what its tests draw with.
+pub(crate) fn fixture_view() -> ViewSetup {
+    ViewSetup {
+        airbrake_graphics: oag_gameplay::AirbrakeGraphics {
+            amount: 0.4363323,
+            up_speed: 30.0,
+            down_speed: 30.0,
+        },
+        // Not HD's tube: these tests drive the PSP ribbon and physics.
+        hd_trail: None,
+        ps2_trail: false,
+        // Pulse's own palette - these tests build a synthetic Pulse fixture.
+        shield_palette: oag_render::shield::PULSE_PALETTE,
+        shield_targets: Vec::new(),
+        // Pulse's own mechanism, same reasoning as `shield_palette` above.
+        hd_plasma_blast: false,
+        disruptor_halo_law: None,
+        disruptor_craft_law: None,
+        plasma_blast_law: oag_pulse::race::WEAPON_MODELS
+            .plasma_blast_pulse
+            .map(|blast| blast.law),
+        hd_bomb_blast: false,
+        hd_missile_blast: false,
+        bomb_shockwave_fades: false,
+        pulse_laid_pose: false,
+        laid_pose_scaled: false,
+        screen_flash: false,
+        quake_flash: false,
+        absorb_burst: None,
+        absorb_anchors: Vec::new(),
+        hit_spark_anchors: Vec::new(),
+        weapon_spark_anchors: Vec::new(),
+        cockpit_hit_noise: None,
+        wreck_anchors: Vec::new(),
+        wreck_shockwave: true,
+        magstrip_wake: None,
+        magstrip_pob: false,
+        leach_strip: None,
+        missile_trail: None,
+        wingtip: None,
+        destroy_stations: Vec::new(),
+        intro_camera: None,
+        intro_voice: None,
+        trail_sparks: false,
+        request: None,
+        campaign_event: false,
+        spark_anchors: Vec::new(),
+        // The nearer external view, deliberately a *different* set of round
+        // numbers from `chase`: a test that cycles to it and back has to be
+        // able to tell the two apart. Note these go into `ViewSetup` already
+        // converted, so unlike a real load no `chase_params` scale or sign
+        // flip is applied to them.
+        chase_close: ChaseParams {
+            fov: 50.0,
+            lookat_height: 1.0,
+            lookat_length: 10.0,
+            pos_height: 1.0,
+            pos_length: 4.0,
+            spring_horiz: 4.0,
+            spring_vert: 2.0,
+            craft_scale: 1.0,
+            view_sheared: false,
+        },
+        // The cockpit view. `length` positive puts the eye ahead of the
+        // craft's origin, which is the sign the original's own measured
+        // sample pins - see `oag_render::camera::internal`.
+        internal: InternalParams {
+            fov: 65.0,
+            headtilt: Some(3.0),
+            height: 1.0,
+            length: 5.0,
+            pitch: 0.0,
+        },
+        // A synthetic setup has no ship model, so no locators either. The
+        // exhaust still ticks; it just has nowhere to be drawn, which is the
+        // same path a model with no `Engine Flare` node takes. Sparks
+        // likewise fall back to anchoring at the contact point.
+        nozzles: vec![None; MAX_SHIPS],
+        engine_lights: vec![None; MAX_SHIPS],
+        spu_vertex_lights: true,
+        hull_points: oag_mesh::mesh_render::HullPointLights::none(),
+        collision_fx: Vec::new(),
+        scenery_fx: Default::default(),
+        // No disc, so no `.pob` at all: every effect trigger runs and
+        // draws nothing, which is the same path a missing entry takes.
+        // A headless test that wants real particles parses a blob itself
+        // and inserts it here.
+        effects: psys::Library::new(),
+        handles: Default::default(),
+        // No disc, so no banks: a headless race raises its cues and plays none
+        // of them, which is the same path a source with no sound banks takes.
+        sounds: oag_sound::sfx::Banks::default(),
+        // No circuit `.vex` either, so no authored ambience - the same path a
+        // Zone circuit takes, which authors none of the three audio classes.
+        track_emitters: oag_sound::sfx::TrackEmitters::default(),
+        // Same path: no title data, so no ladder, so nothing decodes.
+        announcer: oag_sound::sfx::Announcer::default(),
+        class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
+        rumble: oag_tables::rumble::Library::default(),
+        hull_shake: None,
+        zoom_ring: None,
+        zoom_borrowed: false,
+        capture_hud: None,
+        now_playing: None,
+        world_clock_offset: 0.0,
+        gantry_seconds: None,
+        camera_override: None,
+        sight: Sighting::default(),
     }
 }
 
@@ -529,7 +536,7 @@ fn pad_at(at: Vec3, half: f32) -> oag_vex::pads::PadVolume {
 /// Applied to the fixtures that drive rather than to `setup`, so a test *about*
 /// the rescue still gets one - see `race/tests/respawn.rs`.
 fn without_player_rescue(mut race: Race) -> Race {
-    race.sim.player_rescue_distance = f32::INFINITY;
+    race.core.sim.player_rescue_distance = f32::INFINITY;
     race
 }
 
@@ -548,7 +555,11 @@ fn race_with_pads(mode: Mode, pads: Vec<oag_vex::pads::PadVolume>) -> Race {
     let mut setup = setup(handling);
     setup.mode = mode;
     setup.speedup_pads = pads;
-    without_player_rescue(Race::start(setup))
+    without_player_rescue(Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ))
 }
 
 /// A pad big enough to hold the ship wherever `spawn_pose` puts it, so the
@@ -568,6 +579,8 @@ pub(super) fn race_with_a_grid() -> Race {
 /// the way a load hands it.
 pub(super) fn race_with_a_grid_sighted(sight: Sighting) -> Race {
     let mut setup = setup(hulled_handling());
+    let mut view = fixture_view();
+    view.sight = sight;
     setup.sight = sight;
     setup.mode = Mode::SingleRace;
     setup.start_position = Some(oag_vex::track::StartPosition {
@@ -580,7 +593,7 @@ pub(super) fn race_with_a_grid_sighted(sight: Sighting) -> Race {
     // one's craft have no engine, so nothing here reaches the end of the straight
     // - and the opponent-rescue tests built on it assert that slot 0 was *not*
     // recovered, which is worth nothing if slot 0's recovery is switched off.
-    Race::start(setup)
+    Race::start(setup, view, crate::extensions::Prepared::default())
 }
 
 /// The reticle a title's sight dialect gives a race, as a load builds it.
@@ -709,7 +722,11 @@ fn race_with_weapon_table(
     setup.weapon_pads = pads;
     setup.weapons = Some(table);
     setup.weapon_pad_refresh = refresh;
-    without_player_rescue(Race::start(setup))
+    without_player_rescue(Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ))
 }
 
 /// The Rocket's own fixture. Invented numbers, all distinct, and the four
@@ -998,7 +1015,7 @@ fn plane(
     )
 }
 
-fn setup_with(handling: Handling, colliders: Vec<oag_physics::TriangleSoup>) -> Setup {
+fn setup_with(handling: Handling, colliders: Vec<oag_physics::TriangleSoup>) -> SimSetup {
     let mut setup = setup(handling);
     for c in colliders {
         setup.collision.push(c);

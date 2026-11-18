@@ -40,7 +40,7 @@ fn started() -> Option<Race> {
         "the loader reports a 25 s flyby: {:?}",
         loaded.report
     );
-    Some(Race::start(loaded.setup))
+    Some(Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 fn cross() -> PlayerInputs {
@@ -62,7 +62,7 @@ fn the_flyby_runs_its_course_and_leaves_the_world_alone() {
     );
     assert!(race.begin_intro());
     assert!(!race.hud_shown());
-    let before = race.sim.state_hash();
+    let before = race.core.sim.state_hash();
     let mut ticks = 0u32;
     while race.in_intro() {
         let key = race.motion_tick();
@@ -80,8 +80,12 @@ fn the_flyby_runs_its_course_and_leaves_the_world_alone() {
         ticks,
         oag_pulse::pre_race::PRE_RACE.hold_ticks.value + 1500 + 1
     );
-    assert_eq!(race.sim.state_hash(), before, "the flyby stepped the world");
-    assert_eq!(race.sim.world.tick, 0);
+    assert_eq!(
+        race.core.sim.state_hash(),
+        before,
+        "the flyby stepped the world"
+    );
+    assert_eq!(race.core.sim.world.tick, 0);
     assert!(!race.hud_shown(), "the HUD waits out the fade");
     for _ in 0..u64::from(oag_pulse::pre_race::PRE_RACE.hud_delay_ticks.value) {
         assert!(!race.hud_shown());
@@ -121,7 +125,7 @@ fn the_scenery_clock_runs_through_the_flyby_and_its_end_washes_white() {
     for _ in 0..300 {
         race.tick_intro(&PlayerInputs::none());
     }
-    assert_eq!(race.sim.world.tick, 0, "the world is held");
+    assert_eq!(race.core.sim.world.tick, 0, "the world is held");
     assert_eq!(
         race.clock_seconds(),
         0.0,

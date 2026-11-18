@@ -40,7 +40,7 @@ pub struct RaceFrame<'a> {
     pub mod_craft: [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS],
     /// Each grid slot's team name, for HD's crossfaded engine table.
     pub slot_teams: [Option<&'a str>; oag_gameplay::MAX_SHIPS],
-    /// The grid slot this machine's speakers are for (`Race::player_slot`): its
+    /// The grid slot this machine's speakers are for (`SimRace::player_slot`): its
     /// own craft's cues play dry, its engine is the player's, and the other
     /// slots are heard positionally.
     pub player_slot: usize,

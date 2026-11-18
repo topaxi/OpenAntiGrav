@@ -81,8 +81,12 @@ fn what_the_jumps_approach_looks_like() {
         ..race::Options::default()
     })
     .expect("loading 13_Track");
-    let probe = race::Race::start(loaded.setup.clone());
-    let line = probe.sim.racing_line();
+    let probe = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
+    let line = probe.core.sim.racing_line();
     println!("\ncurvature (span 4.0) and corridor by index, 0..55 on {TRACK_ID}:");
     for index in 0..55 {
         let aim = line.aim(index, 0.0);
@@ -103,12 +107,16 @@ fn what_the_jumps_approach_looks_like() {
             lateral_accel: oag_ai::Tuning::default().lateral_accel * grip,
             ..novice
         };
-        let mut race = race::Race::start(loaded.setup.clone());
-        race.sim.set_ai_tuning(tuning);
+        let mut race = race::Race::start(
+            loaded.setup.clone(),
+            loaded.view.clone(),
+            loaded.modules.clone(),
+        );
+        race.core.sim.set_ai_tuning(tuning);
         for slot in 2..8 {
-            race.sim.world.ships[slot].active = false;
+            race.core.sim.world.ships[slot].active = false;
         }
-        race.sim.world.ships[0].active = false;
+        race.core.sim.world.ships[0].active = false;
 
         let mut seen = [false; 30];
         let mut logged = 0usize;
@@ -121,7 +129,7 @@ fn what_the_jumps_approach_looks_like() {
         println!("\ngrip_believed {grip}: speed by index, first pass through 0..26:");
         for _tick in 0..18_000 {
             race.tick(&PlayerInputs::none());
-            let ship = &race.sim.world.ships[LONE];
+            let ship = &race.core.sim.world.ships[LONE];
             let index = ship.driver.index as usize;
             if index < 5 {
                 started = true;
@@ -136,7 +144,7 @@ fn what_the_jumps_approach_looks_like() {
                 );
                 logged += 1;
             }
-            if (started && index >= 26) || race.sim.respawns_of(LONE) > 0 {
+            if (started && index >= 26) || race.core.sim.respawns_of(LONE) > 0 {
                 break;
             }
         }
@@ -151,25 +159,29 @@ fn what_the_jumps_approach_looks_like() {
 /// `liftoff_speed` is the forward speed at the first tick the driver is found
 /// airborne and `first_landing_index` is the driver-line index where the
 /// first airborne window ends.
-fn run_grip(setup: &race::Setup, grip: f32) -> (u32, u32, f32, u32) {
+fn run_grip(setup: &race::SimSetup, grip: f32) -> (u32, u32, f32, u32) {
     let novice = oag_ai::Difficulty::Novice.tune(&oag_ai::Tuning::default());
     let tuning = oag_ai::Tuning {
         lateral_accel: oag_ai::Tuning::default().lateral_accel * grip,
         ..novice
     };
-    let mut race = race::Race::start(setup.clone());
-    race.sim.set_ai_tuning(tuning);
+    let mut race = race::Race::start(
+        setup.clone(),
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
+    race.core.sim.set_ai_tuning(tuning);
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
 
     let mut liftoff_speed = -1.0f32;
     let mut landing_index = 0u32;
     let mut was_airborne = false;
     for _tick in 0..18_000u32 {
         race.tick(&PlayerInputs::none());
-        let ship = &race.sim.world.ships[LONE];
+        let ship = &race.core.sim.world.ships[LONE];
         let airborne_now = ship.physics.time_airborne > 0.0;
         if airborne_now && !was_airborne && liftoff_speed < 0.0 {
             let forward = ship.physics.body.forward();
@@ -179,13 +191,13 @@ fn run_grip(setup: &race::Setup, grip: f32) -> (u32, u32, f32, u32) {
             landing_index = ship.driver.index;
         }
         was_airborne = airborne_now;
-        if race.sim.respawns_of(LONE) > 0 {
+        if race.core.sim.respawns_of(LONE) > 0 {
             break;
         }
     }
     (
-        race.sim.respawns_of(LONE),
-        race.sim.world.ships[LONE].standing.lap,
+        race.core.sim.respawns_of(LONE),
+        race.core.sim.world.ships[LONE].standing.lap,
         liftoff_speed,
         landing_index,
     )
@@ -281,8 +293,8 @@ fn flight_row(
     slot: usize,
     previous: Option<oag_core::math::Vec3>,
 ) -> String {
-    let line = race.sim.racing_line();
-    let ship = &race.sim.world.ships[slot];
+    let line = race.core.sim.racing_line();
+    let ship = &race.core.sim.world.ships[slot];
     let index = ship.driver.index as usize;
     let here = line.point(index);
     let tangent = (line.point(index + 1) - here).normalize();
@@ -296,7 +308,7 @@ fn flight_row(
     let accel = previous.map_or(oag_core::math::Vec3::ZERO, |was| (velocity - was) * 60.0);
     format!(
         "{label},{},{slot},{index},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.3},{:.3},{:.3},{:.3},{:.2},{:.3},{:.2},{:.2},{:.2},{:.2},{},{}",
-        race.sim.world.tick,
+        race.core.sim.world.tick,
         arcs[index] + along,
         body.position.y,
         body.position.y - here.y,
@@ -317,7 +329,7 @@ fn flight_row(
         accel.y,
         ship.physics.brake,
         ship.physics.wall_contact_prev,
-        race.sim.respawns_of(slot),
+        race.core.sim.respawns_of(slot),
     )
 }
 
@@ -350,17 +362,17 @@ fn the_jump_flown_tick_by_tick() {
 
     println!("{FLIGHT_HEADER}");
     let novice = race::load(&options(oag_ai::Difficulty::Novice)).expect("loading 13_Track");
-    let mut lone = race::Race::start(novice.setup);
+    let mut lone = race::Race::start(novice.setup, novice.view, novice.modules);
     for slot in (0..8).filter(|&slot| slot != LONE) {
-        lone.sim.world.ships[slot].active = false;
+        lone.core.sim.world.ships[slot].active = false;
     }
-    let arcs = arc_lengths(lone.sim.racing_line());
+    let arcs = arc_lengths(lone.core.sim.racing_line());
     log_first_passes("novice", &mut lone, &arcs, &[LONE], 18_000);
 
     let field = race::load(&options(race::Options::default().difficulty)).expect("loading");
-    let mut parked = race::Race::start(field.setup);
+    let mut parked = race::Race::start(field.setup, field.view, field.modules);
     assert!(
-        parked.sim.use_original_ai(None, 1),
+        parked.core.sim.use_original_ai(None, 1),
         "VENOM's AI tables read"
     );
     let slots: Vec<usize> = (1..8).collect();
@@ -381,16 +393,16 @@ fn log_first_passes(label: &str, race: &mut race::Race, arcs: &[f32], slots: &[u
             if done[slot] {
                 continue;
             }
-            let index = race.sim.world.ships[slot].driver.index as usize;
+            let index = race.core.sim.world.ships[slot].driver.index as usize;
             let inside = (10..70).contains(&index);
             if inside {
                 entered[slot] = true;
             }
-            if entered[slot] && (inside || race.sim.respawns_of(slot) > 0) {
+            if entered[slot] && (inside || race.core.sim.respawns_of(slot) > 0) {
                 println!("{}", flight_row(label, race, arcs, slot, previous[slot]));
             }
-            previous[slot] = Some(race.sim.world.ships[slot].physics.body.linear_velocity);
-            if race.sim.respawns_of(slot) > 0 {
+            previous[slot] = Some(race.core.sim.world.ships[slot].physics.body.linear_velocity);
+            if race.core.sim.respawns_of(slot) > 0 {
                 after_respawn[slot] += 1;
             }
             if entered[slot] && (index >= 70 || after_respawn[slot] > 60) {
@@ -405,7 +417,7 @@ fn log_first_passes(label: &str, race: &mut race::Race, arcs: &[f32], slots: &[u
 
 /// Loads the parked-player scenario `the_jump_flown_tick_by_tick` runs: the
 /// original driver's field of seven, VENOM, seed 1, single race.
-fn parked_field() -> Option<(race::Setup, race::Race)> {
+fn parked_field() -> Option<(race::SimSetup, race::Race)> {
     let entry = entry_for(TRACK_ID)?;
     let image = image()?;
     let loaded = race::load(&race::Options {
@@ -417,8 +429,15 @@ fn parked_field() -> Option<(race::Setup, race::Race)> {
         ..race::Options::default()
     })
     .expect("loading 13_Track");
-    let mut race = race::Race::start(loaded.setup.clone());
-    assert!(race.sim.use_original_ai(None, 1), "VENOM's AI tables read");
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
+    assert!(
+        race.core.sim.use_original_ai(None, 1),
+        "VENOM's AI tables read"
+    );
     Some((loaded.setup, race))
 }
 
@@ -450,20 +469,21 @@ fn the_parked_field_is_put_back_where_the_original_puts_it() {
         // tick ends. Rebuilt from outside, a slowed craft read 0.15 u/s short
         // a tick (2026-10-19, once opponents absorbed). The latch itself is
         // `breadcrumbs::tests::the_launch_speed_latches_on_every_fully_grounded_tick`'s.
-        let launch: [f32; 8] = std::array::from_fn(|slot| race.sim.reset_launch_speed_of(slot));
+        let launch: [f32; 8] =
+            std::array::from_fn(|slot| race.core.sim.reset_launch_speed_of(slot));
         race.tick(&PlayerInputs::none());
         for (slot, seen) in seen.iter_mut().enumerate().skip(1) {
-            let ship = &race.sim.world.ships[slot];
-            if race.sim.respawns_of(slot) == *seen {
+            let ship = &race.core.sim.world.ships[slot];
+            if race.core.sim.respawns_of(slot) == *seen {
                 continue;
             }
-            *seen = race.sim.respawns_of(slot);
+            *seen = race.core.sim.respawns_of(slot);
             let index = ship.driver.index as usize;
             assert!(
                 (2936..=2955).contains(&index),
                 "slot {slot} was put back at line row {index}, the original at 2938-2953"
             );
-            let line = race.sim.racing_line();
+            let line = race.core.sim.racing_line();
             let velocity = ship.physics.body.linear_velocity;
             let along = (line.point(index + 1) - line.point(index)).normalize();
             let want = launch[slot];
@@ -499,7 +519,7 @@ fn the_parked_field_at_the_jump() {
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(1.0);
-    for ship in &mut race.sim.world.ships {
+    for ship in &mut race.core.sim.world.ships {
         ship.handling.physical.flight_gravity *= scale;
     }
     println!("flight_gravity scale {scale}");
@@ -509,18 +529,19 @@ fn the_parked_field_at_the_jump() {
     for _ in 0..9_000 {
         race.tick(&PlayerInputs::none());
         for slot in 1..8 {
-            let ship = &race.sim.world.ships[slot];
-            let respawns = race.sim.respawns_of(slot);
+            let ship = &race.core.sim.world.ships[slot];
+            let respawns = race.core.sim.respawns_of(slot);
             if respawns > counts[slot] {
                 counts[slot] = respawns;
                 let cause = race
+                    .core
                     .sim
                     .last_respawn_cause_of(slot)
                     .map_or("?", |cause| cause.label());
                 let (lost, speed, y) = before[slot];
                 println!(
                     "{},{slot},{cause},{lost},{},{speed:.2},{y:.2},{:.2}",
-                    race.sim.world.tick, ship.driver.index, ship.physics.body.position.y,
+                    race.core.sim.world.tick, ship.driver.index, ship.physics.body.position.y,
                 );
             }
             before[slot] = (
@@ -535,7 +556,10 @@ fn the_parked_field_at_the_jump() {
          flight_gravity now {}",
         &counts[1..],
         counts.iter().sum::<u32>(),
-        race.sim.world.ships[3].handling.physical.flight_gravity,
+        race.core.sim.world.ships[3]
+            .handling
+            .physical
+            .flight_gravity,
     );
 }
 
@@ -554,7 +578,7 @@ fn the_far_lip_face() {
     let Some((setup, race)) = parked_field() else {
         return;
     };
-    let line = race.sim.racing_line();
+    let line = race.core.sim.racing_line();
     let arcs = arc_lengths(line);
     println!("down casts: idx,arc,line_y,surface_y,normal,surface");
     for index in (10..60).step_by(2) {
@@ -578,7 +602,8 @@ fn the_far_lip_face() {
     }
     let flagged: Vec<usize> = (0..line.len())
         .filter(|&index| {
-            race.sim
+            race.core
+                .sim
                 .ai_sample(index)
                 .is_some_and(|sample| sample.flags & 1 != 0)
         })
@@ -596,7 +621,7 @@ fn the_far_lip_face() {
         line.len(),
     );
     for index in (0..70).step_by(5) {
-        if let Some(sample) = race.sim.ai_sample(index) {
+        if let Some(sample) = race.core.sim.ai_sample(index) {
             println!(
                 "  idx {index}: flags {:#04x} half_width {:.2}/{:.2} ai_bound {:.2}/{:.2} line {:.2}",
                 sample.flags,
@@ -676,15 +701,17 @@ fn the_flag_bit_zero_census() {
         }) else {
             continue;
         };
-        let race = race::Race::start(loaded.setup);
-        let line = race.sim.racing_line();
+        let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+        let line = race.core.sim.racing_line();
         let flagged = runs_of(line.len(), |index| {
-            race.sim
+            race.core
+                .sim
                 .ai_sample(index)
                 .is_some_and(|sample| sample.flags & 1 != 0)
         });
         let other = runs_of(line.len(), |index| {
-            race.sim
+            race.core
+                .sim
                 .ai_sample(index)
                 .is_some_and(|sample| sample.flags & !1 != 0)
         });
@@ -716,13 +743,13 @@ fn the_pad_before_the_jump() {
     };
     const ROW: usize = 3073;
     let lateral_at = |race: &race::Race, index: usize, position: oag_core::math::Vec3| {
-        race.sim.ai_sample(index).map_or(f32::NAN, |sample| {
+        race.core.sim.ai_sample(index).map_or(f32::NAN, |sample| {
             let axis = oag_core::math::Vec3::from_array(sample.lateral).normalize();
             (position - oag_core::math::Vec3::from_array(sample.pos)).dot(axis)
         })
     };
-    let line = race.sim.racing_line();
-    for (n, pad) in race.sim.speedup_pads().iter().enumerate() {
+    let line = race.core.sim.racing_line();
+    for (n, pad) in race.core.sim.speedup_pads().iter().enumerate() {
         let centre =
             oag_core::math::Vec3::new(pad.to_world[12], pad.to_world[13], pad.to_world[14]);
         let index = line.nearest(centre, 0, line.len());
@@ -740,22 +767,22 @@ fn the_pad_before_the_jump() {
     let mut pending = [None::<(u64, f32)>; 8];
     for _ in 0..9_000 {
         race.tick(&PlayerInputs::none());
-        let places = race.places();
+        let places = race.core.places();
         for slot in 1..8 {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             let index = ship.driver.index;
             let speed = ship.physics.body.linear_velocity.length();
             if let Some((at, was)) = pending[slot]
-                && race.sim.world.tick == at + 20
+                && race.core.sim.world.tick == at + 20
             {
                 println!("gain,{slot},{at},{:.1}", speed - was);
                 pending[slot] = None;
             }
             if before[slot].0 < ROW as u32 && index >= ROW as u32 && index < ROW as u32 + 30 {
-                pending[slot] = Some((race.sim.world.tick, before[slot].1));
+                pending[slot] = Some((race.core.sim.world.tick, before[slot].1));
                 println!(
                     "{},{slot},{},{:.2},{:.1},{:.1},{:.3},{}",
-                    race.sim.world.tick,
+                    race.core.sim.world.tick,
                     ship.standing.lap,
                     lateral_at(&race, index as usize, ship.physics.body.position),
                     before[slot].1,

@@ -1,5 +1,5 @@
 //! The original's own opponent (`oag_ai::original`), rubber banding included,
-//! flown on each craft's own team's physics (`Setup::opponent_handling`; the
+//! flown on each craft's own team's physics (`SimSetup::opponent_handling`; the
 //! controller reads no handling, the step does): the AI every race with
 //! opponents flies by default, until this project's
 //! own driver (`oag_ai::Driver`) is solid.

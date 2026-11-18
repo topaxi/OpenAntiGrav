@@ -33,15 +33,15 @@ fn started() -> Option<Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(Race::start(loaded.setup))
+    Some(Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 fn height(race: &Race) -> f32 {
-    race.ship().physics.body.position.y - FLOOR_Y
+    race.core.ship().physics.body.position.y - FLOOR_Y
 }
 
 fn run_to(race: &mut Race, tick: u64) {
-    while race.sim.world.tick < tick {
+    while race.core.sim.world.tick < tick {
         race.tick(&PlayerInputs::none());
     }
 }

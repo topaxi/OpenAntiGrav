@@ -19,7 +19,7 @@
 //! contact of a solo run:
 //!
 //! - `plan`: per route, whether its reference plan verified, the physics steps
-//!   it took (`Race::plan_steps`), the steps each other hull's adaptation took,
+//!   it took (`SimRace::plan_steps`), the steps each other hull's adaptation took,
 //!   and the wall clock of learning every plan of the race.
 //! - `solo`: per route, one craft alone, forced down it at every visit (the
 //!   coin's draw overwritten), as slot 0 (the player's hull, the plans'
@@ -93,8 +93,9 @@ fn difficulty() -> oag_ai::Difficulty {
 /// race's own level, as an opponent is: the autopilot otherwise flies the
 /// original's driver, which reads no speed plan.
 fn fly_ours(race: &mut race::Race) {
-    race.sim.set_autopilot(true);
-    race.sim
+    race.core.sim.set_autopilot(true);
+    race.core
+        .sim
         .set_autopilot_tuning(difficulty().tune(&oag_ai::Tuning::default()));
 }
 
@@ -203,7 +204,7 @@ fn circuits_omega() -> Vec<Circuit> {
     }]
 }
 
-fn load(circuit: &Circuit, class: &str, seed: u64) -> Option<race::Setup> {
+fn load(circuit: &Circuit, class: &str, seed: u64) -> Option<race::SimSetup> {
     let loaded = race::load(&race::Options {
         source: circuit.source.clone(),
         mode: oag_race::Mode::SingleRace,
@@ -231,9 +232,13 @@ fn load(circuit: &Circuit, class: &str, seed: u64) -> Option<race::Setup> {
 
 /// A race on `setup` driving `plans`' plans: the simulation copied before
 /// the first tick, so nothing is learned again.
-fn with_plans(setup: &race::Setup, plans: &race::Race) -> race::Race {
-    let mut race = race::Race::start(setup.clone());
-    race.sim = plans.sim.clone();
+fn with_plans(setup: &race::SimSetup, plans: &race::Race) -> race::Race {
+    let mut race = race::Race::start(
+        setup.clone(),
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
+    race.core.sim = plans.core.sim.clone();
     race
 }
 
@@ -256,9 +261,9 @@ struct Watch {
 /// it and timing from the switch index to the merge on the ring instead, see
 /// [`solo`].
 fn watch(race: &race::Race, slot: usize, tick: u32, w: &mut Watch, tally: &mut [Tally]) {
-    let route = race.sim.world.ships[slot].driver.branching.route;
-    let contacts = race.sim.wall_contact_ticks_of(slot);
-    let respawns = race.sim.respawns_of(slot);
+    let route = race.core.sim.world.ships[slot].driver.branching.route;
+    let contacts = race.core.sim.wall_contact_ticks_of(slot);
+    let respawns = race.core.sim.respawns_of(slot);
     match w.open {
         None if route != 0 => w.open = Some((route, tick, contacts, respawns)),
         Some((line, from, c0, r0)) if route != line => {
@@ -275,41 +280,43 @@ fn watch(race: &race::Race, slot: usize, tick: u32, w: &mut Watch, tally: &mut [
 
 /// One craft alone in `slot`, sent down route `want` (`k + 1`) at every visit
 /// to its fork.
-fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tally {
+fn solo(setup: &race::SimSetup, plans: &race::Race, slot: usize, want: u16) -> Tally {
     let mut race = with_plans(setup, plans);
-    let count = race.sim.ship_count() as usize;
+    let count = race.core.sim.ship_count() as usize;
     for other in 0..count {
         if other != slot {
-            race.sim.world.ships[other].active = false;
+            race.core.sim.world.ships[other].active = false;
         }
     }
     if slot == 0 {
         fly_ours(&mut race);
     }
     let course = race
+        .core
         .sim
         .course()
         .expect("a forked circuit has a course")
         .clone();
     let pre_fork = course.routes()[usize::from(want - 1)].pre_fork;
-    let mut tally = vec![Tally::default(); race.sim.route_count() + 1];
+    let mut tally = vec![Tally::default(); race.core.sim.route_count() + 1];
     let mut w = Watch { open: None };
     for tick in 0..SOLO_TICKS {
         {
-            let branching = &mut race.sim.world.ships[slot].driver.branching;
+            let branching = &mut race.core.sim.world.ships[slot].driver.branching;
             if branching.route == 0 && branching.decided_at == pre_fork + 1 {
                 branching.pending = want;
             }
         }
-        let before = race.sim.wall_contact_ticks_of(slot);
+        let before = race.core.sim.wall_contact_ticks_of(slot);
         race.tick(&PlayerInputs::none());
         if std::env::var_os("OAG_ROUTE_BOARD_WHERE").is_some()
-            && race.sim.wall_contact_ticks_of(slot) > before
+            && race.core.sim.wall_contact_ticks_of(slot) > before
         {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             let speed = ship.physics.body.linear_velocity.length();
             let (route, index) = (ship.driver.branching.route, ship.driver.index);
             let target = race
+                .core
                 .plan_of(slot)
                 .map_or(f32::INFINITY, |p| p.target(index as usize));
             emit(&format!(
@@ -317,7 +324,7 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
             ));
         }
         if std::env::var_os("OAG_ROUTE_BOARD_WHERE").is_some() && tick % 300 == 0 {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             emit(&format!(
                 "at\tslot{slot}\ttick={tick}\troute={}\tindex={}\tlap={}\tspeed={:.1}\tstate={:?}\trespawns={}",
                 ship.driver.branching.route,
@@ -325,11 +332,11 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
                 ship.standing.lap,
                 ship.physics.body.linear_velocity.length(),
                 ship.physics.craft_state,
-                race.sim.respawns_of(slot),
+                race.core.sim.respawns_of(slot),
             ));
         }
         if std::env::var_os("OAG_ROUTE_BOARD_WHERE").is_some() {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             let route = ship.driver.branching.route;
             if w.open.map(|o| o.0) != (route != 0).then_some(route) {
                 emit(&format!(
@@ -345,8 +352,8 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
         if tally[usize::from(want)].visits as usize >= VISITS {
             break;
         }
-        if race.sim.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing {
-            let ship = &race.sim.world.ships[slot];
+        if race.core.sim.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing {
+            let ship = &race.core.sim.world.ships[slot];
             emit(&format!(
                 "ended\tslot{slot}\ttick={tick}\tstate={:?}\troute={}\tindex={}\tlap={}",
                 ship.physics.craft_state,
@@ -360,11 +367,11 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
     tally.swap_remove(usize::from(want))
 }
 
-fn field(setup: &race::Setup, plans: &race::Race) -> (Vec<Tally>, Vec<u32>, u32) {
+fn field(setup: &race::SimSetup, plans: &race::Race) -> (Vec<Tally>, Vec<u32>, u32) {
     let mut race = with_plans(setup, plans);
     fly_ours(&mut race);
-    let count = race.sim.ship_count() as usize;
-    let mut tally = vec![Tally::default(); race.sim.route_count() + 1];
+    let count = race.core.sim.ship_count() as usize;
+    let mut tally = vec![Tally::default(); race.core.sim.route_count() + 1];
     let mut watches: Vec<Watch> = (0..count).map(|_| Watch { open: None }).collect();
     for tick in 0..FIELD_TICKS {
         race.tick(&PlayerInputs::none());
@@ -373,10 +380,12 @@ fn field(setup: &race::Setup, plans: &race::Race) -> (Vec<Tally>, Vec<u32>, u32)
         }
     }
     let laps = (0..count)
-        .map(|s| race.sim.world.ships[s].standing.lap)
+        .map(|s| race.core.sim.world.ships[s].standing.lap)
         .collect();
     let wrecked = (0..count)
-        .filter(|&s| race.sim.world.ships[s].physics.craft_state != oag_physics::CraftState::Racing)
+        .filter(|&s| {
+            race.core.sim.world.ships[s].physics.craft_state != oag_physics::CraftState::Racing
+        })
         .count() as u32;
     (tally, laps, wrecked)
 }
@@ -394,16 +403,20 @@ fn board_at(circuit: &Circuit, class: &str, seed: u64) {
         let Some(setup) = load(circuit, class, seed) else {
             return;
         };
-        let mut plans = race::Race::start(setup.clone());
-        let routes = plans.sim.route_count();
+        let mut plans = race::Race::start(
+            setup.clone(),
+            oag_raceplay::ViewSetup::headless(),
+            oag_raceplay::extensions::Prepared::default(),
+        );
+        let routes = plans.core.sim.route_count();
         if routes == 0 {
             emit(&format!("noforks\t{}\t{class}\t{seed}", circuit.label));
             return;
         }
         let started = Instant::now();
-        let steps = plans.plan_steps().clone();
+        let steps = plans.core.plan_steps().clone();
         let seconds = started.elapsed().as_secs_f64();
-        let ring = plans.speed_plan().is_some();
+        let ring = plans.core.speed_plan().is_some();
         for k in 0..routes {
             let hulls: Vec<String> = steps
                 .hull_routes
@@ -473,7 +486,7 @@ fn route_plan_board() {
 
 /// Where a route's reference plan fails its verification: per circuit
 /// (`OAG_ROUTE_BOARD_ONLY`), class and seed, each route's learning report and
-/// every failure tick of its verification replayed (`Race::probe_route_plan`),
+/// every failure tick of its verification replayed (`SimRace::probe_route_plan`),
 /// with the line index read as ring or route sample. `OAG_ROUTE_PROBE_DUMP`
 /// names a directory that gets every tick of every route as a TSV;
 /// `OAG_ROUTE_PROBE_STAGES=<tick>` re-steps that verification tick stage by
@@ -507,11 +520,15 @@ fn route_verify_probe() {
                 let Some(setup) = load(circuit, &class, seed) else {
                     continue;
                 };
-                let mut race = race::Race::start(setup);
+                let mut race = race::Race::start(
+                    setup,
+                    oag_raceplay::ViewSetup::headless(),
+                    oag_raceplay::extensions::Prepared::default(),
+                );
                 if std::env::var_os("OAG_ROUTE_PROBE_RING").is_some()
                     && std::env::var_os("OAG_ROUTE_PROBE_FLOOR").is_none()
                 {
-                    let probe = race.probe_ring_plan(var_u32("OAG_ROUTE_PROBE_STUCK"));
+                    let probe = race.core.probe_ring_plan(var_u32("OAG_ROUTE_PROBE_STUCK"));
                     report_route(
                         &race,
                         &circuit.label,
@@ -523,12 +540,13 @@ fn route_verify_probe() {
                     );
                     continue;
                 }
-                for k in 0..race.sim.route_count() {
+                for k in 0..race.core.sim.route_count() {
                     let at = std::env::var("OAG_ROUTE_PROBE_STAGES")
                         .ok()
                         .and_then(|t| t.parse().ok());
                     let Some(probe) =
-                        race.probe_route_plan(k, at, var_u32("OAG_ROUTE_PROBE_STUCK"))
+                        race.core
+                            .probe_route_plan(k, at, var_u32("OAG_ROUTE_PROBE_STUCK"))
                     else {
                         continue;
                     };
@@ -634,7 +652,7 @@ fn report_route(
             use oag_physics::{Ray, Raycaster};
             let along = start.velocity.normalize_or_zero();
             let mut out = [None; 8];
-            let count = race.sim.collision().raycast_all(
+            let count = race.core.sim.collision().raycast_all(
                 Ray::new(start.position, along, 30.0),
                 None,
                 true,
@@ -711,7 +729,7 @@ fn floor_along(
     for i in from..to.min(probe.line.len()) {
         let p = probe.line.point(i);
         let mut out = [None; 8];
-        let count = race.sim.collision().raycast_all(
+        let count = race.core.sim.collision().raycast_all(
             Ray::new(p + Vec3::Y * 30.0, -Vec3::Y, 60.0),
             None,
             true,
@@ -736,20 +754,21 @@ fn floor_along(
             })
             .collect();
         if std::env::var_os("OAG_ROUTE_PROBE_RING").is_some() {
-            let ring = race.sim.racing_line();
+            let ring = race.core.sim.racing_line();
             let (j, d) = (0..ring.len())
                 .map(|j| (j, ring.point(j).distance(p)))
                 .min_by(|a, b| a.1.total_cmp(&b.1))
                 .unwrap_or((0, f32::NAN));
             let q = ring.point(j);
             let ring_path = race
+                .core
                 .sim
                 .ai_sample_index(j)
-                .and_then(|s| race.sim.spline().path_of(s));
+                .and_then(|s| race.core.sim.spline().path_of(s));
             let route_path = probe
                 .order
                 .get(i)
-                .and_then(|&s| race.sim.spline().path_of(s as usize));
+                .and_then(|&s| race.core.sim.spline().path_of(s as usize));
             emit(&format!(
                 "ring\t{label}\troute={k}\t{i}({})\tpaths route {route_path:?} ring {ring_path:?}\tnearest ring {j}\tdistance={d:.1}\tdy={:.1}\tring=({:.1},{:.1},{:.1})",
                 where_on(probe, i as u32),
@@ -761,11 +780,11 @@ fn floor_along(
             continue;
         }
         let spline_index = probe.order.get(i).map_or(0, |&s| s as usize);
-        let sample = race.sim.spline().sample(spline_index);
+        let sample = race.core.sim.spline().sample(spline_index);
         emit(&format!(
             "floor\t{label}\troute={k}\t{i}({})\tspline={spline_index}\tpath={:?}\tsample_y={:.1}\twidth={:?}\tai={:?}\tline_offset={:?}\tsection={:?}\tflags={:?}\tp=({:.1},{:.1},{:.1})\t{}",
             where_on(probe, i as u32),
-            race.sim.spline().path_of(spline_index),
+            race.core.sim.spline().path_of(spline_index),
             sample.map_or(f32::NAN, |s| s.pos[1]),
             sample.map(|s| (s.half_width_left, s.half_width_right)),
             sample.map(|s| (s.ai_bound_left, s.ai_bound_right)),
@@ -796,10 +815,11 @@ fn across(race: &race::Race, label: &str, k: usize, probe: &race::RouteProbe, i:
     let mut row = String::new();
     for o in (-30..=30).step_by(2) {
         let q = p + lateral * o as f32;
-        let hit =
-            race.sim
-                .collision()
-                .raycast(Ray::new(q + Vec3::Y * 6.0, -Vec3::Y, 8.5), None, true);
+        let hit = race.core.sim.collision().raycast(
+            Ray::new(q + Vec3::Y * 6.0, -Vec3::Y, 8.5),
+            None,
+            true,
+        );
         row.push(match hit.map(|h| h.surface) {
             Some(Surface::Wall) => 'W',
             Some(Surface::MagFloor) => 'M',
@@ -849,16 +869,20 @@ fn route_original_probe() {
                 let Some(setup) = load(circuit, &class, seed) else {
                     continue;
                 };
-                let mut race = race::Race::start(setup);
-                for other in 1..race.sim.ship_count() as usize {
-                    race.sim.world.ships[other].active = false;
+                let mut race = race::Race::start(
+                    setup,
+                    oag_raceplay::ViewSetup::headless(),
+                    oag_raceplay::extensions::Prepared::default(),
+                );
+                for other in 1..race.core.sim.ship_count() as usize {
+                    race.core.sim.world.ships[other].active = false;
                 }
                 if std::env::var_os("OAG_ROUTE_BOARD_OURS").is_some() {
                     fly_ours(&mut race);
                 } else {
-                    race.sim.set_autopilot(true);
+                    race.core.sim.set_autopilot(true);
                 }
-                let Some(course) = race.sim.course().cloned() else {
+                let Some(course) = race.core.sim.course().cloned() else {
                     continue;
                 };
                 let Some(pre_fork) = course
@@ -871,19 +895,19 @@ fn route_original_probe() {
                 let label = &circuit.label;
                 for tick in 0..SOLO_TICKS {
                     {
-                        let branching = &mut race.sim.world.ships[0].driver.branching;
+                        let branching = &mut race.core.sim.world.ships[0].driver.branching;
                         if branching.route == 0 && branching.decided_at == pre_fork + 1 {
                             branching.pending = want;
                         }
                     }
                     race.tick(&PlayerInputs::none());
-                    let ship = &race.sim.world.ships[0];
+                    let ship = &race.core.sim.world.ships[0];
                     let route = ship.driver.branching.route;
                     if route == 0 || tick % every != 0 {
                         continue;
                     }
                     let index = ship.driver.index as usize;
-                    let line = race.sim.line_of(0);
+                    let line = race.core.sim.line_of(0);
                     let p = line.point(index);
                     let lateral = line
                         .aim(index, 0.0)
@@ -896,7 +920,7 @@ fn route_original_probe() {
                         b.position.y - p.y,
                         b.linear_velocity.length(),
                         u8::from(ship.physics.time_airborne > 0.0),
-                        race.sim.respawns_of(0),
+                        race.core.sim.respawns_of(0),
                         ship.standing.lap,
                         ship.physics.craft_state,
                     ));

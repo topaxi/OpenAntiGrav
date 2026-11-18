@@ -36,11 +36,11 @@ fn single_race(image: &str, team: Option<&str>) -> Option<race::Loaded> {
 
 /// Lands one hit on the player at `shield` and returns the smokes started.
 fn hit_at(loaded: race::Loaded, shield: f32) -> u32 {
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[0].physics.shield = shield;
+    race.core.sim.world.ships[0].physics.shield = shield;
     race.force_weapon_hit(0);
     race.damage_smokes_started_for_tests()
 }

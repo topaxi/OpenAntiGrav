@@ -91,17 +91,17 @@ fn on_the_starting_grid_a_craft_ahead_reads_ahead_and_centred_and_one_across_doe
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
-    let ships = usize::from(race.sim.world.ship_count).min(AIM_SLOTS);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let ships = usize::from(race.core.sim.world.ship_count).min(AIM_SLOTS);
     assert!(ships >= 4, "a full field: {ships} crafts");
 
     // What the guest must read, from the bodies as the tick begins.
-    let bodies: Vec<_> = race.sim.world.ships[..ships]
+    let bodies: Vec<_> = race.core.sim.world.ships[..ships]
         .iter()
         .map(|ship| ship.physics.body)
         .collect();
     race.tick(&PlayerInputs::none());
-    let read = matrix(race.sim.extension_state(0).expect("the module ran"));
+    let read = matrix(race.core.sim.extension_state(0).expect("the module ran"));
 
     let mut ahead_centred = 0;
     for (o, from) in bodies.iter().enumerate() {
@@ -131,11 +131,11 @@ fn on_the_starting_grid_a_craft_ahead_reads_ahead_and_centred_and_one_across_doe
     // straight ahead of it (60).
     let place = |race: &mut race::Race, ahead: f32, right: f32| {
         // Posed from slot 0's body as the next tick will observe it.
-        let from = race.sim.world.ships[0].physics.body;
-        race.sim.world.ships[1].physics.body.position =
+        let from = race.core.sim.world.ships[0].physics.body;
+        race.core.sim.world.ships[1].physics.body.position =
             from.position + from.forward() * ahead + from.right() * right;
         race.tick(&PlayerInputs::none());
-        matrix(race.sim.extension_state(0).unwrap())[0][1]
+        matrix(race.core.sim.extension_state(0).unwrap())[0][1]
     };
     let across = place(&mut race, 4.0, 40.0);
     assert!(

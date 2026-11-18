@@ -83,10 +83,10 @@ fn a_craft_no_tick_has_located_is_lit_by_the_tunnel_it_stands_in() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading Talon's Junction");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.sim.world.ships[0].physics.body.position = TUNNEL;
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.world.ships[0].physics.body.position = TUNNEL;
     assert_eq!(
-        race.sim.world.ships[0].standing.course_index, None,
+        race.core.sim.world.ships[0].standing.course_index, None,
         "the premise: nothing has located the craft"
     );
     let packed = race.ship_hull_scale(0);

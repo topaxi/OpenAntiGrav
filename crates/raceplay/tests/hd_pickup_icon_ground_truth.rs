@@ -160,11 +160,11 @@ fn a_held_rocket_draws_its_own_icon_sprite_on_a_real_race() {
         .context()
         .expect("HD's arcade layout parses; a context is buildable");
 
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // The same edge `capture::advance_one_tick` writes on, and the reason a
     // `--ticks 0` capture never sees it: the assignment has to land before
     // `Race::tick` reads it into the readout.
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Rocket);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Rocket);
     race.tick(&PlayerInputs::none());
 
     let readout = race.readout();

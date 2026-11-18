@@ -39,7 +39,10 @@ fn started(
     })
     .expect("loading the race");
     let teams = loaded.setup.slot_teams.clone();
-    (Race::start(loaded.setup), teams)
+    (
+        Race::start(loaded.setup, loaded.view, loaded.modules),
+        teams,
+    )
 }
 
 /// `team`'s `<Misc>`, as its own file authors it.
@@ -72,7 +75,7 @@ fn check_pools(
 ) -> usize {
     let mut off_shield = 0;
     for (slot, team) in teams.iter().enumerate() {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         if !ship.active {
             continue;
         }
@@ -172,11 +175,11 @@ fn pools_in(
 ) -> (usize, Vec<String>) {
     let report = loaded.report.clone();
     let teams = loaded.setup.slot_teams.clone();
-    let race = Race::start(loaded.setup);
+    let race = Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut archives = oag_assets::Archives::open(source, title).expect("opening the archives");
     let mut moved = 0;
     for (slot, team) in teams.iter().enumerate() {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         if !ship.active {
             continue;
         }
@@ -346,7 +349,10 @@ fn pulses_novice_field_starts_on_each_teams_easyshield() {
         })
         .expect("loading the race");
         let teams = loaded.setup.slot_teams.clone();
-        (Race::start(loaded.setup), teams)
+        (
+            Race::start(loaded.setup, loaded.view, loaded.modules),
+            teams,
+        )
     };
     for (difficulty, easy) in [
         (oag_ai::Difficulty::Novice, true),
@@ -355,7 +361,7 @@ fn pulses_novice_field_starts_on_each_teams_easyshield() {
         let (race, teams) = load(difficulty);
         let mut moved = 0;
         for (slot, team) in teams.iter().enumerate() {
-            if !race.sim.world.ships[slot].active {
+            if !race.core.sim.world.ships[slot].active {
                 continue;
             }
             let misc = authored_in(
@@ -369,7 +375,7 @@ fn pulses_novice_field_starts_on_each_teams_easyshield() {
                 misc.shield
             };
             assert_eq!(
-                race.sim.world.ships[slot].handling.dimensions.shield,
+                race.core.sim.world.ships[slot].handling.dimensions.shield,
                 want,
                 "{}: slot {slot} ({team})",
                 difficulty.name()

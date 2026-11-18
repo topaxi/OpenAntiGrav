@@ -52,7 +52,7 @@ pub struct StartPose {
 impl StartPose {
     /// Ship 0's pose now; taken straight after `Race::start`, it is the resolved `--pose`.
     pub fn of(race: &Race) -> Self {
-        let body = &race.sim.world.ships[0].physics.body;
+        let body = &race.core.sim.world.ships[0].physics.body;
         Self {
             position: body.position,
             orientation: body.orientation,
@@ -71,7 +71,7 @@ impl StartPose {
     /// otherwise keep the velocity its hover gathered while it was moved away.
     pub fn restore_at_rest(&self, race: &mut Race) {
         self.restore(race);
-        let body = &mut race.sim.world.ships[0].physics.body;
+        let body = &mut race.core.sim.world.ships[0].physics.body;
         body.linear_velocity = Vec3::ZERO;
         body.angular_velocity = Vec3::ZERO;
     }

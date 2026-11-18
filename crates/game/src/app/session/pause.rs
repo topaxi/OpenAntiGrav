@@ -105,7 +105,7 @@ impl super::Session {
         if self.net.is_some() {
             return;
         }
-        let start_counted = oag_race::RaceState::thrust_gated(stage.race.sim.world.tick)
+        let start_counted = oag_race::RaceState::thrust_gated(stage.race.core.sim.world.tick)
             || (!self.no_intro && stage.race.intro_to_play());
         let assignment = self.controls.assignment();
         let table = Table {
@@ -133,7 +133,7 @@ impl super::Session {
             _ => None,
         };
         if let (Some(cue), Stage::Race(stage)) = (cue, &mut self.stage) {
-            stage.race.raise_start_cue(cue);
+            stage.race.core.raise_start_cue(cue);
         }
     }
 }

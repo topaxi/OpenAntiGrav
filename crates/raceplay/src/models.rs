@@ -149,12 +149,12 @@ impl Race {
     fn hull_light_scale(&self, slot: usize) -> Option<[u8; 4]> {
         let at = self.ship_model_matrix_of(slot).w_axis;
         let at = oag_core::math::Vec3::new(at.x, at.y, at.z);
-        let course = self.sim.course.as_deref()?;
+        let course = self.core.sim.course.as_deref()?;
         // A craft no tick has located yet (a posed capture runs none, and a race's first frame is drawn before its first)
         // is found where it stands, as the next tick would; without it the scale falls to the default 255 and the hull
         // reads at full light inside a tunnel the original darkens (`scene-light.md`, "The scales"). Read only: the
         // standing's own fix is simulation state and stays as the tick left it.
-        let index = match self.sim.world.ships[slot].standing.course_index {
+        let index = match self.core.sim.world.ships[slot].standing.course_index {
             Some(index) => index as usize,
             None => course.locate(at, None)?.index,
         };
@@ -239,11 +239,12 @@ impl Race {
     /// [`Race::start`].
     #[must_use]
     pub fn ship_model_matrices(&self) -> Vec<Mat4> {
-        self.sim
+        self.core
+            .sim
             .world
             .ships
             .iter()
-            .take(self.sim.world.ship_count as usize)
+            .take(self.core.sim.world.ship_count as usize)
             .enumerate()
             .filter(|(_, ship)| ship.in_world())
             .map(|(slot, _)| self.ship_model_matrix_of(slot))

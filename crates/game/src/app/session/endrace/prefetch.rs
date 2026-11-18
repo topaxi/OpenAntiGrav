@@ -197,7 +197,7 @@ impl Session {
         let Stage::Race(stage) = &self.stage else {
             return;
         };
-        if stage.endrace_prefetch_started || stage.race.sim.finished() {
+        if stage.endrace_prefetch_started || stage.race.core.sim.finished() {
             return;
         }
         // Not on the web: wgpu's web types belong to the page's thread and the race build runs

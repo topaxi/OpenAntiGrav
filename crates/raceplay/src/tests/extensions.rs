@@ -12,15 +12,14 @@ use oag_gameplay::PlayerInputs;
 pub(super) fn grid(extensions: crate::extensions::Prepared) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
-    setup.extensions = extensions;
     setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
-    let engine = &mut race.sim.world.ships[1].handling.engine;
+    let mut race = Race::start(setup, crate::tests::fixture_view(), extensions);
+    let engine = &mut race.core.sim.world.ships[1].handling.engine;
     engine.amount = 20.0;
     engine.accelcap = 1000.0;
     race
@@ -31,7 +30,7 @@ pub(super) fn run(mut race: Race, ticks: u32) -> (Race, Vec<u64>) {
     let hashes = (0..ticks)
         .map(|_| {
             race.tick(&PlayerInputs::none());
-            race.sim.state_hash()
+            race.core.sim.state_hash()
         })
         .collect();
     (race, hashes)
@@ -53,7 +52,7 @@ const VANILLA_FOLD: u64 = 0x43a3_a21f_8003_8fb0;
 #[test]
 fn a_vanilla_race_hashes_the_same_with_the_feature_on_or_off_and_builds_no_engine() {
     let (race, hashes) = run(grid(crate::extensions::Prepared::default()), 600);
-    assert!(!race.sim.is_modded());
+    assert!(!race.core.sim.is_modded());
     assert_eq!(fold(&hashes), VANILLA_FOLD, "{:#018x}", fold(&hashes));
     #[cfg(feature = "extensions")]
     assert_eq!(
@@ -129,13 +128,13 @@ pub(super) mod on {
     #[test]
     fn a_factor_above_one_makes_a_craft_faster_and_one_changes_nothing() {
         let speed = |race: &Race| {
-            race.sim.world.ships[1]
+            race.core.sim.world.ships[1]
                 .physics
                 .body
                 .linear_velocity
                 .length()
         };
-        let (vanilla, plain) = run(grid(Prepared::default()), 600);
+        let (vanilla, plain) = run(grid(crate::extensions::Prepared::default()), 600);
         let (boosted, _) = run(grid(prepared(&[scaler("test.boost", 1.5)])), 600);
         assert!(
             speed(&boosted) > speed(&vanilla),
@@ -147,7 +146,7 @@ pub(super) mod on {
         // trajectory is the vanilla one (the race hash differs only by the module's
         // own state).
         let (neutral, _) = run(grid(prepared(&[scaler("test.neutral", 1.0)])), 600);
-        assert_eq!(neutral.sim.world.ships, vanilla.sim.world.ships);
+        assert_eq!(neutral.core.sim.world.ships, vanilla.core.sim.world.ships);
         assert_eq!(fold(&plain), VANILLA_FOLD);
     }
 
@@ -179,20 +178,20 @@ pub(super) mod on {
     fn a_shield_delta_that_empties_the_pool_wrecks_the_craft_as_a_hit_does() {
         let mut race = grid(prepared(&[drainer()]));
         // The fixture's hulls carry no pool; give slot 1 a full one.
-        race.sim.world.ships[1].handling.dimensions.shield = 100.0;
-        race.sim.world.ships[1].physics.shield = 100.0;
+        race.core.sim.world.ships[1].handling.dimensions.shield = 100.0;
+        race.core.sim.world.ships[1].physics.shield = 100.0;
         assert_eq!(
-            race.sim.world.ships[1].physics.craft_state,
+            race.core.sim.world.ships[1].physics.craft_state,
             oag_physics::damage::CraftState::Racing
         );
         race.tick(&PlayerInputs::none());
-        let ship = &race.sim.world.ships[1];
+        let ship = &race.core.sim.world.ships[1];
         assert_eq!(ship.physics.shield, 0.0);
         assert_eq!(
             ship.physics.craft_state,
             oag_physics::damage::CraftState::Destroyed
         );
-        assert_eq!(race.sim.extension_reports()[0].faulted, None);
+        assert_eq!(race.core.sim.extension_reports()[0].faulted, None);
     }
 
     const EVENTS: i32 = 1024 + oag_ext_abi::EVENTS_AT as i32;
@@ -265,35 +264,35 @@ pub(super) mod on {
         let mut race = grid(prepared(&[giver("test.giver")]));
         race.tick(&PlayerInputs::none()); // the give
         assert_eq!(
-            race.sim.world.ships[0].pickup.weapon,
+            race.core.sim.world.ships[0].pickup.weapon,
             Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
         );
         assert_eq!(
-            race.sim.world.ships[0].pickup.last, None,
+            race.core.sim.world.ships[0].pickup.last, None,
             "the repeat rule's memory is the title's"
         );
         race.tick(&pressed(Button::Square));
         assert_eq!(
-            race.sim.world.ships[0].pickup.weapon,
+            race.core.sim.world.ships[0].pickup.weapon,
             Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)),
             "fire does not spend it"
         );
         assert_eq!(
-            race.sim.world.ships[0].physics.turbo_timer, 0.0,
+            race.core.sim.world.ships[0].physics.turbo_timer, 0.0,
             "nor does the engine fire anything"
         );
-        let shield = race.sim.world.ships[0].physics.shield;
+        let shield = race.core.sim.world.ships[0].physics.shield;
         race.tick(&pressed(Button::Circle));
         assert_eq!(
-            race.sim.world.ships[0].pickup.weapon, None,
+            race.core.sim.world.ships[0].pickup.weapon, None,
             "absorb takes it away"
         );
         assert_eq!(
-            race.sim.world.ships[0].physics.shield, shield,
+            race.core.sim.world.ships[0].physics.shield, shield,
             "and pays nothing"
         );
         race.tick(&PlayerInputs::none());
-        let blob = race.sim.extensions.blob_for_tests(0);
+        let blob = race.core.sim.extensions.blob_for_tests(0);
         assert_eq!(
             &blob[..8],
             &[1, 0, 0, 0, 1, 0, 0, 0],
@@ -306,7 +305,7 @@ pub(super) mod on {
         use oag_tables::weapons::Weapon;
         let mut race = grid(prepared(&[roller()]));
         assert!(
-            race.sim.extensions.rolls(0, Weapon::Turbo).is_none(),
+            race.core.sim.extensions.rolls(0, Weapon::Turbo).is_none(),
             "no rule before the first call"
         );
         race.tick(&PlayerInputs::none());
@@ -318,7 +317,7 @@ pub(super) mod on {
             Weapon::Turbo,
         ]
         .into_iter()
-        .map(|weapon| race.sim.extensions.rolls(0, weapon).is_some())
+        .map(|weapon| race.core.sim.extensions.rolls(0, weapon).is_some())
         .collect();
         assert_eq!(
             rolled,
@@ -327,16 +326,16 @@ pub(super) mod on {
         );
         // Re-sent every tick, the same rule keeps its count.
         race.tick(&PlayerInputs::none());
-        assert!(race.sim.extensions.rolls(0, Weapon::Turbo).is_none());
-        assert!(race.sim.extensions.rolls(0, Weapon::Turbo).is_some());
+        assert!(race.core.sim.extensions.rolls(0, Weapon::Turbo).is_none());
+        assert!(race.core.sim.extensions.rolls(0, Weapon::Turbo).is_some());
     }
 
     #[test]
     fn a_race_without_weapons_gives_no_mod_pickup() {
         let mut setup_race = grid(prepared(&[giver("test.giver")]));
-        setup_race.sim.weapons_on = false;
+        setup_race.core.sim.weapons_on = false;
         setup_race.tick(&PlayerInputs::none());
-        assert_eq!(setup_race.sim.world.ships[0].pickup.weapon, None);
+        assert_eq!(setup_race.core.sim.world.ships[0].pickup.weapon, None);
     }
 
     #[test]
@@ -345,7 +344,7 @@ pub(super) mod on {
         bare.pickup = None;
         let mut race = grid(prepared(&[bare]));
         race.tick(&PlayerInputs::none());
-        let (_, why) = race.sim.extension_reports()[0]
+        let (_, why) = race.core.sim.extension_reports()[0]
             .faulted
             .clone()
             .expect("a mod with no [pickup] is faulted on its first give-pickup");
@@ -354,7 +353,7 @@ pub(super) mod on {
             "{why}"
         );
         assert_eq!(
-            race.sim.world.ships[0].pickup.weapon, None,
+            race.core.sim.world.ships[0].pickup.weapon, None,
             "and the pickup is not given"
         );
         let mut roll = roller();
@@ -362,7 +361,7 @@ pub(super) mod on {
         let mut race = grid(prepared(&[roll]));
         race.tick(&PlayerInputs::none());
         assert!(
-            race.sim.extension_reports()[0].faulted.is_some(),
+            race.core.sim.extension_reports()[0].faulted.is_some(),
             "pickup-roll is the same"
         );
     }
@@ -381,7 +380,7 @@ pub(super) mod on {
         let first = oag_tables::weapons::ModKind::FIRST;
         let second = oag_tables::weapons::ModKind::new(1).unwrap();
         assert_eq!(
-            race.sim.extensions.pickup_look(0, second),
+            race.core.sim.extensions.pickup_look(0, second),
             None,
             "no module has the second kind"
         );
@@ -389,7 +388,7 @@ pub(super) mod on {
         let mut resolved = declared;
         resolved.icon = Icon::Mod(crate::extensions::mod_icon_src("test.giver", "bolt"));
         assert_eq!(
-            race.sim.extensions.pickup_look(0, first),
+            race.core.sim.extensions.pickup_look(0, first),
             Some(resolved.clone()),
             "the manifest's icon key is the HUD sheet's key"
         );
@@ -399,7 +398,7 @@ pub(super) mod on {
             "latched while it is held"
         );
         race.tick(&pressed(Button::Circle));
-        assert_eq!(race.sim.world.ships[0].pickup.weapon, None);
+        assert_eq!(race.core.sim.world.ships[0].pickup.weapon, None);
         assert_eq!(
             race.view.huds[0].pickup_look,
             Some(resolved),
@@ -430,11 +429,11 @@ pub(super) mod on {
         for _ in 0..120 {
             loud.tick(&PlayerInputs::none());
             quiet.tick(&PlayerInputs::none());
-            assert_eq!(loud.sim.state_hash(), quiet.sim.state_hash());
+            assert_eq!(loud.core.sim.state_hash(), quiet.core.sim.state_hash());
         }
         loud.tick_sim_only(&PlayerInputs::none());
         assert_eq!(
-            loud.sim.extensions.effects_for_tests(),
+            loud.core.sim.extensions.effects_for_tests(),
             [(
                 1,
                 crate::extension_effects::Fired::Own {
@@ -443,7 +442,7 @@ pub(super) mod on {
                 }
             )]
         );
-        assert!(quiet.sim.extensions.effects_for_tests().is_empty());
+        assert!(quiet.core.sim.extensions.effects_for_tests().is_empty());
     }
 
     /// Every tick: a Turbo cue, the wall sparks, the three race-wide outputs (rain at 0.5,
@@ -529,10 +528,11 @@ pub(super) mod on {
         for _ in 0..120 {
             loud.tick(&PlayerInputs::none());
             quiet.tick(&PlayerInputs::none());
-            assert_eq!(loud.sim.state_hash(), quiet.sim.state_hash());
+            assert_eq!(loud.core.sim.state_hash(), quiet.core.sim.state_hash());
         }
         assert!(
-            loud.sim
+            loud.core
+                .sim
                 .cues
                 .iter()
                 .any(|cue| cue.cue == oag_gameplay::cue::Cue::Turbo && cue.slot == 1),
@@ -542,7 +542,7 @@ pub(super) mod on {
         // leaves this tick's queued.
         loud.tick_sim_only(&PlayerInputs::none());
         assert_eq!(
-            loud.sim.extensions.effects_for_tests(),
+            loud.core.sim.extensions.effects_for_tests(),
             [(
                 1,
                 crate::extension_effects::Fired::Title(oag_title::effects::Trigger::CollisionSpark)
@@ -551,16 +551,16 @@ pub(super) mod on {
         // The view outputs reach the race's readers for slot 1 alone, and the quiet race has
         // none: the same equal hashes above show they are never state.
         assert_eq!(
-            loud.sim.extension_fill(1),
+            loud.core.sim.extension_fill(1),
             Some([16.0 / 255.0, 32.0 / 255.0, 1.0, 128.0 / 255.0])
         );
-        assert_eq!(loud.sim.extension_fill(0), None);
-        assert_eq!(loud.sim.extension_fov_offset(1), 8.0);
-        assert_eq!(loud.sim.extension_fov_offset(0), 0.0);
-        assert_eq!(quiet.sim.extension_fill(1), None);
-        assert_eq!(quiet.sim.extension_fov_offset(1), 0.0);
-        let tick = loud.sim.world.tick;
-        let hud = loud.sim.extensions.hud(1, tick);
+        assert_eq!(loud.core.sim.extension_fill(0), None);
+        assert_eq!(loud.core.sim.extension_fov_offset(1), 8.0);
+        assert_eq!(loud.core.sim.extension_fov_offset(0), 0.0);
+        assert_eq!(quiet.core.sim.extension_fill(1), None);
+        assert_eq!(quiet.core.sim.extension_fov_offset(1), 0.0);
+        let tick = loud.core.sim.world.tick;
+        let hud = loud.core.sim.extensions.hud(1, tick);
         assert_eq!(
             hud.pickup_look,
             Some(oag_tables::pickup_look::PickupLook {
@@ -600,22 +600,28 @@ pub(super) mod on {
             ]
         );
         assert!(
-            loud.sim.extensions.hud(0, tick).is_quiet(),
+            loud.core.sim.extensions.hud(0, tick).is_quiet(),
             "only the slot it names"
         );
-        assert!(quiet.sim.extensions.hud(1, tick).is_quiet());
+        assert!(quiet.core.sim.extensions.hud(1, tick).is_quiet());
         // The race-wide outputs are held for the view half and absent without a module.
         assert_eq!(
-            loud.sim.extension_sky(),
+            loud.core.sim.extension_sky(),
             crate::extensions::Sky {
                 rain: Some(0.5),
                 sun: 0.5,
                 grey: 0.25
             }
         );
-        assert_eq!(quiet.sim.extension_sky(), crate::extensions::Sky::default());
         assert_eq!(
-            grid(Prepared::default()).sim.extension_sky(),
+            quiet.core.sim.extension_sky(),
+            crate::extensions::Sky::default()
+        );
+        assert_eq!(
+            grid(crate::extensions::Prepared::default())
+                .core
+                .sim
+                .extension_sky(),
             crate::extensions::Sky::default()
         );
     }
@@ -692,8 +698,8 @@ pub(super) mod on {
             let prepared = prepare(sources, "wipeout-pulse", None, track, language, &mut report);
             let mut race = grid(prepared);
             race.tick(&PlayerInputs::none());
-            let tick = race.sim.world.tick;
-            race.sim.extensions.hud(1, tick).items
+            let tick = race.core.sim.world.tick;
+            race.core.sim.extensions.hud(1, tick).items
         };
         let text = |items: &[oag_hud::ext_draws::Item]| {
             items.iter().find_map(|item| match &item.what {
@@ -937,13 +943,14 @@ colour = "#ff2010"
     fn the_craft_record_carries_the_lap_and_the_laps_target() {
         let mut race = grid(prepared(&[lap_reader()]));
         let target = race
+            .core
             .sim
             .world
             .laps_target()
             .expect("a single race has laps");
-        race.sim.world.ships[1].standing.lap = 2;
+        race.core.sim.world.ships[1].standing.lap = 2;
         race.tick(&PlayerInputs::none());
-        let blob = race.sim.extensions.blob_for_tests(0);
+        let blob = race.core.sim.extensions.blob_for_tests(0);
         assert_eq!(blob[..2], [2, u8::try_from(target).unwrap()]);
     }
 
@@ -1005,12 +1012,12 @@ colour = "#ff2010"
     fn a_modded_race_run_twice_hashes_the_same_every_tick_and_the_command_lands() {
         let (first, a) = run(grid(prepared(&[halver()])), 600);
         let (_, b) = run(grid(prepared(&[halver()])), 600);
-        assert!(first.sim.is_modded());
+        assert!(first.core.sim.is_modded());
         assert_eq!(a, b);
         assert_ne!(fold(&a), VANILLA_FOLD, "the blob is in the hash");
-        let (vanilla, _) = run(grid(Prepared::default()), 600);
+        let (vanilla, _) = run(grid(crate::extensions::Prepared::default()), 600);
         let speed = |race: &Race| {
-            race.sim.world.ships[1]
+            race.core.sim.world.ships[1]
                 .physics
                 .body
                 .linear_velocity
@@ -1023,7 +1030,7 @@ colour = "#ff2010"
             speed(&vanilla)
         );
         assert_eq!(oag_modhost::engines_created(), 1);
-        let reports = first.sim.extension_reports();
+        let reports = first.core.sim.extension_reports();
         assert_eq!(reports.len(), 1);
         assert!(reports[0].fuel_used > 0 && reports[0].faulted.is_none());
         assert!(reports[0].memory_bytes > 0 && reports[0].memory_peak >= reports[0].memory_bytes);
@@ -1035,7 +1042,7 @@ colour = "#ff2010"
         let (first, a) = run(grid(prepared(&[runaway(), halver()])), 600);
         let (second, b) = run(grid(prepared(&[runaway(), halver()])), 600);
         assert_eq!(a, b);
-        let reports = first.sim.extension_reports();
+        let reports = first.core.sim.extension_reports();
         // Id order: `test.halver` runs before `test.runaway`.
         assert_eq!(reports[0].mod_id, "test.halver");
         assert!(
@@ -1045,7 +1052,7 @@ colour = "#ff2010"
         let (tick, why) = reports[1].faulted.clone().expect("the runaway faulted");
         assert_eq!(why, "out of fuel");
         assert_eq!(
-            second.sim.extension_reports()[1]
+            second.core.sim.extension_reports()[1]
                 .faulted
                 .as_ref()
                 .unwrap()
@@ -1053,7 +1060,7 @@ colour = "#ff2010"
             tick
         );
         assert!(
-            first.sim.world.tick > tick + 400,
+            first.core.sim.world.tick > tick + 400,
             "the race went on past the fault"
         );
     }
@@ -1178,7 +1185,12 @@ mod triggers {
         // between, so it is driven into and out of once (the fixture's ring sends the
         // craft back round after that).
         let x_at = |ticks| {
-            run(grid(Prepared::default()), ticks).0.sim.world.ships[1]
+            run(grid(crate::extensions::Prepared::default()), ticks)
+                .0
+                .core
+                .sim
+                .world
+                .ships[1]
                 .physics
                 .body
                 .position
@@ -1188,7 +1200,7 @@ mod triggers {
         assert!(to > from + 10.0, "slot 1 drives along +x: {from} to {to}");
         let props = gate(from + (to - from) * 0.25, from + (to - from) * 0.5);
         let (race, _) = run(grid(prepared_on(&props)), 320);
-        let blob = race.sim.extension_state(0).unwrap();
+        let blob = race.core.sim.extension_state(0).unwrap();
         assert_eq!(
             blob[..3],
             [1, 1, 1],
@@ -1197,7 +1209,7 @@ mod triggers {
         assert_eq!(blob[4..8], 0.25_f32.to_le_bytes(), "its gate property");
         // A gate the craft never reaches is never entered.
         let (race, _) = run(grid(prepared_on(&gate(to + 1000.0, to + 1010.0))), 320);
-        assert_eq!(race.sim.extension_state(0).unwrap()[..2], [0, 0]);
+        assert_eq!(race.core.sim.extension_state(0).unwrap()[..2], [0, 0]);
     }
 
     #[test]

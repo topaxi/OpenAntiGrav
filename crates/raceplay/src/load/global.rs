@@ -162,7 +162,7 @@ pub(super) fn resolve(
     // The weapon-pad debounce, out of the same `<GlobalClass>` block as the two
     // above and with the same "absent means the feature is off" fallback. A zero
     // stamp leaves a pad armed on every entry; a craft is then handed a pickup per
-    // crossing (the edge in `Race::test_weapon_pads`), never one per tick.
+    // crossing (the edge in `SimRace::test_weapon_pads`), never one per tick.
     //
     // **Eliminator is a different case on each title.** Pulse stamps
     // `<WeaponPad elimination_refresh_time>`, an order of magnitude shorter than

@@ -32,12 +32,12 @@ fn triangles(cull: bool, offset: Vec3) -> u32 {
         return u32::MAX;
     };
     let mut race = race_with_a_grid();
-    let liveries: Vec<_> = (0..race.sim.ship_count()).map(|_| livery()).collect();
+    let liveries: Vec<_> = (0..race.core.sim.ship_count()).map(|_| livery()).collect();
     let scene = bare_scene_of(&device, &queue, &liveries);
     let view = target(&device);
     race.tick(&oag_gameplay::PlayerInputs::none());
-    let origin = race.sim.world.ships[0].physics.body.position;
-    race.sim.world.ships[1].physics.body.position = origin + offset;
+    let origin = race.core.sim.world.ships[0].physics.body.position;
+    race.core.sim.world.ships[1].physics.body.position = origin + offset;
     let mut encoder = device.create_command_encoder(&Default::default());
     let stats = scene.render(
         &device,

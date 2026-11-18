@@ -86,7 +86,8 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 
 /// Every Cannon round slot 0 has fired and still has in the air.
 fn rounds(race: &race::Race) -> Vec<oag_weapons::projectile::Projectile> {
-    race.sim
+    race.core
+        .sim
         .world
         .projectiles
         .slots
@@ -98,7 +99,7 @@ fn rounds(race: &race::Race) -> Vec<oag_weapons::projectile::Projectile> {
 
 fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
     let loaded = single_race()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));
@@ -113,8 +114,12 @@ fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
 #[ignore = "needs a disc image in data/images/"]
 fn the_discs_cannon_block_decodes() {
     let Some(loaded) = single_race() else { return };
-    let race = race::Race::start(loaded.setup);
-    let cannon = race.sim.cannon_stats().expect("the disc authors a Cannon");
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let cannon = race
+        .core
+        .sim
+        .cannon_stats()
+        .expect("the disc authors a Cannon");
 
     assert!(cannon.absorb > 0.0, "no authored absorb: {cannon:?}");
     assert!(cannon.rounds > 0.0, "no authored rounds: {cannon:?}");
@@ -146,8 +151,12 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
     let Some((mut race, throttle)) = moving() else {
         return;
     };
-    let cannon = race.sim.cannon_stats().expect("the disc authors a Cannon");
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
+    let cannon = race
+        .core
+        .sim
+        .cannon_stats()
+        .expect("the disc authors a Cannon");
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
 
     // Long enough that a self-firing countdown would have gone off many times
     // over, with fire never held. Nothing may leave the barrel. A flat
@@ -164,7 +173,7 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
         );
     }
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(Weapon::Cannon),
         "an unfired Cannon must still be in the slot after {quiet} ticks"
     );
@@ -199,7 +208,7 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
     );
 
     let round = rounds(&race)[0];
-    let speed = race.sim.world.ships[0]
+    let speed = race.core.sim.world.ships[0]
         .physics
         .body
         .linear_velocity
@@ -262,11 +271,15 @@ fn an_opponent_holding_a_cannon_fires_it_with_no_button_anywhere() {
     let Some((mut race, throttle)) = moving() else {
         return;
     };
-    let count = usize::from(race.sim.world.ship_count);
+    let count = usize::from(race.core.sim.world.ship_count);
     assert!(count > 1, "a single race should grid more than one craft");
-    let cannon = race.sim.cannon_stats().expect("the disc authors a Cannon");
+    let cannon = race
+        .core
+        .sim
+        .cannon_stats()
+        .expect("the disc authors a Cannon");
     for slot in 1..count {
-        race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Cannon);
+        race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Cannon);
     }
 
     // `throttle` holds CROSS and never SQUARE, so nothing the player does can
@@ -278,6 +291,7 @@ fn an_opponent_holding_a_cannon_fires_it_with_no_button_anywhere() {
     for _ in 0..ticks {
         race.tick(&PlayerInputs::single(throttle));
         for round in race
+            .core
             .sim
             .world
             .projectiles
@@ -322,24 +336,25 @@ fn an_opponent_with_nobody_ahead_does_not_fire_its_cannon() {
     let Some((mut race, throttle)) = moving() else {
         return;
     };
-    let count = usize::from(race.sim.world.ship_count);
+    let count = usize::from(race.core.sim.world.ship_count);
     // Whoever is out front right now: `Field::ahead` is empty for it, so
     // `Driver::holds_fire` has nothing to aim at.
-    let places = race.places();
+    let places = race.core.places();
     let leader = (1..count)
         .min_by_key(|&slot| places[slot])
         .expect("a grid of more than one");
-    race.sim.world.ships[leader].pickup.weapon = Some(Weapon::Cannon);
+    race.core.sim.world.ships[leader].pickup.weapon = Some(Weapon::Cannon);
 
     for _ in 0..300 {
         race.tick(&PlayerInputs::single(throttle));
         // Stop as soon as it is no longer leading - the premise has gone and
         // the rest of the run would be measuring something else.
-        if race.places()[leader] != 1 {
+        if race.core.places()[leader] != 1 {
             break;
         }
         assert!(
-            race.sim
+            race.core
+                .sim
                 .world
                 .projectiles
                 .slots

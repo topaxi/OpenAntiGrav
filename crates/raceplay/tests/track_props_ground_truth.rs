@@ -229,9 +229,9 @@ fn run(track: &Path, with: Vec<race::extensions::Source>) -> Option<(Vec<Tick>, 
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
-    let pads = race.sim.speedup_pads().to_vec();
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
+    let pads = race.core.sim.speedup_pads().to_vec();
     let mut input = oag_gameplay::input::Input::new();
     let ticks = (0..TICKS)
         .map(|_| {
@@ -240,7 +240,7 @@ fn run(track: &Path, with: Vec<race::extensions::Source>) -> Option<(Vec<Tick>, 
                 buttons: input,
                 ..oag_gameplay::InputSnapshot::new()
             }));
-            let ship = &race.sim.world.ships[0];
+            let ship = &race.core.sim.world.ships[0];
             let at = ship.physics.body.position.to_array();
             Tick {
                 kmh: ship.physics.body.linear_velocity.length() * oag_core::math::SPEED_TO_KMH,
@@ -248,6 +248,7 @@ fn run(track: &Path, with: Vec<race::extensions::Source>) -> Option<(Vec<Tick>, 
                 push: ship.physics.pad_direction.length(),
                 plume: race.exhaust().boost_timer(),
                 pad_sounds: race
+                    .core
                     .sim
                     .drain_cues()
                     .iter()
@@ -288,8 +289,8 @@ fn a_pads_authored_boost_doubles_that_pad_alone() {
     let (entry, pad) = first_pad(&vanilla);
     let file = hillside(Some(pad), "double").unwrap();
     let (modded, race) = run(&file, vec![pad_reader(pad)]).unwrap();
-    assert!(race.sim.is_modded());
-    let pads = race.sim.speedup_pads();
+    assert!(race.core.sim.is_modded());
+    let pads = race.core.sim.speedup_pads();
     let unit = |p: usize| {
         let d = pads[p].direction().unwrap();
         (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
@@ -346,7 +347,7 @@ fn a_slot_held_at_zero_gets_no_push_plume_or_sound_and_still_hears_each_pad() {
     let (held, race) = run(&plain, vec![pad_holder()]).unwrap();
     let vanilla_entries = entries(&vanilla).len();
     let heard = u32::from_le_bytes(
-        race.sim.extension_state(0).expect("the module ran")[..4]
+        race.core.sim.extension_state(0).expect("the module ran")[..4]
             .try_into()
             .unwrap(),
     );
@@ -423,7 +424,7 @@ fn portal() -> race::extensions::Source {
 
 /// The course ring point nearest `at`, and its position.
 fn ring_point_at(race: &race::Race, progress: f32) -> Vec3 {
-    let course = race.sim.course().expect("a course");
+    let course = race.core.sim.course().expect("a course");
     let index = course.index_at_progress(progress).expect("on the lap");
     course.position(index).expect("a ring point")
 }
@@ -445,8 +446,8 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        let race = race::Race::start(loaded.setup);
-        let length = race.sim.course().expect("a course").length();
+        let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+        let length = race.core.sim.course().expect("a course").length();
         (
             ring_point_at(&race, 150.0),
             ring_point_at(&race, length * 0.6),
@@ -465,8 +466,8 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
     let mut input = oag_gameplay::input::Input::new();
     let mut tick = |race: &mut race::Race| {
         input.begin_frame(Button::Cross.bit());
@@ -479,14 +480,15 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
     let mut before = None;
     for _ in 0..TICKS {
         tick(&mut race);
-        if race.sim.world.ships[0].transit.is_some() {
-            before = race.sim.world.ships[0].standing.progress;
+        if race.core.sim.world.ships[0].transit.is_some() {
+            before = race.core.sim.world.ships[0].standing.progress;
             break;
         }
     }
     let before = before.expect("the craft entered the first trigger and the module answered");
-    let went = race.sim.world.ships[0].transit.expect("in transit");
+    let went = race.core.sim.world.ships[0].transit.expect("in transit");
     let to = race
+        .core
         .sim
         .course()
         .unwrap()
@@ -499,7 +501,7 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
     for _ in 0..3 {
         tick(&mut race);
     }
-    let ship = &race.sim.world.ships[0];
+    let ship = &race.core.sim.world.ships[0];
     assert_eq!(ship.transit, None, "out after its ticks");
     let progress = ship.standing.progress.expect("located");
     println!(
@@ -517,6 +519,7 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
 
     // A trigger the track does not have is a refusal that names it.
     let refused = race
+        .core
         .sim
         .begin_transit(0, 2, race::transit::Distance::Trigger(9), 1.0);
     assert!(

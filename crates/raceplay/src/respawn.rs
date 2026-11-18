@@ -316,14 +316,14 @@ impl Race {
         // `ai_order` was empty, the one case where "sample zero" has no
         // relationship to any lap at all.
         let sample = sample_index
-            .and_then(|index| self.sim.spline.sample(index))
-            .or_else(|| self.sim.ai_sample(0))
-            .or_else(|| self.sim.spline.start());
+            .and_then(|index| self.core.sim.spline.sample(index))
+            .or_else(|| self.core.sim.ai_sample(0))
+            .or_else(|| self.core.sim.spline.start());
         let Some(sample) = sample.copied() else {
             return;
         };
 
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.core.sim.world.ships[slot];
         let height = rig_spawn_height(&ship.handling, None, &ship.physics.hover_rig);
         let pose = Pose::on_racing_line(&sample, height);
         self.put_back(slot, pose, Vec3::ZERO);
@@ -382,11 +382,11 @@ impl Race {
     /// Falls back to [`Self::respawn`] at `sample_index` on a track with no
     /// samples to locate on.
     pub(super) fn reset(&mut self, slot: usize, sample_index: Option<usize>) {
-        self.sim.charge_the_reset(slot);
-        let crumbs = &mut self.sim.breadcrumbs[slot];
+        self.core.sim.charge_the_reset(slot);
+        let crumbs = &mut self.core.sim.breadcrumbs[slot];
         let speed = crumbs.launch_speed();
         let crumb = crumbs.take_oldest();
-        match crate::breadcrumbs::relocate(&self.sim.spline, crumb, speed) {
+        match crate::breadcrumbs::relocate(&self.core.sim.spline, crumb, speed) {
             Some(relocation) => self.put_back(slot, relocation.pose, relocation.velocity),
             None => self.respawn(slot, sample_index),
         }
@@ -396,7 +396,7 @@ impl Race {
     /// ([`Self::put_back`]) or a jump (`crate::transit`): the driver told where it now
     /// is, the dwells restarted and the trails cut.
     pub(super) fn reseat(&mut self, slot: usize, position: Vec3) {
-        let ship = &mut self.sim.world.ships[slot];
+        let ship = &mut self.core.sim.world.ships[slot];
         // **The driver has to be told where it has been put.** `Driver::drive`
         // locates a craft in a 48-sample window around its last index, so a
         // teleport of more than that leaves the driver steering at the piece of
@@ -404,10 +404,11 @@ impl Race {
         // `Driver::index` started at zero, except mid-race and invisible,
         // because a craft that recovered and then drove into the scenery reads
         // as bad driving rather than as a lost index.
-        ship.driver.index = self
-            .sim
-            .racing_line
-            .nearest(position, 0, self.sim.racing_line.len()) as u32;
+        ship.driver.index =
+            self.core
+                .sim
+                .racing_line
+                .nearest(position, 0, self.core.sim.racing_line.len()) as u32;
         // Put back on the ring, so off any route. See `oag_ai::branch::Branching::on_ring`.
         ship.driver.branching = ship.driver.branching.on_ring();
         // The craft is back on its line by definition, so the dwell starts
@@ -416,10 +417,10 @@ impl Race {
         // put back is also moving again shortly, and a stall counter that
         // survived the teleport would fire once more the moment the cooldown ran
         // out.
-        self.sim.beneath_ticks[slot] = 0;
-        self.sim.beneath_wide[slot] = false;
-        self.sim.stalled_ticks[slot] = 0;
-        self.sim.distant_ticks[slot] = 0;
+        self.core.sim.beneath_ticks[slot] = 0;
+        self.core.sim.beneath_wide[slot] = false;
+        self.core.sim.stalled_ticks[slot] = 0;
+        self.core.sim.distant_ticks[slot] = 0;
 
         // Otherwise the ribbon spans the teleport: ten samples of history from
         // wherever the craft fell off, stretched across the track to where it was
@@ -435,19 +436,19 @@ impl Race {
     /// What every way back shares: the pose and the launch velocity, the
     /// driver told where it now is, and the respawn bookkeeping.
     fn put_back(&mut self, slot: usize, pose: Pose, velocity: Vec3) {
-        let ship = &mut self.sim.world.ships[slot];
+        let ship = &mut self.core.sim.world.ships[slot];
         ship.place_at(pose);
         ship.physics.body.linear_velocity = velocity;
         self.reseat(slot, pose.position);
 
         #[cfg(feature = "view")]
         self.flash_player_reset(slot);
-        self.sim.respawns[slot] += 1;
-        self.sim.respawns_in_a_row[slot] += 1;
-        self.sim.respawn_cooldown[slot] = self.sim.reset_triggers.cooldown_ticks;
+        self.core.sim.respawns[slot] += 1;
+        self.core.sim.respawns_in_a_row[slot] += 1;
+        self.core.sim.respawn_cooldown[slot] = self.core.sim.reset_triggers.cooldown_ticks;
 
-        if self.sim.respawns_in_a_row[slot] >= RESPAWN_GIVE_UP {
-            self.sim.respawn_disabled[slot] = true;
+        if self.core.sim.respawns_in_a_row[slot] >= RESPAWN_GIVE_UP {
+            self.core.sim.respawn_disabled[slot] = true;
             // **Two causes, and naming only one sent people to the wrong place.**
             // A pose inside a `Reset` volume is the right guess when the reset
             // trigger fired. The second, measured cause: the recovery pose is on the racing line, and some circuits
@@ -459,7 +460,7 @@ impl Race {
                  clear, giving up on it. Either the recovery pose is inside a \
                  Reset volume, or the racing line there runs above the collision \
                  surface; see Race::respawn and docs/gameplay/ai.md.",
-                self.sim.respawns_in_a_row[slot]
+                self.core.sim.respawns_in_a_row[slot]
             );
         }
     }

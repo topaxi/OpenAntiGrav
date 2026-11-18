@@ -32,7 +32,7 @@ fn sections_of_the_flyby(track: &str) -> Option<Vec<u8>> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(race.flyby_camera_section(), None, "before the flyby");
     assert!(race.begin_intro(), "{track} plays a flyby");
     let mut sections = Vec::new();

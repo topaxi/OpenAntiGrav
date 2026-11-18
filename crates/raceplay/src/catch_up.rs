@@ -140,7 +140,7 @@ pub(crate) struct Journal {
 impl Race {
     fn record(&mut self, what: What) {
         let entry = Entry {
-            tick: u32::try_from(self.sim.world.tick).unwrap_or(0),
+            tick: u32::try_from(self.core.sim.world.tick).unwrap_or(0),
             what,
         };
         if self.quiet {
@@ -157,6 +157,7 @@ impl Race {
     /// missed on a replayed one.
     pub(super) fn note_cues(&mut self, queued: usize) {
         let raised: Vec<CueEvent> = self
+            .core
             .sim
             .cues
             .get(queued..)
@@ -203,7 +204,7 @@ impl Race {
     /// a client with nothing to correct calls it itself), after the present is back in place,
     /// because the cues it raises go on the present's queue.
     pub fn settle_presentation(&mut self) {
-        let now = u32::try_from(self.sim.world.tick).unwrap_or(0);
+        let now = u32::try_from(self.core.sim.world.tick).unwrap_or(0);
         let mut missed = std::mem::take(&mut self.journal.missed);
         missed.sort_by_key(|e| e.tick);
         if let Some(from) = missed.first().map(|e| e.tick) {
@@ -244,7 +245,7 @@ impl Race {
             What::Cue(event) if age <= CUE_MAX_AGE => {
                 late.cues += 1;
                 late.oldest_age = late.oldest_age.max(age);
-                self.sim.cues.push(event);
+                self.core.sim.cues.push(event);
             }
             What::Blast {
                 kind,
@@ -256,7 +257,7 @@ impl Race {
                 late.oldest_age = late.oldest_age.max(age);
                 if let Some(playing) = self.ignite_blast_aged(kind, point, struck, orientation, age)
                 {
-                    let dt = self.sim.dt;
+                    let dt = self.core.sim.dt;
                     self.view
                         .stage
                         .pre_age(playing, age, dt, &mut self.view.stage_rng);
@@ -265,7 +266,7 @@ impl Race {
             What::ShieldHit(slot) if age <= SHIELD_MAX_AGE => {
                 late.shield_hits += 1;
                 late.oldest_age = late.oldest_age.max(age);
-                let dt = self.sim.dt;
+                let dt = self.core.sim.dt;
                 if let Some(shell) = self.view.shield.get_mut(slot) {
                     shell.hit();
                     for _ in 0..age {

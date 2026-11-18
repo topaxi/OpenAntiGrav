@@ -315,7 +315,7 @@ impl Race {
         if !self.view.hd_plasma_blast && self.view.plasma_blast_law.is_none() {
             return;
         }
-        let frame = self.sim.track_frame_at(position);
+        let frame = self.core.sim.track_frame_at(position);
         if let Some(slot) = self.view.plasma_blasts.iter().position(Option::is_none) {
             self.view.plasma_blasts[slot] = Some(PlasmaBlast {
                 position,
@@ -367,7 +367,7 @@ impl Race {
             return;
         };
         for slot in 0..MAX_SHIPS {
-            let disrupted = self.sim.world.ships[slot].disruption.active();
+            let disrupted = self.core.sim.world.ships[slot].disruption.active();
             let fx = &mut self.view.disruptor_craft[slot];
             if disrupted && fx.is_none() {
                 *fx = Some(DisruptorCraftBlast {

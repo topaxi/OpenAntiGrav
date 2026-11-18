@@ -76,14 +76,14 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
     for line in &loaded.report {
         println!("{line}");
     }
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.mine_stats().expect("the disc authors a Mine");
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.mine_stats().expect("the disc authors a Mine");
 
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));
     }
-    let speed = race.sim.world.ships[0]
+    let speed = race.core.sim.world.ships[0]
         .physics
         .body
         .linear_velocity
@@ -106,8 +106,8 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
         false,
     );
 
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
-    race.sim.world.ships[0]
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.core.sim.world.ships[0]
         .pickup
         .begin_drop(oag_weapons::projectile::mine::CLUSTER);
 
@@ -122,6 +122,7 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
     for _ in 0..90 {
         race.tick(&PlayerInputs::single(throttle));
         launches += race
+            .core
             .sim
             .pending_cues()
             .iter()

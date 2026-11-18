@@ -311,8 +311,8 @@ impl crate::Race {
     /// where that road lies in a covered section.
     pub fn spray_emitters(&self) -> Vec<Emitter> {
         let mut out = Vec::new();
-        for slot in 0..self.sim.world.ship_count as usize {
-            let ship = &self.sim.world.ships[slot];
+        for slot in 0..self.core.sim.world.ship_count as usize {
+            let ship = &self.core.sim.world.ships[slot];
             if !ship.in_world() {
                 continue;
             }
@@ -323,7 +323,7 @@ impl crate::Race {
             let body = self.body_between(slot);
             let reach = ship.handling.dimensions.height * REACH_HULLS;
             let mut hits = [None; 4];
-            let found = self.sim.collision.raycast_all(
+            let found = self.core.sim.collision.raycast_all(
                 Ray::new(body.position, -body.up(), reach),
                 None,
                 false,

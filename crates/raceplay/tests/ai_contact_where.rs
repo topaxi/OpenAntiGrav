@@ -58,17 +58,21 @@ fn contact_where() {
     let rows = in_parallel::map(&jobs, 16, |&(offset, eps)| {
         let mut setup = race::load(&options).expect("loading").setup;
         perturb::apply_at(&mut setup, eps, offset);
-        let mut race = race::Race::start(setup);
-        for slot in 2..8 {
-            race.sim.world.ships[slot].active = false;
-        }
-        race.sim.world.ships[0].active = false;
-        let yaw = oag_ai::hull_yaw_ceiling(
-            &race.sim.world.ships[1].handling,
-            &race.sim.world.ships[1].physics.body,
+        let mut race = race::Race::start(
+            setup,
+            oag_raceplay::ViewSetup::headless(),
+            oag_raceplay::extensions::Prepared::default(),
         );
-        let reference_ptr = race.speed_plan().map(|p| p as *const _ as usize);
-        let planned = race.plan_of(1).map_or("none".to_string(), |p| {
+        for slot in 2..8 {
+            race.core.sim.world.ships[slot].active = false;
+        }
+        race.core.sim.world.ships[0].active = false;
+        let yaw = oag_ai::hull_yaw_ceiling(
+            &race.core.sim.world.ships[1].handling,
+            &race.core.sim.world.ships[1].physics.body,
+        );
+        let reference_ptr = race.core.speed_plan().map(|p| p as *const _ as usize);
+        let planned = race.core.plan_of(1).map_or("none".to_string(), |p| {
             format!(
                 "{} share {:.3}",
                 if Some(p as *const _ as usize) == reference_ptr {
@@ -81,21 +85,26 @@ fn contact_where() {
         });
         let mut bins: std::collections::BTreeMap<u32, (u32, f32, usize, usize)> =
             Default::default();
-        let mut lap = race.sim.world.ships[1].standing.lap;
+        let mut lap = race.core.sim.world.ships[1].standing.lap;
         let mut started = 0u64;
         let mut laps = Vec::new();
         let mut lap_shield = Vec::new();
-        let start_shield = race.sim.world.ships[1].physics.shield;
+        let start_shield = race.core.sim.world.ships[1].physics.shield;
         for tick in 0..18_000u64 {
-            let before = race.sim.wall_contact_ticks_of(1);
+            let before = race.core.sim.wall_contact_ticks_of(1);
             race.tick(&PlayerInputs::none());
-            let ship = &race.sim.world.ships[1];
-            if race.sim.wall_contact_ticks_of(1) != before {
+            let ship = &race.core.sim.world.ships[1];
+            if race.core.sim.wall_contact_ticks_of(1) != before {
                 let speed = ship.physics.body.linear_velocity.length();
                 let position = ship.physics.body.position;
                 let lap_now = ship.standing.lap;
                 let index = ship.driver.index;
-                let spline = race.sim.spline().nearest(position).map_or(0, |(i, _, _)| i);
+                let spline = race
+                    .core
+                    .sim
+                    .spline()
+                    .nearest(position)
+                    .map_or(0, |(i, _, _)| i);
                 let e = bins
                     .entry(index / bin * bin + 100_000 * u32::from(lap_now > 1))
                     .or_insert((0, 0.0, usize::MAX, 0));
@@ -111,8 +120,8 @@ fn contact_where() {
                 lap = ship.standing.lap;
             }
         }
-        let total = race.sim.wall_contact_ticks_of(1);
-        let end_shield = race.sim.world.ships[1].physics.shield;
+        let total = race.core.sim.wall_contact_ticks_of(1);
+        let end_shield = race.core.sim.world.ships[1].physics.shield;
         // Shield lost per completed lap, from the pool at each lap line.
         let mut pool = Vec::with_capacity(lap_shield.len() + 1);
         pool.push(start_shield);
@@ -173,13 +182,17 @@ fn contact_trace() {
     .expect("loading")
     .setup;
     perturb::apply_at(&mut setup, eps, offset);
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(
+        setup,
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
     let targets: Vec<(f32, f32, f32)> = {
-        let Some(plan) = race.plan_of(1) else {
+        let Some(plan) = race.core.plan_of(1) else {
             println!("no plan: the corner model drives");
             return;
         };
@@ -189,15 +202,15 @@ fn contact_trace() {
     };
     println!("tick lap idx speed target ceil pace lat steer thrust brake abL abR contact");
     for tick in 0..18_000u64 {
-        let before = race.sim.wall_contact_ticks_of(1);
+        let before = race.core.sim.wall_contact_ticks_of(1);
         race.tick(&PlayerInputs::none());
-        let contact = race.sim.wall_contact_ticks_of(1) != before;
-        let ship = &race.sim.world.ships[1];
+        let contact = race.core.sim.wall_contact_ticks_of(1) != before;
+        let ship = &race.core.sim.world.ships[1];
         let index = ship.driver.index as usize;
         if (index as f32) < lo || (index as f32) > hi {
             continue;
         }
-        let line = race.sim.line_of(1);
+        let line = race.core.sim.line_of(1);
         let p = ship.physics.body.position;
         let lat = line
             .corridor_at(index)

@@ -42,7 +42,7 @@ use oag_title::Burst;
 
 /// The burst `title` plays on an absorb, off its [`oag_title::Effects`] table:
 /// `None` for a title whose absorb path is unread, which then plays nothing. Keyed on the title the craft comes from - the same footing
-/// `Setup::shield_palette` is chosen on.
+/// `ViewSetup::shield_palette` is chosen on.
 #[must_use]
 pub fn absorb_burst_for(title: &oag_title::Title) -> Option<Burst> {
     title
@@ -102,7 +102,7 @@ impl Race {
         if let Some(shell) = self.view.absorb_shell.get_mut(slot) {
             shell.stamp();
         }
-        self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+        self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
             oag_gameplay::cue::Cue::Absorb,
             slot,
         ));
@@ -130,20 +130,20 @@ impl Race {
         // against the stamp; past the window there is nothing left to draw.
         for elapsed in &mut self.view.absorb_overlay {
             *elapsed = elapsed
-                .map(|seconds| seconds + self.sim.dt)
+                .map(|seconds| seconds + self.core.sim.dt)
                 .filter(|seconds| *seconds <= oag_fx::hull_overlay::WINDOW);
         }
         for shell in &mut self.view.absorb_shell {
-            shell.advance(self.sim.dt);
+            shell.advance(self.core.sim.dt);
         }
         if self.view.absorb_bursts.is_empty() {
             return;
         }
         let effect = self.view.handles.get(Trigger::ShieldAbsorb).cloned();
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         let mut bursts = std::mem::take(&mut self.view.absorb_bursts);
         bursts.retain_mut(|burst| {
-            let ship = &self.sim.world.ships[burst.slot];
+            let ship = &self.core.sim.world.ships[burst.slot];
             let local = self
                 .view
                 .absorb_anchors

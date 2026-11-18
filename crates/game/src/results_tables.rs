@@ -16,7 +16,7 @@ use oag_ui_screens::endrace::{
 
 /// Wipeout HD/Fury's whole field, ordered by place - the same feed
 /// `crate::scoreboard::Overlay` draws when no `EndRace_Definition.xml` is read at
-/// all. `board` is `None` only before `Race::capture_results` has run, which the
+/// all. `board` is `None` only before `SimRace::capture_results` has run, which the
 /// caller's own guard rules out, so this draws an empty field rather than failing.
 /// `roster` is the grid's team ids in slot order, as the string table keys them
 /// ([`team_keys`]): each row's team column, which the draw resolves to the display name.
@@ -58,7 +58,7 @@ pub fn team_key(title: &oag_title::Title, id: &str) -> String {
     oag_title::team::listed_id(title.teams, base).to_string()
 }
 
-/// A grid's team ids (`Race::slot_teams`) as `title`'s string table keys them.
+/// A grid's team ids (`SimRace::slot_teams`) as `title`'s string table keys them.
 #[must_use]
 pub fn team_keys(title: &oag_title::Title, roster: &[String]) -> Vec<String> {
     roster.iter().map(|id| team_key(title, id)).collect()
@@ -269,7 +269,7 @@ mod tests {
     /// `field_rows` reads place/finish tick/player straight off the
     /// field's own `Board`, in the board's own order - no reordering, no
     /// renumbering, the same "the places are used exactly as assigned"
-    /// rule `Race::capture_results`'s own doc states for the board itself.
+    /// rule `SimRace::capture_results`'s own doc states for the board itself.
     /// A craft still racing when the board was taken (`finish_tick: None`)
     /// keeps that absence rather than a guessed time.
     #[test]

@@ -141,7 +141,7 @@ impl super::Race {
         outcome: &oag_race::Outcome,
         hit: bool,
     ) {
-        let state = self.sim.world.race[slot];
+        let state = self.core.sim.world.race[slot];
         let Some(watch) = self.view.huds[slot].lap_watch.as_mut() else {
             return;
         };
@@ -153,7 +153,7 @@ impl super::Race {
             lap_ticks: outcome.lap_ticks,
             best_lap_ticks: state.best_lap_ticks,
         };
-        let time_trial = self.sim.world.mode() == oag_race::Mode::TimeTrial;
+        let time_trial = self.core.sim.world.mode() == oag_race::Mode::TimeTrial;
         let raised = watch.observe(hit, time_trial, edge);
         for id in raised {
             // The voice is queued on the crossing tick, not when the slot gate
@@ -164,7 +164,8 @@ impl super::Race {
                 .as_ref()
                 .and_then(|w| w.voice(id))
             {
-                self.sim
+                self.core
+                    .sim
                     .cues
                     .push(oag_gameplay::cue::CueEvent::new(cue, slot));
             }

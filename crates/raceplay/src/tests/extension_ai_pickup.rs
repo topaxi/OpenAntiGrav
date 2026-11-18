@@ -43,18 +43,22 @@ fn turbo_table() -> oag_tables::weapons::WeaponStats {
 /// throttle, is raised a `pickup-fire` this tick.
 fn fire_raised(drives_ai_pickup: bool) -> bool {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(std::sync::Arc::new(turbo_table()));
-    race.sim.extensions = crate::extensions::Extensions::new(prepared(&[owner(drives_ai_pickup)]));
+    race.core.sim.weapons = Some(std::sync::Arc::new(turbo_table()));
+    race.core.sim.extensions =
+        crate::extensions::Extensions::new(prepared(&[owner(drives_ai_pickup)]));
     let slot = 1;
-    assert!(race.sim.world.ships[slot].active, "no opponent on the grid");
-    race.sim.world.ships[slot].pickup.weapon =
+    assert!(
+        race.core.sim.world.ships[slot].active,
+        "no opponent on the grid"
+    );
+    race.core.sim.world.ships[slot].pickup.weapon =
         Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
     let controls = oag_physics::ShipControls {
         thrust: 1.0,
         ..oag_physics::ShipControls::default()
     };
     race.spend_opponent_pickup(slot, &controls, &oag_ai::Field::EMPTY);
-    race.sim.extensions.fire_raised(slot)
+    race.core.sim.extensions.fire_raised(slot)
 }
 
 #[test]
@@ -95,11 +99,12 @@ fn tracker() -> crate::extensions::Source {
 #[test]
 fn a_module_reads_the_course_length_and_the_places_the_hud_shows() {
     let mut race = grid(prepared(&[tracker()]));
-    let before = race.places();
+    let before = race.core.places();
     race.tick(&PlayerInputs::none());
-    let blob = race.sim.extensions.blob_for_tests(0);
+    let blob = race.core.sim.extensions.blob_for_tests(0);
     let length = f32::from_bits(u32::from_le_bytes(blob[..4].try_into().unwrap()));
     let expected = race
+        .core
         .sim
         .course
         .as_ref()

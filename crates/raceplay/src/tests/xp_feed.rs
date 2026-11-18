@@ -15,8 +15,12 @@ const XML: &str = r#"<XPAwards>
 fn armed_zone_race() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Zone;
-    let mut race = Race::start(setup);
-    race.sim.arm_xp(XpTally::new(
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.arm_xp(XpTally::new(
         Awards::parse(XML).expect("fixture"),
         Column::Zone,
     ));
@@ -33,12 +37,12 @@ fn run_past_the_countdown(race: &mut Race, ticks: u64) {
 fn each_zone_step_pays_perfect_zone_until_a_wall_is_touched() {
     let mut race = armed_zone_race();
     run_past_the_countdown(&mut race, 1300);
-    let zones = u32::from(race.sim.world.primary_race().zone);
+    let zones = u32::from(race.core.sim.world.primary_race().zone);
     assert!(
         zones >= 2,
         "sanity: two zone steps in 1300 ticks, got {zones}"
     );
-    let tally = race.sim.xp_tally().expect("armed");
+    let tally = race.core.sim.xp_tally().expect("armed");
     assert_eq!(tally.times_paid(10), zones);
     assert_eq!(tally.times_paid(9), 0);
     let perfect = Awards::parse(XML).expect("fixture").xp(10, Column::Zone);
@@ -49,27 +53,31 @@ fn each_zone_step_pays_perfect_zone_until_a_wall_is_touched() {
 fn a_zone_with_a_wall_contact_pays_the_plain_zone_award() {
     let mut race = armed_zone_race();
     run_past_the_countdown(&mut race, 100);
-    race.sim.world.race[0].zone_dirty = true;
+    race.core.sim.world.race[0].zone_dirty = true;
     run_past_the_countdown(&mut race, 600);
-    let tally = race.sim.xp_tally().expect("armed");
+    let tally = race.core.sim.xp_tally().expect("armed");
     assert_eq!(tally.times_paid(9), 1, "the dirty zone");
 }
 
 #[test]
 fn a_kill_pays_once_and_only_after_the_countdown() {
     let mut race = armed_zone_race();
-    race.sim.world.ships[0].standing.kills = 1;
+    race.core.sim.world.ships[0].standing.kills = 1;
     run_past_the_countdown(&mut race, 5);
-    assert_eq!(race.sim.xp_tally().expect("armed").times_paid(6), 1);
+    assert_eq!(race.core.sim.xp_tally().expect("armed").times_paid(6), 1);
 }
 
 #[test]
 fn an_unarmed_race_gathers_nothing() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Zone;
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     run_past_the_countdown(&mut race, 700);
-    assert!(race.sim.xp_tally().is_none());
+    assert!(race.core.sim.xp_tally().is_none());
 }
 
 fn progress(awards: Option<Awards>) -> crate::Campaign2048Progress {
@@ -85,11 +93,15 @@ fn progress(awards: Option<Awards>) -> crate::Campaign2048Progress {
 
 #[test]
 fn an_event_with_a_table_arms_the_tally_in_its_column_and_one_without_does_not() {
-    let mut race = Race::start(setup(hulled_handling()));
-    race.sim.arm_event_xp(&progress(None));
-    assert!(race.sim.xp_tally().is_none());
-    race.sim.arm_event_xp(&progress(Awards::parse(XML)));
-    assert!(race.sim.xp_tally().is_some());
+    let mut race = Race::start(
+        setup(hulled_handling()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.arm_event_xp(&progress(None));
+    assert!(race.core.sim.xp_tally().is_none());
+    race.core.sim.arm_event_xp(&progress(Awards::parse(XML)));
+    assert!(race.core.sim.xp_tally().is_some());
 }
 
 /// The HUD's `RaceXP` reads the tally: a kill raises the readout by the parsed award's value, and
@@ -99,7 +111,7 @@ fn a_kill_raises_the_readouts_xp_by_the_authored_amount() {
     let mut race = armed_zone_race();
     run_past_the_countdown(&mut race, 2);
     assert_eq!(race.readout().race_xp, Some(0));
-    race.sim.world.ships[0].standing.kills = 1;
+    race.core.sim.world.ships[0].standing.kills = 1;
     run_past_the_countdown(&mut race, 2);
     let kill = Awards::parse(XML).expect("fixture").xp(6, Column::Zone);
     assert_eq!(kill, 50);
@@ -107,5 +119,14 @@ fn a_kill_raises_the_readouts_xp_by_the_authored_amount() {
 
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Zone;
-    assert_eq!(Race::start(setup).readout().race_xp, None);
+    assert_eq!(
+        Race::start(
+            setup,
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default()
+        )
+        .readout()
+        .race_xp,
+        None
+    );
 }

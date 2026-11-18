@@ -43,7 +43,7 @@ impl Race {
     /// jump both fall through to the single point: interpolating a zero-length
     /// step adds nothing, and interpolating a long one does not close the gap.
     pub(super) fn pad_sweep(&mut self, slot: usize, position: Vec3) -> (f32, Vec<Vec3>) {
-        let previous = self.sim.pad_previous_position[slot].replace(position);
+        let previous = self.core.sim.pad_previous_position[slot].replace(position);
         let moved = previous.map_or(f32::INFINITY, |from| position.distance(from));
         let sweep = match previous {
             Some(from) if (0.0..Self::PAD_SWEEP_LIMIT).contains(&moved) && moved > 0.0 => (1
@@ -68,7 +68,7 @@ impl Race {
     /// the Zone score, and arming the exhaust flare.
     ///
     /// `moved` and `sweep` come from [`Self::pad_sweep`] and are shared with
-    /// [`Self::test_weapon_pads`], because the original's two trigger functions
+    /// [`SimRace::test_weapon_pads`], because the original's two trigger functions
     /// run in the same craft update against the same previous position.
     pub(super) fn test_speedup_pads(
         &mut self,
@@ -77,23 +77,23 @@ impl Race {
         moved: f32,
         sweep: &[Vec3],
     ) -> Option<Vec3> {
-        if self.sim.speedup_pads.is_empty() {
+        if self.core.sim.speedup_pads.is_empty() {
             return None;
         }
 
         let mut hit = None;
-        for (index, pad) in self.sim.speedup_pads.iter().enumerate() {
+        for (index, pad) in self.core.sim.speedup_pads.iter().enumerate() {
             // The broadphase. Spend the distance travelled, and skip until it is
             // used up. `moved` is infinite on the first tick, so every pad is
             // measured once before any of them is skipped.
-            self.sim.pad_distance[slot][index] -= moved;
-            if self.sim.pad_distance[slot][index] > 0.0 {
+            self.core.sim.pad_distance[slot][index] -= moved;
+            if self.core.sim.pad_distance[slot][index] > 0.0 {
                 continue;
             }
 
             // Measured from the destination, which is where the cache has to be
             // correct from for the next tick's subtraction to mean anything.
-            self.sim.pad_distance[slot][index] = pad.distance(position.to_array());
+            self.core.sim.pad_distance[slot][index] = pad.distance(position.to_array());
 
             // First pad wins. The cache above is still updated for every pad whose
             // turn it was, or a skipped one would keep a stale distance forever.
@@ -115,22 +115,24 @@ impl Race {
         // the pad gives no push, and the entry below pays no plume, sound, boost count
         // or Zone score (chosen). The edge and the cache are the pad's as ever, and the
         // module hears every entry.
-        let factor = entered.map_or(1.0, |index| self.sim.extensions.pad_factor(slot, index));
-        if entered != self.sim.pad_current[slot] {
-            self.sim.pad_current[slot] = entered;
+        let factor = entered.map_or(1.0, |index| {
+            self.core.sim.extensions.pad_factor(slot, index)
+        });
+        if entered != self.core.sim.pad_current[slot] {
+            self.core.sim.pad_current[slot] = entered;
             if let Some(index) = entered {
-                self.sim.extensions.pad_entered(slot, index, false);
+                self.core.sim.extensions.pad_entered(slot, index, false);
             }
             if entered.is_some() && factor > 0.0 {
                 // The lap table's third column: `Ship_ApplySpeedupPad` adds one to the
                 // human craft's own per-lap counter on this same edge (`craft+0x900 +
                 // lap * 0x10 + 0x94`, its only writer). See [`RunStats`].
-                if self.sim.world.controllers[slot].is_human() {
+                if self.core.sim.world.controllers[slot].is_human() {
                     #[cfg(feature = "view")]
-                    let lap = self.sim.world.race[slot].lap;
+                    let lap = self.core.sim.world.race[slot].lap;
                     #[cfg(feature = "view")]
                     if self.draws() {
-                        self.view.run_stats.count_boost(lap);
+                        self.core.outcome.run_stats.count_boost(lap);
                     }
                 }
                 // Zone mode only. `Ship_ApplySpeedupPad` raises its flag under
@@ -140,10 +142,10 @@ impl Race {
                 // score lands on the craft that actually crossed. Zone has no
                 // AI field today, so this gate is about who is being scored
                 // for rather than about excluding opponents.
-                if self.sim.world.controllers[slot].is_human()
-                    && self.sim.world.mode() == Mode::Zone
+                if self.core.sim.world.controllers[slot].is_human()
+                    && self.core.sim.world.mode() == Mode::Zone
                 {
-                    self.sim.world.race[slot].score += oag_race::zone::SPEEDUP_PAD_SCORE;
+                    self.core.sim.world.race[slot].score += oag_race::zone::SPEEDUP_PAD_SCORE;
                 }
                 // The visual, on the same edge and with the same **fixed**
                 // duration the original uses. `ExhaustFlare_OnSpeedupPad`
@@ -177,7 +179,7 @@ impl Race {
                 // layer decides how to place it now. See
                 // `oag_sound::sfx::Placement::CraftUnlessPlayer`, which
                 // carries the one hypothesis that split rides on.
-                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::SpeedupPad,
                     slot,
                 ));
@@ -197,14 +199,16 @@ impl Race {
             }
         })
     }
+}
 
+impl SimRace {
     /// Crosses the ship against the track's weapon pads, granting a pickup.
     ///
     /// Reimplements `WeaponPads_TestCraft` (`0x0888727c`), which
     /// `docs/ghidra/functions/psp-pulse-usa/pads.md` reads as "the exact mirror
     /// of `Pads_TestCraft`" for the `world+0x10c` list - same swept test, same
     /// per-racer distance cache. So the broadphase and the sweep below are
-    /// [`Self::test_speedup_pads`]' verbatim, and what differs is only what
+    /// [`Race::test_speedup_pads`]' verbatim, and what differs is only what
     /// happens on a hit.
     ///
     /// # Three things happen here and one of them is partly recovered
@@ -345,7 +349,7 @@ impl Race {
         let last = self.sim.world.ships[slot].pickup.last;
         // `None` for every non-2048 race and for a 2048 event whose weapon
         // set decodes to nothing recognised - the same "empty is no
-        // restriction" reading `Setup::allowed_weapons`'s own doc comment
+        // restriction" reading `SimSetup::allowed_weapons`'s own doc comment
         // gives. AI slots are gated the same as the player's: which weapons
         // an event's own `WeaponSetDefinition` allows is stated about the
         // pads, not about who crosses them - **chosen, not measured**, since

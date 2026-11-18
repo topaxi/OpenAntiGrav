@@ -111,7 +111,7 @@ fn race_in(mode: oag_race::Mode, extensions: Vec<race::extensions::Source>) -> O
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// The player's speed, km/h, every tick for `ticks` ticks, throttle held from the start.
@@ -119,7 +119,7 @@ fn speeds(mut race: race::Race, ticks: usize) -> Vec<f32> {
     (0..ticks)
         .map(|_| {
             race.tick(&PlayerInputs::single(held(0.0)));
-            race.ship().physics.body.linear_velocity.length() * oag_core::math::SPEED_TO_KMH
+            race.core.ship().physics.body.linear_velocity.length() * oag_core::math::SPEED_TO_KMH
         })
         .collect()
 }
@@ -131,7 +131,7 @@ fn a_craft_scraping_a_wall_is_slower_with_the_curse() {
     let Some(cursed) = race_with(vec![source]) else {
         return;
     };
-    assert!(cursed.sim.is_modded(), "the module loaded");
+    assert!(cursed.core.sim.is_modded(), "the module loaded");
     let plain = race_with(Vec::new()).unwrap();
     const TICKS: usize = 900;
     let (cursed, plain) = (speeds(cursed, TICKS), speeds(plain, TICKS));
@@ -159,7 +159,7 @@ fn hash_lines(mut race: race::Race, ticks: usize) -> Vec<String> {
     (1..=ticks)
         .filter_map(|t| {
             race.tick(&PlayerInputs::single(held(0.0)));
-            (t % 100 == 0).then(|| format!("{t} {:#018x}", race.sim.state_hash()))
+            (t % 100 == 0).then(|| format!("{t} {:#018x}", race.core.sim.state_hash()))
         })
         .collect()
 }
@@ -183,7 +183,7 @@ fn a_modded_race_hashes_the_same_on_either_engine() {
     let Some(cursed) = race_with(vec![source]) else {
         return;
     };
-    assert!(cursed.sim.is_modded(), "the module loaded");
+    assert!(cursed.core.sim.is_modded(), "the module loaded");
     let want = if cfg!(feature = "wasm-interpreter") {
         "Pulley"
     } else {
@@ -213,7 +213,7 @@ fn field_speeds(mut race: race::Race, ticks: usize) -> Vec<[f32; oag_gameplay::M
         .map(|_| {
             race.tick(&PlayerInputs::none());
             std::array::from_fn(|slot| {
-                race.sim.world.ships[slot]
+                race.core.sim.world.ships[slot]
                     .physics
                     .body
                     .linear_velocity

@@ -41,6 +41,7 @@ impl Scene {
         // at five seconds, which is also where the bump's envelope reaches
         // nothing, so the road is flat again by the tick it goes.
         let wave = race
+            .core
             .sim
             .world
             .quake
@@ -67,12 +68,13 @@ impl Scene {
         // reproduces. Gameplay state, driven off `seconds` like the scenery.
         if let Some(weapon_pads) = &self.weapon_pads {
             pads_ready.extend(
-                race.sim
+                race.core
+                    .sim
                     .weapon_pad_refresh_left()
                     .iter()
                     .map(|&left| left <= 0.0),
             );
-            match race.sim.weapon_pad_glow {
+            match race.core.sim.weapon_pad_glow {
                 oag_title::weapon_pad::WeaponPadGlow::Cycle(cycle) => {
                     weapon_pads.glow_weapon_pads(queue, seconds, cycle, pads_ready);
                 }

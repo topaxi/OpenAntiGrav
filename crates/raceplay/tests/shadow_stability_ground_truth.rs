@@ -53,8 +53,8 @@ fn measure(mode: oag_race::Mode, warm: u64, conform: bool) -> Option<Window> {
     })
     .expect("loading the race");
     let hull = loaded.shadows.hulls[0].clone().expect("an authored hull");
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
     for _ in 0..warm {
         race.tick(&PlayerInputs::none());
     }
@@ -83,7 +83,7 @@ fn measure(mode: oag_race::Mode, warm: u64, conform: bool) -> Option<Window> {
         );
         if conform {
             oag_render::shadow::conform_to_floor(&mut v, 0, |at, normal| {
-                race.sim.floor_above(at, normal)
+                race.core.sim.floor_above(at, normal)
             });
         }
         let mut points: Vec<Vec3> = v.iter().map(|x| Vec3::from_array(x.position)).collect();
@@ -96,7 +96,7 @@ fn measure(mode: oag_race::Mode, warm: u64, conform: bool) -> Option<Window> {
         let mut deepest = 0.0f32;
         for at in points {
             // The floor above a point, measured along the polygon's own normal.
-            if let Some(above) = race.sim.floor_above(at, p.normal) {
+            if let Some(above) = race.core.sim.floor_above(at, p.normal) {
                 deepest = deepest.max(above);
             }
         }

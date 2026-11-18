@@ -45,7 +45,10 @@ fn suffix(team: &str) -> &'static str {
 fn started(image: &std::path::Path, team: &str) -> (Race, Vec<String>) {
     let loaded = race::load(&options(image, team)).expect("loading the race");
     let teams = loaded.setup.slot_teams.clone();
-    (Race::start(loaded.setup), teams)
+    (
+        Race::start(loaded.setup, loaded.view, loaded.modules),
+        teams,
+    )
 }
 
 /// The tuning a lone craft of `team` flies, as the player.
@@ -88,7 +91,7 @@ fn every_opponent_flies_its_own_variants_handling_not_the_players() {
         let mut checked = 0;
         let mut moved = 0;
         for (slot, team) in teams.iter().enumerate().skip(1) {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             if !ship.active {
                 continue;
             }
@@ -100,7 +103,7 @@ fn every_opponent_flies_its_own_variants_handling_not_the_players() {
                 "{player}: slot {slot} ({team}) is not on its own tuning"
             );
             checked += 1;
-            moved += usize::from(ship.handling != race.sim.world.ships[0].handling);
+            moved += usize::from(ship.handling != race.core.sim.world.ships[0].handling);
         }
         assert!(
             moved > 0,
@@ -148,7 +151,7 @@ fn pulse_opponents_fly_their_own_teams_handling() {
     };
     let loaded = race::load(&options(None)).expect("loading the race");
     let teams = loaded.setup.slot_teams.clone();
-    let race = Race::start(loaded.setup);
+    let race = Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut differing = 0;
     for (slot, team) in teams.iter().enumerate().skip(1) {
         let own = race::load(&options(Some(team)))
@@ -156,10 +159,10 @@ fn pulse_opponents_fly_their_own_teams_handling() {
             .setup
             .handling;
         assert_eq!(
-            race.sim.world.ships[slot].handling, own,
+            race.core.sim.world.ships[slot].handling, own,
             "slot {slot} ({team})"
         );
-        differing += usize::from(own != race.sim.world.ships[0].handling);
+        differing += usize::from(own != race.core.sim.world.ships[0].handling);
     }
     assert!(differing > 0, "every Pulse team authors the same numbers");
 }

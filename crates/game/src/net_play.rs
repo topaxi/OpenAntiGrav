@@ -410,7 +410,7 @@ impl NetPlay {
     pub fn begin_join(&self, race: &mut Race, title: &str) -> Result<()> {
         oag_net::race::check_title(&self.welcome.params, title)?;
         oag_net::race::prepare(race, &self.welcome.params)?;
-        race.set_person_names(self.names.borrow().clone());
+        race.core.set_person_names(self.names.borrow().clone());
         let mut client = self.client.borrow_mut();
         client.ready(race)?;
         println!(
@@ -635,7 +635,7 @@ impl NetPlay {
     /// Compares this client's board with the server's, once both exist, and says which. They
     /// are the same race (the tick hash proves the state), so a difference is a bug.
     fn check_server_board(&self, race: &Race) {
-        if self.board_checked.get() || !race.sim.finished() || race.results().is_none() {
+        if self.board_checked.get() || !race.core.sim.finished() || race.core.results().is_none() {
             return;
         }
         let Some(theirs) = self.server_board() else {
@@ -661,7 +661,7 @@ impl NetPlay {
     /// clock.
     pub fn drive_to(&self, race: &mut Race, tick: u64, device: InputSnapshot) {
         let dt = Duration::from_secs_f64(f64::from(oag_core::tick::TickRate::DEFAULT.dt()));
-        while race.sim.world.tick < tick && self.over().is_none() {
+        while race.core.sim.world.tick < tick && self.over().is_none() {
             let due = self.due.get().unwrap_or_else(Instant::now);
             let now = Instant::now();
             if now < due {
@@ -793,7 +793,7 @@ impl NetPlay {
         log.1 = Instant::now();
         let (srv, local) = (
             self.client.borrow().confirmed_tick(),
-            u32::try_from(race.sim.world.tick).unwrap_or(u32::MAX),
+            u32::try_from(race.core.sim.world.tick).unwrap_or(u32::MAX),
         );
         let path = self.client.borrow().path();
         let net = {
@@ -808,7 +808,7 @@ impl NetPlay {
              +{} -{} stalls {} resends {} | quic rtt {} ms confirm {} ms jitter {} ms \
              rx {:.0} B/s {:.0} d/s tx {:.0} B/s {:.0} d/s loss {} | \
              shots first seen {} oldest {} ticks, put back {} after {} ticks",
-            race.sim.world.tick,
+            race.core.sim.world.tick,
             s.predicted,
             s.confirmed,
             s.hash_matches,
@@ -867,7 +867,7 @@ fn fmt_ms(value: Option<f32>) -> String {
 /// The board as this client has it when the server ends the race, in the
 /// server's own `board` lines' shape, so the two logs compare line for line.
 fn print_board(race: &Race) {
-    let Some(board) = race.results() else {
+    let Some(board) = race.core.results() else {
         println!("net: the race ended with no board on this client");
         return;
     };

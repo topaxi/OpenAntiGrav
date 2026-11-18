@@ -933,13 +933,13 @@ Claim: "no speed plan is learned on the frame thread: a menu-started Pulse Outpo
 first ticks contain no frame over the control circuit's bound, and the plans the race drives are
 bit-identical to today's".
 
-Cause (the maintainer's Deck log, reproduced here): `Race::ensure_speed_plans` ran at the head of
+Cause (the maintainer's Deck log, reproduced here): `SimRace::ensure_speed_plans` ran at the head of
 the first `Race::tick`. Outpost 7 (`07_Track`) has a fork, so it learns the ring, route and ten
 hull plans even under the original driver (`needs_speed_plans`), 1.3 to 1.7 s of one frame.
 Earlier lanes measured other paths: the flyby does not tick the race (`tick_intro`), so the cost
 lands at the end of the flyby or on the first tick under `--no-intro`.
 
-Fix: `Race::begin_speed_plans` after the launch's last setter (`session/load.rs`), a `speed-plans`
+Fix: `SimRace::begin_speed_plans` after the launch's last setter (`session/load.rs`), a `speed-plans`
 thread on a copy of `RaceSim`, the loading screen's hand-over waits for it. Starting the job
 takes 0.13 ms (the copy), adopting it 25 us; learning on the frame thread took 1.34 to 1.74 s
 (release-like debug test run, `plans_learned_ahead_are_the_plans_the_first_tick_learns`).

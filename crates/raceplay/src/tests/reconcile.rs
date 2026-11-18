@@ -54,7 +54,11 @@ fn loopback_race() -> Race {
     let mut handling = hulled_handling();
     handling.engine.amount = 20.0;
     handling.engine.accelcap = 1000.0;
-    without_player_rescue(Race::start(setup(handling)))
+    without_player_rescue(Race::start(
+        setup(handling),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ))
 }
 
 /// One tick's input for the player's slot, steering by `stick_x`.
@@ -76,7 +80,7 @@ fn steering(stick_x: f32) -> PlayerInputs {
 /// ticks through [`Race::tick`] would raise their cues a second time.
 fn advance(race: &mut Race, inputs: &PlayerInputs) {
     race.tick(inputs);
-    race.sim.drain_cues();
+    race.core.sim.drain_cues();
 }
 
 /// The whole claim, end to end: a client that predicted wrong, handed the
@@ -105,8 +109,8 @@ fn a_mispredicted_run_reconciles_to_the_servers_hash() {
         advance(&mut client, &inputs);
     }
     assert_eq!(
-        server.sim.state_hash(),
-        client.sim.state_hash(),
+        server.core.sim.state_hash(),
+        client.core.sim.state_hash(),
         "client and server disagree while being fed identical inputs - \
          nothing after this would mean anything"
     );
@@ -114,7 +118,7 @@ fn a_mispredicted_run_reconciles_to_the_servers_hash() {
     // What the server would send: its own state at the tick it has finished,
     // which the client tags and keeps until it is contradicted.
     let authoritative = server.snapshot_sim();
-    let authoritative_tick = server.sim.world.tick;
+    let authoritative_tick = server.core.sim.world.tick;
 
     // The client buffers what it believes the truth is, and it is wrong: it
     // steers the other way for the whole run. A real client's buffer holds its
@@ -130,19 +134,19 @@ fn a_mispredicted_run_reconciles_to_the_servers_hash() {
         advance(&mut client, inputs);
     }
     assert_ne!(
-        server.sim.state_hash(),
-        client.sim.state_hash(),
+        server.core.sim.state_hash(),
+        client.core.sim.state_hash(),
         "the prediction did not actually diverge, so reconciling it proves nothing"
     );
 
     client.restore_sim(&authoritative);
     assert_eq!(
-        client.sim.world.tick, authoritative_tick,
+        client.core.sim.world.tick, authoritative_tick,
         "restoring did not wind the clock back to the snapshot's own tick"
     );
     assert_ne!(
-        server.sim.state_hash(),
-        client.sim.state_hash(),
+        server.core.sim.state_hash(),
+        client.core.sim.state_hash(),
         "the restored client already matched the server, so the replay below \
          is not what closes the gap"
     );
@@ -151,12 +155,12 @@ fn a_mispredicted_run_reconciles_to_the_servers_hash() {
         client.tick_sim_only(inputs);
     }
     assert_eq!(
-        server.sim.state_hash(),
-        client.sim.state_hash(),
+        server.core.sim.state_hash(),
+        client.core.sim.state_hash(),
         "reconciliation did not land on the authoritative state"
     );
     assert_eq!(
-        client.sim.world.tick, server.sim.world.tick,
+        client.core.sim.world.tick, server.core.sim.world.tick,
         "the replay left the client on a different tick from the server"
     );
 }
@@ -185,10 +189,10 @@ fn reconciling_a_correct_prediction_changes_nothing() {
         advance(&mut client, inputs);
     }
 
-    let predicted = client.sim.state_hash();
+    let predicted = client.core.sim.state_hash();
     assert_eq!(
         predicted,
-        server.sim.state_hash(),
+        server.core.sim.state_hash(),
         "the client did not predict correctly, so this is the other test"
     );
 
@@ -199,7 +203,7 @@ fn reconciling_a_correct_prediction_changes_nothing() {
 
     assert_eq!(
         predicted,
-        client.sim.state_hash(),
+        client.core.sim.state_hash(),
         "reconciling a correct prediction moved the client off it"
     );
 }
@@ -215,21 +219,21 @@ pub(super) fn two_person_race(controller: Controller) -> Race {
     let mut race = loopback_race();
     // The fixture's craft cannot turn (`Handling::ZERO` has no yaw authority),
     // and "slot 1 turned" is the claim, so both get some.
-    race.sim.world.ships[0].handling.turning = oag_physics::params::Turning {
+    race.core.sim.world.ships[0].handling.turning = oag_physics::params::Turning {
         amount: 60.0,
         falloff: 5.0,
         gain: 5.0,
     };
-    let mut second = race.sim.world.ships[0];
+    let mut second = race.core.sim.world.ships[0];
     let pose = oag_gameplay::Pose {
         position: second.physics.body.position + second.physics.body.right() * 60.0,
         orientation: second.physics.body.orientation,
     };
     second.place_at(pose);
-    race.sim.world.ships[1] = second;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ship_count = 2;
-    race.sim.world.controllers[1] = controller;
+    race.core.sim.world.ships[1] = second;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.controllers[1] = controller;
     race
 }
 
@@ -262,7 +266,7 @@ fn a_remote_slots_input_reaches_its_own_craft() {
     for controller in [Controller::Remote, Controller::Local] {
         let mut idle = two_person_race(controller);
         let mut hard_over = two_person_race(controller);
-        let start_heading = hard_over.sim.world.ships[1].physics.body.forward();
+        let start_heading = hard_over.core.sim.world.ships[1].physics.body.forward();
 
         for _ in 0..60 {
             let evaluations = hard_over.tick(&two_steering(0.0, 1.0));
@@ -270,17 +274,17 @@ fn a_remote_slots_input_reaches_its_own_craft() {
                 evaluations.get(1).is_some(),
                 "{controller:?}: slot 1 was not stepped"
             );
-            hard_over.sim.drain_cues();
+            hard_over.core.sim.drain_cues();
             advance(&mut idle, &two_steering(0.0, 0.0));
         }
 
         assert_ne!(
-            idle.sim.state_hash(),
-            hard_over.sim.state_hash(),
+            idle.core.sim.state_hash(),
+            hard_over.core.sim.state_hash(),
             "{controller:?}: slot 1's stick did not reach the hash"
         );
-        let turned = hard_over.sim.world.ships[1].physics.body.forward();
-        let held_straight = idle.sim.world.ships[1].physics.body.forward();
+        let turned = hard_over.core.sim.world.ships[1].physics.body.forward();
+        let held_straight = idle.core.sim.world.ships[1].physics.body.forward();
         assert!(
             (turned - start_heading).length() > 1.0e-3,
             "{controller:?}: slot 1's craft did not turn: {start_heading:?} -> {turned:?}"
@@ -290,8 +294,8 @@ fn a_remote_slots_input_reaches_its_own_craft() {
             "{controller:?}: the idle craft turned as much as the one held over"
         );
         assert_eq!(
-            idle.sim.world.ships[0].physics.body.position,
-            hard_over.sim.world.ships[0].physics.body.position,
+            idle.core.sim.world.ships[0].physics.body.position,
+            hard_over.core.sim.world.ships[0].physics.body.position,
             "{controller:?}: slot 1's input moved slot 0's craft"
         );
     }
@@ -309,12 +313,12 @@ fn an_ai_slot_is_not_stepped_as_a_player() {
             evaluations.get(1).is_none(),
             "an AI slot was stepped as a player"
         );
-        shouted_at.sim.drain_cues();
+        shouted_at.core.sim.drain_cues();
         advance(&mut idle, &two_steering(0.0, 0.0));
     }
     assert_eq!(
-        idle.sim.state_hash(),
-        shouted_at.sim.state_hash(),
+        idle.core.sim.state_hash(),
+        shouted_at.core.sim.state_hash(),
         "a snapshot in an AI slot reached the simulation"
     );
 }
@@ -336,8 +340,8 @@ fn a_mispredicted_remote_slot_reconciles_to_the_servers_hash() {
         advance(&mut client, &two_steering(0.5, 1.0));
     }
     assert_eq!(
-        server.sim.state_hash(),
-        client.sim.state_hash(),
+        server.core.sim.state_hash(),
+        client.core.sim.state_hash(),
         "client and server disagree while being fed identical inputs"
     );
     let authoritative = server.snapshot_sim();
@@ -357,26 +361,26 @@ fn a_mispredicted_remote_slot_reconciles_to_the_servers_hash() {
         advance(&mut client, inputs);
     }
     assert_ne!(
-        server.sim.state_hash(),
-        client.sim.state_hash(),
+        server.core.sim.state_hash(),
+        client.core.sim.state_hash(),
         "the guess about slot 1 did not diverge, so reconciling it proves nothing"
     );
 
     client.restore_sim(&authoritative);
     assert_ne!(
-        server.sim.state_hash(),
-        client.sim.state_hash(),
+        server.core.sim.state_hash(),
+        client.core.sim.state_hash(),
         "the restored client already matched the server"
     );
     for inputs in &truth {
         client.tick_sim_only(inputs);
     }
     assert_eq!(
-        server.sim.state_hash(),
-        client.sim.state_hash(),
+        server.core.sim.state_hash(),
+        client.core.sim.state_hash(),
         "reconciliation did not land on the authoritative state for a remote slot"
     );
-    assert_eq!(client.sim.world.tick, server.sim.world.tick);
+    assert_eq!(client.core.sim.world.tick, server.core.sim.world.tick);
 }
 
 /// [`Race::restore_sim`] puts the simulation back and leaves the view alone.
@@ -410,7 +414,7 @@ fn restoring_the_sim_leaves_the_view_alone() {
         "restoring the simulation reset the camera perspective with it"
     );
     assert_eq!(
-        race.sim.world.tick,
+        race.core.sim.world.tick,
         u64::from(AGREED_TICKS),
         "the simulation half did not go back"
     );
@@ -448,7 +452,7 @@ fn assert_same_view(before: &str, after: &str) {
 fn slot_fingerprint(race: &Race, slot: usize) -> String {
     format!(
         "{:?} {:?}",
-        race.sim.world.ships[slot], race.sim.world.race[slot]
+        race.core.sim.world.ships[slot], race.core.sim.world.race[slot]
     )
 }
 
@@ -478,8 +482,8 @@ fn a_quiet_replay_reaches_the_hash_of_a_normal_one() {
         advance(&mut server, &varied(tick));
         quiet.tick_sim_only(&varied(tick));
         assert_eq!(
-            server.sim.state_hash(),
-            quiet.sim.state_hash(),
+            server.core.sim.state_hash(),
+            quiet.core.sim.state_hash(),
             "the quiet path left the server's trajectory at tick {tick}"
         );
         for slot in 0..2 {
@@ -494,17 +498,17 @@ fn a_quiet_replay_reaches_the_hash_of_a_normal_one() {
     // counters, dwell timers and cue bookkeeping outside `state_hash`, and a
     // skipped helper that wrote one would pass every check above.
     for race in [&mut server, &mut quiet] {
-        race.sim.drain_announcements();
-        race.sim.drain_class_announcements();
+        race.core.sim.drain_announcements();
+        race.core.sim.drain_class_announcements();
     }
     assert_eq!(
-        format!("{:?}", server.sim),
-        format!("{:?}", quiet.sim),
+        format!("{:?}", server.core.sim),
+        format!("{:?}", quiet.core.sim),
         "the quiet path left the sim differing from the normal one outside the hash"
     );
     // Non-vacuous: the run went somewhere, and the two slots went different
     // ways, so equality is not two craft sitting still.
-    assert_ne!(server.sim.state_hash(), client.sim.state_hash());
+    assert_ne!(server.core.sim.state_hash(), client.core.sim.state_hash());
     assert_ne!(
         slot_fingerprint(&server, 0),
         slot_fingerprint(&server, 1),
@@ -534,7 +538,7 @@ fn a_quiet_replay_leaves_the_view_alone() {
     // The controls: the same window through the normal tick moves the view, and
     // the quiet one still moved the sim.
     assert_ne!(view_before, view_fingerprint(&normal));
-    assert_ne!(snapshot.state_hash(), quiet.sim.state_hash());
+    assert_ne!(snapshot.state_hash(), quiet.core.sim.state_hash());
 }
 
 /// A tick that would light a plume and sound a cue does neither quietly and
@@ -547,9 +551,10 @@ fn a_quiet_tick_enters_the_pad_without_the_plume_or_the_cue() {
     normal.tick(&PlayerInputs::none());
     quiet.tick_sim_only(&PlayerInputs::none());
 
-    assert_eq!(normal.sim.state_hash(), quiet.sim.state_hash());
+    assert_eq!(normal.core.sim.state_hash(), quiet.core.sim.state_hash());
     assert!(
         normal
+            .core
             .sim
             .pending_cues()
             .iter()
@@ -558,9 +563,9 @@ fn a_quiet_tick_enters_the_pad_without_the_plume_or_the_cue() {
     );
     assert!(normal.view.exhaust[0].boost_timer() > 0.0);
     assert!(
-        quiet.sim.pending_cues().is_empty(),
+        quiet.core.sim.pending_cues().is_empty(),
         "{:?}",
-        quiet.sim.pending_cues()
+        quiet.core.sim.pending_cues()
     );
     assert_eq!(quiet.view.exhaust[0].boost_timer(), 0.0);
 }
@@ -571,10 +576,10 @@ fn a_quiet_tick_enters_the_pad_without_the_plume_or_the_cue() {
 fn a_quiet_replay_keeps_the_cues_that_were_already_queued() {
     let mut race = grid_on_a_speed_pad();
     race.tick(&PlayerInputs::none());
-    let waiting = race.sim.pending_cues().len();
+    let waiting = race.core.sim.pending_cues().len();
     assert!(waiting > 0, "no cue was waiting, so the claim is vacuous");
     for _ in 0..10 {
         race.tick_sim_only(&PlayerInputs::none());
     }
-    assert_eq!(race.sim.pending_cues().len(), waiting);
+    assert_eq!(race.core.sim.pending_cues().len(), waiting);
 }

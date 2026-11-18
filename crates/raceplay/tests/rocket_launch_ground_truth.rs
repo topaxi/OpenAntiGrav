@@ -51,7 +51,7 @@ fn start() -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// A body whose forward is `forward` and whose up is as close to `up` as it
@@ -69,18 +69,22 @@ fn a_volley_from_the_originals_pose_is_laid_at_the_craft_and_cruises_at_the_clas
     let Some(mut race) = start() else {
         return;
     };
-    let dt = race.sim.dt();
+    let dt = race.core.sim.dt();
     {
-        let body = &mut race.sim.world.ships[0].physics.body;
+        let body = &mut race.core.sim.world.ships[0].physics.body;
         body.position = ORIGINAL_SPAWN;
         body.orientation = pose(Vec3::new(2.74, 0.10, -0.02), Vec3::new(-0.03, 1.0, 0.05));
         body.linear_velocity = Vec3::ZERO;
     }
-    let stats = race.sim.rocket_stats().expect("the disc authors a Rocket");
+    let stats = race
+        .core
+        .sim
+        .rocket_stats()
+        .expect("the disc authors a Rocket");
     let class = "VENOM".to_string();
     // A copy of the world to step, so the race's collision soup can be borrowed
     // beside it.
-    let mut world = race.sim.world.clone();
+    let mut world = race.core.sim.world.clone();
     let fired = projectile::fire_rocket(
         &mut world.projectiles,
         &world.ships[0].physics,
@@ -110,13 +114,13 @@ fn a_volley_from_the_originals_pose_is_laid_at_the_craft_and_cruises_at_the_clas
             &mut world.projectiles,
             &mut world.ships[..world.ship_count as usize],
             dt,
-            race.sim.collision(),
+            race.core.sim.collision(),
             None,
             None,
             &class,
-            race.sim.floor_arms(),
-            race.sim.own_craft_probe(),
-            race.sim.plasma_release(),
+            race.core.sim.floor_arms(),
+            race.core.sim.own_craft_probe(),
+            race.core.sim.plasma_release(),
             oag_weapons::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [],

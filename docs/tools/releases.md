@@ -74,7 +74,7 @@ meant it only cost a second download, but both said 1.99.0 afterwards, and both 
 The pin, `rust-version` (now 1.100), `ci.yml` and `release.yml` all moved together.
 
 - clippy's `needless_range_loop` now also fires on `for slot in 0..n` when the
-  indexed place is a field path (`race.sim.world.ships[slot]`), where it used to
+  indexed place is a field path (`race.core.sim.world.ships[slot]`), where it used to
   need a plain local. 86 sites in the default build, 79 of them in tests, plus one more test site behind the `ballisticng` feature. The seven in shipped code
   iterate (`iter_mut().enumerate().take(n)`); the tests index several parallel
   slot arrays with one slot, so each test binary and test module tree carries

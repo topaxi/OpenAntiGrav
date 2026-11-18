@@ -50,7 +50,7 @@ impl PoseLean {
     /// Puts the values on `ship`: an opponent's entity is the player's struct (`+0x854`, `+0x87c`),
     /// so `--field-from`'s `steer_lean` / `roll_phase` columns land here for slots 1.. .
     pub fn apply_to(self, race: &mut Race, ship: usize) {
-        if let Some(ship) = race.sim.world.ships.get_mut(ship) {
+        if let Some(ship) = race.core.sim.world.ships.get_mut(ship) {
             ship.physics.steer_lean = self.steer_lean;
             ship.physics.roll_phase = self.roll_phase;
         }

@@ -89,11 +89,11 @@ fn an_omega_circuit_loads_its_probes_and_a_craft_blends_its_lane() {
     assert_eq!(row[36..], [0.25, 0.25, 1.0, 0.0]);
 
     // Ours' player, started and settled on the grid, takes the same lane.
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..100 {
         race.tick(&oag_gameplay::PlayerInputs::single(Default::default()));
     }
-    let taps = probes.locate(race.sim.ship_probe_position(0));
+    let taps = probes.locate(race.core.sim.ship_probe_position(0));
     assert_eq!(taps.from % 3, 2, "{taps:?}");
     assert_eq!(taps.to % 3, 2, "{taps:?}");
 }

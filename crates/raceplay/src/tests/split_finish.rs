@@ -55,9 +55,9 @@ fn a_split_drawn_in_an_open_frame_is_the_picture_it_is_without_one() {
         race.tick(&oag_gameplay::PlayerInputs::none());
     }
     for _ in 0..3 {
-        let forward = race.sim.world.ships[0].physics.body.forward();
-        let ahead = race.sim.world.ships[0].physics.body.position + forward * 6.0;
-        race.sim.world.ships[0].physics.body.position = ahead;
+        let forward = race.core.sim.world.ships[0].physics.body.forward();
+        let ahead = race.core.sim.world.ships[0].physics.body.position + forward * 6.0;
+        race.core.sim.world.ships[0].physics.body.position = ahead;
         race.tick(&oag_gameplay::PlayerInputs::none());
         draw(gpu, &scene, &race, &off, MotionBlur::Off);
         draw(gpu, &scene, &race, &plain, MotionBlur::High);

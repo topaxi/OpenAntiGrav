@@ -27,10 +27,10 @@ fn odds_module(weight: f32) -> crate::extensions::Source {
 #[test]
 fn a_pad_hands_out_the_mods_pickup_at_its_odds() {
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
-    race.sim.extensions = crate::extensions::Extensions::new(prepared(&[odds_module(1.0e6)]));
+    race.core.sim.extensions = crate::extensions::Extensions::new(prepared(&[odds_module(1.0e6)]));
     race.tick(&PlayerInputs::none());
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
     );
 }
@@ -38,9 +38,9 @@ fn a_pad_hands_out_the_mods_pickup_at_its_odds() {
 #[test]
 fn a_zero_weight_or_another_class_hands_out_the_titles_weapon() {
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
-    race.sim.extensions = crate::extensions::Extensions::new(prepared(&[odds_module(0.0)]));
+    race.core.sim.extensions = crate::extensions::Extensions::new(prepared(&[odds_module(0.0)]));
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.ship_pickup(), Some(Weapon::Turbo));
+    assert_eq!(race.core.ship_pickup(), Some(Weapon::Turbo));
     let extensions = crate::extensions::Extensions::new(prepared(&[odds_module(3.0)]));
     assert_eq!(
         extensions.pickup_odds("VENOM").first().map(|(_, o)| o.ai),
@@ -53,10 +53,10 @@ fn a_zero_weight_or_another_class_hands_out_the_titles_weapon() {
 #[test]
 fn the_odds_end_when_their_module_faults() {
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
-    race.sim.extensions = crate::extensions::Extensions::new(prepared(&[odds_module(1.0e6)]));
-    assert!(!race.sim.extensions.pickup_odds("VENOM").is_empty());
+    race.core.sim.extensions = crate::extensions::Extensions::new(prepared(&[odds_module(1.0e6)]));
+    assert!(!race.core.sim.extensions.pickup_odds("VENOM").is_empty());
     crate::extensions::fault_for_tests(&mut race, 0);
-    assert!(race.sim.extensions.pickup_odds("VENOM").is_empty());
+    assert!(race.core.sim.extensions.pickup_odds("VENOM").is_empty());
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.ship_pickup(), Some(Weapon::Turbo));
+    assert_eq!(race.core.ship_pickup(), Some(Weapon::Turbo));
 }

@@ -62,7 +62,7 @@ pub(super) fn advance_one_tick(
                 .as_deref()
                 .expect("matched by the guard");
             for event in record.replay.events_at(u64::from(tick)) {
-                if let Err(why) = race.sim.apply_event(event) {
+                if let Err(why) = race.core.sim.apply_event(event) {
                     log::warn!("--from-png: {why}");
                 }
             }
@@ -91,7 +91,7 @@ pub(super) fn advance_one_tick(
     }
     for &(at, percent) in &options.force_shield {
         if at == tick {
-            let ship = &mut race.sim.world.ships[0];
+            let ship = &mut race.core.sim.world.ships[0];
             ship.physics.shield = ship.handling.dimensions.shield * percent / 100.0;
         }
     }
@@ -115,7 +115,7 @@ pub(super) fn advance_one_tick(
     if let Some((at, slot)) = options.force_wreck
         && at == tick
     {
-        race.sim.force_destroy(slot);
+        race.core.sim.force_destroy(slot);
     }
     if let Some((at, slot)) = options.force_hit
         && at == tick
@@ -125,11 +125,11 @@ pub(super) fn advance_one_tick(
     if let Some((at, slot)) = options.force_wall_slide
         && at == tick
     {
-        race.sim.force_wall_slide(slot);
+        race.core.sim.force_wall_slide(slot);
     }
     if let Some((at, slot)) = options.force_bomb_trip
         && at == tick
-        && !race.sim.force_bomb_trip(slot)
+        && !race.core.sim.force_bomb_trip(slot)
     {
         log::warn!(
             "--force-bomb-trip: no Bomb laid by another craft yet, or slot {slot} is not racing (pass --opponents)"
@@ -137,7 +137,7 @@ pub(super) fn advance_one_tick(
     }
     if let Some((at, slot)) = options.force_missile_hit
         && at == tick
-        && !race.sim.force_missile_hit(slot)
+        && !race.core.sim.force_missile_hit(slot)
     {
         log::warn!(
             "--force-missile-hit: no Missile in flight from another craft yet, or slot {slot} is not racing (pass --opponents)"
@@ -145,7 +145,7 @@ pub(super) fn advance_one_tick(
     }
     if let Some((at, slot)) = options.force_quake
         && at == tick
-        && !race.force_quake(slot)
+        && !race.core.force_quake(slot)
     {
         log::warn!(
             "--force-quake: slot {slot} is not an opponent racing (pass --opponents), a Quake is already up, or the title authors none"
@@ -153,7 +153,7 @@ pub(super) fn advance_one_tick(
     }
     if let Some((at, target)) = options.force_leach_lock
         && at == tick
-        && !race.sim.force_leach_lock(0, target as u8)
+        && !race.core.sim.force_leach_lock(0, target as u8)
     {
         log::warn!(
             "--force-leach-lock: slot {target} is not racing (pass --opponents), or the title authors no LeachBeam"
@@ -188,11 +188,12 @@ pub(super) fn advance_one_tick(
     audio.output().flush_tap();
     if options.log_every > 0
         && race
+            .core
             .sim
             .world
             .tick
             .is_multiple_of(u64::from(options.log_every))
     {
-        println!("{}", describe(&race.telemetry()));
+        println!("{}", describe(&race.core.telemetry()));
     }
 }

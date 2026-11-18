@@ -26,9 +26,9 @@ impl Race {
     /// Not a recorded controller change ([`Race::set_controller`] writes one): a demo records
     /// nothing.
     pub fn fly_as_demo(&mut self, demo: &oag_title::demo::Demo) {
-        self.sim.world.controllers = [Controller::Ai; MAX_PLAYERS];
-        self.sim.set_autopilot(true);
-        self.sim.fire_terms.use_scale = demo.rules.ai_weapon_use.value;
+        self.core.sim.world.controllers = [Controller::Ai; MAX_PLAYERS];
+        self.core.sim.set_autopilot(true);
+        self.core.sim.fire_terms.use_scale = demo.rules.ai_weapon_use.value;
         #[cfg(feature = "view")]
         {
             self.view.camera_shake_on = demo.rules.camera_shake.value;
@@ -37,7 +37,7 @@ impl Race {
         if demo.camera.value == oag_title::demo::Camera::Spectator
             && let Some(director) = &mut self.view.finish_camera
         {
-            director.reseed(self.sim.race_seed);
+            director.reseed(self.core.sim.race_seed);
             self.view.spectates_from_start = true;
         }
     }
@@ -48,26 +48,30 @@ mod tests {
     use oag_core::math::Vec3;
     use oag_race::Mode;
 
-    use crate::{Race, Setup};
+    use crate::{Race, SimSetup};
 
     #[test]
     fn a_demo_has_no_person_and_every_craft_is_flown_by_the_ai() {
-        let mut race = Race::start(Setup::headless(Mode::SingleRace, 1));
+        let mut race = Race::start(
+            SimSetup::headless(Mode::SingleRace, 1),
+            crate::ViewSetup::headless(),
+            crate::extensions::Prepared::default(),
+        );
         assert_eq!(
-            race.sim.world.human_slots().count(),
+            race.core.sim.world.human_slots().count(),
             1,
             "the default grid has a person"
         );
         race.fly_as_demo(&oag_title::demo::Demo::PULSE);
-        assert_eq!(race.sim.world.human_slots().count(), 0);
-        let camera_slot = race.sim.world.primary_slot();
+        assert_eq!(race.core.sim.world.human_slots().count(), 0);
+        let camera_slot = race.core.sim.world.primary_slot();
         assert!(
-            race.sim.flown_for_the_player(camera_slot),
+            race.core.sim.flown_for_the_player(camera_slot),
             "the camera slot is stepped as a player and nobody holds its pad: the autopilot must"
         );
-        for slot in 0..usize::from(race.sim.world.ship_count) {
+        for slot in 0..usize::from(race.core.sim.world.ship_count) {
             assert!(
-                slot == camera_slot || !race.sim.world.person_flown(slot),
+                slot == camera_slot || !race.core.sim.world.person_flown(slot),
                 "slot {slot} is flown by a person"
             );
         }
@@ -81,7 +85,11 @@ mod tests {
             eye: Vec3::new(x, 30.0, 0.0),
             aim: Vec3::new(x - 390.0, 0.0, 0.0),
         };
-        let mut race = Race::start(Setup::headless(Mode::SingleRace, 1));
+        let mut race = Race::start(
+            SimSetup::headless(Mode::SingleRace, 1),
+            crate::ViewSetup::headless(),
+            crate::extensions::Prepared::default(),
+        );
         race.view.finish_camera = Some(FinishCamera::new(
             vec![station(400.0), station(1400.0)],
             0.5,
@@ -96,7 +104,11 @@ mod tests {
             Some(ViewMode::Track),
             "the director starts in the constructor's mode, on the first tick, with no finish"
         );
-        let mut chase = Race::start(Setup::headless(Mode::SingleRace, 1));
+        let mut chase = Race::start(
+            SimSetup::headless(Mode::SingleRace, 1),
+            crate::ViewSetup::headless(),
+            crate::extensions::Prepared::default(),
+        );
         let mut director = FinishCamera::new(vec![station(400.0)], 0.5, SPECTATOR_SEED);
         director.reseed(1);
         chase.view.finish_camera = Some(director);
@@ -110,7 +122,11 @@ mod tests {
     #[cfg(feature = "view")]
     #[test]
     fn a_demo_camera_does_not_shake_and_a_race_camera_does() {
-        let mut race = Race::start(Setup::headless(Mode::SingleRace, 1));
+        let mut race = Race::start(
+            SimSetup::headless(Mode::SingleRace, 1),
+            crate::ViewSetup::headless(),
+            crate::extensions::Prepared::default(),
+        );
         race.force_shake(1.0);
         assert!(race.view.contact.shake.active());
         race.fly_as_demo(&oag_title::demo::Demo::PULSE);
@@ -121,9 +137,13 @@ mod tests {
 
     #[test]
     fn a_demo_doubles_the_opponents_weapon_use_and_a_race_does_not() {
-        let mut race = Race::start(Setup::headless(Mode::SingleRace, 1));
-        assert_eq!(race.sim.fire_terms.use_scale, 1.0);
+        let mut race = Race::start(
+            SimSetup::headless(Mode::SingleRace, 1),
+            crate::ViewSetup::headless(),
+            crate::extensions::Prepared::default(),
+        );
+        assert_eq!(race.core.sim.fire_terms.use_scale, 1.0);
         race.fly_as_demo(&oag_title::demo::Demo::PULSE);
-        assert_eq!(race.sim.fire_terms.use_scale, 2.0);
+        assert_eq!(race.core.sim.fire_terms.use_scale, 2.0);
     }
 }

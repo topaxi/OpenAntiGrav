@@ -35,17 +35,26 @@ fn driven() -> (Box<Race>, Keeper, Vec<String>) {
 
 fn driven_with_hashes() -> (Box<Race>, Keeper, Vec<String>, Vec<u64>) {
     // Boxed: a `Race` is large, and a test thread's stack holds the few that a debug build copies.
-    let mut race = Box::new(Race::start(fixture()));
+    let mut race = Box::new(Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ));
     race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
-    let mut keeper = Keeper::new(fixture(), &race);
-    let mut text = vec![format!("{:?}", race.sim)];
-    let mut hashes = vec![race.sim.state_hash()];
+    let mut keeper = Keeper::new(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        &race,
+    );
+    let mut text = vec![format!("{:?}", race.core.sim)];
+    let mut hashes = vec![race.core.sim.state_hash()];
     for tick in 0..LIVE {
         race.tick(&inputs(tick));
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
         keeper.keep(&race);
-        text.push(format!("{:?}", race.sim));
-        hashes.push(race.sim.state_hash());
+        text.push(format!("{:?}", race.core.sim));
+        hashes.push(race.core.sim.state_hash());
     }
     (race, keeper, text, hashes)
 }
@@ -67,21 +76,21 @@ fn a_rewind_lands_on_the_recorded_run_and_leaves_the_live_race_to_the_bit() {
     // Out of order on purpose, across keyframes and on them, forward and back.
     for target in [0, 61, 17, 150, 299, 120, 121, 300, 1, 240] {
         assert_eq!(rewind.seek(&mut keeper, &mut race, target), target);
-        assert_eq!(race.sim.world.tick, target);
+        assert_eq!(race.core.sim.world.tick, target);
         // Tick 0 is the keyframe before the plans were learned: the same state, a flag apart in
         // the text, so the hash judges it.
         if target > 0 {
             assert!(
-                format!("{:?}", race.sim) == text[target as usize],
+                format!("{:?}", race.core.sim) == text[target as usize],
                 "tick {target} differs from the recorded run"
             );
         } else {
-            assert_eq!(race.sim.state_hash(), hashes[0]);
+            assert_eq!(race.core.sim.state_hash(), hashes[0]);
         }
     }
     rewind.end(&mut keeper, &mut race);
     assert!(
-        format!("{:?}", race.sim) == text[LIVE as usize],
+        format!("{:?}", race.core.sim) == text[LIVE as usize],
         "the live race was not put back"
     );
     assert_eq!(
@@ -103,14 +112,14 @@ fn playing_on_from_a_scrub_follows_the_recorded_run_to_the_live_tick() {
         assert!(rewind.step(&mut race), "tick {tick} is played");
         assert_eq!(rewind.at(), tick);
         assert!(
-            format!("{:?}", race.sim) == text[tick as usize],
+            format!("{:?}", race.core.sim) == text[tick as usize],
             "tick {tick} differs from the recorded run"
         );
     }
     assert!(!rewind.step(&mut race), "and it stops at the live tick");
     rewind.end(&mut keeper, &mut race);
     assert!(
-        format!("{:?}", race.sim) == text[LIVE as usize],
+        format!("{:?}", race.core.sim) == text[LIVE as usize],
         "the live race was not put back"
     );
 }
@@ -131,8 +140,8 @@ fn a_race_that_goes_on_after_a_rewind_hashes_as_one_that_was_not_visited() {
         control.tick(&inputs(tick));
         keeper.keep(&visited);
         assert_eq!(
-            visited.sim.state_hash(),
-            control.sim.state_hash(),
+            visited.core.sim.state_hash(),
+            control.core.sim.state_hash(),
             "tick {tick}"
         );
     }
@@ -141,8 +150,17 @@ fn a_race_that_goes_on_after_a_rewind_hashes_as_one_that_was_not_visited() {
 /// A race that records nothing has no inputs to play: a seek stops at a whole keyframe.
 #[test]
 fn with_no_recording_a_seek_stops_at_the_keyframe_before_it() {
-    let mut race = Box::new(Race::start(fixture()));
-    let mut keeper = Keeper::new(fixture(), &race);
+    let mut race = Box::new(Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ));
+    let mut keeper = Keeper::new(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        &race,
+    );
     for tick in 0..LIVE {
         race.tick(&inputs(tick));
         keeper.keep(&race);
@@ -151,9 +169,9 @@ fn with_no_recording_a_seek_stops_at_the_keyframe_before_it() {
     let mut rewind = Rewind::begin(&mut keeper, &mut race).expect("running");
     assert!(!rewind.resimulates());
     assert_eq!(rewind.seek(&mut keeper, &mut race, 150), 120);
-    assert_eq!(race.sim.world.tick, 120);
+    assert_eq!(race.core.sim.world.tick, 120);
     rewind.end(&mut keeper, &mut race);
-    assert_eq!(race.sim.world.tick, LIVE);
+    assert_eq!(race.core.sim.world.tick, LIVE);
 }
 
 fn blur(race: &mut Race, kind: i32, shutter: i32) {
@@ -297,7 +315,7 @@ fn the_eye_and_the_craft_through(kind: i32) -> Vec<(Vec3, Vec3, Vec3)> {
             &mut race,
         );
         race.set_draw_alpha(alpha);
-        let slot = race.player_slot();
+        let slot = race.core.player_slot();
         let craft = race.ship_model_matrix_of(slot).w_axis.truncate();
         seen.push((eye(&race), craft, race.view().transform_point3(craft)));
         shot.advance();
@@ -310,7 +328,7 @@ fn the_eye_and_the_craft_through(kind: i32) -> Vec<(Vec3, Vec3, Vec3)> {
         &mut race,
     );
     assert_eq!(
-        race.sim.world.tick, LIVE,
+        race.core.sim.world.tick, LIVE,
         "the race is back at the shot's tick"
     );
     seen

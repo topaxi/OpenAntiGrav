@@ -51,7 +51,7 @@ fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
     // fitted to the window, and nothing else. Built here rather than
     // captured, so the assertion cannot be satisfied by both sides drifting
     // together.
-    let body = &off.ship().physics.body;
+    let body = &off.core.ship().physics.body;
     let expected_deg =
         off.view.chase_params.fov + SPEED_FOV_GAIN_DEG * body.forward().dot(body.linear_velocity);
     let expected = oag_render::camera::projection(
@@ -74,8 +74,8 @@ fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
     // *exactly* the un-kicked matrix rather than to something near it. Both
     // races are still in lockstep, so `off` is the right reference at
     // whatever speed they have both decayed to.
-    kicked.sim.speedup_pads = Vec::new().into();
-    off.sim.speedup_pads = Vec::new().into();
+    kicked.core.sim.speedup_pads = Vec::new().into();
+    off.core.sim.speedup_pads = Vec::new().into();
     for _ in 0..600 {
         kicked.tick(&PlayerInputs::none());
         off.tick(&PlayerInputs::none());
@@ -115,7 +115,7 @@ fn the_field_widens_with_forward_speed_and_narrows_when_moving_backwards() {
     );
 
     for speed in [40.0_f32, 100.0, 150.0] {
-        let body = &mut race.sim.world.ships[0].physics.body;
+        let body = &mut race.core.sim.world.ships[0].physics.body;
         body.linear_velocity = body.forward() * speed;
         let expected = authored + SPEED_FOV_GAIN_DEG * speed;
         assert!(
@@ -127,7 +127,7 @@ fn the_field_widens_with_forward_speed_and_narrows_when_moving_backwards() {
 
     // The discriminating case, measured on the running original: a sample at
     // negative forward velocity read 54.26 degrees against an authored 60.
-    let body = &mut race.sim.world.ships[0].physics.body;
+    let body = &mut race.core.sim.world.ships[0].physics.body;
     body.linear_velocity = body.forward() * -76.5;
     assert!(
         vertical_fov_deg(&race) < authored - 5.0,
@@ -186,8 +186,8 @@ fn cycling_the_camera_changes_no_simulation_state() {
 
     fn hash(race: &Race) -> u64 {
         let mut hasher = StateHasher::new();
-        hash_state(&mut hasher, &race.ship().physics);
-        hasher.write_u64(race.sim.world.tick);
+        hash_state(&mut hasher, &race.core.ship().physics);
+        hasher.write_u64(race.core.sim.world.tick);
         hasher.finish()
     }
 
@@ -195,8 +195,16 @@ fn cycling_the_camera_changes_no_simulation_state() {
     // ship would hash the same however badly the camera behaved.
     let held = oag_gameplay::input::Button::Cross.bit();
 
-    let mut control = Race::start(setup(Handling::default()));
-    let mut cycled = Race::start(setup(Handling::default()));
+    let mut control = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    let mut cycled = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
 
     let mut control_input = HeldButtons::new(held);
     let mut cycled_input = HeldButtons::new(held);
@@ -217,7 +225,7 @@ fn cycling_the_camera_changes_no_simulation_state() {
         // separate ones `Race` keeps for the exhaust and the sparks - would
         // desynchronise every later tick, and this catches it on the first.
         assert_eq!(
-            control.sim.world.rng, cycled.sim.world.rng,
+            control.core.sim.world.rng, cycled.core.sim.world.rng,
             "the simulation's generator moved at tick {tick}"
         );
     }
@@ -241,7 +249,11 @@ fn cycling_the_camera_changes_no_simulation_state() {
 fn each_view_frames_the_craft_from_its_own_block() {
     use oag_display::display::{CameraView, Fov};
 
-    let mut race = Race::start(setup(Handling::default()));
+    let mut race = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let mut eyes = Vec::new();
     let mut fovs = Vec::new();
     for view in CameraView::ALL {
@@ -273,8 +285,8 @@ fn each_view_frames_the_craft_from_its_own_block() {
     // The geometry, not just the difference: the cockpit eye is *ahead* of the
     // craft and both chase eyes are behind it. A sign error here is the single
     // most likely mistake in the whole feature.
-    let craft = race.ship().physics.body.position;
-    let forward = race.ship().physics.body.forward();
+    let craft = race.core.ship().physics.body.position;
+    let forward = race.core.ship().physics.body.forward();
     race.set_camera_view(CameraView::Internal);
     assert!((race.camera_position() - craft).dot(forward) > 0.0);
     for view in [CameraView::Close, CameraView::Far] {
@@ -309,9 +321,13 @@ fn each_view_frames_the_craft_from_its_own_block() {
 fn a_race_starts_on_the_close_chase_block() {
     use oag_display::display::CameraView;
 
-    let race = Race::start(setup(Handling::default()));
+    let race = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(race.camera_view(), CameraView::Close);
-    let craft = race.ship().physics.body.position;
+    let craft = race.core.ship().physics.body.position;
     let distance = (race.camera_position() - craft).length();
     assert!(
         (distance - 4.0_f32.hypot(1.0)).abs() < 0.01,
@@ -385,13 +401,14 @@ fn the_external_blocks_carry_the_crafts_global_scale() {
 fn a_camera_override_moves_the_view_and_the_derived_eye_together() {
     let eye = Vec3::new(12.0, 34.0, -56.0);
     let orientation = Quat::from_rotation_y(0.83);
-    let mut setup = setup(Handling::default());
-    setup.camera_override = Some(CameraOverride {
+    let setup = setup(Handling::default());
+    let mut view = crate::tests::fixture_view();
+    view.camera_override = Some(CameraOverride {
         eye,
         orientation,
         fov_deg: None,
     });
-    let race = Race::start(setup);
+    let race = Race::start(setup, view, crate::extensions::Prepared::default());
 
     assert!((race.camera_position() - eye).length() < 1e-4);
     // The view maps the eye to the origin and world axes into camera axes:
@@ -408,26 +425,36 @@ fn a_camera_override_moves_the_view_and_the_derived_eye_together() {
 fn a_camera_fov_override_stands_in_for_the_authored_fov() {
     use oag_display::display::Fov;
 
-    let mut with_override = setup(Handling::default());
-    with_override.camera_override = Some(CameraOverride {
+    let with_override = setup(Handling::default());
+    let mut with_override_view = crate::tests::fixture_view();
+    with_override_view.camera_override = Some(CameraOverride {
         eye: Vec3::ZERO,
         orientation: Quat::IDENTITY,
         fov_deg: Some(75.0),
     });
-    let overridden = Race::start(with_override);
+    let overridden = Race::start(
+        with_override,
+        with_override_view,
+        crate::extensions::Prepared::default(),
+    );
 
     let mut same_authored = setup(Handling::default());
+    let mut same_authored_view = crate::tests::fixture_view();
     // Both external blocks, so the test does not care which one the default view
     // flies with (it is the close one since 2026-10-01).
     same_authored.chase = ChaseParams {
         fov: 75.0,
         ..same_authored.chase
     };
-    same_authored.chase_close = ChaseParams {
+    same_authored_view.chase_close = ChaseParams {
         fov: 75.0,
-        ..same_authored.chase_close
+        ..same_authored_view.chase_close
     };
-    let authored = Race::start(same_authored);
+    let authored = Race::start(
+        same_authored,
+        same_authored_view,
+        crate::extensions::Prepared::default(),
+    );
 
     assert_eq!(
         overridden.projection(AUTHORED_ASPECT, 1000.0, Fov::AUTHORED),
@@ -442,7 +469,11 @@ fn a_camera_fov_override_stands_in_for_the_authored_fov() {
 fn the_field_of_view_setting_widens_the_projection_and_defaults_to_the_authored_one() {
     use oag_display::display::Fov;
 
-    let race = Race::start(setup(Handling::default()));
+    let race = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let aspect = AUTHORED_ASPECT;
     let authored = race.projection(aspect, 1000.0, Fov::AUTHORED);
 
@@ -486,7 +517,11 @@ fn the_field_of_view_setting_widens_the_projection_and_defaults_to_the_authored_
 /// the instant a shake arms.
 #[test]
 fn an_active_shake_never_moves_the_camera_eye() {
-    let mut race = Race::start(setup(Handling::default()));
+    let mut race = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let before = race.camera_position();
 
     race.view.contact.shake.arm(
@@ -516,7 +551,11 @@ fn an_active_shake_never_moves_the_camera_eye() {
 /// silently does nothing.
 #[test]
 fn an_active_shake_does_rotate_the_view() {
-    let mut race = Race::start(setup(Handling::default()));
+    let mut race = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let level = race.view();
 
     race.view.contact.shake.arm(
@@ -537,10 +576,15 @@ fn an_active_shake_does_rotate_the_view() {
 /// side of either rotation, fails both.
 #[test]
 fn the_blur_is_given_the_shakes_own_screen_motion() {
-    let mut race = Race::start(setup(Handling::default()));
+    let mut race = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let projection = race.projection(1.7, 1000.0, oag_display::display::Fov::default());
     let still = race.view_unshaken();
-    let forward = race.ship().physics.body.position + race.ship().physics.body.forward() * 20.0;
+    let forward =
+        race.core.ship().physics.body.position + race.core.ship().physics.body.forward() * 20.0;
     let points = [
         forward,
         forward + Vec3::new(8.0, 3.0, -2.0),
@@ -587,7 +631,11 @@ fn the_blur_is_given_the_shakes_own_screen_motion() {
 /// view is untouched to the bit.
 #[test]
 fn no_shake_gives_the_blur_exactly_the_identity() {
-    let race = Race::start(setup(Handling::default()));
+    let race = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let projection = race.projection(1.7, 1000.0, oag_display::display::Fov::default());
     assert_eq!(
         race.lens_screen_motion(projection, projection, Mat4::IDENTITY),
@@ -605,7 +653,11 @@ fn no_shake_gives_the_blur_exactly_the_identity() {
 #[test]
 fn the_blur_is_given_the_boost_kicks_own_screen_motion() {
     use oag_display::display::{BoostFovKick, Fov};
-    let mut race = Race::start(setup(Handling::default()));
+    let mut race = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.set_boost_fov_kick(BoostFovKick::OFFERED[3]);
     let aspect = 16.0 / 9.0;
     let before = race.projection(aspect, 1000.0, Fov::AUTHORED);
@@ -615,7 +667,7 @@ fn the_blur_is_given_the_boost_kicks_own_screen_motion() {
     let view = race.view();
     let map = race.lens_screen_motion(after, before, Mat4::IDENTITY);
     let ndc = |clip: oag_core::math::Vec4| clip.truncate() / clip.w;
-    let body = &race.ship().physics.body;
+    let body = &race.core.ship().physics.body;
     let ahead = body.position + body.forward() * 6.0;
     let side = body.right() * 4.0;
     for point in [

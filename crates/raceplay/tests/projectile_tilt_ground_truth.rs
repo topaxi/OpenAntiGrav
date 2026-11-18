@@ -92,33 +92,34 @@ fn start(image: &str, track: &str) -> Option<race::Race> {
     // that falls outside the settling window (`docs/gameplay/projectile-floor.md`,
     // "HD Plasma, launch boost on").
     loaded.setup.start_boost = None;
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// Fires `weapon` from the autopilot's craft every 30 ticks for `ticks` ticks,
 /// judging each tick it is in the air.
 fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
     let mut race = start(title.0, title.1)?;
-    let craft_box = race.sim.own_craft_probe() == oag_weapons::projectile::OwnCraftProbe::CraftBox;
+    let craft_box =
+        race.core.sim.own_craft_probe() == oag_weapons::projectile::OwnCraftProbe::CraftBox;
     let mut input: Option<Input> = None;
     let mut next_shot = 200;
     let mut out = Ride::default();
-    let shield = race.sim.world.ships[0].physics.shield;
+    let shield = race.core.sim.world.ships[0].physics.shield;
     for tick in 0..ticks {
-        race.sim.set_autopilot(true);
+        race.core.sim.set_autopilot(true);
         if tick < next_shot {
             let snap = snapshot(Button::Cross.bit(), input.as_ref());
             input = Some(snap.buttons);
-            race.sim.world.ships[0].physics.shield = shield;
+            race.core.sim.world.ships[0].physics.shield = shield;
             race.tick(&PlayerInputs::single(snap));
             continue;
         }
         out.shots += 1;
-        if race.sim.world.ships[0].physics.body.up().y < 0.95 {
+        if race.core.sim.world.ships[0].physics.body.up().y < 0.95 {
             out.tilted_shots += 1;
         }
-        race.sim.world.projectiles.clear();
-        race.sim.world.ships[0].pickup.weapon = Some(weapon);
+        race.core.sim.world.projectiles.clear();
+        race.core.sim.world.ships[0].pickup.weapon = Some(weapon);
         // A Plasma bolt winds up for a second on the nose before it flies.
         let span = if weapon == Weapon::Plasma { 75 } else { 14 };
         next_shot = tick + 30;
@@ -134,9 +135,10 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
             };
             let snap = snapshot(bits, input.as_ref());
             input = Some(snap.buttons);
-            race.sim.world.ships[0].physics.shield = shield;
+            race.core.sim.world.ships[0].physics.shield = shield;
             race.tick(&PlayerInputs::single(snap));
             let Some(shot) = race
+                .core
                 .sim
                 .world
                 .projectiles
@@ -157,7 +159,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
             } else {
                 oag_weapons::projectile::missile::SURFACE_PROBE_LENGTH
             };
-            let ship = &race.sim.world.ships[0];
+            let ship = &race.core.sim.world.ships[0];
             let was_hidden = std::mem::replace(
                 &mut hidden,
                 craft_box
@@ -169,7 +171,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
                         None,
                     ),
             );
-            let Some(floor) = race.sim.collision().raycast(
+            let Some(floor) = race.core.sim.collision().raycast(
                 Ray::new(shot.position, -shot.surface, reach),
                 None,
                 false,
@@ -335,16 +337,16 @@ fn assert_laid_on_a_bank(title: (&str, &str), weapon: Weapon, judge_pose: bool) 
     // Restored every tick, as `ride`'s is: a laid Bomb that a rival trips on the tick it
     // lands blasts the firer too, and on a title that stuns the hit craft (Pulse's posted
     // blast push) a run of them drains the pool and parks the craft on the flat.
-    let shield = race.sim.world.ships[0].physics.shield;
+    let shield = race.core.sim.world.ships[0].physics.shield;
     for tick in 0..9_000_u32 {
-        race.sim.world.ships[0].physics.shield = shield;
+        race.core.sim.world.ships[0].physics.shield = shield;
         // Pressed and released on alternate ticks: a held button is one edge.
         let dropping = tick >= next_drop && (tick - next_drop) % 2 == 0;
-        race.sim.set_autopilot(true);
+        race.core.sim.set_autopilot(true);
         // Anything in the pool after the tick was laid on it.
-        race.sim.world.projectiles.clear();
+        race.core.sim.world.projectiles.clear();
         if tick >= next_drop {
-            race.sim.world.ships[0].pickup.weapon = Some(weapon);
+            race.core.sim.world.ships[0].pickup.weapon = Some(weapon);
         }
         let bits = if dropping {
             Button::Cross.bit() | Button::Square.bit()
@@ -353,9 +355,10 @@ fn assert_laid_on_a_bank(title: (&str, &str), weapon: Weapon, judge_pose: bool) 
         };
         let snap = snapshot(bits, input.as_ref());
         input = Some(snap.buttons);
-        let before = race.sim.world.ships[0].physics;
+        let before = race.core.sim.world.ships[0].physics;
         race.tick(&PlayerInputs::single(snap));
         let laid: Vec<_> = race
+            .core
             .sim
             .world
             .projectiles

@@ -99,7 +99,7 @@ impl super::Session {
     /// is on screen or parked behind the menus, and this build can write a shot.
     pub(crate) fn photo_available(&self) -> bool {
         let race = match &self.stage {
-            Stage::Race(stage) if !stage.race.sim.finished() => Some(stage),
+            Stage::Race(stage) if !stage.race.core.sim.finished() => Some(stage),
             _ => self.suspended_race.as_ref(),
         };
         self.net.is_none() && race.is_some_and(|stage| fits(stage))
@@ -179,7 +179,7 @@ impl super::Session {
                 Origin::Viewer => watched.is_some(),
             },
         );
-        let mut asked = stage.race.sim.world.tick;
+        let mut asked = stage.race.core.sim.world.tick;
         // A watched race is moved through the whole recording by the viewer: the row runs to its
         // end and stands where the playhead does.
         if let (Origin::Viewer, Some((at, ticks))) = (origin, watched) {

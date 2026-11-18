@@ -19,7 +19,7 @@ pub enum PadSeeking {
     #[default]
     Off,
     /// A craft whose weapon slot is empty. A full slot cannot collect - a pad
-    /// crossed with a weapon held grants nothing (`Race::test_weapon_pads`) -
+    /// crossed with a weapon held grants nothing (`SimRace::test_weapon_pads`) -
     /// so a detour for it is all cost.
     EmptySlot,
     /// Every craft, held weapon or not. Kept for the sweep that compares the

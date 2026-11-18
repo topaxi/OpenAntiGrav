@@ -224,11 +224,12 @@ fn start(circuit: &str) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 fn cage_of(race: &race::Race) -> &dyn Containment {
-    race.sim
+    race.core
+        .sim
         .spline()
         .cage()
         .expect("Pulse runs the cage on this circuit")
@@ -254,7 +255,7 @@ fn the_recorded_code_four_queries_are_outside(race: &race::Race, circuit: &str) 
         seen += 1;
     }
     assert!(seen > 0, "no recorded row for {circuit}");
-    let grid = race.sim.world.ships[0].physics.body.position;
+    let grid = race.core.sim.world.ships[0].physics.body.position;
     assert!(
         cage.outside(grid).is_none(),
         "the grid slot is inside the cage"
@@ -280,13 +281,13 @@ fn update(
         &mut world.projectiles,
         &mut world.ships[..count],
         dt,
-        race.sim.collision(),
+        race.core.sim.collision(),
         cage,
-        race.sim.weapon_stats(),
+        race.core.sim.weapon_stats(),
         "VENOM",
-        race.sim.floor_arms(),
-        race.sim.own_craft_probe(),
-        race.sim.plasma_release(),
+        race.core.sim.floor_arms(),
+        race.core.sim.own_craft_probe(),
+        race.core.sim.plasma_release(),
         BlastPush::Posted,
         oag_physics::DamageRules::default(),
         &mut hits,
@@ -298,7 +299,7 @@ fn update(
 /// at the last, until it ends.
 fn fly(race: &race::Race, cage: Option<&dyn Containment>, seed: Projectile, dts: &[f32]) -> Flight {
     let limit = dts.len() + 3;
-    let mut world = race.sim.world.clone();
+    let mut world = race.core.sim.world.clone();
     world.projectiles.clear();
     world.projectiles.slots[0] = seed;
     for calls in 1..=limit {
@@ -405,7 +406,7 @@ fn moa_therma_white_shuriken_ends_at_the_cage() {
     // speed drifts"), so the chain stays on the kerb and meets the cage at update 58; a blade
     // that keeps its speed drifts off the original's line and bounces on the kerb's wall instead.
     let (_, age, position, velocity, surface) = SHURIKEN_STATES[0];
-    let mut world = race.sim.world.clone();
+    let mut world = race.core.sim.world.clone();
     world.projectiles.clear();
     world.projectiles.slots[0] = seeded(Weapon::Shuriken, age, position, velocity, surface, 0.0);
     let mut ended = None;
@@ -504,7 +505,7 @@ fn outpost_7_ramp_launch_normal_is_the_tracks_up() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let craft_up = Vec3::new(-0.014, 0.996, -0.090).normalize();
     let track_up = plasma_rides_the_located_up(race, 186, |_| craft_up);
     // The recorded normal prints as `(-0.000, 1.000, 0.000)`: the sample is 0.26 degrees from
@@ -534,11 +535,11 @@ fn an_hd_plasma_bolt_rides_the_located_tracks_up() {
         ..race::Options::default()
     })
     .expect("loading an HD race");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // HD's own floor arms are unread, so it keeps the parallel turn
     // (`Weapons::floor_arms_steer_to_ride_point`).
     assert_eq!(
-        race.sim.floor_arms(),
+        race.core.sim.floor_arms(),
         oag_weapons::projectile::FloorArms::ParallelToFloor
     );
     plasma_rides_the_located_up(race, 100, |track_up| {
@@ -559,6 +560,7 @@ fn plasma_rides_the_located_up(
     craft_up: impl Fn(Vec3) -> Vec3,
 ) -> Vec3 {
     let sample = *race
+        .core
         .sim
         .spline()
         .sample(sample)
@@ -566,7 +568,7 @@ fn plasma_rides_the_located_up(
     let track_up = -v3(sample.down).normalize();
     let craft_up = craft_up(track_up);
 
-    let craft = &mut race.sim.world.ships[0];
+    let craft = &mut race.core.sim.world.ships[0];
     craft.physics.body.position = v3(sample.pos) + track_up * 3.0;
     craft.physics.body.orientation = Quat::from_rotation_arc(Vec3::Y, craft_up);
     craft.physics.body.linear_velocity = Vec3::ZERO;
@@ -579,7 +581,7 @@ fn plasma_rides_the_located_up(
 
     let idle = oag_gameplay::InputSnapshot::new();
     race.tick(&PlayerInputs::single(idle));
-    let located = race.sim.world.ships[0]
+    let located = race.core.sim.world.ships[0]
         .track_up
         .expect("a step on a track with samples locates the craft");
 
@@ -592,6 +594,7 @@ fn plasma_rides_the_located_up(
     race.tick(&PlayerInputs::single(idle));
 
     let bolt = race
+        .core
         .sim
         .world
         .projectiles
@@ -608,12 +611,12 @@ fn plasma_rides_the_located_up(
         off < 0.05,
         "the bolt carries {:?}, {off} degrees off the track's up {track_up:?}; the craft's up is {:?}",
         bolt.surface,
-        race.sim.world.ships[0].physics.body.up()
+        race.core.sim.world.ships[0].physics.body.up()
     );
     assert!(located.angle_between(track_up).to_degrees() < 0.05);
     assert!(
         bolt.surface
-            .angle_between(race.sim.world.ships[0].physics.body.up())
+            .angle_between(race.core.sim.world.ships[0].physics.body.up())
             .to_degrees()
             > 3.0,
         "the bolt must not be riding the craft's own up"
@@ -625,12 +628,12 @@ fn plasma_rides_the_located_up(
 /// one update: its velocity afterwards. A rocket that rode has the zero velocity it was seeded
 /// with (the step to its ride point is nil); one whose probe fell has `-50 * dt` in y.
 fn rocket_velocity_after_one_update(race: &race::Race, ahead: f32) -> Vec3 {
-    let mut world = race.sim.world.clone();
+    let mut world = race.core.sim.world.clone();
     world.projectiles.clear();
     let craft = world.ships[0].physics.body;
     let above = craft.position + craft.forward() * ahead;
     let floor = oag_physics::Raycaster::raycast(
-        race.sim.collision(),
+        race.core.sim.collision(),
         oag_physics::Ray::new(above, -craft.up(), 20.0),
         None,
         false,
@@ -657,14 +660,14 @@ fn rocket_velocity_after_one_update(race: &race::Race, ahead: f32) -> Vec3 {
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
 fn the_grid_craft_hides_the_floor_from_its_own_first_probes_on_pulse() {
     let Some(race) = start("03") else { return };
-    let body = race.sim.world.ships[0].physics.body;
+    let body = race.core.sim.world.ships[0].physics.body;
     assert!(
         (-body.right()).distance(-Vec3::X) < 0.1,
         "row 0 is {:?}, not the original's (-1, 0, 0)",
         -body.right()
     );
     assert_eq!(
-        race.sim.own_craft_probe(),
+        race.core.sim.own_craft_probe(),
         oag_weapons::projectile::OwnCraftProbe::CraftBox
     );
     let inside = rocket_velocity_after_one_update(&race, 3.0);
@@ -690,18 +693,18 @@ fn the_grid_craft_holds_its_own_first_probes_on_pure() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(
-        race.sim.own_craft_probe(),
+        race.core.sim.own_craft_probe(),
         oag_weapons::projectile::OwnCraftProbe::CraftBoxHolds
     );
     let diving = |ahead: f32| {
-        let mut world = race.sim.world.clone();
+        let mut world = race.core.sim.world.clone();
         world.projectiles.clear();
         let craft = world.ships[0].physics.body;
         let above = craft.position + craft.forward() * ahead;
         let floor = oag_physics::Raycaster::raycast(
-            race.sim.collision(),
+            race.core.sim.collision(),
             oag_physics::Ray::new(above, -craft.up(), 20.0),
             None,
             false,

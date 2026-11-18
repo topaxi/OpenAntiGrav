@@ -36,7 +36,7 @@ the old "inferred" read.
   breakpoint needs the interpreter. Pulse's is watched (the call is taken the frame the timer crosses
   `1.0`, 0.984 s of timer before the release).
 - **The original does not ask a weapon pad at all while the slot is full**
-  (`Ship_TestWeaponPads` asks only with an empty slot); `Race::test_weapon_pads` still
+  (`Ship_TestWeaponPads` asks only with an empty slot); `SimRace::test_weapon_pads` still
   stamps a full craft's pad, so the cooldown differs. Ours kept as it was.
 - **`docs/gameplay/ai.md`'s per-class opponent Autopilot table was measured with pad grants
   mid-stint**, which are now gone. Not re-run.

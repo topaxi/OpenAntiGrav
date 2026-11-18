@@ -104,7 +104,7 @@ fn race_in_mode(
         ticks,
         &Pace::Virtual(clock, std::time::Duration::from_micros(16_667)),
         |host| {
-            let world = &host.race().sim.world;
+            let world = &host.race().core.sim.world;
             activity.peak_in_air = activity.peak_in_air.max(world.projectiles.live());
             for slot in 0..usize::from(people) {
                 let ship = &world.ships[slot];
@@ -118,7 +118,7 @@ fn race_in_mode(
     );
     println!("server, per seat: {:?}", host.take_counts());
     println!("server weapons: {activity:?}");
-    activity.finished = host.race().sim.finished();
+    activity.finished = host.race().core.sim.finished();
     for (n, total) in totals.iter().enumerate() {
         println!("trigger={weapon_trigger} client {n}: {total:?}");
         assert_eq!(total.hash_mismatches, 0, "client {n}");

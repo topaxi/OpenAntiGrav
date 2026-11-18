@@ -14,8 +14,12 @@ fn cannon_race() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_cannon_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
     race
 }
 
@@ -57,16 +61,16 @@ fn a_held_cannon_reads_its_rounds_and_counts_down_as_they_leave() {
 #[test]
 fn a_running_autopilot_prints_its_time_under_its_own_icon() {
     let mut race = cannon_race();
-    race.sim.world.ships[0].pickup.weapon = None;
+    race.core.sim.world.ships[0].pickup.weapon = None;
     assert_eq!(race.readout().sub_weapon, None);
     assert_eq!(race.readout().pickup, None);
 
-    race.sim.world.ships[0].autopilot_timer = 3.5;
+    race.core.sim.world.ships[0].autopilot_timer = 3.5;
     let readout = race.readout();
     assert_eq!(readout.sub_weapon, Some(SubWeapon::Autopilot(3.5)));
     assert_eq!(readout.pickup, Some(Weapon::Autopilot));
 
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
     let readout = race.readout();
     assert_eq!(readout.sub_weapon, Some(SubWeapon::Rounds(5)));
     assert_eq!(

@@ -41,20 +41,20 @@ fn run(source: &str, track: &str, ticks: u32, ribbon: bool) -> Option<(Forks, us
     .unwrap_or_else(|e| panic!("loading {track}: {e:#}"));
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
-    let mut race = race::Race::start(setup);
-    race.sim.set_autopilot(true);
-    let count = race.sim.ship_count() as usize;
+    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
+    let count = race.core.sim.ship_count() as usize;
     assert!(count >= 2, "{track}: no field to split");
-    let routes = race.sim.route_count();
+    let routes = race.core.sim.route_count();
     let mut forks = Forks::default();
     let mut decided = vec![0u16; count];
     let mut laps: Vec<u32> = (0..count)
-        .map(|s| race.sim.world.ships[s].standing.lap)
+        .map(|s| race.core.sim.world.ships[s].standing.lap)
         .collect();
     for tick in 0..ticks {
         race.tick_sim_only(&PlayerInputs::none());
         for slot in 0..count {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             let branching = ship.driver.branching;
             if branching.decided_at != 0 && branching.decided_at != decided[slot] {
                 *forks
@@ -84,15 +84,17 @@ fn run(source: &str, track: &str, ticks: u32, ribbon: bool) -> Option<(Forks, us
     }
     forks.laps = laps;
     forks.wrecked = (0..count)
-        .map(|s| race.sim.world.ships[s].physics.craft_state != oag_physics::CraftState::Racing)
+        .map(|s| {
+            race.core.sim.world.ships[s].physics.craft_state != oag_physics::CraftState::Racing
+        })
         .collect();
     for slot in 0..count {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         println!(
             "{track}: slot {slot} lap {} route {} respawns {} state {:?} progress {:?} index {}",
             ship.standing.lap,
             ship.driver.branching.route,
-            race.sim.respawns_of(slot),
+            race.core.sim.respawns_of(slot),
             ship.physics.craft_state,
             ship.standing.progress,
             ship.driver.index
@@ -217,13 +219,13 @@ fn a_craft_shoved_onto_the_other_side_of_a_fork_follows_that_side() {
     .expect("loading 05_Track");
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
 
     // The ring point in the bypassed stretch furthest from the route.
-    let course = race.sim.course().expect("a ring").clone();
+    let course = race.core.sim.course().expect("a ring").clone();
     let route = &course.routes()[0];
     let n = course.len();
     let span = (route.merge + n - route.split) % n;
@@ -244,11 +246,11 @@ fn a_craft_shoved_onto_the_other_side_of_a_fork_follows_that_side() {
         "the route never leaves the ring's side: {stray:.1}"
     );
 
-    let on_route = race.sim.line_of(1).len() - route.len() / 2;
+    let on_route = race.core.sim.line_of(1).len() - route.len() / 2;
     let position = course.position(ring_at).expect("in range");
     let tangent = course.tangent(ring_at).expect("in range");
     {
-        let ship = &mut race.sim.world.ships[1];
+        let ship = &mut race.core.sim.world.ships[1];
         ship.driver.branching = oag_ai::branch::Branching {
             route: 1,
             decided_at: 0,
@@ -261,7 +263,7 @@ fn a_craft_shoved_onto_the_other_side_of_a_fork_follows_that_side() {
         ship.physics.body.linear_velocity = tangent * 50.0;
     }
     race.tick_sim_only(&PlayerInputs::none());
-    let branching = race.sim.world.ships[1].driver.branching;
+    let branching = race.core.sim.world.ships[1].driver.branching;
     assert_eq!(
         branching.route, 0,
         "a craft {stray:.0} units from its route, on the ring, still follows the route"

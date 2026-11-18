@@ -407,7 +407,7 @@ fn omega_plays_no_xp_or_objective_line() {
         ..oag_raceplay::Options::default()
     })
     .expect("an Omega race loads");
-    let readout = oag_raceplay::Race::start(loaded.setup).readout();
+    let readout = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules).readout();
     let context = loaded.hud.context().expect("the layout parses");
     let frame = oag_hud::draw_list(&context, &readout);
     let drawn: Vec<String> = frame
@@ -574,7 +574,7 @@ fn an_omega_eliminator_draws_the_lap_hexagon() {
     })
     .expect("an Omega Eliminator loads");
     let context = loaded.hud.context().expect("the layout parses");
-    let readout = oag_raceplay::Race::start(loaded.setup).readout();
+    let readout = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules).readout();
     let with = oag_hud::draw_list(&context, &readout);
     let others: &'static [&'static str] = Box::leak(
         context
@@ -668,7 +668,9 @@ fn a_2048_era_circuit_runs_the_original_s_laps_per_class() {
     }
     let laps_of = |track: &str, class: &str| {
         let loaded = load_on(track, class);
-        oag_raceplay::Race::start(loaded.setup).readout().laps
+        oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules)
+            .readout()
+            .laps
     };
     assert_eq!(laps_of(ALTIMA_2048, "venom"), 4, "C CLASS");
     assert_eq!(laps_of(ALTIMA_2048, "rapier"), 5, "A CLASS");

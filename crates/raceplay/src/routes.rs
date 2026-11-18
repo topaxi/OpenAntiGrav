@@ -274,7 +274,7 @@ pub(super) fn line_for<'a>(
         .map_or(ring, |r| &r.line)
 }
 
-impl Race {
+impl SimRace {
     /// The speed plan slot `slot`'s driver follows on its own line: the
     /// ring's, a route's, or none.
     #[must_use]

@@ -40,7 +40,7 @@ fn the_wobble_phases_carry_over_between_beams() {
     let mut strip = Strip::new([None; MAX_SHIPS]);
     strip.phases = [1.5; 3];
     race.view.leach_strip = Some(strip);
-    assert!(race.sim.leach_beams_live().next().is_none());
+    assert!(race.core.sim.leach_beams_live().next().is_none());
     race.advance_leach_strip();
     let phases = race.view.leach_strip.as_ref().map(|strip| strip.phases);
     assert_eq!(phases, Some([1.5; 3]));

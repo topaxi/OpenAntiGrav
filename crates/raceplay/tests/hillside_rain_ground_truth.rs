@@ -87,7 +87,7 @@ fn weather(
     ticks: u32,
 ) -> (bool, usize, usize, f32, usize, bool, race::extensions::Sky) {
     let loaded = race::load(&options).expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
     }
@@ -98,8 +98,8 @@ fn weather(
         weather.lens().alive_count(),
         weather.wet_road(),
         weather.drop_segments().len(),
-        race.sim.is_modded(),
-        race.sim.extension_sky(),
+        race.core.sim.is_modded(),
+        race.core.sim.extension_sky(),
     )
 }
 
@@ -138,14 +138,17 @@ fn a_disc_circuit_never_runs_the_track_module() {
         return;
     };
     let loaded = race::load(&options(1, None, vec![source]).unwrap()).expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..900 {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        !race.sim.is_modded(),
+        !race.core.sim.is_modded(),
         "the module is bound to Hillside's file"
     );
     assert!(!race.scenery_fx().weather().is_driven_active());
-    assert_eq!(race.sim.extension_sky(), race::extensions::Sky::default());
+    assert_eq!(
+        race.core.sim.extension_sky(),
+        race::extensions::Sky::default()
+    );
 }

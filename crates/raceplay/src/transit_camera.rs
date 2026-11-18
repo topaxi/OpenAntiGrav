@@ -50,7 +50,7 @@ impl crate::Race {
     /// Before the cameras advance.
     pub(super) fn advance_transit_seats(&mut self) {
         for slot in 0..oag_gameplay::MAX_SHIPS {
-            let ship = &self.sim.world.ships[slot];
+            let ship = &self.core.sim.world.ships[slot];
             let seat = match (ship.transit, self.view.transit_seats[slot]) {
                 (None, _) => None,
                 (Some(transit), Some(seat)) if transit.ticks_left < seat.left => Some(Seat {
@@ -59,7 +59,7 @@ impl crate::Race {
                     left: transit.ticks_left,
                     ..seat
                 }),
-                (Some(transit), _) => self.sim.transit_seat(slot, transit),
+                (Some(transit), _) => self.core.sim.transit_seat(slot, transit),
             };
             self.view.transit_seats[slot] = seat;
         }
@@ -69,8 +69,8 @@ impl crate::Race {
     /// [`SEAT_SPRING`] of them while it is closing on a seat.
     pub(super) fn camera_step(&self, slot: usize) -> f32 {
         match self.view.transit_seats.get(slot) {
-            Some(Some(_)) => self.sim.dt * SEAT_SPRING,
-            _ => self.sim.dt,
+            Some(Some(_)) => self.core.sim.dt * SEAT_SPRING,
+            _ => self.core.sim.dt,
         }
     }
 }
@@ -143,7 +143,7 @@ impl crate::Race {
 
     /// `slot`'s craft as a camera follows it this tick.
     pub(super) fn followed(&self, slot: usize) -> Target {
-        let mut target = crate::camera::target_of(&self.sim.world.ships[slot]);
+        let mut target = crate::camera::target_of(&self.core.sim.world.ships[slot]);
         target.position = self.drawn_position(slot);
         self.seated(slot, target)
     }
@@ -198,7 +198,7 @@ impl crate::Race {
     /// ([`Self::ship_flown_in_view`]).
     #[must_use]
     pub fn ship_drawn(&self, slot: usize) -> bool {
-        self.sim.ship_active(slot) || self.ship_flown_in_view(slot)
+        self.core.sim.ship_active(slot) || self.ship_flown_in_view(slot)
     }
 
     /// The rigid frame of the craft the view being drawn follows, in the world: its right, up

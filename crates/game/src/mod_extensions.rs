@@ -228,10 +228,12 @@ pub fn attach(
 /// The dev overlay's `mods` block for `race`, `None` in a race with no simulation mod.
 #[must_use]
 pub fn readout(race: &oag_raceplay::Race) -> Option<oag_present::perf::mods::Readout> {
-    race.sim
+    race.core
+        .sim
         .is_modded()
         .then(|| oag_present::perf::mods::Readout {
             modules: race
+                .core
                 .sim
                 .extension_reports()
                 .into_iter()

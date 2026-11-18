@@ -139,8 +139,8 @@ pub fn apply_noting(
     choice: AiChoice,
     source: Source,
 ) -> (bool, Option<oag_raceplay::OriginalAi>) {
-    let opponents = race.sim.world.ship_count > 1;
-    let humans = race.sim.world.human_slots().count();
+    let opponents = race.core.sim.world.ship_count > 1;
+    let humans = race.core.sim.world.human_slots().count();
     match decide(choice, opponents, humans, source) {
         Decision::Ours(reason) => {
             log::info!("AI: this project's driver flies ({})", reason.text());
@@ -151,9 +151,10 @@ pub fn apply_noting(
             level,
             event,
         } => {
-            let flies = race.sim.use_original_ai(skill, level);
+            let flies = race.core.sim.use_original_ai(skill, level);
             if flies && let Some((pad_tracking, weapon_avoidance)) = event {
-                race.sim
+                race.core
+                    .sim
                     .set_original_event_ai_skills(pad_tracking, weapon_avoidance);
             }
             let note =

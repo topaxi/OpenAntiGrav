@@ -82,8 +82,8 @@ fn a_one_seat_window_is_whole_and_a_seat_without_a_camera_is_skipped() {
 #[test]
 fn once_the_race_is_over_every_window_with_a_seat_draws_the_one_end_view() {
     let mut race = race_with_a_grid();
-    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
-    race.sim.world.controllers[2] = oag_gameplay::Controller::Local;
+    race.core.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    race.core.sim.world.controllers[2] = oag_gameplay::Controller::Local;
     assert_eq!(race.set_viewport_count(3), 3);
     race.set_windows(vec![
         WindowViews {
@@ -101,10 +101,10 @@ fn once_the_race_is_over_every_window_with_a_seat_draws_the_one_end_view() {
     ]);
     assert_eq!(race.window_drawn(1), vec![1, 2], "racing: its own seats");
     for slot in 0..3 {
-        race.sim.world.race[slot].finished = true;
+        race.core.sim.world.race[slot].finished = true;
     }
-    assert!(race.sim.finished());
-    let player = race.player_slot();
+    assert!(race.core.sim.finished());
+    let player = race.core.player_slot();
     assert_eq!(race.window_drawn(0), vec![player]);
     assert_eq!(
         race.window_drawn(1),
@@ -449,14 +449,14 @@ fn a_demo_watched_in_three_windows_follows_three_craft_and_moves_no_hash() {
     watched.fly_as_demo(&oag_title::demo::Demo::PULSE);
     watched.watch_in_windows(3);
     assert_eq!(
-        watched.sim.world.human_slots().count(),
+        watched.core.sim.world.human_slots().count(),
         0,
         "a wallpaper seats nobody"
     );
     let drawn: Vec<Vec<usize>> = (0..3).map(|window| watched.window_drawn(window)).collect();
     assert_eq!(
         drawn[0],
-        vec![watched.player_slot()],
+        vec![watched.core.player_slot()],
         "window 1 keeps the demo's own camera"
     );
     let mut slots: Vec<usize> = drawn.iter().map(|seats| seats[0]).collect();
@@ -467,8 +467,8 @@ fn a_demo_watched_in_three_windows_follows_three_craft_and_moves_no_hash() {
         plain.tick(&oag_gameplay::PlayerInputs::default());
         watched.tick(&oag_gameplay::PlayerInputs::default());
         assert_eq!(
-            plain.sim.state_hash(),
-            watched.sim.state_hash(),
+            plain.core.sim.state_hash(),
+            watched.core.sim.state_hash(),
             "diverged at tick {tick}"
         );
     }

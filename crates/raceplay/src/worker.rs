@@ -44,7 +44,7 @@ use super::{Loaded, Options, TextureSink};
 /// [`super::load`] produces plain data - vertex and index buffers, handling
 /// blocks, a spline - and the device only enters at `Stage::race`, which runs
 /// on the frame thread with the result. That is what makes the split cheap
-/// rather than a rewrite; see [`super::Setup`]'s own "no GPU anywhere in sight".
+/// rather than a rewrite; see [`super::SimSetup`]'s own "no graphics driver".
 ///
 /// With one, the thread is inside the driver for every texture and its result
 /// holds their views, so it is a GPU worker (`oag_thread::gpu_workers`).
@@ -78,7 +78,7 @@ impl LoadWorker {
     /// held for the scene - see [`super::TextureSink`].
     ///
     /// `plan_ahead` starts the race on this thread once the circuit is read and
-    /// begins learning its speed plans there ([`crate::Race::begin_speed_plans_ahead`]),
+    /// begins learning its speed plans there ([`crate::SimRace::begin_speed_plans_ahead`]),
     /// for a launch that will seat no one else and take no network host's race:
     /// the menus' own. The scene build then takes the started race
     /// ([`Loaded::started`]).
@@ -149,7 +149,11 @@ impl LoadWorker {
                 // the scene build; see `Loaded::started`.
                 #[cfg(target_arch = "wasm32")]
                 let loaded = loaded.map(|mut loaded| {
-                    loaded.started = Some(Box::new(crate::Race::start(loaded.setup.clone())));
+                    loaded.started = Some(Box::new(crate::Race::start(
+                        loaded.setup.clone(),
+                        loaded.view.clone(),
+                        loaded.modules.clone(),
+                    )));
                     loaded
                 });
                 // Natively, so the speed plans learn beside the scene build
@@ -164,8 +168,12 @@ impl LoadWorker {
                         .as_ref()
                         .is_some_and(|course| !course.routes().is_empty());
                     if plan_ahead && forked {
-                        let mut race = crate::Race::start(loaded.setup.clone());
-                        race.begin_speed_plans_ahead();
+                        let mut race = crate::Race::start(
+                            loaded.setup.clone(),
+                            loaded.view.clone(),
+                            loaded.modules.clone(),
+                        );
+                        race.core.begin_speed_plans_ahead();
                         loaded.started = Some(Box::new(race));
                     }
                     loaded

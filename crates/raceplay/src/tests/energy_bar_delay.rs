@@ -19,7 +19,11 @@ fn shielded_handling() -> Handling {
 /// this any higher would read the first real tick as a false drop from full.
 #[test]
 fn a_fresh_race_starts_the_trail_at_zero() {
-    let race = Race::start(setup(shielded_handling()));
+    let race = Race::start(
+        setup(shielded_handling()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(race.readout().energy_bar_delay_fraction, 0.0);
 }
 
@@ -29,7 +33,11 @@ fn a_fresh_race_starts_the_trail_at_zero() {
 /// height and the two widgets read as one.
 #[test]
 fn the_trail_chases_a_steady_fraction_at_one_tenth_a_tick() {
-    let mut race = Race::start(setup(shielded_handling()));
+    let mut race = Race::start(
+        setup(shielded_handling()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     // This tick both loads the pool and runs `advance_energy_bar_delay` once
     // already (it is part of `Race::tick`), so `expected` starts from what
     // it actually left behind rather than from the pre-race `0.0`.
@@ -73,7 +81,11 @@ fn the_trail_chases_a_steady_fraction_at_one_tenth_a_tick() {
 /// landed on that exact tick.
 #[test]
 fn the_trail_reads_above_the_fraction_for_a_few_ticks_after_a_drop() {
-    let mut race = Race::start(setup(shielded_handling()));
+    let mut race = Race::start(
+        setup(shielded_handling()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.tick(&PlayerInputs::none());
     // Let the trail fully catch up to the loaded, undamaged pool first -
     // `0.9^150` is far below the tolerance below.
@@ -83,7 +95,7 @@ fn the_trail_reads_above_the_fraction_for_a_few_ticks_after_a_drop() {
     let before = race.readout().energy_bar_delay_fraction;
     assert!((before - 1.0).abs() < 1e-3, "should have caught up to full");
 
-    race.sim.world.ships[0].physics.shield = 40.0;
+    race.core.sim.world.ships[0].physics.shield = 40.0;
     race.tick(&PlayerInputs::none());
     let readout = race.readout();
     assert!(

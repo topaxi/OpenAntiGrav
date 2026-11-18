@@ -72,21 +72,21 @@ fn autopiloted_race() -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
     Some(race)
 }
 
 /// Runs until the race ends or [`CAP`] runs out, and says which.
 fn race_to_the_flag(race: &mut race::Race) {
-    while !race.sim.finished() && race.sim.world.tick < CAP {
+    while !race.core.sim.finished() && race.core.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        race.sim.finished(),
+        race.core.sim.finished(),
         "the race was still running after {CAP} ticks; the player reached lap {} of {:?}",
-        race.sim.world.primary_race().lap,
-        race.sim.world.laps_target()
+        race.core.sim.world.primary_race().lap,
+        race.core.sim.world.laps_target()
     );
 }
 
@@ -97,6 +97,7 @@ fn a_single_race_ends_when_the_player_finishes_or_is_eliminated() {
         return;
     };
     let target = race
+        .core
         .sim
         .world
         .laps_target()
@@ -105,19 +106,19 @@ fn a_single_race_ends_when_the_player_finishes_or_is_eliminated() {
 
     println!(
         "the race finished on tick {} ({:.1} s), the player {} of 8, craft state {:?}",
-        race.sim.world.tick,
-        race.sim.world.tick as f32 / 60.0,
-        race.player_place(),
-        race.sim.world.ships[0].physics.craft_state
+        race.core.sim.world.tick,
+        race.core.sim.world.tick as f32 / 60.0,
+        race.core.player_place(),
+        race.core.sim.world.ships[0].physics.craft_state
     );
-    match race.sim.world.ships[0].standing.finish_tick {
+    match race.core.sim.world.ships[0].standing.finish_tick {
         Some(finish_tick) => {
             assert_eq!(
-                finish_tick, race.sim.world.tick,
+                finish_tick, race.core.sim.world.tick,
                 "the player's own standing has to agree with the race's finish condition"
             );
             assert_eq!(
-                race.sim.world.primary_race().lap,
+                race.core.sim.world.primary_race().lap,
                 target + 1,
                 "a finished race is one lap past its target"
             );
@@ -127,7 +128,7 @@ fn a_single_race_ends_when_the_player_finishes_or_is_eliminated() {
         // doc. A craft destroyed in a single race is out, not respawned, so it
         // never earns a `finish_tick`.
         None => assert_eq!(
-            race.sim.world.ships[0].physics.craft_state,
+            race.core.sim.world.ships[0].physics.craft_state,
             oag_physics::CraftState::Eliminated,
             "the race ended without the player finishing or being eliminated"
         ),
@@ -142,7 +143,11 @@ fn the_finished_race_leaves_a_board_with_the_whole_grid_on_it() {
     };
     race_to_the_flag(&mut race);
 
-    let board = race.results().expect("a finished race has results").clone();
+    let board = race
+        .core
+        .results()
+        .expect("a finished race has results")
+        .clone();
     for row in &board.rows {
         println!(
             "{:>2}  slot {}  laps {}  {}",
@@ -156,14 +161,17 @@ fn the_finished_race_leaves_a_board_with_the_whole_grid_on_it() {
         );
     }
 
-    assert_eq!(board.rows.len(), usize::from(race.sim.world.ship_count));
+    assert_eq!(
+        board.rows.len(),
+        usize::from(race.core.sim.world.ship_count)
+    );
     assert_eq!(board.rows.len(), 8, "a single race grids eight");
     let mut places: Vec<u8> = board.rows.iter().map(|row| row.place).collect();
     places.sort_unstable();
     assert_eq!(places, (1..=8).collect::<Vec<_>>());
 
     let player = board.player().expect("the player is on the board");
-    assert_eq!(player.place, race.player_place());
+    assert_eq!(player.place, race.core.player_place());
 
     if player.finished() {
         assert_eq!(player.laps_completed, board.laps_target.unwrap_or(0));
@@ -182,7 +190,7 @@ fn the_finished_race_leaves_a_board_with_the_whole_grid_on_it() {
         // row, but a craft destroyed in a single race is still out rather than
         // still racing.
         assert_eq!(
-            race.sim.world.ships[0].physics.craft_state,
+            race.core.sim.world.ships[0].physics.craft_state,
             oag_physics::CraftState::Eliminated,
             "the race ended without the player finishing or being eliminated"
         );
@@ -206,10 +214,10 @@ fn ticking_past_the_flag_does_not_rewrite_the_result() {
         return;
     };
     race_to_the_flag(&mut race);
-    let taken = race.results().expect("a board").clone();
+    let taken = race.core.results().expect("a board").clone();
 
     for _ in 0..600 {
         race.tick(&PlayerInputs::none());
     }
-    assert_eq!(race.results(), Some(&taken));
+    assert_eq!(race.core.results(), Some(&taken));
 }

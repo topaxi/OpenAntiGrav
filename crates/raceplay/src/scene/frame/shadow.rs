@@ -327,7 +327,7 @@ impl super::super::Scene {
             map.render_depth_far(queue, encoder, &default_fit(), &[]);
             return 0;
         }
-        let drawn = usize::from(race.sim.ship_count());
+        let drawn = usize::from(race.core.sim.ship_count());
         let mut lists = self.shadow_rank.borrow_mut();
         let ShadowRank {
             references,
@@ -338,7 +338,7 @@ impl super::super::Scene {
         models.clear();
         models.extend(
             (0..drawn.min(self.ships.len()))
-                .filter(|&slot| race.sim.ship_active(slot))
+                .filter(|&slot| race.core.sim.ship_active(slot))
                 .map(|slot| (slot, race.ship_model_matrix_of(slot))),
         );
         rank_by_distance(
@@ -382,9 +382,10 @@ impl super::super::Scene {
     fn rank_references(&self, race: &Race, points: &mut Vec<Vec3>) {
         points.clear();
         points.push(race.camera_position());
-        if race.sim.people() > 1 {
+        if race.core.sim.people() > 1 {
             points.extend(
-                race.sim
+                race.core
+                    .sim
                     .world
                     .human_slots()
                     .map(|slot| race.ship_model_matrix_of(slot).transform_point3(Vec3::ZERO)),
@@ -488,13 +489,13 @@ impl super::super::Scene {
         let active = (shadows == oag_display::display::Shadows::Original || mapped)
             && !hulls
             && self.light.enabled > 0.5;
-        let drawn = usize::from(race.sim.ship_count());
+        let drawn = usize::from(race.core.sim.ship_count());
         let track = self.track.occlusion_track();
         for slot in 0..(oag_mesh::mesh_render::OCCLUSION_LAYERS as usize) {
             if self.ships.get(slot).is_none()
                 || !active
                 || slot >= drawn
-                || !race.sim.ship_active(slot)
+                || !race.core.sim.ship_active(slot)
             {
                 // Cleared once, not every frame: a layer nothing drew into
                 // since its last clear is already black, and a title that
@@ -567,7 +568,7 @@ impl super::super::Scene {
         prev: &Snapshot,
         frustum: Option<&Frustum>,
     ) {
-        let drawn = usize::from(race.sim.ship_count());
+        let drawn = usize::from(race.core.sim.ship_count());
         for slot in 0..drawn {
             if !race.ship_drawn(slot) {
                 continue;
@@ -582,7 +583,7 @@ impl super::super::Scene {
                     .as_ref()
                     .map(|probes| {
                         if self.hull_seen(race, slot, frustum) {
-                            probes.write(queue, slot, race.sim.ship_probe_position(slot));
+                            probes.write(queue, slot, race.core.sim.ship_probe_position(slot));
                         }
                         slot
                     })
@@ -591,7 +592,7 @@ impl super::super::Scene {
                         // named by the same layer field.
                         self.sh_ambient.as_ref().map(|sh| {
                             if self.hull_seen(race, slot, frustum) {
-                                sh.write(queue, slot, race.sim.ship_probe_position(slot));
+                                sh.write(queue, slot, race.core.sim.ship_probe_position(slot));
                             }
                             slot
                         })
@@ -816,14 +817,14 @@ impl super::super::Scene {
     /// live rocket, mine, bomb and shuriken.
     fn moving_bodies(&self, race: &Race) -> Vec<(&crate::Drawable, Mat4)> {
         let mut bodies = Vec::new();
-        let drawn = usize::from(race.sim.ship_count());
+        let drawn = usize::from(race.core.sim.ship_count());
         for slot in 0..drawn.min(self.ships.len()) {
             let model = race.ship_model_matrix_of(slot);
             if self.is_wrecked(race, slot) {
                 if let Some(wreck) = self.wrecks.hull(slot) {
                     bodies.push((wreck, model));
                 }
-            } else if race.sim.ship_active(slot) {
+            } else if race.core.sim.ship_active(slot) {
                 bodies.push((&self.ships[slot], model));
             }
         }

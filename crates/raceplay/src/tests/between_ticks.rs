@@ -18,7 +18,7 @@ fn gliding_race() -> Race {
     for _ in 0..oag_race::COUNTDOWN_TICKS {
         race.tick(&PlayerInputs::none());
     }
-    for ship in &mut race.sim.world.ships {
+    for ship in &mut race.core.sim.world.ships {
         ship.physics.body.linear_velocity = Vec3::new(30.0, 0.0, 3.0);
     }
     for _ in 0..5 {
@@ -108,17 +108,21 @@ fn outside_a_draw_every_reader_is_the_tick_exactly() {
     assert_eq!(race.view_unshaken(), race.tick_view_unshaken());
     assert_eq!(
         race.ship_model_matrix_of(0),
-        crate::drawable::model_matrix_of(&race.sim.world.ships[0])
+        crate::drawable::model_matrix_of(&race.core.sim.world.ships[0])
     );
 }
 
 #[test]
 fn a_draw_sits_between_the_last_two_ticks() {
     let mut race = gliding_race();
-    let before = translation(crate::drawable::model_matrix_of(&race.sim.world.ships[0]));
+    let before = translation(crate::drawable::model_matrix_of(
+        &race.core.sim.world.ships[0],
+    ));
     let eye_before = race.camera_position();
     race.tick(&PlayerInputs::none());
-    let after = translation(crate::drawable::model_matrix_of(&race.sim.world.ships[0]));
+    let after = translation(crate::drawable::model_matrix_of(
+        &race.core.sim.world.ships[0],
+    ));
     let eye_after = race.camera_position();
     assert!(
         before.distance(after) > 1e-4,
@@ -149,7 +153,7 @@ fn every_tick_path_captures_first_and_puts_the_alpha_back() {
         // A plain tick first, so a step that captured nothing would leave a
         // previous pose one tick older than the one it started from.
         race.tick(&PlayerInputs::none());
-        let held = crate::drawable::model_matrix_of(&race.sim.world.ships[0]);
+        let held = crate::drawable::model_matrix_of(&race.core.sim.world.ships[0]);
         race.set_draw_alpha(0.5);
         step(race);
         assert_eq!(race.draw_alpha(), 1.0, "{name} left a draw alpha set");
@@ -181,18 +185,18 @@ fn every_tick_path_captures_first_and_puts_the_alpha_back() {
 fn a_respawn_snaps_the_craft_and_cuts_the_camera() {
     let mut race = gliding_race();
     race.tick(&PlayerInputs::none());
-    race.sim.respawns[0] += 1;
+    race.core.sim.respawns[0] += 1;
     race.set_draw_alpha(0.5);
     assert_eq!(
         race.ship_model_matrix_of(0),
-        crate::drawable::model_matrix_of(&race.sim.world.ships[0]),
+        crate::drawable::model_matrix_of(&race.core.sim.world.ships[0]),
         "a respawned craft swept from where it was"
     );
     assert_eq!(race.view(), race.tick_view(), "a cut was swept");
     // Another craft, which did not respawn, still blends.
     assert_ne!(
         race.ship_model_matrix_of(1),
-        crate::drawable::model_matrix_of(&race.sim.world.ships[1])
+        crate::drawable::model_matrix_of(&race.core.sim.world.ships[1])
     );
 }
 
@@ -223,8 +227,16 @@ fn settling_draws_the_current_tick() {
 /// between every tick, as the window does, moves no state hash.
 #[test]
 fn a_draw_alpha_reaches_no_state_hash() {
-    let mut drawn = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
-    let mut plain = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
+    let mut drawn = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
+    let mut plain = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
     for tick in 0..120u32 {
         drawn.set_draw_alpha((tick % 7) as f32 / 7.0);
         let _ = (
@@ -236,11 +248,11 @@ fn a_draw_alpha_reaches_no_state_hash() {
         );
         drawn.tick(&PlayerInputs::none());
         plain.tick(&PlayerInputs::none());
-        drawn.sim.drain_cues();
-        plain.sim.drain_cues();
+        drawn.core.sim.drain_cues();
+        plain.core.sim.drain_cues();
         assert_eq!(
-            drawn.sim.state_hash(),
-            plain.sim.state_hash(),
+            drawn.core.sim.state_hash(),
+            plain.core.sim.state_hash(),
             "a draw alpha moved the hash at tick {tick}"
         );
     }
@@ -250,6 +262,7 @@ fn a_draw_alpha_reaches_no_state_hash() {
 fn a_projectile_in_flight_is_drawn_between_its_ticks() {
     let mut race = super::cannon_draw::one_round(2);
     let slot = race
+        .core
         .sim
         .world
         .projectiles
@@ -257,10 +270,10 @@ fn a_projectile_in_flight_is_drawn_between_its_ticks() {
         .iter()
         .position(|p| p.kind.is_some())
         .expect("one round in flight");
-    let before = race.sim.world.projectiles.slots[slot].position;
-    race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+    let before = race.core.sim.world.projectiles.slots[slot].position;
+    race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
     race.tick(&PlayerInputs::none());
-    let after = race.sim.world.projectiles.slots[slot].position;
+    let after = race.core.sim.world.projectiles.slots[slot].position;
     assert!(before.distance(after) > 0.5, "the round did not fly");
     let rounds = |race: &Race| race.cannon_model_matrices(&CannonDraw::default());
     race.set_draw_alpha(0.5);
@@ -274,11 +287,11 @@ fn a_projectile_in_flight_is_drawn_between_its_ticks() {
 
     // The slot refilled inside the tick: a new shot, drawn where it is.
     race.tick(&PlayerInputs::none());
-    race.sim.world.projectiles.slots[slot].lifetime += 1.0;
+    race.core.sim.world.projectiles.slots[slot].lifetime += 1.0;
     race.set_draw_alpha(0.5);
     assert_eq!(
         translation(rounds(&race)[0]),
-        race.sim.world.projectiles.slots[slot].position
+        race.core.sim.world.projectiles.slots[slot].position
     );
 }
 
@@ -301,7 +314,7 @@ fn the_trail_head_follows_the_drawn_nozzle_and_only_between_ticks() {
     assert_ne!(
         race.nozzle_of(0),
         Some(
-            crate::drawable::model_matrix_of(&race.sim.world.ships[0])
+            crate::drawable::model_matrix_of(&race.core.sim.world.ships[0])
                 .transform_point3(Vec3::new(0.0, 0.0, 4.0))
         ),
         "the nozzle is not on the blended hull"
@@ -312,7 +325,7 @@ fn the_trail_head_follows_the_drawn_nozzle_and_only_between_ticks() {
 fn the_clock_runs_between_ticks_only_while_the_world_steps() {
     let mut race = gliding_race();
     race.tick(&PlayerInputs::none());
-    let tick = race.sim.world.tick as f32;
+    let tick = race.core.sim.world.tick as f32;
     assert_eq!(race.clock_seconds(), tick / 60.0);
     race.set_draw_alpha(0.25);
     assert!((race.clock_seconds() - (tick - 0.75) / 60.0).abs() < 1e-6);
@@ -332,7 +345,7 @@ fn the_world_meshes_clock_is_the_race_clock_plus_the_captures_offset_and_nothing
     race.view.world_clock_offset = 11.605;
     assert!((race.world_clock_seconds() - race.clock_seconds() - 11.605).abs() < 1e-5);
     // The race's own clock, which the HUD and the gantry read, does not move.
-    assert_eq!(race.clock_seconds(), race.sim.world.tick as f32 / 60.0);
+    assert_eq!(race.clock_seconds(), race.core.sim.world.tick as f32 / 60.0);
 }
 
 #[test]
@@ -362,10 +375,13 @@ fn the_ghost_is_drawn_between_its_two_poses() {
 #[test]
 fn the_body_a_blob_shadow_casts_from_is_the_drawn_one() {
     let mut race = gliding_race();
-    let before = race.sim.world.ships[0].physics.body.position;
+    let before = race.core.sim.world.ships[0].physics.body.position;
     race.tick(&PlayerInputs::none());
-    let after = race.sim.world.ships[0].physics.body.position;
-    assert_eq!(race.body_between(0), race.sim.world.ships[0].physics.body);
+    let after = race.core.sim.world.ships[0].physics.body.position;
+    assert_eq!(
+        race.body_between(0),
+        race.core.sim.world.ships[0].physics.body
+    );
     race.set_draw_alpha(0.25);
     let drawn = race.body_between(0).position;
     assert!(

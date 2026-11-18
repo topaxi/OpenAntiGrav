@@ -61,15 +61,15 @@ fn throttle(extra: u32) -> oag_gameplay::InputSnapshot {
 /// the absorb tick itself - the burst's own count rather than the stage's,
 /// since the rest of the field is racing, and firing, the whole time.
 fn absorb_and_watch(loaded: race::Loaded) -> Vec<u32> {
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle(0)));
     }
     let before = race.absorb_started_for_tests();
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.tick(&PlayerInputs::single(throttle(Button::Circle.bit())));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         None,
         "the Mine was not absorbed - the press never reached the absorb arm"
     );
@@ -257,12 +257,12 @@ fn pulse_lights_the_hull_for_one_second_after_a_pickup_absorb() {
 /// A pickup absorbed on the player's craft lights the hull overlay for one second, and
 /// not a tick before or after.
 fn assert_overlay_window(loaded: race::Loaded) {
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle(0)));
     }
     assert_eq!(race.absorb_overlay_pulse(0), None, "lit before any absorb");
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.tick(&PlayerInputs::single(throttle(Button::Circle.bit())));
     let mut pulses = vec![race.absorb_overlay_pulse(0)];
     for _ in 0..70 {
@@ -325,12 +325,12 @@ fn hd_fades_the_absorb_shell_in_over_the_timer_and_out_after() {
         shells >= 8,
         "only {shells} team(s) loaded an absorb shell - every base-game team ships one"
     );
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle(0)));
     }
     assert_eq!(race.absorb_shell_fader(0), None, "shown before any absorb");
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.tick(&PlayerInputs::single(throttle(Button::Circle.bit())));
     let mut fades = vec![race.absorb_shell_fader(0)];
     for _ in 0..150 {

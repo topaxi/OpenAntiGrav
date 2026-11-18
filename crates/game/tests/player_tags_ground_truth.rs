@@ -26,7 +26,7 @@ fn two_people(tags: bool) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
     race.set_player_tags(tags);
     Some(race)
@@ -87,7 +87,8 @@ fn a_lobby_name_replaces_the_stop_gap() {
     let Some(mut race) = two_people(true) else {
         return;
     };
-    race.set_person_names(vec!["ada".into(), "grace".into()]);
+    race.core
+        .set_person_names(vec!["ada".into(), "grace".into()]);
     let seen = tags_seen(&mut race);
     assert!(
         seen.iter()
@@ -109,9 +110,13 @@ fn the_stored_name_is_seat_ones_tag_and_seat_two_keeps_its_stop_gap() {
         ..Default::default()
     };
     oag_game::split_screen::name_first_seat(&mut named, &player, &oag_pulse::TITLE.profile);
-    assert_eq!(named.player_slot(), 0, "seat 1 is the grid's first slot");
-    assert_eq!(named.tag_name(0), "Ada");
-    assert_eq!(named.tag_name(1), "Player 2");
+    assert_eq!(
+        named.core.player_slot(),
+        0,
+        "seat 1 is the grid's first slot"
+    );
+    assert_eq!(named.core.tag_name(0), "Ada");
+    assert_eq!(named.core.tag_name(1), "Player 2");
     // View 1 does not have seat 1's craft in frame in this fixture, so the drawn tag over it is
     // checked on a captured frame (`split_screen_ground_truth`); here the name it would carry.
     let seen = tags_seen(&mut named);
@@ -127,13 +132,13 @@ fn the_stored_name_is_seat_ones_tag_and_seat_two_keeps_its_stop_gap() {
         &oag_game::settings::Player::default(),
         &oag_pulse::TITLE.profile,
     );
-    assert_eq!(blank.tag_name(0), "Player 1");
-    assert_eq!(blank.tag_name(1), "Player 2");
+    assert_eq!(blank.core.tag_name(0), "Player 1");
+    assert_eq!(blank.core.tag_name(1), "Player 2");
 
     // A title that keeps no name (2048, Omega) is not named from the shared one.
     let mut other = two_people(true).unwrap();
     oag_game::split_screen::name_first_seat(&mut other, &player, &oag_2048::TITLE.profile);
-    assert_eq!(other.tag_name(0), "Player 1");
+    assert_eq!(other.core.tag_name(0), "Player 1");
 }
 
 /// The face the tags are drawn in comes off the disc's `MPTag_HUD.xml`, and the eight labels

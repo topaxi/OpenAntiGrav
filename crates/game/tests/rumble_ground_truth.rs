@@ -248,8 +248,8 @@ mod race {
             ..oag_raceplay::Options::default()
         })
         .expect("the race loads");
-        let mut race = oag_raceplay::Race::start(loaded.setup);
-        race.sim.set_autopilot(true);
+        let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+        race.core.sim.set_autopilot(true);
         let mut out = Recorder::default();
         let rumbler = oag_game::rumble::Rumbler::new(&race, token, title.rumble);
         if matches!(token, "none" | "original") {
@@ -261,7 +261,7 @@ mod race {
         for _ in 0..ticks {
             race.tick(&PlayerInputs::none());
             rumbler.tick(&race, false, &mut out);
-            race.sim.drain_cues();
+            race.core.sim.drain_cues();
         }
         let fired = rumbler.fired();
         rumbler.stop(&mut out);

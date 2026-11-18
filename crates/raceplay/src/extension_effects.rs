@@ -291,7 +291,7 @@ mod view {
                 }
                 return;
             }
-            let ship = &self.sim.world.ships[slot];
+            let ship = &self.core.sim.world.ships[slot];
             // The nozzle is the hull's back end along the body's heading; a mod's rear
             // effect points its cone axis away from the nose.
             let body = &ship.physics.body;

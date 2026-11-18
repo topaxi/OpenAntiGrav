@@ -22,18 +22,23 @@ impl Race {
     /// seat's own warnings are not wired). Every racing craft is a valid pair: the
     /// original's own refusal of a pair (its flag byte) is unread.
     pub(super) fn note_incoming_fire(&mut self, slot: usize, weapon: oag_tables::weapons::Weapon) {
-        if slot == self.player_slot() || !self.incoming_warnings_drawn() {
+        if slot == self.core.player_slot() || !self.incoming_warnings_drawn() {
             return;
         }
-        let viewer = self.player_slot();
-        let ships = &self.sim.world.ships;
+        let viewer = self.core.player_slot();
+        let ships = &self.core.sim.world.ships;
         let (Some(here), Some(there)) = (
             ships[viewer].standing.progress,
             ships[slot].standing.progress,
         ) else {
             return;
         };
-        let length = self.sim.course.as_deref().map(oag_race::Course::length);
+        let length = self
+            .core
+            .sim
+            .course
+            .as_deref()
+            .map(oag_race::Course::length);
         let gap =
             oag_weapons::projectile::missile::wrapped_gap(here - there, length.unwrap_or(0.0));
         if let Some(icon) = oag_hud::incoming::classify(weapon, gap) {
@@ -45,12 +50,12 @@ impl Race {
     /// one view and one person, and the mode is one of those that raise them. Every raise,
     /// the original's and a mod's, goes through it.
     fn incoming_warnings_drawn(&self) -> bool {
-        self.view.huds[self.player_slot()].incoming_enabled
+        self.view.huds[self.core.player_slot()].incoming_enabled
             && self.viewport_count() <= 1
-            && self.sim.people() <= 1
-            && self.view.seat.is_none()
+            && self.core.sim.people() <= 1
+            && self.core.outcome.seat.is_none()
             && matches!(
-                self.sim.world.mode(),
+                self.core.sim.world.mode(),
                 oag_race::Mode::SingleRace
                     | oag_race::Mode::Tournament
                     | oag_race::Mode::Eliminator
@@ -63,7 +68,7 @@ impl Race {
     /// viewer and where the warnings are not drawn ([`Self::incoming_warnings_drawn`]).
     #[cfg(feature = "extensions")]
     pub(super) fn raise_mod_warning(&mut self, slot: usize, look: oag_hud::incoming::Look) {
-        if slot == self.player_slot() && self.incoming_warnings_drawn() {
+        if slot == self.core.player_slot() && self.incoming_warnings_drawn() {
             self.view.incoming_raises.push(look);
         }
     }

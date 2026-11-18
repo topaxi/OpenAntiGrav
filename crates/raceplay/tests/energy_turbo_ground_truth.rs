@@ -94,11 +94,11 @@ fn race_on(
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // This project's driver steers (a scripted stick finds the first bend's wall); the
     // buttons below still reach the pickup and the mod.
-    race.sim.set_autopilot(true);
-    let ship = &mut race.sim.world.ships[0];
+    race.core.sim.set_autopilot(true);
+    let ship = &mut race.core.sim.world.ships[0];
     ship.physics.shield = ship.handling.dimensions.shield * 0.5;
     if turbo {
         ship.pickup.weapon = Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
@@ -128,7 +128,7 @@ struct Sample {
 }
 
 fn sample(race: &race::Race) -> Sample {
-    let ship = &race.sim.world.ships[0];
+    let ship = &race.core.sim.world.ships[0];
     Sample {
         kmh: ship.physics.body.linear_velocity.length() * oag_core::math::SPEED_TO_KMH,
         shield: ship.physics.shield,
@@ -170,7 +170,7 @@ fn holding_fire_boosts_on_shield_and_an_absorb_pays_back_at_most_half() {
         return;
     };
     let mut carried = race_with(Some(&source), true).unwrap();
-    assert!(boosted.sim.is_modded());
+    assert!(boosted.core.sim.is_modded());
     const FIRE: std::ops::Range<u32> = 360..480;
     let a = drive(&mut boosted, 0..480, FIRE, None);
     let b = drive(&mut carried, 0..480, 0..0, None);
@@ -185,7 +185,7 @@ fn holding_fire_boosts_on_shield_and_an_absorb_pays_back_at_most_half() {
     assert!(a[479].kmh > b[479].kmh, "the boost is faster");
     assert!(a[479].shield < b[479].shield, "and paid for in shield");
     assert_eq!(
-        boosted.sim.world.ships[0].pickup.weapon,
+        boosted.core.sim.world.ships[0].pickup.weapon,
         Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)),
         "firing keeps it"
     );
@@ -199,7 +199,7 @@ fn holding_fire_boosts_on_shield_and_an_absorb_pays_back_at_most_half() {
     let gained = after - before;
     println!("spent {spent:.2}, absorb gave back {gained:.2} (pool {before:.2} -> {after:.2})");
     assert_eq!(
-        boosted.sim.world.ships[0].pickup.weapon, None,
+        boosted.core.sim.world.ships[0].pickup.weapon, None,
         "the absorb takes it"
     );
     assert!(
@@ -273,7 +273,11 @@ fn an_energy_turbo_race_run_twice_hashes_the_same_every_tick() {
         let inputs = held(&buttons, &pressed);
         first.tick(&inputs);
         second.tick(&inputs);
-        assert_eq!(first.sim.state_hash(), second.sim.state_hash(), "tick {t}");
+        assert_eq!(
+            first.core.sim.state_hash(),
+            second.core.sim.state_hash(),
+            "tick {t}"
+        );
     }
 }
 
@@ -288,20 +292,20 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
     let Some(mut race) = race_on(Some(&source), false, true) else {
         return;
     };
-    let ships = usize::from(race.sim.world.ship_count);
+    let ships = usize::from(race.core.sim.world.ship_count);
     let mut carried: Vec<Option<Weapon>> = vec![None; ships];
     let (mut turbos, mut energy) = (0_u32, 0_u32);
     let mut boost_ticks = 0_u32;
     // What the pads handed the player, whose pickup is spent the tick it arrives (the
     // driver flying it fires nothing), so it keeps drawing.
     let mut player: Vec<Weapon> = Vec::new();
-    let mut prior: Vec<f32> = race.sim.world.ships[..ships]
+    let mut prior: Vec<f32> = race.core.sim.world.ships[..ships]
         .iter()
         .map(|ship| ship.physics.shield)
         .collect();
     for _ in 0..10_800 {
         race.tick(&held(&[Button::Cross], &[]));
-        if let Some(weapon) = race.sim.world.ships[0].pickup.take() {
+        if let Some(weapon) = race.core.sim.world.ships[0].pickup.take() {
             player.push(weapon);
             match weapon {
                 Weapon::Turbo => turbos += 1,
@@ -310,7 +314,7 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
             }
         }
         for slot in 1..ships {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             let now = ship.pickup.weapon;
             if carried[slot].is_none() {
                 match now {
@@ -347,7 +351,7 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
     );
     assert!(boost_ticks > 0, "no AI craft boosted on the energy turbo");
     // The player's own draws are printed, not asserted: one grant path serves every
-    // slot (`Race::test_weapon_pads`), and whether the human column's odds deal the
+    // slot (`SimRace::test_weapon_pads`), and whether the human column's odds deal the
     // player a Turbo in one race is luck of the race (one energy turbo at x1.6, none
     // at x1.9).
 }
@@ -438,8 +442,8 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
     };
     let loaded = race::load(&options).expect("loading the race");
     let seed = loaded.setup.seed;
-    let mut modded = race::Race::start(loaded.setup);
-    assert!(modded.sim.is_modded());
+    let mut modded = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    assert!(modded.core.sim.is_modded());
     modded.start_recording(oag_replay::Header::new(
         "pulse",
         TRACK,
@@ -450,7 +454,7 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
     ));
     assert!(modded.recording(), "a modded race records");
     assert!(modded.give_weapon(0, Weapon::Extension(oag_tables::weapons::ModKind::FIRST)));
-    let pool = modded.sim.world.ships[0].physics.shield;
+    let pool = modded.core.sim.world.ships[0].physics.shield;
     for t in 0..SHOT_AT {
         let firing = (360..480).contains(&t);
         let buttons: &[Button] = if firing {
@@ -462,7 +466,7 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
         modded.tick(&held(buttons, pressed));
     }
     assert!(
-        modded.sim.world.ships[0].physics.shield < pool,
+        modded.core.sim.world.ships[0].physics.shield < pool,
         "the module boosted on the shield, so it is in the hash the shot carries"
     );
     let shot = modded
@@ -534,7 +538,7 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
     let ran = race::replay::resimulate(&vanilla, &image, &[], std::slice::from_ref(&source))
         .expect("builds");
     assert!(
-        !ran.race.sim.is_modded(),
+        !ran.race.core.sim.is_modded(),
         "the recording named no module, so none runs"
     );
 }

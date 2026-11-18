@@ -348,7 +348,7 @@ impl crate::RaceSim {
     }
 }
 
-impl crate::Race {
+impl crate::SimRace {
     /// Whether the player's in-race awards count this tick: the tally is armed and the player is
     /// racing (`FUN_8100d2a6` is false on the grid and after the finish). The boost start and the
     /// N-seconds-ahead awards skip this gate in the original and do not ask it.

@@ -23,15 +23,19 @@ fn grid_in(mode: Mode, weapon: Weapon, table: oag_tables::weapons::WeaponStats, 
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
-    race.sim.weapons = Some(Arc::new(table));
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.weapons = Some(Arc::new(table));
     for _ in 0..5 {
         race.tick(&PlayerInputs::none());
     }
     race.view.huds[0].incoming_enabled = true;
-    race.sim.world.ships[0].standing.progress = Some(1000.0);
-    race.sim.world.ships[1].standing.progress = Some(1000.0 - gap);
-    race.sim.world.ships[1].pickup.weapon = Some(weapon);
+    race.core.sim.world.ships[0].standing.progress = Some(1000.0);
+    race.core.sim.world.ships[1].standing.progress = Some(1000.0 - gap);
+    race.core.sim.world.ships[1].pickup.weapon = Some(weapon);
     race.view.incoming_raises.clear();
     race
 }

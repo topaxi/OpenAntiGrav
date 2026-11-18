@@ -21,12 +21,12 @@ fn table() -> Awards {
 }
 
 fn armed(mut race: Race) -> Race {
-    race.sim.arm_xp(XpTally::new(table(), Column::Race));
+    race.core.sim.arm_xp(XpTally::new(table(), Column::Race));
     race
 }
 
 fn paid(race: &Race, index: u32) -> u32 {
-    race.sim.xp_tally().expect("armed").times_paid(index)
+    race.core.sim.xp_tally().expect("armed").times_paid(index)
 }
 
 fn past_the_countdown(race: &mut Race, ticks: u64) {
@@ -38,7 +38,11 @@ fn past_the_countdown(race: &mut Race, ticks: u64) {
 /// Fails if the launch edge stops feeding the tally.
 #[test]
 fn a_perfect_launch_pays_boost_start() {
-    let mut race = armed(Race::start(perfect_start::launch_setup()));
+    let mut race = armed(Race::start(
+        perfect_start::launch_setup(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ));
     let mut buttons = Buttons::new();
     for tick in 0..oag_race::COUNTDOWN_TICKS + 40 {
         let press = tick >= oag_race::COUNTDOWN_TICKS + 12;
@@ -61,19 +65,19 @@ fn a_pad_pickup_pays_once_the_race_is_on_and_not_on_the_grid() {
     ));
     race.tick(&PlayerInputs::none());
     assert!(
-        race.ship_pickup().is_some(),
+        race.core.ship_pickup().is_some(),
         "sanity: the pad granted on the grid"
     );
     assert_eq!(paid(&race, 8), 0, "the grid is not racing");
 
     past_the_countdown(&mut race, 2);
-    race.sim.world.ships[0].pickup.weapon = None;
-    race.sim.weapon_pad_current[0] = None;
-    race.sim.weapon_pad_distance[0].fill(0.0);
-    race.sim.weapon_pad_refresh_left.fill(0.0);
+    race.core.sim.world.ships[0].pickup.weapon = None;
+    race.core.sim.weapon_pad_current[0] = None;
+    race.core.sim.weapon_pad_distance[0].fill(0.0);
+    race.core.sim.weapon_pad_refresh_left.fill(0.0);
     race.tick(&PlayerInputs::none());
     assert!(
-        race.ship_pickup().is_some(),
+        race.core.ship_pickup().is_some(),
         "sanity: the pad granted again"
     );
     assert_eq!(paid(&race, 8), 1);
@@ -85,15 +89,15 @@ fn a_pad_pickup_pays_once_the_race_is_on_and_not_on_the_grid() {
 fn the_places_the_player_takes_pay_once_each() {
     let mut race = armed(race_with_a_grid());
     let me = 0;
-    race.sim.world.ship_count = 2;
+    race.core.sim.world.ship_count = 2;
     past_the_countdown(&mut race, 2);
-    let body = race.sim.world.ships[me].physics.body;
-    race.sim.world.ships[1].physics.body.position = body.position - body.forward() * 30.0;
-    race.sim.world.ships[me].standing.lap_start_tick = Some(0);
-    race.sim.world.ships[1].standing.lap_start_tick = Some(0);
+    let body = race.core.sim.world.ships[me].physics.body;
+    race.core.sim.world.ships[1].physics.body.position = body.position - body.forward() * 30.0;
+    race.core.sim.world.ships[me].standing.lap_start_tick = Some(0);
+    race.core.sim.world.ships[1].standing.lap_start_tick = Some(0);
     race.tick(&PlayerInputs::none());
     assert_eq!(
-        race.sim.places()[me],
+        race.core.sim.places()[me],
         1,
         "sanity: the player leads the pair"
     );
@@ -106,12 +110,16 @@ fn two_craft_race() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_rocket_table());
-    let mut race = armed(Race::start(setup));
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    race.sim.world.ships[1].handling.dimensions.shield = 100.0;
-    race.sim.world.ships[1].physics.shield = 100.0;
+    let mut race = armed(Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ));
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    race.core.sim.world.ships[1].handling.dimensions.shield = 100.0;
+    race.core.sim.world.ships[1].physics.shield = 100.0;
     past_the_countdown(&mut race, 2);
     race
 }
@@ -121,11 +129,11 @@ fn two_craft_race() -> Race {
 #[test]
 fn a_rocket_the_player_lands_pays_hit_with_rocket_and_one_that_lands_on_the_player_does_not() {
     let mut race = two_craft_race();
-    let body = race.sim.world.ships[0].physics.body;
-    race.sim.world.ships[1].physics.body.position = body.position + body.forward() * 5.0;
-    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
-    let before = race.sim.world.ships[1].physics.shield;
-    race.sim.world.projectiles.spawn(
+    let body = race.core.sim.world.ships[0].physics.body;
+    race.core.sim.world.ships[1].physics.body.position = body.position + body.forward() * 5.0;
+    race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+    let before = race.core.sim.world.ships[1].physics.shield;
+    race.core.sim.world.projectiles.spawn(
         Weapon::Rocket,
         body.position + body.forward() * 2.0,
         body.forward() * 600.0,
@@ -135,13 +143,13 @@ fn a_rocket_the_player_lands_pays_hit_with_rocket_and_one_that_lands_on_the_play
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        race.sim.world.ships[1].physics.shield < before,
+        race.core.sim.world.ships[1].physics.shield < before,
         "sanity: the rocket struck the rival"
     );
     assert_eq!(paid(&race, 12), 1);
 
-    let body = race.sim.world.ships[0].physics.body;
-    race.sim.world.projectiles.spawn(
+    let body = race.core.sim.world.ships[0].physics.body;
+    race.core.sim.world.projectiles.spawn(
         Weapon::Rocket,
         body.position - body.forward() * 3.0,
         body.forward() * 600.0,
@@ -161,9 +169,9 @@ fn a_rocket_the_player_lands_pays_hit_with_rocket_and_one_that_lands_on_the_play
 #[test]
 fn a_hit_the_players_shield_swallows_pays_shielded_against() {
     let mut race = two_craft_race();
-    race.sim.world.ships[0].physics.shield_pickup_timer = 5.0;
-    let body = race.sim.world.ships[0].physics.body;
-    race.sim.world.projectiles.spawn(
+    race.core.sim.world.ships[0].physics.shield_pickup_timer = 5.0;
+    let body = race.core.sim.world.ships[0].physics.body;
+    race.core.sim.world.projectiles.spawn(
         Weapon::Rocket,
         body.position - body.forward() * 3.0,
         body.forward() * 600.0,
@@ -181,11 +189,15 @@ fn a_quake_the_player_fires_pays_hit_with_quake() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    let mut race = armed(Race::start(setup));
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Quake);
+    let mut race = armed(Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ));
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Quake);
     let mut buttons = Buttons::new();
     for tick in 0..oag_race::COUNTDOWN_TICKS + 30 {
         let press = tick == oag_race::COUNTDOWN_TICKS + 1;

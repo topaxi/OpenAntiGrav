@@ -142,9 +142,9 @@ impl Race {
     /// original adds a scaled vector to the position it pushes
     /// (`0x00124880..0x00124888`), unread. The basis is [`rocket_rows`].
     pub(crate) fn advance_rocket_smoke(&mut self) {
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         let smoke = &mut self.view.rocket_smoke;
-        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
+        for (slot, projectile) in self.core.sim.world.projectiles.slots.iter().enumerate() {
             if projectile.kind != Some(oag_tables::weapons::Weapon::Rocket) {
                 smoke.owners[slot] = None;
                 continue;

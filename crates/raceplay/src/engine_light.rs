@@ -246,7 +246,7 @@ impl Race {
 
     /// This frame's engine lights as the **track** takes them: one per active
     /// craft with an authored engine light, or empty on a title with none, on a circuit that
-    /// switches the SPU vertex lights off (`Setup::spu_vertex_lights`), and for
+    /// switches the SPU vertex lights off (`ViewSetup::spu_vertex_lights`), and for
     /// every craft without one. The hull takes them whatever the circuit says:
     /// [`Self::hd_craft_engine_lights`].
     #[must_use]
@@ -267,7 +267,7 @@ impl Race {
             return Vec::new();
         }
         (0..MAX_SHIPS)
-            .filter(|&slot| self.sim.ship_active(slot))
+            .filter(|&slot| self.core.sim.ship_active(slot))
             .filter_map(|slot| {
                 let light = self.view.engine_lights.get(slot).copied().flatten()?;
                 let nozzle = self.nozzle_local_of(slot)?;

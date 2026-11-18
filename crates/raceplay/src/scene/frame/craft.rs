@@ -31,7 +31,7 @@ pub(super) fn shell_visible(race: &Race, slot: usize) -> bool {
 /// Whether the cockpit sphere is drawn this frame: the player's shield is up
 /// and the camera is inside the hull.
 pub(super) fn cockpit_shield_visible(race: &Race) -> bool {
-    !race.draws_own_ship() && race.shield_of(0).visible() && race.sim.ship_active(0)
+    !race.draws_own_ship() && race.shield_of(0).visible() && race.core.sim.ship_active(0)
 }
 
 /// The scale HD's flame groups breathe with, about the origin the group is
@@ -93,7 +93,7 @@ pub(super) fn hd_spike_transform(
     } else {
         flame.main_spike_scale()
     };
-    let tick = race.sim.world.tick as u32;
+    let tick = race.core.sim.world.tick as u32;
     let scale = group * exhaust::hd::spike_flicker(tick, slot as u32, index);
     Mat4::from_translation(nozzle)
         * Mat4::from_scale(Vec3::splat(scale))

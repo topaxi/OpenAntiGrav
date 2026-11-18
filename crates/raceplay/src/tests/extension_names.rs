@@ -101,7 +101,7 @@ fn a_sound_is_the_one_its_key_names_when_another_sorts_ahead_of_it() {
     for keys in [&BEFORE[..], &AFTER[..]] {
         let mut race = grid(prepared(&[manifest(&[play], keys)]));
         race.tick(&PlayerInputs::none());
-        let [event] = &race.sim.drain_mod_sounds()[..] else {
+        let [event] = &race.core.sim.drain_mod_sounds()[..] else {
             panic!("one sound");
         };
         places.push(event.index);
@@ -135,7 +135,7 @@ fn an_effect_is_the_one_its_key_names_when_another_sorts_ahead_of_it() {
             race.tick(&PlayerInputs::none());
         }
         race.tick_sim_only(&PlayerInputs::none());
-        let fired = race.sim.extensions.effects_for_tests();
+        let fired = race.core.sim.extensions.effects_for_tests();
         let got = fired.iter().find_map(|(_, fired)| match fired {
             Fired::Own { index, .. } | Fired::OwnAt { index, .. } => Some(*index),
             Fired::Title(_) | Fired::Stop { .. } => None,
@@ -212,7 +212,7 @@ fn a_key_the_manifest_lacks_faults_the_module_naming_it_and_the_table() {
     for (kind, heading, command) in wrong {
         let mut race = grid(prepared(&[manifest(&[command], &BEFORE)]));
         race.tick(&PlayerInputs::none());
-        let (_, why) = race.sim.extension_reports()[0]
+        let (_, why) = race.core.sim.extension_reports()[0]
             .faulted
             .clone()
             .unwrap_or_else(|| panic!("{kind}: the module did not fault"));

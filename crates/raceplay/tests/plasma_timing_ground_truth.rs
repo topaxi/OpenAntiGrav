@@ -77,8 +77,8 @@ fn fly(ticks: usize) -> Option<(Vec<Option<Sample>>, Option<usize>)> {
         ..race::Options::default()
     })
     .expect("loading Talon's Junction");
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
     let mut input = Input::new();
     let cross = Button::Cross.bit();
     for _ in 0..393 {
@@ -94,6 +94,7 @@ fn fly(ticks: usize) -> Option<(Vec<Option<Sample>>, Option<usize>)> {
         };
         race.tick(&PlayerInputs::single(snap(&mut input, buttons)));
         let bolt = race
+            .core
             .sim
             .world
             .projectiles
@@ -103,7 +104,7 @@ fn fly(ticks: usize) -> Option<(Vec<Option<Sample>>, Option<usize>)> {
         if released.is_none() && bolt.is_some_and(|p| p.launch_speed_kmh > 0.0) {
             released = Some(k);
         }
-        let craft = race.sim.world.ships[0].physics.body.position;
+        let craft = race.core.sim.world.ships[0].physics.body.position;
         positions.push(bolt.map(|p| (p.position, (p.position - craft).length())));
     }
     Some((positions, released))

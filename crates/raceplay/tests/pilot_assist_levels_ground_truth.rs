@@ -89,13 +89,16 @@ fn load(
     })
     .expect("loading the race");
     let report = loaded.report.clone();
-    (Race::start(loaded.setup), report)
+    (
+        Race::start(loaded.setup, loaded.view, loaded.modules),
+        report,
+    )
 }
 
 fn laws(path: &str, class: &str) -> Option<(Laws, Vec<String>)> {
     let source = oag_testdata::exact(path).or_else(|| oag_testdata::image(path))?;
     let (race, report) = load(&source, class, None, true);
-    Some((race.sim.pilot_assist_laws(), report))
+    Some((race.core.sim.pilot_assist_laws(), report))
 }
 
 const CLASSES: [&str; 4] = ["VENOM", "FLASH", "RAPIER", "PHANTOM"];
@@ -153,7 +156,7 @@ fn titles_without_a_level_run_2048s_and_labelled_so() {
     };
     for class in CLASSES {
         let (reference, report) = load(&v2048, class, None, true);
-        let reference = reference.sim.pilot_assist_laws();
+        let reference = reference.core.sim.pilot_assist_laws();
         assert!(
             report
                 .iter()
@@ -213,16 +216,16 @@ fn fly(race: &mut Race) -> (u32, u32, f32, f32) {
     let mut touching = false;
     for _ in 0..TICKS {
         race.tick_sim_only(&inputs);
-        let ship = &race.sim.world.ships[0].physics;
+        let ship = &race.core.sim.world.ships[0].physics;
         let now = ship.wall_contact_prev;
         ticks += u32::from(now);
         contacts += u32::from(now && !touching);
         touching = now;
         peak = peak.max(ship.body.linear_velocity.length());
     }
-    let progress = race.sim.world.ships[0]
+    let progress = race.core.sim.world.ships[0]
         .standing
-        .distance(race.sim.course().expect("a course"));
+        .distance(race.core.sim.course().expect("a course"));
     (ticks, contacts, progress, peak)
 }
 
@@ -233,9 +236,9 @@ fn demo(title: &str, path: &str, track: Option<&str>) {
     let mut results = Vec::new();
     for level in Level::ALL {
         let (mut race, _) = load(&source, "VENOM", track, false);
-        race.sim.set_pilot_assist(level);
+        race.core.sim.set_pilot_assist(level);
         let (ticks, contacts, progress, peak) = fly(&mut race);
-        let ran = race.sim.world.ships[0].physics.pilot_assist != Default::default();
+        let ran = race.core.sim.world.ships[0].physics.pilot_assist != Default::default();
         println!(
             "{title} {:7}: {contacts:2} wall contacts, {ticks:4} ticks on a wall, \
              {progress:5.0} units round the lap, peak {peak:.0} u/s, assist state touched: {ran}",
@@ -269,9 +272,9 @@ fn pulse_levels_off_normal_extreme() {
     let mut results = Vec::new();
     for level in Level::ALL {
         let (mut race, _) = load(&source, "VENOM", None, false);
-        race.sim.set_pilot_assist(level);
+        race.core.sim.set_pilot_assist(level);
         let (ticks, contacts, progress, peak) = fly(&mut race);
-        let ran = race.sim.world.ships[0].physics.pilot_assist != Default::default();
+        let ran = race.core.sim.world.ships[0].physics.pilot_assist != Default::default();
         println!(
             "Pulse {:7}: {contacts:2} wall contacts, {ticks:4} ticks on a wall, \
              {progress:5.0} units round the lap, peak {peak:.0} u/s, assist state touched: {ran}",
@@ -299,20 +302,20 @@ fn no_opponent_ever_gets_either_level() {
             ..race::Options::default()
         })
         .unwrap();
-        let mut race = Race::start(loaded.setup);
-        race.sim.set_pilot_assist(level);
+        let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+        race.core.sim.set_pilot_assist(level);
         let inputs = thrust();
         for _ in 0..900 {
             race.tick_sim_only(&inputs);
         }
         assert_ne!(
-            race.sim.world.ships[0].physics.pilot_assist,
+            race.core.sim.world.ships[0].physics.pilot_assist,
             Default::default(),
             "{level:?}"
         );
-        for slot in 1..race.sim.world.ship_count as usize {
+        for slot in 1..race.core.sim.world.ship_count as usize {
             assert_eq!(
-                race.sim.world.ships[slot].physics.pilot_assist,
+                race.core.sim.world.ships[slot].physics.pilot_assist,
                 Default::default(),
                 "{level:?} slot {slot}"
             );

@@ -127,7 +127,7 @@ fn second_line(host: &mut Host, tick: u32) -> String {
 
 /// The server's results, the race's truth, one line a craft.
 fn board_lines(host: &Host) -> Vec<String> {
-    let Some(board) = host.race().results() else {
+    let Some(board) = host.race().core.results() else {
         return Vec::new();
     };
     board

@@ -139,12 +139,12 @@ fn render(image: &Path, name: &str, keep: bool) -> Render {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let emitters = loaded.setup.track_emitters.clone();
+    let emitters = loaded.view.track_emitters.clone();
     if !keep {
-        loaded.setup.track_emitters = TrackEmitters::default();
+        loaded.view.track_emitters = TrackEmitters::default();
     }
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
     let wav = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../data/shots")
         .join(name);

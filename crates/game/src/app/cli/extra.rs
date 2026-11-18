@@ -295,7 +295,7 @@ pub(crate) struct WreckArgs {
     /// reaches the player at the end of a tick: `TICK:SLOT`, e.g. `120:1`. The
     /// rival's wave a headless run would otherwise never send, for what a Quake
     /// hit shows and sounds: the cue pair, the shake, the sparks and the cockpit
-    /// static. See [`oag_raceplay::Race::force_quake`].
+    /// static. See [`oag_raceplay::SimRace::force_quake`].
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_quake: Option<String>,
 

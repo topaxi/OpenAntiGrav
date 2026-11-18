@@ -180,7 +180,7 @@ has an RPCS3 session on a Fury Eliminator cell (`grid8_3_2`):
 
 - `oag_race::score::final_places` is the end-of-race sort above (higher score, fewer kills, the
   person above an opponent; craft still equal keep grid order); the results board ranks by it,
-  and `Race::eliminator_place` is the player's index, the value `oag-game` hands the cell's
+  and `SimRace::eliminator_place` is the player's index, the value `oag-game` hands the cell's
   evaluator (`medal_watch::elimination_value`) once the race is finished. A quit Eliminator has
   no finished flag and records nothing.
 - `oag_title::Campaign::counting_modes` is the flip set: HD and Omega `Zone` and `Detonator`
@@ -188,7 +188,7 @@ has an RPCS3 session on a Fury Eliminator cell (`grid8_3_2`):
   `Cell::medal_law_is_unmeasured` is gone.
 - Tests: `an_hd_elimination_cell_awards_its_medal_by_place` (`oag-tables`, and
   `hd_campaign_ground_truth.rs` on `grid8_3_2`), 1st to 4th is gold, silver, bronze, nothing at
-  every rung, a kill count nothing; `final_places`' tie tests; `Race::eliminator_place`'s;
+  every rung, a kill count nothing; `final_places`' tie tests; `SimRace::eliminator_place`'s;
   `the_campaign_tier_asks_for_the_elimination_value` for the wiring.
 
 **Departure, chosen not measured:** the tail above overwrites the saved `SkillLevel` with the

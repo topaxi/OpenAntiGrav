@@ -43,7 +43,7 @@ fn chenghou_jumps_per_tick() {
     if env_or("OAG_CAGE", "on") == "off" {
         loaded.setup.spline = loaded.setup.spline.clone().with_cage(None);
     }
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     // `OAG_PLACE=x,y,z,fx,fy,fz,ux,uy,uz,speed`: after the idle ticks (past GO), put the
     // player there, velocity along forward, no spin, then hold thrust alone, as
     // `scripts/rpcs3_place.py` does on the original.
@@ -62,19 +62,20 @@ fn chenghou_jumps_per_tick() {
         }
         println!(
             "placed after {idle} idle ticks: hover cap {:?}, on grid {}",
-            race.sim.world.ships[0].physics.hover_cap, race.sim.world.ships[0].physics.on_grid
+            race.core.sim.world.ships[0].physics.hover_cap,
+            race.core.sim.world.ships[0].physics.on_grid
         );
         let forward = Vec3::new(p[3], p[4], p[5]).normalize();
         let up0 = Vec3::new(p[6], p[7], p[8]);
         let up = (up0 - forward * up0.dot(forward)).normalize();
         let right = forward.cross(up);
-        let body = &mut race.sim.world.ships[0].physics.body;
+        let body = &mut race.core.sim.world.ships[0].physics.body;
         body.position = Vec3::new(p[0], p[1], p[2]);
         body.orientation = Quat::from_mat3(&Mat3::from_cols(right, up, -forward));
         body.linear_velocity = forward * p[9];
         body.angular_velocity = Vec3::ZERO;
     } else {
-        race.sim.set_autopilot(true);
+        race.core.sim.set_autopilot(true);
     }
     let ticks: u64 = env_or("OAG_TICKS", "1200").parse().unwrap();
     println!("tick x y z vy height grounded speed fx fy fz ux uy uz");
@@ -89,8 +90,8 @@ fn chenghou_jumps_per_tick() {
             oag_gameplay::PlayerInputs::none()
         };
         race.tick_sim_only(&inputs);
-        let t = race.telemetry();
-        let body = &race.sim.world.ships[0].physics.body;
+        let t = race.core.telemetry();
+        let body = &race.core.sim.world.ships[0].physics.body;
         let v = body.linear_velocity;
         let f = body.orientation * Vec3::NEG_Z;
         let u = body.orientation * Vec3::Y;

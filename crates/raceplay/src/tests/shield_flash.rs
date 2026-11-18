@@ -25,7 +25,11 @@ fn shielded_handling() -> Handling {
 /// never took a hit.
 #[test]
 fn a_fresh_race_is_not_flashing_at_the_start() {
-    let mut race = Race::start(setup(shielded_handling()));
+    let mut race = Race::start(
+        setup(shielded_handling()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
 
     assert!(!race.readout().shield_flashing, "before the first tick");
 
@@ -47,11 +51,15 @@ fn a_fresh_race_is_not_flashing_at_the_start() {
 /// exercises exactly the same comparison a weapon hit would.
 #[test]
 fn a_drop_flashes_on_the_same_tick_it_lands() {
-    let mut race = Race::start(setup(shielded_handling()));
+    let mut race = Race::start(
+        setup(shielded_handling()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.tick(&PlayerInputs::none());
     assert!(!race.readout().shield_flashing, "no drop yet");
 
-    race.sim.world.ships[0].physics.shield = 40.0;
+    race.core.sim.world.ships[0].physics.shield = 40.0;
     race.tick(&PlayerInputs::none());
     assert!(
         race.readout().shield_flashing,

@@ -112,6 +112,7 @@ fn each_craft_s_exhaust_follows_its_own_throttle() {
 #[test]
 fn every_craft_lays_its_own_ribbon() {
     let mut setup = setup(hulled_handling());
+    let mut view = crate::tests::fixture_view();
     setup.mode = Mode::SingleRace;
     setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
@@ -125,8 +126,8 @@ fn every_craft_lays_its_own_ribbon() {
     // what the test needs is only that the eight are far enough apart to tell
     // one craft's ribbon from another's, and the grid's own 19.79-unit step
     // is 25 times this.
-    setup.nozzles = vec![Some(Vec3::new(0.0, 0.0, -0.8)); MAX_SHIPS];
-    let mut race = Race::start(setup);
+    view.nozzles = vec![Some(Vec3::new(0.0, 0.0, -0.8)); MAX_SHIPS];
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     // `Exhaust::trail_ready` gates the ribbon on a full ring, which is the
     // original's own gate, so this needs one tick per sample.
     for _ in 0..oag_fx::exhaust::TRAIL_SAMPLES {
@@ -178,8 +179,8 @@ fn every_craft_lays_its_own_ribbon() {
 fn the_players_flicker_does_not_depend_on_the_field_behind_it() {
     let mut alone = race_with_pads(Mode::TimeTrial, Vec::new());
     let mut field = race_with_a_grid();
-    assert_eq!(alone.sim.ship_count(), 1);
-    assert_eq!(field.sim.ship_count(), 8);
+    assert_eq!(alone.core.sim.ship_count(), 1);
+    assert_eq!(field.core.sim.ship_count(), 8);
 
     for tick in 0..30 {
         alone.tick(&PlayerInputs::none());
@@ -249,7 +250,7 @@ fn every_projectile_is_drawn_and_the_worst_case_fits_the_buffer() {
 
     // The worst case: every slot in the air at once.
     for slot in 0..oag_weapons::projectile::MAX_PROJECTILES {
-        race.sim.world.projectiles.spawn(
+        race.core.sim.world.projectiles.spawn(
             oag_tables::weapons::Weapon::Rocket,
             Vec3::Z * slot as f32,
             Vec3::Z,
@@ -291,7 +292,7 @@ fn a_missile_places_two_heads_on_its_flare_anchors() {
         race.missile_head_model_matrices().is_empty(),
         "an empty sky must place no heads"
     );
-    race.sim.world.projectiles.spawn(
+    race.core.sim.world.projectiles.spawn(
         oag_tables::weapons::Weapon::Rocket,
         Vec3::Z * 50.0,
         Vec3::Z * 600.0,
@@ -303,13 +304,16 @@ fn a_missile_places_two_heads_on_its_flare_anchors() {
     );
     let position = Vec3::X;
     let velocity = Vec3::new(1.0, 0.0, 2.0).normalize() * 600.0;
-    race.sim
-        .world
-        .projectiles
-        .spawn(oag_tables::weapons::Weapon::Missile, position, velocity, 0);
+    race.core.sim.world.projectiles.spawn(
+        oag_tables::weapons::Weapon::Missile,
+        position,
+        velocity,
+        0,
+    );
     let heads = race.missile_head_model_matrices();
     assert_eq!(heads.len(), 2, "one live missile, two heads");
     let slot = race
+        .core
         .sim
         .world
         .projectiles
@@ -317,7 +321,7 @@ fn a_missile_places_two_heads_on_its_flare_anchors() {
         .iter()
         .position(|p| p.kind == Some(oag_tables::weapons::Weapon::Missile))
         .unwrap();
-    let projectile = &race.sim.world.projectiles.slots[slot];
+    let projectile = &race.core.sim.world.projectiles.slots[slot];
     let age = oag_weapons::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
     let (a, b) = crate::weapons::missile_flare_anchors(projectile.position, velocity, age);
     let body = race.projectile_matrix(oag_tables::weapons::Weapon::Missile, slot, projectile);
@@ -352,7 +356,7 @@ fn a_modelled_rocket_points_where_it_is_going() {
     );
 
     let heading = Vec3::new(1.0, 0.0, 2.0).normalize();
-    race.sim.world.projectiles.spawn(
+    race.core.sim.world.projectiles.spawn(
         oag_tables::weapons::Weapon::Rocket,
         Vec3::X,
         heading * 600.0,
@@ -415,13 +419,13 @@ fn a_modelled_rocket_points_where_it_is_going() {
 fn a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
-    race.sim.world.projectiles.spawn(
+    race.core.sim.world.projectiles.spawn(
         oag_tables::weapons::Weapon::Rocket,
         Vec3::X,
         Vec3::Z * 600.0,
         0,
     );
-    race.sim.world.projectiles.spawn(
+    race.core.sim.world.projectiles.spawn(
         oag_tables::weapons::Weapon::Missile,
         Vec3::Y,
         Vec3::Z * 600.0,
@@ -456,11 +460,13 @@ fn a_laid_mine_or_bomb_keeps_the_pose_it_landed_in() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
     let pose = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
-    race.sim
+    race.core
+        .sim
         .world
         .projectiles
         .lay(oag_tables::weapons::Weapon::Mine, Vec3::X, 0, 5.0, pose);
-    race.sim
+    race.core
+        .sim
         .world
         .projectiles
         .lay(oag_tables::weapons::Weapon::Bomb, Vec3::Y, 0, 20.0, pose);
@@ -484,7 +490,7 @@ fn a_laid_mine_or_bomb_keeps_the_pose_it_landed_in() {
 fn a_rocket_flying_along_world_up_does_not_collapse_its_basis() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
-    race.sim.world.projectiles.spawn(
+    race.core.sim.world.projectiles.spawn(
         oag_tables::weapons::Weapon::Rocket,
         Vec3::ZERO,
         Vec3::NEG_Y * 600.0,
@@ -540,9 +546,9 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
     );
 
     let struck = 1;
-    race.sim.world.ships[struck].active = true;
+    race.core.sim.world.ships[struck].active = true;
     let craft = Vec3::new(-20.0, 4.0, 11.0);
-    race.sim.world.ships[struck].physics.body.position = craft;
+    race.core.sim.world.ships[struck].physics.body.position = craft;
     assert_eq!(
         race.blast_for(Weapon::Rocket, impact, Some(struck)),
         Some((
@@ -667,10 +673,12 @@ fn a_cannon_round_sparks_on_a_wall_and_silently_on_a_craft() {
 fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
-    race.sim
-        .world
-        .projectiles
-        .spawn(oag_tables::weapons::Weapon::Rocket, Vec3::ZERO, Vec3::Z, 0);
+    race.core.sim.world.projectiles.spawn(
+        oag_tables::weapons::Weapon::Rocket,
+        Vec3::ZERO,
+        Vec3::Z,
+        0,
+    );
     race.advance_projectile_flares();
     // No disc in a headless fixture, so no effect loaded and no instance
     // is taken - the trigger still has to run, and still has to be a
@@ -683,7 +691,7 @@ fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
 
     // With the slot vacated the bookkeeping must clear either way, or the
     // next projectile in that slot inherits a flare it never started.
-    race.sim.world.projectiles.slots[0].kind = None;
+    race.core.sim.world.projectiles.slots[0].kind = None;
     race.advance_projectile_flares();
     assert_eq!(race.view.projectile_flare[0], None);
     assert_eq!(race.stage().playing_count(), 0);

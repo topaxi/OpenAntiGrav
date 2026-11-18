@@ -26,7 +26,7 @@ fn race_with_a_trail() -> Race {
 
 /// Sits slot 1 at `at` and runs one tick of the trigger.
 fn place_and_step(race: &mut Race, at: Vec3) {
-    race.sim.world.ships[1].physics.body.position = at;
+    race.core.sim.world.ships[1].physics.body.position = at;
     race.advance_trail_hits();
 }
 
@@ -87,7 +87,7 @@ fn the_mask_tracks_presence_every_tick_rather_than_only_its_edge() {
 #[test]
 fn a_craft_is_never_inside_its_own_trail() {
     let mut race = race_with_a_trail();
-    race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+    race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
     race.advance_trail_hits();
     assert_eq!(race.view.trail_inside[0] & 0b1, 0);
 }
@@ -210,7 +210,7 @@ fn the_ribbons_owner_picks_the_colour_and_the_intruder_carries_it() {
 #[test]
 fn the_trail_hit_burst_inherits_half_the_intruders_velocity() {
     let mut race = race_with_only_the_red_burst();
-    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(60.0, 0.0, 0.0);
+    race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(60.0, 0.0, 0.0);
     place_and_step(&mut race, Vec3::new(-40.0, 0.0, 0.0));
     // Out of the ribbon, so nothing re-fires while the first burst is watched.
     place_and_step(&mut race, Vec3::new(-40.0, 50.0, 0.0));
@@ -238,8 +238,8 @@ fn a_field_warm_up_leaves_a_live_burst_on_a_craft_tucked_in_a_ribbon() {
     let mut race = race_with_only_the_red_burst();
     // Slot 0 owns the ribbon and flies along +X; slot 1 sits eight units behind it, in its wake.
     race.view.nozzles = vec![Some(Vec3::ZERO); oag_gameplay::MAX_SHIPS];
-    race.sim.world.ships[0].physics.body.position = Vec3::new(0.0, 0.0, 0.0);
-    race.sim.world.ships[1].physics.body.position = Vec3::new(-8.0, 0.0, 0.0);
+    race.core.sim.world.ships[0].physics.body.position = Vec3::new(0.0, 0.0, 0.0);
+    race.core.sim.world.ships[1].physics.body.position = Vec3::new(-8.0, 0.0, 0.0);
     let velocities = [Vec3::new(60.0, 0.0, 0.0); 2];
     race.warm_up_field(&velocities, 120, None);
     assert_ne!(
@@ -473,14 +473,14 @@ fn a_craft_with_a_pulse_ribbon_through_its_middle_is_inside_and_one_beside_it_is
 
 /// Every craft lays a ribbon and sits in every other craft's: the most pairs a grid can fire.
 fn all_craft_in_each_others_ribbons(race: &mut Race) {
-    let count = race.sim.world.ship_count as usize;
+    let count = race.core.sim.world.ship_count as usize;
     for owner in 1..count {
         for k in 0..oag_fx::exhaust::TRAIL_SAMPLES {
             race.view.exhaust[owner].push_trail(Vec3::new(k as f32 * -4.0, 0.0, 0.0), Vec3::X);
         }
     }
     for slot in 0..count {
-        race.sim.world.ships[slot].physics.body.position = Vec3::new(-18.0, 0.0, 0.0);
+        race.core.sim.world.ships[slot].physics.body.position = Vec3::new(-18.0, 0.0, 0.0);
     }
 }
 

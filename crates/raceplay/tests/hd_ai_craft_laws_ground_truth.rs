@@ -48,7 +48,7 @@ fn started_seeded(track: &str, seed: Option<u64>) -> Option<Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(Race::start(loaded.setup))
+    Some(Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// Every opponent carries HD's laws from seating, which is when its speed plan was built, and
@@ -59,8 +59,8 @@ fn hd_opponents_are_seated_on_hds_craft_laws() {
     let Some(race) = started(oag_hd::race::DEFAULT_TRACK) else {
         return;
     };
-    for slot in 0..race.sim.world.ship_count as usize {
-        let physics = &race.sim.world.ships[slot].physics;
+    for slot in 0..race.core.sim.world.ship_count as usize {
+        let physics = &race.core.sim.world.ships[slot].physics;
         assert_eq!(physics.body.inertia.y, 24.0, "slot {slot} I_yy");
         assert!(physics.steer_ramp_clamped, "slot {slot} steering ramp");
         assert_eq!(
@@ -73,14 +73,14 @@ fn hd_opponents_are_seated_on_hds_craft_laws() {
         assert_eq!(rig.spring_share, 0.15, "slot {slot} spring share");
         assert!(rig.along_normal, "slot {slot} spring direction");
         // The drawn lean reads the team's `<Tilt shipAmount shipSpeed>` and smooths at `10.0`.
-        let lean = race.sim.world.ships[slot].handling.steer_lean;
+        let lean = race.core.sim.world.ships[slot].handling.steer_lean;
         assert_eq!(lean.smooth_rate, 10.0, "slot {slot} lean smooth");
         assert!(
             lean.stick_amount > 0.0 && lean.follower_rate > 0.0,
             "slot {slot} lean {lean:?}"
         );
         // The cockpit lean reads `<Tilt internalAmount internalSpeed>`, smooths at `6.0`.
-        let camera = race.sim.world.ships[slot].handling.camera_lean;
+        let camera = race.core.sim.world.ships[slot].handling.camera_lean;
         assert_eq!(camera.smooth_rate, 6.0, "slot {slot} cockpit smooth");
         assert_eq!(camera.clamp, oag_physics::CameraClamp::Hd, "slot {slot}");
         assert!(
@@ -88,7 +88,7 @@ fn hd_opponents_are_seated_on_hds_craft_laws() {
             "slot {slot} cockpit lean {camera:?}"
         );
     }
-    let ship = &race.sim.world.ships[1];
+    let ship = &race.core.sim.world.ships[1];
     let ceiling = oag_ai::hull_yaw_ceiling(&ship.handling, &ship.physics.body);
     let pulse = oag_ai::hull_yaw_ceiling(&ship.handling, &oag_physics::Body::default());
     println!("slot 1 yaw ceiling {ceiling} rad/s (Pulse's inertia would read {pulse})");
@@ -119,23 +119,23 @@ fn runs_of(race: &mut Race, slots: &[usize], ticks: u64) -> Vec<Run> {
     let mut runs: Vec<Run> = slots.iter().map(|_| Run::default()).collect();
     let mut mark: Vec<(u32, u64, u32, u32)> = slots
         .iter()
-        .map(|&slot| (race.sim.world.ships[slot].standing.lap, 0, 0, 0))
+        .map(|&slot| (race.core.sim.world.ships[slot].standing.lap, 0, 0, 0))
         .collect();
     for tick in 0..ticks {
         let before: Vec<(f32, f32)> = slots
             .iter()
             .map(|&slot| {
                 (
-                    race.sim.world.ships[slot].physics.shield,
-                    race.sim.wall_shield_charged_of(slot),
+                    race.core.sim.world.ships[slot].physics.shield,
+                    race.core.sim.wall_shield_charged_of(slot),
                 )
             })
             .collect();
         race.tick_sim_only(&PlayerInputs::none());
         for (i, &slot) in slots.iter().enumerate() {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             let lost = before[i].0 - ship.physics.shield;
-            let charged = race.sim.wall_shield_charged_of(slot) - before[i].1;
+            let charged = race.core.sim.wall_shield_charged_of(slot) - before[i].1;
             if lost > 1.0 && charged <= 0.0 {
                 runs[i].off_wall_hits.push((tick, ship.driver.index, lost));
             }
@@ -144,15 +144,15 @@ fn runs_of(race: &mut Race, slots: &[usize], ticks: u64) -> Vec<Run> {
             if now != lap {
                 runs[i].laps.push(Lap {
                     ticks: tick - started,
-                    contacts: race.sim.wall_contact_ticks_of(slot) - contacts,
-                    respawns: race.sim.respawns_of(slot) - respawns,
-                    shield: race.sim.world.ships[slot].physics.shield,
+                    contacts: race.core.sim.wall_contact_ticks_of(slot) - contacts,
+                    respawns: race.core.sim.respawns_of(slot) - respawns,
+                    shield: race.core.sim.world.ships[slot].physics.shield,
                 });
                 mark[i] = (
                     now,
                     tick,
-                    race.sim.wall_contact_ticks_of(slot),
-                    race.sim.respawns_of(slot),
+                    race.core.sim.wall_contact_ticks_of(slot),
+                    race.core.sim.respawns_of(slot),
                 );
             }
         }
@@ -174,10 +174,10 @@ fn print_run(race: &Race, slot: usize, run: &Run, ticks: u64) {
     println!(
         "    end of run ({ticks} ticks): wall-contact ticks {}  respawns {}  shield {:.1}  \
          wall-charged {:.1}  shield spent off walls (barrel rolls: tick, line index, cost) {:?}",
-        race.sim.wall_contact_ticks_of(slot),
-        race.sim.respawns_of(slot),
-        race.sim.world.ships[slot].physics.shield,
-        race.sim.wall_shield_charged_of(slot),
+        race.core.sim.wall_contact_ticks_of(slot),
+        race.core.sim.respawns_of(slot),
+        race.core.sim.world.ships[slot].physics.shield,
+        race.core.sim.wall_shield_charged_of(slot),
         run.off_wall_hits
     );
 }
@@ -191,20 +191,21 @@ fn lone_opponent(environment: &str) {
         return;
     };
     for slot in (0..8).filter(|&slot| slot != 1) {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    let plan = if race.speed_plan().is_some() {
+    let plan = if race.core.speed_plan().is_some() {
         "followed"
     } else {
         "corner model"
     };
     let run = runs_of(&mut race, &[1], TICKS).remove(0);
     let tight = race
+        .core
         .speed_plan()
         .map_or(0, oag_ai::SpeedPlan::tight_samples);
     println!(
         "{environment} (speed plan {plan}, {tight} of {} samples tight)",
-        race.sim.racing_line().len()
+        race.core.sim.racing_line().len()
     );
     print_run(&race, 1, &run, TICKS);
     assert!(
@@ -215,7 +216,7 @@ fn lone_opponent(environment: &str) {
     // closely and the Ace holds the plan's line into it (`docs/gameplay/ai.md`,
     // "Tight corners"); Talon's Junction scraped 6 ticks without that.
     assert_eq!(
-        race.sim.wall_contact_ticks_of(1),
+        race.core.sim.wall_contact_ticks_of(1),
         0,
         "{environment}: the lone Ace touched a wall"
     );
@@ -258,16 +259,16 @@ fn field(environment: &str, seed: u64) {
     let Some(mut race) = started_seeded(&oag_hd::names::track(environment), Some(seed)) else {
         return;
     };
-    race.sim.world.ships[0].active = false;
-    let slots: Vec<usize> = (1..race.sim.world.ship_count as usize).collect();
+    race.core.sim.world.ships[0].active = false;
+    let slots: Vec<usize> = (1..race.core.sim.world.ship_count as usize).collect();
     let runs = runs_of(&mut race, &slots, TICKS);
     let (mut contacts, mut charged, mut lost, mut laps, mut lap_ticks) = (0, 0.0, 0.0, 0, 0);
     for (run, &slot) in runs.iter().zip(&slots) {
         println!("{environment} seed {seed} slot {slot}");
         print_run(&race, slot, run, TICKS);
-        contacts += race.sim.wall_contact_ticks_of(slot);
-        charged += race.sim.wall_shield_charged_of(slot);
-        lost += 95.0 - race.sim.world.ships[slot].physics.shield;
+        contacts += race.core.sim.wall_contact_ticks_of(slot);
+        charged += race.core.sim.wall_shield_charged_of(slot);
+        lost += 95.0 - race.core.sim.world.ships[slot].physics.shield;
         // Flying laps only: the first is the standing start.
         for lap in run.laps.iter().skip(1) {
             laps += 1;

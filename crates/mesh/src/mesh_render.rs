@@ -19,7 +19,7 @@ mod tables;
 mod uniforms;
 
 mod texlod;
-pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
+pub use blend::{ADDITIVE_BLEND, PlainBlend, TRANSPARENT_BLEND, TransparentPipelines};
 pub use foliage::Foliage;
 pub use glow_mask::GlowMask;
 pub use hull_lights::{
@@ -181,6 +181,8 @@ pub struct Built {
     /// alone uses five of the pairs that makes. A Pulse model authors none and
     /// this is empty, so nothing is created for a title that does not use it.
     pub authored_pipelines: Vec<((wgpu::BlendState, bool), [wgpu::RenderPipeline; 2])>,
+    /// The blended pipelines for the plain draws of a prepassed model's transparent list.
+    pub plain_blend: Option<PlainBlend>,
     /// Alpha-only pass that stamps a blended batch's glow byte into the mask,
     /// drawn over [`Model::transparent_draws`] after their colour - see
     /// [`stamp`]. `Some` only for a [`GlowMask::Stamped`] model, and indexed by
@@ -480,6 +482,27 @@ pub fn build_with(
             f64::from(specialise::emissive_rows(plain.present)),
         ));
         if pipeline_cache::scope_rig_is_on() && specialise::plain_is_lit(model, &plain.draws) {
+            constants.push(("lit_by_rig", 1.0));
+        }
+        constants
+    });
+
+    // The same for the plain half of its transparent list. Only a prepassed model (a circuit):
+    // an overlay draws its opaque list through the blended pipelines too.
+    let plain_blend_draws = prepass
+        .then(|| specialise::plain_transparent_draws(model))
+        .flatten();
+    let plain_blend_constants = plain_blend_draws.as_ref().map(|plain| {
+        let mut constants = constants.to_vec();
+        constants.retain(|(name, _)| !matches!(*name, "slots_present" | "emissive_rows"));
+        constants.push(("slots_present", f64::from(plain.present)));
+        constants.push((
+            "emissive_rows",
+            f64::from(specialise::emissive_rows(plain.present)),
+        ));
+        if pipeline_cache::scope_rig_is_on()
+            && specialise::plain_list_is_lit(model, &model.transparent_draws, &plain.draws)
+        {
             constants.push(("lit_by_rig", 1.0));
         }
         constants
@@ -889,10 +912,11 @@ pub fn build_with(
         bias: Default::default(),
     };
     let (blend_entry, velocity_target) = velocity.mesh_blend();
-    let make_pipeline_with = |label: &str,
-                              blend: Option<wgpu::BlendState>,
-                              cull: bool,
-                              depth: &wgpu::DepthStencilState| {
+    let make_pipeline_in = |constants: &[(&'static str, f64)],
+                            label: &str,
+                            blend: Option<wgpu::BlendState>,
+                            cull: bool,
+                            depth: &wgpu::DepthStencilState| {
         // The second target rides along **write-masked empty** when
         // [`Velocity::Write`] adds one: a blended draw writes no depth, so
         // the velocity at its pixels stays the surface's behind it - see
@@ -950,6 +974,12 @@ pub fn build_with(
                 })
             },
         )
+    };
+    let make_pipeline_with = |label: &str,
+                              blend: Option<wgpu::BlendState>,
+                              cull: bool,
+                              depth: &wgpu::DepthStencilState| {
+        make_pipeline_in(constants, label, blend, cull, depth)
     };
     let make_pipeline = |label: &str, blend: Option<wgpu::BlendState>, cull: bool| {
         make_pipeline_with(label, blend, cull, &blend_depth_stencil)
@@ -1010,6 +1040,48 @@ pub fn build_with(
             ],
         ));
     }
+
+    let plain_blend = match (plain_blend_draws, plain_blend_constants.as_deref()) {
+        (Some(plain), Some(constants)) => {
+            let pair = |label: &str, blend: Option<wgpu::BlendState>, depth| {
+                [
+                    make_pipeline_in(constants, label, blend, false, depth),
+                    make_pipeline_in(constants, label, blend, true, depth),
+                ]
+            };
+            crate::not_exiting()?;
+            let authored = authored_pipelines
+                .iter()
+                .map(|&((state, writes_depth), _)| {
+                    let depth = if writes_depth {
+                        &depth_writing_blend
+                    } else {
+                        &blend_depth_stencil
+                    };
+                    (
+                        (state, writes_depth),
+                        pair("mesh blend, plain (authored)", Some(state), depth),
+                    )
+                })
+                .collect();
+            Some(PlainBlend {
+                draws: plain.draws,
+                alpha_over: pair(
+                    "mesh blend, plain (alpha over)",
+                    Some(blend),
+                    &blend_depth_stencil,
+                ),
+                additive: pair(
+                    "mesh blend, plain (additive)",
+                    Some(ADDITIVE_BLEND),
+                    &blend_depth_stencil,
+                ),
+                unblended: pair("mesh blend, plain (none)", None, &blend_depth_stencil),
+                authored,
+            })
+        }
+        _ => None,
+    };
 
     let stamp_pipeline = glow.stamps_blended().then(|| {
         stamp::pipelines(&stamp::Shared {
@@ -1268,6 +1340,7 @@ pub fn build_with(
         additive_pipeline,
         unblended_pipeline,
         authored_pipelines,
+        plain_blend,
         stamp_pipeline,
         foliage,
         bind_group,

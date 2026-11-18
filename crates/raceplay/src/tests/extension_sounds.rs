@@ -61,7 +61,7 @@ fn a_loop_is_queued_once_a_one_shot_every_time_and_a_stop_ends_it() {
     let mut race = grid(prepared(&[loops]));
     race.tick(&oag_gameplay::PlayerInputs::none());
     assert_eq!(
-        race.sim.drain_mod_sounds(),
+        race.core.sim.drain_mod_sounds(),
         [
             event(3, 1, ModSoundMode::Loop),
             event(4, 1, ModSoundMode::Once),
@@ -70,7 +70,7 @@ fn a_loop_is_queued_once_a_one_shot_every_time_and_a_stop_ends_it() {
     );
     race.tick(&oag_gameplay::PlayerInputs::none());
     assert_eq!(
-        race.sim.drain_mod_sounds(),
+        race.core.sim.drain_mod_sounds(),
         [event(4, 1, ModSoundMode::Once)],
         "a loop already running is not started again; a one-shot plays each time"
     );
@@ -85,7 +85,7 @@ fn a_loop_is_queued_once_a_one_shot_every_time_and_a_stop_ends_it() {
     let mut race = grid(prepared(&[stopper]));
     race.tick(&oag_gameplay::PlayerInputs::none());
     assert_eq!(
-        race.sim.drain_mod_sounds(),
+        race.core.sim.drain_mod_sounds(),
         [
             event(3, 1, ModSoundMode::Loop),
             event(3, 1, ModSoundMode::Stop)
@@ -93,7 +93,7 @@ fn a_loop_is_queued_once_a_one_shot_every_time_and_a_stop_ends_it() {
     );
     race.tick(&oag_gameplay::PlayerInputs::none());
     assert_eq!(
-        race.sim.drain_mod_sounds().len(),
+        race.core.sim.drain_mod_sounds().len(),
         2,
         "stopped, so the next tick starts it afresh and stops it again"
     );
@@ -115,16 +115,16 @@ fn the_wanted_loops_survive_a_silent_tick_and_the_queue_is_bounded() {
         &[],
     );
     let mut race = grid(prepared(&[source]));
-    assert!(race.sim.mod_sound_loops().is_empty());
+    assert!(race.core.sim.mod_sound_loops().is_empty());
     race.tick_sim_only(&oag_gameplay::PlayerInputs::none());
     assert!(
-        race.sim.drain_mod_sounds().is_empty(),
+        race.core.sim.drain_mod_sounds().is_empty(),
         "a silent tick is unheard"
     );
-    assert_eq!(race.sim.mod_sound_loops(), [want(3, 1), want(5, 2)]);
+    assert_eq!(race.core.sim.mod_sound_loops(), [want(3, 1), want(5, 2)]);
     crate::extensions::fault_for_tests(&mut race, 0);
     assert!(
-        race.sim.mod_sound_loops().is_empty(),
+        race.core.sim.mod_sound_loops().is_empty(),
         "a faulted module's stop"
     );
 
@@ -136,8 +136,8 @@ fn the_wanted_loops_survive_a_silent_tick_and_the_queue_is_bounded() {
         &[],
     );
     let (mut race, _) = run(grid(prepared(&[churn])), 600);
-    assert_eq!(race.sim.drain_mod_sounds().len(), 1024);
-    assert!(race.sim.mod_sound_loops().is_empty());
+    assert_eq!(race.core.sim.drain_mod_sounds().len(), 1024);
+    assert!(race.core.sim.mod_sound_loops().is_empty());
 }
 
 #[test]
@@ -150,10 +150,10 @@ fn a_faulted_module_stops_the_loops_it_started() {
     );
     let mut race = grid(prepared(&[source]));
     race.tick(&oag_gameplay::PlayerInputs::none());
-    assert_eq!(race.sim.drain_mod_sounds().len(), 2);
+    assert_eq!(race.core.sim.drain_mod_sounds().len(), 2);
     crate::extensions::fault_for_tests(&mut race, 0);
     assert_eq!(
-        race.sim.drain_mod_sounds(),
+        race.core.sim.drain_mod_sounds(),
         [
             event(3, 1, ModSoundMode::Stop),
             event(5, 2, ModSoundMode::Stop)
@@ -162,7 +162,7 @@ fn a_faulted_module_stops_the_loops_it_started() {
     );
     race.tick(&oag_gameplay::PlayerInputs::none());
     assert!(
-        race.sim.drain_mod_sounds().is_empty(),
+        race.core.sim.drain_mod_sounds().is_empty(),
         "a faulted module is off"
     );
 }

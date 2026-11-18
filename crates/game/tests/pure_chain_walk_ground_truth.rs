@@ -112,9 +112,10 @@ fn load_leg(
     })
     .expect("the race loads");
     let _ = campaign;
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
-    race.sim
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
+    race.core
+        .sim
         .set_autopilot_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning::default()));
     race
 }
@@ -123,7 +124,7 @@ fn fly_to_the_line(race: &mut race::Race, ticks: u32) -> bool {
     let inputs = oag_gameplay::PlayerInputs::none();
     for _ in 0..ticks {
         race.tick(&inputs);
-        if race.sim.finished() {
+        if race.core.sim.finished() {
             return true;
         }
     }
@@ -154,6 +155,7 @@ fn a_time_trial_flown_to_the_line_is_judged_recorded_and_shown() {
         "the autopilot gets round a time trial"
     );
     let tick = race
+        .core
         .player_standing()
         .finish_tick
         .expect("a finished race has a finish tick");
@@ -218,11 +220,11 @@ fn a_tournament_flown_by_the_autopilot_earns_a_rank_and_opens_the_next() {
             fly_to_the_line(&mut race, 60 * 60 * 12),
             "leg {leg} finishes under the autopilot"
         );
-        progress.record_leg(race.results().expect("a finished race has results"));
+        progress.record_leg(race.core.results().expect("a finished race has results"));
         println!(
             "leg {}: place {}, {} points so far",
             leg + 1,
-            race.player_place(),
+            race.core.player_place(),
             progress.points(0)
         );
         progress.advance();

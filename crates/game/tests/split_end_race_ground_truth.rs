@@ -43,20 +43,20 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
 
     // Between the first person's line and the second's: the finished person's view
     // holds and says so, the other's does not, and the split is still drawn.
     let mut held = 0;
-    while !race.sim.finished() && race.sim.world.tick < CAP {
+    while !race.core.sim.finished() && race.core.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
         let done: Vec<usize> = (0..2)
-            .filter(|&slot| race.sim.world.ships[slot].standing.finished())
+            .filter(|&slot| race.core.sim.world.ships[slot].standing.finished())
             .collect();
-        if done.len() == 1 && !race.sim.finished() {
+        if done.len() == 1 && !race.core.sim.finished() {
             held += 1;
             let (done, racing) = (done[0], 1 - done[0]);
             assert!(
@@ -71,10 +71,10 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
         }
     }
     assert!(
-        race.sim.finished(),
+        race.core.sim.finished(),
         "still running after {CAP} ticks: slot 0 on lap {}, slot 1 on lap {}",
-        race.sim.world.race[0].lap,
-        race.sim.world.race[1].lap
+        race.core.sim.world.race[0].lap,
+        race.core.sim.world.race[1].lap
     );
     assert!(
         held > 0,
@@ -85,9 +85,9 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
     // restart, and a board that carries both people.
     assert_eq!(race.views_drawn(), 1);
     assert_eq!(race.viewport_count(), 2);
-    let board = race.results().expect("both people finished");
+    let board = race.core.results().expect("both people finished");
     assert_eq!(board.persons(), 2);
-    let people = oag_game::results_tables::people_rows(Some(board), race.slot_teams())
+    let people = oag_game::results_tables::people_rows(Some(board), race.core.slot_teams())
         .expect("a board gives a table");
     let named: Vec<_> = people
         .rows
@@ -112,8 +112,8 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
     // board gave them, and the speedup-pad tally for the first craft alone. This is the
     // library half of `Session::build_endrace`'s split branch (the binary-crate half, the
     // `ResultsModel::PulseSplit` choice and the loyalty banking, is verified by the live walk).
-    let boosts = race.run_stats().boosts_by_lap;
-    let people = oag_game::results_tables::split_people(board, &race.sim.world, &boosts);
+    let boosts = race.core.run_stats().boosts_by_lap;
+    let people = oag_game::results_tables::split_people(board, &race.core.sim.world, &boosts);
     assert_eq!(people.len(), 2, "two people, seat order");
     assert_eq!((people[0].slot, people[1].slot), (0, 1));
     let laps = board.laps_target.expect("a race with a lap target") as usize;
@@ -216,14 +216,14 @@ fn head_to_head_people_end_on_a_board_of_two_with_a_winner() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Vertical);
-    race.sim.set_autopilot(true);
-    while !race.sim.finished() && race.sim.world.tick < CAP {
+    race.core.sim.set_autopilot(true);
+    while !race.core.sim.finished() && race.core.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
-    assert!(race.sim.finished(), "still running after {CAP} ticks");
-    let board = race.results().expect("both people finished");
+    assert!(race.core.sim.finished(), "still running after {CAP} ticks");
+    let board = race.core.results().expect("both people finished");
     assert_eq!(
         board.rows.len(),
         2,
@@ -240,7 +240,7 @@ fn head_to_head_people_end_on_a_board_of_two_with_a_winner() {
         "first place crossed no later than second"
     );
 
-    let people = oag_game::results_tables::people_rows(Some(board), race.slot_teams())
+    let people = oag_game::results_tables::people_rows(Some(board), race.core.slot_teams())
         .expect("a board gives a table");
     let named: Vec<_> = people.rows.iter().map(|row| row.name.clone()).collect();
     assert_eq!(
@@ -260,8 +260,8 @@ fn head_to_head_people_end_on_a_board_of_two_with_a_winner() {
         .collect();
     assert_eq!(seats.len(), 2, "both people are named on the HD grid too");
 
-    let boosts = race.run_stats().boosts_by_lap;
-    let split = oag_game::results_tables::split_people(board, &race.sim.world, &boosts);
+    let boosts = race.core.run_stats().boosts_by_lap;
+    let split = oag_game::results_tables::split_people(board, &race.core.sim.world, &boosts);
     let mut split_places: Vec<_> = split.iter().map(|person| person.place).collect();
     split_places.sort_unstable();
     assert_eq!(

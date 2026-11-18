@@ -417,7 +417,7 @@ pub fn prepare(
         }
         Prepared {
             beacons,
-            ..Prepared::default()
+            ..crate::extensions::Prepared::default()
         }
     }
     #[cfg(feature = "extensions")]
@@ -425,7 +425,7 @@ pub fn prepare(
         if sources.is_empty() {
             return Prepared {
                 beacons,
-                ..Prepared::default()
+                ..crate::extensions::Prepared::default()
             };
         }
         let region = match track::encode(track) {
@@ -440,7 +440,7 @@ pub fn prepare(
                 );
                 return Prepared {
                     beacons,
-                    ..Prepared::default()
+                    ..crate::extensions::Prepared::default()
                 };
             }
         };
@@ -726,7 +726,7 @@ pub(crate) fn pickup_kind_for_tests(held: usize) -> Result<oag_tables::weapons::
 /// Faults module `index` as a refused reply does: for tests.
 #[cfg(all(test, feature = "extensions"))]
 pub(crate) fn fault_for_tests(race: &mut crate::Race, index: usize) {
-    on::fault(&mut race.sim, index, "a test faulted it".into());
+    on::fault(&mut race.core.sim, index, "a test faulted it".into());
 }
 
 /// The race-wide outputs of `set-weather`, `set-sun` and `grade-sky` this tick. Each is
@@ -1204,11 +1204,11 @@ impl crate::Race {
     pub(super) fn tick_extensions(&mut self, inputs: &oag_gameplay::PlayerInputs, transited: u32) {
         #[cfg(feature = "extensions")]
         {
-            on::tick(&mut self.sim, inputs, transited);
-            self.sim.run_motion();
+            on::tick(&mut self.core.sim, inputs, transited);
+            self.core.sim.run_motion();
             #[cfg(feature = "view")]
             self.run_warnings();
-            let gave = self.sim.extensions.take_shield_gives();
+            let gave = self.core.sim.extensions.take_shield_gives();
             for slot in (0..oag_gameplay::MAX_SHIPS).filter(|slot| gave & (1 << slot) != 0) {
                 self.shield_activate(slot);
             }
@@ -1221,9 +1221,9 @@ impl crate::Race {
     /// module that faulted this call raises none.
     #[cfg(all(feature = "extensions", feature = "view"))]
     fn run_warnings(&mut self) {
-        let warnings = std::mem::take(&mut self.sim.extensions.on.warnings);
+        let warnings = std::mem::take(&mut self.core.sim.extensions.on.warnings);
         for (module, slot, look) in warnings {
-            if !on::faulted(&self.sim, module) {
+            if !on::faulted(&self.core.sim, module) {
                 self.raise_mod_warning(slot, look);
             }
         }
@@ -1315,7 +1315,7 @@ impl crate::Race {
     /// one that is absent draws nothing (the load report names every one).
     #[cfg(feature = "view")]
     pub(super) fn draw_extension_effects(&mut self) {
-        for (slot, fired) in self.sim.extensions.take_effects() {
+        for (slot, fired) in self.core.sim.extensions.take_effects() {
             self.play_fired(slot, &fired);
         }
     }
@@ -1456,7 +1456,11 @@ impl crate::Race {
     #[cfg(feature = "view")]
     #[must_use]
     pub fn channel_started(&self, start: oag_mesh::mesh::Start) -> Option<f32> {
-        let tick = self.sim.extensions.last_fired(start.channel, start.value)?;
+        let tick = self
+            .core
+            .sim
+            .extensions
+            .last_fired(start.channel, start.value)?;
         Some(tick as f32 / 60.0 + self.flyby_seconds() + self.world_clock_offset())
     }
 }

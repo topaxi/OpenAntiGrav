@@ -40,21 +40,40 @@ fn inputs(tick: u64) -> PlayerInputs {
 
 /// A recorded run and its `RaceSim` text at every tick.
 fn recording(ticks: u64) -> (Replay, Vec<String>) {
-    let mut race = Race::start(fixture());
+    let mut race = Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
-    let mut text = vec![format!("{:?}", race.sim)];
+    let mut text = vec![format!("{:?}", race.core.sim)];
     for tick in 0..ticks {
         race.tick(&inputs(tick));
-        race.sim.drain_cues();
-        text.push(format!("{:?}", race.sim));
+        race.core.sim.drain_cues();
+        text.push(format!("{:?}", race.core.sim));
     }
     (race.recorded().expect("recording"), text)
 }
 
 /// A viewer over the fixture and a race not yet handed to it.
 fn unbegun(replay: Replay) -> (Box<Viewer>, Box<Race>) {
-    let viewer = Box::new(Viewer::open(fixture(), replay).expect("the race it records"));
-    (viewer, Box::new(Race::start(fixture())))
+    let viewer = Box::new(
+        Viewer::open(
+            fixture(),
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+            replay,
+        )
+        .expect("the race it records"),
+    );
+    (
+        viewer,
+        Box::new(Race::start(
+            fixture(),
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+        )),
+    )
 }
 
 /// A viewer over the fixture and the race it draws, handed over as the session hands it.
@@ -79,7 +98,7 @@ fn pass_ended(viewer: &mut Viewer) -> Pass {
 }
 
 fn assert_stands_at(race: &Race, text: &[String], tick: u64) {
-    let now = format!("{:?}", race.sim);
+    let now = format!("{:?}", race.core.sim);
     let recorded = &text[tick as usize];
     if let Some(at) = now.bytes().zip(recorded.bytes()).position(|(a, b)| a != b) {
         let window = |s: &str| s[at.saturating_sub(120)..(at + 80).min(s.len())].to_string();
@@ -184,7 +203,11 @@ fn a_seek_lands_on_the_recorded_run_wherever_it_goes() {
 
 /// The clocks a HUD reads at tick `k` of the recorded run, at index `k`: `(lap_ticks, race_ticks)`.
 fn clocks(ticks: u64) -> Vec<(u64, u64)> {
-    let mut race = Race::start(fixture());
+    let mut race = Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let at = |race: &Race| {
         let readout = race.readout();
         (readout.lap_ticks, readout.race_ticks)
@@ -192,7 +215,7 @@ fn clocks(ticks: u64) -> Vec<(u64, u64)> {
     let mut clocks = vec![at(&race)];
     for tick in 0..ticks {
         race.tick(&inputs(tick));
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
         clocks.push(at(&race));
     }
     clocks
@@ -245,15 +268,15 @@ fn a_seek_back_clears_what_the_view_kept_about_a_later_moment() {
     let (mut viewer, mut race) = open(replay);
     assert_eq!(pass_ended(&mut viewer), Pass::Complete);
     viewer.seek(&mut race, TICKS);
-    race.view.results = Some(crate::scoreboard::Board {
+    race.core.outcome.results = Some(crate::scoreboard::Board {
         rows: Vec::new(),
         laps_target: None,
         tick: TICKS,
     });
-    race.view.wreck_ended_tick = Some(TICKS);
+    race.core.outcome.wreck_ended_tick = Some(TICKS);
     viewer.seek(&mut race, 100);
-    assert!(race.results().is_none());
-    assert!(race.view.wreck_ended_tick.is_none());
+    assert!(race.core.results().is_none());
+    assert!(race.core.outcome.wreck_ended_tick.is_none());
 }
 
 /// A seek is a camera cut: the drawn view jumps, and the motion blur and a temporal upscaler
@@ -372,9 +395,9 @@ fn past_the_last_agreeing_second_a_pose_track_plays_in_pose_view() {
     );
     assert_eq!(viewer.state(), State::PoseEnded);
     assert!(!viewer.pose_track_is_short());
-    let slots = usize::from(race.sim.ship_count());
+    let slots = usize::from(race.core.sim.ship_count());
     for slot in 0..slots {
-        let shown = race.sim.craft_pose(slot);
+        let shown = race.core.sim.craft_pose(slot);
         let recorded = track.pose(slot, TICKS as f64).expect("a pose");
         assert!(
             (shown.position - recorded.position).length() < 1e-3,
@@ -387,7 +410,7 @@ fn past_the_last_agreeing_second_a_pose_track_plays_in_pose_view() {
     viewer.seek(&mut race, 350);
     assert_eq!(viewer.at(), 350);
     assert_eq!(viewer.state(), State::PoseView);
-    let shown = race.sim.craft_pose(0);
+    let shown = race.core.sim.craft_pose(0);
     let recorded = track.pose(0, 350.0).expect("a pose");
     assert!((shown.position - recorded.position).length() < 1e-3);
 }
@@ -417,13 +440,13 @@ fn a_tick_zero_mismatch_with_a_pose_track_opens_in_pose_view() {
     }
     assert_eq!(viewer.at(), 30);
     assert!(viewer.in_pose_view());
-    assert_eq!(race.sim.world.tick, 0, "no tick of the simulation ran");
+    assert_eq!(race.core.sim.world.tick, 0, "no tick of the simulation ran");
     viewer.seek(&mut race, 250);
     assert_eq!(viewer.at(), 250);
     assert_eq!(viewer.state(), State::PoseView);
-    for slot in 0..usize::from(race.sim.ship_count()) {
+    for slot in 0..usize::from(race.core.sim.ship_count()) {
         let recorded = track.pose(slot, 250.0).expect("a pose");
-        assert!((race.sim.craft_pose(slot).position - recorded.position).length() < 1e-3);
+        assert!((race.core.sim.craft_pose(slot).position - recorded.position).length() < 1e-3);
     }
     viewer.seek(&mut race, TICKS);
     assert_eq!(viewer.state(), State::PoseEnded);
@@ -435,7 +458,12 @@ fn a_tick_zero_mismatch_with_a_pose_track_opens_in_pose_view() {
 fn a_tick_zero_mismatch_without_a_pose_track_is_refused_by_name() {
     let mut replay = rehashed(recording(TICKS).0);
     replay.pose_track = None;
-    let Err(refusal) = Viewer::open(fixture(), replay) else {
+    let Err(refusal) = Viewer::open(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        replay,
+    ) else {
         panic!("nothing to play instead");
     };
     assert!(matches!(
@@ -449,7 +477,12 @@ fn a_tick_zero_mismatch_without_a_pose_track_is_refused_by_name() {
         id: "absent".to_string(),
         ..Default::default()
     });
-    let Err(refusal) = Viewer::open(fixture(), replay) else {
+    let Err(refusal) = Viewer::open(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        replay,
+    ) else {
         panic!("a header this build cannot load");
     };
     assert!(matches!(refusal, crate::timeline::OpenError::Start(_)));
@@ -461,12 +494,12 @@ fn nothing_moves_until_the_first_keyframe_is_in() {
     let (replay, _) = recording(TICKS);
     let (mut viewer, mut race) = unbegun(replay);
     viewer.begin(&mut race).expect("the launch settings");
-    let before = format!("{:?}", race.sim);
+    let before = format!("{:?}", race.core.sim);
     let mut held = 0;
     while viewer.opening() {
         assert_eq!(viewer.state(), State::Opening);
         assert_eq!(viewer.update(&mut race), Moved::Still);
-        assert_eq!(format!("{:?}", race.sim), before);
+        assert_eq!(format!("{:?}", race.core.sim), before);
         held += 1;
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
@@ -496,20 +529,20 @@ fn following_another_craft_moves_the_picture_and_not_one_tick_of_the_run() {
     let (mut viewer, mut race) = open(replay);
     assert_eq!(pass_ended(&mut viewer), Pass::Complete);
     viewer.update(&mut race);
-    let start = race.player_slot();
-    let count = usize::from(race.sim.world.ship_count);
+    let start = race.core.player_slot();
+    let count = usize::from(race.core.sim.world.ship_count);
     assert!(count > 1, "the fixture field");
     assert!(race.step_followed(true));
     assert_eq!(
-        race.player_slot(),
+        race.core.player_slot(),
         (start + 1) % count,
         "R1 follows the next craft"
     );
     assert!(race.step_followed(false));
-    assert_eq!(race.player_slot(), start, "and L1 back");
+    assert_eq!(race.core.player_slot(), start, "and L1 back");
     assert!(race.step_followed(false));
     assert_eq!(
-        race.player_slot(),
+        race.core.player_slot(),
         (start + count - 1) % count,
         "L1 wraps over the start"
     );
@@ -530,10 +563,14 @@ fn following_skips_a_craft_out_of_the_race() {
     let (mut viewer, mut race) = open(replay);
     assert_eq!(pass_ended(&mut viewer), Pass::Complete);
     viewer.update(&mut race);
-    let start = race.player_slot();
-    let next = (start + 1) % usize::from(race.sim.world.ship_count);
-    race.sim.world.ships[next].physics.craft_state = oag_physics::CraftState::Eliminated;
+    let start = race.core.player_slot();
+    let next = (start + 1) % usize::from(race.core.sim.world.ship_count);
+    race.core.sim.world.ships[next].physics.craft_state = oag_physics::CraftState::Eliminated;
     race.step_followed(true);
-    assert_ne!(race.player_slot(), next, "an eliminated craft is skipped");
-    assert_ne!(race.player_slot(), start);
+    assert_ne!(
+        race.core.player_slot(),
+        next,
+        "an eliminated craft is skipped"
+    );
+    assert_ne!(race.core.player_slot(), start);
 }

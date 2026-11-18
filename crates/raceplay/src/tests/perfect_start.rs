@@ -10,7 +10,11 @@ use oag_gameplay::cue::Cue;
 /// `TURBO` on. The disc-backed half, with the disc's own window, is
 /// `launch_boost_ground_truth::only_a_perfect_start_fires_the_flare_and_turbo`.
 pub(super) fn perfect_start() -> Vec<Cue> {
-    let mut race = Race::start(launch_setup());
+    let mut race = Race::start(
+        launch_setup(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let mut buttons = Buttons::new();
     let mut raised = Vec::new();
     for tick in 0..oag_race::COUNTDOWN_TICKS + 40 {
@@ -20,13 +24,13 @@ pub(super) fn perfect_start() -> Vec<Cue> {
         } else {
             0
         })));
-        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.core.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
 
 /// The launch fixture: a time trial with the window above.
-pub(super) fn launch_setup() -> Setup {
+pub(super) fn launch_setup() -> SimSetup {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::TimeTrial;
     setup.start_boost = Some(oag_physics::launch::StartBoost {

@@ -24,11 +24,11 @@ fn two_people(opponents: bool) -> Option<Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = Race::start(loaded.setup);
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(race.set_viewport_count(2), 2);
     race.set_cut(Cut::Vertical);
     for slot in 0..2 {
-        race.sim.world.controllers[slot] = Controller::Local;
+        race.core.sim.world.controllers[slot] = Controller::Local;
     }
     Some(race)
 }
@@ -43,7 +43,7 @@ fn two_people_race_each_other_and_nobody_else() {
         let Some(race) = two_people(opponents) else {
             return;
         };
-        let world = &race.sim.world;
+        let world = &race.core.sim.world;
         assert_eq!(
             world.ship_count, 2,
             "two craft (opponents hatch: {opponents})"
@@ -81,10 +81,10 @@ fn one_person_races_one_ai_opponent() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        let race = Race::start(loaded.setup);
-        assert_eq!(race.sim.world.ship_count, 2, "hatch: {opponents}");
+        let race = Race::start(loaded.setup, loaded.view, loaded.modules);
+        assert_eq!(race.core.sim.world.ship_count, 2, "hatch: {opponents}");
         assert_eq!(
-            race.sim.world.controllers[1],
+            race.core.sim.world.controllers[1],
             Controller::Ai,
             "the opponent is AI"
         );
@@ -133,8 +133,8 @@ fn each_person_reads_the_gap_to_the_other_person() {
 
     // The operator's autopilot flies every local seat, so the second person is handed
     // to the network seat, which sits still with no input: one drives, one waits.
-    race.sim.world.controllers[1] = Controller::Remote;
-    race.sim.set_autopilot(true);
+    race.core.sim.world.controllers[1] = Controller::Remote;
+    race.core.sim.set_autopilot(true);
     let mut gaps = Vec::new();
     for tick in 1..=1200 {
         race.tick(&PlayerInputs::none());
@@ -185,12 +185,12 @@ fn one_persons_head_to_head_is_the_same_race_with_or_without_the_hatch() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        let mut race = Race::start(loaded.setup);
-        race.sim.set_autopilot(true);
+        let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+        race.core.sim.set_autopilot(true);
         for _ in 0..600 {
             race.tick(&PlayerInputs::none());
         }
-        race.sim.state_hash()
+        race.core.sim.state_hash()
     };
     assert_eq!(hash(false), hash(true));
 }

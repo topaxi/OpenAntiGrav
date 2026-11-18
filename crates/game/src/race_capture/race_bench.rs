@@ -218,7 +218,7 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
         advance_one_tick(race, held, audio, options, tick);
         tick += 1;
         let tick_us = start.elapsed().as_secs_f64() * 1e6;
-        if race.sim.finished() {
+        if race.core.sim.finished() {
             // The player's crossing ends the bench; the field running on
             // under the end-race screens is not what a lap costs.
             finished = true;
@@ -324,8 +324,8 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
             in_flight.push_back(queue.submit(std::iter::empty()));
         }
         frames.push(Frame {
-            tick: race.sim.world.tick,
-            lap: race.sim.world.race[0].lap,
+            tick: race.core.sim.world.tick,
+            lap: race.core.sim.world.race[0].lap,
             tick_us,
             record_us: recorded,
             submit_us,
@@ -380,8 +380,8 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
     println!(
         "race bench: {} frame(s) over {} tick(s), finished {finished}, state hash {:016x}, wrote {}",
         frames.len(),
-        race.sim.world.tick,
-        race.sim.state_hash(),
+        race.core.sim.world.tick,
+        race.core.sim.state_hash(),
         json_path.display()
     );
     Ok(())
@@ -493,7 +493,7 @@ const METRICS: [(&str, Read); 11] = [
 
 fn json(frames: &[Frame], facts: &Facts<'_>) -> String {
     let counted = &frames[WARMUP_FRAMES.min(frames.len())..];
-    let world = &facts.race.sim.world;
+    let world = &facts.race.core.sim.world;
     let o = facts.options;
     let a = facts.adapter;
     let settings = [
@@ -582,7 +582,7 @@ fn json(frames: &[Frame], facts: &Facts<'_>) -> String {
     put("final_tick", world.tick.to_string());
     put(
         "final_state_hash",
-        json_string(&format!("{:016x}", facts.race.sim.state_hash())),
+        json_string(&format!("{:016x}", facts.race.core.sim.state_hash())),
     );
     put("frames", frames.len().to_string());
     put("warmup_frames_excluded", WARMUP_FRAMES.to_string());

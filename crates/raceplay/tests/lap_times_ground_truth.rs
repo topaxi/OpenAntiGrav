@@ -73,7 +73,7 @@ fn clocks(track: &str, ticks: u64) -> Option<Vec<Clock>> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     let mut clocks = vec![Clock::default(); oag_gameplay::MAX_SHIPS];
     // Last tick's `lap_start_tick` per slot. Completing a lap restamps the field
@@ -87,9 +87,9 @@ fn clocks(track: &str, ticks: u64) -> Option<Vec<Clock>> {
         // n-th call carries tick n+1 - and reconstructing that offset from out
         // here is how a one-tick error gets built into a test rather than caught
         // by one.
-        let tick = race.sim.world.tick;
+        let tick = race.core.sim.world.tick;
         for (slot, clock) in clocks.iter_mut().enumerate() {
-            let standing = &race.sim.world.ships[slot].standing;
+            let standing = &race.core.sim.world.ships[slot].standing;
             if clock.started.is_none() {
                 clock.started = standing.lap_start_tick;
             }

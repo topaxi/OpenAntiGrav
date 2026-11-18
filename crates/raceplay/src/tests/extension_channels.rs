@@ -54,7 +54,12 @@ fn gate(from: f32, to: f32, channel: &str) -> TrackProps {
 /// the stretch it drives between 284 and 312 ticks: it is entered once.
 fn gate_on_the_road(channel: &str) -> TrackProps {
     let x_at = |ticks| {
-        run(grid(Prepared::default()), ticks).0.sim.world.ships[1]
+        run(grid(crate::extensions::Prepared::default()), ticks)
+            .0
+            .core
+            .sim
+            .world
+            .ships[1]
             .physics
             .body
             .position
@@ -70,9 +75,9 @@ fn a_trigger_raises_its_channel_with_no_module_and_a_race_without_one_hashes_as_
     let props = gate_on_the_road("test.track/passed");
     let beacons = prepared_on(&[], &props);
     let (race, with) = run(grid(beacons), 320);
-    let (_, without) = run(grid(Prepared::default()), 320);
+    let (_, without) = run(grid(crate::extensions::Prepared::default()), 320);
     assert_eq!(with, without, "an emitting trigger moved a hash");
-    assert!(!race.sim.is_modded());
+    assert!(!race.core.sim.is_modded());
     let started = race.channel_started(any(key("test.track/passed")));
     assert!(
         started.is_some_and(|s| (284.0 / 60.0..320.0 / 60.0).contains(&s)),
@@ -88,7 +93,7 @@ fn a_trigger_raises_its_channel_with_no_module_and_a_race_without_one_hashes_as_
 fn a_position_far_from_every_trigger_fires_nothing() {
     let props = gate(1.0e6, 1.0e6 + 10.0, "test.track/passed");
     let (race, _) = run(grid(prepared_on(&[], &props)), 60);
-    assert!(race.sim.extensions.fired().is_empty());
+    assert!(race.core.sim.extensions.fired().is_empty());
 }
 
 #[cfg(feature = "extensions")]
@@ -214,7 +219,7 @@ mod with_modules {
     }
 
     fn heard(race: &Race, module: usize) -> Heard {
-        let blob = race.sim.extension_state(module).unwrap();
+        let blob = race.core.sim.extension_state(module).unwrap();
         let word = |at: usize| u32::from_le_bytes(blob[at..at + 4].try_into().unwrap());
         Heard {
             count: word(0),
@@ -348,7 +353,7 @@ mod with_modules {
 
     #[test]
     fn a_race_with_no_module_hashes_as_before() {
-        let (_, plain) = run(grid(Prepared::default()), 120);
+        let (_, plain) = run(grid(crate::extensions::Prepared::default()), 120);
         let (_, none) = run(race_of(&[]), 120);
         assert_eq!(plain, none);
     }
@@ -367,10 +372,13 @@ mod with_modules {
             race
         };
         let fine = run_with(&at_cap);
-        assert_eq!(fine.sim.extension_reports()[0].faulted, None);
+        assert_eq!(fine.core.sim.extension_reports()[0].faulted, None);
         assert_eq!(heard(&fine, 1).count, 4);
         let broken = run_with(&over);
-        let (tick, why) = broken.sim.extension_reports()[0].faulted.clone().unwrap();
+        let (tick, why) = broken.core.sim.extension_reports()[0]
+            .faulted
+            .clone()
+            .unwrap();
         assert_eq!(tick, 3);
         assert!(why.contains("emit past the cap of 4"), "{why}");
         assert_eq!(
@@ -389,7 +397,10 @@ mod with_modules {
         for _ in 0..6 {
             race.tick(&PlayerInputs::none());
         }
-        let (tick, why) = race.sim.extension_reports()[0].faulted.clone().unwrap();
+        let (tick, why) = race.core.sim.extension_reports()[0]
+            .faulted
+            .clone()
+            .unwrap();
         assert_eq!(tick, 3);
         assert!(
             why.contains("test.a/open") && why.contains("publishes"),
@@ -426,7 +437,7 @@ mod with_modules {
             cap as u32,
             "the listener hears the cap's worth, whoever is first in sorted order"
         );
-        let drops = race.sim.extensions.drops();
+        let drops = race.core.sim.extensions.drops();
         assert!(drops.track_events > 0, "{drops:?}");
         assert_eq!(drops.mod_events, 0);
         assert!(

@@ -13,7 +13,7 @@ fn gliding_race() -> Race {
     for _ in 0..oag_race::COUNTDOWN_TICKS {
         race.tick(&PlayerInputs::none());
     }
-    for ship in &mut race.sim.world.ships {
+    for ship in &mut race.core.sim.world.ships {
         ship.physics.body.linear_velocity = Vec3::new(30.0, 0.0, 3.0);
     }
     for _ in 0..5 {
@@ -35,7 +35,7 @@ fn vertex(at: [f32; 3], strength: f32) -> GpuVertex {
 fn gather(race: &Race, slot: usize, vertices: Vec<GpuVertex>) -> HullGather {
     HullGather {
         generation: 0,
-        models: (0..usize::from(race.sim.ship_count()))
+        models: (0..usize::from(race.core.sim.ship_count()))
             .map(|slot| race.ship_tick_model(slot))
             .collect(),
         slots: vec![(slot, 0..vertices.len())],
@@ -109,7 +109,7 @@ fn a_teleporting_craft_draws_its_current_gather() {
     let mut race = gliding_race();
     let before = gather(&race, 0, vec![vertex([0.0; 3], 0.4)]);
     // A hundred units in one tick, past `SNAP_DISTANCE`.
-    race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(6000.0, 0.0, 0.0);
+    race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(6000.0, 0.0, 0.0);
     race.tick(&PlayerInputs::none());
     assert!(race.ship_swept_from(0).is_none());
     let now = gather(&race, 0, vec![vertex([100.0, 0.0, 0.0], 0.8)]);

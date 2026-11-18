@@ -32,8 +32,8 @@ impl RaceSim {
     /// Chooses which control scheme maps the pilot's buttons.
     ///
     /// A setter for the same reason `set_boost_fov_kick` is one: it is a
-    /// preference read from the settings file, and `Setup` is what a *headless*
-    /// race needs. Unlike the kick it changes what the simulation sees, so it is
+    /// preference read from the settings file, and a load's setups are what a
+    /// *headless* race needs too. Unlike the kick it changes what the simulation sees, so it is
     /// set once before the first tick and not touched again - a scheme swapped
     /// mid-race would leave a half-finished gesture armed in `ShipState`.
     pub fn set_control_scheme(&mut self, scheme: ControlScheme) {
@@ -58,7 +58,7 @@ impl Race {
     /// scale, and note the rates driving it are **not** the force law's.
     #[must_use]
     pub fn airbrake_flaps(&self) -> [f32; 2] {
-        self.airbrake_flaps_of(self.player_slot())
+        self.airbrake_flaps_of(self.core.player_slot())
     }
 
     #[cfg(feature = "view")]
@@ -69,11 +69,13 @@ impl Race {
         self.flaps_between(slot)
             .map(|level| self.view.flap_graphics.amount * level / 100.0)
     }
+}
 
+impl SimRace {
     /// The team id the craft in `slot` flies, when the grid named one.
     #[must_use]
     pub fn slot_team(&self, slot: usize) -> Option<&str> {
-        self.view.slot_teams.get(slot).map(String::as_str)
+        self.outcome.slot_teams.get(slot).map(String::as_str)
     }
 }
 
@@ -90,8 +92,8 @@ impl Race {
     /// Sets how strong the boost's field-of-view kick is. `[graphics]
     /// boost_fov_kick`.
     ///
-    /// A setter rather than a [`Setup`] field because the kick is a display
-    /// choice and `Setup` is what a headless race needs; threading a graphics
+    /// A setter rather than a [`ViewSetup`] field because the kick is a display
+    /// choice the loader cannot see; threading a graphics
     /// setting through the loader would put it in front of every caller that has
     /// no screen. [`oag_display::display::BoostFovKick::OFF`] leaves [`Race::projection`]
     /// bit-identical to what it returned before the effect existed.
@@ -235,7 +237,7 @@ impl Race {
     /// grid (`fit_sights`).
     #[must_use]
     pub fn sight_screen_of(&self, slot: usize) -> [f32; 2] {
-        if slot == self.player_slot() {
+        if slot == self.core.player_slot() {
             self.view.sight.screen()
         } else {
             self.view.huds[slot].sight.screen()
@@ -350,7 +352,8 @@ impl Race {
             .as_ref()
             .map_or(0, intro_camera::IntroCamera::cuts);
         let photo = self.view.photo.as_ref().map_or(0, photo::Photo::cuts);
-        self.sim
+        self.core
+            .sim
             .placements_of(0)
             .wrapping_add(self.view.destroy_camera.cuts)
             .wrapping_add(spectator)
@@ -544,7 +547,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// Which grid slot the person at this screen is flying.
     ///
     /// [`oag_gameplay::World::primary_slot`], and `0` under every session this
@@ -553,19 +556,19 @@ impl Race {
     /// a second local player arrives, "which craft is this view about" is a
     /// parameter in one place rather than a literal `0` in thirty.
     ///
-    /// In a network race, the seat [`Self::set_seat`] names: there every person's
+    /// In a network race, the seat [`Race::set_seat`] names: there every person's
     /// slot is remote on every peer, so the world's lowest person slot is not
     /// necessarily this machine's.
     #[must_use]
     pub fn player_slot(&self) -> usize {
-        self.view
+        self.outcome
             .seat
             .unwrap_or_else(|| self.sim.world.primary_slot())
     }
 
     /// Whether `slot`'s person is one this machine's speakers are for.
     ///
-    /// A network client names its seat ([`Self::set_seat`]) and hears that seat
+    /// A network client names its seat ([`Race::set_seat`]) and hears that seat
     /// alone: every person is person-flown on its copy of the world, and a dry
     /// line (`Cue::Disengaging`, the held `~AUTOPILOT`) from another seat would
     /// play in its ear. Without a seat, every person flown at this machine is
@@ -576,7 +579,7 @@ impl Race {
     /// `docs/ghidra/functions/ps3-hdfury-eu/autopilot.md`.
     #[must_use]
     pub fn heard_here(&self, slot: usize) -> bool {
-        match self.view.seat {
+        match self.outcome.seat {
             Some(seat) => slot == seat,
             None => {
                 slot == self.sim.world.primary_slot()
@@ -585,23 +588,27 @@ impl Race {
             }
         }
     }
+}
 
+impl Race {
     /// Names the slot this machine's person flies in a network race, for every
-    /// presentation-side reader ([`Self::player_slot`]) and for the correction
-    /// glide, which carries the camera and its craft together. View-only: nothing
-    /// the simulation reads changes.
+    /// presentation-side reader ([`SimRace::player_slot`]) and for the correction
+    /// glide, which carries the camera and its craft together. Not simulation state: the
+    /// seat is the race's [`Outcome`](crate::outcome::Outcome), outside `RaceSim` and its hash.
     pub fn set_seat(&mut self, slot: Option<usize>) {
         #[cfg(feature = "view")]
-        let followed = self.player_slot();
-        self.view.seat = slot.filter(|&slot| slot < oag_gameplay::MAX_PLAYERS);
+        let followed = self.core.player_slot();
+        self.core.outcome.seat = slot.filter(|&slot| slot < oag_gameplay::MAX_PLAYERS);
         // The camera starts settled on the craft it now follows, as a race start's does; a
         // seat that names the craft it already follows is no cut.
         #[cfg(feature = "view")]
-        if self.player_slot() != followed {
+        if self.core.player_slot() != followed {
             self.view.camera = Chase::snapped(self.camera_target(), &self.view.chase_params);
         }
     }
+}
 
+impl SimRace {
     /// The player's ship.
     #[must_use]
     pub fn ship(&self) -> &Ship {

@@ -112,13 +112,14 @@ fn scheme(params: &RaceParams) -> Result<oag_gameplay::ControlScheme> {
 ///
 /// A control scheme this build does not know.
 pub fn prepare(race: &mut Race, params: &RaceParams) -> Result<()> {
-    race.sim.set_control_scheme(scheme(params)?);
-    race.sim.set_autopilot(false);
+    race.core.sim.set_control_scheme(scheme(params)?);
+    race.core.sim.set_autopilot(false);
     // Off for everybody unless the room allowed it, in which case each seat flies the level
     // that person asked for: the same list on both ends, so the physics agrees.
-    race.sim
+    race.core
+        .sim
         .set_pilot_assist(oag_physics::pilot_assist::Level::Off);
-    race.sim.apply_room(&room(params));
+    race.core.sim.apply_room(&room(params));
     Ok(())
 }
 
@@ -215,7 +216,7 @@ pub fn presence(race: &mut Race, away: u8) {
 /// join.
 #[must_use]
 pub fn fingerprint(race: &Race) -> u64 {
-    race.sim.state_hash()
+    race.core.sim.state_hash()
 }
 
 /// Loads, starts and prepares the race `params` names, from `source`, and names
@@ -233,7 +234,7 @@ pub fn load(params: &RaceParams, source: &str) -> Result<(Box<Race>, &'static st
     let title = loaded.title.name;
     // Boxed where it is made: a `Race` is 141 KB, and moved by value up an
     // unoptimised call chain its copies overflowed a test thread's 2 MiB stack.
-    let mut race = Box::new(Race::start(loaded.setup));
+    let mut race = Box::new(Race::start(loaded.setup, loaded.view, loaded.modules));
     prepare(&mut race, params)?;
     Ok((race, title))
 }
@@ -259,10 +260,10 @@ pub fn check_title(params: &RaceParams, opened: &str) -> Result<()> {
 /// confirmed state, and [`Board::same_race_as`] compares the two.
 #[must_use]
 pub fn final_board(race: &Race, names: &[Option<String>]) -> Board {
-    let Some(board) = race.results() else {
+    let Some(board) = race.core.results() else {
         return Board::default();
     };
-    let ships = &race.sim.world.ships;
+    let ships = &race.core.sim.world.ships;
     Board {
         rows: board
             .rows

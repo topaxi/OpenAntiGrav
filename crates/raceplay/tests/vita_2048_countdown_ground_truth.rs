@@ -108,7 +108,7 @@ fn a_named_mode_starts_with_ready_the_beat_and_go_from_the_speech_bank() {
         ..options(&source)
     })
     .expect("the named mode loads");
-    let banks = &loaded.setup.sounds;
+    let banks = &loaded.view.sounds;
     // `ready` follows its child cue `321_GO` to the 3.0 s pair at its marker (14 waveforms in the
     // walk), `go` is the long pair, `HBEAT` three groups of 3, 3 and 4 voices.
     for line in [
@@ -175,7 +175,7 @@ fn a_campaign_event_plays_its_pair_panned_as_the_original_pans_it() {
         assert!(!report_has(&loaded, &format!("sfx: {name} not played")));
     }
     assert!(report_has(&loaded, "its start plays the event pair"));
-    let banks = &loaded.setup.sounds;
+    let banks = &loaded.view.sounds;
     let mut rng = Rng::new(7);
     // `Go_NGP`: one pair keyed 100 ticks in, at 90 degrees (hard right, the rear edge) and 270
     // (hard left).

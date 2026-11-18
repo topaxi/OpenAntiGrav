@@ -41,7 +41,7 @@ fn zz_contact_sweep() {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(0.0);
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut tally: BTreeMap<String, u32> = BTreeMap::new();
     let mut ticks_with: BTreeMap<String, u32> = BTreeMap::new();
     for tick in 0..(oag_race::COUNTDOWN_TICKS + 60 * 60) {
@@ -56,7 +56,7 @@ fn zz_contact_sweep() {
         };
         race.tick(&PlayerInputs::single(input));
         let mut seen = std::collections::BTreeSet::new();
-        for event in race.sim.drain_cues() {
+        for event in race.core.sim.drain_cues() {
             if !matches!(
                 event.cue,
                 Cue::Collision | Cue::Grind | Cue::CollisionShield | Cue::GrindShield

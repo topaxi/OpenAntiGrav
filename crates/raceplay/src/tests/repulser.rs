@@ -31,18 +31,22 @@ fn run(
         }
     }
     setup.course = Course::from_track(&setup.ai, None);
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    for ship in &mut race.sim.world.ships[..2] {
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    for ship in &mut race.core.sim.world.ships[..2] {
         ship.handling.dimensions.shield = 100.0;
         ship.physics.shield = 100.0;
     }
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Repulser);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Repulser);
     if let Some(distance) = mine {
-        let forward = race.sim.world.ships[0].physics.body.forward();
-        assert!(race.sim.world.projectiles.lay(
+        let forward = race.core.sim.world.ships[0].physics.body.forward();
+        assert!(race.core.sim.world.projectiles.lay(
             oag_tables::weapons::Weapon::Mine,
             forward * distance,
             0,
@@ -53,18 +57,18 @@ fn run(
     let mut buttons = Buttons::new();
     let mut raised = std::collections::BTreeSet::new();
     for tick in 0..ticks {
-        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
-        let forward = race.sim.world.ships[0].physics.body.forward();
-        race.sim.world.ships[1].physics.body.position = forward * ahead;
-        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        let forward = race.core.sim.world.ships[0].physics.body.forward();
+        race.core.sim.world.ships[1].physics.body.position = forward * ahead;
+        race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
         // Past the countdown, so `Ship_Damage`'s state gate lets a hit through.
-        for ship in &mut race.sim.world.ships[..2] {
+        for ship in &mut race.core.sim.world.ships[..2] {
             ship.physics.craft_state = oag_physics::CraftState::Racing;
         }
         let snapshot = buttons.tick(if press && tick == 1 { SQUARE } else { 0 });
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.core.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     (race, raised)
 }
@@ -76,16 +80,16 @@ pub(super) fn repulser_hits_a_craft() -> std::collections::BTreeSet<Cue> {
 #[test]
 fn pressing_fire_spends_the_repulser_and_raises_repulsor_on_the_firer() {
     let (race, raised) = fire_at(15.0, 3);
-    assert!(race.sim.world.ships[0].pickup.weapon.is_none());
+    assert!(race.core.sim.world.ships[0].pickup.weapon.is_none());
     assert!(raised.contains(&Cue::Repulsor), "{raised:?}");
-    assert!(race.sim.world.repulsers.iter().flatten().count() == 1);
+    assert!(race.core.sim.world.repulsers.iter().flatten().count() == 1);
 }
 
 #[test]
 fn a_wave_hits_the_craft_ahead_once_with_full_damage() {
     let (race, raised) = fire_at(15.0, 60);
     assert!(raised.contains(&Cue::RepulsorHit), "{raised:?}");
-    let target = &race.sim.world.ships[1];
+    let target = &race.core.sim.world.ships[1];
     let full = target.handling.dimensions.shield;
     assert_eq!(
         full - target.physics.shield,
@@ -93,18 +97,19 @@ fn a_wave_hits_the_craft_ahead_once_with_full_damage() {
         "one hit of the authored damage"
     );
     // It retires at blast_time + wave_time.
-    assert!(race.sim.world.repulsers.iter().all(Option::is_none));
+    assert!(race.core.sim.world.repulsers.iter().all(Option::is_none));
 }
 
 #[test]
 fn the_firer_is_never_hit_by_its_own_waves() {
     let (race, _) = fire_at(15.0, 60);
-    let firer = &race.sim.world.ships[0];
+    let firer = &race.core.sim.world.ships[0];
     assert_eq!(firer.physics.shield, firer.handling.dimensions.shield);
 }
 
 fn mines_left(race: &Race) -> usize {
-    race.sim
+    race.core
+        .sim
         .world
         .projectiles
         .slots
@@ -131,7 +136,7 @@ fn the_field_model_draws_at_the_firer_for_the_repulsers_whole_life() {
     let draws: Vec<_> = race.repulser_field_draws().into_iter().flatten().collect();
     assert_eq!(draws.len(), 1, "one live field");
     let (matrix, alpha, _) = draws[0];
-    let firer = race.sim.world.ships[0].physics.body.position;
+    let firer = race.core.sim.world.ships[0].physics.body.position;
     assert!((matrix.w_axis.truncate() - firer).length() < 1e-4);
     // Fired on tick 1, stepped on ticks 1-3: 1 - 0.8^3.
     assert!((alpha - 0.488).abs() < 1e-4, "{alpha}");

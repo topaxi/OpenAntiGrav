@@ -108,22 +108,22 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     if let Some(pilot) = pilot {
         // Tempered here rather than in the caller, so a sweep across tiers is
         // asking about the same character at four levels.
-        race.sim.set_ai_pilot(LONE, level.temper(&pilot));
+        race.core.sim.set_ai_pilot(LONE, level.temper(&pilot));
     }
     // Everyone but one opponent off the track, so nothing it does is about
     // anybody else - the same isolation `race_ground_truth.rs`'s solo benchmark
     // makes, and for the same reason.
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
 
     let mut best: Option<u64> = None;
-    let mut lap = race.sim.world.ships[LONE].standing.lap;
+    let mut lap = race.core.sim.world.ships[LONE].standing.lap;
     let mut started = 0u64;
     let mut recovered_this_lap = false;
     let mut airborne_windows = 0u32;
@@ -131,12 +131,12 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
     let mut airborne_ticks = 0u64;
     let mut was_airborne = false;
     for tick in 0..TICKS {
-        let before = race.sim.respawns_of(LONE);
+        let before = race.core.sim.respawns_of(LONE);
         race.tick_sim_only(&PlayerInputs::none());
-        if race.sim.respawns_of(LONE) != before {
+        if race.core.sim.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
-        let now = race.sim.world.ships[LONE].standing.lap;
+        let now = race.core.sim.world.ships[LONE].standing.lap;
         if now != lap {
             if lap > 1 && !recovered_this_lap {
                 let taken = tick - started;
@@ -146,7 +146,7 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
             lap = now;
             recovered_this_lap = false;
         }
-        let airborne = race.sim.world.ships[LONE].physics.time_airborne;
+        let airborne = race.core.sim.world.ships[LONE].physics.time_airborne;
         if airborne > 0.0 {
             airborne_ticks += 1;
             if !was_airborne {
@@ -158,12 +158,12 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
     }
 
     Some(Rolls {
-        armed: race.sim.rolls_armed_of(LONE),
-        spent: race.sim.roll_shield_spent_of(LONE),
-        shield: race.sim.world.ships[LONE].physics.shield,
-        capacity: race.sim.world.ships[LONE].handling.dimensions.shield,
+        armed: race.core.sim.rolls_armed_of(LONE),
+        spent: race.core.sim.roll_shield_spent_of(LONE),
+        shield: race.core.sim.world.ships[LONE].physics.shield,
+        capacity: race.core.sim.world.ships[LONE].handling.dimensions.shield,
         laps: lap,
-        respawns: race.sim.respawns_of(LONE),
+        respawns: race.core.sim.respawns_of(LONE),
         best,
         airborne_windows,
         longest_airborne,
@@ -228,8 +228,8 @@ fn grid_rolls_on(level: oag_ai::Difficulty, track: &str, seed: u64) -> Option<Ve
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
-    let opponents: Vec<usize> = (1..usize::from(race.sim.ship_count())).collect();
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let opponents: Vec<usize> = (1..usize::from(race.core.sim.ship_count())).collect();
     measure_grid(&mut race, &opponents)
 }
 
@@ -264,10 +264,11 @@ fn grid_rolls_mixed_on(
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
-    let opponents: Vec<usize> = (1..usize::from(race.sim.ship_count())).collect();
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let opponents: Vec<usize> = (1..usize::from(race.core.sim.ship_count())).collect();
     for (slot, &tier) in opponents.iter().zip(tiers.iter()) {
-        race.sim
+        race.core
+            .sim
             .set_ai_pilot(*slot, tier.temper(&oag_ai::Pilot::BALANCED));
     }
     let rolls = measure_grid(&mut race, &opponents)?;
@@ -289,7 +290,7 @@ fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
     let width = slots.iter().copied().max().map_or(0, |m| m + 1);
     let mut lap = vec![0u32; width];
     for &slot in slots {
-        lap[slot] = race.sim.world.ships[slot].standing.lap;
+        lap[slot] = race.core.sim.world.ships[slot].standing.lap;
     }
     let mut started = vec![0u64; width];
     let mut recovered_this_lap = vec![false; width];
@@ -300,13 +301,16 @@ fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
     let mut was_airborne = vec![false; width];
 
     for tick in 0..TICKS {
-        let before: Vec<u32> = slots.iter().map(|&s| race.sim.respawns_of(s)).collect();
+        let before: Vec<u32> = slots
+            .iter()
+            .map(|&s| race.core.sim.respawns_of(s))
+            .collect();
         race.tick_sim_only(&PlayerInputs::none());
         for (i, &slot) in slots.iter().enumerate() {
-            if race.sim.respawns_of(slot) != before[i] {
+            if race.core.sim.respawns_of(slot) != before[i] {
                 recovered_this_lap[slot] = true;
             }
-            let now = race.sim.world.ships[slot].standing.lap;
+            let now = race.core.sim.world.ships[slot].standing.lap;
             if now != lap[slot] {
                 if lap[slot] > 1 && !recovered_this_lap[slot] {
                     let taken = tick - started[slot];
@@ -316,7 +320,7 @@ fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
                 lap[slot] = now;
                 recovered_this_lap[slot] = false;
             }
-            let airborne = race.sim.world.ships[slot].physics.time_airborne;
+            let airborne = race.core.sim.world.ships[slot].physics.time_airborne;
             if airborne > 0.0 {
                 airborne_ticks[slot] += 1;
                 if !was_airborne[slot] {
@@ -332,12 +336,12 @@ fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
         slots
             .iter()
             .map(|&slot| Rolls {
-                armed: race.sim.rolls_armed_of(slot),
-                spent: race.sim.roll_shield_spent_of(slot),
-                shield: race.sim.world.ships[slot].physics.shield,
-                capacity: race.sim.world.ships[slot].handling.dimensions.shield,
+                armed: race.core.sim.rolls_armed_of(slot),
+                spent: race.core.sim.roll_shield_spent_of(slot),
+                shield: race.core.sim.world.ships[slot].physics.shield,
+                capacity: race.core.sim.world.ships[slot].handling.dimensions.shield,
                 laps: lap[slot],
-                respawns: race.sim.respawns_of(slot),
+                respawns: race.core.sim.respawns_of(slot),
                 best: best[slot],
                 airborne_windows: airborne_windows[slot],
                 longest_airborne: longest_airborne[slot],

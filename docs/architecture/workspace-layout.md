@@ -90,8 +90,10 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 
 ## Crates that do not exist yet
 
-Added when their milestone opens. Empty placeholder crates are noise, and a
-crate created before its shape is understood tends to get the wrong shape.
+Added when their milestone opens, and a new crate lands with a short
+`README.md` in its root: what it is for, plus the relations that matter (its
+layer, what it must not depend on, its counterpart). Empty placeholder crates
+are noise, and a crate created before its shape is understood tends to get the wrong shape.
 `oag-net`, reserved here for M8, was created on 2026-10-14 once the transport was
 decided ([ADR-0070](adr/0070-the-network-transport-is-webtransport.md)).
 
@@ -246,10 +248,14 @@ headless verification possible.
 
 `oag-raceplay` has a default-on **`view`** feature. Off, the crate is the
 simulation half of a race and nothing else: `load` reads what the simulation
-reads, `Race::start` builds the `RaceSim` and a `RaceView` of the few fields a
-headless host still reads (the results board and its revision, the slot teams,
-the seat, the person names, the wreck's end tick, the run statistics), and every tick runs the way `Race::tick_sim_only` runs one
-(`Race::draws()` is `cfg!(feature = "view") && !quiet`). `oag-render`, `oag-fx`,
+reads, `Race::start` builds the `RaceSim` and, beside it in `SimRace`, the
+`Outcome` a headless host still reads (the results board and its revision, the
+slot teams, the seat, the person names, the wreck's end tick, the run
+statistics), with no `RaceView` at all, and every tick runs the way
+`Race::tick_sim_only` runs one (`Race::draws()` is
+`cfg!(feature = "view") && !quiet`). `Outcome` is the same struct in both builds
+and, like the speed-plan job beside it, is in neither `RaceSim::state_hash` nor
+`Race::snapshot_sim`. `oag-render`, `oag-fx`,
 `oag-gpu`, `oag-hud`, `oag-input`, `oag-livery`, `oag-mesh`, `oag-post`,
 `oag-present`, `oag-sound`, `oag-ui`, `oag-ui-screens`, `wgpu`, `winit` and
 `bytemuck` are optional and come only with `view`.
@@ -300,6 +306,24 @@ lines before, 280 after; a clean release build of the server alone (no compiler
 cache): 768 CPU-s before, 254 CPU-s after (152 s and 26 s wall at load averages
 of 90 and 25-36). The static build is `scripts/build-server-portable.sh musl`
 ([networking](../networking/README.md), "Running a server on another machine").
+
+**The two setups and the two load phases (2026-11-18).** `Setup` has since split
+into `SimSetup`, what `Race::start` builds the simulation from (no field names the
+disc, a renderer, audio, a window or the extension host), and `ViewSetup`, what only
+the picture and the sound read; a build without `view` has an empty `ViewSetup`.
+The compiled simulation modules (`extensions::Prepared`) travel beside them, so
+`Race::start(setup, view, modules)` and `Loaded { setup, view, modules, .. }`. `load`
+is `load_sim` (`load/sim.rs`, no `cfg`) and then, with `view`, `load_view`
+(`load/view.rs`), which reads off what the sim phase read. The sim phase runs its
+steps in the old single pass's order and marks a `load::seams::Seam` wherever a view
+step stood; the view phase writes its report lines at those seams, so `loader_log`
+reads exactly as one pass did. Two lean-build values became the view build's: the
+lock-on rig carries the title's chase shear (nothing the rig computes reads it; it
+shows in Pure's `RaceSim` Debug text only), and a capture's Zone counters are
+`SimSetup::capture_zone`, written at the same statement of `Race::start` in both
+builds. The view phase checks, in a debug build, that the HUD's lock grid and law,
+the drawn far chase rig and `vex_geometry` equal what the sim phase gave the
+simulation.
 
 ## Which GPU the tests use
 
@@ -1153,8 +1177,8 @@ The growth was in tests that only **start** a race: `Race::start` learned this
 project's driver's speed plan, hd-opponent-variant-2's per-hull adapted plans
 and the route plans, whether or not anything flew them (`spawn_heading`'s PS2
 test never ticks). `Race::start` now learns nothing; the head of
-`Race::tick`, `Race::speed_plan` and `Race::plan_of` learn the plans
-(`Race::ensure_speed_plans`) when an opponent flies this project's driver, the
+`Race::tick`, `SimRace::speed_plan` and `SimRace::plan_of` learn the plans
+(`SimRace::ensure_speed_plans`) when an opponent flies this project's driver, the
 player's autopilot is on, or the circuit has a fork. See
 [ai.md](../gameplay/ai.md), "Which AI flies".
 

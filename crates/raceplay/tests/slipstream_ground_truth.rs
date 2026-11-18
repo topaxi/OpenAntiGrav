@@ -130,8 +130,8 @@ fn race_with_hud(
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
     Some((race, loaded.hud))
 }
 
@@ -156,19 +156,20 @@ fn press_fire() -> PlayerInputs {
 }
 
 fn give(race: &mut race::Race, slot: usize) {
-    race.sim.world.ships[slot].pickup.weapon =
+    race.core.sim.world.ships[slot].pickup.weapon =
         Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
 }
 
 fn no_fault(race: &race::Race) -> bool {
-    race.sim
+    race.core
+        .sim
         .extension_reports()
         .iter()
         .all(|r| r.faulted.is_none())
 }
 
 fn ship(race: &race::Race) -> oag_gameplay::world::Ship {
-    race.sim.world.ships[0]
+    race.core.sim.world.ships[0]
 }
 
 fn progress(race: &race::Race) -> f32 {
@@ -195,7 +196,7 @@ fn drive_until(race: &mut race::Race, limit: u32, done: impl Fn(&race::Race) -> 
 /// is what the guest reads when it places the entrance `AHEAD` of it.
 fn fire_at(race: &mut race::Race, ticks: u32) -> f32 {
     drive_until(race, 3000, |r| {
-        r.sim.world.ships[0].standing.lap_start_tick.is_some()
+        r.core.sim.world.ships[0].standing.lap_start_tick.is_some()
     });
     for _ in 0..ticks {
         race.tick(&throttle());
@@ -219,12 +220,12 @@ fn a_press_where_the_portal_does_not_fit_keeps_the_pickup() {
     // `16_Track` has a stretch (about tick 2000 of this drive) where the half disc 30
     // units ahead meets geometry. Hold the pickup well before it, and press once the
     // probe has read it shut on two ticks running, so the guest's last answer is "no".
-    drive_until(&mut race, 3000, |r| r.sim.world.tick >= 1900);
+    drive_until(&mut race, 3000, |r| r.core.sim.world.tick >= 1900);
     give(&mut race, 0);
     let mut shut = 0;
     for _ in 0..300 {
         race.tick(&throttle());
-        let (fits, _) = race.sim.clearance(0, Distance::Units(30.0), 12.0);
+        let (fits, _) = race.core.sim.clearance(0, Distance::Units(30.0), 12.0);
         shut = if fits { 0 } else { shut + 1 };
         if shut == 2 {
             break;
@@ -235,7 +236,7 @@ fn a_press_where_the_portal_does_not_fit_keeps_the_pickup() {
     race.tick(&throttle());
     assert_eq!(ship(&race).transit, None, "no portal, no transit");
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)),
         "kept"
     );
@@ -250,13 +251,13 @@ fn a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed() {
         return;
     };
     let pressed_at = fire_at(&mut race, 400);
-    let pressed = race.sim.world.tick;
+    let pressed = race.core.sim.world.tick;
     assert_eq!(ship(&race).transit, None, "not on the press tick");
     // The craft keeps flying, in the world, until it reaches the portal 30 units ahead.
     let mut flying = 0;
     while ship(&race).transit.is_none() {
         assert!(ship(&race).in_world(), "still flying at {flying}");
-        assert!(race.sim.ship_active(0), "still drawn at {flying}");
+        assert!(race.core.sim.ship_active(0), "still drawn at {flying}");
         race.tick(&throttle());
         flying += 1;
         assert!(flying < 60, "never reached the portal");
@@ -266,19 +267,22 @@ fn a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed() {
     let speed = kmh(&race);
     println!(
         "pressed at tick {pressed} progress {pressed_at:.1}; transit began tick {} progress {before:.1}",
-        race.sim.world.tick
+        race.core.sim.world.tick
     );
-    assert!(race.sim.world.tick > pressed + 3, "later than the press");
+    assert!(
+        race.core.sim.world.tick > pressed + 3,
+        "later than the press"
+    );
     assert!(
         before - pressed_at >= 30.0 && before - pressed_at < 30.0 + 2.0 * speed / 216.0,
         "began at the entrance: {} units on",
         before - pressed_at
     );
-    assert_eq!(race.ship_pickup(), None, "spent");
+    assert_eq!(race.core.ship_pickup(), None, "spent");
     let mut out = 1;
     while ship(&race).transit.is_some() {
         assert_eq!(ship(&race).physics.body.position, entry, "frozen at {out}");
-        assert!(!race.sim.ship_active(0), "not drawn");
+        assert!(!race.core.sim.ship_active(0), "not drawn");
         assert!(!ship(&race).in_world(), "out of the world: untouchable");
         race.tick(&throttle());
         out += 1;
@@ -300,7 +304,7 @@ fn a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed() {
         (0.8..0.97).contains(&(exit_speed / speed)),
         "a slight loss: {speed} -> {exit_speed}"
     );
-    assert!(race.sim.respawns() == 0, "no rescue");
+    assert!(race.core.sim.respawns() == 0, "no rescue");
 }
 
 #[test]
@@ -311,9 +315,9 @@ fn a_fire_over_the_line_is_a_lap_and_on_the_last_lap_a_finish_on_the_exit_tick()
         return;
     };
     drive_until(&mut race, 3000, |r| {
-        r.sim.world.ships[0].standing.lap_start_tick.is_some()
+        r.core.sim.world.ships[0].standing.lap_start_tick.is_some()
     });
-    let length = race.sim.course().expect("a course").length();
+    let length = race.core.sim.course().expect("a course").length();
     // Near the end of the lap: a fire there crosses the line.
     drive_until(&mut race, 6000, |r| progress(r) > length - 150.0);
     give(&mut race, 0);
@@ -326,7 +330,7 @@ fn a_fire_over_the_line_is_a_lap_and_on_the_last_lap_a_finish_on_the_exit_tick()
     for _ in 0..120 {
         race.tick(&throttle());
         if ship(&race).standing.lap > lap {
-            exit = Some(race.sim.world.tick);
+            exit = Some(race.core.sim.world.tick);
             break;
         }
     }
@@ -334,14 +338,15 @@ fn a_fire_over_the_line_is_a_lap_and_on_the_last_lap_a_finish_on_the_exit_tick()
     assert_eq!(ship(&race).transit, None, "on the exit tick");
     assert_eq!(ship(&race).standing.lap_start_tick, Some(exit));
     assert_eq!(
-        race.sim.world.race[0].lap_start_tick, exit,
+        race.core.sim.world.race[0].lap_start_tick, exit,
         "the person's clock too"
     );
 
     // On to the last lap by the engine's own jump, then the mod's fire over the line.
-    let target = race.sim.world.laps_target().expect("a lap target");
+    let target = race.core.sim.world.laps_target().expect("a lap target");
     while ship(&race).standing.lap < target {
-        race.sim
+        race.core
+            .sim
             .begin_transit(0, 2, Distance::Lap(0.9), 0.95)
             .unwrap();
         for _ in 0..62 {
@@ -364,8 +369,8 @@ fn a_fire_over_the_line_is_a_lap_and_on_the_last_lap_a_finish_on_the_exit_tick()
         }
     }
     let finish = ship(&race).standing.finish_tick.expect("it finishes");
-    assert_eq!(finish, race.sim.world.tick, "timed on the exit tick");
-    assert!(race.sim.world.race[0].finished);
+    assert_eq!(finish, race.core.sim.world.tick, "timed on the exit tick");
+    assert!(race.core.sim.world.race[0].finished);
 }
 
 #[test]
@@ -375,7 +380,7 @@ fn the_ai_fires_it_and_only_one_portal_is_open_at_a_time() {
     let Some(mut race) = race_on(&source, true) else {
         return;
     };
-    let count = usize::from(race.sim.world.ship_count);
+    let count = usize::from(race.core.sim.world.ship_count);
     for slot in 1..count {
         give(&mut race, slot);
     }
@@ -385,11 +390,11 @@ fn the_ai_fires_it_and_only_one_portal_is_open_at_a_time() {
     for _ in 0..2400 {
         race.tick(&throttle());
         let out = (1..count)
-            .filter(|&s| race.sim.world.ships[s].transit.is_some())
+            .filter(|&s| race.core.sim.world.ships[s].transit.is_some())
             .count();
         most_out = most_out.max(out);
         for slot in 1..count {
-            let now = race.sim.world.ships[slot].transit.is_some();
+            let now = race.core.sim.world.ships[slot].transit.is_some();
             if now && !was_out[slot] {
                 transits[slot] += 1;
             }
@@ -470,8 +475,8 @@ fn a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and
         return;
     };
     race.watch_laps(&hud, None);
-    let length = race.sim.course().expect("a course").length();
-    let count = usize::from(race.sim.world.ship_count);
+    let length = race.core.sim.course().expect("a course").length();
+    let count = usize::from(race.core.sim.world.ship_count);
     let gap = |from: f32, to: f32| {
         let delta = to - from;
         delta - (delta / length + if delta < 0.0 { -0.5 } else { 0.5 }).trunc() * length
@@ -483,9 +488,9 @@ fn a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and
     for _ in 0..3600 {
         // The pad draws are not what is under test: a craft trailing the viewer by 60 units or
         // more is handed the pickup, so the field's jumps come from behind as well as ahead.
-        let viewer = race.sim.world.ships[0].standing.progress;
+        let viewer = race.core.sim.world.ships[0].standing.progress;
         for slot in 1..count {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             let behind = viewer
                 .zip(ship.standing.progress)
                 .is_some_and(|(viewer, at)| gap(at, viewer) > 60.0);
@@ -494,7 +499,7 @@ fn a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and
             }
         }
         race.tick(&throttle());
-        let tick = race.sim.world.tick;
+        let tick = race.core.sim.world.tick;
         let lit = race.readout().incoming.rear
             == Some(oag_hud::incoming::Look::Mod {
                 side: oag_hud::incoming::Side::Rear,
@@ -504,12 +509,15 @@ fn a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and
             lit_at.push(tick);
         }
         for (slot, open) in open.iter_mut().enumerate().take(count).skip(1) {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             match (*open, ship.transit.is_some()) {
                 (None, true) => {
                     let (entry, viewer) = (
                         ship.standing.progress.expect("a fix"),
-                        race.sim.world.ships[0].standing.progress.expect("a fix"),
+                        race.core.sim.world.ships[0]
+                            .standing
+                            .progress
+                            .expect("a fix"),
                     );
                     *open = Some((tick, gap(entry, viewer), entry));
                 }
@@ -576,7 +584,13 @@ fn loads_it(mode: oag_race::Mode, weapons: bool) -> Option<bool> {
         .iter()
         .any(|l| l.contains("oag.slipstream") && l.contains("not run in this race"));
     assert_eq!(modded, !declined, "{:?}", loaded.report);
-    assert_eq!(race::Race::start(loaded.setup).sim.is_modded(), modded);
+    assert_eq!(
+        race::Race::start(loaded.setup, loaded.view, loaded.modules)
+            .core
+            .sim
+            .is_modded(),
+        modded
+    );
     Some(modded)
 }
 

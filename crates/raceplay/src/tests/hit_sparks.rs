@@ -26,21 +26,23 @@ fn six_locators() -> Vec<SparkAnchor> {
 /// A race whose slot 0 carries `locators` and whose two hit-spark effects
 /// are one-emitter stand-ins.
 fn race_with_locators(locators: Vec<SparkAnchor>) -> Race {
-    Race::start(setup_with_locators(locators))
+    let (setup, view) = setup_with_locators(locators);
+    Race::start(setup, view, crate::extensions::Prepared::default())
 }
 
-fn setup_with_locators(locators: Vec<SparkAnchor>) -> Setup {
+fn setup_with_locators(locators: Vec<SparkAnchor>) -> (SimSetup, ViewSetup) {
     let mut handling = hulled_handling();
     handling.dimensions.shield = 100.0;
-    let mut setup = setup(handling);
+    let setup = setup(handling);
+    let mut view = crate::tests::fixture_view();
     for trigger in [HitSpark, LeachHitSpark] {
         let blob = super::respawn::one_emitter_pob(super::respawn::trigger_name(trigger), 0);
         let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
             .expect("the hand-laid effect parses");
-        setup.handles.insert(trigger, effect);
+        view.handles.insert(trigger, effect);
     }
-    setup.hit_spark_anchors = vec![locators];
-    setup
+    view.hit_spark_anchors = vec![locators];
+    (setup, view)
 }
 
 fn landed_on_player() -> [WeaponHit; MAX_SHIPS] {
@@ -51,7 +53,8 @@ fn landed_on_player() -> [WeaponHit; MAX_SHIPS] {
 
 /// The `.COLLISIONS` cues raised on the player's craft since the last drain.
 fn collisions_on_the_player(race: &mut Race) -> usize {
-    race.sim
+    race.core
+        .sim
         .drain_cues()
         .into_iter()
         .filter(|e| e.cue == Cue::Collision && e.slot == 0)
@@ -72,7 +75,7 @@ fn a_landed_hit_sparks_one_or_two_locators_and_they_rest_for_0_8_s() {
 
     // Every locator hit on every tick for a little under the gate: no
     // locator may fire twice, so at most six can have started.
-    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.sim.dt()) as usize - 2;
+    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.core.sim.dt()) as usize - 2;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
         race.throw_hit_sparks(&landed_on_player(), false);
@@ -98,7 +101,7 @@ fn a_landed_hit_sparks_one_or_two_locators_and_they_rest_for_0_8_s() {
 #[test]
 fn each_hit_spark_plays_one_collision_cue_behind_the_same_gate() {
     let mut race = race_with_locators(six_locators());
-    let _ = race.sim.drain_cues();
+    let _ = race.core.sim.drain_cues();
     race.throw_hit_sparks(&landed_on_player(), false);
     let first = collisions_on_the_player(&mut race);
     assert!(
@@ -108,10 +111,10 @@ fn each_hit_spark_plays_one_collision_cue_behind_the_same_gate() {
     assert_eq!(first as u32, race.hit_sparks_started_for_tests());
 
     let mut heard = first;
-    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.sim.dt()) as usize - 2;
+    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.core.sim.dt()) as usize - 2;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
-        let _ = race.sim.drain_cues();
+        let _ = race.core.sim.drain_cues();
         race.throw_hit_sparks(&landed_on_player(), false);
         heard += collisions_on_the_player(&mut race);
     }
@@ -126,7 +129,7 @@ fn each_hit_spark_plays_one_collision_cue_behind_the_same_gate() {
     for _ in 0..4 {
         race.tick(&PlayerInputs::none());
     }
-    let _ = race.sim.drain_cues();
+    let _ = race.core.sim.drain_cues();
     race.throw_hit_sparks(&landed_on_player(), false);
     assert!(collisions_on_the_player(&mut race) > 0);
 }
@@ -137,23 +140,24 @@ fn each_hit_spark_plays_one_collision_cue_behind_the_same_gate() {
 fn the_collision_cue_needs_no_spark_effect_and_follows_the_struck_craft() {
     let mut handling = hulled_handling();
     handling.dimensions.shield = 100.0;
-    let mut setup = setup(handling);
-    setup.hit_spark_anchors = vec![six_locators()];
-    let mut race = Race::start(setup);
-    let _ = race.sim.drain_cues();
+    let setup = setup(handling);
+    let mut view = crate::tests::fixture_view();
+    view.hit_spark_anchors = vec![six_locators()];
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
+    let _ = race.core.sim.drain_cues();
     race.throw_hit_sparks(&landed_on_player(), false);
     assert_eq!(race.hit_sparks_started_for_tests(), 0);
     assert!(collisions_on_the_player(&mut race) > 0);
 
     let mut race = race_with_locators(six_locators());
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
     race.view.hit_sparks = crate::hit_sparks::HitSparks::new(vec![six_locators(), six_locators()]);
-    let _ = race.sim.drain_cues();
+    let _ = race.core.sim.drain_cues();
     let mut on_rival = [WeaponHit::default(); MAX_SHIPS];
     on_rival[1].landed = true;
     race.throw_hit_sparks(&on_rival, false);
-    let cues = race.sim.drain_cues();
+    let cues = race.core.sim.drain_cues();
     assert!(
         cues.iter().any(|e| e.cue == Cue::Collision && e.slot == 1),
         "the rival's hit made no sound on the rival"
@@ -162,28 +166,28 @@ fn the_collision_cue_needs_no_spark_effect_and_follows_the_struck_craft() {
 }
 
 /// A Quake wave reaching the player, launched by the rival through
-/// `Race::force_quake` and ticked through `Race::tick`: one `QUAKEHIT` and the
+/// `SimRace::force_quake` and ticked through `Race::tick`: one `QUAKEHIT` and the
 /// hull's own one or two `.COLLISIONS`, one for every spark thrown.
 #[test]
 fn a_quake_hit_plays_quakehit_and_the_collision_pair() {
-    let mut setup = setup_with_locators(six_locators());
+    let (mut setup, view) = setup_with_locators(six_locators());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
     race.tick(&PlayerInputs::none());
-    let _ = race.sim.drain_cues();
+    let _ = race.core.sim.drain_cues();
 
-    assert!(race.force_quake(1), "the rival's wave never launched");
+    assert!(race.core.force_quake(1), "the rival's wave never launched");
     let (mut quake_hits, mut collisions) = (0, 0);
     // Twenty ticks, not the wave's five seconds: this fixture's synthetic
     // circuit is a 141-unit ring, so the wave laps it and strikes the
     // stationary craft again on tick 29.
     for _ in 0..20 {
         race.tick(&PlayerInputs::none());
-        for cue in race.sim.drain_cues() {
+        for cue in race.core.sim.drain_cues() {
             match cue.cue {
                 Cue::QuakeHit if cue.slot == 0 => quake_hits += 1,
                 Cue::Collision if cue.slot == 0 => collisions += 1,
@@ -206,19 +210,26 @@ fn force_quake_launches_one_rivals_wave_and_nothing_else() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
     race.tick(&PlayerInputs::none());
     assert!(
-        !race.force_quake(0),
+        !race.core.force_quake(0),
         "the player was made their own shooter"
     );
-    assert!(!race.force_quake(5), "a craft not racing fired a Quake");
-    assert!(race.force_quake(1));
-    assert_eq!(race.sim.world.quake.map(|wave| wave.owner), Some(1));
-    assert!(!race.force_quake(1), "a second wave joined the first");
+    assert!(
+        !race.core.force_quake(5),
+        "a craft not racing fired a Quake"
+    );
+    assert!(race.core.force_quake(1));
+    assert_eq!(race.core.sim.world.quake.map(|wave| wave.owner), Some(1));
+    assert!(!race.core.force_quake(1), "a second wave joined the first");
 }
 
 /// Nothing without a hit that landed, and nothing on a hull with no
@@ -229,13 +240,13 @@ fn an_absorbed_hit_or_a_bare_hull_throws_nothing() {
     let mut race = race_with_locators(six_locators());
     let mut hits = [WeaponHit::default(); MAX_SHIPS];
     hits[0].absorbed = true;
-    let _ = race.sim.drain_cues();
+    let _ = race.core.sim.drain_cues();
     race.throw_hit_sparks(&hits, false);
     assert_eq!(race.hit_sparks_started_for_tests(), 0);
     assert_eq!(collisions_on_the_player(&mut race), 0);
 
     let mut bare = race_with_locators(Vec::new());
-    let _ = bare.sim.drain_cues();
+    let _ = bare.core.sim.drain_cues();
     bare.throw_hit_sparks(&landed_on_player(), true);
     assert_eq!(bare.hit_sparks_started_for_tests(), 0);
     assert_eq!(collisions_on_the_player(&mut bare), 0);
@@ -275,9 +286,9 @@ fn a_rocket_striking_the_player_in_the_tick_throws_its_hull_sparks() {
     for _ in 0..oag_race::COUNTDOWN_TICKS + 2 {
         race.tick(&PlayerInputs::none());
     }
-    let body = race.sim.world.ships[0].physics.body;
-    let before = race.sim.world.ships[0].physics.shield;
-    race.sim.world.projectiles.spawn(
+    let body = race.core.sim.world.ships[0].physics.body;
+    let before = race.core.sim.world.ships[0].physics.shield;
+    race.core.sim.world.projectiles.spawn(
         oag_tables::weapons::Weapon::Rocket,
         body.position - body.forward() * 3.0,
         body.forward() * 600.0,
@@ -287,7 +298,7 @@ fn a_rocket_striking_the_player_in_the_tick_throws_its_hull_sparks() {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        race.sim.world.ships[0].physics.shield < before,
+        race.core.sim.world.ships[0].physics.shield < before,
         "the rocket never struck the player - not what this test means to check"
     );
     assert!(race.hit_sparks_started_for_tests() > 0);
@@ -316,6 +327,7 @@ fn a_weapon_hit_shakes_the_players_camera_and_nobody_elses() {
 /// `weapon_anchors` as the title built them: HD's craft-hit spark count.
 fn cannon_strikes_a_craft(weapon_anchors: Vec<Vec<SparkAnchor>>) -> u32 {
     let mut setup = setup(hulled_handling());
+    let mut view = crate::tests::fixture_view();
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_cannon_table());
     let blob = super::respawn::one_emitter_pob(
@@ -324,19 +336,19 @@ fn cannon_strikes_a_craft(weapon_anchors: Vec<Vec<SparkAnchor>>) -> u32 {
     );
     let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    setup.handles.insert(Trigger::WeaponSpark, effect);
-    setup.weapon_spark_anchors = weapon_anchors;
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
+    view.handles.insert(Trigger::WeaponSpark, effect);
+    view.weapon_spark_anchors = weapon_anchors;
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
     let mut buttons = Buttons::new();
     for _ in 0..60 {
-        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-        let forward = race.sim.world.ships[0].physics.body.forward();
-        race.sim.world.ships[1].physics.body.position = forward * 15.0;
-        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        let forward = race.core.sim.world.ships[0].physics.body.forward();
+        race.core.sim.world.ships[1].physics.body.position = forward * 15.0;
+        race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
         let snapshot = buttons.tick(SQUARE);
         race.tick(&PlayerInputs::single(snapshot));
     }
@@ -393,22 +405,22 @@ fn hd_2048_and_omega_throw_the_cannon_craft_hit_spark() {
 /// locator's 0.8 s gate holds a second hit on the same pair.
 #[test]
 fn a_craft_to_craft_contact_sparks_both_hulls_once_per_gate() {
-    let mut setup = setup_with_locators(six_locators());
+    let (mut setup, view) = setup_with_locators(six_locators());
     setup.mode = Mode::SingleRace;
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
     race.view.hit_sparks = crate::hit_sparks::HitSparks::new(vec![six_locators(), six_locators()]);
-    let at = race.sim.world.ships[0].physics.body.position;
-    race.sim.world.ships[1].physics.body.position = at + Vec3::new(0.0, 0.0, 1.0);
-    race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
-    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
-    let _ = race.sim.drain_cues();
+    let at = race.core.sim.world.ships[0].physics.body.position;
+    race.core.sim.world.ships[1].physics.body.position = at + Vec3::new(0.0, 0.0, 1.0);
+    race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
+    race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
+    let _ = race.core.sim.drain_cues();
 
     race.resolve_craft_pairs();
     assert_eq!(race.hit_sparks_started_for_tests(), 2, "one spark per hull");
-    let cues = race.sim.drain_cues();
+    let cues = race.core.sim.drain_cues();
     for slot in 0..2 {
         assert_eq!(
             cues.iter()
@@ -419,10 +431,10 @@ fn a_craft_to_craft_contact_sparks_both_hulls_once_per_gate() {
         );
     }
 
-    race.sim.world.ships[1].physics.body.position =
-        race.sim.world.ships[0].physics.body.position + Vec3::new(0.0, 0.0, 1.0);
-    race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
-    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
+    race.core.sim.world.ships[1].physics.body.position =
+        race.core.sim.world.ships[0].physics.body.position + Vec3::new(0.0, 0.0, 1.0);
+    race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
+    race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
     race.resolve_craft_pairs();
     assert_eq!(
         race.hit_sparks_started_for_tests(),
@@ -431,10 +443,10 @@ fn a_craft_to_craft_contact_sparks_both_hulls_once_per_gate() {
     );
 
     let mut shielded = race_with_locators(six_locators());
-    shielded.sim.world.ships[0].physics.shield_pickup_timer = 5.0;
+    shielded.core.sim.world.ships[0].physics.shield_pickup_timer = 5.0;
     shielded.throw_contact_spark(
         0,
-        shielded.sim.world.ships[0].physics.body.position,
+        shielded.core.sim.world.ships[0].physics.body.position,
         100.0,
         true,
     );
@@ -451,7 +463,7 @@ fn a_craft_to_craft_contact_sparks_both_hulls_once_per_gate() {
 #[test]
 fn a_recorded_contact_spark_is_thrown_early_and_aged_to_the_frame() {
     let mut race = race_with_locators(six_locators());
-    let posed = race.sim.world.ships[0].physics.body.position;
+    let posed = race.core.sim.world.ships[0].physics.body.position;
     let seed = crate::ContactSeed {
         slot: 0,
         node: 2,
@@ -464,7 +476,7 @@ fn a_recorded_contact_spark_is_thrown_early_and_aged_to_the_frame() {
         race.view.stage.alive_count() > 0,
         "the spark is not alive at the frame it was aged to"
     );
-    assert_eq!(race.sim.world.ships[0].physics.body.position, posed);
+    assert_eq!(race.core.sim.world.ships[0].physics.body.position, posed);
     assert_eq!(collisions_on_the_player(&mut race), 1);
 
     let mut none = race_with_locators(six_locators());
@@ -477,25 +489,24 @@ fn a_recorded_contact_spark_is_thrown_early_and_aged_to_the_frame() {
 /// nothing for a shielded craft.
 #[test]
 fn a_cage_contact_throws_the_no_damage_spark_from_the_nearest_locator() {
-    let mut setup = setup_with_locators(six_locators());
+    let (setup, mut view) = setup_with_locators(six_locators());
     let blob = super::respawn::one_emitter_pob(
         super::respawn::trigger_name(oag_title::Trigger::CollisionSparkNoDamage),
         0,
     );
     let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    setup
-        .handles
+    view.handles
         .insert(oag_title::Trigger::CollisionSparkNoDamage, effect);
-    let mut race = Race::start(setup);
-    let at = race.sim.world.ships[0].physics.body.position;
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
+    let at = race.core.sim.world.ships[0].physics.body.position;
     let mut response = oag_physics::cage::CageResponse::default();
     response.resolved[0] = oag_physics::cage::CageContact {
         point: at + Vec3::new(2.0, 0.0, 0.0),
         impulse: 40.0,
     };
     response.contacts = 1;
-    let _ = race.sim.drain_cues();
+    let _ = race.core.sim.drain_cues();
 
     race.throw_cage_sparks(0, &response);
     assert_eq!(race.cage_sparks_started_for_tests(), 1);
@@ -508,7 +519,7 @@ fn a_cage_contact_throws_the_no_damage_spark_from_the_nearest_locator() {
         "the locator's gate let a second one through"
     );
 
-    race.sim.world.ships[0].physics.shield_pickup_timer = 5.0;
+    race.core.sim.world.ships[0].physics.shield_pickup_timer = 5.0;
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
     }

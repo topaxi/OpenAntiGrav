@@ -364,7 +364,7 @@ impl Session {
         self.net = None;
         self.lan = None;
         if let Stage::Race(stage) = outgoing
-            && !stage.race.sim.finished()
+            && !stage.race.core.sim.finished()
             && !was_lan
             && !stage.watching
             && stage.demo.is_none()

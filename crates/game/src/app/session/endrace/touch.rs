@@ -36,6 +36,7 @@ impl Session {
         let several_over_the_network = self.net.is_some()
             && stage
                 .race
+                .core
                 .results()
                 .is_some_and(|board| board.persons() > 1);
         if stage.race.viewport_count() > 1 || several_over_the_network {

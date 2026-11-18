@@ -14,23 +14,26 @@
 //! `mod_sounds`, `announcements` and `class_announcements` are `oag_gameplay::cue` types
 //! and plain integers. What does:
 //!
-//! - **State a tick writes outside this struct.** The fields the lean
-//!   [`RaceView`](super::RaceView) keeps without the `view` feature (the seat, the person
-//!   names, the slot teams, the results board and its revision, the run statistics and
-//!   `wreck_ended_tick`) sit beside `RaceSim`, not in it, and the tick writes some of them.
+//! - **State a tick writes outside this struct.** The race's
+//!   [`Outcome`](crate::outcome::Outcome) (the seat, the person names, the slot teams, the
+//!   results board and its revision, the run statistics and `wreck_ended_tick`) sits beside
+//!   `RaceSim` in [`SimRace`](super::SimRace), not in it, and the tick writes some of it.
 //!   ADR-0087 decision 9 rests on two of them, the results capture and the wreck's end tick,
 //!   living outside `RaceSim`.
 //! - **The tick calls the view in the middle.** [`Race::tick`](super::Race::tick) and the
 //!   methods it reaches interleave simulation statements with `#[cfg(feature = "view")]`
 //!   blocks (effects, camera shake, HUD messages), and one runs the other way: a HUD
 //!   message board decides whether a `Cue::Message` is raised. Most methods that read and
-//!   write this half alone are `impl RaceSim` methods, reached as `race.sim.x()`; the ones
-//!   that read a view accessor (the seat's slot, the intro, who hears a cue) stay on `Race`.
+//!   write this half alone are `impl RaceSim` methods, reached as `race.core.sim.x()`; those
+//!   that also read the [`Outcome`](crate::outcome::Outcome) (the seat's slot, who hears a
+//!   cue, the results board) are `impl SimRace` methods, reached as `race.core.x()`; the ones
+//!   that read a view accessor (the viewed slot, the intro, the followed craft) stay on `Race`.
 //! - **The extension runtime.** With the `extensions` feature, `extensions` holds the
 //!   module instances over `oag_modhost`, which `just check-deps` forbids to a gameplay
 //!   crate.
-//! - **The load.** `load` builds this struct, and reads `oag-trackfile` to do it, which
-//!   `just check-deps` forbids to a gameplay crate; it also opens the disc through
+//! - **The load.** `Race::start` builds this struct out of a [`crate::SimSetup`], which
+//!   names no disc, renderer or extension-host type, but the setup comes from `load_sim`,
+//!   which reads `oag-trackfile` (forbidden to a gameplay crate) and opens the disc through
 //!   `oag-source` and `oag-assets`, which a simulation crate should not need.
 //!
 //! Every other field is an `oag_gameplay`, `oag_physics`, `oag_ai`, `oag_race`,
@@ -47,8 +50,9 @@ use super::*;
 
 /// The half of a race that decides what happens next.
 ///
-/// Reached as `Race::sim`. Holds no renderer, audio or windowing type - see the
-/// module doc comment for what stands between this and a crate of its own.
+/// Reached as `race.core.sim` ([`SimRace::sim`](super::SimRace::sim)). Holds no renderer,
+/// audio or windowing type - see the module doc comment for what stands between this and a
+/// crate of its own.
 ///
 /// # Why it is `Clone`
 ///
@@ -76,7 +80,7 @@ use super::*;
 /// its value's, so the text a restore is compared by still reads all of it.
 ///
 /// **Constant means constant after the first tick.** The plans, and the routes'
-/// plans, are written by [`Race::ensure_speed_plans`], and a test or a setter
+/// plans, are written by [`SimRace::ensure_speed_plans`], and a test or a setter
 /// may write any of the others, always through [`Arc::make_mut`] or a new
 /// [`Arc`]: a snapshot holding the old value keeps it. A snapshot from before
 /// the first tick therefore restores to a race with no plans, which learns them
@@ -101,7 +105,7 @@ pub struct RaceSim {
     pub(super) original_ai: Option<Box<super::original_ai::OriginalAi>>,
     /// The race seed, for the original field's own generator.
     pub(super) race_seed: u64,
-    /// How many people the grid was laid out for ([`Setup::people`](super::Setup::people)):
+    /// How many people the grid was laid out for ([`SimSetup::people`](super::SimSetup::people)):
     /// the rows `rank_from_back` gave the craft, which the original field's grid positions follow.
     pub(super) people: u8,
     pub(super) collision: Arc<CollisionWorld>,
@@ -127,7 +131,7 @@ pub struct RaceSim {
     /// race has no opponents or the plan did not verify clean. See
     /// [`RaceSim::field_speed_plan`] and `oag_ai::plan`.
     pub(super) speed_plan: Option<Arc<oag_ai::SpeedPlan>>,
-    /// Whether [`Race::ensure_speed_plans`] has run: the plans are learned on
+    /// Whether [`SimRace::ensure_speed_plans`] has run: the plans are learned on
     /// the first tick, not in `Race::start`, so a race whose opponents all fly
     /// the original driver can skip them.
     pub(super) plans_built: bool,
@@ -174,7 +178,7 @@ pub struct RaceSim {
     pub(super) autopilot_ours: bool,
     /// An opponent on this project's driver flies the original's player
     /// driver while it holds an Autopilot, instead of absorbing it
-    /// ([`RaceSim::set_opponent_autopilot`]). Starts as [`Setup::opponent_autopilot`],
+    /// ([`RaceSim::set_opponent_autopilot`]). Starts as [`SimSetup::opponent_autopilot`],
     /// the title's per-class rule.
     pub(super) opponent_autopilot: bool,
     /// The lap counter's ring, or `None` on a track whose chain does not close.
@@ -218,7 +222,7 @@ pub struct RaceSim {
     /// reset state reads to put a craft back ([`crate::breadcrumbs`]). Seeded
     /// with the grid pose at [`Race::start`] and laid after every step.
     pub(super) breadcrumbs: [crate::breadcrumbs::Breadcrumbs; oag_gameplay::MAX_SHIPS],
-    /// Whether this race runs with weapons - [`Setup::weapons_on`], resolved.
+    /// Whether this race runs with weapons - [`SimSetup::weapons_on`], resolved.
     /// Read through [`Self::damage_rules`] so contact and weapon damage agree
     /// with the pads the load kept.
     pub(super) weapons_on: bool,
@@ -231,12 +235,12 @@ pub struct RaceSim {
     pub(super) lock_rig: oag_race::chase_rig::ChaseParams,
     /// Whether a laid Mine or Bomb leaves from the rear anchor,
     /// [`REAR_ANCHOR_BACK`](super::weapons::REAR_ANCHOR_BACK) behind the body, rather
-    /// than at the body: `options::Setup::laid_from_rear`. Simulation, not
+    /// than at the body: `options::SimSetup::laid_from_rear`. Simulation, not
     /// look: it moves where the mine is dropped. Not hashed, being a constant
     /// of the load.
     pub(super) laid_from_rear: bool,
     /// The kill count that ends an Eliminator event - see
-    /// [`Setup::eliminator_kill_target`].
+    /// [`SimSetup::eliminator_kill_target`].
     pub(super) eliminator_kill_target: u32,
     /// The slot whose weapon last got through to each craft, `None` while
     /// nobody's has. Eliminator-only bookkeeping - see `crate::eliminator`.
@@ -398,19 +402,19 @@ pub struct RaceSim {
     /// whose grid sits at sample 2,791, zero is a different piece of track.
     pub(super) last_on_track: [u32; oag_gameplay::MAX_PLAYERS],
     /// This title's own zone-to-speed-class ladder, straight out of
-    /// [`Setup::zone_stages`] - what [`RaceView::class_announcer`] fires against.
+    /// [`SimSetup::zone_stages`] - what [`RaceView::class_announcer`] fires against.
     pub(super) zone_stages: Option<&'static oag_title::ZoneStages>,
-    /// Whether the race voices its start - see [`Setup::countdown_voice`].
+    /// Whether the race voices its start - see [`SimSetup::countdown_voice`].
     pub(super) countdown_voice: bool,
-    /// Whether the start also raises the start beat - see [`Setup::countdown_beat`].
+    /// Whether the start also raises the start beat - see [`SimSetup::countdown_beat`].
     pub(super) countdown_beat: bool,
-    /// The grid hover the craft carries - see [`Setup::launch_hover`].
+    /// The grid hover the craft carries - see [`SimSetup::launch_hover`].
     pub(super) launch_hover: Option<&'static oag_title::launch_hover::LaunchHover>,
-    /// The hover probe set every craft flies - see [`Setup::hover_rig`].
+    /// The hover probe set every craft flies - see [`SimSetup::hover_rig`].
     pub(super) hover_rig: oag_physics::hover::Rig,
-    /// Whether every craft's steering ramp stops at its target - see [`Setup::craft_laws`].
+    /// Whether every craft's steering ramp stops at its target - see [`SimSetup::craft_laws`].
     pub(super) steer_ramp_clamped: bool,
-    /// Whether every craft adds the in-air `weight_distribution` torque - see [`Setup::craft_laws`].
+    /// Whether every craft adds the in-air `weight_distribution` torque - see [`SimSetup::craft_laws`].
     pub(super) air_pitch_bias: bool,
     /// [`oag_physics::ShipState::pitch_gate`] for every craft, from the title.
     pub(super) pitch_gate: bool,
@@ -421,63 +425,63 @@ pub struct RaceSim {
     /// Whether an Eliminator race kills a wrong-way craft's engine, from the title - see
     /// [`oag_physics::ShipState::wrong_way_kill`].
     pub(super) eliminator_wrong_way_kill: bool,
-    /// The frame every craft's inertia diagonal is applied in - see [`Setup::craft_laws`].
+    /// The frame every craft's inertia diagonal is applied in - see [`SimSetup::craft_laws`].
     pub(super) inertia_frame: oag_physics::InertiaFrame,
-    /// Every craft's force-law constants, the title's - see [`Setup::craft_laws`].
+    /// Every craft's force-law constants, the title's - see [`SimSetup::craft_laws`].
     pub(super) physics_laws: oag_physics::laws::Laws,
-    /// What the Autopilot does to the player's engine - see [`Setup::autopilot_engine`].
+    /// What the Autopilot does to the player's engine - see [`SimSetup::autopilot_engine`].
     pub(super) autopilot_engine: oag_title::autopilot_engine::AutopilotEngine,
-    /// What colours a weapon pad's light bars - see [`Setup::weapon_pad_glow`].
+    /// What colours a weapon pad's light bars - see [`SimSetup::weapon_pad_glow`].
     #[cfg_attr(not(feature = "view"), allow(dead_code))]
     pub(super) weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
-    /// When a locked LeachBeam moves energy - see [`Setup::leach_drain`].
+    /// When a locked LeachBeam moves energy - see [`SimSetup::leach_drain`].
     pub(super) leach_drain: oag_title::weapons::LeachDrain,
-    /// How a weapon blast's push reaches a craft - see [`Setup::blast_push`].
+    /// How a weapon blast's push reaches a craft - see [`SimSetup::blast_push`].
     pub(super) blast_push: oag_title::weapons::BlastPush,
-    /// How many LeachBeams may be live at once - see [`Setup::leach_beams`].
+    /// How many LeachBeams may be live at once - see [`SimSetup::leach_beams`].
     pub(super) leach_beams: u8,
-    /// How a Quake's wave reaches a craft - see [`Setup::quake_hit`].
+    /// How a Quake's wave reaches a craft - see [`SimSetup::quake_hit`].
     pub(super) quake_hit: oag_title::weapons::QuakeHit,
-    /// Whether an absorb cancels a running Autopilot - see [`Setup::autopilot_absorb_cancels`].
+    /// Whether an absorb cancels a running Autopilot - see [`SimSetup::autopilot_absorb_cancels`].
     pub(super) autopilot_absorb_cancels: bool,
-    /// Whether a pad grants a craft whose Autopilot runs - see [`Setup::autopilot_pad_grants`].
+    /// Whether a pad grants a craft whose Autopilot runs - see [`SimSetup::autopilot_pad_grants`].
     pub(super) autopilot_pad_grants: bool,
     /// Whether the weapons are born carrying the located track's up - see
-    /// [`Setup::launch_normal_is_track_up`].
+    /// [`SimSetup::launch_normal_is_track_up`].
     pub(super) launch_normal_is_track_up: bool,
     /// Whether the projectiles' floor arms are Pulse's decompiled laws - see
-    /// [`Setup::floor_arms_steer_to_ride_point`].
+    /// [`SimSetup::floor_arms_steer_to_ride_point`].
     pub(super) floor_arms_steer_to_ride_point: bool,
     /// Whether a Plasma bolt leaves at the craft's display scale - see
-    /// [`Setup::plasma_release_at_display_scale`].
+    /// [`SimSetup::plasma_release_at_display_scale`].
     pub(super) plasma_release_at_display_scale: bool,
     /// What the firing craft's box does to its projectiles' first probes - see
-    /// [`Setup::own_craft_box_hides_track`].
+    /// [`SimSetup::own_craft_box_hides_track`].
     pub(super) own_craft_box_hides_track: oag_title::weapons::OwnCraftBox,
     /// Which ways a craft is put back are on, and their numbers - see
-    /// [`Setup::reset_triggers`].
+    /// [`SimSetup::reset_triggers`].
     pub(super) reset_triggers: oag_race::recovery::ResetTriggers,
-    /// How a craft's contact is heard - see [`Setup::contact_cues`].
+    /// How a craft's contact is heard - see [`SimSetup::contact_cues`].
     pub(super) contact_cues: oag_title::contact_cue::ContactCues,
     /// The opponents' decision terms, resolved for this race's difficulty - see
-    /// [`Setup::opponent_fire`].
+    /// [`SimSetup::opponent_fire`].
     pub(super) fire_terms: oag_ai::weapon_ai::Law,
-    /// What an Eliminator is won on - see [`Setup::score_law`].
+    /// What an Eliminator is won on - see [`SimSetup::score_law`].
     pub(super) score_law: Option<oag_race::ScoreLaw>,
     /// How a score Eliminator's opponents spend weapons - see [`crate::score_pace`].
     pub(super) score_pace: Option<crate::score_pace::ScorePace>,
-    /// The Eliminator flip - see [`Setup::flip_law`].
+    /// The Eliminator flip - see [`SimSetup::flip_law`].
     pub(super) flip_law: Option<oag_physics::flip::FlipLaw>,
-    /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
+    /// The per-class grounded-gravity scale - see [`SimSetup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
     /// Which gravity term that scale multiplies, the title's craft law.
     pub(super) class_gravity_term: oag_physics::passive::ClassGravityTerm,
-    /// The launch boost's parameters - see [`Setup::start_boost`].
+    /// The launch boost's parameters - see [`SimSetup::start_boost`].
     pub(super) start_boost: Option<oag_physics::launch::StartBoost>,
     /// The launch boost the AI field flies: [`Self::start_boost`], or `None` where the title's
     /// engine boosts the player's craft alone.
     pub(super) field_start_boost: Option<oag_physics::launch::StartBoost>,
-    /// Pilot Assist's laws for this class - see [`Setup::pilot_assist`].
+    /// Pilot Assist's laws for this class - see [`SimSetup::pilot_assist`].
     pub(super) pilot_assist: oag_physics::pilot_assist::Laws,
     /// The level each person-flown slot flies with; the settings decide, and a network room
     /// sets one per seat (`RaceSim::set_pilot_assist_seat`).
@@ -485,7 +489,7 @@ pub struct RaceSim {
     /// Whether craft may barrel roll; `false` only in a network room that switched rolls off
     /// (`RaceSim::set_barrel_rolls`).
     pub(super) barrel_rolls: bool,
-    /// The track's speed-pad trigger volumes - see [`Setup::speedup_pads`].
+    /// The track's speed-pad trigger volumes - see [`SimSetup::speedup_pads`].
     pub(super) speedup_pads: Arc<[oag_vex::pads::PadVolume]>,
     /// Distance from the ship to each pad, one entry per pad, in track units.
     ///
@@ -507,7 +511,7 @@ pub struct RaceSim {
     /// pad, which is what gates the Zone score - standing still on one pad does
     /// not pay repeatedly. One per racer.
     pub(super) pad_current: [Option<usize>; MAX_SHIPS],
-    /// The track's weapon-pad trigger volumes - see [`Setup::weapon_pads`].
+    /// The track's weapon-pad trigger volumes - see [`SimSetup::weapon_pads`].
     ///
     /// **Empty unless the mode arms them.** A weapons-off race in the original
     /// does not skip the trigger, it zeroes the list's own count
@@ -539,7 +543,7 @@ pub struct RaceSim {
     /// one - see `docs/gameplay/pickups.md`.
     pub(super) weapon_pad_refresh_left: Vec<f32>,
     /// How long a stamped weapon pad stays inert - see
-    /// [`Setup::weapon_pad_refresh`].
+    /// [`SimSetup::weapon_pad_refresh`].
     pub(super) weapon_pad_refresh: f32,
     /// Each weapon pad's nearest sample on [`Self::racing_line`] and its
     /// offset across it - see `field::pad_seek::line_positions`.
@@ -548,14 +552,14 @@ pub struct RaceSim {
     pub(super) pad_seeking: super::PadSeeking,
     /// Which rule fires an opponent's forward weapon - see [`super::FireLaw`].
     pub(super) fire_law: super::FireLaw,
-    /// The odds the original's fire law reads - see [`Setup::weapon_ai`].
+    /// The odds the original's fire law reads - see [`SimSetup::weapon_ai`].
     pub(super) weapon_ai: Option<Arc<oag_tables::weapons::ai::WeaponAiStats>>,
-    /// This race's weapon table - see [`Setup::weapons`].
+    /// This race's weapon table - see [`SimSetup::weapons`].
     pub(super) weapons: Option<Arc<oag_tables::weapons::WeaponStats>>,
     /// Restricts what a `Weapon Pad` hands out - see
-    /// [`Setup::allowed_weapons`]. Empty is no restriction.
+    /// [`SimSetup::allowed_weapons`]. Empty is no restriction.
     pub(super) allowed_weapons: Arc<[oag_tables::weapons::Weapon]>,
-    /// The speed class, which indexes the pickup odds - see [`Setup::class`].
+    /// The speed class, which indexes the pickup odds - see [`SimSetup::class`].
     ///
     /// The disc's own spelling, so a title whose ladder is not Pulse's - Pure,
     /// with `VECTOR` - selects its own row.
@@ -637,7 +641,7 @@ const _: () = {
 };
 
 impl RaceSim {
-    /// [`Race::may_use_pickup`]'s check, for the paths that hold a `RaceSim` alone (a
+    /// [`SimRace::may_use_pickup`]'s check, for the paths that hold a `RaceSim` alone (a
     /// module's commands): only a racing craft uses a pickup.
     pub(super) fn may_use_pickup(&self, slot: usize) -> bool {
         self.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing

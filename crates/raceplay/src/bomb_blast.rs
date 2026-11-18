@@ -451,7 +451,8 @@ impl Race {
         if !self.view.hd_bomb_blast {
             return Vec::new();
         }
-        self.sim
+        self.core
+            .sim
             .world
             .projectiles
             .slots

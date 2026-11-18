@@ -40,7 +40,7 @@ What is left of the gaps the capture found: the slowdown.
    this state's straight ends 5 frames after the hit, so use a state made on a long straight, or a
    shooter near enough that the hit lands in the first 10 rows. Ours: `--pilot-assist off`, the
    same hold, a counterfactual run with nothing fired on both sides. Ours: `--force-quake TICK:SLOT`
-   launches the rival's wave with its bump on the player (`Race::force_quake`); a shooter further
+   launches the rival's wave with its bump on the player (`SimRace::force_quake`); a shooter further
    behind needs the same launch at `progress - distance`, and `--trace-out` logs the speed and timers.
 
 Smaller, not worth a lane alone:

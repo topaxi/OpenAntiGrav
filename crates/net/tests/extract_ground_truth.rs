@@ -57,17 +57,17 @@ fn hashes(
 ) -> Vec<u64> {
     if to_the_finish {
         for slot in 0..usize::from(params.people) {
-            race.sim.world.controllers[slot] = oag_gameplay::Controller::Local;
+            race.core.sim.world.controllers[slot] = oag_gameplay::Controller::Local;
         }
-        race.sim.set_autopilot(true);
+        race.core.sim.set_autopilot(true);
     }
     let none = PlayerInputs::none();
     let mut out = Vec::new();
     let mut after = 0;
     while out.len() < ticks && after < 60 {
         race.tick_sim_only(&none);
-        out.push(race.sim.state_hash());
-        if to_the_finish && race.sim.finished() {
+        out.push(race.core.sim.state_hash());
+        if to_the_finish && race.core.sim.finished() {
             after += 1;
         }
     }

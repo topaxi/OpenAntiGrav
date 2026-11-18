@@ -148,7 +148,7 @@ fn agreement_and_grid(
     let spline = loaded.setup.spline.clone();
     let colliders = grid.then(|| loaded.setup.collision.clone());
     let bound = loaded.setup.spline.max_half_width() * 2.0;
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     if let Some(colliders) = &colliders {
         the_grid_lands_on_the_track(track, &race, colliders, bound);
     }
@@ -161,6 +161,7 @@ fn agreement_and_grid(
     };
 
     let craft = race
+        .core
         .sim
         .world
         .ships
@@ -253,7 +254,14 @@ fn the_grid_lands_on_the_track(
     /// `(track file, allowed slots with no collision under them)`.
     const KNOWN_SHORT: &[(&str, usize)] = &[];
 
-    let ships: Vec<_> = race.sim.world.ships.iter().filter(|s| s.active).collect();
+    let ships: Vec<_> = race
+        .core
+        .sim
+        .world
+        .ships
+        .iter()
+        .filter(|s| s.active)
+        .collect();
     assert_eq!(ships.len(), 8, "{track} should field a full grid");
     let allowed_short = KNOWN_SHORT
         .iter()
@@ -263,6 +271,7 @@ fn the_grid_lands_on_the_track(
     for (index, ship) in ships.iter().enumerate() {
         let position = ship.physics.body.position;
         let distance = race
+            .core
             .sim
             .spline()
             .distance_to(position)
@@ -606,7 +615,8 @@ fn the_ps2s_stale_slot_is_corrected_to_what_the_psps_own_file_authors() {
     );
 
     // What the PS2 craft now points along, against what the PSP file authors.
-    let corrected = race::Race::start(on_ps2.setup)
+    let corrected = race::Race::start(on_ps2.setup, on_ps2.view, on_ps2.modules)
+        .core
         .sim
         .world
         .ships

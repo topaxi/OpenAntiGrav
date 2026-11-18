@@ -10,16 +10,16 @@ use super::*;
 /// selected for a headless capture either - see `RaceStage::observation`'s own doc.
 #[must_use]
 pub fn observation(race: &Race) -> crate::records::Observation {
-    let standing = &race.sim.world.ships[0].standing;
+    let standing = &race.core.sim.world.ships[0].standing;
     crate::records::Observation {
-        finished: race.sim.finished(),
-        place: Some(race.player_place()),
+        finished: race.core.sim.finished(),
+        place: Some(race.core.player_place()),
         laps_completed: crate::records::laps_completed(
             standing.lap,
-            race.sim.finished(),
-            race.sim.world.laps_target(),
+            race.core.sim.finished(),
+            race.core.sim.world.laps_target(),
         ),
-        tick: oag_race::race_clock_ticks(standing.finish_tick.unwrap_or(race.sim.world.tick)),
+        tick: oag_race::race_clock_ticks(standing.finish_tick.unwrap_or(race.core.sim.world.tick)),
         best_lap_ticks: standing.best_lap_ticks,
         campaign_medal: None,
         campaign_difficulty: None,

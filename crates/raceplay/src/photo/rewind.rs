@@ -53,10 +53,10 @@ impl Rewind {
     /// Starts moving `race`, the live race, through its past. `None` when it cannot be: a race
     /// that has finished is on its end screens and keeps its board.
     pub fn begin(keeper: &mut Keeper, race: &mut Race) -> Option<Self> {
-        if race.sim.finished() {
+        if race.core.sim.finished() {
             return None;
         }
-        let live = race.sim.world.tick;
+        let live = race.core.sim.world.tick;
         let replay = keeper.visit(race).recording();
         Some(Self {
             saved: race.snapshot_sim(),
@@ -110,7 +110,7 @@ impl Rewind {
         if timeline.seek(from).is_err() {
             return self.at;
         }
-        race.restore_sim(&timeline.probe().sim);
+        race.restore_sim(&timeline.probe().core.sim);
         race.settle_poses();
         self.at = timeline.tick();
         if let Some(replay) = self.replay.clone() {
@@ -136,7 +136,7 @@ impl Rewind {
 
     fn advance(&mut self, race: &mut Race, replay: &Replay) -> bool {
         for event in replay.events_at(self.at) {
-            if race.sim.apply_event(event).is_err() {
+            if race.core.sim.apply_event(event).is_err() {
                 return false;
             }
         }
@@ -145,9 +145,9 @@ impl Rewind {
         }
         race.tick(&replay.inputs_at(self.at));
         // The tick being replayed already sounded once, and a rewind is silent.
-        drop(race.sim.drain_cues());
-        drop(race.sim.drain_announcements());
-        drop(race.sim.drain_class_announcements());
+        drop(race.core.sim.drain_cues());
+        drop(race.core.sim.drain_announcements());
+        drop(race.core.sim.drain_class_announcements());
         self.at += 1;
         if self.follow {
             race.photo_repose();

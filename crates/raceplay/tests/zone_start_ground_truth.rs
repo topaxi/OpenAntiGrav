@@ -28,14 +28,14 @@ fn a_zone_craft_stands_still_through_the_countdown_and_moves_after_go() {
     })
     .expect("loading the zone race");
 
-    let mut zone = race::Race::start(loaded.setup);
-    let start = zone.ship().physics.body.position;
+    let mut zone = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let start = zone.core.ship().physics.body.position;
     let mut furthest_before_go = 0.0_f32;
     let go = oag_race::COUNTDOWN_TICKS;
     for _ in 0..go {
         zone.tick(&PlayerInputs::none());
         furthest_before_go =
-            furthest_before_go.max((zone.ship().physics.body.position - start).length());
+            furthest_before_go.max((zone.core.ship().physics.body.position - start).length());
     }
     assert!(
         furthest_before_go < 0.5,
@@ -44,7 +44,7 @@ fn a_zone_craft_stands_still_through_the_countdown_and_moves_after_go() {
     for _ in 0..120 {
         zone.tick(&PlayerInputs::none());
     }
-    let moved = (zone.ship().physics.body.position - start).length();
+    let moved = (zone.core.ship().physics.body.position - start).length();
     assert!(
         moved > 20.0,
         "a Zone craft only moved {moved} units in 2 s after GO"

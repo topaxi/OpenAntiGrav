@@ -211,10 +211,10 @@ three flags is read to a meaning, so nothing is renamed and no confidence is cla
 what the code does show is that **there is no viewport or local-seat comparison on the
 path** - the call is not routed to the window of the seat it concerns.
 
-Our rule is therefore **chosen, not measured**: `Race::heard_here` (a network client
+Our rule is therefore **chosen, not measured**: `SimRace::heard_here` (a network client
 hears its own seat's dry voice lines alone; one machine flying several seats has one
 output and plays each local person's), applied to `Cue::Disengaging` at its raise site
-and to the held `~AUTOPILOT` level (`Race::autopilot_is_active`). Pulse and Pure have
+and to the held `~AUTOPILOT` level (`SimRace::autopilot_is_active`). Pulse and Pure have
 no split screen. Omega and 2048: not checked, the announcer path is
 unread there, so the same chosen rule applies to both.
 
@@ -330,10 +330,10 @@ cue's position against the hand-back is read, not watched; Pulse's is watched. C
 
 HD's `Autopilot_Update` has no seat test, and the play helper's flags are unread, so
 which seat hears a dry line is **chosen, not measured**. The port's rule is one seat per
-speaker set: `oag_raceplay::Race::heard_here` admits the seat a network client names
+speaker set: `oag_raceplay::SimRace::heard_here` admits the seat a network client names
 (`set_seat`) and, with no seat, every person flown on this machine (split screen, one window
 per seat: every local person hears every call, confirmed by the maintainer 2026-10-21).
-Three things follow the listening seat (`Race::player_slot`) and not slot 0:
+Three things follow the listening seat (`SimRace::player_slot`) and not slot 0:
 
 - `Cue::Message` is raised only for a board whose slot `heard_here`, once per tick, carrying the listening seat's slot.
 - The dry branch of `Placement::CraftUnlessPlayer` cues, the engine's "quieter" flag and HD's crossfade throttle compare the event's or craft's slot with `RaceFrame::player_slot`; `CueEvent::is_player` (`slot == 0`) is gone.

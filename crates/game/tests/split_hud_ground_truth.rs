@@ -41,7 +41,7 @@ fn split_race(players: usize) -> Option<(race::Race, oag_hud::Assets)> {
     })
     .expect("loading the race");
     let hud = loaded.hud;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     oag_game::split_screen::apply(&mut race, players, oag_render::viewport::Cut::Horizontal);
     Some((race, hud))
 }
@@ -180,7 +180,7 @@ fn a_later_views_reticle_follows_its_own_slots_lock() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.world.ships[3].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.core.sim.world.ships[3].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
     let mut seen = false;
     for _ in 0..200 {
         race.tick(&PlayerInputs::none());
@@ -426,13 +426,17 @@ fn hd_draws_a_reticle_in_its_authored_vertical_split_view(loaded: &race::Loaded)
 
 fn hd_reticle_in_split_view(loaded: &race::Loaded, cut: oag_render::viewport::Cut) {
     let hud = &loaded.hud;
-    let mut race = race::Race::start(loaded.setup.clone());
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     oag_game::split_screen::apply(&mut race, 2, cut);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
     for slot in 0..2 {
-        race.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+        race.core.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
     }
 
     let mut drawn = [false; 2];
@@ -879,7 +883,7 @@ fn pulse_pure_and_2048_draw_a_vertical_two_view_race_from_the_tall_rule() {
         }
         let loaded = load();
         let hud = loaded.hud;
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         oag_game::split_screen::apply(&mut race, 2, Cut::Vertical);
         for _ in 0..300 {
             race.tick(&throttle(2));
@@ -941,7 +945,11 @@ fn hd_authors_the_bar_both_places_and_the_gap_label_by_its_own_name(two: &race::
 /// cut, and each slot's reticle projects into its own view's grid.
 fn hd_a_two_h_two_v_race_draws_each_window_its_own_family(loaded: &race::Loaded) {
     let hud = &loaded.hud;
-    let mut race = race::Race::start(loaded.setup.clone());
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     let layout =
         oag_game::split_screen::parse_window_seats("2h,2v", oag_render::viewport::Cut::Horizontal)
             .expect("the layout parses");

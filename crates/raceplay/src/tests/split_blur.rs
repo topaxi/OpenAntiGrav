@@ -47,7 +47,7 @@ pub(super) fn hull_scene(
         livery.hull.radius = 30.0;
         livery
     };
-    let liveries: Vec<_> = (0..race.sim.ship_count()).map(|_| hull()).collect();
+    let liveries: Vec<_> = (0..race.core.sim.ship_count()).map(|_| hull()).collect();
     scene_over_post(
         device,
         queue,
@@ -182,9 +182,9 @@ fn after_frames(mover: usize, msaa: Msaa) -> Option<Frames> {
         race.tick(&oag_gameplay::PlayerInputs::none());
     }
     for _ in 0..3 {
-        let forward = race.sim.world.ships[mover].physics.body.forward();
-        let ahead = race.sim.world.ships[mover].physics.body.position + forward * 6.0;
-        race.sim.world.ships[mover].physics.body.position = ahead;
+        let forward = race.core.sim.world.ships[mover].physics.body.forward();
+        let ahead = race.core.sim.world.ships[mover].physics.body.position + forward * 6.0;
+        race.core.sim.world.ships[mover].physics.body.position = ahead;
         race.tick(&oag_gameplay::PlayerInputs::none());
         draw((&device, &queue), &scene, &race, &off, MotionBlur::Off);
         draw((&device, &queue), &scene, &race, &on, MotionBlur::High);
@@ -270,8 +270,8 @@ fn every_view_keeps_the_history_of_its_own_camera() {
     let mut last = [None; 2];
     for frame in 0..4 {
         for slot in 0..2 {
-            let forward = race.sim.world.ships[slot].physics.body.forward();
-            race.sim.world.ships[slot].physics.body.position += forward * (3.0 + slot as f32);
+            let forward = race.core.sim.world.ships[slot].physics.body.forward();
+            race.core.sim.world.ships[slot].physics.body.position += forward * (3.0 + slot as f32);
         }
         race.tick(&oag_gameplay::PlayerInputs::none());
         draw(gpu, &scene, &race, &target, MotionBlur::Medium);

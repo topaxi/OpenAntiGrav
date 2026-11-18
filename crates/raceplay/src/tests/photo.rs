@@ -137,8 +137,8 @@ fn a_race_taken_through_photo_mode_hashes_as_one_that_was_not() {
             photographed.photo_end();
         }
         assert_eq!(
-            control.sim.state_hash(),
-            photographed.sim.state_hash(),
+            control.core.sim.state_hash(),
+            photographed.core.sim.state_hash(),
             "diverged at tick {tick}"
         );
     }
@@ -168,7 +168,11 @@ fn race_on_a_sectioned_straight() -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// What the race's cull allows from the seat: each section sees only itself, so a seat in one
@@ -222,12 +226,12 @@ fn photo_mode_draws_every_section_and_leaving_restores_the_cull() {
 #[test]
 fn photo_modes_weather_section_is_the_subjects() {
     let mut race = race_on_a_sectioned_straight();
-    let last = race.sim.spline().len() - 1;
-    let pos = race.sim.spline().sample(last).expect("a sample").pos;
-    let line = (0..race.sim.ai_order.len())
-        .find(|&k| race.sim.ai_sample_index(k) == Some(last))
+    let last = race.core.sim.spline().len() - 1;
+    let pos = race.core.sim.spline().sample(last).expect("a sample").pos;
+    let line = (0..race.core.sim.ai_order.len())
+        .find(|&k| race.core.sim.ai_sample_index(k) == Some(last))
         .expect("the last sample is on the racing line");
-    let ship = &mut race.sim.world.ships[3];
+    let ship = &mut race.core.sim.world.ships[3];
     ship.physics.body.position = Vec3::from_array(pos);
     ship.driver.index = u32::try_from(line).expect("a short fixture");
     let seat = race.section_of_framed();
@@ -243,6 +247,11 @@ fn photo_modes_weather_section_is_the_subjects() {
     assert_ne!(subject, seat);
     assert_eq!(
         subject,
-        race.sim.spline().sample(last).expect("a sample").section_id
+        race.core
+            .sim
+            .spline()
+            .sample(last)
+            .expect("a sample")
+            .section_id
     );
 }

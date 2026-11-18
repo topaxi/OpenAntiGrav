@@ -11,22 +11,26 @@ use oag_render::shield::{SWELL_ON_HIT, SWELL_REST};
 fn bump(shielded: [bool; 2]) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
     for (slot, shielded) in shielded.into_iter().enumerate() {
-        let ship = &mut race.sim.world.ships[slot].physics;
+        let ship = &mut race.core.sim.world.ships[slot].physics;
         ship.shield_pickup_timer = if shielded { 20.0 } else { 0.0 };
         race.view.shield[slot].activate();
         for _ in 0..60 {
             race.view.shield[slot].advance(1.0 / 60.0);
         }
     }
-    let at = race.sim.world.ships[0].physics.body.position;
-    race.sim.world.ships[1].physics.body.position = at + Vec3::new(0.0, 0.0, 1.0);
-    race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
-    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
+    let at = race.core.sim.world.ships[0].physics.body.position;
+    race.core.sim.world.ships[1].physics.body.position = at + Vec3::new(0.0, 0.0, 1.0);
+    race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
+    race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
     race
 }
 
@@ -66,8 +70,8 @@ fn a_craft_bump_bulges_both_shells_when_both_craft_run_a_shield() {
 #[test]
 fn a_bump_on_a_craft_that_is_not_racing_leaves_the_shell_alone() {
     let mut race = bump([true, false]);
-    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
-    race.sim.world.ships[0].physics.state_timer = 0.0;
+    race.core.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
+    race.core.sim.world.ships[0].physics.state_timer = 0.0;
 
     race.resolve_craft_pairs();
 
@@ -95,13 +99,17 @@ fn duel() -> Race {
         ))
         .expect("the fixture table must parse"),
     );
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    race.sim.world.ships[1].handling.dimensions.shield = 100.0;
-    race.sim.world.ships[1].physics.shield = 100.0;
-    race.sim.world.ships[1].physics.shield_pickup_timer = 20.0;
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    race.core.sim.world.ships[1].handling.dimensions.shield = 100.0;
+    race.core.sim.world.ships[1].physics.shield = 100.0;
+    race.core.sim.world.ships[1].physics.shield_pickup_timer = 20.0;
     race.view.shield[1].activate();
     race
 }
@@ -109,17 +117,18 @@ fn duel() -> Race {
 /// One tick of the duel with both craft pinned; slot 0 fires a Rocket when `fire` is set.
 /// Returns whether a Rocket reached a craft this tick.
 fn step(race: &mut Race, buttons: &mut Buttons, fire: bool) -> bool {
-    race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-    let forward = race.sim.world.ships[0].physics.body.forward();
-    race.sim.world.ships[0].physics.body.linear_velocity = forward * 60.0;
-    race.sim.world.ships[1].physics.body.position = forward * 15.0;
-    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+    race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+    let forward = race.core.sim.world.ships[0].physics.body.forward();
+    race.core.sim.world.ships[0].physics.body.linear_velocity = forward * 60.0;
+    race.core.sim.world.ships[1].physics.body.position = forward * 15.0;
+    race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
     if fire {
-        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
+        race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
     }
     let snapshot = buttons.tick(if fire { SQUARE } else { 0 });
     race.tick(&PlayerInputs::single(snapshot));
-    race.sim
+    race.core
+        .sim
         .drain_cues()
         .into_iter()
         .any(|e| e.cue == oag_gameplay::cue::Cue::RocketHitShip)
@@ -149,7 +158,7 @@ fn a_rocket_a_shield_swallows_bulges_the_shell() {
 
     assert!(struck, "the Rocket never reached the craft");
     assert_eq!(
-        race.sim.world.ships[1].physics.shield, 100.0,
+        race.core.sim.world.ships[1].physics.shield, 100.0,
         "a running Shield took the Rocket's damage"
     );
     assert!(
@@ -165,23 +174,28 @@ fn leach_duel(shielded: [bool; 2]) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_leach_beam_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    race.sim.world.ships[1].handling.dimensions.shield = 100.0;
-    race.sim.world.ships[1].physics.shield = 100.0;
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    race.core.sim.world.ships[1].handling.dimensions.shield = 100.0;
+    race.core.sim.world.ships[1].physics.shield = 100.0;
     for (slot, shielded) in shielded.into_iter().enumerate() {
-        race.sim.world.ships[slot].physics.shield_pickup_timer = if shielded { 20.0 } else { 0.0 };
+        race.core.sim.world.ships[slot].physics.shield_pickup_timer =
+            if shielded { 20.0 } else { 0.0 };
         race.view.shield[slot].activate();
         for _ in 0..60 {
             race.view.shield[slot].advance(1.0 / 60.0);
         }
     }
-    let forward = race.sim.world.ships[0].physics.body.forward();
-    race.sim.world.ships[1].physics.body.position =
-        race.sim.world.ships[0].physics.body.position + forward * 60.0;
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+    let forward = race.core.sim.world.ships[0].physics.body.forward();
+    race.core.sim.world.ships[1].physics.body.position =
+        race.core.sim.world.ships[0].physics.body.position + forward * 60.0;
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
     race
 }
 
@@ -208,7 +222,7 @@ fn a_leach_beam_on_a_shielded_target_bulges_the_shell_through_its_linger() {
     let peak = peak_swell_under_a_leach_beam(&mut race, 20);
 
     assert!(
-        race.sim.world.leach_beams[0].is_some(),
+        race.core.sim.world.leach_beams[0].is_some(),
         "the beam never fired, so the linger was never reached"
     );
     assert!(
@@ -216,7 +230,7 @@ fn a_leach_beam_on_a_shielded_target_bulges_the_shell_through_its_linger() {
         "a LeachBeam link on a shielded target left the shell at rest: {peak}"
     );
     assert_eq!(
-        race.sim.world.ships[1].physics.shield, 100.0,
+        race.core.sim.world.ships[1].physics.shield, 100.0,
         "the broken link drained a running Shield"
     );
 }
@@ -228,7 +242,7 @@ fn a_leach_beam_from_a_shielded_owner_leaves_the_targets_shell_at_rest() {
     let peak = peak_swell_under_a_leach_beam(&mut race, 20);
 
     assert!(
-        race.sim.world.leach_beams[0].is_some(),
+        race.core.sim.world.leach_beams[0].is_some(),
         "the beam never fired, so the guard asserted nothing"
     );
     assert!(
@@ -240,9 +254,9 @@ fn a_leach_beam_from_a_shielded_owner_leaves_the_targets_shell_at_rest() {
 /// [`bump`] with both pools full at 100 and the race's weapons switch at `weapons`.
 fn charged_bump(shielded: [bool; 2], weapons: bool) -> Race {
     let mut race = bump(shielded);
-    race.sim.weapons_on = weapons;
+    race.core.sim.weapons_on = weapons;
     for slot in 0..2 {
-        let ship = &mut race.sim.world.ships[slot];
+        let ship = &mut race.core.sim.world.ships[slot];
         ship.handling.dimensions.shield = 100.0;
         ship.physics.shield = 100.0;
     }
@@ -255,7 +269,7 @@ fn pools_after_a_bump(race: &mut Race) -> ([f32; 2], f32) {
     assert_eq!(race.pair_contacts, [(0, 1)], "the craft never touched");
     let impulse = race.pair_impulses[0];
     assert!(impulse > 0.0, "a touch with no impulse charges nothing");
-    let pools = [0, 1].map(|slot| race.sim.world.ships[slot].physics.shield);
+    let pools = [0, 1].map(|slot| race.core.sim.world.ships[slot].physics.shield);
     (pools, impulse)
 }
 
@@ -303,8 +317,8 @@ fn a_shielded_hull_pays_nothing_for_a_bump_and_its_partner_still_does() {
 #[test]
 fn a_bump_leaves_the_pool_of_a_hull_that_is_not_racing_alone() {
     let mut race = charged_bump([false, false], true);
-    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
-    race.sim.world.ships[0].physics.state_timer = oag_physics::damage::DESTROYED_DURATION;
+    race.core.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
+    race.core.sim.world.ships[0].physics.state_timer = oag_physics::damage::DESTROYED_DURATION;
     let (pools, _) = pools_after_a_bump(&mut race);
     assert_eq!(pools[0], 100.0, "a destroyed hull was charged");
     assert!(pools[1] < 100.0, "the racing partner was not charged");

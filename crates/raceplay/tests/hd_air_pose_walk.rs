@@ -79,23 +79,23 @@ fn the_original_hd_capture_stepped_once_per_row() {
     })
     .expect("loading the race");
     let gravity = loaded.setup.class_gravity_scale;
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     // `OAG_HD_OPENLOOP=<ticks>`: fly our own race with no input and print the player's clamp and
     // body height per tick, to set against a `--ramp` capture's `timer` and `py`.
     if let Ok(ticks) = std::env::var("OAG_HD_OPENLOOP") {
         for _ in 0..ticks.parse::<u64>().unwrap_or(600) {
             race.tick_sim_only(&oag_gameplay::PlayerInputs::none());
-            let ship = &race.sim.world.ships[0].physics;
+            let ship = &race.core.sim.world.ships[0].physics;
             println!(
                 "ol {} {:?} {:.4}",
-                race.sim.world.tick, ship.hover_cap, ship.body.position.y
+                race.core.sim.world.tick, ship.hover_cap, ship.body.position.y
             );
         }
         return;
     }
     // One tick so the per-tick craft laws (hover rig, steering clamp) are written.
     race.tick_sim_only(&oag_gameplay::PlayerInputs::none());
-    let mut template = race.sim.world.ships[0].physics;
+    let mut template = race.core.sim.world.ships[0].physics;
     // The tick above ran on the grid, where HD caps the hover target low (`hover_cap`); the
     // capture starts after GO and fits no cap from its row 20, when the cap has released (`hover-target.md`).
     if std::env::var_os("OAG_HD_GRID_CAP").is_none() {
@@ -105,12 +105,12 @@ fn the_original_hd_capture_stepped_once_per_row() {
     if std::env::var("OAG_HD_SUM").as_deref() == Ok("0") {
         template.hover_rig.sum_escapes = false;
     }
-    let mut handling = race.sim.world.ships[0].handling;
+    let mut handling = race.core.sim.world.ships[0].handling;
     // `OAG_HD_RIDE=<delta>`: the handling's ride height moved by `delta`, a sensitivity probe.
     if let Ok(delta) = std::env::var("OAG_HD_RIDE") {
         handling.antigrav.ride_height += delta.parse::<f32>().unwrap_or(0.0);
     }
-    let world = race.sim.collision();
+    let world = race.core.sim.collision();
     let term = match std::env::var("OAG_HD_GRAV").as_deref() {
         Ok("ground") => oag_physics::passive::ClassGravityTerm::Grounded,
         _ => oag_physics::passive::ClassGravityTerm::Airborne,

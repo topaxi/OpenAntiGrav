@@ -208,9 +208,9 @@ fn changed(a: &[(&'static str, u64)], b: &[(&'static str, u64)]) -> Vec<&'static
         .collect()
 }
 
-/// One craft's drawn pose: where `Race::player_pose` puts the player's, for any slot.
+/// One craft's drawn pose: where `SimRace::player_pose` puts the player's, for any slot.
 fn pose(race: &Race, slot: usize) -> (Vec3, Quat) {
-    let ship = &race.sim.world.ships[slot];
+    let ship = &race.core.sim.world.ships[slot];
     let roll = oag_render::roll::display_rotation(
         Vec3::NEG_Z,
         ship.physics.roll_phase,
@@ -426,29 +426,33 @@ fn replay_timeline_cost_sweep() {
         ..crate::Options::default()
     })
     .expect("loading the race");
-    let setup = loaded.setup.clone();
+    let (setup, view, modules) = (
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
 
     let started = Instant::now();
-    let mut race = Race::start(setup.clone());
+    let mut race = Race::start(setup.clone(), view.clone(), modules.clone());
     let start_ms = started.elapsed().as_secs_f64() * 1e3;
     let started = Instant::now();
-    let copy = Race::start(setup.clone());
+    let copy = Race::start(setup.clone(), view.clone(), modules.clone());
     let copy_ms = started.elapsed().as_secs_f64() * 1e3;
     drop(copy);
     println!(
         "start: Race::start(setup.clone()) {start_ms:.0} ms first, {copy_ms:.0} ms second; \
          ships {}; size_of RaceSim {} bytes, Race {} bytes",
-        race.sim.ship_count(),
+        race.core.sim.ship_count(),
         std::mem::size_of::<RaceSim>(),
         std::mem::size_of::<Race>(),
     );
 
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     let idle = PlayerInputs::single(oag_gameplay::InputSnapshot::default());
-    let slots = usize::from(race.sim.ship_count());
+    let slots = usize::from(race.core.sim.ship_count());
 
-    let before_run = Split::of(&race.sim);
-    let constants_at_start = constant_part(&race.sim);
+    let before_run = Split::of(&race.core.sim);
+    let constants_at_start = constant_part(&race.core.sim);
     let mut keyframes: Vec<(u64, RaceSim)> = Vec::new();
     let mut hashes: Vec<(u64, u64)> = Vec::new();
     let mut probes: Vec<(u64, RaceSim)> = Vec::new();
@@ -465,19 +469,19 @@ fn replay_timeline_cost_sweep() {
         race.tick_sim_only(&idle);
         if track.poses.is_empty() {
             first_tick_ms = t.elapsed().as_secs_f64() * 1e3;
-            constants_after_first = constant_part(&race.sim);
+            constants_after_first = constant_part(&race.core.sim);
         }
-        let now = race.sim.world.tick;
+        let now = race.core.sim.world.tick;
         if now.is_multiple_of(60) {
             keyframes.push((now, race.snapshot_sim()));
         }
         if now % 397 == 1 {
-            hashes.push((now, race.sim.state_hash()));
+            hashes.push((now, race.core.sim.state_hash()));
         }
         if [617, 5117, 9017].contains(&now) {
             probes.push((now, race.snapshot_sim()));
         }
-        if finished_at.is_none() && race.sim.finished() {
+        if finished_at.is_none() && race.core.sim.finished() {
             finished_at = Some(now);
         }
         track
@@ -491,14 +495,14 @@ fn replay_timeline_cost_sweep() {
         full_pass * 1e6 / ticks as f64,
         loadavg()
     );
-    let constants_at_end = constant_part(&race.sim);
+    let constants_at_end = constant_part(&race.core.sim);
     println!(
         "first tick {first_tick_ms:.1} ms (it learns the speed plans); fields that differ \
          between Race::start and the first tick: {:?}; between the first tick and the end: {:?}",
         changed(&constants_at_start, &constants_after_first),
         changed(&constants_after_first, &constants_at_end),
     );
-    let after_run = Split::of(&race.sim);
+    let after_run = Split::of(&race.core.sim);
     println!("heap, KiB: a snapshot's own / world / shared: track / tables / plans");
     for (label, s) in [("tick 0", &before_run), ("end", &after_run)] {
         println!(
@@ -570,7 +574,7 @@ fn replay_timeline_cost_sweep() {
     for _ in 0..7 {
         let t = Instant::now();
         for _ in 0..50 {
-            std::hint::black_box(race.sim.world.clone());
+            std::hint::black_box(race.core.sim.world.clone());
         }
         world_us.push(t.elapsed().as_secs_f64() * 1e6 / 50.0);
     }
@@ -592,7 +596,7 @@ fn replay_timeline_cost_sweep() {
                     race.tick_sim_only(&idle);
                 } else {
                     race.tick(&idle);
-                    race.sim.drain_cues();
+                    race.core.sim.drain_cues();
                 }
             }
             let us = t.elapsed().as_secs_f64() * 1e6 / 240.0;
@@ -630,7 +634,7 @@ fn replay_timeline_cost_sweep() {
             ms.push(t.elapsed().as_secs_f64() * 1e3);
             if let Some(&(_, hash)) = hashes.iter().find(|(t, _)| *t == target) {
                 agree.1 += 1;
-                agree.0 += usize::from(race.sim.state_hash() == hash);
+                agree.0 += usize::from(race.core.sim.state_hash() == hash);
             }
         }
         let (m, lo, hi) = median(&mut ms);
@@ -653,14 +657,14 @@ fn replay_timeline_cost_sweep() {
         }
         println!(
             "  RaceSim as text after a seek to tick {target} equals the original run's: {}",
-            format!("{:?}", race.sim) == format!("{truth:?}")
+            format!("{:?}", race.core.sim) == format!("{truth:?}")
         );
     }
     let mut hash_us = Vec::new();
     for _ in 0..7 {
         let t = Instant::now();
         for _ in 0..50 {
-            std::hint::black_box(race.sim.state_hash());
+            std::hint::black_box(race.core.sim.state_hash());
         }
         hash_us.push(t.elapsed().as_secs_f64() * 1e6 / 50.0);
     }
@@ -676,22 +680,22 @@ fn replay_timeline_cost_sweep() {
     for (_, sim) in keyframes.iter().skip(2).step_by(5) {
         for (inputs, out) in [(&idle, &mut dead), (&held, &mut thrust)] {
             race.restore_sim(sim);
-            race.sim.set_autopilot(false);
-            let base = race.sim.wall_contact_ticks[0];
-            let shield = race.ship().physics.shield;
+            race.core.sim.set_autopilot(false);
+            let base = race.core.sim.wall_contact_ticks[0];
+            let shield = race.core.ship().physics.shield;
             let mut first = None;
             for k in 0..600u32 {
                 race.tick_sim_only(inputs);
-                if first.is_none() && race.sim.wall_contact_ticks[0] > base {
+                if first.is_none() && race.core.sim.wall_contact_ticks[0] > base {
                     first = Some(k);
                 }
             }
             out.push(first.map_or(600.0, f64::from));
             if std::ptr::eq(inputs, &held) {
-                shield_after.push(f64::from(shield - race.ship().physics.shield));
+                shield_after.push(f64::from(shield - race.core.ship().physics.shield));
             }
         }
-        race.sim.set_autopilot(true);
+        race.core.sim.set_autopilot(true);
     }
     let report = |name: &str, v: &mut Vec<f64>| {
         let (m, lo, hi) = median(v);

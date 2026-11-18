@@ -59,7 +59,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// Launches craft `slot`'s Quake with its bump centred on the player, for
     /// `--force-quake`: the wave reaches the player on the next tick and the
     /// ordinary hit path runs (the cue, the lift, the slowdown, the hull's

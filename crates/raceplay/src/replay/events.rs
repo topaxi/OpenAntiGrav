@@ -52,8 +52,8 @@ impl Race {
     /// for each person-flown seat so the recording reproduces: the level changes the player's
     /// physics, so a recording that did not hear of the change would desync at the next hash.
     pub fn change_pilot_assist(&mut self, level: Level) {
-        self.sim.set_pilot_assist(level);
-        let seats: Vec<usize> = self.sim.world.human_slots().collect();
+        self.core.sim.set_pilot_assist(level);
+        let seats: Vec<usize> = self.core.sim.world.human_slots().collect();
         for seat in seats {
             self.record_event(seat, Kind::PilotAssist, ordinal(&Level::ALL, level));
         }
@@ -63,7 +63,7 @@ impl Race {
     /// Hands `slot` the `weapon` when its pickup slot is empty (the capture flag `--give`),
     /// recording the top-up. Returns whether it wrote.
     pub fn give_weapon(&mut self, slot: usize, weapon: Weapon) -> bool {
-        if !self.sim.write_weapon(slot, weapon) {
+        if !self.core.sim.write_weapon(slot, weapon) {
             return false;
         }
         self.record_event(slot, Kind::Give, ordinal(&STORED_WEAPONS, weapon));
@@ -81,7 +81,7 @@ impl Race {
             oag_gameplay::Controller::Local => 1,
             oag_gameplay::Controller::Remote | oag_gameplay::Controller::Away => return false,
         };
-        let Some(have) = self.sim.world.controllers.get_mut(slot) else {
+        let Some(have) = self.core.sim.world.controllers.get_mut(slot) else {
             return false;
         };
         if *have == controller {
@@ -100,7 +100,7 @@ impl Race {
     /// The driver is seeded from the race seed and the slot and placed on the line where the
     /// craft is, the same on every peer; the person's own driver state was never used.
     pub fn set_away(&mut self, slot: usize) -> bool {
-        let changed = self.sim.write_away(slot);
+        let changed = self.core.sim.write_away(slot);
         #[cfg(feature = "view")]
         if changed {
             self.record_event(slot, Kind::Presence, 0);
@@ -113,7 +113,7 @@ impl Race {
     /// pickup held before the drop stays held. Absorb cancels the countdown (a recorded
     /// input). Recorded as a [`Kind::Presence`] event. Returns whether the seat changed.
     pub fn hand_back(&mut self, slot: usize) -> bool {
-        let changed = self.sim.write_hand_back(slot);
+        let changed = self.core.sim.write_hand_back(slot);
         #[cfg(feature = "view")]
         if changed {
             self.record_event(slot, Kind::Presence, 1);

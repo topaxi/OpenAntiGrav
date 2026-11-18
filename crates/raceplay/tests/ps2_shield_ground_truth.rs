@@ -233,9 +233,9 @@ fn the_ps2_source_does_not_tint_the_shell() {
     let Some(loaded) = load() else {
         return;
     };
-    assert!(!loaded.setup.shield_palette.tints_shell);
+    assert!(!loaded.view.shield_palette.tints_shell);
     assert_eq!(
-        loaded.setup.shield_palette,
+        loaded.view.shield_palette,
         oag_render::shield::PS2_PULSE_PALETTE
     );
 }

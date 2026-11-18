@@ -889,7 +889,7 @@ read whole, so the opponents' controller flies it here.
 
 Still this project's driver: a race whose title and class have no original
 tables, `--autopilot-skill` and `--autopilot-pilot` (developer flags that tune
-ours, logged), and the network bot (`Race::autopilot_wants`), whose restore of
+ours, logged), and the network bot (`SimRace::autopilot_wants`), whose restore of
 the whole simulation every call would reset a driver kept outside the world.
 
 Measured, Pulse PSP USA, VENOM, seed 1, the original field at level 1, slot 0
@@ -1884,20 +1884,20 @@ person is slot 0, and no capture shows the original's field with two players.
 **The speed plan is learned only when something reads it (2026-10-13).** This
 project's driver follows a speed plan (`oag_ai::plan`), and the original driver
 reads none. `Race::start` no longer learns it: the head of `Race::tick` does
-(`Race::ensure_speed_plans`), when an opponent flies this project's driver
+(`SimRace::ensure_speed_plans`), when an opponent flies this project's driver
 (`--ai ours`, a fallback, several humans), when the player's autopilot is on, or
-when the circuit has a fork, and `Race::speed_plan` and `Race::plan_of` learn it
+when the circuit has a fork, and `SimRace::speed_plan` and `SimRace::plan_of` learn it
 first, so a reader never sees a plan missing that used to be there. (Until
 2026-10-14 `start` learned it at once, which made every race-starting test pay
 for it: see the test-data budget in `docs/architecture/workspace-layout.md`.) A
 test shows the plans are the same whether asked for before the first tick or at
 it.
 
-**Off the frame thread (2026-10-31).** A menu launch calls `Race::begin_speed_plans`
+**Off the frame thread (2026-10-31).** A menu launch calls `SimRace::begin_speed_plans`
 once the race is fully set up (after `ai_choice::apply`): the plans are learned by
 the same function (`speed_plan::learn_speed_plans`) on a copy of the simulation on a
 `speed-plans` thread, the hand-over from the loading screen waits for
-`Race::speed_plans_ready`, and the first tick adopts them
+`SimRace::speed_plans_ready`, and the first tick adopts them
 (`ensure_speed_plans`, 25 us). Callers that build a race another
 way (headless, `--race`, tests, a mid-race autopilot) keep the lazy path. Bit-identity:
 `speed_plan_ground_truth::plans_learned_ahead_are_the_plans_the_first_tick_learns`
@@ -1907,7 +1907,7 @@ equal). Measured in `docs/rendering/frame-thread-cpu.md`.
 **Started on the race-load thread, overlapped (2026-10-31, `speed-plan-overlap`).**
 On a forked circuit the job starts as soon as the circuit is read: the race-load
 thread runs `Race::start` (natively too, as the web worker always did) and
-`Race::begin_speed_plans_ahead`, so the plans learn beside the scene build and its
+`SimRace::begin_speed_plans_ahead`, so the plans learn beside the scene build and its
 warm-up instead of after them. A fork reads the plans whichever driver flies, so
 nothing the launch decides later can make the job unwanted. A circuit without a
 fork waits for the launch's own `begin_speed_plans`, which knows whether anything
@@ -4783,8 +4783,8 @@ that is a capture-only synthetic warmup, not a field-wide mechanic.
 **Every craft counts its own laps as of 2026-08-11**, and the field can be
 ordered. `oag_race::Standing` is the small per-craft thing - lap, distance round
 the circuit, finish tick - that sits on every `Ship` and therefore inside the
-world snapshot, so a replay reproduces the finishing order. `Race::places()`
-returns all eight positions and `Race::player_place()` the player's.
+world snapshot, so a replay reproduces the finishing order. `SimRace::places()`
+returns all eight positions and `SimRace::player_place()` the player's.
 
 **The lap rule is not written twice.** A lap is a wrap of the distance-along, and
 the two-half `LapGate` is what stops a craft rocking over the line and scoring
@@ -6512,7 +6512,7 @@ OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_OUT=board.tsv \
 
 Lane `route-coverage`, a measurement: nothing a race does changed. The tool is
 `route_verify_probe` in `crates/raceplay/tests/route_plan_board.rs`. It learns a
-route's reference plan exactly as the race does (`Race::probe_route_plan`: the ring
+route's reference plan exactly as the race does (`SimRace::probe_route_plan`: the ring
 plans first, for their reference hull, then `SpeedPlan::build_within` on the
 route's line) and replays the plan's final verification tick by tick
 (`oag_ai::plan::probe::verify`, the same loop as `SpeedPlan::verify`). Each
@@ -6672,7 +6672,7 @@ sites verify at every class, on both titles
 ([above](#a-road-under-the-line-is-a-failure-2026-11-11)).
 
 `route=0`'s lead-in shares the first site. These are on the reference hull
-(`RaceSim::plan_reference`, `Race::probe_ring_plan`). **Omega**: checked, applies.
+(`RaceSim::plan_reference`, `SimRace::probe_ring_plan`). **Omega**: checked, applies.
 Its re-shipped `square` fails at the same two sites (3389-3406 and 1591-1674), with a
 different split by class: VENOM 15 and FLASH 4 wall ticks at 3389-3406 only;
 RAPIER and PHANTOM add the 1591-1674 site, with rescues and no completed lap. `sol`

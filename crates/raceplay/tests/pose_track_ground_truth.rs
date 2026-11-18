@@ -143,7 +143,7 @@ fn respawn(title: &str) {
     };
     let loaded = race::load(&options).expect("loading the race");
     let seed = loaded.setup.seed;
-    let mut race = Race::start(loaded.setup);
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     race.start_recording(oag_replay::Header::new(
         title,
         "default",
@@ -160,15 +160,15 @@ fn respawn(title: &str) {
     while respawned.is_none_or(|at: usize| tick < at + AFTER) {
         assert!(tick < 3_000, "{title}: the rescue never put the craft back");
         if tick == THROW_AT {
-            race.sim.world.ships[0].physics.body.position += oag_core::math::Vec3::Y * 500.0;
+            race.core.sim.world.ships[0].physics.body.position += oag_core::math::Vec3::Y * 500.0;
             thrown = Some(tick);
         }
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
         tick += 1;
         truth.push(grid(&race));
-        if respawned.is_none() && race.sim.respawns() > 0 {
+        if respawned.is_none() && race.core.sim.respawns() > 0 {
             respawned = Some(tick);
         }
     }
@@ -178,7 +178,7 @@ fn respawn(title: &str) {
     let track = replay.pose_track.as_ref().expect("a pose track");
     println!(
         "{title}: thrown after tick {thrown}, respawned at tick {respawned} ({:?}), {} ticks, {} keys",
-        race.sim.last_respawn_cause_of(0),
+        race.core.sim.last_respawn_cause_of(0),
         replay.ticks(),
         track.keys(0)
     );
@@ -224,8 +224,8 @@ fn respawn(title: &str) {
 }
 
 fn grid(race: &Race) -> Vec<Pose> {
-    (0..usize::from(race.sim.ship_count()))
-        .map(|slot| race.sim.craft_pose(slot))
+    (0..usize::from(race.core.sim.ship_count()))
+        .map(|slot| race.core.sim.craft_pose(slot))
         .collect()
 }
 

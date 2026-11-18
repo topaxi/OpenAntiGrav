@@ -298,18 +298,18 @@ impl Race {
         controls: &oag_physics::ShipControls,
         field: &oag_ai::Field,
     ) {
-        if !self.may_use_pickup(slot) {
+        if !self.core.may_use_pickup(slot) {
             return;
         }
         // Before anything returns: it advances this craft's weapon-AI clocks.
-        let decision = self.sim.opponent_decides(slot, field);
-        if let Some(pace) = self.sim.score_pace
-            && self.sim.world.ships[slot].weapon_ai.held_ticks < pace.hold_ticks
+        let decision = self.core.sim.opponent_decides(slot, field);
+        if let Some(pace) = self.core.sim.score_pace
+            && self.core.sim.world.ships[slot].weapon_ai.held_ticks < pace.hold_ticks
         {
             return;
         }
         let fires = decision == oag_ai::weapon_ai::Decision::Fire;
-        let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
+        let Some(weapon) = self.core.sim.world.ships[slot].pickup.weapon else {
             return;
         };
         // A simulation mod's own pickup: the driver asks to fire it wherever it would
@@ -321,7 +321,7 @@ impl Race {
         };
         // A module that drives its own AI decision is raised nothing: it reads the
         // observation (progress, place, course) and clears the pickup itself.
-        if extension.is_some_and(|kind| self.sim.extensions.guest_drives_ai_pickup(kind)) {
+        if extension.is_some_and(|kind| self.core.sim.extensions.guest_drives_ai_pickup(kind)) {
             return;
         }
         let looked_up = if extension.is_some() {
@@ -330,9 +330,10 @@ impl Race {
             weapon
         };
         // Looked up and copied out before the branches, so the borrow of
-        // `self.sim.weapons` ends here: the Rocket arm needs `&mut self` to put
+        // `self.core.sim.weapons` ends here: the Rocket arm needs `&mut self` to put
         // anything in the air, and every one of these returns an owned value.
         let Some((simple, absorb)) = self
+            .core
             .sim
             .weapons
             .as_deref()
@@ -345,11 +346,11 @@ impl Race {
         if decision == oag_ai::weapon_ai::Decision::Absorb && extension.is_none() {
             // A score Eliminator's absorb spends the weapon on the Shield, as the player's does
             // (`crate::score_pace`).
-            if self.sim.score_pace.is_some() {
+            if self.core.sim.score_pace.is_some() {
                 self.eliminator_absorb(slot);
                 return;
             }
-            self.sim.absorb_opponent_pickup(slot, absorb);
+            self.core.sim.absorb_opponent_pickup(slot, absorb);
             return;
         }
 
@@ -391,7 +392,7 @@ impl Race {
             {
                 return;
             }
-            let ship = &self.sim.world.ships[slot];
+            let ship = &self.core.sim.world.ships[slot];
             let speed = ship
                 .physics
                 .body
@@ -408,15 +409,18 @@ impl Race {
             let route = ship.driver.branching.route;
             let context = oag_ai::Context {
                 air_trim: 0.0,
-                line: self.sim.line_of(slot),
-                tuning: &self.sim.ai_tuning,
-                pilot: &self.sim.ai_pilots[slot],
+                line: self.core.sim.line_of(slot),
+                tuning: &self.core.sim.ai_tuning,
+                pilot: &self.core.sim.ai_pilots[slot],
                 field,
                 yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&ship.handling, &ship.physics.body)),
                 plan: super::routes::plan_for(
-                    &self.sim.routes,
-                    self.sim.speed_plan.as_deref(),
-                    super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
+                    &self.core.sim.routes,
+                    self.core.sim.speed_plan.as_deref(),
+                    super::speed_plan::hull_of(
+                        &self.core.sim.hull_plans,
+                        self.core.sim.ship_plan[slot],
+                    ),
                     route,
                 ),
             };
@@ -425,10 +429,10 @@ impl Race {
                 return;
             }
             if let Some(kind) = extension {
-                self.sim.extensions.pickup_used(slot, kind, false);
+                self.core.sim.extensions.pickup_used(slot, kind, false);
                 return;
             }
-            self.sim.world.ships[slot].physics.turbo_timer = simple.time;
+            self.core.sim.world.ships[slot].physics.turbo_timer = simple.time;
             // And its own plume, the same reuse the player's Turbo makes of it -
             // an opponent's boost has to be visible from behind, or the field
             // gains speed with nothing on screen saying why.
@@ -443,41 +447,41 @@ impl Race {
             // effectively the tick it collected it. The comment that used to sit
             // here claimed the opposite in as many words. See
             // `an_opponent_that_declines_a_shot_does_not_absorb_the_pickup`.
-            if !fires || !self.sim.fire_opponent_rocket(slot) {
+            if !fires || !self.core.sim.fire_opponent_rocket(slot) {
                 // No target, no authored rocket or no free slot. Keep it - the
                 // same rule the player's path follows, which is a `match` with
                 // early returns and always did.
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Missile {
-            if !fires || !self.sim.fire_opponent_missile(slot) {
+            if !fires || !self.core.sim.fire_opponent_missile(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Plasma {
-            if !fires || !self.sim.fire_opponent_plasma(slot) {
+            if !fires || !self.core.sim.fire_opponent_plasma(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Shuriken {
-            if !fires || !self.sim.throw_opponent_shuriken(slot) {
+            if !fires || !self.core.sim.throw_opponent_shuriken(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Quake {
-            if !fires || !self.sim.fire_opponent_quake(slot) {
+            if !fires || !self.core.sim.fire_opponent_quake(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Repulser {
-            if !fires || !self.sim.fire_repulser(slot) {
+            if !fires || !self.core.sim.fire_repulser(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::LeachBeam {
-            if !fires || !self.sim.fire_opponent_leach_beam(slot) {
+            if !fires || !self.core.sim.fire_opponent_leach_beam(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Autopilot {
             // Absorbed, unless the class's switch hands the craft to the
             // original's player driver (`RaceSim::set_opponent_autopilot`).
-            if !self.sim.engage_opponent_autopilot(slot) {
-                self.sim.absorb_opponent_pickup(slot, absorb);
+            if !self.core.sim.engage_opponent_autopilot(slot) {
+                self.core.sim.absorb_opponent_pickup(slot, absorb);
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Disruptor {
@@ -521,7 +525,7 @@ impl Race {
             // makes that fail loudly.
             // **In the Eliminator an opponent keeps the weapon**: see
             // `RaceSim::absorb_opponent_pickup`.
-            self.sim.absorb_opponent_pickup(slot, absorb);
+            self.core.sim.absorb_opponent_pickup(slot, absorb);
             return;
         }
         // The fire request the original announces (`Weapon_AnnounceIncoming`): one per
@@ -532,7 +536,7 @@ impl Race {
         // Mine/Bomb arm above always returns before here, so this is
         // defensive rather than reachable today, but a direct field write
         // would silently stop being safe the day that stops being true.
-        self.sim.world.ships[slot].pickup.take();
+        self.core.sim.world.ships[slot].pickup.take();
     }
 }
 
@@ -580,10 +584,10 @@ impl Race {
         slot: usize,
         field: &oag_ai::Field,
     ) -> bool {
-        let Some(weapons) = self.sim.weapons.as_deref() else {
+        let Some(weapons) = self.core.sim.weapons.as_deref() else {
             return false;
         };
-        let counts = self.sim.world.ships[slot].weapon_counts;
+        let counts = self.core.sim.world.ships[slot].weapon_counts;
         let Some(drop) = oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons, counts)
         else {
             // The table authors no block for this weapon, so nothing to lay.
@@ -591,12 +595,12 @@ impl Race {
             // that cannot be spent.
             return false;
         };
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.core.sim.world.ships[slot];
         let context = oag_ai::Context {
             air_trim: 0.0,
-            line: self.sim.line_of(slot),
-            tuning: &self.sim.ai_tuning,
-            pilot: &self.sim.ai_pilots[slot],
+            line: self.core.sim.line_of(slot),
+            tuning: &self.core.sim.ai_tuning,
+            pilot: &self.core.sim.ai_pilots[slot],
             field,
             yaw_ceiling: None,
             plan: None,
@@ -610,8 +614,10 @@ impl Race {
             return false;
         }
         #[cfg(feature = "view")]
-        let started = !self.sim.world.ships[slot].pickup.is_dropping();
-        self.sim.world.ships[slot].pickup.begin_drop(drop.count);
+        let started = !self.core.sim.world.ships[slot].pickup.is_dropping();
+        self.core.sim.world.ships[slot]
+            .pickup
+            .begin_drop(drop.count);
         // One announcement per drop that starts: not per mine laid, and not for a re-roll
         // while a cluster is out. Chosen, not measured: the original announces on every press
         // (`docs/ghidra/functions/psp-pulse-usa/hud-incoming-warnings.md`, "Wired in the engine").

@@ -18,14 +18,18 @@ fn race_with(people: u8) -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// Ships ordered from the back of the grid to the front.
 fn back_to_front(race: &Race) -> Vec<usize> {
-    let mut ships: Vec<usize> = (0..usize::from(race.sim.world.ship_count)).collect();
+    let mut ships: Vec<usize> = (0..usize::from(race.core.sim.world.ship_count)).collect();
     ships.sort_by(|&a, &b| {
-        let x = |ship: usize| race.sim.world.ships[ship].physics.body.position.x;
+        let x = |ship: usize| race.core.sim.world.ships[ship].physics.body.position.x;
         x(a).total_cmp(&x(b))
     });
     ships
@@ -36,7 +40,7 @@ fn back_to_front(race: &Race) -> Vec<usize> {
 #[test]
 fn one_person_starts_last_with_the_opponents_ahead() {
     let race = race_with(1);
-    assert_eq!(race.sim.world.ship_count, 8);
+    assert_eq!(race.core.sim.world.ship_count, 8);
     assert_eq!(back_to_front(&race), [0, 7, 6, 5, 4, 3, 2, 1]);
 }
 
@@ -77,11 +81,12 @@ fn more_people_take_the_next_rows_forward() {
 fn the_grid_is_the_same_eight_places_at_every_head_count() {
     let places = |race: &Race| {
         let mut places: Vec<[u32; 3]> = race
+            .core
             .sim
             .world
             .ships
             .iter()
-            .take(usize::from(race.sim.world.ship_count))
+            .take(usize::from(race.core.sim.world.ship_count))
             .map(|ship| ship.physics.body.position.to_array().map(f32::to_bits))
             .collect();
         places.sort_unstable();
@@ -101,18 +106,18 @@ fn a_person_stands_on_the_row_an_opponent_stood_on() {
     let two = race_with(2);
     // Person 2 now stands where ship 7 stood.
     assert_eq!(
-        two.sim.world.ships[1].physics.body.position,
-        one.sim.world.ships[7].physics.body.position
+        two.core.sim.world.ships[1].physics.body.position,
+        one.core.sim.world.ships[7].physics.body.position
     );
     // And ship 7 moved forward one row, to where ship 6 stood.
     assert_eq!(
-        two.sim.world.ships[7].physics.body.position,
-        one.sim.world.ships[6].physics.body.position
+        two.core.sim.world.ships[7].physics.body.position,
+        one.core.sim.world.ships[6].physics.body.position
     );
     // Person 1 did not move.
     assert_eq!(
-        two.sim.world.ships[0].physics.body.position,
-        one.sim.world.ships[0].physics.body.position
+        two.core.sim.world.ships[0].physics.body.position,
+        one.core.sim.world.ships[0].physics.body.position
     );
 }
 
@@ -127,14 +132,22 @@ fn head_to_head_with(people: u8) -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// The `x` of grid row `row` (1 front, 8 back) of the full grid, read off an eight-craft race.
 fn full_grid_x(row: usize) -> f32 {
     let race = race_with(1);
     let order = back_to_front(&race);
-    race.sim.world.ships[order[8 - row]].physics.body.position.x
+    race.core.sim.world.ships[order[8 - row]]
+        .physics
+        .body
+        .position
+        .x
 }
 
 /// One person: the AI on place 1 and the player on place 2, the two FRONT places (PPSSPP,
@@ -142,8 +155,8 @@ fn full_grid_x(row: usize) -> f32 {
 #[test]
 fn head_to_head_one_person_starts_on_the_front_two_places() {
     let race = head_to_head_with(1);
-    assert_eq!(race.sim.world.ship_count, 2);
-    let x = |ship: usize| race.sim.world.ships[ship].physics.body.position.x;
+    assert_eq!(race.core.sim.world.ship_count, 2);
+    let x = |ship: usize| race.core.sim.world.ships[ship].physics.body.position.x;
     assert!((x(1) - full_grid_x(1)).abs() < 1e-3, "AI on place 1");
     assert!((x(0) - full_grid_x(2)).abs() < 1e-3, "player on place 2");
 }
@@ -152,8 +165,8 @@ fn head_to_head_one_person_starts_on_the_front_two_places() {
 #[test]
 fn head_to_head_two_people_start_on_the_front_two_places() {
     let race = head_to_head_with(2);
-    assert_eq!(race.sim.world.ship_count, 2);
-    let x = |ship: usize| race.sim.world.ships[ship].physics.body.position.x;
+    assert_eq!(race.core.sim.world.ship_count, 2);
+    let x = |ship: usize| race.core.sim.world.ships[ship].physics.body.position.x;
     assert!((x(1) - full_grid_x(1)).abs() < 1e-3, "person 2 on place 1");
     assert!((x(0) - full_grid_x(2)).abs() < 1e-3, "person 1 on place 2");
 }

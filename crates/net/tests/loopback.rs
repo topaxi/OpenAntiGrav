@@ -6,7 +6,7 @@ use oag_net::client::{Client, Phase, Stats};
 use oag_net::host::Host;
 use oag_net::link::{Clock, Conditions, Link, Loopback, Shim};
 use oag_net::wire::RaceParams;
-use oag_raceplay::{Race, Setup};
+use oag_raceplay::{Race, SimSetup};
 
 /// What a test client flies with: a function of the tick, so every run is the
 /// same and the two clients differ.
@@ -165,17 +165,18 @@ pub(crate) fn params(people: u8) -> RaceParams {
 }
 
 pub(crate) fn headless(params: &RaceParams) -> Box<Race> {
-    let mut race = Box::new(Race::start(Setup::headless(
-        oag_race::Mode::SingleRace,
-        params.seed,
-    )));
+    let mut race = Box::new(Race::start(
+        SimSetup::headless(oag_race::Mode::SingleRace, params.seed),
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    ));
     oag_net::race::prepare(&mut race, params).expect("prepares");
     race
 }
 
 pub(crate) fn pilot(phase: u32) -> Pilot {
     Box::new(move |_, race| {
-        let tick = u32::try_from(race.sim.world.tick).unwrap_or(0);
+        let tick = u32::try_from(race.core.sim.world.tick).unwrap_or(0);
         let mut buttons = oag_gameplay::input::Input::new();
         let cross = oag_gameplay::input::Button::Cross.bit();
         buttons.begin_frame(if (tick + phase) % 7 < 4 { cross } else { 0 });
@@ -330,8 +331,11 @@ fn a_person_who_leaves_is_retired_on_both_ends_and_the_hashes_agree() {
         history[299].retired, 0b10,
         "seat 1 is retired once it has left"
     );
-    assert_eq!(host.race().sim.world.controllers[1], Controller::Away);
-    assert_eq!(host.race().sim.world.controllers[0], Controller::Remote);
+    assert_eq!(host.race().core.sim.world.controllers[1], Controller::Away);
+    assert_eq!(
+        host.race().core.sim.world.controllers[0],
+        Controller::Remote
+    );
     // The survivor's own present simulation (what the game checks `finished()` on) has the
     // leaver's craft retired too, not only its confirmed state.
     let (survivor, race, _) = &mut clients[0];
@@ -339,7 +343,7 @@ fn a_person_who_leaves_is_retired_on_both_ends_and_the_hashes_agree() {
         survivor.step(race, &oag_gameplay::InputSnapshot::EMPTY);
     }
     assert_eq!(
-        race.sim.world.controllers[1],
+        race.core.sim.world.controllers[1],
         Controller::Away,
         "the survivor's present has the leaver retired"
     );
@@ -421,6 +425,7 @@ pub(crate) fn drop_and_return(
 fn holding_turbo(params: &RaceParams) -> Box<Race> {
     let mut race = headless(params);
     for ship in race
+        .core
         .sim
         .world
         .ships
@@ -447,7 +452,7 @@ fn a_person_whose_link_drops_comes_back_to_their_seat_and_the_hashes_agree() {
     let (mismatches, matches) =
         drop_and_return(&mut host, &mut clients, &tokens, (600, 900, 1300), |host| {
             let at = host.tick_number();
-            let world = &host.race().sim.world;
+            let world = &host.race().core.sim.world;
             if at == 700 {
                 assert_eq!(world.controllers[1], Controller::Away);
             }
@@ -476,12 +481,15 @@ fn a_person_whose_link_drops_comes_back_to_their_seat_and_the_hashes_agree() {
         history[handed_back_at as usize].retired, 0,
         "away no longer"
     );
-    assert_eq!(host.race().sim.world.controllers[1], Controller::Remote);
+    assert_eq!(
+        host.race().core.sim.world.controllers[1],
+        Controller::Remote
+    );
     let (returned, race, _) = &mut clients[1];
     for _ in 0..30 {
         returned.step(race, &oag_gameplay::InputSnapshot::EMPTY);
     }
-    assert_eq!(race.sim.world.controllers[1], Controller::Remote);
+    assert_eq!(race.core.sim.world.controllers[1], Controller::Remote);
 }
 
 /// A killed game sends no close frame: the host still holds the old link when the relaunched
@@ -537,7 +545,10 @@ fn a_token_taking_over_a_seat_whose_link_is_still_held_is_the_person_returning()
         host.history().iter().all(|tick| tick.retired == 0),
         "the race never saw the seat leave"
     );
-    assert_eq!(host.race().sim.world.controllers[1], Controller::Remote);
+    assert_eq!(
+        host.race().core.sim.world.controllers[1],
+        Controller::Remote
+    );
 }
 
 /// A seat that came back to a running race and has not said ready again is loading it, and is
@@ -611,7 +622,7 @@ fn the_weapon_digest_knows_a_shot_by_the_tick_it_was_fired_on() {
     let params = params(2);
     let digest_with_rocket_aged = |ticks: u16| {
         let mut race = headless(&params);
-        let projectiles = &mut race.sim.world.projectiles;
+        let projectiles = &mut race.core.sim.world.projectiles;
         assert!(projectiles.spawn(
             oag_tables::weapons::Weapon::Rocket,
             oag_core::math::Vec3::ZERO,
@@ -619,7 +630,7 @@ fn the_weapon_digest_knows_a_shot_by_the_tick_it_was_fired_on() {
             1,
         ));
         projectiles.slots[0].lifetime -= f32::from(ticks) / 60.0;
-        oag_net::weapon_sync::digest(&race.sim)
+        oag_net::weapon_sync::digest(&race.core.sim)
     };
     assert_eq!(digest_with_rocket_aged(3), digest_with_rocket_aged(3));
     assert_ne!(

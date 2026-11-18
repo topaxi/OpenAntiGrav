@@ -12,7 +12,7 @@ use super::*;
 /// every filled slot active and nothing clears one afterward - so this is set
 /// by hand, the shape a future elimination takes.
 fn deactivate(race: &mut Race, slot: usize) {
-    race.sim.world.ships[slot].active = false;
+    race.core.sim.world.ships[slot].active = false;
 }
 
 /// `ship_active` reports exactly the slot flipped, and nothing else - the
@@ -21,16 +21,16 @@ fn deactivate(race: &mut Race, slot: usize) {
 #[test]
 fn ship_active_reports_only_the_slot_that_went_inactive() {
     let mut race = race_with_a_grid();
-    assert_eq!(race.sim.ship_count(), 8);
+    assert_eq!(race.core.sim.ship_count(), 8);
     for slot in 0..8 {
-        assert!(race.sim.ship_active(slot), "slot {slot} starts active");
+        assert!(race.core.sim.ship_active(slot), "slot {slot} starts active");
     }
 
     deactivate(&mut race, 3);
 
-    assert!(!race.sim.ship_active(3));
+    assert!(!race.core.sim.ship_active(3));
     for slot in [0, 1, 2, 4, 5, 6, 7] {
-        assert!(race.sim.ship_active(slot), "slot {slot} is unaffected");
+        assert!(race.core.sim.ship_active(slot), "slot {slot} is unaffected");
     }
 }
 

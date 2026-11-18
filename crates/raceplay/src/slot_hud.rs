@@ -243,29 +243,29 @@ impl Race {
     /// advances used to be, after the shield pool's last writer and after
     /// [`Self::advance_absorb_bursts`].
     pub(super) fn advance_slot_huds(&mut self) {
-        let primary = self.player_slot();
+        let primary = self.core.player_slot();
         let viewed = self.viewport_count();
         let mut raises = std::mem::take(&mut self.view.incoming_raises);
         for slot in 0..MAX_SHIPS {
             if slot != primary && slot >= viewed {
                 continue;
             }
-            let ship = &self.sim.world.ships[slot];
+            let ship = &self.core.sim.world.ships[slot];
             let pool = ship.physics.shield;
             let max = ship.handling.dimensions.shield;
             let percent = oag_physics::damage::percent(pool, max);
             let fraction = oag_hud::shield_fraction(pool, max);
             let thrust = ship.physics.thrust.clamp(0.0, 100.0);
             let absorbing = self.absorb_window_active(slot);
-            let held = self.sim.held_for_hud(slot);
+            let held = self.core.sim.held_for_hud(slot);
             let look = match held {
                 Some(oag_tables::weapons::Weapon::Extension(kind)) => {
-                    self.sim.extensions.pickup_look(slot, kind)
+                    self.core.sim.extensions.pickup_look(slot, kind)
                 }
                 _ => None,
             };
             let acting = ship.physics.pilot_assist.acting;
-            let (shown, dt) = (self.sim.pilot_assist_shown(slot), self.sim.dt);
+            let (shown, dt) = (self.core.sim.pilot_assist_shown(slot), self.core.sim.dt);
             let hud = &mut self.view.huds[slot];
             hud.advance(percent, fraction, thrust, absorbing, held, dt);
             if look.is_some() {

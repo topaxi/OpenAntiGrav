@@ -11,10 +11,10 @@ use oag_gameplay::{Controller, PlayerInputs};
 /// The text every comparison of a whole simulation reads, with the per-tick outputs a
 /// drawn tick leaves queued and a quiet one drops taken out.
 fn text(race: &mut Race) -> String {
-    race.sim.drain_cues();
-    race.sim.drain_announcements();
-    race.sim.drain_class_announcements();
-    format!("{:?}", race.sim)
+    race.core.sim.drain_cues();
+    race.core.sim.drain_announcements();
+    race.core.sim.drain_class_announcements();
+    format!("{:?}", race.core.sim)
 }
 
 /// Runs `ticks` of `inputs`, drawn or quiet, from tick `from`.
@@ -44,7 +44,7 @@ fn crosses_the_first_tick(
 
     run(&mut drawn, 0, ticks, false, inputs);
     assert!(
-        drawn.sim.plans_built,
+        drawn.core.sim.plans_built,
         "a race with a field learns its plans"
     );
     assert!(
@@ -58,11 +58,11 @@ fn crosses_the_first_tick(
     // the race learns the same ones. The quiet tick and the drawn one agree on the way.
     drawn.restore_sim(&before_fill);
     assert!(
-        format!("{:?}", drawn.sim) == before_text,
+        format!("{:?}", drawn.core.sim) == before_text,
         "a restore across the fill is not the snapshot"
     );
     run(&mut drawn, 0, ticks, true, inputs);
-    assert_eq!(filled.state_hash(), drawn.sim.state_hash());
+    assert_eq!(filled.state_hash(), drawn.core.sim.state_hash());
     assert!(
         text(&mut drawn) == filled_text,
         "a pre-fill snapshot replayed quietly left the drawn run outside the hash"
@@ -70,12 +70,12 @@ fn crosses_the_first_tick(
 
     // The reverse: a snapshot from after the fill, put back into a race that never ticked.
     let mut other = fresh();
-    assert!(!other.sim.plans_built);
+    assert!(!other.core.sim.plans_built);
     other.restore_sim(&filled);
-    assert!(other.sim.shares_constant_half_with(&filled));
+    assert!(other.core.sim.shares_constant_half_with(&filled));
     run(&mut other, ticks, ticks, true, inputs);
     run(&mut drawn, ticks, ticks, false, inputs);
-    assert_eq!(drawn.sim.state_hash(), other.sim.state_hash());
+    assert_eq!(drawn.core.sim.state_hash(), other.core.sim.state_hash());
     assert!(
         text(&mut drawn) == text(&mut other),
         "a post-fill snapshot in a race that never ticked left the drawn run"
@@ -91,7 +91,7 @@ fn a_snapshot_shares_the_constant_half_for_the_whole_race() {
         race.tick(&varied(tick));
     }
     let late = race.snapshot_sim();
-    assert!(late.shares_constant_half_with(&race.sim));
+    assert!(late.shares_constant_half_with(&race.core.sim));
     assert!(
         early.shares_constant_half_with(&late),
         "a tick copied part of the constant half"
@@ -105,7 +105,7 @@ fn a_snapshot_shares_the_constant_half_for_the_whole_race() {
 fn the_text_of_a_snapshot_reads_the_shared_half() {
     let mut race = two_person_race(Controller::Remote);
     race.tick(&varied(0));
-    let before = format!("{:?}", race.sim);
+    let before = format!("{:?}", race.core.sim);
 
     let mut order = race.snapshot_sim();
     Arc::make_mut(&mut order.ai_order)[0] ^= 1;
@@ -128,7 +128,7 @@ fn the_text_of_a_snapshot_reads_the_shared_half() {
         );
     }
     assert!(
-        format!("{:?}", race.sim) == before,
+        format!("{:?}", race.core.sim) == before,
         "a snapshot's write reached the race"
     );
 }
@@ -161,8 +161,14 @@ fn crosses_on_a_fork(source: &std::path::Path, track: &str) {
         ..Options::default()
     })
     .expect("loading the circuit");
-    let start = || Race::start(loaded.setup.clone());
-    assert!(!start().sim.routes.is_empty(), "{track} has a fork");
+    let start = || {
+        Race::start(
+            loaded.setup.clone(),
+            loaded.view.clone(),
+            loaded.modules.clone(),
+        )
+    };
+    assert!(!start().core.sim.routes.is_empty(), "{track} has a fork");
     crosses_the_first_tick(&start, 240, &one_person_on_the_throttle);
 }
 

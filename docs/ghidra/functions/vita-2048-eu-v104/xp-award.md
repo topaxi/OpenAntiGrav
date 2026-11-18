@@ -135,7 +135,7 @@ tally and banks its total.
 | 5 | Perfect lap | **wired**: lap completed with no health lost in the lap (ours: no drop in the ship's shield pool since the last line), human, gate; `Pilot_UpdateLapProgress` `0x811c38a0` (78); `XpTally::lap_completed` |
 | 6 | Opponent destroyed | **wired** (`0x812ccfe0`, `0x8123b5ea`, `0x811c4a06`: human killer, `FUN_8100d2a6`); fed from `Standing::kills` |
 | 7 | Speed pad hit | **read**, unwired: pad hit, human, gate, and `pilot+0x6128` byte 0 (that flag still unread); `0x811cd052` (60) |
-| 8 | Weapon pad hit | **wired**: the pad hands the human a weapon, gate; `0x811c9ee8` (75); `Race::test_weapon_pads`'s grant |
+| 8 | Weapon pad hit | **wired**: the pad hands the human a weapon, gate; `0x811c9ee8` (75); `SimRace::test_weapon_pads`'s grant |
 | 9 | Zone | **wired** (`0x812c4052`, `0x81186862`): a zone step with a wall contact |
 | 10 | Perfect Zone | **wired** (same sites): a clean zone step; our `zone_dirty` stands for flag `+0x60a4 & 0x1000000`, **chosen** |
 | 11 | Boost start | **wired**: the perfect launch, human; no gate; `Race_UpdateLaunchGrade` `0x811760de` (80); ours is the player's launch grade turning Perfect (`XpTally::observe_launch`, `crates/physics/src/launch.rs`), read in the simulation so a build without the view pays it too |

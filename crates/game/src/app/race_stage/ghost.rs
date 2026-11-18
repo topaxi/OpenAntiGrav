@@ -48,7 +48,7 @@ fn arm_in(
     seed: u64,
     options: std::collections::BTreeMap<String, String>,
 ) {
-    if !races_a_ghost(mode, race.sim.people()) {
+    if !races_a_ghost(mode, race.core.sim.people()) {
         return;
     }
     let stored =
@@ -87,7 +87,7 @@ pub(crate) fn header_for(
 pub(crate) fn save(race: &mut race::Race, key: &records::Key) {
     // A lap from a race a second person was in, split or in another window, is
     // not a ghost anybody should race against.
-    if race.sim.people() > 1 {
+    if race.core.sim.people() > 1 {
         return;
     }
     let Some(replay) = race.take_new_best_ghost() else {
@@ -164,7 +164,7 @@ mod tests {
                 ..oag_raceplay::Options::default()
             })
             .expect("loading the race");
-            let mut race = oag_raceplay::Race::start(loaded.setup);
+            let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
             arm_in(
                 Some(&root),
                 &mut race,

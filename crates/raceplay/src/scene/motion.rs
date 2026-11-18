@@ -654,7 +654,11 @@ mod advance_tests {
     use super::*;
 
     fn race() -> Race {
-        Race::start(Setup::headless(oag_race::Mode::TimeTrial, 1))
+        Race::start(
+            SimSetup::headless(oag_race::Mode::TimeTrial, 1),
+            crate::ViewSetup::headless(),
+            crate::extensions::Prepared::default(),
+        )
     }
 
     /// [`MotionState::advance`]'s snapshot, copied out so a test can advance again while
@@ -719,7 +723,7 @@ mod advance_tests {
         // The shot changes: the camera jumps a hundred units and brings a field
         // of view of its own, as the destroy camera's zoom does, and the
         // picture says so.
-        race.sim.respawns[0] += 1;
+        race.core.sim.respawns[0] += 1;
         race.tick(&oag_gameplay::PlayerInputs::none());
         let zoomed = Mat4::from_scale(Vec3::new(2.0, 2.0, 1.0));
         let prev = advance(&cell, &race, &CannonDraw::default(), zoomed, at(101.0), 1);
@@ -744,7 +748,7 @@ mod advance_tests {
         let cell = std::cell::RefCell::new(None);
         let race = race();
         // Without a flyby the key is the world's tick.
-        assert_eq!(race.motion_tick(), race.sim.world.tick);
+        assert_eq!(race.motion_tick(), race.core.sim.world.tick);
         advance(
             &cell,
             &race,

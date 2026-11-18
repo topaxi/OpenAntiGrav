@@ -138,7 +138,7 @@ impl Race {
     /// Each of `triggers` at the first `cap` wreck locators of `slot`, node by node.
     fn ride_wreck_nodes(&mut self, slot: usize, triggers: &[Trigger], cap: usize) {
         let nodes = self.view.wreck_fx.anchors.get(slot).map_or(0, Vec::len);
-        let model = model_matrix_of(&self.sim.world.ships[slot]);
+        let model = model_matrix_of(&self.core.sim.world.ships[slot]);
         for node in 0..nodes.min(cap) {
             for &trigger in triggers {
                 let Some(effect) = self.view.handles.get(trigger).cloned() else {
@@ -225,7 +225,7 @@ impl Race {
     pub(super) fn advance_wreck_fx(&mut self) {
         let mut riding = std::mem::take(&mut self.view.wreck_fx.riding);
         riding.retain(|fx| {
-            let ship = &self.sim.world.ships[fx.slot];
+            let ship = &self.core.sim.world.ships[fx.slot];
             if !ship.active || !self.view.stage.is_emitting(fx.playing) {
                 self.view.stage.detach(fx.playing);
                 return false;

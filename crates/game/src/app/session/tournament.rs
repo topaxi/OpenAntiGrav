@@ -35,7 +35,7 @@ use super::Session;
 /// runs from is itself guarded by `RaceStage::result_saved`, but nothing
 /// here relies on that guard holding - scores it once either way.
 pub(crate) fn record_finished_leg(tournament: &mut Option<Progress>, stage: &mut RaceStage) {
-    let Some(board) = stage.race.results() else {
+    let Some(board) = stage.race.core.results() else {
         return;
     };
     let Some(progress) = tournament.as_mut() else {

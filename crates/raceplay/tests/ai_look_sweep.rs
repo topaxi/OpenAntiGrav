@@ -54,28 +54,28 @@ fn solo_on(track: &str, tuning: oag_ai::Tuning) -> Option<Solo> {
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.set_ai_tuning(tuning);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_ai_tuning(tuning);
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
 
     let mut best: Option<u64> = None;
-    let mut lap = race.sim.world.ships[LONE].standing.lap;
+    let mut lap = race.core.sim.world.ships[LONE].standing.lap;
     let mut started = 0u64;
     let mut recovered_this_lap = false;
     let mut per_lap = Vec::new();
-    let mut shield_at_lap = race.sim.world.ships[LONE].physics.shield;
+    let mut shield_at_lap = race.core.sim.world.ships[LONE].physics.shield;
     for tick in 0..TICKS {
-        let before = race.sim.respawns_of(LONE);
+        let before = race.core.sim.respawns_of(LONE);
         race.tick(&PlayerInputs::none());
-        if race.sim.respawns_of(LONE) != before {
+        if race.core.sim.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
-        let now = race.sim.world.ships[LONE].standing.lap;
+        let now = race.core.sim.world.ships[LONE].standing.lap;
         if now != lap {
-            let shield = race.sim.world.ships[LONE].physics.shield;
+            let shield = race.core.sim.world.ships[LONE].physics.shield;
             per_lap.push(shield_at_lap - shield);
             shield_at_lap = shield;
             if lap > 1 && !recovered_this_lap {
@@ -90,9 +90,9 @@ fn solo_on(track: &str, tuning: oag_ai::Tuning) -> Option<Solo> {
 
     Some(Solo {
         best,
-        respawns: race.sim.respawns_of(LONE),
+        respawns: race.core.sim.respawns_of(LONE),
         laps: lap,
-        shield: race.sim.world.ships[LONE].physics.shield,
+        shield: race.core.sim.world.ships[LONE].physics.shield,
         per_lap,
     })
 }
@@ -135,17 +135,22 @@ fn field_run(measured: oag_ai::Tuning) -> Option<FieldRun> {
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(lap_times.setup);
-    race.sim.set_ai_tuning(tuned(oag_ai::Difficulty::Ace));
+    let mut race = race::Race::start(lap_times.setup, lap_times.view, lap_times.modules);
+    race.core.sim.set_ai_tuning(tuned(oag_ai::Difficulty::Ace));
     for _ in 0..9_000 {
         race.tick(&PlayerInputs::none());
     }
-    let lapped: Vec<usize> = (1..usize::from(race.sim.ship_count()))
-        .filter(|&slot| race.sim.world.ships[slot].standing.lap >= 2)
+    let lapped: Vec<usize> = (1..usize::from(race.core.sim.ship_count()))
+        .filter(|&slot| race.core.sim.world.ships[slot].standing.lap >= 2)
         .collect();
     let untimed = lapped
         .iter()
-        .filter(|&&slot| race.sim.world.ships[slot].standing.best_lap_ticks.is_none())
+        .filter(|&&slot| {
+            race.core.sim.world.ships[slot]
+                .standing
+                .best_lap_ticks
+                .is_none()
+        })
         .count();
     let lapped = lapped.len();
 
@@ -157,21 +162,21 @@ fn field_run(measured: oag_ai::Tuning) -> Option<FieldRun> {
     };
     let level = options.difficulty;
     let mines = race::load(&options).ok()?;
-    let mut race = race::Race::start(mines.setup);
-    race.sim.set_ai_tuning(tuned(level));
-    let opponents = 1..usize::from(race.sim.ship_count());
-    let full = race.sim.world.ships[1].handling.dimensions.shield;
+    let mut race = race::Race::start(mines.setup, mines.view, mines.modules);
+    race.core.sim.set_ai_tuning(tuned(level));
+    let opponents = 1..usize::from(race.core.sim.ship_count());
+    let full = race.core.sim.world.ships[1].handling.dimensions.shield;
     for _ in 0..3_600 {
         race.tick(&PlayerInputs::none());
     }
     let mean = opponents
         .clone()
-        .map(|slot| race.sim.world.ships[slot].physics.shield)
+        .map(|slot| race.core.sim.world.ships[slot].physics.shield)
         .sum::<f32>()
         / opponents.len() as f32
         / full;
     let worst = opponents
-        .map(|slot| race.sim.world.ships[slot].physics.shield)
+        .map(|slot| race.core.sim.world.ships[slot].physics.shield)
         .fold(f32::INFINITY, f32::min)
         / full;
 

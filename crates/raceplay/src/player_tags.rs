@@ -5,6 +5,7 @@
 //! view's `SlotHud` and the tags leave as part of the view's `Readout`.
 
 use crate::RaceSim;
+use crate::SimRace;
 use oag_gameplay::MAX_SHIPS;
 use oag_hud::PlayerTag;
 use oag_hud::player_tags::{alpha, raise, step_fade};
@@ -20,8 +21,8 @@ impl Race {
 
     /// The slots whose view shows tags: the person-flown slots with a view of their own.
     fn tag_viewers(&self) -> impl Iterator<Item = usize> + '_ {
-        let primary = self.player_slot();
-        let own_views = if self.view.seat.is_some() {
+        let primary = self.core.player_slot();
+        let own_views = if self.core.outcome.seat.is_some() {
             0
         } else {
             self.viewport_count()
@@ -48,33 +49,38 @@ impl Race {
         if !self.view.player_tags_on {
             return;
         }
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         let viewers: Vec<usize> = self.tag_viewers().collect();
         for viewer in viewers {
             for target in 0..MAX_SHIPS {
                 let fade = self.view.huds[viewer].tag_fade[target];
-                self.view.huds[viewer].tag_fade[target] = if self.sim.tagged_for(viewer, target) {
-                    step_fade(fade, dt)
-                } else {
-                    0.0
-                };
+                self.view.huds[viewer].tag_fade[target] =
+                    if self.core.sim.tagged_for(viewer, target) {
+                        step_fade(fade, dt)
+                    } else {
+                        0.0
+                    };
             }
         }
     }
+}
 
+impl SimRace {
     /// The name over `slot`'s craft: the one [`Self::set_person_names`] gave it (the lobby's in a
     /// network race, the stored player name for seat 1 in a local one), else `Player N` (a stop
     /// gap; the original's own fallback string is one shared `PLAYER`).
     #[must_use]
     pub fn tag_name(&self, slot: usize) -> String {
-        self.view
+        self.outcome
             .person_names
             .get(slot)
             .filter(|name| !name.is_empty())
             .cloned()
             .unwrap_or_else(|| format!("Player {}", slot + 1))
     }
+}
 
+impl Race {
     /// The tags `viewer`'s view draws this frame, projected through that view's camera at the
     /// craft's drawn pose and into the grid its reticle uses.
     ///
@@ -85,7 +91,7 @@ impl Race {
         if !self.view.player_tags_on || viewer >= MAX_SHIPS {
             return Vec::new();
         }
-        let primary = viewer == self.player_slot();
+        let primary = viewer == self.core.player_slot();
         let screen = if primary {
             self.view.sight.screen()
         } else {
@@ -98,7 +104,7 @@ impl Race {
             self.set_viewpoint(viewer);
         }
         let tags = (0..MAX_SHIPS)
-            .filter(|&target| self.sim.tagged_for(viewer, target))
+            .filter(|&target| self.core.sim.tagged_for(viewer, target))
             .filter_map(|target| {
                 let fade = self.view.huds[viewer].tag_fade[target];
                 let body = self.body_between(target);
@@ -108,7 +114,7 @@ impl Race {
                 (alpha > 0.0).then(|| PlayerTag {
                     screen: projected.screen,
                     alpha,
-                    name: self.tag_name(target),
+                    name: self.core.tag_name(target),
                 })
             })
             .collect();

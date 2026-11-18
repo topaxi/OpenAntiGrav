@@ -21,27 +21,31 @@ fn press_once(
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(table);
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     if target.is_some() {
-        race.sim.world.ship_count = 2;
-        race.sim.world.ships[1].active = true;
-        race.sim.world.ships[1].handling = hulled_handling();
+        race.core.sim.world.ship_count = 2;
+        race.core.sim.world.ships[1].active = true;
+        race.core.sim.world.ships[1].handling = hulled_handling();
     }
-    race.sim.world.ships[0].pickup.weapon = Some(weapon);
+    race.core.sim.world.ships[0].pickup.weapon = Some(weapon);
 
     let mut buttons = Buttons::new();
     let mut raised = std::collections::BTreeSet::new();
     for tick in 0..ticks {
-        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-        let forward = race.sim.world.ships[0].physics.body.forward();
-        race.sim.world.ships[0].physics.body.linear_velocity = forward * 60.0;
+        race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        let forward = race.core.sim.world.ships[0].physics.body.forward();
+        race.core.sim.world.ships[0].physics.body.linear_velocity = forward * 60.0;
         if let Some(distance) = target {
-            race.sim.world.ships[1].physics.body.position = forward * distance;
-            race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+            race.core.sim.world.ships[1].physics.body.position = forward * distance;
+            race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
         }
         let snapshot = buttons.tick(if tick == 1 { SQUARE } else { 0 });
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.core.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }

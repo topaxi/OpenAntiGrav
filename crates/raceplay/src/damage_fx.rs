@@ -136,7 +136,7 @@ impl Race {
     /// calls for. Nothing on a title that answers no [`Trigger::DamageMild`],
     /// on a craft with no shield left, or while the hold rules it out.
     pub(super) fn throw_damage_smoke(&mut self, slot: usize) {
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.core.sim.world.ships[slot];
         let shield = ship.physics.shield;
         if shield <= 0.0 || !ship.in_world() {
             return;
@@ -183,7 +183,7 @@ impl Race {
     /// `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` attached at `+0x1c0`, the point
     /// [`State`]'s smoke uses. No state, no hold: every hit throws one.
     pub(super) fn throw_attached_leach_spark(&mut self, slot: usize) {
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.core.sim.world.ships[slot];
         if !ship.in_world() {
             return;
         }
@@ -218,13 +218,13 @@ impl Race {
     /// Counts the holds down and keeps every emitting smoke on its craft.
     /// Before `Stage::advance`, like the hit sparks.
     pub(super) fn advance_damage_smoke(&mut self) {
-        let dt = self.sim.dt;
+        let dt = self.core.sim.dt;
         for left in &mut self.view.damage_fx.hold {
             *left = (*left - dt).max(0.0);
         }
         let mut riding = std::mem::take(&mut self.view.damage_fx.riding);
         riding.retain(|smoke| {
-            let ship = &self.sim.world.ships[smoke.slot];
+            let ship = &self.core.sim.world.ships[smoke.slot];
             if !ship.in_world() || !self.view.stage.is_emitting(smoke.playing) {
                 self.view.stage.detach(smoke.playing);
                 return false;

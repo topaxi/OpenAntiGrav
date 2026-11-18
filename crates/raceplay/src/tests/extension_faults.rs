@@ -137,33 +137,33 @@ fn a_faulted_owner_hands_a_rolled_pickup_back_as_the_weapon_the_pad_drew_and_the
     ]));
     race.tick(&PlayerInputs::none());
     // A pad draws a Turbo for slot 0 and the roll turns it into the mod's own pickup.
-    let held = &mut race.sim.world.ships[0].pickup;
+    let held = &mut race.core.sim.world.ships[0].pickup;
     held.grant(Weapon::Turbo);
-    assert!(race.sim.extensions.rolls(0, Weapon::Turbo).is_some());
-    race.sim.world.ships[0].pickup.weapon =
+    assert!(race.core.sim.extensions.rolls(0, Weapon::Turbo).is_some());
+    race.core.sim.world.ships[0].pickup.weapon =
         Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
 
     race.tick(&PlayerInputs::none());
-    let reports = race.sim.extension_reports();
+    let reports = race.core.sim.extension_reports();
     assert!(reports[0].faulted.is_some(), "the roller trapped");
     assert_eq!(
-        race.sim.world.ships[0].pickup.weapon,
+        race.core.sim.world.ships[0].pickup.weapon,
         Some(Weapon::Turbo),
         "the rolled pickup is the vanilla grant it replaced"
     );
     assert!(
-        race.sim.extensions.rolls(1, Weapon::Turbo).is_none(),
+        race.core.sim.extensions.rolls(1, Weapon::Turbo).is_none(),
         "pads hand out vanilla weapons again"
     );
 
     race.tick(&PlayerInputs::none());
-    let reports = race.sim.extension_reports();
+    let reports = race.core.sim.extension_reports();
     assert_eq!(
         reports[1].faulted, None,
         "the second module is not the dead one's problem"
     );
     assert_eq!(
-        race.sim.world.ships[1].pickup.weapon,
+        race.core.sim.world.ships[1].pickup.weapon,
         Some(Weapon::Extension(
             oag_tables::weapons::ModKind::new(1).unwrap()
         )),
@@ -177,13 +177,13 @@ fn a_faulted_owners_given_pickup_is_taken_away() {
     let mut race = grid(prepared(&[once_then_traps("test.a", &[give])]));
     race.tick(&PlayerInputs::none());
     assert_eq!(
-        race.sim.world.ships[1].pickup.weapon,
+        race.core.sim.world.ships[1].pickup.weapon,
         Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
     );
     race.tick(&PlayerInputs::none());
-    assert!(race.sim.extension_reports()[0].faulted.is_some());
+    assert!(race.core.sim.extension_reports()[0].faulted.is_some());
     assert_eq!(
-        race.sim.world.ships[1].pickup.weapon, None,
+        race.core.sim.world.ships[1].pickup.weapon, None,
         "a given pickup replaced no weapon: nothing to hand back, and nothing nobody can fire"
     );
 }
@@ -219,14 +219,14 @@ fn a_faulted_modules_held_scale_pad_goes_back_to_one() {
     let mut race = grid(with_one_pad(&[once_then_traps("test.a", &[dead])]));
     race.tick(&PlayerInputs::none());
     assert_eq!(
-        race.sim.extensions.pad_factor(1, 0),
+        race.core.sim.extensions.pad_factor(1, 0),
         0.0,
         "held while it runs"
     );
     race.tick(&PlayerInputs::none());
-    assert!(race.sim.extension_reports()[0].faulted.is_some());
+    assert!(race.core.sim.extension_reports()[0].faulted.is_some());
     assert_eq!(
-        race.sim.extensions.pad_factor(1, 0),
+        race.core.sim.extensions.pad_factor(1, 0),
         1.0,
         "the pad is the title's again"
     );
@@ -258,29 +258,29 @@ fn a_fault_found_while_applying_lands_none_of_the_modules_commands_that_tick() {
         )
     };
     let ticks = 600;
-    let (vanilla, _) = run(grid(Prepared::default()), ticks);
+    let (vanilla, _) = run(grid(crate::extensions::Prepared::default()), ticks);
     // Within the cap, the thrust commands land and the blob is kept.
     let (fine, _) = run(
         grid(prepared(&[around(oag_ext_abi::MAX_EMITS_PER_TICK)])),
         ticks,
     );
-    assert_eq!(fine.sim.extension_reports()[0].faulted, None);
-    assert_eq!(fine.sim.extension_state(0).unwrap()[0], 7);
-    assert_ne!(fine.sim.world.ships, vanilla.sim.world.ships);
+    assert_eq!(fine.core.sim.extension_reports()[0].faulted, None);
+    assert_eq!(fine.core.sim.extension_state(0).unwrap()[0], 7);
+    assert_ne!(fine.core.sim.world.ships, vanilla.core.sim.world.ships);
     // One emit past it: the module faults and nothing of it lands, before or after.
     let mut bad = grid(prepared(&[around(oag_ext_abi::MAX_EMITS_PER_TICK + 1)]));
     bad.tick(&PlayerInputs::none());
-    let (_, why) = bad.sim.extension_reports()[0]
+    let (_, why) = bad.core.sim.extension_reports()[0]
         .faulted
         .clone()
         .expect("faulted");
     assert!(why.contains("emit past the cap"), "{why}");
     assert!(
-        bad.sim.extensions.fired().is_empty(),
+        bad.core.sim.extensions.fired().is_empty(),
         "no emit of it was delivered or noted"
     );
     assert_eq!(
-        bad.sim.extension_state(0).unwrap()[0],
+        bad.core.sim.extension_state(0).unwrap()[0],
         0,
         "the blob keeps its value from before the call"
     );
@@ -288,7 +288,7 @@ fn a_fault_found_while_applying_lands_none_of_the_modules_commands_that_tick() {
         bad.tick(&PlayerInputs::none());
     }
     assert_eq!(
-        bad.sim.world.ships, vanilla.sim.world.ships,
+        bad.core.sim.world.ships, vanilla.core.sim.world.ships,
         "no thrust command of the faulted reply landed, so the race is the vanilla one"
     );
 }
@@ -312,18 +312,21 @@ fn a_faulted_module_takes_back_its_own_kind_alone() {
             oag_tables::weapons::ModKind::new(i).unwrap(),
         ))
     };
-    assert_eq!(race.sim.world.ships[0].pickup.weapon, kind(0));
-    assert_eq!(race.sim.world.ships[1].pickup.weapon, kind(1));
+    assert_eq!(race.core.sim.world.ships[0].pickup.weapon, kind(0));
+    assert_eq!(race.core.sim.world.ships[1].pickup.weapon, kind(1));
     race.tick(&PlayerInputs::none());
     assert!(
-        race.sim.extension_reports()[0].faulted.is_some(),
+        race.core.sim.extension_reports()[0].faulted.is_some(),
         "a trapped"
     );
-    assert_eq!(race.sim.world.ships[0].pickup.weapon, None, "a's is gone");
     assert_eq!(
-        race.sim.world.ships[1].pickup.weapon,
+        race.core.sim.world.ships[0].pickup.weapon, None,
+        "a's is gone"
+    );
+    assert_eq!(
+        race.core.sim.world.ships[1].pickup.weapon,
         kind(1),
         "b's is the other mod's and stays"
     );
-    assert_eq!(race.sim.extension_reports()[1].faulted, None);
+    assert_eq!(race.core.sim.extension_reports()[1].faulted, None);
 }

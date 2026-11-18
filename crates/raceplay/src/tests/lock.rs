@@ -11,20 +11,20 @@ use oag_tables::weapons::Weapon;
 /// slot 0 holding `weapon` under `pulse`'s reticle dialect or Wipeout HD's.
 fn parked_race(weapon: Weapon, pulse: bool, distance: f32, side: f32) -> (Race, Vec3) {
     let mut race = race_with_a_grid_sighted(title_sighting(pulse));
-    race.sim.weapons = Some(Arc::new(match weapon {
+    race.core.sim.weapons = Some(Arc::new(match weapon {
         Weapon::LeachBeam => one_leach_beam_table(),
         _ => one_missile_table(),
     }));
-    let body = race.sim.world.ships[0].physics.body;
+    let body = race.core.sim.world.ships[0].physics.body;
     let at = body.position + body.forward() * distance + body.right() * side;
-    race.sim.world.ships[0].pickup.weapon = Some(weapon);
+    race.core.sim.world.ships[0].pickup.weapon = Some(weapon);
     (race, at)
 }
 
 /// One tick with slot 1 held at `at`.
 fn tick_parked(race: &mut Race, at: Vec3) {
-    race.sim.world.ships[1].physics.body.position = at;
-    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+    race.core.sim.world.ships[1].physics.body.position = at;
+    race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
     race.tick(&PlayerInputs::none());
 }
 
@@ -33,7 +33,7 @@ fn first_lock(weapon: Weapon, pulse: bool, distance: f32, side: f32) -> Option<u
     let (mut race, at) = parked_race(weapon, pulse, distance, side);
     (0..200).find(|_| {
         tick_parked(&mut race, at);
-        race.sim.lock_of(0).locked()
+        race.core.sim.lock_of(0).locked()
     })
 }
 
@@ -69,10 +69,10 @@ fn the_reticle_shows_the_lock_the_simulation_took() {
             tick_parked(&mut race, at);
             assert_eq!(
                 race.sight().locked(),
-                race.sim.lock_of(0).locked(),
+                race.core.sim.lock_of(0).locked(),
                 "{weapon:?}: the reticle disagrees with the lock on tick {tick}"
             );
-            taken |= race.sim.lock_of(0).locked();
+            taken |= race.core.sim.lock_of(0).locked();
         }
         assert!(taken, "{weapon:?} never locked");
     }
@@ -88,7 +88,7 @@ fn the_reticle_shows_the_lock_the_simulation_took() {
 fn the_lock_does_not_read_the_camera() {
     let (mut plain, at) = parked_race(Weapon::Missile, true, 60.0, 0.0);
     let (mut turned, _) = parked_race(Weapon::Missile, true, 60.0, 0.0);
-    let body = turned.sim.world.ships[0].physics.body;
+    let body = turned.core.sim.world.ships[0].physics.body;
     turned.view.camera_override = Some(crate::options::CameraOverride {
         eye: body.position - body.forward() * 40.0,
         orientation: body.orientation * Quat::from_rotation_y(std::f32::consts::PI),
@@ -100,17 +100,17 @@ fn the_lock_does_not_read_the_camera() {
         tick_parked(&mut plain, at);
         tick_parked(&mut turned, at);
         assert_eq!(
-            plain.sim.state_hash(),
-            turned.sim.state_hash(),
+            plain.core.sim.state_hash(),
+            turned.core.sim.state_hash(),
             "the camera reached the state hash on tick {tick}"
         );
-        if locked_at.is_none() && turned.sim.lock_of(0).locked() {
+        if locked_at.is_none() && turned.core.sim.lock_of(0).locked() {
             locked_at = Some(tick);
         }
     }
     assert_eq!(locked_at, Some(48), "the lock moved with the camera");
     assert!(
-        !turned.sight().locked() || turned.sim.lock_of(0).locked(),
+        !turned.sight().locked() || turned.core.sim.lock_of(0).locked(),
         "the reticle cannot be locked on a lock the simulation does not hold"
     );
 }
@@ -125,7 +125,7 @@ fn the_lock_is_hashed_while_a_lock_weapon_is_held() {
             screen: [100.0, 100.0],
             distance: 50.0,
         });
-        race.sim.locks[0].update(0.3, projected);
+        race.core.sim.locks[0].update(0.3, projected);
     };
     for (weapon, hashed) in [
         (Weapon::Missile, true),
@@ -134,10 +134,10 @@ fn the_lock_is_hashed_while_a_lock_weapon_is_held() {
     ] {
         let (mut race, _) = parked_race(weapon, true, 60.0, 0.0);
         race.tick(&PlayerInputs::none());
-        let before = race.sim.state_hash();
+        let before = race.core.sim.state_hash();
         nudge(&mut race);
         assert_eq!(
-            race.sim.state_hash() != before,
+            race.core.sim.state_hash() != before,
             hashed,
             "{weapon:?}: the lock's presence in the hash is wrong"
         );
@@ -149,26 +149,26 @@ fn the_lock_is_hashed_while_a_lock_weapon_is_held() {
 #[test]
 fn a_second_persons_early_leach_press_fires_unlocked() {
     let mut race = race_with_a_grid_sighted(title_sighting(true));
-    race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
-    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
-    let forward = race.sim.world.ships[0].physics.body.forward();
-    let rival = race.sim.world.ships[0].physics.body.position;
+    race.core.sim.weapons = Some(Arc::new(one_leach_beam_table()));
+    race.core.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    let forward = race.core.sim.world.ships[0].physics.body.forward();
+    let rival = race.core.sim.world.ships[0].physics.body.position;
     let shooter = rival - forward * 60.0;
-    race.sim.world.ships[1].physics.body.orientation =
-        race.sim.world.ships[0].physics.body.orientation;
-    race.sim.world.ships[1].pickup.weapon = Some(Weapon::LeachBeam);
+    race.core.sim.world.ships[1].physics.body.orientation =
+        race.core.sim.world.ships[0].physics.body.orientation;
+    race.core.sim.world.ships[1].pickup.weapon = Some(Weapon::LeachBeam);
     let mut buttons = Buttons::new();
     buttons.tick(0);
     for tick in 0..=5 {
-        race.sim.world.ships[0].physics.body.position = rival;
-        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
-        race.sim.world.ships[1].physics.body.position = shooter;
-        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.position = rival;
+        race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        race.core.sim.world.ships[1].physics.body.position = shooter;
+        race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
         let mut inputs = PlayerInputs::none();
         inputs.set(1, buttons.tick(if tick == 5 { SQUARE } else { 0 }));
         race.tick(&inputs);
     }
-    let beam = race.sim.world.leach_beams[0].expect("slot 1's press must fire");
+    let beam = race.core.sim.world.leach_beams[0].expect("slot 1's press must fire");
     assert_eq!(beam.owner, 1);
     assert_eq!(
         beam.kind,
@@ -190,17 +190,17 @@ fn a_quiet_replay_locks_exactly_as_a_normal_tick_does() {
         let mut locked_at = None;
         for tick in 0..100 {
             for race in [&mut normal, &mut quiet] {
-                race.sim.world.ships[1].physics.body.position = at;
-                race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+                race.core.sim.world.ships[1].physics.body.position = at;
+                race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
             }
             normal.tick(&PlayerInputs::none());
             quiet.tick_sim_only(&PlayerInputs::none());
             assert_eq!(
-                normal.sim.state_hash(),
-                quiet.sim.state_hash(),
+                normal.core.sim.state_hash(),
+                quiet.core.sim.state_hash(),
                 "{weapon:?}: the quiet path left the normal one on tick {tick}"
             );
-            if locked_at.is_none() && quiet.sim.lock_of(0).locked() {
+            if locked_at.is_none() && quiet.core.sim.lock_of(0).locked() {
                 locked_at = Some(tick);
             }
         }
@@ -212,13 +212,13 @@ fn a_quiet_replay_locks_exactly_as_a_normal_tick_does() {
             !quiet.sight().locked() && !quiet.sight().visible(),
             "{weapon:?}: a quiet tick advanced the picture's reticle"
         );
-        normal.sim.drain_announcements();
-        quiet.sim.drain_announcements();
-        normal.sim.drain_class_announcements();
-        quiet.sim.drain_class_announcements();
+        normal.core.sim.drain_announcements();
+        quiet.core.sim.drain_announcements();
+        normal.core.sim.drain_class_announcements();
+        quiet.core.sim.drain_class_announcements();
         assert_eq!(
-            format!("{:?}", normal.sim),
-            format!("{:?}", quiet.sim),
+            format!("{:?}", normal.core.sim),
+            format!("{:?}", quiet.core.sim),
             "{weapon:?}: the sims differ outside the hash"
         );
     }
@@ -232,7 +232,7 @@ fn a_quiet_replay_locks_exactly_as_a_normal_tick_does() {
 fn the_primarys_missile_is_guided_by_the_sim_lock_whatever_the_camera_shows() {
     let target_of_shot = |press_at: usize| {
         let (mut race, at) = parked_race(Weapon::Missile, true, 60.0, 0.0);
-        let body = race.sim.world.ships[0].physics.body;
+        let body = race.core.sim.world.ships[0].physics.body;
         race.view.camera_override = Some(crate::options::CameraOverride {
             eye: body.position - body.forward() * 40.0,
             orientation: body.orientation * Quat::from_rotation_y(std::f32::consts::PI),
@@ -241,12 +241,13 @@ fn the_primarys_missile_is_guided_by_the_sim_lock_whatever_the_camera_shows() {
         let mut buttons = Buttons::new();
         buttons.tick(0);
         for tick in 0..=press_at {
-            race.sim.world.ships[1].physics.body.position = at;
-            race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+            race.core.sim.world.ships[1].physics.body.position = at;
+            race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
             let input = buttons.tick(if tick == press_at { SQUARE } else { 0 });
             race.tick(&PlayerInputs::single(input));
         }
         let shot = race
+            .core
             .sim
             .world
             .projectiles
@@ -289,13 +290,14 @@ fn a_race_starts_with_the_loads_reticle_and_the_locks_ignore_the_split_view() {
             .all(|hud| hud.sight.screen() == [1920.0, 540.0])
     );
     assert!(
-        race.sim
+        race.core
+            .sim
             .locks
             .iter()
             .all(|lock| lock.screen() == [1920.0, 1080.0])
     );
     let unset = race_with_a_grid();
-    assert_eq!(unset.sim.locks[0].screen(), oag_race::sight::SCREEN);
+    assert_eq!(unset.core.sim.locks[0].screen(), oag_race::sight::SCREEN);
 }
 
 /// A `2h,2v` race has a window of each cut: the slots of the side-by-side window project
@@ -343,7 +345,8 @@ fn each_windows_slots_sight_in_their_own_views_grid() {
     race.set_cut(Cut::Horizontal);
     assert_eq!(race.sight_screen_of(1), [1920.0, 540.0]);
     assert!(
-        race.sim
+        race.core
+            .sim
             .locks
             .iter()
             .all(|lock| lock.screen() == [1920.0, 1080.0])

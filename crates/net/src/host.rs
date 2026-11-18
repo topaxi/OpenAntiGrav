@@ -723,10 +723,10 @@ impl Host {
         self.race.tick_sim_only(&inputs);
         #[cfg(feature = "test-cheats")]
         if self.cheat == Cheat::Speed && tick >= CHEAT_AT {
-            self.race.sim.world.ships[0].physics.body.position.z += 0.05;
+            self.race.core.sim.world.ships[0].physics.body.position.z += 0.05;
         }
         self.history.push(TickRecord {
-            hash: self.race.sim.state_hash(),
+            hash: self.race.core.sim.state_hash(),
             inputs: applied,
             retired,
         });
@@ -834,7 +834,7 @@ impl Host {
     /// Whether every person's craft has finished ([`RaceSim::finished`](oag_raceplay::RaceSim::finished)).
     #[must_use]
     pub fn finished(&self) -> bool {
-        self.race.sim.finished()
+        self.race.core.sim.finished()
     }
 
     /// Whether a seat that was seated has left (a refused or closed connection, an end).

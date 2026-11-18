@@ -31,7 +31,7 @@ impl Race {
     /// ([`RaceSim`], "Why it is `Clone`"), so this is 27 to 32 KiB and a few microseconds.
     #[must_use]
     pub fn snapshot_sim(&self) -> RaceSim {
-        self.sim.clone()
+        self.core.sim.clone()
     }
 
     /// Puts a snapshot back, leaving the view untouched.
@@ -48,7 +48,7 @@ impl Race {
     /// camera, draws sparks, shakes on impact and raises sound cues again.
     /// Replay through [`Self::tick_sim_only`] instead.
     pub fn restore_sim(&mut self, snapshot: &RaceSim) {
-        self.sim = snapshot.clone();
+        self.core.sim = snapshot.clone();
     }
 
     /// [`Self::restore_sim`] for a race that is being watched, not played: the state is put back
@@ -65,8 +65,8 @@ impl Race {
         self.restore_sim(snapshot);
         #[cfg(feature = "view")]
         {
-            self.view.results = None;
-            self.view.wreck_ended_tick = None;
+            self.core.outcome.results = None;
+            self.core.outcome.wreck_ended_tick = None;
             self.view.restores = self.view.restores.wrapping_add(1);
             self.settle_poses();
         }
@@ -96,9 +96,10 @@ impl Race {
     /// each of the twenty-odd push sites: a cue's bookkeeping
     /// (`contact_cue_cooldown`) is sim state and must keep running.
     ///
-    /// **What still runs although it lives in the view**, because the
-    /// simulation or the caller reads it back. The lock-on is not one of them:
-    /// each person-flown slot's lock is simulation state
+    /// **What still runs although it is not simulation state**, because the
+    /// simulation or the caller reads it back: the race's
+    /// [`Outcome`](crate::outcome::Outcome), beside `RaceSim` and outside its hash. The
+    /// lock-on is not one of them: each person-flown slot's lock is simulation state
     /// ([`RaceSim::advance_locks`], hashed), advanced from the world with no camera, so
     /// the chase camera and the reticle are never read by a shot, and a server
     /// with neither agrees with its client about a lock. The picture's reticle
@@ -106,25 +107,25 @@ impl Race {
     ///
     /// - `capture_results`, which writes the scoreboard once, on the first tick
     ///   the race is finished.
-    /// - `wreck_ended_tick`, which `Race::runs_on_after_the_wreck` reads.
+    /// - `wreck_ended_tick`, which `SimRace::runs_on_after_the_wreck` reads.
     ///
     /// **The recording does not hear a replayed tick.** A client recording its
     /// race keeps the inputs it predicted, not the corrected ones; correcting a
     /// recording is its own piece of work.
     pub fn tick_sim_only(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluations {
         let queued = (
-            self.sim.cues.len(),
-            self.sim.announcements.len(),
-            self.sim.class_announcements.len(),
-            self.sim.mod_sounds.len(),
+            self.core.sim.cues.len(),
+            self.core.sim.announcements.len(),
+            self.core.sim.class_announcements.len(),
+            self.core.sim.mod_sounds.len(),
         );
         let was_quiet = std::mem::replace(&mut self.quiet, true);
         let evaluations = self.tick(inputs);
         self.quiet = was_quiet;
-        self.sim.cues.truncate(queued.0);
-        self.sim.announcements.truncate(queued.1);
-        self.sim.class_announcements.truncate(queued.2);
-        self.sim.mod_sounds.truncate(queued.3);
+        self.core.sim.cues.truncate(queued.0);
+        self.core.sim.announcements.truncate(queued.1);
+        self.core.sim.class_announcements.truncate(queued.2);
+        self.core.sim.mod_sounds.truncate(queued.3);
         evaluations
     }
 

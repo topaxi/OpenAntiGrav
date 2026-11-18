@@ -99,8 +99,8 @@ impl Scene {
     ) -> Option<oag_render::ghost::Frame> {
         self.ghost.pipeline.as_ref()?;
         let (now, before) = race.ghost_pose()?;
-        let distance = (race.ship().physics.body.position - now.position).length();
-        let tick = race.sim.world.tick;
+        let distance = (race.core.ship().physics.body.position - now.position).length();
+        let tick = race.core.sim.world.tick;
         let mut offsets = self.ghost.offsets.borrow_mut();
         if offsets.0 != tick
             && let Some(rng) = self.ghost.rng.borrow_mut().as_mut()
@@ -143,7 +143,7 @@ impl Scene {
         let ghost = race.ghost()?;
         let (now, before) = race.ghost_pose()?;
         let drawable = self.ghost_drawable(&ghost.team)?;
-        let distance = (race.ship().physics.body.position - now.position).length();
+        let distance = (race.core.ship().physics.body.position - now.position).length();
         Some((
             drawable.ghost_hull(race.ghost_draw_matrix(&now, &before), eye),
             oag_render::ghost::fade(distance),

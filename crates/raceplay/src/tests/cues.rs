@@ -22,14 +22,18 @@ pub(super) fn grid_on_a_speed_pad() -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 #[test]
 fn crossing_a_pad_raises_its_cue_on_the_tick_the_flare_is_armed() {
     let mut race = grid_on_a_speed_pad();
     assert!(
-        race.sim.pending_cues().is_empty(),
+        race.core.sim.pending_cues().is_empty(),
         "a cue before any tick ran"
     );
 
@@ -43,12 +47,13 @@ fn crossing_a_pad_raises_its_cue_on_the_tick_the_flare_is_armed() {
         "the flare did not arm"
     );
     assert!(
-        race.sim
+        race.core
+            .sim
             .pending_cues()
             .iter()
             .any(|e| e.cue == Cue::SpeedupPad),
         "the flare armed and the cue did not: {:?}",
-        race.sim.pending_cues()
+        race.core.sim.pending_cues()
     );
 }
 
@@ -57,6 +62,7 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
     let mut race = grid_on_a_speed_pad();
     race.tick(&PlayerInputs::none());
     let first: Vec<_> = race
+        .core
         .sim
         .drain_cues()
         .into_iter()
@@ -66,7 +72,7 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
     // single race raises eight - each carrying its own slot, which is what the
     // audio layer places it by. Before positional audio the seven opponents
     // were dropped at the point of raising and this asserted `1`.
-    assert_eq!(first.len(), race.sim.ship_count() as usize);
+    assert_eq!(first.len(), race.core.sim.ship_count() as usize);
     let mut slots: Vec<_> = first.iter().map(|e| e.slot).collect();
     slots.sort_unstable();
     slots.dedup();
@@ -85,6 +91,7 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
     }
     assert!(
         !race
+            .core
             .sim
             .drain_cues()
             .iter()
@@ -97,11 +104,11 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
 fn draining_takes_the_queue_and_leaves_it_empty() {
     let mut race = grid_on_a_speed_pad();
     race.tick(&PlayerInputs::none());
-    assert!(!race.sim.pending_cues().is_empty());
-    let drained = race.sim.drain_cues();
+    assert!(!race.core.sim.pending_cues().is_empty());
+    let drained = race.core.sim.drain_cues();
     assert!(!drained.is_empty());
     assert!(
-        race.sim.pending_cues().is_empty(),
+        race.core.sim.pending_cues().is_empty(),
         "a second reader would play the same cue twice"
     );
 }
@@ -113,6 +120,7 @@ fn a_track_with_no_pads_raises_no_pad_cue() {
         race.tick(&PlayerInputs::none());
         assert!(
             !race
+                .core
                 .sim
                 .drain_cues()
                 .iter()
@@ -133,7 +141,7 @@ fn a_track_with_no_pads_raises_no_pad_cue() {
 #[test]
 fn every_cue_has_something_that_raises_it() {
     // A cue driven from the *level* rather than from an edge: the audio layer
-    // reads `Race::shield_is_up`, `Race::craft_is_exploding`, `RaceSim::finished`
+    // reads `SimRace::shield_is_up`, `SimRace::craft_is_exploding`, `RaceSim::finished`
     // and `Race::sight_state` directly, so these have no entry in the queue by
     // design. `LockOn` is the odd one - it is fired on an *edge*, but the edge
     // is computed in the audio layer from that level rather than pushed here,
@@ -145,10 +153,10 @@ fn every_cue_has_something_that_raises_it() {
     // join this for the same reason: each is read directly off the world's
     // own projectile array every tick in `Audio::race_tick`, never pushed as
     // a `CueEvent` - see `TravelVoices`. `LeachAttach` is the same shape
-    // again, read directly off `race.sim.world.leach_beams[0]` instead of a
+    // again, read directly off `race.core.sim.world.leach_beams[0]` instead of a
     // projectile slot - see `SfxVoices::leach_attach`. `Autopilot` and
     // `Engaging` join `Blowup` for the same reason it is here: both are read
-    // off `Race::autopilot_is_active` directly in `Audio::race_tick`'s own
+    // off `SimRace::autopilot_is_active` directly in `Audio::race_tick`'s own
     // level-and-latch match, never pushed.
     //
     // `Magstrip` is neither: it is an edge, raised only on a title that builds
@@ -188,7 +196,11 @@ fn every_cue_has_something_that_raises_it() {
     setup.mode = Mode::SingleRace;
     setup.speedup_pads = enveloping_pad();
     setup.weapons = Some(wall_fixture_weapons_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
 
     let mut buttons = Buttons::new();
     let mut raised = std::collections::BTreeSet::new();
@@ -197,7 +209,7 @@ fn every_cue_has_something_that_raises_it() {
         // A shield, put up mid-race and taken down again, so the rising edge,
         // the level and the shielded-contact branch are all exercised. Set
         // outside `tick` on purpose - this is a fixture, not a pickup grant.
-        race.sim.world.ships[0].physics.shield_pickup_timer =
+        race.core.sim.world.ships[0].physics.shield_pickup_timer =
             if (60..180).contains(&tick) { 1.0 } else { 0.0 };
         // An Autopilot armed once, long enough to reach its own one-second
         // warning inside this run. Set directly for the same reason the shield
@@ -205,7 +217,7 @@ fn every_cue_has_something_that_raises_it() {
         // After the Mine's absorb below, not before: an absorb under a running
         // Autopilot only cancels it and raises nothing of its own.
         if tick == 41 {
-            race.sim.world.ships[0].autopilot_timer = 1.4;
+            race.core.sim.world.ships[0].autopilot_timer = 1.4;
         }
         // A Plasma, pressed once the Autopilot above has run out -
         // `spend_pickup` ignores a fire press while
@@ -215,13 +227,13 @@ fn every_cue_has_something_that_raises_it() {
         // wall it is re-aimed at every tick, and `Cue::PlasmaHitWall` follows
         // within a tick or two of that.
         if tick == 130 {
-            race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Plasma);
+            race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Plasma);
         }
         // A Mine absorbed, before the shield goes up: `Cue::Absorb` is the
         // absorb handler's own feedback and nothing else raises it - a
         // shielded contact is silent.
         if tick == 40 {
-            race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+            race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
         }
         // A Mine, dropped once - after the wall business above has already
         // had its first pass, so the impulse this leaves on `physics.shield`
@@ -229,8 +241,8 @@ fn every_cue_has_something_that_raises_it() {
         // the pickup path, for the same reason the shield and Autopilot above
         // are set directly.
         if tick == 200 {
-            race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
-            race.sim.world.ships[0]
+            race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+            race.core.sim.world.ships[0]
                 .pickup
                 .begin_drop(oag_weapons::projectile::mine::CLUSTER);
         }
@@ -249,10 +261,10 @@ fn every_cue_has_something_that_raises_it() {
         // `shuriken_bounces_off_a_wall` stage those two independently, aimed
         // rather than dropped.
         if tick == 210 {
-            race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
+            race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
         }
         if tick == 212 {
-            race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+            race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
         }
         // A HUD message line, raised once: `Cue::Message` sounds as it shows.
         if tick == 5 {
@@ -260,7 +272,7 @@ fn every_cue_has_something_that_raises_it() {
         }
         // Re-aimed at the wall every tick, so each one sees a fresh inbound
         // contact rather than the ship bouncing away after the first.
-        let body = &mut race.sim.world.ships[0].physics.body;
+        let body = &mut race.core.sim.world.ships[0].physics.body;
         // Level and pressed onto the wall, except on the Missile's own tick:
         // `missile::launch` fires along the craft's *forward* from its nose,
         // so for that one press the craft is lifted ten units clear and
@@ -279,7 +291,7 @@ fn every_cue_has_something_that_raises_it() {
             _ => buttons.tick(0),
         };
         saw_impact |= race.tick(&PlayerInputs::single(snapshot)).wall.impact;
-        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.core.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     assert!(
         saw_impact,
@@ -385,20 +397,24 @@ fn plasma_hits_a_craft() -> std::collections::BTreeSet<Cue> {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_plasma_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Plasma);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Plasma);
 
     let mut buttons = Buttons::new();
     let mut raised = std::collections::BTreeSet::new();
     for tick in 0..180 {
-        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-        let forward = race.sim.world.ships[0].physics.body.forward();
-        race.sim.world.ships[0].physics.body.linear_velocity = forward * 60.0;
-        race.sim.world.ships[1].physics.body.position = forward * 15.0;
-        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        let forward = race.core.sim.world.ships[0].physics.body.forward();
+        race.core.sim.world.ships[0].physics.body.linear_velocity = forward * 60.0;
+        race.core.sim.world.ships[1].physics.body.position = forward * 15.0;
+        race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
 
         let snapshot = if tick == 0 {
             buttons.tick(SQUARE)
@@ -406,7 +422,7 @@ fn plasma_hits_a_craft() -> std::collections::BTreeSet<Cue> {
             buttons.tick(0)
         };
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.core.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -422,20 +438,24 @@ fn rocket_hits_a_craft() -> std::collections::BTreeSet<Cue> {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_rocket_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
 
     let mut buttons = Buttons::new();
     let mut raised = std::collections::BTreeSet::new();
     for tick in 0..60 {
-        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-        let forward = race.sim.world.ships[0].physics.body.forward();
-        race.sim.world.ships[0].physics.body.linear_velocity = forward * 60.0;
-        race.sim.world.ships[1].physics.body.position = forward * 15.0;
-        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        let forward = race.core.sim.world.ships[0].physics.body.forward();
+        race.core.sim.world.ships[0].physics.body.linear_velocity = forward * 60.0;
+        race.core.sim.world.ships[1].physics.body.position = forward * 15.0;
+        race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
 
         let snapshot = if tick == 0 {
             buttons.tick(SQUARE)
@@ -443,7 +463,7 @@ fn rocket_hits_a_craft() -> std::collections::BTreeSet<Cue> {
             buttons.tick(0)
         };
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.core.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -459,11 +479,15 @@ fn cannon_hits_a_craft() -> std::collections::BTreeSet<Cue> {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_cannon_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
 
     let mut buttons = Buttons::new();
     let mut raised = std::collections::BTreeSet::new();
@@ -472,16 +496,16 @@ fn cannon_hits_a_craft() -> std::collections::BTreeSet<Cue> {
         // its own shooter: `forward * 15.0` is a *relative* offset, and
         // reading it against a shooter left to drift would place the target
         // somewhere that was never actually down the nose.
-        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-        let forward = race.sim.world.ships[0].physics.body.forward();
-        race.sim.world.ships[1].physics.body.position = forward * 15.0;
-        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        let forward = race.core.sim.world.ships[0].physics.body.forward();
+        race.core.sim.world.ships[1].physics.body.position = forward * 15.0;
+        race.core.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
 
         // Held the whole run: `Cannon_UpdateReload` reads the held bit, not
         // the press edge.
         let snapshot = buttons.tick(SQUARE);
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.core.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -502,18 +526,22 @@ fn cannon_hits_a_wall() -> std::collections::BTreeSet<Cue> {
     );
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_cannon_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
 
     let mut buttons = Buttons::new();
     let mut raised = std::collections::BTreeSet::new();
     for _ in 0..60 {
-        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
         // Held the whole run, the same reason `cannon_hits_a_craft` holds it.
         let snapshot = buttons.tick(SQUARE);
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.core.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -530,21 +558,25 @@ fn shuriken_bounces_off_a_wall() -> std::collections::BTreeSet<Cue> {
     );
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_shuriken_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shuriken);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shuriken);
 
     let mut buttons = Buttons::new();
     let mut raised = std::collections::BTreeSet::new();
     for tick in 0..60 {
-        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
         let snapshot = if tick == 0 {
             buttons.tick(SQUARE)
         } else {
             buttons.tick(0)
         };
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.core.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -565,11 +597,15 @@ fn quake_hits_a_craft() -> std::collections::BTreeSet<Cue> {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Quake);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Quake);
 
     let mut buttons = Buttons::new();
     let mut raised = std::collections::BTreeSet::new();
@@ -580,7 +616,7 @@ fn quake_hits_a_craft() -> std::collections::BTreeSet<Cue> {
             buttons.tick(0)
         };
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.core.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -596,14 +632,18 @@ fn leach_fires_locked() -> std::collections::BTreeSet<Cue> {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_leach_beam_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    let forward = race.sim.world.ships[0].physics.body.forward();
-    race.sim.world.ships[1].physics.body.position =
-        race.sim.world.ships[0].physics.body.position + forward * 60.0;
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    let forward = race.core.sim.world.ships[0].physics.body.forward();
+    race.core.sim.world.ships[1].physics.body.position =
+        race.core.sim.world.ships[0].physics.body.position + forward * 60.0;
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
 
     let mut buttons = Buttons::new();
     let mut raised = std::collections::BTreeSet::new();
@@ -614,7 +654,7 @@ fn leach_fires_locked() -> std::collections::BTreeSet<Cue> {
             buttons.tick(0)
         };
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.core.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -718,14 +758,18 @@ fn a_re_press_while_a_quake_wave_travels_still_raises_quakelaunch() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Quake);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Quake);
 
     let mut buttons = Buttons::new();
     let mut launches = 0;
     for tick in 0..5 {
         // Pressed twice: the launch on tick 1, and a re-press on tick 3
-        // while that same wave is still `race.sim.world.quake`.
+        // while that same wave is still `race.core.sim.world.quake`.
         let snapshot = if tick == 1 || tick == 3 {
             buttons.tick(SQUARE)
         } else {
@@ -736,9 +780,10 @@ fn a_re_press_while_a_quake_wave_travels_still_raises_quakelaunch() {
         // this fixture wants a Quake in the slot for the second press too,
         // to land on the busy-return path deliberately rather than on "no
         // weapon held" for an unrelated reason.
-        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Quake);
+        race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Quake);
         race.tick(&PlayerInputs::single(snapshot));
         launches += race
+            .core
             .sim
             .drain_cues()
             .iter()
@@ -771,14 +816,18 @@ fn a_locked_leachbeam_pulses_leachenergy_and_not_every_tick() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_leach_beam_table());
-    let mut race = Race::start(setup);
-    race.sim.world.ship_count = 2;
-    race.sim.world.ships[1].active = true;
-    race.sim.world.ships[1].handling = hulled_handling();
-    let forward = race.sim.world.ships[0].physics.body.forward();
-    race.sim.world.ships[1].physics.body.position =
-        race.sim.world.ships[0].physics.body.position + forward * 60.0;
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    race.core.sim.world.ship_count = 2;
+    race.core.sim.world.ships[1].active = true;
+    race.core.sim.world.ships[1].handling = hulled_handling();
+    let forward = race.core.sim.world.ships[0].physics.body.forward();
+    race.core.sim.world.ships[1].physics.body.position =
+        race.core.sim.world.ships[0].physics.body.position + forward * 60.0;
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
 
     let mut buttons = Buttons::new();
     let ticks = 120;
@@ -791,6 +840,7 @@ fn a_locked_leachbeam_pulses_leachenergy_and_not_every_tick() {
         };
         race.tick(&PlayerInputs::single(snapshot));
         if race
+            .core
             .sim
             .drain_cues()
             .iter()
@@ -832,9 +882,11 @@ fn the_shield_announcer_fires_on_the_edge_and_not_on_the_level() {
     let mut race = grid_on_a_speed_pad();
     let mut announcements = 0;
     for tick in 0..180 {
-        race.sim.world.ships[0].physics.shield_pickup_timer = if tick >= 30 { 1.0 } else { 0.0 };
+        race.core.sim.world.ships[0].physics.shield_pickup_timer =
+            if tick >= 30 { 1.0 } else { 0.0 };
         race.tick(&PlayerInputs::none());
         announcements += race
+            .core
             .sim
             .drain_cues()
             .iter()
@@ -859,7 +911,11 @@ fn zone_race() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Zone;
     setup.zone_stages = Some(&TEST_ZONE_STAGES);
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// The speed-class announcer's own trigger: it fires on a stage *boundary*,
@@ -880,12 +936,12 @@ fn the_class_announcer_fires_on_a_stage_step_and_not_on_every_zone() {
     // Past the start-line countdown, through which the zone machine holds.
     for _ in 0..oag_race::COUNTDOWN_TICKS + 1300 {
         race.tick(&PlayerInputs::none());
-        raised.extend(race.sim.drain_class_announcements());
+        raised.extend(race.core.sim.drain_class_announcements());
     }
     assert!(
-        race.sim.world.primary_race().zone >= 2,
+        race.core.sim.world.primary_race().zone >= 2,
         "sanity: 1300 ticks should survive at least two zones, got {}",
-        race.sim.world.primary_race().zone
+        race.core.sim.world.primary_race().zone
     );
     assert_eq!(
         raised,
@@ -905,16 +961,20 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
     // The default `setup()` fixture already leaves this `None` - restated
     // here so the test does not depend on that staying true by accident.
     setup.zone_stages = None;
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
 
     let mut raised = Vec::new();
     // Past the start-line countdown, through which the zone machine holds.
     for _ in 0..oag_race::COUNTDOWN_TICKS + 1300 {
         race.tick(&PlayerInputs::none());
-        raised.extend(race.sim.drain_class_announcements());
+        raised.extend(race.core.sim.drain_class_announcements());
     }
     assert!(
-        race.sim.world.primary_race().zone >= 2,
+        race.core.sim.world.primary_race().zone >= 2,
         "sanity: the zone counter itself does not need a ladder to step"
     );
     assert!(
@@ -932,9 +992,9 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
 #[test]
 fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(Arc::new(one_mine_table()));
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
-    race.sim.world.ships[0]
+    race.core.sim.weapons = Some(Arc::new(one_mine_table()));
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+    race.core.sim.world.ships[0]
         .pickup
         .begin_drop(oag_weapons::projectile::mine::CLUSTER);
 
@@ -944,6 +1004,7 @@ fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
     for _ in 0..120 {
         race.tick(&PlayerInputs::none());
         launches += race
+            .core
             .sim
             .drain_cues()
             .iter()
@@ -964,7 +1025,7 @@ fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
 #[test]
 fn dropping_a_bomb_raises_no_mine_launch_cue() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(Arc::new(
+    race.core.sim.weapons = Some(Arc::new(
         oag_tables::weapons::parse(
             r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
@@ -978,13 +1039,13 @@ fn dropping_a_bomb_raises_no_mine_launch_cue() {
         )
         .expect("the fixture table must parse"),
     ));
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Bomb);
-    race.sim.world.ships[0].pickup.begin_drop(1);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Bomb);
+    race.core.sim.world.ships[0].pickup.begin_drop(1);
 
     let mut raised = Vec::new();
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
-        raised.extend(race.sim.drain_cues());
+        raised.extend(race.core.sim.drain_cues());
     }
     assert!(
         !raised.iter().any(|e| e.cue == Cue::MineLaunch),
@@ -1005,9 +1066,12 @@ fn raising_a_cue_does_not_move_the_race_hash() {
         without.tick(&PlayerInputs::none());
         // One of the two has its queue drained every tick and the other never
         // does, so by the end they hold different queues entirely.
-        with.sim.drain_cues();
+        with.core.sim.drain_cues();
     }
-    assert!(!without.sim.pending_cues().is_empty(), "nothing was queued");
-    assert!(with.sim.pending_cues().is_empty());
-    assert_eq!(with.sim.state_hash(), without.sim.state_hash());
+    assert!(
+        !without.core.sim.pending_cues().is_empty(),
+        "nothing was queued"
+    );
+    assert!(with.core.sim.pending_cues().is_empty());
+    assert_eq!(with.core.sim.state_hash(), without.core.sim.state_hash());
 }

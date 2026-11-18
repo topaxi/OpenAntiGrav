@@ -52,7 +52,7 @@
 
 use oag_race::COUNTDOWN_TICKS;
 
-use super::Race;
+use super::SimRace;
 use oag_gameplay::cue::{Cue, CueEvent};
 
 /// Ticks from `ready` to `go`: the countdown state's own length.
@@ -67,7 +67,7 @@ pub const GO_TICK: u64 = COUNTDOWN_TICKS - 1;
 /// The `World::tick` `ready` is raised on.
 pub const READY_TICK: u64 = GO_TICK - READY_TO_GO_TICKS;
 
-impl Race {
+impl SimRace {
     /// Raises one of the start voice's cues outside a tick, for a resume
     /// countdown (`oag_game`'s `session::pause`, chosen, not measured): the same
     /// cue the original voices at the start, on a title that voices it, and
@@ -83,7 +83,7 @@ impl Race {
 
     /// Raises `ready` and `go` on their ticks, on a title that voices its start.
     ///
-    /// Called from [`Race::tick`] before the step, so `World::tick` is the tick
+    /// Called from [`Race::tick`](super::Race::tick) before the step, so `World::tick` is the tick
     /// being stepped. A cue is a per-tick output and no world state: nothing
     /// here can move a state hash.
     pub(super) fn tick_countdown_voice(&mut self) {

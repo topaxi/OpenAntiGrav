@@ -400,31 +400,31 @@ fn an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors() {
     let loaded = race::load_event(&options, "2048 - Event 1").expect("the event loads");
     let progress = loaded.campaign_2048_event.clone().expect("an event");
     let awards = progress.xp_awards.clone().expect("the table loads");
-    let mut run = race::Race::start(loaded.setup);
-    run.sim.arm_event_xp(&progress);
-    run.sim.set_autopilot(true);
-    let max = run.sim.world.ships[0].handling.dimensions.shield;
-    let (mut lap, mut shield, mut damaged) = (run.sim.world.race[0].lap, max, false);
+    let mut run = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    run.core.sim.arm_event_xp(&progress);
+    run.core.sim.set_autopilot(true);
+    let max = run.core.sim.world.ships[0].handling.dimensions.shield;
+    let (mut lap, mut shield, mut damaged) = (run.core.sim.world.race[0].lap, max, false);
     let (mut perfect, mut full) = (0, 0);
-    while !run.sim.finished() && run.sim.world.tick < 30_000 {
+    while !run.core.sim.finished() && run.core.sim.world.tick < 30_000 {
         run.tick(&oag_gameplay::PlayerInputs::none());
-        let now = run.sim.world.ships[0].physics.shield;
+        let now = run.core.sim.world.ships[0].physics.shield;
         damaged |= now < shield;
         shield = now;
-        if run.sim.world.race[0].lap > lap {
-            lap = run.sim.world.race[0].lap;
+        if run.core.sim.world.race[0].lap > lap {
+            lap = run.core.sim.world.race[0].lap;
             perfect += u32::from(!damaged);
             full += u32::from(now >= max);
             damaged = false;
-            run.sim.world.ships[0].physics.shield = max;
+            run.core.sim.world.ships[0].physics.shield = max;
             shield = max;
         }
     }
     assert!(
-        run.sim.finished(),
+        run.core.sim.finished(),
         "the event did not finish in 30000 ticks"
     );
-    let tally = run.sim.xp_tally().expect("armed");
+    let tally = run.core.sim.xp_tally().expect("armed");
     let column = progress.xp_column;
     assert!(
         awards.xp(5, column) > 0 && awards.xp(44, column) > 0 && awards.xp(21, column) > 0,

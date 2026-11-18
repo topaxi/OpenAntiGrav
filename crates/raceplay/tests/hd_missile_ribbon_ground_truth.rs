@@ -75,8 +75,8 @@ fn a_missile_lays_four_ribbons_that_draw_and_outlive_it() {
         .expect("assets")
         .ramp
         .clone();
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
     let eye = Vec3::new(0.0, 5.0, 0.0);
     let mut buttons = oag_core::buttons::Input::new();
     let mut peak = 0;
@@ -97,6 +97,7 @@ fn a_missile_lays_four_ribbons_that_draw_and_outlive_it() {
         let live = race.missile_smoke_live();
         peak = peak.max(live);
         let airborne = race
+            .core
             .sim
             .world
             .projectiles

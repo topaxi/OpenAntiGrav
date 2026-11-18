@@ -33,8 +33,8 @@ impl Race {
     /// Keeps [`Trigger::Quake`] and its own transform riding the travelling
     /// wave, one instance for the whole race.
     ///
-    /// Needs `self.sim.course` (to place the wave along the ring) and
-    /// `self.sim.spline` (to read the track's own width there), which is why this
+    /// Needs `self.core.sim.course` (to place the wave along the ring) and
+    /// `self.core.sim.spline` (to read the track's own width there), which is why this
     /// cannot live in `oag_weapons::projectile::quake` at all - see that
     /// module's own doc comment on the split.
     ///
@@ -67,12 +67,12 @@ impl Race {
     /// (`oag_title::QuakeLook`, `psp-pure-usa/quake.md`).
     ///
     /// Releases the instance the tick the wave goes away
-    /// (`self.sim.world.quake` becomes `None`), as `Quake_Update` does
+    /// (`self.core.sim.world.quake` becomes `None`), as `Quake_Update` does
     /// (`Psys_ReleaseHandle`, `now != 0`): the same "hand the slot back, free
     /// the templates, let the particles fade" shape
     /// [`Race::advance_projectile_flares`] takes.
     pub(crate) fn advance_quake_visual(&mut self) {
-        let Some(wave) = self.sim.world.quake else {
+        let Some(wave) = self.core.sim.world.quake else {
             self.view.quake_point = None;
             self.view.quake_surface = None;
             if let Some(playing) = self.view.quake_effect.take() {
@@ -80,7 +80,7 @@ impl Race {
             }
             return;
         };
-        let Some(course) = self.sim.course.as_deref() else {
+        let Some(course) = self.core.sim.course.as_deref() else {
             return;
         };
         let Some(index) = course_index_near_progress(course, wave.progress) else {
@@ -89,7 +89,7 @@ impl Race {
         let Some(position) = course.position(index) else {
             return;
         };
-        let Some((_, sample, _)) = self.sim.spline.nearest(position) else {
+        let Some((_, sample, _)) = self.core.sim.spline.nearest(position) else {
             return;
         };
         let lateral = Vec3::from_array(sample.lateral);

@@ -64,14 +64,17 @@ fn an_hd_detonator_race_steps_a_stage_per_lap_and_ends_at_fifteen() {
     let Some(loaded) = load() else {
         return;
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // The player flies their own racing line (`RaceSim::set_autopilot`); the rules are the race's.
-    race.sim.set_autopilot(true);
-    assert_eq!(race.sim.world.race[LONE].mode, oag_race::Mode::Detonator);
-    assert_eq!(race.sim.world.race[LONE].laps_target, Some(14));
+    race.core.sim.set_autopilot(true);
+    assert_eq!(
+        race.core.sim.world.race[LONE].mode,
+        oag_race::Mode::Detonator
+    );
+    assert_eq!(race.core.sim.world.race[LONE].laps_target, Some(14));
 
     let stage = |race: &race::Race| {
-        oag_race::Mode::detonator_stage(race.sim.world.race[LONE].laps_completed())
+        oag_race::Mode::detonator_stage(race.core.sim.world.race[LONE].laps_completed())
     };
     assert_eq!(stage(&race), 1);
     let mut seen = vec![stage(&race)];
@@ -81,10 +84,10 @@ fn an_hd_detonator_race_steps_a_stage_per_lap_and_ends_at_fifteen() {
         race.tick(&PlayerInputs::none());
         let now = stage(&race);
         if now != *seen.last().expect("one stage at least") {
-            shield_per_lap.push(race.sim.world.ships[LONE].physics.shield);
+            shield_per_lap.push(race.core.sim.world.ships[LONE].physics.shield);
             seen.push(now);
         }
-        if race.sim.world.race[LONE].finished {
+        if race.core.sim.world.race[LONE].finished {
             break;
         }
     }
@@ -92,15 +95,15 @@ fn an_hd_detonator_race_steps_a_stage_per_lap_and_ends_at_fifteen() {
     println!("per-lap shield (at each line crossing): {shield_per_lap:?}");
     println!(
         "end-of-run shield: {}",
-        race.sim.world.ships[LONE].physics.shield
+        race.core.sim.world.ships[LONE].physics.shield
     );
-    assert!(race.sim.world.race[LONE].finished, "the race ends");
+    assert!(race.core.sim.world.race[LONE].finished, "the race ends");
     assert_eq!(
         seen,
         (1..=15).collect::<Vec<u32>>(),
         "one stage per lap, 1 to 15"
     );
-    assert_eq!(race.sim.world.race[LONE].laps_completed(), 14);
+    assert_eq!(race.core.sim.world.race[LONE].laps_completed(), 14);
 }
 
 /// HD's Zone-modes mask covers Detonator: the race flies `/data/ships/zone`'s handling.
@@ -143,7 +146,16 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
     })
     .expect("loading a 2048 Detonator race");
     assert_eq!(
-        race::Race::start(loaded.setup.clone()).sim.world.race[0].laps_target,
+        race::Race::start(
+            loaded.setup.clone(),
+            loaded.view.clone(),
+            loaded.modules.clone()
+        )
+        .core
+        .sim
+        .world
+        .race[0]
+            .laps_target,
         Some(14)
     );
     let grade = loaded.zone_grade.as_ref().expect("a grade");
@@ -172,7 +184,16 @@ fn an_omega_detonator_race_runs_fourteen_stages_without_a_grade() {
     })
     .expect("loading an Omega Detonator race");
     assert_eq!(
-        race::Race::start(loaded.setup.clone()).sim.world.race[0].laps_target,
+        race::Race::start(
+            loaded.setup.clone(),
+            loaded.view.clone(),
+            loaded.modules.clone()
+        )
+        .core
+        .sim
+        .world
+        .race[0]
+            .laps_target,
         Some(14)
     );
     assert!(loaded.zone_grade.is_none());

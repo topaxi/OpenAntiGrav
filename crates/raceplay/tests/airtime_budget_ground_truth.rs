@@ -216,25 +216,25 @@ fn measure_airtime(
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     if let Some(pilot) = pilot {
         // Tempered here, so a sweep across tiers is asking about the same
         // character at four levels rather than whichever one slot 1 drew.
-        race.sim.set_ai_pilot(LONE, level.temper(&pilot));
+        race.core.sim.set_ai_pilot(LONE, level.temper(&pilot));
     }
     // Everyone but one opponent off the track, so every airborne window
     // measured is this craft's own driving, with no traffic in the way of it.
     for slot in 2..8 {
-        race.sim.world.ships[slot].active = false;
+        race.core.sim.world.ships[slot].active = false;
     }
-    race.sim.world.ships[0].active = false;
+    race.core.sim.world.ships[0].active = false;
 
-    let mut lap = race.sim.world.ships[LONE].standing.lap;
+    let mut lap = race.core.sim.world.ships[LONE].standing.lap;
     let mut recovered_this_lap = false;
     let mut clean_laps = 0u32;
 
     let mut respawn_ticks: Vec<u64> = Vec::new();
-    let mut prev_respawns = race.sim.respawns_of(LONE);
+    let mut prev_respawns = race.core.sim.respawns_of(LONE);
 
     let mut raw: Vec<RawWindow> = Vec::new();
     let mut was_airborne = false;
@@ -243,14 +243,14 @@ fn measure_airtime(
     for tick in 0..TICKS {
         race.tick(&PlayerInputs::none());
 
-        let now_respawns = race.sim.respawns_of(LONE);
+        let now_respawns = race.core.sim.respawns_of(LONE);
         if now_respawns != prev_respawns {
             respawn_ticks.push(tick);
             prev_respawns = now_respawns;
             recovered_this_lap = true;
         }
 
-        let now_lap = race.sim.world.ships[LONE].standing.lap;
+        let now_lap = race.core.sim.world.ships[LONE].standing.lap;
         if now_lap != lap {
             // The same convention `ai_roll_ground_truth.rs::rolls_on` uses for
             // its own "best lap" figure: the first lap segment is the run-up
@@ -262,7 +262,7 @@ fn measure_airtime(
             recovered_this_lap = false;
         }
 
-        let airborne = race.sim.world.ships[LONE].physics.time_airborne;
+        let airborne = race.core.sim.world.ships[LONE].physics.time_airborne;
         if airborne > 0.0 {
             if !was_airborne {
                 start_tick = tick;
@@ -304,7 +304,7 @@ fn measure_airtime(
         discarded,
         clean_laps,
         laps: lap,
-        respawns: race.sim.respawns_of(LONE),
+        respawns: race.core.sim.respawns_of(LONE),
     })
 }
 

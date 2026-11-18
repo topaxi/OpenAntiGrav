@@ -43,10 +43,10 @@ fn run(source: &std::path::Path, track: &str, class: &str) -> Run {
     if std::env::var_os("OAG_BENEATH_OFF").is_some() {
         setup.reset_triggers.beneath.enabled = false;
     }
-    let mut race = race::Race::start(setup);
-    let count = race.sim.ship_count() as usize;
-    race.sim.world.ships[0].active = false;
-    let laps_target = race.sim.world.laps_target().unwrap_or(3) as usize;
+    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
+    let count = race.core.sim.ship_count() as usize;
+    race.core.sim.world.ships[0].active = false;
+    let laps_target = race.core.sim.world.laps_target().unwrap_or(3) as usize;
     let mut out = Run {
         beneath_per_lap: vec![0; laps_target],
         respawns: Vec::new(),
@@ -63,7 +63,7 @@ fn run(source: &std::path::Path, track: &str, class: &str) -> Run {
         out.ticks = tick + 1;
         let mut running = 0;
         for slot in 1..count {
-            let ship = &race.sim.world.ships[slot];
+            let ship = &race.core.sim.world.ships[slot];
             if !ship.active {
                 continue;
             }
@@ -80,9 +80,9 @@ fn run(source: &std::path::Path, track: &str, class: &str) -> Run {
             {
                 running += 1;
             }
-            if race.sim.respawns_of(slot) != respawns[slot] {
-                respawns[slot] = race.sim.respawns_of(slot);
-                let cause = race.sim.last_respawn_cause_of(slot);
+            if race.core.sim.respawns_of(slot) != respawns[slot] {
+                respawns[slot] = race.core.sim.respawns_of(slot);
+                let cause = race.core.sim.last_respawn_cause_of(slot);
                 let index = ship.driver.index;
                 out.respawns
                     .push(format!("slot {slot} lap {lap} {cause:?}@{index}"));
@@ -100,7 +100,7 @@ fn run(source: &std::path::Path, track: &str, class: &str) -> Run {
         }
     }
     for slot in 1..count {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         if ship.active {
             out.shield_at_end.push(ship.physics.shield);
             out.finished += usize::from(ship.standing.finished());
@@ -112,7 +112,7 @@ fn run(source: &std::path::Path, track: &str, class: &str) -> Run {
                     ship.physics.body.linear_velocity.length(),
                     ship.physics.time_airborne,
                     ship.physics.craft_state,
-                    race.sim.respawn_given_up_of(slot)
+                    race.core.sim.respawn_given_up_of(slot)
                 ));
             }
         }
@@ -275,9 +275,9 @@ fn beneath_census_all_titles() {
                 continue;
             }
         };
-        let mut race = race::Race::start(loaded.setup);
-        let count = race.sim.ship_count() as usize;
-        race.sim.world.ships[0].active = false;
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+        let count = race.core.sim.ship_count() as usize;
+        race.core.sim.world.ships[0].active = false;
         let mut respawns = vec![0u32; count];
         let mut wide = vec![false; count];
         let mut outside_before = vec![false; count];
@@ -289,16 +289,16 @@ fn beneath_census_all_titles() {
             ticks = tick + 1;
             let mut running = 0;
             for slot in 1..count {
-                let ship = &race.sim.world.ships[slot];
+                let ship = &race.core.sim.world.ships[slot];
                 if !ship.active {
                     continue;
                 }
                 if !ship.standing.finished() {
                     running += 1;
                 }
-                if race.sim.respawns_of(slot) != respawns[slot] {
-                    respawns[slot] = race.sim.respawns_of(slot);
-                    let cause = race.sim.last_respawn_cause_of(slot);
+                if race.core.sim.respawns_of(slot) != respawns[slot] {
+                    respawns[slot] = race.core.sim.respawns_of(slot);
+                    let cause = race.core.sim.last_respawn_cause_of(slot);
                     let mut event = format!("{cause:?}@{}t{tick}", ship.driver.index);
                     if cause == Some(RespawnCause::Beneath) {
                         event.push_str(&format!(
@@ -309,15 +309,19 @@ fn beneath_census_all_titles() {
                     events.push(event);
                     wide[slot] = false;
                 }
-                let line = race.sim.line_of(slot);
+                let line = race.core.sim.line_of(slot);
                 let index = ship.driver.index as usize;
                 let under = ship.physics.time_airborne <= 0.0
                     && !line.is_unsupported(index)
-                    && race.sim.ai_sample_for(slot, index).is_some_and(|sample| {
-                        let up = -Vec3::from_array(sample.down).normalize_or_zero();
-                        (line.point(index) - ship.physics.body.position).dot(up)
-                            > oag_race::recovery::BENEATH_LINE
-                    });
+                    && race
+                        .core
+                        .sim
+                        .ai_sample_for(slot, index)
+                        .is_some_and(|sample| {
+                            let up = -Vec3::from_array(sample.down).normalize_or_zero();
+                            (line.point(index) - ship.physics.body.position).dot(up)
+                                > oag_race::recovery::BENEATH_LINE
+                        });
                 let outside = line.aim(index, 0.0).corridor.is_some_and(|frame| {
                     let offset =
                         (ship.physics.body.position - line.point(index)).dot(frame.lateral);
@@ -335,14 +339,14 @@ fn beneath_census_all_titles() {
         }
         let finished: Vec<String> = (1..count)
             .map(|slot| {
-                let s = &race.sim.world.ships[slot].standing;
+                let s = &race.core.sim.world.ships[slot].standing;
                 format!("{}{}", s.lap, if s.finished() { "f" } else { "" })
             })
             .collect();
         // The field's bodies bit for bit: the race hash also covers the
         // rescue's own bookkeeping, which a change to the rescue may add to.
         let bodies = (1..count).fold(0u64, |acc, slot| {
-            let body = &race.sim.world.ships[slot].physics.body;
+            let body = &race.core.sim.world.ships[slot].physics.body;
             [body.position, body.linear_velocity]
                 .iter()
                 .flat_map(|v| v.to_array())
@@ -350,7 +354,7 @@ fn beneath_census_all_titles() {
         });
         println!(
             "CENSUS\t{label}\t{class}\tticks {ticks}\tbodies {bodies:016x}\thash {:016x}\tlaps {}\t{}",
-            race.sim.state_hash(),
+            race.core.sim.state_hash(),
             finished.join(","),
             events.join(" ")
         );

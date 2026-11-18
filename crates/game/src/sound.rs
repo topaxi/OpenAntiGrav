@@ -197,10 +197,10 @@ pub fn race_tick_keeping(
 /// rebuilt from the race as it stands at `tick` (`Audio::rebuild_race_sfx`). The cues of the
 /// ticks the seek ran are dropped, so nothing that sounded before the target sounds late.
 pub fn rebuild(audio: &mut Audio, race: &mut Race, tick: u64) {
-    drop(race.sim.drain_cues());
-    drop(race.sim.drain_mod_sounds());
-    drop(race.sim.drain_announcements());
-    drop(race.sim.drain_class_announcements());
+    drop(race.core.sim.drain_cues());
+    drop(race.core.sim.drain_mod_sounds());
+    drop(race.core.sim.drain_announcements());
+    drop(race.core.sim.drain_class_announcements());
     audio.rebuild_race_sfx(
         frame_of(race, Vec::new(), Vec::new(), Vec::new(), Vec::new()),
         tick,
@@ -212,10 +212,10 @@ pub fn rebuild(audio: &mut Audio, race: &mut Race, tick: u64) {
 /// 1X they are rebuilt from the state at `at` (`muted` remembers it), not started cold.
 pub fn viewer_step(audio: &mut Audio, race: &mut Race, normal: bool, muted: &mut bool, at: u64) {
     if !normal {
-        drop(race.sim.drain_cues());
-        drop(race.sim.drain_mod_sounds());
-        drop(race.sim.drain_announcements());
-        drop(race.sim.drain_class_announcements());
+        drop(race.core.sim.drain_cues());
+        drop(race.core.sim.drain_mod_sounds());
+        drop(race.core.sim.drain_announcements());
+        drop(race.core.sim.drain_class_announcements());
         audio.stop_race_sfx();
         *muted = true;
     } else if std::mem::take(muted) {
@@ -247,10 +247,10 @@ fn tick_effects(
         (Vec::new(), Vec::new(), Vec::new(), Vec::new())
     } else {
         (
-            race.sim.drain_cues(),
-            race.sim.drain_mod_sounds(),
-            race.sim.drain_announcements(),
-            race.sim.drain_class_announcements(),
+            race.core.sim.drain_cues(),
+            race.core.sim.drain_mod_sounds(),
+            race.core.sim.drain_announcements(),
+            race.core.sim.drain_class_announcements(),
         )
     };
     cues.retain(|event| keep(event));
@@ -280,35 +280,36 @@ fn frame_of<'a>(
         class_announcer: race.class_announcer(),
         cues,
         mod_sounds,
-        mod_loops: race.sim.mod_sound_loops(),
+        mod_loops: race.core.sim.mod_sound_loops(),
         announcements,
         class_announcements,
         listener: listener_of(race),
         craft: craft_positions(race, false),
         mod_craft: craft_positions(race, true),
-        slot_teams: std::array::from_fn(|slot| race.slot_team(slot)),
-        player_slot: race.player_slot(),
+        slot_teams: std::array::from_fn(|slot| race.core.slot_team(slot)),
+        player_slot: race.core.player_slot(),
         // The local player's throttle, `0..=100`: what
         // `Ship_UpdateEngineCrossfade` reads as `ctrl[+4]` for the craft whose
         // role is zero.
         throttle: race
+            .core
             .sim
             .world
             .ships
-            .get(race.player_slot())
+            .get(race.core.player_slot())
             .map_or(0.0, |ship| ship.physics.thrust),
         // An owned snapshot - `Projectile` is `Copy` and the array is small.
         // Read after `Race::tick` has already run, so a bolt that ended this
         // tick is already back to `Projectile::default()` here.
-        projectiles: race.sim.world.projectiles.slots,
-        running: !race.sim.finished(),
-        shielded: race.shield_is_up(),
-        exploding: race.craft_is_exploding(),
-        autopilot_active: race.autopilot_is_active(),
-        thrust_gated: oag_race::RaceState::thrust_gated(race.sim.world.tick),
+        projectiles: race.core.sim.world.projectiles.slots,
+        running: !race.core.sim.finished(),
+        shielded: race.core.shield_is_up(),
+        exploding: race.core.craft_is_exploding(),
+        autopilot_active: race.core.autopilot_is_active(),
+        thrust_gated: oag_race::RaceState::thrust_gated(race.core.sim.world.tick),
         sight: race.sight_state(),
         quake_point: race.quake_point(),
-        leach_beams: race.sim.world.leach_beams,
+        leach_beams: race.core.sim.world.leach_beams,
     }
 }
 
@@ -350,8 +351,9 @@ fn craft_positions(
     in_transit: bool,
 ) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
     std::array::from_fn(|slot| {
-        let ship = race.sim.world.ships.get(slot)?;
-        (slot < race.sim.ship_count() as usize && (ship.in_world() || in_transit && ship.active))
+        let ship = race.core.sim.world.ships.get(slot)?;
+        (slot < race.core.sim.ship_count() as usize
+            && (ship.in_world() || in_transit && ship.active))
             .then(|| {
                 (
                     ship.physics.body.position,

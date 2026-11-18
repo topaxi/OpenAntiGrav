@@ -59,13 +59,13 @@ fn start() -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// Yaw about world up, in degrees from `+X` toward `-Z`, the way the capture
 /// reads it (`atan2(forward.z, forward.x)`).
 fn yaw_degrees(race: &race::Race) -> f32 {
-    let forward = race.ship().physics.body.orientation * Vec3::NEG_Z;
+    let forward = race.core.ship().physics.body.orientation * Vec3::NEG_Z;
     forward.z.atan2(forward.x).to_degrees()
 }
 
@@ -74,7 +74,7 @@ fn fly(race: &mut race::Race, ticks: u64) -> Vec<(f32, Vec3)> {
     let held = throttle_held();
     (0..ticks)
         .map(|_| {
-            let row = (yaw_degrees(race), race.ship().physics.body.position);
+            let row = (yaw_degrees(race), race.core.ship().physics.body.position);
             race.tick(&PlayerInputs::single(held));
             row
         })
@@ -173,14 +173,14 @@ fn every_grid_slot_points_along_the_tracks_own_frame_as_the_original_does() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut worst = 0.0f32;
     for (x, yaw_original) in ORIGINAL_GRID {
         // The slot is found by where it stands: ours puts the player on slot 8
         // and the opponents on 1 to 7, which is the original's order too, but
         // matching by position does not depend on that.
         let ship = (0..8)
-            .map(|slot| &race.sim.world.ships[slot].physics.body)
+            .map(|slot| &race.core.sim.world.ships[slot].physics.body)
             .min_by(|a, b| {
                 (a.position.x - x)
                     .abs()

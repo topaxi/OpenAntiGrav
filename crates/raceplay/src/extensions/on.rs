@@ -864,7 +864,7 @@ fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
                 on.from_roll &= !(1 << slot.index());
             }
         }
-        // A guest never uses a pickup for a craft that may not (`Race::may_use_pickup`).
+        // A guest never uses a pickup for a craft that may not (`SimRace::may_use_pickup`).
         Command::ClearPickup { .. } if !may => {}
         Command::ClearPickup { slot } => {
             let pickup = &mut sim.world.ships[slot.index()].pickup;

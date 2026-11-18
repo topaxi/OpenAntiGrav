@@ -21,14 +21,14 @@ impl Scene {
         &'a self,
         race: &'a Race,
     ) -> impl Iterator<Item = (usize, &'a Drawable, f32)> + 'a {
-        let drawn = usize::from(race.sim.ship_count());
+        let drawn = usize::from(race.core.sim.ship_count());
         self.absorb_shell
             .iter()
             .enumerate()
             .take(drawn)
             .filter_map(move |(slot, shell)| {
                 let shell = shell.as_ref()?;
-                if !race.sim.ship_active(slot) || (slot == 0 && !race.draws_own_ship()) {
+                if !race.core.sim.ship_active(slot) || (slot == 0 && !race.draws_own_ship()) {
                     return None;
                 }
                 Some((slot, shell, race.absorb_shell_fader(slot)?))

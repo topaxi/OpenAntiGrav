@@ -1,5 +1,5 @@
 //! What a race a wreck ended goes on doing under the results - see
-//! `Race::tick_cosmetics` and `Race::runs_on_after_the_wreck`. In a Single Race
+//! `Race::tick_cosmetics` and `SimRace::runs_on_after_the_wreck`. In a Single Race
 //! the world runs on, as the original's does (the field races, the player's wreck
 //! stays down); in a Zone run only what is seen moves: the explosion, the shake and
 //! the destroy camera.
@@ -16,10 +16,10 @@ fn a_race_the_wreck_ended() -> Race {
 
 fn a_race_the_wreck_ended_in(mode: Mode) -> Race {
     let mut race = a_race_ready_for_a_wreck(mode);
-    race.sim.force_destroy(0);
+    race.core.sim.force_destroy(0);
     for _ in 0..120 {
         race.tick(&oag_gameplay::PlayerInputs::none());
-        if race.sim.finished() {
+        if race.core.sim.finished() {
             return race;
         }
     }
@@ -55,9 +55,9 @@ fn a_race_ready_for_a_wreck(mode: Mode) -> Race {
 #[test]
 fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
     let mut race = a_race_the_wreck_ended_in(Mode::Zone);
-    assert!(!race.runs_on_after_the_end());
+    assert!(!race.core.runs_on_after_the_end());
     assert_eq!(
-        race.sim.world.ships[0].physics.craft_state,
+        race.core.sim.world.ships[0].physics.craft_state,
         CraftState::Eliminated
     );
     assert!(
@@ -65,8 +65,8 @@ fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
         "the state 5 shake is armed"
     );
     assert_eq!(race.wreck_explosion_at_for_tests(), None);
-    let hash = race.sim.state_hash();
-    let tick = race.sim.world.tick;
+    let hash = race.core.sim.state_hash();
+    let tick = race.core.sim.world.tick;
     let fov = race.vertical_fov(16.0 / 9.0, oag_display::display::Fov::AUTHORED);
 
     let mut shaken = 0;
@@ -99,8 +99,15 @@ fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
         fov,
         "the destroy camera keeps easing in"
     );
-    assert_eq!(race.sim.world.tick, tick, "the world's own clock stands");
-    assert_eq!(race.sim.state_hash(), hash, "nothing the hash reads moved");
+    assert_eq!(
+        race.core.sim.world.tick, tick,
+        "the world's own clock stands"
+    );
+    assert_eq!(
+        race.core.sim.state_hash(),
+        hash,
+        "nothing the hash reads moved"
+    );
 }
 
 /// A Single Race wreck: the world runs on under the results - the clock advances, the
@@ -109,19 +116,23 @@ fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
 fn a_single_race_wreck_keeps_the_world_running_under_the_results() {
     let mut race = a_race_the_wreck_ended();
     assert!(
-        !race.sim.runs_on_after_the_line(),
+        !race.core.sim.runs_on_after_the_line(),
         "the player never crossed"
     );
-    assert!(race.runs_on_after_the_wreck());
-    assert!(race.runs_on_after_the_end());
-    let tick = race.sim.world.tick;
+    assert!(race.core.runs_on_after_the_wreck());
+    assert!(race.core.runs_on_after_the_end());
+    let tick = race.core.sim.world.tick;
     for _ in 0..200 {
         race.tick_finished();
     }
-    assert_eq!(race.sim.world.tick, tick + 200, "the world's clock runs on");
-    assert!(race.sim.finished(), "the race stays over");
     assert_eq!(
-        race.sim.world.ships[0].physics.craft_state,
+        race.core.sim.world.tick,
+        tick + 200,
+        "the world's clock runs on"
+    );
+    assert!(race.core.sim.finished(), "the race stays over");
+    assert_eq!(
+        race.core.sim.world.ships[0].physics.craft_state,
         CraftState::Eliminated,
         "a single race's wreck never comes back"
     );
@@ -170,7 +181,11 @@ fn an_eliminator_grid() -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// The Eliminator's state 8: the player comes back `1.0` s after state 5's
@@ -195,13 +210,13 @@ fn the_eliminators_wait_holds_the_destroy_camera_through_the_explosion() {
         }],
         0.4,
     );
-    race.sim.world.ships[1].physics.craft_state = CraftState::Eliminated;
-    race.sim.force_destroy(0);
+    race.core.sim.world.ships[1].physics.craft_state = CraftState::Eliminated;
+    race.core.sim.force_destroy(0);
 
     let (mut edge, mut blast, mut back, mut opponent_back) = (None, None, None, None);
     for tick in 0..260u32 {
         race.tick(&oag_gameplay::PlayerInputs::none());
-        let state = race.sim.world.ships[0].physics.craft_state;
+        let state = race.core.sim.world.ships[0].physics.craft_state;
         if edge.is_none() && state == CraftState::Eliminated {
             edge = Some(tick);
         }
@@ -220,7 +235,7 @@ fn the_eliminators_wait_holds_the_destroy_camera_through_the_explosion() {
             );
         }
         if opponent_back.is_none()
-            && race.sim.world.ships[1].physics.craft_state == CraftState::Racing
+            && race.core.sim.world.ships[1].physics.craft_state == CraftState::Racing
         {
             opponent_back = Some(tick);
         }
@@ -257,7 +272,11 @@ fn zone_grid(mode: Mode) -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// A camera that stands on an authored station is masked by the section of the craft it
@@ -275,7 +294,7 @@ fn a_station_camera_is_masked_by_the_section_of_the_craft_it_draws() {
     );
     assert_eq!(
         race.station_camera_section(),
-        Some(race.sim.section_of_slot(0)),
+        Some(race.core.sim.section_of_slot(0)),
         "the wreck's own section"
     );
     // The director draws whichever craft it was handed: a live opponent after a cut.
@@ -298,7 +317,7 @@ fn a_station_camera_is_masked_by_the_section_of_the_craft_it_draws() {
         .expect("the director has started");
     assert_eq!(
         race.station_camera_section(),
-        Some(race.sim.section_of_slot(slot))
+        Some(race.core.sim.section_of_slot(slot))
     );
 }
 
@@ -317,16 +336,16 @@ fn the_director_starts_240_ticks_after_the_wreck_call() {
         0.4,
         SPECTATOR_SEED,
     ));
-    race.sim.force_destroy(0);
-    let called = race.sim.world.tick;
+    race.core.sim.force_destroy(0);
+    let called = race.core.sim.world.tick;
     for _ in 0..600 {
-        if race.sim.finished() {
+        if race.core.sim.finished() {
             race.tick_finished();
         } else {
             race.tick(&oag_gameplay::PlayerInputs::none());
         }
         if race.spectator_mode().is_some() {
-            assert_eq!(race.sim.world.tick - called, 240);
+            assert_eq!(race.core.sim.world.tick - called, 240);
             return;
         }
     }

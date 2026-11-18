@@ -22,7 +22,10 @@ fn locators(count: usize) -> Vec<SparkAnchor> {
 /// A grid whose slot 3 has three wreck locators and the two effects loaded.
 fn race_with_wreck_locators() -> Race {
     let mut race = race_with_a_grid();
-    assert!(race.sim.world.ship_count > 3, "the fixture has opponents");
+    assert!(
+        race.core.sim.world.ship_count > 3,
+        "the fixture has opponents"
+    );
     let mut anchors = vec![Vec::new(); 4];
     anchors[3] = locators(3);
     race.view.wreck_fx = WreckFx::new(anchors);
@@ -36,14 +39,14 @@ fn race_with_wreck_locators() -> Race {
 }
 
 fn go_out(race: &mut Race, slot: usize) {
-    race.sim.world.ships[slot].physics.craft_state = CraftState::Destroyed;
+    race.core.sim.world.ships[slot].physics.craft_state = CraftState::Destroyed;
     race.advance_craft_flashes();
     assert_eq!(
         race.wreck_fx_started_for_tests(),
         0,
         "the explosion (state 4) throws nothing"
     );
-    race.sim.world.ships[slot].physics.craft_state = CraftState::Eliminated;
+    race.core.sim.world.ships[slot].physics.craft_state = CraftState::Eliminated;
     race.advance_craft_flashes();
 }
 
@@ -91,8 +94,8 @@ fn the_big_explosion_follows_after_the_delay_below_the_craft() {
         .expect("the hand-laid effect parses");
     race.view.handles.insert(Trigger::WreckExplosion, effect);
     go_out(&mut race, 3);
-    let wrecked_at = race.sim.world.ships[3].physics.body.position;
-    let up = race.sim.world.ships[3].physics.body.orientation * Vec3::Y;
+    let wrecked_at = race.core.sim.world.ships[3].physics.body.position;
+    let up = race.core.sim.world.ships[3].physics.body.orientation * Vec3::Y;
     let after_the_nodes = race.wreck_fx_started_for_tests();
     assert_eq!(race.wreck_explosion_at_for_tests(), None, "not on the edge");
     for _ in 0..80 {
@@ -101,7 +104,7 @@ fn the_big_explosion_follows_after_the_delay_below_the_craft() {
     assert_eq!(race.wreck_fx_started_for_tests(), after_the_nodes);
     // Put back on the track meanwhile, as an Eliminator craft is: the blast
     // still goes where the wreck lies.
-    race.sim.world.ships[3].physics.body.position += Vec3::new(500.0, 0.0, 0.0);
+    race.core.sim.world.ships[3].physics.body.position += Vec3::new(500.0, 0.0, 0.0);
     for _ in 0..20 {
         race.tick(&oag_gameplay::PlayerInputs::none());
     }

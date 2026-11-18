@@ -80,23 +80,23 @@ fn single_race() -> Option<race::Loaded> {
 /// blind spot.
 fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
     let loaded = single_race()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // **This project's fire law, which never absorbs.** Since 2026-10-19 the
     // original's law has its absorb half too (`oag_ai::weapon_ai::Decision`),
     // so under it a weapon turning into energy is sometimes the law and not
     // the fall-through this test exists for. The arms it guards are the same
     // under both laws.
-    race.sim.set_fire_law(race::FireLaw::Ours);
+    race.core.sim.set_fire_law(race::FireLaw::Ours);
     // A few ticks so the grid settles and the standings take a first fix - the
     // drivers' own gates read `Standing::progress`.
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
     }
 
-    let opponents = 1..usize::from(race.sim.ship_count());
+    let opponents = 1..usize::from(race.core.sim.ship_count());
     let count = opponents.len();
     for slot in opponents.clone() {
-        race.sim.world.ships[slot].pickup.weapon = Some(weapon);
+        race.core.sim.world.ships[slot].pickup.weapon = Some(weapon);
     }
 
     // Watched every tick rather than only at the end, because a projectile is
@@ -105,7 +105,7 @@ fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
     let mut fired = std::collections::BTreeSet::new();
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
-        for projectile in &race.sim.world.projectiles.slots {
+        for projectile in &race.core.sim.world.projectiles.slots {
             if projectile.kind == Some(weapon) && projectile.owner != 0 {
                 fired.insert(usize::from(projectile.owner));
             }
@@ -114,7 +114,7 @@ fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
 
     let accounted = opponents
         .filter(|&slot| {
-            fired.contains(&slot) || race.sim.world.ships[slot].pickup.weapon == Some(weapon)
+            fired.contains(&slot) || race.core.sim.world.ships[slot].pickup.weapon == Some(weapon)
         })
         .count();
     Some((count, accounted))
@@ -269,10 +269,10 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
-        let opponents = 1..usize::from(race.sim.ship_count());
-        let full: f32 = race.sim.world.ships[1].handling.dimensions.shield;
+        let opponents = 1..usize::from(race.core.sim.ship_count());
+        let full: f32 = race.core.sim.world.ships[1].handling.dimensions.shield;
         assert!(full > 0.0, "the fixture has no energy pool to measure");
 
         // A minute of racing, untouched: real pads, real refresh timers, the
@@ -281,7 +281,7 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
         let mut seen = std::collections::BTreeSet::new();
         for _ in 0..3_600 {
             race.tick(&PlayerInputs::none());
-            for projectile in &race.sim.world.projectiles.slots {
+            for projectile in &race.core.sim.world.projectiles.slots {
                 if matches!(projectile.kind, Some(Weapon::Mine | Weapon::Bomb))
                     && seen.insert(projectile.position.x.to_bits())
                 {
@@ -292,15 +292,15 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
 
         let depleted = opponents
             .clone()
-            .filter(|&slot| race.sim.world.ships[slot].physics.shield <= 0.0)
+            .filter(|&slot| race.core.sim.world.ships[slot].physics.shield <= 0.0)
             .count();
         let mean: f32 = opponents
             .clone()
-            .map(|slot| race.sim.world.ships[slot].physics.shield)
+            .map(|slot| race.core.sim.world.ships[slot].physics.shield)
             .sum::<f32>()
             / opponents.len() as f32;
         let worst = opponents
-            .map(|slot| race.sim.world.ships[slot].physics.shield)
+            .map(|slot| race.core.sim.world.ships[slot].physics.shield)
             .fold(f32::INFINITY, f32::min);
         println!(
             "seed {seed}: {laid} charges laid, mean energy {mean:.0} of {full:.0}, \

@@ -61,8 +61,8 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
         ..race::Options::default()
     })
     .expect("loading");
-    let mut race = race::Race::start(loaded.setup);
-    let count = race.sim.ship_count() as usize;
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let count = race.core.sim.ship_count() as usize;
     let slots: Vec<usize> = if field {
         (1..count).collect()
     } else {
@@ -75,10 +75,10 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
     };
     for slot in 0..count {
         if !slots.contains(&slot) {
-            race.sim.world.ships[slot].active = false;
+            race.core.sim.world.ships[slot].active = false;
         }
     }
-    let line_len = race.sim.racing_line().len() as u32;
+    let line_len = race.core.sim.racing_line().len() as u32;
     let mut charge = vec![vec![0.0f32; (line_len / CLUSTER + 2) as usize]; count];
     let mut seen_charge = vec![0.0f32; count];
     let mut seen_resp = vec![0u32; count];
@@ -92,55 +92,55 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
     for _ in 0..TICKS {
         tick_no += 1;
         let at: Vec<u32> = (0..count)
-            .map(|s| race.sim.world.ships[s].driver.index)
+            .map(|s| race.core.sim.world.ships[s].driver.index)
             .collect();
         race.tick(&PlayerInputs::none());
         for &s in &slots {
             if !took[s]
-                && race.sim.world.ships[s].physics.grounded == 0.0
+                && race.core.sim.world.ships[s].physics.grounded == 0.0
                 && (100..260).contains(&at[s])
             {
                 took[s] = true;
                 println!(
                     "TAKEOFF seed {seed} slot {s} idx {} v {:.1} accelcap {:?}",
                     at[s],
-                    race.sim.world.ships[s]
+                    race.core.sim.world.ships[s]
                         .physics
                         .body
                         .linear_velocity
                         .length(),
-                    race.sim.world.ships[s].handling.engine.accelcap
+                    race.core.sim.world.ships[s].handling.engine.accelcap
                 );
-                landed_ok[s] = Some(race.sim.respawns_of(s));
+                landed_ok[s] = Some(race.core.sim.respawns_of(s));
                 tk.push((
                     s,
                     tick_no,
-                    race.sim.world.ships[s]
+                    race.core.sim.world.ships[s]
                         .physics
                         .body
                         .linear_velocity
                         .length(),
-                    race.sim.respawns_of(s),
+                    race.core.sim.respawns_of(s),
                 ));
             }
-            let now = race.sim.wall_shield_charged_of(s);
+            let now = race.core.sim.wall_shield_charged_of(s);
             if now > seen_charge[s] {
                 if let Some(c) = charge[s].get_mut((at[s] / CLUSTER) as usize) {
                     *c += now - seen_charge[s];
                 }
                 seen_charge[s] = now;
             }
-            let r = race.sim.respawns_of(s);
+            let r = race.core.sim.respawns_of(s);
             if r != seen_resp[s] {
                 seen_resp[s] = r;
                 tally.respawns_at.push(at[s]);
                 rs.push((s, tick_no, at[s]));
             }
-            if !dead[s] && race.sim.world.ships[s].physics.craft_state != CraftState::Racing {
+            if !dead[s] && race.core.sim.world.ships[s].physics.craft_state != CraftState::Racing {
                 dead[s] = true;
                 tally.deaths_at.push(at[s]);
             }
-            best_laps = best_laps.max(race.sim.world.ships[s].standing.lap);
+            best_laps = best_laps.max(race.core.sim.world.ships[s].standing.lap);
         }
     }
     for (s, t0, v, _) in &tk {
@@ -152,10 +152,10 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
     tally.runs += 1;
     for &s in &slots {
         tally.craft += 1;
-        tally.respawns += race.sim.respawns_of(s);
-        tally.contact += race.sim.wall_contact_ticks_of(s);
-        tally.charged += race.sim.wall_shield_charged_of(s);
-        tally.end_shield += race.sim.world.ships[s].physics.shield;
+        tally.respawns += race.core.sim.respawns_of(s);
+        tally.contact += race.core.sim.wall_contact_ticks_of(s);
+        tally.charged += race.core.sim.wall_shield_charged_of(s);
+        tally.end_shield += race.core.sim.world.ships[s].physics.shield;
         if dead[s] {
             tally.destroyed += 1;
         }
@@ -303,8 +303,8 @@ fn field_trace() {
         ..race::Options::default()
     })
     .unwrap();
-    let mut race = race::Race::start(loaded.setup);
-    let count = race.sim.ship_count() as usize;
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let count = race.core.sim.ship_count() as usize;
     for slot in 0..count {
         if slot == 0
             || (lone
@@ -314,7 +314,7 @@ fn field_trace() {
                         .and_then(|v| v.parse().ok())
                         .unwrap_or(1))
         {
-            race.sim.world.ships[slot].active = false;
+            race.core.sim.world.ships[slot].active = false;
         }
     }
     for tick in 0..to {
@@ -322,11 +322,12 @@ fn field_trace() {
         if tick >= from && tick % 6 == 0 {
             let mut line = format!("t{tick:<5}");
             for s in 1..count {
-                let sh = &race.sim.world.ships[s];
+                let sh = &race.core.sim.world.ships[s];
                 if !sh.active {
                     continue;
                 }
                 let off = race
+                    .core
                     .sim
                     .ai_sample_for(s, sh.driver.index as usize)
                     .map_or(0.0, |sm| {
@@ -343,7 +344,7 @@ fn field_trace() {
                     sh.physics.brake,
                     sh.physics.grounded,
                     sh.physics.shield,
-                    race.sim.respawns_of(s)
+                    race.core.sim.respawns_of(s)
                 ));
             }
             println!("{line}");
@@ -367,8 +368,8 @@ fn line_profile() {
         ..race::Options::default()
     })
     .unwrap();
-    let race = race::Race::start(loaded.setup);
-    let line = race.sim.racing_line();
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let line = race.core.sim.racing_line();
     let from: usize = std::env::var("OAG_FROM")
         .ok()
         .and_then(|s| s.parse().ok())

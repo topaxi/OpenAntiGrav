@@ -33,14 +33,15 @@ fn zone() -> Option<Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(Race::start(loaded.setup))
+    Some(Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// The craft's centre above the surface straight below it, along that surface's normal.
 fn height(race: &Race) -> f32 {
-    let body = &race.ship().physics.body;
+    let body = &race.core.ship().physics.body;
     let down = -body.up();
     let hit = race
+        .core
         .sim
         .collision()
         .raycast(Ray::new(body.position, down, 20.0), None, false)
@@ -49,7 +50,7 @@ fn height(race: &Race) -> f32 {
 }
 
 fn run_to(race: &mut Race, tick: u64) {
-    while race.sim.world.tick < tick {
+    while race.core.sim.world.tick < tick {
         race.tick(&PlayerInputs::none());
     }
 }
@@ -68,7 +69,7 @@ fn an_hd_zone_craft_waits_on_the_grid_at_the_rays_height_not_the_lowered_hover()
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn an_hd_zone_craft_flies_at_the_rays_height() {
     let Some(mut race) = zone() else { return };
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
     run_to(&mut race, GO + 120);
     let mut heights = Vec::new();
     for _ in 0..600 {

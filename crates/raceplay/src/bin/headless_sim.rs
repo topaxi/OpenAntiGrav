@@ -15,7 +15,7 @@
 //! wrong shape" - applies to a protocol written before the loopback
 //! client/server test that would justify it.
 //!
-//! **The race it runs means nothing.** [`Setup::headless`] authors no track, no
+//! **The race it runs means nothing.** [`SimSetup::headless`] authors no track, no
 //! handling and no weapon table, so the craft fall in a vacuum and no lap is
 //! ever counted. A hash that moves is the whole assertion: it says the tick ran
 //! and changed state, not that it produced a result anyone should read.
@@ -26,7 +26,7 @@
 //! ```
 
 use oag_gameplay::{Controller, PlayerInputs};
-use oag_raceplay::{Race, Setup};
+use oag_raceplay::{Race, SimSetup, ViewSetup};
 
 /// Ticks to run when the command line says nothing.
 const DEFAULT_TICKS: u32 = 120;
@@ -49,27 +49,31 @@ fn main() {
             std::process::exit(2);
         });
 
-    let mut race = Race::start(Setup::headless(oag_race::Mode::SingleRace, SEED));
+    let mut race = Race::start(
+        SimSetup::headless(oag_race::Mode::SingleRace, SEED),
+        ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
 
     // Three people and five drivers. Written here rather than by `Race::start`
     // because the front end is what decides how many people are racing, and
     // there is no front end in this process - which is the point.
-    for controller in race.sim.world.controllers.iter_mut().take(HUMANS) {
+    for controller in race.core.sim.world.controllers.iter_mut().take(HUMANS) {
         *controller = Controller::Local;
     }
-    let humans: Vec<usize> = race.sim.world.human_slots().collect();
+    let humans: Vec<usize> = race.core.sim.world.human_slots().collect();
     // One craft, not eight: `opponents` asks for a grid and a grid is spawned
-    // along a racing line, which `Setup::headless` does not author. Said out
+    // along a racing line, which `SimSetup::headless` does not author. Said out
     // loud rather than papered over - the slots past the first consume a
     // snapshot and reach the hash, which is what this binary is checking, and
     // a full grid needs a track this deliberately has not got.
     println!(
         "{} craft on the grid (no racing line to spawn one), human slots {humans:?}",
-        race.sim.world.ship_count
+        race.core.sim.world.ship_count
     );
 
-    let before = race.sim.state_hash();
-    println!("tick {:>6}: {before:#018x}", race.sim.world.tick);
+    let before = race.core.sim.state_hash();
+    println!("tick {:>6}: {before:#018x}", race.core.sim.world.tick);
 
     for tick in 0..ticks {
         // A different held mask per slot, so a tick that quietly read slot 0's
@@ -92,15 +96,15 @@ fn main() {
         race.tick(&inputs);
         // The cues a tick emits are an output, never state (ADR-0018). With no
         // audio attached they would otherwise grow without bound.
-        race.sim.drain_cues();
-        race.sim.drain_mod_sounds();
+        race.core.sim.drain_cues();
+        race.core.sim.drain_mod_sounds();
     }
 
-    let after = race.sim.state_hash();
-    println!("tick {:>6}: {after:#018x}", race.sim.world.tick);
+    let after = race.core.sim.state_hash();
+    println!("tick {:>6}: {after:#018x}", race.core.sim.world.tick);
 
     assert_eq!(
-        race.sim.world.tick,
+        race.core.sim.world.tick,
         u64::from(ticks),
         "the tick loop did not advance the clock"
     );

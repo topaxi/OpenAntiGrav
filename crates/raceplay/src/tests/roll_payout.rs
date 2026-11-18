@@ -10,16 +10,20 @@ use oag_gameplay::cue::Cue;
 fn rolled_and_falling(turbotime: f32) -> Race {
     let mut handling = hulled_handling();
     handling.roll_turbotime = turbotime;
-    let mut race = Race::start(setup_with(
-        handling,
-        vec![upward_plane(0.0, oag_physics::Surface::Floor)],
-    ));
+    let mut race = Race::start(
+        setup_with(
+            handling,
+            vec![upward_plane(0.0, oag_physics::Surface::Floor)],
+        ),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     // Past the countdown: the grid holds a craft in place until the green light.
     for _ in 0..oag_race::COUNTDOWN_TICKS + 2 {
         race.tick(&PlayerInputs::none());
     }
-    race.sim.drain_cues();
-    let ship = &mut race.sim.world.ships[0].physics;
+    race.core.sim.drain_cues();
+    let ship = &mut race.core.sim.world.ships[0].physics;
     ship.body.position.y += 40.0;
     ship.body.linear_velocity.y = -40.0;
     ship.grounded = 0.0;
@@ -35,8 +39,14 @@ fn rolled_and_falling(turbotime: f32) -> Race {
 fn until_paid(race: &mut Race) -> Option<(Vec<Cue>, f32)> {
     for _ in 0..600 {
         race.tick(&PlayerInputs::none());
-        let cues: Vec<Cue> = race.sim.drain_cues().into_iter().map(|e| e.cue).collect();
-        if race.sim.world.ships[0].physics.roll_payout_timer > 0.0 {
+        let cues: Vec<Cue> = race
+            .core
+            .sim
+            .drain_cues()
+            .into_iter()
+            .map(|e| e.cue)
+            .collect();
+        if race.core.sim.world.ships[0].physics.roll_payout_timer > 0.0 {
             return Some((cues, race.readout().boost_phase));
         }
     }
@@ -59,7 +69,12 @@ fn landing_a_completed_roll_arms_the_flare_and_raises_turbo_once() {
     for _ in 0..90 {
         race.tick(&PlayerInputs::none());
         assert!(
-            !race.sim.drain_cues().iter().any(|e| e.cue == Cue::Turbo),
+            !race
+                .core
+                .sim
+                .drain_cues()
+                .iter()
+                .any(|e| e.cue == Cue::Turbo),
             "the payout re-fired while it ran"
         );
     }
@@ -70,6 +85,13 @@ fn a_roll_that_pays_nothing_raises_no_turbo() {
     let mut race = rolled_and_falling(0.0);
     for _ in 0..300 {
         race.tick(&PlayerInputs::none());
-        assert!(!race.sim.drain_cues().iter().any(|e| e.cue == Cue::Turbo));
+        assert!(
+            !race
+                .core
+                .sim
+                .drain_cues()
+                .iter()
+                .any(|e| e.cue == Cue::Turbo)
+        );
     }
 }

@@ -1223,7 +1223,7 @@ fn a_held_stick_reaches_the_hud_as_the_drawn_leans_follower() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading the race");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     let held = |stick_x: f32| {
         let mut buttons = Input::new();
         buttons.begin_frame(Button::Cross.bit());
@@ -1242,7 +1242,7 @@ fn a_held_stick_reaches_the_hud_as_the_drawn_leans_follower() {
     }
     let follower = race.readout().steer_lean_follower;
     assert_eq!(
-        follower, race.sim.world.ships[0].physics.steer_lean_follower,
+        follower, race.core.sim.world.ships[0].physics.steer_lean_follower,
         "the HUD reads the hull's own follower"
     );
     assert!(

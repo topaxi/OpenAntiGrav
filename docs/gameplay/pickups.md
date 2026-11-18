@@ -879,7 +879,7 @@ A craft in its destroyed sequence (`CraftState::Destroyed`, then `Eliminated` un
 Eliminator puts it back on the line) cannot fire, lay, absorb or hold a trigger, and
 every use it had under way is **cancelled, not paused**. Our rule.
 
-- **The gate**: `Race::may_use_pickup`, true only while the craft is `Racing`. Every way
+- **The gate**: `SimRace::may_use_pickup`, true only while the craft is `Racing`. Every way
   to use a pickup goes through it: the player's press (`Race::spend_pickup`), an
   opponent's decision (`Race::spend_opponent_pickup`) and a held Cannon trigger
   (`Race::advance_cannons`). A mod's own pickup (`Weapon::Extension`, `pickup-fire`,
@@ -1038,7 +1038,7 @@ pad is never stamped and never greys, and the loader report says so. Every other
 Eliminator, is as the table above. Read through `race::load` on the four discs by
 `eliminator_pad_stamp_ground_truth` (Pulse `0.05` / `0.55`, the other three `0.0` / `0.75`).
 
-**One grant per crossing, not per tick.** `Race::test_weapon_pads` grants on the entry edge
+**One grant per crossing, not per tick.** `SimRace::test_weapon_pads` grants on the entry edge
 (`weapon_pad_current`), not on containment, so a zero stamp does not hand a pickup every tick a
 craft sits inside; a craft that crosses a pad is handed one pickup, and one that leaves and comes
 back in a tick is handed another (unit test `an_unstamped_pad_pays_on_every_entry_and_never_once_per_tick`).

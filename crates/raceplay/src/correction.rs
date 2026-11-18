@@ -74,34 +74,36 @@ impl Race {
         mut each: impl FnMut(&RaceSim),
     ) -> Reconciled {
         let before: [Vec3; MAX_SHIPS] =
-            std::array::from_fn(|slot| self.sim.world.ships[slot].physics.body.position);
-        let shield_before = self.sim.world.ships[self.player_slot()].physics.shield;
+            std::array::from_fn(|slot| self.core.sim.world.ships[slot].physics.body.position);
+        let shield_before = self.core.sim.world.ships[self.core.player_slot()]
+            .physics
+            .shield;
         self.restore_sim(authoritative);
         let mut ticks = 0;
         for tick in inputs {
             self.tick_sim_only(&tick);
-            each(&self.sim);
+            each(&self.core.sim);
             ticks += 1;
         }
         #[cfg(feature = "view")]
         self.settle_presentation();
         let mut pops = [0.0; MAX_SHIPS];
         for (slot, pop) in pops.iter_mut().enumerate() {
-            let moved = before[slot] - self.sim.world.ships[slot].physics.body.position;
+            let moved = before[slot] - self.core.sim.world.ships[slot].physics.body.position;
             *pop = moved.length();
             // **A person's craft glides, this machine's own included.** In a network
             // race every person is remote on every peer. The craft the camera follows
             // glides with the camera: `camera_target` carries the same offset, so the
             // hull stays where its own chase camera frames it (offsetting the hull
             // alone drew it off the camera's centre for the length of the glide).
-            let remote = self.sim.world.controllers[slot] == oag_gameplay::Controller::Remote
-                || self.view.seat == Some(slot);
+            let remote = self.core.sim.world.controllers[slot] == oag_gameplay::Controller::Remote
+                || self.core.outcome.seat == Some(slot);
             // **A hit the client had not predicted is drawn where it lands**: the own
             // craft's input is known exactly, so what moves it in a correction is an
             // interaction, and a hit that first shows here (shield lost) must not be
             // softened into a glide.
-            let hit = slot == self.player_slot()
-                && self.sim.world.ships[slot].physics.shield < shield_before - HIT_SHIELD;
+            let hit = slot == self.core.player_slot()
+                && self.core.sim.world.ships[slot].physics.shield < shield_before - HIT_SHIELD;
             #[cfg(feature = "view")]
             if hit {
                 // The shake that tick would have armed had the hit been predicted: once, here,
@@ -153,7 +155,8 @@ impl Race {
         if let Some(flown) = self.flown_model(slot) {
             return flown;
         }
-        let model = shaken_model_matrix_of(&self.sim.world.ships[slot], self.hull_shake_of(slot));
+        let model =
+            shaken_model_matrix_of(&self.core.sim.world.ships[slot], self.hull_shake_of(slot));
         match self.view.correction[slot] {
             offset if offset == Vec3::ZERO => model,
             offset => Mat4::from_translation(offset) * model,
@@ -162,7 +165,7 @@ impl Race {
 
     /// `slot`'s body position as drawn at this tick.
     pub(super) fn drawn_position(&self, slot: usize) -> Vec3 {
-        self.sim.world.ships[slot].physics.body.position + self.view.correction[slot]
+        self.core.sim.world.ships[slot].physics.body.position + self.view.correction[slot]
     }
 }
 
@@ -243,7 +246,7 @@ impl Scene {
 
     /// Which way craft `b` lies from craft `a`: `+1.0` to its right.
     fn side(race: &Race, a: usize, b: usize) -> f32 {
-        let ships = &race.sim.world.ships;
+        let ships = &race.core.sim.world.ships;
         let toward = ships[b].physics.body.position - ships[a].physics.body.position;
         if toward.dot(ships[a].physics.body.right()) >= 0.0 {
             1.0
@@ -322,15 +325,15 @@ impl Scene {
         let k = tick - self.at;
         if k == 0 {
             race.set_correction_smoothing(self.smooth);
-            race.sim.world.controllers[self.slot] = oag_gameplay::Controller::Remote;
+            race.core.sim.world.controllers[self.slot] = oag_gameplay::Controller::Remote;
             // The remote person makes two people: in a Time Trial that is Pulse's Multiplayer
             // Time Trial, where craft do not collide, so a `contact` scene has nothing to touch.
-            let people = race.sim.world.human_slots().count();
-            if self.contact && !race.sim.world.mode().craft_collide(people) {
+            let people = race.core.sim.world.human_slots().count();
+            if self.contact && !race.core.sim.world.mode().craft_collide(people) {
                 log::warn!(
                     "force-remote-correction: {:?} with {people} people is a Multiplayer Time \
                      Trial, craft do not collide: `contact` touches nothing (use `--mode single_race`)",
-                    race.sim.world.mode()
+                    race.core.sim.world.mode()
                 );
             }
             if self.contact || self.own.is_some() {
@@ -339,7 +342,7 @@ impl Scene {
                 race.set_seat(Some(0));
             }
             if let Some(weapon) = self.fire {
-                race.sim.world.ships[self.slot].pickup.weapon = Some(weapon);
+                race.core.sim.world.ships[self.slot].pickup.weapon = Some(weapon);
             }
             let base = race.snapshot_sim();
             let side = Self::side(race, self.slot, 0);

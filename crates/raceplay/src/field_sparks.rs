@@ -84,10 +84,10 @@ impl Race {
             Vec::new()
         };
         for slot in 0..MAX_SHIPS {
-            let ship = &self.sim.world.ships[slot];
-            let stepped = slot < self.sim.world.ship_count as usize
+            let ship = &self.core.sim.world.ships[slot];
+            let stepped = slot < self.core.sim.world.ship_count as usize
                 && ship.in_world()
-                && !self.sim.world.person_flown(slot);
+                && !self.core.sim.world.person_flown(slot);
             let wall = self.view.field_sparks.walls[slot].filter(|_| stepped);
             let pair: Option<PairContact> = self.view.pair_contacts[slot].filter(|_| stepped);
             let shielded = ship.physics.shield_pickup_timer > 0.0;

@@ -3,7 +3,7 @@
 //!
 //! **Chosen, not measured.** No recording of an analog stick flying a race exists; the
 //! only human input recorded is three-valued keyboard. This turns the driver's wants
-//! (what the player's own autopilot would ask, [`Race::autopilot_wants`]) into what a
+//! (what the player's own autopilot would ask, [`SimRace::autopilot_wants`](crate::SimRace::autopilot_wants)) into what a
 //! thumb would send, so the stream is continuous like a hand's but drives the circuit
 //! as well as the driver does. It is a verification aid: nothing in a race uses it.
 //!

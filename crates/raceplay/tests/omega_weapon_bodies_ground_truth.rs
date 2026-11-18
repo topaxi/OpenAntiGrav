@@ -123,14 +123,14 @@ fn a_craft_over_a_magstrip_draws_the_arc_wake() {
         loaded.ribbon_textures.magstrip.is_some(),
         "HD_electric_arc_8x8.gnf and HD_ElectricArc_Contact.gnf must both decode"
     );
-    let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.sim.set_autopilot(true);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
     assert!(race.has_magstrip_wake(), "Omega builds the wake");
-    let slots = usize::from(race.sim.ship_count());
+    let slots = usize::from(race.core.sim.ship_count());
     let mut drawn = None;
     for tick in 0..2400_u64 {
         race.tick(&PlayerInputs::none());
-        race.sim.drain_cues();
+        race.core.sim.drain_cues();
         let (atlas, _) = race.magstrip_wake_vertices();
         if (0..slots).any(|slot| race.over_magstrip(slot)) && !atlas.is_empty() {
             drawn = Some(tick);

@@ -64,17 +64,17 @@ fn every_craft_on_the_grid_casts_a_blob_shadow_onto_the_floor() {
     let Some(loaded) = load_with_opponents() else {
         return;
     };
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let placements = race.shadow_placements();
     assert_eq!(
         placements.len(),
-        usize::from(race.sim.ship_count()),
+        usize::from(race.core.sim.ship_count()),
         "a craft resting on the grid has ground under it, so every slot places"
     );
 
     for placement in &placements {
         let slot = placement.silhouette;
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         let body = &ship.physics.body;
         let up = body.up();
         // Below the craft, along its own up axis - not merely nearby.
@@ -128,7 +128,7 @@ fn the_projected_hull_lands_on_the_surface_under_the_craft() {
         return;
     };
     let hulls = loaded.shadows.hulls.clone();
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let placements = race.shadow_placements();
     let placement = &placements[0];
     let hull = hulls[0].as_ref().expect("the player's craft authors one");
@@ -148,7 +148,7 @@ fn the_projected_hull_lands_on_the_surface_under_the_craft() {
     assert!(rings > 0, "no ring was drawn");
     assert_eq!(vertices.len() % 3, 0);
 
-    let craft = race.sim.world.ships[0].physics.body.position;
+    let craft = race.core.sim.world.ships[0].physics.body.position;
     println!(
         "craft at {craft:?}, contact {:?}, {rings} ring(s), {} vertices",
         placement.contact,

@@ -11,7 +11,8 @@ use oag_gameplay::Controller;
 use oag_replay::Header;
 
 use super::Launch;
-use crate::{Options, Race, Setup};
+use crate::extensions::Prepared;
+use crate::{Loaded, Options, Race, SimSetup, ViewSetup};
 
 impl Options {
     /// The options a header's race was loaded with, over `source`.
@@ -107,18 +108,18 @@ impl Options {
     }
 }
 
-/// The setup of the race `header` was recorded from, loaded from `source`.
+/// The race `header` was recorded from, loaded from `source`.
 ///
 /// # Errors
 ///
 /// [`Options::for_replay`]'s or the load's.
-pub fn load_recorded(header: &Header, source: &str) -> Result<Setup> {
+pub fn load_recorded(header: &Header, source: &str) -> Result<Loaded> {
     let options = Options::for_replay(header, source)?;
-    let loaded = crate::load(&options).context("loading the replay's race")?;
-    Ok(loaded.setup)
+    crate::load(&options).context("loading the replay's race")
 }
 
-/// The race `header` was recorded from, started from `setup` with the recorded launch settings
+/// The race `header` was recorded from, started from `setup`, `view` and `modules` with the
+/// recorded launch settings
 /// and its recorded seats, before its first tick.
 ///
 /// The seats are the header's: a split screen makes its slots [`Controller::Local`] after
@@ -128,8 +129,13 @@ pub fn load_recorded(header: &Header, source: &str) -> Result<Setup> {
 /// # Errors
 ///
 /// A launch setting this build does not know.
-pub fn start_recorded(setup: Setup, header: &Header) -> Result<Race> {
-    let mut race = Race::start(setup);
+pub fn start_recorded(
+    setup: SimSetup,
+    view: ViewSetup,
+    modules: Prepared,
+    header: &Header,
+) -> Result<Race> {
+    let mut race = Race::start(setup, view, modules);
     apply_recorded(&mut race, header)?;
     Ok(race)
 }
@@ -142,24 +148,24 @@ pub fn start_recorded(setup: Setup, header: &Header) -> Result<Race> {
 ///
 /// A launch setting this build does not know.
 pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
-    crate::extensions::check_recorded(&header.mods, race.sim.mods_used()).map_err(|why| {
+    crate::extensions::check_recorded(&header.mods, race.core.sim.mods_used()).map_err(|why| {
         anyhow::anyhow!("the replay's simulation modules are not this race's: {why}")
     })?;
     let launch = Launch::from_table(&header.options)?;
-    race.sim.apply_launch(&launch);
+    race.core.sim.apply_launch(&launch);
     for &slot in &header.slots {
-        if let Some(controller) = race.sim.world.controllers.get_mut(usize::from(slot)) {
+        if let Some(controller) = race.core.sim.world.controllers.get_mut(usize::from(slot)) {
             *controller = Controller::Local;
         }
     }
     // After the seats: an online room's people are remote, not local.
     if let Some(room) = super::Room::from_table(&header.options)? {
-        race.sim.apply_room(&room);
+        race.core.sim.apply_room(&room);
     }
     // After the seats, as the session applies the AI choice: which driver flies reads who is
     // human.
     if let Some(ai) = launch.original_ai {
-        race.sim.use_original_ai(ai.skill, ai.level);
+        race.core.sim.use_original_ai(ai.skill, ai.level);
     }
     Ok(())
 }
@@ -171,5 +177,6 @@ pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
 ///
 /// [`load_recorded`]'s and [`start_recorded`]'s.
 pub fn rebuild(header: &Header, source: &str) -> Result<Race> {
-    start_recorded(load_recorded(header, source)?, header)
+    let loaded = load_recorded(header, source)?;
+    start_recorded(loaded.setup, loaded.view, loaded.modules, header)
 }

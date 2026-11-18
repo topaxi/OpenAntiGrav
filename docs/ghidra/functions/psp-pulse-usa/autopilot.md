@@ -598,7 +598,7 @@ test, so with nothing held too), pays nothing and spends nothing, and the contro
 are the person's again on the next tick; a fire press is ignored, which also keeps a
 held Autopilot from being fired into a running one. In an Eliminator a held weapon is
 first requested as the Shield (`Race::eliminator_absorb`) and the cancel follows.
-`Race::test_weapon_pads` stamps the pad as before and grants nothing to a craft whose
+`SimRace::test_weapon_pads` stamps the pad as before and grants nothing to a craft whose
 timer runs. Both are per-title data on `oag_title::weapons::Weapons`
 (`autopilot_absorb_cancels`, `autopilot_pad_grants`, each `Sourced`): Pulse measured,
 HD measured (static) for the cancel, Pure `false` (measured absence, static), 2048 and

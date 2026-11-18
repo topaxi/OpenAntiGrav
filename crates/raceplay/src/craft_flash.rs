@@ -75,10 +75,10 @@ impl Race {
     /// Starts the washes a craft's state edges call for, once a tick, after
     /// the destroyed-craft pass has settled every state.
     pub(super) fn advance_craft_flashes(&mut self) {
-        let player = self.player_slot();
-        let dt = self.sim.dt;
-        for slot in 0..self.sim.world.ship_count as usize {
-            let ship = &self.sim.world.ships[slot];
+        let player = self.core.player_slot();
+        let dt = self.core.sim.dt;
+        for slot in 0..self.core.sim.world.ship_count as usize {
+            let ship = &self.core.sim.world.ships[slot];
             let state = ship.physics.craft_state;
             let position = self.drawn_position(slot);
             let was = std::mem::replace(&mut self.view.craft_flashes.previous[slot], state);
@@ -148,7 +148,7 @@ impl Race {
     /// The local player was put back on the track: `Ship_SetState` case 3 and
     /// `Ship_UpdateRespawn` both start kind 6 for `craft+0x368 == 0` only.
     pub(super) fn flash_player_reset(&mut self, slot: usize) {
-        if slot == self.player_slot() {
+        if slot == self.core.player_slot() {
             self.start_flash(oag_fx::flash::RESET, Vec3::ZERO);
         }
     }

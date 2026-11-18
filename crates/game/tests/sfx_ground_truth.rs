@@ -736,7 +736,7 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     // `Some(dump)` forces the null backend, which is what makes this runnable
     // on a machine with no sound card and on CI - see `Audio::open`.
@@ -769,7 +769,7 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
     // Forced rather than driven: reaching a real finish is a lap of real
     // circuit, and what is under test is the frame loop's finished-race arm,
     // not the lap counter. This is the same flag `RaceSim::finished` reads.
-    race.sim.world.primary_race_mut().finished = true;
+    race.core.sim.world.primary_race_mut().finished = true;
     for _ in 0..600 {
         // Deliberately **not** calling `race.tick` - that is exactly what the
         // finished arm does not do.
@@ -810,7 +810,7 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
@@ -829,14 +829,14 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
     let engine_only = voices(&audio);
     assert!(engine_only >= 1, "the engine never opened");
     assert!(
-        !race.craft_is_exploding(),
+        !race.core.craft_is_exploding(),
         "the fixture blew up before the test began"
     );
 
     // Set directly - reaching zero shield honestly is `oag_physics`'s business
     // and needs a wall this fixture has no reason to build. What is under test
     // is the audio layer reading the state.
-    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
+    race.core.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
     oag_game::sound::race_tick(&mut audio, &mut race);
     audio.tick();
     assert!(
@@ -852,7 +852,7 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
     // later either way. A second of audio separates the two answers - a
     // one-shot is 0.37 s and has ended, and a loop that was not released never
     // will.
-    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Eliminated;
+    race.core.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Eliminated;
     for _ in 0..60 {
         oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
@@ -892,20 +892,20 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     // positions of their own - so leaving them in would make a claim about one
     // rival's stereo position into a claim about wherever the start line
     // happens to be. `track_audio_ground_truth` is where they are tested.
-    loaded.setup.track_emitters = oag_sound::sfx::TrackEmitters::default();
+    loaded.view.track_emitters = oag_sound::sfx::TrackEmitters::default();
     // **The start-of-race voice is dropped from this fixture.** `ready` opens
     // voices from tick 91 and this counts them; what it counts is the held
     // loops, and the start voice has its own file
     // (`countdown_voice_ground_truth`).
     loaded.setup.countdown_voice = false;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // The pan ratio below is calibrated against the far chase view: the player's own
     // engine sits at the listener's feet and its share of the energy grows as the
     // eye nears it. The default became the close view on 2026-10-01 (a fresh Pulse
     // profile starts on `OPT_CLOSE`), so the view this was written for is named.
     race.set_camera_view(oag_display::display::CameraView::Far);
     assert!(
-        race.sim.ship_count() > 1,
+        race.core.sim.ship_count() > 1,
         "the fixture raced alone, so nothing below is testing anything"
     );
 
@@ -937,10 +937,10 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
         .saturating_sub(audio.ambient_voices());
     assert_eq!(
         voices,
-        race.sim.ship_count() as usize,
+        race.core.sim.ship_count() as usize,
         "one engine per craft is what `ExhaustFlare_Init` builds; got {voices} \
          for {} craft",
-        race.sim.ship_count()
+        race.core.sim.ship_count()
     );
 
     // **Rendered, not inspected.** A pan that is stored and never applied is
@@ -956,7 +956,7 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     // the same kind of fixture `race::tests::cues` uses for its wall.
     let camera = race.view().inverse();
     let right = camera.x_axis.truncate().normalize();
-    race.sim.world.ships[1].physics.body.position = camera.w_axis.truncate() + right * 10.0;
+    race.core.sim.world.ships[1].physics.body.position = camera.w_axis.truncate() + right * 10.0;
     oag_game::sound::race_tick(&mut audio, &mut race);
 
     let (left, right) = audio.output().with_mixer(|mixer| {
@@ -983,10 +983,10 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
 /// The shield's two cues through the whole path, which nothing else covers.
 ///
 /// `~SHIELD` is driven by a *level* rather than by an edge - the audio layer
-/// reads `Race::shield_is_up` - so it is the one held voice with no queue entry
+/// reads `SimRace::shield_is_up` - so it is the one held voice with no queue entry
 /// to inspect, and the only way to see it is to watch the pool. The
 /// Autopilot's own pair (`~AUTOPILOT`/`autopilot_eng`) is the same shape,
-/// off `Race::autopilot_is_active` - its own test is in
+/// off `SimRace::autopilot_is_active` - its own test is in
 /// `sfx_weapon_ground_truth.rs`, moved there under the 1,000-line rule.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -1004,7 +1004,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // loops, and the start voice has its own file
     // (`countdown_voice_ground_truth`).
     loaded.setup.countdown_voice = false;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
@@ -1031,11 +1031,11 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     assert!(idle >= 1, "the engine never opened");
 
     // Set directly: this is the field `oag_physics::damage` drives and the one
-    // `Race::shield_is_up` reads, and granting a real pickup would be testing
+    // `SimRace::shield_is_up` reads, and granting a real pickup would be testing
     // the pad table instead. Ten seconds, so it outlasts the wait below for
     // `shieldactive` to end; a one-second timer used to do, and expired on
     // its own inside that wait once the line played at its real rate.
-    race.sim.world.ships[0].physics.shield_pickup_timer = 10.0;
+    race.core.sim.world.ships[0].physics.shield_pickup_timer = 10.0;
     race.tick(&PlayerInputs::none());
     oag_game::sound::race_tick(&mut audio, &mut race);
     assert!(
@@ -1077,7 +1077,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
         settled.expect("the shield's one-shot line never ended, or the loops are not two voices");
     println!("shield held with only its loop open after {settled} ticks");
 
-    race.sim.world.ships[0].physics.shield_pickup_timer = 0.0;
+    race.core.sim.world.ships[0].physics.shield_pickup_timer = 0.0;
     race.tick(&PlayerInputs::none());
     oag_game::sound::race_tick(&mut audio, &mut race);
     assert_eq!(
@@ -1090,7 +1090,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
 /// `~AUTOPILOT` and `autopilot_eng` through the whole path, the same shape
 /// [`the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires`]
 /// already proves for the shield: `Cue::Autopilot` is a level
-/// (`Race::autopilot_is_active`), not a queued edge, so watching the pool is
+/// (`SimRace::autopilot_is_active`), not a queued edge, so watching the pool is
 /// the only way to see it open and close on the right tick.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -1122,10 +1122,7 @@ fn a_loaded_race_reports_what_its_banks_did() {
         Cue::ALL.len() + Cue::COUNTDOWN.len() + Cue::LAP_VOICES.len(),
         "the load report is incomplete"
     );
-    assert!(
-        !loaded.setup.sounds.is_empty(),
-        "a real disc loaded no cues"
-    );
+    assert!(!loaded.view.sounds.is_empty(), "a real disc loaded no cues");
 }
 
 /// Slipstream (`assets/mods/official/slipstream`) heard through the whole pipeline: the
@@ -1184,12 +1181,12 @@ fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
             "{name} is in the loader report:\n{report}"
         );
     }
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(
         !race.sounds().mod_sounds.is_empty(),
         "the mod's sounds reached the race's banks"
     );
-    race.sim.set_autopilot(true);
+    race.core.sim.set_autopilot(true);
 
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
@@ -1224,7 +1221,11 @@ fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
 
     let throttle = held(&[Button::Cross], &[]);
     for _ in 0..3000 {
-        if race.sim.world.ships[0].standing.lap_start_tick.is_some() {
+        if race.core.sim.world.ships[0]
+            .standing
+            .lap_start_tick
+            .is_some()
+        {
             break;
         }
         step(&mut audio, &mut race, &throttle);
@@ -1233,7 +1234,7 @@ fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
         step(&mut audio, &mut race, &throttle);
     }
     if fire {
-        race.sim.world.ships[0].pickup.weapon =
+        race.core.sim.world.ships[0].pickup.weapon =
             Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
     }
     for _ in 0..4 {
@@ -1251,7 +1252,7 @@ fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
     }
     // The craft flies to the portal first and goes through at the entrance.
     for _ in 0..40 {
-        if !fire || race.sim.world.ships[0].transit.is_some() {
+        if !fire || race.core.sim.world.ships[0].transit.is_some() {
             break;
         }
         step(&mut audio, &mut race, &throttle);
@@ -1263,7 +1264,7 @@ fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
         return Some((0, stats(&audio)));
     }
     assert!(
-        race.sim.world.ships[0].transit.is_some(),
+        race.core.sim.world.ships[0].transit.is_some(),
         "the fire went through"
     );
     let during = voices(&audio);
@@ -1277,7 +1278,7 @@ fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
         step(&mut audio, &mut race, &throttle);
     }
     assert!(
-        race.sim.world.ships[0].transit.is_none(),
+        race.core.sim.world.ships[0].transit.is_none(),
         "back in the world"
     );
     assert_eq!(audio.mod_sound_loops(), 0, "the hum ended with the transit");

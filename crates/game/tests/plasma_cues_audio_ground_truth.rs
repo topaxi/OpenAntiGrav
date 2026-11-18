@@ -122,14 +122,17 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
     for line in &loaded.report {
         println!("{line}");
     }
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.plasma_stats().expect("the disc authors a Plasma");
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core
+        .sim
+        .plasma_stats()
+        .expect("the disc authors a Plasma");
 
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));
     }
-    let speed = race.sim.world.ships[0]
+    let speed = race.core.sim.world.ships[0]
         .physics
         .body
         .linear_velocity
@@ -152,7 +155,7 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
         false,
     );
 
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
 
     let mut plasma_press_tick = None;
     // **Either ending, not `PlasmaHitWall` specifically.** `Mode::SingleRace`
@@ -190,7 +193,7 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
         // `drain_cues`, which is what actually feeds the mixer. Draining
         // here first would starve that call - the same trap
         // `mine_launch_audio_ground_truth.rs` names for its own peek.
-        for event in race.sim.pending_cues() {
+        for event in race.core.sim.pending_cues() {
             if event.cue == Cue::Plasma {
                 plasma_press_tick.get_or_insert(tick);
             }
@@ -200,6 +203,7 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
             }
         }
         saw_bolt_flying |= race
+            .core
             .sim
             .world
             .projectiles
@@ -308,14 +312,17 @@ fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
-    race.sim.plasma_stats().expect("the disc authors a Plasma");
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core
+        .sim
+        .plasma_stats()
+        .expect("the disc authors a Plasma");
     assert!(
-        race.sim.world.ship_count > 1,
+        race.core.sim.world.ship_count > 1,
         "a Single Race needs at least one opponent to repurpose as a target"
     );
     assert!(
-        race.sim.world.ships[1].active,
+        race.core.sim.world.ships[1].active,
         "slot 1 is not an active opponent"
     );
 
@@ -335,7 +342,7 @@ fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
         false,
     );
 
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
+    race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
 
     let mut plasma_press_tick = None;
     let mut hit_ship_tick = None;
@@ -343,11 +350,11 @@ fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
     for tick in 0..FLIGHT_TICKS {
         // Re-pinned every tick, ahead of the moving player rather than a
         // fixed world point - see this test's own doc comment.
-        let forward = race.sim.world.ships[0].physics.body.forward();
-        race.sim.world.ships[1].physics.body.position =
-            race.sim.world.ships[0].physics.body.position + forward * 15.0;
-        race.sim.world.ships[1].physics.body.linear_velocity =
-            race.sim.world.ships[0].physics.body.linear_velocity;
+        let forward = race.core.sim.world.ships[0].physics.body.forward();
+        race.core.sim.world.ships[1].physics.body.position =
+            race.core.sim.world.ships[0].physics.body.position + forward * 15.0;
+        race.core.sim.world.ships[1].physics.body.linear_velocity =
+            race.core.sim.world.ships[0].physics.body.linear_velocity;
 
         let snapshot = if tick == 0 {
             fire_while_driving()
@@ -355,7 +362,7 @@ fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
             throttle
         };
         race.tick(&PlayerInputs::single(snapshot));
-        for event in race.sim.pending_cues() {
+        for event in race.core.sim.pending_cues() {
             if event.cue == Cue::Plasma {
                 plasma_press_tick.get_or_insert(tick);
             }

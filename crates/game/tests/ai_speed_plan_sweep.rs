@@ -157,65 +157,66 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
         eprintln!("skipping {entry} at {class}: it does not load");
         return (String::new(), String::new());
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // `player`: the field with slot 0 flown by the operator's autopilot at the
     // top level, standing in for a human who keeps up; the opponents are still
     // the measured craft. Otherwise slot 0 sits out.
     if scenario == "player" {
-        race.sim.set_autopilot(true);
-        race.sim
+        race.core.sim.set_autopilot(true);
+        race.core
+            .sim
             .set_autopilot_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning::default()));
     } else {
-        race.sim.world.ships[0].active = false;
+        race.core.sim.world.ships[0].active = false;
     }
     let measured: Vec<usize> = if scenario == "lone" {
         for slot in 2..8 {
-            race.sim.world.ships[slot].active = false;
+            race.core.sim.world.ships[slot].active = false;
         }
         vec![1]
     } else {
-        (1..race.sim.world.ship_count as usize).collect()
+        (1..race.core.sim.world.ship_count as usize).collect()
     };
     // Diagnostic: every measured craft a plain line-follower (seed 0, no
     // personality), to separate the plan from what a pilot does to it.
     if std::env::var_os("OAG_SWEEP_PLAIN").is_some() {
         for &slot in &measured {
-            race.sim.world.ships[slot].driver.seed = 0;
+            race.core.sim.world.ships[slot].driver.seed = 0;
         }
     }
     let mut crafts: Vec<Craft> = measured
         .iter()
         .map(|&slot| Craft {
-            lap: race.sim.world.ships[slot].standing.lap,
-            shield_at_lap: vec![race.sim.world.ships[slot].physics.shield],
+            lap: race.core.sim.world.ships[slot].standing.lap,
+            shield_at_lap: vec![race.core.sim.world.ships[slot].physics.shield],
             ..Craft::default()
         })
         .collect();
-    let plan = if race.speed_plan().is_some() {
+    let plan = if race.core.speed_plan().is_some() {
         "plan"
     } else {
         "corner"
     };
     for tick in 0..ticks() {
         for (craft, &slot) in crafts.iter_mut().zip(&measured) {
-            craft.respawns_before = race.sim.respawns_of(slot);
+            craft.respawns_before = race.core.sim.respawns_of(slot);
         }
         race.tick(&PlayerInputs::none());
         let mut live = false;
         for (craft, &slot) in crafts.iter_mut().zip(&measured) {
-            if race.sim.respawns_of(slot) != craft.respawns_before {
+            if race.core.sim.respawns_of(slot) != craft.respawns_before {
                 craft.recovered = true;
                 if std::env::var_os("OAG_SWEEP_CAUSES").is_some() {
-                    let ship = &race.sim.world.ships[slot];
+                    let ship = &race.core.sim.world.ships[slot];
                     eprintln!(
                         "respawn {id} {class} slot {slot} tick {tick} index {} cause {:?}",
                         ship.driver.index,
-                        race.sim.last_respawn_cause_of(slot)
+                        race.core.sim.last_respawn_cause_of(slot)
                     );
                 }
             }
-            let ship = &race.sim.world.ships[slot];
-            let contacts = race.sim.wall_contact_ticks_of(slot);
+            let ship = &race.core.sim.world.ships[slot];
+            let contacts = race.core.sim.wall_contact_ticks_of(slot);
             if let Some(width) = profile_bin()
                 && craft.lap > 1
                 && !ship.standing.finished()
@@ -263,7 +264,7 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
                     continue;
                 }
                 let from = bin * width;
-                let plan_min = race.speed_plan().map_or(f32::NAN, |plan| {
+                let plan_min = race.core.speed_plan().map_or(f32::NAN, |plan| {
                     (from..(from + width).min(plan.len()))
                         .map(|i| plan.target(i))
                         .fold(f32::INFINITY, f32::min)
@@ -280,7 +281,7 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
     }
     let mut out = String::new();
     for (craft, &slot) in crafts.iter().zip(&measured) {
-        let ship = &race.sim.world.ships[slot];
+        let ship = &race.core.sim.world.ships[slot];
         let best = craft.clean_laps.iter().min().map(|&t| t as f32 / 60.0);
         let mean = if craft.clean_laps.is_empty() {
             None
@@ -316,8 +317,8 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
             fmt(best),
             fmt(mean),
             fmt(any),
-            race.sim.wall_contact_ticks_of(slot),
-            race.sim.respawns_of(slot),
+            race.core.sim.wall_contact_ticks_of(slot),
+            race.core.sim.respawns_of(slot),
             ship.standing.deaths,
             u8::from(
                 ship.physics.craft_state != oag_physics::CraftState::Racing
@@ -478,8 +479,8 @@ fn plan_floor_report() {
             }) else {
                 continue;
             };
-            let race = race::Race::start(loaded.setup);
-            let (plan, report) = race.sim.build_speed_plan(1);
+            let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+            let (plan, report) = race.core.sim.build_speed_plan(1);
             let mut runs: Vec<(usize, usize, f32)> = Vec::new();
             for i in 0..plan.len() {
                 let ceiling = plan.ceiling(i);
@@ -540,8 +541,8 @@ fn takeoff_census() {
                 eprintln!("skipping {entry}: it does not load");
                 continue;
             };
-            let race = race::Race::start(loaded.setup);
-            let line = race.sim.racing_line();
+            let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+            let line = race.core.sim.racing_line();
             let n = line.len();
             for lip in 0..n {
                 let before = (lip + n - 1) % n;

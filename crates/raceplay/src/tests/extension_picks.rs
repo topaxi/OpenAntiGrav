@@ -41,11 +41,11 @@ fn run(picks: Picks, ticks: usize) -> (u64, Option<[f32; 4]>, f32) {
     let mut race = grid(prepared(&[picky(picks)]));
     race.tick(&PlayerInputs::none());
     let wash = race.screen_wash();
-    let scale = race.sim.world.ships[0].pending_thrust_scale;
+    let scale = race.core.sim.world.ships[0].pending_thrust_scale;
     for _ in 1..ticks {
         race.tick(&PlayerInputs::none());
     }
-    (race.sim.state_hash(), wash, scale)
+    (race.core.sim.state_hash(), wash, scale)
 }
 
 /// Row 0 a `view` row: the simulation call reads its default (0), the view call the pick.
@@ -118,7 +118,7 @@ fn a_view_calls_fault_never_faults_the_module() {
     for _ in 0..3 {
         race.tick(&PlayerInputs::none());
     }
-    assert!(race.sim.extension_reports()[0].faulted.is_none());
+    assert!(race.core.sim.extension_reports()[0].faulted.is_none());
 }
 
 /// An option-blind module: only the pick's own contribution to the tick-0 state hash, which
@@ -126,7 +126,7 @@ fn a_view_calls_fault_never_faults_the_module() {
 fn blind(picks: Picks) -> u64 {
     let mut source = scripted("test.blind", "", &[], &[]);
     source.options = picks;
-    grid(prepared(&[source])).sim.state_hash()
+    grid(prepared(&[source])).core.sim.state_hash()
 }
 
 #[test]
@@ -164,8 +164,8 @@ fn whether_a_module_faults_does_not_depend_on_a_view_pick() {
             race.tick(&PlayerInputs::none());
         }
         (
-            race.sim.extension_reports()[0].faulted.is_some(),
-            race.sim.state_hash(),
+            race.core.sim.extension_reports()[0].faulted.is_some(),
+            race.core.sim.state_hash(),
         )
     };
     let (faulted, hash) = run(0);
