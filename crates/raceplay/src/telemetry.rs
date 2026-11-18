@@ -429,9 +429,9 @@ impl Race {
         };
         Some(oag_hud::RaceLine {
             player: fraction(player),
-            player_turned: self.facing_back(player),
+            player_turned: self.sim.facing_back(player),
             others: others().map(fraction).collect(),
-            others_turned: others().map(|slot| self.facing_back(slot)).collect(),
+            others_turned: others().map(|slot| self.sim.facing_back(slot)).collect(),
         })
     }
 

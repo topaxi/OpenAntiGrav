@@ -528,7 +528,7 @@ impl Race {
                     }
                     // The lock is the Missile's own, unmodified - the same
                     // `Ship_AcquireLock` scan off the LeachBeam's own
-                    // `<Stats>` window, which `Race::sight_target` computes
+                    // `<Stats>` window, which `RaceSim::sight_target` computes
                     // per slot. `FUN_0883f540` confirms the
                     // reuse directly: it calls `Ship_AcquireLock` for held
                     // weapon ids `1` and `10` and no others.
@@ -555,16 +555,17 @@ impl Race {
                     // alone. An opponent has no reticle.
                     //
                     // **Every person-flown slot holds the lock.** The
-                    // [`Race::sight_target`] window is computed for `slot` itself,
-                    // from its own craft, and [`Race::lock_taken`] adds the
+                    // [`RaceSim::sight_target`] window is computed for `slot` itself,
+                    // from its own craft, and [`RaceSim::lock_taken`] adds the
                     // `0.34` s closing on top - the simulation's lock, run off
                     // the world with no camera, for the primary and a second pad
                     // alike. An opponent fires off the window alone. **Chosen,
                     // not measured**: the original has one reticle, and what a
                     // second pad's sight would hold is not recovered; a second
                     // pad runs the primary's law.
-                    let target = self.sight_target(slot).filter(|_| {
-                        !self.sim.locks[slot].leach_law() || self.lock_taken(slot).unwrap_or(true)
+                    let target = self.sim.sight_target(slot).filter(|_| {
+                        !self.sim.locks[slot].leach_law()
+                            || self.sim.lock_taken(slot).unwrap_or(true)
                     });
                     let beam = match target {
                         Some(target) => {
@@ -960,7 +961,7 @@ impl Race {
     /// alone - the reticle, which this project has found no evidence runs for
     /// anything but the craft the HUD is drawn for. So the craft that owns the
     /// reticle (every person-flown slot) additionally needs its simulation lock
-    /// ([`Race::lock_taken`]: the reticle law over a camera-free projection, held
+    /// ([`RaceSim::lock_taken`]: the reticle law over a camera-free projection, held
     /// past [`sight::HOLD_SECONDS`]) before its candidate is passed through; an
     /// opponent's candidate is used as soon as `lock` finds one, exactly as
     /// before this gate landed.
@@ -1013,7 +1014,7 @@ impl Race {
         // "The lock test is shared; the hold is not" above. A press before the
         // brackets close still fires, same as an opponent's shot always does;
         // it just carries no candidate through.
-        let target = candidate.filter(|_| self.lock_taken(slot).unwrap_or(true));
+        let target = candidate.filter(|_| self.sim.lock_taken(slot).unwrap_or(true));
         // `target` is passed through as it comes, `None` included: that is the
         // original's null pointer, and `Missile_Update` skips its whole guidance
         // block on it rather than treating it as an error.

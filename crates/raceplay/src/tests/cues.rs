@@ -572,7 +572,7 @@ fn quake_hits_a_craft() -> std::collections::BTreeSet<Cue> {
 /// [`crate::tests::weapons::holding_a_missile_behind_a_craft_locks_it_after_the_recovered_hold`]
 /// uses, since `Ship_AcquireLock` is one function serving both weapons. No
 /// hold to wait out here, unlike that test's own player-facing reticle gate:
-/// `Race::spend_pickup`'s own LeachBeam arm reads `Race::sight_target`
+/// `Race::spend_pickup`'s own LeachBeam arm reads `RaceSim::sight_target`
 /// directly, with no `Sight::locked` requirement layered on top of it - see
 /// `Cue::Leach`'s own doc comment.
 fn leach_fires_locked() -> std::collections::BTreeSet<Cue> {

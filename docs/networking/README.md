@@ -146,7 +146,7 @@ held on a target for a time. It used to be the primary's on-screen reticle, adva
 from the chase camera, so the simulation read the view: a replay was exact only as
 far as the reticle it started from, and a server with no camera could disagree with
 its client about a lock with no misprediction at all. Now `RaceSim::locks` holds one
-`oag_race::sight::Sight` per slot, advanced by `Race::advance_locks`
+`oag_race::sight::Sight` per slot, advanced by `RaceSim::advance_locks`
 (`crates/raceplay/src/lock.rs`) for every person-flown slot (the primary and any
 second pad alike) from the world alone, and hashed while the slot holds a Missile or
 a LeachBeam (a race holding neither hashes as before). The law is the recovered

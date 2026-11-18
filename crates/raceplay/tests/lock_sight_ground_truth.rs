@@ -416,7 +416,7 @@ fn pure_locks_a_craft_and_draws_the_psp_reticle() {
 /// Which titles author a `<Weapon type="LeachBeam">` at all, printed and pinned.
 ///
 /// **The reason this is a test and not a note, and it caught something.**
-/// `Race::sight_held` returns `Some(Held::LeachBeam)` for any title whose table
+/// `RaceSim::sight_held` returns `Some(Held::LeachBeam)` for any title whose table
 /// authors the block, and the widget set that answers it is per title. Pulse
 /// names four. Pure names none *and authors no block*, so its `leach: None` is
 /// belt and braces. **HD authors the block** - measured here, and it was assumed

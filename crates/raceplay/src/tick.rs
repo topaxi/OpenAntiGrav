@@ -131,7 +131,7 @@ impl Race {
             ship.physics.released = released;
             ship.physics.four_corner = four_corner;
         }
-        self.set_wrong_way_kill();
+        self.sim.set_wrong_way_kill();
         self.set_hover_caps();
         // A transit whose count ran out puts its craft further round before anything
         // reads where it is: its controls, its autopilot's lane snap, the modules' call
@@ -148,7 +148,7 @@ impl Race {
                 *slot_controls = self.player_controls(slot, inputs.get(slot));
             }
         }
-        self.tick_flips(inputs, &mut controls);
+        self.sim.tick_flips(inputs, &mut controls);
         #[cfg(test)]
         {
             self.last_controls = controls;
@@ -712,7 +712,7 @@ impl Race {
         // a different extent in a screenshot than in a window at the same tick
         // count. **After the camera**, because it projects through it, and only
         // when the tick is drawn: it follows the lock and decides nothing.
-        self.advance_locks();
+        self.sim.advance_locks();
         #[cfg(feature = "view")]
         if self.draws() {
             self.update_sight();

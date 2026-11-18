@@ -127,7 +127,7 @@ on this tree (its scenario was not kept); the shortfall did.
 Wired as `oag_title::hud::LiveSight::chase_gain` (`4.0`; `Sights::chase_gain()` is `1.0` wherever `live` is `None`),
 `oag_raceplay::Sighting::chase_gain`, `oag_race::sight::Sight::set_chase_gain`, applied as `rate *= zoom * gain` on the
 target-on-screen path only. The simulation's per-slot locks and the drawn reticle take the same value from the same
-`Sighting`, so the red, the tone and the shot agree. Only person-flown slots run a `Sight` (`Race::advance_locks`: opponents
+`Sighting`, so the red, the tone and the shot agree. Only person-flown slots run a `Sight` (`RaceSim::advance_locks`: opponents
 have no lock, their shot takes the window's candidate at once), so HD's AI is untouched; a player's Missile shot on HD now
 finds its lock taken far more often while chasing, as the original's does.
 

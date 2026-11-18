@@ -1164,7 +1164,7 @@ a guess.
   `locate_player_driver(slot)`, and the Eliminator's kill-target finish.
   Moved to per person-flown slot afterwards (`per-slot-sim-leftovers`,
   2026-10-13; every one is **chosen, not measured** where it says so, the
-  original having one player). The LeachBeam's lock is `Race::sight_target(slot)`,
+  original having one player). The LeachBeam's lock is `RaceSim::sight_target(slot)`,
   a simulation quantity computed from the world for whichever slot fires, with
   the reticle reading the primary's; a second person has no reticle, so no
   Pulse hold on the lock (chosen). The fire arms of `spend_pickup` still wrote

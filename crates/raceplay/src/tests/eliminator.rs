@@ -321,20 +321,20 @@ fn only_an_eliminator_craft_facing_back_down_the_track_loses_its_engine() {
     };
 
     let mut race = eliminator();
-    race.set_wrong_way_kill();
+    race.sim.set_wrong_way_kill();
     assert!(
         !race.sim.world.ships[0].physics.wrong_way_kill,
         "facing forward"
     );
     turn_round(&mut race);
-    race.set_wrong_way_kill();
+    race.sim.set_wrong_way_kill();
     assert!(
         race.sim.world.ships[0].physics.wrong_way_kill,
         "facing back down the track"
     );
 
     race.sim.eliminator_wrong_way_kill = false;
-    race.set_wrong_way_kill();
+    race.sim.set_wrong_way_kill();
     assert!(
         !race.sim.world.ships[0].physics.wrong_way_kill,
         "a title without the law"
@@ -343,7 +343,7 @@ fn only_an_eliminator_craft_facing_back_down_the_track_loses_its_engine() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_mine_table());
     turn_round(&mut race);
-    race.set_wrong_way_kill();
+    race.sim.set_wrong_way_kill();
     assert!(
         !race.sim.world.ships[0].physics.wrong_way_kill,
         "not an Eliminator race"

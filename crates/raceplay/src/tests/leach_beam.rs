@@ -439,7 +439,7 @@ fn the_leach_beam_locks_only_once_its_reticle_has() {
 
 /// A second person's LeachBeam locks on what is in front of *their* craft.
 ///
-/// `Race::sight_target` used to measure from `ships[0]` and read slot 0's
+/// `RaceSim::sight_target` used to measure from `ships[0]` and read slot 0's
 /// held weapon, so slot 1 pressing fire with a rival dead ahead of it got the
 /// unlocked arm (slot 0 held nothing, and had it held one, the window would
 /// have been slot 0's). Here slot 0 is the rival, parked 60 units ahead of
@@ -463,7 +463,7 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
         race.sim.world.ships[0].physics.body.orientation;
     race.sim.world.ships[1].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
     assert_eq!(
-        race.sight_target(1),
+        race.sim.sight_target(1),
         None,
         "nothing is in front of slot 1 before the rival is parked"
     );
@@ -476,7 +476,7 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
         race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
         if tick == 0 {
             assert_eq!(
-                race.sight_target(1),
+                race.sim.sight_target(1),
                 Some(0),
                 "slot 1's own window does not find the rival ahead of it"
             );

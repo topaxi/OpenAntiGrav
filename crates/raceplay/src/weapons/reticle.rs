@@ -28,7 +28,7 @@ impl Race {
     /// frame and stores the winner on the entity; running it here reaches the
     /// same answer without storing the target. What *is* stored, per slot and in
     /// the simulation, is the lock the hold has taken on it
-    /// ([`Race::advance_locks`]).
+    /// ([`RaceSim::advance_locks`]).
     ///
     /// # The lock is not decided here
     ///
@@ -58,19 +58,19 @@ impl Race {
     /// which is what the weapon plays like.
     pub(crate) fn update_sight(&mut self) {
         // The reticle is the primary person's; every other person-flown slot
-        // reads the same lock through [`Race::sight_target`] without one.
+        // reads the same lock through [`RaceSim::sight_target`] without one.
         let primary = self.player_slot();
-        if let Some(held) = self.sight_held(primary) {
+        if let Some(held) = self.sim.sight_held(primary) {
             self.view.sight.set_held(held);
         }
-        let target = self.sight_target(primary);
+        let target = self.sim.sight_target(primary);
         let screen = self.view.sight.screen();
         let projected = target.and_then(|slot| {
             let world = self.sim.world.ships[slot as usize].physics.body.position;
             self.project_for_sight(world, screen)
         });
         self.view.sight_aim = target.zip(projected);
-        // The lock is the simulation's ([`Race::advance_locks`]); this reticle
+        // The lock is the simulation's ([`RaceSim::advance_locks`]); this reticle
         // only puts the brackets on the craft and follows it.
         let locked = self.sim.locks[primary].locked();
         self.view.sight_state = self.view.sight.follow(self.sim.dt, projected, locked);
@@ -155,7 +155,7 @@ impl Race {
     ///
     /// **Display only, and view-side.** Each is a [`sight::Sight`] of its own in
     /// that slot's [`SlotHud`](crate::slot_hud::SlotHud), fed by
-    /// [`Self::sight_target`] and projected through that slot's own chase camera
+    /// [`RaceSim::sight_target`] and projected through that slot's own chase camera
     /// and field of view, and told the slot's simulation lock exactly as the
     /// primary's is. A no-op with one view.
     ///
@@ -171,10 +171,10 @@ impl Race {
         }
         let primary = self.player_slot();
         for slot in (0..self.viewport_count()).filter(|&slot| slot != primary) {
-            if let Some(held) = self.sight_held(slot) {
+            if let Some(held) = self.sim.sight_held(slot) {
                 self.view.huds[slot].sight.set_held(held);
             }
-            let target = self.sight_target(slot);
+            let target = self.sim.sight_target(slot);
             let screen = self.view.huds[slot].sight.screen();
             // The camera accessors follow the viewpoint; put the player's back
             // after, as the draw does.
@@ -191,7 +191,9 @@ impl Race {
             hud.sight_state = hud.sight.follow(dt, projected, locked);
         }
     }
+}
 
+impl RaceSim {
     /// Which of the two lockable weapons `slot` is holding, or `None`.
     ///
     /// **`None` for a weapon this title's table does not author**, not only for
@@ -199,8 +201,8 @@ impl Race {
     /// `leachbeam_sight_*` widgets, so a LeachBeam there has no window to run
     /// and gets no reticle rather than borrowing the Missile's.
     pub(crate) fn sight_held(&self, slot: usize) -> Option<sight::Held> {
-        let stats = self.sim.weapons.as_deref()?;
-        match self.sim.world.ships[slot].pickup.weapon? {
+        let stats = self.weapons.as_deref()?;
+        match self.world.ships[slot].pickup.weapon? {
             oag_tables::weapons::Weapon::Missile => stats.missile().map(|_| sight::Held::Missile),
             oag_tables::weapons::Weapon::LeachBeam => {
                 stats.leach_beam().map(|_| sight::Held::LeachBeam)
@@ -213,7 +215,7 @@ impl Race {
     /// `Ship_AcquireLock` would give for the weapon `slot` holds.
     ///
     /// **A per-slot simulation quantity**, computed from the world alone for
-    /// whichever slot asks. [`Race::advance_locks`] runs a person-flown slot's
+    /// whichever slot asks. [`RaceSim::advance_locks`] runs a person-flown slot's
     /// reticle law on it; the fire paths read the lock that comes of that. Split
     /// out so the choice can be asserted without a camera. Returns `None` whenever
     /// `slot` is holding something that does not lock, which is every weapon
@@ -234,9 +236,9 @@ impl Race {
     /// units out, so nothing visible turns on it.
     pub(crate) fn sight_target(&self, slot: usize) -> Option<u8> {
         let held = self.sight_held(slot)?;
-        let stats = self.sim.weapons.as_deref()?;
-        let count = self.sim.world.ship_count as usize;
-        let ship = &self.sim.world.ships[slot];
+        let stats = self.weapons.as_deref()?;
+        let count = self.world.ship_count as usize;
+        let ship = &self.world.ships[slot];
         let (origin, min, max) = match held {
             sight::Held::Missile => {
                 let missile = stats.missile()?;
@@ -247,7 +249,7 @@ impl Race {
                     &ship.physics,
                     &ship.handling.dimensions,
                     &missile,
-                    &self.sim.class,
+                    &self.class,
                 );
                 (origin, missile.lock_min_dist, missile.lock_max_dist)
             }
@@ -261,13 +263,13 @@ impl Race {
             }
         };
         oag_weapons::projectile::missile::lock_window(
-            &self.sim.world.ships[..count],
+            &self.world.ships[..count],
             slot as u8,
             origin,
             ship.physics.body.forward(),
             min,
             max,
-            self.sim.course.as_deref().map(oag_race::Course::length),
+            self.course.as_deref().map(oag_race::Course::length),
         )
     }
 }

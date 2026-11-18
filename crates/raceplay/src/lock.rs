@@ -39,7 +39,7 @@ use super::*;
 use crate::weapons::SIGHT_FAR;
 use oag_core::math::Vec4;
 
-impl Race {
+impl RaceSim {
     /// Advances every person-flown slot's lock one tick.
     ///
     /// Runs at the end of the tick, after the weapon fire and the camera, as the
@@ -50,19 +50,19 @@ impl Race {
     /// lock never outlives its weapon. Opponents have no lock (their shot takes
     /// the window's candidate at once - see [`Race::fire_missile`]).
     pub(super) fn advance_locks(&mut self) {
-        let dt = self.sim.dt;
-        for slot in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.person_flown(slot) {
+        let dt = self.dt;
+        for slot in 0..self.world.ship_count as usize {
+            if !self.world.person_flown(slot) {
                 continue;
             }
             let Some(held) = self.sight_held(slot) else {
-                self.sim.locks[slot] = self.sim.locks[slot].cleared();
+                self.locks[slot] = self.locks[slot].cleared();
                 continue;
             };
             let projected = self
                 .sight_target(slot)
                 .and_then(|target| self.lock_projection(slot, target as usize));
-            let lock = &mut self.sim.locks[slot];
+            let lock = &mut self.locks[slot];
             lock.set_held(held);
             lock.update(dt, projected);
         }
@@ -71,8 +71,8 @@ impl Race {
     /// Where `target` is on screen for `slot`'s virtual camera, or `None` behind
     /// it, out of its range or off the grid. See the module documentation.
     fn lock_projection(&self, slot: usize, target: usize) -> Option<sight::Projected> {
-        let body = &self.sim.world.ships[slot].physics.body;
-        let rig = &self.sim.lock_rig;
+        let body = &self.world.ships[slot].physics.body;
+        let rig = &self.lock_rig;
         let craft = Target {
             position: body.position,
             forward: body.forward(),
@@ -81,11 +81,11 @@ impl Race {
         let eye = oag_race::chase_rig::anchor(craft, rig);
         let look = oag_race::chase_rig::look_at_point(craft, rig);
         let view = oag_core::math::camera::look_at(eye, look, craft.up);
-        let screen = self.sim.locks[slot].screen();
+        let screen = self.locks[slot].screen();
         let widened = (rig.fov + SPEED_FOV_GAIN_DEG * craft.forward.dot(body.linear_velocity))
             .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
         let projection = lock_perspective(widened.to_radians(), screen[0] / screen[1]);
-        let world = self.sim.world.ships[target].physics.body.position;
+        let world = self.world.ships[target].physics.body.position;
         sight::project(view, projection * view, world, screen)
     }
 
@@ -93,17 +93,16 @@ impl Race {
     /// from, for a slot that has one at all. `None` for an opponent, whose shot
     /// needs no lock.
     pub(super) fn lock_taken(&self, slot: usize) -> Option<bool> {
-        self.sim
-            .world
+        self.world
             .person_flown(slot)
-            .then(|| self.sim.locks[slot].locked())
+            .then(|| self.locks[slot].locked())
     }
 
     /// `slot`'s lock, for a test or a tool that wants the simulation's reticle
     /// rather than the picture's.
     #[must_use]
     pub fn lock_of(&self, slot: usize) -> &sight::Sight {
-        &self.sim.locks[slot]
+        &self.locks[slot]
     }
 }
 

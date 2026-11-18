@@ -141,7 +141,7 @@ impl Race {
         };
         let count = self.sim.world.ship_count as usize;
         let ship = &self.sim.world.ships[slot];
-        // The same window `Race::sight_target` runs for the player, from the
+        // The same window `RaceSim::sight_target` runs for the player, from the
         // craft's own position - the LeachBeam has no recovered launch offset to
         // measure from, so neither path invents one.
         let Some(target) = oag_weapons::projectile::missile::lock_window(
